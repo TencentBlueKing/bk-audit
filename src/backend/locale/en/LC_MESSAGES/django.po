@@ -1,0 +1,3296 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-09-26 14:44+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "创建入库"
+msgstr "Create Storage"
+
+msgid "更新入库"
+msgstr "Update Storage"
+
+msgid "删除入库"
+msgstr "Delete Storage"
+
+msgid "创建清洗"
+msgstr "Create Clean"
+
+msgid "更新清洗"
+msgstr "Update Clean"
+
+msgid "删除清洗"
+msgstr "Delete Clean"
+
+msgid "启动清洗任务"
+msgstr "Start Clean Task"
+
+msgid "停止清洗任务"
+msgstr "Stop Clean Task"
+
+msgid "创建资源"
+msgstr "Create Resource"
+
+msgid "更新资源"
+msgstr "Update Resource"
+
+msgid "清洗预览"
+msgstr "Clean Preview"
+
+msgid "查询数据源"
+msgstr "Get Deploy Plan"
+
+msgid "创建数据源"
+msgstr "Create Deploy Plan"
+
+msgid "更新数据源"
+msgstr "Update Deploy Plan"
+
+msgid "启动数据接入"
+msgstr "Start Collector"
+
+msgid "停止数据接入"
+msgstr "Stop Collector"
+
+msgid "获取方案列表"
+msgstr "Get Plan List"
+
+msgid "获取方案详情"
+msgstr "Get Plan Detail"
+
+msgid "检测是否部署AIOPS"
+msgstr "Check Aiops Available"
+
+msgid "RT授权"
+msgstr "Auth RT"
+
+msgid "创建Flow"
+msgstr "Create Flow"
+
+msgid "启动Flow"
+msgstr "Start Flow"
+
+msgid "重启Flow"
+msgstr "Restart Flow"
+
+msgid "停止Flow"
+msgstr "Stop Flow"
+
+msgid "获取Flow"
+msgstr "Get Flow"
+
+msgid "获取Flow图"
+msgstr "Get Flow Graph"
+
+msgid "创建Flow节点"
+msgstr "Create Flow Node"
+
+msgid "更新Flow节点"
+msgstr "Update Flow Node"
+
+msgid "删除Flow节点"
+msgstr "Delete Flow Node"
+
+msgid "获取结果表字段"
+msgstr "Get Rt Fields"
+
+msgid "获取Flow部署状态"
+msgstr "Get Flow Deploy Status"
+
+msgid "获取源数据列表"
+msgstr "Get DataID List"
+
+msgid "获取我有权限的源数据列表"
+msgstr "Get Authorized DataID List"
+
+msgid "获取源数据详情"
+msgstr "Get DataID Detail"
+
+msgid "获取源数据最近数据"
+msgstr "Get DataID Tail"
+
+msgid "获取结果表列表"
+msgstr "Get Result Tables"
+
+msgid "列举项目相关数据"
+msgstr "Get Project Data"
+
+msgid "获取消息类型"
+msgstr "Get Msg Type"
+
+msgid "发送邮件"
+msgstr "Send Mail"
+
+msgid "发送企业微信"
+msgstr "Send Wecom Msg"
+
+msgid "发送语音"
+msgstr "Send Voice"
+
+msgid "发送消息"
+msgstr "Send SMS"
+
+msgid "发送微信"
+msgstr "Send Wechat"
+
+msgid "获取IAM系统列表"
+msgstr "Get IAM System List"
+
+msgid "获取IAM系统角色信息"
+msgstr "Get IAM System Role"
+
+msgid "获取IAM系统信息"
+msgstr "Get IAM System Info"
+
+msgid "服务列表查询"
+msgstr "List Services"
+
+msgid "获取服务详情"
+msgstr "Get Service Detail"
+
+msgid "创建单据"
+msgstr "Create Ticket"
+
+msgid "单据状态查询"
+msgstr "Get Ticket Status"
+
+msgid "查询审批结果"
+msgstr "Get Ticket Approve Result"
+
+msgid "操作单据"
+msgstr "Operate Ticket"
+
+msgid "当前业务"
+msgstr "Current Biz"
+
+msgid "多业务"
+msgstr "Multi Biz"
+
+msgid "全业务"
+msgstr "All Biz"
+
+msgid "业务属性"
+msgstr "Biz Property"
+
+msgid "主机"
+msgstr "Host"
+
+msgid "服务模板"
+msgstr "Service Template"
+
+msgid "集群模版"
+msgstr "Set Template"
+
+msgid "创建集群"
+msgstr "Create Storage"
+
+msgid "更新集群"
+msgstr "Update Storage"
+
+msgid "删除集群"
+msgstr "Delete Storage"
+
+msgid "存储集群列表"
+msgstr "Storage List"
+
+msgid "连通性测试"
+msgstr "Connectivity Detect"
+
+msgid "批量连通性测试"
+msgstr "Bulk Connectivity Detect"
+
+msgid "集群节点属性"
+msgstr "Node Attr"
+
+msgid "业务列表"
+msgstr "Biz List"
+
+msgid "业务拓扑"
+msgstr "Biz Topo"
+
+msgid "实例列表(Node)"
+msgstr "Instance List (Node)"
+
+msgid "实例列表(IP)"
+msgstr "Instance List (IP)"
+
+msgid "获取Agent状态"
+msgstr "Agent Status"
+
+msgid "服务模板拓扑"
+msgstr "Service Template Topo"
+
+msgid "节点列表(Template)"
+msgstr "Node List (Template)"
+
+msgid "创建采集项"
+msgstr "Create Collector"
+
+msgid "更新采集"
+msgstr "Update Collector"
+
+msgid "获取集群列表"
+msgstr "Get Storage List"
+
+msgid "校验Yaml合法"
+msgstr "Validate Yaml"
+
+msgid "创建采集"
+msgstr "Create Collector"
+
+msgid "获取采集项"
+msgstr "Get Collector"
+
+msgid "创建采集项清洗规则"
+msgstr "Create Collector Etl"
+
+msgid "获取任务下发状态(Task)"
+msgstr "Get Subscription Status (Task)"
+
+msgid "获取任务下发详情"
+msgstr "Get Subscription Detail"
+
+msgid "重试订阅任务"
+msgstr "Retry Subscription Task"
+
+msgid "获取任务下发状态(Collector)"
+msgstr "Get Subscription Status (Collector)"
+
+msgid "批量获取任务下发状态(Collector)"
+msgstr "Batch Get Subscription Status (Collector)"
+
+msgid "获取最新上报的数据"
+msgstr "Get Tail Log"
+
+msgid "获取清洗预览"
+msgstr "Clean Preview"
+
+msgid "停止采集"
+msgstr "Stop Collector"
+
+msgid "全局配置"
+msgstr "Global Config"
+
+msgid "创建采集插件"
+msgstr "Create Collector Plugin"
+
+msgid "更新采集插件"
+msgstr "Update Collector Plugin"
+
+msgid "预检查采集英文名"
+msgstr "Pre Check Collector En Name"
+
+msgid "搜索日志"
+msgstr "Search Log"
+
+msgid "滚动查询日志"
+msgstr "Search Log (Scroll)"
+
+msgid "重建索引集"
+msgstr "Replace Index"
+
+msgid "获取操作符"
+msgstr "Get Operator"
+
+msgid "权限检测"
+msgstr "Permission Check"
+
+msgid "获取鉴权信息"
+msgstr "Get Auth Info"
+
+msgid "获取空间列表"
+msgstr "Get Space List"
+
+msgid "创建自定义采集"
+msgstr "Create Custom Collector"
+
+msgid "创建自定义日志上报"
+msgstr "Create Custom Log Report"
+
+msgid "获取自定义日志上报最近日志"
+msgstr "Get Custom Report Recent Log"
+
+msgid "获取上报Token"
+msgstr "Get Report Token"
+
+msgid "获取上报Host"
+msgstr "Get Report Host"
+
+msgid "用户名"
+msgstr "Username"
+
+msgid "密码"
+msgstr "Password"
+
+msgid "默认保留天数"
+msgstr "Retention(Default)"
+
+msgid "默认副本数"
+msgstr "Default Replicas"
+
+msgid "集群ID"
+msgstr "Storage ID"
+
+msgid "集群域名"
+msgstr "Storage Domain"
+
+msgid "端口"
+msgstr "Port"
+
+msgid "集群协议"
+msgstr "Storage Schema"
+
+msgid "是否包含集群信息"
+msgstr "Include Storage Info"
+
+msgid "是否使用默认用户信息"
+msgstr "Using Default Auth"
+
+msgid "凭据信息"
+msgstr "Auth Info"
+
+msgid "数据节点数量"
+msgstr "Data Nodes"
+
+msgid "索引数量"
+msgstr "Indices"
+
+msgid "索引文档数量"
+msgstr "Index Docs"
+
+msgid "节点数量"
+msgstr "Nodes"
+
+msgid "分片数量"
+msgstr "Shards"
+
+msgid "节点状态"
+msgstr "Node Status"
+
+msgid "集群状态"
+msgstr "Storage Status"
+
+msgid "节点名"
+msgstr "Node Name"
+
+msgid "IP"
+msgstr "IP"
+
+msgid "节点ID"
+msgstr "Node ID"
+
+msgid "节点HOST"
+msgstr "Node Host"
+
+msgid "节点属性"
+msgstr "Node Attr"
+
+msgid "业务ID"
+msgstr "Bk Biz ID"
+
+msgid "实例类型"
+msgstr "Instance Type"
+
+msgid "是否删除空节点"
+msgstr "Remove Empty Nodes"
+
+msgid "ID"
+msgstr "ID"
+
+msgid "名称"
+msgstr "Name"
+
+msgid "实例ID"
+msgstr "Instance ID"
+
+msgid "实例名"
+msgstr "Instance Name"
+
+msgid "对象ID"
+msgstr "Object ID"
+
+msgid "对象名"
+msgstr "Object Name"
+
+msgid "默认"
+msgstr "Default"
+
+msgid "子节点"
+msgstr "Child Node"
+
+msgid "运行状态"
+msgstr "Run Status"
+
+msgid "云区域ID"
+msgstr "BK Cloud ID"
+
+msgid "下发日志"
+msgstr "Send Log"
+
+msgid "节点名称"
+msgstr "Node Name"
+
+msgid "任务ID"
+msgstr "Task ID"
+
+msgid "云服务商ID"
+msgstr "Supplier ID"
+
+msgid "创建时间"
+msgstr "Create Time"
+
+msgid "步骤"
+msgstr "Steps"
+
+msgid "是否有标签"
+msgstr "Is Label"
+
+msgid "节点标签"
+msgstr "Node Label"
+
+msgid "节点路径"
+msgstr "Node Path"
+
+msgid "任务启动状态"
+msgstr "Task Ready"
+
+msgid "采集项ID"
+msgstr "Collector ID"
+
+msgid "任务ID列表"
+msgstr "Task ID List"
+
+msgid "节点信息"
+msgstr "Node List"
+
+msgid "标签"
+msgstr "Label"
+
+msgid "Agent数量"
+msgstr "Agents"
+
+msgid "Agent错误数量"
+msgstr "Agent Errors"
+
+msgid "云区域名称"
+msgstr "BK Cloud Name"
+
+msgid "Agent状态ID"
+msgstr "Agent Status ID"
+
+msgid "Agent状态"
+msgstr "Agent Status"
+
+msgid "操作系统类型"
+msgstr "OS"
+
+msgid "是否内网IP"
+msgstr "Is Inner IP"
+
+msgid "模板类型"
+msgstr "Template Type"
+
+msgid "业务名称"
+msgstr "Bk Biz Name"
+
+msgid "多个实例以英文逗号分隔"
+msgstr "Split by commas"
+
+msgid "分隔符"
+msgstr "Delimiter"
+
+msgid "正则表达式"
+msgstr "Regexp Expression"
+
+msgid "是否保留原文"
+msgstr "Keep Origin Text"
+
+msgid "BK-LOG 采集项ID"
+msgstr "BK-LOG Collector ID"
+
+msgid "云服务商"
+msgstr "Supplier"
+
+msgid "实例ID列表(BCS)"
+msgstr "Instance ID List (BCS)"
+
+msgid "清洗类型"
+msgstr "Etl Config"
+
+msgid "日志内容"
+msgstr "Log Content"
+
+msgid "多个使用英文逗号分隔"
+msgstr "Split by commas"
+
+msgid "订阅ID"
+msgstr "Subscription ID"
+
+msgid "状态"
+msgstr "Status"
+
+msgid "状态描述"
+msgstr "Status Description"
+
+msgid "数量"
+msgstr "Counts"
+
+msgid "成功数量"
+msgstr "Success"
+
+msgid "失败数量"
+msgstr "Failed"
+
+msgid "无结果数量"
+msgstr "No Result"
+
+msgid "字段名"
+msgstr "Field Name"
+
+msgid "操作符"
+msgstr "Operator"
+
+msgid "值"
+msgstr "Value"
+
+msgid "条件"
+msgstr "Condition"
+
+msgid "类型"
+msgstr "Type"
+
+msgid "权限信息"
+msgstr "Permission Info"
+
+msgid "权限URL"
+msgstr "Apply Url"
+
+msgid "YAML配置的base64"
+msgstr "Yaml Base64"
+
+msgid "base64编码解析失败"
+msgstr "Base64 Decode Failed"
+
+msgid "校验结果"
+msgstr "Validate Result"
+
+msgid "校验详情"
+msgstr "Validate Detail"
+
+msgid "ES"
+msgstr "ES"
+
+msgid "查询告警策略"
+msgstr "Search Alarm Strategy"
+
+msgid "保存告警策略"
+msgstr "Save Alarm Strategy"
+
+msgid "删除告警策略"
+msgstr "Delete Alarm Strategy"
+
+msgid "启停告警策略"
+msgstr "Switch Alarm Strategy"
+
+msgid "聚合查询"
+msgstr "Union Search"
+
+msgid "获取变量值"
+msgstr "Get Variable Value"
+
+msgid "搜索通知组"
+msgstr "Search Notice Group"
+
+msgid "保存通知组"
+msgstr "Save Notice Group"
+
+msgid "删除通知组"
+msgstr "Delete Notice Group"
+
+msgid "查询告警"
+msgstr "Search Alert"
+
+msgid "获取集群信息"
+msgstr "Get Storage Info"
+
+msgid "上报到监控自定义指标"
+msgstr "Report to BKM Custom Metric"
+
+msgid "来源标识如IP"
+msgstr "Target"
+
+msgid "自定义指标"
+msgstr "Custom Metrics"
+
+msgid "自定义维度"
+msgstr "Custom Dimensions"
+
+msgid "数据时间(ms)"
+msgstr "Data Time"
+
+msgid "数据通道标识"
+msgstr "Data ID"
+
+msgid "数据通道标识验证码"
+msgstr "Data Token"
+
+msgid "指标数据"
+msgstr "Metric Data"
+
+msgid "查询多平台应用信息"
+msgstr "Get App Info"
+
+msgid "查询业务下的模板列表"
+msgstr "Get Template List of Biz"
+
+msgid "查询业务下单个模板详情"
+msgstr "Get Template Detail of Biz"
+
+msgid "通过业务流程模板创建任务"
+msgstr "Create Task by Template of Biz"
+
+msgid "开始执行任务"
+msgstr "Start Task"
+
+msgid "查询任务执行状态"
+msgstr "Get Task Status"
+
+msgid "操作任务"
+msgstr "Operate Task"
+
+msgid "获取节点数据"
+msgstr "Get Node Data"
+
+msgid "操作节点"
+msgstr "Operate Node"
+
+msgid "获取用户列表"
+msgstr "Get User List"
+
+msgid "获取单个用户信息"
+msgstr "Retrieve User"
+
+msgid "获取用户快照Schema"
+msgstr "Get User Snapshot Schema"
+
+msgid "Generate Watermark"
+msgstr "Generate Watermark"
+
+msgid "审计"
+msgstr "Audit"
+
+msgid "系统不存在"
+msgstr "System Not Exist"
+
+msgid "配置不存在"
+msgstr "Config Not Exist"
+
+msgid "参数异常"
+msgstr "Param Invalid"
+
+msgid "关联任务处理中，请勿重复操作"
+msgstr "Snapshot Preparing !"
+
+msgid "存储变更中"
+msgstr "Storage Changing"
+
+msgid "数据关联预检查失败，接入系统未实现对应方法"
+msgstr "Snapshot Pre Check Failed"
+
+msgid "未能匹配分隔符，请确认"
+msgstr "None delimiter found"
+
+msgid "JSON语法异常，请确认"
+msgstr "JSON Invalid"
+
+msgid "正则表达式有误"
+msgstr "Regexp Invalid"
+
+msgid "必须设置时间字段"
+msgstr "Timefield Missing"
+
+msgid "语言标识[language]为空或有误"
+msgstr "[language] missing or invalid"
+
+msgid "未开启系统初始化"
+msgstr "Init System Disabled"
+
+#, python-format
+msgid "检索数量超过限制，仅允许检索前%(count)s条"
+msgstr "Searching exceeds the limit. Only %(count)s doc can be reached."
+
+#, python-format
+msgid "特性[%s]不存在"
+msgstr "Feature [%s] not exist"
+
+#, python-format
+msgid "特性ID[%s]不合法"
+msgstr "Feature ID [%s] Invalid"
+
+msgid "页码错误，请重新选择"
+msgstr "Invalid Page"
+
+msgid "通知组不存在"
+msgstr "Notice Group Not Exist"
+
+msgid "Healthz状态异常"
+msgstr "Healthz Error"
+
+msgid "策略变更中，请稍后操作"
+msgstr "Strategy changing, please try again later"
+
+msgid "解析Log失败"
+msgstr "Parse Log Failed"
+
+msgid "特性"
+msgstr "Feature"
+
+msgid "已关闭"
+msgstr "Closed"
+
+msgid "测试环境"
+msgstr "Staging"
+
+msgid "正式环境"
+msgstr "Production"
+
+msgid "已启用"
+msgstr "Enabled"
+
+msgid "特性开关ID"
+msgstr "Feature Toggle ID"
+
+msgid "特性开关别名"
+msgstr "Feature Toggle Alias"
+
+msgid "特性开关status"
+msgstr "Feature Toggle Status"
+
+msgid "是否在前端展示"
+msgstr "Is Display"
+
+msgid "特性开关配置"
+msgstr "Feature Toggle Config"
+
+msgid "特性开关"
+msgstr "Feature Toggle"
+
+msgid "云区域"
+msgstr "Cloud Area"
+
+msgid "特性ID"
+msgstr "Feature ID"
+
+msgid "待处理"
+msgstr "New"
+
+msgid "审批中"
+msgstr "For Approve"
+
+msgid "待认领"
+msgstr "Receiving"
+
+msgid "待分派"
+msgstr "Distributing"
+
+msgid "被终止"
+msgstr "Terminated"
+
+msgid "已结束"
+msgstr "Finished"
+
+msgid "执行失败"
+msgstr "Failed"
+
+msgid "被撤销"
+msgstr "Revoked"
+
+msgid "被挂起"
+msgstr "Suspend"
+
+msgid "撤销"
+msgstr "Revoke"
+
+msgid "获取服务列表"
+msgstr "List Services"
+
+msgid "获取单据状态常量"
+msgstr "Get Ticket Status Constants"
+
+msgid "元数据"
+msgstr "Meta Data"
+
+msgid "敏感对象(操作)"
+msgstr "Sensitive Obj (Action)"
+
+msgid "敏感对象(资源)"
+msgstr "Sensitive Obj (Resource Type)"
+
+msgid "DBA托管"
+msgstr "DBA"
+
+msgid "腾讯云"
+msgstr "Tencent Cloud"
+
+msgid "1天"
+msgstr "1d"
+
+msgid "3天"
+msgstr "3d"
+
+msgid "7天"
+msgstr "7d"
+
+msgid "14天"
+msgstr "14d"
+
+msgid "30天"
+msgstr "30d"
+
+msgid "竖线(|)"
+msgstr "Vertical Bar (|)"
+
+msgid "逗号(,)"
+msgstr "Comma(,)"
+
+msgid "反引号(`)"
+msgstr "Backticks(`)"
+
+msgid "空格"
+msgstr "Space"
+
+msgid "分号(;)"
+msgstr "Semicolon(;)"
+
+msgid "业务配置"
+msgstr "Business Config"
+
+msgid "应用配置"
+msgstr "Application Config"
+
+msgid "命名空间"
+msgstr "Namespace"
+
+msgid "升序"
+msgstr "Asc"
+
+msgid "降序"
+msgstr "Desc"
+
+msgid "业务"
+msgstr "BKCC Biz"
+
+msgid "BCS项目"
+msgstr "BCS Project"
+
+msgid "研发项目"
+msgstr "BKCI Project"
+
+msgid "蓝盾项目"
+msgstr "Devops Project"
+
+msgid "未知"
+msgstr "Unknown"
+
+msgid "Container"
+msgstr "Container"
+
+msgid "Node"
+msgstr "Node"
+
+msgid "标准输出"
+msgstr "Stdout"
+
+msgid "JSON"
+msgstr "JSON"
+
+msgid "正则"
+msgstr "Regexp"
+
+msgid "计算平台JSON"
+msgstr "BK Data JSON"
+
+msgid "字符串过滤"
+msgstr "String Filter"
+
+msgid "分隔符过滤"
+msgstr "Delimiter Filter"
+
+msgid "保留匹配字符串"
+msgstr "Keep Match String"
+
+msgid "Namespace不存在"
+msgstr "Namespace does not exist"
+
+msgid "应用信息不存在"
+msgstr "App info does not exist"
+
+msgid "Tag Name Invalid"
+msgstr "Tag Name Invalid"
+
+msgid "配置级别"
+msgstr "Config Level"
+
+msgid "配置归属Key"
+msgstr "Instance Key"
+
+msgid "配置Key"
+msgstr "Config Key"
+
+msgid "配置Value"
+msgstr "Config Value"
+
+msgid "系统全局配置"
+msgstr "System Global Config"
+
+msgid "namespace"
+msgstr "Namespace"
+
+msgid "系统ID"
+msgstr "System ID"
+
+msgid "英文名称"
+msgstr "En Name"
+
+msgid "客户端"
+msgstr "Client"
+
+msgid "系统配置"
+msgstr "System Config"
+
+msgid "应用图标"
+msgstr "App Icon"
+
+msgid "访问地址"
+msgstr "System Url"
+
+msgid "应用描述"
+msgstr "App Description"
+
+msgid "接入系统"
+msgstr "System"
+
+msgid "角色名称"
+msgstr "Role Name"
+
+msgid "系统角色"
+msgstr "System Role"
+
+msgid "资源类型ID"
+msgstr "Resource Type ID"
+
+msgid "敏感等级"
+msgstr "Sensitivity"
+
+msgid "资源类型配置"
+msgstr "Resource Type Config"
+
+msgid "版本"
+msgstr "Version"
+
+msgid "描述信息"
+msgstr "Description"
+
+msgid "资源类型"
+msgstr "Resource Type"
+
+msgid "操作ID"
+msgstr "Action ID"
+
+msgid "操作类型"
+msgstr "Action Type"
+
+msgid "操作"
+msgstr "Action"
+
+msgid "字段名称"
+msgstr "Field Name"
+
+msgid "字段类型"
+msgstr "Field Type"
+
+msgid "别名"
+msgstr "Alias"
+
+msgid "是否分词"
+msgstr "Is Analyze"
+
+msgid "是否时间字段"
+msgstr "Is Timefield"
+
+msgid "是否为Json格式"
+msgstr "Is Json"
+
+msgid "是否纬度"
+msgstr "Is Dimension"
+
+msgid "是否删除"
+msgstr "Is Deleted"
+
+msgid "是否必须"
+msgstr "Is Required"
+
+msgid "是否展示"
+msgstr "Is Display"
+
+msgid "是否内置"
+msgstr "Is Build In"
+
+msgid "jsonschema声明"
+msgstr "Json Schema"
+
+msgid "描述"
+msgstr "Description"
+
+msgid "优先指数"
+msgstr "Priority Index"
+
+msgid "字段"
+msgstr "Field"
+
+msgid "敏感ID"
+msgstr "Sensitivity ID"
+
+msgid "资源ID"
+msgstr "Resource ID"
+
+msgid "关联字段"
+msgstr "Relate Field"
+
+msgid "是否隐藏"
+msgstr "is Hidden"
+
+msgid "敏感信息对象"
+msgstr "Sensitive Object"
+
+msgid "字段归属页面"
+msgstr "Field Home Page"
+
+msgid "自定义字段"
+msgstr "Custom Field"
+
+msgid "用户字段"
+msgstr "User Field"
+
+msgid "数据字段"
+msgstr "Data Field"
+
+msgid "数据键"
+msgstr "Data Key"
+
+msgid "数据别名"
+msgstr "Data Alias"
+
+msgid "数据字典"
+msgstr "Data Map"
+
+msgid "Tag ID"
+msgstr "Tag ID"
+
+msgid "Tag Name"
+msgstr "Tag Name"
+
+msgid "Tag"
+msgstr "Tag"
+
+msgid "获取 Namespace 列表"
+msgstr "Get Namespcae List"
+
+msgid "获取系统列表"
+msgstr "Get System List"
+
+msgid "获取系统列表(All)"
+msgstr "Get System List (All)"
+
+msgid "获取系统详情"
+msgstr "Retrieve System"
+
+msgid "资源类型列表"
+msgstr "Resource Type List"
+
+msgid "操作列表"
+msgstr "Action List"
+
+msgid "资源类型列表(搜索)"
+msgstr "Resource Type List (Search)"
+
+msgid "操作列表(搜索)"
+msgstr "Action List (Search)"
+
+msgid "系统成员列表"
+msgstr "System Memeber List"
+
+msgid "获取全局配置"
+msgstr "Get Global Config"
+
+msgid "获取标准字段"
+msgstr "Get Standard Fields"
+
+msgid "获取用户字段"
+msgstr "Get User Field"
+
+msgid "更新用户字段"
+msgstr "Update User Field"
+
+msgid "获取多平台应用信息"
+msgstr "Get App Info"
+
+msgid "未找到"
+msgstr "Not Found"
+
+msgid "正常"
+msgstr "Normal"
+
+msgid "未部署"
+msgstr "Not Deployed"
+
+msgid "获取资源类型结构"
+msgstr "Resource Type Schema"
+
+msgid "获取本地全局配置"
+msgstr "Get Local Global Config"
+
+msgid "获取本地全局配置详情"
+msgstr "Retrieve Local Global Config"
+
+msgid "设置本地全局配置"
+msgstr "Set Local Global Config"
+
+msgid "获取用户详情"
+msgstr "Get User Detail"
+
+msgid "未知用户"
+msgstr "Abnormal User"
+
+msgid "获取敏感对象"
+msgstr "Get Sensitive Obj"
+
+msgid "上传数据字典文件"
+msgstr "Upload Data Map File"
+
+msgid "数据表格不存在，请检查"
+msgstr "Data Sheet Not Exist"
+
+msgid "字段不匹配，请按照模板文件配置"
+msgstr "Filed Unmatch, please follow the template file"
+
+msgid "Save Tags"
+msgstr "Save Tags"
+
+msgid "获取资源拉取信息"
+msgstr "Get Asset Pull Info"
+
+msgid "搜索关键字"
+msgstr "Search Keyword"
+
+msgid "排序字段"
+msgstr "Sort Field"
+
+msgid "排序方式"
+msgstr "Sort Type"
+
+msgid "状态筛选"
+msgstr "Status Filter"
+
+msgid "权限"
+msgstr "Permission"
+
+msgid "应用负责人"
+msgstr "App Manager"
+
+msgid "空间ID"
+msgstr "Space ID"
+
+msgid "空间名称"
+msgstr "Space Name"
+
+msgid "空间类型ID"
+msgstr "Space Type ID"
+
+msgid "空间类型名称"
+msgstr "Space Type Name"
+
+msgid "页码"
+msgstr "Page"
+
+msgid "单页数量"
+msgstr "Page Size"
+
+msgid "返回字段"
+msgstr "Fields"
+
+msgid "查找字段"
+msgstr "Lookup Field"
+
+msgid "模糊查找关键字"
+msgstr "Fuzzy Keywords"
+
+msgid "精准查找关键字"
+msgstr "Exact Keywords"
+
+#, python-format
+msgid "字段不在允许查询的字段列表中 => %(fields)s"
+msgstr "Field Invalid => %(fields)s"
+
+msgid "显示名称"
+msgstr "Display Name"
+
+msgid "雇员状态"
+msgstr "Staff Status"
+
+msgid "部门"
+msgstr "Department"
+
+msgid "上级"
+msgstr "Leader"
+
+msgid "拓展信息"
+msgstr "Extra Data"
+
+msgid "文件"
+msgstr "File"
+
+msgid "事件ID"
+msgstr "Event ID"
+
+msgid "事件描述"
+msgstr "Event Description"
+
+msgid "请求ID"
+msgstr "Request ID"
+
+msgid "操作人"
+msgstr "Operator"
+
+msgid "操作人账号类型"
+msgstr "Operator Account Type"
+
+msgid "操作人租户ID"
+msgstr "Operator Tenant ID"
+
+msgid "操作人账号来源"
+msgstr "Operator Src"
+
+msgid "操作人账号"
+msgstr "Operator Src Username"
+
+msgid "操作起始时间"
+msgstr "Event Start Time"
+
+msgid "操作结束时间"
+msgstr "Event End Time"
+
+msgid "事件上报模块"
+msgstr "Bk App Code"
+
+msgid "操作途径"
+msgstr "Access Type"
+
+msgid "来源IP"
+msgstr "Event Source IP"
+
+msgid "客户端类型"
+msgstr "Access Client Type"
+
+msgid "资源实例ID"
+msgstr "Instance ID"
+
+msgid "资源实例名"
+msgstr "Instance Name"
+
+msgid "实例当前内容"
+msgstr "The current content of the instance"
+
+msgid "实例变更前内容"
+msgstr "Case change before content"
+
+msgid "操作结果"
+msgstr "Operation Result"
+
+msgid "操作结果描述"
+msgstr "Operation result description"
+
+msgid "拓展数据"
+msgstr "Expand Data"
+
+msgid "用户信息快照"
+msgstr "User Info Snapshot"
+
+msgid "资源类型快照"
+msgstr "Resource Type Snapshot"
+
+msgid "操作快照"
+msgstr "Playback Operation"
+
+msgid "实例名称快照"
+msgstr "Instance Name Snapshot"
+
+msgid "实例信息快照"
+msgstr "Instance Information Snapshot"
+
+msgid "来源系统"
+msgstr "Event Source System"
+
+msgid "数据源ID"
+msgstr "DataID"
+
+msgid "索引版本号"
+msgstr "Index Version"
+
+msgid "上报时间"
+msgstr "Report Time"
+
+msgid "入库时间"
+msgstr "Storage Time"
+
+msgid "拓展字段"
+msgstr "Extend Field"
+
+msgid "数据开发任务MD5"
+msgstr "Flow MD5"
+
+msgid "AIOPS开始时间"
+msgstr "AIOPS Start Time"
+
+msgid "AIOPS结束时间"
+msgstr "AIOPS End Time"
+
+msgid "分组ID"
+msgstr "Group ID"
+
+msgid "Index"
+msgstr "Index"
+
+msgid "Copy"
+msgstr "Copy"
+
+msgid "Timestamp"
+msgstr "Timestamp"
+
+msgid "AIOPS拓展信息"
+msgstr "AIOPS Extra Data"
+
+msgid "AIOPS内置数据时间"
+msgstr "Aiops Build in Data Time"
+
+msgid "AIOPS内置处理时间"
+msgstr "AIOPS Build in Clean Time"
+
+msgid "操作事件名称"
+msgstr "Action Name"
+
+msgid "资源类型名称"
+msgstr "Resource Type Name"
+
+msgid "用户信息"
+msgstr "User Info"
+
+msgid "发送时间"
+msgstr "Send At"
+
+msgid "Notice"
+msgstr "Notice"
+
+msgid "审计中心管理员"
+msgstr "BK Audit Administrator"
+
+msgid "微信"
+msgstr "WeChat"
+
+msgid "企业微信"
+msgstr "Wecom"
+
+msgid "邮件"
+msgstr "Mail"
+
+msgid "语音"
+msgstr "Voice"
+
+msgid "短信"
+msgstr "SMS"
+
+msgid "通知组名称重复"
+msgstr "Notice Group Name Duplicate"
+
+msgid "此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"
+msgstr "Sent by Blueking Audit Center"
+
+msgid "异常信息"
+msgstr "Error Msg"
+
+msgid "TraceID"
+msgstr "TraceID"
+
+msgid "通知组ID"
+msgstr "Notice Group ID"
+
+msgid "通知组名称"
+msgstr "Notice Group Name"
+
+msgid "通知组成员"
+msgstr "Notice Group Member"
+
+msgid "通知配置"
+msgstr "Notice Config"
+
+msgid "通知组"
+msgstr "Notice Group"
+
+msgid "发送方式"
+msgstr "Send Way"
+
+msgid "标题"
+msgstr "Title"
+
+msgid "内容"
+msgstr "Content"
+
+msgid "消息Hash值"
+msgstr "Msg Hash"
+
+msgid "收件人"
+msgstr "Receiver"
+
+msgid "Trace ID"
+msgstr "TraceID"
+
+msgid "是否成功"
+msgstr "Is Success"
+
+msgid "是否重复"
+msgstr "Is Duplicated"
+
+msgid "消息记录"
+msgstr "Msg Record"
+
+msgid "消息类型"
+msgstr "Msg Type"
+
+msgid "通知组列表"
+msgstr "Notice Group List"
+
+msgid "通知组列表(all)"
+msgstr "Notice Group List (ALL)"
+
+msgid "通知组详情"
+msgstr "Notice Group Detail"
+
+msgid "创建通知组"
+msgstr "Create Notice Group"
+
+msgid "更新通知组"
+msgstr "Update Notice Group"
+
+msgid "Icon"
+msgstr "Icon"
+
+msgid "关键字"
+msgstr "Keyword"
+
+msgid "通知方式"
+msgstr "Msg Type"
+
+msgid "RTX"
+msgstr "RTX"
+
+#, python-format
+msgid "通知组名称不能包含特殊字符 %s"
+msgstr "Notice Group Name Invalid with %s"
+
+msgid "权限中心异常"
+msgstr "IAM Error"
+
+msgid "动作ID不存在"
+msgstr "Action ID Not Exist"
+
+msgid "资源ID不存在"
+msgstr "Resource Not Exist"
+
+msgid "获取系统信息错误"
+msgstr "Getting system information error"
+
+msgid "资源类型已存在"
+msgstr "Resource Type ID Exists"
+
+msgid "资源属性名称已存在"
+msgstr "Resource Property Name Exists"
+
+#, python-brace-format
+msgid "资源类型{attr_type}不存在"
+msgstr "Resource Type {attr_type} Not Exist"
+
+msgid "资源属性类型不能为空"
+msgstr "Resource Property Cannot be Empty"
+
+msgid "同一鉴权仅支持一种资源类型"
+msgstr "Multi ResourceType Denied"
+
+msgid "同一鉴权仅支持一个接入系统"
+msgstr "Multi System Denied"
+
+#, python-format
+msgid "动作ID不存在：%(action_id)s"
+msgstr "Action ID Not Exist：%(action_id)s"
+
+#, python-format
+msgid "获取系统信息错误：%(message)s"
+msgstr "Getting system information error：%(message)s"
+
+#, python-format
+msgid "资源ID不存在：%(resource_id)s"
+msgstr "Resource Not Exist：%(resource_id)s"
+
+msgid "空间"
+msgstr "Space"
+
+msgid "采集项"
+msgstr "Collector"
+
+msgid "获取IAM系统配置"
+msgstr "Get IAM System COnfig"
+
+msgid "检查当前用户对该动作是否有权限"
+msgstr "Check Action Permission"
+
+msgid "获取权限申请数据"
+msgstr "Get Apply Data"
+
+msgid "查询某批资源某批操作是否有权限"
+msgstr "Bulk Check Permission"
+
+msgid "资源ID列表"
+msgstr "Resource ID List"
+
+msgid "未执行"
+msgstr "Created"
+
+msgid "执行中"
+msgstr "Running"
+
+msgid "暂停"
+msgstr "Suspend"
+
+msgid "节点暂停"
+msgstr "Node Suspend"
+
+msgid "已过期"
+msgstr "Expired"
+
+msgid "执行成功"
+msgstr "Success"
+
+msgid "已终止"
+msgstr "Revoked"
+
+msgid "终止任务"
+msgstr "Revoke"
+
+msgid "重试"
+msgstr "Retry"
+
+msgid "获取执行模板列表"
+msgstr "List Templates"
+
+msgid "获取执行模板详情"
+msgstr "Get Template Detail"
+
+msgid "获取任务状态常量"
+msgstr "List Task Status Constants"
+
+msgid "审计中心"
+msgstr "BK Audit"
+
+msgid "Default"
+msgstr "Default"
+
+msgid "Api"
+msgstr "Api"
+
+msgid "Puller"
+msgstr "Puller"
+
+msgid "参数验证失败"
+msgstr "Parameter Validation Failed"
+
+msgid "远程服务请求结果异常"
+msgstr "Request Remote Service Error"
+
+msgid "组件调用异常"
+msgstr "Component Error"
+
+msgid "语言不支持"
+msgstr "Language Not Supported"
+
+msgid "获取锁失败"
+msgstr "Failed To Acquire Lock"
+
+msgid "资源实例获取失败"
+msgstr "Failed To Get Resource Instance"
+
+msgid "服务不稳定，请检查组件健康状况"
+msgstr "Service Is Unstable, Please Check Component Health"
+
+msgid "权限校验不通过"
+msgstr "Permission Check Failed"
+
+#, python-format
+msgid "当前用户无 [%(action_name)s] 权限"
+msgstr "The Current User Has No [%(action_name)s] Permission"
+
+msgid "应用身份校验失败"
+msgstr "App Identify Failed"
+
+#, python-format
+msgid "风险状态异常 (%s)"
+msgstr "Risk Status Invalid (%s)"
+
+#, python-format
+msgid "无命中的风险处理规则，风险ID %s"
+msgstr "No Rule Match, Risk ID %s"
+
+msgid "该处理规则有未关单风险"
+msgstr "Risks not closed"
+
+msgid "创建者"
+msgstr "Creator"
+
+msgid "更新时间"
+msgstr "Update Time"
+
+msgid "修改者"
+msgstr "Updater"
+
+msgid "Permission Denied"
+msgstr "Permission Denied"
+
+msgid "Staff Required"
+msgstr "Staff Required"
+
+msgid "Admin Required"
+msgstr "Admin Required"
+
+msgid "Token Invalid"
+msgstr "Token Invalid"
+
+msgid "数据拉取"
+msgstr "Data Pull"
+
+msgid "Control Name"
+msgstr "Control Name"
+
+msgid "Control Type"
+msgstr "Control Type"
+
+msgid "分析"
+msgstr "Analyze"
+
+msgid "Operate Audit"
+msgstr "Operate Audit"
+
+msgid "BK Base AIOps"
+msgstr "BK Base AIOps"
+
+msgid "成功"
+msgstr "Success"
+
+msgid "失败"
+msgstr "Failed"
+
+msgid "其他"
+msgstr "Other"
+
+msgid "RealTime"
+msgstr "RealTime"
+
+msgid "Batch"
+msgstr "Batch"
+
+msgid "BatchV2"
+msgstr "BatchV2"
+
+msgid "Start Flow"
+msgstr "Start Flow"
+
+msgid "Stop Flow"
+msgstr "Stop Flow"
+
+msgid "Restart Flow"
+msgstr "Restart Flow"
+
+msgid "Running"
+msgstr "Running"
+
+msgid "Not Start"
+msgstr "Not Start"
+
+msgid "Failed"
+msgstr "Failed"
+
+msgid "="
+msgstr "="
+
+msgid "!="
+msgstr "!="
+
+msgid ">"
+msgstr ">"
+
+msgid "<"
+msgstr "<"
+
+msgid ">="
+msgstr ">="
+
+msgid "<="
+msgstr "<="
+
+msgid "AND"
+msgstr "AND"
+
+msgid "OR"
+msgstr "OR"
+
+msgid "No Failed"
+msgstr "No Failed"
+
+msgid "All Finished"
+msgstr "All Finished"
+
+msgid "At Least One Finished"
+msgstr "At Least One Finished"
+
+msgid "Upstream"
+msgstr "Upstream"
+
+msgid "Schedule"
+msgstr "Schedule"
+
+msgid "Hour"
+msgstr "Hour"
+
+msgid "Day"
+msgstr "Day"
+
+msgid "Week"
+msgstr "Week"
+
+msgid "Month"
+msgstr "Month"
+
+msgid "Scroll"
+msgstr "Scroll"
+
+msgid "Slide"
+msgstr "Slide"
+
+msgid "Whole"
+msgstr "Whole"
+
+msgid "Create or Update Flow Failed"
+msgstr "Create or Update Flow Failed"
+
+#, python-format
+msgid "Strategy ID:\t%s"
+msgstr "Strategy ID:\t%s"
+
+msgid "Cluster Not Exists"
+msgstr "Cluster Not Exists"
+
+msgid "Control Not Exists"
+msgstr "Cluster Not Exists"
+
+msgid "Control ID"
+msgstr "Control ID"
+
+msgid "Control Type ID"
+msgstr "Control Type ID"
+
+msgid "Priority Index"
+msgstr "Priority Index"
+
+msgid "Control"
+msgstr "Control"
+
+msgid "Control Version"
+msgstr "Control Version"
+
+msgid "Input Config"
+msgstr "Input Config"
+
+msgid "Output Config"
+msgstr "Output Config"
+
+msgid "Variable Config"
+msgstr "Variable Config"
+
+msgid "Extra Config"
+msgstr "Extra Config"
+
+msgid "Analyze Ability"
+msgstr "Analyze Ability"
+
+msgid "Control Version Detail"
+msgstr "Control Version Detail"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Control Versions"
+msgstr "Control Versions"
+
+msgid "Flow Status Abnormal"
+msgstr "Flow Status Abnormal"
+
+msgid "采集项数量"
+msgstr "采集项数量"
+
+msgid "采集插件信息"
+msgstr "Collector Plugin Info"
+
+msgid "数据集成"
+msgstr "Databus"
+
+#, python-format
+msgid "%s 应为 %s 类型，当前值为 %s"
+msgstr "%s 应为 %s 类型，当前值为 %s"
+
+msgid "原始日志"
+msgstr "Original Log"
+
+msgid "迭代ID"
+msgstr "Iteration Index"
+
+msgid "JoinDataCreateFailed"
+msgstr "JoinDataCreateFailed"
+
+#, python-format
+msgid "Error: %s"
+msgstr "Error: %s"
+
+msgid "资源快照状态"
+msgstr "Snapshot Status"
+
+msgid "获取采集列表"
+msgstr "Get Collector List"
+
+msgid "获取采集项元数据"
+msgstr "Get Collector Info"
+
+msgid "采集详情"
+msgstr "Collector Detail"
+
+msgid "新建采集"
+msgstr "Create Collecot"
+
+msgid "获取BCS Yaml模板"
+msgstr "Get BCS Yaml Template"
+
+msgid "创建BCS采集"
+msgstr "Create BCS Collector"
+
+msgid "更新BCS采集"
+msgstr "Update BCS Collector"
+
+msgid "删除采集"
+msgstr "Delete Collector"
+
+msgid "应用的采集数据上报状态"
+msgstr "Log Status"
+
+msgid "批量获取应用采集状态"
+msgstr "Bulk Log Status"
+
+msgid "采集项清洗规则"
+msgstr "Etl"
+
+msgid "切换数据关联状态"
+msgstr "Change Join Data Status"
+
+msgid "清洗字段历史"
+msgstr "Etl Field History"
+
+msgid "获取 API PUSH"
+msgstr "Get API PUSH"
+
+msgid "创建 API PUSH"
+msgstr "Create API PUSH"
+
+msgid "获取 API PUSH 最近日志"
+msgstr "Get API PUSH Recent Log"
+
+msgid "获取 API PUSH 上报主机"
+msgstr "Get API PUSH Report Host"
+
+msgid "获取系统下的DataID列表"
+msgstr "Get System DataID List"
+
+msgid "获取我的DataID列表"
+msgstr "Get My DataID List"
+
+msgid "获取DataID详情"
+msgstr "Get DataID Detail"
+
+msgid "获取最近源数据"
+msgstr "Get DataID Tail"
+
+msgid "接入DataID数据源"
+msgstr "Apply DataID Source"
+
+#, python-format
+msgid "无数据源 %s 的访问权限"
+msgstr "Permission Denied for %s"
+
+#, python-format
+msgid "DataID %s 已接入"
+msgstr "DataID %s Already Applied"
+
+msgid "DataID清洗预览"
+msgstr "DataID Clean Preview"
+
+msgid "创建或更新DataID清洗入库"
+msgstr "Create or update DataID ETL"
+
+msgid "DataID清洗字段历史"
+msgstr "DataID tl Field History"
+
+msgid "删除DataID接入"
+msgstr "Delete DataID Source"
+
+msgid "服务实例id"
+msgstr "Service Instance ID"
+
+msgid "节点实例id"
+msgstr "Node Instance ID"
+
+msgid "节点对象"
+msgstr "Node Instance"
+
+msgid "主机实例ip"
+msgstr "Host Instance IP"
+
+msgid "蓝鲸云区域id"
+msgstr "BK Cloud ID"
+
+msgid "供应商id"
+msgstr "Supplier ID"
+
+msgid "数据平台用户"
+msgstr "BK Data User"
+
+msgid "数据平台业务ID"
+msgstr "BK Data Biz ID"
+
+msgid "采集名称"
+msgstr "Collector Name"
+
+msgid "采集英文名称"
+msgstr "Collector En Name"
+
+msgid "目标类型"
+msgstr "Target Type"
+
+msgid "节点类型"
+msgstr "Node Type"
+
+msgid "目标节点"
+msgstr "Target Node"
+
+msgid "日志字符集"
+msgstr "Log Character Set"
+
+msgid "最后数据上报时间"
+msgstr "Last Data Time"
+
+msgid "备注说明"
+msgstr "Note"
+
+msgid "必须字段未传入映射值"
+msgstr "Required fields not set"
+
+msgid "采集插件ID"
+msgstr "Collector Plugin ID"
+
+msgid "清洗配置"
+msgstr "Clean Config"
+
+msgid "清洗参数"
+msgstr "Clean Param"
+
+msgid "字段列表"
+msgstr "Field List"
+
+msgid "字段未提供"
+msgstr "Field not provided"
+
+msgid "分隔符不能为空"
+msgstr "Delimiter cannot be empty"
+
+msgid "正则表达式不能为空"
+msgstr "Regexp expression cannot be empty"
+
+msgid "启用数据关联"
+msgstr "Enable Join Data"
+
+msgid "Storage Type"
+msgstr "Storage Type"
+
+msgid "日志类型"
+msgstr "Log Type"
+
+msgid "bcs集群id"
+msgstr "BCS Cluster ID"
+
+msgid "yaml配置内容"
+msgstr "Yaml Config"
+
+msgid "DataID"
+msgstr "DataID"
+
+msgid "数据源名称"
+msgstr "DataID Name"
+
+msgid "数据源别名"
+msgstr "DataID Alias"
+
+msgid "接入场景"
+msgstr "DataID Scene"
+
+msgid "是否已接入"
+msgstr "is Applied"
+
+msgid "编码"
+msgstr "Encoding"
+
+msgid "数据源平台"
+msgstr "Source Platform"
+
+msgid "创建人"
+msgstr "Creator"
+
+msgid "更新人"
+msgstr "Update User"
+
+msgid "可用状态"
+msgstr "Available Status"
+
+msgid "计算平台访问链接"
+msgstr "BK Data URL"
+
+msgid "解析Log"
+msgstr "Parse Log"
+
+msgid "主题"
+msgstr "Topic"
+
+msgid "最近源数据"
+msgstr "Recent DataID Data"
+
+msgid "解析后的最近源数据"
+msgstr "Parsed Recent DataID Data"
+
+msgid "无法获取系统ID"
+msgstr "Cannot get system id"
+
+msgid "ip"
+msgstr "IP"
+
+msgid "日志路径"
+msgstr "Log Path"
+
+msgid "gse索引"
+msgstr "Gse Index"
+
+msgid "time"
+msgstr "Time"
+
+msgid "审计中心采集插件"
+msgstr "Collector"
+
+msgid "采集插件列表"
+msgstr "Collector Plugin List"
+
+msgid "匹配方式"
+msgstr "Match Method"
+
+msgid "逻辑操作符"
+msgstr "Logical Operator"
+
+msgid "匹配项所在列"
+msgstr "Column Of Match"
+
+msgid "匹配值"
+msgstr "Match Value"
+
+msgid "过滤方式类型"
+msgstr "Filter Type"
+
+msgid "过滤方式"
+msgstr "Filter Type"
+
+msgid "过滤内容"
+msgstr "Filter Content"
+
+msgid "过滤规则"
+msgstr "Filter Rules"
+
+msgid "作为默认插件"
+msgstr "As Default Plugin"
+
+msgid "插件场景"
+msgstr "Plugin Scene"
+
+msgid "容器"
+msgstr "Container"
+
+msgid "计算平台"
+msgstr "BK Data"
+
+msgid "日志平台"
+msgstr "Bk Log"
+
+msgid "容器日志上报"
+msgstr "Container Log Report"
+
+msgid "otlpTrace上报"
+msgstr "OtlpTrace Report"
+
+msgid "otlp日志上报"
+msgstr "Otlp Log Report"
+
+msgid "动态拓扑"
+msgstr "Dynamic Topo"
+
+msgid "静态拓扑"
+msgstr "Static Topo"
+
+msgid "无数据"
+msgstr "No Data"
+
+msgid "未配置"
+msgstr "Not Configured"
+
+msgid "数据开发"
+msgstr "Data Flow"
+
+msgid "审计事件"
+msgstr "Audit Event"
+
+msgid "运行中"
+msgstr "Running"
+
+msgid "启动中"
+msgstr "Preparing"
+
+msgid "HDFS"
+msgstr "HDFS"
+
+msgid "Redis"
+msgstr "Redis"
+
+msgid "String"
+msgstr "String"
+
+msgid "Number"
+msgstr "Number"
+
+msgid "Integer"
+msgstr "Integer"
+
+msgid "Object"
+msgstr "Object"
+
+msgid "Array"
+msgstr "Array"
+
+msgid "Boolean"
+msgstr "Boolean"
+
+msgid "Null"
+msgstr "Null"
+
+msgid "Field Type Not Match"
+msgstr "Field Type Not Match"
+
+msgid "Schema Empty"
+msgstr "Schema Empty"
+
+msgid "Multi or None Raw Data Match"
+msgstr "Multi or None Raw Data Match"
+
+msgid "BK-LOG 采集插件ID"
+msgstr "Collector Plugin ID"
+
+msgid "BK-LOG 采集插件名称"
+msgstr "Collector Plugin Name"
+
+msgid "BK-LOG 采集插件英文名称"
+msgstr "Collector Plugin En Name"
+
+msgid "数据所属业务"
+msgstr "Bk Data Biz ID"
+
+msgid "结果表ID"
+msgstr "Result Table ID"
+
+msgid "索引集ID"
+msgstr "Index ID"
+
+msgid "过期时间"
+msgstr "Expiration"
+
+msgid "冷热数据时间"
+msgstr "Allocation Min Days"
+
+msgid "副本数量"
+msgstr "Replicas"
+
+msgid "分片大小"
+msgstr "ES Shards Size"
+
+msgid "额外字段"
+msgstr "Extra Fields"
+
+msgid "清洗"
+msgstr "Etl"
+
+msgid "是否有存储"
+msgstr "has Storage"
+
+msgid "是否授权"
+msgstr "is Authorizaed"
+
+msgid "采集插件"
+msgstr "Collector Plugin"
+
+msgid "所属业务"
+msgstr "Biz"
+
+msgid "DATAID"
+msgstr "DATAID"
+
+msgid "BK-LOG 采集项名称"
+msgstr "BK-LOG Collector Name"
+
+msgid "BK-LOG 采集项英文名称"
+msgstr "Collector En Name"
+
+msgid "数据来源"
+msgstr "Source Platform"
+
+msgid "自定义类型"
+msgstr "Custom Type"
+
+msgid "是否有入库"
+msgstr "Has Storage"
+
+msgid "数据关联RT"
+msgstr "Join Data RT"
+
+msgid "最新数据时间"
+msgstr "Last Data Time"
+
+msgid "已授权RT"
+msgstr "Authed RT"
+
+msgid "资源名称"
+msgstr "Resource Name"
+
+msgid "管理员"
+msgstr "Manage"
+
+msgid "连接信息"
+msgstr "Connection Info"
+
+msgid "补充信息"
+msgstr "Extra Info"
+
+msgid "Redis Config"
+msgstr "Redis Config"
+
+msgid "接入ID"
+msgstr "Data ID"
+
+msgid "清洗ID"
+msgstr "Clean ID"
+
+msgid "入库表"
+msgstr "Result Table"
+
+msgid "是否公共"
+msgstr "Is Public"
+
+msgid "BKBase HDFS Processing ID"
+msgstr "BKBase HDFS Processing ID"
+
+msgid "BKBase HDFS Table ID"
+msgstr "BKBase HDFS Table ID"
+
+msgid "HDFS Status"
+msgstr "HDFS Status"
+
+msgid "is RT Authorized"
+msgstr "is RT Authorized"
+
+msgid "快照配置"
+msgstr "Snapshot Config"
+
+msgid "操作时间"
+msgstr "Operate Time"
+
+msgid "集群操作记录"
+msgstr "Storage Operate Log"
+
+msgid "设置默认集群"
+msgstr "Change Default Storage"
+
+msgid "集群列表"
+msgstr "Storage List"
+
+msgid "创建或更新Redis"
+msgstr "Create or update redis"
+
+msgid "集群名称"
+msgstr "Storage Name"
+
+msgid "是否开启冷热分离"
+msgstr "Enable Hot Warm"
+
+msgid "冷热数据生效时间"
+msgstr "Allocation Min Days"
+
+msgid "热节点属性名称"
+msgstr "Hot Attr Name"
+
+msgid "热节点属性值"
+msgstr "Hot Attr Value"
+
+msgid "冷节点属性名称"
+msgstr "Warm Attr Name"
+
+msgid "冷节点属性值"
+msgstr "Warm Attr Value"
+
+msgid "es设置"
+msgstr "Setup Config"
+
+msgid "来源"
+msgstr "Source"
+
+msgid "负责人"
+msgstr "Manager"
+
+msgid "集群描述"
+msgstr "Storage Description"
+
+msgid "当冷热数据处于开启状态时，冷热节点属性配置不能为空"
+msgstr "Hot and cold node property configuration can not be empty when hot and cold data is enabled"
+
+msgid "数据降冷时间应小于数据过期时间"
+msgstr "Allocation days should be less than retention days"
+
+msgid "Namespace"
+msgstr "Namespace"
+
+msgid "集群端口"
+msgstr "Storage Port"
+
+msgid "是否开启冷热数据"
+msgstr "Enable Hot Warm"
+
+msgid "哨兵集群"
+msgstr "Sentinel Storage"
+
+msgid "哨兵名"
+msgstr "Sentinel Name"
+
+msgid "哨兵HOST"
+msgstr "Sentinel Host"
+
+msgid "哨兵端口"
+msgstr "Sentinel Port"
+
+msgid "HOST"
+msgstr "Host"
+
+msgid "集群名"
+msgstr "Storage Name"
+
+msgid "集群英文名称"
+msgstr "Storage En Name"
+
+msgid "ChangePluginStorageFailed"
+msgstr "ChangePluginStorageFailed"
+
+msgid "ChangeCollectorStorageFailed"
+msgstr "ChangeCollectorStorageFailed"
+
+msgid "健康检测"
+msgstr "Health Check"
+
+msgid "超链接"
+msgstr "Hyperlink"
+
+msgid "审计中心 | 腾讯蓝鲸智云"
+msgstr "BK Audit | Tencent BlueKing"
+
+msgid "蓝鲸审计中心"
+msgstr "BK Audit"
+
+msgid "联系BK助手"
+msgstr "Contact BK Customer Service"
+
+msgid "蓝鲸桌面"
+msgstr "BlueKing Desktop"
+
+msgid "技术支持"
+msgstr "Technical Support"
+
+msgid "社区论坛"
+msgstr "Community Forum"
+
+msgid "产品官网"
+msgstr "Official Website"
+
+msgid "ES检索"
+msgstr "ES Query"
+
+msgid "WebUI"
+msgstr "WebUI"
+
+msgid "API"
+msgstr "API"
+
+msgid "Console"
+msgstr "Console"
+
+msgid "Other"
+msgstr "Other"
+
+msgid "个人账号"
+msgstr "Personal Account"
+
+msgid "平台账号"
+msgstr "Platform Account"
+
+msgid "集群不存在"
+msgstr "集群不存在"
+
+msgid "搜索(All)"
+msgstr "Search(All)"
+
+msgid "搜索"
+msgstr "Search"
+
+msgid "时间范围"
+msgstr "Time Limit"
+
+msgid "多个字段使用逗号分隔"
+msgstr "Split by commas"
+
+msgid "多个字段以半角逗号分隔"
+msgstr "Split by commas"
+
+msgid "Risk"
+msgstr "Risk"
+
+msgid "风险ID"
+msgstr "Risk ID"
+
+msgid "风险描述"
+msgstr "Risk Description"
+
+msgid "责任人"
+msgstr "Operator"
+
+msgid "风险等级"
+msgstr "Risk Level"
+
+msgid "处理套餐名称"
+msgstr "Auto Process Name"
+
+msgid "说明"
+msgstr "Description"
+
+msgid "审计关联单据"
+msgstr "Audit Relate Ticket"
+
+msgid "BK Monitor"
+msgstr "BK Monitor"
+
+msgid "原始事件ID"
+msgstr "Raw Event ID"
+
+msgid "命中策略(ID)"
+msgstr "Matched Strategy (ID)"
+
+msgid "事件证据"
+msgstr "Event Evidence"
+
+msgid "事件类型"
+msgstr "Event Type"
+
+msgid "事件拓展数据"
+msgstr "Event Expand Data"
+
+msgid "事件发生时间"
+msgstr "Event Time"
+
+msgid "事件来源"
+msgstr "Event Source"
+
+msgid "新"
+msgstr "New"
+
+msgid "自动处理审批中"
+msgstr "For Approve"
+
+msgid "套餐处理中"
+msgstr "Auto Process"
+
+msgid "已关单"
+msgstr "Closed"
+
+msgid "已完成"
+msgstr "Finished"
+
+msgid "误报"
+msgstr "Mis Report"
+
+msgid "Create Risk Failed"
+msgstr "Create Risk Failed"
+
+#, python-format
+msgid "Strategy ID: %s; Raw Event ID:\t%s"
+msgstr "Strategy ID: %s; Raw Event ID:\t%s"
+
+msgid "BkAudit"
+msgstr "BkAudit"
+
+msgid "新增风险提醒"
+msgstr "New Risk"
+
+msgid "Risk ID"
+msgstr "Risk ID"
+
+msgid "命中策略"
+msgstr "Match Startegy"
+
+msgid "风险发现时间"
+msgstr "Risk Discover Time"
+
+msgid "Show Detail"
+msgstr "Show Detail"
+
+msgid "默认流转"
+msgstr "Default"
+
+msgid "风险单待办提醒"
+msgstr "Risk Ticket Pending Remind"
+
+msgid "流转新风险"
+msgstr "New Risk"
+
+msgid "关单"
+msgstr "Close Risk"
+
+msgid "自动处理审批"
+msgstr "Approve"
+
+#, python-format
+msgid "【审计中心】执行%s审批"
+msgstr "[BKAudit] Process %s wating for approve"
+
+msgid "自动套餐处理"
+msgstr "Auto Process"
+
+msgid "套餐执行成功后自动关单"
+msgstr "AUto Process Finished, Close Risk"
+
+msgid "重开风险"
+msgstr "Reopen Risk"
+
+#, python-format
+msgid "%s 标记误报，系统自动关单"
+msgstr "%s label as misreport, ticket closed by system"
+
+msgid "解除误报"
+msgstr "Reopen Misreport"
+
+msgid "人工处理"
+msgstr "Await Deal"
+
+msgid "转单"
+msgstr "Trans Operator"
+
+msgid "自动处理异常"
+msgstr "Auto Process Error"
+
+msgid "Risk Status"
+msgstr "Risk Status"
+
+msgid "Risk Rule ID"
+msgstr "Risk Rule ID"
+
+msgid "Risk Rule Version"
+msgstr "Risk Rule Version"
+
+msgid "Origin Operator"
+msgstr "Origin Operator"
+
+msgid "Current Operator"
+msgstr "Current Operator"
+
+msgid "Notice Users"
+msgstr "Notice Users"
+
+msgid "Tags"
+msgstr "Tags"
+
+msgid "Risk Label"
+msgstr "Risk Label"
+
+msgid "UUID"
+msgstr "UUID"
+
+msgid "SOps Template ID"
+msgstr "SOps Template ID"
+
+msgid "Need Approve"
+msgstr "Need Approve"
+
+msgid "Approve Service ID"
+msgstr "Approve Service ID"
+
+msgid "Approve Config"
+msgstr "Approve Config"
+
+msgid "Description"
+msgstr "Description"
+
+msgid "Is Enabled"
+msgstr "Is Enabled"
+
+msgid "Process Application"
+msgstr "Process Application"
+
+msgid "Rule ID"
+msgstr "Rule ID"
+
+msgid "版本号"
+msgstr "Version"
+
+msgid "Risk Rule Name"
+msgstr "Risk Rule Name"
+
+msgid "Rule Scope"
+msgstr "Rule Scope"
+
+msgid "Process Application ID"
+msgstr "Process Application ID"
+
+msgid "Process Application Params"
+msgstr "Process Application Params"
+
+msgid "Auto Close Risk"
+msgstr "Auto Close Risk"
+
+msgid "Risk Rule"
+msgstr "Risk Rule"
+
+msgid "Risk Experience Content"
+msgstr "Risk Experience Content"
+
+msgid "Risk Experience"
+msgstr "Risk Experience"
+
+msgid "Operator"
+msgstr "Operator"
+
+msgid "Action"
+msgstr "Action"
+
+msgid "Time"
+msgstr "Time"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Ticket History"
+msgstr "Ticket History"
+
+msgid "创建事件"
+msgstr "Create Event"
+
+msgid "获取事件列表"
+msgstr "List Event"
+
+msgid "保存风险处理经验"
+msgstr "Save Risk Experience"
+
+msgid "获取风险处理经验"
+msgstr "List Risk Experience"
+
+msgid "获取处理套餐列表"
+msgstr "List Auto Process"
+
+msgid "获取所有处理套餐列表"
+msgstr "List All Auto Process"
+
+msgid "创建处理套餐"
+msgstr "Create Auto Process"
+
+msgid "更新处理套餐"
+msgstr "Update Auto Process"
+
+msgid "获取处理套餐命中的风险"
+msgstr "List Risks by Auto Process"
+
+msgid "获取处理套餐关联的规则"
+msgstr "List Rules by Auto Process"
+
+msgid "启停处理套餐"
+msgstr "Toggle Auto Process"
+
+msgid "审批内置字段"
+msgstr "Approve Build In Fields"
+
+msgid "获取风险详情"
+msgstr "Get Risk Detail"
+
+msgid "获取风险列表"
+msgstr "List Risk"
+
+msgid "获取待我处理的风险列表"
+msgstr "List Risk to Deal"
+
+msgid "获取风险字段"
+msgstr "List Risk Fields"
+
+msgid "更新风险标记"
+msgstr "Update Risk Label"
+
+msgid "获取风险状态类型"
+msgstr "List Risk Status Constants"
+
+msgid "获取风险的标签"
+msgstr "List Risk Tags"
+
+msgid "人工关单"
+msgstr "Close Risk"
+
+#, python-format
+msgid "%s 人工关单"
+msgstr "%s close risk"
+
+msgid "人工转单"
+msgstr "Trans Operator"
+
+msgid "人工执行处理套餐"
+msgstr "Execute Auth Process"
+
+msgid "强制终止处理套餐"
+msgstr "Force Revoke Auto Process"
+
+#, python-format
+msgid "节点类型异常 => %s"
+msgstr "Node Type Invalid => %s"
+
+msgid "重试处理套餐"
+msgstr "Retry Auto Process"
+
+msgid "重开单据"
+msgstr "Reopen Risk"
+
+msgid "风险处理规则列表"
+msgstr "List Risk Rules"
+
+msgid "创建风险处理规则"
+msgstr "Create Risk Rule"
+
+msgid "更新风险处理规则"
+msgstr "Update Risk Rule"
+
+msgid "删除风险处理规则"
+msgstr "Delete Risk Rule"
+
+msgid "获取处理规则命中的风险"
+msgstr "List Risks by Risk Rule"
+
+msgid "启停风险处理规则"
+msgstr "Toggle Risk Rule"
+
+msgid "获取风险处理规则匹配方式"
+msgstr "List Risk Rule Operator"
+
+msgid "批量调整风险处理规则优先级"
+msgstr "Batch Update Risk Rule Priority Index"
+
+#, python-format
+msgid "%s 不是有效的 JSON"
+msgstr "%s Invalid"
+
+msgid "Event IDs"
+msgstr "Event IDs"
+
+msgid "Event ID"
+msgstr "Event ID"
+
+msgid "Start Time"
+msgstr "Start Time"
+
+msgid "End Time"
+msgstr "End Time"
+
+msgid "Page"
+msgstr "Page"
+
+msgid "Page Size"
+msgstr "Page Size"
+
+msgid "Total Pages"
+msgstr "Total Pages"
+
+msgid "Total"
+msgstr "Total"
+
+msgid "Events"
+msgstr "Events"
+
+msgid "Strategy ID"
+msgstr "Strategy ID"
+
+msgid "Risk Type"
+msgstr "Risk Type"
+
+msgid "Event Content"
+msgstr "Event Content"
+
+msgid "未配置审批流"
+msgstr "Approve Service Not Set"
+
+msgid "处理套餐名称重复"
+msgstr "Auto Process Name Duplicate"
+
+msgid "适用范围匹配值异常"
+msgstr "Scope Invalid"
+
+msgid "规则名称重复"
+msgstr "Risk Rule Name Duplicate"
+
+msgid "Misreport Description Not Set"
+msgstr "Misreport Description Not Set"
+
+msgid "Rule Name"
+msgstr "Rule Name"
+
+msgid "Update User"
+msgstr "Update User"
+
+msgid "处理说明"
+msgstr "Deal Desciption"
+
+msgid "新处理人"
+msgstr "New Operator"
+
+msgid "Process Risk Ticket Failed"
+msgstr "Process Risk Ticket Failed"
+
+#, python-format
+msgid ""
+"ProcessClass: %s\n"
+"RiskID: %s\n"
+"Error: %s"
+msgstr ""
+"ProcessClass: %s\n"
+"RiskID: %s\n"
+"Error: %s"
+
+#, python-format
+msgid "执行%s节点失败，转人工处理"
+msgstr "Process %s Node Failed, Trans Operator to Security Person"
+
+msgid "Control Type Name"
+msgstr "Control Type Name"
+
+msgid "Strategy V2"
+msgstr "Strategy V2"
+
+msgid "Has Update"
+msgstr "Has Update"
+
+msgid "Disabled"
+msgstr "Disabled"
+
+msgid "Start Failed"
+msgstr "Start Failed"
+
+msgid "Update Failed"
+msgstr "Update Failed"
+
+msgid "Stop Failed"
+msgstr "Stop Failed"
+
+msgid "Delete Failed"
+msgstr "Delete Failed"
+
+msgid "Starting"
+msgstr "Starting"
+
+msgid "Updating"
+msgstr "Updating"
+
+msgid "Stopping"
+msgstr "Stopping"
+
+msgid "Equal"
+msgstr "Equal"
+
+msgid "NotEqual"
+msgstr "NotEqual"
+
+msgid "Regex"
+msgstr "Regex"
+
+msgid "NotRegex"
+msgstr "NotRegex"
+
+msgid "Include"
+msgstr "Include"
+
+msgid "Exclude"
+msgstr "Exclude"
+
+msgid "致命"
+msgstr "Fatal"
+
+msgid "预警"
+msgstr "Warning"
+
+msgid "提醒"
+msgstr "Remind"
+
+msgid "Event Log"
+msgstr "Event Log"
+
+msgid "Asset Data"
+msgstr "Asset Data"
+
+msgid "CDC"
+msgstr "CDC"
+
+msgid "Static"
+msgstr "Static"
+
+msgid "Public Field"
+msgstr "Public Field"
+
+msgid "Extend Field"
+msgstr "Extend Field"
+
+msgid "Control Changed"
+msgstr "Control Changed"
+
+msgid "Strategy Pending"
+msgstr "Strategy Pending"
+
+msgid "Empty Fields"
+msgstr "Empty Fields"
+
+msgid "Strategy Status Unexpected"
+msgstr "Strategy Status Unexpected"
+
+msgid "Strategy Name"
+msgstr "Strategy Name"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "Configs"
+msgstr "Configs"
+
+msgid "Status Message"
+msgstr "Statu Message"
+
+msgid "Backend Data"
+msgstr "Backend Data"
+
+msgid "Notice Groups"
+msgstr "Notice Groups"
+
+msgid "Strategy"
+msgstr "Strategy"
+
+msgid "Strategy Tag"
+msgstr "Strategy Tag"
+
+msgid "Create Strategy"
+msgstr "Create Strategy"
+
+msgid "Update Strategy"
+msgstr "Update Strategy"
+
+msgid "Delete Strategy"
+msgstr "Delete Strategy"
+
+msgid "List Strategy"
+msgstr "List Strategy"
+
+msgid "List All Strategy"
+msgstr "List All Strategy"
+
+msgid "Toggle Strategy"
+msgstr "Toggle Strategy"
+
+msgid "Retry Strategy"
+msgstr "Retry Strategy"
+
+msgid "List Has Update Strategy"
+msgstr "List Has Update Strategy"
+
+msgid "List Strategy Tags"
+msgstr "List Strategy Tags"
+
+msgid "List Strategy Fields"
+msgstr "List Strategy Fields"
+
+msgid "Get Strategy Field Value"
+msgstr "Get Strategy Field Value"
+
+msgid "Get Strategy Common"
+msgstr "Get Strategy Common"
+
+msgid "List Tables"
+msgstr "List Tables"
+
+msgid "Get RT Fields"
+msgstr "Get RT Fields"
+
+msgid "Get Strategy Status"
+msgstr "Get Strategy Status"
+
+msgid "Control Version not Exists"
+msgstr "Control Version not Exists"
+
+msgid "Strategy Name Duplicate"
+msgstr "Strategy Name Duplicate"
+
+msgid "Toggle"
+msgstr "Toggle"
+
+msgid "Strategy Count"
+msgstr "Strategy Count"
+
+msgid "Key"
+msgstr "Key"
+
+msgid "Value"
+msgstr "Value"
+
+msgid "Method"
+msgstr "Method"
+
+msgid "Condition"
+msgstr "Condition"
+
+msgid "Threshold"
+msgstr "Threshold"
+
+msgid "Count"
+msgstr "Count"
+
+msgid "Alert Window"
+msgstr "Alert Window"
+
+msgid "Dimension"
+msgstr "Dimension"
+
+msgid "Interval"
+msgstr "Interval"
+
+msgid "Algorithms"
+msgstr "Algorithms"
+
+msgid "Detects"
+msgstr "Detects"
+
+msgid "Field Name"
+msgstr "Field Name"
+
+msgid "System ID"
+msgstr "System ID"
+
+msgid "Label"
+msgstr "Label"
+
+msgid "Children"
+msgstr "Children"
+
+msgid "Action ID"
+msgstr "Action ID"
+
+msgid "Field Type"
+msgstr "Field Type"
+
+msgid "Config"
+msgstr "Config"
+
+msgid "Strategy Operator"
+msgstr "Strategy Operator"
+
+msgid "Filter Operator"
+msgstr "Filter Operator"
+
+msgid "Table Type"
+msgstr "Table Type"
+
+msgid "Strategy Status"
+msgstr "Strategy Status"
+
+msgid "Offset Unit"
+msgstr "Offset Unit"
+
+msgid "Mapping Type"
+msgstr "Mapping Type"
+
+msgid "Connector"
+msgstr "Connector"
+
+msgid "Source Field"
+msgstr "Source Field"
+
+msgid "Source Type"
+msgstr "Source Type"
+
+msgid "Result Table ID"
+msgstr "Result Table ID"
+
+msgid "BK Biz ID"
+msgstr "BK Biz ID"
+
+msgid "Filter Config"
+msgstr "Filter Config"
+
+msgid "Fields"
+msgstr "Fields"
+
+msgid "Schedule Period"
+msgstr "Schedule Period"
+
+msgid "Schedule Period Unit"
+msgstr "Schedule Period Unit"
+
+msgid "Data Source"
+msgstr "Data Source"
+
+msgid "配置类型"
+msgstr "Config Type"
+
+msgid "AIOPS Config"
+msgstr "AIOPS Config"
+
+msgid "Table ID"
+msgstr "Table ID"
+
+msgid "value"
+msgstr "value"
+
+msgid "Strategy IDs"
+msgstr "Strategy IDs"
+
+msgid "Strategy ID Invalid"
+msgstr "Strategy ID Invalid"
+
+msgid "版本日志"
+msgstr "Version Log"
+
+msgid "发布时间"
+msgstr "Release At"
+
+msgid "查看时间"
+msgstr "Visit At"
+
+msgid "版本日志访问记录"
+msgstr "Version Log Visit History"
+
+msgid "版本列表"
+msgstr "Version List"
+
+msgid "版本信息"
+msgstr "Version Information"
+
+msgid "系统权限不足"
+msgstr "Insufficient System Permissions"
+
+msgid "你的角色所拥有的权限不足"
+msgstr "Your Role Has Insufficient Permissions"
+
+msgid "系统出现异常"
+msgstr "The System Is Abnormal"
+
+msgid "请记录下错误场景并及时与开发人员联系"
+msgstr "Please Note The Error Scenario And Contact The Developer Promptly"
+
+msgid "管理"
+msgstr "Manage"
+
+msgid "您暂时不能访问该站点的后台管理，这是以下原因造成的："
+msgstr "You cannot visit admin, caused by: "
+
+msgid "你还没登录，请重新刷新页面！"
+msgstr "Please login and reafresh this page"
+
+msgid "用户"
+msgstr "User"
+
+msgid "未激活！"
+msgstr "Inactivated"
+
+msgid "没有管理员权限，请联系管理员！"
+msgstr "No Administrator Privileges, Please Contact The Administrator!"
+
+msgid "如有需要，请联系管理员或开发者为您解决上述问题。"
+msgstr "Please Contact Admin"
+
+msgid "蓝鲸开发框架(Django模板)"
+msgstr "BK Development Framework (Django Template)"
+
+msgid "首页"
+msgstr "Index"
+
+msgid "开发指引"
+msgstr "Development Guidelines"
+
+msgid "联系我们"
+msgstr "Contact Us"
+
+msgid "语言"
+msgstr "Language"
+
+msgid "QQ咨询(800802001)"
+msgstr "QQ Consulting (800802001)"
+
+msgid "蓝鲸论坛"
+msgstr "BK Forum"
+
+msgid "蓝鲸官网"
+msgstr "BK Official Website"
+
+msgid "蓝鲸智云工作台"
+msgstr "BK Workbench"
+
+msgid "蓝鲸智云 版权所有"
+msgstr "BK All Rights Reserved"

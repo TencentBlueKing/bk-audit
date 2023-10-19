@@ -1,0 +1,218 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+"""
+
+from bk_resource import api
+from blueapps.utils.logger import logger
+from django.conf import settings
+from django.db.models import QuerySet
+from django.utils.translation import gettext
+
+from apps.meta.models import ResourceType, System
+from apps.meta.utils.fields import (
+    FIELD_TYPE_STRING,
+    FIELD_TYPE_TEXT,
+    INSTANCE_ID,
+    RESOURCE_TYPE_ID,
+    SNAPSHOT_INSTANCE_DATA,
+    SNAPSHOT_INSTANCE_NAME,
+    SYSTEM_ID,
+)
+from apps.notice.handlers import ErrorMsgHandler
+from services.web.databus.collector.etl.base import EtlStorage
+from services.web.databus.collector.join.etl_storage import (
+    AssetEtlStorageHandler,
+    JoinDataEtlStorageHandler,
+)
+from services.web.databus.collector.join.http_pull import HttpPullHandler
+from services.web.databus.constants import (
+    ASSET_RT_FORMAT,
+    JOIN_DATA_RT_FORMAT,
+    SnapshotRunningStatus,
+    SnapShotStorageChoices,
+)
+from services.web.databus.models import CollectorConfig, Snapshot
+
+
+class JoinConfig:
+    def __init__(self, result_table_id):
+        self.result_table_id = result_table_id
+
+    @property
+    def config(self):
+        return {
+            "result_table_id": self.result_table_id,
+            "join_on": [
+                {"this_field": SYSTEM_ID.field_name, "target_field": "system_id"},
+                {"this_field": INSTANCE_ID.field_name, "target_field": "id"},
+                {"this_field": RESOURCE_TYPE_ID.field_name, "target_field": "resource_type_id"},
+            ],
+            "select": [
+                {"field_name": "data", "type": FIELD_TYPE_TEXT, "as": SNAPSHOT_INSTANCE_DATA.field_name},
+                {"field_name": "display_name", "type": FIELD_TYPE_STRING, "as": SNAPSHOT_INSTANCE_NAME.field_name},
+            ],
+        }
+
+    @classmethod
+    def fields(cls):
+        return [
+            {
+                "field_name": SNAPSHOT_INSTANCE_DATA.field_name,
+                "field_type": SNAPSHOT_INSTANCE_DATA.field_type,
+                "field_alias": SNAPSHOT_INSTANCE_DATA.alias_name,
+                "is_dimension": SNAPSHOT_INSTANCE_DATA.is_dimension,
+                "field_index": 100,
+            },
+            {
+                "field_name": SNAPSHOT_INSTANCE_NAME.field_name,
+                "field_type": SNAPSHOT_INSTANCE_NAME.field_type,
+                "field_alias": SNAPSHOT_INSTANCE_NAME.alias_name,
+                "is_dimension": SNAPSHOT_INSTANCE_NAME.is_dimension,
+                "field_index": 101,
+            },
+        ]
+
+
+class JoinDataHandler:
+    storage_type = SnapShotStorageChoices.REDIS.value
+
+    def __init__(self, system_id: str, resource_type_id: str):
+        self.system_id = system_id
+        self.system = System.objects.get(system_id=system_id)
+        self.resource_type_id = resource_type_id
+        self.resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
+        self.collectors = self.load_collectors()
+        self.snapshot = self.get_snapshot_instance()
+
+    def get_snapshot_instance(self):
+        snapshot, _ = Snapshot.objects.get_or_create(system_id=self.system_id, resource_type_id=self.resource_type_id)
+        return snapshot
+
+    def load_collectors(self) -> QuerySet:
+        return CollectorConfig.objects.filter(system_id=self.system_id, is_deleted=False, join_data_rt=None).exclude(
+            bkbase_table_id=None
+        )
+
+    def start(self):
+        try:
+            # 创建DATAID
+            self.create_dataid()
+            # 创建清洗入库
+            self.create_data_etl_storage()
+            # 更新采集项清洗链路
+            self.update_log_clean_link()
+            # 更新状态
+            self.update_status(SnapshotRunningStatus.RUNNING.value)
+            self.snapshot.save()
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            self.update_status(SnapshotRunningStatus.FAILED.value)
+            self.snapshot.save()
+            title = gettext("JoinDataCreateFailed")
+            content = gettext("Error: %s") % str(err)
+            ErrorMsgHandler(title, content).send()
+            logger.exception(
+                "[Start Join Data Failed] SystemID => %s, ResourceTypeID => %s, SnapshotID => %s; Err => %s",
+                self.system_id,
+                self.resource_type_id,
+                self.snapshot.id,
+                err,
+            )
+
+    def update_status(self, status: str) -> None:
+        self.snapshot.status = status
+
+    def stop(self):
+        # 直接停止采集任务
+        params = {
+            "bkbase_data_id": self.snapshot.bkbase_data_id,
+            "data_scenario": "http",
+            "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
+            "config_mode": "full",
+            "scope": [{"deploy_plan_id": 0, "hosts": []}],
+        }
+        api.bk_base.stop_collector(**params)
+        # 更新状态
+        self.update_status(SnapshotRunningStatus.CLOSED.value)
+        self.snapshot.save()
+
+    def create_dataid(self):
+        # 判断是否已有
+        logger.info(f"{self.__class__.__name__} Update or Create Collector; SnapshotID => {self.snapshot.id}")
+        http_pull_handler = HttpPullHandler(self.system, self.resource_type, self.snapshot, self.storage_type)
+        self.snapshot.bkbase_data_id = http_pull_handler.update_or_create()
+        self.snapshot.save()
+
+    def create_data_etl_storage(self):
+        # 已有清洗链路不做调整
+        if self._get_table_id():
+            logger.info(f"{self.__class__.__name__} Skip EtlStorage; SnapshotID => {self.snapshot.id}")
+            return
+        # 没有清洗链路则创建
+        logger.info(f"{self.__class__.__name__} Create EtlStorage; SnapshotID => {self.snapshot.id}")
+        etl_storage_handler = JoinDataEtlStorageHandler(
+            self.snapshot.bkbase_data_id, self.system, self.resource_type, self.storage_type
+        )
+        self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id = etl_storage_handler.create()
+        self.snapshot.save()
+
+    def _get_table_id(self) -> str:
+        if self.storage_type == SnapShotStorageChoices.HDFS.value:
+            return self.snapshot.bkbase_hdfs_table_id
+        return self.snapshot.bkbase_table_id
+
+    def update_log_clean_link(self):
+        logger.info("%s Update Collector Clean Configs; SnapshotID => %s", self.__class__.__name__, self.snapshot.id)
+        for collector in self.collectors:
+            # 更新采集项清洗规则
+            etl_storage: EtlStorage = EtlStorage.get_instance(collector.etl_config)
+            etl_storage.update_or_create(
+                collector.collector_config_id,
+                collector.etl_params,
+                collector.fields,
+                self.system.namespace,
+            )
+
+    @property
+    def result_table_id(self):
+        return JOIN_DATA_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id)
+
+
+class AssetHandler(JoinDataHandler):
+    storage_type = SnapShotStorageChoices.HDFS.value
+
+    def load_collectors(self) -> QuerySet:
+        return CollectorConfig.objects.none()
+
+    def update_status(self, status: str) -> None:
+        self.snapshot.hdfs_status = status
+
+    def create_data_etl_storage(self):
+        # 已有清洗链路不做调整
+        if self._get_table_id():
+            logger.info(f"{self.__class__.__name__} Skip EtlStorage; SnapshotID => {self.snapshot.id}")
+            return
+        # 没有清洗链路则创建
+        logger.info(f"{self.__class__.__name__} Create EtlStorage; SnapshotID => {self.snapshot.id}")
+        etl_storage_handler = AssetEtlStorageHandler(
+            self.snapshot.bkbase_data_id, self.system, self.resource_type, self.storage_type
+        )
+        self.snapshot.bkbase_hdfs_processing_id, self.snapshot.bkbase_hdfs_table_id = etl_storage_handler.create()
+        self.snapshot.save()
+
+    @property
+    def result_table_id(self):
+        return ASSET_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id)

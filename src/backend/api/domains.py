@@ -1,0 +1,67 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+"""
+
+import os
+
+from django.conf import settings
+
+from api.constants import APIProvider
+from api.utils import get_endpoint
+from core.utils.distutils import strtobool
+
+APIGW_ENABLED = strtobool(os.getenv("BKAPP_USE_APIGW", "True"))
+
+# 权限中心
+BK_IAM_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stage"
+BK_IAM_API_URL = (
+    get_endpoint("bk-iam", stage=BK_IAM_APIGW_STAGE) if APIGW_ENABLED else get_endpoint("iam", APIProvider.ESB)
+)
+
+# 日志平台
+BK_LOG_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stag"
+BK_LOG_API_URL = (
+    get_endpoint("log-search", stage=BK_LOG_APIGW_STAGE) if APIGW_ENABLED else get_endpoint("bk_log", APIProvider.ESB)
+)
+
+# PaaSV3
+BK_PAAS_API_URL = get_endpoint("paasv3", stage="prod")
+
+# User Manage
+USER_MANAGE_URL = get_endpoint("usermanage", APIProvider.ESB)
+
+# BkBase
+BK_BASE_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "test"
+BK_BASE_API_URL = get_endpoint("bk-data", stage=BK_BASE_APIGW_STAGE)
+
+# BkMonitor
+BK_MONITOR_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stage"
+BK_MONITOR_API_URL = get_endpoint("bkmonitorv3", stage=BK_MONITOR_APIGW_STAGE)
+BK_MONITOR_METRIC_PROXY_URL = settings.BK_MONITOR_METRIC_PROXY_URL
+
+# CMSI
+BK_CMSI_API_URL = get_endpoint("cmsi", APIProvider.ESB, stage="prod")
+
+# Watermark
+WATERMARK_API_URL = get_endpoint("devsecops", APIProvider.APIGW)
+
+# BK SOps
+BK_SOPS_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stage"
+BK_SOPS_API_URL = get_endpoint("bk-sops", APIProvider.APIGW, stage=BK_SOPS_APIGW_STAGE)
+
+# BK ITSM
+BK_ITSM_API_URL = get_endpoint("bk-itsm", APIProvider.APIGW)

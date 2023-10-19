@@ -1,0 +1,3296 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-09-26 14:44+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "创建入库"
+msgstr "创建入库"
+
+msgid "更新入库"
+msgstr "更新入库"
+
+msgid "删除入库"
+msgstr "删除入库"
+
+msgid "创建清洗"
+msgstr "创建清洗"
+
+msgid "更新清洗"
+msgstr "更新清洗"
+
+msgid "删除清洗"
+msgstr "删除清洗"
+
+msgid "启动清洗任务"
+msgstr "启动清洗任务"
+
+msgid "停止清洗任务"
+msgstr "停止清洗任务"
+
+msgid "创建资源"
+msgstr "创建资源"
+
+msgid "更新资源"
+msgstr "更新资源"
+
+msgid "清洗预览"
+msgstr "清洗预览"
+
+msgid "查询数据源"
+msgstr "查询数据源"
+
+msgid "创建数据源"
+msgstr "创建数据源"
+
+msgid "更新数据源"
+msgstr "更新数据源"
+
+msgid "启动数据接入"
+msgstr "启动数据接入"
+
+msgid "停止数据接入"
+msgstr "停止数据接入"
+
+msgid "获取方案列表"
+msgstr "获取方案列表"
+
+msgid "获取方案详情"
+msgstr "获取方案详情"
+
+msgid "检测是否部署AIOPS"
+msgstr "检测是否部署AIOPS"
+
+msgid "RT授权"
+msgstr "RT授权"
+
+msgid "创建Flow"
+msgstr "创建Flow"
+
+msgid "启动Flow"
+msgstr "启动Flow"
+
+msgid "重启Flow"
+msgstr "重启Flow"
+
+msgid "停止Flow"
+msgstr "停止Flow"
+
+msgid "获取Flow"
+msgstr "获取Flow"
+
+msgid "获取Flow图"
+msgstr "获取Flow图"
+
+msgid "创建Flow节点"
+msgstr "创建Flow节点"
+
+msgid "更新Flow节点"
+msgstr "更新Flow节点"
+
+msgid "删除Flow节点"
+msgstr "删除Flow节点"
+
+msgid "获取结果表字段"
+msgstr "获取结果表字段"
+
+msgid "获取Flow部署状态"
+msgstr "获取Flow部署状态"
+
+msgid "获取源数据列表"
+msgstr "获取源数据列表"
+
+msgid "获取我有权限的源数据列表"
+msgstr "获取我有权限的源数据列表"
+
+msgid "获取源数据详情"
+msgstr "获取源数据详情"
+
+msgid "获取源数据最近数据"
+msgstr "获取源数据最近数据"
+
+msgid "获取结果表列表"
+msgstr "获取结果表列表"
+
+msgid "列举项目相关数据"
+msgstr "列举项目相关数据"
+
+msgid "获取消息类型"
+msgstr "获取消息类型"
+
+msgid "发送邮件"
+msgstr "发送邮件"
+
+msgid "发送企业微信"
+msgstr "企业微信群ID"
+
+msgid "发送语音"
+msgstr "发送语音"
+
+msgid "发送消息"
+msgstr "发送消息"
+
+msgid "发送微信"
+msgstr "发送微信"
+
+msgid "获取IAM系统列表"
+msgstr "获取IAM系统列表"
+
+msgid "获取IAM系统角色信息"
+msgstr "获取IAM系统角色信息"
+
+msgid "获取IAM系统信息"
+msgstr "获取IAM系统信息"
+
+msgid "服务列表查询"
+msgstr "服务列表查询"
+
+msgid "获取服务详情"
+msgstr "获取服务详情"
+
+msgid "创建单据"
+msgstr "创建单据"
+
+msgid "单据状态查询"
+msgstr "单据状态查询"
+
+msgid "查询审批结果"
+msgstr "查询审批结果"
+
+msgid "操作单据"
+msgstr "操作单据"
+
+msgid "当前业务"
+msgstr "当前业务"
+
+msgid "多业务"
+msgstr "多业务"
+
+msgid "全业务"
+msgstr "全业务"
+
+msgid "业务属性"
+msgstr "业务属性"
+
+msgid "主机"
+msgstr "主机"
+
+msgid "服务模板"
+msgstr "服务模板"
+
+msgid "集群模版"
+msgstr "集群模版"
+
+msgid "创建集群"
+msgstr "创建集群"
+
+msgid "更新集群"
+msgstr "更新集群"
+
+msgid "删除集群"
+msgstr "删除集群"
+
+msgid "存储集群列表"
+msgstr "存储集群列表"
+
+msgid "连通性测试"
+msgstr "连通性测试"
+
+msgid "批量连通性测试"
+msgstr "批量连通性测试"
+
+msgid "集群节点属性"
+msgstr "集群节点属性"
+
+msgid "业务列表"
+msgstr "业务列表"
+
+msgid "业务拓扑"
+msgstr "业务拓扑"
+
+msgid "实例列表(Node)"
+msgstr "实例列表(Node)"
+
+msgid "实例列表(IP)"
+msgstr "实例列表(IP)"
+
+msgid "获取Agent状态"
+msgstr "获取Agent状态"
+
+msgid "服务模板拓扑"
+msgstr "服务模板拓扑"
+
+msgid "节点列表(Template)"
+msgstr "节点列表(Template)"
+
+msgid "创建采集项"
+msgstr "创建采集项"
+
+msgid "更新采集"
+msgstr "更新采集"
+
+msgid "获取集群列表"
+msgstr "获取集群列表"
+
+msgid "校验Yaml合法"
+msgstr "校验Yaml合法"
+
+msgid "创建采集"
+msgstr "创建采集"
+
+msgid "获取采集项"
+msgstr "获取采集项"
+
+msgid "创建采集项清洗规则"
+msgstr "创建采集项清洗规则"
+
+msgid "获取任务下发状态(Task)"
+msgstr "获取任务下发状态(Task)"
+
+msgid "获取任务下发详情"
+msgstr "获取任务下发详情"
+
+msgid "重试订阅任务"
+msgstr "重试订阅任务"
+
+msgid "获取任务下发状态(Collector)"
+msgstr "获取任务下发状态(Collector)"
+
+msgid "批量获取任务下发状态(Collector)"
+msgstr "批量获取任务下发状态(Collector)"
+
+msgid "获取最新上报的数据"
+msgstr "获取最新上报的数据"
+
+msgid "获取清洗预览"
+msgstr "获取清洗预览"
+
+msgid "停止采集"
+msgstr "停止采集"
+
+msgid "全局配置"
+msgstr "全局配置"
+
+msgid "创建采集插件"
+msgstr "创建采集插件"
+
+msgid "更新采集插件"
+msgstr "更新采集插件"
+
+msgid "预检查采集英文名"
+msgstr "预检查采集英文名"
+
+msgid "搜索日志"
+msgstr "搜索日志"
+
+msgid "滚动查询日志"
+msgstr "滚动查询日志"
+
+msgid "重建索引集"
+msgstr "重建索引集"
+
+msgid "获取操作符"
+msgstr "获取操作符"
+
+msgid "权限检测"
+msgstr "权限检测"
+
+msgid "获取鉴权信息"
+msgstr "获取鉴权信息"
+
+msgid "获取空间列表"
+msgstr "获取空间列表"
+
+msgid "创建自定义采集"
+msgstr "创建自定义采集"
+
+msgid "创建自定义日志上报"
+msgstr "创建自定义日志上报"
+
+msgid "获取自定义日志上报最近日志"
+msgstr "获取自定义日志上报最近日志"
+
+msgid "获取上报Token"
+msgstr "获取上报Token"
+
+msgid "获取上报Host"
+msgstr "获取上报Host"
+
+msgid "用户名"
+msgstr "用户名"
+
+msgid "密码"
+msgstr "密码"
+
+msgid "默认保留天数"
+msgstr "默认保留天数"
+
+msgid "默认副本数"
+msgstr "默认副本数"
+
+msgid "集群ID"
+msgstr "集群ID"
+
+msgid "集群域名"
+msgstr "集群域名"
+
+msgid "端口"
+msgstr "端口"
+
+msgid "集群协议"
+msgstr "集群协议"
+
+msgid "是否包含集群信息"
+msgstr "是否包含集群信息"
+
+msgid "是否使用默认用户信息"
+msgstr "是否使用默认用户信息"
+
+msgid "凭据信息"
+msgstr "凭据信息"
+
+msgid "数据节点数量"
+msgstr "数据节点数量"
+
+msgid "索引数量"
+msgstr "索引数量"
+
+msgid "索引文档数量"
+msgstr "索引文档数量"
+
+msgid "节点数量"
+msgstr "节点数量"
+
+msgid "分片数量"
+msgstr "分片数量"
+
+msgid "节点状态"
+msgstr "节点状态"
+
+msgid "集群状态"
+msgstr "集群状态"
+
+msgid "节点名"
+msgstr "节点名"
+
+msgid "IP"
+msgstr "IP"
+
+msgid "节点ID"
+msgstr "节点ID"
+
+msgid "节点HOST"
+msgstr "节点HOST"
+
+msgid "节点属性"
+msgstr "节点属性"
+
+msgid "业务ID"
+msgstr "业务ID"
+
+msgid "实例类型"
+msgstr "实例类型"
+
+msgid "是否删除空节点"
+msgstr "是否删除空节点"
+
+msgid "ID"
+msgstr "ID"
+
+msgid "名称"
+msgstr "名称"
+
+msgid "实例ID"
+msgstr "实例ID"
+
+msgid "实例名"
+msgstr "实例名"
+
+msgid "对象ID"
+msgstr "对象ID"
+
+msgid "对象名"
+msgstr "对象名"
+
+msgid "默认"
+msgstr "默认"
+
+msgid "子节点"
+msgstr "子节点"
+
+msgid "运行状态"
+msgstr "运行状态"
+
+msgid "云区域ID"
+msgstr "云区域ID"
+
+msgid "下发日志"
+msgstr "下发日志"
+
+msgid "节点名称"
+msgstr "节点名称"
+
+msgid "任务ID"
+msgstr "任务ID"
+
+msgid "云服务商ID"
+msgstr "云服务商ID"
+
+msgid "创建时间"
+msgstr "创建时间"
+
+msgid "步骤"
+msgstr "步骤"
+
+msgid "是否有标签"
+msgstr "是否有标签"
+
+msgid "节点标签"
+msgstr "节点标签"
+
+msgid "节点路径"
+msgstr "节点路径"
+
+msgid "任务启动状态"
+msgstr "任务启动状态"
+
+msgid "采集项ID"
+msgstr "采集项ID"
+
+msgid "任务ID列表"
+msgstr "任务ID列表"
+
+msgid "节点信息"
+msgstr "节点信息"
+
+msgid "标签"
+msgstr "标签"
+
+msgid "Agent数量"
+msgstr "Agent数量"
+
+msgid "Agent错误数量"
+msgstr "Agent错误数量"
+
+msgid "云区域名称"
+msgstr "云区域名称"
+
+msgid "Agent状态ID"
+msgstr "Agent状态ID"
+
+msgid "Agent状态"
+msgstr "Agent状态"
+
+msgid "操作系统类型"
+msgstr "操作系统类型"
+
+msgid "是否内网IP"
+msgstr "是否内网IP"
+
+msgid "模板类型"
+msgstr "模板类型"
+
+msgid "业务名称"
+msgstr "业务名称"
+
+msgid "多个实例以英文逗号分隔"
+msgstr "多个实例以英文逗号分隔"
+
+msgid "分隔符"
+msgstr "分隔符"
+
+msgid "正则表达式"
+msgstr "正则表达式"
+
+msgid "是否保留原文"
+msgstr "是否保留原文"
+
+msgid "BK-LOG 采集项ID"
+msgstr "BK-LOG 采集项ID"
+
+msgid "云服务商"
+msgstr "云服务商"
+
+msgid "实例ID列表(BCS)"
+msgstr "实例ID列表(BCS)"
+
+msgid "清洗类型"
+msgstr "清洗类型"
+
+msgid "日志内容"
+msgstr "日志内容"
+
+msgid "多个使用英文逗号分隔"
+msgstr "多个使用英文逗号分隔"
+
+msgid "订阅ID"
+msgstr "订阅ID"
+
+msgid "状态"
+msgstr "状态"
+
+msgid "状态描述"
+msgstr "状态描述"
+
+msgid "数量"
+msgstr "数量"
+
+msgid "成功数量"
+msgstr "成功数量"
+
+msgid "失败数量"
+msgstr "失败数量"
+
+msgid "无结果数量"
+msgstr "无结果数量"
+
+msgid "字段名"
+msgstr "字段名"
+
+msgid "操作符"
+msgstr "操作符"
+
+msgid "值"
+msgstr "值"
+
+msgid "条件"
+msgstr "条件"
+
+msgid "类型"
+msgstr "类型"
+
+msgid "权限信息"
+msgstr "权限信息"
+
+msgid "权限URL"
+msgstr "权限URL"
+
+msgid "YAML配置的base64"
+msgstr "YAML配置的base64"
+
+msgid "base64编码解析失败"
+msgstr "base64编码解析失败"
+
+msgid "校验结果"
+msgstr "校验结果"
+
+msgid "校验详情"
+msgstr "校验详情"
+
+msgid "ES"
+msgstr "ES"
+
+msgid "查询告警策略"
+msgstr "查询告警策略"
+
+msgid "保存告警策略"
+msgstr "保存告警策略"
+
+msgid "删除告警策略"
+msgstr "删除告警策略"
+
+msgid "启停告警策略"
+msgstr "启停告警策略"
+
+msgid "聚合查询"
+msgstr "聚合查询"
+
+msgid "获取变量值"
+msgstr "获取变量值"
+
+msgid "搜索通知组"
+msgstr "搜索通知组"
+
+msgid "保存通知组"
+msgstr "保存通知组"
+
+msgid "删除通知组"
+msgstr "删除通知组"
+
+msgid "查询告警"
+msgstr "查询告警"
+
+msgid "获取集群信息"
+msgstr "获取集群信息"
+
+msgid "上报到监控自定义指标"
+msgstr "上报到监控自定义指标"
+
+msgid "来源标识如IP"
+msgstr "来源标识如IP"
+
+msgid "自定义指标"
+msgstr "自定义指标"
+
+msgid "自定义维度"
+msgstr "自定义维度"
+
+msgid "数据时间(ms)"
+msgstr "数据时间(ms)"
+
+msgid "数据通道标识"
+msgstr "数据通道标识"
+
+msgid "数据通道标识验证码"
+msgstr "数据通道标识验证码"
+
+msgid "指标数据"
+msgstr "指标数据"
+
+msgid "查询多平台应用信息"
+msgstr "查询多平台应用信息"
+
+msgid "查询业务下的模板列表"
+msgstr "查询业务下的模板列表"
+
+msgid "查询业务下单个模板详情"
+msgstr "查询业务下单个模板详情"
+
+msgid "通过业务流程模板创建任务"
+msgstr "通过业务流程模板创建任务"
+
+msgid "开始执行任务"
+msgstr "开始执行任务"
+
+msgid "查询任务执行状态"
+msgstr "查询任务执行状态"
+
+msgid "操作任务"
+msgstr "操作任务"
+
+msgid "获取节点数据"
+msgstr "获取节点数据"
+
+msgid "操作节点"
+msgstr "操作节点"
+
+msgid "获取用户列表"
+msgstr "获取用户列表"
+
+msgid "获取单个用户信息"
+msgstr "获取单个用户信息"
+
+msgid "获取用户快照Schema"
+msgstr "获取用户快照Schema"
+
+msgid "Generate Watermark"
+msgstr "生成水印"
+
+msgid "审计"
+msgstr "审计"
+
+msgid "系统不存在"
+msgstr "系统不存在"
+
+msgid "配置不存在"
+msgstr "配置不存在"
+
+msgid "参数异常"
+msgstr "参数异常"
+
+msgid "关联任务处理中，请勿重复操作"
+msgstr "关联任务处理中，请勿重复操作"
+
+msgid "存储变更中"
+msgstr "存储变更中"
+
+msgid "数据关联预检查失败，接入系统未实现对应方法"
+msgstr "数据关联预检查失败，接入系统未实现对应方法"
+
+msgid "未能匹配分隔符，请确认"
+msgstr "未能匹配分隔符，请确认"
+
+msgid "JSON语法异常，请确认"
+msgstr "JSON语法异常，请确认"
+
+msgid "正则表达式有误"
+msgstr "正则表达式有误"
+
+msgid "必须设置时间字段"
+msgstr "必须设置时间字段"
+
+msgid "语言标识[language]为空或有误"
+msgstr "语言标识[language]为空或有误"
+
+msgid "未开启系统初始化"
+msgstr "未开启系统初始化"
+
+#, python-format
+msgid "检索数量超过限制，仅允许检索前%(count)s条"
+msgstr "检索数量超过限制，仅允许检索前%(count)s条"
+
+#, python-format
+msgid "特性[%s]不存在"
+msgstr "特性[%s]不存在"
+
+#, python-format
+msgid "特性ID[%s]不合法"
+msgstr "特性ID[%s]不合法"
+
+msgid "页码错误，请重新选择"
+msgstr "页码错误，请重新选择"
+
+msgid "通知组不存在"
+msgstr "通知组不存在"
+
+msgid "Healthz状态异常"
+msgstr "Healthz状态异常"
+
+msgid "策略变更中，请稍后操作"
+msgstr "策略变更中，请稍后操作"
+
+msgid "解析Log失败"
+msgstr "解析Log失败"
+
+msgid "特性"
+msgstr "特性"
+
+msgid "已关闭"
+msgstr "已关闭"
+
+msgid "测试环境"
+msgstr "测试环境"
+
+msgid "正式环境"
+msgstr "正式环境"
+
+msgid "已启用"
+msgstr "已启用"
+
+msgid "特性开关ID"
+msgstr "特性开关ID"
+
+msgid "特性开关别名"
+msgstr "特性开关别名"
+
+msgid "特性开关status"
+msgstr "特性开关status"
+
+msgid "是否在前端展示"
+msgstr "是否在前端展示"
+
+msgid "特性开关配置"
+msgstr "特性开关配置"
+
+msgid "特性开关"
+msgstr "特性开关"
+
+msgid "云区域"
+msgstr "云区域"
+
+msgid "特性ID"
+msgstr "特性ID"
+
+msgid "待处理"
+msgstr "待处理"
+
+msgid "审批中"
+msgstr "审批中"
+
+msgid "待认领"
+msgstr "待认领"
+
+msgid "待分派"
+msgstr "待分派"
+
+msgid "被终止"
+msgstr "被终止"
+
+msgid "已结束"
+msgstr "已结束"
+
+msgid "执行失败"
+msgstr "执行失败"
+
+msgid "被撤销"
+msgstr "被撤销"
+
+msgid "被挂起"
+msgstr "被挂起"
+
+msgid "撤销"
+msgstr "撤销"
+
+msgid "获取服务列表"
+msgstr "获取服务列表"
+
+msgid "获取单据状态常量"
+msgstr "获取单据状态常量"
+
+msgid "元数据"
+msgstr "元数据"
+
+msgid "敏感对象(操作)"
+msgstr "敏感对象(操作)"
+
+msgid "敏感对象(资源)"
+msgstr "敏感对象(资源)"
+
+msgid "DBA托管"
+msgstr "DBA托管"
+
+msgid "腾讯云"
+msgstr "腾讯云"
+
+msgid "1天"
+msgstr "1天"
+
+msgid "3天"
+msgstr "3天"
+
+msgid "7天"
+msgstr "7天"
+
+msgid "14天"
+msgstr "14天"
+
+msgid "30天"
+msgstr "30天"
+
+msgid "竖线(|)"
+msgstr "竖线(|)"
+
+msgid "逗号(,)"
+msgstr "逗号(,)"
+
+msgid "反引号(`)"
+msgstr "反引号(`)"
+
+msgid "空格"
+msgstr "空格"
+
+msgid "分号(;)"
+msgstr "分号(;)"
+
+msgid "业务配置"
+msgstr "业务配置"
+
+msgid "应用配置"
+msgstr "应用配置"
+
+msgid "命名空间"
+msgstr "命名空间"
+
+msgid "升序"
+msgstr "升序"
+
+msgid "降序"
+msgstr "降序"
+
+msgid "业务"
+msgstr "业务"
+
+msgid "BCS项目"
+msgstr "BCS项目"
+
+msgid "研发项目"
+msgstr "研发项目"
+
+msgid "蓝盾项目"
+msgstr "蓝盾项目"
+
+msgid "未知"
+msgstr "未知"
+
+msgid "Container"
+msgstr "容器"
+
+msgid "Node"
+msgstr "节点"
+
+msgid "标准输出"
+msgstr "标准输出"
+
+msgid "JSON"
+msgstr "JSON"
+
+msgid "正则"
+msgstr "正则"
+
+msgid "计算平台JSON"
+msgstr "计算平台JSON"
+
+msgid "字符串过滤"
+msgstr "字符串过滤"
+
+msgid "分隔符过滤"
+msgstr "分隔符过滤"
+
+msgid "保留匹配字符串"
+msgstr "保留匹配字符串"
+
+msgid "Namespace不存在"
+msgstr "Namespace不存在"
+
+msgid "应用信息不存在"
+msgstr "应用信息不存在"
+
+msgid "Tag Name Invalid"
+msgstr "Tag Name Invalid"
+
+msgid "配置级别"
+msgstr "配置级别"
+
+msgid "配置归属Key"
+msgstr "配置归属Key"
+
+msgid "配置Key"
+msgstr "配置Key"
+
+msgid "配置Value"
+msgstr "配置Value"
+
+msgid "系统全局配置"
+msgstr "系统全局配置"
+
+msgid "namespace"
+msgstr "namespace"
+
+msgid "系统ID"
+msgstr "系统ID"
+
+msgid "英文名称"
+msgstr "英文名称"
+
+msgid "客户端"
+msgstr "客户端"
+
+msgid "系统配置"
+msgstr "系统配置"
+
+msgid "应用图标"
+msgstr "应用图标"
+
+msgid "访问地址"
+msgstr "访问地址"
+
+msgid "应用描述"
+msgstr "应用描述"
+
+msgid "接入系统"
+msgstr "接入系统"
+
+msgid "角色名称"
+msgstr "角色名称"
+
+msgid "系统角色"
+msgstr "系统角色"
+
+msgid "资源类型ID"
+msgstr "资源类型ID"
+
+msgid "敏感等级"
+msgstr "敏感等级"
+
+msgid "资源类型配置"
+msgstr "资源类型配置"
+
+msgid "版本"
+msgstr "版本"
+
+msgid "描述信息"
+msgstr "描述信息"
+
+msgid "资源类型"
+msgstr "资源类型"
+
+msgid "操作ID"
+msgstr "操作ID"
+
+msgid "操作类型"
+msgstr "操作类型"
+
+msgid "操作"
+msgstr "操作"
+
+msgid "字段名称"
+msgstr "字段名称"
+
+msgid "字段类型"
+msgstr "字段类型"
+
+msgid "别名"
+msgstr "别名"
+
+msgid "是否分词"
+msgstr "是否分词"
+
+msgid "是否时间字段"
+msgstr "是否时间字段"
+
+msgid "是否为Json格式"
+msgstr "是否为Json格式"
+
+msgid "是否纬度"
+msgstr "是否纬度"
+
+msgid "是否删除"
+msgstr "是否删除"
+
+msgid "是否必须"
+msgstr "是否必须"
+
+msgid "是否展示"
+msgstr "是否展示"
+
+msgid "是否内置"
+msgstr "是否内置"
+
+msgid "jsonschema声明"
+msgstr "jsonschema声明"
+
+msgid "描述"
+msgstr "描述"
+
+msgid "优先指数"
+msgstr "优先指数"
+
+msgid "字段"
+msgstr "字段"
+
+msgid "敏感ID"
+msgstr "敏感ID"
+
+msgid "资源ID"
+msgstr "资源ID"
+
+msgid "关联字段"
+msgstr "关联字段"
+
+msgid "是否隐藏"
+msgstr "是否隐藏"
+
+msgid "敏感信息对象"
+msgstr "敏感信息对象"
+
+msgid "字段归属页面"
+msgstr "字段归属页面"
+
+msgid "自定义字段"
+msgstr "自定义字段"
+
+msgid "用户字段"
+msgstr "用户字段"
+
+msgid "数据字段"
+msgstr "数据字段"
+
+msgid "数据键"
+msgstr "数据键"
+
+msgid "数据别名"
+msgstr "数据别名"
+
+msgid "数据字典"
+msgstr "数据字典"
+
+msgid "Tag ID"
+msgstr "标签ID"
+
+msgid "Tag Name"
+msgstr "标签名"
+
+msgid "Tag"
+msgstr "标签"
+
+msgid "获取 Namespace 列表"
+msgstr "获取 Namespace 列表"
+
+msgid "获取系统列表"
+msgstr "获取系统列表"
+
+msgid "获取系统列表(All)"
+msgstr "获取系统列表(All)"
+
+msgid "获取系统详情"
+msgstr "获取系统详情"
+
+msgid "资源类型列表"
+msgstr "资源类型列表"
+
+msgid "操作列表"
+msgstr "操作列表"
+
+msgid "资源类型列表(搜索)"
+msgstr "资源类型列表(搜索)"
+
+msgid "操作列表(搜索)"
+msgstr "操作列表(搜索)"
+
+msgid "系统成员列表"
+msgstr "系统成员列表"
+
+msgid "获取全局配置"
+msgstr "获取全局配置"
+
+msgid "获取标准字段"
+msgstr "获取标准字段"
+
+msgid "获取用户字段"
+msgstr "获取用户字段"
+
+msgid "更新用户字段"
+msgstr "更新用户字段"
+
+msgid "获取多平台应用信息"
+msgstr "获取多平台应用信息"
+
+msgid "未找到"
+msgstr "未找到"
+
+msgid "正常"
+msgstr "正常"
+
+msgid "未部署"
+msgstr "未部署"
+
+msgid "获取资源类型结构"
+msgstr "获取资源类型结构"
+
+msgid "获取本地全局配置"
+msgstr "获取本地全局配置"
+
+msgid "获取本地全局配置详情"
+msgstr "获取本地全局配置详情"
+
+msgid "设置本地全局配置"
+msgstr "设置本地全局配置"
+
+msgid "获取用户详情"
+msgstr "获取用户详情"
+
+msgid "未知用户"
+msgstr "未知用户"
+
+msgid "获取敏感对象"
+msgstr "获取敏感对象"
+
+msgid "上传数据字典文件"
+msgstr "上传数据字典文件"
+
+msgid "数据表格不存在，请检查"
+msgstr "数据表格不存在，请检查"
+
+msgid "字段不匹配，请按照模板文件配置"
+msgstr "字段不匹配，请按照模板文件配置"
+
+msgid "Save Tags"
+msgstr "保存标签"
+
+msgid "获取资源拉取信息"
+msgstr "获取资源拉取信息"
+
+msgid "搜索关键字"
+msgstr "搜索关键字"
+
+msgid "排序字段"
+msgstr "排序字段"
+
+msgid "排序方式"
+msgstr "排序方式"
+
+msgid "状态筛选"
+msgstr "状态筛选"
+
+msgid "权限"
+msgstr "权限"
+
+msgid "应用负责人"
+msgstr "应用负责人"
+
+msgid "空间ID"
+msgstr "空间ID"
+
+msgid "空间名称"
+msgstr "空间名称"
+
+msgid "空间类型ID"
+msgstr "空间类型ID"
+
+msgid "空间类型名称"
+msgstr "空间类型名称"
+
+msgid "页码"
+msgstr "页码"
+
+msgid "单页数量"
+msgstr "单页数量"
+
+msgid "返回字段"
+msgstr "返回字段"
+
+msgid "查找字段"
+msgstr "查找字段"
+
+msgid "模糊查找关键字"
+msgstr "模糊查找关键字"
+
+msgid "精准查找关键字"
+msgstr "精准查找关键字"
+
+#, python-format
+msgid "字段不在允许查询的字段列表中 => %(fields)s"
+msgstr "字段不在允许查询的字段列表中 => %(fields)s"
+
+msgid "显示名称"
+msgstr "显示名称"
+
+msgid "雇员状态"
+msgstr "雇员状态"
+
+msgid "部门"
+msgstr "部门"
+
+msgid "上级"
+msgstr "上级"
+
+msgid "拓展信息"
+msgstr "拓展信息"
+
+msgid "文件"
+msgstr "文件"
+
+msgid "事件ID"
+msgstr "事件ID"
+
+msgid "事件描述"
+msgstr "事件描述"
+
+msgid "请求ID"
+msgstr "请求ID"
+
+msgid "操作人"
+msgstr "操作人"
+
+msgid "操作人账号类型"
+msgstr "操作人账号类型"
+
+msgid "操作人租户ID"
+msgstr "操作人租户ID"
+
+msgid "操作人账号来源"
+msgstr "操作人账号来源"
+
+msgid "操作人账号"
+msgstr "操作人账号"
+
+msgid "操作起始时间"
+msgstr "操作起始时间"
+
+msgid "操作结束时间"
+msgstr "操作结束时间"
+
+msgid "事件上报模块"
+msgstr "事件上报模块"
+
+msgid "操作途径"
+msgstr "操作途径"
+
+msgid "来源IP"
+msgstr "来源IP"
+
+msgid "客户端类型"
+msgstr "客户端类型"
+
+msgid "资源实例ID"
+msgstr "资源实例ID"
+
+msgid "资源实例名"
+msgstr "资源实例名"
+
+msgid "实例当前内容"
+msgstr "实例当前内容"
+
+msgid "实例变更前内容"
+msgstr "实例变更前内容"
+
+msgid "操作结果"
+msgstr "操作结果"
+
+msgid "操作结果描述"
+msgstr "操作结果描述"
+
+msgid "拓展数据"
+msgstr "拓展数据"
+
+msgid "用户信息快照"
+msgstr "用户信息快照"
+
+msgid "资源类型快照"
+msgstr "资源类型快照"
+
+msgid "操作快照"
+msgstr "操作快照"
+
+msgid "实例名称快照"
+msgstr "实例名称快照"
+
+msgid "实例信息快照"
+msgstr "实例信息快照"
+
+msgid "来源系统"
+msgstr "来源系统"
+
+msgid "数据源ID"
+msgstr "数据源ID"
+
+msgid "索引版本号"
+msgstr "索引版本号"
+
+msgid "上报时间"
+msgstr "上报时间"
+
+msgid "入库时间"
+msgstr "入库时间"
+
+msgid "拓展字段"
+msgstr "拓展字段"
+
+msgid "数据开发任务MD5"
+msgstr "数据开发任务MD5"
+
+msgid "AIOPS开始时间"
+msgstr "AIOPS开始时间"
+
+msgid "AIOPS结束时间"
+msgstr "AIOPS结束时间"
+
+msgid "分组ID"
+msgstr "分组ID"
+
+msgid "Index"
+msgstr "索引"
+
+msgid "Copy"
+msgstr "拷贝"
+
+msgid "Timestamp"
+msgstr "时间戳"
+
+msgid "AIOPS拓展信息"
+msgstr "AIOPS拓展信息"
+
+msgid "AIOPS内置数据时间"
+msgstr "AIOPS内置数据时间"
+
+msgid "AIOPS内置处理时间"
+msgstr "AIOPS内置处理时间"
+
+msgid "操作事件名称"
+msgstr "操作事件名称"
+
+msgid "资源类型名称"
+msgstr "资源类型名称"
+
+msgid "用户信息"
+msgstr "用户信息"
+
+msgid "发送时间"
+msgstr "发送时间"
+
+msgid "Notice"
+msgstr "通知"
+
+msgid "审计中心管理员"
+msgstr "审计中心管理员"
+
+msgid "微信"
+msgstr "微信"
+
+msgid "企业微信"
+msgstr "企业微信"
+
+msgid "邮件"
+msgstr "邮件"
+
+msgid "语音"
+msgstr "语音"
+
+msgid "短信"
+msgstr "短信"
+
+msgid "通知组名称重复"
+msgstr "通知组名称重复"
+
+msgid "此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"
+msgstr "此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"
+
+msgid "异常信息"
+msgstr "异常信息"
+
+msgid "TraceID"
+msgstr "TraceID"
+
+msgid "通知组ID"
+msgstr "通知组ID"
+
+msgid "通知组名称"
+msgstr "通知组名称"
+
+msgid "通知组成员"
+msgstr "通知组成员"
+
+msgid "通知配置"
+msgstr "通知配置"
+
+msgid "通知组"
+msgstr "通知组"
+
+msgid "发送方式"
+msgstr "发送方式"
+
+msgid "标题"
+msgstr "标题"
+
+msgid "内容"
+msgstr "内容"
+
+msgid "消息Hash值"
+msgstr "消息Hash值"
+
+msgid "收件人"
+msgstr "收件人"
+
+msgid "Trace ID"
+msgstr "Trace ID"
+
+msgid "是否成功"
+msgstr "是否成功"
+
+msgid "是否重复"
+msgstr "是否重复"
+
+msgid "消息记录"
+msgstr "消息记录"
+
+msgid "消息类型"
+msgstr "消息类型"
+
+msgid "通知组列表"
+msgstr "通知组列表"
+
+msgid "通知组列表(all)"
+msgstr "通知组列表(all)"
+
+msgid "通知组详情"
+msgstr "通知组详情"
+
+msgid "创建通知组"
+msgstr "创建通知组"
+
+msgid "更新通知组"
+msgstr "更新通知组"
+
+msgid "Icon"
+msgstr "Icon"
+
+msgid "关键字"
+msgstr "关键字"
+
+msgid "通知方式"
+msgstr "通知方式"
+
+msgid "RTX"
+msgstr "RTX"
+
+#, python-format
+msgid "通知组名称不能包含特殊字符 %s"
+msgstr "通知组名称不能包含特殊字符 %s"
+
+msgid "权限中心异常"
+msgstr "权限中心异常"
+
+msgid "动作ID不存在"
+msgstr "动作ID不存在"
+
+msgid "资源ID不存在"
+msgstr "资源ID不存在"
+
+msgid "获取系统信息错误"
+msgstr "获取系统信息错误"
+
+msgid "资源类型已存在"
+msgstr "资源类型已存在"
+
+msgid "资源属性名称已存在"
+msgstr "资源属性名称已存在"
+
+#, python-brace-format
+msgid "资源类型{attr_type}不存在"
+msgstr "资源类型{attr_type}不存在"
+
+msgid "资源属性类型不能为空"
+msgstr "资源属性类型不能为空"
+
+msgid "同一鉴权仅支持一种资源类型"
+msgstr "同一鉴权仅支持一种资源类型"
+
+msgid "同一鉴权仅支持一个接入系统"
+msgstr "同一鉴权仅支持一个接入系统"
+
+#, python-format
+msgid "动作ID不存在：%(action_id)s"
+msgstr "动作ID不存在：%(action_id)s"
+
+#, python-format
+msgid "获取系统信息错误：%(message)s"
+msgstr "获取系统信息错误：%(message)s"
+
+#, python-format
+msgid "资源ID不存在：%(resource_id)s"
+msgstr "资源ID不存在：%(resource_id)s"
+
+msgid "空间"
+msgstr "空间"
+
+msgid "采集项"
+msgstr "采集项"
+
+msgid "获取IAM系统配置"
+msgstr "获取IAM系统配置"
+
+msgid "检查当前用户对该动作是否有权限"
+msgstr "检查当前用户对该动作是否有权限"
+
+msgid "获取权限申请数据"
+msgstr "获取权限申请数据"
+
+msgid "查询某批资源某批操作是否有权限"
+msgstr "查询某批资源某批操作是否有权限"
+
+msgid "资源ID列表"
+msgstr "资源ID列表"
+
+msgid "未执行"
+msgstr "未执行"
+
+msgid "执行中"
+msgstr "执行中"
+
+msgid "暂停"
+msgstr "暂停"
+
+msgid "节点暂停"
+msgstr "节点暂停"
+
+msgid "已过期"
+msgstr "已过期"
+
+msgid "执行成功"
+msgstr "执行成功"
+
+msgid "已终止"
+msgstr "已终止"
+
+msgid "终止任务"
+msgstr "终止任务"
+
+msgid "重试"
+msgstr "重试"
+
+msgid "获取执行模板列表"
+msgstr "获取执行模板列表"
+
+msgid "获取执行模板详情"
+msgstr "获取执行模板详情"
+
+msgid "获取任务状态常量"
+msgstr "获取任务状态常量"
+
+msgid "审计中心"
+msgstr "审计中心"
+
+msgid "Default"
+msgstr "Default"
+
+msgid "Api"
+msgstr "Api"
+
+msgid "Puller"
+msgstr "Puller"
+
+msgid "参数验证失败"
+msgstr "参数验证失败"
+
+msgid "远程服务请求结果异常"
+msgstr "远程服务请求结果异常"
+
+msgid "组件调用异常"
+msgstr "组件调用异常"
+
+msgid "语言不支持"
+msgstr "语言不支持"
+
+msgid "获取锁失败"
+msgstr "获取锁失败"
+
+msgid "资源实例获取失败"
+msgstr "资源实例获取失败"
+
+msgid "服务不稳定，请检查组件健康状况"
+msgstr "服务不稳定，请检查组件健康状况"
+
+msgid "权限校验不通过"
+msgstr "权限校验不通过"
+
+#, python-format
+msgid "当前用户无 [%(action_name)s] 权限"
+msgstr "当前用户无 [%(action_name)s] 权限"
+
+msgid "应用身份校验失败"
+msgstr "应用身份校验失败"
+
+#, python-format
+msgid "风险状态异常 (%s)"
+msgstr "风险状态异常 (%s)"
+
+#, python-format
+msgid "无命中的风险处理规则，风险ID %s"
+msgstr "无命中的风险处理规则，风险ID %s"
+
+msgid "该处理规则有未关单风险"
+msgstr "该处理规则有未关单风险"
+
+msgid "创建者"
+msgstr "创建者"
+
+msgid "更新时间"
+msgstr "更新时间"
+
+msgid "修改者"
+msgstr "修改者"
+
+msgid "Permission Denied"
+msgstr "没有权限"
+
+msgid "Staff Required"
+msgstr "员工请求"
+
+msgid "Admin Required"
+msgstr "管理员请求"
+
+msgid "Token Invalid"
+msgstr "Token验证失败"
+
+msgid "数据拉取"
+msgstr "数据拉取"
+
+msgid "Control Name"
+msgstr "控件名称"
+
+msgid "Control Type"
+msgstr "控件类型"
+
+msgid "分析"
+msgstr "分析"
+
+msgid "Operate Audit"
+msgstr "操作行为审计"
+
+msgid "BK Base AIOps"
+msgstr "AIOps"
+
+msgid "成功"
+msgstr "成功"
+
+msgid "失败"
+msgstr "失败"
+
+msgid "其他"
+msgstr "其他"
+
+msgid "RealTime"
+msgstr "实时计算"
+
+msgid "Batch"
+msgstr "离线计算"
+
+msgid "BatchV2"
+msgstr "离线计算V2"
+
+msgid "Start Flow"
+msgstr "启动任务"
+
+msgid "Stop Flow"
+msgstr "停止任务"
+
+msgid "Restart Flow"
+msgstr "重启任务"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Not Start"
+msgstr "未启动"
+
+msgid "Failed"
+msgstr "失败"
+
+msgid "="
+msgstr "="
+
+msgid "!="
+msgstr "!="
+
+msgid ">"
+msgstr ">"
+
+msgid "<"
+msgstr "<"
+
+msgid ">="
+msgstr ">="
+
+msgid "<="
+msgstr "<="
+
+msgid "AND"
+msgstr "AND"
+
+msgid "OR"
+msgstr "OR"
+
+msgid "No Failed"
+msgstr "无失败"
+
+msgid "All Finished"
+msgstr "全部完成"
+
+msgid "At Least One Finished"
+msgstr "至少成功一次"
+
+msgid "Upstream"
+msgstr "上游"
+
+msgid "Schedule"
+msgstr "调度"
+
+msgid "Hour"
+msgstr "小时"
+
+msgid "Day"
+msgstr "天"
+
+msgid "Week"
+msgstr "周"
+
+msgid "Month"
+msgstr "月"
+
+msgid "Scroll"
+msgstr "滚动"
+
+msgid "Slide"
+msgstr "滑动"
+
+msgid "Whole"
+msgstr "全部"
+
+msgid "Create or Update Flow Failed"
+msgstr "创建或更新任务失败"
+
+#, python-format
+msgid "Strategy ID:\t%s"
+msgstr "策略ID:\t%s"
+
+msgid "Cluster Not Exists"
+msgstr "集群不存在"
+
+msgid "Control Not Exists"
+msgstr "控件不存在"
+
+msgid "Control ID"
+msgstr "控件ID"
+
+msgid "Control Type ID"
+msgstr "控件类型ID"
+
+msgid "Priority Index"
+msgstr "优先指数"
+
+msgid "Control"
+msgstr "控件"
+
+msgid "Control Version"
+msgstr "控件版本"
+
+msgid "Input Config"
+msgstr "输入参数"
+
+msgid "Output Config"
+msgstr "输出配置"
+
+msgid "Variable Config"
+msgstr "变量配置"
+
+msgid "Extra Config"
+msgstr "其他配置"
+
+msgid "Analyze Ability"
+msgstr "分析能力"
+
+msgid "Control Version Detail"
+msgstr "控件版本详情"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Control Versions"
+msgstr "控件版本"
+
+msgid "Flow Status Abnormal"
+msgstr "任务状态异常"
+
+msgid "采集项数量"
+msgstr "采集项数量"
+
+msgid "采集插件信息"
+msgstr "采集插件信息"
+
+msgid "数据集成"
+msgstr "数据集成"
+
+#, python-format
+msgid "%s 应为 %s 类型，当前值为 %s"
+msgstr "%s 应为 %s 类型，当前值为 %s"
+
+msgid "原始日志"
+msgstr "原始日志"
+
+msgid "迭代ID"
+msgstr "迭代ID"
+
+msgid "JoinDataCreateFailed"
+msgstr "JoinDataCreateFailed"
+
+#, python-format
+msgid "Error: %s"
+msgstr "Error: %s"
+
+msgid "资源快照状态"
+msgstr "资源快照状态"
+
+msgid "获取采集列表"
+msgstr "获取采集列表"
+
+msgid "获取采集项元数据"
+msgstr "获取采集项元数据"
+
+msgid "采集详情"
+msgstr "采集详情"
+
+msgid "新建采集"
+msgstr "新建采集"
+
+msgid "获取BCS Yaml模板"
+msgstr "获取BCS Yaml模板"
+
+msgid "创建BCS采集"
+msgstr "创建BCS采集"
+
+msgid "更新BCS采集"
+msgstr "更新BCS采集"
+
+msgid "删除采集"
+msgstr "删除采集"
+
+msgid "应用的采集数据上报状态"
+msgstr "应用的采集数据上报状态"
+
+msgid "批量获取应用采集状态"
+msgstr "批量获取应用采集状态"
+
+msgid "采集项清洗规则"
+msgstr "采集项清洗规则"
+
+msgid "切换数据关联状态"
+msgstr "切换数据关联状态"
+
+msgid "清洗字段历史"
+msgstr "清洗字段历史"
+
+msgid "获取 API PUSH"
+msgstr "获取 API PUSH"
+
+msgid "创建 API PUSH"
+msgstr "创建 API PUSH"
+
+msgid "获取 API PUSH 最近日志"
+msgstr "获取 API PUSH 最近日志"
+
+msgid "获取 API PUSH 上报主机"
+msgstr "获取 API PUSH 上报主机"
+
+msgid "获取系统下的DataID列表"
+msgstr "获取系统下的DataID列表"
+
+msgid "获取我的DataID列表"
+msgstr "获取我的DataID列表"
+
+msgid "获取DataID详情"
+msgstr "获取DataID详情"
+
+msgid "获取最近源数据"
+msgstr "获取最近源数据"
+
+msgid "接入DataID数据源"
+msgstr "接入DataID数据源"
+
+#, python-format
+msgid "无数据源 %s 的访问权限"
+msgstr "无数据源 %s 的访问权限"
+
+#, python-format
+msgid "DataID %s 已接入"
+msgstr "DataID %s 已接入"
+
+msgid "DataID清洗预览"
+msgstr "DataID清洗预览"
+
+msgid "创建或更新DataID清洗入库"
+msgstr "创建或更新DataID清洗入库"
+
+msgid "DataID清洗字段历史"
+msgstr "DataID清洗字段历史"
+
+msgid "删除DataID接入"
+msgstr "删除DataID接入"
+
+msgid "服务实例id"
+msgstr "服务实例id"
+
+msgid "节点实例id"
+msgstr "节点实例id"
+
+msgid "节点对象"
+msgstr "节点对象"
+
+msgid "主机实例ip"
+msgstr "主机实例ip"
+
+msgid "蓝鲸云区域id"
+msgstr "蓝鲸云区域id"
+
+msgid "供应商id"
+msgstr "供应商id"
+
+msgid "数据平台用户"
+msgstr "数据平台用户"
+
+msgid "数据平台业务ID"
+msgstr "数据平台业务ID"
+
+msgid "采集名称"
+msgstr "采集名称"
+
+msgid "采集英文名称"
+msgstr "采集英文名称"
+
+msgid "目标类型"
+msgstr "目标类型"
+
+msgid "节点类型"
+msgstr "节点类型"
+
+msgid "目标节点"
+msgstr "目标节点"
+
+msgid "日志字符集"
+msgstr "日志字符集"
+
+msgid "最后数据上报时间"
+msgstr "最后数据上报时间"
+
+msgid "备注说明"
+msgstr "备注说明"
+
+msgid "必须字段未传入映射值"
+msgstr "必须字段未传入映射值"
+
+msgid "采集插件ID"
+msgstr "采集插件ID"
+
+msgid "清洗配置"
+msgstr "清洗配置"
+
+msgid "清洗参数"
+msgstr "清洗参数"
+
+msgid "字段列表"
+msgstr "字段列表"
+
+msgid "字段未提供"
+msgstr "字段未提供"
+
+msgid "分隔符不能为空"
+msgstr "分隔符不能为空"
+
+msgid "正则表达式不能为空"
+msgstr "正则表达式不能为空"
+
+msgid "启用数据关联"
+msgstr "启用数据关联"
+
+msgid "Storage Type"
+msgstr "存储类型"
+
+msgid "日志类型"
+msgstr "日志类型"
+
+msgid "bcs集群id"
+msgstr "bcs集群id"
+
+msgid "yaml配置内容"
+msgstr "yaml配置内容"
+
+msgid "DataID"
+msgstr "DataID"
+
+msgid "数据源名称"
+msgstr "数据源名称"
+
+msgid "数据源别名"
+msgstr "数据源别名"
+
+msgid "接入场景"
+msgstr "接入场景"
+
+msgid "是否已接入"
+msgstr "是否已接入"
+
+msgid "编码"
+msgstr "编码"
+
+msgid "数据源平台"
+msgstr "数据源平台"
+
+msgid "创建人"
+msgstr "创建人"
+
+msgid "更新人"
+msgstr "更新人"
+
+msgid "可用状态"
+msgstr "可用状态"
+
+msgid "计算平台访问链接"
+msgstr "计算平台访问链接"
+
+msgid "解析Log"
+msgstr "解析Log"
+
+msgid "主题"
+msgstr "主题"
+
+msgid "最近源数据"
+msgstr "最近源数据"
+
+msgid "解析后的最近源数据"
+msgstr "解析后的最近源数据"
+
+msgid "无法获取系统ID"
+msgstr "无法获取系统ID"
+
+msgid "ip"
+msgstr "IP"
+
+msgid "日志路径"
+msgstr "日志路径"
+
+msgid "gse索引"
+msgstr "gse索引"
+
+msgid "time"
+msgstr "time"
+
+msgid "审计中心采集插件"
+msgstr "审计中心采集插件"
+
+msgid "采集插件列表"
+msgstr "采集插件列表"
+
+msgid "匹配方式"
+msgstr "匹配方式"
+
+msgid "逻辑操作符"
+msgstr "逻辑操作符"
+
+msgid "匹配项所在列"
+msgstr "匹配项所在列"
+
+msgid "匹配值"
+msgstr "匹配值"
+
+msgid "过滤方式类型"
+msgstr "过滤方式类型"
+
+msgid "过滤方式"
+msgstr "过滤方式"
+
+msgid "过滤内容"
+msgstr "过滤内容"
+
+msgid "过滤规则"
+msgstr "过滤规则"
+
+msgid "作为默认插件"
+msgstr "作为默认插件"
+
+msgid "插件场景"
+msgstr "插件场景"
+
+msgid "容器"
+msgstr "容器"
+
+msgid "计算平台"
+msgstr "计算平台"
+
+msgid "日志平台"
+msgstr "日志平台"
+
+msgid "容器日志上报"
+msgstr "容器日志上报"
+
+msgid "otlpTrace上报"
+msgstr "otlpTrace上报"
+
+msgid "otlp日志上报"
+msgstr "otlp日志上报"
+
+msgid "动态拓扑"
+msgstr "动态拓扑"
+
+msgid "静态拓扑"
+msgstr "静态拓扑"
+
+msgid "无数据"
+msgstr "无数据"
+
+msgid "未配置"
+msgstr "未配置"
+
+msgid "数据开发"
+msgstr "数据开发"
+
+msgid "审计事件"
+msgstr "审计事件"
+
+msgid "运行中"
+msgstr "运行中"
+
+msgid "启动中"
+msgstr "启动中"
+
+msgid "HDFS"
+msgstr "HDFS"
+
+msgid "Redis"
+msgstr "Redis"
+
+msgid "String"
+msgstr "字符串"
+
+msgid "Number"
+msgstr "数字"
+
+msgid "Integer"
+msgstr "整数"
+
+msgid "Object"
+msgstr "对象"
+
+msgid "Array"
+msgstr "列表"
+
+msgid "Boolean"
+msgstr "布尔"
+
+msgid "Null"
+msgstr "空"
+
+msgid "Field Type Not Match"
+msgstr "字段类型不匹配"
+
+msgid "Schema Empty"
+msgstr "结构为空"
+
+msgid "Multi or None Raw Data Match"
+msgstr "识别到多个或零个数据源"
+
+msgid "BK-LOG 采集插件ID"
+msgstr "BK-LOG 采集插件ID"
+
+msgid "BK-LOG 采集插件名称"
+msgstr "BK-LOG 采集插件名称"
+
+msgid "BK-LOG 采集插件英文名称"
+msgstr "BK-LOG 采集插件英文名称"
+
+msgid "数据所属业务"
+msgstr "数据所属业务"
+
+msgid "结果表ID"
+msgstr "结果表ID"
+
+msgid "索引集ID"
+msgstr "索引集ID"
+
+msgid "过期时间"
+msgstr "过期时间"
+
+msgid "冷热数据时间"
+msgstr "冷热数据时间"
+
+msgid "副本数量"
+msgstr "副本数量"
+
+msgid "分片大小"
+msgstr "分片大小"
+
+msgid "额外字段"
+msgstr "额外字段"
+
+msgid "清洗"
+msgstr "清洗"
+
+msgid "是否有存储"
+msgstr "是否有存储"
+
+msgid "是否授权"
+msgstr "是否授权"
+
+msgid "采集插件"
+msgstr "采集插件"
+
+msgid "所属业务"
+msgstr "所属业务"
+
+msgid "DATAID"
+msgstr "DATAID"
+
+msgid "BK-LOG 采集项名称"
+msgstr "BK-LOG 采集项名称"
+
+msgid "BK-LOG 采集项英文名称"
+msgstr "BK-LOG 采集项英文名称"
+
+msgid "数据来源"
+msgstr "数据来源"
+
+msgid "自定义类型"
+msgstr "自定义类型"
+
+msgid "是否有入库"
+msgstr "是否有入库"
+
+msgid "数据关联RT"
+msgstr "数据关联RT"
+
+msgid "最新数据时间"
+msgstr "最新数据时间"
+
+msgid "已授权RT"
+msgstr "已授权RT"
+
+msgid "资源名称"
+msgstr "资源名称"
+
+msgid "管理员"
+msgstr "管理员"
+
+msgid "连接信息"
+msgstr "连接信息"
+
+msgid "补充信息"
+msgstr "补充信息"
+
+msgid "Redis Config"
+msgstr "Redis配置"
+
+msgid "接入ID"
+msgstr "接入ID"
+
+msgid "清洗ID"
+msgstr "清洗ID"
+
+msgid "入库表"
+msgstr "入库表"
+
+msgid "是否公共"
+msgstr "是否公共"
+
+msgid "BKBase HDFS Processing ID"
+msgstr "BKBase HDFS Processing ID"
+
+msgid "BKBase HDFS Table ID"
+msgstr "BKBase HDFS Table ID"
+
+msgid "HDFS Status"
+msgstr "HDFS Status"
+
+msgid "is RT Authorized"
+msgstr "RT是否授权"
+
+msgid "快照配置"
+msgstr "快照配置"
+
+msgid "操作时间"
+msgstr "操作时间"
+
+msgid "集群操作记录"
+msgstr "集群操作记录"
+
+msgid "设置默认集群"
+msgstr "设置默认集群"
+
+msgid "集群列表"
+msgstr "集群列表"
+
+msgid "创建或更新Redis"
+msgstr "创建或更新Redis"
+
+msgid "集群名称"
+msgstr "集群名称"
+
+msgid "是否开启冷热分离"
+msgstr "是否开启冷热分离"
+
+msgid "冷热数据生效时间"
+msgstr "冷热数据生效时间"
+
+msgid "热节点属性名称"
+msgstr "热节点属性名称"
+
+msgid "热节点属性值"
+msgstr "热节点属性值"
+
+msgid "冷节点属性名称"
+msgstr "冷节点属性名称"
+
+msgid "冷节点属性值"
+msgstr "冷节点属性值"
+
+msgid "es设置"
+msgstr "es设置"
+
+msgid "来源"
+msgstr "来源"
+
+msgid "负责人"
+msgstr "负责人"
+
+msgid "集群描述"
+msgstr "集群描述"
+
+msgid "当冷热数据处于开启状态时，冷热节点属性配置不能为空"
+msgstr "当冷热数据处于开启状态时，冷热节点属性配置不能为空"
+
+msgid "数据降冷时间应小于数据过期时间"
+msgstr "数据降冷时间应小于数据过期时间"
+
+msgid "Namespace"
+msgstr "Namespace"
+
+msgid "集群端口"
+msgstr "集群端口"
+
+msgid "是否开启冷热数据"
+msgstr "是否开启冷热数据"
+
+msgid "哨兵集群"
+msgstr "哨兵集群"
+
+msgid "哨兵名"
+msgstr "哨兵名"
+
+msgid "哨兵HOST"
+msgstr "哨兵HOST"
+
+msgid "哨兵端口"
+msgstr "哨兵端口"
+
+msgid "HOST"
+msgstr "主机"
+
+msgid "集群名"
+msgstr "集群名"
+
+msgid "集群英文名称"
+msgstr "集群英文名称"
+
+msgid "ChangePluginStorageFailed"
+msgstr "ChangePluginStorageFailed"
+
+msgid "ChangeCollectorStorageFailed"
+msgstr "ChangeCollectorStorageFailed"
+
+msgid "健康检测"
+msgstr "健康检测"
+
+msgid "超链接"
+msgstr "超链接"
+
+msgid "审计中心 | 腾讯蓝鲸智云"
+msgstr "审计中心 | 腾讯蓝鲸智云"
+
+msgid "蓝鲸审计中心"
+msgstr "蓝鲸审计中心"
+
+msgid "联系BK助手"
+msgstr "联系BK助手"
+
+msgid "蓝鲸桌面"
+msgstr "蓝鲸桌面"
+
+msgid "技术支持"
+msgstr "技术支持"
+
+msgid "社区论坛"
+msgstr "社区论坛"
+
+msgid "产品官网"
+msgstr "产品官网"
+
+msgid "ES检索"
+msgstr "ES检索"
+
+msgid "WebUI"
+msgstr "WebUI"
+
+msgid "API"
+msgstr "API"
+
+msgid "Console"
+msgstr "Console"
+
+msgid "Other"
+msgstr "Other"
+
+msgid "个人账号"
+msgstr "个人账号"
+
+msgid "平台账号"
+msgstr "平台账号"
+
+msgid "集群不存在"
+msgstr "集群不存在"
+
+msgid "搜索(All)"
+msgstr "搜索(All)"
+
+msgid "搜索"
+msgstr "搜索"
+
+msgid "时间范围"
+msgstr "时间范围"
+
+msgid "多个字段使用逗号分隔"
+msgstr "多个字段使用逗号分隔"
+
+msgid "多个字段以半角逗号分隔"
+msgstr "多个字段以半角逗号分隔"
+
+msgid "Risk"
+msgstr "风险"
+
+msgid "风险ID"
+msgstr "风险ID"
+
+msgid "风险描述"
+msgstr "风险描述"
+
+msgid "责任人"
+msgstr "责任人"
+
+msgid "风险等级"
+msgstr "风险等级"
+
+msgid "处理套餐名称"
+msgstr "处理套餐名称"
+
+msgid "说明"
+msgstr "说明"
+
+msgid "审计关联单据"
+msgstr "审计关联单据"
+
+msgid "BK Monitor"
+msgstr "蓝鲸监控"
+
+msgid "原始事件ID"
+msgstr "原始事件ID"
+
+msgid "命中策略(ID)"
+msgstr "命中策略(ID)"
+
+msgid "事件证据"
+msgstr "事件证据"
+
+msgid "事件类型"
+msgstr "事件类型"
+
+msgid "事件拓展数据"
+msgstr "事件拓展数据"
+
+msgid "事件发生时间"
+msgstr "事件发生时间"
+
+msgid "事件来源"
+msgstr "事件来源"
+
+msgid "新"
+msgstr "新"
+
+msgid "自动处理审批中"
+msgstr "自动处理审批中"
+
+msgid "套餐处理中"
+msgstr "套餐处理中"
+
+msgid "已关单"
+msgstr "已关单"
+
+msgid "已完成"
+msgstr "已完成"
+
+msgid "误报"
+msgstr "误报"
+
+msgid "Create Risk Failed"
+msgstr "创建风险失败"
+
+#, python-format
+msgid "Strategy ID: %s; Raw Event ID:\t%s"
+msgstr "策略ID: %s; 原始事件ID:\t%s"
+
+msgid "BkAudit"
+msgstr "蓝鲸审计中心"
+
+msgid "新增风险提醒"
+msgstr "新增风险提醒"
+
+msgid "Risk ID"
+msgstr "风险ID"
+
+msgid "命中策略"
+msgstr "命中策略"
+
+msgid "风险发现时间"
+msgstr "风险发现时间"
+
+msgid "Show Detail"
+msgstr "查看详情"
+
+msgid "默认流转"
+msgstr "默认流转"
+
+msgid "风险单待办提醒"
+msgstr "风险单待办提醒"
+
+msgid "流转新风险"
+msgstr "流转新风险"
+
+msgid "关单"
+msgstr "关单"
+
+msgid "自动处理审批"
+msgstr "自动处理审批"
+
+#, python-format
+msgid "【审计中心】执行%s审批"
+msgstr "【审计中心】执行%s审批"
+
+msgid "自动套餐处理"
+msgstr "自动套餐处理"
+
+msgid "套餐执行成功后自动关单"
+msgstr "套餐执行成功后自动关单"
+
+msgid "重开风险"
+msgstr "重开风险"
+
+#, python-format
+msgid "%s 标记误报，系统自动关单"
+msgstr "%s 标记误报，系统自动关单"
+
+msgid "解除误报"
+msgstr "解除误报"
+
+msgid "人工处理"
+msgstr "人工处理"
+
+msgid "转单"
+msgstr "转单"
+
+msgid "自动处理异常"
+msgstr "自动处理异常"
+
+msgid "Risk Status"
+msgstr "风险状态"
+
+msgid "Risk Rule ID"
+msgstr "风险处理规则ID"
+
+msgid "Risk Rule Version"
+msgstr "风险处理规则版本"
+
+msgid "Origin Operator"
+msgstr "原始处理人"
+
+msgid "Current Operator"
+msgstr "当前处理人"
+
+msgid "Notice Users"
+msgstr "通知人"
+
+msgid "Tags"
+msgstr "标签"
+
+msgid "Risk Label"
+msgstr "风险标签"
+
+msgid "UUID"
+msgstr "UUID"
+
+msgid "SOps Template ID"
+msgstr "标准运维模板ID"
+
+msgid "Need Approve"
+msgstr "是否需要审批"
+
+msgid "Approve Service ID"
+msgstr "审批服务ID"
+
+msgid "Approve Config"
+msgstr "审批服务配置"
+
+msgid "Description"
+msgstr "描述"
+
+msgid "Is Enabled"
+msgstr "是否启用"
+
+msgid "Process Application"
+msgstr "处理套餐"
+
+msgid "Rule ID"
+msgstr "处理规则ID"
+
+msgid "版本号"
+msgstr "版本号"
+
+msgid "Risk Rule Name"
+msgstr "风险处理规则名称"
+
+msgid "Rule Scope"
+msgstr "规则适用范围"
+
+msgid "Process Application ID"
+msgstr "处理套餐ID"
+
+msgid "Process Application Params"
+msgstr "处理套餐参数"
+
+msgid "Auto Close Risk"
+msgstr "自动关单"
+
+msgid "Risk Rule"
+msgstr "风险处理规则"
+
+msgid "Risk Experience Content"
+msgstr "风险处理经验内容"
+
+msgid "Risk Experience"
+msgstr "风险处理经验"
+
+msgid "Operator"
+msgstr "责任人"
+
+msgid "Action"
+msgstr "操作"
+
+msgid "Time"
+msgstr "时间"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Ticket History"
+msgstr "风险流转历史"
+
+msgid "创建事件"
+msgstr "创建事件"
+
+msgid "获取事件列表"
+msgstr "获取事件列表"
+
+msgid "保存风险处理经验"
+msgstr "保存风险处理经验"
+
+msgid "获取风险处理经验"
+msgstr "获取风险处理经验"
+
+msgid "获取处理套餐列表"
+msgstr "获取处理套餐列表"
+
+msgid "获取所有处理套餐列表"
+msgstr "获取所有处理套餐列表"
+
+msgid "创建处理套餐"
+msgstr "创建处理套餐"
+
+msgid "更新处理套餐"
+msgstr "更新处理套餐"
+
+msgid "获取处理套餐命中的风险"
+msgstr "获取处理套餐命中的风险"
+
+msgid "获取处理套餐关联的规则"
+msgstr "获取处理套餐关联的规则"
+
+msgid "启停处理套餐"
+msgstr "启停处理套餐"
+
+msgid "审批内置字段"
+msgstr "审批内置字段"
+
+msgid "获取风险详情"
+msgstr "获取风险详情"
+
+msgid "获取风险列表"
+msgstr "获取风险列表"
+
+msgid "获取待我处理的风险列表"
+msgstr "获取待我处理的风险列表"
+
+msgid "获取风险字段"
+msgstr "获取风险字段"
+
+msgid "更新风险标记"
+msgstr "更新风险标记"
+
+msgid "获取风险状态类型"
+msgstr "获取风险状态类型"
+
+msgid "获取风险的标签"
+msgstr "获取风险的标签"
+
+msgid "人工关单"
+msgstr "人工关单"
+
+#, python-format
+msgid "%s 人工关单"
+msgstr "%s 人工关单"
+
+msgid "人工转单"
+msgstr "人工转单"
+
+msgid "人工执行处理套餐"
+msgstr "人工执行处理套餐"
+
+msgid "强制终止处理套餐"
+msgstr "强制终止处理套餐"
+
+#, python-format
+msgid "节点类型异常 => %s"
+msgstr "节点类型异常 => %s"
+
+msgid "重试处理套餐"
+msgstr "重试处理套餐"
+
+msgid "重开单据"
+msgstr "重开单据"
+
+msgid "风险处理规则列表"
+msgstr "风险处理规则列表"
+
+msgid "创建风险处理规则"
+msgstr "创建风险处理规则"
+
+msgid "更新风险处理规则"
+msgstr "更新风险处理规则"
+
+msgid "删除风险处理规则"
+msgstr "删除风险处理规则"
+
+msgid "获取处理规则命中的风险"
+msgstr "获取处理规则命中的风险"
+
+msgid "启停风险处理规则"
+msgstr "启停风险处理规则"
+
+msgid "获取风险处理规则匹配方式"
+msgstr "获取风险处理规则匹配方式"
+
+msgid "批量调整风险处理规则优先级"
+msgstr "批量调整风险处理规则优先级"
+
+#, python-format
+msgid "%s 不是有效的 JSON"
+msgstr "%s 不是有效的 JSON"
+
+msgid "Event IDs"
+msgstr "事件ID"
+
+msgid "Event ID"
+msgstr "事件ID"
+
+msgid "Start Time"
+msgstr "开始时间"
+
+msgid "End Time"
+msgstr "结束时间"
+
+msgid "Page"
+msgstr "页码"
+
+msgid "Page Size"
+msgstr "单页数量"
+
+msgid "Total Pages"
+msgstr "总页数"
+
+msgid "Total"
+msgstr "总数"
+
+msgid "Events"
+msgstr "事件"
+
+msgid "Strategy ID"
+msgstr "策略ID"
+
+msgid "Risk Type"
+msgstr "风险类型"
+
+msgid "Event Content"
+msgstr "事件详情"
+
+msgid "未配置审批流"
+msgstr "未配置审批流"
+
+msgid "处理套餐名称重复"
+msgstr "处理套餐名称重复"
+
+msgid "适用范围匹配值异常"
+msgstr "适用范围匹配值异常"
+
+msgid "规则名称重复"
+msgstr "规则名称重复"
+
+msgid "Misreport Description Not Set"
+msgstr "误报说明未设置"
+
+msgid "Rule Name"
+msgstr "规则名称"
+
+msgid "Update User"
+msgstr "更新人"
+
+msgid "处理说明"
+msgstr "处理说明"
+
+msgid "新处理人"
+msgstr "新处理人"
+
+msgid "Process Risk Ticket Failed"
+msgstr "自动处理风险异常"
+
+#, python-format
+msgid ""
+"ProcessClass: %s\n"
+"RiskID: %s\n"
+"Error: %s"
+msgstr ""
+"ProcessClass: %s\n"
+"RiskID: %s\n"
+"Error: %s"
+
+#, python-format
+msgid "执行%s节点失败，转人工处理"
+msgstr "执行%s节点失败，转人工处理"
+
+msgid "Control Type Name"
+msgstr "控件类型名称"
+
+msgid "Strategy V2"
+msgstr "策略 (V2)"
+
+msgid "Has Update"
+msgstr "可升级"
+
+msgid "Disabled"
+msgstr "已停用"
+
+msgid "Start Failed"
+msgstr "启动失败"
+
+msgid "Update Failed"
+msgstr "更新失败"
+
+msgid "Stop Failed"
+msgstr "停用失败"
+
+msgid "Delete Failed"
+msgstr "删除失败"
+
+msgid "Starting"
+msgstr "启动中"
+
+msgid "Updating"
+msgstr "更新中"
+
+msgid "Stopping"
+msgstr "停用中"
+
+msgid "Equal"
+msgstr "="
+
+msgid "NotEqual"
+msgstr "!="
+
+msgid "Regex"
+msgstr "正则"
+
+msgid "NotRegex"
+msgstr "正则(非)"
+
+msgid "Include"
+msgstr "包含"
+
+msgid "Exclude"
+msgstr "不包含"
+
+msgid "致命"
+msgstr "致命"
+
+msgid "预警"
+msgstr "预警"
+
+msgid "提醒"
+msgstr "提醒"
+
+msgid "Event Log"
+msgstr "操作记录"
+
+msgid "Asset Data"
+msgstr "资源数据"
+
+msgid "CDC"
+msgstr "CDC"
+
+msgid "Static"
+msgstr "静态"
+
+msgid "Public Field"
+msgstr "公共字段"
+
+msgid "Extend Field"
+msgstr "拓展字段"
+
+msgid "Control Changed"
+msgstr "控件切换"
+
+msgid "Strategy Pending"
+msgstr "策略处理中"
+
+msgid "Empty Fields"
+msgstr "字段为空"
+
+msgid "Strategy Status Unexpected"
+msgstr "策略状态异常"
+
+msgid "Strategy Name"
+msgstr "策略名称"
+
+msgid "Version"
+msgstr "版本"
+
+msgid "Configs"
+msgstr "配置"
+
+msgid "Status Message"
+msgstr "状态说明"
+
+msgid "Backend Data"
+msgstr "后台数据"
+
+msgid "Notice Groups"
+msgstr "通知组"
+
+msgid "Strategy"
+msgstr "策略"
+
+msgid "Strategy Tag"
+msgstr "策略标签"
+
+msgid "Create Strategy"
+msgstr "创建策略"
+
+msgid "Update Strategy"
+msgstr "更新策略"
+
+msgid "Delete Strategy"
+msgstr "删除策略"
+
+msgid "List Strategy"
+msgstr "策略列表"
+
+msgid "List All Strategy"
+msgstr "策略列表(All)"
+
+msgid "Toggle Strategy"
+msgstr "启停策略"
+
+msgid "Retry Strategy"
+msgstr "重试策略"
+
+msgid "List Has Update Strategy"
+msgstr "获取可升级策略"
+
+msgid "List Strategy Tags"
+msgstr "获取策略标签"
+
+msgid "List Strategy Fields"
+msgstr "获取策略字段"
+
+msgid "Get Strategy Field Value"
+msgstr "获取策略字段值"
+
+msgid "Get Strategy Common"
+msgstr "获取策略通用参数"
+
+msgid "List Tables"
+msgstr "获取结果表列表"
+
+msgid "Get RT Fields"
+msgstr "获取RT字段"
+
+msgid "Get Strategy Status"
+msgstr "获取策略状态"
+
+msgid "Control Version not Exists"
+msgstr "控件版本不存在"
+
+msgid "Strategy Name Duplicate"
+msgstr "策略名称重复"
+
+msgid "Toggle"
+msgstr "启停"
+
+msgid "Strategy Count"
+msgstr "策略数量"
+
+msgid "Key"
+msgstr "键"
+
+msgid "Value"
+msgstr "值"
+
+msgid "Method"
+msgstr "方法"
+
+msgid "Condition"
+msgstr "条件"
+
+msgid "Threshold"
+msgstr "阈值"
+
+msgid "Count"
+msgstr "数量"
+
+msgid "Alert Window"
+msgstr "告警窗口"
+
+msgid "Dimension"
+msgstr "纬度"
+
+msgid "Interval"
+msgstr "周期"
+
+msgid "Algorithms"
+msgstr "检测算法"
+
+msgid "Detects"
+msgstr "识别条件"
+
+msgid "Field Name"
+msgstr "字段名称"
+
+msgid "System ID"
+msgstr "系统ID"
+
+msgid "Label"
+msgstr "标签"
+
+msgid "Children"
+msgstr "子数据"
+
+msgid "Action ID"
+msgstr "操作ID"
+
+msgid "Field Type"
+msgstr "字段类型"
+
+msgid "Config"
+msgstr "配置"
+
+msgid "Strategy Operator"
+msgstr "策略操作符"
+
+msgid "Filter Operator"
+msgstr "筛选操作符"
+
+msgid "Table Type"
+msgstr "结果表类型"
+
+msgid "Strategy Status"
+msgstr "策略状态"
+
+msgid "Offset Unit"
+msgstr "偏移量单位"
+
+msgid "Mapping Type"
+msgstr "映射类型"
+
+msgid "Connector"
+msgstr "连接器"
+
+msgid "Source Field"
+msgstr "原始字段"
+
+msgid "Source Type"
+msgstr "数据源类型"
+
+msgid "Result Table ID"
+msgstr "结果表"
+
+msgid "BK Biz ID"
+msgstr "业务ID"
+
+msgid "Filter Config"
+msgstr "筛选配置"
+
+msgid "Fields"
+msgstr "字段"
+
+msgid "Schedule Period"
+msgstr "调度周期"
+
+msgid "Schedule Period Unit"
+msgstr "调度周期单位"
+
+msgid "Data Source"
+msgstr "数据源"
+
+msgid "配置类型"
+msgstr "配置类型"
+
+msgid "AIOPS Config"
+msgstr "AIOps 参数"
+
+msgid "Table ID"
+msgstr "结果表ID"
+
+msgid "value"
+msgstr "值"
+
+msgid "Strategy IDs"
+msgstr "策略ID"
+
+msgid "Strategy ID Invalid"
+msgstr "策略ID不合法"
+
+msgid "版本日志"
+msgstr "版本日志"
+
+msgid "发布时间"
+msgstr "发布时间"
+
+msgid "查看时间"
+msgstr "查看时间"
+
+msgid "版本日志访问记录"
+msgstr "版本日志访问记录"
+
+msgid "版本列表"
+msgstr "版本列表"
+
+msgid "版本信息"
+msgstr "版本信息"
+
+msgid "系统权限不足"
+msgstr "系统权限不足"
+
+msgid "你的角色所拥有的权限不足"
+msgstr "你的角色所拥有的权限不足"
+
+msgid "系统出现异常"
+msgstr "系统出现异常"
+
+msgid "请记录下错误场景并及时与开发人员联系"
+msgstr "请记录下错误场景并及时与开发人员联系"
+
+msgid "管理"
+msgstr "管理"
+
+msgid "您暂时不能访问该站点的后台管理，这是以下原因造成的："
+msgstr "您暂时不能访问该站点的后台管理，这是以下原因造成的："
+
+msgid "你还没登录，请重新刷新页面！"
+msgstr "你还没登录，请重新刷新页面！"
+
+msgid "用户"
+msgstr "用户"
+
+msgid "未激活！"
+msgstr "未激活"
+
+msgid "没有管理员权限，请联系管理员！"
+msgstr "没有管理员权限，请联系管理员！"
+
+msgid "如有需要，请联系管理员或开发者为您解决上述问题。"
+msgstr "如有需要，请联系管理员或开发者为您解决上述问题。"
+
+msgid "蓝鲸开发框架(Django模板)"
+msgstr "蓝鲸开发框架(Django模板)"
+
+msgid "首页"
+msgstr "首页"
+
+msgid "开发指引"
+msgstr "开发指引"
+
+msgid "联系我们"
+msgstr "联系我们"
+
+msgid "语言"
+msgstr "语言"
+
+msgid "QQ咨询(800802001)"
+msgstr "QQ咨询(800802001)"
+
+msgid "蓝鲸论坛"
+msgstr "蓝鲸论坛"
+
+msgid "蓝鲸官网"
+msgstr "蓝鲸官网"
+
+msgid "蓝鲸智云工作台"
+msgstr "蓝鲸智云工作台"
+
+msgid "蓝鲸智云 版权所有"
+msgstr "蓝鲸智云 版权所有"
