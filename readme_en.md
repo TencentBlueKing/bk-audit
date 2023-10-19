@@ -1,4 +1,4 @@
-![logo.png](./assests/logo.png)
+![logo.png](assets/logo.png)
 
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](https://github.com/TencentBlueKing/bk-audit/blob/master/LICENSE.txt)
 [![Release Version](https://img.shields.io/badge/release-1.6.0-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
