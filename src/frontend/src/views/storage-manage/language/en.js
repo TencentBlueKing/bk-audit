@@ -1,0 +1,87 @@
+/*
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+*/
+export default {
+  storageManage: {
+    管理: 'Manage',
+    名称: 'Name',
+    设为默认: 'set Default',
+    地址: 'Address',
+    来源: 'Source',
+    端口: 'port',
+    协议: 'protocol',
+    创建人: 'founder',
+    创建时间: 'creation time',
+    更新人: 'updater',
+    更新时间: 'last modified',
+    '确认设为默认？': 'Are you sure you want to set as  default?',
+    '切换集群后，将自动调整采集插件及采集项到新的集群，此操作将对新的审计事件生效，历史审计事件需要手动迁移': 'After switching clusters, the collection plug-in and collection items will be automatically adjusted to the new cluster. This operation will take effect for new audit events, and historical audit events need to migrate data manually.',
+    正常: 'normal',
+    异常: 'abnormal',
+    存储名称: 'storage name',
+    存储别名: 'storage alias',
+    '编辑 ES 存储': 'Edit ES Storage',
+    '新建 ES 存储': 'New ES storage',
+    'ES 地址': 'ES address',
+    用户名: 'username',
+    密码: 'password',
+    连通性测试: 'Connectivity test',
+    连接成功: 'connection succeeded',
+    '连接失败，请检查数据是否正确': 'Connection failed, please check if the data is correct',
+    提交数据前请先连通性测试: 'Please test connectivity before submitting data',
+    'ES 集群管理': 'ES cluster management',
+    过期时间: 'Expiration',
+    天: 'day',
+    小时: 'hour',
+    分钟: 'minute',
+    副本数: 'number of copies',
+    冷热分离: 'Hot and cold separation',
+    当前存储的标签数: 'The number of tags currently stored',
+    无法开启: 'can not open',
+    热数据标签: 'Hot data label',
+    冷数据标签: 'cold data label',
+    数据降冷时间: 'Data cooling time',
+    集群负责人: 'cluster leader',
+    集群说明: 'cluster description',
+    请先完成连通性测试: 'Please complete the connectivity test first',
+    数据存储: 'Data Storage',
+    请选择协议: 'Please select a schema',
+    请输入端口: 'Please enter the port',
+    '请输入 ES 地址（IP）': 'Please enter ES address (IP)',
+    请选择类型: 'Please choose the type',
+    请输入存储别名: 'Please enter a storage alias',
+    请输入存储名称: 'Please enter a storage name',
+    '搜索 ES 源名称、地址': 'Search ES source name, address',
+    热数据标签不能为空: 'Hot data label cannot be empty',
+    冷数据标签不能为空: 'Cold data tag cannot be empty',
+    '过期时间需 > 0': 'Expiration time needs to be > 0',
+    '副本数需 > 0': 'The number of replicas needs to be > 0',
+    '数据降冷时间需 >= 0 且不能大于过期时间': 'The data cooling time must be >= 0 and cannot be greater than the expiration time',
+    集群负责人不能为空: 'Cluster leader cannot be empty',
+    集群说明不能为空: 'Cluster description cannot be empty',
+    '存储别名仅支持：A-Za-z0-9_': 'Storage aliases only support: A-Za-z0-9_',
+    请输入集群说明: 'Please enter a cluster description',
+    输入数据降冷时间天数: 'Enter the number of days to cool down the data',
+    输入过期时间天数: 'Enter expiration date in days',
+    请输入密码: 'Please enter password',
+    存储名称不能为空: 'storage name cannot be empty',
+    用户名不能为空: 'username cannot be empty',
+    密码不能为空: 'password cannot be empty',
+    'ES 地址不能为空': 'password cannot be empty',
+    类型不能为空: 'type cannot be empty',
+    存储别名不能为空: 'storage alias cannot be empty',
+  },
+};

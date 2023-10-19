@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+echo "pre Hook: this runs before npm install"
+npm config set registry https://mirrors.tencent.com/npm/
+echo `npm config list`

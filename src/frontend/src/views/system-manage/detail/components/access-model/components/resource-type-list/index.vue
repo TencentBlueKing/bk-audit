@@ -1,0 +1,241 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <div class="access-model-resource-list">
+    <div style="margin-bottom: 16px; font-size: 14px;">
+      {{ t('资源') }}
+    </div>
+    <bk-loading :loading="loading || isSystemDataLoading">
+      <bk-table
+        :border="['outer']"
+        :columns="renderTableColumn"
+        :data="resourceTypeList" />
+    </bk-loading>
+  </div>
+  <audit-sideslider
+    v-model:is-show="isShowJobPlan"
+    :show-footer="false"
+    :title="rowData.resource_type_id"
+    :width="640">
+    <job-plan :data="rowData" />
+  </audit-sideslider>
+</template>
+<script setup lang="tsx">
+  import {
+    computed,
+    ref,
+  } from 'vue';
+  import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
+
+  import CollectorManageService from '@service/collector-manage';
+  import IamManageService from '@service/iam-manage';
+  import MetaManageService from '@service/meta-manage';
+
+  import type JoinDataModel from '@model/collector/join-data';
+  import SystemModel from '@model/meta/system';
+  import type SystemResourceTypeModel from '@model/meta/system-resource-type';
+
+  import useRequest from '@hooks/use-request';
+
+  import JobPlan from './components/job-plan.vue';
+  import StatusTag from './components/status-tag.vue';
+  import TaskFailed from './components/task-failed.vue';
+  import TaskPreparing from './components/task-preparing.vue';
+  import TaskSwitch from './components/task-switch.vue';
+
+  const { t } = useI18n();
+  const rowData = ref({
+    resource_type_id: '',
+  });
+
+  const baseTableColumn = [
+    {
+      label: () => t('资源类型'),
+      field: () => 'resource_type_id',
+      width: '250px',
+    },
+    {
+      label: () => t('资源名称'),
+      width: '200px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+        data.description ? (
+        <span
+          class="tips"
+          v-bk-tooltips={ t(data.description) }>
+          {data.name}
+        </span>)
+          : (<span>{data.name}</span>)
+      ),
+    },
+    {
+      label: () => t('敏感等级'),
+      width: '200px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+        <render-sensitivity-level value={data.sensitivity} />
+      ),
+    },
+    {
+      label: () => t('资源实例 URL'),
+      minWidth: '200px',
+      showOverflowTooltip: true,
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+        `${systemDetailData.value.provider_config.host}${data.provider_config.path} `
+      ),
+    },
+    {
+      label: () => t('数据结构'),
+      width: '150px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+          <div
+            onClick={() => handleJobPlan(data)}
+            style="color:#3a84ff"
+            class="cursor"
+            >
+            <audit-icon
+              class="mr8 schema-icon"
+              svg
+              type="schema"
+            />
+            <span class="ml5">schema</span>
+          </div>
+      ),
+    },
+    {
+      label: () => t('资源状态'),
+      width: '150px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+        <StatusTag
+          status={snapShotStatusList.value[data.resource_type_id]?.status} />
+      ),
+    },
+  ];
+
+  const route = useRoute();
+  const isShowJobPlan = ref(false);
+  const renderTableColumn = computed(() => {
+    if (permissionCheckData.value.access_global_setting) {
+      return baseTableColumn;
+    }
+    return [
+      ...baseTableColumn,
+      {
+        label: () => t('操作'),
+        width: '150px',
+        render: ({ data }: {data: SystemResourceTypeModel}) => {
+          switch (data.status) {
+          case 'preparing':
+            return <TaskPreparing/>;
+          case 'failed':
+            return <TaskFailed data={data}/>;
+          default:
+            return <TaskSwitch
+            data={data}
+            onChangeStatus={(value: JoinDataModel) => handleDataStatus(value)}/>;
+          }
+        },
+      },
+    ];
+  });
+
+
+  // 拥有 access_global_setting 权限的用户才会显示操作列
+  const {
+    data: permissionCheckData,
+  } = useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'access_global_setting',
+    },
+    defaultValue: {
+      access_global_setting: false,
+    },
+    manual: true,
+  });
+
+  // 获取系统详情
+  const {
+    loading: isSystemDataLoading,
+    run: fetchSystemDetail,
+    data: systemDetailData,
+  } = useRequest(MetaManageService.fetchSystemDetail, {
+    defaultParams: {
+      id: route.params.id,
+    },
+    defaultValue: new SystemModel(),
+    // manual: true,
+  });
+
+  // 获取列表数据
+  const {
+    loading,
+    run: fetchSysetemResourceTypeList,
+    data: resourceTypeList,
+  }  = useRequest(MetaManageService.fetchSysetemResourceTypeList, {
+    defaultParams: {
+      id: route.params.id,
+    },
+    defaultValue: [],
+    // manual: true,
+  });
+  const {
+    data: snapShotStatusList,
+    run: fetchSnapShotStatus,
+  } = useRequest(CollectorManageService.fetchSnapShotStatus, {
+    defaultValue: {},
+  });
+
+  Promise.all([fetchSystemDetail({
+    id: route.params.id,
+  }), fetchSysetemResourceTypeList({
+    id: route.params.id,
+  })]).then(() => {
+    const resourceIds = resourceTypeList.value.map(item => item.resource_type_id).join(',');
+    fetchSnapShotStatus({
+      system_id: systemDetailData.value.system_id,
+      resource_type_ids: resourceIds,
+    });
+  });
+
+
+  const handleDataStatus = (data: JoinDataModel) => {
+    resourceTypeList.value.forEach((item) => {
+      if (item.resource_type_id === data.resource_type_id) {
+        // eslint-disable-next-line no-param-reassign
+        item.status = data.status;
+      }
+    });
+  };
+  const handleJobPlan = (data: SystemResourceTypeModel) => {
+    isShowJobPlan.value = true;
+    rowData.value = data;
+  };
+</script>
+<style lang="postcss">
+  .access-model-resource-list {
+    padding: 16px 24px;
+    margin-top: 24px;
+    color: #313238;
+    background-color: #fff;
+    border-radius: 2px;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
+
+    .schema-icon {
+      font-size: 14px;
+      vertical-align: sub;
+    }
+  }
+</style>
