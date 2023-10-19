@@ -1,0 +1,30 @@
+# 日志类型
+logConfigType: {log_config_type}
+# 命名空间匹配
+namespaceSelector:
+  # 是否所有的命名空间
+  any: false
+  # 若any=false，则需要提供命名空间
+  matchNames:  []
+# 命名空间下所有容器
+allContainer: false
+# 容器名匹配
+containerNameMatch:  []
+# workload 匹配
+workloadName: ''
+workloadType: ''
+# label 匹配
+labelSelector:
+  # label 表达式匹配
+  matchExpressions:  []
+  # label 值匹配
+  matchLabels: {{}}
+# 日志路径
+path:
+  - ''
+# 日志字符集
+encoding: UTF-8
+# 分隔符过滤
+delimiter: null
+# 过滤内容
+filters:  []
