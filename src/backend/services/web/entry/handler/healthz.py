@@ -117,7 +117,7 @@ class HealthzHandler(object):
                         host=connection_info["host"], port=connection_info["port"], password=connection_info["password"]
                     )
                     client.ping()
-            except Exception as err:
+            except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 logger.exception("[CheckRedisFailed] RedisID => %s; Err => %s", redis_config.redis_id, err)
                 self.redis_errors.append({redis_config.redis_id: str(err)})
 

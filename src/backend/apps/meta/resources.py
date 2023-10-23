@@ -360,7 +360,7 @@ class UpdateCustomFieldsResource(Meta, Resource):
         username = get_request_username()
         route_path = validated_request_data["route_path"]
         fields = validated_request_data["fields"]
-        custom_field, is_create = CustomField.objects.get_or_create(username=username, route_path=route_path)
+        custom_field, _ = CustomField.objects.get_or_create(username=username, route_path=route_path)
         custom_field.fields = fields
         custom_field.save()
 
@@ -438,7 +438,7 @@ class ResourceTypeSchema(Meta, CacheMixin, Resource):
         web = requests.session()
         try:
             data = web.post(url=request_url, json=request_body, headers=request_header).json()["data"]["properties"]
-        except Exception as err:
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception(
                 "[Get ResourceType Schema Failed] "
                 "RequestURL => %s; "

@@ -103,7 +103,7 @@ def change_storage_cluster():
                 collector_plugin.refresh_from_db()
                 collector_plugin.storage_changed = False
                 collector_plugin.save()
-            except Exception as err:
+            except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 title = gettext("ChangePluginStorageFailed")
                 content = gettext("Error: %s") % str(err)
                 ErrorMsgHandler(title, content).send()
@@ -128,7 +128,7 @@ def change_storage_cluster():
                 collector.refresh_from_db()
                 collector.storage_changed = False
                 collector.save()
-            except Exception as err:
+            except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 title = gettext("ChangeCollectorStorageFailed")
                 content = gettext("Error: %s") % str(err)
                 ErrorMsgHandler(title, content).send()
@@ -224,7 +224,7 @@ def check_report_continues(end_time: datetime.datetime = None, time_period: int 
             ReportCheckHandler(
                 namespace=namespace, end_time=end_time, time_period=time_period, time_range=time_range
             ).check()
-        except Exception as err:
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 "[ReportCheckRunFailed] "
                 "Namespace => %s; "

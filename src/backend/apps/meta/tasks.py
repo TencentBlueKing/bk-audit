@@ -133,7 +133,7 @@ def sync_iam_system_roles(iam_systems):
 
     # step 2: 确认需要处理的系统信息
     bk_username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
-    for index, item in enumerate(iam_requests):
+    for _, item in enumerate(iam_requests):
         system_id = item["system_id"]
         iam_system_info = iam_roles.get(system_id, [{}])[0]
         # 兼容IAM的同步信息

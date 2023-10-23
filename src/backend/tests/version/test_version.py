@@ -51,13 +51,13 @@ class VersionTest(TestCase):
         ]
         version_logs_of_set = [dict(i) for i in ({tuple(i.items()) for i in version_logs_of_item})]
         version_logs = sorted(version_logs_of_set, key=lambda x: x["release_at"], reverse=True)
-        VERSION_LIST_DATA = {
+        version_list_data = {
             "show_version": show_version,
             "version_logs": version_logs,
             "last_version": last_version,
         }
 
-        self.assertEqual(result, VERSION_LIST_DATA)
+        self.assertEqual(result, version_list_data)
 
     @mock.patch("version.resources.mistune.Markdown", mock.Mock(return_value=object))
     @mock.patch("version.resources.get_local_request", mock.Mock(return_value=GetLocalRequestMock()))
@@ -67,9 +67,9 @@ class VersionTest(TestCase):
 
         version = VERSION_INFO_PARAMS["version"]
         language = settings.LANGUAGE_CODE
-        VERSION_INFO_DATA = self.version_log.get(version=f"{version}.{language}").content
+        version_info_data = self.version_log.get(version=f"{version}.{language}").content
 
-        self.assertEqual(result, VERSION_INFO_DATA)
+        self.assertEqual(result, version_info_data)
 
     @mock.patch("version.resources.get_local_request", mock.Mock(return_value=GetLocalRequestMock()))
     def test_version_info_of_except(self):
