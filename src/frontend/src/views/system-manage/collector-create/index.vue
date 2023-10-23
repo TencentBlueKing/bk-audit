@@ -101,7 +101,7 @@
 
   const renderStepCom = computed(() => comMap[currentStep.value]);
 
-  const handleStepChange = (step: StepType) => {
+  const handleStepChange = (step: any) => {
     changeConfirm()
       .then(() => {
         appendSearchParams({
@@ -111,7 +111,7 @@
       });
   };
 
-  const handleRenderSteps = (value: string) => {
+  const handleRenderSteps = (value: any) => {
     steps.value = value === 'container'
       || value === 'bkbase' ? containerSteps : initSteps;
   };

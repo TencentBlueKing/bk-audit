@@ -1,5 +1,5 @@
 {
-  "extends": "@vue/tsconfig/tsconfig.web.json",
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
   "include": [
     "env.d.ts",
     "components.d.ts",
@@ -7,7 +7,9 @@
     "src/**/*.vue"
   ],
   "compilerOptions": {
-    "ignoreDeprecations": "5.0",
+    // "ignoreDeprecations": "5.0",
+    "resolvePackageJsonExports": false,
+    "resolveJsonModule": true,
     "lib": [
       "es2016",
       "dom",
@@ -58,7 +60,8 @@
     },
     "types": [
       "bkui-vue/lib/volar.components"
-    ]
+    ],
+    "jsx": "preserve"
   },
   "references": [
     {

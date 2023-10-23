@@ -23,6 +23,12 @@ module.exports = {
     'stylelint-order',
   ],
   rules: {
+    'color-hex-case': 'lower',
+    'block-opening-brace-space-before': 'always',
+    'selector-list-comma-newline-after': 'always',
+    'string-quotes': 'single',
+    'number-leading-zero': 'never',
+    'declaration-colon-space-after': 'always',
     'at-rule-no-unknown': [true, {
       ignoreAtRules: [
         'function',
