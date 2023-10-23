@@ -14,6 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import Aegis from 'aegis-web-sdk';
 import BkuiVue from 'bkui-vue';
 import { bkTooltips } from 'bkui-vue/lib/directives';
 import { createApp } from 'vue';
@@ -39,7 +40,6 @@ import SkeletonLoading from '@components/skeleton-loading/index.vue';
 import SmartAction from '@components/smart-action/index.vue';
 
 import cursor from '@directives/cursor';
-import Aegis from 'aegis-web-sdk';
 
 import createRouter from '@router/index';
 

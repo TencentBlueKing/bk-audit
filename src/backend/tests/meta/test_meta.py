@@ -288,7 +288,7 @@ class MetaTest(TestCase):
         self.assertEqual(result, GET_SPACES_MINE_DATA)
 
     @mock.patch("meta.resources.api.bk_log.get_spaces_mine", mock.Mock(return_value=GET_SPACES_MINE_API_RESP))
-    def test_get_spaces_mine_of_V2(self):
+    def test_get_spaces_mine_of_v2(self):
         """GetSpacesMineResource"""
         result = self.resource.meta.get_spaces_mine()
         result = ordered_dict_to_json(result)

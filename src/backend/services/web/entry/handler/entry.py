@@ -130,7 +130,7 @@ class EntryHandler(object):
         try:
             with open(file, "r") as file:
                 return file.read().strip() or str()
-        except Exception as err:
+        except Exception as err:  # NOCC:broad-except(需要处理所有异常)
             logger.exception(f"GetVersion Failed => {err}")
             return str()
 

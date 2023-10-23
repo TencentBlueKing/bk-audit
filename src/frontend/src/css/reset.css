@@ -16,17 +16,16 @@ html,
 body {
   padding: 0;
   margin: 0;
-  font-family:
-    -apple-system,
+  font-family: -apple-system,
     BlinkMacSystemFont,
-    "PingFang SC",
-    "Microsoft YaHei",
-    "Helvetica Neue",
+    'PingFang SC',
+    'Microsoft YaHei',
+    'Helvetica Neue',
     Arial,
     sans-serif;
   font-size: 12px;
   line-height: 1.4285;
-  letter-spacing: 0.4px;
+  letter-spacing: .4px;
   text-rendering: optimizelegibility;
   background: #f5f6fa;
   -webkit-tap-highlight-color: transparent;

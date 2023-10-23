@@ -41,7 +41,7 @@ class BkAuditResourceApiDispatcher(DjangoBasicResourceApiDispatcher):
 
         try:
             data = json.loads(request.body)
-        except Exception:
+        except Exception:  # NOCC:broad-except(需要处理所有错误)
             logger.error("resource request(%s) failed with invalid body: %s", request_id, request.body)
             return fail_response(400, "reqeust body is not a valid json", request_id)
 
@@ -72,7 +72,7 @@ class BkAuditResourceApiDispatcher(DjangoBasicResourceApiDispatcher):
             response = fail_response(422, str(e), request_id)
         except KeywordTooShortException as e:
             response = fail_response(406, str(e), request_id)
-        except Exception as e:
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.exception("resource request(%s) failed with exception: %s", request_id, e)
             response = fail_response(500, str(e), request_id)
 
