@@ -79,7 +79,7 @@ class GlobalMetaConfig(OperateRecordModel):
         config_level: str = ConfigLevelChoices.GLOBAL.value,
         instance_key: str = GLOBAL_CONFIG_LEVEL_INSTANCE,
     ):
-        config, is_create = cls.objects.get_or_create(
+        config, _ = cls.objects.get_or_create(
             config_level=config_level, config_key=config_key, instance_key=instance_key
         )
         config.config_value = config_value

@@ -103,7 +103,7 @@ def change_storage_cluster():
                 collector_plugin.refresh_from_db()
                 collector_plugin.storage_changed = False
                 collector_plugin.save()
-            except Exception as err:
+            except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 title = gettext("ChangePluginStorageFailed")
                 content = gettext("Error: %s") % str(err)
                 ErrorMsgHandler(title, content).send()
@@ -128,7 +128,7 @@ def change_storage_cluster():
                 collector.refresh_from_db()
                 collector.storage_changed = False
                 collector.save()
-            except Exception as err:
+            except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 title = gettext("ChangeCollectorStorageFailed")
                 content = gettext("Error: %s") % str(err)
                 ErrorMsgHandler(title, content).send()
@@ -200,7 +200,7 @@ def create_api_push_etl(collector_config_id: int):
             resource.databus.collector.collector_etl(**etl_params)
             retry = API_PUSH_ETL_RETRY_TIMES + 1
             logger.info("[CreateApiPushEtlSuccess] Retry => %s; Collector => %s", retry, collector.collector_config_id)
-        except Exception as err:
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception(
                 "[CreateApiPushEtlError] Retry => %s; Error => %s; Detail %s;", retry, str(err), traceback.format_exc()
             )
@@ -224,7 +224,7 @@ def check_report_continues(end_time: datetime.datetime = None, time_period: int 
             ReportCheckHandler(
                 namespace=namespace, end_time=end_time, time_period=time_period, time_range=time_range
             ).check()
-        except Exception as err:
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.error(
                 "[ReportCheckRunFailed] "
                 "Namespace => %s; "

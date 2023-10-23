@@ -71,7 +71,7 @@ class JsonConfig(BkBaseConfig):
             ]
         # 二层非JSON
         assigned_second_level_fields = []
-        for index, _parent_path in enumerate(second_level_field_map.keys(), 1):
+        for _, _parent_path in enumerate(second_level_field_map.keys(), 1):
             _config = {
                 "type": "access",
                 "subtype": "access_obj",

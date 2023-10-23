@@ -68,7 +68,7 @@ class TailLogHandler:
         if self.tail_logs:
             try:
                 self.parse_log_time()
-            except Exception as err:
+            except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 logger.warning(
                     "[ParseLogFailed] Collector => %s; Log => %s; Err => %s",
                     self.collector.collector_config_id,
