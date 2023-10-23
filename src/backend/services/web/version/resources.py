@@ -86,7 +86,7 @@ class VersionInfoResource(Resource):
         try:
             parser = mistune.Markdown(hard_wrap=True)
             html_version_log = parser(version_log.content)
-        except Exception as err:
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception("[Log Parse Error] Version => %s; err => %s", version, err)
             html_version_log = version_log.content
         return html_version_log

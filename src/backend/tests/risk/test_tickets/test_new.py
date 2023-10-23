@@ -53,7 +53,7 @@ class NewTest(TicketTest):
         关键验证：有规则，状态
         """
 
-        with RuleContext(pa_info=pa_info) as (pa, rule):
+        with RuleContext(pa_info=pa_info) as (_, rule):
             with RiskContext() as risk:
                 # 运行
                 operator = uuid.uuid1().hex

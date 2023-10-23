@@ -134,7 +134,7 @@ RESOURCE_TYPE_DATA = {
     "version": 1,
     "description": None,
 }
-Snapshot_Running_Status_CLOSED = "closed"
+SNAPSHOT_RUNNING_STATUS_CLOSED = "closed"
 SNAPSHOT_DATA = {
     "system_id": settings.APP_CODE,
     "resource_type_id": RESOURCE_TYPE_ID,
@@ -142,7 +142,7 @@ SNAPSHOT_DATA = {
     "bkbase_processing_id": None,
     "bkbase_table_id": "2",
     "is_public": False,
-    "status": Snapshot_Running_Status_CLOSED,
+    "status": SNAPSHOT_RUNNING_STATUS_CLOSED,
 }
 FIELDS_DATA = {
     "field_name": EVENT_ID.field_name,
@@ -287,7 +287,7 @@ RESOURCE_TYPE_LIST_DATA.update(
     }
 )
 RESOURCE_TYPE_LIST_DATA2 = copy.deepcopy(RESOURCE_TYPE_DATA)
-RESOURCE_TYPE_LIST_DATA2.update({"status": Snapshot_Running_Status_CLOSED, "bkbase_url": None})
+RESOURCE_TYPE_LIST_DATA2.update({"status": SNAPSHOT_RUNNING_STATUS_CLOSED, "bkbase_url": None})
 
 # System Filter
 GET_AUTH_SYSTEMS_API_RESP = copy.deepcopy(_GET_AUTH_SYSTEMS_API_RESP)

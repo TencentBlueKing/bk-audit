@@ -31,7 +31,7 @@ class DelimiterConfig(BkBaseConfig):
         # 生成Assign
         assigned_first_level_fields = [self.to_bkdata_assign(field, is_index=True) for field in first_level_fields]
         assigned_second_level_fields = []
-        for index, _parent_path in enumerate(second_level_field_map.keys(), 1):
+        for _, _parent_path in enumerate(second_level_field_map.keys(), 1):
             _config = {
                 "type": "access",
                 "subtype": "access_pos",
