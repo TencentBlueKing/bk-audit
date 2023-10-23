@@ -138,6 +138,8 @@
     border: () => ['outer'],
     reverseSortFields: () => [],
     needEmptySearchTip: true,
+    paginationValidator: undefined,
+    settings: undefined,
   }) ;
   const emits = defineEmits<Emits>();
   const { getRecordPageParams, removePageParams } = useRecordPage;

@@ -51,7 +51,7 @@
 
   /* 修改表格悬停超出的问题 */
   .bk-table-body {
-    table td.column_fixed.column_fixed_right{
+    table td.column_fixed.column_fixed_right {
       z-index: 0 !important;
     }
 
@@ -75,27 +75,27 @@
   }
 
   /* 表格下方边界线被遮挡问题 */
-  .bk-fixed-bottom-border{
-    z-index:1 !important;
+  .bk-fixed-bottom-border {
+    z-index: 1 !important;
   }
 
 
 }
 
 /* 解决提示消息时icon对齐问题 */
-.bk-message-icon span{
+.bk-message-icon span {
   display: inline !important;
 }
 
 
 
 /* 解决表格中loading被遮挡的问题 */
-.bk-loading-wrapper .bk-loading-mask{
+.bk-loading-wrapper .bk-loading-mask {
   z-index: 10 !important;
 
 }
 
-.bk-loading-wrapper .bk-loading-indicator{
+.bk-loading-wrapper .bk-loading-indicator {
   z-index: 11 !important;
 }
 
@@ -106,15 +106,15 @@
 }
 
 /* radio按钮选中禁用的样式 */
-.bk-radio-tab .bk-radio-button.is-checked.is-disabled .bk-radio-button-label, 
-.bk-radio-card .bk-radio-button.is-checked.is-disabled .bk-radio-button-label{
-  color: #C9CBD1;
-  background-color: #F0F1F5;
+.bk-radio-tab .bk-radio-button.is-checked.is-disabled .bk-radio-button-label,
+.bk-radio-card .bk-radio-button.is-checked.is-disabled .bk-radio-button-label {
+  color: #c9cbd1;
+  background-color: #f0f1f5;
 }
 
 /* radio按钮禁用的样式 */
-.bk-radio-tab .bk-radio-button.is-disabled .bk-radio-button-label, 
-.bk-radio-card .bk-radio-button.is-disabled .bk-radio-button-label{
-  color: #D5D7DB;
-  background-color: #FFF;
+.bk-radio-tab .bk-radio-button.is-disabled .bk-radio-button-label,
+.bk-radio-card .bk-radio-button.is-disabled .bk-radio-button-label {
+  color: #d5d7db;
+  background-color: #fff;
 }

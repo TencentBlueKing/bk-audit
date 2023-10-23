@@ -17,7 +17,7 @@
 <template>
   <router-link
     v-if="isShowRaw"
-    v-bind="(attrs as unknown as RouterLinkProps)">
+    v-bind="(attrs as unknown as any)">
     <slot />
   </router-link>
   <span
@@ -42,7 +42,6 @@
     type StyleValue,
     useAttrs,
   } from 'vue';
-  import type { RouterLinkProps } from 'vue-router';
 
   import useBase from './use-base';
 

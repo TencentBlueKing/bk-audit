@@ -43,8 +43,8 @@
         <component
           :is="statusComponent"
           ref="listRef"
-          @change-checked="handleChecked"
-          @change-status-com="handleStatusCom" />
+          @change-checked="(value: any) => handleChecked(value)"
+          @change-status-com="(value: any) => handleStatusCom(value)" />
       </div>
     </div>
   </skeleton-loading>
