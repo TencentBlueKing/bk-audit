@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import math
+import os
 import re
 from typing import List, Union
 
@@ -42,7 +43,6 @@ from apps.notice.models import (
 from apps.notice.tasks import send_notice
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
-    EVENT_DATA_TIME_DURATION_HOURS,
     EVENT_OPERATOR_SPLIT_REGEX,
     EVENT_TYPE_SPLIT_REGEX,
     RISK_ESQUERY_DELAY_TIME,
@@ -95,13 +95,9 @@ class RiskHandler:
         """
 
         # 获取起始时间
-        start_time_ts = GlobalMetaConfig.get(
-            config_key=RISK_SYNC_START_TIME_KEY,
-            default=math.floor(
-                (datetime.datetime.now() - datetime.timedelta(hours=EVENT_DATA_TIME_DURATION_HOURS)).timestamp()
-            ),
+        start_time = datetime.datetime.now() - datetime.timedelta(
+            days=int(os.getenv("BKAPP_RISK_EVENTS_SYNC_TIME", "2"))
         )
-        start_time = datetime.datetime.fromtimestamp(start_time_ts)
         end_time = datetime.datetime.now() - datetime.timedelta(seconds=RISK_ESQUERY_DELAY_TIME)
 
         # 加载数据
