@@ -56,7 +56,7 @@ def add_event(data: list):
     EventHandler().add_event(data)
 
 
-@periodic_task(run_every=crontab(minute="*/10"), queue="risk")
+@periodic_task(run_every=crontab(minute="0"), queue="risk")
 @single_task_decorator
 def generate_risk_from_event():
     """从审计事件创建风险"""
