@@ -240,11 +240,13 @@ class NewRisk(RiskFlowBaseHandler):
         self.risk.origin_operator = []
         self.risk.current_operator = []
         self.risk.save(update_fields=["origin_operator", "current_operator"])
-        # 初始化处理规则
-        self.match_risk_rule()
-        # 重新初始化
-        self.init_rule()
-        self.init_process_application()
+        # 只有有责任人时走规则
+        if self.risk.operator:
+            # 初始化处理规则
+            self.match_risk_rule()
+            # 重新初始化
+            self.init_rule()
+            self.init_process_application()
         # 范围记录内容
         return {"rule_id": self.risk.rule_id, "rule_version": self.risk.rule_version}
 
@@ -677,7 +679,6 @@ class TransOperator(CustomProcess):
 
     name = gettext_lazy("转单")
     enable_notice = True
-    allowed_status = [RiskStatus.AWAIT_PROCESS]
 
     def process(self, **kwargs) -> dict:
         return {}
@@ -692,7 +693,8 @@ class TransOperator(CustomProcess):
         return history
 
     def update_status(self, process_result: dict, **kwargs) -> None:
-        return
+        self.risk.status = RiskStatus.AWAIT_PROCESS
+        self.risk.save(update_fields=["status"])
 
 
 class OperateFailed(RiskFlowBaseHandler):
