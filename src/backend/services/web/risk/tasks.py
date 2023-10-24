@@ -32,7 +32,12 @@ from core.utils.tools import single_task_decorator
 from services.web.risk.constants import RiskStatus, TicketNodeStatus
 from services.web.risk.handlers import BKMAlertSyncHandler, EventHandler
 from services.web.risk.handlers.risk import RiskHandler
-from services.web.risk.handlers.ticket import AutoProcess, ForApprove, NewRisk
+from services.web.risk.handlers.ticket import (
+    AutoProcess,
+    ForApprove,
+    NewRisk,
+    TransOperator,
+)
 from services.web.risk.models import Risk, TicketNode
 
 
@@ -86,10 +91,15 @@ def process_risk_ticket(risk_id: str = None):
             logger_celery.info("[ProcessRiskTicket] %s Start %s", process_class.__name__, risk.risk_id)
             process_class(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run()
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            # 异常通知
             logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
             title = gettext("Process Risk Ticket Failed")
             content = gettext("ProcessClass: %s\nRiskID: %s\nError: %s") % (process_class.__name__, risk.risk_id, err)
             ErrorMsgHandler(title, content).send()
+            # 转换到人工处理
+            TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
+                new_operators=TransOperator.load_security_person(), description=gettext("风险自动流转失败，转为安全接口人处理")
+            )
         finally:
             logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
