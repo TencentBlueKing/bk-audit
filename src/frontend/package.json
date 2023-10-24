@@ -16,7 +16,7 @@
     "@types/sortablejs": "^1.15.0",
     "@types/yamljs": "^0.2.31",
     "@vueup/vue-quill": "^1.2.0",
-    "aegis-web-sdk": "^1.38.3",
+    "aegis-web-sdk": "1.38.3",
     "art-template": "^4.13.2",
     "axios": "^0.27.2",
     "bkui-vue": "0.0.2-beta.70",
