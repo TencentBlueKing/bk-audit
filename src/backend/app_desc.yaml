@@ -32,7 +32,7 @@ modules:
         - bk_app_code: "bksops"
           module_name: "default"
         - bk_app_code: "bk-audit"
-          module_name: "frontend"
+          module_name: "default"
   puller:
     language: Python
     processes:

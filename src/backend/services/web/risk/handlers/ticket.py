@@ -677,7 +677,6 @@ class TransOperator(CustomProcess):
 
     name = gettext_lazy("转单")
     enable_notice = True
-    allowed_status = [RiskStatus.AWAIT_PROCESS]
 
     def process(self, **kwargs) -> dict:
         return {}
@@ -692,7 +691,8 @@ class TransOperator(CustomProcess):
         return history
 
     def update_status(self, process_result: dict, **kwargs) -> None:
-        return
+        self.risk.status = RiskStatus.AWAIT_PROCESS
+        self.risk.save(update_fields=["status"])
 
 
 class OperateFailed(RiskFlowBaseHandler):
