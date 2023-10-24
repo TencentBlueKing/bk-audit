@@ -25,11 +25,11 @@ modules:
         replicas: 1
     svc_discovery:
       bk_saas:
-        - bk_app_code: "bkc-itsm"
+        - bk_app_code: "bk_itsm"
           module_name: "default"
-        - bk_app_code: "dataweb"
+        - bk_app_code: "bk_dataweb"
           module_name: "default"
-        - bk_app_code: "bksops"
+        - bk_app_code: "bk_sops"
           module_name: "default"
         - bk_app_code: "bk-audit"
           module_name: "default"
