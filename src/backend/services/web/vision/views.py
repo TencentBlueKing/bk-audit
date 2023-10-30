@@ -16,24 +16,25 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import abc
+
 from bk_resource import api
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
+from core.utils.renderers import API200Renderer
 
-class MetaViewSet(ResourceViewSet):
+
+class BKVisionViewSet(abc.ABC):
+    renderer_classes = [API200Renderer]
+
+
+class MetaViewSet(BKVisionViewSet, ResourceViewSet):
     resource_routes = [
-        ResourceRoute("GET", api.bk_vision.query_meta),
+        ResourceRoute("GET", api.bk_vision.query_meta, endpoint="query"),
     ]
 
 
-class PanelViewSet(ResourceViewSet):
+class DatasourceViewSet(BKVisionViewSet, ResourceViewSet):
     resource_routes = [
-        ResourceRoute("GET", api.bk_vision.get_panel),
-    ]
-
-
-class DataViewSet(ResourceViewSet):
-    resource_routes = [
-        ResourceRoute("POST", api.bk_vision.query_data),
-        ResourceRoute("POST", api.bk_vision.query_variable_data, endpoint="variable"),
+        ResourceRoute("POST", api.bk_vision.query_data, endpoint="query"),
     ]

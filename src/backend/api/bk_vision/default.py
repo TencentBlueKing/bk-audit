@@ -25,9 +25,10 @@ from api.domains import BK_VISION_API_URL
 
 
 class BKVision(BkApiResource, abc.ABC):
-    module_name = "bk_sops"
+    module_name = "bk_vision"
     base_url = BK_VISION_API_URL
     platform_authorization = True
+    tags = ["BKVision"]
 
 
 class QueryMeta(BKVision):

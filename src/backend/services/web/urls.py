@@ -8,5 +8,5 @@ urlpatterns = [
     path("api/v1/", include("services.web.strategy_v2.urls")),
     path("api/v1/", include("services.web.risk.urls")),
     path("api/v1/", include("services.web.version.urls")),
-    path("api/v1/vision/", include("services.web.vision.urls")),
+    path("bkvision/api/v1/", include("services.web.vision.urls")),
 ]
