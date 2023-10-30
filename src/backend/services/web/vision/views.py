@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import api
+from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from core.utils.renderers import API200Renderer
@@ -30,11 +30,11 @@ class BKVisionViewSet(abc.ABC):
 
 class MetaViewSet(BKVisionViewSet, ResourceViewSet):
     resource_routes = [
-        ResourceRoute("GET", api.bk_vision.query_meta, endpoint="query"),
+        ResourceRoute("GET", resource.vision.query_meta, endpoint="query"),
     ]
 
 
 class DatasourceViewSet(BKVisionViewSet, ResourceViewSet):
     resource_routes = [
-        ResourceRoute("POST", api.bk_vision.query_data, endpoint="query"),
+        ResourceRoute("POST", resource.vision.query_data, endpoint="query"),
     ]

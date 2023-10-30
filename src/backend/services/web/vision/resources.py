@@ -16,9 +16,25 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import Resource
+import abc
+
+from bk_resource import Resource, api
+from django.utils.translation import gettext_lazy
 
 
-class Demo(Resource):
+class BKVision(Resource, abc.ABC):
+    tags = ["BKVision"]
+
+
+class QueryMeta(BKVision):
+    name = gettext_lazy("查询视图配置")
+
     def perform_request(self, validated_request_data):
-        return
+        return api.bk_vision.query_meta(**validated_request_data)
+
+
+class QueryData(BKVision):
+    name = gettext_lazy("获取面板视图数据")
+
+    def perform_request(self, validated_request_data):
+        return api.bk_vision.query_data(**validated_request_data)
