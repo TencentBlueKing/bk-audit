@@ -34,8 +34,13 @@
               {{ item.key }}
             </td>
             <td class="hover-table-value">
-              <multiple-line-clamp
-                :data="item.value" />
+              <!-- <multiple-line-clamp
+                :data="item.value" /> -->
+              <component
+                :is="comMap[item.type as keyof typeof comMap]"
+                :data="item.value"
+                target="_blank"
+                :to="item.value" />
             </td>
             <template v-if="length>4">
               <template v-if="colDataRight[index]">
@@ -47,8 +52,13 @@
                 <td
                   class="hover-table-value border-bottom"
                   style="width: 36%;word-break: break-all;">
-                  <multiple-line-clamp
-                    :data="colDataRight[index].value " />
+                  <!-- <multiple-line-clamp
+                    :data="colDataRight[index].value" /> -->
+                  <component
+                    :is="comMap[colDataRight[index].type as keyof typeof comMap]"
+                    :data="colDataRight[index].value"
+                    target="_blank"
+                    :to="colDataRight[index].value" />
                 </td>
               </template>
             </template>
@@ -73,6 +83,7 @@
   import MultipleLineClamp from '@components/multiple-line-clamp/index.vue';
 
   import DescPopover from './components/desc-popover.vue';
+  import RenderRouterLink from './components/field-link.vue';
   import RenderFieldText from './components/field-text.vue';
 
   interface Props{
@@ -83,6 +94,7 @@
   interface IResults {
     key:string;
     value:string;
+    type: string;
   }
   // const { t } = useI18n();
 
@@ -92,6 +104,11 @@
   const popoverRef = ref();
   const poverWidth = ref(325);
   const updateAfterValues = ref();
+
+  const comMap = {
+    url: RenderRouterLink,
+    other: MultipleLineClamp,
+  };
 
   /**
    * 从接口获取中文字段名称
@@ -107,21 +124,25 @@
     },
     defaultValue: [],
     onSuccess: (data) => {
-      const tmpSchemaResult = data.reduce((result, item) => ({
-        // eslint-disable-next-line no-param-reassign
-        ...result,
-        [item.id]: item,
-      }), {} as Record<string, ResourceTypeSchemaModel>);
+      if (data.length > 0) {
+        const tmpSchemaResult = data.reduce((result, item) => ({
+          // eslint-disable-next-line no-param-reassign
+          ...result,
+          [item.id]: item,
+        }), {} as Record<string, ResourceTypeSchemaModel>);
 
-      colDataLeft.value = colDataLeft.value.map((item:IResults) => ({
-        key: (tmpSchemaResult[item.key] && tmpSchemaResult[item.key].description) || item.key,
-        value: updateAfterValues.value[item.key],
-      }));
+        colDataLeft.value = colDataLeft.value.map((item:IResults) => ({
+          key: (tmpSchemaResult[item.key] && tmpSchemaResult[item.key].description) || item.key,
+          value: updateAfterValues.value[item.key],
+          type: tmpSchemaResult[item.key].type === 'url' ? 'url' : 'other',
+        }));
 
-      colDataRight.value = colDataRight.value.map((item: IResults) => ({
-        key: (tmpSchemaResult[item.key] && tmpSchemaResult[item.key].description) || item.key,
-        value: updateAfterValues.value[item.key],
-      }));
+        colDataRight.value = colDataRight.value.map((item: IResults) => ({
+          key: (tmpSchemaResult[item.key] && tmpSchemaResult[item.key].description) || item.key,
+          value: updateAfterValues.value[item.key],
+          type: tmpSchemaResult[item.key].type === 'url' ? 'url' : 'other',
+        }));
+      }
     },
   });
 
@@ -134,8 +155,8 @@
     const data = (updateFields as Array<string>).map((item: string) => ({
       key: item,
       value: updateAfterValues.value[item],
+      type: 'other',
     }));
-
     /**
      * 当有超过四条数据一行展示两个数据
      */
