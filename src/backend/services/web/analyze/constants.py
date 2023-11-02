@@ -78,7 +78,7 @@ class FlowSQLNodeType(TextChoices):
     def get_sql_node_type(cls, node_type: str) -> str:
         if node_type == FlowDataSourceNodeType.REALTIME.value:
             return cls.REALTIME.value
-        elif node_type == FlowDataSourceNodeType.BATCH.value:
+        elif node_type in [FlowDataSourceNodeType.BATCH.value, FlowDataSourceNodeType.BATCH_REAL.value]:
             return cls.BATCH_V2.value
         else:
             raise KeyError("NodeType [%s] Not Exists" % node_type)
