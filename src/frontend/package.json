@@ -1,6 +1,6 @@
 {
   "name": "bk-audit",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check build-only",
