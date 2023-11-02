@@ -130,21 +130,24 @@
           ...result,
           [item.id]: item,
         }), {} as Record<string, ResourceTypeSchemaModel>);
-
-        colDataLeft.value = colDataLeft.value.map((item:IResults) => ({
-          key: (tmpSchemaResult[item.key] && tmpSchemaResult[item.key].description) || item.key,
-          value: updateAfterValues.value[item.key],
-          type: tmpSchemaResult[item.key].type === 'url' ? 'url' : 'other',
-        }));
-
-        colDataRight.value = colDataRight.value.map((item: IResults) => ({
-          key: (tmpSchemaResult[item.key] && tmpSchemaResult[item.key].description) || item.key,
-          value: updateAfterValues.value[item.key],
-          type: tmpSchemaResult[item.key].type === 'url' ? 'url' : 'other',
-        }));
+        colDataLeft.value = colDataLeft.value.map((item: IResults, index) => updateItem(item, index, 'left', tmpSchemaResult));
+        colDataRight.value = colDataRight.value.map((item: IResults, index) => updateItem(item, index, 'right', tmpSchemaResult));
       }
     },
   });
+
+  const updateItem = (item: IResults, index: number, type: 'left' | 'right', tmpSchemaResult: Record<string, any>) => {
+    const key = (tmpSchemaResult[item.key] && tmpSchemaResult[item.key].description) || item.key;
+    const value = updateAfterValues.value[item.key];
+    const itemType = tmpSchemaResult[item.key] && tmpSchemaResult[item.key].type;
+    const typeResult = itemType === 'url' ? 'url' : 'other';
+
+    return {
+      key,
+      value,
+      type: typeResult,
+    };
+  };
 
   const handleAfterShow = async () => {
     /**
