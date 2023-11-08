@@ -95,7 +95,9 @@ class DeptFilterHandler(FilterDataHandler):
             result = DeptConvertor().convert(policies)
             authed_dept = authed_dept.union(set(result.value))
 
-        return [{"label": dept, "value": dept, "uuid": uuid.uuid1()} for dept in authed_dept]
+        data = [{"label": dept, "value": dept, "uuid": uuid.uuid1()} for dept in authed_dept]
+        data.sort(key=lambda item: item["label"])
+        return data
 
     def check_data(self, input_data: str) -> None:
         # 获取有权限的架构
