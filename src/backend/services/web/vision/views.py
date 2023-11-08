@@ -21,11 +21,16 @@ import abc
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import IAMPermission
 from core.utils.renderers import API200Renderer
 
 
 class BKVisionViewSet(abc.ABC):
     renderer_classes = [API200Renderer]
+
+    def get_permissions(self):
+        return [IAMPermission(actions=[ActionEnum.VIEW_BASE_PANEL])]
 
 
 class MetaViewSet(BKVisionViewSet, ResourceViewSet):
