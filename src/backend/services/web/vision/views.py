@@ -26,20 +26,22 @@ from apps.permission.handlers.drf import IAMPermission
 from core.utils.renderers import API200Renderer
 
 
-class BKVisionViewSet(ResourceViewSet, abc.ABC):
+class API200ViewSet(ResourceViewSet, abc.ABC):
     renderer_classes = [API200Renderer]
 
+
+class BKVisionViewSet(ResourceViewSet, abc.ABC):
     def get_permissions(self):
         return [IAMPermission(actions=[ActionEnum.VIEW_BASE_PANEL])]
 
 
-class PanelsViewSet(BKVisionViewSet):
+class PanelsViewSet(API200ViewSet, BKVisionViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_panels),
     ]
 
 
-class MetaViewSet(BKVisionViewSet):
+class MetaViewSet(API200ViewSet, BKVisionViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.vision.query_meta, endpoint="query"),
     ]
