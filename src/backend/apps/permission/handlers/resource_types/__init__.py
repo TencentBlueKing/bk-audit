@@ -22,6 +22,7 @@ from apps.permission.exceptions import ResourceNotExistError
 from apps.permission.handlers.resource_types.base import ResourceTypeMeta
 from apps.permission.handlers.resource_types.biz_bk_log import BusinessBKLog, SpaceBKLog
 from apps.permission.handlers.resource_types.collection_bk_log import CollectionBKLog
+from apps.permission.handlers.resource_types.dept_bk_usermgr import DeptBKUsermgr
 from apps.permission.handlers.resource_types.notice_group import NoticeGroup
 from apps.permission.handlers.resource_types.risk import Risk
 from apps.permission.handlers.resource_types.sensitive_object import (
@@ -49,6 +50,8 @@ class ResourceEnum:
     SPACE_BK_LOG = SpaceBKLog
     BUSINESS_BK_LOG = BusinessBKLog
     COLLECTION_BK_LOG = CollectionBKLog
+    # BK User
+    DEPT_BK_USERMGR = DeptBKUsermgr
 
 
 _all_resources = {resource.id: resource for resource in ResourceEnum.__dict__.values() if hasattr(resource, "id")}

@@ -8,4 +8,5 @@ INSTALLED_APPS += (
     "services.web.strategy_v2",
     "services.web.risk",
     "services.web.version",
+    "services.web.vision",
 )

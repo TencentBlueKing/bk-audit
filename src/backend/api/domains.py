@@ -65,3 +65,6 @@ BK_SOPS_API_URL = get_endpoint("bk-sops", APIProvider.APIGW, stage=BK_SOPS_APIGW
 
 # BK ITSM
 BK_ITSM_API_URL = get_endpoint("bk-itsm", APIProvider.APIGW)
+
+# BK Vision
+BK_VISION_API_URL = get_endpoint("bk-vision", APIProvider.APIGW)

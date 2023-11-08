@@ -30,6 +30,7 @@ from core.utils.distutils import strtobool
 INSTALLED_APPS = ("simpleui",) + INSTALLED_APPS
 INSTALLED_APPS += (
     "corsheaders",
+    "sslserver",
     "apps.audit",
     "apps.meta",
     "apps.permission",
