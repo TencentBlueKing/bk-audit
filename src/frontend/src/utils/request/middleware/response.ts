@@ -53,7 +53,6 @@ const redirectLogin = (loginUrl:string) => {
 export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
   interceptors.use((response: AxiosResponse) => {
     // 处理http响应成功，后端返回逻辑
-    response.data.code = 0;
     switch (response.data.code) {
       // 后端业务逻辑处理成功
       case 0:
