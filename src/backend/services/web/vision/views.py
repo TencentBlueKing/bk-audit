@@ -35,7 +35,7 @@ class BKVisionViewSet(ResourceViewSet, abc.ABC):
         return [IAMPermission(actions=[ActionEnum.VIEW_BASE_PANEL])]
 
 
-class PanelsViewSet(API200ViewSet, BKVisionViewSet):
+class PanelsViewSet(BKVisionViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_panels),
     ]
@@ -47,7 +47,7 @@ class MetaViewSet(API200ViewSet, BKVisionViewSet):
     ]
 
 
-class DatasourceViewSet(BKVisionViewSet):
+class DatasourceViewSet(API200ViewSet, BKVisionViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.vision.query_data, endpoint="query"),
     ]
