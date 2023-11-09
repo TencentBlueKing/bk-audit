@@ -23,8 +23,6 @@ from django.utils.deprecation import MiddlewareMixin
 class CSRFExemptMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # 调试无需检测 CSRF TOKEN
-        if settings.DEBUG:
-            setattr(request, "csrf_processing_done", True)
-        # 仪表盘豁免
-        if hasattr(request, "path") and request.path.startswith("bkvision"):
+        # 豁免 BKVision 路径
+        if any([settings.DEBUG, hasattr(request, "path") and request.path.startswith("/bkvision")]):
             setattr(request, "csrf_processing_done", True)
