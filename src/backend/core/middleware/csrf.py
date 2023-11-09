@@ -25,3 +25,6 @@ class CSRFExemptMiddleware(MiddlewareMixin):
         # 调试无需检测 CSRF TOKEN
         if settings.DEBUG:
             setattr(request, "csrf_processing_done", True)
+        # 仪表盘豁免
+        if hasattr(request, "path") and request.path.startswith("bkvision"):
+            setattr(request, "csrf_processing_done", True)
