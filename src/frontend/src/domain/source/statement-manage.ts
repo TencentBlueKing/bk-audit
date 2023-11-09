@@ -14,38 +14,23 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-/// <reference types="vite/client" />
+import Request, {
+} from '@utils/request';
 
-interface ImportMetaEnv {
-  readonly VITE_AJAX_URL_PREFIX: string
-  readonly DEV_DOMAIN: string
+import ModuleBase from './module-base';
+
+class Statement extends ModuleBase {
+  constructor() {
+    super();
+    this.module = '/';
+  }
+
+  getMenuList() {
+    return Request.get<Array<{
+      id:string,
+      name:string
+    }>>(`${this.module}bkvision/api/v1/panels/`);
+  }
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
-
-declare module '*.js' {
-  const css: string;
-  export default js;
-}
-
-declare interface Window {
-  PROJECT_CONFIG: {
-    AJAX_URL_PREFIX: string,
-    NAMESPACE: string
-  };
-  changeConfirm: boolean | 'popover';
-  testmessage: any;
-  BkVisionSDK: any;
-}
-
-declare module 'js-cookie'
-
-interface URLSearchParams {
-  keys(): string[];
-}
-
-type ValueOf<T> = T[keyof T];
-
-
+export default new Statement();
