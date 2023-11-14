@@ -351,6 +351,7 @@ class AIOPSConfigSerializer(serializers.Serializer):
     data_source = AIOPSDataSourceSerializer(label=gettext_lazy("Data Source"))
     config_type = serializers.ChoiceField(label=gettext_lazy("配置类型"), choices=TableType.choices)
     aiops_config = AIOPSSceneConfigSerializer(label=gettext_lazy("AIOPS Config"), required=False)
+    variable_config = serializers.ListField(label=gettext_lazy("方案参数"), required=False, child=serializers.JSONField())
 
 
 class ListTablesRequestSerializer(serializers.Serializer):
