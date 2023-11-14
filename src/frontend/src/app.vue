@@ -24,6 +24,7 @@
       :locale="bkuiLocal">
       <layout
         v-if="isWatermarkSuccess"
+        ref="layoutRef"
         class="layout-box">
         <template #header>
           <router-back />
@@ -149,7 +150,8 @@
     manual: true,
   });
 
-  const pageTitle = computed(() => (route.meta.title || '') as string);
+  const layoutRef = ref();
+  const pageTitle = computed(() => route.meta.title || layoutRef.value?.titleRef || '' as string);
 
   const handleVersionLog = () => {
     isShowVersionLog.value = true;

@@ -1,4 +1,4 @@
-/*
+<!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
   Copyright (C) 2023 THL A29 Limited,
@@ -13,39 +13,17 @@
   specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
-*/
-/// <reference types="vite/client" />
-
-interface ImportMetaEnv {
-  readonly VITE_AJAX_URL_PREFIX: string
-  readonly DEV_DOMAIN: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
-
-declare module '*.js' {
-  const css: string;
-  export default js;
-}
-
-declare interface Window {
-  PROJECT_CONFIG: {
-    AJAX_URL_PREFIX: string,
-    NAMESPACE: string
-  };
-  changeConfirm: boolean | 'popover';
-  testmessage: any;
-  BkVisionSDK: any;
-}
-
-declare module 'js-cookie'
-
-interface URLSearchParams {
-  keys(): string[];
-}
-
-type ValueOf<T> = T[keyof T];
-
-
+-->
+<template>
+  <a
+    :href="data"
+    target="_blank">
+    {{ data }}
+  </a>
+</template>
+  <script setup lang="ts">
+  interface Props{
+    data: string
+  }
+  defineProps<Props>();
+  </script>
