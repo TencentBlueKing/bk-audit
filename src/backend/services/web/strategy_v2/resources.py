@@ -22,6 +22,7 @@ from collections import defaultdict
 from typing import List
 
 from bk_resource import Resource, api, resource
+from bk_resource.base import Empty
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.db import transaction
@@ -59,6 +60,7 @@ from services.web.analyze.tasks import call_controller
 from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
+    LOCAL_UPDATE_FIELDS,
     MappingType,
     StrategyAlgorithmOperator,
     StrategyOperator,
@@ -162,42 +164,22 @@ class UpdateStrategy(StrategyV2Base):
     ResponseSerializer = UpdateStrategyResponseSerializer
 
     def perform_request(self, validated_request_data):
-        with transaction.atomic():
-            # pop tag
-            tag_names = validated_request_data.pop("tags", [])
-            # check configs
-            self._validate_configs(validated_request_data)
-            # load strategy
-            strategy: Strategy = get_object_or_404(
-                Strategy, strategy_id=validated_request_data.pop("strategy_id", int())
-            )
-            instance_origin_data = StrategyInfoSerializer(strategy).data
-            # check control
-            if strategy.control_id != validated_request_data["control_id"]:
-                raise ControlChangeError()
-            # check strategy status
-            if strategy.status in [
-                StrategyStatusChoices.STARTING,
-                StrategyStatusChoices.UPDATING,
-                StrategyStatusChoices.STOPPING,
-            ]:
-                raise StrategyPendingError()
-            # save strategy
-            for key, val in validated_request_data.items():
-                setattr(strategy, key, val)
-            strategy.save(update_fields=validated_request_data.keys())
-            strategy.status = StrategyStatusChoices.UPDATING
-            strategy.save(update_fields=["status"])
-            # save strategy tag
-            self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
-        # update
-        try:
-            call_controller(Controller.update.__name__, strategy.strategy_id)
-        except Exception as err:
-            strategy.status = StrategyStatusChoices.UPDATE_FAILED
-            strategy.status_msg = str(err)
-            strategy.save(update_fields=["status", "status_msg"])
-            raise err
+        # load strategy
+        strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data.pop("strategy_id", int()))
+        # check strategy status
+        if strategy.status in [
+            StrategyStatusChoices.STARTING,
+            StrategyStatusChoices.UPDATING,
+            StrategyStatusChoices.STOPPING,
+        ]:
+            raise StrategyPendingError()
+        # save origin data
+        instance_origin_data = StrategyInfoSerializer(strategy).data
+        # update db
+        need_update_remote = self.update_db(strategy=strategy, validated_request_data=validated_request_data)
+        # update remote
+        if need_update_remote:
+            self.update_remote(strategy)
         # audit
         setattr(strategy, "instance_origin_data", instance_origin_data)
         bk_audit_client.add_event(
@@ -208,6 +190,41 @@ class UpdateStrategy(StrategyV2Base):
         )
         # response
         return strategy
+
+    @transaction.atomic()
+    def update_db(self, strategy: Strategy, validated_request_data: dict) -> bool:
+        # 用于控制是否更新真实的监控策略或计算平台Flow
+        need_update_remote = False
+        # pop tag
+        tag_names = validated_request_data.pop("tags", [])
+        # check configs
+        self._validate_configs(validated_request_data)
+        # check control
+        if strategy.control_id != validated_request_data["control_id"]:
+            raise ControlChangeError()
+        # save strategy
+        for key, val in validated_request_data.items():
+            inst_val = getattr(strategy, key, Empty())
+            # 不同且不在本地更新清单中的字段才触发远程更新
+            if inst_val != val and key not in LOCAL_UPDATE_FIELDS:
+                need_update_remote = True
+            setattr(strategy, key, val)
+        strategy.save(update_fields=validated_request_data.keys())
+        # save strategy tag
+        self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+        # return
+        return need_update_remote
+
+    def update_remote(self, strategy: Strategy) -> None:
+        strategy.status = StrategyStatusChoices.UPDATING
+        strategy.save(update_fields=["status"])
+        try:
+            call_controller(Controller.update.__name__, strategy.strategy_id)
+        except Exception as err:
+            strategy.status = StrategyStatusChoices.UPDATE_FAILED
+            strategy.status_msg = str(err)
+            strategy.save(update_fields=["status", "status_msg"])
+            raise err
 
 
 class DeleteStrategy(StrategyV2Base):

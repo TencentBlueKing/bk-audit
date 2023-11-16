@@ -88,6 +88,7 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Strategy
+        # 若有可变化的字段变更，需要同步修改本地更新的字段列表 LOCAL_UPDATE_FIELDS
         fields = ["strategy_id", "strategy_name", "control_id", "control_version", "configs", "tags", "notice_groups"]
 
     def validate(self, attrs: dict) -> dict:
