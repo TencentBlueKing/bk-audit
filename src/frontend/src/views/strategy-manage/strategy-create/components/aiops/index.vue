@@ -174,6 +174,7 @@
         schedule_period: string,
       },
       config_type: string,
+      variable_config: Array<Record<string, any>>
     },
   }
 
@@ -211,6 +212,7 @@
         count_freq: '',
         schedule_period: 'hour',
       },
+      variable_config: [],
     },
   });
   const sourceTypeMap = ref<Record<string, string>>({});
@@ -309,6 +311,7 @@
       }).then(() => {
         comRef.value.setConfigs(configs);
       });
+      paramenterRef.value.setConfigs(configs.variable_config);
       isInit = true;
     },
     getFields() {

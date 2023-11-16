@@ -58,8 +58,8 @@
 </template>
 <script setup lang="ts">
   import {
-    computed,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -73,11 +73,12 @@
 
   interface Exposes {
     getValue: () => void;
-    getFields(): () => void;
+    getFields: () => void;
+    setConfigs: (configs: Array<ParameterItem>) => void;
     clearFields: () => void;
   }
 
-  interface parameterItem {
+  interface ParameterItem {
     variable_name: string,
     variable_alias: string,
     variable_type: string,
@@ -87,20 +88,29 @@
     properties: {
       is_required: boolean,
     },
+    default_value?: string,
   }
 
   const props = defineProps<Props>();
   const { t } = useI18n();
   const fieldItemRef = ref();
-
-  const parameter = computed(() => props?.controlDetail?.variable_config?.parameter);
+  let isInit = false;
+  const parameter = ref<Array<ParameterItem>>([]);
+  watch(() => props.controlDetail, (val) => {
+    if (isInit) return;
+    parameter.value = val?.variable_config?.parameter || [];
+    if (parameter.value.length) {
+      // eslint-disable-next-line no-param-reassign
+      parameter.value.map(item => item.variable_value = item.default_value || '');
+    }
+  });
 
   defineExpose<Exposes>({
     getValue() {
       return Promise.all((fieldItemRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
     },
     getFields() {
-      const res = parameter.value.reduce((res: Array<parameterItem>, item: parameterItem) => {
+      const res = parameter.value.reduce((res: Array<ParameterItem>, item: ParameterItem) => {
         if (item.variable_name) {
           res[res.length] = {
             variable_name: item.variable_name,
@@ -115,6 +125,10 @@
         return res;
       }, []);
       return res;
+    },
+    setConfigs(configs: Array<ParameterItem>) {
+      parameter.value = configs;
+      isInit = true;
     },
     clearFields() {
       if (!fieldItemRef.value) return;
