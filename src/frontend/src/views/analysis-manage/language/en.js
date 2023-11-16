@@ -132,5 +132,7 @@ export default {
     员工类型: 'employee type',
     管理职级: 'management rank',
     审计配置: 'Audit Configuration',
+    管理空间类型: 'scope type',
+    管理空间ID: 'scope id',
   },
 };
