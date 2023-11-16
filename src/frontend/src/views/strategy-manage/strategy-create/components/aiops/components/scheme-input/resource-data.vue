@@ -90,8 +90,8 @@
 
   import useRequest from '@hooks/use-request';
 
-  import FilterCondition,  { type conditionData } from './components/filter-condition.vue';
-  import RenderField from './components/render-field.vue';
+  import FilterCondition,  { type conditionData } from '../components/filter-condition.vue';
+  import RenderField from '../components/render-field.vue';
 
   interface Props {
     loading: boolean;

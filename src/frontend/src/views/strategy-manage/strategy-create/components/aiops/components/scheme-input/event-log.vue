@@ -47,7 +47,7 @@
                 disabled: system.status != 'unset',
                 content: t('该系统暂未接入审计中心')
               }"
-              style=" display:inline-block;width:100%;">
+              style=" display: inline-block;width: 100%;">
               {{ system.name }}
             </span>
           </bk-option>
@@ -93,7 +93,7 @@
 
   import useRequest from '@hooks/use-request';
 
-  import TableComponent from './components/render-table.vue';
+  import TableComponent from '../components/render-table.vue';
 
   interface Props{
     loading: boolean;
