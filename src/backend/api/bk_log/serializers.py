@@ -247,7 +247,7 @@ class AgentStatusSerializer(serializers.Serializer):
 
 class GetHostInstanceByIPInstanceSerializer(serializers.Serializer):
     ip = serializers.CharField(label=gettext_lazy("IP"))
-    bk_cloud_id = serializers.IntegerField(label=gettext_lazy("云区域ID"), required=False)
+    bk_cloud_id = serializers.IntegerField(label=gettext_lazy("云区域ID"), required=False, allow_null=True)
 
 
 class GetHostInstanceByIPRequestSerializer(serializers.Serializer):
@@ -257,7 +257,7 @@ class GetHostInstanceByIPRequestSerializer(serializers.Serializer):
 
 class GetHostInstanceByIPResponseSerializer(serializers.Serializer):
     ip = serializers.CharField(label=gettext_lazy("IP"))
-    bk_cloud_id = serializers.IntegerField(label=gettext_lazy("云区域ID"))
+    bk_cloud_id = serializers.IntegerField(label=gettext_lazy("云区域ID"), allow_null=True, required=False)
     bk_cloud_name = serializers.CharField(label=gettext_lazy("云区域名称"))
     agent_status = serializers.CharField(label=gettext_lazy("Agent状态ID"))
     agent_status_name = serializers.CharField(label=gettext_lazy("Agent状态"))
@@ -306,7 +306,7 @@ class GetSubscriptTaskDetailRequestSerializer(serializers.Serializer):
 
 
 class RetrySubscriptTaskInstSerializer(serializers.Serializer):
-    bk_cloud_id = serializers.IntegerField(label=gettext_lazy("云区域ID"))
+    bk_cloud_id = serializers.IntegerField(label=gettext_lazy("云区域ID"), allow_null=True, required=False)
     bk_supplier_id = serializers.CharField(label=gettext_lazy("云服务商"))
     ip = serializers.CharField(label=gettext_lazy("IP"))
 
