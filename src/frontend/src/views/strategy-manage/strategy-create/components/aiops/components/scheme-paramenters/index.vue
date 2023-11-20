@@ -36,7 +36,10 @@
         <div class="field-id">
           {{ fieldIndex + 1 }}
         </div>
-        <div class="field-key">
+        <div
+          v-bk-tooltips="{ content: fieldItem.description || fieldItem.variable_alias }"
+          class="field-key"
+          style="cursor: pointer;">
           <span class="field-type">{{ fieldItem.value_type }}</span>
           <span style="line-height: 20px;">
             {{ fieldItem.variable_name }}（{{ fieldItem.variable_alias }}）
@@ -72,8 +75,8 @@
   }
 
   interface Exposes {
-    getValue: () => void;
-    getFields: () => void;
+    getValue: () => Promise<any>;
+    getFields: () => Array<ParameterItem>;
     setConfigs: (configs: Array<ParameterItem>) => void;
     clearFields: () => void;
   }
@@ -100,8 +103,11 @@
     if (isInit) return;
     parameter.value = val?.variable_config?.parameter || [];
     if (parameter.value.length) {
-      // eslint-disable-next-line no-param-reassign
-      parameter.value.map(item => item.variable_value = item.default_value || '');
+      parameter.value = parameter.value.map((item) => {
+        const ParameterItem = { ...item };
+        ParameterItem.variable_value = ParameterItem.default_value || '';
+        return ParameterItem;
+      });
     }
   });
 
@@ -112,7 +118,7 @@
     getFields() {
       const res = parameter.value.reduce((res: Array<ParameterItem>, item: ParameterItem) => {
         if (item.variable_name) {
-          res[res.length] = {
+          res.push({
             variable_name: item.variable_name,
             variable_alias: item.variable_alias,
             variable_type: item.variable_type,
@@ -120,7 +126,7 @@
             variable_value: item.variable_value,
             description: item.description,
             properties: item.properties,
-          };
+          });
         }
         return res;
       }, []);

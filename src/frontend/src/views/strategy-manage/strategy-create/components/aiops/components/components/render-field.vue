@@ -31,7 +31,7 @@
           v-bk-tooltips="{
             content: t('数据源中与方案输入参数匹配的字段'),
           }"
-          style="margin-left: 8px;font-size: 14px;color: #C4C6CC;"
+          style="margin-left: 8px;font-size: 14px;color: #c4c6cc;"
           type="info-fill" />
       </div>
     </div>
@@ -96,8 +96,8 @@
   }
 
   interface Exposes {
-    getValue: () => void;
-    getFields: () => void;
+    getValue: () => Promise<any>;
+    getFields: () => Record<string, any>;
     clearFields: () => void;
   }
 

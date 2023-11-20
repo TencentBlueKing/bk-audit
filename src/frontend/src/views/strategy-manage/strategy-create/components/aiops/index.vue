@@ -147,6 +147,8 @@
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
   import SchemeParamenters from './components/scheme-paramenters/index.vue';
 
+  type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
+
   interface Props {
     controlDetail: ControlModel;
     triggerError?: boolean,
@@ -157,9 +159,9 @@
     (e: 'updateAiopsConfig', value: IFormData['configs']['aiops_config'] | undefined): void,
   }
   interface Exposes {
-    getValue: () => void;
-    getFields: () => void;
-    getParamenterFields: () => void;
+    getValue: () => Promise<any>;
+    getFields: () => GetFieldsType;
+    getParamenterFields: () => ReturnType<InstanceType<typeof SchemeParamenters>['getFields']>;
     setConfigs: (data: IFormData['configs']) => void;
     clearData: () => void;
   }
@@ -296,7 +298,7 @@
 
   defineExpose<Exposes>({
     getValue() {
-      return comRef.value.getValue() && paramenterRef.value.getValue();
+      return comRef.value.getValue().then(() => paramenterRef.value.getValue());
     },
     setConfigs(configs: IFormData['configs']) {
       formData.value.configs.config_type = configs.config_type;

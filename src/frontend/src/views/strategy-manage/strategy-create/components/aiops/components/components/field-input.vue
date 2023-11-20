@@ -43,7 +43,7 @@
   interface Props {
     modelValue: string;
     required?: boolean;
-    theme?: 'background' | '';
+    theme?: string;
   }
 
   interface Emits{
@@ -51,7 +51,7 @@
   }
 
   interface Expose {
-    getValue: () => void,
+    getValue: () => Promise<any>,
     clearFields: () => void
   }
 
@@ -83,10 +83,7 @@
         return Promise.reject(new Error('必填'));
       }
       isError.value = false;
-      return Promise.resolve({
-        field_name: localValue.value,
-        source_field: localValue.value,
-      });
+      return Promise.resolve();
     },
     clearFields() {
       isError.value = false;
@@ -94,7 +91,7 @@
     },
   });
 </script>
-<style lang="postcss">
+<style lang="postcss" scoped>
 .field-input {
   display: flex;
   width: 100%;
@@ -120,14 +117,6 @@
 
   .bk-input {
     border-color: #ea3636 !important;
-  }
-}
-
-.is-errored.is-background-errored-tip .bk-input {
-  border-color: #fee !important;
-
-  input {
-    background-color: #fee !important;
   }
 }
 </style>

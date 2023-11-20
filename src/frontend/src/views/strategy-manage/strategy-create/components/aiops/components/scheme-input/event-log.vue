@@ -112,8 +112,8 @@
     (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
   }
   interface Exposes {
-    getValue: () => void;
-    getFields: () => void;
+    getValue: () => Promise<any>;
+    getFields: () => Record<string, Record<string, string>>;
     setConfigs: (data: IFormData['configs']) => void;
     clearData: () => void;
   }
