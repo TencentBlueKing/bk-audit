@@ -36,12 +36,11 @@
         <div class="field-id">
           {{ fieldIndex + 1 }}
         </div>
-        <div
-          v-bk-tooltips="{ content: fieldItem.description || fieldItem.variable_alias }"
-          class="field-key"
-          style="cursor: pointer;">
+        <div class="field-key">
           <span class="field-type">{{ fieldItem.value_type }}</span>
-          <span style="line-height: 20px;">
+          <span
+            v-bk-tooltips="{ content: fieldItem.description || fieldItem.variable_alias }"
+            class="field-key-text">
             {{ fieldItem.variable_name }}（{{ fieldItem.variable_alias }}）
           </span>
           <span
@@ -191,6 +190,12 @@
     background: #fafbfd;
     align-items: center;
     flex: 1 0 340px;
+
+    .field-key-text {
+      line-height: 20px;
+      cursor: pointer;
+      border-bottom: 1px dashed rgb(196 198 204)
+    }
 
     .field-type {
       display: inline-block;
