@@ -438,6 +438,7 @@ class AIOpsController(Controller):
         extra_config = self.strategy.control_version_inst.extra_config
         data_source = self.strategy.configs["data_source"]
         sql_node_type = FlowSQLNodeType.get_sql_node_type(data_source["source_type"])
+        variable_config = self.strategy.configs.get("variable_config") or []
 
         return {
             "node_type": "scenario_app",
@@ -464,7 +465,7 @@ class AIOpsController(Controller):
                     }
                     for _input_config in input_config
                 },
-                "variable_config": [],
+                "variable_config": variable_config,
                 "schedule_config": {
                     "count_freq": aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ),
                     "schedule_period": aiops_config.get("schedule_period", OffsetUnit.HOUR),
