@@ -26,147 +26,120 @@
       <div
         class="field-value"
         style="display: flex;padding-left: 16px; align-items: center;">
-        {{ t('映射值') }}
-        <audit-icon
-          v-bk-tooltips="{
-            content: t('数据源中与方案输入参数匹配的字段'),
-          }"
-          style="margin-left: 8px;font-size: 14px;color: #c4c6cc;"
-          type="info-fill" />
+        {{ t('参数值') }}
       </div>
     </div>
     <template
-      v-for="(fieldItem, fieldIndex) in renderData"
+      v-for="(fieldItem, fieldIndex) in parameter"
       :key="fieldIndex">
       <div class="field-row">
         <div class="field-id">
           {{ fieldIndex + 1 }}
         </div>
         <div class="field-key">
-          <span class="field-type">{{ fieldItem.field_type }}</span>
-          <span style="line-height: 20px;">
-            {{ fieldItem.field_name }}（{{ fieldItem.field_alias }}）
+          <span class="field-type">{{ fieldItem.value_type }}</span>
+          <span
+            v-bk-tooltips="{ content: fieldItem.description || fieldItem.variable_alias }"
+            class="field-key-text">
+            {{ fieldItem.variable_name }}（{{ fieldItem.variable_alias }}）
           </span>
           <span
             v-if="fieldItem.properties?.is_required"
             class="field-required">*</span>
         </div>
-        <div class="field-value field-value-content">
-          <div style="width: 100%;height: 100%;">
-            <field-select
-              ref="fieldItemRef"
-              :default-value="fieldItem.source_field || ''"
-              :field-name="fieldItem.field_name"
-              :required="fieldItem.properties?.is_required"
-              :rt-fields="rtFields"
-              theme="background"
-              @change="(value: string) => handleChange(value, fieldItem)" />
-          </div>
+        <div class="field-value">
+          <field-input
+            ref="fieldItemRef"
+            v-model="fieldItem.variable_value"
+            :required="fieldItem.properties?.is_required"
+            theme="background" />
         </div>
       </div>
     </template>
   </div>
 </template>
-<script lang="ts">
-  export interface ResourceFieldType {
-    label: string;
-    value: string;
-    field_type?: string;
-  }
-</script>
 <script setup lang="ts">
-  import _ from 'lodash';
   import {
-    computed,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import AiopPlanModel from '@model/strategy/aiops-plan';
+  import type ControlModel from '@model/control/control';
 
-  import FieldSelect from './field-select.vue';
-
+  import FieldInput from '../components/field-input.vue';
 
   interface Props {
-    data: Record<string, any>[];
-    rtFields: Array<ResourceFieldType>;
-    configs: Record<string, any>[];
-    triggerError?: boolean
+    controlDetail: ControlModel;
   }
 
   interface Exposes {
     getValue: () => Promise<any>;
-    getFields: () => Record<string, any>;
+    getFields: () => Array<ParameterItem>;
+    setConfigs: (configs: Array<ParameterItem>) => void;
     clearFields: () => void;
   }
 
-  const props = defineProps<Props>();
+  interface ParameterItem {
+    variable_name: string,
+    variable_alias: string,
+    variable_type: string,
+    value_type: string,
+    variable_value: string,
+    description: string,
+    properties: {
+      is_required: boolean,
+    },
+    default_value?: string,
+  }
 
+  const props = defineProps<Props>();
   const { t } = useI18n();
   const fieldItemRef = ref();
-  const renderData = computed(() => {
-    const genKey = (fieldConfig: Record<string, any>) => `${[fieldConfig.field_name]}(${fieldConfig.field_alias})`;
-    const fieldNameConfigMap = props.configs.reduce((result, item) => ({
-      ...result,
-      [genKey(item)]: item,
-    }), {});
-    return _.filter(props.data, (item) => {
-      const config = fieldNameConfigMap[genKey(item)];
-      if (!config || !config.roles) {
-        return false;
-      }
-      return AiopPlanModel.checkHideInputField(config);
-    });
-  });
-
-  let localData: Props['data'];
-
-
-  const handleChange = (value: string | string[], fieldItem: Record<string, any>) => {
-    const targetIndex = _.findIndex(props.data, item => item === fieldItem);
-    if (targetIndex > -1) {
-      localData[targetIndex].source_field = value;
+  let isInit = false;
+  const parameter = ref<Array<ParameterItem>>([]);
+  watch(() => props.controlDetail, (val) => {
+    if (isInit) return;
+    parameter.value = val?.variable_config?.parameter || [];
+    if (parameter.value.length) {
+      parameter.value = parameter.value.map((item) => {
+        const ParameterItem = { ...item };
+        ParameterItem.variable_value = ParameterItem.default_value || '';
+        return ParameterItem;
+      });
     }
-    window.changeConfirm = true;
-  };
-
-
-  watch(() => props.data, () => {
-    localData = _.cloneDeep(props.data);
-  }, {
-    immediate: true,
   });
-  watch(() => [fieldItemRef.value, props.triggerError], () => {
-    if (props.triggerError && fieldItemRef.value) {
-      Promise.all((fieldItemRef.value as { getValue: () => any }[]).map(item => item.getValue()));
-    }
-  }, {
-    immediate: true,
-    deep: true,
-  });
+
   defineExpose<Exposes>({
-    clearFields() {
-      if (!fieldItemRef.value) return;
-      (fieldItemRef.value as { clearFields: () => void }[]).map(item => item.clearFields());
-    },
     getValue() {
       return Promise.all((fieldItemRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
     },
     getFields() {
-      const res = localData.reduce((res, item) => {
-        if (item.source_field) {
-          res[res.length] = {
-            field_name: item.field_name,
-            source_field: item.source_field,
-          };
+      const res = parameter.value.reduce((res: Array<ParameterItem>, item: ParameterItem) => {
+        if (item.variable_name) {
+          res.push({
+            variable_name: item.variable_name,
+            variable_alias: item.variable_alias,
+            variable_type: item.variable_type,
+            value_type: item.value_type,
+            variable_value: item.variable_value,
+            description: item.description,
+            properties: item.properties,
+          });
         }
         return res;
       }, []);
       return res;
     },
+    setConfigs(configs: Array<ParameterItem>) {
+      parameter.value = configs;
+      isInit = true;
+    },
+    clearFields() {
+      if (!fieldItemRef.value) return;
+      (fieldItemRef.value as { clearFields: () => void }[]).map(item => item.clearFields());
+    },
   });
-
 </script>
 <style lang="postcss" scoped>
 .render-field {
@@ -218,6 +191,12 @@
     align-items: center;
     flex: 1 0 340px;
 
+    .field-key-text {
+      line-height: 20px;
+      cursor: pointer;
+      border-bottom: 1px dashed rgb(196 198 204)
+    }
+
     .field-type {
       display: inline-block;
       padding: 0 10px;
@@ -226,11 +205,6 @@
       color: #3a84ff;
       background: #e1ecff;
       border-radius: 10px;
-    }
-
-    .field-type-icon {
-      width: 46px;
-      margin-right: 6px;
     }
 
     .field-required {
@@ -248,8 +222,5 @@
     flex: 1 1 320px;
   }
 
-  .field-value-content {
-    background-color: #fff;
-  }
 }
 </style>
