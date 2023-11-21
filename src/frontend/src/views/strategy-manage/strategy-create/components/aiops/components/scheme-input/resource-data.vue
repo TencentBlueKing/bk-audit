@@ -90,8 +90,8 @@
 
   import useRequest from '@hooks/use-request';
 
-  import FilterCondition,  { type conditionData } from './components/filter-condition.vue';
-  import RenderField from './components/render-field.vue';
+  import FilterCondition,  { type ConditionData } from '../components/filter-condition.vue';
+  import RenderField from '../components/render-field.vue';
 
   interface Props {
     loading: boolean;
@@ -111,8 +111,8 @@
     (e: 'updateDataSource', value: FormData['data_source']): void,
   }
   interface Exposes{
-    getValue: () => void;
-    getFields: () => void;
+    getValue: () => Promise<any>;
+    getFields: () => Record<string, any>;
     setConfigs: (config: FormData) => void;
   }
 
@@ -133,7 +133,7 @@
     configs: {
       data_source: {
         fields: [] as ValueOf<AiopPlanModel['input_fields']>,
-        filter_config: [] as conditionData,
+        filter_config: [] as ConditionData,
         result_table_id: [] as Array<string>,
       },
     },
@@ -156,7 +156,7 @@
   } = useRequest(StrategyManageService.fetchTableRtFields);
 
 
-  const handleUpdateFilterConfig = (filterConfig: conditionData) => {
+  const handleUpdateFilterConfig = (filterConfig: ConditionData) => {
     formData.value.configs.data_source.filter_config = filterConfig;
     handleUpdateDataSource();
   };

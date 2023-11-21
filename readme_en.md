@@ -1,7 +1,7 @@
 ![logo.png](assets/logo.png)
 
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](https://github.com/TencentBlueKing/bk-audit/blob/master/LICENSE.txt)
-[![Release Version](https://img.shields.io/badge/release-1.6.2-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
+[![Release Version](https://img.shields.io/badge/release-1.6.3-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/pulls)
 
 ## Overview
