@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="render-field">
+  <div
+    v-if="parameter.length"
+    class="render-field">
     <div class="field-header-row">
       <div class="field-id">
         #
@@ -57,6 +59,7 @@
       </div>
     </template>
   </div>
+  <model-empty v-else />
 </template>
 <script setup lang="ts">
   import {
@@ -68,6 +71,7 @@
   import type ControlModel from '@model/control/control';
 
   import FieldInput from '../components/field-input.vue';
+  import ModelEmpty from '../components/model-empty.vue';
 
   interface Props {
     controlDetail: ControlModel;

@@ -43,6 +43,13 @@
       :rt-fields-map="rtFieldsMap" />
 
     <render-info-block>
+      <render-info-item :label="t('方案参数')">
+        <render-parameter
+          :data="data.configs.variable_config" />
+      </render-info-item>
+    </render-info-block>
+
+    <render-info-block>
       <render-info-item :label="t('调度周期')">
         <template v-if="data.configs.aiops_config">
           <span>
@@ -83,6 +90,7 @@
 
   import FilterCondition from './filter-condition.vue';
   import RenderField from './render-field.vue';
+  import renderParameter from './render-parameter.vue';
 
 
   interface Props{
