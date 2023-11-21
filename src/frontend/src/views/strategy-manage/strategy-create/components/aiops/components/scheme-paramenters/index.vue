@@ -96,15 +96,21 @@
   const props = defineProps<Props>();
   const { t } = useI18n();
   const fieldItemRef = ref();
-  let isInit = false;
+  let parameterData:Array<ParameterItem> = []; // 编辑获取的数据
   const parameter = ref<Array<ParameterItem>>([]);
   watch(() => props.controlDetail, (val) => {
-    if (isInit) return;
     parameter.value = val?.variable_config?.parameter || [];
     if (parameter.value.length) {
-      parameter.value = parameter.value.map((item) => {
+      parameter.value = parameter.value.map((item, index) => {
+        // 创建一个新的item
         const ParameterItem = { ...item };
-        ParameterItem.variable_value = ParameterItem.default_value || '';
+        // 如果有编辑数据，填充
+        if (parameterData.length && parameterData[index].variable_value) {
+          ParameterItem.variable_value = parameterData[index].variable_value;
+        } else {
+          // 没有编辑数据，获取默认值
+          ParameterItem.variable_value = ParameterItem.default_value || '';
+        }
         return ParameterItem;
       });
     }
@@ -132,8 +138,7 @@
       return res;
     },
     setConfigs(configs: Array<ParameterItem>) {
-      parameter.value = configs;
-      isInit = true;
+      parameterData = configs;
     },
     clearFields() {
       if (!fieldItemRef.value) return;
