@@ -77,7 +77,7 @@
   import RenderInfoItem from '../render-info-item.vue';
 
   import MultiRenderField from './multi-render-field.vue';
-  import renderParameter from './render-parameter.vue';
+  import RenderParameter from './render-parameter.vue';
 
   interface Props {
     data: StrategyModel,

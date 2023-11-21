@@ -90,7 +90,7 @@
 
   import FilterCondition from './filter-condition.vue';
   import RenderField from './render-field.vue';
-  import renderParameter from './render-parameter.vue';
+  import RenderParameter from './render-parameter.vue';
 
 
   interface Props{
