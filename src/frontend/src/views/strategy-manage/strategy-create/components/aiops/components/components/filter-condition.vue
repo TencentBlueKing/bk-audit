@@ -169,7 +169,7 @@
       value: [] as Array<string>, // 对应值
     },
   ];
-  export type conditionData = typeof lists;
+  export type ConditionData = typeof lists;
 </script>
 
 <script setup lang="ts">
@@ -190,11 +190,11 @@
   import useRequest from '@hooks/use-request';
 
   interface Exposes{
-    handleValueDicts: (data: conditionData) => void,
+    handleValueDicts: (data: ConditionData) => void,
     getValue(): void,
   }
   interface Emits {
-    (e: 'updateFilterConfig', value: conditionData): void
+    (e: 'updateFilterConfig', value: ConditionData): void
   }
   interface Props {
     data: Record<string, any>,
@@ -228,7 +228,7 @@
   const dicts = ref<Record<string, Array<any>>>({});
   const isValueFocus = reactive({} as Record<string, boolean>);
   const formData = ref({
-    filter_config: [...lists] as conditionData,
+    filter_config: [...lists] as ConditionData,
   });
   formData.value.filter_config = lists;
   let isInit = false;
@@ -287,7 +287,7 @@
     handleUpdateFilterConfig();
   };
   // 回显下拉值
-  const  handleValueDicts = (conditions: conditionData) => {
+  const  handleValueDicts = (conditions: ConditionData) => {
     conditions.forEach((item) => {
       dicts.value[item.key] = [];
     });
@@ -334,7 +334,7 @@
   });
 
   defineExpose<Exposes>({
-    handleValueDicts(data: conditionData) {
+    handleValueDicts(data: ConditionData) {
       handleValueDicts(data);
     },
     getValue() {
@@ -363,7 +363,7 @@
 
     :deep(.bk-form-label::after) {
       width: 0;
-      content: "";
+      content: '';
     }
 
     :deep(.bk-form-label) {
