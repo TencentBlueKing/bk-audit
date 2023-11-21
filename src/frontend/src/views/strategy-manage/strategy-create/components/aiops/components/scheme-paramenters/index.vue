@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="render-field">
+  <div
+    v-if="parameter.length"
+    class="render-field">
     <div class="field-header-row">
       <div class="field-id">
         #
@@ -57,6 +59,7 @@
       </div>
     </template>
   </div>
+  <model-empty v-else />
 </template>
 <script setup lang="ts">
   import {
@@ -68,6 +71,7 @@
   import type ControlModel from '@model/control/control';
 
   import FieldInput from '../components/field-input.vue';
+  import ModelEmpty from '../components/model-empty.vue';
 
   interface Props {
     controlDetail: ControlModel;
@@ -96,15 +100,21 @@
   const props = defineProps<Props>();
   const { t } = useI18n();
   const fieldItemRef = ref();
-  let isInit = false;
+  let parameterData:Array<ParameterItem> = []; // 编辑获取的数据
   const parameter = ref<Array<ParameterItem>>([]);
   watch(() => props.controlDetail, (val) => {
-    if (isInit) return;
     parameter.value = val?.variable_config?.parameter || [];
     if (parameter.value.length) {
-      parameter.value = parameter.value.map((item) => {
+      parameter.value = parameter.value.map((item, index) => {
+        // 创建一个新的item
         const ParameterItem = { ...item };
-        ParameterItem.variable_value = ParameterItem.default_value || '';
+        // 如果有编辑数据，填充
+        if (parameterData.length && parameterData[index].variable_value) {
+          ParameterItem.variable_value = parameterData[index].variable_value;
+        } else {
+          // 没有编辑数据，获取默认值
+          ParameterItem.variable_value = ParameterItem.default_value || '';
+        }
         return ParameterItem;
       });
     }
@@ -132,8 +142,7 @@
       return res;
     },
     setConfigs(configs: Array<ParameterItem>) {
-      parameter.value = configs;
-      isInit = true;
+      parameterData = configs;
     },
     clearFields() {
       if (!fieldItemRef.value) return;

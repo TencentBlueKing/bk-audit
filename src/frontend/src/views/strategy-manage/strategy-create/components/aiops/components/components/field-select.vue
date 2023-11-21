@@ -111,12 +111,12 @@
   });
 </script>
 <style lang="postcss">
-.select-field-value{
+.select-field-value {
   position: relative;
 
-  .err-tip{
+  .err-tip {
     position: absolute;
-    top:27%;
+    top: 27%;
     right: 30px;
     font-size: 16px;
     line-height: 1;
@@ -141,6 +141,10 @@
   .bk-input--large {
     font-size: 12px;
   }
+
+  input::placeholder {
+    font-size: 12px;
+  }
 }
 
 .is-errored .bk-input {
@@ -148,11 +152,10 @@
 }
 
 .is-errored.is-background-errored-tip .bk-input {
-  border-color: #FEE !important;
+  border-color: #fee !important;
 
-  input{
-    background-color: #FEE !important;
+  input {
+    background-color: #fee !important;
   }
 }
-
 </style>
