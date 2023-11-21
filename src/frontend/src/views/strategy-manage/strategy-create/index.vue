@@ -587,9 +587,7 @@
             };
           }
           // 方案配置参数部分
-          formData.value.configs.variable_config = [
-            ...editData.configs.variable_config,
-          ];
+          formData.value.configs.variable_config = editData.configs.variable_config || [];
         }
       }
       nextTick(() => {
