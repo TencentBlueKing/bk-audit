@@ -23,12 +23,14 @@ from typing import Dict, List
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.common_utils import ignored
+from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request, get_request_username
 
 from apps.permission.handlers.actions import ActionEnum, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
+from services.web.vision.exceptions import VisionPermissionInvalid
 from services.web.vision.handlers.convertor import DeptConvertor
 
 
@@ -92,8 +94,11 @@ class DeptFilterHandler(FilterDataHandler):
         request = permission.make_request(action=get_action_by_id(ActionEnum.VIEW_PANEL), resources=[])
         policies = permission.iam_client._do_policy_query(request)
         if policies:
-            result = DeptConvertor().convert(policies)
-            authed_dept = authed_dept.union(set(result.value))
+            try:
+                result = DeptConvertor().convert(policies)
+                authed_dept = authed_dept.union(set(result.value))
+            except VisionPermissionInvalid as err:
+                logger.warning("[%s] %s", str(err), policies)
 
         data = [{"label": dept, "value": dept, "uuid": uuid.uuid1()} for dept in authed_dept]
         data.sort(key=lambda item: item["label"])
