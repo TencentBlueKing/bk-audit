@@ -458,6 +458,8 @@ class AutoProcess(RiskFlowBaseHandler):
             value = getattr(self.risk, field["field"], "")
             if isinstance(value, (dict, list)):
                 value = json.dumps(value, ensure_ascii=False)
+            if isinstance(value, datetime.datetime):
+                value = value.strftime(api_settings.DATETIME_FORMAT)
             constants[c["key"]] = value
         params = {
             "name": f"{self.process_application.name}_{int(datetime.datetime.now().timestamp() * 1000)}",
