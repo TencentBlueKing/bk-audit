@@ -99,11 +99,17 @@
   align-items: center;
 
   .bk-input {
-    border: none;
+    height: 42px;
 
     .is-focused:not(.is-readonly) {
-      box-shadow: none !important;
+      border: 1px solid #3a84ff !important;
+      outline: 0;
+      box-shadow: 0 0 3px #a3c5fd;
     }
+  }
+
+  .bk-input:not(.is-focused) {
+    border: none;
   }
 
   .err-tip {
