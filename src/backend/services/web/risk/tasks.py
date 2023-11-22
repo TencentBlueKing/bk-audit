@@ -77,9 +77,16 @@ def process_risk_ticket(risk_id: str = None):
     if not settings.ENABLE_PROCESS_RISK_TASK:
         return
 
+    # 获取风险
     risks = Risk.objects.filter(status__in=[RiskStatus.NEW, RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS])
     if risk_id:
         risks = risks.filter(risk_id=risk_id)
+
+    # 风险白名单
+    if settings.ENABLE_PROCESS_RISK_WHITELIST:
+        risks = risks.filter(strategy_id__in=settings.PROCESS_RISK_WHITELIST)
+
+    # 流转风险
     for risk in risks:
         # 重试
         cache_key = f"process_risk_ticket-{risk.risk_id}"
