@@ -16,13 +16,16 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.conf import settings
-from django.utils.deprecation import MiddlewareMixin
+from django.utils.translation import gettext_lazy
+
+from core.exceptions import CoreException
 
 
-class CSRFExemptMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        # 调试无需检测 CSRF TOKEN
-        # 豁免 BKVision 路径
-        if any([settings.DEBUG, hasattr(request, "path") and request.path.startswith("/bkvision")]):
-            setattr(request, "csrf_processing_done", True)
+class VisionException(CoreException):
+    MODULE_CODE = CoreException.Module.Vision
+
+
+class VisionPermissionInvalid(VisionException):
+    ERROR_CODE = "001"
+    STATUS_CODE = 500
+    MESSAGE = gettext_lazy("不支持的权限，请联系管理员")

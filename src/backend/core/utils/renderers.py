@@ -82,3 +82,7 @@ class APIRenderer(JSONRenderer):
         for key, value in dict_data.items():
             res.append(f"{key}: {value}")
         return "; ".join(res)
+
+
+class API200Renderer(APIRenderer):
+    SUCCESS_CODE = 200

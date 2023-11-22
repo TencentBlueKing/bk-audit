@@ -16,13 +16,17 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.conf import settings
-from django.utils.deprecation import MiddlewareMixin
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
 
 
-class CSRFExemptMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        # 调试无需检测 CSRF TOKEN
-        # 豁免 BKVision 路径
-        if any([settings.DEBUG, hasattr(request, "path") and request.path.startswith("/bkvision")]):
-            setattr(request, "csrf_processing_done", True)
+def iam_migrate(*args, **kwargs):
+    migrator = IAMMigrator("initial.json")
+    migrator.migrate()
+
+
+class Migration(migrations.Migration):
+    initial = True
+    dependencies = []
+
+    operations = [migrations.RunPython(iam_migrate)]
