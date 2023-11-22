@@ -1,6 +1,7 @@
 {
   "name": "bk-audit",
   "version": "1.6.3",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check build-only",
