@@ -232,6 +232,7 @@
     /* 解决投影被遮挡问题 */
     position: relative;
     z-index: 1;
+    display: flex;
     height: 52px;
     padding: 0 20px;
     margin-left: 1px;
@@ -243,6 +244,7 @@
 
     /* box-shadow: 0 1px 0 0 #eaebf0; */
     box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+    align-items: center;
   }
 
   .audit-navigation-header {
@@ -270,8 +272,8 @@
     display: flex;
     width: 220px;
     font-size: 14px;
-    background: #2C354D;
-    transition: all 0.3s;
+    background: #2c354d;
+    transition: all .3s;
     flex-direction: column;
 
     .audit-side-menu {
@@ -294,7 +296,7 @@
         cursor: pointer;
         border-radius: 50%;
         transform: rotateZ(0deg);
-        transition: all 0.15s;
+        transition: all .15s;
 
         &:hover {
           color: #d3d9e4;
@@ -338,7 +340,7 @@
     }
   }
 
-  .audit-logo{
+  .audit-logo {
     display: flex;
     align-items: center;
     min-width: 238px;
