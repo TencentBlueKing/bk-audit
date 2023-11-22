@@ -57,6 +57,9 @@
         <render-info-item :label="t('来源 IP')">
           {{ data.access_source_ip || '--' }}
         </render-info-item>
+        <render-info-item :label="t('管理空间类型')">
+          {{ data.scope_type || '--' }}
+        </render-info-item>
         <render-info-item :label="t('开始时间')">
           {{ data.start_time || '--' }}
         </render-info-item>
@@ -87,6 +90,9 @@
         </render-info-item>
         <render-info-item :label="t('客户端类型')">
           {{ data.access_user_agent || '--' }}
+        </render-info-item>
+        <render-info-item :label="t('管理空间ID')">
+          {{ data.scope_id || '--' }}
         </render-info-item>
         <render-info-item :label="t('结束时间')">
           {{ data.end_time || '--' }}

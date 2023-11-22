@@ -64,7 +64,12 @@
         :is-active="isActive"
         :label="t('方案参数')"
         style="margin-bottom: 14px;">
-        <model-empty />
+        <!-- <model-empty /> -->
+        <div style="padding: 16px 32px 24px;">
+          <scheme-paramenters
+            ref="paramenterRef"
+            :control-detail="controlDetail" />
+        </div>
       </collapse-panel>
 
       <collapse-panel
@@ -137,9 +142,12 @@
   import useRequest from '@hooks/use-request';
 
   import CollapsePanel from './components/components/collapse-panel.vue';
-  import ModelEmpty from './components/components/model-empty.vue';
-  import EventLogComponent from './components/event-log.vue';
-  import ResourceDataComponent from './components/resource-data.vue';
+  // import ModelEmpty from './components/components/model-empty.vue';
+  import EventLogComponent from './components/scheme-input/event-log.vue';
+  import ResourceDataComponent from './components/scheme-input/resource-data.vue';
+  import SchemeParamenters from './components/scheme-paramenters/index.vue';
+
+  type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
 
   interface Props {
     controlDetail: ControlModel;
@@ -151,8 +159,9 @@
     (e: 'updateAiopsConfig', value: IFormData['configs']['aiops_config'] | undefined): void,
   }
   interface Exposes {
-    getValue: () => void;
-    getFields: () => void;
+    getValue: () => Promise<any>;
+    getFields: () => GetFieldsType;
+    getParamenterFields: () => ReturnType<InstanceType<typeof SchemeParamenters>['getFields']>;
     setConfigs: (data: IFormData['configs']) => void;
     clearData: () => void;
   }
@@ -167,6 +176,7 @@
         schedule_period: string,
       },
       config_type: string,
+      variable_config: Array<Record<string, any>>
     },
   }
 
@@ -191,6 +201,7 @@
 
 
   const comRef = ref();
+  const paramenterRef = ref();
   const inputFields = shallowRef<ValueOf<AiopPlanModel['input_fields']>>([]);
   const isActive = ref(true);
   const formData = ref<IFormData>({
@@ -203,6 +214,7 @@
         count_freq: '',
         schedule_period: 'hour',
       },
+      variable_config: [],
     },
   });
   const sourceTypeMap = ref<Record<string, string>>({});
@@ -286,7 +298,7 @@
 
   defineExpose<Exposes>({
     getValue() {
-      return comRef.value.getValue();
+      return comRef.value.getValue().then(() => paramenterRef.value.getValue());
     },
     setConfigs(configs: IFormData['configs']) {
       formData.value.configs.config_type = configs.config_type;
@@ -301,10 +313,14 @@
       }).then(() => {
         comRef.value.setConfigs(configs);
       });
+      paramenterRef.value.setConfigs(configs.variable_config);
       isInit = true;
     },
     getFields() {
       return comRef.value.getFields();
+    },
+    getParamenterFields() {
+      return paramenterRef.value.getFields();
     },
     clearData() {
       comRef.value.clearData && comRef.value.clearData();
@@ -319,7 +335,7 @@
 
 <style lang="postcss">
 
-.schedule-input{
+.schedule-input {
   /* display: block; */
   width: 340px;
   border-right: 0;
@@ -332,11 +348,11 @@
   }
 }
 
-.schedule-select .bk-input{
+.schedule-select .bk-input {
   display: block;
   border-radius: 0 2px 2px 0;
 
-  .bk-input--text{
+  .bk-input--text {
     display: flex;
     align-items: center;
     height: 100%;
@@ -350,11 +366,11 @@
     line-height: 32px;
     color: #ea3636;
     text-align: center;
-    content: "*";
+    content: '*';
   }
 
   .no-label .bk-form-label::after {
-    content: "";
+    content: '';
   }
 
   .no-label .bk-form-label {

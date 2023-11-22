@@ -16,27 +16,14 @@
 -->
 <template>
   <div
-    ref="rootRef"
-    class="select-field-value"
+    class="field-input"
     :class="{
       'is-errored': isError,
       'is-background-errored-tip': theme === 'background'
     }">
-    <bk-select
+    <bk-input
       v-model="localValue"
-      class="strategy-create-aiops-select-item"
-      filterable
-      :multiple="multiple"
-      :placeholder="t('请选择')"
-      size="large"
-      @change="attrs.onChange"
-      @update:model-value="onUpdate">
-      <bk-option
-        v-for="(item, key) in rtFields"
-        :key="key"
-        :label="item.label"
-        :value="item.value" />
-    </bk-select>
+      clearable />
     <span
       v-if="isError"
       v-bk-tooltips="{content: t('必填项'), placement: 'top'}"
@@ -48,48 +35,45 @@
 </template>
 <script setup lang="ts">
   import {
+    computed,
     ref,
-    useAttrs,
-    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import  type { ResourceFieldType } from './render-field.vue';
-
   interface Props {
-    rtFields: Array<ResourceFieldType>;
-    defaultValue: string | string[];
+    modelValue: string;
     required?: boolean;
-    multiple?: boolean;
-    theme?: 'background' | ''
+    theme?: string;
+  }
+
+  interface Emits{
+    (e: 'update:modelValue', value: string):void
   }
 
   interface Expose {
-    getValue: () => void,
+    getValue: () => Promise<any>,
     clearFields: () => void
   }
+
   const props = withDefaults(defineProps<Props>(), {
+    modelValue: '',
     required: false,
-    multiple: false,
     theme: '',
   });
-
+  const emit = defineEmits<Emits>();
   const { t } = useI18n();
-  const attrs = useAttrs();
-
   const isError = ref(false);
-  // eslint-disable-next-line vue/no-setup-props-destructure
-  const localValue = ref(props.defaultValue);
-
-  const onUpdate = (val: string) => {
-    if (val) {
-      isError.value = false;
-    }
-  };
-  watch(() => props.defaultValue, (value) => {
-    localValue.value = value;
-  }, {
-    immediate: true,
+  const localValue = computed({
+    get() {
+      return props.modelValue;
+    },
+    set(value) {
+      const newValue = value.trim();
+      if (newValue) {
+        isError.value = false;
+      }
+      emit('update:modelValue', newValue);
+    },
   });
 
   defineExpose<Expose>({
@@ -99,10 +83,7 @@
         return Promise.reject(new Error('必填'));
       }
       isError.value = false;
-      return Promise.resolve({
-        field_name: localValue.value,
-        source_field: localValue.value,
-      });
+      return Promise.resolve();
     },
     clearFields() {
       isError.value = false;
@@ -110,52 +91,38 @@
     },
   });
 </script>
-<style lang="postcss">
-.select-field-value {
-  position: relative;
+<style lang="postcss" scoped>
+.field-input {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+
+  .bk-input {
+    height: 42px;
+
+    .is-focused:not(.is-readonly) {
+      border: 1px solid #3a84ff !important;
+      outline: 0;
+      box-shadow: 0 0 3px #a3c5fd;
+    }
+  }
+
+  .bk-input:not(.is-focused) {
+    border: none;
+  }
 
   .err-tip {
-    position: absolute;
-    top: 27%;
-    right: 30px;
     font-size: 16px;
-    line-height: 1;
     color: #ea3636;
   }
 }
 
-.strategy-create-aiops-select-item {
-  /* margin: 0 -15px;
-  border-bottom: 0; */
+.is-errored {
+  background-color: #fee;
 
-  .bk-input,
-  .bk-input:hover {
-    height: 42px;
-    border-color: white;
-  }
-
-  .bk-input.is-focused {
-    border-color: #3a84ff;
-  }
-
-  .bk-input--large {
-    font-size: 12px;
-  }
-
-  input::placeholder {
-    font-size: 12px;
-  }
-}
-
-.is-errored .bk-input {
-  border-color: #ea3636 !important;
-}
-
-.is-errored.is-background-errored-tip .bk-input {
-  border-color: #fee !important;
-
-  input {
-    background-color: #fee !important;
+  .bk-input {
+    border-color: #ea3636 !important;
   }
 }
 </style>

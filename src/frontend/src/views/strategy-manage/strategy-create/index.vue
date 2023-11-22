@@ -586,6 +586,8 @@
               ...editData.configs.aiops_config,
             };
           }
+          // 方案配置参数部分
+          formData.value.configs.variable_config = editData.configs.variable_config || [];
         }
       }
       nextTick(() => {
@@ -767,6 +769,8 @@
             fields,
           };
         }
+        // 添加方案配置参数
+        params.configs.variable_config = comRef.value.getParamenterFields();
       } else {
         params.configs.algorithms = [formData.value.configs.algorithms];
         params.configs.agg_interval = aggInterval.value;
@@ -832,16 +836,16 @@
       width: 8px;
       height: 8px;
       margin-right: 6px;
-      background: #EA3636;
+      background: #ea3636;
       border-radius: 50%;
     }
 
     .content {
-      color: #EA3636;
+      color: #ea3636;
     }
 
     .btn {
-      color: #3A84FF;
+      color: #3a84ff;
       cursor: pointer;
     }
   }
@@ -886,7 +890,7 @@
   .content {
     :deep(.bk-form-label::after) {
       width: 0;
-      content: "";
+      content: '';
     }
   }
 }
@@ -913,8 +917,8 @@
   padding: 3px 10px;
   font-size: 12px;
   font-weight: normal;
-  color: #3A84FF;
-  background: #EDF4FF;
+  color: #3a84ff;
+  background: #edf4ff;
   border-radius: 2px;
   transform: translateY(-50%);
 }

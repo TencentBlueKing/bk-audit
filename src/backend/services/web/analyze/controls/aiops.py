@@ -294,16 +294,8 @@ class AIOpsController(Controller):
         data_source = self.strategy.configs["data_source"]
         source_type = data_source["source_type"]
 
-        # check batch / batch_join
         if source_type == FlowDataSourceNodeType.BATCH:
-            result_table = api.bk_base.get_result_table(result_table_id=data_source["result_table_id"])
-            if (
-                result_table["processing_type"] == ResultTableType.CDC
-                or result_table["result_table_type"] == ResultTableType.STATIC
-            ):
-                source_type = FlowDataSourceNodeType.BATCH
-            else:
-                source_type = FlowDataSourceNodeType.BATCH_REAL
+            source_type = self.check_source_type(result_table_id=data_source["result_table_id"])
 
         return {
             "node_type": source_type,
@@ -312,6 +304,20 @@ class AIOpsController(Controller):
             "name": data_source["result_table_id"],
         }
 
+    def check_source_type(self, result_table_id: str) -> str:
+        """
+        check batch / batch_join
+        """
+
+        result_table = api.bk_base.get_result_table(result_table_id=result_table_id)
+        if (
+            result_table["processing_type"] == ResultTableType.CDC
+            or result_table["result_table_type"] == ResultTableType.STATIC
+        ):
+            return FlowDataSourceNodeType.BATCH
+        else:
+            return FlowDataSourceNodeType.BATCH_REAL
+
     def _build_sql_node(self, bk_biz_id: int, raw_table_name: str) -> dict:
         """
         build sql node
@@ -319,8 +325,13 @@ class AIOpsController(Controller):
 
         # init params
         data_source = self.strategy.configs["data_source"]
+        source_type = data_source["source_type"]
         plan_config = data_source.get("plan_config", {})
         aiops_config = self.strategy.configs.get("aiops_config", {})
+
+        # check source type
+        if source_type == FlowDataSourceNodeType.BATCH:
+            source_type = self.check_source_type(result_table_id=data_source["result_table_id"])
 
         # init sql node
         sql_node_type = FlowSQLNodeType.get_sql_node_type(data_source["source_type"])
@@ -386,7 +397,9 @@ class AIOpsController(Controller):
                             "dependency_rule": plan_config.get("window_offset_unit", WindowDependencyRule.NO_FAILED),
                             "accumulate_start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
                             "result_table_id": sql_node_params["from_result_table_ids"][0],
-                            "window_type": WindowType.WHOLE,
+                            "window_type": WindowType.WHOLE
+                            if source_type == FlowDataSourceNodeType.BATCH
+                            else WindowType.SCROLL,
                             "color": BKBASE_DEFAULT_WINDOW_COLOR,
                         }
                     ],
@@ -425,6 +438,7 @@ class AIOpsController(Controller):
         extra_config = self.strategy.control_version_inst.extra_config
         data_source = self.strategy.configs["data_source"]
         sql_node_type = FlowSQLNodeType.get_sql_node_type(data_source["source_type"])
+        variable_config = self.strategy.configs.get("variable_config") or []
 
         return {
             "node_type": "scenario_app",
@@ -451,7 +465,7 @@ class AIOpsController(Controller):
                     }
                     for _input_config in input_config
                 },
-                "variable_config": [],
+                "variable_config": variable_config,
                 "schedule_config": {
                     "count_freq": aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ),
                     "schedule_period": aiops_config.get("schedule_period", OffsetUnit.HOUR),
