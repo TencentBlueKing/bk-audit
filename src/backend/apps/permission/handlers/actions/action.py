@@ -369,6 +369,24 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
+    VIEW_BASE_PANEL = ActionMeta(
+        id="view_base_panel",
+        name="查看报表",
+        name_en="View Audit Report",
+        type="view",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
+    VIEW_PANEL = ActionMeta(
+        id="view_panel",
+        name="查看报表(组织架构)",
+        name_en="View Audit Report by Department",
+        type="view",
+        related_resource_types=[ResourceEnum.DEPT_BK_USERMGR],
+        related_actions=[],
+        version=1,
+    )
 
     # 日志平台
     CREATE_COLLECTION_BK_LOG = ActionMeta(

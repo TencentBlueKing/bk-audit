@@ -30,6 +30,7 @@ import NoticeGroup from '@views/notice-group/routes';
 import ApplicationManage from '@views/process-application-manage/routes';
 import RiskManage from '@views/risk-manage/routes';
 import RuleManage from '@views/rule-manage/routes';
+import StatementManage from '@views/statement-manage/routes';
 import StorageManage from '@views/storage-manage/routes';
 import StrategyManage from '@views/strategy-manage/routes';
 import SystemManage from '@views/system-manage/routes';
@@ -56,6 +57,7 @@ export default (config: ConfigModel) => {
         HandleManage,
         ApplicationManage,
         RuleManage,
+        StatementManage,
       ],
     },
     {

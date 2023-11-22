@@ -127,6 +127,7 @@
                 has-delete-icon
                 :input-search="false"
                 :loading="fieldLoading"
+                :paste-fn="pasteFn"
                 :placeholder="t('请输入并Enter结束')"
                 trigger="focus"
                 @blur="isValueFocus[index] = false"
@@ -314,6 +315,8 @@
     }
     handleUpdateFilterConfig();
   };
+
+  const pasteFn = (value: string) => ([{ id: value, name: value }]);
 
   const handleUpdateFilterConfig = () => {
     isNeedErrorTip.value = false;

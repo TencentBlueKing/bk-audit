@@ -6,7 +6,7 @@ Copyright (C) 2023 THL A29 Limited,
 a Tencent company. All rights reserved.
 Licensed under the MIT License (the "License");
 you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://opensource.org/licenses/MIT
+You may obtain a copy of the License at https://opensource.org/licenses/MIT
 Unless required by applicable law or agreed to in writing,
 software distributed under the License is distributed on
 an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
@@ -16,13 +16,11 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.conf import settings
-from django.utils.deprecation import MiddlewareMixin
+from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
-class CSRFExemptMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        # 调试无需检测 CSRF TOKEN
-        # 豁免 BKVision 路径
-        if any([settings.DEBUG, hasattr(request, "path") and request.path.startswith("/bkvision")]):
-            setattr(request, "csrf_processing_done", True)
+class VisionConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "services.web.vision"
+    verbose_name = gettext_lazy("仪表盘")

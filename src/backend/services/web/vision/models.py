@@ -16,13 +16,22 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.conf import settings
-from django.utils.deprecation import MiddlewareMixin
+from django.db import models
+from django.utils.translation import gettext_lazy
+
+from core.models import SoftDeleteModel
 
 
-class CSRFExemptMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        # 调试无需检测 CSRF TOKEN
-        # 豁免 BKVision 路径
-        if any([settings.DEBUG, hasattr(request, "path") and request.path.startswith("/bkvision")]):
-            setattr(request, "csrf_processing_done", True)
+class VisionPanel(SoftDeleteModel):
+    """
+    仪表盘
+    """
+
+    id = models.CharField(gettext_lazy("ID"), primary_key=True, max_length=255)
+    name = models.CharField(gettext_lazy("Name"), max_length=255)
+    priority_index = models.IntegerField(gettext_lazy("优先指数"), default=0)
+
+    class Meta:
+        verbose_name = gettext_lazy("仪表盘")
+        verbose_name_plural = verbose_name
+        ordering = ["-priority_index", "name"]

@@ -16,13 +16,14 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.conf import settings
-from django.utils.deprecation import MiddlewareMixin
+from django.utils.translation import gettext_lazy
+
+from core.choices import TextChoices
 
 
-class CSRFExemptMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        # 调试无需检测 CSRF TOKEN
-        # 豁免 BKVision 路径
-        if any([settings.DEBUG, hasattr(request, "path") and request.path.startswith("/bkvision")]):
-            setattr(request, "csrf_processing_done", True)
+class KeyVariable(TextChoices):
+    """
+    关键变量
+    """
+
+    DEPARTMENT = "dept", gettext_lazy("组织架构")

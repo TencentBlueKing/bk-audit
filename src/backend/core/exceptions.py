@@ -110,3 +110,8 @@ class RiskRuleInUse(BlueException):
     ERROR_CODE = "400"
     MESSAGE = gettext_lazy("该处理规则有未关单风险")
     STATUS_CODE = 400
+
+
+class CoreException(BlueException):
+    class Module:
+        Vision = "100"

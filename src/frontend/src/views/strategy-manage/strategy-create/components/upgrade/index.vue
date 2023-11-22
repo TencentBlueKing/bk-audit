@@ -70,8 +70,17 @@
   });
 </script>
 <style scoped>
-.strategy-upgrade-step{
+.strategy-upgrade-step {
   width: 402px;
   margin: 0 auto;
+  transform: translateX(-86px);
+
+  :deep(.bk-step ) {
+    display: flex;
+
+    .bk-step-content {
+      display: flex;
+    }
+  }
 }
 </style>

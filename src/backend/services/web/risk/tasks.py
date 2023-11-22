@@ -22,8 +22,10 @@ from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from celery.task import periodic_task, task
 from django.conf import settings
+from django.core.cache import cache as _cache
 from django.db import transaction
 from django.utils.translation import gettext
+from django_redis.client import DefaultClient
 
 from apps.itsm.constants import TicketStatus
 from apps.notice.handlers import ErrorMsgHandler
@@ -39,6 +41,8 @@ from services.web.risk.handlers.ticket import (
     TransOperator,
 )
 from services.web.risk.models import Risk, TicketNode
+
+cache: DefaultClient = _cache
 
 
 @periodic_task(run_every=crontab(minute="*/10"), queue="risk")
@@ -73,10 +77,20 @@ def process_risk_ticket(risk_id: str = None):
     if not settings.ENABLE_PROCESS_RISK_TASK:
         return
 
+    # 获取风险
     risks = Risk.objects.filter(status__in=[RiskStatus.NEW, RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS])
     if risk_id:
         risks = risks.filter(risk_id=risk_id)
+
+    # 风险白名单
+    if settings.ENABLE_PROCESS_RISK_WHITELIST:
+        risks = risks.filter(strategy_id__in=settings.PROCESS_RISK_WHITELIST)
+
+    # 流转风险
     for risk in risks:
+        # 重试
+        cache_key = f"process_risk_ticket-{risk.risk_id}"
+        # 判断操作
         match risk.status:
             case RiskStatus.NEW:
                 process_class = NewRisk
@@ -89,17 +103,32 @@ def process_risk_ticket(risk_id: str = None):
         # 处理
         try:
             logger_celery.info("[ProcessRiskTicket] %s Start %s", process_class.__name__, risk.risk_id)
+            # 处理
             process_class(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run()
+            # 成功后移除缓存
+            cache.delete(key=cache_key)
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            # 获取失败次数
+            retry_times = cache.get(key=cache_key, default=1)
             # 异常通知
             logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
             title = gettext("Process Risk Ticket Failed")
-            content = gettext("ProcessClass: %s\nRiskID: %s\nError: %s") % (process_class.__name__, risk.risk_id, err)
-            ErrorMsgHandler(title, content).send()
-            # 转换到人工处理
-            TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
-                new_operators=TransOperator.load_security_person(), description=gettext("风险自动流转失败，转为安全接口人处理")
+            content = gettext("ProcessClass: %s\nRiskID: %s(%d/%d)\nError: %s") % (
+                process_class.__name__,
+                risk.risk_id,
+                retry_times,
+                settings.PROCESS_RISK_MAX_RETRY,
+                err,
             )
+            ErrorMsgHandler(title, content).send()
+            # 失败达到最大次数转人工
+            if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
+                cache.delete(key=cache_key)
+                TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
+                    new_operators=TransOperator.load_security_person(), description=gettext("风险自动流转失败，转为安全接口人处理")
+                )
+            else:
+                cache.set(key=cache_key, value=retry_times + 1, timeout=settings.PROCESS_RISK_RETRY_KEY_TIMEOUT)
         finally:
             logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
