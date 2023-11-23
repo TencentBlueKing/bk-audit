@@ -41,14 +41,12 @@
           {{ t('审计风险') }}
         </router-link>
         <router-link
-          v-if="menuData.length"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditStatement'
           }"
-          :to="{ name:'statementManageDetail', params: {
-            id: menuData[0]?.id,
-          }}">
+          :to="{}"
+          @click="() => gotoStatement()">
           {{ t('审计报表') }}
         </router-link>
         <router-link
@@ -236,15 +234,30 @@
   };
 
   const titleRef = ref<string>('');
+  let clickLink: boolean = false;
+  // 点击审计报表开始请求菜单，相当于懒加载
+  const gotoStatement = async (hasStatementPath: boolean = false) => {
+    // 防止路由刷新再请求一次
+    clickLink = true;
+    menuData.value = await fetchMenuList();
+    if (!hasStatementPath) {
+      router.push({
+        name: 'statementManageDetail',
+        params: {
+          id: menuData.value[0]?.id || 'undefined',
+        } });
+      titleRef.value = menuData.value[0]?.name;
+    } else {
+      // 刷新页面找回pageTitle
+      titleRef.value = menuData.value.find(item => item.id === route.params.id)?.name || '';
+    }
+  };
   // 获取审计报表左侧菜单
   const {
     data: menuData,
+    run: fetchMenuList,
   } =  useRequest(StatementManageService.fetchMenuList, {
     defaultValue: [],
-    manual: true,
-    onSuccess: (data) => {
-      titleRef.value = data[0].name;
-    },
   });
   // 导航路由切换
   const handleRouterChange = (routerName: string) => {
@@ -270,6 +283,10 @@
   });
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
+    // 防止在审计报表刷新页面，侧边栏为空
+    if (curNavName.value === 'auditStatement' && !clickLink) {
+      gotoStatement(true);
+    }
   }, {
     deep: true,
     immediate: true,
