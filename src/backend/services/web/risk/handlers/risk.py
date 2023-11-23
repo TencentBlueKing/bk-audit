@@ -62,7 +62,6 @@ class RiskHandler:
     Deal with Risk
     """
 
-    @transaction.atomic()
     def generate_risk_from_event(self) -> None:
         """
         从事件生成风险
@@ -116,6 +115,7 @@ class RiskHandler:
 
         return data
 
+    @transaction.atomic
     def create_risk(self, event: dict) -> (bool, Risk):
         """
         创建或更新风险

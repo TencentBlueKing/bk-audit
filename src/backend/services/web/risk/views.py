@@ -50,6 +50,22 @@ class EventsViewSet(ResourceViewSet):
     ]
 
 
+class RisksAPIGWViewSet(ResourceViewSet):
+    """
+    Risks APIGW
+    """
+
+    def get_authenticators(self):
+        return []
+
+    def get_permissions(self):
+        return []
+
+    resource_routes = [
+        ResourceRoute("GET", resource.risk.retrieve_risk_apigw, pk_field="risk_id"),
+    ]
+
+
 class RisksViewSet(ResourceViewSet):
     """
     Risks
