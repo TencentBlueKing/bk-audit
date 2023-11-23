@@ -25,7 +25,6 @@ from typing import List, Union
 
 from blueapps.utils.logger import logger
 from django.conf import settings
-from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext
@@ -115,7 +114,6 @@ class RiskHandler:
 
         return data
 
-    @transaction.atomic
     def create_risk(self, event: dict) -> (bool, Risk):
         """
         创建或更新风险
@@ -136,10 +134,13 @@ class RiskHandler:
             .first()
         )
 
-        # 存在则更新结束事件
+        # 存在则更新结束时间
         if risk:
-            risk.event_end_time = datetime.datetime.fromtimestamp(event["event_time"] / 1000)
-            risk.save(update_fields=["event_end_time"])
+            last_end_time = int(event["event_time"] / 1000)
+            # 只在事件的时间更新的时候存储
+            if int(risk.event_end_time.timestamp()) < last_end_time:
+                risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
+                risk.save(update_fields=["event_end_time"])
             return False, None
 
         # 不存在则创建
