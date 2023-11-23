@@ -68,7 +68,7 @@ def generate_risk_from_event():
     RiskHandler().generate_risk_from_event()
 
 
-@periodic_task(run_every=crontab(minute="*"), queue="risk")
+@periodic_task(run_every=crontab(minute="*/5"), queue="risk")
 @single_task_decorator
 def process_risk_ticket(risk_id: str = None):
     """自动处理风险单"""
@@ -133,7 +133,7 @@ def process_risk_ticket(risk_id: str = None):
             logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
-@periodic_task(run_every=crontab(minute="*"), queue="risk")
+@periodic_task(run_every=crontab(minute="0"), queue="risk")
 @single_task_decorator
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
