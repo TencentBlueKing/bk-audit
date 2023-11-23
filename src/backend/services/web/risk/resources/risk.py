@@ -35,7 +35,7 @@ from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
-from core.utils.tools import choices_to_dict
+from core.utils.tools import choices_to_dict, get_app_info
 from services.web.risk.constants import (
     RISK_SHOW_FIELDS,
     RiskLabel,
@@ -99,6 +99,13 @@ class RetrieveRisk(RiskMeta):
         nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
         risk["ticket_history"] = TicketNodeSerializer(nodes, many=True).data
         return risk
+
+
+class RetrieveRiskAPIGW(RetrieveRisk):
+    def perform_request(self, validated_request_data):
+        get_app_info()
+        risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+        return RiskInfoSerializer(risk).data
 
 
 class ListRisk(RiskMeta):
