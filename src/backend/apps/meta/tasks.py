@@ -41,7 +41,7 @@ from apps.meta.models import Action, Namespace, ResourceType, System, SystemRole
 from core.utils.tools import group_by
 
 
-@periodic_task(run_every=crontab(minute="*/1"))
+@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @transaction.atomic
 @ignored(Exception)
 def sync_iam_systems():
@@ -172,7 +172,7 @@ def sync_iam_system_roles(iam_systems):
     logger.info("[sync_iam_system_roles] finished")
 
 
-@periodic_task(run_every=crontab(minute="*/10"))
+@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @transaction.atomic
 @ignored(Exception)
 def sync_system_infos():
@@ -314,7 +314,7 @@ def sync_iam_objects(
     return to_insert, to_update, to_delete
 
 
-@periodic_task(run_every=crontab(minute="*/10"))
+@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @transaction.atomic
 @ignored(Exception)
 def sync_iam_resources_actions():

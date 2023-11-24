@@ -31,7 +31,6 @@ from apps.exceptions import MetaConfigNotExistException, StorageChanging
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.actions import ActionEnum
-from core.utils.tools import single_task_cache_key
 from services.web.databus.constants import (
     COLLECTOR_PLUGIN_ID,
     DEFAULT_STORAGE_CONFIG_KEY,
@@ -50,7 +49,6 @@ from services.web.databus.storage.serializers import (
     StorageListResponseSerializer,
     StorageUpdateRequestSerializer,
 )
-from services.web.databus.tasks import change_storage_cluster
 
 
 class StorageMeta:
@@ -94,8 +92,7 @@ class StorageActivateResource(StorageMeta, Resource):
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        cache_key = single_task_cache_key(change_storage_cluster)
-        if cache.get(cache_key):
+        if cache.get("celery:change_storage_cluster"):
             raise StorageChanging()
         # 设置默认集群
         namespace = validated_request_data["namespace"]
