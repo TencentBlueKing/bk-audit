@@ -17,9 +17,10 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from celery.task import task
+from django.conf import settings
 
 
-@task(queue="notice")
+@task(queue="notice", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def send_notice(*args, **kwargs):
     from apps.notice.handlers import NoticeHandler
 
