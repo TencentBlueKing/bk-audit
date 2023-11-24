@@ -15,7 +15,11 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <audit-router-view />
+  <bk-loading
+    class="loading"
+    :loading="isLoading">
+    <audit-router-view />
+  </bk-loading>
 </template>
 <script setup lang="ts">
   import {
@@ -31,7 +35,9 @@
   const router = useRouter();
 
   // 获取审计报表左侧菜单
-  useRequest(StatementManageService.fetchMenuList, {
+  const {
+    loading: isLoading,
+  } = useRequest(StatementManageService.fetchMenuList, {
     manual: true,
     defaultValue: [],
     onSuccess: (menuData) => {
@@ -45,4 +51,9 @@
     },
   });
 </script>
+<style lang="postcss">
+  .loading {
+    height: 500px;
+  }
+</style>
 

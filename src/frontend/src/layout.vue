@@ -181,7 +181,7 @@
             :index="item.id">
             <audit-icon
               class="menu-item-icon"
-              type="daiwochuli" />
+              type="baobiao" />
             {{ item.name }}
           </audit-menu-item>
         </template>
