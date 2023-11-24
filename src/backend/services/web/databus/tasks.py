@@ -32,7 +32,7 @@ from django.utils.translation import gettext
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, System
 from apps.notice.handlers import ErrorMsgHandler
-from core.utils.tools import single_task_decorator
+from core.lock import lock
 from services.web.databus.collector.check.handlers import ReportCheckHandler
 from services.web.databus.collector.etl.base import EtlStorage
 from services.web.databus.collector.handlers import TailLogHandler
@@ -50,8 +50,8 @@ from services.web.databus.constants import (
 from services.web.databus.models import CollectorConfig, CollectorPlugin, Snapshot
 
 
-@periodic_task(run_every=crontab(minute="*/1"))
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:start_snapshot")
 def start_snapshot():
     # 获取所有的启动中快照并逐个运行 (Redis)
     snapshots = Snapshot.objects.filter(
@@ -73,16 +73,16 @@ def start_snapshot():
         AssetHandler(snapshot.system_id, snapshot.resource_type_id).start()
 
 
-@periodic_task(run_every=crontab(minute="*/10"))
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:sync_tail_log_time")
 def sync_tail_log_time():
     collectors = CollectorConfig.objects.all()
     for collector in collectors:
         TailLogHandler.get_instance(collector).sync()
 
 
-@periodic_task(run_every=crontab(minute="*/1"))
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:change_storage_cluster")
 def change_storage_cluster():
     def change_plugin_storage():
         collector_plugins = CollectorPlugin.objects.filter(storage_changed=True)
@@ -138,8 +138,8 @@ def change_storage_cluster():
     change_config_storage()
 
 
-@periodic_task(run_every=crontab(minute="0", hour="0"))
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="0", hour="0"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:refresh_snapshot")
 def refresh_snapshot():
     # 获取所有的运行中快照
     snapshots = Snapshot.objects.filter(status=SnapshotRunningStatus.RUNNING.value).order_by("updated_at")
@@ -159,7 +159,7 @@ def refresh_snapshot():
     Snapshot.objects.filter(id__in=snapshot_ids).update(status=SnapshotRunningStatus.PREPARING.value)
 
 
-@task()
+@task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def create_api_push_etl(collector_config_id: int):
     """
     创建 API PUSH 对应的数据清洗入库链路
@@ -212,8 +212,8 @@ def create_api_push_etl(collector_config_id: int):
     logger.info("[create_api_push_etl] End %s", datetime.datetime.now())
 
 
-@periodic_task(run_every=crontab(minute="*/1"))
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:check_report_continues")
 def check_report_continues(end_time: datetime.datetime = None, time_period: int = None, time_range: int = None):
     """检查上报数据是否连续"""
 
@@ -240,8 +240,8 @@ def check_report_continues(end_time: datetime.datetime = None, time_period: int 
             )
 
 
-@periodic_task(run_every=crontab(minute="*/1"))
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:create_or_update_plugin_etl")
 def create_or_update_plugin_etl(collector_plugin_id: int = None):
     """创建或更新采集插件清洗入库"""
 

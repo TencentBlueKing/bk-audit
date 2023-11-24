@@ -16,6 +16,7 @@
 */
 export default {
   path: '/statement-manage',
+  component: () => import('@/views/statement-manage/index.vue'),
   name: 'statementManage',
   meta: {
     title: '',
@@ -24,7 +25,7 @@ export default {
   children: [
     {
       path: 'statementManageDetail/:id',
-      component: () => import('@/views/statement-manage/index.vue'),
+      component: () => import('@/views/statement-manage/detail/index.vue'),
       name: 'statementManageDetail',
       meta: {
         title: '',

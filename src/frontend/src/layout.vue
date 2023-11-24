@@ -41,14 +41,11 @@
           {{ t('审计风险') }}
         </router-link>
         <router-link
-          v-if="menuData.length"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditStatement'
           }"
-          :to="{ name:'statementManageDetail', params: {
-            id: menuData[0]?.id,
-          }}">
+          :to="{ name:'statementManage', query: {} }">
           {{ t('审计报表') }}
         </router-link>
         <router-link
@@ -175,7 +172,7 @@
             {{ t('所有风险') }}
           </audit-menu-item>
         </template>
-        <template v-else>
+        <template v-else-if="menuData.length">
           <audit-menu-item
             v-for="item in menuData"
             :key="item.id"
@@ -184,7 +181,7 @@
             :index="item.id">
             <audit-icon
               class="menu-item-icon"
-              type="daiwochuli" />
+              type="baobiao" />
             {{ item.name }}
           </audit-menu-item>
         </template>
@@ -202,6 +199,7 @@
 
   import {
     defineExpose,
+    onBeforeUnmount,
     type Ref,
     ref,
     watch  } from 'vue';
@@ -212,10 +210,10 @@
   } from 'vue-router';
 
   import RootManageService from '@service/root-manage';
-  import StatementManageService from '@service/statement-manage';
 
   import ConfigModel from '@model/root/config';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
   import AuditMenu from '@components/audit-menu/index.vue';
@@ -226,9 +224,14 @@
   interface Exposes {
     titleRef: Ref<string>
   }
+  interface MenuDataType {
+    id: string;
+    name: string;
+  }
   const router = useRouter();
   const route = useRoute();
   const isMenuFlod = ref(false);
+  const { on, off } = useEventBus();
   const { t } = useI18n();
   const curNavName = ref('');
   const handleSideMenuFlodChange = (value: boolean) => {
@@ -236,15 +239,10 @@
   };
 
   const titleRef = ref<string>('');
-  // 获取审计报表左侧菜单
-  const {
-    data: menuData,
-  } =  useRequest(StatementManageService.fetchMenuList, {
-    defaultValue: [],
-    manual: true,
-    onSuccess: (data) => {
-      titleRef.value = data[0].name;
-    },
+  const menuData = ref<Array<MenuDataType>>([]);
+  on('statement-menuData', (data) => {
+    menuData.value = data as Array<MenuDataType>;
+    titleRef.value = menuData.value[0]?.name;
   });
   // 导航路由切换
   const handleRouterChange = (routerName: string) => {
@@ -273,6 +271,9 @@
   }, {
     deep: true,
     immediate: true,
+  });
+  onBeforeUnmount(() => {
+    off('statement-menuData');
   });
   defineExpose<Exposes>({
     titleRef,

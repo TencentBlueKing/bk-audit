@@ -23,10 +23,11 @@ from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from celery.task import periodic_task, task
+from django.conf import settings
 from django.utils.translation import gettext
 
 from apps.notice.handlers import ErrorMsgHandler
-from core.utils.tools import single_task_decorator
+from core.lock import lock
 from services.web.analyze.constants import (
     BKBASE_ERROR_LOG_LEVEL,
     CHECK_FLOW_STATUS_SLEEP_SECONDS,
@@ -41,7 +42,7 @@ from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.models import Strategy
 
 
-@task()
+@task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def call_controller(func_name: str, strategy_id: int, *args, **kwargs):
     """
     call controller async
@@ -53,7 +54,7 @@ def call_controller(func_name: str, strategy_id: int, *args, **kwargs):
     controller_func(*args, **kwargs)
 
 
-@task()
+@task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def check_flow_status(strategy_id: int, success_status: str, failed_status: str, other_status: str):
     """
     check flow status
@@ -107,8 +108,8 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
         ErrorMsgHandler(title=gettext("Flow Status Abnormal"), content=gettext("Strategy ID:\t%s") % strategy_id).send()
 
 
-@periodic_task(run_every=crontab(minute="*/1"))
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:sync_plan_from_bkbase")
 def sync_plan_from_bkbase():
     """
     从 BKBASE 同步方案
@@ -122,8 +123,8 @@ def sync_plan_from_bkbase():
     AiopsPlanSyncHandler().sync()
 
 
-@periodic_task(run_every=crontab(minute="*/1"))
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:auth_rt")
 def auth_rt():
     """Auth Result Table For BkBase"""
 

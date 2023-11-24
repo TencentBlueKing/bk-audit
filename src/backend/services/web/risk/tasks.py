@@ -30,7 +30,7 @@ from django_redis.client import DefaultClient
 from apps.itsm.constants import TicketStatus
 from apps.notice.handlers import ErrorMsgHandler
 from apps.sops.constants import SOPSTaskStatus
-from core.utils.tools import single_task_decorator
+from core.lock import lock
 from services.web.risk.constants import RiskStatus, TicketNodeStatus
 from services.web.risk.handlers import BKMAlertSyncHandler, EventHandler
 from services.web.risk.handlers.risk import RiskHandler
@@ -45,31 +45,32 @@ from services.web.risk.models import Risk, TicketNode
 cache: DefaultClient = _cache
 
 
-@periodic_task(run_every=crontab(minute="*/10"), queue="risk")
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/10"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:sync_bkm_alert")
 def sync_bkm_alert():
     """同步监控告警为审计事件"""
 
     BKMAlertSyncHandler().sync()
 
 
-@task(queue="risk")
+@task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:add_event")
 def add_event(data: list):
     """创建审计事件"""
 
     EventHandler().add_event(data)
 
 
-@periodic_task(run_every=crontab(minute="0"), queue="risk")
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:generate_risk_from_event")
 def generate_risk_from_event():
     """从审计事件创建风险"""
 
     RiskHandler().generate_risk_from_event()
 
 
-@periodic_task(run_every=crontab(minute="*/5"), queue="risk")
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="*/5"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:process_risk_ticket")
 def process_risk_ticket(risk_id: str = None):
     """自动处理风险单"""
 
@@ -133,8 +134,8 @@ def process_risk_ticket(risk_id: str = None):
             logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
-@periodic_task(run_every=crontab(minute="0"), queue="risk")
-@single_task_decorator
+@periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:sync_auto_result")
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
 

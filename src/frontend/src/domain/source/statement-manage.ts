@@ -25,11 +25,13 @@ class Statement extends ModuleBase {
     this.module = '/';
   }
 
-  getMenuList() {
+  getMenuList(payload = {}) {
     return Request.get<Array<{
       id:string,
       name:string
-    }>>(`${this.module}bkvision/api/v1/panels/`);
+    }>>(`${this.module}bkvision/api/v1/panels/`, {
+      payload,
+    });
   }
 }
 

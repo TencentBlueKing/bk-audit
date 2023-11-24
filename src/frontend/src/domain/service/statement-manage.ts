@@ -21,7 +21,9 @@ export default {
    * @desc 获取左侧菜单
    */
   fetchMenuList() {
-    return StatementManageSource.getMenuList()
+    return StatementManageSource.getMenuList({
+      permission: 'page',
+    })
       .then(({ data }) => data);
   },
 };
