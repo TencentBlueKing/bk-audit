@@ -15,65 +15,34 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div style="width: 100%;height: 100%;">
-    <div id="panel" />
-  </div>
+  <audit-router-view />
 </template>
 <script setup lang="ts">
   import {
-    onMounted,
-    watch,
-  } from 'vue';
-  import {
-    useRoute,
+    useRouter,
   } from 'vue-router';
 
-  const route = useRoute();
-  const loadScript = (src: string) => new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = () => resolve(script);
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-    document.head.appendChild(script);
-  });
+  import StatementManageService from '@service/statement-manage';
 
-  const render = () => {
-    window.BkVisionSDK.init(
-      '#panel',
-      route.params.id,
-      {
-        filter: {},
-        waterMark: { content: 'bk-vision' },
-        apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
-      },
-    );
-  };
+  import useEventBus from '@hooks/use-event-bus';
+  import useRequest from '@hooks/use-request';
 
-  const init = async  () => {
-    try {
-      // 样式文件
-      const link = document.createElement('link');
-      link.href = '//staticfile.qq.com/bkvision/p8e3a7f52d95c45d795cb6f90955f2800/latest/main.css';
-      link.rel = 'stylesheet';
-      document.body.append(link);
-      await loadScript('//staticfile.qq.com/bkvision/p8e3a7f52d95c45d795cb6f90955f2800/latest/chunk-vendors.js?v={{STATIC_VERSION}}');
-      await loadScript('//staticfile.qq.com/bkvision/p8e3a7f52d95c45d795cb6f90955f2800/latest/chunk-bk-magic-vue.js?v={{STATIC_VERSION}}');
-      await loadScript('//staticfile.qq.com/bkvision/p8e3a7f52d95c45d795cb6f90955f2800/latest/main.js?v={{STATIC_VERSION}}');
-      render();
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  const { emit } = useEventBus();
+  const router = useRouter();
 
-  watch(() => route, () => {
-    if (route.params.id !== '' && route.name === 'statementManageDetail') {
-      render();
-    }
-  }, {
-    deep: true,
-  });
-
-  onMounted(() => {
-    init();
+  // 获取审计报表左侧菜单
+  useRequest(StatementManageService.fetchMenuList, {
+    manual: true,
+    defaultValue: [],
+    onSuccess: (menuData) => {
+      emit('statement-menuData', menuData);
+      // 获取菜单成功
+      router.push({
+        name: 'statementManageDetail',
+        params: {
+          id: menuData[0]?.id || 'undefined',
+        } });
+    },
   });
 </script>
+

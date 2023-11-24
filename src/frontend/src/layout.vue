@@ -45,8 +45,7 @@
           :class="{
             active: curNavName === 'auditStatement'
           }"
-          :to="{}"
-          @click="() => gotoStatement()">
+          :to="{ name:'statementManage', query: {} }">
           {{ t('审计报表') }}
         </router-link>
         <router-link
@@ -173,7 +172,7 @@
             {{ t('所有风险') }}
           </audit-menu-item>
         </template>
-        <template v-else>
+        <template v-else-if="menuData.length">
           <audit-menu-item
             v-for="item in menuData"
             :key="item.id"
@@ -200,6 +199,7 @@
 
   import {
     defineExpose,
+    onBeforeUnmount,
     type Ref,
     ref,
     watch  } from 'vue';
@@ -210,10 +210,10 @@
   } from 'vue-router';
 
   import RootManageService from '@service/root-manage';
-  import StatementManageService from '@service/statement-manage';
 
   import ConfigModel from '@model/root/config';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
   import AuditMenu from '@components/audit-menu/index.vue';
@@ -224,9 +224,14 @@
   interface Exposes {
     titleRef: Ref<string>
   }
+  interface MenuDataType {
+    id: string;
+    name: string;
+  }
   const router = useRouter();
   const route = useRoute();
   const isMenuFlod = ref(false);
+  const { on, off } = useEventBus();
   const { t } = useI18n();
   const curNavName = ref('');
   const handleSideMenuFlodChange = (value: boolean) => {
@@ -234,30 +239,10 @@
   };
 
   const titleRef = ref<string>('');
-  let clickLink: boolean = false;
-  // 点击审计报表开始请求菜单，相当于懒加载
-  const gotoStatement = async (hasStatementPath: boolean = false) => {
-    // 防止路由刷新再请求一次
-    clickLink = true;
-    menuData.value = await fetchMenuList();
-    if (!hasStatementPath) {
-      router.push({
-        name: 'statementManageDetail',
-        params: {
-          id: menuData.value[0]?.id || 'undefined',
-        } });
-      titleRef.value = menuData.value[0]?.name;
-    } else {
-      // 刷新页面找回pageTitle
-      titleRef.value = menuData.value.find(item => item.id === route.params.id)?.name || '';
-    }
-  };
-  // 获取审计报表左侧菜单
-  const {
-    data: menuData,
-    run: fetchMenuList,
-  } =  useRequest(StatementManageService.fetchMenuList, {
-    defaultValue: [],
+  const menuData = ref<Array<MenuDataType>>([]);
+  on('statement-menuData', (data) => {
+    menuData.value = data as Array<MenuDataType>;
+    titleRef.value = menuData.value[0]?.name;
   });
   // 导航路由切换
   const handleRouterChange = (routerName: string) => {
@@ -283,13 +268,12 @@
   });
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
-    // 防止在审计报表刷新页面，侧边栏为空
-    if (curNavName.value === 'auditStatement' && !clickLink) {
-      gotoStatement(true);
-    }
   }, {
     deep: true,
     immediate: true,
+  });
+  onBeforeUnmount(() => {
+    off('statement-menuData');
   });
   defineExpose<Exposes>({
     titleRef,
