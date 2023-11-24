@@ -335,3 +335,6 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .audit-icon-stop-2:before {
 	content: "\e180";
 }
+.audit-icon-baobiao:before {
+	content: "\e181";
+}

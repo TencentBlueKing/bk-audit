@@ -298,6 +298,9 @@
 
   defineExpose<Exposes>({
     getValue() {
+      if (!props.controlDetail.variable_config.parameter.length) {
+        return Promise.resolve();
+      }
       return comRef.value.getValue().then(() => paramenterRef.value.getValue());
     },
     setConfigs(configs: IFormData['configs']) {
@@ -320,6 +323,9 @@
       return comRef.value.getFields();
     },
     getParamenterFields() {
+      if (!props.controlDetail.variable_config.parameter.length) {
+        return [];
+      }
       return paramenterRef.value.getFields();
     },
     clearData() {
