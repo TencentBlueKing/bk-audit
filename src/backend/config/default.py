@@ -235,6 +235,7 @@ FEATURE_TOGGLE = {
     "bkbase_aiops": os.getenv("BKAPP_FEATURE_BKBASE_AIOPS", "deny"),
     "bklog_otlp": os.getenv("BKAPP_FEATURE_BKLOG_OTLP", "on"),
     "watermark": os.getenv("BKAPP_FEATURE_WATERMARK", "deny"),
+    "bkvision": os.getenv("BKAPP_FEATURE_BKVISION", "deny"),
 }
 
 # BkLog
