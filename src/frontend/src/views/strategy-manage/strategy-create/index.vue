@@ -17,7 +17,7 @@
 <template>
   <skeleton-loading
     fullscreen
-    :loading="isEditDataLoading || controlLoading"
+    :loading="isEditDataLoading || controlLoading || tagLoading"
     name="createStrategy">
     <smart-action
       class="create-strategy-page"
