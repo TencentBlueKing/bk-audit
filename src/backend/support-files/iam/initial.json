@@ -916,6 +916,47 @@
             }
         },
         {
+            "operation": "upsert_action",
+            "data": {
+                "id": "view_base_panel",
+                "name": "查看报表",
+                "name_en": "View Audit Report",
+                "type": "view",
+                "version": 1,
+                "related_resource_types": [],
+                "related_actions": [],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
+                "id": "view_panel",
+                "name": "查看报表(组织架构)",
+                "name_en": "View Audit Report by Department",
+                "type": "view",
+                "version": 1,
+                "related_resource_types": [
+                     {
+                        "system_id": "bk_usermgr",
+                        "id": "department",
+                        "related_instance_selections": [
+                            {
+                                "system_id": "bk_usermgr",
+                                "id": "department",
+                                "ignore_iam_path": true
+                            }
+                        ],
+                        "selection_mode": "instance"
+                    }
+                ],
+                "related_actions": [],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
             "operation": "upsert_action_groups",
             "data": [
                 {
@@ -934,6 +975,18 @@
                                 },
                                 {
                                     "id": "access_audit_sensitive_info"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "报表",
+                            "name_en": "Report",
+                            "actions": [
+                                {
+                                    "id": "view_base_panel"
+                                },
+                                {
+                                    "id": "view_panel"
                                 }
                             ]
                         }

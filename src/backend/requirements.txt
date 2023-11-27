@@ -7,7 +7,7 @@
 -r requirements_env.txt
 
 bk_audit[opentelemetry]==1.0.7
-bk_resource==0.4.2
+bk_resource==0.4.6
 
 # web server
 gunicorn==19.6.0
@@ -23,6 +23,7 @@ drf-yasg==1.20.0
 drf_spectacular==0.12.0
 django-environ==0.10.0
 django-simpleui==2023.3.1
+django-sslserver==0.22
 
 # staticfiles
 whitenoise==5.2.0

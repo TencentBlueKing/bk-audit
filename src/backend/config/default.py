@@ -30,6 +30,7 @@ from core.utils.distutils import strtobool
 INSTALLED_APPS = ("simpleui",) + INSTALLED_APPS
 INSTALLED_APPS += (
     "corsheaders",
+    "sslserver",
     "apps.audit",
     "apps.meta",
     "apps.permission",
@@ -291,8 +292,13 @@ BK_SOPS_APP_CODE = os.getenv("BKAPP_BK_SOPS_APP_CODE", "bk_sops")
 
 # Risk
 ENABLE_PROCESS_RISK_TASK = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_TASK", "True"))
+ENABLE_PROCESS_RISK_WHITELIST = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_WHITELIST", "False"))
+PROCESS_RISK_WHITELIST = [int(i) for i in os.getenv("BKAPP_PROCESS_RISK_WHITELIST", "").split(",") if i]
 PROCESS_RISK_MAX_RETRY = int(os.getenv("BKAPP_PROCESS_RISK_MAX_RETRY", 3))
 PROCESS_RISK_RETRY_KEY_TIMEOUT = int(os.getenv("BKAPP_PROCESS_RISK_RETRY_KEY_TIMEOUT", 60 * 30))
+
+# cache lock
+DEFAULT_CACHE_LOCK_TIMEOUT = int(os.getenv("BKAPP_DEFAULT_CACHE_LOCK_TIMEOUT", 60 * 60))
 
 """
 以下为框架代码 请勿修改

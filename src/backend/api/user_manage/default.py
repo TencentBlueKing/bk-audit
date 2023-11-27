@@ -21,6 +21,7 @@ import base64
 import os
 
 from bk_resource import BkApiResource
+from bk_resource.utils.cache import CacheTypeItem
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
@@ -42,6 +43,29 @@ class RetrieveUser(UserManageResource):
     name = gettext_lazy("获取单个用户信息")
     method = "GET"
     action = "/retrieve_user/"
+
+
+class ListUserDepartments(UserManageResource):
+    name = gettext_lazy("查询用户的部门信息 (v2)")
+    method = "GET"
+    action = "/list_profile_departments/"
+    cache_type = CacheTypeItem(key="list_profile_departments", timeout=60 * 60)
+
+
+class ListDepartments(UserManageResource):
+    name = gettext_lazy("查询部门 (v2)")
+    method = "GET"
+    action = "/list_departments/"
+    cache_type = CacheTypeItem(key="list_departments", timeout=60 * 60)
+    platform_authorization = True
+
+
+class RetrieveDepartment(UserManageResource):
+    name = gettext_lazy("查询单个部门信息 (v2)")
+    method = "GET"
+    action = "/retrieve_department/"
+    cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60)
+    platform_authorization = True
 
 
 class GetSnapshotSchema(UserManageResource):

@@ -36,7 +36,8 @@ declare interface Window {
     NAMESPACE: string
   };
   changeConfirm: boolean | 'popover';
-  testmessage: any
+  testmessage: any;
+  BkVisionSDK: any;
 }
 
 declare module 'js-cookie'

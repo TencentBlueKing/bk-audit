@@ -43,6 +43,14 @@
         <router-link
           class="main-navigation-nav "
           :class="{
+            active: curNavName === 'auditStatement'
+          }"
+          :to="{ name:'statementManage', query: {} }">
+          {{ t('审计报表') }}
+        </router-link>
+        <router-link
+          class="main-navigation-nav "
+          :class="{
             active: curNavName === 'auditConfigurationManage'
           }"
           :to="{ name:'analysisManage', query: {} }">
@@ -57,7 +65,7 @@
       <audit-menu
         :floded="isMenuFlod"
         @change="handleRouterChange">
-        <template v-if="curNavName !== 'auditRiskManage'">
+        <template v-if="curNavName === 'auditConfigurationManage'">
           <audit-menu-item-group>
             <template #title>
               <div> {{ t('分析') }}</div>
@@ -148,7 +156,7 @@
             </audit-menu-item>
           </audit-menu-item-group>
         </template>
-        <template v-else>
+        <template v-else-if="curNavName === 'auditRiskManage'">
           <audit-menu-item
             class="mt8"
             index="handleManage">
@@ -164,6 +172,19 @@
             {{ t('所有风险') }}
           </audit-menu-item>
         </template>
+        <template v-else-if="menuData.length">
+          <audit-menu-item
+            v-for="item in menuData"
+            :key="item.id"
+            class="mt8"
+            :class="[item.id === route.params.id ? 'active' : '']"
+            :index="item.id">
+            <audit-icon
+              class="menu-item-icon"
+              type="baobiao" />
+            {{ item.name }}
+          </audit-menu-item>
+        </template>
       </audit-menu>
     </template>
     <template #contentHeader>
@@ -177,9 +198,11 @@
 <script setup lang="ts">
 
   import {
+    defineExpose,
+    onBeforeUnmount,
+    type Ref,
     ref,
-    watch,
-  } from 'vue';
+    watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
     useRoute,
@@ -190,6 +213,7 @@
 
   import ConfigModel from '@model/root/config';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
   import AuditMenu from '@components/audit-menu/index.vue';
@@ -197,16 +221,41 @@
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
 
+  interface Exposes {
+    titleRef: Ref<string>
+  }
+  interface MenuDataType {
+    id: string;
+    name: string;
+  }
   const router = useRouter();
   const route = useRoute();
   const isMenuFlod = ref(false);
+  const { on, off } = useEventBus();
   const { t } = useI18n();
   const curNavName = ref('');
   const handleSideMenuFlodChange = (value: boolean) => {
     isMenuFlod.value = !value;
   };
+
+  const titleRef = ref<string>('');
+  const menuData = ref<Array<MenuDataType>>([]);
+  on('statement-menuData', (data) => {
+    menuData.value = data as Array<MenuDataType>;
+    titleRef.value = menuData.value[0]?.name;
+  });
   // 导航路由切换
   const handleRouterChange = (routerName: string) => {
+    if (curNavName.value === 'auditStatement') {
+      router.push({
+        name: 'statementManageDetail',
+        params: {
+          id: routerName,
+        },
+      });
+      titleRef.value = menuData.value.find(item => item.id === routerName)?.name || '';
+      return;
+    }
     router.push({
       name: routerName,
     });
@@ -222,6 +271,12 @@
   }, {
     deep: true,
     immediate: true,
+  });
+  onBeforeUnmount(() => {
+    off('statement-menuData');
+  });
+  defineExpose<Exposes>({
+    titleRef,
   });
 </script>
 <style lang="postcss">

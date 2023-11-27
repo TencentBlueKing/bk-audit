@@ -27,7 +27,6 @@ import arrow
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from dateutil.tz import tzutc
-from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.settings import api_settings
 
@@ -121,30 +120,6 @@ def format_date_string(date_string: str, output_format: str = api_settings.DATET
             "[FormatDataStringFailed] DateString => %s; OutputFormat => %s; Err => %s", date_string, output_format, err
         )
         return date_string
-
-
-def single_task_cache_key(func):
-    return f"{func.__name__}_running_key"
-
-
-def single_task_decorator(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        logger.info(f"[{func.__name__}] start")
-        # 多并发控制
-        cache_key = single_task_cache_key(func)
-        is_running = cache.get(cache_key)
-        if is_running:
-            logger.info(f"[{func.__name__}] end (duplicate running task)")
-            return
-        try:
-            cache.set(cache_key, True)
-            func(*args, **kwargs)
-        finally:
-            cache.delete(cache_key)
-        logger.info(f"[{func.__name__}] end")
-
-    return wrapper
 
 
 def choices_to_select_list(choice_class) -> list:
