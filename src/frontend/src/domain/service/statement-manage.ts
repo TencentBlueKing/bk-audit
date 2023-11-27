@@ -26,4 +26,8 @@ export default {
     })
       .then(({ data }) => data);
   },
+  fetchHasBkvision() {
+    return StatementManageSource.getHasBkvision()
+      .then(({ data }) => data);
+  },
 };
