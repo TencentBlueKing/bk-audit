@@ -41,6 +41,7 @@
           {{ t('审计风险') }}
         </router-link>
         <router-link
+          v-if="hasBkvision.enabled"
           class="main-navigation-nav "
           :class="{
             active: curNavName === 'auditStatement'
@@ -210,6 +211,7 @@
   } from 'vue-router';
 
   import RootManageService from '@service/root-manage';
+  import StatementManageService from '@service/statement-manage';
 
   import ConfigModel from '@model/root/config';
 
@@ -238,6 +240,13 @@
     isMenuFlod.value = !value;
   };
 
+  // 是否展示审计报表导航
+  const {
+    data: hasBkvision,
+  } = useRequest(StatementManageService.fetchHasBkvision, {
+    manual: true,
+    defaultValue: { enabled: false },
+  });
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
   on('statement-menuData', (data) => {
