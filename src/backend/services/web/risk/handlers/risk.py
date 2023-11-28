@@ -25,7 +25,7 @@ from typing import List, Union
 
 from blueapps.utils.logger import logger
 from django.conf import settings
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext
 from rest_framework.settings import api_settings
@@ -127,9 +127,23 @@ class RiskHandler:
         event = serializer.validated_data
 
         # 检查是否有已存在的
+        # 策略ID相同，原始事件ID相同，不为关单状态或事件时间小于最后发现时间
+        # 若未关单，则不创建新风险
+        # 若事件时间小于最后发现时间，则应当收敛风险
         risk = (
-            Risk.objects.filter(strategy_id=event["strategy_id"], raw_event_id=event["raw_event_id"])
-            .exclude(status=RiskStatus.CLOSED)
+            Risk.objects.filter(
+                Q(
+                    Q(strategy_id=event["strategy_id"], raw_event_id=event["raw_event_id"])
+                    & Q(
+                        ~Q(status=RiskStatus.CLOSED)
+                        | Q(
+                            event_end_time__lte=datetime.datetime.fromtimestamp(
+                                event["event_time"] / 1000, tz=timezone.get_default_timezone()
+                            )
+                        )
+                    )
+                )
+            )
             .order_by("-event_time")
             .first()
         )
