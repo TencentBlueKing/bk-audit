@@ -36,6 +36,7 @@ from iam.exceptions import AuthAPIError
 from iam.meta import setup_action, setup_resource, setup_system
 from iam.utils import gen_perms_apply_data
 
+from api.domains import BK_IAM_API_URL
 from apps.permission.exceptions import ActionNotExistError, GetSystemInfoError
 from apps.permission.handlers.actions import ActionMeta, _all_actions, get_action_by_id
 from apps.permission.handlers.resource_types import _all_resources, get_resource_by_id
@@ -64,7 +65,7 @@ class Permission(object):
 
     @classmethod
     def get_iam_client(cls):
-        return IAM(settings.APP_CODE, settings.SECRET_KEY, bk_apigateway_url=settings.BK_IAM_APIGATEWAY_URL)
+        return IAM(settings.APP_CODE, settings.SECRET_KEY, bk_apigateway_url=BK_IAM_API_URL)
 
     def make_request(self, action: Union[ActionMeta, str], resources: List[Resource] = None) -> Request:
         """

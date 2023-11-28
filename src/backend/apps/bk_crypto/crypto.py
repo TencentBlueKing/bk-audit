@@ -27,6 +27,7 @@ from bkcrypto.contrib.django.ciphers import get_asymmetric_cipher, get_symmetric
 from bkcrypto.symmetric.ciphers import BaseSymmetricCipher
 from blueapps.utils.logger import logger
 from django.conf import settings
+from django.db import ProgrammingError
 
 from apps.bk_crypto.constants import PRIVATE_KEY_CONFIG_NAME
 from apps.exceptions import MetaConfigNotExistException
@@ -96,7 +97,7 @@ class AsymmetricCipher:
                     instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
                 )
                 private_key_string = self.symmetric_cipher.decrypt(private_key_string)
-            except MetaConfigNotExistException:
+            except (MetaConfigNotExistException, ProgrammingError):
                 logger.warning(
                     "[PrivateKetNotExists] %s, %s, %s",
                     PRIVATE_KEY_CONFIG_NAME,
@@ -118,7 +119,7 @@ class AsymmetricCipher:
                 config_level=ConfigLevelChoices.GLOBAL,
                 instance_key=GLOBAL_CONFIG_LEVEL_INSTANCE,
             )
-        except MetaConfigNotExistException:
+        except (MetaConfigNotExistException, ProgrammingError):
             private_key = self.symmetric_cipher.encrypt(get_asymmetric_cipher().export_private_key())
             GlobalMetaConfig.set(
                 config_key=PRIVATE_KEY_CONFIG_NAME,

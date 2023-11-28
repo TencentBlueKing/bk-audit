@@ -25,6 +25,7 @@ from bk_resource import api, resource
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 
@@ -459,7 +460,7 @@ class AutoProcess(RiskFlowBaseHandler):
             if isinstance(value, (dict, list)):
                 value = json.dumps(value, ensure_ascii=False)
             if isinstance(value, datetime.datetime):
-                value = value.strftime(api_settings.DATETIME_FORMAT)
+                value = value.astimezone(tz=timezone.get_default_timezone()).strftime(api_settings.DATETIME_FORMAT)
             constants[c["key"]] = value
         params = {
             "name": f"{self.process_application.name}_{int(datetime.datetime.now().timestamp() * 1000)}",

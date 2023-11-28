@@ -17,7 +17,7 @@
 <template>
   <skeleton-loading
     fullscreen
-    :loading="isEditDataLoading || controlLoading"
+    :loading="isEditDataLoading || controlLoading || tagLoading"
     name="createStrategy">
     <smart-action
       class="create-strategy-page"
@@ -202,6 +202,7 @@
       <template #action>
         <bk-button
           class="w88"
+          :disabled="tagLoading"
           :loading="isSubmiting"
           theme="primary"
           @click="handleSubmit">
