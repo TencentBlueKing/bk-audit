@@ -202,6 +202,7 @@
       <template #action>
         <bk-button
           class="w88"
+          :disabled="tagLoading"
           :loading="isSubmiting"
           theme="primary"
           @click="handleSubmit">
