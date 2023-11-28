@@ -137,7 +137,14 @@ class EntryHandler(object):
     @classmethod
     def get_query_help(cls):
         return GlobalMetaConfig.get(
-            DEFAULT_QUERY_STRING_HELP_KEY, default=os.getenv(DEFAULT_QUERY_STRING_HELP_ENV_KEY, "")
+            DEFAULT_QUERY_STRING_HELP_KEY,
+            default=os.getenv(
+                DEFAULT_QUERY_STRING_HELP_ENV_KEY,
+                (
+                    "https://bk.tencent.com/docs/markdown/ZH/LogSearch/4.6"
+                    "/UserGuide/ProductFeatures/data-visualization/query_string.md"
+                ),
+            ),
         )
 
     @classmethod

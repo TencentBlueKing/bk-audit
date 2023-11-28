@@ -168,7 +168,7 @@ BK_RESOURCE = {
     "REQUEST_LOG_SPLIT_LENGTH": int(os.getenv("BKAPP_REQUEST_LOG_SPLIT_LENGTH", 1024)),
     "PLATFORM_AUTH_ENABLED": strtobool(os.getenv("BKAPP_PLATFORM_AUTH_ENABLED", "True")),
     "PLATFORM_AUTH_ACCESS_TOKEN": os.getenv("BKAPP_PLATFORM_AUTH_ACCESS_TOKEN"),
-    "PLATFORM_AUTH_ACCESS_USERNAME": os.getenv("BKAPP_PLATFORM_AUTH_ACCESS_USERNAME"),
+    "PLATFORM_AUTH_ACCESS_USERNAME": os.getenv("BKAPP_PLATFORM_AUTH_ACCESS_USERNAME", "admin"),
 }
 
 APPEND_SLASH = False
@@ -235,6 +235,7 @@ FEATURE_TOGGLE = {
     "bkbase_aiops": os.getenv("BKAPP_FEATURE_BKBASE_AIOPS", "deny"),
     "bklog_otlp": os.getenv("BKAPP_FEATURE_BKLOG_OTLP", "on"),
     "watermark": os.getenv("BKAPP_FEATURE_WATERMARK", "deny"),
+    "bkvision": os.getenv("BKAPP_FEATURE_BKVISION", "deny"),
 }
 
 # BkLog
