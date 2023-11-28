@@ -97,7 +97,7 @@
                 onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
                 :placeholder="t('请输入')"
                 type="number"
-                @blur="handleAiopsConfig" />
+                @change="handleAiopsConfig" />
             </bk-form-item>
             <bk-form-item
               class="is-required no-label"
