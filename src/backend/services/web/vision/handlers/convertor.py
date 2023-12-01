@@ -104,7 +104,10 @@ class DeptConvertor(Converter):
         return data
 
     def _starts_with(self, left, right) -> DeptMatch:
-        # 只需要最后一层组织架构
+        # 最后一层直接返回
+        if right.isdigit():
+            return DeptMatch(method=OP.STARTS_WITH, value=[right])
+        # 多层只需要最后一层组织架构
         dept_id = right.split("/")[-2].split(",")[-1]
         return DeptMatch(method=OP.STARTS_WITH, value=[dept_id])
 
