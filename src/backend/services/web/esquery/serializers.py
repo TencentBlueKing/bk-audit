@@ -81,6 +81,7 @@ class EsQuerySearchAttrSerializer(serializers.Serializer):
     storage_cluster_id = serializers.IntegerField(required=False)
     bind_system_info = serializers.BooleanField(default=True)
     scroll = serializers.CharField(required=False)
+    include_end_time = serializers.BooleanField(default=False)
 
     def validate(self, attrs):
         # 检索数量
