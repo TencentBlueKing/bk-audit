@@ -32,19 +32,20 @@ class VisionHandler:
         vision_data = api.bk_vision.query_meta(**params)
         for panel in vision_data["data"]["panels"]:
             category = panel.get("category")
+            if category != PanelType.ACTION:
+                continue
+            # 图表配置
+            uid = panel["uid"]
             chart_config = panel.get("chartConfig") or {}
-            flag = chart_config.get("flag")
-            if category == PanelType.ACTION and flag == KeyVariable.DEPARTMENT:
-                # 获取枚举数据
-                chart_config["json"] = DeptFilterHandler().get_data()
-                # 设置默认值
-                chart_config["default"] = chart_config["json"][0]["value"] if chart_config["json"] else []
-                # 替换map
-                for action_map_variable_config in vision_data["data"].get("actionMapPanelRelation", {}).values():
-                    for panel_variable_config in action_map_variable_config.values():
-                        for value in panel_variable_config.values():
-                            if value.get("flag") == KeyVariable.DEPARTMENT:
-                                value["value"] = chart_config["default"]
+            match chart_config.get("flag"):
+                # 组织架构
+                case KeyVariable.DEPARTMENT:
+                    # 获取数据
+                    chart_config["json"] = DeptFilterHandler().get_data()
+                    # 设置默认值
+                    chart_config["default"] = chart_config["json"][0]["value"] if chart_config["json"] else []
+                    # 替换外层默认值
+                    vision_data["filters"][uid] = chart_config["default"]
         return vision_data
 
     def query_dataset(self, params: dict) -> dict:
@@ -52,5 +53,8 @@ class VisionHandler:
         # 检测过滤条件是否合法
         variables = option.get("variables", {})
         for variable_config in variables:
-            DeptFilterHandler().check_data(variable_config["value"])
+            match variable_config["flag"]:
+                # 组织架构
+                case KeyVariable.DEPARTMENT:
+                    DeptFilterHandler().check_data(variable_config["value"])
         return api.bk_vision.query_dataset(**params)
