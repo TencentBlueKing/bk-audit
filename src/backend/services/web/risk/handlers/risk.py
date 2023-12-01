@@ -41,7 +41,6 @@ from apps.notice.models import (
 from apps.notice.tasks import send_notice
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
-    EVENT_OPERATOR_SPLIT_REGEX,
     EVENT_TYPE_SPLIT_REGEX,
     RISK_SYNC_BATCH_SIZE,
     RISK_SYNC_START_TIME_KEY,
@@ -165,8 +164,8 @@ class RiskHandler:
         )
 
     def parse_operator(self, operator: str) -> List[str]:
-        operators = [str(o) for o in re.split(EVENT_OPERATOR_SPLIT_REGEX, (operator or "")) if o]
-        return operators
+        operator = operator or ""
+        return [j.strip() for i in operator.split(",") for j in i.split(";") if j]
 
     def parse_event_type(self, event_type: str) -> List[str]:
         event_types = [t for t in re.split(EVENT_TYPE_SPLIT_REGEX, (event_type or "")) if t]
