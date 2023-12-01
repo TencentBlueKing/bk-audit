@@ -52,9 +52,9 @@ class QueryMeta(BKVision):
         return VisionHandler().query_meta(params=validated_request_data)
 
 
-class QueryData(BKVision):
+class QueryDataset(BKVision):
     name = gettext_lazy("获取面板视图数据")
 
     def perform_request(self, validated_request_data):
         get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
-        return VisionHandler().query_data(params=validated_request_data)
+        return VisionHandler().query_dataset(params=validated_request_data)
