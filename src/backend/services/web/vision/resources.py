@@ -22,8 +22,11 @@ from bk_resource import Resource
 from django.utils.translation import gettext_lazy
 from rest_framework.generics import get_object_or_404
 
+from apps.audit.client import bk_audit_client
+from apps.permission.handlers.actions import ActionEnum
+from services.web.vision.constants import PANEL
 from services.web.vision.handlers.query import VisionHandler
-from services.web.vision.models import VisionPanel
+from services.web.vision.models import VisionPanel, VisionPanelInstance
 from services.web.vision.serializers import (
     QueryMetaReqSerializer,
     VisionPanelInfoSerializer,
@@ -40,6 +43,10 @@ class ListPanels(BKVision):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        bk_audit_client.add_event(
+            action=ActionEnum.VIEW_BASE_PANEL,
+            extend_data=validated_request_data,
+        )
         return VisionPanel.objects.all()
 
 
@@ -48,7 +55,13 @@ class QueryMeta(BKVision):
     RequestSerializer = QueryMetaReqSerializer
 
     def perform_request(self, validated_request_data):
-        get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
+        panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
+        bk_audit_client.add_event(
+            action=ActionEnum.VIEW_PANEL,
+            resource_type=PANEL,
+            instance=VisionPanelInstance(panel).instance,
+            extend_data=validated_request_data,
+        )
         return VisionHandler().query_meta(params=validated_request_data)
 
 
@@ -56,5 +69,11 @@ class QueryDataset(BKVision):
     name = gettext_lazy("获取面板视图数据")
 
     def perform_request(self, validated_request_data):
-        get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
+        panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
+        bk_audit_client.add_event(
+            action=ActionEnum.VIEW_PANEL,
+            resource_type=PANEL,
+            instance=VisionPanelInstance(panel).instance,
+            extend_data=validated_request_data,
+        )
         return VisionHandler().query_dataset(params=validated_request_data)
