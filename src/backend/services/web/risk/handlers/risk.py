@@ -97,6 +97,7 @@ class RiskHandler:
             page=1,
             page_size=RISK_SYNC_BATCH_SIZE,
             sort_list=EVENT_DATA_SORT_FIELD,
+            include_end_time=False,
         )
         logger.info("[LoadEventSuccess] Total %d", len(data))
 
