@@ -84,6 +84,7 @@ def generate_risk_from_event():
     while end_time <= task_end_time:
         # 生成风险
         RiskHandler().generate_risk_from_event(start_time=start_time, end_time=end_time)
+        logger_celery.info("[GenerateRiskFinished] %s ~ %s", start_time, end_time)
         # 滚动时间
         start_time = end_time
         end_time = start_time + datetime.timedelta(seconds=RISK_ESQUERY_SLICE_DURATION)
