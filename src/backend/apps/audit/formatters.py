@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import copy
+import json
 
 from bk_audit.contrib.django.formatters import DjangoFormatter
 from bk_resource.settings import bk_resource_settings
@@ -62,10 +63,16 @@ class AuditFormatter(DjangoFormatter):
             get_local_request_id,
         )
 
+        extend_data = dict(copy.deepcopy(extend_data)) or dict()
+        for key, val in extend_data.items():
+            try:
+                json.dumps(val)
+            except TypeError:
+                extend_data[key] = str(val)
+
         request = get_local_request()
         if request:
             setattr(request, "request_id", get_local_request_id())
-            extend_data = copy.deepcopy(extend_data) or dict()
             extend_data.update(
                 {
                     "_request_url": "{scheme}://{host}{path}?{query}".format(
@@ -77,6 +84,7 @@ class AuditFormatter(DjangoFormatter):
             request = MockRequest()
             user = get_user_model()(username=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME)
             request.user = user
+
         audit_context.request = request
         return super().build_event(
             action=action,
