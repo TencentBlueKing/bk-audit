@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from bk_resource import api
 
-from services.web.vision.constants import KeyVariable
+from services.web.vision.constants import KeyVariable, PanelType
 from services.web.vision.handlers.filter import DeptFilterHandler
 
 
@@ -30,19 +30,31 @@ class VisionHandler:
     def query_meta(self, params: dict) -> dict:
         # 重新构造过滤条件
         vision_data = api.bk_vision.query_meta(**params)
-        for f in vision_data["data"]["filters"]:
-            if f["name"] == KeyVariable.DEPARTMENT:
-                # 获取枚举数据
-                f["query_data"] = DeptFilterHandler().get_data()
-                # 设置默认值
-                f["value"] = f["query_data"][0]["value"] if f["query_data"] else ""
+        for panel in vision_data["data"]["panels"]:
+            category = panel.get("category")
+            if category != PanelType.ACTION:
+                continue
+            # 图表配置
+            uid = panel["uid"]
+            chart_config = panel.get("chartConfig") or {}
+            match chart_config.get("flag"):
+                # 组织架构
+                case KeyVariable.DEPARTMENT:
+                    # 获取数据
+                    chart_config["json"] = DeptFilterHandler().get_data()
+                    # 设置默认值
+                    chart_config["default"] = chart_config["json"][0]["value"] if chart_config["json"] else []
+                    # 替换外层默认值
+                    vision_data["filters"][uid] = chart_config["default"]
         return vision_data
 
-    def query_data(self, params: dict) -> dict:
+    def query_dataset(self, params: dict) -> dict:
         option = params.get("option", {})
         # 检测过滤条件是否合法
         variables = option.get("variables", {})
-        for key, val in variables.items():
-            if key == KeyVariable.DEPARTMENT:
-                DeptFilterHandler().check_data(val)
-        return api.bk_vision.query_data(**params)
+        for variable_config in variables:
+            match variable_config["flag"]:
+                # 组织架构
+                case KeyVariable.DEPARTMENT:
+                    DeptFilterHandler().check_data(variable_config["value"])
+        return api.bk_vision.query_dataset(**params)

@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import math
-import os
 import re
 from typing import List, Union
 
@@ -42,9 +41,7 @@ from apps.notice.models import (
 from apps.notice.tasks import send_notice
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
-    EVENT_OPERATOR_SPLIT_REGEX,
     EVENT_TYPE_SPLIT_REGEX,
-    RISK_ESQUERY_DELAY_TIME,
     RISK_SYNC_BATCH_SIZE,
     RISK_SYNC_START_TIME_KEY,
     EventMappingFields,
@@ -61,12 +58,12 @@ class RiskHandler:
     Deal with Risk
     """
 
-    def generate_risk_from_event(self) -> None:
+    def generate_risk_from_event(self, start_time: datetime.datetime, end_time: datetime.datetime) -> None:
         """
         从事件生成风险
         """
 
-        events = self.load_events()
+        events = self.load_events(start_time=start_time, end_time=end_time)
         for event in events:
             try:
                 is_create, risk = self.create_risk(event)
@@ -87,16 +84,10 @@ class RiskHandler:
                     ),
                 ).send()
 
-    def load_events(self) -> List[dict]:
+    def load_events(self, start_time: datetime.datetime, end_time: datetime.datetime) -> List[dict]:
         """
         加载事件
         """
-
-        # 获取起始时间
-        start_time = datetime.datetime.now() - datetime.timedelta(
-            days=int(os.getenv("BKAPP_RISK_EVENTS_SYNC_TIME", "2"))
-        )
-        end_time = datetime.datetime.now() - datetime.timedelta(seconds=RISK_ESQUERY_DELAY_TIME)
 
         # 加载数据
         data = EventHandler.search_all_event(
@@ -106,6 +97,7 @@ class RiskHandler:
             page=1,
             page_size=RISK_SYNC_BATCH_SIZE,
             sort_list=EVENT_DATA_SORT_FIELD,
+            include_end_time=False,
         )
         logger.info("[LoadEventSuccess] Total %d", len(data))
 
@@ -173,8 +165,8 @@ class RiskHandler:
         )
 
     def parse_operator(self, operator: str) -> List[str]:
-        operators = [str(o) for o in re.split(EVENT_OPERATOR_SPLIT_REGEX, (operator or "")) if o]
-        return operators
+        operator = operator or ""
+        return [j.strip() for i in operator.split(",") for j in i.split(";") if j]
 
     def parse_event_type(self, event_type: str) -> List[str]:
         event_types = [t for t in re.split(EVENT_TYPE_SPLIT_REGEX, (event_type or "")) if t]

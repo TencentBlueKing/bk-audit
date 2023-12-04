@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from django.utils.translation import gettext_lazy
+from iam.model.models import ResourceType
 
 from core.choices import TextChoices
 
@@ -27,3 +28,23 @@ class KeyVariable(TextChoices):
     """
 
     DEPARTMENT = "dept", gettext_lazy("组织架构")
+
+
+class PanelType(TextChoices):
+    """
+    组件类型
+    """
+
+    ACTION = "Action", gettext_lazy("筛选")
+
+
+PANEL = ResourceType(
+    id="panel",
+    name=None,
+    name_en=None,
+    description=None,
+    description_en=None,
+    parents=None,
+    provider_config=None,
+    version=None,
+)

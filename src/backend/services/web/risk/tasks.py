@@ -16,6 +16,9 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import datetime
+import os
+
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger_celery
@@ -31,7 +34,12 @@ from apps.itsm.constants import TicketStatus
 from apps.notice.handlers import ErrorMsgHandler
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
-from services.web.risk.constants import RiskStatus, TicketNodeStatus
+from services.web.risk.constants import (
+    RISK_ESQUERY_DELAY_TIME,
+    RISK_ESQUERY_SLICE_DURATION,
+    RiskStatus,
+    TicketNodeStatus,
+)
 from services.web.risk.handlers import BKMAlertSyncHandler, EventHandler
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.ticket import (
@@ -61,12 +69,25 @@ def add_event(data: list):
     EventHandler().add_event(data)
 
 
-@periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-@lock(lock_name="celery:generate_risk_from_event")
+@periodic_task(
+    run_every=crontab(minute="0", hour="*/4"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT * 4
+)
+@lock(lock_name="celery:generate_risk_from_event", timeout=settings.DEFAULT_CACHE_LOCK_TIMEOUT * 4)
 def generate_risk_from_event():
     """从审计事件创建风险"""
 
-    RiskHandler().generate_risk_from_event()
+    # 初始化时间
+    start_time = datetime.datetime.now() - datetime.timedelta(days=int(os.getenv("BKAPP_RISK_EVENTS_SYNC_TIME", "2")))
+    end_time = start_time + datetime.timedelta(seconds=RISK_ESQUERY_SLICE_DURATION)
+    task_end_time = datetime.datetime.now() - datetime.timedelta(seconds=RISK_ESQUERY_DELAY_TIME)
+
+    while end_time <= task_end_time:
+        # 生成风险
+        RiskHandler().generate_risk_from_event(start_time=start_time, end_time=end_time)
+        logger_celery.info("[GenerateRiskFinished] %s ~ %s", start_time, end_time)
+        # 滚动时间
+        start_time = end_time
+        end_time = start_time + datetime.timedelta(seconds=RISK_ESQUERY_SLICE_DURATION)
 
 
 @periodic_task(run_every=crontab(minute="*/5"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
