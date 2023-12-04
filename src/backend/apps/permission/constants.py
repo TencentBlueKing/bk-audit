@@ -21,6 +21,7 @@ from enum import Enum
 from django.conf import settings
 
 PERMISSION_CACHE_EXPIRE = 5 * 60
+FETCH_INSTANCE_TOKEN_KEY = "FETCH_INSTANCE_TOKEN"
 
 
 class IAMSystems(Enum):

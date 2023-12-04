@@ -24,6 +24,8 @@ from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
+from apps.meta.models import GlobalMetaConfig
+from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
 from core.permissions import FetchInstancePermission
 from services.web.databus.constants import (
     ACTION_DATA_NAME_FORMAT,
@@ -53,7 +55,7 @@ class HttpPullHandler:
             self.url = os.getenv("BKAPP_FETCH_USER_INFO_URL")
         else:
             self.token = FetchInstancePermission.build_auth(
-                settings.FETCH_INSTANCE_USERNAME, settings.FETCH_INSTANCE_TOKEN
+                settings.FETCH_INSTANCE_USERNAME, GlobalMetaConfig.get(FETCH_INSTANCE_TOKEN_KEY)
             )
             self.url = os.getenv("BKAPP_FETCH_INSTANCE_URL")
 
