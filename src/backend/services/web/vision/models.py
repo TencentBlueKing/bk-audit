@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from bk_audit.log.models import AuditInstance
 from django.db import models
 from django.utils.translation import gettext_lazy
 
@@ -35,3 +36,13 @@ class VisionPanel(SoftDeleteModel):
         verbose_name = gettext_lazy("仪表盘")
         verbose_name_plural = verbose_name
         ordering = ["-priority_index", "name"]
+
+
+class VisionPanelInstance:
+    def __init__(self, panel: VisionPanel):
+        self.instance_id = panel.id
+        self.instance_name = panel.name
+
+    @property
+    def instance(self):
+        return AuditInstance(self)

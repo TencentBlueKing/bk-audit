@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-import uuid
 from typing import Dict, List
 
 from bk_resource import api
@@ -100,7 +99,7 @@ class DeptFilterHandler(FilterDataHandler):
             except VisionPermissionInvalid as err:
                 logger.warning("[%s] %s", str(err), policies)
 
-        data = [{"label": dept, "value": dept, "uuid": uuid.uuid1()} for dept in authed_dept]
+        data = [{"label": dept, "value": dept} for dept in authed_dept]
         data.sort(key=lambda item: item["label"])
         return data
 

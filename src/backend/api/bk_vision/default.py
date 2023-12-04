@@ -53,3 +53,9 @@ class QueryVariableData(BKVision):
     name = gettext_lazy("获取面板变量数据")
     method = "POST"
     action = "/api/v1/variable/query/"
+
+
+class QueryDataset(BKVision):
+    name = gettext_lazy("查询数据集")
+    method = "POST"
+    action = "/api/v1/dataset/query/"
