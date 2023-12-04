@@ -42,8 +42,6 @@
       '#panel',
       route.params.id,
       {
-        filter: {},
-        waterMark: { content: 'bk-vision' },
         apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
       },
     );
@@ -53,12 +51,12 @@
     try {
       // 样式文件
       const link = document.createElement('link');
-      link.href = '//staticfile.qq.com/bkvision/p8e3a7f52d95c45d795cb6f90955f2800/latest/main.css';
+      link.href = 'https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/main.css?v=1701524891';
       link.rel = 'stylesheet';
       document.body.append(link);
-      await loadScript('//staticfile.qq.com/bkvision/p8e3a7f52d95c45d795cb6f90955f2800/latest/chunk-vendors.js?v={{STATIC_VERSION}}');
-      await loadScript('//staticfile.qq.com/bkvision/p8e3a7f52d95c45d795cb6f90955f2800/latest/chunk-bk-magic-vue.js?v={{STATIC_VERSION}}');
-      await loadScript('//staticfile.qq.com/bkvision/p8e3a7f52d95c45d795cb6f90955f2800/latest/main.js?v={{STATIC_VERSION}}');
+      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/chunk-vendors.js?v=1701524891');
+      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/chunk-bk-magic-vue.js?v=1701524891');
+      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/main.js?v=1701524891');
       render();
     } catch (error) {
       console.error(error);

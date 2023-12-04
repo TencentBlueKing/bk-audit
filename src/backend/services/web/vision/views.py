@@ -47,7 +47,7 @@ class MetaViewSet(API200ViewSet, BKVisionViewSet):
     ]
 
 
-class DatasourceViewSet(API200ViewSet, BKVisionViewSet):
+class DatasetViewSet(API200ViewSet, BKVisionViewSet):
     resource_routes = [
-        ResourceRoute("POST", resource.vision.query_data, endpoint="query"),
+        ResourceRoute("POST", resource.vision.query_dataset, endpoint="query"),
     ]
