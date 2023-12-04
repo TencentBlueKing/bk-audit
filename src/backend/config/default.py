@@ -281,7 +281,7 @@ INIT_SECURITY_PERSON = [p for p in os.getenv("BKAPP_INIT_SECURITY_PERSON", "admi
 BKBASE_APP_CODE = os.getenv("BKAPP_BKBASE_APP_CODE", "bk_dataweb")
 BK_ITSM_APP_CODE = os.getenv("BKAPP_BK_ITSM_APP_CODE", "bk_itsm")
 BK_SOPS_APP_CODE = os.getenv("BKAPP_BK_SOPS_APP_CODE", "bk_sops")
-BK_AUDIT_APP_CODE = os.getenv("BKAPP_BK_AUDIT_APP_CODE", "bk_iam")
+BK_IAM_APP_CODE = os.getenv("BKAPP_BK_IAM_APP_CODE", "bk_iam")
 
 # Risk
 ENABLE_PROCESS_RISK_TASK = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_TASK", "True"))

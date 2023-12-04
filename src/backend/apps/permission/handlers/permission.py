@@ -177,7 +177,7 @@ class Permission(object):
                 [resource.to_dict() for resource in resources],
                 message,
             )
-            return get_saas_url(settings.BK_AUDIT_APP_CODE)
+            return get_saas_url(settings.BK_IAM_APP_CODE)
         return url
 
     def get_apply_data(self, actions: List[Union[ActionMeta, str]], resources: List[Resource] = None):
