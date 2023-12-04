@@ -18,10 +18,6 @@ to the current version of the project delivered to anyone in the future.
 
 from enum import Enum
 
-from django.utils.translation import gettext_lazy
-
-from core.choices import TextChoices
-
 DEFAULT_JSON_EXPAND_LEVEL = 2
 DEFAULT_JSON_EXPAND_SEPARATOR = "/"
 
