@@ -19,22 +19,23 @@ to the current version of the project delivered to anyone in the future.
 import base64
 import json
 import os
+from collections import defaultdict
 
 from django.conf import settings
 
-BKSAAS_SERVICE_ADDRESSES = os.getenv("BKPAAS_SERVICE_ADDRESSES_BKSAAS")
-if BKSAAS_SERVICE_ADDRESSES:
-    BKSAAS_SERVICE_ADDRESSES = json.loads(base64.b64decode(BKSAAS_SERVICE_ADDRESSES).decode("utf-8"))
-    BKSAAS_SERVICE_ADDRESSES = {
-        item["key"]["bk_app_code"]: item["value"]["prod" if settings.RUN_MODE == "PRODUCT" else "stag"].rstrip("/")
-        for item in BKSAAS_SERVICE_ADDRESSES
-    }
-else:
-    BKSAAS_SERVICE_ADDRESSES = {}
+service_addresses = defaultdict(dict)
+if os.getenv("BKPAAS_SERVICE_ADDRESSES_BKSAAS"):
+    service_addresses_data = json.loads(base64.b64decode(os.getenv("BKPAAS_SERVICE_ADDRESSES_BKSAAS")).decode("utf-8"))
+    for item in service_addresses_data:
+        app_code = item["key"]["bk_app_code"]
+        module_name = item["key"]["module_name"]
+        service_addresses[app_code][module_name] = item["value"][
+            "prod" if settings.RUN_MODE == "PRODUCT" else "stag"
+        ].rstrip("/")
 
 
-def get_saas_url(app_code: str) -> str:
+def get_saas_url(app_code: str, module_name: str = None) -> str:
     # 环境变量优先，服务发现其次
     env_saas_url = os.getenv(f"BKAPP_{app_code.replace('-', '_').upper()}_SAAS_URL", "").rstrip("/")
-    service_url = BKSAAS_SERVICE_ADDRESSES.get(app_code, "")
-    return env_saas_url or service_url
+    service_url = service_addresses.get(app_code, {})
+    return env_saas_url or service_url.get(module_name, "")

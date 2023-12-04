@@ -31,7 +31,7 @@ modules:
         - bk_app_code: "bk-audit"
         - bk_app_code: "bk_iam"
         - bk_app_code: "bk-audit"
-          module: "puller"
+          module_name: "puller"
   puller:
     language: Python
     processes:
