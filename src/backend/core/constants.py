@@ -49,9 +49,3 @@ class ErrorCode(Enum):
     ESB_API_NOT_FORBIDDEN = 20102  # API没有权限
     ESB_API_FORMAT_ERROR = 1306201  # API后端返回格式异常
     IAM_NOT_PERMISSION = "9900403"
-
-
-class DeployModuleChoices(TextChoices):
-    DEFAULT = "default", gettext_lazy("Default")
-    API = "api", gettext_lazy("Api")
-    PULLER = "puller", gettext_lazy("Puller")

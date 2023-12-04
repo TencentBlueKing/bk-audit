@@ -22,7 +22,6 @@ from blueapps.conf.default_settings import *  # noqa
 from blueapps.conf.log import get_logging_config_dict
 from django.utils.translation import gettext_lazy
 
-from core.constants import DeployModuleChoices
 from core.utils.distutils import strtobool
 
 # 请在这里加入你的自定义 APP
@@ -224,9 +223,6 @@ BK_APP_OTEL_ADDTIONAL_INSTRUMENTORS = []
 
 # TAM
 AEGIS_ID = os.getenv("BKAPP_AEGIS_ID")
-
-# Deploy
-DEPLOY_MODULE = os.getenv("BKAPP_DEPLOY_MODULE", DeployModuleChoices.DEFAULT.value)
 
 # FeatureToggle
 FEATURE_TOGGLE = {
