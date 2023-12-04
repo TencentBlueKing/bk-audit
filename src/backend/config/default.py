@@ -268,7 +268,7 @@ ASSET_RT_EXPIRE_TIME = os.getenv("BKAPP_ASSET_RT_EXPIRE_TIME", "-1")
 CLUSTER_REGISTRY_APP = os.getenv("BKAPP_CLUSTER_REGISTRY_APP", "log-search-4")
 
 # BKCrypto
-ENABLE_BKCRYPTO = strtobool(os.getenv("BKAPP_ENABLE_BKCRYPTO", "True"))
+ENABLE_BKCRYPTO = strtobool(os.getenv("BKAPP_ENABLE_BKCRYPTO", "False"))
 BKCRYPTO = {
     "ASYMMETRIC_CIPHER_TYPE": AsymmetricCipherType.SM2.value,
     "SYMMETRIC_CIPHER_TYPE": SymmetricCipherType.SM4.value,
