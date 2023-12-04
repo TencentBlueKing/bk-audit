@@ -26,6 +26,7 @@ from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
 from apps.meta.models import GlobalMetaConfig
+from apps.meta.utils.saas import get_saas_url
 from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
 from core.permissions import FetchInstancePermission
 from services.web.databus.constants import (
@@ -58,7 +59,7 @@ class HttpPullHandler:
             password = GlobalMetaConfig.get(FETCH_INSTANCE_TOKEN_KEY, default=uuid.uuid4().hex)
             GlobalMetaConfig.set(FETCH_INSTANCE_TOKEN_KEY, password)
             self.token = FetchInstancePermission.build_auth(settings.FETCH_INSTANCE_USERNAME, password)
-            self.url = os.getenv("BKAPP_FETCH_INSTANCE_URL")
+            self.url = get_saas_url(settings.APP_CODE, module_name="puller") + "/api/v1/resources/"
 
     def build_params(self):
         return {
