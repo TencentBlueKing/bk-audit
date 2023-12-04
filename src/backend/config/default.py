@@ -210,7 +210,6 @@ BK_IAM_SYSTEM_NAME = APP_CODE
 BK_IAM_USE_APIGATEWAY = True
 BK_IAM_APIGATEWAY_URL = os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL")
 BK_IAM_RESOURCE_API_HOST = os.getenv("BKAPP_BK_IAM_RESOURCE_API_HOST")
-BK_IAM_SAAS_HOST = os.getenv("BKAPP_BK_IAM_SAAS_HOST")
 
 # Version
 VERSION_MD_DIR = "version_md"
@@ -287,9 +286,10 @@ BKCRYPTO = {
 INIT_SECURITY_PERSON = [p for p in os.getenv("BKAPP_INIT_SECURITY_PERSON", "admin").split(",") if p]
 
 # SAAS Code
-BKBASE_APP_CODE = os.getenv("BKAPP_BKBASE_APP_CODE", "dataweb")
+BKBASE_APP_CODE = os.getenv("BKAPP_BKBASE_APP_CODE", "bk_dataweb")
 BK_ITSM_APP_CODE = os.getenv("BKAPP_BK_ITSM_APP_CODE", "bk_itsm")
 BK_SOPS_APP_CODE = os.getenv("BKAPP_BK_SOPS_APP_CODE", "bk_sops")
+BK_AUDIT_APP_CODE = os.getenv("BKAPP_BK_AUDIT_APP_CODE", "bk_iam")
 
 # Risk
 ENABLE_PROCESS_RISK_TASK = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_TASK", "True"))

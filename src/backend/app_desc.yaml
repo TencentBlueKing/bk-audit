@@ -29,6 +29,7 @@ modules:
         - bk_app_code: "bk_dataweb"
         - bk_app_code: "bk_sops"
         - bk_app_code: "bk-audit"
+        - bk_app_code: "bk_iam"
   puller:
     language: Python
     processes:
