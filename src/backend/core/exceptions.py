@@ -17,12 +17,10 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+import os
 
 from blueapps.core.exceptions import BlueException
-from django.conf import settings
 from django.utils.translation import gettext, gettext_lazy
-
-from apps.meta.utils.saas import get_saas_url
 
 
 class ApiError(BlueException):
@@ -84,7 +82,7 @@ class PermissionException(BlueException):
     MESSAGE = gettext_lazy("权限校验不通过")
     STATUS_CODE = 403
 
-    def __init__(self, action_name, permission, apply_url=get_saas_url(settings.BK_IAM_APP_CODE)):
+    def __init__(self, action_name, permission, apply_url=os.getenv("BKPAAS_IAM_URL")):
         message = gettext("当前用户无 [%(action_name)s] 权限") % {"action_name": action_name}
         data = {"permission": permission, "apply_url": apply_url}
         super(PermissionException, self).__init__(message, data=json.dumps(data), code="9900403")

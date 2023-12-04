@@ -36,6 +36,14 @@ if os.getenv("BKPAAS_SERVICE_ADDRESSES_BKSAAS"):
 
 def get_saas_url(app_code: str, module_name: str = None) -> str:
     # 环境变量优先，服务发现其次
-    env_saas_url = os.getenv(f"BKAPP_{app_code.replace('-', '_').upper()}_SAAS_URL", "").rstrip("/")
+    env_saas_url = os.getenv(
+        (
+            f"BKAPP"
+            f"_{app_code.replace('-', '_').upper()}"
+            f"{'_' + module_name.replace('-', '_').upper() if module_name else ''}"
+            f"_SAAS_URL"
+        ),
+        "",
+    ).rstrip("/")
     service_url = service_addresses.get(app_code, {})
     return env_saas_url or service_url.get(module_name, "")

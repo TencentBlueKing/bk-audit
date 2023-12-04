@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import os
 from typing import Dict, List, Union
 
 from blueapps.utils.logger import logger
@@ -37,7 +38,6 @@ from iam.meta import setup_action, setup_resource, setup_system
 from iam.utils import gen_perms_apply_data
 
 from api.domains import BK_IAM_API_URL
-from apps.meta.utils.saas import get_saas_url
 from apps.permission.exceptions import ActionNotExistError, GetSystemInfoError
 from apps.permission.handlers.actions import ActionMeta, _all_actions, get_action_by_id
 from apps.permission.handlers.resource_types import _all_resources, get_resource_by_id
@@ -177,7 +177,7 @@ class Permission(object):
                 [resource.to_dict() for resource in resources],
                 message,
             )
-            return get_saas_url(settings.BK_IAM_APP_CODE)
+            return os.getenv("BKPAAS_IAM_URL")
         return url
 
     def get_apply_data(self, actions: List[Union[ActionMeta, str]], resources: List[Resource] = None):
