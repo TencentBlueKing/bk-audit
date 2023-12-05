@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import os
 
+from billiard.exceptions import SoftTimeLimitExceeded
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger_celery
@@ -143,6 +144,9 @@ def process_risk_ticket(risk_id: str = None):
                 err,
             )
             ErrorMsgHandler(title, content).send()
+            # 不捕获超时的异常
+            if isinstance(err, SoftTimeLimitExceeded):
+                raise err
             # 失败达到最大次数转人工
             if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
                 cache.delete(key=cache_key)
