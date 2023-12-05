@@ -20,6 +20,7 @@ import datetime
 import time
 import traceback
 
+from billiard.exceptions import SoftTimeLimitExceeded
 from bk_resource import resource
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
@@ -112,6 +113,8 @@ def change_storage_cluster():
                     collector_plugin.collector_plugin_id,
                     err,
                 )
+                if isinstance(err, SoftTimeLimitExceeded):
+                    raise err
 
     def change_config_storage():
         collectors = CollectorConfig.objects.filter(storage_changed=True, is_deleted=False)
@@ -238,6 +241,8 @@ def check_report_continues(end_time: datetime.datetime = None, time_period: int 
                 time_range,
                 err,
             )
+            if isinstance(err, SoftTimeLimitExceeded):
+                raise err
 
 
 @periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
