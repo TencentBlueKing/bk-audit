@@ -88,3 +88,6 @@ pypinyin==0.49.0
 
 # crypto
 bk-crypto-python-sdk==1.1.1
+
+# throttle
+client-throttler==1.1.0
