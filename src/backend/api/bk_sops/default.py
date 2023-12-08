@@ -20,6 +20,8 @@ import abc
 
 import requests
 from bk_resource import BkApiResource
+from client_throttler import Throttler, ThrottlerConfig
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_sops.constants import SOpsDatetime
@@ -30,6 +32,15 @@ class BKSOps(BkApiResource, abc.ABC):
     module_name = "bk_sops"
     base_url = BK_SOPS_API_URL
     platform_authorization = True
+
+    def perform_request(self, validated_request_data):
+        return Throttler(
+            config=ThrottlerConfig(
+                func=super().perform_request,
+                key=f"{self.__module__}.{self.__class__.__name__}",
+                rate=settings.SOPS_API_RATE_LIMIT,
+            )
+        )(validated_request_data)
 
 
 class GetTemplateList(BKSOps):

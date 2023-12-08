@@ -19,6 +19,8 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from bk_resource import BkApiResource
+from client_throttler import Throttler, ThrottlerConfig
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.domains import BK_ITSM_API_URL
@@ -28,6 +30,15 @@ class BKITSM(BkApiResource, abc.ABC):
     module_name = "bk_itsm"
     base_url = BK_ITSM_API_URL
     platform_authorization = True
+
+    def perform_request(self, validated_request_data):
+        return Throttler(
+            config=ThrottlerConfig(
+                func=super().perform_request,
+                key=f"{self.__module__}.{self.__class__.__name__}",
+                rate=settings.ITSM_API_RATE_LIMIT,
+            )
+        )(validated_request_data)
 
 
 class GetServices(BKITSM):
