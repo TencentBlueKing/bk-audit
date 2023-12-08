@@ -103,24 +103,40 @@ def process_risk_ticket(*, risk_id: str = None):
     if not settings.ENABLE_PROCESS_RISK_TASK:
         return
 
-    # 没有指定则全部
-    if not risk_id:
-        # 获取所有的风险
-        risks = Risk.objects.filter(status__in=[RiskStatus.NEW, RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS])
-        # 风险白名单
-        if settings.ENABLE_PROCESS_RISK_WHITELIST:
-            risks = risks.filter(strategy_id__in=settings.PROCESS_RISK_WHITELIST)
-        # 并发执行
-        for risk in risks:
-            process_risk_ticket.delay(risk_id=risk.risk_id)
+    # 获取风险
+    risks = Risk.objects.filter(status__in=[RiskStatus.NEW, RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS])
+    if risk_id:
+        risks = risks.filter(risk_id=risk_id)
+
+    # 风险白名单
+    if settings.ENABLE_PROCESS_RISK_WHITELIST:
+        risks = risks.filter(strategy_id__in=settings.PROCESS_RISK_WHITELIST)
+
+    # 逐个处理
+    for risk in risks:
+        if settings.ENABLE_MULTI_PROCESS_RISK:
+            process_one_risk.delay(risk_id=risk.risk_id)
             logger_celery.info("[ProcessRiskTicket] Scheduled %s", risk.risk_id)
-        return
+        else:
+            logger_celery.info("[ProcessRiskTicket] Sync-Running %s", risk.risk_id)
+            process_one_risk(risk_id=risk.risk_id)
+
+
+@task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(
+    lock_name="celery:process_one_risk",
+    load_lock_name=lambda **kwargs: f"celery:process_one_risk:{kwargs['risk_id']}",
+)
+def process_one_risk(*, risk_id: str):
+    """
+    处理单个风险
+    """
 
     # 获取风险
     risk = Risk.objects.get(risk_id=risk_id)
 
     # 重试
-    cache_key = f"process_risk_ticket-{risk.risk_id}"
+    cache_key = f"process_one_risk:fail:{risk.risk_id}"
     # 判断操作
     match risk.status:
         case RiskStatus.NEW:
