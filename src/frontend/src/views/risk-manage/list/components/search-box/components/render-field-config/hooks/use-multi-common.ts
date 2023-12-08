@@ -29,9 +29,9 @@ interface Props {
 export default function (props: Props, allText: string) {
   const currentInstance = getCurrentInstance() as ComponentInternalInstance;
 
-  const modelValue = computed<Array<string>>(() => {
+  const modelValue = computed<Array<string | number>>(() => {
     const lastValue = props.model[props.name];
-    return lastValue && lastValue.length > 0 ? lastValue : [allText];
+    return lastValue && lastValue.length > 0 ? lastValue.map((item: string) => Number(item)) : [allText];
   });
 
   const selectedAll = computed(() => modelValue.value.includes(allText));
