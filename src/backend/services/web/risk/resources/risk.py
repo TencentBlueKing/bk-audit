@@ -35,6 +35,7 @@ from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
+from core.utils.page import paginate_queryset
 from core.utils.tools import choices_to_dict, get_app_info
 from services.web.risk.constants import (
     RISK_SHOW_FIELDS,
@@ -111,12 +112,16 @@ class RetrieveRiskAPIGW(RetrieveRisk):
 class ListRisk(RiskMeta):
     name = gettext_lazy("获取风险列表")
     RequestSerializer = ListRiskRequestSerializer
-    ResponseSerializer = ListRiskResponseSerializer
-    many_response_data = True
+    bind_request = True
 
     def perform_request(self, validated_request_data):
+        # 获取请求
+        request = validated_request_data.pop("_request")
+        # 获取风险
         order_field = validated_request_data.pop("order_field", "-last_operate_time")
         risks = self.load_risks(validated_request_data).order_by(order_field)
+        # 分页
+        risks, page = paginate_queryset(queryset=risks, request=request)
         # 获取关联的经验
         experiences = {
             e["risk_id"]: e["count"]
@@ -128,7 +133,7 @@ class ListRisk(RiskMeta):
         for risk in risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
         # 响应
-        return risks
+        return page.get_paginated_response(data=ListRiskResponseSerializer(instance=risks, many=True).data)
 
     def load_risks(self, validated_request_data: dict) -> QuerySet:
         # 构造表达式

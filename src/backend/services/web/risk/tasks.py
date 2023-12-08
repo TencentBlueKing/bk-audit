@@ -92,8 +92,11 @@ def generate_risk_from_event():
 
 
 @periodic_task(run_every=crontab(minute="*/5"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-@lock(lock_name="celery:process_risk_ticket")
-def process_risk_ticket(risk_id: str = None):
+@lock(
+    lock_name="celery:process_risk_ticket",
+    load_lock_name=lambda **kwargs: f"celery:process_risk_ticket:{kwargs['risk_id'] if kwargs else None}",
+)
+def process_risk_ticket(*, risk_id: str = None):
     """自动处理风险单"""
 
     # 检测是否开启自动流转
@@ -109,54 +112,75 @@ def process_risk_ticket(risk_id: str = None):
     if settings.ENABLE_PROCESS_RISK_WHITELIST:
         risks = risks.filter(strategy_id__in=settings.PROCESS_RISK_WHITELIST)
 
-    # 流转风险
+    # 逐个处理
     for risk in risks:
-        # 重试
-        cache_key = f"process_risk_ticket-{risk.risk_id}"
-        # 判断操作
-        match risk.status:
-            case RiskStatus.NEW:
-                process_class = NewRisk
-            case RiskStatus.FOR_APPROVE:
-                process_class = ForApprove
-            case RiskStatus.AUTO_PROCESS:
-                process_class = AutoProcess
-            case _:
-                continue
+        if settings.ENABLE_MULTI_PROCESS_RISK:
+            process_one_risk.delay(risk_id=risk.risk_id)
+            logger_celery.info("[ProcessRiskTicket] Scheduled %s", risk.risk_id)
+        else:
+            logger_celery.info("[ProcessRiskTicket] Sync-Running %s", risk.risk_id)
+            process_one_risk(risk_id=risk.risk_id)
+
+
+@task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(
+    lock_name="celery:process_one_risk",
+    load_lock_name=lambda **kwargs: f"celery:process_one_risk:{kwargs['risk_id']}",
+)
+def process_one_risk(*, risk_id: str):
+    """
+    处理单个风险
+    """
+
+    # 获取风险
+    risk = Risk.objects.get(risk_id=risk_id)
+
+    # 重试
+    cache_key = f"process_one_risk:fail:{risk.risk_id}"
+    # 判断操作
+    match risk.status:
+        case RiskStatus.NEW:
+            process_class = NewRisk
+        case RiskStatus.FOR_APPROVE:
+            process_class = ForApprove
+        case RiskStatus.AUTO_PROCESS:
+            process_class = AutoProcess
+        case _:
+            return
+    # 处理
+    try:
+        logger_celery.info("[ProcessRiskTicket] %s Start %s", process_class.__name__, risk.risk_id)
         # 处理
-        try:
-            logger_celery.info("[ProcessRiskTicket] %s Start %s", process_class.__name__, risk.risk_id)
-            # 处理
-            process_class(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run()
-            # 成功后移除缓存
+        process_class(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run()
+        # 成功后移除缓存
+        cache.delete(key=cache_key)
+    except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+        # 获取失败次数
+        retry_times = cache.get(key=cache_key, default=1)
+        # 异常通知
+        logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
+        title = gettext("Process Risk Ticket Failed")
+        content = gettext("ProcessClass: %s\nRiskID: %s(%d/%d)\nError: %s") % (
+            process_class.__name__,
+            risk.risk_id,
+            retry_times,
+            settings.PROCESS_RISK_MAX_RETRY,
+            err,
+        )
+        ErrorMsgHandler(title, content).send()
+        # 不捕获超时的异常
+        if isinstance(err, SoftTimeLimitExceeded):
+            raise err
+        # 失败达到最大次数转人工
+        if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
             cache.delete(key=cache_key)
-        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
-            # 获取失败次数
-            retry_times = cache.get(key=cache_key, default=1)
-            # 异常通知
-            logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
-            title = gettext("Process Risk Ticket Failed")
-            content = gettext("ProcessClass: %s\nRiskID: %s(%d/%d)\nError: %s") % (
-                process_class.__name__,
-                risk.risk_id,
-                retry_times,
-                settings.PROCESS_RISK_MAX_RETRY,
-                err,
+            TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
+                new_operators=TransOperator.load_security_person(), description=gettext("风险自动流转失败，转为安全接口人处理")
             )
-            ErrorMsgHandler(title, content).send()
-            # 不捕获超时的异常
-            if isinstance(err, SoftTimeLimitExceeded):
-                raise err
-            # 失败达到最大次数转人工
-            if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
-                cache.delete(key=cache_key)
-                TransOperator(risk_id=risk.risk_id, operator=bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME).run(
-                    new_operators=TransOperator.load_security_person(), description=gettext("风险自动流转失败，转为安全接口人处理")
-                )
-            else:
-                cache.set(key=cache_key, value=retry_times + 1, timeout=settings.PROCESS_RISK_RETRY_KEY_TIMEOUT)
-        finally:
-            logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
+        else:
+            cache.set(key=cache_key, value=retry_times + 1, timeout=settings.PROCESS_RISK_RETRY_KEY_TIMEOUT)
+    finally:
+        logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
 @periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
