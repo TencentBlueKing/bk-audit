@@ -93,7 +93,6 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute(
             "GET",
             resource.risk.list_risk,
-            enable_paginate=True,
             decorators=[
                 insert_permission_field(
                     actions=[ActionEnum.EDIT_RISK],
@@ -105,7 +104,6 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute(
             "GET",
             resource.risk.list_mine_risk,
-            enable_paginate=True,
             endpoint="todo",
             decorators=[
                 insert_permission_field(

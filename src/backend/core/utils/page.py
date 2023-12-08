@@ -16,33 +16,17 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_audit.log.models import AuditInstance
-from django.db import models
-from django.utils.translation import gettext_lazy
+from django.db.models import QuerySet
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.request import Request
+from rest_framework.settings import api_settings
 
-from core.models import SoftDeleteModel
 
-
-class VisionPanel(SoftDeleteModel):
+def paginate_queryset(queryset: QuerySet, request: Request) -> (QuerySet, PageNumberPagination):
     """
-    仪表盘
+    分页 QuerySet
     """
 
-    id = models.CharField(gettext_lazy("ID"), primary_key=True, max_length=255)
-    name = models.CharField(gettext_lazy("Name"), max_length=255)
-    priority_index = models.IntegerField(gettext_lazy("优先指数"), default=0)
-
-    class Meta:
-        verbose_name = gettext_lazy("仪表盘")
-        verbose_name_plural = verbose_name
-        ordering = ["-priority_index", "name"]
-
-
-class VisionPanelInstance:
-    def __init__(self, panel: VisionPanel):
-        self.instance_id = panel.id
-        self.instance_name = panel.name
-
-    @property
-    def instance(self):
-        return AuditInstance(self)
+    page: PageNumberPagination = api_settings.DEFAULT_PAGINATION_CLASS()
+    paged_queryset = page.paginate_queryset(queryset=queryset, request=request)
+    return queryset.model.objects.filter(pk__in=[item.pk for item in paged_queryset]), page

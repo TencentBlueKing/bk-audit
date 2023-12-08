@@ -20,9 +20,12 @@ from bk_audit.constants.utils import LOGGER_NAME
 from bkcrypto.constants import AsymmetricCipherType, SymmetricCipherType
 from blueapps.conf.default_settings import *  # noqa
 from blueapps.conf.log import get_logging_config_dict
+from client_throttler import ThrottlerConfig, setup
 from django.utils.translation import gettext_lazy
+from redis.client import Redis
 
 from core.utils.distutils import strtobool
+from core.utils.environ import get_env_or_raise
 
 # 请在这里加入你的自定义 APP
 
@@ -174,7 +177,7 @@ APPEND_SLASH = False
 
 FETCH_INSTANCE_USERNAME = os.getenv("BKAPP_FETCH_INSTANCE_USERNAME", "bk_iam")
 
-REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_HOST = get_env_or_raise("REDIS_HOST")
 REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
@@ -185,18 +188,15 @@ CACHES["db"] = {
     "OPTIONS": {"MAX_ENTRIES": 100000, "CULL_FREQUENCY": 10},
     "TIMEOUT": 3600,
 }
-if REDIS_HOST:
-    CACHES["redis"] = {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
-        "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient", "PASSWORD": REDIS_PASSWORD},
-        "KEY_PREFIX": os.getenv("REDIS_KEY_PREFIX", ""),
-        "TIMEOUT": 3600,
-    }
-    CACHES["default"] = CACHES["redis"]
-    CACHES["login_db"] = CACHES["redis"]
-else:
-    CACHES["default"] = CACHES["db"]
+CACHES["redis"] = {
+    "BACKEND": "django_redis.cache.RedisCache",
+    "LOCATION": f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
+    "OPTIONS": {"CLIENT_CLASS": "django_redis.client.DefaultClient", "PASSWORD": REDIS_PASSWORD},
+    "KEY_PREFIX": os.getenv("REDIS_KEY_PREFIX", ""),
+    "TIMEOUT": 3600,
+}
+CACHES["default"] = CACHES["redis"]
+CACHES["login_db"] = CACHES["redis"]
 
 # BkBase
 BK_BASE_ACCESS_URL = os.getenv("BKAPP_BK_BASE_ACCESS_URL", "/#/data-hub-detail/index/")
@@ -288,9 +288,18 @@ ENABLE_PROCESS_RISK_WHITELIST = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_W
 PROCESS_RISK_WHITELIST = [int(i) for i in os.getenv("BKAPP_PROCESS_RISK_WHITELIST", "").split(",") if i]
 PROCESS_RISK_MAX_RETRY = int(os.getenv("BKAPP_PROCESS_RISK_MAX_RETRY", 3))
 PROCESS_RISK_RETRY_KEY_TIMEOUT = int(os.getenv("BKAPP_PROCESS_RISK_RETRY_KEY_TIMEOUT", 60 * 30))
+ENABLE_MULTI_PROCESS_RISK = strtobool(os.getenv("BKAPP_ENABLE_MULTI_PROCESS_RISK", "True"))
 
 # cache lock
 DEFAULT_CACHE_LOCK_TIMEOUT = int(os.getenv("BKAPP_DEFAULT_CACHE_LOCK_TIMEOUT", 60 * 60))
+
+# Throttler
+throttler_config = ThrottlerConfig(
+    redis_client=Redis(host=REDIS_HOST, port=int(REDIS_PORT), password=REDIS_PASSWORD, db=int(REDIS_DB))
+)
+setup(throttler_config)
+SOPS_API_RATE_LIMIT = os.getenv("BKAPP_SOPS_API_RATE_LIMIT", "10/s")
+ITSM_API_RATE_LIMIT = os.getenv("BKAPP_ITSM_API_RATE_LIMIT", "10/s")
 
 """
 以下为框架代码 请勿修改
