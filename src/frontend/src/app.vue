@@ -168,6 +168,10 @@
     manual: true,
     onSuccess(data) {
       if (data) {
+        if (!data.enabled) {
+          isWatermarkSuccess.value = true;
+          return;
+        }
         const src = data.watermark.items[0].data;
         WaterMark(src);
         isWatermarkSuccess.value = true;
