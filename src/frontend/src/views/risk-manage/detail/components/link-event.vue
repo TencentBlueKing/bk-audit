@@ -37,7 +37,7 @@
     <template #header>
       <div>
         <span> {{ t('事件证据') }}</span>
-        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979BA5;border-left: 1px solid #DCDEE5;">
+        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979ba5;border-left: 1px solid #dcdee5;">
           {{ t('事件ID：') }}{{ eventItem.event_id || `${eventItem.strategy_id}-${eventItem.raw_event_id }` }}
         </span>
       </div>
@@ -236,7 +236,7 @@
           label: () => key,
           field: () => key,
           showOverflowTooltip: true,
-          render: ({ data }: { data: Record<string, any> }) => data[key] || '--',
+          render: ({ data }: { data: Record<string, any> }) => JSON.stringify(data[key]) || '--',
         };
         if (index < 4) {
           params.minWidth = index === 0 ? 260 : 200;
@@ -269,23 +269,23 @@
   });
 </script>
 <style  lang="postcss">
-.risk-manage-detail-linkevent-part{
+.risk-manage-detail-linkevent-part {
   padding: 6px 14px 14px;
 
-  .linkevent-table :deep(thead th){
-    background-color: #F5F7FA;
+  .linkevent-table :deep(thead th) {
+    background-color: #f5f7fa;
   }
 
-  .evidence-table :deep(thead th){
-    background-color: #F5F7FA;
+  .evidence-table :deep(thead th) {
+    background-color: #f5f7fa;
   }
 
-  .evidence-table :deep(.bk-table-body){
+  .evidence-table :deep(.bk-table-body) {
     max-height: calc(100vh - 100px);
   }
 }
 
-.bk-popover{
+.bk-popover {
   max-width: 750px;
   word-break: break-all;
 }
