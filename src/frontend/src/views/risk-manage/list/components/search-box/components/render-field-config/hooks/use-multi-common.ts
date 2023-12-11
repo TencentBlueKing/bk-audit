@@ -31,7 +31,8 @@ export default function (props: Props, allText: string) {
 
   const modelValue = computed<Array<string | number>>(() => {
     const lastValue = props.model[props.name];
-    return lastValue && lastValue.length > 0 ? lastValue.map((item: string) => Number(item)) : [allText];
+    return lastValue && lastValue.length > 0
+      ? lastValue.map((item: string) => (isNaN(Number(item)) ? item : Number(item))) : [allText];
   });
 
   const selectedAll = computed(() => modelValue.value.includes(allText));

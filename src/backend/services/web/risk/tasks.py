@@ -91,7 +91,7 @@ def generate_risk_from_event():
         end_time = start_time + datetime.timedelta(seconds=RISK_ESQUERY_SLICE_DURATION)
 
 
-@periodic_task(run_every=crontab(minute="*/5"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(
     lock_name="celery:process_risk_ticket",
     load_lock_name=lambda **kwargs: f"celery:process_risk_ticket:{kwargs['risk_id'] if kwargs else None}",
