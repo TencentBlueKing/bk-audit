@@ -28,7 +28,23 @@
     useRoute,
   } from 'vue-router';
 
+  import IamApplyDataModel from '@model/iam/apply-data';
+
+  import useMessage from '@hooks/use-message';
+
+  import {
+    permissionDialog,
+  } from '@utils/assist';
+
+  interface Error {
+    data: Record<string, any>,
+    message: string,
+    status: number
+  }
+
   const route = useRoute();
+  const { messageError } = useMessage();
+
   const loadScript = (src: string) => new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = src;
@@ -37,12 +53,23 @@
     document.head.appendChild(script);
   });
 
+  const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
+    if (err.data.code === '9900403') {
+      const iamResult = new IamApplyDataModel(err.data.data || {});
+      // 弹框展示没权限提示
+      permissionDialog(iamResult);
+    } else {
+      messageError(err.message);
+    }
+  };
+
   const render = () => {
     window.BkVisionSDK.init(
       '#panel',
       route.params.id,
       {
         apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
+        handleError,
       },
     );
   };
