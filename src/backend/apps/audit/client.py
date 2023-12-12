@@ -44,7 +44,7 @@ class BkAuditClient(BkAudit):
         from blueapps.utils.request_provider import get_request_username
 
         username = get_request_username()
-        if not username or username == bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME:
+        if not username:
             return
         super().add_event(
             action=action,
