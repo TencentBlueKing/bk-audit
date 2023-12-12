@@ -27,13 +27,15 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext
 
-from apps.meta.constants import EtlConfigEnum
+from apps.exceptions import MetaConfigNotExistException
+from apps.meta.constants import ConfigLevelChoices, EtlConfigEnum
 from apps.meta.models import GlobalMetaConfig
 from services.web.databus.constants import (
     DEFAULT_CATEGORY_ID,
     DEFAULT_COLLECTOR_SCENARIO,
     DEFAULT_DATA_ENCODING,
     DEFAULT_ETL_PROCESSOR,
+    DEFAULT_STORAGE_CONFIG_KEY,
     EMPTY_INDEX_SET_ID,
     EMPTY_TABLE_ID,
     PluginSceneChoices,
@@ -60,7 +62,16 @@ class EventHandler(ElasticHandler):
     """
 
     def __init__(self):
-        super().__init__(cluster_id=GlobalMetaConfig.get(EVENT_ES_CLUSTER_ID_KEY))
+        try:
+            cluster_id = GlobalMetaConfig.get(EVENT_ES_CLUSTER_ID_KEY)
+        except MetaConfigNotExistException:
+            cluster_id = GlobalMetaConfig.get(
+                DEFAULT_STORAGE_CONFIG_KEY,
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=settings.DEFAULT_NAMESPACE,
+            )
+            GlobalMetaConfig.set(EVENT_ES_CLUSTER_ID_KEY, cluster_id)
+        super().__init__(cluster_id=cluster_id)
 
     @transaction.atomic()
     def update_or_create_rt(self) -> None:
