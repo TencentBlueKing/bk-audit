@@ -44,7 +44,7 @@ USER_MANAGE_URL = get_endpoint("usermanage", APIProvider.ESB)
 
 # BkBase
 BK_BASE_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "test"
-BK_BASE_API_URL = get_endpoint(os.getenv("BKAPP_BK_BASE_APIGW_NAME", "bk_base"), stage=BK_BASE_APIGW_STAGE)
+BK_BASE_API_URL = get_endpoint(os.getenv("BKAPP_BK_BASE_APIGW_NAME", "bk-base"), stage=BK_BASE_APIGW_STAGE)
 
 # BkMonitor
 BK_MONITOR_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stage"
