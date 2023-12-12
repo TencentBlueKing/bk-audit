@@ -464,7 +464,7 @@ class EsQueryScroll(BKLogBaseResource):
 class IndexSetReplace(BKLogBaseResource):
     name = gettext_lazy("重建索引集")
     tags = ["EsQuery"]
-    action = "/index_set/replace/"
+    action = "/replace_index_set/" if settings.RUN_VER == "open" else "/index_set/replace/"
     method = "POST"
     platform_authorization = True
 
