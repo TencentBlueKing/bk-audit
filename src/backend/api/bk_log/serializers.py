@@ -79,6 +79,7 @@ class StorageDetectRequestSerializer(serializers.Serializer):
 
 
 class StorageBatchConnectivityDetectRequestSerializer(serializers.Serializer):
+    bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"), default=settings.DEFAULT_BK_BIZ_ID)
     cluster_ids = serializers.CharField(label=gettext_lazy("集群ID"))
     origin_resp = serializers.BooleanField(default=False)
 
