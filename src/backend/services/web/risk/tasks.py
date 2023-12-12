@@ -59,7 +59,12 @@ cache: DefaultClient = _cache
 def sync_bkm_alert():
     """同步监控告警为审计事件"""
 
-    BKMAlertSyncHandler().sync()
+    try:
+        BKMAlertSyncHandler().sync()
+    except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+        logger_celery.exception("[SyncBKMAlertFailed] %s", err)
+        ErrorMsgHandler(gettext("Sync BKM Alert Failed"), str(err)).send()
+        raise err
 
 
 @task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -82,13 +87,19 @@ def generate_risk_from_event():
     end_time = start_time + datetime.timedelta(seconds=RISK_ESQUERY_SLICE_DURATION)
     task_end_time = datetime.datetime.now() - datetime.timedelta(seconds=RISK_ESQUERY_DELAY_TIME)
 
-    while end_time <= task_end_time:
-        # 生成风险
-        RiskHandler().generate_risk_from_event(start_time=start_time, end_time=end_time)
-        logger_celery.info("[GenerateRiskFinished] %s ~ %s", start_time, end_time)
-        # 滚动时间
-        start_time = end_time
-        end_time = start_time + datetime.timedelta(seconds=RISK_ESQUERY_SLICE_DURATION)
+    try:
+        while end_time <= task_end_time:
+            # 生成风险
+            RiskHandler().generate_risk_from_event(start_time=start_time, end_time=end_time)
+            logger_celery.info("[GenerateRiskFinished] %s ~ %s", start_time, end_time)
+            # 滚动时间
+            start_time = end_time
+            end_time = start_time + datetime.timedelta(seconds=RISK_ESQUERY_SLICE_DURATION)
+    except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+        # 异常通知
+        logger_celery.exception("[GenerateRiskFailed] %s", err)
+        ErrorMsgHandler(gettext("Generate Risk Failed"), str(err)).send()
+        raise err
 
 
 @periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
