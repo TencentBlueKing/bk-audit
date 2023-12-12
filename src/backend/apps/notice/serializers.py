@@ -22,7 +22,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
-from apps.notice.constants import NOTICE_GROUP_NAME_REGEX
+from apps.notice.constants import ADMIN_NOTICE_GROUP_ID, NOTICE_GROUP_NAME_REGEX
 from apps.notice.exceptions import NoticeGroupNameDuplicate
 from apps.notice.models import NoticeGroup
 
@@ -184,3 +184,8 @@ class DeleteNoticeGroupRequestSerializer(serializers.Serializer):
 
     class Meta:
         ref_name = "notice.serializers.DeleteNoticeGroupRequestSerializer"
+
+    def validate_group_id(self, group_id: int) -> int:
+        if group_id == ADMIN_NOTICE_GROUP_ID:
+            raise serializers.ValidationError(gettext("内置通知组禁止删除"))
+        return group_id
