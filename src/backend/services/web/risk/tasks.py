@@ -76,9 +76,14 @@ def add_event(data: list):
 
 
 @periodic_task(
-    run_every=crontab(minute="0", hour="*/4"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT * 4
+    run_every=crontab(minute="0", hour=os.getenv("BKAPP_GENERATE_RISK_FROM_EVENT_SCHEDULE", "*")),
+    queue="risk",
+    soft_time_limit=int(os.getenv("BKAPP_GENERATE_RISK_FROM_EVENT_TIMEOUT", settings.DEFAULT_CACHE_LOCK_TIMEOUT)),
 )
-@lock(lock_name="celery:generate_risk_from_event", timeout=settings.DEFAULT_CACHE_LOCK_TIMEOUT * 4)
+@lock(
+    lock_name="celery:generate_risk_from_event",
+    timeout=int(os.getenv("BKAPP_GENERATE_RISK_FROM_EVENT_TIMEOUT", settings.DEFAULT_CACHE_LOCK_TIMEOUT)),
+)
 def generate_risk_from_event():
     """从审计事件创建风险"""
 
