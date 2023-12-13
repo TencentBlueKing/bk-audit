@@ -23,7 +23,9 @@ from django.utils.translation import gettext_lazy
 from core.choices import TextChoices
 
 ITSM_SERVICE_CATALOG_ID_KEY = "ITSM_SERVICE_CATALOG_ID"
+DEFAULT_ITSM_SERVICE_CATALOG_ID = 1
 ITSM_SERVICE_PROJECT_ID_KEY = "ITSM_SERVICE_PROJECT_ID"
+DEFAULT_ITSM_SERVICE_PROJECT_ID = 0
 
 
 class TicketStatus(TextChoices):

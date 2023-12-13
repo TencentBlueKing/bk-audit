@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+import os
 import time
 import traceback
 
@@ -219,6 +220,9 @@ def create_api_push_etl(collector_config_id: int):
 @lock(lock_name="celery:check_report_continues")
 def check_report_continues(end_time: datetime.datetime = None, time_period: int = None, time_range: int = None):
     """检查上报数据是否连续"""
+
+    if not os.getenv("BKAPP_COLLECTOR_CHECK_REPORT_ACCESS_TOKEN"):
+        return
 
     namespaces = CollectorPlugin.objects.all().order_by().values_list("namespace", flat=True).distinct()
 
