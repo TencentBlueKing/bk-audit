@@ -87,9 +87,18 @@ class CreateRiskSerializer(CreateEventSerializer):
     生成审计风险
     """
 
+    dtEventTimeStamp = serializers.IntegerField(required=False)
+
     def validate_event_data(self, event_data: dict) -> str:
         event_data = super().validate_event_data(event_data)
-        return json.loads(event_data)
+        event_data = json.loads(event_data)
+        # 优先使用 dtEventTimeStamp 生成
+        # 避免查询关联事件列表接口
+        # 由于 event_time 与 dtEventTimeStamp 不一致
+        # 导致关联事件为空或者不准确
+        if event_data.get("dtEventTimeStamp"):
+            event_data["event_time"] = event_data.pop("dtEventTimeStamp")
+        return event_data
 
 
 class CreateEventAPIResponseSerializer(serializers.Serializer):
