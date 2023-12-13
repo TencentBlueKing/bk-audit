@@ -20,7 +20,6 @@ from bk_audit.client import BkAudit
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE, DEFAULT_RESULT_CODE
 from bk_audit.contrib.opentelemetry.exporters import OTLogExporter
 from bk_audit.contrib.opentelemetry.utils import ServiceNameHandler
-from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
 from apps.audit.formatters import AuditFormatter
