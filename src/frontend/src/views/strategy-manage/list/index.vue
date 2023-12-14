@@ -232,6 +232,7 @@
   import {
     execCopy,
   } from '@utils/assist';
+  import getAssetsFile from '@utils/getAssetsFile';
 
   import StrategyDetail from './components/detail.vue';
   import RenderLabel from './components/render-label.vue';
@@ -449,7 +450,7 @@
           </a>
           <img
               class='table-new-tip'
-              src="/images/new-tip.png"/>
+              src={getAssetsFile('new-tip.png')}/>
           </div>
           :  <a onClick={() => handleDetail(data)}>
             <Tooltips data={data.strategy_name} />
@@ -1188,7 +1189,7 @@
   });
 </script>
 <style lang="postcss">
-.table-new-tip{
+.table-new-tip {
   height: 14px;
 
   /* position: absolute; */

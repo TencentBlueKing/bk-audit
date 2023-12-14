@@ -19,7 +19,7 @@
     <div class="no-permission-tips">
       <img
         class="lock"
-        src="/static/images/no-permission.svg">
+        src="@images/no-permission.svg">
       <p class="tips-text">
         {{ t('该操作需要以下权限') }}
       </p>

@@ -84,6 +84,7 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import { changeConfirm } from '@utils/assist';
+  import getAssetsFile from '@utils/getAssetsFile';
 
   interface Emits{
     (e: 'showDetail', data: RiskRuleManageModel): void,
@@ -128,7 +129,7 @@
               style='width: 100%;display: flex;align-items: center;'
               onClick={() => handleDetail(data)}>
               <Tooltips data={data.name } />
-              <img class='table-new-tip' src="/images/new-tip.png"
+              <img class='table-new-tip' src={getAssetsFile('new-tip.png')}
               style='width: 30px;margin-left: 4px;'/>
             </a>)
           : (
@@ -359,13 +360,14 @@
 .batch-priority-index-table .bk-table-body {
   max-height: calc(100vh - 280px);
 
-  td{
+  td {
     border-bottom: 1px solid #dcdee5;
   }
 
 }
 
-.bk-table .bk-table-head table tbody tr td.is-last, .bk-table .bk-table-body table tbody tr td.is-last{
+.bk-table .bk-table-head table tbody tr td.is-last,
+.bk-table .bk-table-body table tbody tr td.is-last {
   border-bottom: 1px solid #dcdee5;
 }
 
@@ -375,12 +377,12 @@ tr.sortable-chosen {
   opacity: 100% !important;
   box-shadow: 0 2px 4px 0 rgb(0 0 0 / 10%), 0 2px 4px 0 rgb(25 25 41 / 5%);
 
-  td{
-    background-color: #F0F5FF !important;
+  td {
+    background-color: #f0f5ff !important;
   }
 
   .audit-icon {
-    color: #3A84FF !important;
+    color: #3a84ff !important;
   }
 
   td:nth-of-type(1) {

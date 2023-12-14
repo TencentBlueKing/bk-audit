@@ -33,8 +33,8 @@
             v-if="item.type"
             class="field-type-icon"
             :src="item.highlight
-              ? `/images/field-type/y-${item.type}.png`
-              : `/images/field-type/${item.type}.png`">
+              ? getAssetsFile(`field-type/y-${item.type}.png`)
+              : getAssetsFile(`field-type/${item.type}.png`)">
           <tool-tip
             class="content"
             :data="item.label" />
@@ -72,8 +72,8 @@
                 v-if="item.type"
                 class="field-type-icon"
                 :src="item.disabled || item.new
-                  ? `/images/field-type/y-${item.type}.png`
-                  : `/images/field-type/${item.type}.png`">
+                  ? getAssetsFile(`field-type/y-${item.type}.png`)
+                  : getAssetsFile(`field-type/${item.type}.png`)">
               <tool-tip
                 class="content"
                 :data="item.label" />
@@ -102,6 +102,8 @@
 
   import ToolTip from '@components/show-tooltips-text/index.vue';
 
+  import getAssetsFile from '@utils/getAssetsFile';
+
   import type { ColumnType } from '../index.vue';
 
   interface Props {
@@ -119,7 +121,7 @@
 .strategy-upgrade-card {
   width: 491px;
   padding: 12px 16px;
-  background: #FFF;
+  background: #fff;
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 #1919290d;
 
@@ -128,12 +130,12 @@
     margin-right: 6px;
   }
 
-  .fields-map{
+  .fields-map {
     margin-top: 15px;
     font-size: 12px;
     color: #313238;
 
-    .title{
+    .title {
       /* width: 459px; */
       height: 32px;
       padding-left: 8px;
@@ -141,7 +143,7 @@
       font-size: 12px;
       line-height: 32px;
       color: #313238;
-      background: #F0F1F5;
+      background: #f0f1f5;
     }
   }
 
@@ -151,38 +153,38 @@
     color: #313238;
   }
 
-  .table-content{
-    .table-tr:last-child{
-      border-bottom: 1px solid #F0F1F5;
+  .table-content {
+    .table-tr:last-child {
+      border-bottom: 1px solid #f0f1f5;
     }
 
-    .table-tr.disabled{
-      color: #FF9C01;
+    .table-tr.disabled {
+      color: #ff9c01;
 
-      .tr-title{
-        color: #FF9C01;
+      .tr-title {
+        color: #ff9c01;
 
         .field-type-icon {
           width: 46px;
           margin-right: 6px;
         }
 
-        .content{
+        .content {
           text-decoration: line-through;
         }
       }
 
-      .tr-content{
-        color: #FF9C01;
+      .tr-content {
+        color: #ff9c01;
         text-decoration: line-through;
       }
     }
 
-    .table-tr.new{
-      color: #FF9C01;
+    .table-tr.new {
+      color: #ff9c01;
 
-      .tr-title{
-        color: #FF9C01;
+      .tr-title {
+        color: #ff9c01;
 
         .field-type-icon {
           width: 46px;
@@ -190,47 +192,47 @@
         }
       }
 
-      .tr-content{
+      .tr-content {
         position: relative;
         width: 100%;
-        color: #FF9C01;
+        color: #ff9c01;
       }
 
-      .new-tip{
+      .new-tip {
         position: absolute;
         top: 32%;
         right: 10px;
       }
     }
 
-    .table-tr.highlight{
-      .tr-title{
-        color: #FF9C01;
+    .table-tr.highlight {
+      .tr-title {
+        color: #ff9c01;
       }
 
-      .tr-content{
-        color: #FF9C01;
+      .tr-content {
+        color: #ff9c01;
       }
     }
 
-    .table-tr{
+    .table-tr {
       display: flex;
       align-items: center;
       height: 32px;
-      border-top: 1px solid #F0F1F5;
+      border-top: 1px solid #f0f1f5;
 
-      >.tr-title{
+      >.tr-title {
         display: flex;
         height: 31px;
         max-width: 200px;
         min-width: 200px;
         padding: 0 8px;
-        color:#979BA5;
-        background: #FAFBFD;
-        border-right: 1px solid #F0F1F5;
+        color: #979ba5;
+        background: #fafbfd;
+        border-right: 1px solid #f0f1f5;
         align-items: center;
 
-        .tr-type{
+        .tr-type {
           display: inline-block;
           width: 46px;
           height: 23px;
@@ -238,14 +240,14 @@
           font-size: 10px;
           font-weight: 400;
           line-height: 23px;
-          color: #3A84FF;
+          color: #3a84ff;
           text-align: center;
-          background: #E1ECFF;
+          background: #e1ecff;
           border-radius: 10px;
         }
       }
 
-      >.tr-content{
+      >.tr-content {
         padding: 5px 8px;
         color: #63656e;
       }

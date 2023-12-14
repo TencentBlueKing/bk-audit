@@ -52,7 +52,7 @@
                 v-else
                 class="no-data">
                 <img
-                  src="/images/no-log-data.svg"
+                  src="@images/no-log-data.svg"
                   style="width: 68px; margin-left: 16px;">
                 <div
                   class="ml8"

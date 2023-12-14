@@ -76,7 +76,7 @@
                       <img
                         alt=""
                         height="16"
-                        :src="`/images/${item.id}.svg`"
+                        :src="getAssetsFile(`${item.id}.svg`)"
                         style="margin-right: 5px;vertical-align: sub;"
                         width="16">
                       <span>{{ t(item.name) }}</span>
@@ -139,6 +139,8 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+
+  import getAssetsFile from '@/utils/getAssetsFile';
 
   interface NoticeWay{
     [key: string|number]: boolean
