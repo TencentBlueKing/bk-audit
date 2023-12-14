@@ -64,6 +64,7 @@ class StorageUpdateRequestSerializer(serializers.Serializer):
             raise ValidationError(message=gettext("当冷热数据处于开启状态时，冷热节点属性配置不能为空"))
         if attrs["allocation_min_days"] > attrs["setup_config"]["retention_days_default"]:
             raise ValidationError(message=gettext("数据降冷时间应小于数据过期时间"))
+        attrs["es_auth_info"] = attrs["auth_info"]
         return attrs
 
 

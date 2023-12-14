@@ -136,7 +136,7 @@ class SystemInitHandler:
         print("[InitSnapshot] Type => ResourceType")
         create_iam_data_link("resource_type")
         print("[InitSnapshot] Type => User")
-        if os.getenv("BKAPP_FETCH_USER_INFO_URL"):
+        if settings.SNAPSHOT_USERINFO_RESOURCE_URL:
             create_iam_data_link("user")
         self.post_init(INIT_SNAPSHOT_FINISHED_KEY)
 
