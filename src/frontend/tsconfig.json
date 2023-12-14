@@ -57,6 +57,9 @@
       "@language/*": [
         "./src/language/*"
       ],
+      "@images/*": [
+        "./src/images/*"
+      ],
     },
     "types": [
       "bkui-vue/lib/volar.components"

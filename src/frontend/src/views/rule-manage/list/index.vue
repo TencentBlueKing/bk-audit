@@ -186,7 +186,7 @@
     <template #header>
       <div>
         <span> {{ t('命中风险') }}</span>
-        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979BA5;border-left: 1px solid #DCDEE5;">
+        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979ba5;border-left: 1px solid #dcdee5;">
           规则：{{ riskScopeRiskDetailItem.name }}
         </span>
       </div>
@@ -229,6 +229,8 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
+
+  import getAssetsFile from '@utils/getAssetsFile';
 
   import BatchPriorityIndexSlider from './components/batch-priority-index-slider.vue';
   import RiskRuleDetail from './components/risk-rule-detail.vue';
@@ -276,7 +278,7 @@
               style='width: 100%;display: flex;align-items: center;'
               onClick={() => handleDetail(data)}>
               <Tooltips data={data.name } />
-              <img class='table-new-tip' src="/images/new-tip.png"
+              <img class='table-new-tip' src={getAssetsFile('new-tip.png')}
               style='width: 30px;margin-left: 4px;'/>
             </a>
           )
@@ -776,10 +778,10 @@
   });
 </script>
 <style scoped lang="postcss">
-:deep(.tooltip-btn .bk-button-text){
+:deep(.tooltip-btn .bk-button-text) {
   width: 100% !important;
 
-  .show-tooltips-text{
+  .show-tooltips-text {
     width: 100%;
     height: 100%;
     max-width: 100%;
@@ -787,11 +789,11 @@
   }
 }
 
-.rule-table :deep(thead th){
-  background-color: #F5F7FA;
+.rule-table :deep(thead th) {
+  background-color: #f5f7fa;
 }
 
-.rule-table :deep(.bk-table-body){
+.rule-table :deep(.bk-table-body) {
   max-height: calc(100vh - 277px);
 }
 

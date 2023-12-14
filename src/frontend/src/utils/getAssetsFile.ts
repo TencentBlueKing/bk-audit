@@ -1,4 +1,4 @@
-<!--
+/*
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
   Copyright (C) 2023 THL A29 Limited,
@@ -13,30 +13,8 @@
   specific language governing permissions and limitations under the License.
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
--->
-<template>
-  <div class="exception-box">
-    <img
-      alt=""
-      src="@images/404.png">
-    <p>没找到页面！</p>
-  </div>
-</template>
-<style scoped lang="postcss">
-  .exception-box {
-    margin: auto;
-    text-align: center;
+*/
 
-    img {
-      width: 300px;
-      margin-top: 150px;
-    }
+const getImageFile = (url: string) => new URL(`../images/${url}`, import.meta.url).href;
 
-    p {
-      margin: 32px 0;
-      font-size: 20px;
-      font-weight: 400;
-      color: #979797;
-    }
-  }
-</style>
+export default getImageFile;
