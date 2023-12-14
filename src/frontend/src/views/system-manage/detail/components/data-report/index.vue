@@ -18,6 +18,7 @@
   <div class="data-report-box">
     <div class="box-layout-left">
       <api-push
+        v-if="showApiPush.enabled"
         ref="apiRef"
         class="mb12"
         @change-checked="handleApiChecked" />
@@ -35,6 +36,10 @@
     ref,
   } from 'vue';
 
+  import CollectorManageService from '@service/collector-manage';
+
+  import useRequest from '@hooks/use-request';
+
   import ApiPush from './components/api-push.vue';
   import LogCollection from './components/log-collection/index.vue';
   import RecentData from './components/recent-data.vue';
@@ -47,6 +52,18 @@
   const listRef = ref();
   const apiRef = ref();
   const collectorData = ref < CollectorData >({ id: 0, name: '' });
+
+  const {
+    data: showApiPush,
+  }  = useRequest(CollectorManageService.fetchApiPushFeature, {
+    defaultValue: {
+      enabled: false,
+    },
+    defaultParams: {
+      system_id: 'bklog_otlp',
+    },
+    manual: true,
+  });
 
   const handleChecked = (value: {id: number|string, name: string}) => {
     collectorData.value = value;
