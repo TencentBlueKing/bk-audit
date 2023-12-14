@@ -54,7 +54,7 @@ class HttpPullHandler:
             self.token = FetchInstancePermission.build_auth(
                 settings.FETCH_INSTANCE_USERNAME, os.getenv("BKAPP_FETCH_USER_INFO_TOKEN", "")
             )
-            self.url = os.getenv("BKAPP_FETCH_USER_INFO_URL")
+            self.url = settings.SNAPSHOT_USERINFO_RESOURCE_URL
         else:
             password = GlobalMetaConfig.get(FETCH_INSTANCE_TOKEN_KEY, default=uuid.uuid4().hex)
             GlobalMetaConfig.set(FETCH_INSTANCE_TOKEN_KEY, password)
