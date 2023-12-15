@@ -73,7 +73,10 @@ LOG_LEVEL = "INFO"
 # 如果静态资源修改了以后，上线前改这个版本号即可
 STATIC_VERSION = "1.0"
 
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]  # noqa
+if strtobool(os.getenv("BKAPP_IS_KUBERNETES", "False")):
+    STATIC_ROOT = "static"
+else:
+    STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]  # noqa
 
 # CELERY 开关，使用时请改为 True，修改项目目录下的 Procfile 文件，添加以下两行命令：
 # worker: python manage.py celery worker -l info
