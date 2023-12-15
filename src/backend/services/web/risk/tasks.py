@@ -194,7 +194,11 @@ def process_one_risk(*, risk_id: str):
                 new_operators=TransOperator.load_security_person(), description=gettext("风险自动流转失败，转为安全接口人处理")
             )
         else:
-            cache.set(key=cache_key, value=retry_times + 1, timeout=settings.PROCESS_RISK_RETRY_KEY_TIMEOUT)
+            cache.set(
+                key=cache_key,
+                value=retry_times + 1,
+                timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+            )
     finally:
         logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
