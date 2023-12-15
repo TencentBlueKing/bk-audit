@@ -53,6 +53,7 @@ INSTALLED_APPS += (
 MIDDLEWARE = (
     "core.middleware.csrf.CSRFExemptMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "core.middleware.login_exempt.LoginExemptMiddleware",
 ) + MIDDLEWARE
 MIDDLEWARE += (
     "apigw_manager.apigw.authentication.ApiGatewayJWTGenericMiddleware",  # JWT 认证
