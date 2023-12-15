@@ -22,6 +22,8 @@ import os
 
 import json_log_formatter
 from django.conf import settings
+from django.core.handlers.wsgi import WSGIRequest
+from rest_framework.request import Request
 from rest_framework.settings import api_settings
 
 
@@ -36,7 +38,8 @@ class JsonLogFormatter(json_log_formatter.JSONFormatter):
         # 移除request
         if "request" in extra:
             request = extra.pop("request")
-            extra["username"] = request.user.username
+            if isinstance(request, (Request, WSGIRequest)):
+                extra["username"] = request.user.username
         extra["request_id"] = get_or_create_local_request_id()
         extra["bk_app_code"] = settings.APP_CODE
         extra["bk_app_module"] = os.getenv("BKPAAS_APP_MODULE_NAME", "default")

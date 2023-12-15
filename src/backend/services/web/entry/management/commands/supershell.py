@@ -25,5 +25,8 @@ from django.core.management.commands.shell import Command as _Command
 class Command(_Command):
     def handle(self, **options):
         for logger_name in settings.LOGGING["loggers"].keys():
-            logging.getLogger(logger_name).addHandler(logging.StreamHandler())
+            logger = logging.getLogger(logger_name)
+            if any([isinstance(handler, logging.StreamHandler) for handler in logger.handlers]):
+                continue
+            logger.addHandler(logging.StreamHandler())
         super().handle(**options)
