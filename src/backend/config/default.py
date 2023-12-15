@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import sys
+
 from bk_audit.constants.utils import LOGGER_NAME
 from bkcrypto.constants import AsymmetricCipherType, SymmetricCipherType
 from blueapps.conf.default_settings import *  # noqa
@@ -92,10 +94,20 @@ CELERY_ACCEPT_CONTENT = ["pickle", "json"]
 LOGGING = get_logging_config_dict(locals())
 # 日志使用json格式
 LOGGING["formatters"]["verbose"] = {"()": "core.log.JsonLogFormatter"}
+# 添加额外的logger
 LOGGING["loggers"]["bk_resource"] = LOGGING["loggers"]["app"]
 LOGGING["loggers"][LOGGER_NAME] = LOGGING["loggers"]["app"]
+# 避免多次输出
 for _l in LOGGING["loggers"].values():
     _l["propagate"] = False
+# 容器使用标准输出
+if strtobool(os.getenv("BKAPP_IS_KUBERNETES", "False")):
+    LOGGING["formatters"]["json"] = {"()": "core.log.JsonLogFormatter"}
+    LOGGING["handlers"] = {
+        "stdout": {"level": LOG_LEVEL, "class": "logging.StreamHandler", "formatter": "json", "stream": sys.stdout}
+    }
+    for _l in LOGGING["loggers"].values():
+        _l["handlers"] = ["stdout"]
 
 # 初始化管理员列表，列表中的人员将拥有预发布环境和正式环境的管理员权限
 # 注意：请在首次提测和上线前修改，之后的修改将不会生效
