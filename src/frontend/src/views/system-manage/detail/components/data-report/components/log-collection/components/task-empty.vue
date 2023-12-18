@@ -17,7 +17,7 @@
 <template>
   <div class="no-task">
     <img
-      src="/static/images/empty.svg"
+      src="@images/empty.svg"
       style="height: 100px; margin-top: 22px;">
     <div style="font-size: 14px;">
       {{ t('暂无任务') }}，

@@ -34,7 +34,7 @@
         <div class="field-key">
           <img
             class="field-type-icon"
-            :src="`/images/field-type/${fieldItem.field_type}.png`">
+            :src="getAssetsFile(`field-type/${fieldItem.field_type}.png`)">
           <span style="line-height: 20px;">
             {{ fieldItem.field_name }}（{{ fieldItem.description }}）
           </span>
@@ -77,6 +77,8 @@
   import type EtlPreviewModel from '@model/collector/etl-preview';
 
   import useRequest from '@hooks/use-request';
+
+  import getAssetsFile from '@utils/getAssetsFile';
 
   import SelectMapValue from '../select-map-value.vue';
 

@@ -63,7 +63,7 @@
             class="field-output">
             <img
               class="field-type-icon"
-              :src="`/images/field-type/${item.field_type}.png`">
+              :src="getAssetsFile(`field-type/${item.field_type}.png`)">
             <span>
               {{ `${item.field_name}(${item.field_alias})` }}
             </span>
@@ -75,7 +75,7 @@
       v-else
       class="exception-empty-part">
       <img
-        src="/static/images/content-empty.png"
+        src="@images/content-empty.png"
         style="width: 220px;">
       <p class="tip">
         {{ t('暂无方案说明') }}
@@ -88,6 +88,8 @@
   import { useI18n } from 'vue-i18n';
 
   import EditTag from '@components/edit-box/tag.vue';
+
+  import getAssetsFile from '@utils/getAssetsFile';
 
   import CollapsePanel from './aiops/components/components/collapse-panel.vue';
 
@@ -111,7 +113,7 @@
   flex-shrink: 0;
 
 
-  .exception-empty-part{
+  .exception-empty-part {
     display: flex;
     height: 60%;
     padding-top: 240px;
@@ -121,22 +123,22 @@
     justify-content: center;
     flex-direction: column;
 
-    >.tip{
+    >.tip {
       font-size: 12px;
-      color: #63656E;
+      color: #63656e;
     }
   }
 
-  .diff-content{
-    padding:8px 16px;
+  .diff-content {
+    padding: 8px 16px;
     line-height: 20px;
 
-    .collapse-panel-title{
+    .collapse-panel-title {
       height: 24px;
       background-color: red !important;
     }
 
-    .field-output{
+    .field-output {
       display: flex;
       margin-bottom: 10px;
       align-items: center;

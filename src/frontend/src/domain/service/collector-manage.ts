@@ -274,6 +274,13 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 判断API Push是否启用
+   */
+  fetchApiPushFeature(params: {system_id: string}) {
+    return CollectorSource.getApiPushFeature(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取启用状态&上报host （无需单独鉴权）
    */
   fetchApiPushHost(params: {system_id: string}) {

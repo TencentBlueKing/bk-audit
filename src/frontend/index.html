@@ -18,15 +18,8 @@
 <html>
 <head>
     <meta charset="UTF-8"/>
-    <link rel="icon" id="favicon" href="static/images/favicon.ico" type="image/x-icon"/>
-    <link rel="shortcut icon" id="shortcut-icon" href="static/images/favicon.ico" type="image/x-icon"/>
-    <script>
-        const baseDir = '{{ AUDIT_VITE_BUILD_BASE_DIR }}' || '/';
-        const faviconLink = document.getElementById('favicon');
-        faviconLink.href = `${baseDir}static/images/favicon.ico`;
-        const shortCutIconLink = document.getElementById('shortcut-icon');
-        shortCutIconLink.href = `${baseDir}static/images/favicon.ico`;
-    </script>
+    <link rel="icon" id="favicon" href="/static/images/favicon.ico" type="image/x-icon"/>
+    <link rel="shortcut icon" id="shortcut-icon" href="/static/images/favicon.ico" type="image/x-icon"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>loading....</title>
 </head>
@@ -42,9 +35,5 @@
     };
 </script>
 <script type="module" id="main-js" src="/src/main.ts"></script>
-<script>
-    const mainJsLink = document.getElementById('main-js');
-    mainJsLink.src = `${baseDir}src/main.ts`;
-</script>
 </body>
 </html>

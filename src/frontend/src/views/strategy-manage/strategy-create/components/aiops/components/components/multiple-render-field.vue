@@ -31,7 +31,7 @@
           v-bk-tooltips="{
             content: t('由于不同操作对应的拓展字段不同，若需要使用拓展字段作为映射值，映射值类型请选择拓展字段。若不使用拓展字段则映射值类型选为公共字段'),
           }"
-          style="margin-left: 8px;font-size: 14px;color: #C4C6CC;"
+          style="margin-left: 8px;font-size: 14px;color: #c4c6cc;"
           type="info-fill" />
       </div>
       <div
@@ -42,7 +42,7 @@
           v-bk-tooltips="{
             content: t('数据源中与方案输入参数匹配的字段'),
           }"
-          style="margin-left: 8px;font-size: 14px;color: #C4C6CC;"
+          style="margin-left: 8px;font-size: 14px;color: #c4c6cc;"
           type="info-fill" />
       </div>
     </div>
@@ -56,7 +56,7 @@
         <div class="field-key">
           <img
             class="field-type-icon"
-            :src="`/images/field-type/${fieldItem.field_type}.png`">
+            :src="getAssetsFile(`field-type/${fieldItem.field_type}.png`)">
           <span style="line-height: 20px;">
             {{ fieldItem.field_name }}（{{ fieldItem.field_alias }}）
           </span>
@@ -147,6 +147,8 @@
   import AiopPlanModel from '@model/strategy/aiops-plan';
 
   import useRequest from '@hooks/use-request';
+
+  import getAssetsFile from '@utils/getAssetsFile';
 
   import FieldCascader from './field-cascader.vue';
   import FieldSelect from './field-select.vue';
@@ -521,7 +523,7 @@
 
     .option-btn {
       font-size: 14px;
-      color: #979BA5;
+      color: #979ba5;
       cursor: pointer;
     }
 

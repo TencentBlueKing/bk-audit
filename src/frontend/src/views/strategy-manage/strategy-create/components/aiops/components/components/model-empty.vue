@@ -17,7 +17,7 @@
 <template>
   <div class="no-module">
     <img
-      src="/static/images/empty.svg"
+      src="@images/empty.svg"
       style="width: 220px;height: 100px;">
     <div style="font-size: 14px;">
       {{ t('该模型暂无参数') }}
