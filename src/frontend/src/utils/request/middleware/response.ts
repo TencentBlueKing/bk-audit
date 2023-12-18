@@ -42,11 +42,13 @@ const { messageError } = useMessage();
 let hasLogined = false;
 
 const redirectLogin = (loginUrl:string) => {
-  const { protocol, host } = parseURL(loginUrl);
+  const { protocol, host, pathname } = parseURL(loginUrl);
+  let pathnameWithoutPlain = pathname.replace('/plain/', '');
+  pathnameWithoutPlain = pathnameWithoutPlain.endsWith('/') ? pathnameWithoutPlain : `${pathnameWithoutPlain}/`;
   if (hasLogined) {
-    loginDialog(`${protocol}://${host}/plain/?c_url=${decodeURIComponent(`${window.location.origin}/login-success.html`)}`);
+    loginDialog(`${protocol}://${host}${pathnameWithoutPlain}plain/?c_url=${decodeURIComponent(`${window.location.origin}/login-success.html`)}`);
   } else {
-    window.location.href = `${protocol}://${host}/?c_url=${decodeURIComponent(window.location.href)}`;
+    window.location.href = `${protocol}://${host}${pathnameWithoutPlain}?c_url=${decodeURIComponent(window.location.href)}`;
   }
 };
 

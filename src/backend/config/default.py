@@ -121,7 +121,7 @@ INIT_SUPERUSER = []
 IS_BKUI_HISTORY_MODE = False
 
 # 是否需要对AJAX弹窗登录强行打开
-IS_AJAX_PLAIN_MODE = False
+IS_AJAX_PLAIN_MODE = True
 
 # 国际化配置
 LOCALE_PATHS = (os.path.join(BASE_DIR, "locale"),)  # noqa
