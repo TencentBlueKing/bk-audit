@@ -59,9 +59,12 @@ class EntryHandler(object):
         feature_toggle = {}
 
         # 平台管理员
-        manage_actions = "list_storage,list_sensitive_object"
-        results = resource.permission.check_permission(action_ids=manage_actions)
-        super_manager = any(results.values())
+        if request.user.is_authenticated:
+            manage_actions = "list_storage,list_sensitive_object"
+            results = resource.permission.check_permission(action_ids=manage_actions)
+            super_manager = any(results.values())
+        else:
+            super_manager = False
 
         data = {
             # 应用信息
