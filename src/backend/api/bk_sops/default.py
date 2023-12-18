@@ -32,13 +32,14 @@ class BKSOps(BkApiResource, abc.ABC):
     module_name = "bk_sops"
     base_url = BK_SOPS_API_URL
     platform_authorization = True
+    rate_limit = settings.SOPS_API_RATE_LIMIT
 
     def perform_request(self, validated_request_data):
         return Throttler(
             config=ThrottlerConfig(
                 func=super().perform_request,
                 key=f"{self.__module__}.{self.__class__.__name__}",
-                rate=settings.SOPS_API_RATE_LIMIT,
+                rate=self.rate_limit,
             )
         )(validated_request_data)
 
@@ -62,6 +63,7 @@ class CreateTask(BKSOps):
     method = "POST"
     action = "/create_task/{template_id}/{bk_biz_id}/"
     url_keys = ["template_id", "bk_biz_id"]
+    rate_limit = settings.SOPS_OPERATE_API_RATE_LIMIT
 
 
 class StartTask(BKSOps):
@@ -69,6 +71,7 @@ class StartTask(BKSOps):
     method = "POST"
     action = "/start_task/{task_id}/{bk_biz_id}/"
     url_keys = ["task_id", "bk_biz_id"]
+    rate_limit = settings.SOPS_OPERATE_API_RATE_LIMIT
 
 
 class GetTaskStatus(BKSOps):
@@ -89,6 +92,7 @@ class OperateTask(BKSOps):
     method = "POST"
     action = "/operate_task/{task_id}/{bk_biz_id}/"
     url_keys = ["task_id", "bk_biz_id"]
+    rate_limit = settings.SOPS_OPERATE_API_RATE_LIMIT
 
 
 class GetNodeData(BKSOps):
@@ -103,3 +107,4 @@ class OperateNode(BKSOps):
     method = "POST"
     action = "/operate_node/{bk_biz_id}/{task_id}/"
     url_keys = ["task_id", "bk_biz_id"]
+    rate_limit = settings.SOPS_OPERATE_API_RATE_LIMIT
