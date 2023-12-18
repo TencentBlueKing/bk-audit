@@ -196,8 +196,8 @@ class CollectorManage extends ModuleBase {
     });
   }
   // 判断API Push是否启用
-  getApiPushFeature(params: {system_id: string}) {
-    return Request.get<Record<string, any>>(`/api/v1/feature/${params.system_id}/`);
+  getApiPushFeature(params: {feature_id: string}) {
+    return Request.get<Record<string, any>>(`/api/v1/feature/${params.feature_id}/`);
   }
   // 获取启用状态&上报host （无需单独鉴权）
   getApiPushHost(params: {system_id: string}) {

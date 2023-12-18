@@ -60,7 +60,7 @@
       enabled: false,
     },
     defaultParams: {
-      system_id: 'bklog_otlp',
+      feature_id: 'bklog_otlp',
     },
     manual: true,
   });

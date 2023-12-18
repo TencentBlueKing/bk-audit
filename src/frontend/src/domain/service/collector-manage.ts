@@ -276,7 +276,7 @@ export default {
   /**
    * @desc 判断API Push是否启用
    */
-  fetchApiPushFeature(params: {system_id: string}) {
+  fetchApiPushFeature(params: {feature_id: string}) {
     return CollectorSource.getApiPushFeature(params)
       .then(({ data }) => data);
   },
