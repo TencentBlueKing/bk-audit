@@ -72,7 +72,7 @@ export default (config: ConfigModel) => {
     routes[0].children?.push(StorageManage);
   }
   const router =  createRouter({
-    history: createWebHistory(),
+    history: createWebHistory(import.meta.env.AUDIT_VITE_BUILD_BASE_DIR),
     routes,
   });
 

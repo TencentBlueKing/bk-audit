@@ -18,7 +18,7 @@
   <audit-navigation @menu-flod="handleSideMenuFlodChange">
     <template #logo>
       <img
-        src="/static/images/logo.png"
+        src="@images/logo.png"
         style="width: 28px; margin-left: 16px;cursor: pointer;"
         @click="handleRouterChange('handleManage')">
       <span

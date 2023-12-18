@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import os
 from typing import Dict, List, Union
 
 from blueapps.utils.logger import logger
@@ -176,7 +177,7 @@ class Permission(object):
                 [resource.to_dict() for resource in resources],
                 message,
             )
-            return settings.BK_IAM_SAAS_HOST
+            return os.getenv("BKPAAS_IAM_URL")
         return url
 
     def get_apply_data(self, actions: List[Union[ActionMeta, str]], resources: List[Resource] = None):

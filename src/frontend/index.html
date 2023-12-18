@@ -16,22 +16,24 @@
 -->
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" href="/static/images/favicon.ico" type="image/x-icon" />
-    <link rel="shortcut icon" href="/static/images/favicon.ico" type="image/x-icon" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8"/>
+    <link rel="icon" id="favicon" href="/static/images/favicon.ico" type="image/x-icon"/>
+    <link rel="shortcut icon" id="shortcut-icon" href="/static/images/favicon.ico" type="image/x-icon"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>loading....</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script>
-      window.PROJECT_CONFIG = {
+</head>
+<body>
+<div id="app"></div>
+<script>
+    window.PROJECT_CONFIG = {
         NAMESPACE: 'default',
         // 后台API 地址
         AJAX_URL_PREFIX: '{{ AUDIT_AJAX_URL_PREFIX }}',
-      };
-    </script>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+        // 路径
+        AUDIT_VITE_BUILD_BASE_DIR: '{{ AUDIT_VITE_BUILD_BASE_DIR }}',
+    };
+</script>
+<script type="module" id="main-js" src="/src/main.ts"></script>
+</body>
 </html>

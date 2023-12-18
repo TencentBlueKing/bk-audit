@@ -287,14 +287,18 @@ class RetrieveUserRequestSerializer(serializers.Serializer):
 
 
 class RetrieveUserResponseSerializer(serializers.Serializer):
-    id = serializers.IntegerField(label=gettext_lazy("ID"), default=0)
-    username = serializers.CharField(label=gettext_lazy("用户名"))
-    status = serializers.CharField(label=gettext_lazy("状态"), default="")
-    display_name = serializers.CharField(label=gettext_lazy("显示名称"), default="")
-    staff_status = serializers.CharField(label=gettext_lazy("雇员状态"), default="")
-    departments = serializers.ListField(label=gettext_lazy("部门"), child=serializers.JSONField(), default=list)
-    leader = serializers.ListField(label=gettext_lazy("上级"), child=serializers.JSONField(), default=list)
-    extras = serializers.JSONField(label=gettext_lazy("拓展信息"), default=dict)
+    id = serializers.IntegerField(label=gettext_lazy("ID"), default=0, allow_null=True)
+    username = serializers.CharField(label=gettext_lazy("用户名"), allow_blank=True)
+    status = serializers.CharField(label=gettext_lazy("状态"), default="", allow_blank=True)
+    display_name = serializers.CharField(label=gettext_lazy("显示名称"), default="", allow_blank=True)
+    staff_status = serializers.CharField(label=gettext_lazy("雇员状态"), default="", allow_blank=True)
+    departments = serializers.ListField(
+        label=gettext_lazy("部门"), child=serializers.JSONField(), default=list, allow_null=True
+    )
+    leader = serializers.ListField(
+        label=gettext_lazy("上级"), child=serializers.JSONField(), default=list, allow_null=True
+    )
+    extras = serializers.JSONField(label=gettext_lazy("拓展信息"), default=dict, allow_null=True)
 
 
 class UploadDataMapFileRequestSerializer(serializers.Serializer):

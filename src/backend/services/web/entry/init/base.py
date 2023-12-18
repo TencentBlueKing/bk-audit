@@ -37,6 +37,7 @@ from services.web.entry.constants import (
     INIT_REDIS_FISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
 )
+from services.web.risk.constants import EVENT_ES_CLUSTER_ID_KEY
 from services.web.risk.handlers import EventHandler
 
 
@@ -101,6 +102,8 @@ class SystemInitHandler:
         print(f"[InitEs] Params => {es_config}")
         cluster_id = resource.databus.storage.create_storage(es_config)
         print(f"[InitEs] Resp => {cluster_id}")
+        GlobalMetaConfig.set(EVENT_ES_CLUSTER_ID_KEY, cluster_id)
+        print("InitEs GlobalMetaConfig Set Success")
         resource.databus.storage.storage_activate(namespace=settings.DEFAULT_NAMESPACE, cluster_id=cluster_id)
         print(f"[InitEs] Default => {cluster_id}")
 
@@ -133,7 +136,7 @@ class SystemInitHandler:
         print("[InitSnapshot] Type => ResourceType")
         create_iam_data_link("resource_type")
         print("[InitSnapshot] Type => User")
-        if os.getenv("BKAPP_FETCH_USER_INFO_URL"):
+        if settings.SNAPSHOT_USERINFO_RESOURCE_URL:
             create_iam_data_link("user")
         self.post_init(INIT_SNAPSHOT_FINISHED_KEY)
 

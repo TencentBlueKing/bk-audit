@@ -20,7 +20,6 @@ from bk_audit.client import BkAudit
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE, DEFAULT_RESULT_CODE
 from bk_audit.contrib.opentelemetry.exporters import OTLogExporter
 from bk_audit.contrib.opentelemetry.utils import ServiceNameHandler
-from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
 from apps.audit.formatters import AuditFormatter
@@ -44,7 +43,7 @@ class BkAuditClient(BkAudit):
         from blueapps.utils.request_provider import get_request_username
 
         username = get_request_username()
-        if not username or username == bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME:
+        if not username:
             return
         super().add_event(
             action=action,

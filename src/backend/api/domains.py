@@ -24,13 +24,11 @@ from api.constants import APIProvider
 from api.utils import get_endpoint
 from core.utils.distutils import strtobool
 
-APIGW_ENABLED = strtobool(os.getenv("BKAPP_USE_APIGW", "True"))
+APIGW_ENABLED = strtobool(os.getenv("BKAPP_USE_APIGW", "False"))
 
 # 权限中心
 BK_IAM_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stage"
-BK_IAM_API_URL = (
-    get_endpoint("bk-iam", stage=BK_IAM_APIGW_STAGE) if APIGW_ENABLED else get_endpoint("iam", APIProvider.ESB)
-)
+BK_IAM_API_URL = get_endpoint("bk-iam", stage=BK_IAM_APIGW_STAGE)
 
 # 日志平台
 BK_LOG_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stag"
@@ -39,18 +37,22 @@ BK_LOG_API_URL = (
 )
 
 # PaaSV3
-BK_PAAS_API_URL = get_endpoint("paasv3", stage="prod")
+BK_PAAS_API_URL = get_endpoint(os.getenv("BKAPP_BK_PAAS_APIGW_NAME", "bkpaas3"), stage="prod")
 
 # User Manage
 USER_MANAGE_URL = get_endpoint("usermanage", APIProvider.ESB)
 
 # BkBase
 BK_BASE_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "test"
-BK_BASE_API_URL = get_endpoint("bk-data", stage=BK_BASE_APIGW_STAGE)
+BK_BASE_API_URL = get_endpoint(os.getenv("BKAPP_BK_BASE_APIGW_NAME", "bk-base"), stage=BK_BASE_APIGW_STAGE)
 
 # BkMonitor
 BK_MONITOR_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stage"
-BK_MONITOR_API_URL = get_endpoint("bkmonitorv3", stage=BK_MONITOR_APIGW_STAGE)
+BK_MONITOR_API_URL = (
+    get_endpoint("bkmonitorv3", stage=BK_MONITOR_APIGW_STAGE)
+    if APIGW_ENABLED
+    else get_endpoint("monitor_v3", provider=APIProvider.ESB)
+)
 BK_MONITOR_METRIC_PROXY_URL = settings.BK_MONITOR_METRIC_PROXY_URL
 
 # CMSI
@@ -64,7 +66,7 @@ BK_SOPS_APIGW_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stage"
 BK_SOPS_API_URL = get_endpoint("bk-sops", APIProvider.APIGW, stage=BK_SOPS_APIGW_STAGE)
 
 # BK ITSM
-BK_ITSM_API_URL = get_endpoint("bk-itsm", APIProvider.APIGW)
+BK_ITSM_API_URL = get_endpoint("bk-itsm", APIProvider.APIGW) if APIGW_ENABLED else get_endpoint("itsm", APIProvider.ESB)
 
 # BK Vision
 BK_VISION_API_URL = get_endpoint("bk-vision", APIProvider.APIGW)

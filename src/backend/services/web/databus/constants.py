@@ -82,13 +82,13 @@ ASSET_RT_FORMAT = "asset_{system_id}_{resource_type_id}"
 DEFAULT_REDIS_TAGS = ["Bk-Audit", "inland", "enable", "usr"]
 
 RESOURCE_TYPE_DATA_RT_KEY = "bkaudit_resource_type_data"
-RESOURCE_TYPE_DATA_CONFIG_KEY = "bkaudit_resource_type_data"
+RESOURCE_TYPE_DATA_CONFIG_KEY = "bkaudit_resource_type_config_data"
 RESOURCE_TYPE_DATA_NAME_FORMAT = "bkaudit_resource_type_data_{}"
 ACTION_DATA_RT_KEY = "bkaudit_action_data"
-ACTION_DATA_CONFIG_KEY = "bkaudit_action_data"
+ACTION_DATA_CONFIG_KEY = "bkaudit_action_config_data"
 ACTION_DATA_NAME_FORMAT = "bkaudit_action_data_{}"
 USER_INFO_DATA_RT_KEY = "bkaudit_user_info_data"
-USER_INFO_DATA_CONFIG_KEY = "bkaudit_user_info_data"
+USER_INFO_DATA_CONFIG_KEY = "bkaudit_user_info_config_data"
 USER_INFO_DATA_NAME_FORMAT = "bkaudit_user_info_data_{}"
 
 API_PUSH_COLLECTOR_NAME_FORMAT = "{system_id}_{id}_{date}"
