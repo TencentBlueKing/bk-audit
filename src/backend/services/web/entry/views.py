@@ -28,11 +28,6 @@ from services.web.entry.throttlers import HealthzThrottle
 
 
 class ViewSet(ResourceViewSet):
-    def get_authenticators(self):
-        if self.request.path in ("/ping/", "/"):
-            return []
-        return super().get_authenticators()
-
     def get_permissions(self):
         if self.request.path in ("/ping/", "/"):
             return []
