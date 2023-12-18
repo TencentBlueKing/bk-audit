@@ -75,6 +75,7 @@ class StorageDetectRequestSerializer(serializers.Serializer):
     def validate(self, attrs):
         attrs["username"] = attrs["auth_info"].get("username", "")
         attrs["password"] = attrs["auth_info"].get("password", "")
+        attrs["es_auth_info"] = attrs["auth_info"]
         return attrs
 
 

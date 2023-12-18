@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import sys
+
 from bk_audit.constants.utils import LOGGER_NAME
 from bkcrypto.constants import AsymmetricCipherType, SymmetricCipherType
 from blueapps.conf.default_settings import *  # noqa
@@ -24,7 +26,6 @@ from client_throttler import ThrottlerConfig, setup
 from django.utils.translation import gettext_lazy
 from redis.client import Redis
 
-from core.constants import DeployModuleChoices
 from core.utils.distutils import strtobool
 from core.utils.environ import get_env_or_raise
 
@@ -52,6 +53,7 @@ INSTALLED_APPS += (
 MIDDLEWARE = (
     "core.middleware.csrf.CSRFExemptMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "core.middleware.login_exempt.LoginExemptMiddleware",
 ) + MIDDLEWARE
 MIDDLEWARE += (
     "apigw_manager.apigw.authentication.ApiGatewayJWTGenericMiddleware",  # JWT 认证
@@ -71,7 +73,10 @@ LOG_LEVEL = "INFO"
 # 如果静态资源修改了以后，上线前改这个版本号即可
 STATIC_VERSION = "1.0"
 
-STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]  # noqa
+if strtobool(os.getenv("BKAPP_IS_KUBERNETES", "False")):
+    STATIC_ROOT = "static"
+else:
+    STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]  # noqa
 
 # CELERY 开关，使用时请改为 True，修改项目目录下的 Procfile 文件，添加以下两行命令：
 # worker: python manage.py celery worker -l info
@@ -93,10 +98,20 @@ CELERY_ACCEPT_CONTENT = ["pickle", "json"]
 LOGGING = get_logging_config_dict(locals())
 # 日志使用json格式
 LOGGING["formatters"]["verbose"] = {"()": "core.log.JsonLogFormatter"}
+# 添加额外的logger
 LOGGING["loggers"]["bk_resource"] = LOGGING["loggers"]["app"]
 LOGGING["loggers"][LOGGER_NAME] = LOGGING["loggers"]["app"]
+# 避免多次输出
 for _l in LOGGING["loggers"].values():
     _l["propagate"] = False
+# 容器使用标准输出
+if strtobool(os.getenv("BKAPP_IS_KUBERNETES", "False")):
+    LOGGING["formatters"]["json"] = {"()": "core.log.JsonLogFormatter"}
+    LOGGING["handlers"] = {
+        "stdout": {"level": LOG_LEVEL, "class": "logging.StreamHandler", "formatter": "json", "stream": sys.stdout}
+    }
+    for _l in LOGGING["loggers"].values():
+        _l["handlers"] = ["stdout"]
 
 # 初始化管理员列表，列表中的人员将拥有预发布环境和正式环境的管理员权限
 # 注意：请在首次提测和上线前修改，之后的修改将不会生效
@@ -106,7 +121,7 @@ INIT_SUPERUSER = []
 IS_BKUI_HISTORY_MODE = False
 
 # 是否需要对AJAX弹窗登录强行打开
-IS_AJAX_PLAIN_MODE = False
+IS_AJAX_PLAIN_MODE = True
 
 # 国际化配置
 LOCALE_PATHS = (os.path.join(BASE_DIR, "locale"),)  # noqa
@@ -149,10 +164,10 @@ PLATFORM_CODE = "29"
 
 # APIGW配置
 BK_APIGW_NAME = os.getenv("BKAPP_BK_APIGW_NAME", APP_CODE)
-BK_API_URL_TMPL = os.getenv("BKAPP_API_URL_TMPL", "")
+BK_API_URL_TMPL = os.getenv("BK_API_URL_TMPL", "")
 
 # ESB配置
-BK_COMPONENT_API_URL = os.getenv("BKAPP_COMPONENT_API_URL", "")
+BK_COMPONENT_API_URL = os.getenv("BK_COMPONENT_API_URL", "")
 
 SWAGGER_SETTINGS = {
     "DEFAULT_INFO": "urls.info",
@@ -160,9 +175,9 @@ SWAGGER_SETTINGS = {
 }
 
 DEFAULT_NAMESPACE = os.getenv("BKAPP_DEFAULT_NAMESPACE", "default")
-DEFAULT_BK_BIZ_ID = os.getenv("BKAPP_DEFAULT_BK_BIZ_ID", 2)
+DEFAULT_BK_BIZ_ID = int(os.getenv("BKAPP_DEFAULT_BK_BIZ_ID", 2))
 
-SESSION_COOKIE_DOMAIN = os.getenv("BKAPP_SESSION_COOKIE_DOMAIN")
+SESSION_COOKIE_DOMAIN = os.getenv("BKAPP_SESSION_COOKIE_DOMAIN", os.getenv("BKPAAS_BK_DOMAIN"))
 CSRF_COOKIE_DOMAIN = SESSION_COOKIE_DOMAIN
 LANGUAGE_COOKIE_DOMAIN = SESSION_COOKIE_DOMAIN
 
@@ -177,7 +192,6 @@ BK_RESOURCE = {
 APPEND_SLASH = False
 
 FETCH_INSTANCE_USERNAME = os.getenv("BKAPP_FETCH_INSTANCE_USERNAME", "bk_iam")
-FETCH_INSTANCE_TOKEN = os.getenv("BKAPP_FETCH_INSTANCE_TOKEN")
 
 REDIS_HOST = get_env_or_raise("REDIS_HOST")
 REDIS_PORT = os.getenv("REDIS_PORT", "6379")
@@ -210,7 +224,6 @@ BK_IAM_SYSTEM_NAME = APP_CODE
 BK_IAM_USE_APIGATEWAY = True
 BK_IAM_APIGATEWAY_URL = os.getenv("BKAPP_BK_IAM_APIGATEWAY_URL")
 BK_IAM_RESOURCE_API_HOST = os.getenv("BKAPP_BK_IAM_RESOURCE_API_HOST")
-BK_IAM_SAAS_HOST = os.getenv("BKAPP_BK_IAM_SAAS_HOST")
 
 # Version
 VERSION_MD_DIR = "version_md"
@@ -226,9 +239,6 @@ BK_APP_OTEL_ADDTIONAL_INSTRUMENTORS = []
 
 # TAM
 AEGIS_ID = os.getenv("BKAPP_AEGIS_ID")
-
-# Deploy
-DEPLOY_MODULE = os.getenv("BKAPP_DEPLOY_MODULE", DeployModuleChoices.DEFAULT.value)
 
 # FeatureToggle
 FEATURE_TOGGLE = {
@@ -266,9 +276,6 @@ SNAPSHOT_USERINFO_RESOURCE_TOKEN = os.getenv("BKAPP_FETCH_USER_INFO_TOKEN", "")
 # Notice
 NOTICE_AGG_MINUTES = int(os.getenv("BKAPP_NOTICE_AGG_MINUTES", 30))
 
-# Event
-EVENT_ES_CLUSTER_ID = int(os.getenv("BKAPP_EVENT_ES_CLUSTER_ID", 0))
-
 # Asset
 ASSET_RT_STORAGE_CLUSTER = os.getenv("BKAPP_ASSET_RT_STORAGE_CLUSTER", "")
 ASSET_RT_EXPIRE_TIME = os.getenv("BKAPP_ASSET_RT_EXPIRE_TIME", "-1")
@@ -277,7 +284,7 @@ ASSET_RT_EXPIRE_TIME = os.getenv("BKAPP_ASSET_RT_EXPIRE_TIME", "-1")
 CLUSTER_REGISTRY_APP = os.getenv("BKAPP_CLUSTER_REGISTRY_APP", "log-search-4")
 
 # BKCrypto
-ENABLE_BKCRYPTO = strtobool(os.getenv("BKAPP_ENABLE_BKCRYPTO", "True"))
+ENABLE_BKCRYPTO = strtobool(os.getenv("BKAPP_ENABLE_BKCRYPTO", "False"))
 BKCRYPTO = {
     "ASYMMETRIC_CIPHER_TYPE": AsymmetricCipherType.SM2.value,
     "SYMMETRIC_CIPHER_TYPE": SymmetricCipherType.SM4.value,
@@ -287,7 +294,7 @@ BKCRYPTO = {
 INIT_SECURITY_PERSON = [p for p in os.getenv("BKAPP_INIT_SECURITY_PERSON", "admin").split(",") if p]
 
 # SAAS Code
-BKBASE_APP_CODE = os.getenv("BKAPP_BKBASE_APP_CODE", "dataweb")
+BKBASE_APP_CODE = os.getenv("BKAPP_BKBASE_APP_CODE", "bk_dataweb")
 BK_ITSM_APP_CODE = os.getenv("BKAPP_BK_ITSM_APP_CODE", "bk_itsm")
 BK_SOPS_APP_CODE = os.getenv("BKAPP_BK_SOPS_APP_CODE", "bk_sops")
 
@@ -296,7 +303,6 @@ ENABLE_PROCESS_RISK_TASK = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_TASK",
 ENABLE_PROCESS_RISK_WHITELIST = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_WHITELIST", "False"))
 PROCESS_RISK_WHITELIST = [int(i) for i in os.getenv("BKAPP_PROCESS_RISK_WHITELIST", "").split(",") if i]
 PROCESS_RISK_MAX_RETRY = int(os.getenv("BKAPP_PROCESS_RISK_MAX_RETRY", 3))
-PROCESS_RISK_RETRY_KEY_TIMEOUT = int(os.getenv("BKAPP_PROCESS_RISK_RETRY_KEY_TIMEOUT", 60 * 30))
 ENABLE_MULTI_PROCESS_RISK = strtobool(os.getenv("BKAPP_ENABLE_MULTI_PROCESS_RISK", "True"))
 
 # cache lock
@@ -308,6 +314,7 @@ throttler_config = ThrottlerConfig(
 )
 setup(throttler_config)
 SOPS_API_RATE_LIMIT = os.getenv("BKAPP_SOPS_API_RATE_LIMIT", "10/s")
+SOPS_OPERATE_API_RATE_LIMIT = os.getenv("BKAPP_SOPS_OPERATE_API_RATE_LIMIT", "10/s")
 ITSM_API_RATE_LIMIT = os.getenv("BKAPP_ITSM_API_RATE_LIMIT", "10/s")
 
 """

@@ -32,6 +32,7 @@ class EntryManage extends ModuleBase {
   // 获取水印
   watermark() {
     return Request.get<{
+      enabled: boolean,
       watermark: {
         items: Array<{
           type: string,

@@ -27,13 +27,15 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext
 
-from apps.meta.constants import EtlConfigEnum
+from apps.exceptions import MetaConfigNotExistException
+from apps.meta.constants import ConfigLevelChoices, EtlConfigEnum
 from apps.meta.models import GlobalMetaConfig
 from services.web.databus.constants import (
     DEFAULT_CATEGORY_ID,
     DEFAULT_COLLECTOR_SCENARIO,
     DEFAULT_DATA_ENCODING,
     DEFAULT_ETL_PROCESSOR,
+    DEFAULT_STORAGE_CONFIG_KEY,
     EMPTY_INDEX_SET_ID,
     EMPTY_TABLE_ID,
     PluginSceneChoices,
@@ -46,6 +48,7 @@ from services.web.risk.constants import (
     BKAUDIT_EVENT_RT_INDEX_NAME_FORMAT,
     BKAUDIT_EVENT_RT_INDEX_SET_ID,
     BULK_ADD_EVENT_SIZE,
+    EVENT_ES_CLUSTER_ID_KEY,
     INDEX_TIME_FORMAT,
     RISK_SYNC_SCROLL,
     WRITE_INDEX_FORMAT,
@@ -59,7 +62,16 @@ class EventHandler(ElasticHandler):
     """
 
     def __init__(self):
-        super().__init__(cluster_id=settings.EVENT_ES_CLUSTER_ID)
+        try:
+            cluster_id = GlobalMetaConfig.get(EVENT_ES_CLUSTER_ID_KEY)
+        except MetaConfigNotExistException:
+            cluster_id = GlobalMetaConfig.get(
+                DEFAULT_STORAGE_CONFIG_KEY,
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=settings.DEFAULT_NAMESPACE,
+            )
+            GlobalMetaConfig.set(EVENT_ES_CLUSTER_ID_KEY, cluster_id)
+        super().__init__(cluster_id=cluster_id)
 
     @transaction.atomic()
     def update_or_create_rt(self) -> None:
@@ -121,14 +133,13 @@ class EventHandler(ElasticHandler):
                 field["field_type"] = field["option"]["meta_field_type"]
         now = datetime.datetime.now()
         uniq = str(uniqid())[:10].upper()
-        cluster_id = settings.EVENT_ES_CLUSTER_ID
         (
             retention,
             replicas,
             allocation_min_days,
             storage_shards_nums,
             storage_shards_size,
-        ) = StorageConfig.get_default(settings.DEFAULT_NAMESPACE, cluster_id)
+        ) = StorageConfig.get_default(settings.DEFAULT_NAMESPACE, self.cluster_id)
         retention = os.getenv("BKAPP_EVENT_ES_RETENTION", retention)
         params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
@@ -149,7 +160,7 @@ class EventHandler(ElasticHandler):
             "is_allow_alone_etl_config": True,
             "is_allow_alone_storage": False,
             "etl_processor": DEFAULT_ETL_PROCESSOR,
-            "storage_cluster_id": cluster_id,
+            "storage_cluster_id": self.cluster_id,
             "fields": fields,
             "retention": retention,
             "allocation_min_days": allocation_min_days,
@@ -241,7 +252,7 @@ class EventHandler(ElasticHandler):
             resp = api.bk_log.es_query_scroll(
                 indices=cls.get_table_id().replace(".", "_"),
                 scenario_id="log",
-                storage_cluster_id=settings.EVENT_ES_CLUSTER_ID,
+                storage_cluster_id=GlobalMetaConfig.get(EVENT_ES_CLUSTER_ID_KEY),
                 scroll=RISK_SYNC_SCROLL,
                 scroll_id=scroll_id,
             )
@@ -261,7 +272,7 @@ class EventHandler(ElasticHandler):
             page=page,
             page_size=page_size,
             index_set_id=cls.get_search_index_set_id(),
-            storage_cluster_id=settings.EVENT_ES_CLUSTER_ID,
+            storage_cluster_id=GlobalMetaConfig.get(EVENT_ES_CLUSTER_ID_KEY),
             bind_system_info=False,
             **kwargs,
         )

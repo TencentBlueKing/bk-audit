@@ -24,7 +24,7 @@
       'text-align': 'center',
     }">
     <img
-      src="/static/images/empty.svg"
+      src="@images/empty.svg"
       style="height: 200px; margin-top: -100px;">
     <div
       style="margin-top: 8px; font-size: 24px; line-height: 32px; color: #63656e;">

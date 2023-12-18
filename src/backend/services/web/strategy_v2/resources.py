@@ -25,6 +25,7 @@ from bk_resource import Resource, api, resource
 from bk_resource.base import Empty
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.request_provider import get_local_request, get_request_username
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
@@ -461,6 +462,9 @@ class ListStrategyFields(StrategyV2Base):
             }
             for field in STRATEGY_DISPLAY_FIELDS
         ]
+        # 没有配置用户信息来源则直接返回
+        if not settings.SNAPSHOT_USERINFO_RESOURCE_URL:
+            return data
         # load snapshot user info fields
         try:
             schema = api.user_manage.get_snapshot_schema()

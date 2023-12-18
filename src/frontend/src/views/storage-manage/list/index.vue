@@ -148,7 +148,6 @@
     },
     {
       label: () => t('名称'),
-      type: 'index',
       field: () => 'cluster_config.cluster_name',
       width: '250px',
       render: ({ data }: {data: StorageModel}) => (

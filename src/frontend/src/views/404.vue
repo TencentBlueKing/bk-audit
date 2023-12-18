@@ -18,7 +18,7 @@
   <div class="exception-box">
     <img
       alt=""
-      src="/static/images/404.png">
+      src="@images/404.png">
     <p>没找到页面！</p>
   </div>
 </template>

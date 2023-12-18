@@ -23,6 +23,8 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 from rest_framework.permissions import BasePermission
 
+from apps.meta.models import GlobalMetaConfig
+from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
 from apps.permission.handlers.actions import ActionEnum
 from core.exceptions import PermissionException
 
@@ -103,7 +105,7 @@ class FetchInstancePermission(BasePermission):
         return system_token
 
     def has_permission(self, request, view):
-        system_token = self.build_auth(settings.FETCH_INSTANCE_USERNAME, settings.FETCH_INSTANCE_TOKEN)
+        system_token = self.build_auth(settings.FETCH_INSTANCE_USERNAME, GlobalMetaConfig.get(FETCH_INSTANCE_TOKEN_KEY))
         user_auth_token = request.META.get("HTTP_AUTHORIZATION")
         if system_token == user_auth_token:
             return True

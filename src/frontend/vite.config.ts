@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => {
   const isDevelopment = mode === 'development';
 
   return {
+    base: process.env.AUDIT_VITE_BUILD_BASE_DIR || '/',
     publicDir: 'static',
     plugins: [
       vue(),
@@ -60,6 +61,7 @@ export default defineConfig(({ mode }) => {
         '@utils': fileURLToPath(new URL('./src/utils', import.meta.url)),
         '@css': fileURLToPath(new URL('./src/css', import.meta.url)),
         '@language': fileURLToPath(new URL('./src/language', import.meta.url)),
+        '@images': fileURLToPath(new URL('./src/images', import.meta.url)),
       },
     },
     envPrefix: 'AUDIT_',

@@ -37,7 +37,7 @@
             @click="hanldeType(item.id, 'physics')">
             <img
               class="type-image"
-              :src="`/images/${item.image}.svg`">
+              :src="getAssetsFile(`${item.image}.svg`)">
             <span class="ml8">{{ item.name }}</span>
           </span>
         </div>
@@ -60,7 +60,7 @@
             @click="hanldeType(item.id, 'container')">
             <img
               class="type-image"
-              :src="`/images/${item.id}.svg`">
+              :src="getAssetsFile(`${item.id}.svg`)">
             <span class="ml8">{{ t(item.name) }}</span>
           </span>
         </div>
@@ -80,6 +80,8 @@
   import GlobalsModel from '@model/meta/globals';
 
   import useRequest from '@hooks/use-request';
+
+  import getAssetsFile from '@utils/getAssetsFile';
 
   interface Props {
     collectorEnvironment: string,

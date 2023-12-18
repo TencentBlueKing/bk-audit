@@ -28,6 +28,11 @@ from services.web.entry.throttlers import HealthzThrottle
 
 
 class ViewSet(ResourceViewSet):
+    def get_permissions(self):
+        if self.request.path in ("/ping/",):
+            return []
+        return super().get_permissions()
+
     resource_routes = [
         ResourceRoute("GET", resource.entry.home),
         ResourceRoute("GET", resource.entry.ping, endpoint="ping"),

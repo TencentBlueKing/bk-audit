@@ -49,3 +49,4 @@ yarn.lock
 *.sw?
 .eslintcache
 .stylelintcache
+.env*

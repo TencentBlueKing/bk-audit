@@ -230,7 +230,7 @@ class ErrorMsgHandler:
     """
 
     def __init__(self, title, content, **kwargs):
-        self.title = title
+        self.title = f"{gettext('【蓝鲸审计中心%s】') % settings.RUN_MODE} {title}"
         self.content = self.build_content(content)
         self.kwargs = kwargs
 
