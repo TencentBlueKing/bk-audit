@@ -64,7 +64,6 @@ def sync_bkm_alert():
     except Exception as err:  # NOCC:broad-except(需要处理所有错误)
         logger_celery.exception("[SyncBKMAlertFailed] %s", err)
         ErrorMsgHandler(gettext("Sync BKM Alert Failed"), str(err)).send()
-        raise err
 
 
 @task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -104,7 +103,6 @@ def generate_risk_from_event():
         # 异常通知
         logger_celery.exception("[GenerateRiskFailed] %s", err)
         ErrorMsgHandler(gettext("Generate Risk Failed"), str(err)).send()
-        raise err
 
 
 @periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)

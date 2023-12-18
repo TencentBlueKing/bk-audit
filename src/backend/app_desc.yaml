@@ -8,15 +8,15 @@ modules:
         plan: 4C4G5R
         replicas: 5
       worker:
-        command: python manage.py celery worker  -O fair -l info -c 4 -Q celery,default
+        command: python manage.py celery worker  -O fair -l info -c 4 -Q celery,default --max-tasks-per-child=100
         plan: 4C4G5R
         replicas: 5
       risk-worker:
-        command: python manage.py celery worker  -O fair -l info -c 4 -Q risk
+        command: python manage.py celery worker  -O fair -l info -c 4 -Q risk --max-tasks-per-child=100
         plan: 4C4G5R
         replicas: 2
       notice:
-        command: python manage.py celery worker  -O fair -l info -c 4 -Q notice
+        command: python manage.py celery worker  -O fair -l info -c 4 -Q notice --max-tasks-per-child=100
         plan: 4C1G5R
         replicas: 1
       beat:
