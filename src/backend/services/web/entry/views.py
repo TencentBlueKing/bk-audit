@@ -29,7 +29,7 @@ from services.web.entry.throttlers import HealthzThrottle
 
 class ViewSet(ResourceViewSet):
     def get_permissions(self):
-        if self.request.path in ("/ping/", "/"):
+        if self.request.path in ("/ping/",):
             return []
         return super().get_permissions()
 

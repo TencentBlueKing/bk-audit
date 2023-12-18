@@ -21,5 +21,5 @@ from django.utils.deprecation import MiddlewareMixin
 
 class LoginExemptMiddleware(MiddlewareMixin):
     def process_view(self, request, view_func, view_args, view_kwargs):
-        if request.path in ("/ping/", "/"):
+        if request.path in ("/ping/",):
             setattr(view_func, "login_exempt", True)
