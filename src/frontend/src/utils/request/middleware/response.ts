@@ -21,14 +21,14 @@ import type {
   AxiosResponse,
 } from 'axios';
 
-import RootManageService from '@service/root-manage';
-
 import IamApplyDataModel from '@model/iam/apply-data';
 
 import useEventBus from '@hooks/use-event-bus';
 import useMessage from '@hooks/use-message';
 
 import {
+  loginDialog,
+  parseURL,
   permissionDialog,
 } from '@utils/assist';
 
@@ -37,12 +37,17 @@ import RequestError from '../lib/request-error';
 const { messageError } = useMessage();
 
 
-const redirectLogin = () => {
-  RootManageService.config().then((config) => {
-    const loginUrlPlain = config.login_url.startsWith('http://') || config.login_url.startsWith('https://') ? config.login_url : `${window.location.protocol}//${config.login_url}`;
-    const { protocol, host, pathname } = new URL(loginUrlPlain);
-    window.location.href = `${protocol}//${host}${pathname}?c_url=${decodeURIComponent(window.location.href)}`;
-  });
+// 标记已经登录过状态
+// 第一次登录跳转登录页面，之后弹框登录
+let hasLogined = false;
+
+const redirectLogin = (loginUrl:string) => {
+  const { protocol, host } = parseURL(loginUrl);
+  if (hasLogined) {
+    loginDialog(`${protocol}://${host}/plain/?c_url=${decodeURIComponent(`${window.location.origin}/login-success.html`)}`);
+  } else {
+    window.location.href = `${protocol}://${host}/?c_url=${decodeURIComponent(window.location.href)}`;
+  }
 };
 
 export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
@@ -51,6 +56,7 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
     switch (response.data.code) {
       // 后端业务逻辑处理成功
       case 0:
+        hasLogined = true;
         return response.data;
       default: {
         // 后端逻辑处理报错
@@ -89,7 +95,7 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
     switch (error.code) {
       // 未登陆
       case 401:
-        redirectLogin();
+        redirectLogin(error.response.data.login_url);
         break;
       case 403:
         handlePermission(error);
