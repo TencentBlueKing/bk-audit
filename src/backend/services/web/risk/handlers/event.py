@@ -30,6 +30,7 @@ from django.utils.translation import gettext
 from apps.exceptions import MetaConfigNotExistException
 from apps.meta.constants import ConfigLevelChoices, EtlConfigEnum
 from apps.meta.models import GlobalMetaConfig
+from core.utils.retry import FuncRunner
 from services.web.databus.constants import (
     DEFAULT_CATEGORY_ID,
     DEFAULT_COLLECTOR_SCENARIO,
@@ -233,15 +234,18 @@ class EventHandler(ElasticHandler):
     @classmethod
     def search_all_event(cls, namespace: str, start_time: str, end_time: str, page: int, page_size: int, **kwargs):
         # 获取单次结果
-        resp = cls.search_event(
-            namespace=namespace,
-            start_time=start_time,
-            end_time=end_time,
-            page=page,
-            page_size=page_size,
-            scroll=RISK_SYNC_SCROLL,
-            **kwargs,
-        )
+        resp = FuncRunner(
+            func=cls.search_event,
+            kwargs={
+                "namespace": namespace,
+                "start_time": start_time,
+                "end_time": end_time,
+                "page": page,
+                "page_size": page_size,
+                "scroll": RISK_SYNC_SCROLL,
+                **kwargs,
+            },
+        ).run()
         data: list = resp["results"]
         # 判断是否需要滚动查询
         if resp["total"] <= page_size:
@@ -249,13 +253,16 @@ class EventHandler(ElasticHandler):
         # 滚动查询
         scroll_id = resp["scroll_id"]
         while True:
-            resp = api.bk_log.es_query_scroll(
-                indices=cls.get_table_id().replace(".", "_"),
-                scenario_id="log",
-                storage_cluster_id=GlobalMetaConfig.get(EVENT_ES_CLUSTER_ID_KEY),
-                scroll=RISK_SYNC_SCROLL,
-                scroll_id=scroll_id,
-            )
+            resp = FuncRunner(
+                func=api.bk_log.es_query_scroll,
+                kwargs={
+                    "indices": cls.get_table_id().replace(".", "_"),
+                    "scenario_id": "log",
+                    "storage_cluster_id": GlobalMetaConfig.get(EVENT_ES_CLUSTER_ID_KEY),
+                    "scroll": RISK_SYNC_SCROLL,
+                    "scroll_id": scroll_id,
+                },
+            ).run()
             hits = [HitsFormatter(hit["_source"], []).value for hit in resp.get("hits", {}).get("hits", [])]
             if not hits:
                 break
