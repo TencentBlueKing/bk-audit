@@ -26,7 +26,7 @@ class Command(_Command):
     def handle(self, **options):
         for logger_name in settings.LOGGING["loggers"].keys():
             logger = logging.getLogger(logger_name)
-            if any([isinstance(handler, logging.StreamHandler) for handler in logger.handlers]):
+            if any([type(handler) is logging.StreamHandler for handler in logger.handlers]):
                 continue
             logger.addHandler(logging.StreamHandler())
         super().handle(**options)
