@@ -4,5 +4,4 @@ COPY . /app
 
 WORKDIR /app
 
-RUN yarn
-RUN yarn build
+RUN yarn && yarn build && yarn build-server && rm -rf node_modules && yarn cache clean
