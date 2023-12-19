@@ -162,7 +162,6 @@
         res[item.id] = item.name;
         return res;
       }, {} as Record<string, string>);
-      console.log(riskFieldMap);
     },
   });
   // 获取处理套餐详情

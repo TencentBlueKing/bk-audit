@@ -456,6 +456,12 @@
             };
           }
         });
+        // 如果删除字段删除对应field
+        Object.keys(formData.value.pa_params).forEach((key) => {
+          if (!paramsDetailData.value[key]) {
+            delete formData.value.pa_params[key];
+          }
+        });
       }
     },
   });
@@ -500,7 +506,6 @@
 
   const handleValueDicts = (val: string) => {
     if (val === 'strategy_id' && !strategyList.value.length) {
-      console.log(333);
       fetchAllStrategyList();
     }
   };
