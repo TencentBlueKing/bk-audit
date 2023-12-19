@@ -191,7 +191,7 @@
               </bk-select>
               <router-link
                 v-if="formData.pa_id"
-                style="color: #979BA5;"
+                style="color: #979ba5;"
                 target="_blank"
                 :to="{
                   name:'applicationManageList',
@@ -202,7 +202,7 @@
                 <audit-icon
                   v-bk-tooltips="t('查看套餐详情')"
                   class="ml8"
-                  style="font-size: 16px;color: #979BA5;"
+                  style="font-size: 16px;color: #979ba5;"
                   type="audit" />
               </router-link>
             </div>
@@ -213,7 +213,7 @@
               class="is-required mr16"
               :label="t('套餐参数')"
               property="pa_params">
-              <div style="width:976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
+              <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
                 <template
                   v-for="(val,index) in Object.values(paramsDetailData)"
                   :key="`${val.key}-${index}`">
@@ -448,6 +448,14 @@
             fetchAllStrategyList();
           }
         });
+        // 防止新增字段取不到对应field
+        Object.values(paramsDetailData.value).forEach((val) => {
+          if (!formData.value.pa_params[val.key]) {
+            formData.value.pa_params[val.key] = {
+              field: '',
+            };
+          }
+        });
       }
     },
   });
@@ -492,6 +500,7 @@
 
   const handleValueDicts = (val: string) => {
     if (val === 'strategy_id' && !strategyList.value.length) {
+      console.log(333);
       fetchAllStrategyList();
     }
   };
@@ -553,7 +562,7 @@
   });
 </script>
 <style scoped lang="postcss">
-.create-strategy-page{
+.create-strategy-page {
   padding: 28px 24px;
   background-color: #fff;
 
@@ -568,7 +577,7 @@
 
     :deep(.bk-form-label::after) {
       width: 0;
-      content: "";
+      content: '';
     }
 
     :deep(.bk-form-label) {

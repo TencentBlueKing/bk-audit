@@ -78,7 +78,7 @@
               v-for="item in Object.values(paramsDetailData)"
               :key="item.key"
               :label="item.name">
-              {{ riskFieldMap[data.pa_params[item.key].field] || data.pa_params[item.key].field }}
+              {{ riskFieldMap[data.pa_params[item.key]?.field] || data.pa_params[item.key]?.field }}
             </render-info-item>
           </div>
           <span v-else>--</span>
@@ -162,6 +162,7 @@
         res[item.id] = item.name;
         return res;
       }, {} as Record<string, string>);
+      console.log(riskFieldMap);
     },
   });
   // 获取处理套餐详情
@@ -185,20 +186,20 @@
   });
 </script>
 <style scoped lang="postcss">
-.riskrule-detail-wrap{
+.riskrule-detail-wrap {
   padding: 24px 32px;
 
-  .mr4{
+  .mr4 {
     margin-right: 4px;
   }
 
-  .mb4{
+  .mb4 {
     margin-bottom: 4px;
   }
 
   .scope-render-item {
-    .info-label{
-      margin-top:2px;
+    .info-label {
+      margin-top: 2px;
     }
   }
 
