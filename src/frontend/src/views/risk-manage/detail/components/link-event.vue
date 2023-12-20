@@ -200,7 +200,18 @@
     {
       label: () => t('字段值'),
       field: () => 'val',
-      render: ({ data }: { data: { val: string } }) => <Tooltips data = { data.val} />,
+      render: ({ data }: { data: { val: string, hasTooltips: boolean } }) => (
+        data.hasTooltips
+          ? <div
+            v-bk-tooltips={{
+              content: data.val,
+              placement: 'top',
+              extCls: 'val-tooltips',
+            }}
+            class='val-tooltips-text'>
+            { data.val || '--' }
+          </div> : <div class='val-tooltips-text'> { data.val || '--' } </div>
+      ),
     },
   ]);
   const eventDataList = ref<Record<string, any>[]>([]);
@@ -221,11 +232,29 @@
   // 事件数据字段
   const handleShowEventData = (data: EventModel) => {
     showEventDataSlider.value = true;
-    const tableData = Object.keys(data.event_data).map(key => ({
-      key,
-      val: data.event_data[key] ? JSON.stringify(data.event_data[key]) : '',
-    }));
+    const tableData = Object.keys(data.event_data).map((key) => {
+      const val = data.event_data[key] ? JSON.stringify(data.event_data[key]) : '';
+      return {
+        key,
+        val,
+        hasTooltips: hasTooltips(val),
+      };
+    });
     eventDataList.value = tableData;
+  };
+  // 判断数据字段是否显示tooltips
+  const hasTooltips = (text: string) => {
+    const tempDiv = document.createElement('div');
+    // 防止span影响页面布局
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.whiteSpace = 'nowrap';
+    tempDiv.style.visibility = 'hidden';
+    tempDiv.textContent = text;
+    document.body.appendChild(tempDiv);
+    const width = tempDiv.offsetWidth;
+    // 移除临时的span元素
+    document.body.removeChild(tempDiv);
+    return width > 300;
   };
   const handleShowEvidence = (data: EventModel) => {
     const evidenceList = JSON.parse(data.event_evidence) as Record<string, any>[];
@@ -287,6 +316,18 @@
 
 .bk-popover {
   max-width: 750px;
+  word-break: break-all;
+}
+
+.val-tooltips-text {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.val-tooltips {
+  max-width: 300px;
   word-break: break-all;
 }
 </style>
