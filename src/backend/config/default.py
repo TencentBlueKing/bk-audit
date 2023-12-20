@@ -128,7 +128,7 @@ LOCALE_PATHS = (os.path.join(BASE_DIR, "locale"),)  # noqa
 
 USE_TZ = True
 TIME_ZONE = "Asia/Shanghai"
-LANGUAGE_CODE = "zh-cn"
+LANGUAGE_CODE = os.getenv("BKAPP_LANGUAGE_CODE", "zh-cn")
 
 LANGUAGES = (
     ("en", "English"),
