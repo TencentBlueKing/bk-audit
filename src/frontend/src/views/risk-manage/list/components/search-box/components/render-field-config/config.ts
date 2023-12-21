@@ -85,4 +85,9 @@ export default {
       },
     ])),
   },
+  event_content: {
+    label: '风险描述',
+    type: 'string',
+    required: false,
+  },
 } as Record<string, IFieldConfig>;
