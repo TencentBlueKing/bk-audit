@@ -201,16 +201,16 @@
       label: () => t('字段值'),
       field: () => 'val',
       render: ({ data }: { data: { val: string, hasTooltips: boolean } }) => (
-        data.hasTooltips
-          ? <div
-            v-bk-tooltips={{
-              content: data.val,
-              placement: 'top',
-              extCls: 'val-tooltips',
-            }}
-            class='val-tooltips-text'>
-            { data.val || '--' }
-          </div> : <div class='val-tooltips-text'> { data.val || '--' } </div>
+        <div
+          v-bk-tooltips={{
+            content: data.val,
+            placement: 'top',
+            extCls: 'val-tooltips',
+            disabled: !data.hasTooltips,
+          }}
+          class='val-tooltips-text'>
+          { data.val || '--' }
+        </div>
       ),
     },
   ]);
@@ -229,19 +229,6 @@
     });
     return strList.join('\n');
   };
-  // 事件数据字段
-  const handleShowEventData = (data: EventModel) => {
-    showEventDataSlider.value = true;
-    const tableData = Object.keys(data.event_data).map((key) => {
-      const val = data.event_data[key] ? JSON.stringify(data.event_data[key]) : '';
-      return {
-        key,
-        val,
-        hasTooltips: hasTooltips(val),
-      };
-    });
-    eventDataList.value = tableData;
-  };
   // 判断数据字段是否显示tooltips
   const hasTooltips = (text: string) => {
     const tempDiv = document.createElement('div');
@@ -255,6 +242,19 @@
     // 移除临时的span元素
     document.body.removeChild(tempDiv);
     return width > 300;
+  };
+  // 事件数据字段
+  const handleShowEventData = (data: EventModel) => {
+    showEventDataSlider.value = true;
+    const tableData = Object.keys(data.event_data).map((key) => {
+      const val = data.event_data[key] ? JSON.stringify(data.event_data[key]) : '';
+      return {
+        key,
+        val,
+        hasTooltips: hasTooltips(val),
+      };
+    });
+    eventDataList.value = tableData;
   };
   const handleShowEvidence = (data: EventModel) => {
     const evidenceList = JSON.parse(data.event_evidence) as Record<string, any>[];
