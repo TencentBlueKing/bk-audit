@@ -20,8 +20,10 @@ import abc
 import traceback
 
 from bk_resource import BkApiResource
+from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_base.constants import UNSUPPORTED_CODE
@@ -32,6 +34,12 @@ class BkBaseResource(BkApiResource, abc.ABC):
     base_url = BK_BASE_API_URL
     module_name = "bkbase"
     platform_authorization = True
+
+    def build_request_data(self, validated_request_data: dict) -> dict:
+        data = super().build_request_data(validated_request_data)
+        data["bk_username"] = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
+        data["bk_app_code"] = settings.APP_CODE
+        return data
 
 
 class DatabusStoragesPost(BkBaseResource):
