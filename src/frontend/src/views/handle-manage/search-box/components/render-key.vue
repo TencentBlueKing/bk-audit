@@ -139,7 +139,7 @@
 
       .active {
         transform: rotateZ(-180deg);
-        transition: all 0.15s;
+        transition: all .15s;
       }
     }
   }
