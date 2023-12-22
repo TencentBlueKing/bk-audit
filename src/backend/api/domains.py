@@ -69,4 +69,5 @@ BK_SOPS_API_URL = get_endpoint("bk-sops", APIProvider.APIGW, stage=BK_SOPS_APIGW
 BK_ITSM_API_URL = get_endpoint("bk-itsm", APIProvider.APIGW) if APIGW_ENABLED else get_endpoint("itsm", APIProvider.ESB)
 
 # BK Vision
-BK_VISION_API_URL = get_endpoint("bk-vision", APIProvider.APIGW)
+BK_VISION_API_STAGE = "prod" if settings.RUN_MODE == "PRODUCT" else "stag-new"
+BK_VISION_API_URL = get_endpoint("bk-vision", APIProvider.APIGW, stage=BK_VISION_API_STAGE)
