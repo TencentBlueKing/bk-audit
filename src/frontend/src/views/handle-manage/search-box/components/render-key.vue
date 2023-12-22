@@ -27,33 +27,7 @@
           :name="fieldName"
           @change="handleChange" />
       </template>
-      <div class="show-more-condition-btn">
-        <bk-button
-          text
-          theme="primary"
-          @click="handleShowMore">
-          {{ t('更多选项') }}
-          <audit-icon
-            :class="{ active: isShowMore }"
-            style=" margin-left: 4px;"
-            type="angle-double-down" />
-        </bk-button>
-      </div>
     </div>
-    <template v-if="isShowMore">
-      <div class="box-row">
-        <template
-          v-for="(fieldItem, fieldName) in moreFieldList"
-          :key="fieldName">
-          <render-field-config
-            ref="fieldConfigRef"
-            class="box-column"
-            :model="localSearchModel"
-            :name="fieldName"
-            @change="handleChange" />
-        </template>
-      </div>
-    </template>
     <div class="mt16">
       <bk-button
         class="mr8"
@@ -98,14 +72,9 @@
     datetime: ['', ''],
   });
   const fieldConfigRef = ref();
-  const isShowMore = ref(false);
 
   const allFieldNameList = Object.keys(filedConfig) as Array<keyof typeof filedConfig>;
-  const defaultFieldList = allFieldNameList.slice(0, 7).reduce((result, fieldName) => ({
-    ...result,
-    [fieldName]: filedConfig[fieldName],
-  }), {});
-  const moreFieldList = allFieldNameList.slice(7).reduce((result, fieldName) => ({
+  const defaultFieldList = allFieldNameList.slice(0).reduce((result, fieldName) => ({
     ...result,
     [fieldName]: filedConfig[fieldName],
   }), {});
@@ -117,10 +86,6 @@
     immediate: true,
   });
 
-  // 显示更多搜索条件
-  const handleShowMore = () => {
-    isShowMore.value = !isShowMore.value;
-  };
   // 搜索项值改变
   const handleChange = (fieldName: string, value: any) => {
     localSearchModel.value = {

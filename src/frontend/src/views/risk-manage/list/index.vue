@@ -446,6 +446,7 @@
       current_operator: '',
       status: '',
       risk_label: '',
+      event_content: '',
     };
     listRef.value.fetchData({
       ...params,
@@ -459,10 +460,10 @@
 </script>
 <style lang='postcss'>
 
-.risk-manage-list-page-wrap{
+.risk-manage-list-page-wrap {
   padding-bottom: 44px;
 
-  .risk-manage-list{
+  .risk-manage-list {
     margin-top: 16px;
     background-color: white;
 
@@ -475,17 +476,17 @@
 
 }
 
-.risk-label-status{
+.risk-label-status {
   padding: 1px 8px;
   font-size: 12px;
-  color: #14A568;
-  background-color: #E4FAF0;
+  color: #14a568;
+  background-color: #e4faf0;
   border: 1px solid rgb(20 165 104 / 30%);
   border-radius: 11px;
 }
 
-.risk-label-status.misreport{
-  color: #EA3536;
+.risk-label-status.misreport {
+  color: #ea3536;
   background: #fedddc99;
   border: 1px solid #ea35364d;
 }
