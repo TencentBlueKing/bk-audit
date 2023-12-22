@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-09-26 14:44+0800\n"
+"POT-Creation-Date: 2023-12-20 10:58+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -125,6 +125,9 @@ msgstr "获取源数据最近数据"
 
 msgid "获取结果表列表"
 msgstr "获取结果表列表"
+
+msgid "获取结果表"
+msgstr "获取结果表"
 
 msgid "列举项目相关数据"
 msgstr "列举项目相关数据"
@@ -678,11 +681,32 @@ msgstr "获取节点数据"
 msgid "操作节点"
 msgstr "操作节点"
 
+msgid "查询视图配置"
+msgstr "查询视图配置"
+
+msgid "获取面板视图数据"
+msgstr "获取面板视图数据"
+
+msgid "获取面板变量数据"
+msgstr "获取面板变量数据"
+
+msgid "查询数据集"
+msgstr "查询数据集"
+
 msgid "获取用户列表"
 msgstr "获取用户列表"
 
 msgid "获取单个用户信息"
 msgstr "获取单个用户信息"
+
+msgid "查询用户的部门信息 (v2)"
+msgstr "查询用户的部门信息 (v2)"
+
+msgid "查询部门 (v2)"
+msgstr "查询部门 (v2)"
+
+msgid "查询单个部门信息 (v2)"
+msgstr "查询单个部门信息 (v2)"
 
 msgid "获取用户快照Schema"
 msgstr "获取用户快照Schema"
@@ -1297,6 +1321,12 @@ msgstr "操作结束时间"
 msgid "事件上报模块"
 msgstr "事件上报模块"
 
+msgid "管理空间类型"
+msgstr "管理空间类型"
+
+msgid "管理空间ID"
+msgstr "管理空间ID"
+
 msgid "操作途径"
 msgstr "操作途径"
 
@@ -1511,6 +1541,9 @@ msgstr "RTX"
 msgid "通知组名称不能包含特殊字符 %s"
 msgstr "通知组名称不能包含特殊字符 %s"
 
+msgid "内置通知组禁止删除"
+msgstr "内置通知组禁止删除"
+
 msgid "权限中心异常"
 msgstr "权限中心异常"
 
@@ -1559,6 +1592,9 @@ msgstr "空间"
 
 msgid "采集项"
 msgstr "采集项"
+
+msgid "组织架构"
+msgstr "组织架构"
 
 msgid "获取IAM系统配置"
 msgstr "获取IAM系统配置"
@@ -1613,15 +1649,6 @@ msgstr "获取任务状态常量"
 
 msgid "审计中心"
 msgstr "审计中心"
-
-msgid "Default"
-msgstr "Default"
-
-msgid "Api"
-msgstr "Api"
-
-msgid "Puller"
-msgstr "Puller"
 
 msgid "参数验证失败"
 msgstr "参数验证失败"
@@ -1716,8 +1743,17 @@ msgstr "其他"
 msgid "RealTime"
 msgstr "实时计算"
 
+msgid "Batch Join"
+msgstr "离线维表计算"
+
 msgid "Batch"
-msgstr "离线计算"
+msgstr "离线实时计算"
+
+msgid "CDC"
+msgstr "CDC"
+
+msgid "Static Table"
+msgstr "维表"
 
 msgid "BatchV2"
 msgstr "离线计算V2"
@@ -1812,6 +1848,9 @@ msgstr "集群不存在"
 
 msgid "Control Not Exists"
 msgstr "控件不存在"
+
+msgid "操作行为审计"
+msgstr "操作行为审计"
 
 msgid "Control ID"
 msgstr "控件ID"
@@ -2630,6 +2669,17 @@ msgstr "%s 标记误报，系统自动关单"
 msgid "解除误报"
 msgstr "解除误报"
 
+msgid "原套餐继续执行"
+msgstr "原套餐继续执行"
+
+#, python-format
+msgid "指定处理人：%s"
+msgstr "指定处理人：%s"
+
+#, python-format
+msgid "%s 解除误报，系统自动重开单据"
+msgstr "%s 解除误报，系统自动重开单据"
+
 msgid "人工处理"
 msgstr "人工处理"
 
@@ -2662,6 +2712,9 @@ msgstr "标签"
 
 msgid "Risk Label"
 msgstr "风险标签"
+
+msgid "Last Operate Time"
+msgstr "最后处理时间"
 
 msgid "UUID"
 msgstr "UUID"
@@ -2731,6 +2784,12 @@ msgstr "状态"
 
 msgid "Ticket History"
 msgstr "风险流转历史"
+
+msgid "Authorized Time"
+msgstr "授权时间"
+
+msgid "Ticket Permission"
+msgstr "单据权限"
 
 msgid "创建事件"
 msgstr "创建事件"
@@ -2802,18 +2861,25 @@ msgstr "人工转单"
 msgid "人工执行处理套餐"
 msgstr "人工执行处理套餐"
 
-msgid "强制终止处理套餐"
-msgstr "强制终止处理套餐"
+msgid "强制撤销审批单据"
+msgstr "强制撤销审批单据"
 
 #, python-format
 msgid "节点类型异常 => %s"
 msgstr "节点类型异常 => %s"
+
+msgid "强制终止处理套餐"
+msgstr "强制终止处理套餐"
 
 msgid "重试处理套餐"
 msgstr "重试处理套餐"
 
 msgid "重开单据"
 msgstr "重开单据"
+
+#, python-format
+msgid "%s 重开单据，指定处理人 %s"
+msgstr "%s 重开单据，指定处理人 %s"
 
 msgid "风险处理规则列表"
 msgstr "风险处理规则列表"
@@ -2906,22 +2972,30 @@ msgstr "处理说明"
 msgid "新处理人"
 msgstr "新处理人"
 
+msgid "不能转单给自己"
+msgstr "不能转单给自己"
+
+msgid "Sync BKM Alert Failed"
+msgstr "同步监控告警异常"
+
+msgid "Generate Risk Failed"
+msgstr "风险生成异常"
+
 msgid "Process Risk Ticket Failed"
 msgstr "自动处理风险异常"
 
 #, python-format
 msgid ""
 "ProcessClass: %s\n"
-"RiskID: %s\n"
+"RiskID: %s(%d/%d)\n"
 "Error: %s"
 msgstr ""
-"ProcessClass: %s\n"
-"RiskID: %s\n"
-"Error: %s"
+"处理方式: %s\n"
+"风险ID: %s(%d/%d)\n"
+"异常信息: %s"
 
-#, python-format
-msgid "执行%s节点失败，转人工处理"
-msgstr "执行%s节点失败，转人工处理"
+msgid "风险自动流转失败，转为安全接口人处理"
+msgstr "风险自动流转失败，转为安全接口人处理"
 
 msgid "Control Type Name"
 msgstr "控件类型名称"
@@ -2988,9 +3062,6 @@ msgstr "操作记录"
 
 msgid "Asset Data"
 msgstr "资源数据"
-
-msgid "CDC"
-msgstr "CDC"
 
 msgid "Static"
 msgstr "静态"
@@ -3202,6 +3273,9 @@ msgstr "配置类型"
 msgid "AIOPS Config"
 msgstr "AIOps 参数"
 
+msgid "方案参数"
+msgstr "方案参数"
+
 msgid "Table ID"
 msgstr "结果表ID"
 
@@ -3231,6 +3305,18 @@ msgstr "版本列表"
 
 msgid "版本信息"
 msgstr "版本信息"
+
+msgid "仪表盘"
+msgstr "仪表盘"
+
+msgid "筛选"
+msgstr "筛选"
+
+msgid "不支持的权限，请联系管理员"
+msgstr "不支持的权限，请联系管理员！"
+
+msgid "仪表盘列表"
+msgstr "仪表盘列表"
 
 msgid "系统权限不足"
 msgstr "系统权限不足"
@@ -3294,3 +3380,19 @@ msgstr "蓝鲸智云工作台"
 
 msgid "蓝鲸智云 版权所有"
 msgstr "蓝鲸智云 版权所有"
+
+msgid "Admin 风险"
+msgstr "Admin 风险"
+
+msgid "自动处理套餐"
+msgstr "自动处理套餐"
+
+msgid "自动处理规则"
+msgstr "自动处理规则"
+
+msgid "【审计中心】执行自动处理套餐审批"
+msgstr "【审计中心】执行自动处理套餐审批"
+
+#, python-format
+msgid "%s 操作关单"
+msgstr "%s 操作关单"
