@@ -110,6 +110,7 @@
                 :placeholder="t('请输入并Enter结束')"
                 trigger="focus"
                 @blur="isValueFocus[index]=false"
+                @change="handleUpdateFilterConfig"
                 @focus="isValueFocus[index]=true">
                 <bk-option
                   v-for="(condition, conditionIndex) in dicts[item.key]"

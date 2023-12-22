@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-09-26 14:44+0800\n"
+"POT-Creation-Date: 2023-12-20 10:58+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -125,6 +125,9 @@ msgstr "Get DataID Tail"
 
 msgid "获取结果表列表"
 msgstr "Get Result Tables"
+
+msgid "获取结果表"
+msgstr "Get Result Table"
 
 msgid "列举项目相关数据"
 msgstr "Get Project Data"
@@ -678,11 +681,32 @@ msgstr "Get Node Data"
 msgid "操作节点"
 msgstr "Operate Node"
 
+msgid "查询视图配置"
+msgstr "Get Panel Meta"
+
+msgid "获取面板视图数据"
+msgstr "Get Panel Data"
+
+msgid "获取面板变量数据"
+msgstr "Get Panel Variables"
+
+msgid "查询数据集"
+msgstr "Search Dataset"
+
 msgid "获取用户列表"
 msgstr "Get User List"
 
 msgid "获取单个用户信息"
 msgstr "Retrieve User"
+
+msgid "查询用户的部门信息 (v2)"
+msgstr "Get User Department (V2)"
+
+msgid "查询部门 (v2)"
+msgstr "List Department (v2)"
+
+msgid "查询单个部门信息 (v2)"
+msgstr "Retrieve Department (V2)"
 
 msgid "获取用户快照Schema"
 msgstr "Get User Snapshot Schema"
@@ -1297,6 +1321,12 @@ msgstr "Event End Time"
 msgid "事件上报模块"
 msgstr "Bk App Code"
 
+msgid "管理空间类型"
+msgstr "Scope Type"
+
+msgid "管理空间ID"
+msgstr "Scope ID"
+
 msgid "操作途径"
 msgstr "Access Type"
 
@@ -1511,6 +1541,9 @@ msgstr "RTX"
 msgid "通知组名称不能包含特殊字符 %s"
 msgstr "Notice Group Name Invalid with %s"
 
+msgid "内置通知组禁止删除"
+msgstr "Build in notice group is not allowed to delete"
+
 msgid "权限中心异常"
 msgstr "IAM Error"
 
@@ -1559,6 +1592,9 @@ msgstr "Space"
 
 msgid "采集项"
 msgstr "Collector"
+
+msgid "组织架构"
+msgstr "Department"
 
 msgid "获取IAM系统配置"
 msgstr "Get IAM System COnfig"
@@ -1613,15 +1649,6 @@ msgstr "List Task Status Constants"
 
 msgid "审计中心"
 msgstr "BK Audit"
-
-msgid "Default"
-msgstr "Default"
-
-msgid "Api"
-msgstr "Api"
-
-msgid "Puller"
-msgstr "Puller"
 
 msgid "参数验证失败"
 msgstr "Parameter Validation Failed"
@@ -1716,8 +1743,17 @@ msgstr "Other"
 msgid "RealTime"
 msgstr "RealTime"
 
+msgid "Batch Join"
+msgstr "Batch Join"
+
 msgid "Batch"
 msgstr "Batch"
+
+msgid "CDC"
+msgstr "CDC"
+
+msgid "Static Table"
+msgstr "Static Table"
 
 msgid "BatchV2"
 msgstr "BatchV2"
@@ -1812,6 +1848,9 @@ msgstr "Cluster Not Exists"
 
 msgid "Control Not Exists"
 msgstr "Cluster Not Exists"
+
+msgid "操作行为审计"
+msgstr "User Operate Audit"
 
 msgid "Control ID"
 msgstr "Control ID"
@@ -2630,6 +2669,17 @@ msgstr "%s label as misreport, ticket closed by system"
 msgid "解除误报"
 msgstr "Reopen Misreport"
 
+msgid "原套餐继续执行"
+msgstr "Process continues"
+
+#, python-format
+msgid "指定处理人：%s"
+msgstr "Assign to: %s"
+
+#, python-format
+msgid "%s 解除误报，系统自动重开单据"
+msgstr "%s labeled as normal, ticket reopened by system"
+
 msgid "人工处理"
 msgstr "Await Deal"
 
@@ -2662,6 +2712,9 @@ msgstr "Tags"
 
 msgid "Risk Label"
 msgstr "Risk Label"
+
+msgid "Last Operate Time"
+msgstr "Last Operate Time"
 
 msgid "UUID"
 msgstr "UUID"
@@ -2731,6 +2784,12 @@ msgstr "Status"
 
 msgid "Ticket History"
 msgstr "Ticket History"
+
+msgid "Authorized Time"
+msgstr "Authorized Time"
+
+msgid "Ticket Permission"
+msgstr "Ticket Permission"
 
 msgid "创建事件"
 msgstr "Create Event"
@@ -2802,18 +2861,25 @@ msgstr "Trans Operator"
 msgid "人工执行处理套餐"
 msgstr "Execute Auth Process"
 
-msgid "强制终止处理套餐"
-msgstr "Force Revoke Auto Process"
+msgid "强制撤销审批单据"
+msgstr "Force revoke approve ticket"
 
 #, python-format
 msgid "节点类型异常 => %s"
 msgstr "Node Type Invalid => %s"
+
+msgid "强制终止处理套餐"
+msgstr "Force revoke process"
 
 msgid "重试处理套餐"
 msgstr "Retry Auto Process"
 
 msgid "重开单据"
 msgstr "Reopen Risk"
+
+#, python-format
+msgid "%s 重开单据，指定处理人 %s"
+msgstr "%s reopen ticket, assign to %s"
 
 msgid "风险处理规则列表"
 msgstr "List Risk Rules"
@@ -2906,22 +2972,30 @@ msgstr "Deal Desciption"
 msgid "新处理人"
 msgstr "New Operator"
 
+msgid "不能转单给自己"
+msgstr "Not allowed to trans to yourself"
+
+msgid "Sync BKM Alert Failed"
+msgstr "Sync BKM Alert Failed"
+
+msgid "Generate Risk Failed"
+msgstr "Generate Risk Failed"
+
 msgid "Process Risk Ticket Failed"
 msgstr "Process Risk Ticket Failed"
 
 #, python-format
 msgid ""
 "ProcessClass: %s\n"
-"RiskID: %s\n"
+"RiskID: %s(%d/%d)\n"
 "Error: %s"
 msgstr ""
 "ProcessClass: %s\n"
-"RiskID: %s\n"
+"RiskID: %s(%d/%d)\n"
 "Error: %s"
 
-#, python-format
-msgid "执行%s节点失败，转人工处理"
-msgstr "Process %s Node Failed, Trans Operator to Security Person"
+msgid "风险自动流转失败，转为安全接口人处理"
+msgstr "Risk auto process failed, trans to security person"
 
 msgid "Control Type Name"
 msgstr "Control Type Name"
@@ -2988,9 +3062,6 @@ msgstr "Event Log"
 
 msgid "Asset Data"
 msgstr "Asset Data"
-
-msgid "CDC"
-msgstr "CDC"
 
 msgid "Static"
 msgstr "Static"
@@ -3202,6 +3273,9 @@ msgstr "Config Type"
 msgid "AIOPS Config"
 msgstr "AIOPS Config"
 
+msgid "方案参数"
+msgstr "Plan variables"
+
 msgid "Table ID"
 msgstr "Table ID"
 
@@ -3231,6 +3305,18 @@ msgstr "Version List"
 
 msgid "版本信息"
 msgstr "Version Information"
+
+msgid "仪表盘"
+msgstr "Panel"
+
+msgid "筛选"
+msgstr "Filter"
+
+msgid "不支持的权限，请联系管理员"
+msgstr "Unsupported privilege, Please Contact The Administrator!"
+
+msgid "仪表盘列表"
+msgstr "Panel List"
 
 msgid "系统权限不足"
 msgstr "Insufficient System Permissions"
@@ -3294,3 +3380,19 @@ msgstr "BK Workbench"
 
 msgid "蓝鲸智云 版权所有"
 msgstr "BK All Rights Reserved"
+
+msgid "Admin 风险"
+msgstr "Admin Risk"
+
+msgid "自动处理套餐"
+msgstr "Auto Process"
+
+msgid "自动处理规则"
+msgstr "Risk Rule"
+
+msgid "【审计中心】执行自动处理套餐审批"
+msgstr "[BKAudit] Process waiting for approve"
+
+#, python-format
+msgid "%s 操作关单"
+msgstr "%s close risk"
