@@ -65,19 +65,9 @@ export default {
     service: RiskManageService.fetchRiskStatusCommon,
     filterList: ['new'],
   },
-  risk_label: {
-    label: '风险标记',
-    type: 'select',
+  event_content: {
+    label: '风险描述',
+    type: 'string',
     required: false,
-    service: () => new Promise(resolve => resolve([
-      {
-        id: 'normal',
-        name: '正常',
-      },
-      {
-        id: 'misreport',
-        name: '误报',
-      },
-    ])),
   },
 } as Record<string, IFieldConfig>;
