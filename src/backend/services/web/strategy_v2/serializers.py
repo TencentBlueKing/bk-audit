@@ -32,6 +32,7 @@ from services.web.analyze.models import ControlVersion
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     ConnectorChoices,
+    FilterType,
     StrategyAlgorithmOperator,
     StrategyOperator,
     TableType,
@@ -331,7 +332,13 @@ class AIOPSDataSourceSerializer(serializers.Serializer):
     bk_biz_id = serializers.CharField(
         label=gettext_lazy("BK Biz ID"), allow_null=True, allow_blank=True, required=False
     )
+    filter_type = serializers.ChoiceField(
+        label=gettext_lazy("Filter Type"), choices=FilterType.choices, default=FilterType.NORMAL
+    )
     filter_config = AIOPSDataSourceFilterSerializer(label=gettext_lazy("Filter Config"), many=True)
+    filter_sql = serializers.CharField(
+        label=gettext_lazy("Filter SQL"), required=False, allow_blank=True, allow_null=True
+    )
     fields = serializers.JSONField(label=gettext_lazy("Fields"))
 
 
