@@ -63,7 +63,11 @@ from services.web.analyze.constants import (
 from services.web.analyze.controls.base import Controller
 from services.web.analyze.exceptions import ClusterNotExists
 from services.web.analyze.models import Control, ControlVersion
-from services.web.analyze.tasks import call_controller, check_flow_status
+from services.web.analyze.tasks import (
+    call_controller,
+    check_flow_status,
+    toggle_monitor,
+)
 from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.handlers import EventHandler
@@ -191,6 +195,7 @@ class AIOpsController(Controller):
                 api.bk_base.start_flow(**params)
                 self.strategy.status = StrategyStatusChoices.STARTING
                 self.strategy.save(update_fields=["status"])
+                toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
                 check_flow_status.delay(
                     strategy_id=self.strategy.strategy_id,
                     success_status=StrategyStatusChoices.RUNNING,
@@ -201,6 +206,7 @@ class AIOpsController(Controller):
                 api.bk_base.restart_flow(**params)
                 self.strategy.status = StrategyStatusChoices.UPDATING
                 self.strategy.save(update_fields=["status"])
+                toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
                 check_flow_status.delay(
                     strategy_id=self.strategy.strategy_id,
                     success_status=StrategyStatusChoices.RUNNING,
@@ -211,6 +217,7 @@ class AIOpsController(Controller):
                 api.bk_base.stop_flow(**params)
                 self.strategy.status = StrategyStatusChoices.STOPPING
                 self.strategy.save(update_fields=["status"])
+                toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=False)
                 check_flow_status.delay(
                     strategy_id=self.strategy.strategy_id,
                     success_status=StrategyStatusChoices.DISABLED.value,

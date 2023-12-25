@@ -309,3 +309,17 @@ class GetProjectData(BkBaseResource):
     action = "/v3/auth/projects/{project_id}/data/"
     method = "GET"
     url_keys = ["project_id"]
+
+
+class GetAlertConfigs(BkBaseResource):
+    name = gettext_lazy("获取告警策略配置详情")
+    action = "/v3/datamanage/dmonitor/alert_configs/{object_type}/{object_id}/"
+    method = "GET"
+    url_keys = ["object_type", "object_id"]
+
+
+class EditAlertConfigs(BkBaseResource):
+    name = gettext_lazy("修改部分告警策略配置配置")
+    action = "/v3/datamanage/dmonitor/alert_configs/{alert_config_id}/"
+    method = "PATCH"
+    url_keys = ["alert_config_id"]
