@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import time
+from typing import List
 
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
@@ -26,12 +27,15 @@ from celery.task import periodic_task, task
 from django.conf import settings
 from django.utils.translation import gettext
 
+from apps.notice.constants import MsgType
 from apps.notice.handlers import ErrorMsgHandler
+from apps.notice.models import NoticeGroup
 from core.lock import lock
 from services.web.analyze.constants import (
     BKBASE_ERROR_LOG_LEVEL,
     CHECK_FLOW_STATUS_SLEEP_SECONDS,
     FlowStatusChoices,
+    ObjectType,
 )
 from services.web.analyze.controls.auth import (
     AssetAuthHandler,
@@ -142,3 +146,46 @@ def auth_rt():
     assets = list(Snapshot.objects.filter(auth_rt=False, bkbase_hdfs_table_id__isnull=False))
     for asset in assets:
         AssetAuthHandler(asset).auth()
+
+
+@task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+def toggle_monitor(strategy_id: int, is_active: bool):
+    """
+    切换BKBASE数据监控开关状态
+    """
+
+    # 获取策略并判定关键参数存在
+    strategy: Strategy = Strategy.objects.filter(strategy_id=strategy_id).first()
+    if not strategy or not strategy.backend_data or not strategy.backend_data.get("flow_id"):
+        logger_celery.error("[ToggleMonitorFailed] Strategy Status Invalid => %s", strategy_id)
+        return
+
+    # 获取通知组并判定关键参数存在
+    notice_groups: List[NoticeGroup] = list(NoticeGroup.objects.filter(group_id__in=strategy.notice_groups))
+    receivers = [
+        {"receiver_type": "user", "username": member}
+        for notice_group in notice_groups
+        for member in notice_group.group_member
+    ]
+    notify_config = list(
+        {
+            config["msg_type"]
+            for notice_group in notice_groups
+            for config in notice_group.notice_config
+            if config.get("msg_type") != MsgType.VOICE
+        }
+    )
+    if not receivers or not notify_config:
+        logger_celery.error("[ToggleMonitorFailed] %s Notice Group Invalid => %s", strategy_id, strategy.notice_groups)
+        return
+
+    # 获取告警配置
+    alert_config = api.bk_base.get_alert_configs(
+        object_type=ObjectType.DATAFLOW, object_id=strategy.backend_data["flow_id"]
+    )
+    alert_config["active"] = is_active
+    alert_config["alert_config_id"] = alert_config["id"]
+    alert_config["receivers"] = receivers
+    alert_config["notify_config"] = notify_config
+    api.bk_base.edit_alert_configs(**alert_config)
+    logger_celery.info("[ToggleMonitorSuccess] %s %s", strategy_id, is_active)

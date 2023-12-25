@@ -169,3 +169,12 @@ class WindowType(TextChoices):
     SCROLL = "scroll", gettext_lazy("Scroll")
     SLIDE = "slide", gettext_lazy("Slide")
     WHOLE = "whole", gettext_lazy("Whole")
+
+
+class ObjectType(TextChoices):
+    """
+    对象类型
+    """
+
+    RAW_DATA = "rawdata", gettext_lazy("数据源")
+    DATAFLOW = "dataflow", gettext_lazy("数据开发")
