@@ -1206,15 +1206,15 @@
   max-width: 1000px;
 }
 
-.edit-badge {
-  .bk-badge.pinned.top-right {
-    top: 13px;
-  }
-}
-
 .strategy-manage {
   display: flex;
   margin: -20px -24px 0;
+
+  .edit-badge {
+    .bk-badge.pinned.top-right {
+      top: 13px;
+    }
+  }
 
   .strategy-enable-switch {
     margin-left: 5px;
