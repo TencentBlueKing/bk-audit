@@ -17,9 +17,12 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import json
+from typing import Dict
 
 import requests
 from bk_resource import BkApiResource
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.domains import BK_PAAS_API_URL
@@ -27,7 +30,8 @@ from api.domains import BK_PAAS_API_URL
 
 class PaaSV3BaseResource(BkApiResource, abc.ABC):
     base_url = BK_PAAS_API_URL
-    bkapi_header_authorization = True
+    bkapi_header_authorization = False
+    bkapi_data_authorization = False
     module_name = "paasv3"
 
 
@@ -40,3 +44,14 @@ class UniAppsQuery(PaaSV3BaseResource):
     def parse_response(self, response: requests.Response):
         results = super().parse_response(response)
         return [result for result in results if result]
+
+    def build_header(self, validated_request_data: dict) -> Dict[str, str]:
+        """
+        构造Header
+        """
+
+        return {
+            "x-bkapi-authorization": json.dumps(
+                {"bk_app_code": settings.APP_CODE, "bk_app_secret": settings.SECRET_KEY}
+            )
+        }
