@@ -30,8 +30,8 @@ from api.domains import BK_PAAS_API_URL
 
 class PaaSV3BaseResource(BkApiResource, abc.ABC):
     base_url = BK_PAAS_API_URL
-    bkapi_header_authorization = True
-    bkapi_data_authorization = True
+    bkapi_header_authorization = False
+    bkapi_data_authorization = False
     module_name = "paasv3"
 
 
