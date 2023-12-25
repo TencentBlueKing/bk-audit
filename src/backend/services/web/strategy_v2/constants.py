@@ -100,7 +100,6 @@ class TableType(TextChoices):
 
     EVENT_LOG = "EventLog", gettext_lazy("Event Log")
     BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
-    # BIZ_ASSET = "BizAsset", gettext_lazy("Biz Asset")
 
     @classmethod
     def get_config(cls, table_type: str) -> dict:
@@ -142,3 +141,12 @@ class MappingType(TextChoices):
 
     PUBLIC = "public", gettext_lazy("Public Field")
     ACTION = "action", gettext_lazy("Extend Field")
+
+
+class FilterType(TextChoices):
+    """
+    筛选类型
+    """
+
+    NORMAL = "normal", gettext_lazy("常规")
+    SQL = "sql", gettext_lazy("SQL")

@@ -68,6 +68,7 @@ from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CO
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.handlers import EventHandler
 from services.web.strategy_v2.constants import (
+    FilterType,
     MappingType,
     StrategyStatusChoices,
     TableType,
@@ -578,7 +579,11 @@ class AIOpsController(Controller):
                 sql_fields.append("CASE \n{}\nELSE NULL \nEND as {}".format(" \n".join(sql_whens), field["field_name"]))
             sql_fields.append(self._build_sql_fields([], using_as=True, add_strategy_id=True)[0])
             system_filter = self._build_sql_filter(
-                [{"key": SYSTEM_ID.field_name, "method": FilterOperator.EQUAL, "value": list(system_ids)}]
+                filter_type=data_source.get("filter_type"),
+                filter_config=[
+                    {"key": SYSTEM_ID.field_name, "method": FilterOperator.EQUAL, "value": list(system_ids)}
+                ],
+                filter_sql=data_source.get("filter_sql"),
             )
             return "SELECT \n{fields}{origin_data_field} \nFROM {table} \n{where}".format(
                 fields=", \n".join(sql_fields),
@@ -591,7 +596,11 @@ class AIOpsController(Controller):
             fields=", ".join(self._build_sql_fields(data_source["fields"])),
             origin_data_field=self._build_origin_data_field(data_source["result_table_id"]),
             table=data_source["result_table_id"],
-            where=self._build_sql_filter(data_source.get("filter_config", [])),
+            where=self._build_sql_filter(
+                filter_type=data_source.get("filter_type"),
+                filter_config=data_source.get("filter_config"),
+                filter_sql=data_source.get("filter_sql"),
+            ),
         )
 
     def _build_origin_data_field(self, result_table_id: str) -> str:
@@ -619,17 +628,25 @@ class AIOpsController(Controller):
             return sql
         return ""
 
-    def _build_sql_filter(self, filter_config: List[dict]) -> str:
+    def _build_sql_filter(
+        self, filter_type: str = None, filter_config: List[dict] = None, filter_sql: str = None
+    ) -> str:
         """
         build sql where
         """
 
         # empty filter
-        if not filter_config:
+        if not filter_config and not filter_sql:
             return ""
 
-        # filter
+        filter_type = filter_type or FilterType.NORMAL
         filter_string = "where "
+
+        # sql filter
+        if filter_type == FilterType.SQL:
+            return filter_string + filter_sql
+
+        # normal filter
         for index, _filter in enumerate(filter_config):
             _filter_conditions = [
                 "{}{}'{}'".format(_filter["key"], _filter["method"], _value.replace("'", "''"))
