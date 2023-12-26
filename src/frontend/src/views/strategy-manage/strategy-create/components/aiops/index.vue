@@ -207,7 +207,7 @@
   const formData = ref<IFormData>({
     configs: {
       data_source: {
-        source_type: 'batch_join_source', // 默认使用离线模式：handleDataSourceType中不切换类型
+        source_type: 'batch_join_source',
       },
       config_type: 'EventLog',
       aiops_config: {
@@ -262,14 +262,11 @@
   });
 
 
-  // 切换数据源类型
+  // 切换数据源类型： 默认使用离线模式batch_join_source，不切换类型
   const handleDataSourceType = (item: boolean | string | number) => {
     fetchTable({
       table_type: item,
     });
-    // formData.value.configs.data_source = {
-    //   source_type: sourceTypeMap.value[formData.value.configs.config_type],
-    // };
     if (isInit) {
       emits('updateDataSource', formData.value.configs.data_source);
       emits('updateConfigType', formData.value.configs.config_type);
