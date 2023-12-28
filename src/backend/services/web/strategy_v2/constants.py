@@ -24,7 +24,7 @@ from services.web.analyze.constants import FlowDataSourceNodeType
 BKMONITOR_AGG_INTERVAL_MIN = 60  # s
 
 HAS_UPDATE_TAG_ID = "-1"
-HAS_UPDATE_TAG_NAME = gettext_lazy("Has Update")
+HAS_UPDATE_TAG_NAME = gettext_lazy("Upgradable")
 
 # 本地更新字段，这些字段不会传递给后端策略，不会导致策略输出变化
 LOCAL_UPDATE_FIELDS = ["strategy_name", "tags", "notice_groups"]
