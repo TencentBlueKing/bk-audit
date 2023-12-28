@@ -48,6 +48,7 @@ INSTALLED_APPS += (
     "drf_yasg",
     "blueapps.opentelemetry.instrument_app",
     "apigw_manager.apigw",
+    "bk_notice_sdk",
 )
 
 MIDDLEWARE = (
@@ -246,6 +247,7 @@ FEATURE_TOGGLE = {
     "bklog_otlp": os.getenv("BKAPP_FEATURE_BKLOG_OTLP", "on"),
     "watermark": os.getenv("BKAPP_FEATURE_WATERMARK", "deny"),
     "bkvision": os.getenv("BKAPP_FEATURE_BKVISION", "deny"),
+    "bknotice": os.getenv("BKAPP_FEATURE_BKNOTICE", "deny"),
 }
 
 # BkLog
@@ -323,6 +325,13 @@ DEFAULT_RETRY_SLEEP_TIME = float(os.getenv("BKAPP_DEFAULT_RETRY_SLEEP_TIME", 0.5
 DEFAULT_MAX_RETRY_SLEEP_TIME = float(os.getenv("BKAPP_DEFAULT_MAX_RETRY_SLEEP_TIME", 1))
 if DEFAULT_RETRY_SLEEP_TIME >= DEFAULT_MAX_RETRY_SLEEP_TIME:
     raise SystemError()
+
+# BK Notice
+BK_NOTICE = {
+    "STAGE": {"dev": "stage", "stag": "stage", "prod": "prod"}[os.getenv("BKPAAS_ENVIRONMENT", "dev")],
+    "ENTRANCE_URL": "bk-notice/",
+    "DEFAULT_LANGUAGE": LANGUAGE_CODE,
+}
 
 """
 以下为框架代码 请勿修改
