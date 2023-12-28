@@ -23,6 +23,8 @@ modules:
         command: python manage.py celery beat -l info
         plan: 4C1G5R
         replicas: 1
+    scripts:
+      pre_release_hook: sh -c "python manage.py migrate --no-input && python manage.py createcachetable && python manage.py init_system && python manage.py init_fields"
     svc_discovery:
       bk_saas:
         - bk_app_code: "bk_itsm"
