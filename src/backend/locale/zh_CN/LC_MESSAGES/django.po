@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-12-20 10:58+0800\n"
+"POT-Creation-Date: 2023-12-28 09:51+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -131,6 +131,12 @@ msgstr "获取结果表"
 
 msgid "列举项目相关数据"
 msgstr "列举项目相关数据"
+
+msgid "获取告警策略配置详情"
+msgstr "获取告警策略配置详情"
+
+msgid "修改部分告警策略配置配置"
+msgstr "修改部分告警策略配置配置"
 
 msgid "获取消息类型"
 msgstr "获取消息类型"
@@ -1821,12 +1827,6 @@ msgstr "小时"
 msgid "Day"
 msgstr "天"
 
-msgid "Week"
-msgstr "周"
-
-msgid "Month"
-msgstr "月"
-
 msgid "Scroll"
 msgstr "滚动"
 
@@ -1835,6 +1835,12 @@ msgstr "滑动"
 
 msgid "Whole"
 msgstr "全部"
+
+msgid "数据源"
+msgstr "数据源"
+
+msgid "数据开发"
+msgstr "数据开发"
 
 msgid "Create or Update Flow Failed"
 msgstr "创建或更新任务失败"
@@ -2221,9 +2227,6 @@ msgstr "无数据"
 
 msgid "未配置"
 msgstr "未配置"
-
-msgid "数据开发"
-msgstr "数据开发"
 
 msgid "审计事件"
 msgstr "审计事件"
@@ -3003,7 +3006,7 @@ msgstr "控件类型名称"
 msgid "Strategy V2"
 msgstr "策略 (V2)"
 
-msgid "Has Update"
+msgid "Upgradable"
 msgstr "可升级"
 
 msgid "Disabled"
@@ -3083,6 +3086,10 @@ msgstr "字段为空"
 
 msgid "Strategy Status Unexpected"
 msgstr "策略状态异常"
+
+#, python-format
+msgid "调度周期超过允许的范围(%s天)"
+msgstr "调度周期超过允许的范围(%s天)"
 
 msgid "Strategy Name"
 msgstr "策略名称"
