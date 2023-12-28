@@ -57,7 +57,7 @@
           </span>
           <span>
             {{ commonData.offset_unit
-              .find((item: Record<string, string>) =>
+              .find((item) =>
                 item.value === data.configs.aiops_config.schedule_period)?.label }}
           </span>
         </template>
@@ -81,6 +81,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import ControlModel from '@model/control/control';
+  import type CommonData from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -92,10 +93,9 @@
   import RenderField from './render-field.vue';
   import RenderParameter from './render-parameter.vue';
 
-
   interface Props{
     data: StrategyModel,
-    commonData: Record<string, any>
+    commonData: CommonData
   }
 
 
