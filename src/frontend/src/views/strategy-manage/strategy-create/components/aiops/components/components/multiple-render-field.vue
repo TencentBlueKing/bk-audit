@@ -153,6 +153,8 @@
   import FieldCascader from './field-cascader.vue';
   import FieldSelect from './field-select.vue';
 
+  import CommonData from '@/domain/model/strategy/common-data';
+
   interface Props {
     data: Record<string, any>[];
     configs: Record<string, any>[];
@@ -218,9 +220,7 @@
   const {
     data: commonData,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      mapping_type: [],
-    },
+    defaultValue: new CommonData(),
     manual: true,
   });
   const {

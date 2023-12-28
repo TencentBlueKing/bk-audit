@@ -25,11 +25,19 @@ export default class CommonData {
   offset_unit: Array<ItemType>;
   table_type: Array<ItemType>;
   mapping_type: Array<ItemType>;
+  strategy_operator: Array<ItemType>;
+  filter_operator: Array<ItemType>;
+  algorithm_operator: Array<ItemType>;
+  strategy_status: Array<ItemType>;
 
   constructor(payload = {} as CommonData) {
-    this.offset_unit = payload.offset_unit;
-    this.table_type = payload.table_type;
-    this.mapping_type = payload.mapping_type;
+    this.offset_unit = payload.offset_unit || [];
+    this.table_type = payload.table_type || [];
+    this.mapping_type = payload.mapping_type || [];
+    this.strategy_operator = payload.strategy_operator || [];
+    this.filter_operator = payload.filter_operator || [];
+    this.algorithm_operator = payload.algorithm_operator || [];
+    this.strategy_status = payload.strategy_status || [];
   }
 }
 

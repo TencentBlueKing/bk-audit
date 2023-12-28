@@ -136,6 +136,8 @@
 
   import Card from './components/card.vue';
 
+  import CommonData from '@/domain/model/strategy/common-data';
+
   interface Emits {
     (e: 'change', step: number): void,
   }
@@ -430,10 +432,7 @@
     data: commonData,
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      table_type: [],
-      offset_unit: [],
-    },
+    defaultValue: new CommonData(),
     manual: true,
   });
 
@@ -580,7 +579,7 @@
   left: 0;
   width: 100%;
   padding-left: 24px;
-  background: #DCDEE5;
+  background: #dcdee5;
 
   .top-title {
     flex: 1;
@@ -599,9 +598,9 @@
       font-size: 12px;
       font-weight: 700;
       line-height: 22px;
-      color: #FFF;
+      color: #fff;
       text-align: center;
-      background: #979BA5;
+      background: #979ba5;
       border-radius: 2px;
     }
   }

@@ -85,7 +85,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import ControlModel from '@model/control/control';
-  import type CommonData from '@model/strategy/common-data';
+  import CommonData from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -151,11 +151,7 @@
   const {
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      table_type: [],
-      offset_unit: [],
-      mapping_type: [],
-    },
+    defaultValue: new CommonData(),
     manual: true,
     onSuccess(data) {
       data.mapping_type.forEach((item) => {

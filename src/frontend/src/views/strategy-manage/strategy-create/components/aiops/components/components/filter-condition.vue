@@ -191,6 +191,8 @@
 
   import useRequest from '@hooks/use-request';
 
+  import CommonData from '@/domain/model/strategy/common-data';
+
   interface Exposes{
     handleValueDicts: (data: ConditionData) => void,
     getValue(): void,
@@ -253,7 +255,7 @@
   const {
     data: operators,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {},
+    defaultValue: new CommonData(),
     manual: true,
   });
   // 筛选条件值

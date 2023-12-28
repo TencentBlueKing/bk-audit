@@ -147,6 +147,8 @@
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
   import SchemeParamenters from './components/scheme-paramenters/index.vue';
 
+  import CommonData from '@/domain/model/strategy/common-data';
+
   type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
 
   interface Props {
@@ -229,17 +231,12 @@
   const {
     data: commonData,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {},
+    defaultValue: new CommonData(),
     manual: true,
     onSuccess(data) {
       sourceTypeMap.value = commonData.value.table_type.reduce((
         res: Record<string, string>,
-        item: {
-          value: string;
-          config: {
-            source_type: string
-          }
-        },
+        item,
       ) => {
         res[item.value] = item.config.source_type;
         return res;

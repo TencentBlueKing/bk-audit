@@ -39,7 +39,7 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import type CommonData from '@model/strategy/common-data';
+  import CommonData from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -54,11 +54,7 @@
     data: StrategyModel,
   }
   const props = defineProps<Props>();
-  const commonData = shallowRef<CommonData>({
-    table_type: [],
-    offset_unit: [],
-    mapping_type: [],
-  });
+  const commonData = shallowRef<CommonData>(new CommonData());
 
   const comMap: Record<string, any> = {
     EventLog: EventLogPart,
@@ -73,11 +69,7 @@
   const {
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      table_type: [],
-      offset_unit: [],
-      mapping_type: [],
-    },
+    defaultValue: new CommonData(),
     manual: true,
     onSuccess: (data) => {
       commonData.value = data;
