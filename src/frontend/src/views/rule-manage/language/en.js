@@ -17,19 +17,19 @@
 export default {
   ruleManage: {
 
-    处理规则: 'Process Rules',
+    处理规则: '{ text }',
     查看套餐详情: 'Detail',
     套餐参数: 'Parameter',
     冻结账号: 'Account freezing',
-    处理套餐: 'Process Tool',
+    处理套餐: '{ text }',
     适用范围: 'Usage',
     待我处理: 'My Open Tickets',
     套餐参数不能为空: 'Tool parameter is required',
     规则名称不能为空: 'Rule name is required',
     处理套餐不能为空: 'Process tool is required',
-    新建处理规则: 'New',
-    风险: 'Risk',
-    规则名称: 'Rule name',
+    新建处理规则: 'New Rule',
+    风险: 'Auto Processing',
+    规则名称: 'name',
     套餐执行成功后自动关单: 'Automatically close the ticket after successful execution of the tool',
     规则ID: 'Rule ID',
     批量调整优先级: 'Re-prioritize',
@@ -58,5 +58,6 @@ export default {
     该启停状态不存在: 'Rule status is not exists',
     规则停用确认: 'Switch Off confirmation',
     规则启用确认: 'Switch On Confirmation',
+    编辑处理规则: 'Edit Rule',
   },
 };

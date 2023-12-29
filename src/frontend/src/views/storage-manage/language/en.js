@@ -16,6 +16,7 @@
 */
 export default {
   storageManage: {
+    默认: 'Default',
     管理: 'Administration',
     名称: 'Name',
     设为默认: 'Default',
