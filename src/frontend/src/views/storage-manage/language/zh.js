@@ -16,6 +16,7 @@
 */
 export default {
   storageManage: {
+    默认: '默认',
     管理: '管理',
     设为默认: '设为默认',
     地址: '地址',

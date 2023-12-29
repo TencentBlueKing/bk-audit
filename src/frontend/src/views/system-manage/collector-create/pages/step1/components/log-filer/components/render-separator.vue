@@ -45,7 +45,7 @@
     </div>
     <div>
       <div class="separator-filter-tips">
-        复杂的过滤条件（超过5个）会影响机器性能
+        {{ t('复杂的过滤条件（超过5个）会影响机器性能') }}
       </div>
       <div class="separator-filter-list">
         <div
@@ -63,8 +63,8 @@
             class="column-input"
             :model-value="filterItem.fieldindex"
             placeholder=" "
-            prefix="第"
-            suffix="列"
+            :prefix="t('第')"
+            :suffix="t('列')"
             @input="(value: any) => handleFieldIndexChange(value as string, index)" />
           <span class="column-expression">=</span>
           <bk-input

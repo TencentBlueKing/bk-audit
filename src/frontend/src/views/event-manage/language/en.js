@@ -16,7 +16,7 @@
 */
 export default {
   eventManage: {
-    审计风险: 'Risk',
+    审计风险: 'Risk Tickets',
     命中策略ID: 'Strategy ID',
     事件名称: 'Event name',
     请输入事件名称: 'Please enter the Event name',
