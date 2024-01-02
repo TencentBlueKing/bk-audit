@@ -119,13 +119,13 @@
               <audit-icon
                 class="menu-item-icon"
                 type="insert" />
-              {{ t('处理规则') }}
+              {{ t('处理规则', { text: 'Rules' }) }}
             </audit-menu-item>
             <audit-menu-item index="applicationManage">
               <audit-icon
                 class="menu-item-icon"
                 type="taocanchulizhong" />
-              {{ t('处理套餐') }}
+              {{ t('处理套餐', { text: 'Tools'}) }}
             </audit-menu-item>
           </audit-menu-item-group>
           <audit-menu-item-group>
@@ -210,7 +210,6 @@
     useRouter,
   } from 'vue-router';
 
-  import RootManageService from '@service/root-manage';
   import StatementManageService from '@service/statement-manage';
 
   import ConfigModel from '@model/root/config';
@@ -230,6 +229,11 @@
     id: string;
     name: string;
   }
+  interface Props {
+    configData: ConfigModel,
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const props = defineProps<Props>();
   const router = useRouter();
   const route = useRoute();
   const isMenuFlod = ref(false);
@@ -269,12 +273,6 @@
       name: routerName,
     });
   };
-  const {
-    data: configData,
-  } =  useRequest(RootManageService.config, {
-    defaultValue: new ConfigModel(),
-    manual: true,
-  });
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
   }, {
