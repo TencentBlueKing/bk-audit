@@ -17,8 +17,8 @@
 export default {
   noticeManage: {
     新建: 'New',
-    通知组: 'Team',
-    通知组名称: 'Notification Group name',
+    通知组: 'Notification Group',
+    通知组名称: 'Group name',
     说明: 'Description',
     最近更新人: 'Last modified by',
     最近更新时间: 'Last modified  at',

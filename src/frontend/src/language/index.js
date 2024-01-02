@@ -37,9 +37,7 @@ import systemEn from '@views/system-manage/language/en.js';
 import systemZh from '@views/system-manage/language/zh.js';
 
 let localeLanguage = 'zh-CN';
-const bluekingLanguage = Cookie.get('blueking_language', {
-  domain: window.location.hostname.replace(/^.*(\.[^.]+\.[^.]+)$/, '$1'),
-});
+const bluekingLanguage = Cookie.get('blueking_language');
 if (bluekingLanguage && bluekingLanguage.toLowerCase() === 'en') {
   localeLanguage = 'en-US';
 }
