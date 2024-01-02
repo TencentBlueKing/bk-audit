@@ -7,7 +7,7 @@
 -r requirements_env.txt
 
 bk_audit[opentelemetry]==1.0.7
-bk_resource==0.4.7
+bk_resource==0.4.8
 
 # web server
 gunicorn==19.6.0
