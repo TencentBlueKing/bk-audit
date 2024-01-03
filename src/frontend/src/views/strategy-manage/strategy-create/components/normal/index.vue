@@ -342,7 +342,7 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import CommonData from '@model/strategy/common-data';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import useRequest from '@hooks/use-request';
 
@@ -458,7 +458,7 @@
   const {
     data: equations,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: new CommonData(),
+    defaultValue: new CommonDataModel(),
     manual: true,
   });
 

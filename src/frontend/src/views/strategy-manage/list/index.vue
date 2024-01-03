@@ -219,7 +219,7 @@
   import NoticeGroupManageService from '@service/notice-group';
   import StrategyManageService from '@service/strategy-manage';
 
-  import CommonData from '@model/strategy/common-data';
+  import CommonDataModel from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useMessage from '@hooks/use-message';
@@ -794,7 +794,7 @@
     run: fetchStrategyCommon,
     data: commonData,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: new CommonData(),
+    defaultValue: new CommonDataModel(),
     onSuccess(data) {
       statusMap.value = data.strategy_status.reduce((res: Record<string, string>, item: {
         label: string;

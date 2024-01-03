@@ -62,7 +62,7 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import CommonData from '@model/strategy/common-data';
+  import CommonDataModel from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -94,7 +94,7 @@
   const {
     data: operators,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: new CommonData(),
+    defaultValue: new CommonDataModel(),
     manual: true,
   });
   // 筛选条件值

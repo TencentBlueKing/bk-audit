@@ -17,7 +17,7 @@
 import type SearchModel from '@model/es-query/search';
 import type AiopsDetailModel from '@model/strategy/aiops-detail';
 import type AiopsPlanModel from '@model/strategy/aiops-plan';
-import type CommonData from '@model/strategy/common-data';
+import type CommonDataModel from '@model/strategy/common-data';
 import type StrategyModel from '@model/strategy/strategy';
 // import type StrategyFieldModel from '@model/strategy/strategy-field';
 // import type StrategyConfigListModel from '@model/strategy/strategy-config-list';
@@ -63,7 +63,7 @@ class Strategy extends ModuleBase {
   }
   // 获取告警常量
   getStrategyCommon(payload = {} as IRequestPayload) {
-    return Request.get<CommonData>(`${this.path}/strategy/common/`, {
+    return Request.get<CommonDataModel>(`${this.path}/strategy/common/`, {
       payload,
     });
   }

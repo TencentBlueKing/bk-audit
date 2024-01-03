@@ -129,7 +129,7 @@
 
   import ControlModel from '@model/control/control';
   import AiopPlanModel from '@model/strategy/aiops-plan';
-  import CommonData from '@model/strategy/common-data';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import useRequest from '@hooks/use-request';
 
@@ -431,7 +431,7 @@
     data: commonData,
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: new CommonData(),
+    defaultValue: new CommonDataModel(),
     manual: true,
   });
 

@@ -85,7 +85,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import ControlModel from '@model/control/control';
-  import CommonData from '@model/strategy/common-data';
+  import CommonDataModel from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -100,7 +100,7 @@
 
   interface Props {
     data: StrategyModel,
-    commonData: CommonData
+    commonData: CommonDataModel
   }
 
   const props = defineProps<Props>();
@@ -151,7 +151,7 @@
   const {
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: new CommonData(),
+    defaultValue: new CommonDataModel(),
     manual: true,
     onSuccess(data) {
       data.mapping_type.forEach((item) => {

@@ -81,7 +81,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import ControlModel from '@model/control/control';
-  import type CommonData from '@model/strategy/common-data';
+  import type CommonDataModel from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -95,7 +95,7 @@
 
   interface Props{
     data: StrategyModel,
-    commonData: CommonData
+    commonData: CommonDataModel
   }
 
 
