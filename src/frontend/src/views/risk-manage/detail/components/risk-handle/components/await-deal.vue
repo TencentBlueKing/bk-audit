@@ -79,7 +79,7 @@
       <template v-else-if="formData.method === 'ProcessPackage'">
         <bk-form-item
           class="is-required mr16"
-          :label="t('处理套餐')"
+          :label="t('处理套餐', { text: 'Tools' })"
           property="pa_id">
           <bk-select
             v-model="formData.pa_id"
@@ -232,7 +232,7 @@
     },
     {
       id: 'ProcessPackage',
-      name: t('处理套餐'),
+      name: t('处理套餐', { text: 'Tools' }),
     },
   ];
 

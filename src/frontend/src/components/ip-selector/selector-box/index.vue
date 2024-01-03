@@ -56,7 +56,7 @@
         class="mr8"
         theme="primary"
         @click="handleSubmit">
-        {{ t('确定') }}
+        {{ confirmText }}
       </bk-button>
       <bk-button @click="handleCancle">
         {{ t('取消') }}
@@ -116,7 +116,7 @@
     uniqued: true,
   });
   const emits = defineEmits<Emits>();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const tabTypeToNodeType = {
     dynamicTopo: 'TOPO',
@@ -161,6 +161,7 @@
     }
     return tabTypeToNodeType[renderType.value];
   });
+  const confirmText = computed(() => (locale.value === 'en-US' ? '确定' : 'ok'));
 
   const {
     loading: isTopoLoading,

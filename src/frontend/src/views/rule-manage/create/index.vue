@@ -174,7 +174,7 @@
           </bk-form-item>
           <bk-form-item
             class="is-required mr16"
-            :label="t('处理套餐')"
+            :label="t('处理套餐', { text: 'Tools'})"
             property="pa_id">
             <div style="display: flex;align-items: center;">
               <bk-select

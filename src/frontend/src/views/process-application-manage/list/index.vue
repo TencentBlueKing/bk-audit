@@ -412,24 +412,14 @@
         text>
         {t('编辑')}
       </auth-button>
-      <bk-dropdown trigger='click'>
-        {{
-          default: () => <bk-button text><audit-icon type='more' /></bk-button>,
-          content: () => (
-            <bk-dropdown-menu >
-              <bk-dropdown-item >
-                <auth-button
-                  permission={permissionCheckData.value.create_pa}
-                  onClick={() => handleClone(data)}
-                  text
-                  action-id='create_pa'
-                >
-                  {t('克隆')}
-                </auth-button>
-              </bk-dropdown-item>
-            </bk-dropdown-menu>),
-        }}
-      </bk-dropdown>
+      <auth-button
+        permission={permissionCheckData.value.create_pa}
+        onClick={() => handleClone(data)}
+        text
+        action-id='create_pa'
+      >
+        {t('克隆')}
+      </auth-button>
     </p>,
     },
   ] as any[];
