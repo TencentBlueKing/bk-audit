@@ -189,6 +189,8 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import CommonDataModel from '@model/strategy/common-data';
+
   import useRequest from '@hooks/use-request';
 
   interface Exposes{
@@ -253,7 +255,7 @@
   const {
     data: operators,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {},
+    defaultValue: new CommonDataModel(),
     manual: true,
   });
   // 筛选条件值

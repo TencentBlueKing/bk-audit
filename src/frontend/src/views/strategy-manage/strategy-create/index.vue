@@ -582,7 +582,8 @@
           // 操作记录部分
           if (formData.value.configs.config_type === 'EventLog') {
             formData.value.configs.data_source.system_id = Object.keys(formData.value.configs.data_source.fields);
-          } else {
+          }
+          if (editData.configs.aiops_config) {
             formData.value.configs.aiops_config = {
               ...editData.configs.aiops_config,
             };

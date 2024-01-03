@@ -33,12 +33,13 @@
 </template>
 <script setup lang="ts">
   import {
-    computed,
+    computed, shallowRef,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import CommonDataModel from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -53,7 +54,7 @@
     data: StrategyModel,
   }
   const props = defineProps<Props>();
-
+  const commonData = shallowRef<CommonDataModel>(new CommonDataModel());
 
   const comMap: Record<string, any> = {
     EventLog: EventLogPart,
@@ -62,18 +63,17 @@
   };
   const renderCom = computed(() => props.data.configs.config_type || '');
   const dataSourceType = computed(() => commonData.value.table_type
-    .find((item: Record<string, string>) => item.value === props.data.configs.config_type)?.label || '--');
+    .find(item => item.value === props.data.configs.config_type)?.label || '--');
   const { t } = useI18n();
 
   const {
-    data: commonData,
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      table_type: [],
-      offset_unit: [],
-    },
+    defaultValue: new CommonDataModel(),
     manual: true,
+    onSuccess: (data) => {
+      commonData.value = data;
+    },
   });
 </script>
 <style lang="postcss">

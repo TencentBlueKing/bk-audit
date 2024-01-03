@@ -146,6 +146,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import AiopPlanModel from '@model/strategy/aiops-plan';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import useRequest from '@hooks/use-request';
 
@@ -219,9 +220,7 @@
   const {
     data: commonData,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      mapping_type: [],
-    },
+    defaultValue: new CommonDataModel(),
     manual: true,
   });
   const {

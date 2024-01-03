@@ -138,6 +138,7 @@
 
   import type ControlModel from '@model/control/control';
   import type AiopPlanModel from '@model/strategy/aiops-plan';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import useRequest from '@hooks/use-request';
 
@@ -229,17 +230,12 @@
   const {
     data: commonData,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {},
+    defaultValue: new CommonDataModel(),
     manual: true,
     onSuccess(data) {
       sourceTypeMap.value = commonData.value.table_type.reduce((
         res: Record<string, string>,
-        item: {
-          value: string;
-          config: {
-            source_type: string
-          }
-        },
+        item,
       ) => {
         res[item.value] = item.config.source_type;
         return res;

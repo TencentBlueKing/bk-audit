@@ -77,6 +77,7 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import CommonDataModel from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   // import type StrategyConfigListModel from '@model/strategy/strategy-config-list';
@@ -126,9 +127,7 @@
   const {
     data: equations,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      algorithm_operator: [],
-    },
+    defaultValue: new CommonDataModel(),
     manual: true,
   });
   // 筛选条件
@@ -151,9 +150,7 @@
   const {
     data: operators,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      strategy_operator: [],
-    },
+    defaultValue: new CommonDataModel(),
     manual: true,
   });
 
@@ -208,8 +205,8 @@
   }
 
   .condition-render-item {
-    .info-label{
-      margin-top:2px;
+    .info-label {
+      margin-top: 2px;
     }
   }
 
