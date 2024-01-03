@@ -116,7 +116,8 @@
               :required="fieldItem.properties?.is_required"
               :rt-fields="selectRtFields"
               theme="background"
-              @change="(value: string) => handleSelectChange(value, fieldItem)" />
+              @change="(value: string) => handleSelectChange(value, fieldItem)"
+              @init="(value: string) => handleInit(value, fieldItem)" />
           </div>
         </div>
       </div>
@@ -276,6 +277,16 @@
     if (targetIndex < 0) return;
     localData[targetIndex].source_field[0].source_field = value;
     window.changeConfirm = true;
+  };
+
+  // 初始化填充
+  const handleInit = (value: string | string[], fieldItem: Record<string, any>) => {
+    const targetIndex = _.findIndex(props.data, item => item === fieldItem);
+    if (targetIndex < 0) return;
+    localData[targetIndex].source_field[0].source_field = value;
+    // eslint-disable-next-line no-param-reassign
+    fieldItem.mapping_type = 'public';
+    localData[targetIndex].mapping_type = 'public';
   };
 
   const handleChange = (index: number, value: string[], fieldItem: Record<string, any>) => {

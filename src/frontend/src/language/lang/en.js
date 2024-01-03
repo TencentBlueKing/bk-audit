@@ -510,7 +510,7 @@ export default {
   IP地址格式不正确: 'IP address format is incorrect',
   找不到对应用户: 'No corresponding user found',
   '确认删除通知组？': 'Are you sure to delete the Notification Group ?',
-  未配置: 'Not configured',
+  未配置: 'Not ready',
   请输入事件ID: 'Please enter the Event ID',
   命中策略ID: 'Strategy ID',
   请输入事件名称: 'Please enter the Event name',

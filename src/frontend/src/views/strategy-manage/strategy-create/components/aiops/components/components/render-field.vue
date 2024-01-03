@@ -60,7 +60,8 @@
               :required="fieldItem.properties?.is_required"
               :rt-fields="rtFields"
               theme="background"
-              @change="(value: string) => handleChange(value, fieldItem)" />
+              @change="(value: string) => handleChange(value, fieldItem)"
+              @init="(value: string) => handleInit(value, fieldItem)" />
           </div>
         </div>
       </div>
@@ -129,6 +130,14 @@
       localData[targetIndex].source_field = value;
     }
     window.changeConfirm = true;
+  };
+
+  // // 初始化填充
+  const handleInit = (value: string | string[], fieldItem: Record<string, any>) => {
+    const targetIndex = _.findIndex(props.data, item => item === fieldItem);
+    if (targetIndex > -1) {
+      localData[targetIndex].source_field = value;
+    }
   };
 
 

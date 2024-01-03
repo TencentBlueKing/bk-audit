@@ -334,6 +334,8 @@ class GetStandardFieldsResource(Meta, ModelResource):
 
     def perform_request(self, validated_request_data: dict) -> any:
         fields = super().perform_request(validated_request_data)
+        for field in fields:
+            field["description"] = gettext(field["description"])
         if validated_request_data.get("is_etl"):
             return [field for field in fields if field["is_display"]]
         return fields

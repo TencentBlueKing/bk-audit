@@ -1,3 +1,4 @@
+<!-- eslint-disable max-len -->
 <!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
@@ -25,10 +26,15 @@
       <layout
         v-if="isWatermarkSuccess"
         ref="layoutRef"
-        class="layout-box">
+        class="layout-box"
+        :config-data="configData">
         <template #header>
           <router-back />
-          <span>{{ t(pageTitle) }}</span>
+          <span>{{
+            pageTitle === '处理规则' ?
+              t(pageTitle, { text: 'Rules' }) :
+              pageTitle === '处理套餐' ?
+                t(pageTitle, { text: 'Tools' }) : t(pageTitle) }}</span>
           <use-router-link />
           <div
             id="teleport-nav-step"
@@ -123,8 +129,10 @@
 
   import AccountManageService from '@service/account-manage';
   import EntryManageService from '@service/entry-manage';
+  import RootManageService from '@service/root-manage';
 
   import AccountModel from '@model/account/account';
+  import ConfigModel from '@model/root/config';
 
   import useRequest from '@hooks/use-request';
 
@@ -158,6 +166,13 @@
   };
 
   const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
+  const {
     run: fetchLogout,
   } = useRequest(EntryManageService.fetchLogout);
 
@@ -185,10 +200,10 @@
   };
 
   const handleSwitchLang = (lang: string) => {
-    Cookie.remove('blueking_language', { path: '' });
-    Cookie.set('blueking_language', lang, {
+    Cookie.remove(configData.value.language.name, { path: '' });
+    Cookie.set(configData.value.language.name, lang, {
       expires: 3600,
-      domain: window.location.hostname.replace(/^.*(\.[^.]+\.[^.]+)$/, '$1'),
+      domain: configData.value.language.domain,
     });
     window.location.reload();
   };
