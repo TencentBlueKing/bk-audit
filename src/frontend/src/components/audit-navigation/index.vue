@@ -18,13 +18,22 @@
   <div
     class="audit-navigation"
     :class="{
-      'is-fixed': isSideMenuFixed
+      'is-fixed': isSideMenuFixed,
+      'show-notice-navigation': showNotice.enabled
     }">
+    <div>
+      <notice-component
+        v-if="showNotice.enabled"
+        :api-url="apiUrl" />
+    </div>
     <div
       class="audit-navigation-side"
       :style="sideStyles">
       <div
-        class="audit-navigation-header">
+        class="audit-navigation-header"
+        :class="{
+          'show-notice-navigation-header': showNotice.enabled
+        }">
         <div class="audit-logo">
           <slot name="logo" />
         </div>
@@ -38,6 +47,9 @@
       <slot name="sideAppendBefore" />
       <div
         class="audit-side-menu"
+        :class="{
+          'show-notice-side-menu': showNotice.enabled
+        }"
         @mouseenter="handleSideMouseenter"
         @mouseleave="handleSideMouseleave">
         <scroll-faker theme="dark">
@@ -54,6 +66,9 @@
     </div>
     <div
       class="audit-navigation-main"
+      :class="{
+        'show-notice-navigation-main': showNotice.enabled
+      }"
       :style="mainStyles">
       <div class="page-title">
         <slot name="header" />
@@ -87,11 +102,18 @@
     ref,
   } from 'vue';
 
+  import NoticeService from '@service/notice';
+
+  import NoticeComponent from '@blueking/notice-component';
+
+  import useRequest from '@/hooks/use-request';
+
   interface Emits{
     (e: 'menu-flod', value: boolean):void
   }
   const emit = defineEmits<Emits>();
 
+  const apiUrl = `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/api/v1/bk-notice/announcements/`;
   const TOGGLE_CACHE = 'navigation_toggle_status';
   const PAGE_MIN_WIDTH = 1366;
   const PAGE_MIDDLE_WIDTH = 1920;
@@ -200,6 +222,18 @@
     }
   };
   const resizeHandler = _.throttle(init, 100);
+
+  const {
+    data: showNotice,
+  }  = useRequest(NoticeService.fetchNoticeFeature, {
+    defaultValue: {
+      enabled: false,
+    },
+    defaultParams: {
+      feature_id: 'bknotice',
+    },
+    manual: true,
+  });
 
   onMounted(() => {
     init();
@@ -345,5 +379,22 @@
     align-items: center;
     min-width: 238px;
   }
+}
+
+.show-notice-navigation {
+  height: calc(100vh - 92px);
+  overflow: hidden;
+}
+
+.show-notice-navigation-main {
+  height: calc(100vh - 92px);
+}
+
+.show-notice-side-menu {
+  padding-top: 40px;
+}
+
+.show-notice-navigation-header {
+  top: 40px !important;
 }
 </style>
