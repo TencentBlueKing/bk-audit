@@ -217,7 +217,9 @@
                 <template
                   v-for="(val,index) in Object.values(paramsDetailData)"
                   :key="`${val.key}-${index}`">
+                  <!-- 只显示需要显示的字段 -->
                   <bk-form-item
+                    v-if="val.show_type === 'show'"
                     :label="val.name"
                     :label-width="150"
                     :property="`pa_params.${val.key}.field`"
