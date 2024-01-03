@@ -17,10 +17,10 @@
 <template>
   <div class="reopen-mis-report-wrap">
     <div class="mis-title">
-      <span style="color:#313238">{{ data.operator }}</span>
+      <span style="color: #313238">{{ data.operator }}</span>
       <span
         class="ml8"
-        style="color: #979BA5">{{ data.time }}</span>
+        style="color: #979ba5">{{ data.time }}</span>
     </div>
     <div class="mis-content">
       <render-info-item :label="t('处理方法')">
@@ -38,13 +38,17 @@
             .find(item=>item.id === data.pa_id)?.name || data.pa_id || '--' }}
         </render-info-item>
         <template v-if="data.pa_params">
-          <render-info-item
+          <!-- 只显示需要显示的字段 -->
+          <template
             v-for="(key,index) in Object.keys(data.pa_params)"
-            :key="index"
-            class="mt8"
-            :label="processPackageDetail[key]?.name || key">
-            {{ riskFieldMap[data.pa_params[key].field] || data.pa_params[key].field ||'--' }}
-          </render-info-item>
+            :key="index">
+            <render-info-item
+              v-if="processPackageDetail[key]?.show_type === 'show'"
+              class="mt8"
+              :label="processPackageDetail[key]?.name || key">
+              {{ riskFieldMap[data.pa_params[key].field] || data.pa_params[key].field ||'--' }}
+            </render-info-item>
+          </template>
         </template>
         <render-info-item
           class="mt8"
@@ -97,21 +101,21 @@
   });
 </script>
 <style scoped lang="postcss">
-.reopen-mis-report-wrap{
+.reopen-mis-report-wrap {
   padding: 10px 16px;
-  background: #FFF;
-  border: 1px solid #EAEBF0;
+  background: #fff;
+  border: 1px solid #eaebf0;
   border-radius: 6px;
   box-shadow: 0 2px 6px 0 #0000000a;
 
-  .mis-title{
+  .mis-title {
     font-size: 12px;
   }
 
-  >.mis-content{
+  >.mis-content {
     padding: 12px 16px;
     margin-top: 8px;
-    background: #F5F7FA;
+    background: #f5f7fa;
     border-radius: 4px;
   }
 }

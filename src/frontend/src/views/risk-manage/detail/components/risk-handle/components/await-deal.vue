@@ -101,11 +101,13 @@
             class="is-required mr16"
             :label="t('套餐参数')"
             property="pa_params">
-            <div style="width:976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
+            <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
               <template
                 v-for="(val, index) in Object.values(paramsDetailData)"
                 :key="`${val.key}-${index}`">
+                <!-- 只显示需要显示的字段 -->
                 <bk-form-item
+                  v-if="val.show_type === 'show'"
                   :label="val.name"
                   :label-width="150"
                   :property="`pa_params.${val.key}.field`"
@@ -381,8 +383,8 @@
 .risk-await-deal-wrap {
   padding: 10px 16px;
   font-size: 12px;
-  background: #FFF;
-  border: 1px solid #EAEBF0;
+  background: #fff;
+  border: 1px solid #eaebf0;
   border-radius: 6px;
   box-shadow: 0 2px 6px 0 #0000000a;
 }
