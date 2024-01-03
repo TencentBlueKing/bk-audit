@@ -17,10 +17,10 @@
 <template>
   <div class="reopen-mis-report-wrap">
     <div class="mis-title">
-      <span style="color:#313238">{{ data.operator }}</span>
+      <span style="color: #313238">{{ data.operator }}</span>
       <span
         class="ml8"
-        style="color: #979BA5">{{ data.time }}</span>
+        style="color: #979ba5">{{ data.time }}</span>
     </div>
     <div class="mis-content">
       <render-info-item :label="t('处理方法')">
@@ -28,7 +28,7 @@
         <span v-else-if="data.custom_action === 'TransOperator'">
           {{ t('转单给') }}{{ data.new_operators?.join(',') }}
         </span>
-        <span v-else>{{ t('处理套餐') }} </span>
+        <span v-else>{{ t('处理套餐', { text: 'Tools'}) }} </span>
       </render-info-item>
       <template v-if="data.custom_action === 'AutoProcess'">
         <render-info-item
@@ -97,21 +97,21 @@
   });
 </script>
 <style scoped lang="postcss">
-.reopen-mis-report-wrap{
+.reopen-mis-report-wrap {
   padding: 10px 16px;
-  background: #FFF;
-  border: 1px solid #EAEBF0;
+  background: #fff;
+  border: 1px solid #eaebf0;
   border-radius: 6px;
   box-shadow: 0 2px 6px 0 #0000000a;
 
-  .mis-title{
+  .mis-title {
     font-size: 12px;
   }
 
-  >.mis-content{
+  >.mis-content {
     padding: 12px 16px;
     margin-top: 8px;
-    background: #F5F7FA;
+    background: #f5f7fa;
     border-radius: 4px;
   }
 }

@@ -91,7 +91,7 @@ export default {
     启停状态: 'On/Off status',
     作业平台: 'Platform',
     节点管理: 'Node management',
-    参数名: 'name',
+    参数名: 'Name',
     参数值: 'value',
     在: 'during',
     每: 'Detect every',

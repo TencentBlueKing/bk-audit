@@ -79,7 +79,7 @@
       <template v-else-if="formData.method === 'ProcessPackage'">
         <bk-form-item
           class="is-required mr16"
-          :label="t('处理套餐')"
+          :label="t('处理套餐', { text: 'Tools' })"
           property="pa_id">
           <bk-select
             v-model="formData.pa_id"
@@ -101,7 +101,7 @@
             class="is-required mr16"
             :label="t('套餐参数')"
             property="pa_params">
-            <div style="width:976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
+            <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
               <template
                 v-for="(val, index) in Object.values(paramsDetailData)"
                 :key="`${val.key}-${index}`">
@@ -230,7 +230,7 @@
     },
     {
       id: 'ProcessPackage',
-      name: t('处理套餐'),
+      name: t('处理套餐', { text: 'Tools' }),
     },
   ];
 
@@ -381,8 +381,8 @@
 .risk-await-deal-wrap {
   padding: 10px 16px;
   font-size: 12px;
-  background: #FFF;
-  border: 1px solid #EAEBF0;
+  background: #fff;
+  border: 1px solid #eaebf0;
   border-radius: 6px;
   box-shadow: 0 2px 6px 0 #0000000a;
 }
