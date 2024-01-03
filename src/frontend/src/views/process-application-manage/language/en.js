@@ -17,10 +17,10 @@
 export default {
   applicationManage: {
     '查看关联规则：': '',
-    查看关联规则: 'Rules',
+    查看关联规则: 'Related Rules',
     '套餐ID、套餐名称、最近更新人、启停状态': 'Search by Tool ID / Tool name / Last modified by or Status',
     套餐ID: 'Tool ID',
-    套餐名称: 'name',
+    套餐名称: 'Name',
     请输入套餐ID: 'Please enter the Tool ID',
     请输入套餐名称: 'Please enter the Tool name',
     套餐详情: 'Details',
@@ -41,8 +41,10 @@ export default {
     查看动作详情: 'Details',
     查看流程: 'Details',
     套餐ID只允许输入整数: 'Tool ID only allows integer',
-    已关联规则: 'Related',
+    已关联规则: 'Related Rules',
     是: 'Yes',
     否: 'No',
+    规则状态: 'Status',
+    '套餐：': 'Tool name',
   },
 };

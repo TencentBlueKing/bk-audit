@@ -32,7 +32,7 @@
       <bk-option
         v-for="item in filterList"
         :key="item.id"
-        :label="item[config.labelName ? config.labelName : 'name']"
+        :label="t(item[config.labelName ? config.labelName : 'name'])"
         :value="item[config.valName ? config.valName : 'id']" />
       <template
         v-if="simple"
