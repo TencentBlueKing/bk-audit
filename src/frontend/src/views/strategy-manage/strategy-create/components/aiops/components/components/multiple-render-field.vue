@@ -145,6 +145,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import AiopPlanModel from '@model/strategy/aiops-plan';
+  import CommonData from '@model/strategy/common-data';
 
   import useRequest from '@hooks/use-request';
 
@@ -152,8 +153,6 @@
 
   import FieldCascader from './field-cascader.vue';
   import FieldSelect from './field-select.vue';
-
-  import CommonData from '@/domain/model/strategy/common-data';
 
   interface Props {
     data: Record<string, any>[];

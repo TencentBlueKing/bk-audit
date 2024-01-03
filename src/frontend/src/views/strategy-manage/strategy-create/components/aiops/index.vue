@@ -138,6 +138,7 @@
 
   import type ControlModel from '@model/control/control';
   import type AiopPlanModel from '@model/strategy/aiops-plan';
+  import CommonData from '@model/strategy/common-data';
 
   import useRequest from '@hooks/use-request';
 
@@ -146,8 +147,6 @@
   import EventLogComponent from './components/scheme-input/event-log.vue';
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
   import SchemeParamenters from './components/scheme-paramenters/index.vue';
-
-  import CommonData from '@/domain/model/strategy/common-data';
 
   type GetFieldsType = ReturnType<InstanceType<typeof EventLogComponent>['getFields']> | ReturnType<InstanceType<typeof ResourceDataComponent>['getFields']>;
 

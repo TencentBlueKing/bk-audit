@@ -342,9 +342,9 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import useRequest from '@hooks/use-request';
+  import CommonData from '@model/strategy/common-data';
 
-  import CommonData from '@/domain/model/strategy/common-data';
+  import useRequest from '@hooks/use-request';
 
   interface Emits {
     (e: 'updateConfigs', value: IFormData['configs']): void,

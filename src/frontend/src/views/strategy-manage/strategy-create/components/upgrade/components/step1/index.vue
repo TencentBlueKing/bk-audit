@@ -129,14 +129,13 @@
 
   import ControlModel from '@model/control/control';
   import AiopPlanModel from '@model/strategy/aiops-plan';
+  import CommonData from '@model/strategy/common-data';
 
   import useRequest from '@hooks/use-request';
 
   import type { ControlType } from '@views/strategy-manage/strategy-create/index.vue';
 
   import Card from './components/card.vue';
-
-  import CommonData from '@/domain/model/strategy/common-data';
 
   interface Emits {
     (e: 'change', step: number): void,
