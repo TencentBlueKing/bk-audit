@@ -961,7 +961,7 @@ msgid "分隔符过滤"
 msgstr "Delimiter Filter"
 
 msgid "保留匹配字符串"
-msgstr "Keep Match String"
+msgstr "Preserve matching strings"
 
 msgid "Namespace不存在"
 msgstr "Namespace does not exist"

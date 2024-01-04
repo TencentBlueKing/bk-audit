@@ -96,7 +96,7 @@ export default {
     转单人员: 'Transfer to',
     '解除误报后，风险单会重新打开至“待处理” 请谨慎确认是否解除误报？': 'After the false positive is released, the risk ticket will be reopened to "Open" status. Please confirm carefully whether to release the false positive.',
     审计报表: 'Analysis',
-    关联事件: 'Related events',
+    关联事件: 'Events',
     提交: 'Submit',
     取消: 'No',
     请输入风险描述: 'Please enter the risk description...',
