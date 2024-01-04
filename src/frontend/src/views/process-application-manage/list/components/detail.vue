@@ -18,24 +18,32 @@
   <bk-loading :loading="false">
     <div class="process-detail-wrap">
       <render-info-block style="margin-bottom: 16px;">
-        <render-info-item :label="t('套餐ID')">
+        <render-info-item
+          :label="t('套餐ID')"
+          :label-width="labelWidth">
           {{ data.id }}
         </render-info-item>
       </render-info-block>
       <render-info-block style="margin-bottom: 16px;">
-        <render-info-item :label="t('套餐名称')">
+        <render-info-item
+          :label="t('套餐名称')"
+          :label-width="labelWidth">
           {{ data.name }}
         </render-info-item>
       </render-info-block>
       <render-info-block style="margin-bottom: 16px;">
-        <render-info-item :label="t('执行动作')">
+        <render-info-item
+          :label="t('执行动作')"
+          :label-width="labelWidth">
           <bk-loading :loading="soapLoading">
             {{ soapList.find(item=>item.id === data.sops_template_id)?.name || '--' }}
           </bk-loading>
         </render-info-item>
       </render-info-block>
       <render-info-block style="margin-bottom: 16px;">
-        <render-info-item :label="t('执行前审批')">
+        <render-info-item
+          :label="t('执行前审批')"
+          :label-width="labelWidth">
           {{ data.need_approve ? t('是'):t('否') }}
         </render-info-item>
       </render-info-block>
@@ -43,12 +51,13 @@
         v-if="data.need_approve"
         style="margin-bottom: 16px;">
         <render-info-item
-          :label="t('审批配置')">
+          :label="t('审批配置')"
+          :label-width="labelWidth">
           <bk-loading :loading="serviceLoading">
             <div class="approve-config-wrap">
               <render-info-item
                 :label="t('审批流程')"
-                :label-width="84"
+                :label-width="locale === 'en-US' ? 100 : 84"
                 style="min-height: 32px;align-items: flex-start;line-height: 32px;">
                 {{ serviceList.find(item=>item.id === data.approve_service_id)?.name || '--' }}
               </render-info-item>
@@ -62,7 +71,7 @@
                     :key="item.id"
                     class="approve-info-item"
                     :label="item.name"
-                    :label-width="84"
+                    :label-width="locale === 'en-US' ? 100 : 84"
                     style="min-height: 32px;align-items: flex-start;line-height: 32px;">
                     <span v-if="item.choice && item.choice.length">
                       {{ item.choice.find(cItem=>cItem.key === data.approve_config[item.key]?.value )?.name
@@ -78,7 +87,9 @@
         </render-info-item>
       </render-info-block>
       <render-info-block style="margin-bottom: 16px;">
-        <render-info-item :label="t('备注')">
+        <render-info-item
+          :label="t('备注')"
+          :label-width="labelWidth">
           {{ data.description || '--' }}
         </render-info-item>
       </render-info-block>
@@ -112,7 +123,26 @@
   interface Props{
     data: ProcessApplicationManageModel
   }
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+
+  const getMaxLabelWidth = (label: string) => {
+    const span = document.createElement('span');
+    // 防止span影响页面布局
+    span.style.position = 'absolute';
+    span.style.whiteSpace = 'nowrap';
+    span.style.visibility = 'hidden';
+    span.style.fontSize = '12px';
+    span.style.fontFamily = 'Arial';
+    span.textContent = label;
+    document.body.appendChild(span);
+    return span.offsetWidth;
+  };
+  const zhCn = ['套餐ID：', '套餐名称：', '执行动作：', '执行前审批：', '审批配置：', '审批流程：', '审批单信息：', '备注：'];
+  const usEn = ['Tool ID:', 'name:', 'Action:', 'Pre-Approval:', 'Approval settings:', 'Flow:', 'Ticket info:', 'Desc:'];
+  const cnLabel = zhCn.reduce((a: string, b:string) => (a.length > b.length ? a : b), '');
+  const enLabel = usEn.reduce((a: string, b:string) => (a.length > b.length ? a : b), '');
+  const labelWidth = computed(() => (locale.value === 'en-US' ? getMaxLabelWidth(enLabel) : getMaxLabelWidth(cnLabel)));
+
   const filterDetailDataFields = computed(() => {
     if (!detailData.value) return [] as ServiceField[];
     const { fields } = detailData.value;
@@ -169,15 +199,15 @@
   });
 </script>
 <style scoped lang="postcss">
-.process-detail-wrap{
+.process-detail-wrap {
   padding: 24px 32px;
 
-  .approve-config-wrap{
+  .approve-config-wrap {
     padding: 16px 24px;
     padding-left: 0;
-    background-color: #F5F7FA;
+    background-color: #f5f7fa;
 
-    .render-info-item .info-label{
+    .render-info-item .info-label {
       /* flex: 0 0 120px !important; */
       width: 120px;
     }

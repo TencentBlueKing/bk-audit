@@ -87,7 +87,7 @@
         </template>
       </render-info-item>
       <render-info-item
-        :label="t('处理规则')"
+        :label="t('处理规则', { text: 'Rules' })"
         style="width: 100%;">
         <router-link
           v-if="riskRule"
@@ -222,14 +222,14 @@
   });
 </script>
 <style scoped>
-.detail-base-info{
+.detail-base-info {
   padding: 10px 16px;
-  background:#fff;
-  border-top: 6px solid #FFB848;
+  background: #fff;
+  border-top: 6px solid #ffb848;
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 #1919290d;
 
-  .render-info-item{
+  .render-info-item {
     min-width: 400px;
   }
 }

@@ -174,7 +174,7 @@
           </bk-form-item>
           <bk-form-item
             class="is-required mr16"
-            :label="t('处理套餐')"
+            :label="t('处理套餐', { text: 'Tools'})"
             property="pa_id">
             <div style="display: flex;align-items: center;">
               <bk-select
@@ -217,7 +217,9 @@
                 <template
                   v-for="(val,index) in Object.values(paramsDetailData)"
                   :key="`${val.key}-${index}`">
+                  <!-- 只显示需要显示的字段 -->
                   <bk-form-item
+                    v-if="val.show_type === 'show'"
                     :label="val.name"
                     :label-width="150"
                     :property="`pa_params.${val.key}.field`"

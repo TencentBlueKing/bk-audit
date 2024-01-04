@@ -33,7 +33,7 @@
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
-          {{ t('处理套餐') }}
+          {{ t('处理套餐', { text: 'New' }) }}
         </auth-button>
         <bk-search-select
           v-model="searchKey"
@@ -333,11 +333,11 @@
               onClick={() => showRisks(data)}
               class='mr16'
               text>
-                  { t('查看关联规则')}：{data.rule_count}
+                  { t('查看关联规则：')}{data.rule_count}
             </auth-button>
           );
         }
-        return <span>{ t('查看关联规则')}：{data.rule_count}</span>;
+        return <span>{ t('查看关联规则：')}{data.rule_count}</span>;
       },
     },
     {
@@ -412,24 +412,14 @@
         text>
         {t('编辑')}
       </auth-button>
-      <bk-dropdown trigger='click'>
-        {{
-          default: () => <bk-button text><audit-icon type='more' /></bk-button>,
-          content: () => (
-            <bk-dropdown-menu >
-              <bk-dropdown-item >
-                <auth-button
-                  permission={permissionCheckData.value.create_pa}
-                  onClick={() => handleClone(data)}
-                  text
-                  action-id='create_pa'
-                >
-                  {t('克隆')}
-                </auth-button>
-              </bk-dropdown-item>
-            </bk-dropdown-menu>),
-        }}
-      </bk-dropdown>
+      <auth-button
+        permission={permissionCheckData.value.create_pa}
+        onClick={() => handleClone(data)}
+        text
+        action-id='create_pa'
+      >
+        {t('克隆')}
+      </auth-button>
     </p>,
     },
   ] as any[];

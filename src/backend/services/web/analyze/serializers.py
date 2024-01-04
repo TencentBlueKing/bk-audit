@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from services.web.analyze.models import Control, ControlVersion
@@ -59,6 +59,11 @@ class ControlResourceResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Control
         fields = ["control_type_id", "control_id", "control_name", "versions"]
+
+    def to_representation(self, instance: Control) -> dict:
+        data = super().to_representation(instance)
+        data["control_name"] = gettext(data.get("control_name"))
+        return data
 
 
 class ControlVersionDetailRequestSerializer(serializers.Serializer):

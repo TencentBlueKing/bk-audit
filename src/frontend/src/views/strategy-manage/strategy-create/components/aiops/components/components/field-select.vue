@@ -61,7 +61,8 @@
     defaultValue: string | string[];
     required?: boolean;
     multiple?: boolean;
-    theme?: 'background' | ''
+    theme?: 'background' | '',
+    fieldName: string,
   }
 
   interface Expose {
@@ -74,6 +75,10 @@
     theme: '',
   });
 
+  const emit = defineEmits<Emits>();
+  interface Emits{
+    (e: 'init', value: string):void
+  }
   const { t } = useI18n();
   const attrs = useAttrs();
 
@@ -90,6 +95,15 @@
     localValue.value = value;
   }, {
     immediate: true,
+  });
+  watch(() => props.rtFields, () => {
+    if (props.fieldName === '' || !props.rtFields.length) return;
+    if (localValue.value !== '') return;
+    const field = props.rtFields.find(item => item.value === props.fieldName);
+    if (field) {
+      localValue.value = field.value;
+      emit('init', field.value);
+    }
   });
 
   defineExpose<Expose>({
