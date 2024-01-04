@@ -129,6 +129,7 @@
 
   import ControlModel from '@model/control/control';
   import AiopPlanModel from '@model/strategy/aiops-plan';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import useRequest from '@hooks/use-request';
 
@@ -430,10 +431,7 @@
     data: commonData,
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      table_type: [],
-      offset_unit: [],
-    },
+    defaultValue: new CommonDataModel(),
     manual: true,
   });
 
@@ -580,7 +578,7 @@
   left: 0;
   width: 100%;
   padding-left: 24px;
-  background: #DCDEE5;
+  background: #dcdee5;
 
   .top-title {
     flex: 1;
@@ -599,9 +597,9 @@
       font-size: 12px;
       font-weight: 700;
       line-height: 22px;
-      color: #FFF;
+      color: #fff;
       text-align: center;
-      background: #979BA5;
+      background: #979ba5;
       border-radius: 2px;
     }
   }

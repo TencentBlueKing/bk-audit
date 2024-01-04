@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from bk_notice_sdk import config as bk_notice_config
 from blueapps.account.decorators import login_exempt
 from django.conf import settings
 from django.conf.urls import include
@@ -42,4 +43,5 @@ urlpatterns = [
     path("swagger/", schema_view.with_ui(), name="swagger-ui"),
     path("swagger.json", login_exempt(token_schema_view.without_ui()), name="swagger-json"),
     path("", include(f"services.{settings.DEPLOY_SERVICE}.urls")),
+    path(f"api/v1/{bk_notice_config.ENTRANCE_URL}", include(("bk_notice_sdk.urls", "notice"), namespace="notice")),
 ]

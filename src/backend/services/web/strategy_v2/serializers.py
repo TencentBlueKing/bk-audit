@@ -31,11 +31,13 @@ from services.web.analyze.constants import (
 from services.web.analyze.models import ControlVersion
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
+    STRATEGY_SCHEDULE_TIME,
     ConnectorChoices,
     StrategyAlgorithmOperator,
     StrategyOperator,
     TableType,
 )
+from services.web.strategy_v2.exceptions import SchedulePeriodInvalid
 from services.web.strategy_v2.models import Strategy
 
 
@@ -342,6 +344,17 @@ class AIOPSSceneConfigSerializer(serializers.Serializer):
 
     count_freq = serializers.IntegerField(label=gettext_lazy("Schedule Period"), min_value=1)
     schedule_period = serializers.ChoiceField(label=gettext_lazy("Schedule Period Unit"), choices=OffsetUnit.choices)
+
+    def validate(self, attr: dict) -> dict:
+        data = super().validate(attr)
+        if any(
+            [
+                data["schedule_period"] == OffsetUnit.HOUR and data["count_freq"] > STRATEGY_SCHEDULE_TIME * 24,
+                data["schedule_period"] == OffsetUnit.DAY and data["count_freq"] > STRATEGY_SCHEDULE_TIME,
+            ]
+        ):
+            raise SchedulePeriodInvalid()
+        return data
 
 
 class AIOPSConfigSerializer(serializers.Serializer):

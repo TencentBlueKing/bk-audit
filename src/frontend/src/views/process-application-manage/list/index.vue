@@ -33,7 +33,7 @@
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
-          {{ t('处理套餐') }}
+          {{ t('处理套餐', { text: 'New' }) }}
         </auth-button>
         <bk-search-select
           v-model="searchKey"
@@ -155,7 +155,7 @@
     <template #header>
       <div>
         <span> {{ t('查看关联规则') }}</span>
-        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979BA5;border-left: 1px solid #DCDEE5;">
+        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979ba5;border-left: 1px solid #dcdee5;">
           {{ t('套餐：') }} {{ detailItem.name || '--' }}
         </span>
       </div>
@@ -333,11 +333,11 @@
               onClick={() => showRisks(data)}
               class='mr16'
               text>
-                  { t('查看关联规则')}：{data.rule_count}
+                  { t('查看关联规则：')}{data.rule_count}
             </auth-button>
           );
         }
-        return <span>{ t('查看关联规则')}：{data.rule_count}</span>;
+        return <span>{ t('查看关联规则：')}{data.rule_count}</span>;
       },
     },
     {
@@ -412,24 +412,14 @@
         text>
         {t('编辑')}
       </auth-button>
-      <bk-dropdown trigger='click'>
-        {{
-          default: () => <bk-button text><audit-icon type='more' /></bk-button>,
-          content: () => (
-            <bk-dropdown-menu >
-              <bk-dropdown-item >
-                <auth-button
-                  permission={permissionCheckData.value.create_pa}
-                  onClick={() => handleClone(data)}
-                  text
-                  action-id='create_pa'
-                >
-                  {t('克隆')}
-                </auth-button>
-              </bk-dropdown-item>
-            </bk-dropdown-menu>),
-        }}
-      </bk-dropdown>
+      <auth-button
+        permission={permissionCheckData.value.create_pa}
+        onClick={() => handleClone(data)}
+        text
+        action-id='create_pa'
+      >
+        {t('克隆')}
+      </auth-button>
     </p>,
     },
   ] as any[];
@@ -611,26 +601,25 @@
   });
 </script>
 <style scoped lang="postcss">
-:deep(.bk-button-text){
+:deep(.bk-button-text) {
   width: 100% !important;
 
-  .show-tooltips-text{
+  .show-tooltips-text {
     width: 100%;
     max-width: 100%;
     text-align: left;
   }
 }
 
-.process-table :deep(thead th){
-  background-color: #F5F7FA;
+.process-table :deep(thead th) {
+  background-color: #f5f7fa;
 }
 
-.process-table :deep(.bk-table-body){
+.process-table :deep(.bk-table-body) {
   max-height: calc(100vh - 277px);
 }
 
 .application-list-wrap {
-  height: calc(100vh - 144px);
   padding: 16px;
   background: #fff;
 

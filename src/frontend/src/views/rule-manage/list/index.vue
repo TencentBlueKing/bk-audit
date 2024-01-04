@@ -33,7 +33,7 @@
             <audit-icon
               style="margin-right: 8px;font-size: 14px;"
               type="add" />
-            {{ t('处理规则') }}
+            {{ t('处理规则', { text: 'New'}) }}
           </auth-button>
           <auth-button
             action-id="edit_rule"
@@ -500,42 +500,41 @@
   }
   const listLoading = computed(() => listRef.value?.loading);
 
-
   const initSettings = () => ({
     fields: [
       {
-        label: '规则ID',
+        label: t('规则ID'),
         field: 'rule_id',
         disabled: true,
       },
       {
-        label: '规则名称',
+        label: t('规则名称'),
         field: 'name',
         disabled: true,
       },
       {
-        label: '执行优先级',
+        label: t('执行优先级'),
         field: 'priority_index',
         disabled: true,
       },
       {
-        label: '最近更新人',
+        label: t('最近更新人'),
         field: 'updated_by',
       },
       {
-        label: '最近更新时间',
+        label: t('最近更新时间'),
         field: 'updated_at',
       },
       {
-        label: '创建人',
+        label: t('创建人'),
         field: 'created_by',
       },
       {
-        label: '创建时间',
+        label: t('创建时间'),
         field: 'created_at',
       },
       {
-        label: '启用/停用',
+        label: t('启用/停用'),
         field: 'is_enabled',
         disabled: true,
       },
@@ -798,7 +797,6 @@
 }
 
 .rule-manage-wrap {
-  height: calc(100vh - 144px);
   padding: 16px;
   background: #fff;
 

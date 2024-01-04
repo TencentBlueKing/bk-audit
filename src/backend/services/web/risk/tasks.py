@@ -38,6 +38,7 @@ from core.lock import lock
 from services.web.risk.constants import (
     RISK_ESQUERY_DELAY_TIME,
     RISK_ESQUERY_SLICE_DURATION,
+    RISK_EVENTS_SYNC_TIME,
     RiskStatus,
     TicketNodeStatus,
 )
@@ -87,7 +88,7 @@ def generate_risk_from_event():
     """从审计事件创建风险"""
 
     # 初始化时间
-    start_time = datetime.datetime.now() - datetime.timedelta(days=int(os.getenv("BKAPP_RISK_EVENTS_SYNC_TIME", "2")))
+    start_time = datetime.datetime.now() - datetime.timedelta(days=RISK_EVENTS_SYNC_TIME)
     end_time = start_time + datetime.timedelta(seconds=RISK_ESQUERY_SLICE_DURATION)
     task_end_time = datetime.datetime.now() - datetime.timedelta(seconds=RISK_ESQUERY_DELAY_TIME)
 

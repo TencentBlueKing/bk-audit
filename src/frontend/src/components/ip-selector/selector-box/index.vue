@@ -56,7 +56,7 @@
         class="mr8"
         theme="primary"
         @click="handleSubmit">
-        {{ t('确定') }}
+        {{ t('确定(OK)') }}
       </bk-button>
       <bk-button @click="handleCancle">
         {{ t('取消') }}

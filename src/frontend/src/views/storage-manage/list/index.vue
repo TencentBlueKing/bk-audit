@@ -160,7 +160,7 @@
             onClick={() => handleEdit(data)}>
             {data.cluster_config.cluster_name}
           </auth-button>
-          {data.isDefault && <bk-tag class="ml8">默认</bk-tag>}
+          {data.isDefault && <bk-tag class="ml8">{ t('默认') }</bk-tag>}
         </div>
       ),
     },

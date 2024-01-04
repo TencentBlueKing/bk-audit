@@ -92,7 +92,7 @@
             <bk-select
               v-model="formData.etl_params.delimiter"
               :clearable="false"
-              placeholder="请选择分隔符"
+              :placeholder="t('请选择分隔符')"
               style="width: 205px;">
               <bk-option
                 v-for="item in globalsData.data_delimiter"

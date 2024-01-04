@@ -69,7 +69,11 @@
       route.params.id,
       {
         apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
-        chartDropMenu: ['excel'],
+        chartToolMenu: [
+          { type: 'tool', id: 'fullscreen', build_in: true },
+          { type: 'tool', id: 'refresh', build_in: true },
+          { type: 'menu', id: 'excel', build_in: true },
+        ],
         handleError,
       },
     );
@@ -79,12 +83,12 @@
     try {
       // 样式文件
       const link = document.createElement('link');
-      link.href = 'https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/main.css?v=1703211517';
+      link.href = 'https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/main.css?v=1704275097';
       link.rel = 'stylesheet';
       document.body.append(link);
-      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/chunk-vendors.js?v=1703211517');
-      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/chunk-bk-magic-vue.js?v=1703211517');
-      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/main.js?v=1703211517');
+      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/chunk-vendors.js?v=1704275097');
+      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/chunk-bk-magic-vue.js?v=1704275097');
+      await loadScript('https://staticfile.qq.com/bkvision/p7e76e4518060411cb65c6bc2eaea9c03/latest/main.js?v=1704275097');
       render();
     } catch (error) {
       console.error(error);

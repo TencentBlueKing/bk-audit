@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-12-20 10:58+0800\n"
+"POT-Creation-Date: 2023-12-28 10:12+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -131,6 +131,12 @@ msgstr "Get Result Table"
 
 msgid "列举项目相关数据"
 msgstr "Get Project Data"
+
+msgid "获取告警策略配置详情"
+msgstr "Get Alert Config Detail"
+
+msgid "修改部分告警策略配置配置"
+msgstr "Edit Alert Config"
 
 msgid "获取消息类型"
 msgstr "Get Msg Type"
@@ -820,7 +826,7 @@ msgid "特性ID"
 msgstr "Feature ID"
 
 msgid "待处理"
-msgstr "New"
+msgstr "Open"
 
 msgid "审批中"
 msgstr "For Approve"
@@ -955,7 +961,7 @@ msgid "分隔符过滤"
 msgstr "Delimiter Filter"
 
 msgid "保留匹配字符串"
-msgstr "Keep Match String"
+msgstr "Preserve matching strings"
 
 msgid "Namespace不存在"
 msgstr "Namespace does not exist"
@@ -1821,12 +1827,6 @@ msgstr "Hour"
 msgid "Day"
 msgstr "Day"
 
-msgid "Week"
-msgstr "Week"
-
-msgid "Month"
-msgstr "Month"
-
 msgid "Scroll"
 msgstr "Scroll"
 
@@ -1835,6 +1835,12 @@ msgstr "Slide"
 
 msgid "Whole"
 msgstr "Whole"
+
+msgid "数据源"
+msgstr "Data Source"
+
+msgid "数据开发"
+msgstr "Data Flow"
 
 msgid "Create or Update Flow Failed"
 msgstr "Create or Update Flow Failed"
@@ -1850,7 +1856,7 @@ msgid "Control Not Exists"
 msgstr "Cluster Not Exists"
 
 msgid "操作行为审计"
-msgstr "User Operate Audit"
+msgstr "Operation Audit"
 
 msgid "Control ID"
 msgstr "Control ID"
@@ -2222,9 +2228,6 @@ msgstr "No Data"
 msgid "未配置"
 msgstr "Not Configured"
 
-msgid "数据开发"
-msgstr "Data Flow"
-
 msgid "审计事件"
 msgstr "Audit Event"
 
@@ -2595,10 +2598,10 @@ msgid "新"
 msgstr "New"
 
 msgid "自动处理审批中"
-msgstr "For Approve"
+msgstr "Pre-Approving"
 
 msgid "套餐处理中"
-msgstr "Auto Process"
+msgstr "Auto-Processing"
 
 msgid "已关单"
 msgstr "Closed"
@@ -2607,7 +2610,7 @@ msgid "已完成"
 msgstr "Finished"
 
 msgid "误报"
-msgstr "Mis Report"
+msgstr "False positive"
 
 msgid "Create Risk Failed"
 msgstr "Create Risk Failed"
@@ -2664,7 +2667,7 @@ msgstr "Reopen Risk"
 
 #, python-format
 msgid "%s 标记误报，系统自动关单"
-msgstr "%s label as misreport, ticket closed by system"
+msgstr "%s label as false positive, ticket closed by system"
 
 msgid "解除误报"
 msgstr "Reopen Misreport"
@@ -2678,7 +2681,7 @@ msgstr "Assign to: %s"
 
 #, python-format
 msgid "%s 解除误报，系统自动重开单据"
-msgstr "%s labeled as normal, ticket reopened by system"
+msgstr "%s labeled as false positive, ticket reopened by system"
 
 msgid "人工处理"
 msgstr "Await Deal"
@@ -3003,8 +3006,8 @@ msgstr "Control Type Name"
 msgid "Strategy V2"
 msgstr "Strategy V2"
 
-msgid "Has Update"
-msgstr "Has Update"
+msgid "Upgradable"
+msgstr "Upgradable"
 
 msgid "Disabled"
 msgstr "Disabled"
@@ -3083,6 +3086,10 @@ msgstr "Empty Fields"
 
 msgid "Strategy Status Unexpected"
 msgstr "Strategy Status Unexpected"
+
+#, python-format
+msgid "调度周期超过允许的范围(%s天)"
+msgstr "Schedule period grater than %s day"
 
 msgid "Strategy Name"
 msgstr "Strategy Name"

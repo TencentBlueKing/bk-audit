@@ -29,7 +29,7 @@
       <bk-tab-panel
         v-for="(item) in panels"
         :key="item.name"
-        :label="item.label"
+        :label="t(item.label)"
         :name="item.name" />
       <component
         :is="comMap[active as keyof typeof comMap]"
@@ -164,8 +164,8 @@
   });
 </script>
 <style scoped lang="postcss">
-.risk-manage-detail-wrap{
-  .flex{
+.risk-manage-detail-wrap {
+  .flex {
     display: flex;
     align-items: center;
 

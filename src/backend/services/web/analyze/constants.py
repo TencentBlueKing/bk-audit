@@ -157,8 +157,6 @@ class OffsetUnit(TextChoices):
 
     HOUR = "hour", gettext_lazy("Hour")
     DAY = "day", gettext_lazy("Day")
-    WEEK = "week", gettext_lazy("Week")
-    MONTH = "month", gettext_lazy("Month")
 
 
 class WindowType(TextChoices):

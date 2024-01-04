@@ -52,6 +52,24 @@
         :data="data.configs.variable_config" />
     </render-info-item>
   </render-info-block>
+  <!-- 旧的Eventlog没有调度周期不显示；batch_join_source为默认值后，新建则有 -->
+  <render-info-block v-if="data.configs.aiops_config">
+    <render-info-item :label="t('调度周期')">
+      <template v-if="data?.configs.aiops_config.count_freq">
+        <span>
+          {{ data?.configs.aiops_config.count_freq }}
+        </span>
+        <span>
+          {{ commonData.offset_unit
+            .find((item: Record<string, string>) =>
+              item.value === data.configs.aiops_config.schedule_period)?.label }}
+        </span>
+      </template>
+      <span v-else>
+        --
+      </span>
+    </render-info-item>
+  </render-info-block>
 </template>
 
 <script setup lang='ts'>
@@ -67,6 +85,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import ControlModel from '@model/control/control';
+  import CommonDataModel from '@model/strategy/common-data';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -81,6 +100,7 @@
 
   interface Props {
     data: StrategyModel,
+    commonData: CommonDataModel
   }
 
   const props = defineProps<Props>();
@@ -131,9 +151,7 @@
   const {
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: {
-      mapping_type: [],
-    },
+    defaultValue: new CommonDataModel(),
     manual: true,
     onSuccess(data) {
       data.mapping_type.forEach((item) => {

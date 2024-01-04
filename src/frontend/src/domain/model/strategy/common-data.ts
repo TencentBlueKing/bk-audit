@@ -14,40 +14,30 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-/// <reference types="vite/client" />
 
-interface ImportMetaEnv {
-  readonly VITE_AJAX_URL_PREFIX: string
-  readonly DEV_DOMAIN: string
+type ItemType = {
+  label: string,
+  value: string
+  config?: any;
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
+export default class CommonData {
+  offset_unit: Array<ItemType>;
+  table_type: Array<ItemType>;
+  mapping_type: Array<ItemType>;
+  strategy_operator: Array<ItemType>;
+  filter_operator: Array<ItemType>;
+  algorithm_operator: Array<ItemType>;
+  strategy_status: Array<ItemType>;
+
+  constructor(payload = {} as CommonData) {
+    this.offset_unit = payload.offset_unit || [];
+    this.table_type = payload.table_type || [];
+    this.mapping_type = payload.mapping_type || [];
+    this.strategy_operator = payload.strategy_operator || [];
+    this.filter_operator = payload.filter_operator || [];
+    this.algorithm_operator = payload.algorithm_operator || [];
+    this.strategy_status = payload.strategy_status || [];
+  }
 }
-
-declare module '*.js' {
-  const css: string;
-  export default js;
-}
-
-declare interface Window {
-  PROJECT_CONFIG: {
-    AJAX_URL_PREFIX: string,
-    NAMESPACE: string
-  };
-  changeConfirm: boolean | 'popover';
-  testmessage: any;
-  BkVisionSDK: any;
-}
-
-declare module 'js-cookie'
-
-declare module '@blueking/notice-component';
-
-interface URLSearchParams {
-  keys(): string[];
-}
-
-type ValueOf<T> = T[keyof T];
-
 

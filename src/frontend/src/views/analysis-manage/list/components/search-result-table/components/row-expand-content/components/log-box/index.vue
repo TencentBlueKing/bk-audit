@@ -58,21 +58,23 @@
               {{ t('原始日志') }}
             </div>
           </div>
-          <div
-            class="cursor mr24"
-            @click="handleCopyLog">
-            <audit-icon
-              style="color: #979ba5;"
-              type="copy" />
-            {{ t('复制日志') }}
-          </div>
-          <div>
-            {{ t('深色模式') }}
-            <bk-switcher
-              size="small"
-              theme="primary"
-              :value="theme === 'vs-dark'"
-              @change="handleChangeTheme" />
+          <div class="log-btns">
+            <div
+              class="cursor mr24"
+              @click="handleCopyLog">
+              <audit-icon
+                style="color: #979ba5;"
+                type="copy" />
+              {{ t('复制日志') }}
+            </div>
+            <div>
+              {{ t('深色模式') }}
+              <bk-switcher
+                size="small"
+                theme="primary"
+                :value="theme === 'vs-dark'"
+                @change="handleChangeTheme" />
+            </div>
           </div>
         </div>
       </div>
@@ -183,6 +185,11 @@
 </script>
 <style lang="postcss">
   .analysis-log-dialog {
+    .flex {
+      align-items: center;
+      width: 100%;
+    }
+
     .log-operation {
       display: flex;
       margin-left: auto;
@@ -202,6 +209,11 @@
       border-radius: 2px;
     }
 
+    .log-btns {
+      display: flex;
+      align-items: center;
+    }
+
     .log-tab-item {
       display: flex;
       height: 26px;
@@ -210,7 +222,7 @@
       border-radius: 2px;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s;
+      transition: all .15s;
 
       &.active {
         color: #3a84ff;

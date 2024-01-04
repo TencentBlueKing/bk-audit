@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from django.utils.translation import gettext_lazy
 
 from apps.exceptions import CoreException
+from services.web.strategy_v2.constants import STRATEGY_SCHEDULE_TIME
 
 
 class StrategyV2Exception(CoreException):
@@ -47,3 +48,9 @@ class StrategyStatusUnexpected(StrategyV2Exception):
     STATUS_CODE = 500
     ERROR_CODE = "004"
     MESSAGE = gettext_lazy("Strategy Status Unexpected")
+
+
+class SchedulePeriodInvalid(StrategyV2Exception):
+    STATUS_CODE = 500
+    ERROR_CODE = "005"
+    MESSAGE = gettext_lazy("调度周期超过允许的范围(%s天)") % STRATEGY_SCHEDULE_TIME

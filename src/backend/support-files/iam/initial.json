@@ -217,8 +217,8 @@
             "operation": "upsert_action",
             "data": {
                 "id": "search_regular_event",
-                "name": "审计日志检索",
-                "name_en": "Search Audit Event",
+                "name": "审计日志检索(非敏感)",
+                "name_en": "Search Audit Event (Non-Sensitive)",
                 "type": "view",
                 "version": 1,
                 "related_resource_types": [
@@ -969,9 +969,6 @@
                             "actions": [
                                 {
                                     "id": "search_regular_event"
-                                },
-                                {
-                                    "id": "search_sensitive_event"
                                 },
                                 {
                                     "id": "access_audit_sensitive_info"
