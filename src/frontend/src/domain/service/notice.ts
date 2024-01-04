@@ -14,40 +14,14 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-/// <reference types="vite/client" />
+import NoticeSource from '../source/notice';
 
-interface ImportMetaEnv {
-  readonly VITE_AJAX_URL_PREFIX: string
-  readonly DEV_DOMAIN: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
-
-declare module '*.js' {
-  const css: string;
-  export default js;
-}
-
-declare interface Window {
-  PROJECT_CONFIG: {
-    AJAX_URL_PREFIX: string,
-    NAMESPACE: string
-  };
-  changeConfirm: boolean | 'popover';
-  testmessage: any;
-  BkVisionSDK: any;
-}
-
-declare module 'js-cookie'
-
-declare module '@blueking/notice-component';
-
-interface URLSearchParams {
-  keys(): string[];
-}
-
-type ValueOf<T> = T[keyof T];
-
-
+export default {
+  /**
+   * @desc 判断notice是否启用
+   */
+  fetchNoticeFeature(params: {feature_id: string}) {
+    return NoticeSource.getNoticeFeature(params)
+      .then(({ data }) => data);
+  },
+};

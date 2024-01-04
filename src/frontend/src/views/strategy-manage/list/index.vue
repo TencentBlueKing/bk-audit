@@ -1224,7 +1224,6 @@
   .strategy-manage-list {
     position: absolute;
     right: -24px;
-    height: calc(100vh - 52px);
     padding: 24px;
     background-color: white;
     box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
