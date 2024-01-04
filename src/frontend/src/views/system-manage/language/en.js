@@ -228,7 +228,7 @@ export default {
     '【含义】匹配 c1-c2 中的任意单一字符': '[Meaning] match any single character in c1-c2',
     '【示例】[0-9] [a-z], a[0-9]b, 0 与 9 之间必须也只能有一个字符 如 a0b, a1b... a9b': '[Example] [0-9] [a-z], a[0-9]b, only one character can appear between 0 and 9 or between a and z, such as a0b, a1b... a9b',
     '【含义】匹配 sring1 或 string2 (或更多)其一字符串': '[Meaniing] match one of sring1 or string2 (or more) strings',
-    '【示例】a{abc,xyz,123}b, a 与 b 之间只能是 abc 或 xyz 或 123 这三个字符串之一': '[Example] a{abc,xyz,123}b, only abc, xyz, or 123 can appear between a and b',
+    '【示例】a{abc,xyz,123}b, a 与 b 之间只能是 abc 或 xyz 或 123 这三个字符串之一': '[Example] a{string}b, only abc, xyz, or 123 can appear between a and b',
     本次共下发: 'Total issued this time',
     '确认离开当前页？': 'Are you sure to leave current page ?',
     离开将会导致未保存信息丢失: 'Leaving will cause unsaved information to be lost',
