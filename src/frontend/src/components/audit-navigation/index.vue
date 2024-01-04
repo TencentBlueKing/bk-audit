@@ -15,17 +15,17 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  <div>
+    <notice-component
+      v-if="showNotice.enabled"
+      :api-url="apiUrl" />
+  </div>
   <div
     class="audit-navigation"
     :class="{
       'is-fixed': isSideMenuFixed,
       'show-notice-navigation': showNotice.enabled
     }">
-    <div>
-      <notice-component
-        v-if="showNotice.enabled"
-        :api-url="apiUrl" />
-    </div>
     <div
       class="audit-navigation-side"
       :style="sideStyles">
@@ -155,7 +155,7 @@
   // }));
 
   const scrollStyles = computed(() => {
-    const contentHeaderHeight = 104;
+    const contentHeaderHeight = showNotice.value.enabled ? 144 : 104;
     return {
       width: `calc(100vw - ${realSideWidth.value}px)`,
       height: `calc(100vh - ${contentHeaderHeight}px)`,
@@ -382,12 +382,12 @@
 }
 
 .show-notice-navigation {
-  height: calc(100vh - 92px);
+  height: calc(100vh - 40px);
   overflow: hidden;
 }
 
 .show-notice-navigation-main {
-  height: calc(100vh - 92px);
+  height: calc(100vh - 40px);
 }
 
 .show-notice-side-menu {

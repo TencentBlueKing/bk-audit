@@ -155,7 +155,7 @@
     <template #header>
       <div>
         <span> {{ t('查看关联规则') }}</span>
-        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979BA5;border-left: 1px solid #DCDEE5;">
+        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979ba5;border-left: 1px solid #dcdee5;">
           {{ t('套餐：') }} {{ detailItem.name || '--' }}
         </span>
       </div>
@@ -611,26 +611,25 @@
   });
 </script>
 <style scoped lang="postcss">
-:deep(.bk-button-text){
+:deep(.bk-button-text) {
   width: 100% !important;
 
-  .show-tooltips-text{
+  .show-tooltips-text {
     width: 100%;
     max-width: 100%;
     text-align: left;
   }
 }
 
-.process-table :deep(thead th){
-  background-color: #F5F7FA;
+.process-table :deep(thead th) {
+  background-color: #f5f7fa;
 }
 
-.process-table :deep(.bk-table-body){
+.process-table :deep(.bk-table-body) {
   max-height: calc(100vh - 277px);
 }
 
 .application-list-wrap {
-  height: calc(100vh - 144px);
   padding: 16px;
   background: #fff;
 

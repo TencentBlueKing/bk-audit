@@ -74,11 +74,9 @@
 </script>
 <style lang="postcss">
   .analysis-manage-page {
-    padding-bottom: 44px;
-
     /* 解决表格悬停超出 */
-    .bk-table-fixed .column_fixed{
-      bottom:80px !important;
+    .bk-table-fixed .column_fixed {
+      bottom: 80px !important;
     }
 
     .search-result-action {
