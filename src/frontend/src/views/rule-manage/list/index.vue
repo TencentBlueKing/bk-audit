@@ -798,7 +798,6 @@
 }
 
 .rule-manage-wrap {
-  height: calc(100vh - 144px);
   padding: 16px;
   background: #fff;
 

@@ -186,7 +186,7 @@
 <style lang="postcss" scoped>
 .render-label-box {
   position: relative;
-  height: calc(100vh - 104px);
+  height: calc(100vh - 144px);
   background-color: #f5f7fa;
 
   .render-label {
@@ -194,7 +194,7 @@
     min-width: 240px;
     padding: 20px 0;
     color: #63656e;
-    transition: all 0.8s;
+    transition: all .8s;
 
     .active {
       color: #3a84ff !important;
