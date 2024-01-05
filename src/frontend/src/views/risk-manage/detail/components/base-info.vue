@@ -19,11 +19,14 @@
     <render-info-block
       class="flex mt16"
       style="margin-bottom: 12px;">
-      <render-info-item :label="t('风险ID')">
+      <render-info-item
+        :label="t('风险ID')"
+        :label-width="labelWidth">
         {{ data.risk_id }}
       </render-info-item>
       <render-info-item
         :label="t('风险命中策略')"
+        :label-width="labelWidth"
         style="width: 100%;">
         <router-link
           v-if="strategyName"
@@ -42,31 +45,42 @@
     <render-info-block
       class="flex "
       style="margin-bottom: 12px;">
-      <render-info-item :label="t('责任人')">
+      <render-info-item
+        :label="t('责任人')"
+        :label-width="labelWidth">
         <edit-tag :data="data.operator || ''" />
       </render-info-item>
-      <render-info-item :label="t('风险标签')">
+      <render-info-item
+        :label="t('风险标签')"
+        :label-width="labelWidth">
         <edit-tag :data="data.tags?.map(item=>strategyTagMap[item] || item) || ''" />
       </render-info-item>
     </render-info-block>
     <render-info-block
       class="flex "
       style="margin-bottom: 12px;">
-      <render-info-item :label="t('首次发现时间')">
+      <render-info-item
+        :label="t('首次发现时间')"
+        :label-width="labelWidth">
         {{ data.event_time || '--' }}
       </render-info-item>
-      <render-info-item :label="t('最后发现时间')">
+      <render-info-item
+        :label="t('最后发现时间')"
+        :label-width="labelWidth">
         {{ data.event_end_time || '--' }}
       </render-info-item>
     </render-info-block>
     <render-info-block
       class="flex "
       style="margin-bottom: 12px;">
-      <render-info-item :label="t('风险类型')">
+      <render-info-item
+        :label="t('风险类型')"
+        :label-width="labelWidth">
         {{ data.event_type?.join('、') || '--' }}
       </render-info-item>
       <render-info-item
         :label="t('通知人员')"
+        :label-width="labelWidth"
         style="width: 100%;">
         <edit-tag :data="data.notice_users || ''" />
       </render-info-item>
@@ -74,7 +88,9 @@
     <render-info-block
       class="flex "
       style="margin-bottom: 12px;">
-      <render-info-item :label="t('处理状态')">
+      <render-info-item
+        :label="t('处理状态')"
+        :label-width="labelWidth">
         <template v-if="statusToMap[data.status]">
           <bk-tag :theme="statusToMap[data.status].tag">
             <p style="display: flex;align-items: center;">
@@ -88,6 +104,7 @@
       </render-info-item>
       <render-info-item
         :label="t('处理规则', { text: 'Rules' })"
+        :label-width="labelWidth"
         style="width: 100%;">
         <router-link
           v-if="riskRule"
@@ -108,6 +125,7 @@
       style="margin-bottom: 12px;">
       <render-info-item
         :label="t('当前处理人')"
+        :label-width="labelWidth"
         style="width: 100%;">
         <edit-tag :data="data.current_operator || ''" />
       </render-info-item>
@@ -115,7 +133,9 @@
     <render-info-block
       class="flex "
       style="margin-bottom: 12px;">
-      <render-info-item :label="t('风险描述')">
+      <render-info-item
+        :label="t('风险描述')"
+        :label-width="labelWidth">
         {{ data.event_content }}
       </render-info-item>
     </render-info-block>
@@ -185,7 +205,9 @@
       color: '#0CA668',
     },
   };
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
   const strategyTagMap = ref<Record<string, string>>({});
   const strategyName = computed(() => {
     const { data } = props;

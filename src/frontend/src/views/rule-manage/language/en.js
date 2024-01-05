@@ -59,5 +59,6 @@ export default {
     规则停用确认: 'Switch Off confirmation',
     规则启用确认: 'Switch On Confirmation',
     编辑处理规则: 'Edit Rule',
+    '规则：': 'Rule: ',
   },
 };

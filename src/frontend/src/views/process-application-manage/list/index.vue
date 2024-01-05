@@ -93,8 +93,8 @@
             <audit-popconfirm
               :confirm-handler="()=>handleToggle(detailItem)"
               :content="detailItem.is_enabled
-                ? t('套餐停用后，新建/编辑处理规则时不可再选择该套餐，请确认是否停用')
-                : t('套餐启用后，新建/编辑处理规则时可以选择该套餐，请确认是否启用')"
+                ? t('套餐停用后，新建/编辑处理规则时不可再选择该套餐，请确认是否停用？')
+                : t('套餐启用后，新建/编辑处理规则时可以选择该套餐，请确认是否启用？')"
               :title="detailItem.is_enabled ? t('套餐停用确认') : t('套餐启用确认')">
               <auth-switch
                 action-id="edit_pa"
@@ -373,8 +373,8 @@
           ? (
             <audit-popconfirm
               content={data.is_enabled
-                ? t('套餐停用后，新建/编辑处理规则时不可再选择该套餐，请确认是否停用')
-                : t('套餐启用后，新建/编辑处理规则时可以选择该套餐，请确认是否启用')}
+                ? t('套餐停用后，新建/编辑处理规则时不可再选择该套餐，请确认是否停用？')
+                : t('套餐启用后，新建/编辑处理规则时可以选择该套餐，请确认是否启用？')}
               title={data.is_enabled ? t('套餐停用确认') : t('套餐启用确认')}
               confirm-handler={() => handleToggle(data)}>
             <auth-switch
@@ -413,6 +413,7 @@
         {t('编辑')}
       </auth-button>
       <auth-button
+        theme='primary'
         permission={permissionCheckData.value.create_pa}
         onClick={() => handleClone(data)}
         text

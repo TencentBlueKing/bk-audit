@@ -29,7 +29,7 @@
             :key="index">
             <td
               class="hover-table-title"
-              style="width: 84px;">
+              :style="{width: `${labelWidth}px`}">
               {{ t(item.key) }}
             </td>
             <td class="hover-table-value">
@@ -55,7 +55,7 @@
   </desc-popover>
 </template>
 <script setup lang="tsx">
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MultipleLineClamp from '@components/multiple-line-clamp/index.vue';
@@ -73,7 +73,8 @@
     value:string;
     type?: string,
   }
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 150 : 84));
 
   // eslint-disable-next-line vue/no-setup-props-destructure
   const initData = [

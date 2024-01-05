@@ -98,8 +98,9 @@ export default {
     审计报表: 'Analysis',
     关联事件: 'Events',
     提交: 'Submit',
-    取消: 'No',
     请输入风险描述: 'Please enter the risk description...',
     风险处理: 'Processing',
+    取消: 'Cancel',
+    '取消(No)': 'No',
   },
 };
