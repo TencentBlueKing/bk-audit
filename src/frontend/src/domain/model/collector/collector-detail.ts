@@ -16,6 +16,10 @@
 */
 import _ from 'lodash';
 
+import i18n from '@/language/index.js';
+
+const { t } = i18n.global;
+
 export default class CollectorDetail {
   allocation_min_days: number;
   bcs_cluster_id: string;
@@ -259,10 +263,10 @@ export default class CollectorDetail {
 
   get statusText() {
     const statusText: Record<string, string> =  {
-      running: '执行中',
-      failed: '失败',
-      success: '成功',
-      unknown: '未知',
+      running: t('执行中'),
+      failed: t('失败'),
+      success: t('成功'),
+      unknown: t('未知'),
     };
     return statusText;
   }

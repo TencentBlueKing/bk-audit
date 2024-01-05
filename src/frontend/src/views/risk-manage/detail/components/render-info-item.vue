@@ -39,7 +39,7 @@
   const props = defineProps<Props>();
   const labelStyle = computed(() => ({
     'min-width': `${props.labelWidth || 80}px`,
-    flex: `0 0 ${props.labelWidth || 80}px`,
+    flex: '0 0 auto',
   }));
 </script>
 <style lang="postcss" scoped>
@@ -50,7 +50,7 @@
 
   .info-label {
     min-width: 60px;
-    color: #63656E;
+    color: #63656e;
     text-align: right;
     flex: 0 0 60px;
   }
