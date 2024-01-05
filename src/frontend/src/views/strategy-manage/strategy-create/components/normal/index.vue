@@ -144,7 +144,7 @@
         <div class="condition-icon">
           <div
             v-if="formData.configs.agg_condition.length > 1"
-            v-bk-tooltips="t('删除')"
+            v-bk-tooltips="t('删除(Remove)')"
             class="ml8"
             @click="handleRemoveCondition(index)">
             <audit-icon type="reduce-fill" />
@@ -234,7 +234,7 @@
         property="configs.agg_interval">
         <div
           class="rule-item"
-          style="position:relative"
+          style="position: relative"
           @mouseenter="isShowTip=true;"
           @mouseleave="isShowTip=false;">
           <span>{{ t('每') }}</span>
@@ -606,10 +606,10 @@
   padding: 10px 20px;
 }
 
-.bk-select.not-select-close-btn{
-  :deep(.bk-select-tag-wrapper){
-    .bk-tag-closable:nth-of-type(1){
-      .bk-tag-close{
+.bk-select.not-select-close-btn {
+  :deep(.bk-select-tag-wrapper) {
+    .bk-tag-closable:nth-of-type(1) {
+      .bk-tag-close {
         display: none !important;
       }
     }
@@ -618,27 +618,27 @@
 }
 
 .filter-conditon {
-  .flex-center{
+  .flex-center {
     display: flex;
     align-items: center;
   }
 
 
-  .info-tip{
+  .info-tip {
     position: absolute;
-    top:22%;
+    top: 22%;
     left: 70px;
     display: none;
     font-size: 16px;
     line-height: 1;
-    color: #3A84FF;
+    color: #3a84ff;
   }
 
-  .info-tip.active{
+  .info-tip.active {
     display: inline-block;
   }
 
-  .form-item-title-required{
+  .form-item-title-required {
     position: relative;
     font-weight: 400;
     color: #63656e;
@@ -650,7 +650,7 @@
     width: 14px;
     color: #ea3636;
     text-align: center;
-    content: "*";
+    content: '*';
   }
 
   .rule-item {
@@ -659,7 +659,7 @@
 
     :deep(.bk-form-label::after) {
       width: 0;
-      content: "";
+      content: '';
     }
 
     :deep(.bk-form-label) {
@@ -704,7 +704,7 @@
 
     :deep(.bk-form-label::after) {
       width: 0;
-      content: "";
+      content: '';
     }
 
     :deep(.bk-form-label) {

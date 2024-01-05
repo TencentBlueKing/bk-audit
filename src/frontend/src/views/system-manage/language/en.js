@@ -243,7 +243,7 @@ export default {
     分隔符不能为空: 'Delimiter is required',
     数据为空: 'Data is empty',
     '确认删除通知组？': 'Are you sure to delete the Notification Group ?',
-    未配置: 'Not ready',
+    未配置: 'Not Configured',
     部署中: 'Deploying',
     等待中: 'Waiting',
     部分失败: 'Failed',
