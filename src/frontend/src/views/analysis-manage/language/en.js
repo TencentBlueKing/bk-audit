@@ -121,7 +121,7 @@ export default {
     确认: 'Yes',
     搜索属性: 'Search attr.',
     确定: 'Yes',
-    '确定(OK)': 'Ok',
+    '确定(OK)': 'OK',
     简体中文: '简体中文',
     English: 'English',
     上级员工: 'direct supervisor',
