@@ -2217,10 +2217,10 @@ msgid "静态拓扑"
 msgstr "Static Topo"
 
 msgid "无数据"
-msgstr "No Data"
+msgstr "No-data"
 
 msgid "未配置"
-msgstr "Not Configured"
+msgstr "Not ready"
 
 msgid "数据开发"
 msgstr "Data Flow"
