@@ -46,5 +46,12 @@ export default {
     否: 'No',
     规则状态: 'Status',
     '套餐：': 'Tool name',
+    启动成功: 'Activated successfully',
+    停用成功: 'Deactivation successful',
+    套餐停用确认: 'Tool deactivation confirm',
+    '套餐停用后，新建/编辑处理规则时不可再选择该套餐，请确认是否停用？': 'If the tool has been deactivated, processing rule will not be applied to the tool, are you sure ?',
+    套餐启用确认: 'Tool activation confirm',
+    '套餐启用后，新建/编辑处理规则时可以选择该套餐，请确认是否启用？': 'After the tool is enabled, processing rule can be applied to this tool, are you sure ?',
+
   },
 };

@@ -31,13 +31,12 @@
               :key="index">
               <td
                 class="hover-table-title"
-                style="width: 84px;">
+                :style="{width: `${labelWidth}px`}">
                 {{ t(item.key) }}
               </td>
               <td
                 class="hover-table-value"
-                :colspan="item.colspan"
-                style="width: 36%;">
+                :colspan="item.colspan">
                 <p class="sensitive-item">
                   <multiple-line-clamp :data="(item.value as string)" />
                   <auth-button
@@ -58,12 +57,11 @@
               <template v-if="colDataRight[index]">
                 <td
                   class="hover-table-title  border-bottom"
-                  style="width: 84px;">
+                  :style="{width: `${labelWidth}px`}">
                   {{ t(colDataRight[index].key) }}
                 </td>
                 <td
-                  class="hover-table-value border-bottom"
-                  style="width: 36%;word-break: break-all;">
+                  class="hover-table-value border-bottom">
                   <p class="sensitive-item">
                     <multiple-line-clamp :data="(colDataRight[index].value as string)" />
                     <auth-button
@@ -71,7 +69,7 @@
                       action-id="access_audit_sensitive_info"
                       :permission="false"
                       :resource="sensitiveData.id"
-                      style="float:right;"
+                      style="float: right;"
                       text
                       theme="primary">
                       <audit-icon
@@ -93,6 +91,7 @@
 </template>
 <script setup lang="ts">
   import {
+    computed,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -120,8 +119,9 @@
     data: Record<string, any>;
   }
   const props = defineProps<Props>();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const popoverRef = ref();
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 84));
   const initColDataLeft = () => [
     {
       id: 'name',
@@ -269,12 +269,12 @@
 </script>
 <style lang="postcss" scoped>
 
-.sensitive-item{
+.sensitive-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
 
-  .permission-icon{
+  .permission-icon {
     cursor: pointer;
   }
 }
