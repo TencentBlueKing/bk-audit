@@ -59,7 +59,9 @@ def load_settings(module_path: str, raise_exception: bool = True):
         warn(msg)
         return
     for setting in dir(module):
-        if setting == setting.upper():
+        if setting == "INSTALLED_APPS" and setting in globals():
+            globals()[setting] = (*globals()[setting], *getattr(module, setting))
+        elif setting == setting.upper():
             globals()[setting] = getattr(module, setting)
 
 
