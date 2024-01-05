@@ -56,7 +56,7 @@ export default {
   筛选条件: 'Filtering',
   触发规则: 'Trigger rules',
   确定: 'Yes',
-  '确定(OK)': 'Ok',
+  '确定(OK)': 'OK',
   新增通知组: 'New',
   提交: 'Submit',
   取消: 'Cancel',
