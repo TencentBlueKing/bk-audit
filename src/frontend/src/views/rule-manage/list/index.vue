@@ -187,7 +187,7 @@
       <div>
         <span> {{ t('命中风险') }}</span>
         <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979ba5;border-left: 1px solid #dcdee5;">
-          规则：{{ riskScopeRiskDetailItem.name }}
+          {{ t('规则：') }}{{ riskScopeRiskDetailItem.name }}
         </span>
       </div>
     </template>

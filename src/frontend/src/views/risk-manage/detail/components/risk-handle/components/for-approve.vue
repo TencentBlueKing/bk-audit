@@ -18,15 +18,17 @@
   <div class="approve-wrap">
     <template v-if="forApproveData">
       <div class="mis-title">
-        <span style="color:#313238">{{ t('执行前审批') }}</span>
+        <span style="color: #313238">{{ t('执行前审批') }}</span>
         <span
           class="ml8"
-          style="color: #979BA5">
+          style="color: #979ba5">
           {{ forApproveData.process_result?.status?.update_at || forApproveData.time }}
         </span>
       </div>
       <div class="mis-content">
-        <render-info-item :label="t('审批结果')">
+        <render-info-item
+          :label="t('审批结果')"
+          :label-width="labelWidth">
           <div style="display: flex;align-items: center;">
             <audit-icon
               :class="forApproveStatusCom.icon==='loading' ? 'rotate-loading' : '' "
@@ -38,7 +40,8 @@
         </render-info-item>
         <render-info-item
           class="mt8"
-          :label="t('关联单据')">
+          :label="t('关联单据')"
+          :label-width="labelWidth">
           <a
             v-if="forApproveData.process_result?.ticket?.ticket_url"
             :href="forApproveData.process_result.ticket.ticket_url"
@@ -53,13 +56,15 @@
     <!-- 执行套餐 - AutoProcess -->
     <template v-if="data.action === 'AutoProcess'">
       <div class="mis-title mt16">
-        <span style="color:#313238">{{ t('执行套餐动作') }}</span>
+        <span style="color: #313238">{{ t('执行套餐动作') }}</span>
         <span
           class="ml8"
-          style="color: #979BA5">{{ data.process_result?.status?.update_at || data.time }}</span>
+          style="color: #979ba5">{{ data.process_result?.status?.update_at || data.time }}</span>
       </div>
       <div class="mis-content">
-        <render-info-item :label="t('任务名称')">
+        <render-info-item
+          :label="t('任务名称')"
+          :label-width="labelWidth">
           <!-- 任务名称，没有默认展示 loading -->
           <a
             v-if="data.process_result?.status?.name"
@@ -76,7 +81,8 @@
         </render-info-item>
         <render-info-item
           class="mt8"
-          :label="t('任务状态')">
+          :label="t('任务状态')"
+          :label-width="labelWidth">
           <!-- 没有则展示执行中 -->
           <div style="display: flex;align-items: center;">
             <audit-icon
@@ -114,7 +120,8 @@
         </render-info-item>
         <render-info-item
           class="mt8"
-          :label="t('执行开始时间')">
+          :label="t('执行开始时间')"
+          :label-width="labelWidth">
           <span v-if="data.process_result?.status?.start_time">
             {{ data.process_result.status.start_time || '--' }}
           </span>
@@ -122,7 +129,8 @@
         </render-info-item>
         <render-info-item
           class="mt8"
-          :label="t('执行结束时间')">
+          :label="t('执行结束时间')"
+          :label-width="labelWidth">
           <span v-if="data.process_result?.status?.finish_time">
             {{ data.process_result?.status.finish_time || '--' }}
           </span>
@@ -165,8 +173,9 @@
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { messageSuccess } = useMessage();
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 100 : 80));
 
   // 执行前审批的状态
   const currentStatus = computed(() => {
@@ -305,8 +314,8 @@
 <style scoped lang="postcss">
 .approve-wrap {
   padding: 10px 16px;
-  background: #FFF;
-  border: 1px solid #EAEBF0;
+  background: #fff;
+  border: 1px solid #eaebf0;
   border-radius: 6px;
   box-shadow: 0 2px 6px 0 #0000000a;
 
@@ -317,7 +326,7 @@
   >.mis-content {
     padding: 12px 16px;
     margin-top: 8px;
-    background: #F5F7FA;
+    background: #f5f7fa;
     border-radius: 4px;
   }
 }

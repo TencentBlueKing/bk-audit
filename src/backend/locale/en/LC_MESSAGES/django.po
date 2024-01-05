@@ -949,16 +949,16 @@ msgid "JSON"
 msgstr "JSON"
 
 msgid "正则"
-msgstr "Regexp"
+msgstr "Regex."
 
 msgid "计算平台JSON"
 msgstr "BK Data JSON"
 
 msgid "字符串过滤"
-msgstr "String Filter"
+msgstr "By string"
 
 msgid "分隔符过滤"
-msgstr "Delimiter Filter"
+msgstr "By delimiter"
 
 msgid "保留匹配字符串"
 msgstr "Preserve matching strings"
@@ -2223,10 +2223,10 @@ msgid "静态拓扑"
 msgstr "Static Topo"
 
 msgid "无数据"
-msgstr "No Data"
+msgstr "No-data"
 
 msgid "未配置"
-msgstr "Not Configured"
+msgstr "Not ready"
 
 msgid "审计事件"
 msgstr "Audit Event"

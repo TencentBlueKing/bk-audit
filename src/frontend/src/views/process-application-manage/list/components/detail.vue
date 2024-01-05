@@ -125,23 +125,7 @@
   }
   const { t, locale } = useI18n();
 
-  const getMaxLabelWidth = (label: string) => {
-    const span = document.createElement('span');
-    // 防止span影响页面布局
-    span.style.position = 'absolute';
-    span.style.whiteSpace = 'nowrap';
-    span.style.visibility = 'hidden';
-    span.style.fontSize = '12px';
-    span.style.fontFamily = 'Arial';
-    span.textContent = label;
-    document.body.appendChild(span);
-    return span.offsetWidth;
-  };
-  const zhCn = ['套餐ID：', '套餐名称：', '执行动作：', '执行前审批：', '审批配置：', '审批流程：', '审批单信息：', '备注：'];
-  const usEn = ['Tool ID:', 'name:', 'Action:', 'Pre-Approval:', 'Approval settings:', 'Flow:', 'Ticket info:', 'Desc:'];
-  const cnLabel = zhCn.reduce((a: string, b:string) => (a.length > b.length ? a : b), '');
-  const enLabel = usEn.reduce((a: string, b:string) => (a.length > b.length ? a : b), '');
-  const labelWidth = computed(() => (locale.value === 'en-US' ? getMaxLabelWidth(enLabel) : getMaxLabelWidth(cnLabel)));
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 100 : 80));
 
   const filterDetailDataFields = computed(() => {
     if (!detailData.value) return [] as ServiceField[];
