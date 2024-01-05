@@ -62,7 +62,7 @@ export default {
     转单: 'Reassignment',
     处理方法: 'Processing by',
     处理说明: 'Description',
-    人工关单: 'Closed',
+    人工关单: 'Close',
     审批结果: 'Approval result',
     关联单据: 'Related ticket',
     执行处理套餐: 'Execute Processing Tool',
