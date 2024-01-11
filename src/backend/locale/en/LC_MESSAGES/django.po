@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-12-28 10:12+0800\n"
+"POT-Creation-Date: 2024-01-11 11:53+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1579,6 +1579,129 @@ msgstr "Multi System Denied"
 msgid "动作ID不存在：%(action_id)s"
 msgstr "Action ID Not Exist：%(action_id)s"
 
+msgid "审计日志检索"
+msgstr "Search Audit Event"
+
+msgid "高敏感资源审计检索"
+msgstr "Search High Sensitive Resource Event"
+
+msgid "审计敏感信息查看"
+msgstr "Access Audit Sensitive Info"
+
+msgid "系统列表访问"
+msgstr "List System"
+
+msgid "系统查看"
+msgstr "View System"
+
+msgid "系统编辑"
+msgstr "Edit System"
+
+msgid "数据存储列表访问"
+msgstr "List Storage"
+
+msgid "数据存储查看"
+msgstr "View Storage"
+
+msgid "数据存储创建"
+msgstr "Create Storage"
+
+msgid "数据存储编辑"
+msgstr "Edit Storage"
+
+msgid "数据存储删除"
+msgstr "Delete Storage"
+
+msgid "敏感信息对象列表"
+msgstr "List Sensitive OBJECT"
+
+msgid "敏感信息对象查看"
+msgstr "View Sensitive Object"
+
+msgid "敏感信息对象创建"
+msgstr "Create Sensitive Object"
+
+msgid "敏感信息对象编辑"
+msgstr "Edit Sensitive Object"
+
+msgid "敏感信息对象删除"
+msgstr "Delete Sensitive Object"
+
+msgid "全局设置查看"
+msgstr "View Global Setting"
+
+msgid "全局设置管理"
+msgstr "Manage Global Setting"
+
+msgid "策略列表访问"
+msgstr "List Strategy"
+
+msgid "创建策略"
+msgstr "Create Strategy"
+
+msgid "编辑策略"
+msgstr "Edit Strategy"
+
+msgid "删除策略"
+msgstr "Delete Strategy"
+
+msgid "审计风险列表(V2)"
+msgstr "List Risk (V2)"
+
+msgid "编辑审计风险(V2)"
+msgstr "Manage Risk (V2)"
+
+msgid "规则列表访问"
+msgstr "List Rule"
+
+msgid "新建规则"
+msgstr "Create Rule"
+
+msgid "编辑规则"
+msgstr "Edit Rule"
+
+msgid "删除规则"
+msgstr "Delete Rule"
+
+msgid "处理套餐列表"
+msgstr "List Tools"
+
+msgid "创建处理套餐"
+msgstr "Create Tool"
+
+msgid "编辑处理套餐"
+msgstr "Edit Tool"
+
+msgid "新建通知组"
+msgstr "Create Notice Group"
+
+msgid "编辑通知组"
+msgstr "Edit Notice Group"
+
+msgid "编辑通知组(V2)"
+msgstr "Edit Notice Group V2"
+
+msgid "删除通知组(V2)"
+msgstr "Delete Notice Group V2"
+
+msgid "查看报表"
+msgstr "View Audit Report"
+
+msgid "查看报表(组织架构)"
+msgstr "View Audit Report by Department"
+
+msgid "采集新建"
+msgstr "Create Collection"
+
+msgid "采集查看"
+msgstr "View Collection"
+
+msgid "采集管理"
+msgstr "Manage Collection"
+
+msgid "业务访问"
+msgstr "View Business"
+
 #, python-format
 msgid "获取系统信息错误：%(message)s"
 msgstr "Getting system information error：%(message)s"
@@ -1595,6 +1718,18 @@ msgstr "Collector"
 
 msgid "组织架构"
 msgstr "Department"
+
+msgid "风险"
+msgstr "Risk"
+
+msgid "敏感操作"
+msgstr "Sensitive Action"
+
+msgid "敏感资源类型"
+msgstr "Sensitive Resource Type"
+
+msgid "审计策略"
+msgstr "Audit Strategy"
 
 msgid "获取IAM系统配置"
 msgstr "Get IAM System COnfig"
@@ -2559,7 +2694,7 @@ msgid "风险等级"
 msgstr "Risk Level"
 
 msgid "处理套餐名称"
-msgstr "Auto Process Name"
+msgstr "Tool Name"
 
 msgid "说明"
 msgstr "Description"
@@ -2804,25 +2939,22 @@ msgid "获取风险处理经验"
 msgstr "List Risk Experience"
 
 msgid "获取处理套餐列表"
-msgstr "List Auto Process"
+msgstr "List Tools"
 
 msgid "获取所有处理套餐列表"
-msgstr "List All Auto Process"
-
-msgid "创建处理套餐"
-msgstr "Create Auto Process"
+msgstr "List All Tools"
 
 msgid "更新处理套餐"
-msgstr "Update Auto Process"
+msgstr "Update Tool"
 
 msgid "获取处理套餐命中的风险"
-msgstr "List Risks by Auto Process"
+msgstr "List Risks by Tool"
 
 msgid "获取处理套餐关联的规则"
-msgstr "List Rules by Auto Process"
+msgstr "List Rules by Tool"
 
 msgid "启停处理套餐"
-msgstr "Toggle Auto Process"
+msgstr "Toggle Tool"
 
 msgid "审批内置字段"
 msgstr "Approve Build In Fields"
@@ -2859,7 +2991,7 @@ msgid "人工转单"
 msgstr "Trans Operator"
 
 msgid "人工执行处理套餐"
-msgstr "Execute Auth Process"
+msgstr "Execute Tool"
 
 msgid "强制撤销审批单据"
 msgstr "Force revoke approve ticket"
@@ -2949,7 +3081,7 @@ msgid "未配置审批流"
 msgstr "Approve Service Not Set"
 
 msgid "处理套餐名称重复"
-msgstr "Auto Process Name Duplicate"
+msgstr "Tool Name Duplicate"
 
 msgid "适用范围匹配值异常"
 msgstr "Scope Invalid"
@@ -3385,7 +3517,7 @@ msgid "Admin 风险"
 msgstr "Admin Risk"
 
 msgid "自动处理套餐"
-msgstr "Auto Process"
+msgstr "Tool"
 
 msgid "自动处理规则"
 msgstr "Risk Rule"
