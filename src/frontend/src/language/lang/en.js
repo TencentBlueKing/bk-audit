@@ -307,6 +307,7 @@ export default {
   系统: 'System',
   需要申请的权限: 'Required permissions to apply for',
   关联的资源实例: 'Related resource instances',
+  无需关联实例: 'No need to associate instance',
   '你已拥有权限，请刷新页面': 'You already have the permission, please refresh the page',
   'Agent 状态': 'Agent status',
   云区域: 'BK-Net',
