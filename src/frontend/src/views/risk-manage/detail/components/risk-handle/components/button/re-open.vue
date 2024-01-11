@@ -106,7 +106,7 @@
   } = useRequest(RiskManageService.reopen, {
     defaultValue: null,
     onSuccess() {
-      messageSuccess('重开单据成功');
+      messageSuccess(t('重开单据成功'));
       emits('update');
       popRef.value.hide();
     },
