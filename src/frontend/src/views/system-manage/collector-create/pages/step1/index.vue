@@ -362,6 +362,8 @@
   });
   let editCollectorData: CollectorDetailModel;
   let editCollectorFormDataClone: typeof formData;
+  // 当选择框处于打开状态，不校验target_nodes
+  const isShowTargetNodes = ref(false);
   const rules = {
     system_id: [
       {
@@ -434,7 +436,10 @@
     ],
     target_nodes: [
       {
-        validator: (targetNodes: Array<any>) => targetNodes.length > 0,
+        validator: (targetNodes: Array<any>) => {
+          if (isShowTargetNodes.value) return;
+          return targetNodes.length > 0;
+        },
         message: t('采集目标不能为空'),
         trigger: 'change',
       },
@@ -639,13 +644,14 @@
     emits('changeEnvironment', value);
   };
   // 同步值
-  const handeUpdate = (modelValue: TFormData) => {
+  const handeUpdate = (modelValue: TFormData, isShow = false) => {
     formData.target_node_type = modelValue.target_node_type || formData.target_node_type;
     formData.target_nodes = modelValue.target_nodes || formData.target_nodes;
     formData.data_encoding = modelValue.data_encoding || formData.data_encoding;
     formData.params = modelValue.params || formData.params;
     formData.bcs_cluster_id = modelValue.bcs_cluster_id;
     formData.yaml_config = modelValue.yaml_config;
+    isShowTargetNodes.value = isShow;
   };
   // 提交采集
   const handleNext = () => {
@@ -767,7 +773,7 @@
       line-height: 32px;
       color: #ea3636;
       text-align: center;
-      content: "*";
+      content: '*';
     }
   }
 }

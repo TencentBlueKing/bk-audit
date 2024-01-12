@@ -68,9 +68,9 @@
   const { t } = useI18n();
 
   interface Emits {
-    (e: 'change', result: IResult): void
+    (e: 'change', result: IResult, isShow: boolean): void
   }
-  const handleIPChange = (result: IResult) => {
-    emits('change', result);
+  const handleIPChange = (result: IResult, isShow: boolean) => {
+    emits('change', result, isShow);
   };
 </script>

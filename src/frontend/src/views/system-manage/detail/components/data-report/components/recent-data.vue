@@ -43,7 +43,7 @@
           <template #empty>
             <bk-exception
               scene="part"
-              style="padding-top: 40px;color: #63656e;"
+              style="padding-top: 130px;color: #63656e;"
               type="empty">
               {{ t('暂无数据') }}
             </bk-exception>
@@ -58,7 +58,7 @@
           <template #empty>
             <bk-exception
               scene="part"
-              style="padding-top: 40px;color: #63656e;"
+              style="padding-top: 130px;color: #63656e;"
               type="empty">
               {{ t('暂无数据') }}
             </bk-exception>

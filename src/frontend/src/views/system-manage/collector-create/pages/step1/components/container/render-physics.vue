@@ -92,7 +92,7 @@
     spaceTypeId: string
   }
   interface Emits{
-    (e:'change', value: Props['data']): void
+    (e:'change', value: Props['data'], isShow?: boolean): void
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -135,7 +135,7 @@
     },
   });
 
-  const handleIPChange = ({ type, value }: { type: string, value: Array<unknown> }) => {
+  const handleIPChange = ({ type, value }: { type: string, value: Array<unknown> }, isShow: boolean) => {
     // eslint-disable-next-line vue/no-mutating-props
     formData.value.target_node_type = type;
     // eslint-disable-next-line vue/no-mutating-props
@@ -143,7 +143,7 @@
     emits('change', {
       ...props.data,
       ...formData.value,
-    });
+    }, isShow);
   };
   const handeUpdate = () => {
     emits('change', {

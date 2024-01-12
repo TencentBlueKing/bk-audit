@@ -25,6 +25,7 @@
           ref="treeRef"
           children="children"
           :data="topoTreeData"
+          :empty-text="t('暂无数据')"
           label="name"
           :search="topoTreeSearchOption"
           :show-node-type-icon="false"
@@ -92,7 +93,9 @@
           v-if="searchList.length < 1"
           class="exception-part"
           scene="part"
-          type="search-empty" />
+          type="search-empty">
+          {{ t('暂无数据') }}
+        </bk-exception>
         <bk-pagination
           v-if="showPagination"
           v-model="pagination.modelValue"

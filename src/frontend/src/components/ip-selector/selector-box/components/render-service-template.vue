@@ -96,7 +96,9 @@
             v-if="searchKey && searchList.length < 1"
             class="exception-part"
             scene="part"
-            type="search-empty" />
+            type="search-empty">
+            {{ t('暂无数据') }}
+          </bk-exception>
           <bk-pagination
             v-if="showPagination"
             v-model="pagination.modelValue"

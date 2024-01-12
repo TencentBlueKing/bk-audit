@@ -72,7 +72,7 @@
     bizId?: number,
   }
   interface Emits {
-    (e: 'change', result: IResult): void
+    (e: 'change', result: IResult, isShow: boolean): void
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -120,7 +120,7 @@
   const handleChange = (result: IResult) => {
     localValue.type = result.type;
     localValue.value = result.value;
-    emits('change', result);
+    emits('change', result, isShow.value);
   };
 </script>
 <style lang="postcss">

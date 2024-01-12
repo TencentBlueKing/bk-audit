@@ -272,5 +272,6 @@ export default {
     至: 'to',
     '复制成功 {num} 个 IP': 'Copy {num} IPs successfully',
     生成中: 'Processing',
+    'IP格式有误或不存在，检查后重试！': 'Some IPs do not exist, please remove them and try again!',
   },
 };
