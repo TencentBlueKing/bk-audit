@@ -135,7 +135,7 @@
     },
   });
 
-  const handleIPChange = ({ type, value }: { type: string, value: Array<unknown> }, isShow: boolean) => {
+  const handleIPChange = ({ type, value }: { type: string, value: Array<unknown> }) => {
     // eslint-disable-next-line vue/no-mutating-props
     formData.value.target_node_type = type;
     // eslint-disable-next-line vue/no-mutating-props
@@ -143,7 +143,7 @@
     emits('change', {
       ...props.data,
       ...formData.value,
-    }, isShow);
+    });
   };
   const handeUpdate = () => {
     emits('change', {

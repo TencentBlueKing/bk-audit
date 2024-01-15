@@ -100,7 +100,7 @@
             </tbody>
           </table>
           <bk-exception
-            v-if="searchKey && searchList.length < 1"
+            v-if="searchList.length < 1"
             class="exception-part"
             scene="part"
             type="search-empty">

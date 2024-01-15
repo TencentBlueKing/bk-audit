@@ -58,6 +58,8 @@
 <script setup lang="ts">
   import {
     computed,
+    inject,
+    type Ref,
     ref,
     shallowReactive,
     watch,
@@ -72,7 +74,7 @@
     bizId?: number,
   }
   interface Emits {
-    (e: 'change', result: IResult, isShow: boolean): void
+    (e: 'change', result: IResult): void
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -94,7 +96,7 @@
     SET_TEMPLATE: '个集群模板',
   };
 
-  const isShow = ref(false);
+  const isShow = inject<Ref<boolean>>('isShow', ref(false));
   const localValue = shallowReactive<IResult>({
     type: '',
     value: [],
@@ -120,7 +122,7 @@
   const handleChange = (result: IResult) => {
     localValue.type = result.type;
     localValue.value = result.value;
-    emits('change', result, isShow.value);
+    emits('change', result);
   };
 </script>
 <style lang="postcss">

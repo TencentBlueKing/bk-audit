@@ -39,7 +39,7 @@
           :border="['outer', 'row']"
           :columns="tableColumn"
           :data="tableData"
-          :height="tableData.length?tableMaxHeight:320">
+          :max-height="tableData.length?tableMaxHeight:320">
           <template #empty>
             <bk-exception
               scene="part"
@@ -54,7 +54,7 @@
           :border="['outer', 'row']"
           :columns="dataIdTableColumn"
           :data="dataIdTableData"
-          :height="dataIdTableData.length ? tableMaxHeight : 320">
+          :max-height="dataIdTableData.length ? tableMaxHeight : 320">
           <template #empty>
             <bk-exception
               scene="part"

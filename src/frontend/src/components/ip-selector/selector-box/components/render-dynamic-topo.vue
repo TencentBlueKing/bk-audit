@@ -23,16 +23,23 @@
         type="search" />
       <div class="topo-tree-container">
         <bk-tree
+          v-if="topoTreeData.length"
           ref="treeRef"
           :auto-open-parent-node="false"
           children="children"
           :data="topoTreeData"
-          :empty-text="t('暂无数据')"
           label="name"
           node-key="id"
           :search="topoTreeSearchOption"
           :show-node-type-icon="false"
           @node-click="handleNodeClick" />
+        <bk-exception
+          v-else
+          class="exception-part"
+          scene="part"
+          type="search-empty">
+          {{ t('暂无数据') }}
+        </bk-exception>
       </div>
     </div>
     <div class="topo-node-list">
@@ -201,6 +208,7 @@
   });
 
   const triggerChange = () => {
+    console.log(900);
     innerChange = true;
     triggerRef(checkedMap);
     emits('change', 'dynamicTopo', Object.values(checkedMap.value));
