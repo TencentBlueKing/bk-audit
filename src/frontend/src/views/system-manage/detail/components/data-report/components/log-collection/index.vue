@@ -98,7 +98,7 @@
 
   onMounted(() => {
     const { top } = getOffset(rootRef.value);
-    height.value = `calc(100vh - ${top + 20}px)`;
+    height.value = `calc(100vh - ${top + 155}px)`;
   });
 
   defineExpose<Exposes>({

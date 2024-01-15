@@ -110,5 +110,6 @@ export default {
     字段: 'Field',
     字段值: 'Value',
     人工转单成功: 'Reassign successfully',
+    重开: 'Yes',
   },
 };
