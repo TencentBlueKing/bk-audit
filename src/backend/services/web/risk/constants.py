@@ -341,3 +341,28 @@ class RiskRuleOperator(TextChoices):
 class RiskLabel(TextChoices):
     NORMAL = "normal", gettext_lazy("正常")
     MISREPORT = "misreport", gettext_lazy("误报")
+
+
+class RiskFields:
+    """
+    工单字段
+    """
+
+    @property
+    def fields(self) -> List[Field]:
+        return [
+            self.RISK_ID,
+            self.RISK_CONTENT,
+            self.STRATEGY_ID,
+            self.RAW_EVENT_ID,
+            self.RISK_OPERATOR,
+            self.RISK_EVIDENCE,
+        ]
+
+    RISK_ID = Field(field_name="risk_id", alias_name=gettext_lazy("风险ID"))
+    RISK_CONTENT = Field(field_name="risk_content", alias_name=gettext_lazy("风险描述"))
+    STRATEGY_ID = Field(field_name="strategy_id", alias_name=gettext_lazy("策略ID"))
+    RAW_EVENT_ID = Field(field_name="raw_event_id", alias_name=gettext_lazy("原始事件ID"))
+    RISK_OPERATOR = Field(field_name="risk_operator", alias_name=gettext_lazy("风险责任人"))
+    RISK_EVIDENCE = Field(field_name="risk_evidence", alias_name=gettext_lazy("风险证据"))
+    RISK_DATA = Field(field_name="risk_data", alias_name=gettext_lazy("拓展数据"))

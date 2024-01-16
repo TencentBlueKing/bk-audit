@@ -333,6 +333,10 @@ BK_NOTICE = {
     "DEFAULT_LANGUAGE": LANGUAGE_CODE,
 }
 
+# APIGW
+# 用于网关Host
+BKAUDIT_API_HOST = os.getenv("BKAPP_BKAUDIT_API_HOST", "")
+
 """
 以下为框架代码 请勿修改
 """
