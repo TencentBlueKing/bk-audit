@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+import os
 import sys
 
 from bk_audit.constants.utils import LOGGER_NAME
@@ -332,6 +332,10 @@ BK_NOTICE = {
     "ENTRANCE_URL": "bk-notice/",
     "DEFAULT_LANGUAGE": LANGUAGE_CODE,
 }
+
+# APIGW
+# 用于网关Host
+BKAUDIT_API_HOST = os.getenv("BKAPP_BKAUDIT_API_HOST", "")
 
 """
 以下为框架代码 请勿修改
