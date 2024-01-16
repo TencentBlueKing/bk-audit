@@ -17,9 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import json
 
 from bk_resource import Resource, api
 from bk_resource.settings import bk_resource_settings
+from bk_resource.utils.common_utils import ignored
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.db import transaction
@@ -39,6 +41,7 @@ from core.utils.page import paginate_queryset
 from core.utils.tools import choices_to_dict, get_app_info
 from services.web.risk.constants import (
     RISK_SHOW_FIELDS,
+    RiskFields,
     RiskLabel,
     RiskStatus,
     TicketNodeStatus,
@@ -66,6 +69,8 @@ from services.web.risk.serializers import (
     CustomTransRiskReqSerializer,
     ForceRevokeApproveTicketReqSerializer,
     ForceRevokeAutoProcessReqSerializer,
+    GetRiskFieldsByStrategyRequestSerializer,
+    GetRiskFieldsByStrategyResponseSerializer,
     ListRiskRequestSerializer,
     ListRiskResponseSerializer,
     ReopenRiskReqSerializer,
@@ -414,3 +419,46 @@ class ReopenRisk(RiskMeta):
             instance=RiskAuditInstance(risk),
             extend_data=validated_request_data,
         )
+
+
+class GetRiskFieldsByStrategy(RiskMeta):
+    name = gettext_lazy("获取风险字段")
+    RequestSerializer = GetRiskFieldsByStrategyRequestSerializer
+    ResponseSerializer = GetRiskFieldsByStrategyResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        get_app_info()
+        # 获取基础字段
+        fields = [
+            {
+                "key": field.field_name,
+                "name": str(field.alias_name),
+                "unique": field.field_name in (RiskFields.RAW_EVENT_ID.field_name, RiskFields.STRATEGY_ID.field_name),
+            }
+            for field in RiskFields().fields
+        ]
+        # 获取风险
+        risk: Risk = Risk.objects.filter(strategy_id=validated_request_data["strategy_id"]).first()
+        # 风险不存在时直接返回
+        if risk is None:
+            return fields
+        # 补充风险拓展字段
+        for key in risk.event_data.keys():
+            fields.append(
+                {
+                    "key": f"{RiskFields.RISK_DATA.field_name}__{key}",
+                    "name": f"{str(RiskFields.RISK_DATA.alias_name)}.{key}",
+                }
+            )
+        # 补充风险证据字段
+        with ignored(Exception, log_exception=False):
+            origin_data = json.loads(json.loads(risk.event_evidence)[0].get("origin_data", "{}"))
+            for key in origin_data.keys():
+                fields.append(
+                    {
+                        "key": f"{RiskFields.RISK_EVIDENCE.field_name}__{key}",
+                        "name": f"{str(RiskFields.RISK_EVIDENCE.alias_name)}.{key}",
+                    }
+                )
+        return fields

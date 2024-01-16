@@ -63,6 +63,7 @@ class RisksAPIGWViewSet(ResourceViewSet):
 
     resource_routes = [
         ResourceRoute("GET", resource.risk.retrieve_risk_apigw, pk_field="risk_id"),
+        ResourceRoute("GET", resource.risk.get_risk_fields_by_strategy, endpoint="risk_fields_by_strategy"),
     ]
 
 

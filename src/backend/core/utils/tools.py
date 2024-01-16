@@ -27,6 +27,7 @@ import arrow
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from dateutil.tz import tzutc
+from django.conf import settings
 from django.utils import timezone
 from rest_framework.settings import api_settings
 
@@ -202,6 +203,10 @@ def get_app_info():
     """
     获取APP信息，确保请求来自APIGW
     """
+
+    # 开发环境忽略校验
+    if settings.RUN_MODE == "DEVELOP":
+        return
 
     try:
         app = get_local_request().app
