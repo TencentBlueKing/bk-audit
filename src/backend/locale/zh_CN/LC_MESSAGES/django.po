@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-12-28 10:12+0800\n"
+"POT-Creation-Date: 2024-01-11 11:53+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1579,6 +1579,129 @@ msgstr "同一鉴权仅支持一个接入系统"
 msgid "动作ID不存在：%(action_id)s"
 msgstr "动作ID不存在：%(action_id)s"
 
+msgid "审计日志检索"
+msgstr "审计日志检索"
+
+msgid "高敏感资源审计检索"
+msgstr "高敏感资源审计检索"
+
+msgid "审计敏感信息查看"
+msgstr "审计敏感信息查看"
+
+msgid "系统列表访问"
+msgstr "系统列表访问"
+
+msgid "系统查看"
+msgstr "系统查看"
+
+msgid "系统编辑"
+msgstr "系统编辑"
+
+msgid "数据存储列表访问"
+msgstr "数据存储列表访问"
+
+msgid "数据存储查看"
+msgstr "数据存储查看"
+
+msgid "数据存储创建"
+msgstr "数据存储创建"
+
+msgid "数据存储编辑"
+msgstr "数据存储编辑"
+
+msgid "数据存储删除"
+msgstr "数据存储删除"
+
+msgid "敏感信息对象列表"
+msgstr "敏感信息对象列表"
+
+msgid "敏感信息对象查看"
+msgstr "敏感信息对象查看"
+
+msgid "敏感信息对象创建"
+msgstr "敏感信息对象创建"
+
+msgid "敏感信息对象编辑"
+msgstr "敏感信息对象编辑"
+
+msgid "敏感信息对象删除"
+msgstr "敏感信息对象删除"
+
+msgid "全局设置查看"
+msgstr "全局设置查看"
+
+msgid "全局设置管理"
+msgstr "全局设置管理"
+
+msgid "策略列表访问"
+msgstr "策略列表访问"
+
+msgid "创建策略"
+msgstr "创建策略"
+
+msgid "编辑策略"
+msgstr "编辑策略"
+
+msgid "删除策略"
+msgstr "删除策略"
+
+msgid "审计风险列表(V2)"
+msgstr "审计风险列表(V2)"
+
+msgid "编辑审计风险(V2)"
+msgstr "编辑审计风险(V2)"
+
+msgid "规则列表访问"
+msgstr "规则列表访问"
+
+msgid "新建规则"
+msgstr "新建规则"
+
+msgid "编辑规则"
+msgstr "编辑规则"
+
+msgid "删除规则"
+msgstr "删除规则"
+
+msgid "处理套餐列表"
+msgstr "处理套餐列表"
+
+msgid "创建处理套餐"
+msgstr "创建处理套餐"
+
+msgid "编辑处理套餐"
+msgstr "编辑处理套餐"
+
+msgid "新建通知组"
+msgstr "新建通知组"
+
+msgid "编辑通知组"
+msgstr "编辑通知组"
+
+msgid "编辑通知组(V2)"
+msgstr "编辑通知组(V2)"
+
+msgid "删除通知组(V2)"
+msgstr "删除通知组(V2)"
+
+msgid "查看报表"
+msgstr "查看报表"
+
+msgid "查看报表(组织架构)"
+msgstr "查看报表(组织架构)"
+
+msgid "采集新建"
+msgstr "采集新建"
+
+msgid "采集查看"
+msgstr "采集查看"
+
+msgid "采集管理"
+msgstr "采集管理"
+
+msgid "业务访问"
+msgstr "业务访问"
+
 #, python-format
 msgid "获取系统信息错误：%(message)s"
 msgstr "获取系统信息错误：%(message)s"
@@ -1595,6 +1718,18 @@ msgstr "采集项"
 
 msgid "组织架构"
 msgstr "组织架构"
+
+msgid "风险"
+msgstr "风险"
+
+msgid "敏感操作"
+msgstr "敏感操作"
+
+msgid "敏感资源类型"
+msgstr "敏感资源类型"
+
+msgid "审计策略"
+msgstr "审计策略"
 
 msgid "获取IAM系统配置"
 msgstr "获取IAM系统配置"
@@ -2808,9 +2943,6 @@ msgstr "获取处理套餐列表"
 
 msgid "获取所有处理套餐列表"
 msgstr "获取所有处理套餐列表"
-
-msgid "创建处理套餐"
-msgstr "创建处理套餐"
 
 msgid "更新处理套餐"
 msgstr "更新处理套餐"

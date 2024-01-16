@@ -203,8 +203,40 @@ class Permission(object):
             action_to_resources_list=action_to_resources_list,
         )
 
+        # 国际化
+        data = self.translate_apply_data(data=data)
+
         url = self.get_apply_url(actions, resources)
         return data, url
+
+    @classmethod
+    def translate_apply_data(cls, data: dict) -> dict:
+        """
+        国际化
+        """
+
+        if not data:
+            return {}
+
+        # 系统名称国际化
+        data["system_name"] = gettext(data["system_name"])
+
+        # 逐项国际化
+        for _action in data.get("actions", []):
+            # 国际化操作名称
+            _action["name"] = gettext(_action["name"])
+            if "related_resource_types" in _action:
+                for _resource in _action["related_resource_types"]:
+                    # 国际化资源类型名
+                    _resource["type_name"] = gettext(_resource["type_name"])
+                    for _instance in _resource["instances"]:
+                        for _item in _instance:
+                            # 国际化资源类型名
+                            _item["type_name"] = gettext(_item["type_name"])
+                            # 国际化系统名
+                            _item["name"] = gettext(_item["name"])
+
+        return data
 
     def is_allowed(
         self, action: Union[ActionMeta, str], resources: List[Resource] = None, raise_exception: bool = False
@@ -235,7 +267,7 @@ class Permission(object):
         if not result and raise_exception:
             apply_data, apply_url = self.get_apply_data([action], resources)
             raise PermissionException(
-                action_name=action.name,
+                action_name=gettext(action.name),
                 apply_url=apply_url,
                 permission=apply_data,
             )
