@@ -102,8 +102,7 @@
                         class="business-type"
                         :class="{
                           'business-type-active': item.space_type_id === 'bkcc'
-                        }"
-                        style="margin-left: auto;">
+                        }">
                         {{ item.space_type_name }}
                       </span>
                     </div>
@@ -783,7 +782,6 @@
   height: 25px;
   padding: 0 5px;
   margin-top: 3px;
-  margin-left: auto;
   line-height: 25px;
   color: #979ba5;
   background: #f0f1f5;

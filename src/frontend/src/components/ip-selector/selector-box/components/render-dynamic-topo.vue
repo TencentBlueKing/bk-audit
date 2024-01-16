@@ -28,6 +28,7 @@
           :auto-open-parent-node="false"
           children="children"
           :data="topoTreeData"
+          :empty-text="t('暂无数据')"
           label="name"
           node-key="id"
           :search="topoTreeSearchOption"
@@ -208,7 +209,6 @@
   });
 
   const triggerChange = () => {
-    console.log(900);
     innerChange = true;
     triggerRef(checkedMap);
     emits('change', 'dynamicTopo', Object.values(checkedMap.value));

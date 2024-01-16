@@ -26,6 +26,7 @@
           ref="treeRef"
           children="children"
           :data="topoTreeData"
+          :empty-text="t('暂无数据')"
           label="name"
           :search="topoTreeSearchOption"
           :show-node-type-icon="false"
