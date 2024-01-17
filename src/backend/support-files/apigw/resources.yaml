@@ -103,3 +103,27 @@ paths:
           userVerifiedRequired: true
         disabledStages: [ ]
         descriptionEn:
+  /{namespace}/strategies/:
+    get:
+      operationId: list_strategies
+      description: 获取策略信息
+      tags: [ ]
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/namespaces/{namespace}/strategy/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: [ ]
+        descriptionEn:
