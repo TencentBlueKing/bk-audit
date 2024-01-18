@@ -48,7 +48,10 @@
     separator: RenderSeparator,
   };
 
-  const renderComponent = computed(() => comMap[props.modelValue.type as keyof typeof comMap]);
+  const renderComponent = computed(() => {
+    if (props.modelValue.type === 'none') return comMap.match;
+    return comMap[props.modelValue.type as keyof typeof comMap];
+  });
 
   const handleChange = (value: Props['modelValue']) => {
     emits('change', value);

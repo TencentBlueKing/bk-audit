@@ -22,13 +22,22 @@
         :placeholder="t('搜索拓扑节点')" />
       <div class="topo-tree-container">
         <bk-tree
+          v-if="topoTreeData.length"
           ref="treeRef"
           children="children"
           :data="topoTreeData"
+          :empty-text="t('暂无数据')"
           label="name"
           :search="topoTreeSearchOption"
           :show-node-type-icon="false"
           @node-click="handleNodeClick" />
+        <bk-exception
+          v-else
+          class="exception-part"
+          scene="part"
+          type="search-empty">
+          {{ t('暂无数据') }}
+        </bk-exception>
       </div>
     </div>
     <div class="topo-node-list">
@@ -92,7 +101,9 @@
           v-if="searchList.length < 1"
           class="exception-part"
           scene="part"
-          type="search-empty" />
+          type="search-empty">
+          {{ t('暂无数据') }}
+        </bk-exception>
         <bk-pagination
           v-if="showPagination"
           v-model="pagination.modelValue"

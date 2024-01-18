@@ -21,7 +21,7 @@
     <div class="log-filter-box">
       <bk-select
         :clearable="false"
-        :model-value="data.type"
+        :model-value="localData.type"
         style="width: 160px;"
         @change="(value: string) => handleChange('type', value)">
         <bk-option
@@ -32,14 +32,14 @@
       </bk-select>
       <bk-input
         class="ml8"
-        :model-value="data.match_content"
+        :model-value="localData.match_content"
         :placeholder="t('请输入过滤内容')"
         style="width: 312px;"
         @input="(value: any) => handleChange('match_content', value as string)" />
       <bk-select
         class="ml8"
         :clearable="false"
-        :model-value="data.match_type"
+        :model-value="localData.match_type"
         style="width: 240px;"
         @change="(value: string) => handleChange('match_type', value)">
         <bk-option
@@ -52,6 +52,8 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
+  import _ from 'lodash';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -72,6 +74,20 @@
 
   const emits = defineEmits(['change']);
   const { t } = useI18n();
+
+  const localData = ref<Props['data']>({
+    type: '',
+    match_type: '',
+    match_content: '',
+  });
+  watch(() => props.data, () => {
+    localData.value = _.cloneDeep(props.data);
+    if (localData.value.type === 'none') {
+      localData.value.type = 'match';
+    }
+  }, {
+    immediate: true,
+  });
 
   // 获取global数据
   const {

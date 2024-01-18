@@ -102,8 +102,7 @@
                         class="business-type"
                         :class="{
                           'business-type-active': item.space_type_id === 'bkcc'
-                        }"
-                        style="margin-left: auto;">
+                        }">
                         {{ item.space_type_name }}
                       </span>
                     </div>
@@ -210,6 +209,7 @@
 <script lang="ts">
   import {
     computed,
+    provide,
     reactive,
     ref,
   } from 'vue';
@@ -362,6 +362,9 @@
   });
   let editCollectorData: CollectorDetailModel;
   let editCollectorFormDataClone: typeof formData;
+  // 提供给ip-selector使用，如果isShow处于打开状态，不校验target_nodes
+  const isShow = ref(false);
+  provide('isShow', isShow);
   const rules = {
     system_id: [
       {
@@ -434,7 +437,10 @@
     ],
     target_nodes: [
       {
-        validator: (targetNodes: Array<any>) => targetNodes.length > 0,
+        validator: (targetNodes: Array<any>) => {
+          if (isShow.value) return;
+          return targetNodes.length > 0;
+        },
         message: t('采集目标不能为空'),
         trigger: 'change',
       },
@@ -767,7 +773,7 @@
       line-height: 32px;
       color: #ea3636;
       text-align: center;
-      content: "*";
+      content: '*';
     }
   }
 }
@@ -776,7 +782,6 @@
   height: 25px;
   padding: 0 5px;
   margin-top: 3px;
-  margin-left: auto;
   line-height: 25px;
   color: #979ba5;
   background: #f0f1f5;
