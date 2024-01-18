@@ -1,0 +1,31 @@
+spec_version: 1
+
+release:
+  version: "0.0.2-beta.3"
+  title: "0.0.2-beta.3"
+  comment: "修改网关接口可见状态"
+
+apigateway:
+  description: "审计中心"
+  description_en: "BK Audit"
+  is_public: true
+  api_type: 1
+  allow_auth_from_params: false
+  allow_delete_sensitive_params: false
+  maintainers:
+    - "admin"
+
+stage:
+  name: "prod"
+  description: "生产环境"
+  description_en: "Product"
+  proxy_http:
+    timeout: 60
+    upstreams:
+      loadbalance: "roundrobin"
+      hosts:
+        - host: "{{ settings.BKAUDIT_API_HOST }}"
+          weight: 100
+
+related_apps:
+  - "{{ settings.APP_CODE }}"

@@ -36,6 +36,7 @@ module.exports = {
         'depend',
         'chore',
         'del',
+        'style',
       ],
     ],
     'subject-case': [

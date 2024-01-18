@@ -1,6 +1,4 @@
-from config.default import INSTALLED_APPS
-
-INSTALLED_APPS += (
+INSTALLED_APPS = (
     "services.web.analyze",
     "services.web.databus",
     "services.web.entry",

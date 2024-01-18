@@ -128,7 +128,7 @@
   const route = useRoute();
   const isShowJobPlan = ref(false);
   const renderTableColumn = computed(() => {
-    if (permissionCheckData.value.access_global_setting) {
+    if (!permissionCheckData.value.access_global_setting) {
       return baseTableColumn;
     }
     return [

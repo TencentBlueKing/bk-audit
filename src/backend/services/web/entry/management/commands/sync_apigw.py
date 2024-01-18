@@ -16,9 +16,21 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.deprecation import MiddlewareMixin
+from django.conf import settings
+from django.core.management import call_command
+from django.core.management.base import BaseCommand
 
 
-class CSRFExemptMiddleware(MiddlewareMixin):
-    def process_request(self, request):
-        setattr(request, "csrf_processing_done", True)
+class Command(BaseCommand):
+    def handle(self, *args, **kwargs):
+        if not settings.BKAUDIT_API_HOST:
+            return
+
+        definition_path = "support-files/apigw/definition.yaml"
+        resources_path = "support-files/apigw/resources.yaml"
+
+        call_command("sync_apigw_config", f"--file={definition_path}")
+        call_command("sync_apigw_stage", f"--file={definition_path}")
+        call_command("sync_apigw_resources", f"--file={resources_path}")
+        call_command("create_version_and_release_apigw", f"--file={definition_path}")
+        call_command("fetch_apigw_public_key")

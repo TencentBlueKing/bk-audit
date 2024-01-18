@@ -533,3 +533,13 @@ class ForceRevokeApproveTicketReqSerializer(serializers.Serializer):
 class RetryAutoProcessReqSerializer(serializers.Serializer):
     node_id = serializers.CharField()
     risk_id = serializers.CharField()
+
+
+class GetRiskFieldsByStrategyRequestSerializer(serializers.Serializer):
+    strategy_id = serializers.IntegerField()
+
+
+class GetRiskFieldsByStrategyResponseSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    name = serializers.CharField()
+    unique = serializers.BooleanField(default=False)
