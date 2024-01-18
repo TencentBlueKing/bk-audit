@@ -28,7 +28,7 @@ HAS_UPDATE_TAG_ID = "-1"
 HAS_UPDATE_TAG_NAME = gettext_lazy("Upgradable")
 
 # 本地更新字段，这些字段不会传递给后端策略，不会导致策略输出变化
-LOCAL_UPDATE_FIELDS = ["strategy_name", "tags", "notice_groups"]
+LOCAL_UPDATE_FIELDS = ["strategy_name", "tags", "notice_groups", "description"]
 
 # 策略可用的调度时间依赖于事件的查询周期
 STRATEGY_SCHEDULE_TIME = max(1, RISK_EVENTS_SYNC_TIME - 1)  # day

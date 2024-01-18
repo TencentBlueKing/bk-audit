@@ -46,6 +46,7 @@ class Strategy(SoftDeleteModel):
     status_msg = models.TextField(gettext_lazy("Status Message"), null=True, blank=True)
     backend_data = models.JSONField(gettext_lazy("Backend Data"), default=dict, null=True, blank=True)
     notice_groups = models.JSONField(gettext_lazy("Notice Groups"), default=list, null=True, blank=True)
+    description = models.TextField(gettext_lazy("Description"), null=True, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("Strategy")
