@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from typing import Type, Union
 
 from django.conf import settings
+from django.utils.translation import gettext
 from iam import Resource
 
 from apps.meta.constants import SensitiveResourceTypeEnum
@@ -30,7 +31,7 @@ from apps.permission.handlers.resource_types import ResourceTypeMeta
 class SensitiveObject(ResourceTypeMeta):
     system_id = settings.BK_IAM_SYSTEM_ID
     id = "sensitive_object"
-    name = "敏感信息对象"
+    name = gettext("敏感信息对象")
     selection_mode = "instance"
     related_instance_selections = [
         {"system_id": system_id, "id": "sensitive_action_list"},
@@ -114,7 +115,7 @@ class SensitiveObjectInstance(SensitiveObject):
 
 class SensitiveAction(SensitiveObjectInstance):
     id = "sensitive_action"
-    name = "敏感操作"
+    name = gettext("敏感操作")
     related_instance_selections = []
 
     @classmethod
@@ -129,7 +130,7 @@ class SensitiveAction(SensitiveObjectInstance):
 
 class SensitiveResourceType(SensitiveObjectInstance):
     id = "sensitive_resource_type"
-    name = "敏感资源类型"
+    name = gettext("敏感资源类型")
     related_instance_selections = []
 
     @classmethod

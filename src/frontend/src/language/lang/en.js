@@ -526,4 +526,5 @@ export default {
   部分失败: 'Failed',
   未知: 'Unknown',
   准备中: 'Preparing',
+  '复制成功 {num} 个 IP': 'Copy {num} IPs successfully',
 };

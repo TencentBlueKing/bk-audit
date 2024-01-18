@@ -270,5 +270,9 @@ export default {
     '复杂的过滤条件（超过5个）会影响机器性能': 'The more complex filtering conditions are, the higher requirements for machine performance.',
     第: '',
     列: 'th col',
+    至: 'to',
+    '复制成功 {num} 个 IP': 'Copy {num} IPs successfully',
+    生成中: 'Processing',
+    'IP格式有误或不存在，检查后重试！': 'Some IPs do not exist, please remove them and try again!',
   },
 };

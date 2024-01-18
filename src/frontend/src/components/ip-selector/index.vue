@@ -58,6 +58,8 @@
 <script setup lang="ts">
   import {
     computed,
+    inject,
+    type Ref,
     ref,
     shallowReactive,
     watch,
@@ -94,7 +96,7 @@
     SET_TEMPLATE: '个集群模板',
   };
 
-  const isShow = ref(false);
+  const isShow = inject<Ref<boolean>>('isShow', ref(false));
   const localValue = shallowReactive<IResult>({
     type: '',
     value: [],

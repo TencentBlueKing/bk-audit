@@ -69,7 +69,7 @@
             label="">
             <p style="display: flex;align-items: center;">
               <bk-checkbox v-model="formData.need_approve" />
-              <span style="margin-left: 4px;font-size: 12px; color: #63656E;">
+              <span style="margin-left: 4px;font-size: 12px; color: #63656e;">
                 {{ t('执行前审批') }}
               </span>
             </p>
@@ -372,7 +372,7 @@
     defaultValue: null,
     onSuccess() {
       window.changeConfirm = false;
-      messageSuccess('新建成功');
+      messageSuccess(t('新建成功'));
       retToList();
     },
   });
@@ -383,7 +383,7 @@
     defaultValue: null,
     onSuccess() {
       window.changeConfirm = false;
-      messageSuccess('编辑成功');
+      messageSuccess(t('编辑成功'));
       retToList();
     },
   });
@@ -418,16 +418,16 @@
 </script>
 
 <style scoped lang="postcss">
-.process-create-wrap{
+.process-create-wrap {
   padding: 28px 24px;
   background-color: #fff;
 
-  .approve-config-wrap{
+  .approve-config-wrap {
     padding: 16px 24px;
-    background-color: #F5F7FA;
+    background-color: #f5f7fa;
   }
 
-  :deep(.config-form-item .bk-form-label){
+  :deep(.config-form-item .bk-form-label) {
     padding-right: 0;
 
     /* margin-right: 8px; */

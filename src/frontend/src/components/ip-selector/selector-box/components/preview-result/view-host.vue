@@ -75,7 +75,7 @@
   };
   // 复制IP
   const handleCopyIP = () => {
-    execCopy(props.data.map(({ ip }) => ip).join('\n'), `复制成功 ${props.data.length} 个 IP`);
+    execCopy(props.data.map(({ ip }) => ip).join('\n'), t('复制成功 {num} 个 IP', { num: props.data.length }));
   };
   // 移除所有IP
   const handlRemoveAll = () => {

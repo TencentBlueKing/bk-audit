@@ -14,9 +14,14 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+
 import useMessage from '@hooks/use-message';
 
-export const execCopy = (value: string, message = '复制成功') => {
+import i18n from '@/language/index.js';
+
+const { t } = i18n.global;
+
+export const execCopy = (value: string, message = t('复制成功')) => {
   const { messageSuccess } = useMessage();
   const textarea = document.createElement('textarea');
   document.body.appendChild(textarea);

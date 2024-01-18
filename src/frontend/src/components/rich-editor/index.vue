@@ -24,7 +24,7 @@
       content-type="html"
       disabled
       :options="options"
-      :placeholder="placeholder"
+      :placeholder="t('请输入')"
       :style="{background: backgroundColor}"
       theme="snow"
       @ready="onEditorReady"
@@ -48,6 +48,18 @@
     ref,
     watch,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  const props = withDefaults(defineProps<Props>(), {
+    maxLen: 0,
+    default: '',
+    disabled: false,
+    height: 'auto',
+  });
+
+  const emits = defineEmits<Emits>();
+
+  const { t } = useI18n();
 
   import { QuillEditor } from '@vueup/vue-quill';
 
@@ -58,20 +70,11 @@
     (e: 'update:content', value: string): void,
   }
   interface Props{
-    placeholder?:string,
     disabled?: boolean;
     default?: string;
     maxLen?: number;
     height?: string;
   }
-  const props = withDefaults(defineProps<Props>(), {
-    maxLen: 0,
-    default: '',
-    disabled: false,
-    placeholder: '请输入',
-    height: 'auto',
-  });
-  const emits = defineEmits<Emits>();
   const content = ref();
   const editorRef = ref();
   const TiLength = ref(0);
@@ -168,16 +171,17 @@
 }
 
 
-.ql-editor ul li:not(.ql-direction-rtl){
+.ql-editor ul li:not(.ql-direction-rtl) {
   padding-left: 10px;
 }
 
-.ql-editor ol li:not(.ql-direction-rtl){
+.ql-editor ol li:not(.ql-direction-rtl) {
   padding-left: 15px;
 }
 
 .ql-editor {
-  ol,ul{
+  ol,
+  ul {
     padding-left: 0;
   }
 }
@@ -187,12 +191,12 @@
   background-color: #fafbfd !important;
 }
 
-:deep(.editor-wrap[active="false"] .ql-toolbar) {
+:deep(.editor-wrap[active='false'] .ql-toolbar) {
   background-color: #fafbfd;
 }
 
 /* toolbar 激活样式 */
-:deep(.editor-wrap[active="true"] .ql-toolbar) {
+:deep(.editor-wrap[active='true'] .ql-toolbar) {
   background-color: #fff;
 }
 

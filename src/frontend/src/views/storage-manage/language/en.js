@@ -84,5 +84,7 @@ export default {
     'ES 地址不能为空': 'password cannot be empty',
     类型不能为空: 'type cannot be empty',
     存储别名不能为空: 'storage alias cannot be empty',
+    编辑成功: 'Edit successfully',
+    新建成功: 'Create successfully',
   },
 };

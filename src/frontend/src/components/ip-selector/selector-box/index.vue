@@ -19,7 +19,8 @@
     class="ip-selector-dialog"
     :is-show="isShow"
     :title="t('选择目标')"
-    width="1100">
+    width="1100"
+    @closed="handleCancle">
     <bk-loading :loading="isTopoLoading">
       <div class="ip-selector-box">
         <div class="left-selector-box">
