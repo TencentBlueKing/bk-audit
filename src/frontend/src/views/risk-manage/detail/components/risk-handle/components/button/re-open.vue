@@ -19,7 +19,7 @@
     ref="popRef"
     :confirm-auto-hide="false"
     :confirm-handler="handleReOpen"
-    confirm-text="重开"
+    :confirm-text="t('重开')"
     :content="t('重打开单据后，风险单会重新打开至“待处理”')"
     :hide-on-click="false"
     :title="t('确认重开单据？')"
@@ -106,7 +106,7 @@
   } = useRequest(RiskManageService.reopen, {
     defaultValue: null,
     onSuccess() {
-      messageSuccess('重开单据成功');
+      messageSuccess(t('重开单据成功'));
       emits('update');
       popRef.value.hide();
     },

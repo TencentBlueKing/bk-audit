@@ -33,6 +33,7 @@
     ref,
     watch,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   import StorageService from '@service/storage-manage';
 
@@ -91,6 +92,7 @@
   const isEdit = ref(false);
 
   const { messageSuccess } = useMessage();
+  const { t } = useI18n();
 
   watch(() => props.data, (data) => {
     if (!data.cluster_config) {
@@ -172,7 +174,7 @@
           ...manageData,
         }))
           .then(() => {
-            messageSuccess('编辑成功');
+            messageSuccess(t('编辑成功'));
             emit('change');
             emit('update:btnLoading', false);
           });
@@ -182,7 +184,7 @@
         ...manageData,
       }))
         .then(() => {
-          messageSuccess('新建成功');
+          messageSuccess(t('新建成功'));
           emit('change');
           emit('update:btnLoading', false);
         });

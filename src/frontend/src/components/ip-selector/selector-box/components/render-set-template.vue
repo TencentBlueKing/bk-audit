@@ -33,6 +33,13 @@
               {{ nodeItem.bk_inst_name }}
             </bk-checkbox>
           </div>
+          <bk-exception
+            v-if="renderTemplateTopoList && renderTemplateTopoList.length < 1"
+            class="exception-part"
+            scene="part"
+            type="search-empty">
+            {{ t('暂无数据') }}
+          </bk-exception>
         </div>
       </div>
       <div class="topo-node-list">
@@ -93,10 +100,12 @@
             </tbody>
           </table>
           <bk-exception
-            v-if="searchKey && searchList.length < 1"
+            v-if="searchList.length < 1"
             class="exception-part"
             scene="part"
-            type="search-empty" />
+            type="search-empty">
+            {{ t('暂无数据') }}
+          </bk-exception>
           <bk-pagination
             v-if="showPagination"
             v-model="pagination.modelValue"

@@ -878,7 +878,7 @@
             "data": {
                 "id": "list_pa",
                 "name": "处理套餐列表",
-                "name_en": "List Process Application",
+                "name_en": "List Tools",
                 "type": "list",
                 "version": 1,
                 "related_resource_types": [],
@@ -892,7 +892,7 @@
             "data": {
                 "id": "create_pa",
                 "name": "创建处理套餐",
-                "name_en": "Create Process Application",
+                "name_en": "Create Tool",
                 "type": "create",
                 "version": 1,
                 "related_resource_types": [],
@@ -906,7 +906,7 @@
             "data": {
                 "id": "edit_pa",
                 "name": "编辑处理套餐",
-                "name_en": "Edit Process Application",
+                "name_en": "Edit Tool",
                 "type": "edit",
                 "version": 1,
                 "related_resource_types": [],

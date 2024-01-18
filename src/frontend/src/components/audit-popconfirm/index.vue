@@ -63,7 +63,6 @@
     onBeforeUnmount,
     onMounted,
     ref,
-    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -98,9 +97,6 @@
 
   const emits = defineEmits<Emits>();
 
-  watch(() => props, (val) => {
-    console.log(val);
-  });
 
   let tippyIns: Instance;
 
