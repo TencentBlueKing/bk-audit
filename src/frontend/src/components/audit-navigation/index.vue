@@ -49,7 +49,7 @@
       <div
         class="audit-side-menu"
         :class="{
-          'show-notice-side-menu': showNotice.enabled
+          'show-notice-side-menu': showNotice.enabled && showAlert
         }"
         @mouseenter="handleSideMouseenter"
         @mouseleave="handleSideMouseleave">
