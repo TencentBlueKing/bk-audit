@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from django.utils.translation import gettext
+
 from apps.permission.constants import IAMSystems
 from apps.permission.handlers.actions.base import ActionMeta
 from apps.permission.handlers.resource_types import ResourceEnum
@@ -25,7 +27,7 @@ from apps.permission.handlers.version import BkLogPermissionVersion
 class ActionEnum:
     SEARCH_REGULAR_EVENT = ActionMeta(
         id="search_regular_event",
-        name="审计日志检索",
+        name=gettext("审计日志检索"),
         name_en="Search Audit Event",
         type="view",
         related_resource_types=[ResourceEnum.SYSTEM],
@@ -35,7 +37,7 @@ class ActionEnum:
 
     SEARCH_SENSITIVE_EVENT = ActionMeta(
         id="search_sensitive_event",
-        name="高敏感资源审计检索",
+        name=gettext("高敏感资源审计检索"),
         name_en="Search High Sensitive Resource Event",
         type="view",
         related_resource_types=[],
@@ -45,7 +47,7 @@ class ActionEnum:
 
     ACCESS_AUDIT_SENSITIVE_INFO = ActionMeta(
         id="access_audit_sensitive_info",
-        name="审计敏感信息查看",
+        name=gettext("审计敏感信息查看"),
         name_en="Access Audit Sensitive Info",
         type="view",
         related_resource_types=[ResourceEnum.SENSITIVE_OBJECT],
@@ -56,7 +58,7 @@ class ActionEnum:
     # 系统接入
     LIST_SYSTEM = ActionMeta(
         id="list_system",
-        name="系统列表访问",
+        name=gettext("系统列表访问"),
         name_en="List System",
         type="view",
         related_resource_types=[],
@@ -65,7 +67,7 @@ class ActionEnum:
     )
     VIEW_SYSTEM = ActionMeta(
         id="view_system",
-        name="系统查看",
+        name=gettext("系统查看"),
         name_en="View System",
         type="view",
         related_resource_types=[ResourceEnum.SYSTEM],
@@ -74,7 +76,7 @@ class ActionEnum:
     )
     EDIT_SYSTEM = ActionMeta(
         id="edit_system",
-        name="系统编辑",
+        name=gettext("系统编辑"),
         name_en="Edit System",
         type="edit",
         related_resource_types=[ResourceEnum.SYSTEM],
@@ -85,7 +87,7 @@ class ActionEnum:
 
     LIST_STORAGE = ActionMeta(
         id="list_storage",
-        name="数据存储列表访问",
+        name=gettext("数据存储列表访问"),
         name_en="List Storage",
         type="view",
         related_resource_types=[],
@@ -94,7 +96,7 @@ class ActionEnum:
     )
     VIEW_STORAGE = ActionMeta(
         id="view_storage",
-        name="数据存储查看",
+        name=gettext("数据存储查看"),
         name_en="View Storage",
         type="view",
         related_resource_types=[],
@@ -103,7 +105,7 @@ class ActionEnum:
     )
     CREATE_STORAGE = ActionMeta(
         id="create_storage",
-        name="数据存储创建",
+        name=gettext("数据存储创建"),
         name_en="Create Storage",
         type="create",
         related_resource_types=[],
@@ -112,7 +114,7 @@ class ActionEnum:
     )
     EDIT_STORAGE = ActionMeta(
         id="edit_storage",
-        name="数据存储编辑",
+        name=gettext("数据存储编辑"),
         name_en="Edit Storage",
         type="edit",
         related_resource_types=[],
@@ -121,7 +123,7 @@ class ActionEnum:
     )
     DELETE_STORAGE = ActionMeta(
         id="delete_storage",
-        name="数据存储删除",
+        name=gettext("数据存储删除"),
         name_en="Delete Storage",
         type="delete",
         related_resource_types=[],
@@ -133,7 +135,7 @@ class ActionEnum:
 
     LIST_SENSITIVE_OBJECT = ActionMeta(
         id="list_sensitive_object",
-        name="敏感信息对象列表",
+        name=gettext("敏感信息对象列表"),
         name_en="List SENSITIVE OBJECT",
         type="view",
         related_resource_types=[],
@@ -142,7 +144,7 @@ class ActionEnum:
     )
     VIEW_SENSITIVE_OBJECT = ActionMeta(
         id="view_sensitive_object",
-        name="敏感信息对象查看",
+        name=gettext("敏感信息对象查看"),
         name_en="View Sensitive Object",
         type="view",
         related_resource_types=[],
@@ -151,7 +153,7 @@ class ActionEnum:
     )
     CREATE_SENSITIVE_OBJECT = ActionMeta(
         id="create_sensitive_object",
-        name="敏感信息对象创建",
+        name=gettext("敏感信息对象创建"),
         name_en="Create Sensitive Object",
         type="create",
         related_resource_types=[],
@@ -160,7 +162,7 @@ class ActionEnum:
     )
     EDIT_SENSITIVE_OBJECT = ActionMeta(
         id="edit_sensitive_object",
-        name="敏感信息对象编辑",
+        name=gettext("敏感信息对象编辑"),
         name_en="Edit Sensitive Object",
         type="edit",
         related_resource_types=[],
@@ -169,7 +171,7 @@ class ActionEnum:
     )
     DELETE_SENSITIVE_OBJECT = ActionMeta(
         id="delete_sensitive_object",
-        name="敏感信息对象删除",
+        name=gettext("敏感信息对象删除"),
         name_en="Delete Sensitive Object",
         type="delete",
         related_resource_types=[],
@@ -180,7 +182,7 @@ class ActionEnum:
     # 全局设置
     ACCESS_GLOBAL_SETTING = ActionMeta(
         id="access_global_setting",
-        name="全局设置查看",
+        name=gettext("全局设置查看"),
         name_en="View Global Setting",
         type="view",
         related_resource_types=[],
@@ -189,7 +191,7 @@ class ActionEnum:
     )
     MANAGE_GLOBAL_SETTING = ActionMeta(
         id="manage_global_setting",
-        name="全局设置管理",
+        name=gettext("全局设置管理"),
         name_en="Manage Global Setting",
         type="manage",
         related_resource_types=[],
@@ -200,7 +202,7 @@ class ActionEnum:
     # 策略分析
     LIST_STRATEGY = ActionMeta(
         id="list_strategy",
-        name="策略列表访问",
+        name=gettext("策略列表访问"),
         name_en="List Strategy",
         type="list",
         related_resource_types=[],
@@ -209,7 +211,7 @@ class ActionEnum:
     )
     CREATE_STRATEGY = ActionMeta(
         id="create_strategy",
-        name="创建策略",
+        name=gettext("创建策略"),
         name_en="Create Strategy",
         type="create",
         related_resource_types=[],
@@ -218,7 +220,7 @@ class ActionEnum:
     )
     EDIT_STRATEGY = ActionMeta(
         id="edit_strategy",
-        name="编辑策略",
+        name=gettext("编辑策略"),
         name_en="Edit Strategy",
         type="edit",
         related_resource_types=[ResourceEnum.STRATEGY],
@@ -227,7 +229,7 @@ class ActionEnum:
     )
     DELETE_STRATEGY = ActionMeta(
         id="delete_strategy",
-        name="删除策略",
+        name=gettext("删除策略"),
         name_en="Delete Strategy",
         type="delete",
         related_resource_types=[ResourceEnum.STRATEGY],
@@ -236,7 +238,7 @@ class ActionEnum:
     )
     LIST_RISK = ActionMeta(
         id="list_risk_v2",
-        name="审计风险列表(V2)",
+        name=gettext("审计风险列表(V2)"),
         name_en="List Risk (V2)",
         type="list",
         related_resource_types=[ResourceEnum.RISK],
@@ -245,7 +247,7 @@ class ActionEnum:
     )
     EDIT_RISK = ActionMeta(
         id="edit_risk_v2",
-        name="编辑审计风险(V2)",
+        name=gettext("编辑审计风险(V2)"),
         name_en="Manage Risk (V2)",
         type="manage",
         related_resource_types=[ResourceEnum.RISK],
@@ -254,7 +256,7 @@ class ActionEnum:
     )
     LIST_RULE = ActionMeta(
         id="list_rule",
-        name="规则列表访问",
+        name=gettext("规则列表访问"),
         name_en="List Rule",
         type="list",
         related_resource_types=[],
@@ -263,7 +265,7 @@ class ActionEnum:
     )
     CREATE_RULE = ActionMeta(
         id="create_rule",
-        name="新建规则",
+        name=gettext("新建规则"),
         name_en="Create Rule",
         type="create",
         related_resource_types=[],
@@ -272,7 +274,7 @@ class ActionEnum:
     )
     EDIT_RULE = ActionMeta(
         id="edit_rule",
-        name="编辑规则",
+        name=gettext("编辑规则"),
         name_en="Edit Rule",
         type="edit",
         related_resource_types=[],
@@ -281,7 +283,7 @@ class ActionEnum:
     )
     DELETE_RULE = ActionMeta(
         id="delete_rule",
-        name="删除规则",
+        name=gettext("删除规则"),
         name_en="Delete Rule",
         type="delete",
         related_resource_types=[],
@@ -290,8 +292,8 @@ class ActionEnum:
     )
     LIST_PA = ActionMeta(
         id="list_pa",
-        name="处理套餐列表",
-        name_en="List Process Application",
+        name=gettext("处理套餐列表"),
+        name_en="List Tools",
         type="list",
         related_resource_types=[],
         related_actions=[],
@@ -299,8 +301,8 @@ class ActionEnum:
     )
     CREATE_PA = ActionMeta(
         id="create_pa",
-        name="创建处理套餐",
-        name_en="Create Process Application",
+        name=gettext("创建处理套餐"),
+        name_en="Create Tool",
         type="create",
         related_resource_types=[],
         related_actions=[],
@@ -308,8 +310,8 @@ class ActionEnum:
     )
     EDIT_PA = ActionMeta(
         id="edit_pa",
-        name="编辑处理套餐",
-        name_en="Edit Process Application",
+        name=gettext("编辑处理套餐"),
+        name_en="Edit Tool",
         type="edit",
         related_resource_types=[],
         related_actions=[],
@@ -317,7 +319,7 @@ class ActionEnum:
     )
     LIST_NOTICE_GROUP = ActionMeta(
         id="list_notice_group",
-        name="通知组列表",
+        name=gettext("通知组列表"),
         name_en="List Notice Group",
         type="list",
         related_resource_types=[],
@@ -326,7 +328,7 @@ class ActionEnum:
     )
     CREATE_NOTICE_GROUP = ActionMeta(
         id="create_notice_group",
-        name="新建通知组",
+        name=gettext("新建通知组"),
         name_en="Create Notice Group",
         type="create",
         related_resource_types=[],
@@ -335,7 +337,7 @@ class ActionEnum:
     )
     EDIT_NOTICE_GROUP = ActionMeta(
         id="edit_notice_group",
-        name="编辑通知组",
+        name=gettext("编辑通知组"),
         name_en="Edit Notice Group",
         type="edit",
         related_resource_types=[],
@@ -344,7 +346,7 @@ class ActionEnum:
     )
     EDIT_NOTICE_GROUP_V2 = ActionMeta(
         id="edit_notice_group_v2",
-        name="编辑通知组(V2)",
+        name=gettext("编辑通知组(V2)"),
         name_en="Edit Notice Group V2",
         type="edit",
         related_resource_types=[ResourceEnum.NOTICE_GROUP],
@@ -353,7 +355,7 @@ class ActionEnum:
     )
     DELETE_NOTICE_GROUP = ActionMeta(
         id="delete_notice_group",
-        name="删除通知组",
+        name=gettext("删除通知组"),
         name_en="Delete Notice Group",
         type="delete",
         related_resource_types=[],
@@ -362,7 +364,7 @@ class ActionEnum:
     )
     DELETE_NOTICE_GROUP_V2 = ActionMeta(
         id="delete_notice_group_v2",
-        name="删除通知组(V2)",
+        name=gettext("删除通知组(V2)"),
         name_en="Delete Notice Group V2",
         type="delete",
         related_resource_types=[ResourceEnum.NOTICE_GROUP],
@@ -371,7 +373,7 @@ class ActionEnum:
     )
     VIEW_BASE_PANEL = ActionMeta(
         id="view_base_panel",
-        name="查看报表",
+        name=gettext("查看报表"),
         name_en="View Audit Report",
         type="view",
         related_resource_types=[],
@@ -380,7 +382,7 @@ class ActionEnum:
     )
     VIEW_PANEL = ActionMeta(
         id="view_panel",
-        name="查看报表(组织架构)",
+        name=gettext("查看报表(组织架构)"),
         name_en="View Audit Report by Department",
         type="view",
         related_resource_types=[ResourceEnum.DEPT_BK_USERMGR],
@@ -391,7 +393,7 @@ class ActionEnum:
     # 日志平台
     CREATE_COLLECTION_BK_LOG = ActionMeta(
         id=BkLogPermissionVersion("create_collection").action_id,
-        name="采集新建",
+        name=gettext("采集新建"),
         name_en="Create Collection",
         type="create",
         related_resource_types=BkLogPermissionVersion("create_collection").related_resource_types,
@@ -401,7 +403,7 @@ class ActionEnum:
     )
     VIEW_COLLECTION_BK_LOG = ActionMeta(
         id=BkLogPermissionVersion("view_collection").action_id,
-        name="采集查看",
+        name=gettext("采集查看"),
         name_en="View Collection",
         type="view",
         related_resource_types=[ResourceEnum.COLLECTION_BK_LOG],
@@ -411,7 +413,7 @@ class ActionEnum:
     )
     MANAGE_COLLECTION_BK_LOG = ActionMeta(
         id=BkLogPermissionVersion("manage_collection").action_id,
-        name="采集管理",
+        name=gettext("采集管理"),
         name_en="Manage Collection",
         type="manage",
         related_resource_types=[ResourceEnum.COLLECTION_BK_LOG],
@@ -421,7 +423,7 @@ class ActionEnum:
     )
     VIEW_BUSINESS_BK_LOG = ActionMeta(
         id=BkLogPermissionVersion("view_business").action_id,
-        name="业务访问",
+        name=gettext("业务访问"),
         name_en="View Business",
         type="view",
         related_resource_types=BkLogPermissionVersion("view_business").related_resource_types,

@@ -109,6 +109,13 @@
             </tr>
           </tbody>
         </table>
+        <bk-exception
+          v-if="renderList.length < 1"
+          class="exception-part"
+          scene="part"
+          type="search-empty">
+          {{ t('暂无数据') }}
+        </bk-exception>
         <bk-pagination
           v-if="showPagination"
           v-model="pagination.modelValue"
@@ -202,7 +209,7 @@
     const stack = ipInput.value.split(/[;\n, ]/);
     for (let i = 0 ; i < stack.length ; i++) {
       if (!IPRule.validator(stack[i])) {
-        inputError.value = 'IP格式有误或不存在，检查后重试！';
+        inputError.value = t('IP格式有误或不存在，检查后重试！');
         return;
       }
     }
@@ -279,7 +286,7 @@
         background: #fff;
         border: 1px solid #3a84ff;
         border-radius: 2px;
-        transition: all 0.15s;
+        transition: all .15s;
 
         &:hover {
           color: #fff;
@@ -352,7 +359,7 @@
             left: 0;
             height: 2px;
             background: #3a84ff;
-            content: "";
+            content: '';
           }
         }
 

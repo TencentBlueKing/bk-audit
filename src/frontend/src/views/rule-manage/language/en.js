@@ -60,5 +60,11 @@ export default {
     规则启用确认: 'Switch On Confirmation',
     编辑处理规则: 'Edit Rule',
     '规则：': 'Rule: ',
+    启用成功: 'Enable successfully',
+    规则新建后默认: 'New rule is ',
+    不启用: 'Disabled',
+    可在调整: 'you can change the status after set-up',
+    后手动启用: '',
+    克隆处理规则: 'Clone Rule',
   },
 };

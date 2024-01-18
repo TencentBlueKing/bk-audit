@@ -23,7 +23,9 @@
       v-if="empty"
       class="result-empty"
       scene="part"
-      type="empty" />
+      type="empty">
+      {{ t('暂无数据') }}
+    </bk-exception>
     <scroll-faker>
       <view-host
         :data="hostList"

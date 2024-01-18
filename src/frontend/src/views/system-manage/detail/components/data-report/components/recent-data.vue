@@ -39,11 +39,11 @@
           :border="['outer', 'row']"
           :columns="tableColumn"
           :data="tableData"
-          :height="tableData.length?tableMaxHeight:320">
+          :max-height="tableData.length?tableMaxHeight:320">
           <template #empty>
             <bk-exception
               scene="part"
-              style="padding-top: 40px;color: #63656e;"
+              style="padding-top: 130px;color: #63656e;"
               type="empty">
               {{ t('暂无数据') }}
             </bk-exception>
@@ -54,11 +54,11 @@
           :border="['outer', 'row']"
           :columns="dataIdTableColumn"
           :data="dataIdTableData"
-          :height="dataIdTableData.length ? tableMaxHeight : 320">
+          :max-height="dataIdTableData.length ? tableMaxHeight : 320">
           <template #empty>
             <bk-exception
               scene="part"
-              style="padding-top: 40px;color: #63656e;"
+              style="padding-top: 130px;color: #63656e;"
               type="empty">
               {{ t('暂无数据') }}
             </bk-exception>

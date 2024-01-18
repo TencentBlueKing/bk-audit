@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext
 
 from apps.permission.handlers.resource_types import ResourceTypeMeta
 
@@ -24,6 +24,6 @@ from apps.permission.handlers.resource_types import ResourceTypeMeta
 class CollectionBKLog(ResourceTypeMeta):
     system_id = "bk_log_search"
     id = "collection"
-    name = gettext_lazy("采集项")
+    name = gettext("采集项")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "collection_list"}]

@@ -92,7 +92,7 @@
     spaceTypeId: string
   }
   interface Emits{
-    (e:'change', value: Props['data']): void
+    (e:'change', value: Props['data'], isShow?: boolean): void
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
