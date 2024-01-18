@@ -85,6 +85,7 @@
     }
 
     .auth-option-label {
+      width: 100%;
       pointer-events: all !important;
     }
   }

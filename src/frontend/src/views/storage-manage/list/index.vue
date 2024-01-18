@@ -294,44 +294,44 @@
                disabled: true,
              },
              {
-               label: '名称',
+               label: t('名称'),
                field: 'source_name',
                disabled: true,
              },
              {
-               label: '地址',
+               label: t('地址'),
                field: 'cluster_config.domain_name',
              },
              {
-               label: '来源',
+               label: t('来源'),
                field: 'cluster_config.custom_option.source_type',
              },
              {
-               label: '端口',
+               label: t('端口'),
                field: 'cluster_config.port',
              },
              {
-               label: '协议',
+               label: t('协议'),
                field: 'cluster_config.schema',
              },
              {
-               label: '状态',
+               label: t('状态'),
                field: 'status',
              },
              {
-               label: '创建人',
+               label: t('创建人'),
                field: 'cluster_config.custom_option.option.creator',
              },
              {
-               label: '创建时间',
+               label: t('创建时间'),
                field: 'cluster_config.custom_option.option.create_at',
              },
              {
-               label: '最近更新人',
+               label: t('最近更新人'),
                field: 'cluster_config.custom_option.option.updater',
              },
              {
-               label: '最近更新时间',
+               label: t('最近更新时间'),
                field: 'cluster_config.custom_option.option.update_at',
              },
     ],
