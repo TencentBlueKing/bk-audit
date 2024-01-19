@@ -47,7 +47,7 @@
                   {{ resourceItem.type }}-{{ resourceItem.instances.join('，') }}
                 </p>
                 <p v-if="permissionItem.relatedResources.length < 1">
-                  --
+                  {{ t('无需关联实例') }}
                 </p>
               </td>
             </tr>

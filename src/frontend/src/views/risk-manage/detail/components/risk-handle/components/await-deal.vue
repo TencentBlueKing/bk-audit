@@ -18,7 +18,6 @@
   <div class="risk-await-deal-wrap">
     <audit-form
       ref="formRef"
-      :label-width="80"
       :model="formData"
       :rules="rules">
       <bk-form-item
@@ -146,12 +145,12 @@
           style="min-width: 72px;"
           theme="primary"
           @click="handleSubmit">
-          提交
+          {{ t('提交') }}
         </auth-button>
         <bk-button
           style="min-width: 72px;margin-left: 8px;"
           @click="handleCancel">
-          取消
+          {{ t('取消') }}
         </bk-button>
       </bk-form-item>
     </audit-form>
@@ -194,7 +193,6 @@
   const router = useRouter();
   const route = useRoute();
   const { messageSuccess } = useMessage();
-
 
   const rules = {
     new_operators: [{
@@ -346,6 +344,8 @@
         pa_params: {},
         auto_close_risk: false,
       };
+      paramsDetailData.value = {};
+      formData.value.pa_params = {};
       break;
     }
     formData.value = {

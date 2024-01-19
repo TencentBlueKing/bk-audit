@@ -1,0 +1,129 @@
+swagger: '2.0'
+basePath: /
+info:
+  version: '0.1'
+  title: API Gateway Resources
+  description: ''
+schemes:
+  - http
+paths:
+  /asset/pull_info/:
+    get:
+      operationId: asset_pull_info
+      description: 获取反向拉取鉴权信息
+      tags: [ ]
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/meta/meta/asset_pull_info/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: [ ]
+        descriptionEn:
+  /risks/fields/:
+    get:
+      operationId: get_risk_fields
+      description: 获取风险字段列表
+      tags: [ ]
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/risks_apigw/risk_fields_by_strategy/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: [ ]
+        descriptionEn:
+  /risks/{id}/:
+    get:
+      operationId: retrieve_risk
+      description: 获取风险详情
+      tags: [ ]
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/risks_apigw/{id}/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: [ ]
+        descriptionEn:
+  /{namespace}/strategies/all/:
+    get:
+      operationId: get_all_strategy
+      description: 获取命名空间下所有策略
+      tags: [ ]
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/namespaces/{namespace}/strategy/all/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: [ ]
+        descriptionEn:
+  /{namespace}/strategies/:
+    get:
+      operationId: list_strategies
+      description: 获取策略信息
+      tags: [ ]
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: get
+          path: /api/v1/namespaces/{namespace}/strategy/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: [ ]
+        descriptionEn:

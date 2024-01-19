@@ -163,7 +163,7 @@
       return '--';
     }
     if (config.type === 'datetimerange') {
-      return `${props.value[0]} 至 ${props.value[1]}`;
+      return `${props.value[0]} ${t('至')} ${props.value[1]}`;
     }
     if (config.type === 'select') {
       const valueMap = (props.value as Array<string>).reduce((result, item: string) => ({
@@ -268,7 +268,7 @@
     cursor: pointer;
     background: #f0f1f5;
     border-radius: 2px;
-    transition: all 0.15s;
+    transition: all .15s;
     align-items: center;
 
     .tag-pop-ref {

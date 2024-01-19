@@ -16,22 +16,18 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext
-
-from apps.permission.handlers.resource_types import ResourceTypeMeta
+from django.db import migrations, models
 
 
-class BusinessBKLog(ResourceTypeMeta):
-    system_id = "bk_cmdb"
-    id = "biz"
-    name = gettext("业务")
-    selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": "system"}]
+class Migration(migrations.Migration):
+    dependencies = [
+        ("strategy_v2", "0003_auto_20230704_0928"),
+    ]
 
-
-class SpaceBKLog(ResourceTypeMeta):
-    system_id = "bk_monitorv3"
-    id = "space"
-    name = gettext("空间")
-    selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": "space_list"}]
+    operations = [
+        migrations.AddField(
+            model_name="strategy",
+            name="description",
+            field=models.TextField(blank=True, null=True, verbose_name="Description"),
+        ),
+    ]

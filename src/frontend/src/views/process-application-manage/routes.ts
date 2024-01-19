@@ -14,6 +14,11 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+
+import i18n from '@/language/index.js';
+
+const { t } = i18n.global;
+
 export default {
   path: '/application-manage',
   name: 'applicationManage',
@@ -30,7 +35,7 @@ export default {
       component: () => import('@views/process-application-manage/list/index.vue'),
       name: 'applicationManageList',
       meta: {
-        title: '处理套餐',
+        title: t('处理套餐'),
       },
     },
     {
@@ -38,7 +43,7 @@ export default {
       component: () => import('@views/process-application-manage/create/index.vue'),
       name: 'processApplicationCreate',
       meta: {
-        title: '新建处理套餐',
+        title: t('新建处理套餐'),
       },
     },
     {
@@ -46,7 +51,7 @@ export default {
       component: () => import('@views/process-application-manage/create/index.vue'),
       name: 'processApplicationEdit',
       meta: {
-        title: '编辑处理套餐',
+        title: t('编辑处理套餐'),
       },
     },
     {
@@ -54,7 +59,7 @@ export default {
       component: () => import('@views/process-application-manage/create/index.vue'),
       name: 'processApplicationClone',
       meta: {
-        title: '克隆处理套餐',
+        title: t('克隆处理套餐'),
       },
     },
     // {

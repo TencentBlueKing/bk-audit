@@ -71,6 +71,18 @@
                   </bk-loading>
                 </bk-form-item>
               </div>
+              <bk-form-item
+                :label="t('描述')"
+                label-width="160"
+                property="description">
+                <bk-input
+                  v-model.trim="formData.description"
+                  :maxlength="1000"
+                  :placeholder="t('请输入描述')"
+                  show-word-limit
+                  style="width: 100%;"
+                  type="textarea" />
+              </bk-form-item>
             </template>
           </card-part-vue>
           <card-part-vue
@@ -282,6 +294,7 @@
     strategy_id?: number,
     strategy_name: string,
     tags: Array<string>,
+    description: string,
     control_id: string,
     control_version?: number,
     configs: Record<string, any>,
@@ -306,6 +319,7 @@
     // strategy_id: '',
     strategy_name: '',
     tags: [],
+    description: '',
     control_id: '',
     // control_version: '',
     configs: {
@@ -558,6 +572,7 @@
       formData.value.control_id = editData.control_id;
       formData.value.control_version = editData.control_version;
       formData.value.notice_groups = editData.notice_groups;
+      formData.value.description = editData.description;
 
       const controlItem = controlMap.value[editData.control_id];
       if (controlItem) {

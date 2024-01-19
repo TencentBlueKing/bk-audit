@@ -16,22 +16,21 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext
-
-from apps.permission.handlers.resource_types import ResourceTypeMeta
-
-
-class BusinessBKLog(ResourceTypeMeta):
-    system_id = "bk_cmdb"
-    id = "biz"
-    name = gettext("业务")
-    selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": "system"}]
+from django.conf import settings
+from django.core.management import call_command
+from django.core.management.base import BaseCommand
 
 
-class SpaceBKLog(ResourceTypeMeta):
-    system_id = "bk_monitorv3"
-    id = "space"
-    name = gettext("空间")
-    selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": "space_list"}]
+class Command(BaseCommand):
+    def handle(self, *args, **kwargs):
+        if not settings.BKAUDIT_API_HOST:
+            return
+
+        definition_path = "support-files/apigw/definition.yaml"
+        resources_path = "support-files/apigw/resources.yaml"
+
+        call_command("sync_apigw_config", f"--file={definition_path}")
+        call_command("sync_apigw_stage", f"--file={definition_path}")
+        call_command("sync_apigw_resources", f"--file={resources_path}")
+        call_command("create_version_and_release_apigw", f"--file={definition_path}")
+        call_command("fetch_apigw_public_key")

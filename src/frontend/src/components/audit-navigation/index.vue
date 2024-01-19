@@ -18,13 +18,14 @@
   <div>
     <notice-component
       v-if="showNotice.enabled"
-      :api-url="apiUrl" />
+      :api-url="apiUrl"
+      @show-alert-change="showAlertChange" />
   </div>
   <div
     class="audit-navigation"
     :class="{
       'is-fixed': isSideMenuFixed,
-      'show-notice-navigation': showNotice.enabled
+      'show-notice-navigation': showNotice.enabled && showAlert
     }">
     <div
       class="audit-navigation-side"
@@ -32,7 +33,7 @@
       <div
         class="audit-navigation-header"
         :class="{
-          'show-notice-navigation-header': showNotice.enabled
+          'show-notice-navigation-header': showNotice.enabled && showAlert
         }">
         <div class="audit-logo">
           <slot name="logo" />
@@ -48,7 +49,7 @@
       <div
         class="audit-side-menu"
         :class="{
-          'show-notice-side-menu': showNotice.enabled
+          'show-notice-side-menu': showNotice.enabled && showAlert
         }"
         @mouseenter="handleSideMouseenter"
         @mouseleave="handleSideMouseleave">
@@ -243,6 +244,11 @@
   onBeforeUnmount(() => {
     window.removeEventListener('resize', resizeHandler);
   });
+
+  const showAlert = ref(false);
+  const showAlertChange = (isShow: boolean) => {
+    showAlert.value = isShow;
+  };
 </script>
 <style lang="postcss">
 .audit-navigation {

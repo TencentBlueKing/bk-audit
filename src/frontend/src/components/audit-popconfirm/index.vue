@@ -48,7 +48,7 @@
         :loading="isCancelLoading? isConfirmLoading: false"
         size="small"
         @click="handleCancel">
-        {{ t('取消') }}
+        {{ t(cancelText) }}
       </bk-button>
     </div>
   </div>
@@ -81,6 +81,7 @@
     zIndex?: number,
     hideOnClick?: boolean,
     confirmText?: string,
+    cancelText?: string,
     confirmAutoHide?: boolean,
     isCancelLoading?:boolean
   }
@@ -90,10 +91,12 @@
     zIndex: 999999,
     hideOnClick: true,
     confirmText: '确认',
+    cancelText: '取消(No)',
     confirmAutoHide: true,
   });
 
   const emits = defineEmits<Emits>();
+
 
   let tippyIns: Instance;
 

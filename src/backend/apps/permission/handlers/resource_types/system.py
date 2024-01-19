@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from django.conf import settings
+from django.utils.translation import gettext
 from iam import Resource
 
 from apps.permission.handlers.resource_types import ResourceTypeMeta
@@ -25,7 +26,7 @@ from apps.permission.handlers.resource_types import ResourceTypeMeta
 class System(ResourceTypeMeta):
     system_id = settings.BK_IAM_SYSTEM_ID
     id = "system"
-    name = "接入系统"
+    name = gettext("接入系统")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "system"}]
 

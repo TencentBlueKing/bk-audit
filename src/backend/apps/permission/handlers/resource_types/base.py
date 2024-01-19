@@ -22,6 +22,7 @@ from typing import List
 
 from django.conf import settings
 from django.core.cache import cache
+from django.utils.translation import gettext
 from iam import Resource
 
 from apps.permission.constants import PERMISSION_CACHE_EXPIRE
@@ -128,6 +129,6 @@ class ResourceTypeMeta(metaclass=abc.ABCMeta):
 class System(ResourceTypeMeta):
     system_id = settings.BK_IAM_SYSTEM_ID
     id = "system"
-    name = "接入系统"
+    name = gettext("接入系统")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": "system"}]

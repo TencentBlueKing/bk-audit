@@ -123,9 +123,9 @@
             riskId: data.risk_id,
           },
         };
-        return <router-link to={to}>
-                <Tooltips data={data.risk_id} />
-              </router-link>;
+        return <router-link to={to} target='_blank'>
+          <Tooltips data={data.risk_id} />
+        </router-link>;
       },
     },
     {

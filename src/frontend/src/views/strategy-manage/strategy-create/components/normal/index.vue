@@ -144,7 +144,7 @@
         <div class="condition-icon">
           <div
             v-if="formData.configs.agg_condition.length > 1"
-            v-bk-tooltips="t('删除')"
+            v-bk-tooltips="t('删除(Remove)')"
             class="ml8"
             @click="handleRemoveCondition(index)">
             <audit-icon type="reduce-fill" />

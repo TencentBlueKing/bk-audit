@@ -90,7 +90,9 @@ class GetApplyDataResource(IAM, Resource):
         view_collection = ActionEnum.VIEW_COLLECTION_BK_LOG.id.replace(f"_{IAMSystems.BK_LOG.value}", "")
         if manage_collection in action_ids and view_collection not in action_ids:
             action_ids.append(view_collection)
-        return api.bk_log.get_apply_data(action_ids=action_ids, resources=instances)
+        data = api.bk_log.get_apply_data(action_ids=action_ids, resources=instances)
+        data["permission"] = Permission.translate_apply_data(data["permission"])
+        return data
 
 
 class BatchIsAllowedResource(IAM, Resource):
