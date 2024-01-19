@@ -58,6 +58,7 @@ export default class Strategy {
   status_msg: string;
   permission: Record<string, boolean>;
   notice_groups: Array<number>;
+  description: string;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -75,6 +76,7 @@ export default class Strategy {
     this.status_msg = payload.status_msg;
     this.permission = payload.permission;
     this.notice_groups = payload.notice_groups;
+    this.description = payload.description;
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {
