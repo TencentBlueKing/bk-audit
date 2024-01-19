@@ -35,6 +35,16 @@
       </render-info-item>
     </render-info-block>
     <render-info-block>
+      <render-info-item :label="t('描述')">
+        <span v-if="data.description">
+          {{ data.description }}
+        </span>
+        <span v-else>
+          --
+        </span>
+      </render-info-item>
+    </render-info-block>
+    <render-info-block>
       <render-info-item :label="t('方案')">
         {{ controlName }} - V{{ data.control_version }}
       </render-info-item>

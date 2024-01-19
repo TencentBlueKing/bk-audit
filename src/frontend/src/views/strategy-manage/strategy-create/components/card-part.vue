@@ -64,14 +64,14 @@
 .strategy-create-card-part {
   /* width: 82%; */
   margin-bottom: 16px;
-  background: #FFF;
+  background: #fff;
   border-radius: 2px;
   box-shadow: 0 1px 2px 0 #00000029;
 
   >.card-part-title {
     display: flex;
     height: 53px;
-    padding:0 16px;
+    padding: 0 16px;
 
     /* font-family: PingFangSC-SNaNpxibold; */
     font-size: 14px;
@@ -80,14 +80,15 @@
     align-items: center;
     justify-content: space-between;
 
-    >.audit-icon{
+    >.audit-icon {
       cursor: pointer;
     }
   }
 
-  >.card-part-content{
-    padding:10px 16px 0;
-    border-top: 1px solid #F0F1F5;
+  >.card-part-content {
+    padding: 10px 16px 0;
+    overflow: hidden;
+    border-top: 1px solid #f0f1f5;
   }
 }
 </style>
