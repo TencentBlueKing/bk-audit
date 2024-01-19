@@ -344,6 +344,8 @@
         pa_params: {},
         auto_close_risk: false,
       };
+      paramsDetailData.value = {};
+      formData.value.pa_params = {};
       break;
     }
     formData.value = {
