@@ -456,7 +456,9 @@ class AutoProcess(RiskFlowBaseHandler):
         constants = {}
         for c in template_info["pipeline_tree"]["constants"].values():
             field = pa_params.get(c["key"])
-            value = getattr(self.risk, field["field"], "")
+            # 如果配置了常量，优先使用，没有常量使用字段映射
+            value = field.get("value") or getattr(self.risk, field.get("field"), "")
+            # 对值的类型进行转换
             if isinstance(value, (dict, list)):
                 value = json.dumps(value, ensure_ascii=False)
             if isinstance(value, datetime.datetime):
