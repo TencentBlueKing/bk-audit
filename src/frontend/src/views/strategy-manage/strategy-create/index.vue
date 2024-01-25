@@ -159,6 +159,9 @@
                       multiple
                       multiple-mode="tag"
                       :placeholder="t('请选择')"
+                      :popover-options="{
+                        zIndex: 1000
+                      }"
                       :search-placeholder="t('请输入关键字')">
                       <auth-option
                         v-for="(item, index) in groupList"
