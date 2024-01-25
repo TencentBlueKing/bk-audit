@@ -1,6 +1,6 @@
 {
   "name": "bk-audit",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -22,7 +22,7 @@
     "aegis-web-sdk": "1.38.3",
     "art-template": "4.13.2",
     "axios": "1.6.0",
-    "bkui-vue": "0.0.2-beta.118",
+    "bkui-vue": "0.0.2-beta.123",
     "connect-history-api-fallback": "2.0.0",
     "cookie-parser": "1.4.6",
     "dayjs": "1.11.10",
