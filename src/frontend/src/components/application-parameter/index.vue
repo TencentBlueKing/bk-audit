@@ -33,15 +33,10 @@
 </template>
 <script setup lang="ts">
   import {
-    onMounted,
     ref,
   } from 'vue';
 
   interface Props {
-    modelValue: {
-      field: string,
-      value: string,
-    }
     riskFieldList: Array<{
       id: string,
       name: string,
@@ -50,32 +45,31 @@
 
   const props = defineProps<Props>();
 
-  const emit = defineEmits<{
-    'update:modelValue': [value: {field: string, value: string}]
-  }>();
-
   const localValue = ref('');  // 仅仅用于select绑定，真正传给父组件的是：根据input，select类型赋值给modelValue.value，modelValue.field
+
+  const modelValue = defineModel<{field: string, value: string}>({
+    default: () => ({
+      field: '',
+      value: '',
+    }),
+  });
 
   // 选中或者enter选中，也可能是自定义输入
   const handlerChange = (val: string) => {
-    const target = {
-      ...props.modelValue,
-    };
     // 如果是选中（包含搜索enter选中）
     if (props.riskFieldList.find((item: { id: string; }) => item.id === val)) {
-      target.field = val;
-      target.value = '';
-      emit('update:modelValue', target);
+      modelValue.value = {
+        field: val,
+        value: '',
+      };
       return;
     }
     // 自定义输入
-    target.value = val;
-    target.field = '';
-    emit('update:modelValue', target);
+    modelValue.value = {
+      field: '',
+      value: val,
+    };
   };
 
-  onMounted(() => {
-    // 编辑、克隆填充
-    localValue.value = props.modelValue.value || props.modelValue.field;
-  });
+  localValue.value = modelValue.value.value || modelValue.value.field;
 </script>
