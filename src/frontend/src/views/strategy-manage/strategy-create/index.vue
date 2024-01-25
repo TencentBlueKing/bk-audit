@@ -77,6 +77,7 @@
                 property="description">
                 <bk-input
                   v-model.trim="formData.description"
+                  autosize
                   :maxlength="1000"
                   :placeholder="t('请输入描述')"
                   show-word-limit
