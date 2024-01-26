@@ -234,14 +234,14 @@
         property="configs.agg_interval">
         <div
           class="rule-item"
-          style="position: relative"
           @mouseenter="isShowTip=true;"
           @mouseleave="isShowTip=false;">
           <span>{{ t('每') }}</span>
           <bk-form-item
             class="mb0"
             label=""
-            label-width="0">
+            label-width="0"
+            style="position: relative">
             <bk-input
               v-model="formData.configs.agg_interval"
               class="form-item-common"
@@ -251,14 +251,14 @@
               style="width: 80px;"
               type="number"
               @blur="handleUpdateConfigs" />
+            <span
+              v-bk-tooltips="{content: t('统计周期最小为5分钟'), placement: 'top'}"
+              class="info-tip"
+              :class="{'active':isShowTip}">
+              <audit-icon
+                type="alert" />
+            </span>
           </bk-form-item>
-          <span
-            v-bk-tooltips="{content: t('统计周期最小为5分钟'), placement: 'top'}"
-            class="info-tip"
-            :class="{'active':isShowTip}">
-            <audit-icon
-              type="alert" />
-          </span>
           <bk-form-item
             class="mb0"
             label=""
@@ -629,7 +629,7 @@
   .info-tip {
     position: absolute;
     top: 22%;
-    left: 70px;
+    right: 0;
     display: none;
     font-size: 16px;
     line-height: 1;
@@ -657,6 +657,7 @@
 
   .rule-item {
     display: flex;
+    align-items: center;
     color: #63656e;
 
     :deep(.bk-form-label::after) {
