@@ -442,12 +442,12 @@
       {
         validator: (value: number) => !!value,
         message: t('调度周期不能为空'),
-        trigger: 'blur',
+        trigger: ['change', 'blur'],
       },
     ],
     'configs.aiops_config.schedule_period': [
       {
-        validator: (value: number) => !!value,
+        validator: (value: string) => !!value,
         message: t('不能为空'),
         trigger: 'change',
       },
@@ -731,6 +731,9 @@
     };
   };
   const handleUpdateDataSource = (dataSource: Record<string, any>) => {
+    if (dataSource.result_table_id && dataSource.result_table_id.length) {
+      formRef.value.clearValidate('configs.data_source.result_table_id');
+    }
     formData.value.configs.data_source = {
       ...formData.value.configs.data_source,
       ...dataSource,

@@ -101,7 +101,7 @@
             :property="`configs.agg_condition.${index}.value`"
             required
             :rules="[
-              { message: '', trigger: 'change',validator: (value: Array<any>) => handleValidate(value) },
+              { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
             ]">
             <bk-cascader
               v-if="dicts[item.key] && dicts[item.key].length"
