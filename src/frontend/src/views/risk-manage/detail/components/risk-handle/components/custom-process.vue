@@ -46,7 +46,10 @@
               v-if="processPackageDetail[key]?.show_type === 'show'"
               class="mt8"
               :label="processPackageDetail[key]?.name || key">
-              {{ riskFieldMap[data.pa_params[key].field] || data.pa_params[key].field ||'--' }}
+              {{ riskFieldMap[data.pa_params[key].field]
+                || data.pa_params[key].field
+                || data.pa_params[key].value
+                || '--' }}
             </render-info-item>
           </template>
         </template>
