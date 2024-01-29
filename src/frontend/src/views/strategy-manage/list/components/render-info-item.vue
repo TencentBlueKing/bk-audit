@@ -45,6 +45,7 @@
       padding-left: 14px;
       color: #63656e;
       flex: 1;
+      word-break: break-all;
     }
   }
 </style>
