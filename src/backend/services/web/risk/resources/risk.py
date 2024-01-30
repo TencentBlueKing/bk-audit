@@ -79,7 +79,7 @@ from services.web.risk.serializers import (
     TicketNodeSerializer,
     UpdateRiskLabelReqSerializer,
 )
-from services.web.risk.tasks import sync_auto_result
+from services.web.risk.tasks import process_one_risk, sync_auto_result
 
 
 class RiskMeta(Resource, abc.ABC):
@@ -462,3 +462,11 @@ class GetRiskFieldsByStrategy(RiskMeta):
                     }
                 )
         return fields
+
+
+class ProcessRiskTicket(RiskMeta):
+    name = gettext_lazy("风险单据流转")
+
+    def perform_request(self, validated_request_data):
+        process_one_risk(risk_id=validated_request_data["risk_id"])
+        return
