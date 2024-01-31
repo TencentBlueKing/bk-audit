@@ -18,10 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import Resource, api
+from bk_resource import api
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import (
     ITSM_SERVICE_CATALOG_ID_KEY,
     ITSM_SERVICE_PROJECT_ID_KEY,
@@ -33,7 +34,7 @@ from apps.meta.utils.saas import get_saas_url
 from core.utils.tools import choices_to_dict
 
 
-class ITSMMeta(Resource, abc.ABC):
+class ITSMMeta(AuditMixinResource, abc.ABC):
     tags = ["ITSM"]
 
 

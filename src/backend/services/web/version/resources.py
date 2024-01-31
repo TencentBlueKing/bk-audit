@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import mistune
-from bk_resource import Resource
 from bk_resource.contrib.model import ModelResource
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
@@ -25,6 +24,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
+from apps.audit.resources import AuditMixinResource
 from core.models import get_request_username
 from services.web.entry.resources import I18nResource
 from services.web.version.models import VersionLog, VersionLogVisit
@@ -62,7 +62,7 @@ class VersionListResource(ModelResource):
         return {"show_version": show_version, "version_logs": version_logs, "last_version": last_version}
 
 
-class VersionInfoResource(Resource):
+class VersionInfoResource(AuditMixinResource):
     name = gettext_lazy("版本信息")
     tags = ["Version"]
     RequestSerializer = VersionLogInfoRequestSerializer

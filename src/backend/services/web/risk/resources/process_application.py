@@ -18,13 +18,12 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import Resource
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
 
-from apps.audit.client import bk_audit_client
+from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import OrderTypeChoices
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
@@ -47,7 +46,7 @@ from services.web.risk.serializers import (
 )
 
 
-class ProcessApplicationMeta(Resource, abc.ABC):
+class ProcessApplicationMeta(AuditMixinResource, abc.ABC):
     tags = ["ProcessApplication"]
 
 
@@ -56,10 +55,9 @@ class ListProcessApplications(ProcessApplicationMeta):
     RequestSerializer = ListProcessApplicationsReqSerializer
     ResponseSerializer = ProcessApplicationsInfoSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
-        # 记录审计日志
-        bk_audit_client.add_event(action=ActionEnum.LIST_PA, extend_data=validated_request_data)
         # 构造排序条件
         order_field = validated_request_data.pop("order_field", "-created_at")
         # 构造筛选条件
@@ -87,6 +85,7 @@ class ListProcessApplications(ProcessApplicationMeta):
 
 class ListAllProcessApplications(ProcessApplicationMeta):
     name = gettext_lazy("获取所有处理套餐列表")
+    audit_action = ActionEnum.LIST_PA
 
     def perform_request(self, validated_request_data):
         if (
@@ -103,7 +102,6 @@ class ListAllProcessApplications(ProcessApplicationMeta):
             and not TicketPermission.objects.filter(operator=get_request_username()).exists()
         ):
             return []
-        bk_audit_client.add_event(action=ActionEnum.LIST_PA, extend_data=validated_request_data)
         return [
             {"id": pa.id, "name": pa.name, "sops_template_id": pa.sops_template_id, "is_enabled": pa.is_enabled}
             for pa in ProcessApplication.objects.all()
@@ -114,24 +112,23 @@ class CreateProcessApplication(ProcessApplicationMeta):
     name = gettext_lazy("创建处理套餐")
     RequestSerializer = CreateProcessApplicationsReqSerializer
     ResponseSerializer = ProcessApplicationsInfoSerializer
+    audit_action = ActionEnum.CREATE_PA
 
     def perform_request(self, validated_request_data):
-        process_application = ProcessApplication.objects.create(**validated_request_data)
-        bk_audit_client.add_event(action=ActionEnum.CREATE_PA, extend_data=validated_request_data)
-        return process_application
+        return ProcessApplication.objects.create(**validated_request_data)
 
 
 class UpdateProcessApplication(ProcessApplicationMeta):
     name = gettext_lazy("更新处理套餐")
     RequestSerializer = UpdateProcessApplicationsReqSerializer
     ResponseSerializer = ProcessApplicationsInfoSerializer
+    audit_action = ActionEnum.EDIT_PA
 
     def perform_request(self, validated_request_data):
         pa = get_object_or_404(ProcessApplication, id=validated_request_data["id"])
         for key, val in validated_request_data.items():
             setattr(pa, key, val)
         pa.save()
-        bk_audit_client.add_event(action=ActionEnum.EDIT_PA, extend_data=validated_request_data)
         return pa
 
 
@@ -139,6 +136,8 @@ class ListRiskByPA(ProcessApplicationMeta):
     name = gettext_lazy("获取处理套餐命中的风险")
     ResponseSerializer = ListRiskResponseSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_RISK
+    audit_resource_type = ResourceEnum.RISK
 
     def perform_request(self, validated_request_data):
         # 获取处理套餐实例
@@ -150,11 +149,6 @@ class ListRiskByPA(ProcessApplicationMeta):
         for rule in rules:
             q |= Q(rule_id=rule.rule_id, rule_version=rule.version)
         risks = Risk.load_authed_risks(action=ActionEnum.LIST_RISK).exclude(status=RiskStatus.CLOSED).filter(q)
-        bk_audit_client.add_event(
-            action=ActionEnum.LIST_RISK,
-            resource_type=ResourceEnum.RISK,
-            extend_data=validated_request_data,
-        )
         return risks
 
 
@@ -162,6 +156,7 @@ class ListRuleByPA(ProcessApplicationMeta):
     name = gettext_lazy("获取处理套餐关联的规则")
     ResponseSerializer = RiskRuleInfoSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_RULE
 
     def perform_request(self, validated_request_data):
         # 获取处理套餐实例
@@ -171,23 +166,18 @@ class ListRuleByPA(ProcessApplicationMeta):
         order_field = (
             f"-{order_field}" if validated_request_data.get("order_type") == OrderTypeChoices.DESC else order_field
         )
-        rules = RiskRule.load_latest_rules().filter(pa_id=pa.id).order_by("-is_enabled", order_field)
-        bk_audit_client.add_event(
-            action=ActionEnum.LIST_RULE,
-            extend_data=validated_request_data,
-        )
-        return rules
+        return RiskRule.load_latest_rules().filter(pa_id=pa.id).order_by("-is_enabled", order_field)
 
 
 class ToggleProcessApplication(ProcessApplicationMeta):
     name = gettext_lazy("启停处理套餐")
     RequestSerializer = ToggleProcessApplicationReqSerializer
+    audit_action = ActionEnum.EDIT_PA
 
     def perform_request(self, validated_request_data):
         pa = get_object_or_404(ProcessApplication, id=validated_request_data["id"])
         pa.is_enabled = validated_request_data["is_enabled"]
         pa.save(update_fields=["is_enabled"])
-        bk_audit_client.add_event(action=ActionEnum.EDIT_PA, extend_data=validated_request_data)
 
 
 class ApproveBuildInFields(ProcessApplicationMeta):

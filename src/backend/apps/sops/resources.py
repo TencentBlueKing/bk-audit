@@ -18,17 +18,18 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import Resource, api
+from bk_resource import api
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
+from apps.audit.resources import AuditMixinResource
 from apps.meta.utils.saas import get_saas_url
 from apps.sops.constants import SOPSTaskStatus
 from apps.sops.serializers import GetTemplatesRespSerializer
 from core.utils.tools import choices_to_dict
 
 
-class SopsMeta(Resource, abc.ABC):
+class SopsMeta(AuditMixinResource, abc.ABC):
     tags = ["SOps"]
 
 

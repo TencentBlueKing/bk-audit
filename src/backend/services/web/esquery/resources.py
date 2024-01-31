@@ -18,12 +18,12 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import Resource, api, resource
+from bk_resource import api, resource
 from blueapps.utils.request_provider import get_request_username
 from django.utils.translation import gettext_lazy
 
 from api.bk_log.constants import INDEX_SET_ID
-from apps.audit.client import bk_audit_client
+from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, SensitiveObject
 from apps.permission.handlers.actions import ActionEnum
@@ -42,7 +42,7 @@ from services.web.esquery.utils.field_map import FieldMapHandler
 from services.web.esquery.utils.formatter import HitsFormatter
 
 
-class EsQueryBaseResource(Resource, abc.ABC):
+class EsQueryBaseResource(AuditMixinResource, abc.ABC):
     tags = ["EsQuery"]
 
 
@@ -129,6 +129,7 @@ class SearchResource(SearchAllResource):
     name = gettext_lazy("搜索")
     RequestSerializer = EsQuerySearchAttrSerializer
     serializer_class = EsQuerySearchResponseSerializer
+    audit_action = ActionEnum.SEARCH_REGULAR_EVENT
 
     def validate_request_data(self, request_data):
         validated_request_data = super().validate_request_data(request_data)
@@ -153,11 +154,6 @@ class SearchResource(SearchAllResource):
                 }
             )
         return validated_request_data
-
-    def perform_request(self, validated_request_data):
-        data = super().perform_request(validated_request_data)
-        bk_audit_client.add_event(action=ActionEnum.SEARCH_REGULAR_EVENT, extend_data=validated_request_data)
-        return data
 
 
 class FieldMapResource(EsQueryBaseResource):

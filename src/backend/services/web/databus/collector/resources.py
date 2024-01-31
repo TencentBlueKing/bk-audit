@@ -24,7 +24,7 @@ from collections import defaultdict
 
 import arrow
 import requests
-from bk_resource import Resource, api, resource
+from bk_resource import api, resource
 from bk_resource.contrib.model import ModelResource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.common_utils import uniqid
@@ -35,6 +35,7 @@ from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 
+from apps.audit.resources import AuditMixinResource
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.exceptions import (
     JoinDataPreCheckFailed,
@@ -109,11 +110,11 @@ from services.web.databus.models import CollectorConfig, Snapshot
 from services.web.databus.tasks import create_api_push_etl
 
 
-class CollectorMeta:
+class CollectorMeta(AuditMixinResource, abc.ABC):
     tags = ["Collector"]
 
 
-class SnapshotStatusResource(CollectorMeta, Resource):
+class SnapshotStatusResource(CollectorMeta):
     """资源快照状态"""
 
     name = gettext_lazy("资源快照状态")
@@ -184,7 +185,7 @@ class GetCollectorInfoResource(CollectorMeta, ModelResource):
         return data
 
 
-class CreateCollectorResource(CollectorMeta, Resource):
+class CreateCollectorResource(CollectorMeta):
     name = gettext_lazy("新建采集")
     RequestSerializer = CollectorCreateRequestSerializer
     serializer_class = CollectorCreateResponseSerializer
@@ -231,7 +232,7 @@ class CreateCollectorResource(CollectorMeta, Resource):
         return data
 
 
-class UpdateCollectorResource(CollectorMeta, Resource):
+class UpdateCollectorResource(CollectorMeta):
     name = gettext_lazy("更新采集")
     RequestSerializer = UpdateCollectorRequestSerializer
     serializer_class = CollectorCreateResponseSerializer
@@ -250,7 +251,7 @@ class UpdateCollectorResource(CollectorMeta, Resource):
         return data
 
 
-class GetBcsYamlTemplateResource(CollectorMeta, Resource):
+class GetBcsYamlTemplateResource(CollectorMeta):
     name = gettext_lazy("获取BCS Yaml模板")
     RequestSerializer = GetBcsYamlTemplateRequestSerializer
     serializer_class = GetBcsYamlTemplateResponseSerializer
@@ -285,7 +286,7 @@ class CreateBcsCollectorResource(CreateCollectorResource):
         return self.serializer_class(collector_config).data
 
 
-class UpdateBcsCollectorResource(CollectorMeta, Resource):
+class UpdateBcsCollectorResource(CollectorMeta):
     name = gettext_lazy("更新BCS采集")
     RequestSerializer = UpdateBcsCollectorRequestSerializer
     serializer_class = CollectorCreateResponseSerializer
@@ -334,7 +335,7 @@ class DeleteCollectorResource(CollectorMeta, ModelResource):
         super().perform_request(validated_request_data)
 
 
-class SystemCollectorsStatusResource(CollectorMeta, Resource):
+class SystemCollectorsStatusResource(CollectorMeta):
     name = gettext_lazy("应用的采集数据上报状态")
     RequestSerializer = CollectorStatusRequestSerializer
     serializer_class = CollectorStatusResponseSerializer
@@ -383,7 +384,7 @@ class SystemCollectorsStatusResource(CollectorMeta, Resource):
         return data
 
 
-class BulkSystemCollectorsStatusResource(CollectorMeta, Resource):
+class BulkSystemCollectorsStatusResource(CollectorMeta):
     name = gettext_lazy("批量获取应用采集状态")
     RequestSerializer = BulkSystemCollectorsStatusRequestSerializer
     serializer_class = BulkSystemCollectorsStatusResponseSerializer
@@ -416,7 +417,7 @@ class CollectorEtlResource(CollectorMeta, ModelResource):
         )
 
 
-class EtlPreviewResource(CollectorMeta, Resource):
+class EtlPreviewResource(CollectorMeta):
     name = gettext_lazy("清洗预览")
     RequestSerializer = EtlPreviewRequestSerializer
 
@@ -425,7 +426,7 @@ class EtlPreviewResource(CollectorMeta, Resource):
         return etl_storage.etl_preview(validated_request_data["data"], validated_request_data.get("etl_params"))
 
 
-class ToggleJoinDataResource(CollectorMeta, Resource):
+class ToggleJoinDataResource(CollectorMeta):
     name = gettext_lazy("切换数据关联状态")
     RequestSerializer = ToggleJoinDataRequestSerializer
     ResponseSerializer = ToggleJoinDataResponseSerializer
@@ -481,7 +482,7 @@ class ToggleJoinDataResource(CollectorMeta, Resource):
         return snapshot
 
 
-class EtlFieldHistory(CollectorMeta, Resource):
+class EtlFieldHistory(CollectorMeta):
     name = gettext_lazy("清洗字段历史")
 
     def perform_request(self, validated_request_data):
@@ -495,7 +496,7 @@ class EtlFieldHistory(CollectorMeta, Resource):
         }
 
 
-class GetApiPushBaseResource(CollectorMeta, Resource, abc.ABC):
+class GetApiPushBaseResource(CollectorMeta, abc.ABC):
     name = gettext_lazy("获取 API PUSH")
 
     def get_collector(self, system_id: str):
@@ -595,7 +596,7 @@ class ApiPushHost(GetApiPushResource):
         return {"enabled": bool(collector), "hosts": FeatureHandler("bklog_otlp").get_feature().config.get("hosts", [])}
 
 
-class DataIdResource(abc.ABC, Resource):
+class DataIdResource(AuditMixinResource, abc.ABC):
     tags = ["DataID"]
 
 

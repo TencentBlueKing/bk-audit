@@ -49,6 +49,7 @@ INSTALLED_APPS += (
     "blueapps.opentelemetry.instrument_app",
     "apigw_manager.apigw",
     "bk_notice_sdk",
+    "bk_audit.contrib.bk_audit",
 )
 
 MIDDLEWARE = (
@@ -336,6 +337,11 @@ BK_NOTICE = {
 # APIGW
 # 用于网关Host
 BKAUDIT_API_HOST = os.getenv("BKAPP_BKAUDIT_API_HOST", "")
+
+# BK Audit
+BK_AUDIT_SETTINGS = {
+    "formatter": "apps.audit.formatters.AuditFormatter",
+}
 
 """
 以下为框架代码 请勿修改
