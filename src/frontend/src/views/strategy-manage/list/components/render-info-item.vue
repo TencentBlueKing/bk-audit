@@ -17,18 +17,37 @@
 <template>
   <div class="render-info-item">
     <span class="info-label">{{ label }}: </span>
-    <span class="info-value">
+    <span
+      v-bk-tooltips="{
+        content,
+        disabled: hasToolTips,
+        extCls: 'info-label-tooltips',
+      }"
+      class="info-value"
+      @mouseenter="enter">
       <slot />
     </span>
   </div>
 </template>
 <script setup lang="ts">
+  import { ref } from 'vue';
+
   defineProps({
     label: {
       type: String,
       default: () => '',
     },
   });
+
+  let hasToolTips = false;
+  const content = ref('');
+
+  const enter = (e: MouseEvent) => {
+    const { target } = e;
+    const { offsetWidth, scrollWidth } = target as HTMLElement;
+    hasToolTips = offsetWidth >= scrollWidth;
+    content.value = (e.target as HTMLElement).innerText;
+  };
 </script>
 <style lang="postcss" scoped>
   .render-info-item {
@@ -43,9 +62,16 @@
 
     .info-value {
       padding-left: 14px;
+      overflow: hidden;
       color: #63656e;
+      text-overflow: ellipsis;
       flex: 1;
-      word-break: break-all;
     }
+  }
+</style>
+<style>
+  .info-label-tooltips {
+    width: 816px;
+    word-break: break-all;
   }
 </style>
