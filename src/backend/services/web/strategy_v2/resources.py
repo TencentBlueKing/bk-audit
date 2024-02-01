@@ -388,6 +388,16 @@ class ListStrategyFields(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        # check permission
+        if not ActionPermission(
+            actions=[
+                ActionEnum.CREATE_STRATEGY,
+                ActionEnum.LIST_STRATEGY,
+                ActionEnum.EDIT_STRATEGY,
+                ActionEnum.DELETE_STRATEGY,
+            ]
+        ).has_permission(request=get_local_request(), view=self):
+            return []
         # load log field
         system_id = validated_request_data.get("system_id")
         action_id = validated_request_data.get("action_id")
@@ -480,6 +490,16 @@ class GetStrategyFieldValue(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        # check permission
+        if not ActionPermission(
+            actions=[
+                ActionEnum.CREATE_STRATEGY,
+                ActionEnum.LIST_STRATEGY,
+                ActionEnum.EDIT_STRATEGY,
+                ActionEnum.DELETE_STRATEGY,
+            ]
+        ).has_permission(request=get_local_request(), view=self):
+            return []
         handler = FieldValueHandler(
             field_name=validated_request_data["field_name"],
             namespace=validated_request_data["namespace"],
@@ -512,6 +532,16 @@ class ListTables(StrategyV2Base):
     RequestSerializer = ListTablesRequestSerializer
 
     def perform_request(self, validated_request_data):
+        # check permission
+        if not ActionPermission(
+            actions=[
+                ActionEnum.CREATE_STRATEGY,
+                ActionEnum.LIST_STRATEGY,
+                ActionEnum.EDIT_STRATEGY,
+                ActionEnum.DELETE_STRATEGY,
+            ]
+        ).has_permission(request=get_local_request(), view=self):
+            return []
         return TableHandler(**validated_request_data).list_tables()
 
 
@@ -522,6 +552,16 @@ class GetRTFields(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        # check permission
+        if not ActionPermission(
+            actions=[
+                ActionEnum.CREATE_STRATEGY,
+                ActionEnum.LIST_STRATEGY,
+                ActionEnum.EDIT_STRATEGY,
+                ActionEnum.DELETE_STRATEGY,
+            ]
+        ).has_permission(request=get_local_request(), view=self):
+            return []
         fields = api.bk_base.get_rt_fields(result_table_id=validated_request_data["table_id"])
         return [
             {

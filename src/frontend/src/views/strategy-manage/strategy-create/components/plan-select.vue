@@ -102,6 +102,7 @@
   const isCloneMode = route.name === 'strategyClone';
 
   const onControlIdChange = (id: string) => {
+    if (id) isError.value = false;
     emits('change', id);
   };
 
@@ -123,12 +124,12 @@
   });
 </script>
 <style lang="postcss" scoped>
-.strategy-create-plan-select{
+.strategy-create-plan-select {
   position: relative;
 
-  .err-tip{
+  .err-tip {
     position: absolute;
-    top:27%;
+    top: 27%;
     right: 30px;
     font-size: 16px;
     line-height: 1;
@@ -136,15 +137,15 @@
   }
 }
 
-.inset-tip{
+.inset-tip {
   position: absolute;
   top: 50%;
   right: 24px;
   padding: 3px 10px;
   font-size: 12px;
   font-weight: normal;
-  color: #3A84FF;
-  background: #EDF4FF;
+  color: #3a84ff;
+  background: #edf4ff;
   border-radius: 2px;
   transform: translateY(-50%);
 }
