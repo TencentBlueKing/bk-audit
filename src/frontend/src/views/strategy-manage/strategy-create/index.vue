@@ -77,6 +77,7 @@
                 property="description">
                 <bk-input
                   v-model.trim="formData.description"
+                  autosize
                   :maxlength="1000"
                   :placeholder="t('请输入描述')"
                   show-word-limit
@@ -159,6 +160,9 @@
                       multiple
                       multiple-mode="tag"
                       :placeholder="t('请选择')"
+                      :popover-options="{
+                        zIndex: 1000
+                      }"
                       :search-placeholder="t('请输入关键字')">
                       <auth-option
                         v-for="(item, index) in groupList"
@@ -438,12 +442,12 @@
       {
         validator: (value: number) => !!value,
         message: t('调度周期不能为空'),
-        trigger: 'blur',
+        trigger: ['change', 'blur'],
       },
     ],
     'configs.aiops_config.schedule_period': [
       {
-        validator: (value: number) => !!value,
+        validator: (value: string) => !!value,
         message: t('不能为空'),
         trigger: 'change',
       },
@@ -727,6 +731,9 @@
     };
   };
   const handleUpdateDataSource = (dataSource: Record<string, any>) => {
+    if (dataSource.result_table_id && dataSource.result_table_id.length) {
+      formRef.value.clearValidate('configs.data_source.result_table_id');
+    }
     formData.value.configs.data_source = {
       ...formData.value.configs.data_source,
       ...dataSource,

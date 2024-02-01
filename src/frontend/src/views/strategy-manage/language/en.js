@@ -179,5 +179,6 @@ export default {
     删除: 'Delete',
     取消: 'Cancel',
     '取消(No)': 'No',
+    请输入描述: 'Please enter the description',
   },
 };
