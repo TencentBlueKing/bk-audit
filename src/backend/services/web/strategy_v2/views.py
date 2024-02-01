@@ -83,9 +83,6 @@ class StrategyFieldsViewSet(ResourceViewSet):
 
 
 class StrategyTableViewSet(ResourceViewSet):
-    def get_permissions(self):
-        return [IAMPermission(actions=[ActionEnum.CREATE_STRATEGY])]
-
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_tables),
         ResourceRoute("GET", resource.strategy_v2.get_rt_fields, endpoint="rt_fields"),
