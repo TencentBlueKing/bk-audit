@@ -36,8 +36,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
-from apps.audit.client import bk_audit_client
-from apps.audit.models import SystemInstance
+from apps.audit.resources import AuditMixinResource
 from apps.meta import models
 from apps.meta.constants import (
     FETCH_INSTANCE_SCHEMA_CACHE_TIMEOUT,
@@ -57,6 +56,7 @@ from apps.meta.models import (
     ResourceType,
     SensitiveObject,
     System,
+    SystemInstance,
     Tag,
 )
 from apps.meta.serializers import (
@@ -117,9 +117,10 @@ class NamespaceListResource(Meta, ModelResource):
     many_response_data = True
 
 
-class SystemAbstractResource(Meta, ModelResource, ABC):
+class SystemAbstractResource(Meta, AuditMixinResource, ModelResource, ABC):
     model = models.System
     serializer_class = SystemSerializer
+    audit_resource_type = ResourceEnum.SYSTEM
 
 
 class SystemListResource(SystemAbstractResource):
@@ -127,6 +128,7 @@ class SystemListResource(SystemAbstractResource):
     action = "list"
     many_response_data = True
     RequestSerializer = SystemListRequestSerializer
+    audit_action = ActionEnum.LIST_SYSTEM
 
     @classmethod
     def sort_system_by_permission(cls, system: dict) -> (int, str):
@@ -188,7 +190,6 @@ class SystemListResource(SystemAbstractResource):
         actions = [ActionEnum.VIEW_SYSTEM, ActionEnum.EDIT_SYSTEM]
         systems = wrapper_permission_field(systems, actions, id_field=lambda x: x["system_id"])
         systems.sort(key=self.sort_system_by_permission)
-        bk_audit_client.add_event(action=ActionEnum.LIST_SYSTEM, resource_type=ResourceEnum.SYSTEM)
         if not systems:
             return systems
         try:
@@ -216,6 +217,7 @@ class SystemListAllResource(SystemAbstractResource):
     filter_fields = ["namespace"]
     RequestSerializer = SystemListAllRequestSerializer
     serializer_class = SystemListAllResponseSerializer
+    audit_action = ActionEnum.LIST_SYSTEM
 
     def perform_request(self, validated_request_data: dict) -> any:
         systems = super().perform_request(validated_request_data)
@@ -225,7 +227,6 @@ class SystemListAllResource(SystemAbstractResource):
         actions = [get_action_by_id(action) for action in validated_request_data["action_ids"]]
         systems = wrapper_permission_field(systems, actions)
         systems.sort(key=SystemListResource.sort_system_by_permission)
-        bk_audit_client.add_event(action=ActionEnum.LIST_SYSTEM, resource_type=ResourceEnum.SYSTEM)
         return systems
 
 
@@ -234,6 +235,7 @@ class SystemInfoResource(SystemAbstractResource):
     lookup_field = "system_id"
     serializer_class = SystemInfoResponseSerializer
     action = "retrieve"
+    audit_action = ActionEnum.VIEW_SYSTEM
 
     def perform_request(self, validated_request_data: dict) -> any:
         system_id = validated_request_data["system_id"]
@@ -242,11 +244,7 @@ class SystemInfoResource(SystemAbstractResource):
             manager["username"]
             for manager in resource.meta.system_role_list(system_id=system_id, role=IAM_MANAGER_ROLE)
         ]
-        bk_audit_client.add_event(
-            action=ActionEnum.VIEW_SYSTEM,
-            resource_type=ResourceEnum.SYSTEM,
-            instance=SystemInstance(system_info).instance,
-        )
+        self.add_audit_instance_to_context(instance=SystemInstance(system_info).instance)
         return system_info
 
 

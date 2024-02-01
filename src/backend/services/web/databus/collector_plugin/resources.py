@@ -20,13 +20,14 @@ import abc
 import datetime
 from typing import List
 
-from bk_resource import Resource, api, resource
+from bk_resource import api, resource
 from bk_resource.contrib.model import ModelResource
 from blueapps.utils.unique import uniqid
 from django.conf import settings
 from django.utils.translation import gettext, gettext_lazy
 
 from api.bk_log.constants import INDEX_SET_ID
+from apps.audit.resources import AuditMixinResource
 from apps.exceptions import MetaConfigNotExistException
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
@@ -57,7 +58,7 @@ from services.web.databus.storage.handler.es import StorageConfig
 from services.web.databus.tasks import create_or_update_plugin_etl
 
 
-class PluginBaseResource(Resource, abc.ABC):
+class PluginBaseResource(AuditMixinResource, abc.ABC):
     tags = ["CollectorPlugin"]
 
     def build_in_config(self, namespace: str, extra_fields: List[dict] = None):

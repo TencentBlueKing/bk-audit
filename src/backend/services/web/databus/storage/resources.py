@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import Resource, api, resource
+from bk_resource import api, resource
 from bk_resource.utils.common_utils import ignored
 from django.core.cache import cache
 from django.db import transaction
@@ -25,7 +25,7 @@ from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 from rest_framework.settings import api_settings
 
-from apps.audit.client import bk_audit_client
+from apps.audit.resources import AuditMixinResource
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.exceptions import MetaConfigNotExistException, StorageChanging
 from apps.meta.constants import ConfigLevelChoices
@@ -51,7 +51,7 @@ from services.web.databus.storage.serializers import (
 )
 
 
-class StorageMeta:
+class StorageMeta(AuditMixinResource):
     tags = ["Storage"]
 
     def record_config(self, cluster_id, validated_request_data):
@@ -60,20 +60,21 @@ class StorageMeta:
         )
 
 
-class DeleteStorageResource(StorageMeta, Resource):
+class DeleteStorageResource(StorageMeta):
     name = "删除集群"
     RequestSerializer = StorageDeleteRequestSerializer
+    audit_action = ActionEnum.DELETE_STORAGE
 
     def perform_request(self, validated_request_data):
         data = api.bk_log.delete_storage(validated_request_data)
         StorageOperateLog.create(validated_request_data["cluster_id"])
-        bk_audit_client.add_event(action=ActionEnum.DELETE_STORAGE)
         return data
 
 
-class UpdateStorageResource(StorageMeta, Resource):
+class UpdateStorageResource(StorageMeta):
     name = gettext_lazy("更新集群")
     RequestSerializer = StorageUpdateRequestSerializer
+    audit_action = ActionEnum.EDIT_STORAGE
 
     def perform_request(self, validated_request_data):
         password = validated_request_data["auth_info"]["password"]
@@ -82,11 +83,10 @@ class UpdateStorageResource(StorageMeta, Resource):
         data = api.bk_log.update_storage(validated_request_data)
         StorageOperateLog.create(validated_request_data["cluster_id"])
         self.record_config(data["cluster_config"]["cluster_id"], validated_request_data)
-        bk_audit_client.add_event(action=ActionEnum.EDIT_STORAGE)
         return data
 
 
-class StorageActivateResource(StorageMeta, Resource):
+class StorageActivateResource(StorageMeta):
     name = gettext_lazy("设置默认集群")
     serializer_class = serializers.IntegerField
 
@@ -109,11 +109,12 @@ class StorageActivateResource(StorageMeta, Resource):
         return int(default_cluster_config.config_value)
 
 
-class StorageListResource(StorageMeta, Resource):
+class StorageListResource(StorageMeta):
     name = gettext_lazy("集群列表")
     RequestSerializer = StorageListRequestSerializer
     ResponseSerializer = StorageListResponseSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_STORAGE
 
     def _check_filter_clusters(self, cluster: dict, validated_request_data: dict) -> bool:
         namespace = validated_request_data["namespace"]
@@ -181,14 +182,14 @@ class StorageListResource(StorageMeta, Resource):
             for cluster in bk_log_clusters
             if self._check_filter_clusters(cluster, validated_request_data)
         ]
-        bk_audit_client.add_event(action=ActionEnum.LIST_STORAGE)
         return clusters
 
 
-class CreateStorageResource(StorageMeta, Resource):
+class CreateStorageResource(StorageMeta):
     name = gettext_lazy("创建集群")
     RequestSerializer = StorageCreateRequestSerializer
     serializer_class = serializers.IntegerField
+    audit_action = ActionEnum.CREATE_STORAGE
 
     def perform_request(self, validated_request_data):
         password = validated_request_data["auth_info"]["password"]
@@ -220,11 +221,10 @@ class CreateStorageResource(StorageMeta, Resource):
             resource.databus.collector_plugin.create_plugin(
                 namespace=validated_request_data["namespace"], is_default=True
             )
-        bk_audit_client.add_event(action=ActionEnum.CREATE_STORAGE)
         return data
 
 
-class CreateOrUpdateRedisResource(StorageMeta, Resource):
+class CreateOrUpdateRedisResource(StorageMeta):
     name = gettext_lazy("创建或更新Redis")
     RequestSerializer = CreateRedisRequestSerializer
     ResponseSerializer = CreateRedisResponseSerializer

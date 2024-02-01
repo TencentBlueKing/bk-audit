@@ -20,6 +20,8 @@ import uuid
 from collections import defaultdict
 from typing import Union
 
+from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
+from bk_audit.log.models import AuditInstance
 from blueapps.utils.logger import logger
 from django.db import models
 from django.utils.translation import gettext_lazy
@@ -120,6 +122,17 @@ class System(OperateRecordModel):
         verbose_name = gettext_lazy("接入系统")
         verbose_name_plural = verbose_name
         ordering = ["-id"]
+
+
+class SystemInstance:
+    def __init__(self, system_info: dict):
+        self.instance_id = system_info.get("system_id", DEFAULT_EMPTY_VALUE)
+        self.instance_name = system_info.get("name", DEFAULT_EMPTY_VALUE)
+        self.instance_data = system_info
+
+    @property
+    def instance(self):
+        return AuditInstance(self)
 
 
 class SystemRole(OperateRecordModel):

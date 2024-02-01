@@ -18,11 +18,10 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import Resource
 from django.utils.translation import gettext_lazy
 from rest_framework.generics import get_object_or_404
 
-from apps.audit.client import bk_audit_client
+from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
 from services.web.vision.constants import PANEL
 from services.web.vision.handlers.query import VisionHandler
@@ -33,8 +32,10 @@ from services.web.vision.serializers import (
 )
 
 
-class BKVision(Resource, abc.ABC):
+class BKVision(AuditMixinResource, abc.ABC):
     tags = ["BKVision"]
+    audit_action = ActionEnum.VIEW_PANEL
+    audit_resource_type = PANEL
 
 
 class ListPanels(BKVision):
@@ -43,10 +44,6 @@ class ListPanels(BKVision):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        bk_audit_client.add_event(
-            action=ActionEnum.VIEW_BASE_PANEL,
-            extend_data=validated_request_data,
-        )
         return VisionPanel.objects.all()
 
 
@@ -56,12 +53,7 @@ class QueryMeta(BKVision):
 
     def perform_request(self, validated_request_data):
         panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
-        bk_audit_client.add_event(
-            action=ActionEnum.VIEW_PANEL,
-            resource_type=PANEL,
-            instance=VisionPanelInstance(panel).instance,
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
         return VisionHandler().query_meta(params=validated_request_data)
 
 
@@ -70,10 +62,5 @@ class QueryDataset(BKVision):
 
     def perform_request(self, validated_request_data):
         panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
-        bk_audit_client.add_event(
-            action=ActionEnum.VIEW_PANEL,
-            resource_type=PANEL,
-            instance=VisionPanelInstance(panel).instance,
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
         return VisionHandler().query_dataset(params=validated_request_data)

@@ -18,11 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import Resource
 from blueapps.utils.request_provider import get_request_username
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
 
+from apps.audit.resources import AuditMixinResource
 from services.web.risk.models import Risk, RiskExperience
 from services.web.risk.serializers import (
     ListRiskExperienceReqSerializer,
@@ -31,7 +31,7 @@ from services.web.risk.serializers import (
 )
 
 
-class RiskExperienceMeta(Resource, abc.ABC):
+class RiskExperienceMeta(AuditMixinResource, abc.ABC):
     tags = ["RiskExperience"]
 
 

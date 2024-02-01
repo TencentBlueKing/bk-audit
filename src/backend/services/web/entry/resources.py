@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import Resource, api
+from bk_resource import api
 from blueapps.account import ConfFixture
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
@@ -28,12 +28,13 @@ from django.views.i18n import LANGUAGE_QUERY_PARAMETER
 from rest_framework import serializers
 from rest_framework.response import Response
 
+from apps.audit.resources import AuditMixinResource
 from apps.exceptions import LangCodeError
 from services.web.entry.handler.entry import EntryHandler, WatermarkFeature
 from services.web.entry.serializers import HomeResponseSerializer
 
 
-class EntryMeta(Resource, abc.ABC):
+class EntryMeta(AuditMixinResource, abc.ABC):
     tags = ["Entry"]
 
 

@@ -18,12 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
-from bk_resource import Resource
 from blueapps.utils.request_provider import get_local_request
 from django.db.models import Q
 from django.utils.translation import gettext_lazy
 
-from apps.audit.client import bk_audit_client
+from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
@@ -42,7 +41,7 @@ from services.web.risk.serializers import (
 )
 
 
-class RiskRuleMeta(Resource, abc.ABC):
+class RiskRuleMeta(AuditMixinResource, abc.ABC):
     tags = ["RiskRule"]
 
 
@@ -51,12 +50,9 @@ class ListRiskRule(RiskRuleMeta):
     RequestSerializer = ListRiskRuleReqSerializer
     ResponseSerializer = RiskRuleInfoSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_RULE
 
     def perform_request(self, validated_request_data):
-        bk_audit_client.add_event(
-            action=ActionEnum.LIST_RULE,
-            extend_data=validated_request_data,
-        )
         # 排序
         order_field = validated_request_data.pop("order_field", "-priority_index")
         # 构造筛选条件
@@ -89,17 +85,14 @@ class CreateRiskRule(RiskRuleMeta):
     name = gettext_lazy("创建风险处理规则")
     RequestSerializer = CreateRiskRuleReqSerializer
     ResponseSerializer = RiskRuleInfoSerializer
+    audit_action = ActionEnum.CREATE_RULE
 
     def perform_request(self, validated_request_data):
         instance: RiskRule = RiskRule.objects.create(**validated_request_data, version=1, is_enabled=False)
         instance.rule_id = instance.id
         instance.priority_index = RiskRule.objects.all().order_by("-priority_index").first().priority_index + 1
         instance.save(update_fields=["rule_id", "priority_index"])
-        bk_audit_client.add_event(
-            action=ActionEnum.CREATE_RULE,
-            instance=RiskRuleAuditInstance(instance),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instance))
         return instance
 
 
@@ -107,6 +100,7 @@ class UpdateRiskRule(RiskRuleMeta):
     name = gettext_lazy("更新风险处理规则")
     RequestSerializer = UpdateRiskRuleReqSerializer
     ResponseSerializer = RiskRuleInfoSerializer
+    audit_action = ActionEnum.EDIT_RULE
 
     def perform_request(self, validated_request_data):
         rule = RiskRule.get_rule_or_404(rule_id=validated_request_data["rule_id"])
@@ -119,16 +113,13 @@ class UpdateRiskRule(RiskRuleMeta):
             created_by=rule.created_by
         )
         setattr(instance, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RULE,
-            instance=RiskRuleAuditInstance(instance),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instance))
         return instance
 
 
 class DeleteRiskRule(RiskRuleMeta):
     name = gettext_lazy("删除风险处理规则")
+    audit_action = ActionEnum.DELETE_RULE
 
     def perform_request(self, validated_request_data):
         if Risk.objects.filter(rule_id=validated_request_data["rule_id"]).exclude(status=RiskStatus.CLOSED).exists():
@@ -136,11 +127,7 @@ class DeleteRiskRule(RiskRuleMeta):
         instances = RiskRule.objects.filter(rule_id=validated_request_data["rule_id"]).order_by("-version")
         if not instances:
             return
-        bk_audit_client.add_event(
-            action=ActionEnum.DELETE_RULE,
-            instance=RiskRuleAuditInstance(instances.first()),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instances.first()))
         instances.delete()
 
 
@@ -148,6 +135,8 @@ class ListRiskByRule(RiskRuleMeta):
     name = gettext_lazy("获取处理规则命中的风险")
     ResponseSerializer = ListRiskResponseSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_RISK
+    audit_resource_type = ResourceEnum.RISK
 
     def perform_request(self, validated_request_data):
         rule = RiskRule.get_rule_or_404(rule_id=validated_request_data["rule_id"])
@@ -155,11 +144,6 @@ class ListRiskByRule(RiskRuleMeta):
             Q(event_time__gte=rule.created_at) | Q(status=RiskStatus.NEW)
         )
         risks = Risk.load_authed_risks(action=ActionEnum.LIST_RISK).exclude(status=RiskStatus.CLOSED).filter(q)
-        bk_audit_client.add_event(
-            action=ActionEnum.LIST_RISK,
-            resource_type=ResourceEnum.RISK,
-            extend_data=validated_request_data,
-        )
         return risks
 
 
@@ -167,6 +151,7 @@ class ToggleRiskRule(RiskRuleMeta):
     name = gettext_lazy("启停风险处理规则")
     RequestSerializer = ToggleRiskRuleRequestSerializer
     ResponseSerializer = RiskRuleInfoSerializer
+    audit_action = ActionEnum.EDIT_RULE
 
     def perform_request(self, validated_request_data):
         rule = RiskRule.get_rule_or_404(rule_id=validated_request_data["rule_id"])
@@ -174,11 +159,7 @@ class ToggleRiskRule(RiskRuleMeta):
         rule.is_enabled = validated_request_data["is_enabled"]
         rule.save(update_fields=["is_enabled"])
         setattr(rule, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RULE,
-            instance=RiskRuleAuditInstance(rule),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(rule))
         return rule
 
 
@@ -192,6 +173,7 @@ class ListRiskRuleOperator(RiskRuleMeta):
 class BatchUpdateRiskRulePriorityIndex(RiskRuleMeta):
     name = gettext_lazy("批量调整风险处理规则优先级")
     RequestSerializer = BatchUpdateRiskRulePriorityIndexReqSerializer
+    audit_action = ActionEnum.EDIT_RULE
 
     def perform_request(self, validated_request_data):
         for config in validated_request_data["config"]:
@@ -204,8 +186,4 @@ class BatchUpdateRiskRulePriorityIndex(RiskRuleMeta):
             )
             rule.refresh_from_db()
             setattr(rule, "instance_origin_data", origin_data)
-            bk_audit_client.add_event(
-                action=ActionEnum.EDIT_RULE,
-                instance=RiskRuleAuditInstance(rule),
-                extend_data=validated_request_data,
-            )
+            self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(rule))

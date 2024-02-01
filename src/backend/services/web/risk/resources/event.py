@@ -18,10 +18,10 @@ to the current version of the project delivered to anyone in the future.
 
 import uuid
 
-from bk_resource import Resource
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
 
+from apps.audit.resources import AuditMixinResource
 from core.utils.tools import get_app_info
 from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
@@ -34,11 +34,11 @@ from services.web.risk.serializers import (
 from services.web.risk.tasks import add_event
 
 
-class EventMeta:
+class EventMeta(AuditMixinResource):
     tags = ["Event"]
 
 
-class CreateEvent(EventMeta, Resource):
+class CreateEvent(EventMeta):
     name = gettext_lazy("创建事件")
     RequestSerializer = CreateEventAPISerializer
     ResponseSerializer = CreateEventAPIResponseSerializer
@@ -58,7 +58,7 @@ class CreateEvent(EventMeta, Resource):
         return {"event_ids": event_ids}
 
 
-class ListEvent(EventMeta, Resource):
+class ListEvent(EventMeta):
     name = gettext_lazy("获取事件列表")
     RequestSerializer = ListEventRequestSerializer
     ResponseSerializer = ListEventResponseSerializer

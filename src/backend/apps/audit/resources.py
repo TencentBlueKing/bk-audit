@@ -16,16 +16,14 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
-from bk_audit.log.models import AuditInstance
+import abc
+
+from bk_audit.contrib.django.resources import AuditEvent
+from bk_audit.contrib.django.resources import AuditMixinResource as _AuditMixinResource
 
 
-class SystemInstance:
-    def __init__(self, system_info: dict):
-        self.instance_id = system_info.get("system_id", DEFAULT_EMPTY_VALUE)
-        self.instance_name = system_info.get("name", DEFAULT_EMPTY_VALUE)
-        self.instance_data = system_info
-
-    @property
-    def instance(self):
-        return AuditInstance(self)
+class AuditMixinResource(_AuditMixinResource, abc.ABC):
+    def _init_audit_event(self, request_data=None, **kwargs) -> AuditEvent:
+        event = super()._init_audit_event(request_data=request_data, **kwargs)
+        event["extend_data"]["request_data"] = request_data
+        return event
