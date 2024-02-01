@@ -82,13 +82,6 @@
 
 }
 
-/* 解决提示消息时icon对齐问题 */
-.bk-message-icon span {
-  display: inline !important;
-}
-
-
-
 /* 解决表格中loading被遮挡的问题 */
 .bk-loading-wrapper .bk-loading-mask {
   z-index: 10 !important;
