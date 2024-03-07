@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import json
 
-from bk_resource import Resource, api
+from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.common_utils import ignored
 from blueapps.utils.request_provider import get_request_username
@@ -29,7 +29,7 @@ from django.db.models import Count, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 
-from apps.audit.client import bk_audit_client
+from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketOperate, TicketStatus
 from apps.meta.models import Tag
 from apps.permission.handlers.actions import ActionEnum
@@ -79,27 +79,24 @@ from services.web.risk.serializers import (
     TicketNodeSerializer,
     UpdateRiskLabelReqSerializer,
 )
-from services.web.risk.tasks import sync_auto_result
+from services.web.risk.tasks import process_one_risk, sync_auto_result
 
 
-class RiskMeta(Resource, abc.ABC):
+class RiskMeta(AuditMixinResource, abc.ABC):
     tags = ["Risk"]
+    audit_resource_type = ResourceEnum.RISK
 
 
 class RetrieveRisk(RiskMeta):
     name = gettext_lazy("获取风险详情")
+    audit_action = ActionEnum.LIST_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
         data = RiskInfoSerializer(risk).data
         data = wrapper_permission_field(
             data, actions=[ActionEnum.EDIT_RISK], id_field=lambda risk: risk["risk_id"], many=False
-        )
-        bk_audit_client.add_event(
-            action=ActionEnum.LIST_RISK,
-            resource_type=ResourceEnum.RISK,
-            instance=RiskAuditInstance(risk),
-            extend_data=validated_request_data,
         )
         risk = data[0]
         nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
@@ -118,6 +115,7 @@ class ListRisk(RiskMeta):
     name = gettext_lazy("获取风险列表")
     RequestSerializer = ListRiskRequestSerializer
     bind_request = True
+    audit_action = ActionEnum.LIST_RISK
 
     def perform_request(self, validated_request_data):
         # 获取请求
@@ -151,11 +149,7 @@ class ListRisk(RiskMeta):
                 _q |= Q(**{key: i})
             q &= _q
         # 获取有权限且符合表达式的
-        risks = Risk.load_authed_risks(action=ActionEnum.LIST_RISK).filter(q)
-        bk_audit_client.add_event(
-            action=ActionEnum.LIST_RISK, resource_type=ResourceEnum.RISK, extend_data=validated_request_data
-        )
-        return risks
+        return Risk.load_authed_risks(action=ActionEnum.LIST_RISK).filter(q)
 
 
 class ListMineRisk(ListRisk):
@@ -178,6 +172,7 @@ class UpdateRiskLabel(RiskMeta):
     name = gettext_lazy("更新风险标记")
     RequestSerializer = UpdateRiskLabelReqSerializer
     ResponseSerializer = ListRiskResponseSerializer
+    audit_action = ActionEnum.EDIT_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -199,12 +194,7 @@ class UpdateRiskLabel(RiskMeta):
             )
         risk.refresh_from_db()
         setattr(risk, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RISK,
-            resource_type=ResourceEnum.RISK,
-            instance=RiskAuditInstance(risk),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
         return risk
 
 
@@ -225,6 +215,7 @@ class ListRiskTags(RiskMeta):
 class CustomCloseRisk(RiskMeta):
     name = gettext_lazy("人工关单")
     RequestSerializer = CustomCloseRiskRequestSerializer
+    audit_action = ActionEnum.EDIT_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -236,17 +227,13 @@ class CustomCloseRisk(RiskMeta):
         )
         CloseRisk(risk_id=risk.risk_id, operator=username).run(description=gettext("%s 人工关单") % username)
         setattr(risk, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RISK,
-            resource_type=ResourceEnum.RISK,
-            instance=RiskAuditInstance(risk),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
 
 
 class CustomTransRisk(RiskMeta):
     name = gettext_lazy("人工转单")
     RequestSerializer = CustomTransRiskReqSerializer
+    audit_action = ActionEnum.EDIT_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -256,17 +243,13 @@ class CustomTransRisk(RiskMeta):
             new_operators=validated_request_data["new_operators"], description=validated_request_data["description"]
         )
         setattr(risk, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RISK,
-            resource_type=ResourceEnum.RISK,
-            instance=RiskAuditInstance(risk),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
 
 
 class CustomAutoProcess(RiskMeta):
     name = gettext_lazy("人工执行处理套餐")
     RequestSerializer = CustomAutoProcessReqSerializer
+    audit_action = ActionEnum.EDIT_RISK
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -295,17 +278,13 @@ class CustomAutoProcess(RiskMeta):
             }
         )
         setattr(risk, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RISK,
-            resource_type=ResourceEnum.RISK,
-            instance=RiskAuditInstance(risk),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
 
 
 class ForceRevokeApproveTicket(RiskMeta):
     name = gettext_lazy("强制撤销审批单据")
     RequestSerializer = ForceRevokeApproveTicketReqSerializer
+    audit_action = ActionEnum.EDIT_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
@@ -328,17 +307,13 @@ class ForceRevokeApproveTicket(RiskMeta):
         )
         sync_auto_result(node_id=node.id)
         setattr(risk, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RISK,
-            resource_type=ResourceEnum.RISK,
-            instance=RiskAuditInstance(risk),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
 
 
 class ForceRevokeAutoProcess(RiskMeta):
     name = gettext_lazy("强制终止处理套餐")
     RequestSerializer = ForceRevokeAutoProcessReqSerializer
+    audit_action = ActionEnum.EDIT_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
@@ -356,12 +331,7 @@ class ForceRevokeAutoProcess(RiskMeta):
         api.bk_sops.operate_task(bk_biz_id=settings.DEFAULT_BK_BIZ_ID, task_id=task_id, action=SOPSTaskOperation.REVOKE)
         sync_auto_result(node_id=node.id)
         setattr(risk, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RISK,
-            resource_type=ResourceEnum.RISK,
-            instance=RiskAuditInstance(risk),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
 
 
 class RetryAutoProcess(RiskMeta):
@@ -403,6 +373,7 @@ class RetryAutoProcess(RiskMeta):
 class ReopenRisk(RiskMeta):
     name = gettext_lazy("重开单据")
     RequestSerializer = ReopenRiskReqSerializer
+    audit_action = ActionEnum.EDIT_RISK
 
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
@@ -413,12 +384,7 @@ class ReopenRisk(RiskMeta):
             % (get_request_username(), ";".join(validated_request_data["new_operators"])),
         )
         setattr(risk, "instance_origin_data", origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_RISK,
-            resource_type=ResourceEnum.RISK,
-            instance=RiskAuditInstance(risk),
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
 
 
 class GetRiskFieldsByStrategy(RiskMeta):
@@ -462,3 +428,11 @@ class GetRiskFieldsByStrategy(RiskMeta):
                     }
                 )
         return fields
+
+
+class ProcessRiskTicket(RiskMeta):
+    name = gettext_lazy("风险单据流转")
+
+    def perform_request(self, validated_request_data):
+        process_one_risk(risk_id=validated_request_data["risk_id"])
+        return

@@ -21,7 +21,7 @@ import datetime
 from collections import defaultdict
 from typing import List
 
-from bk_resource import Resource, api, resource
+from bk_resource import api, resource
 from bk_resource.base import Empty
 from bk_resource.exceptions import APIRequestError
 from blueapps.utils.request_provider import get_local_request, get_request_username
@@ -33,7 +33,7 @@ from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
 from rest_framework.settings import api_settings
 
-from apps.audit.client import bk_audit_client
+from apps.audit.resources import AuditMixinResource
 from apps.meta.models import DataMap, Tag
 from apps.meta.utils.fields import (
     DIMENSION_FIELD_TYPES,
@@ -97,8 +97,9 @@ from services.web.strategy_v2.utils.field_value import FieldValueHandler
 from services.web.strategy_v2.utils.table import TableHandler
 
 
-class StrategyV2Base(Resource, abc.ABC):
+class StrategyV2Base(AuditMixinResource, abc.ABC):
     tags = ["StrategyV2"]
+    audit_resource_type = ResourceEnum.STRATEGY
 
     def _save_tags(self, strategy_id: int, tag_names: list) -> None:
         StrategyTag.objects.filter(strategy_id=strategy_id).delete()
@@ -124,6 +125,7 @@ class CreateStrategy(StrategyV2Base):
     name = gettext_lazy("Create Strategy")
     RequestSerializer = CreateStrategyRequestSerializer
     ResponseSerializer = CreateStrategyResponseSerializer
+    audit_action = ActionEnum.CREATE_STRATEGY
 
     def perform_request(self, validated_request_data):
         with transaction.atomic():
@@ -149,12 +151,7 @@ class CreateStrategy(StrategyV2Base):
             resource_instance = ResourceEnum.STRATEGY.create_instance(strategy.strategy_id)
             Permission(username).grant_creator_action(resource_instance)
         # audit
-        bk_audit_client.add_event(
-            action=ActionEnum.CREATE_STRATEGY,
-            resource_type=ResourceEnum.STRATEGY,
-            instance=StrategyAuditInstance(strategy),
-            event_content=ActionEnum.CREATE_STRATEGY.name,
-        )
+        self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         # response
         return strategy
 
@@ -163,6 +160,7 @@ class UpdateStrategy(StrategyV2Base):
     name = gettext_lazy("Update Strategy")
     RequestSerializer = UpdateStrategyRequestSerializer
     ResponseSerializer = UpdateStrategyResponseSerializer
+    audit_action = ActionEnum.EDIT_STRATEGY
 
     def perform_request(self, validated_request_data):
         # load strategy
@@ -183,12 +181,7 @@ class UpdateStrategy(StrategyV2Base):
             self.update_remote(strategy)
         # audit
         setattr(strategy, "instance_origin_data", instance_origin_data)
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_STRATEGY,
-            resource_type=ResourceEnum.STRATEGY,
-            instance=StrategyAuditInstance(strategy),
-            event_content=ActionEnum.EDIT_STRATEGY.name,
-        )
+        self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         # response
         return strategy
 
@@ -230,6 +223,7 @@ class UpdateStrategy(StrategyV2Base):
 
 class DeleteStrategy(StrategyV2Base):
     name = gettext_lazy("Delete Strategy")
+    audit_action = ActionEnum.DELETE_STRATEGY
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -245,12 +239,7 @@ class DeleteStrategy(StrategyV2Base):
             strategy.save(update_fields=["status", "status_msg"])
             raise err
         # delete strategy
-        bk_audit_client.add_event(
-            action=ActionEnum.DELETE_STRATEGY,
-            resource_type=ResourceEnum.STRATEGY,
-            instance=StrategyAuditInstance(strategy),
-            event_content=ActionEnum.DELETE_STRATEGY.name,
-        )
+        self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         strategy.delete()
 
 
@@ -259,6 +248,7 @@ class ListStrategy(StrategyV2Base):
     RequestSerializer = ListStrategyRequestSerializer
     ResponseSerializer = ListStrategyResponseSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_STRATEGY
 
     def perform_request(self, validated_request_data):
         # init queryset
@@ -293,13 +283,6 @@ class ListStrategy(StrategyV2Base):
             tag_map[t.strategy_id].append(t.tag_id)
         for item in queryset:
             setattr(item, "tags", tag_map.get(item.strategy_id, []))
-        # audit
-        bk_audit_client.add_event(
-            action=ActionEnum.LIST_STRATEGY,
-            resource_type=ResourceEnum.STRATEGY,
-            event_content=ActionEnum.LIST_STRATEGY.name,
-            extend_data=validated_request_data,
-        )
         # response
         return queryset
 
@@ -321,16 +304,11 @@ class ListStrategyAll(StrategyV2Base):
 class ToggleStrategy(StrategyV2Base):
     name = gettext_lazy("Toggle Strategy")
     RequestSerializer = ToggleStrategyRequestSerializer
+    audit_action = ActionEnum.EDIT_STRATEGY
 
     def perform_request(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
-        bk_audit_client.add_event(
-            action=ActionEnum.EDIT_STRATEGY,
-            resource_type=ResourceEnum.STRATEGY,
-            instance=StrategyAuditInstance(strategy),
-            event_content=ActionEnum.EDIT_STRATEGY.name,
-            extend_data=validated_request_data,
-        )
+        self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         if validated_request_data["toggle"]:
             call_controller(Controller.enable.__name__, strategy.strategy_id)
             return
@@ -410,6 +388,16 @@ class ListStrategyFields(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        # check permission
+        if not ActionPermission(
+            actions=[
+                ActionEnum.CREATE_STRATEGY,
+                ActionEnum.LIST_STRATEGY,
+                ActionEnum.EDIT_STRATEGY,
+                ActionEnum.DELETE_STRATEGY,
+            ]
+        ).has_permission(request=get_local_request(), view=self):
+            return []
         # load log field
         system_id = validated_request_data.get("system_id")
         action_id = validated_request_data.get("action_id")
@@ -502,6 +490,16 @@ class GetStrategyFieldValue(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        # check permission
+        if not ActionPermission(
+            actions=[
+                ActionEnum.CREATE_STRATEGY,
+                ActionEnum.LIST_STRATEGY,
+                ActionEnum.EDIT_STRATEGY,
+                ActionEnum.DELETE_STRATEGY,
+            ]
+        ).has_permission(request=get_local_request(), view=self):
+            return []
         handler = FieldValueHandler(
             field_name=validated_request_data["field_name"],
             namespace=validated_request_data["namespace"],
@@ -534,6 +532,16 @@ class ListTables(StrategyV2Base):
     RequestSerializer = ListTablesRequestSerializer
 
     def perform_request(self, validated_request_data):
+        # check permission
+        if not ActionPermission(
+            actions=[
+                ActionEnum.CREATE_STRATEGY,
+                ActionEnum.LIST_STRATEGY,
+                ActionEnum.EDIT_STRATEGY,
+                ActionEnum.DELETE_STRATEGY,
+            ]
+        ).has_permission(request=get_local_request(), view=self):
+            return []
         return TableHandler(**validated_request_data).list_tables()
 
 
@@ -544,6 +552,16 @@ class GetRTFields(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        # check permission
+        if not ActionPermission(
+            actions=[
+                ActionEnum.CREATE_STRATEGY,
+                ActionEnum.LIST_STRATEGY,
+                ActionEnum.EDIT_STRATEGY,
+                ActionEnum.DELETE_STRATEGY,
+            ]
+        ).has_permission(request=get_local_request(), view=self):
+            return []
         fields = api.bk_base.get_rt_fields(result_table_id=validated_request_data["table_id"])
         return [
             {
@@ -558,14 +576,9 @@ class GetRTFields(StrategyV2Base):
 class GetStrategyStatus(StrategyV2Base):
     name = gettext_lazy("Get Strategy Status")
     RequestSerializer = GetStrategyStatusRequestSerializer
+    audit_action = ActionEnum.LIST_STRATEGY
 
     def perform_request(self, validated_request_data):
-        bk_audit_client.add_event(
-            action=ActionEnum.LIST_STRATEGY,
-            resource_type=ResourceEnum.STRATEGY,
-            event_content=ActionEnum.LIST_STRATEGY.name,
-            extend_data=validated_request_data,
-        )
         return {
             s.strategy_id: {"status": s.status, "status_msg": s.status_msg}
             for s in Strategy.objects.filter(strategy_id__in=validated_request_data["strategy_ids"])

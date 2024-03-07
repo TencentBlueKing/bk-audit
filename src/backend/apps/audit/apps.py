@@ -16,20 +16,10 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import os
-
-from bk_audit.contrib.opentelemetry.setup import setup
 from django.apps import AppConfig
 from django.utils.translation import gettext_lazy
-
-from apps.audit.client import bk_audit_client
 
 
 class AuditConfig(AppConfig):
     name = "apps.audit"
     verbose_name = gettext_lazy("审计")
-
-    def ready(self):
-        if not os.getenv("BKAPP_OTEL_LOG_ENDPOINT"):
-            return
-        setup(bk_audit_client)

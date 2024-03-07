@@ -78,7 +78,10 @@
               v-for="item in Object.values(paramsDetailData)"
               :key="item.key"
               :label="item.name">
-              {{ riskFieldMap[data.pa_params[item.key]?.field] || data.pa_params[item.key]?.field }}
+              {{ riskFieldMap[data.pa_params[item.key]?.field]
+                || data.pa_params[item.key]?.field
+                || data.pa_params[item.key]?.value
+                || '--' }}
             </render-info-item>
           </div>
           <span v-else>--</span>

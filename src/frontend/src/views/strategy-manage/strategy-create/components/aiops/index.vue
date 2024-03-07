@@ -224,6 +224,7 @@
     isInit = true;
     emits('updateDataSource', formData.value.configs.data_source);
     emits('updateConfigType', formData.value.configs.config_type);
+    emits('updateAiopsConfig', formData.value.configs.aiops_config);
   }
 
 

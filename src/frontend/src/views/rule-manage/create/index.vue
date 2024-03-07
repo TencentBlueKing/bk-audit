@@ -215,27 +215,26 @@
               property="pa_params">
               <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
                 <template
-                  v-for="(val,index) in Object.values(paramsDetailData)"
+                  v-for="(val, index) in Object.values(paramsDetailData)"
                   :key="`${val.key}-${index}`">
                   <!-- 只显示需要显示的字段 -->
                   <bk-form-item
                     v-if="val.show_type === 'show'"
                     :label="val.name"
                     :label-width="150"
-                    :property="`pa_params.${val.key}.field`"
+                    :property="`pa_params.${val.key}`"
                     required
+                    :rules="[
+                      { message: '不能为空', trigger: 'change', validator: (value: any) => handlePaValidate(value) },
+                    ]"
                     style="margin-bottom: 16px;">
-                    <bk-select
-                      v-model="formData.pa_params[val.key].field"
-                      filterable
-                      :placeholder="t('请选择')"
-                      style="width: 480px;">
-                      <bk-option
-                        v-for="(item, conditionIndex) in riskFieldList"
-                        :key="conditionIndex"
-                        :label="item.name"
-                        :value="item.id" />
-                    </bk-select>
+                    <application-parameter
+                      v-model="formData.pa_params[val.key]"
+                      clearable
+                      :risk-field-list="riskFieldList" />
+                    <template #error="message">
+                      <div>{{ val.name }}{{ message }}</div>
+                    </template>
                   </bk-form-item>
                 </template>
               </div>
@@ -296,6 +295,8 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
+
+  import ApplicationParameter from '@components/application-parameter/index.vue';
 
   import BatchDialog from './components/dialog.vue';
 
@@ -441,6 +442,7 @@
         Object.values(data).forEach((val) => {
           formData.value.pa_params[val.key] = {
             field: '',
+            value: '', // 添加填写字段
           };
         });
       }
@@ -455,6 +457,7 @@
           if (!formData.value.pa_params[val.key]) {
             formData.value.pa_params[val.key] = {
               field: '',
+              value: '', // 添加填写字段
             };
           }
         });
@@ -548,6 +551,10 @@
     formData.value.scope.push(item);
   };
   const handleValidate = (value: any) => value.length > 0;
+  const handlePaValidate = (value: {field: string, value: string}) => {
+    if (!value.field && !value.value) return false;
+    return true;
+  };
   const handleSubmit = () => {
     formRef.value.validate().then(() => {
       if (!isEditMode) {

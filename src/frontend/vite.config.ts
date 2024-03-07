@@ -33,7 +33,11 @@ export default defineConfig(({ mode }) => {
     base: process.env.AUDIT_VITE_BUILD_BASE_DIR || '/',
     publicDir: 'static',
     plugins: [
-      vue(),
+      vue({
+        script: {
+          defineModel: true,
+        },
+      }),
       vueJsx(),
       basicSsl(),
       monacoEditorPlugin({}),

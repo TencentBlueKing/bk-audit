@@ -105,6 +105,10 @@
       border-top: 1px solid #dcdee5;
     }
 
+    .field-row:last-child {
+      border-bottom: 1px solid #dcdee5;
+    }
+
     .field-key {
       position: relative;
       display: flex;

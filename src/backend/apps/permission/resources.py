@@ -16,10 +16,11 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import Resource, api
+from bk_resource import api
 from django.conf import settings
 from django.utils.translation import gettext, gettext_lazy
 
+from apps.audit.resources import AuditMixinResource
 from apps.permission.constants import IAMSystems
 from apps.permission.exceptions import GetSystemInfoError
 from apps.permission.handlers.actions import ActionEnum
@@ -32,11 +33,11 @@ from apps.permission.serializers import (
 )
 
 
-class IAM:
+class IAM(AuditMixinResource):
     tags = ["IAM"]
 
 
-class SystemResource(IAM, Resource):
+class SystemResource(IAM):
     name = gettext_lazy("获取IAM系统配置")
 
     def perform_request(self, validated_request_data: dict) -> any:
@@ -47,7 +48,7 @@ class SystemResource(IAM, Resource):
         return data
 
 
-class CheckPermissionResource(IAM, Resource):
+class CheckPermissionResource(IAM):
     name = gettext_lazy("检查当前用户对该动作是否有权限")
     RequestSerializer = CheckPermissionRequestSerializer
 
@@ -70,7 +71,7 @@ class CheckPermissionResource(IAM, Resource):
         return api.bk_log.check_allowed(action_ids=action_ids, resources=instances)
 
 
-class GetApplyDataResource(IAM, Resource):
+class GetApplyDataResource(IAM):
     name = gettext_lazy("获取权限申请数据")
     RequestSerializer = GetApplyDataRequestSerializer
 
@@ -95,7 +96,7 @@ class GetApplyDataResource(IAM, Resource):
         return data
 
 
-class BatchIsAllowedResource(IAM, Resource):
+class BatchIsAllowedResource(IAM):
     name = gettext_lazy("查询某批资源某批操作是否有权限")
     RequestSerializer = BatchIsAllowRequestSerializer
 

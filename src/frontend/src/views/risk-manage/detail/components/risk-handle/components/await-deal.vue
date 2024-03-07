@@ -109,20 +109,19 @@
                   v-if="val.show_type === 'show'"
                   :label="val.name"
                   :label-width="150"
-                  :property="`pa_params.${val.key}.field`"
+                  :property="`pa_params.${val.key}`"
                   required
+                  :rules="[
+                    { message: '不能为空', trigger: 'change', validator: (value: any) => handlePaValidate(value) },
+                  ]"
                   style="margin-bottom: 16px;">
-                  <bk-select
-                    v-model="formData.pa_params[val.key].field"
-                    filterable
-                    :placeholder="t('请选择')"
-                    style="width: 480px;">
-                    <bk-option
-                      v-for="(item, conditionIndex) in riskFieldList"
-                      :key="conditionIndex"
-                      :label="item.name"
-                      :value="item.id" />
-                  </bk-select>
+                  <application-parameter
+                    v-model="formData.pa_params[val.key]"
+                    clearable
+                    :risk-field-list="riskFieldList" />
+                  <template #error="message">
+                    <div>{{ val.name }}{{ message }}</div>
+                  </template>
                 </bk-form-item>
               </template>
             </div>
@@ -176,6 +175,8 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+
+  import ApplicationParameter from '@components/application-parameter/index.vue';
 
   interface Props {
     riskId: string,
@@ -256,6 +257,11 @@
     }
   };
 
+  const handlePaValidate = (value: {field: string, value: string}) => {
+    if (!value.field && !value.value) return false;
+    return true;
+  };
+
   //  获取风险可用字段
   const {
     data: riskFieldList,
@@ -284,6 +290,7 @@
       Object.values(data).forEach((val) => {
         formData.value.pa_params[val.key] = {
           field: '',
+          value: '', // 添加填写字段
         };
       });
     },
