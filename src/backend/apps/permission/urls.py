@@ -41,6 +41,11 @@ try:
 except (RuntimeError, ImportError):
     RiskResourceProvider = None
 
+try:
+    from services.web.vision.providers import PanelResourceProvider
+except (RuntimeError, ImportError):
+    PanelResourceProvider = None
+
 resources_dispatcher = BkAuditResourceApiDispatcher(Permission.get_iam_client(), settings.BK_IAM_SYSTEM_ID)
 resources_dispatcher.register("system", SystemResourceProvider())
 resources_dispatcher.register(
@@ -57,6 +62,9 @@ if StrategyResourceProvider is not None:
 
 if RiskResourceProvider is not None:
     resources_dispatcher.register("risk", RiskResourceProvider())
+
+if PanelResourceProvider is not None:
+    resources_dispatcher.register("panel", PanelResourceProvider())
 
 router = ResourceRouter()
 router.register_module(views)
