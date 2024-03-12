@@ -947,6 +947,20 @@
         {
             "operation": "upsert_action",
             "data": {
+                "id": "list_base_panel",
+                "name": "报表列表",
+                "name_en": "List Audit Report",
+                "type": "list",
+                "version": 1,
+                "related_resource_types": [],
+                "related_actions": [],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
                 "id": "view_base_panel_v2",
                 "name": "查看报表(V2)",
                 "name_en": "View Audit Report V2",
@@ -966,7 +980,9 @@
                         ]
                     }
                 ],
-                "related_actions": [],
+                "related_actions": [
+                    "list_base_panel"
+                ],
                 "description": "",
                 "description_en": ""
             }
@@ -993,7 +1009,10 @@
                         ]
                     }
                 ],
-                "related_actions": [],
+                "related_actions": [
+                    "list_base_panel",
+                    "view_base_panel_v2"
+                ],
                 "description": "",
                 "description_en": ""
             }
@@ -1021,6 +1040,9 @@
                             "name": "报表",
                             "name_en": "Report",
                             "actions": [
+                                {
+                                    "id": "list_base_panel"
+                                },
                                 {
                                     "id": "view_base_panel_v2"
                                 },
