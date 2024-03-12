@@ -20,9 +20,12 @@ import abc
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from django.utils.translation import gettext
 
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import IAMPermission
+from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
+from apps.permission.handlers.resource_types import ResourceEnum
+from core.exceptions import ValidationError
 from core.utils.renderers import API200Renderer
 
 
@@ -35,19 +38,36 @@ class BKVisionViewSet(ResourceViewSet, abc.ABC):
         return [IAMPermission(actions=[ActionEnum.VIEW_BASE_PANEL])]
 
 
+class BKVisionInstanceViewSet(BKVisionViewSet):
+    def get_permissions(self):
+        return [
+            InstanceActionPermission(
+                actions=[ActionEnum.VIEW_BASE_PANEL],
+                resource_meta=ResourceEnum.PANEL,
+                get_instance_id=self.get_instance_id,
+            )
+        ]
+
+    def get_instance_id(self):
+        instance_id: str = self.request.query_params.get("share_uid") or self.request.data.get("share_uid")
+        if instance_id:
+            return instance_id
+        raise ValidationError(message=gettext("无法获取报表ID"))
+
+
 class PanelsViewSet(BKVisionViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_panels),
     ]
 
 
-class MetaViewSet(API200ViewSet, BKVisionViewSet):
+class MetaViewSet(API200ViewSet, BKVisionInstanceViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.vision.query_meta, endpoint="query"),
     ]
 
 
-class DatasetViewSet(API200ViewSet, BKVisionViewSet):
+class DatasetViewSet(API200ViewSet, BKVisionInstanceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.vision.query_dataset, endpoint="query"),
     ]
