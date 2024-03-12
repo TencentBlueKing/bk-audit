@@ -35,7 +35,13 @@ class API200ViewSet(ResourceViewSet, abc.ABC):
 
 class BKVisionViewSet(ResourceViewSet, abc.ABC):
     def get_permissions(self):
-        return [IAMPermission(actions=[ActionEnum.VIEW_BASE_PANEL])]
+        return [IAMPermission(actions=[ActionEnum.LIST_BASE_PANEL])]
+
+
+class PanelsViewSet(BKVisionViewSet):
+    resource_routes = [
+        ResourceRoute("GET", resource.vision.list_panels),
+    ]
 
 
 class BKVisionInstanceViewSet(BKVisionViewSet):
@@ -53,12 +59,6 @@ class BKVisionInstanceViewSet(BKVisionViewSet):
         if instance_id:
             return instance_id
         raise ValidationError(message=gettext("无法获取报表ID"))
-
-
-class PanelsViewSet(BKVisionViewSet):
-    resource_routes = [
-        ResourceRoute("GET", resource.vision.list_panels),
-    ]
 
 
 class MetaViewSet(API200ViewSet, BKVisionInstanceViewSet):
