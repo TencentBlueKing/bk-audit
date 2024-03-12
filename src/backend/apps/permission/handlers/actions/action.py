@@ -372,11 +372,11 @@ class ActionEnum:
         version=1,
     )
     VIEW_BASE_PANEL = ActionMeta(
-        id="view_base_panel",
+        id="view_base_panel_v2",
         name=gettext("查看报表"),
         name_en="View Audit Report",
         type="view",
-        related_resource_types=[],
+        related_resource_types=[ResourceEnum.PANEL],
         related_actions=[],
         version=1,
     )

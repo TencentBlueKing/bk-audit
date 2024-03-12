@@ -24,6 +24,7 @@ from apps.permission.handlers.resource_types.biz_bk_log import BusinessBKLog, Sp
 from apps.permission.handlers.resource_types.collection_bk_log import CollectionBKLog
 from apps.permission.handlers.resource_types.dept_bk_usermgr import DeptBKUsermgr
 from apps.permission.handlers.resource_types.notice_group import NoticeGroup
+from apps.permission.handlers.resource_types.panel import Panel
 from apps.permission.handlers.resource_types.risk import Risk
 from apps.permission.handlers.resource_types.sensitive_object import (
     SensitiveAction,
@@ -46,6 +47,7 @@ class ResourceEnum:
     STRATEGY = Strategy
     NOTICE_GROUP = NoticeGroup
     RISK = Risk
+    PANEL = Panel
     # BK LOG
     SPACE_BK_LOG = SpaceBKLog
     BUSINESS_BK_LOG = BusinessBKLog
