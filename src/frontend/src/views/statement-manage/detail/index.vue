@@ -32,9 +32,7 @@
 
   import useMessage from '@hooks/use-message';
 
-  import {
-    permissionDialog,
-  } from '@utils/assist';
+  import useEventBus from '@/hooks/use-event-bus';
 
   interface Error {
     data: Record<string, any>,
@@ -44,6 +42,7 @@
 
   const route = useRoute();
   const { messageError } = useMessage();
+  const {  emit } = useEventBus();
 
   const loadScript = (src: string) => new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -56,8 +55,8 @@
   const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
     if (err.data.code === '9900403') {
       const iamResult = new IamApplyDataModel(err.data.data || {});
-      // 弹框展示没权限提示
-      permissionDialog(iamResult);
+      // 页面展示没权限提示
+      emit('permission-page', iamResult);
     } else {
       messageError(err.message);
     }

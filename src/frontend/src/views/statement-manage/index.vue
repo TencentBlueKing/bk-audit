@@ -18,21 +18,52 @@
   <bk-loading
     class="loading"
     :loading="isLoading">
-    <audit-router-view />
+    <div class="audit-router-view">
+      <permission-page
+        v-if="needApplyPermission"
+        :data="permissionResult" />
+      <router-view v-if="!needApplyPermission" />
+    </div>
   </bk-loading>
 </template>
 <script setup lang="ts">
+  import { ref, watch  } from 'vue';
   import {
+    useRoute,
     useRouter,
   } from 'vue-router';
 
   import StatementManageService from '@service/statement-manage';
 
+  import ApplyDataModel from '@model/iam/apply-data';
+
   import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
 
+  import PermissionPage from '@components/apply-permission/page.vue';
+
+  const { on } = useEventBus();
+
+  const permissionResult = ref(new ApplyDataModel());
+  const needApplyPermission = ref(false);
+
   const { emit } = useEventBus();
   const router = useRouter();
+  const route = useRoute();
+
+  // 每次切换菜单时重新设置无权限为false，防止出现一个菜单没有权限后，切换其他正常菜单，仍然是无权限页面
+  watch(() => route, () => {
+    if (route.params.id !== '' && route.name === 'statementManageDetail') {
+      needApplyPermission.value = false;
+    }
+  }, {
+    deep: true,
+  });
+
+  on('permission-page', (data) => {
+    needApplyPermission.value = true;
+    permissionResult.value = data as ApplyDataModel;
+  });
 
   // 获取审计报表左侧菜单
   const {
