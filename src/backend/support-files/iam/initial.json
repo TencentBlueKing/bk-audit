@@ -122,6 +122,21 @@
             }
         },
         {
+            "operation": "upsert_resource_type",
+            "data": {
+                "id": "panel",
+                "name": "报表",
+                "name_en": "Statement",
+                "description": "",
+                "description_en": "",
+                "parents": [],
+                "provider_config": {
+                    "path": "/api/v1/iam/resources/"
+                },
+                "version": 1
+            }
+        },
+        {
             "operation": "upsert_instance_selection",
             "data": {
                 "id": "system_list",
@@ -209,6 +224,20 @@
                     {
                         "system_id": "bk-audit",
                         "id": "risk"
+                    }
+                ]
+            }
+        },
+        {
+            "operation": "upsert_instance_selection",
+            "data": {
+                "id": "panel_list",
+                "name": "报表列表",
+                "name_en": "Statement List",
+                "resource_type_chain": [
+                    {
+                        "system_id": "bk-audit",
+                        "id": "panel"
                     }
                 ]
             }
@@ -918,13 +947,42 @@
         {
             "operation": "upsert_action",
             "data": {
-                "id": "view_base_panel",
-                "name": "查看报表",
-                "name_en": "View Audit Report",
-                "type": "view",
+                "id": "list_base_panel",
+                "name": "报表列表",
+                "name_en": "List Audit Report",
+                "type": "list",
                 "version": 1,
                 "related_resource_types": [],
                 "related_actions": [],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
+                "id": "view_base_panel_v2",
+                "name": "查看报表(V2)",
+                "name_en": "View Audit Report V2",
+                "type": "view",
+                "version": 1,
+                "related_resource_types": [
+                     {
+                        "system_id": "bk-audit",
+                        "id": "panel",
+                        "selection_mode": "instance",
+                        "related_instance_selections": [
+                            {
+                                "system_id": "bk-audit",
+                                "id": "panel_list",
+                                "ignore_iam_path": true
+                            }
+                        ]
+                    }
+                ],
+                "related_actions": [
+                    "list_base_panel"
+                ],
                 "description": "",
                 "description_en": ""
             }
@@ -938,20 +996,23 @@
                 "type": "view",
                 "version": 1,
                 "related_resource_types": [
-                     {
+                    {
                         "system_id": "bk_usermgr",
                         "id": "department",
+                        "selection_mode": "instance",
                         "related_instance_selections": [
                             {
                                 "system_id": "bk_usermgr",
                                 "id": "department",
                                 "ignore_iam_path": true
                             }
-                        ],
-                        "selection_mode": "instance"
+                        ]
                     }
                 ],
-                "related_actions": [],
+                "related_actions": [
+                    "list_base_panel",
+                    "view_base_panel_v2"
+                ],
                 "description": "",
                 "description_en": ""
             }
@@ -980,7 +1041,10 @@
                             "name_en": "Report",
                             "actions": [
                                 {
-                                    "id": "view_base_panel"
+                                    "id": "list_base_panel"
+                                },
+                                {
+                                    "id": "view_base_panel_v2"
                                 },
                                 {
                                     "id": "view_panel"

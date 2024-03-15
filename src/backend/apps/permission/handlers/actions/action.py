@@ -371,12 +371,21 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
+    LIST_BASE_PANEL = ActionMeta(
+        id="list_base_panel",
+        name=gettext("报表列表"),
+        name_en="List Base Panel",
+        type="list",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
     VIEW_BASE_PANEL = ActionMeta(
-        id="view_base_panel",
+        id="view_base_panel_v2",
         name=gettext("查看报表"),
         name_en="View Audit Report",
         type="view",
-        related_resource_types=[],
+        related_resource_types=[ResourceEnum.PANEL],
         related_actions=[],
         version=1,
     )
