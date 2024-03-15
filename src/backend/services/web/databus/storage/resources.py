@@ -191,6 +191,7 @@ class CreateStorageResource(StorageMeta):
     serializer_class = serializers.IntegerField
     audit_action = ActionEnum.CREATE_STORAGE
 
+    @transaction.atomic()
     def perform_request(self, validated_request_data):
         password = validated_request_data["auth_info"]["password"]
         if password:
