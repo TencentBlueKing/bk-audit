@@ -28,6 +28,7 @@ class KeyVariable(TextChoices):
     """
 
     DEPARTMENT = "dept", gettext_lazy("组织架构")
+    DEPARTMENT_NAME = "dept_name", gettext_lazy("组织架构")
 
 
 class PanelType(TextChoices):
