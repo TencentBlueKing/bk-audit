@@ -27,6 +27,11 @@ class VisionHandler:
     审计报表
     """
 
+    def parse_flag(self, flag: str) -> str:
+        if flag == KeyVariable.DEPARTMENT_NAME:
+            return KeyVariable.DEPARTMENT
+        return flag
+
     def query_meta(self, params: dict) -> dict:
         # 重新构造过滤条件
         vision_data = api.bk_vision.query_meta(**params)
@@ -37,7 +42,7 @@ class VisionHandler:
             # 图表配置
             uid = panel["uid"]
             chart_config = panel.get("chartConfig") or {}
-            match chart_config.get("flag"):
+            match self.parse_flag(chart_config.get("flag")):
                 # 组织架构
                 case KeyVariable.DEPARTMENT:
                     # 获取数据
@@ -53,7 +58,7 @@ class VisionHandler:
         # 检测过滤条件是否合法
         variables = option.get("variables", {})
         for variable_config in variables:
-            match variable_config["flag"]:
+            match self.parse_flag(variable_config["flag"]):
                 # 组织架构
                 case KeyVariable.DEPARTMENT:
                     DeptFilterHandler().check_data(variable_config["value"])
