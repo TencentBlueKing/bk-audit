@@ -301,7 +301,7 @@ class AIOpsController(Controller):
             if bkbase_nodes:
                 node_name_map = {node["node_name"]: node for node in bkbase_nodes}
                 for node in nodes:
-                    node_id = node_name_map.get(node["name"])
+                    node_id = node_name_map.get(node["name"], {}).get("node_id")
                     if node_id:
                         node["node_id"] = node_id
 
