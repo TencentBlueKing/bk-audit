@@ -49,14 +49,14 @@ class ListUserDepartments(UserManageResource):
     name = gettext_lazy("查询用户的部门信息 (v2)")
     method = "GET"
     action = "/list_profile_departments/"
-    cache_type = CacheTypeItem(key="list_profile_departments", timeout=60 * 60)
+    cache_type = CacheTypeItem(key="list_profile_departments", timeout=60 * 60, user_related=False)
 
 
 class ListDepartments(UserManageResource):
     name = gettext_lazy("查询部门 (v2)")
     method = "GET"
     action = "/list_departments/"
-    cache_type = CacheTypeItem(key="list_departments", timeout=60 * 60)
+    cache_type = CacheTypeItem(key="list_departments", timeout=60 * 60, user_related=False)
     platform_authorization = True
 
 
@@ -64,7 +64,7 @@ class RetrieveDepartment(UserManageResource):
     name = gettext_lazy("查询单个部门信息 (v2)")
     method = "GET"
     action = "/retrieve_department/"
-    cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60)
+    cache_type = CacheTypeItem(key="retrieve_department", timeout=60 * 60, user_related=False)
     platform_authorization = True
 
 
