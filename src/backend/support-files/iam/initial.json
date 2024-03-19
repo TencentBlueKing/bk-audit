@@ -1010,8 +1010,7 @@
                     }
                 ],
                 "related_actions": [
-                    "list_base_panel",
-                    "view_base_panel_v2"
+                    "list_base_panel"
                 ],
                 "description": "",
                 "description_en": ""
