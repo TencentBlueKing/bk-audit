@@ -16,7 +16,6 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import time
 from typing import List
 
 from bk_resource import api
@@ -102,9 +101,14 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
 
     # check re-run
     if strategy.status == other_status:
-        time.sleep(CHECK_FLOW_STATUS_SLEEP_SECONDS)
-        check_flow_status.delay(
-            strategy_id, success_status=success_status, failed_status=failed_status, other_status=other_status
+        check_flow_status.apply_async(
+            kwargs={
+                "strategy_id": strategy_id,
+                "success_status": success_status,
+                "failed_status": failed_status,
+                "other_status": other_status,
+            },
+            countdown=CHECK_FLOW_STATUS_SLEEP_SECONDS,
         )
 
     # check failed
