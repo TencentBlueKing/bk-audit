@@ -16,6 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import os
+
 from django.utils.translation import gettext_lazy
 
 from core.choices import TextChoices
@@ -38,6 +40,8 @@ BKBASE_DEFAULT_COUNT_FREQ = 1
 BKBASE_ERROR_LOG_LEVEL = "ERROR"
 BKBASE_ORIGIN_DATA_FIELD = "origin_data"
 BKBASE_STRATEGY_ID_FIELD = "strategy_id"
+
+KAFKA_EXPIRE_DAY = int(os.getenv("BKAPP_KAFKA_EXPIRE_DAY", 1))
 
 
 class ControlTypeChoices(TextChoices):
@@ -176,3 +180,13 @@ class ObjectType(TextChoices):
 
     RAW_DATA = "rawdata", gettext_lazy("数据源")
     DATAFLOW = "dataflow", gettext_lazy("数据开发")
+
+
+class NodeType(TextChoices):
+    """
+    节点类型
+    """
+
+    SCENE_PLAN = "scenario_app", gettext_lazy("场景方案")
+    ES_STORAGE = "elastic_storage", gettext_lazy("ES入库")
+    QUEUR_STORAGE = "queue_storage", gettext_lazy("消息队列入库")

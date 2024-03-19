@@ -46,6 +46,7 @@ from services.web.analyze.constants import (
     BKBASE_PLAN_TAG,
     BKBASE_STRATEGY_ID_FIELD,
     BKBASE_SYSTEM_FIELD_ROLE,
+    KAFKA_EXPIRE_DAY,
     ControlTypeChoices,
     FilterConnector,
     FilterOperator,
@@ -53,6 +54,7 @@ from services.web.analyze.constants import (
     FlowNodeStatusChoices,
     FlowSQLNodeType,
     FlowStatusToggleChoices,
+    NodeType,
     OffsetUnit,
     OutputBaselineType,
     ResultTableType,
@@ -68,7 +70,11 @@ from services.web.analyze.tasks import (
     check_flow_status,
     toggle_monitor,
 )
-from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
+from services.web.databus.constants import (
+    DEFAULT_RETENTION,
+    DEFAULT_STORAGE_CONFIG_KEY,
+    KAFKA_STORAGE_CONFIG_KEY,
+)
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.handlers import EventHandler
 from services.web.strategy_v2.constants import (
@@ -127,24 +133,29 @@ class AIOpsController(Controller):
             self._create_flow()
         # create or update node
         last_node_id = 0
+        scene_node_id = 0
         node_configs = self._build_flow_nodes()
         for index, node_config in enumerate(node_configs):
             node = {
                 "flow_id": self.strategy.backend_data["flow_id"],
                 "frontend_info": {"x": (index + 1) * 300, "y": 30},
-                "from_links": self._describe_from_links(index, last_node_id),
+                "from_links": self._describe_from_links(node_config["node_type"], index, last_node_id, scene_node_id),
                 "node_type": node_config["node_type"],
                 "config": node_config,
             }
             # 离线节点需要配置上游id
             if node["config"].get("inputs") and "id" in node["config"]["inputs"][0]:
                 node["config"]["inputs"][0]["id"] = last_node_id
-            if is_create:
-                resp = api.bk_base.create_flow_node(**node)
-            else:
+            # 创建或更新
+            if node_config.get("node_id"):
                 node["node_id"] = node_config["node_id"]
                 resp = api.bk_base.update_flow_node(**node)
+            else:
+                resp = api.bk_base.create_flow_node(**node)
+            # 存储数据
             last_node_id = resp["node_id"]
+            if node["node_type"] == NodeType.SCENE_PLAN:
+                scene_node_id = resp["node_id"]
             logger.info(
                 "[CreateOrUpdateBkBaseFlowNodeSuccess] FlowID => %s; NodeID => %s",
                 self.strategy.backend_data["flow_id"],
@@ -281,15 +292,18 @@ class AIOpsController(Controller):
                 project_id=project_id,
             ),
             self._build_storage_node(bk_biz_id=bk_biz_id, raw_table_name=raw_table_name),
+            self._build_kafka_storage_node(bk_biz_id=bk_biz_id, raw_table_name=raw_table_name),
         ]
 
         # get exist nodes
         if self.strategy.backend_data.get("flow_id"):
             bkbase_nodes = api.bk_base.get_flow_graph(flow_id=self.strategy.backend_data["flow_id"])["nodes"]
             if bkbase_nodes:
-                node_ids = [node["node_id"] for node in bkbase_nodes]
-                for index, node in enumerate(nodes):
-                    node["node_id"] = node_ids[index]
+                node_name_map = {node["node_name"]: node for node in bkbase_nodes}
+                for node in nodes:
+                    node_id = node_name_map.get(node["name"])
+                    if node_id:
+                        node["node_id"] = node_id
 
         return nodes
 
@@ -448,7 +462,7 @@ class AIOpsController(Controller):
         variable_config = self.strategy.configs.get("variable_config") or []
 
         return {
-            "node_type": "scenario_app",
+            "node_type": NodeType.SCENE_PLAN,
             "outputs": [{}],
             "inputs": [{}],
             "name": f"scenario_{raw_table_name}",
@@ -530,7 +544,7 @@ class AIOpsController(Controller):
         table_id = EventHandler.get_table_id().replace(".", "_")
 
         return {
-            "node_type": "elastic_storage",
+            "node_type": NodeType.ES_STORAGE,
             "name": f"es_storage_{raw_table_name}",
             "result_table_id": f"{bk_biz_id}_scenario_{raw_table_name}",
             "bk_biz_id": bk_biz_id,
@@ -545,6 +559,36 @@ class AIOpsController(Controller):
             "json_fields": [],
             "from_result_table_ids": [f"{bk_biz_id}_scenario_{raw_table_name}"],
             "physical_table_name": f"write_{{yyyyMMdd}}_{table_id}",
+        }
+
+    def _build_kafka_storage_node(self, bk_biz_id: int, raw_table_name: str) -> dict:
+        """
+        build kafka storage node
+        """
+
+        cluster_info = GlobalMetaConfig.get(
+            KAFKA_STORAGE_CONFIG_KEY,
+            config_level=ConfigLevelChoices.NAMESPACE,
+            instance_key=self.strategy.namespace,
+            default=None,
+        )
+        if cluster_info is None:
+            raise ClusterNotExists()
+        bkbase_cluster_id = cluster_info["bkbase_cluster_id"]
+        table = cluster_info["event_topic"]
+
+        return {
+            "node_type": NodeType.QUEUR_STORAGE,
+            "name": f"queue_storage_{raw_table_name}",
+            "result_table_id": f"{bk_biz_id}_scenario_{raw_table_name}",
+            "bk_biz_id": bk_biz_id,
+            "indexed_fields": [],
+            "cluster": bkbase_cluster_id,
+            "expires": KAFKA_EXPIRE_DAY,
+            "has_unique_key": False,
+            "storage_keys": [],
+            "from_result_table_ids": [f"{bk_biz_id}_scenario_{raw_table_name}"],
+            "physical_table_name": table,
         }
 
     def _build_sql(self) -> str:
@@ -651,9 +695,17 @@ class AIOpsController(Controller):
             )
         return filter_string
 
-    def _describe_from_links(self, index: int, last_node_id: int):
+    def _describe_from_links(self, node_type: str, index: int, last_node_id: int, scene_node_id: int):
         if index == 0:
             return []
+
+        if node_type.endswith("storage"):
+            return [
+                {
+                    "source": {"node_id": scene_node_id, "id": f"ch_{scene_node_id}", "arrow": "Left"},
+                    "target": {"id": f"bk_node_{int(datetime.datetime.now().timestamp() * 1000)}", "arrow": "Left"},
+                }
+            ]
 
         return [
             {
