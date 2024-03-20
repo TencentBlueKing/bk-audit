@@ -34,14 +34,13 @@ from services.web.vision.serializers import (
 
 class BKVision(AuditMixinResource, abc.ABC):
     tags = ["BKVision"]
-    audit_action = ActionEnum.VIEW_PANEL
-    audit_resource_type = PANEL
 
 
 class ListPanels(BKVision):
     name = gettext_lazy("仪表盘列表")
     ResponseSerializer = VisionPanelInfoSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_BASE_PANEL
 
     def perform_request(self, validated_request_data):
         return VisionPanel.objects.all()
@@ -50,6 +49,8 @@ class ListPanels(BKVision):
 class QueryMeta(BKVision):
     name = gettext_lazy("查询视图配置")
     RequestSerializer = QueryMetaReqSerializer
+    audit_action = ActionEnum.VIEW_BASE_PANEL
+    audit_resource_type = PANEL
 
     def perform_request(self, validated_request_data):
         panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
@@ -59,6 +60,8 @@ class QueryMeta(BKVision):
 
 class QueryDataset(BKVision):
     name = gettext_lazy("获取面板视图数据")
+    audit_action = ActionEnum.VIEW_BASE_PANEL
+    audit_resource_type = PANEL
 
     def perform_request(self, validated_request_data):
         panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
