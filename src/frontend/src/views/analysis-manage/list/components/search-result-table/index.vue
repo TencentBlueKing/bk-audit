@@ -112,7 +112,7 @@
           ? <RenderSystem data={data}/>
           : '--'
       ),
-      minWidth: '140px',
+      minWidth: 140,
     },
     {
       label: () => t('操作事件名(ID)'),
@@ -125,7 +125,7 @@
         }
         return '--';
       },
-      minWidth: '160px',
+      minWidth: 160,
     },
     {
       label: () => t('资源类型(ID)'),
@@ -138,7 +138,7 @@
         }
         return '--';
       },
-      minWidth: '150px',
+      minWidth: 150,
     },
     {
       label: () => t('资源实例(ID)'),
@@ -161,11 +161,11 @@
         }
         return '--';
       },
-      minWidth: '160px',
+      minWidth: 160,
     },
     {
       label: () => t('操作结果(Code)'),
-      minWidth: '160px',
+      minWidth: 160,
       render: ({ data }: {data: SearchModel}) => (
         data.result_code
           ? <RenderResult key={data.bk_receive_time} data={data}/>
@@ -179,7 +179,7 @@
           {data.access_type || '--'}
         </span>
       ),
-      minWidth: '120px',
+      minWidth: 120,
     },
   ];
   // const fixedColum:InstanceType<typeof Table>['$props']['columns'] = [{
@@ -234,7 +234,7 @@
         label: () => t(item.description),
         resizable: true,
         field: item.field_name,
-        minWidth: '140px',
+        minWidth: 140,
         showOverflowTooltip: true,
         render: ({ data }: {data: SearchModel}) =>  (data[item.field_name as keyof SearchModel] || '--'),
       }));

@@ -462,7 +462,7 @@
     {
       label: () => t('标签'),
       field: () => 'tags',
-      minWidth: '230px',
+      minWidth: 230,
       render: ({ data }: { data: StrategyModel }) => {
         const tags = data.tags.map(item => strategyTagMap.value[item] || item);
         return <EditTag data={tags} key={data.strategy_id} />;

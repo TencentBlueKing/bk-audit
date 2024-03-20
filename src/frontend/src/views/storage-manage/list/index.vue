@@ -168,7 +168,7 @@
       label: () => t('地址'),
       field: () => 'cluster_config.domain_name',
       width: '5%',
-      minWidth: '200px',
+      minWidth: 200,
       showOverflowTooltip: true,
     },
     {

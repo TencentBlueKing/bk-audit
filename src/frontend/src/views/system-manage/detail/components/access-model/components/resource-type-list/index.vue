@@ -91,7 +91,7 @@
     },
     {
       label: () => t('资源实例 URL'),
-      minWidth: '200px',
+      minWidth: 200,
       showOverflowTooltip: true,
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         `${systemDetailData.value.provider_config.host}${data.provider_config.path} `
