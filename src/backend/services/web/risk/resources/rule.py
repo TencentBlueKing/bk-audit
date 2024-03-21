@@ -110,7 +110,8 @@ class UpdateRiskRule(RiskRuleMeta):
             version=rule.version + 1,
             priority_index=rule.priority_index,
             created_at=rule.created_at,
-            created_by=rule.created_by
+            created_by=rule.created_by,
+            is_enabled=rule.is_enabled,
         )
         setattr(instance, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskRuleAuditInstance(instance))
