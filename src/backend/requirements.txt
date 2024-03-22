@@ -10,7 +10,7 @@ bk_audit[opentelemetry]==1.2.0b1
 bk_resource==0.4.8
 
 # web server
-gunicorn==19.6.0
+gunicorn==21.2.0
 
 # django
 django==3.2.23
