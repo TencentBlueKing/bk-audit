@@ -84,6 +84,8 @@
     localData.value = _.cloneDeep(props.data);
     if (localData.value.type === 'none') {
       localData.value.type = 'match';
+      // 同步数据
+      handleChange('type', localData.value.type);
     }
   }, {
     immediate: true,
