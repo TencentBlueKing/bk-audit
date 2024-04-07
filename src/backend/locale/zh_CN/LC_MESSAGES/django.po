@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-01-18 14:27+0800\n"
+"POT-Creation-Date: 2024-04-07 17:07+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -970,7 +970,7 @@ msgid "应用信息不存在"
 msgstr "应用信息不存在"
 
 msgid "Tag Name Invalid"
-msgstr "Tag Name Invalid"
+msgstr "标签不合法"
 
 msgid "配置级别"
 msgstr "配置级别"
@@ -1690,6 +1690,9 @@ msgstr "编辑通知组(V2)"
 msgid "删除通知组(V2)"
 msgstr "删除通知组(V2)"
 
+msgid "报表列表"
+msgstr "报表列表"
+
 msgid "查看报表"
 msgstr "查看报表"
 
@@ -1724,6 +1727,9 @@ msgstr "采集项"
 
 msgid "组织架构"
 msgstr "组织架构"
+
+msgid "审计报表"
+msgstr "审计报表"
 
 msgid "风险"
 msgstr "风险"
@@ -3025,6 +3031,9 @@ msgstr "重开单据"
 msgid "%s 重开单据，指定处理人 %s"
 msgstr "%s 重开单据，指定处理人 %s"
 
+msgid "风险单据流转"
+msgstr "风险单据流转"
+
 msgid "风险处理规则列表"
 msgstr "风险处理规则列表"
 
@@ -3465,6 +3474,9 @@ msgstr "不支持的权限，请联系管理员！"
 
 msgid "仪表盘列表"
 msgstr "仪表盘列表"
+
+msgid "无法获取报表ID"
+msgstr "无法获取报表ID"
 
 msgid "系统权限不足"
 msgstr "系统权限不足"
