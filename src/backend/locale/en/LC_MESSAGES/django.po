@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-01-18 14:27+0800\n"
+"POT-Creation-Date: 2024-04-07 17:07+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1690,6 +1690,9 @@ msgstr "Edit Notice Group V2"
 msgid "删除通知组(V2)"
 msgstr "Delete Notice Group V2"
 
+msgid "报表列表"
+msgstr "List Audit Report"
+
 msgid "查看报表"
 msgstr "View Audit Report"
 
@@ -1724,6 +1727,9 @@ msgstr "Collector"
 
 msgid "组织架构"
 msgstr "Department"
+
+msgid "审计报表"
+msgstr "Audit Report"
 
 msgid "风险"
 msgstr "Risk"
@@ -3025,6 +3031,9 @@ msgstr "Reopen Risk"
 msgid "%s 重开单据，指定处理人 %s"
 msgstr "%s reopen ticket, assign to %s"
 
+msgid "风险单据流转"
+msgstr "Process Risk Ticket"
+
 msgid "风险处理规则列表"
 msgstr "List Risk Rules"
 
@@ -3465,6 +3474,9 @@ msgstr "Unsupported privilege, Please Contact The Administrator!"
 
 msgid "仪表盘列表"
 msgstr "Panel List"
+
+msgid "无法获取报表ID"
+msgstr "Cannot get audit report id"
 
 msgid "系统权限不足"
 msgstr "Insufficient System Permissions"
