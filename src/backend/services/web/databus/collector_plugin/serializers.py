@@ -57,14 +57,17 @@ class PluginConditionSerializer(serializers.Serializer):
     )
     separator_filters = PluginConditionSeparatorFiltersSerializer(label=gettext_lazy("过滤规则"), required=False, many=True)
 
-    def validate(self, attrs):
-        if attrs["type"] == CollectorParamConditionTypeEnum.MATCH.value:
-            attrs.pop("separator", None)
+    def validate(self, attrs: dict) -> dict:
+        condition_type = attrs.get("type")
+        if condition_type == CollectorParamConditionTypeEnum.NONE:
+            return {"type": CollectorParamConditionTypeEnum.NONE}
+        if condition_type != CollectorParamConditionTypeEnum.SEPARATOR:
             attrs.pop("separator_filters", None)
-        elif attrs["type"] == CollectorParamConditionTypeEnum.SEPARATOR.value:
+            attrs.pop("separator", None)
+        if condition_type != CollectorParamConditionTypeEnum.MATCH:
             attrs.pop("match_type", None)
             attrs.pop("match_content", None)
-        return attrs
+        return super().validate(attrs)
 
 
 class PluginParamSerializer(serializers.Serializer):
