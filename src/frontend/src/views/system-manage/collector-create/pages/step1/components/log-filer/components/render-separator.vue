@@ -196,7 +196,7 @@
   };
 
   watch(() => props.data, (newData) => {
-    if (newData.separator_filters.length < 1) {
+    if (newData.separator_filters && newData.separator_filters.length < 1) {
       handleAddSeparatorFilter(-1);
     }
   }, {

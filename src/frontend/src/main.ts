@@ -14,10 +14,12 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+
+// eslint-disable-next-line simple-import-sort/imports
+import { createApp } from 'vue';
 import Aegis from 'aegis-web-sdk';
 import BkuiVue from 'bkui-vue';
 import { bkTooltips } from 'bkui-vue/lib/directives';
-import { createApp } from 'vue';
 
 import RootManageService from '@service/root-manage';
 
