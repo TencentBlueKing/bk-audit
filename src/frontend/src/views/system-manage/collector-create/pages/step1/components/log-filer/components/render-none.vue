@@ -30,31 +30,12 @@
           :label="item.name"
           :value="item.id" />
       </bk-select>
-      <bk-input
-        class="ml8"
-        :model-value="localData.match_content"
-        :placeholder="t('请输入过滤内容')"
-        style="width: 312px;"
-        @input="(value: any) => handleChange('match_content', value as string)" />
-      <bk-select
-        class="ml8"
-        :clearable="false"
-        :model-value="localData.match_type"
-        style="width: 240px;"
-        @change="(value: string) => handleChange('match_type', value)">
-        <bk-option
-          v-for="item in globalsData.param_conditions_match"
-          :key="item.id"
-          :label="item.name"
-          :value="item.id" />
-      </bk-select>
     </div>
   </bk-loading>
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
   import { ref, watch } from 'vue';
-  import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
 
@@ -65,20 +46,15 @@
   interface Props {
     data: {
       type: string,
-      match_type: string,
-      match_content: string,
     }
   }
 
   const props = defineProps<Props>();
 
   const emits = defineEmits(['change']);
-  const { t } = useI18n();
 
   const localData = ref<Props['data']>({
     type: '',
-    match_type: '',
-    match_content: '',
   });
   watch(() => props.data, () => {
     localData.value = _.cloneDeep(props.data);
@@ -93,9 +69,6 @@
   } = useRequest(MetaManageService.fetchGlobals, {
     defaultValue: new GlobalsModel(),
     manual: true,
-    onSuccess(data) {
-      handleChange('match_type', data.param_conditions_match[0].id);
-    },
   });
 
   const handleChange = (field: string, value: any) => {
