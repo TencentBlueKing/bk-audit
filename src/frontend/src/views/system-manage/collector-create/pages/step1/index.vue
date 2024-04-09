@@ -494,10 +494,7 @@
         formData.data_encoding = data.data_encoding;
         formData.params.paths = data.params.paths;
         // 后端返回conditions只有type字段时，把缺少的字段补上，故是合并，不是直接赋值
-        formData.params.conditions = {
-          ...formData.params.conditions,
-          ...data.params.conditions,
-        };
+        formData.params.conditions = Object.assign({}, formData.params.conditions, data.params.conditions);
         formData.bcs_cluster_id = data.bcs_cluster_id;
         formData.yaml_config = decodeURIComponent(escape(atob(data.yaml_config)));
         yaml.value = data.yaml_config;

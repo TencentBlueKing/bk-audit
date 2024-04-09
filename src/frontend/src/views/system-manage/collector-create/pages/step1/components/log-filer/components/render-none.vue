@@ -23,7 +23,7 @@
         :clearable="false"
         :model-value="localData.type"
         style="width: 160px;"
-        @change="(value: string) => handleChange('type', value)">
+        @change="(value: string) => handleChange(value)">
         <bk-option
           v-for="item in globalsData.param_conditions_type"
           :key="item.id"
@@ -71,10 +71,10 @@
     manual: true,
   });
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (value: any) => {
     emits('change', {
       ...props.data,
-      [field]: value,
+      type: value,
     });
   };
 </script>
