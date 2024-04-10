@@ -23,27 +23,9 @@
         :clearable="false"
         :model-value="localData.type"
         style="width: 160px;"
-        @change="(value: string) => handleChange('type', value)">
+        @change="(value: string) => handleChange(value)">
         <bk-option
           v-for="item in globalsData.param_conditions_type"
-          :key="item.id"
-          :label="item.name"
-          :value="item.id" />
-      </bk-select>
-      <bk-input
-        class="ml8"
-        :model-value="localData.match_content"
-        :placeholder="t('请输入过滤内容')"
-        style="width: 312px;"
-        @input="(value: any) => handleChange('match_content', value as string)" />
-      <bk-select
-        class="ml8"
-        :clearable="false"
-        :model-value="localData.match_type"
-        style="width: 240px;"
-        @change="(value: string) => handleChange('match_type', value)">
-        <bk-option
-          v-for="item in globalsData.param_conditions_match"
           :key="item.id"
           :label="item.name"
           :value="item.id" />
@@ -54,7 +36,6 @@
 <script setup lang="ts">
   import _ from 'lodash';
   import { ref, watch } from 'vue';
-  import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
 
@@ -65,20 +46,15 @@
   interface Props {
     data: {
       type: string,
-      match_type: string,
-      match_content: string,
     }
   }
 
   const props = defineProps<Props>();
 
   const emits = defineEmits(['change']);
-  const { t } = useI18n();
 
   const localData = ref<Props['data']>({
     type: '',
-    match_type: '',
-    match_content: '',
   });
   watch(() => props.data, () => {
     localData.value = _.cloneDeep(props.data);
@@ -93,15 +69,12 @@
   } = useRequest(MetaManageService.fetchGlobals, {
     defaultValue: new GlobalsModel(),
     manual: true,
-    onSuccess(data) {
-      handleChange('match_type', data.param_conditions_match[0].id);
-    },
   });
 
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (value: any) => {
     emits('change', {
       ...props.data,
-      [field]: value,
+      type: value,
     });
   };
 </script>
