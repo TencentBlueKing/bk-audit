@@ -122,6 +122,7 @@ class EtlConfigEnum(TextChoices):
 
 
 class CollectorParamConditionTypeEnum(TextChoices):
+    NONE = "none", gettext_lazy("不过滤")
     MATCH = "match", gettext_lazy("字符串过滤")
     SEPARATOR = "separator", gettext_lazy("分隔符过滤")
 
