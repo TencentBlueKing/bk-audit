@@ -15,6 +15,7 @@
     "prepare": "cd ../.. && husky install src/frontend/.husky"
   },
   "dependencies": {
+    "@blueking/login-modal": "^1.0.1",
     "@blueking/notice-component": "^2.0.0",
     "@types/sortablejs": "1.15.4",
     "@types/yamljs": "0.2.33",

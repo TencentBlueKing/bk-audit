@@ -44,6 +44,8 @@ declare module 'js-cookie'
 
 declare module '@blueking/notice-component';
 
+declare module '@blueking/login-modal';
+
 interface URLSearchParams {
   keys(): string[];
 }
