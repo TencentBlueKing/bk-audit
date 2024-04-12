@@ -26,8 +26,9 @@ import IamApplyDataModel from '@model/iam/apply-data';
 import useEventBus from '@hooks/use-event-bus';
 import useMessage from '@hooks/use-message';
 
+import { showLoginModal } from '@blueking/login-modal';
+
 import {
-  loginDialog,
   parseURL,
   permissionDialog,
 } from '@utils/assist';
@@ -46,7 +47,12 @@ const redirectLogin = (loginUrl:string) => {
   let pathnameWithoutPlain = pathname.replace('/plain/', '');
   pathnameWithoutPlain = pathnameWithoutPlain.endsWith('/') ? pathnameWithoutPlain : `${pathnameWithoutPlain}/`;
   if (hasLogined) {
-    loginDialog(`${protocol}://${host}${pathnameWithoutPlain}plain/?c_url=${decodeURIComponent(`${window.location.origin}/login-success.html`)}`);
+    const loginUrl = `${protocol}://${host}${pathnameWithoutPlain}plain/?c_url=${decodeURIComponent(`${window.location.origin}/login-success.html`)}`;
+    showLoginModal({
+      loginUrl,
+      width: 400,
+      height: 400,
+    });
   } else {
     window.location.href = `${protocol}://${host}${pathnameWithoutPlain}?c_url=${decodeURIComponent(window.location.href)}`;
   }
