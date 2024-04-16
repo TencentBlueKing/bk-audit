@@ -134,16 +134,27 @@ class SnapshotStatusResource(CollectorMeta):
             # 是否已经集成快照数据
             item: Snapshot = snapshot.get(resource_type_id)
             if not item:
-                result.update({"status": SnapshotRunningStatus.CLOSED.value, "bkbase_url": None})
+                result.update(
+                    {
+                        "status": SnapshotRunningStatus.CLOSED.value,
+                        "hdfs_status": SnapshotRunningStatus.CLOSED.value,
+                        "bkbase_url": None,
+                    }
+                )
                 continue
-            result["status"] = item.status
-            result["bkbase_url"] = (
-                get_saas_url(settings.BKBASE_APP_CODE)
-                + str(settings.BK_BASE_ACCESS_URL).rstrip("/")
-                + "/"
-                + str(item.bkbase_data_id)
-                if item.bkbase_data_id
-                else None
+            result.update(
+                {
+                    "status": item.status,
+                    "hdfs_status": item.hdfs_status,
+                    "bkbase_url": (
+                        get_saas_url(settings.BKBASE_APP_CODE)
+                        + str(settings.BK_BASE_ACCESS_URL).rstrip("/")
+                        + "/"
+                        + str(item.bkbase_data_id)
+                        if item.bkbase_data_id
+                        else None
+                    ),
+                }
             )
         return result_dict
 
@@ -466,7 +477,10 @@ class ToggleJoinDataResource(CollectorMeta):
         snapshot = Snapshot.objects.get_or_create(
             system_id=validated_request_data["system_id"], resource_type_id=validated_request_data["resource_type_id"]
         )[0]
-        if snapshot.status == SnapshotRunningStatus.PREPARING:
+        if (
+            snapshot.status == SnapshotRunningStatus.PREPARING
+            or snapshot.hdfs_status == SnapshotRunningStatus.PREPARING
+        ):
             raise SnapshotPreparingException()
         is_enabled = validated_request_data["is_enabled"]
         if is_enabled:

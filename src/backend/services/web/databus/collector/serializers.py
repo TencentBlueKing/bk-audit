@@ -222,14 +222,14 @@ class ToggleJoinDataRequestSerializer(serializers.Serializer):
     storage_type = serializers.ChoiceField(
         label=gettext_lazy("Storage Type"),
         choices=SnapShotStorageChoices.choices,
-        default=SnapShotStorageChoices.REDIS.value,
+        default=SnapShotStorageChoices.HDFS.value,
     )
 
 
 class ToggleJoinDataResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Snapshot
-        fields = ["system_id", "resource_type_id", "status"]
+        fields = ["system_id", "resource_type_id", "status", "hdfs_status"]
 
 
 class GetBcsYamlTemplateRequestSerializer(serializers.Serializer):
