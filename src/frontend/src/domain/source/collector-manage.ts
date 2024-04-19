@@ -167,7 +167,7 @@ class CollectorManage extends ModuleBase {
   }
   // 判断资源表格操作列是否显示
   getResourceFeature() {
-    return Request.get('/api/v1/feature/bkbase_aiops/');
+    return Request.get<Record<'enabled', boolean>>('/api/v1/feature/bkbase_aiops/');
   }
   // 清洗字段历史
   getFieldHistory(params: { id: string}) {
@@ -203,7 +203,7 @@ class CollectorManage extends ModuleBase {
   }
   // 判断API Push是否启用
   getApiPushFeature(params: {feature_id: string}) {
-    return Request.get<Record<string, any>>(`/api/v1/feature/${params.feature_id}/`);
+    return Request.get<Record<'enabled', boolean>>(`/api/v1/feature/${params.feature_id}/`);
   }
   // 获取启用状态&上报host （无需单独鉴权）
   getApiPushHost(params: {system_id: string}) {

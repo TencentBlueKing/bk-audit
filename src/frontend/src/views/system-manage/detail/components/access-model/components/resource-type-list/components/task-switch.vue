@@ -25,7 +25,7 @@
         :title="t('请确认是否停止任务')">
         <bk-button
           v-bk-tooltips="t('停用后, 资源的详细数据将会失效')"
-          :disabled="status === 'preparing' || status === 'failed' || status === 'closed'"
+          :disabled="['preparing','failed','closed'].includes(status)"
           text
           theme="primary">
           {{ t('停用') }}
@@ -34,7 +34,7 @@
       <bk-button
         v-bk-tooltips="t('启用后, 资源的详细数据将会生效')"
         class="ml8"
-        :disabled="status === 'preparing' || status === 'running'"
+        :disabled="['preparing', 'running'].includes(status)"
         text
         theme="primary"
         @click="handleJoinData(true)">

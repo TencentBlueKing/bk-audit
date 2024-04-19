@@ -56,7 +56,7 @@
   import StatusTag from './components/status-tag.vue';
   import TaskSwitch from './components/task-switch.vue';
 
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const rowData = ref({
     resource_type_id: '',
   });
@@ -134,7 +134,7 @@
       ...baseTableColumn,
       {
         label: () => t('操作'),
-        width: '150px',
+        width: locale.value === 'en-US' ? 230 : 150,
         render: ({ data }: {data: SystemResourceTypeModel}) => <TaskSwitch
           data={data}
           bkbaseUrl={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
