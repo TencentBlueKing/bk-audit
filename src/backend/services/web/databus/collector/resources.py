@@ -151,9 +151,13 @@ class SnapshotStatusResource(CollectorMeta):
                         + str(settings.BK_BASE_ACCESS_URL).rstrip("/")
                         + "/"
                         + str(item.bkbase_data_id)
-                        if item.bkbase_data_id
-                        else None
-                    ),
+                    )
+                    if item.bkbase_data_id
+                    and (
+                        item.hdfs_status == SnapshotRunningStatus.RUNNING
+                        or item.status == SnapshotRunningStatus.RUNNING
+                    )
+                    else None,
                 }
             )
         return result_dict
