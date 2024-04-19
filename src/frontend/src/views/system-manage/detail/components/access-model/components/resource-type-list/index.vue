@@ -37,6 +37,7 @@
 <script setup lang="tsx">
   import {
     computed,
+    onMounted,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -46,7 +47,6 @@
   import IamManageService from '@service/iam-manage';
   import MetaManageService from '@service/meta-manage';
 
-  import type JoinDataModel from '@model/collector/join-data';
   import SystemModel from '@model/meta/system';
   import type SystemResourceTypeModel from '@model/meta/system-resource-type';
 
@@ -54,8 +54,6 @@
 
   import JobPlan from './components/job-plan.vue';
   import StatusTag from './components/status-tag.vue';
-  import TaskFailed from './components/task-failed.vue';
-  import TaskPreparing from './components/task-preparing.vue';
   import TaskSwitch from './components/task-switch.vue';
 
   const { t } = useI18n();
@@ -120,15 +118,16 @@
       width: '150px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <StatusTag
-          status={snapShotStatusList.value[data.resource_type_id]?.status} />
+          status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status} />
       ),
     },
   ];
 
   const route = useRoute();
   const isShowJobPlan = ref(false);
+  const controlsPermission = ref(false);
   const renderTableColumn = computed(() => {
-    if (!permissionCheckData.value.access_global_setting) {
+    if (!controlsPermission.value) {
       return baseTableColumn;
     }
     return [
@@ -136,35 +135,24 @@
       {
         label: () => t('操作'),
         width: '150px',
-        render: ({ data }: {data: SystemResourceTypeModel}) => {
-          switch (data.status) {
-          case 'preparing':
-            return <TaskPreparing/>;
-          case 'failed':
-            return <TaskFailed data={data}/>;
-          default:
-            return <TaskSwitch
-            data={data}
-            onChangeStatus={(value: JoinDataModel) => handleDataStatus(value)}/>;
-          }
-        },
+        render: ({ data }: {data: SystemResourceTypeModel}) => <TaskSwitch
+          data={data}
+          bkbaseUrl={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
+          status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status}
+          onChangeStatus={() => handleDataStatus()}/>,
       },
     ];
   });
 
-
-  // 拥有 access_global_setting 权限的用户才会显示操作列
-  const {
-    data: permissionCheckData,
-  } = useRequest(IamManageService.check, {
-    defaultParams: {
-      action_ids: 'access_global_setting',
-    },
-    defaultValue: {
-      access_global_setting: false,
-    },
-    manual: true,
-  });
+  /* 有相关权限才显示操作列
+    1. 拥有 access_global_setting 权限
+    2. 拥有特性开关enabled为true
+  */
+  const checkPermission = async () => {
+    const { access_global_setting: accessGlobalSetting = false } = await IamManageService.check({ action_ids: 'access_global_setting' });
+    const { enabled = false } = await CollectorManageService.fetchResourceFeature();
+    controlsPermission.value =  accessGlobalSetting && enabled;
+  };
 
   // 获取系统详情
   const {
@@ -191,6 +179,7 @@
     defaultValue: [],
     // manual: true,
   });
+
   const {
     data: snapShotStatusList,
     run: fetchSnapShotStatus,
@@ -198,31 +187,36 @@
     defaultValue: {},
   });
 
-  Promise.all([fetchSystemDetail({
-    id: route.params.id,
-  }), fetchSysetemResourceTypeList({
-    id: route.params.id,
-  })]).then(() => {
+  const getSnapShotStatus = () => {
     const resourceIds = resourceTypeList.value.map(item => item.resource_type_id).join(',');
     fetchSnapShotStatus({
       system_id: systemDetailData.value.system_id,
       resource_type_ids: resourceIds,
     });
+  };
+
+  Promise.all([fetchSystemDetail({
+    id: route.params.id,
+  }), fetchSysetemResourceTypeList({
+    id: route.params.id,
+  })]).then(() => {
+    // 获取资源快照状态
+    getSnapShotStatus();
   });
 
-
-  const handleDataStatus = (data: JoinDataModel) => {
-    resourceTypeList.value.forEach((item) => {
-      if (item.resource_type_id === data.resource_type_id) {
-        // eslint-disable-next-line no-param-reassign
-        item.status = data.status;
-      }
-    });
+  // 更新资源快照状态
+  const handleDataStatus = () => {
+    getSnapShotStatus();
   };
+
   const handleJobPlan = (data: SystemResourceTypeModel) => {
     isShowJobPlan.value = true;
     rowData.value = data;
   };
+
+  onMounted(() => {
+    checkPermission();
+  });
 </script>
 <style lang="postcss">
   .access-model-resource-list {

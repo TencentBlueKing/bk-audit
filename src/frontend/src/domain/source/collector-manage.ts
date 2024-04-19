@@ -157,11 +157,17 @@ class CollectorManage extends ModuleBase {
   }) {
     return Request.get<Record<string,
     {
+      bkbase_url: string,
       system_id: string,
-      status:string
+      status:string,
+      hdfs_status: string
     }>>(`${this.path}/collectors/snapshot_status/`, {
       params,
     });
+  }
+  // 判断资源表格操作列是否显示
+  getResourceFeature() {
+    return Request.get('/api/v1/feature/bkbase_aiops/');
   }
   // 清洗字段历史
   getFieldHistory(params: { id: string}) {

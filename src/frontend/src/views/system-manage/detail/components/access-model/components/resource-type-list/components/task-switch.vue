@@ -25,7 +25,7 @@
         :title="t('请确认是否停止任务')">
         <bk-button
           v-bk-tooltips="t('停用后, 资源的详细数据将会失效')"
-          :disabled="!data.swithValue"
+          :disabled="status === 'preparing' || status === 'failed' || status === 'closed'"
           text
           theme="primary">
           {{ t('停用') }}
@@ -34,7 +34,7 @@
       <bk-button
         v-bk-tooltips="t('启用后, 资源的详细数据将会生效')"
         class="ml8"
-        :disabled="data.swithValue"
+        :disabled="status === 'preparing' || status === 'running'"
         text
         theme="primary"
         @click="handleJoinData(true)">
@@ -42,10 +42,10 @@
       </bk-button>
     </auth-component>
     <a
-      v-if="data.bkbase_url"
+      v-if="bkbaseUrl"
       v-bk-tooltips="t('查看计算平台的任务详情')"
       class="ml8"
-      :href="data.bkbase_url"
+      :href="bkbaseUrl"
       target="_blank">
       {{ t('数据详情') }}
     </a>
@@ -65,9 +65,11 @@
 
   interface Props{
     data: Record<string, any>;
+    status: string,
+    bkbaseUrl: string,
   }
   interface Emits {
-    (e: 'changeStatus', value: JoinDataModel): void
+    (e: 'changeStatus'): void
   }
 
   const props = defineProps<Props>();
@@ -80,8 +82,8 @@
     run: fetchJoinData,
   }  = useRequest(CollectorManageService.fetchJoinData, {
     defaultValue: new JoinDataModel(),
-    onSuccess: (data) => {
-      emits('changeStatus', data);
+    onSuccess: () => {
+      emits('changeStatus');
     },
   });
 
