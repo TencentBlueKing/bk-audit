@@ -248,7 +248,7 @@ class AgentStatusSerializer(serializers.Serializer):
 
 class GetHostInstanceByIPInstanceSerializer(serializers.Serializer):
     ip = serializers.CharField(label=gettext_lazy("IP"))
-    bk_cloud_id = serializers.IntegerField(label=gettext_lazy("云区域ID"), required=False)
+    bk_cloud_id = serializers.IntegerField(label=gettext_lazy("云区域ID"), required=False, allow_null=True)
 
 
 class GetHostInstanceByIPRequestSerializer(serializers.Serializer):
