@@ -36,6 +36,8 @@ export default {
     启用: 'Enabled',
     正在启动: 'Starting',
     启动失败: 'Startup failed | Start Failed',
+    启用中: 'Initializing',
+    启用失败: ' Init failed',
     数据详情: ' Data Details',
     '操作 ID': 'Action ID',
     操作事件名称: 'Action name',

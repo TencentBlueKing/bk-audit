@@ -229,6 +229,13 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 判断资源表格操作列是否显示
+   */
+  fetchResourceFeature() {
+    return CollectorSource.getResourceFeature()
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 清洗字段历史
    * @param { String } id
    */

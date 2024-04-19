@@ -32,37 +32,43 @@
 
   const { t } = useI18n();
 
+  const statusStyle: Record<string, Record<'background'|'color', string>> = {
+    closed: {
+      background: '#F0F1F5',
+      color: '#979BA5',
+    },
+    preparing: {
+      background: '#E1ECFF',
+      color: '#3A84FF',
+    },
+    failed: {
+      background: '#FFEEEE',
+      color: '#EA3636',
+    },
+    running: {
+      background: '#E5F6EA',
+      color: '#3FC06D',
+    },
+  };
+
   const renderText = computed(() => {
     const textMap = {
       closed: t('停用'),
       running: t('启用'),
-      preparing: t('停用'),
-      failed: t('停用'),
+      preparing: t('启用中'),
+      failed: t('启用失败'),
     } as Record<string, string>;
 
     return textMap[props.status];
   });
 
-  const styles = computed(() => { // 停用状态颜色
-    if (props.status === 'closed'
-      || props.status === 'preparing'
-      || props.status === 'failed') {
-      return {
-        background: '#F0F1F5',
-        color: '#979BA5',
-      };
-    }
-    return { // 启用状态
-      background: '#E5F6EA',
-      color: '#3FC06D',
-    };
-  });
+  const styles = computed(() => statusStyle[props.status] || { background: '#E5F6EA', color: '#3FC06D' });
 
 </script>
 <style lang="postcss" scoped>
   .status-tag {
     display: inline-block;
-    padding:2px 4px;
+    padding: 2px 4px;
     font-weight: bold;
     line-height: 16px;
     text-align: center;
