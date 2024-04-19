@@ -57,7 +57,7 @@ from services.web.databus.models import CollectorConfig, CollectorPlugin, Snapsh
 def start_snapshot():
     # 获取所有的启动中快照并逐个运行 (Redis)
     snapshots = Snapshot.objects.filter(
-        status__in=(SnapshotRunningStatus.PREPARING.value, SnapshotRunningStatus.FAILED.value),
+        status__in=(SnapshotRunningStatus.PREPARING.value,),
         storage_type__in=(SnapShotStorageChoices.REDIS.value,),
     )
     for snapshot in snapshots:
@@ -67,7 +67,7 @@ def start_snapshot():
         JoinDataHandler(snapshot.system_id, snapshot.resource_type_id).start()
     # 创建HDFS快照
     snapshots = Snapshot.objects.filter(
-        hdfs_status__in=(SnapshotRunningStatus.PREPARING.value, SnapshotRunningStatus.FAILED.value),
+        hdfs_status__in=(SnapshotRunningStatus.PREPARING.value,),
         storage_type__in=(SnapShotStorageChoices.HDFS.value,),
     )
     for snapshot in snapshots:
