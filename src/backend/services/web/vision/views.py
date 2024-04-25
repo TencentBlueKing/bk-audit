@@ -71,3 +71,15 @@ class DatasetViewSet(API200ViewSet, BKVisionInstanceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.vision.query_dataset, endpoint="query"),
     ]
+
+
+class FieldViewSet(API200ViewSet, BKVisionInstanceViewSet):
+    resource_routes = [
+        ResourceRoute("POST", resource.vision.query_field_data, endpoint="preview_data", pk_field="uid"),
+    ]
+
+
+class VariableViewSet(API200ViewSet, BKVisionInstanceViewSet):
+    resource_routes = [
+        ResourceRoute("POST", resource.vision.query_variable_data, endpoint="query"),
+    ]

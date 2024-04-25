@@ -59,3 +59,10 @@ class QueryDataset(BKVision):
     name = gettext_lazy("查询数据集")
     method = "POST"
     action = "/api/v1/dataset/query/"
+
+
+class QueryFieldData(BKVision):
+    name = gettext_lazy("查询字段值")
+    method = "POST"
+    action = "/api/v1/field/{uid}/preview_data/"
+    url_keys = ["uid"]

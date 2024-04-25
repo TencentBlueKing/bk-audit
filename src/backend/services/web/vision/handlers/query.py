@@ -63,3 +63,9 @@ class VisionHandler:
                 case KeyVariable.DEPARTMENT:
                     DeptFilterHandler().check_data(variable_config["value"])
         return api.bk_vision.query_dataset(**params)
+
+    def query_field_data(self, params: dict) -> dict:
+        return api.bk_vision.query_field_data(**params)
+
+    def query_variable_data(self, params: dict) -> dict:
+        return api.bk_vision.query_variable_data(**params)
