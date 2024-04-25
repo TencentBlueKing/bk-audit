@@ -66,3 +66,6 @@ class VisionHandler:
 
     def query_field_data(self, params: dict) -> dict:
         return api.bk_vision.query_field_data(**params)
+
+    def query_variable_data(self, params: dict) -> dict:
+        return api.bk_vision.query_variable_data(**params)

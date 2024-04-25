@@ -78,3 +78,14 @@ class QueryFieldData(BKVision):
         panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
         self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
         return VisionHandler().query_field_data(params=validated_request_data)
+
+
+class QueryVariableData(BKVision):
+    name = gettext_lazy("查询变量数据")
+    audit_action = ActionEnum.VIEW_BASE_PANEL
+    audit_resource_type = PANEL
+
+    def perform_request(self, validated_request_data):
+        panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
+        self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
+        return VisionHandler().query_variable_data(params=validated_request_data)
