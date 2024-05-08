@@ -347,8 +347,10 @@ class SaveTagsRequestSerializer(serializers.Serializer):
     tag_name = serializers.CharField(label=gettext_lazy("Tag Name"))
 
     def validate_tag_name(self, tag_name: str) -> str:
-        if not TAG_NAME_REGEXP.match(tag_name) or tag_name.isdigit():
-            raise TagNameInValid(message="{} => {}".format(TagNameInValid.MESSAGE, tag_name))
+        if not TAG_NAME_REGEXP.match(tag_name):
+            raise TagNameInValid(message="{} {}".format(TagNameInValid.MESSAGE, tag_name))
+        if tag_name.isdigit():
+            raise TagNameInValid(message="{}".format(gettext("标签不能使用纯数字，请修改")))
         return tag_name
 
 

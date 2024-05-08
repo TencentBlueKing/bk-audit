@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-07 17:07+0800\n"
+"POT-Creation-Date: 2024-05-08 15:06+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -699,6 +699,9 @@ msgstr "Get Panel Variables"
 msgid "查询数据集"
 msgstr "Search Dataset"
 
+msgid "查询字段值"
+msgstr "Search Field Value"
+
 msgid "获取用户列表"
 msgstr "Get User List"
 
@@ -953,6 +956,9 @@ msgstr "Regex."
 
 msgid "计算平台JSON"
 msgstr "BK Data JSON"
+
+msgid "不过滤"
+msgstr "No Filter"
 
 msgid "字符串过滤"
 msgstr "By string"
@@ -1293,6 +1299,9 @@ msgstr "Extra Data"
 
 msgid "文件"
 msgstr "File"
+
+msgid "标签不能使用纯数字，请修改"
+msgstr "Tag invalid with all digit"
 
 msgid "事件ID"
 msgstr "Event ID"
@@ -3474,6 +3483,12 @@ msgstr "Unsupported privilege, Please Contact The Administrator!"
 
 msgid "仪表盘列表"
 msgstr "Panel List"
+
+msgid "获取字段数据"
+msgstr "Load Field Data"
+
+msgid "查询变量数据"
+msgstr "Get Variables Data"
 
 msgid "无法获取报表ID"
 msgstr "Cannot get audit report id"
