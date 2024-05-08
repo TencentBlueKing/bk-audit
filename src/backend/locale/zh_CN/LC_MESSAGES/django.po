@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-04-07 17:07+0800\n"
+"POT-Creation-Date: 2024-05-08 15:06+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -699,6 +699,9 @@ msgstr "获取面板变量数据"
 msgid "查询数据集"
 msgstr "查询数据集"
 
+msgid "查询字段值"
+msgstr "查询字段值"
+
 msgid "获取用户列表"
 msgstr "获取用户列表"
 
@@ -953,6 +956,9 @@ msgstr "正则"
 
 msgid "计算平台JSON"
 msgstr "计算平台JSON"
+
+msgid "不过滤"
+msgstr "不过滤"
 
 msgid "字符串过滤"
 msgstr "字符串过滤"
@@ -1293,6 +1299,9 @@ msgstr "拓展信息"
 
 msgid "文件"
 msgstr "文件"
+
+msgid "标签不能使用纯数字，请修改"
+msgstr "标签不能使用纯数字，请修改"
 
 msgid "事件ID"
 msgstr "事件ID"
@@ -3474,6 +3483,12 @@ msgstr "不支持的权限，请联系管理员！"
 
 msgid "仪表盘列表"
 msgstr "仪表盘列表"
+
+msgid "获取字段数据"
+msgstr "获取字段数据"
+
+msgid "查询变量数据"
+msgstr "查询变量数据"
 
 msgid "无法获取报表ID"
 msgstr "无法获取报表ID"
