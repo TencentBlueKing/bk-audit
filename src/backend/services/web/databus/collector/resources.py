@@ -51,7 +51,7 @@ from core.cache import CacheType
 from core.utils.tools import format_date_string, replenish_params
 from services.web.databus.collector.bcs.yaml import YamlTemplate
 from services.web.databus.collector.etl.base import EtlStorage
-from services.web.databus.collector.join.base import JoinDataHandler
+from services.web.databus.collector.join.base import AssetHandler, JoinDataHandler
 from services.web.databus.collector.join.http_pull import HttpPullHandler
 from services.web.databus.collector.serializers import (
     ApplyDataIdSourceRequestSerializer,
@@ -495,7 +495,10 @@ class ToggleJoinDataResource(CollectorMeta):
             snapshot.storage_type = validated_request_data["storage_type"]
             snapshot.save(update_fields=["status", "hdfs_status", "storage_type"])
         else:
-            JoinDataHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
+            if snapshot.storage_type == SnapShotStorageChoices.REDIS:
+                JoinDataHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
+            if snapshot.storage_type == SnapShotStorageChoices.HDFS:
+                AssetHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
         snapshot.refresh_from_db()
         return snapshot
 
