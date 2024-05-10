@@ -365,8 +365,10 @@
       },
       {
         validator: (value: Array<string>) => {
-          const reg = /\D/;
-          return value.every(item => reg.test(item));
+          // 因为校验的是name，但value是id的数组，转换成name数组；如果是自定义输入，id = name，直接使用item即可
+          const tags = value.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+          const reg = /\D+/;
+          return tags.every(item => reg.test(item));
         },
         message: t('标签不能为纯数字'),
         trigger: 'change',
