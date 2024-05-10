@@ -85,6 +85,7 @@ export default {
     '请输入策略ID (只允许输入整数)': 'Please enter the policy ID (only integer is allowed)',
     策略ID只允许输入整数: 'Policy ID only integer is allowed',
     '标签只允许中文、字母、数字、中划线或下划线组成': 'Tags are only allowed Composed of Chinese characters, letters, numbers, Center lines or underlines',
+    标签不能为纯数字: 'Tag cannot be consisted of all digit',
     策略名称不能为空: 'name cannot be empty',
     检测条件不能为空: 'filter cannot be empty',
     策略ID: 'ID',

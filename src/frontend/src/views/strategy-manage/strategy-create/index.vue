@@ -364,6 +364,14 @@
         trigger: 'change',
       },
       {
+        validator: (value: Array<string>) => {
+          const reg = /\D/;
+          return value.every(item => reg.test(item));
+        },
+        message: t('标签不能为纯数字'),
+        trigger: 'change',
+      },
+      {
         validator: (value: Array<any>) => value.length > 0,
         message: t('标签不能为空'),
         trigger: 'change',
