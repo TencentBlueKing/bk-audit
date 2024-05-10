@@ -84,7 +84,7 @@ export default {
     请选择启停状态: 'Please select the start and stop status',
     '请输入策略ID (只允许输入整数)': 'Please enter the policy ID (only integer is allowed)',
     策略ID只允许输入整数: 'Policy ID only integer is allowed',
-    '标签只允许中英文、数字、中划线、下划线': 'Tags are only allowed in Chinese and English, numbers, middle lines and underscores',
+    '标签只允许中文、字母、数字、中划线或下划线组成': 'Tags are only allowed Composed of Chinese characters, letters, numbers, Center lines or underlines',
     策略名称不能为空: 'name cannot be empty',
     检测条件不能为空: 'filter cannot be empty',
     策略ID: 'ID',
