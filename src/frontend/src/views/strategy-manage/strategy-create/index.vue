@@ -48,6 +48,7 @@
                 <bk-form-item
                   :label="t('标签')"
                   label-width="160"
+                  property="tags"
                   style="flex: 1;">
                   <bk-loading
                     :loading="tagLoading"
@@ -354,13 +355,22 @@
       },
     ],
     tags: [
+      // 因为校验的是name，但value是id的数组；将item转为name，自定义输入id = name，直接使用item即可
       {
         validator: (value: Array<string>) => {
-          const reg = /^[A-Za-z0-9\u4e00-\u9fa5-_]+$/;
-          return value.every(item => reg.test(item));
+          const reg = /^[\w\u4e00-\u9fa5-_]+$/;
+          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
         },
-        message: t('标签只允许中英文、数字、中划线、下划线'),
-        trigger: 'blur',
+        message: t('标签只允许中文、字母、数字、中划线或下划线组成'),
+        trigger: 'change',
+      },
+      {
+        validator: (value: Array<string>) => {
+          const reg = /\D+/;
+          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+        },
+        message: t('标签不能为纯数字'),
+        trigger: 'change',
       },
       {
         validator: (value: Array<any>) => value.length > 0,
