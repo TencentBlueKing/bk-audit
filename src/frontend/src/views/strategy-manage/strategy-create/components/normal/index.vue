@@ -318,7 +318,7 @@
               :placeholder="t('请输入')"
               :show-controls="false"
               size="small"
-              style="width: 100px;"
+              style="width: 120px;"
               type="number"
               @blur="handleUpdateConfigs" />
           </bk-form-item>
