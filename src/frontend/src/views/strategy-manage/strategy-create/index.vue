@@ -355,20 +355,19 @@
       },
     ],
     tags: [
+      // 因为校验的是name，但value是id的数组；将item转为name，自定义输入id = name，直接使用item即可
       {
         validator: (value: Array<string>) => {
           const reg = /^[\w\u4e00-\u9fa5-_]+$/;
-          return value.every(item => reg.test(item));
+          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
         },
         message: t('标签只允许中文、字母、数字、中划线或下划线组成'),
         trigger: 'change',
       },
       {
         validator: (value: Array<string>) => {
-          // 因为校验的是name，但value是id的数组，转换成name数组；如果是自定义输入，id = name，直接使用item即可
-          const tags = value.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
           const reg = /\D+/;
-          return tags.every(item => reg.test(item));
+          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
         },
         message: t('标签不能为纯数字'),
         trigger: 'change',
