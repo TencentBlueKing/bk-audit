@@ -398,6 +398,15 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
+    VIEW_TAG_PANEL = ActionMeta(
+        id="view_tag_panel",
+        name=gettext("查看报表(标签)"),
+        name_en="View Audit Report by Tag",
+        type="view",
+        related_resource_types=[ResourceEnum.TAG],
+        related_actions=[],
+        version=1,
+    )
 
     # 日志平台
     CREATE_COLLECTION_BK_LOG = ActionMeta(

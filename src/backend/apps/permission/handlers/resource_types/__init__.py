@@ -33,6 +33,7 @@ from apps.permission.handlers.resource_types.sensitive_object import (
 )
 from apps.permission.handlers.resource_types.strategy import Strategy
 from apps.permission.handlers.resource_types.system import System
+from apps.permission.handlers.resource_types.tag import Tag
 
 
 class ResourceEnum:
@@ -48,6 +49,7 @@ class ResourceEnum:
     NOTICE_GROUP = NoticeGroup
     RISK = Risk
     PANEL = Panel
+    TAG = Tag
     # BK LOG
     SPACE_BK_LOG = SpaceBKLog
     BUSINESS_BK_LOG = BusinessBKLog

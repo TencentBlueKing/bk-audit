@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
-from apps.meta.models import System
+from apps.meta.models import System, Tag
 
 
 class CheckPermissionRequestSerializer(serializers.Serializer):
@@ -48,3 +48,9 @@ class SystemListSerializer(serializers.ModelSerializer):
     class Meta:
         model = System
         exclude = ["provider_config"]
+
+
+class TagListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tag
+        fields = "__all__"
