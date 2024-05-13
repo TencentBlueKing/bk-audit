@@ -137,6 +137,21 @@
             }
         },
         {
+            "operation": "upsert_resource_type",
+            "data": {
+                "id": "tag",
+                "name": "标签",
+                "name_en": "Tag",
+                "description": "",
+                "description_en": "",
+                "parents": [],
+                "provider_config": {
+                    "path": "/api/v1/iam/resources/"
+                },
+                "version": 1
+            }
+        },
+        {
             "operation": "upsert_instance_selection",
             "data": {
                 "id": "system_list",
@@ -238,6 +253,20 @@
                     {
                         "system_id": "bk-audit",
                         "id": "panel"
+                    }
+                ]
+            }
+        },
+        {
+            "operation": "upsert_instance_selection",
+            "data": {
+                "id": "tag_list",
+                "name": "标签列表",
+                "name_en": "Tag List",
+                "resource_type_chain": [
+                    {
+                        "system_id": "bk-audit",
+                        "id": "tag"
                     }
                 ]
             }
@@ -1010,7 +1039,38 @@
                     }
                 ],
                 "related_actions": [
-                    "list_base_panel"
+                    "list_base_panel",
+                    "view_base_panel_v2"
+                ],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
+                "id": "view_tag_panel",
+                "name": "查看报表(标签)",
+                "name_en": "View Audit Report by Tag",
+                "type": "view",
+                "version": 1,
+                "related_resource_types": [
+                    {
+                        "system_id": "bk-audit",
+                        "id": "tag",
+                        "selection_mode": "instance",
+                        "related_instance_selections": [
+                            {
+                                "system_id": "bk-audit",
+                                "id": "tag_list",
+                                "ignore_iam_path": true
+                            }
+                        ]
+                    }
+                ],
+                "related_actions": [
+                    "list_base_panel",
+                    "view_base_panel_v2"
                 ],
                 "description": "",
                 "description_en": ""
@@ -1047,6 +1107,9 @@
                                 },
                                 {
                                     "id": "view_panel"
+                                },
+                                {
+                                    "id": "view_tag_panel"
                                 }
                             ]
                         }

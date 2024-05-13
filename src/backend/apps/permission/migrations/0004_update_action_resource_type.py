@@ -16,37 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext_lazy
-from iam.model.models import ResourceType
+import os
 
-from core.choices import TextChoices
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
 
-
-class KeyVariable(TextChoices):
-    """
-    关键变量
-    """
-
-    DEPARTMENT = "dept", gettext_lazy("组织架构")
-    DEPARTMENT_NAME = "dept_name", gettext_lazy("组织架构")
-    TAG = "tag", gettext_lazy("标签")
+from core.utils.distutils import strtobool
 
 
-class PanelType(TextChoices):
-    """
-    组件类型
-    """
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
 
-    ACTION = "Action", gettext_lazy("筛选")
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
 
 
-PANEL = ResourceType(
-    id="panel",
-    name=None,
-    name_en=None,
-    description=None,
-    description_en=None,
-    parents=None,
-    provider_config=None,
-    version=None,
-)
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0003_update_action_resource_type"),
+    ]
+
+    operations = [migrations.RunPython(forward_func)]

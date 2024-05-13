@@ -26,6 +26,7 @@ from apps.meta.constants import SensitiveResourceTypeEnum
 from apps.meta.models import Action, ResourceType
 from apps.meta.provider.sensitive_obj import SensitiveObjResourceProvider
 from apps.meta.provider.system import SystemResourceProvider
+from apps.meta.provider.tag import TagResourceProvider
 from apps.notice.provider import NoticeGroupResourceProvider
 from apps.permission import views
 from apps.permission.dispatcher import BkAuditResourceApiDispatcher
@@ -48,6 +49,7 @@ except (RuntimeError, ImportError):
 
 resources_dispatcher = BkAuditResourceApiDispatcher(Permission.get_iam_client(), settings.BK_IAM_SYSTEM_ID)
 resources_dispatcher.register("system", SystemResourceProvider())
+resources_dispatcher.register("tag", TagResourceProvider())
 resources_dispatcher.register(
     "sensitive_action", SensitiveObjResourceProvider(SensitiveResourceTypeEnum.ACTION.value, Action)
 )

@@ -16,37 +16,29 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext_lazy
-from iam.model.models import ResourceType
+from django.conf import settings
+from django.utils.translation import gettext
+from iam import Resource
 
-from core.choices import TextChoices
-
-
-class KeyVariable(TextChoices):
-    """
-    关键变量
-    """
-
-    DEPARTMENT = "dept", gettext_lazy("组织架构")
-    DEPARTMENT_NAME = "dept_name", gettext_lazy("组织架构")
-    TAG = "tag", gettext_lazy("标签")
+from apps.meta.models import Tag as TagModel
+from apps.permission.handlers.resource_types import ResourceTypeMeta
 
 
-class PanelType(TextChoices):
-    """
-    组件类型
-    """
+class Tag(ResourceTypeMeta):
+    system_id = settings.BK_IAM_SYSTEM_ID
+    id = "tag"
+    name = gettext("标签")
+    selection_mode = "instance"
+    related_instance_selections = [{"system_id": system_id, "id": "tag"}]
 
-    ACTION = "Action", gettext_lazy("筛选")
+    @classmethod
+    def create_instance(cls, instance_id: str, attribute=None) -> Resource:
+        resource = cls.create_simple_instance(instance_id, attribute)
 
+        instance_name = str(instance_id)
+        tag = TagModel.objects.filter(pk=instance_id).first()
+        if tag:
+            instance_name = tag.tag_name
 
-PANEL = ResourceType(
-    id="panel",
-    name=None,
-    name_en=None,
-    description=None,
-    description_en=None,
-    parents=None,
-    provider_config=None,
-    version=None,
-)
+        resource.attribute = {"id": str(instance_id), "name": instance_name}
+        return resource
