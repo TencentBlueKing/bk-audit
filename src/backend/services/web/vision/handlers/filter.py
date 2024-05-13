@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
@@ -33,7 +33,6 @@ from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
 from services.web.vision.exceptions import (
     VisionPermissionInvalid,
-    VisionVariableInvalid,
 )
 from services.web.vision.handlers.convertor import DeptConvertor
 
@@ -108,10 +107,12 @@ class DeptFilterHandler(FilterDataHandler):
         data.sort(key=lambda item: item["label"])
         return data
 
-    def check_data(self, input_data: List[str]) -> List[str]:
+    def check_data(self, input_data: Union[List[str], str]) -> List[str]:
         # 检查
+        is_single = False
         if not isinstance(input_data, list):
-            raise VisionVariableInvalid()
+            is_single = True
+            input_data = [input_data]
 
         # 获取有权限的架构
         departments = [dept["value"] for dept in self.get_data()]
@@ -133,7 +134,7 @@ class DeptFilterHandler(FilterDataHandler):
 
         # 有权限则跳过
         if not no_permission_dept and input_data:
-            return input_data
+            return input_data[0] if is_single else input_data
 
         # 无权限申请
         apply_data, apply_url = Permission().get_apply_data(
@@ -171,10 +172,12 @@ class TagFilterHandler(FilterDataHandler):
         data.sort(key=lambda item: item["label"])
         return data
 
-    def check_data(self, input_data: List[str]) -> List[str]:
+    def check_data(self, input_data: Union[List[str], str]) -> List[str]:
         # 检查
+        is_single = False
         if not isinstance(input_data, list):
-            raise VisionVariableInvalid()
+            input_data = [input_data]
+            is_single = True
 
         # 已授权的标签
         authed_tags = [item["value"] for item in self.get_data()]
@@ -189,3 +192,6 @@ class TagFilterHandler(FilterDataHandler):
             resources=[ResourceEnum.TAG.create_instance(item) for item in input_data],
             raise_exception=True,
         )
+
+        # 检查通过则返回
+        return input_data[0] if is_single else input_data
