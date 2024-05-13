@@ -164,7 +164,7 @@ class TagFilterHandler(FilterDataHandler):
         request = permission.make_request(action=get_action_by_id(ActionEnum.VIEW_TAG_PANEL), resources=[])
         policies = permission.iam_client._do_policy_query(request)
         if policies:
-            condition = DjangoQuerySetConverter().convert(policies)
+            condition = DjangoQuerySetConverter({"tag.id": "tag_id"}).convert(policies)
             authed_tag = Tag.objects.filter(condition)
 
         data = [{"label": tag.tag_name, "value": tag.tag_id} for tag in authed_tag]
