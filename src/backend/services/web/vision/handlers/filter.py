@@ -51,7 +51,7 @@ class FilterDataHandler:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def check_data(self, input_data: List[str]) -> List[str]:
+    def check_data(self, input_data: Union[List[str], str, int]) -> Union[List[str], str, int]:
         """
         检查数据是否合法及是否有权限
         """
@@ -107,7 +107,7 @@ class DeptFilterHandler(FilterDataHandler):
         data.sort(key=lambda item: item["label"])
         return data
 
-    def check_data(self, input_data: Union[List[str], str]) -> List[str]:
+    def check_data(self, input_data: Union[List[str], str, int]) -> Union[List[str], str, int]:
         # 检查
         is_single = False
         if not isinstance(input_data, list):
@@ -172,7 +172,7 @@ class TagFilterHandler(FilterDataHandler):
         data.sort(key=lambda item: item["label"])
         return data
 
-    def check_data(self, input_data: Union[List[str], str]) -> List[str]:
+    def check_data(self, input_data: Union[List[str], str, int]) -> Union[List[str], str, int]:
         # 检查
         is_single = False
         if not isinstance(input_data, list):
