@@ -29,3 +29,9 @@ class VisionPermissionInvalid(VisionException):
     ERROR_CODE = "001"
     STATUS_CODE = 500
     MESSAGE = gettext_lazy("不支持的权限，请联系管理员")
+
+
+class VisionVariableInvalid(VisionException):
+    ERROR_CODE = "002"
+    STATUS_CODE = 400
+    MESSAGE = gettext_lazy("不支持的选项类型，请联系管理员")

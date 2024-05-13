@@ -23,13 +23,18 @@ from bk_resource import api
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.common_utils import ignored
 from blueapps.utils.logger import logger
-from blueapps.utils.request_provider import get_local_request, get_request_username
+from blueapps.utils.request_provider import get_local_request
+from iam.contrib.converter.queryset import DjangoQuerySetConverter
 
+from apps.meta.models import Tag
 from apps.permission.handlers.actions import ActionEnum, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
-from services.web.vision.exceptions import VisionPermissionInvalid
+from services.web.vision.exceptions import (
+    VisionPermissionInvalid,
+    VisionVariableInvalid,
+)
 from services.web.vision.handlers.convertor import DeptConvertor
 
 
@@ -47,7 +52,7 @@ class FilterDataHandler:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def check_data(self, input_data: str) -> None:
+    def check_data(self, input_data: List[str]) -> List[str]:
         """
         检查数据是否合法及是否有权限
         """
@@ -89,7 +94,7 @@ class DeptFilterHandler(FilterDataHandler):
                 authed_dept.add(departments[0]["full_name"])
 
         # 获取有权限的组织架构
-        permission = Permission(get_request_username())
+        permission = Permission(username)
         request = permission.make_request(action=get_action_by_id(ActionEnum.VIEW_PANEL), resources=[])
         policies = permission.iam_client._do_policy_query(request)
         if policies:
@@ -103,19 +108,81 @@ class DeptFilterHandler(FilterDataHandler):
         data.sort(key=lambda item: item["label"])
         return data
 
-    def check_data(self, input_data: str) -> None:
+    def check_data(self, input_data: List[str]) -> List[str]:
+        # 检查
+        if not isinstance(input_data, list):
+            raise VisionVariableInvalid()
+
         # 获取有权限的架构
-        departments = self.get_data()
-        for dept in departments:
-            if input_data.startswith(dept["value"]):
-                return
+        departments = [dept["value"] for dept in self.get_data()]
+
+        # 为空直接范围
+        if not input_data:
+            return departments
+
+        # 逐个判断权限
+        no_permission_dept = []
+        for item in input_data:
+            has_permission = False
+            for dept in departments:
+                if item.startswith(dept):
+                    has_permission = True
+                    break
+            if not has_permission:
+                no_permission_dept.append(item)
+
+        # 有权限则跳过
+        if not no_permission_dept:
+            return input_data
 
         # 无权限申请
         apply_data, apply_url = Permission().get_apply_data(
-            [ActionEnum.VIEW_PANEL], [ResourceEnum.DEPT_BK_USERMGR.create_instance(instance_id=input_data)]
+            [ActionEnum.VIEW_PANEL],
+            [ResourceEnum.DEPT_BK_USERMGR.create_instance(instance_id=item) for item in no_permission_dept],
         )
         raise PermissionException(
             action_name=str(ActionEnum.VIEW_PANEL.name),
             apply_url=apply_url,
             permission=apply_data,
+        )
+
+
+class TagFilterHandler(FilterDataHandler):
+    """
+    获取标签数据
+    """
+
+    def get_data(self) -> List[Dict[str, str]]:
+        # 初始化
+        authed_tag = set()
+
+        # 获取用户
+        username = self.get_request_username()
+
+        # 获取有权限的标签
+        permission = Permission(username)
+        request = permission.make_request(action=get_action_by_id(ActionEnum.VIEW_TAG_PANEL), resources=[])
+        policies = permission.iam_client._do_policy_query(request)
+        if policies:
+            condition = DjangoQuerySetConverter().convert(policies)
+            authed_tag = Tag.objects.filter(condition)
+
+        data = [{"label": tag.tag_name, "value": tag.tag_id} for tag in authed_tag]
+        data.sort(key=lambda item: item["label"])
+        return data
+
+    def check_data(self, input_data: List[str]) -> List[str]:
+        # 检查
+        if not isinstance(input_data, list):
+            raise VisionVariableInvalid()
+
+        # 为空则直接返回
+        if not input_data:
+            return [item["value"] for item in self.get_data()]
+
+        # 检验权限
+        Permission(self.get_request_username()).is_allowed(
+            action=ActionEnum.VIEW_TAG_PANEL,
+            resources=[ResourceEnum.TAG.create_instance(item) for item in input_data],
+            raise_exception=True,
         )
