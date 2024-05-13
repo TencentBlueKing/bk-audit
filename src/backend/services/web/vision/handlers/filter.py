@@ -117,7 +117,7 @@ class DeptFilterHandler(FilterDataHandler):
         departments = [dept["value"] for dept in self.get_data()]
 
         # 为空直接范围
-        if not input_data:
+        if not input_data and departments:
             return departments
 
         # 逐个判断权限
@@ -132,7 +132,7 @@ class DeptFilterHandler(FilterDataHandler):
                 no_permission_dept.append(item)
 
         # 有权限则跳过
-        if not no_permission_dept:
+        if not no_permission_dept and input_data:
             return input_data
 
         # 无权限申请
@@ -176,9 +176,12 @@ class TagFilterHandler(FilterDataHandler):
         if not isinstance(input_data, list):
             raise VisionVariableInvalid()
 
+        # 已授权的标签
+        authed_tags = [item["value"] for item in self.get_data()]
+
         # 为空则直接返回
-        if not input_data:
-            return [item["value"] for item in self.get_data()]
+        if not input_data and authed_tags:
+            return authed_tags
 
         # 检验权限
         Permission(self.get_request_username()).is_allowed(
