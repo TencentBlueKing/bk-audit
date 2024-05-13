@@ -1107,6 +1107,9 @@
                                 },
                                 {
                                     "id": "view_panel"
+                                },
+                                {
+                                    "id": "view_tag_panel"
                                 }
                             ]
                         }
