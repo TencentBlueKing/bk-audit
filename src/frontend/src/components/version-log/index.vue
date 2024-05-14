@@ -20,7 +20,6 @@
     dialog-type="show"
     :draggable="false"
     ext-cls="version-log-dialog"
-    height="70%"
     :is-show="isShow"
     title=""
     width="60%"
@@ -126,6 +125,7 @@
 <style lang="postcss">
 .log-version {
   display: flex;
+  height: 70vh;
   margin: -33px -24px -26px;
 
   .log-version-left {
@@ -198,7 +198,7 @@
         left: 0;
         width: 6px;
         background-color: #3a84ff;
-        content: " ";
+        content: ' ';
       }
     }
   }
@@ -220,14 +220,13 @@
     h5 {
       height: auto;
       margin: 10px 0;
-      font:
-        normal 14px/1.5
-        "Helvetica Neue",
+      font: normal 14px/1.5
+        'Helvetica Neue',
         Helvetica,
         Arial,
-        "Lantinghei SC",
-        "Hiragino Sans GB",
-        "Microsoft Yahei",
+        'Lantinghei SC',
+        'Hiragino Sans GB',
+        'Microsoft Yahei',
         sans-serif;
       font-weight: bold;
       color: #34383e;
@@ -306,11 +305,11 @@
         float: left;
         width: 6px;
         height: 6px;
-        margin-top: calc(0.9em - 5px);
+        margin-top: calc(.9em - 5px);
         margin-left: -15px;
         background: #000;
         border-radius: 50%;
-        content: "";
+        content: '';
       }
     }
 
@@ -360,7 +359,7 @@
     code {
       width: 95%;
       padding: 0 3px 2px;
-      font-family: Monaco, Menlo, Consolas, "Courier New", monospace;
+      font-family: Monaco, Menlo, Consolas, 'Courier New', monospace;
       font-size: 14px;
       color: #333;
       border-radius: 3px;
@@ -414,12 +413,12 @@
     }
 
     blockquote small::before {
-      content: "\2014 \00A0";
+      content: '\2014 \00A0';
     }
 
     blockquote::before,
     blockquote::after {
-      content: "";
+      content: '';
     }
   }
 }
