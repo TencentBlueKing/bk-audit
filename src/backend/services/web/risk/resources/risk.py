@@ -105,6 +105,8 @@ class RetrieveRisk(RiskMeta):
 
 
 class RetrieveRiskAPIGW(RetrieveRisk):
+    audit_action = None
+
     def perform_request(self, validated_request_data):
         get_app_info()
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
