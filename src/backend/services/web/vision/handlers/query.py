@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from bk_resource import api
 
 from services.web.vision.constants import KeyVariable, PanelType
-from services.web.vision.handlers.filter import DeptFilterHandler
+from services.web.vision.handlers.filter import DeptFilterHandler, TagFilterHandler
 
 
 class VisionHandler:
@@ -51,6 +51,14 @@ class VisionHandler:
                     chart_config["default"] = chart_config["json"][0]["value"] if chart_config["json"] else []
                     # 替换外层默认值
                     vision_data["filters"][uid] = chart_config["default"]
+                # 标签
+                case KeyVariable.TAG:
+                    # 获取数据
+                    chart_config["json"] = TagFilterHandler().get_data()
+                    # 设置默认值
+                    chart_config["default"] = chart_config["json"][0]["value"] if chart_config["json"] else []
+                    # 替换外层默认值
+                    vision_data["filters"][uid] = chart_config["default"]
         return vision_data
 
     def query_dataset(self, params: dict) -> dict:
@@ -61,7 +69,10 @@ class VisionHandler:
             match self.parse_flag(variable_config["flag"]):
                 # 组织架构
                 case KeyVariable.DEPARTMENT:
-                    DeptFilterHandler().check_data(variable_config["value"])
+                    variable_config["value"] = DeptFilterHandler().check_data(variable_config["value"])
+                # 标签
+                case KeyVariable.TAG:
+                    variable_config["value"] = TagFilterHandler().check_data(variable_config["value"])
         return api.bk_vision.query_dataset(**params)
 
     def query_field_data(self, params: dict) -> dict:
