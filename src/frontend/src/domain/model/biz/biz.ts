@@ -22,6 +22,7 @@ export default class Biz {
   permission: {
     view_business_v2_bk_log: boolean;
   };
+  displayName: string;
 
   constructor(payload = {} as Biz) {
     this.id = payload.id;
@@ -29,5 +30,6 @@ export default class Biz {
     this.space_type_name = payload.space_type_name;
     this.space_type_id = payload.space_type_id;
     this.permission = payload.permission;
+    this.displayName = `${payload.name}(${payload.id})`;
   }
 }
