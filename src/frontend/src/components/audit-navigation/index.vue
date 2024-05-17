@@ -156,7 +156,7 @@
   // }));
 
   const scrollStyles = computed(() => {
-    const contentHeaderHeight = showNotice.value.enabled ? 144 : 104;
+    const contentHeaderHeight = showNotice.value.enabled && showAlert.value ? 144 : 104;
     return {
       width: `calc(100vw - ${realSideWidth.value}px)`,
       height: `calc(100vh - ${contentHeaderHeight}px)`,
@@ -248,6 +248,7 @@
   const showAlert = ref(false);
   const showAlertChange = (isShow: boolean) => {
     showAlert.value = isShow;
+    localStorage.setItem('show-notice', showNotice.value.enabled && isShow);
   };
 </script>
 <style lang="postcss">
