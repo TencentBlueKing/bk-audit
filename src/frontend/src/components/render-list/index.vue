@@ -279,7 +279,7 @@
       const windowInnerHeight = window.innerHeight;
       const tableHeaderHeight = 42;
       const paginationHeight = 60;
-      const pageOffsetBottom = JSON.parse(localStorage.getItem('show-notice')) ? 60 : 20;
+      const pageOffsetBottom = JSON.parse(localStorage.getItem('show-notice') || 'false') ? 60 : 20;
       const tableRowHeight = 42;
 
       const tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
