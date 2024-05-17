@@ -105,6 +105,8 @@
 
   import NoticeService from '@service/notice';
 
+  import useEventBus from '@hooks/use-event-bus';
+
   import NoticeComponent from '@blueking/notice-component';
 
   import useRequest from '@/hooks/use-request';
@@ -113,6 +115,7 @@
     (e: 'menu-flod', value: boolean):void
   }
   const emit = defineEmits<Emits>();
+  const { emit: emits } = useEventBus();
 
   const apiUrl = `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/api/v1/bk-notice/announcements/`;
   const TOGGLE_CACHE = 'navigation_toggle_status';
@@ -248,7 +251,8 @@
   const showAlert = ref(false);
   const showAlertChange = (isShow: boolean) => {
     showAlert.value = isShow;
-    localStorage.setItem('show-notice', showNotice.value.enabled && isShow);
+    // 发送通知中心状态两个条件：1.拥有enable权限，2.通知中心有内容
+    emits('show-notice', showNotice.value.enabled && isShow);
   };
 </script>
 <style lang="postcss">

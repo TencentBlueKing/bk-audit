@@ -23,7 +23,7 @@
     "aegis-web-sdk": "1.38.3",
     "art-template": "4.13.2",
     "axios": "1.6.0",
-    "bkui-vue": "^1.0.3-beta.68.dialog.1",
+    "bkui-vue": "^2.0.1-beta.1",
     "connect-history-api-fallback": "2.0.0",
     "cookie-parser": "1.4.6",
     "dayjs": "1.11.10",
