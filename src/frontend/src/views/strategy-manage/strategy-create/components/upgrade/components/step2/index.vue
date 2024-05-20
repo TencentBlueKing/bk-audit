@@ -253,7 +253,6 @@
         subTitle: t('升级后将按照方案新版本设定的最新输出字段输出审计风险，请确认是否升级？'),
         cancelText: t('取消'),
         confirmText: t('确定'),
-        draggable: false,
         headerAlign: 'center',
         contentAlign: 'center',
         footerAlign: 'center',

@@ -27,7 +27,7 @@
       style="position: relative; ">
       <span
         v-if="(isEditMode || isCloneMode) && !isChange"
-        style="position: absolute; top:-4px; left: 10px; z-index:10; pointer-events: none;">
+        style="position: absolute; top: -4px; left: 10px; z-index: 10; pointer-events: none;">
         {{ localValueMap }}
       </span>
       <bk-cascader
@@ -142,7 +142,6 @@
         subTitle: t('多个参数的映射值都需要选择拓展字段，则需保持所选操作一致，此处选择其他操作会同步修改其他参数已经映射的操作。请确认是否选择其他操作'),
         cancelText: t('取消'),
         confirmText: t('确定'),
-        draggable: false,
         headerAlign: 'center',
         contentAlign: 'center',
         footerAlign: 'center',
@@ -285,7 +284,7 @@
     font-size: 12px;
   }
 
-  .bk-cascader.is-hover:not(.is-disabled){
+  .bk-cascader.is-hover:not(.is-disabled) {
     border: 1px solid #fff;
   }
 }
@@ -294,15 +293,15 @@
   border-color: #ea3636 !important;
 }
 
-.is-errored .cascader-wrap{
+.is-errored .cascader-wrap {
   height: 41px;
   padding-top: 4px;
-  background-color: #FEE;
+  background-color: #fee;
 }
 
 .is-errored.is-background-errored-tip .bk-cascader {
-  background-color: #FEE !important;
-  border-color: #FEE !important;
+  background-color: #fee !important;
+  border-color: #fee !important;
 
 }
 
