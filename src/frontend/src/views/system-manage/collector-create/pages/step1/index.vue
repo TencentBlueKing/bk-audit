@@ -82,31 +82,35 @@
                   v-model="formData.bk_biz_id"
                   :clearable="false"
                   :disabled="isEditMode"
+                  display-key="displayName"
+                  enable-virtual-render
                   filterable
+                  id-key="id"
                   :input-search="false"
+                  :list="bizList"
                   :no-match-text="t('无匹配数据')"
                   :placeholder="t('请选择所属空间')"
                   :search-placeholder="t('请输入关键字')"
                   @change="handleBizIdChange">
-                  <auth-option
-                    v-for="item in bizList"
-                    :key="item.id"
-                    action-id="view_business_v2_bk_log"
-                    :label="`${item.name}(${item.id})`"
-                    :permission="item.permission.view_business_v2_bk_log"
-                    :resource="item.id"
-                    :value="item.id">
-                    <div style="display: flex;">
-                      <span>{{ item.name }}({{ item.id }})</span>
-                      <span
-                        class="business-type"
-                        :class="{
-                          'business-type-active': item.space_type_id === 'bkcc'
-                        }">
-                        {{ item.space_type_name }}
-                      </span>
-                    </div>
-                  </auth-option>
+                  <template #virtualScrollRender="{ item }">
+                    <auth-component
+                      action-id="view_business_v2_bk_log"
+                      :label="`${item.name}(${item.id})`"
+                      :permission="item.permission.view_business_v2_bk_log"
+                      :resource="item.id"
+                      :value="item.id">
+                      <div style="display: flex;">
+                        <span>{{ item.name }}({{ item.id }})</span>
+                        <span
+                          class="business-type"
+                          :class="{
+                            'business-type-active': item.space_type_id === 'bkcc'
+                          }">
+                          {{ item.space_type_name }}
+                        </span>
+                      </div>
+                    </auth-component>
+                  </template>
                 </bk-select>
               </bk-loading>
             </bk-form-item>
