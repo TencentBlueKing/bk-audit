@@ -30,4 +30,8 @@ export default class Biz {
     this.space_type_id = payload.space_type_id;
     this.permission = payload.permission;
   }
+
+  get displayName() {
+    return `${this.name}(${this.id})`;
+  }
 }

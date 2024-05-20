@@ -30,7 +30,6 @@ export const changeConfirm = (message = '离开将会导致未保存信息丢失
       subTitle: msg,
       cancelText: t('取消'),
       confirmText: t('确定'),
-      draggable: false,
       headerAlign: 'center',
       contentAlign: 'center',
       footerAlign: 'center',
@@ -38,7 +37,7 @@ export const changeConfirm = (message = '离开将会导致未保存信息丢失
         window.changeConfirm = false;
         resolve(true);
       },
-      onClosed() {
+      onClose() {
         reject(false);
       },
     });

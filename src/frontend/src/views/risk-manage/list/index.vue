@@ -461,8 +461,6 @@
 <style lang='postcss'>
 
 .risk-manage-list-page-wrap {
-  padding-bottom: 44px;
-
   .risk-manage-list {
     margin-top: 16px;
     background-color: white;

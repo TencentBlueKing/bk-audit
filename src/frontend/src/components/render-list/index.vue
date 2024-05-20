@@ -89,14 +89,15 @@
   import _ from 'lodash';
   import {
     nextTick,
+    onBeforeUnmount,
     onMounted,
     reactive,
     type Ref,
     ref,
-    watch,
-  } from 'vue';
+    watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -143,6 +144,7 @@
   }) ;
   const emits = defineEmits<Emits>();
   const { getRecordPageParams, removePageParams } = useRecordPage;
+  const { on, off } = useEventBus();
 
   const rootRef = ref();
   const { t } = useI18n();
@@ -271,6 +273,16 @@
   onMounted(() => {
     parseURL();
     calcTableHeight();
+  });
+
+  // 监听通知中心状态，重新计算表格高度
+  on('show-notice', () => {
+    calcTableHeight();
+  });
+
+  // 销毁组件时去除监听，防止多次绑定触发
+  onBeforeUnmount(() => {
+    off('show-notice');
   });
 
   const calcTableHeight = () => {
