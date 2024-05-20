@@ -23,7 +23,7 @@
     :is-show="isShow"
     title=""
     width="60%"
-    @value-change="handleValueChange">
+    @closed="handleClosed">
     <div
       class="log-version">
       <div class="log-version-left">
@@ -80,8 +80,8 @@
 
   const current = ref(0);
   const active = ref(0);
-  const handleValueChange = (value: boolean) => {
-    emits('update:isShow', value);
+  const handleClosed = () => {
+    emits('update:isShow', false);
   };
   const handleItemClick = (version: string, index: number) => {
     active.value = index;

@@ -674,7 +674,7 @@
           onConfirm() {
             SendSwitchStrategy(true);
           },
-          onClosed() {
+          onClose() {
             SendSwitchStrategy(false);
           },
         });
