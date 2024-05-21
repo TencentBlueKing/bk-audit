@@ -83,6 +83,8 @@ class PluginEtlHandler:
         # 更新入库字段
         for field in bkbase_params["fields"]:
             field["physical_field"] = field["field_name"]
+            # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
+            field["is_doc_values"] = field.get("is_dimension", False)
         # 获取入库参数
         storage_params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
