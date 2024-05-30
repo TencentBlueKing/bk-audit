@@ -6,11 +6,11 @@
 # 各自环境所需的不同依赖, 通过 sites/${env}/deploy/requirements_env.txt得到
 -r requirements_env.txt
 
-bk_audit[opentelemetry]==1.2.0b1
-bk_resource==0.4.8
+bk_audit[opentelemetry]==1.2.2b0
+bk_resource==0.4.11
 
 # web server
-gunicorn==21.2.0
+gunicorn==22.0.0
 
 # django
 django==3.2.23
@@ -29,20 +29,19 @@ django-sslserver==0.22
 whitenoise==5.2.0
 
 # redis
-redis==3.2.0
-redis-py-cluster==2.1.0
+redis==5.0.0
 django-redis==5.2.0
 
 # celery
-celery==4.4.7
+celery==5.2.3
 django-celery-beat==2.2.0
-django-celery-results==2.0.1
+django-celery-results==2.4.0
 
 # iam
 bk-iam==1.3.2
 
 # ipython
-ipython==8.10
+ipython==8.10.0
 
 # pyinstrument
 pyinstrument==3.4.2
@@ -53,21 +52,21 @@ arrow==1.2.2
 requests==2.31.0
 
 # version log
-mistune==0.8.4
+mistune==2.0.3
 
 # OT
 protobuf==3.19.5
-opentelemetry-api==1.11.1
-opentelemetry-sdk==1.11.1
-opentelemetry-exporter-otlp==1.11.1
-opentelemetry-exporter-jaeger==1.11.1
-opentelemetry-instrumentation==0.30b1
-opentelemetry-instrumentation-django==0.30b1
-opentelemetry-instrumentation-dbapi==0.30b1
-opentelemetry-instrumentation-redis==0.30b1
-opentelemetry-instrumentation-requests==0.30b1
-opentelemetry-instrumentation-celery==0.30b1
-opentelemetry-instrumentation-logging==0.30b1
+opentelemetry-api==1.20.0
+opentelemetry-sdk==1.20.0
+opentelemetry-exporter-otlp==1.20.0
+opentelemetry-exporter-jaeger==1.20.0
+opentelemetry-instrumentation==0.41b0
+opentelemetry-instrumentation-django==0.41b0
+opentelemetry-instrumentation-dbapi==0.41b0
+opentelemetry-instrumentation-redis==0.41b0
+opentelemetry-instrumentation-requests==0.41b0
+opentelemetry-instrumentation-celery==0.41b0
+opentelemetry-instrumentation-logging==0.41b0
 django-prometheus==2.2.0
 
 # numpy

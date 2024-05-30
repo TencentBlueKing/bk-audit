@@ -16,11 +16,11 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from celery.task import task
+from blueapps.core.celery import celery_app
 from django.conf import settings
 
 
-@task(queue="notice", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(queue="notice", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def send_notice(*args, **kwargs):
     from apps.notice.handlers import NoticeHandler
 

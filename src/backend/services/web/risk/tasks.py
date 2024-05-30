@@ -22,9 +22,10 @@ import os
 from billiard.exceptions import SoftTimeLimitExceeded
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
+from blueapps.contrib.celery_tools.periodic import periodic_task
+from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
-from celery.task import periodic_task, task
 from django.conf import settings
 from django.core.cache import cache as _cache
 from django.db import transaction
@@ -67,7 +68,7 @@ def sync_bkm_alert():
         ErrorMsgHandler(gettext("Sync BKM Alert Failed"), str(err)).send()
 
 
-@task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:add_event")
 def add_event(data: list):
     """创建审计事件"""
@@ -137,7 +138,7 @@ def process_risk_ticket(*, risk_id: str = None):
             process_one_risk(risk_id=risk.risk_id)
 
 
-@task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(
     lock_name="celery:process_one_risk",
     load_lock_name=lambda **kwargs: f"celery:process_one_risk:{kwargs['risk_id']}",
