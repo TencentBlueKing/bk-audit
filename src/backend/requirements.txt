@@ -30,7 +30,7 @@ mysqlclient==2.1.1
 whitenoise==5.2.0
 
 # redis
-redis==5.0.0
+redis==3.5.3
 django-redis==5.2.0
 
 # celery
