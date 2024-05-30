@@ -23,9 +23,9 @@ from typing import List
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.common_utils import ignored
+from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.utils.logger import logger_celery as logger
 from celery.schedules import crontab
-from celery.task import periodic_task
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
