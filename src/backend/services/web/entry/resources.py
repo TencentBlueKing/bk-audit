@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from bk_resource import api
-from blueapps.account import ConfFixture
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.contrib import auth
@@ -55,9 +54,7 @@ class PingResource(EntryMeta):
 class LogoutResource(EntryMeta):
     def perform_request(self, validated_request_data):
         auth.logout(get_local_request())
-        response = Response()
-        response.delete_cookie(ConfFixture.BACKEND_TYPE, domain=settings.AUTH_BACKEND_DOMAIN)
-        return response
+        return
 
 
 class I18nResource(EntryMeta):
