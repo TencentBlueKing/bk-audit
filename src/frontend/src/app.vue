@@ -196,7 +196,7 @@
 
   const handleLogout = async () => {
     await fetchLogout();
-    window.location.reload();
+    window.location.href = `${configData.value.login_url}?is_from_logout=1&c_url=${encodeURIComponent(window.location.href)}`;
   };
 
   const handleSwitchLang = (lang: string) => {
