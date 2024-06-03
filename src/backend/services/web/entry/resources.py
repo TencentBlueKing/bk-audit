@@ -55,9 +55,7 @@ class PingResource(EntryMeta):
 class LogoutResource(EntryMeta):
     def perform_request(self, validated_request_data):
         auth.logout(get_local_request())
-        response = Response()
-        response.delete_cookie(ConfFixture.BACKEND_TYPE, domain=settings.AUTH_BACKEND_DOMAIN)
-        return response
+        return
 
 
 class I18nResource(EntryMeta):
