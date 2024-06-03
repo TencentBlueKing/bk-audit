@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import abc
 
 from bk_resource import api
-from blueapps.account import ConfFixture
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.contrib import auth
