@@ -196,7 +196,10 @@
 
   const handleLogout = async () => {
     await fetchLogout();
-    window.location.reload();
+    const loginUrl = configData.value.login_url;
+    const currentUrl = window.location.href;
+    const formattedLoginUrl = /^(https?:\/\/|\/\/)/.test(loginUrl) ? loginUrl : `//${loginUrl}`;
+    window.location.href = `${formattedLoginUrl}?is_from_logout=1&c_url=${encodeURIComponent(currentUrl)}`;
   };
 
   const handleSwitchLang = (lang: string) => {
