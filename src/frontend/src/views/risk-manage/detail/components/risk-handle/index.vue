@@ -18,7 +18,10 @@
   <div
     ref="rootRef"
     class="risk-manage-detail-handle-part">
-    <div style="padding-bottom: 16px;margin-left: 14px;">
+    <div class="header">
+      <div class="title">
+        工单处理
+      </div>
       <!-- 标记误报 / 解除误报 -->
       <mark-misreport-btn
         v-if="(data.risk_label === 'misreport')|| (data.risk_label==='normal')"
@@ -107,7 +110,7 @@
   }
   interface Props{
     data: RiskManageModel,
-    riskId: string,
+    riskId: number,
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -343,11 +346,25 @@
   });
 </script>
 <style scoped lang="postcss">
-.risk-manage-detail-handle-part{
+.risk-manage-detail-handle-part {
   padding: 14px;
+
+  .header {
+    display: flex;
+    padding-bottom: 16px;
+    justify-content: space-between;
+    align-items: center;
+
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 22px;
+      color: #313238;
+    }
+  }
 }
 
-.risk-handle-timeline{
+.risk-handle-timeline {
   :deep(.bk-timeline-dot .bk-timeline-content) {
     max-width: 100%;
   }

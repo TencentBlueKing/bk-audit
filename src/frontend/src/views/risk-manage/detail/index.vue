@@ -17,38 +17,33 @@
 <template>
   <bk-loading :loading="loading || strategyLoading || statusLoading">
     <div class="risk-manage-detail-wrap mb12">
-      <base-info
-        :data="riskData"
-        :risk-status-common="riskStatusCommon"
-        :strategy-list="strategyList" />
+      <div class="left">
+        <base-info
+          :data="riskData"
+          :risk-status-common="riskStatusCommon"
+          :strategy-list="strategyList" />
+        <!-- 关联事件 -->
+        <div class="link-event-wrap">
+          <link-event
+            :data="riskData"
+            :strategy-list="strategyList" />
+        </div>
+      </div>
+      <!-- 事件处理 -->
+      <scroll-faker style="width: 368px;">
+        <div class="right">
+          <risk-handle
+            :data="riskData"
+            :risk-id="riskData.risk_id" />
+        </div>
+      </scroll-faker>
     </div>
-    <bk-tab
-      v-model:active="active"
-      type="card-grid"
-      @change="onTabChange">
-      <bk-tab-panel
-        v-for="(item) in panels"
-        :key="item.name"
-        :label="t(item.label)"
-        :name="item.name" />
-      <component
-        :is="comMap[active as keyof typeof comMap]"
-        v-if="!loading && riskData"
-        :data="riskData"
-        :risk-id="riskData.risk_id"
-        :strategy-list="strategyList"
-        @update="handleUpdate" />
-
-      <!-- 跳转到页面最后的锚点 -->
-      <span id="risk-manage-detail-end-anchor" />
-    </bk-tab>
   </bk-loading>
 </template>
 
 <script setup lang='ts'>
   import {
     onUnmounted,
-    ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -64,7 +59,6 @@
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
   import useRouterLink from '@hooks/use-router-link';
-  import useUrlSearch from '@hooks/use-url-search';
 
   import {
     execCopy,
@@ -78,20 +72,6 @@
   const route = useRoute();
   const { t } = useI18n();
   let timeout: undefined | number = undefined;
-  const panels = [
-    { name: 'linkEvent', label: '关联事件' },
-    { name: 'handleRisk', label: '风险处理' },
-  ];
-  const comMap = {
-    linkEvent: LinkEvent,
-    handleRisk: RiskHandle,
-  };
-  const active = ref('linkEvent');
-  const { getSearchParams, replaceSearchParams } = useUrlSearch();
-  const { tab } = getSearchParams();
-  if (tab) {
-    active.value = tab;
-  }
 
   const {
     loading: strategyLoading,
@@ -134,11 +114,6 @@
       id: route.params.riskId,
     });
   };
-  const onTabChange = (tab: string) => {
-    replaceSearchParams({
-      tab,
-    });
-  };
   // 轮训查询详情
   const startPolling = () => {
     clearTimeout(timeout);
@@ -165,11 +140,23 @@
 </script>
 <style scoped lang="postcss">
 .risk-manage-detail-wrap {
-  .flex {
-    display: flex;
-    align-items: center;
+  display: flex;
 
+  .left {
+    width: calc(100% - 368px);
+    padding-right: 16px;
 
+    .link-event-wrap {
+      padding: 10px 16px;
+      margin-top: 16px;
+      background: #fff;
+      border-radius: 2px;
+      box-shadow: 0 2px 4px 0 #1919290d;
+    }
+  }
+
+  .right {
+    max-height: calc(100vh - 144px);
   }
 }
 </style>

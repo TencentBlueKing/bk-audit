@@ -18,6 +18,7 @@
   <div class="risk-await-deal-wrap">
     <audit-form
       ref="formRef"
+      form-type="vertical"
       :model="formData"
       :rules="rules">
       <bk-form-item
