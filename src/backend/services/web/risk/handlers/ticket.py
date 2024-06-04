@@ -455,7 +455,7 @@ class AutoProcess(RiskFlowBaseHandler):
         pa_params = pa_params or self.rule.pa_params
         constants = {}
         for c in template_info["pipeline_tree"]["constants"].values():
-            field = pa_params.get(c["key"])
+            field = pa_params.get(c["key"]) or {}
             # 如果配置了常量，优先使用，没有常量使用字段映射
             value = field.get("value") or getattr(self.risk, field.get("field"), "")
             # 对值的类型进行转换
