@@ -31,9 +31,7 @@ from apps.permission.handlers.actions import ActionEnum, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
-from services.web.vision.exceptions import (
-    VisionPermissionInvalid,
-)
+from services.web.vision.exceptions import VisionPermissionInvalid
 from services.web.vision.handlers.convertor import DeptConvertor
 
 

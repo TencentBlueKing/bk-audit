@@ -24,9 +24,10 @@ import traceback
 from billiard.exceptions import SoftTimeLimitExceeded
 from bk_resource import resource
 from bk_resource.exceptions import APIRequestError
+from blueapps.contrib.celery_tools.periodic import periodic_task
+from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger
 from celery.schedules import crontab
-from celery.task import periodic_task, task
 from django.conf import settings
 from django.utils import timezone
 from django.utils.translation import gettext
@@ -163,7 +164,7 @@ def refresh_snapshot():
     Snapshot.objects.filter(id__in=snapshot_ids).update(status=SnapshotRunningStatus.PREPARING.value)
 
 
-@task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def create_api_push_etl(collector_config_id: int):
     """
     创建 API PUSH 对应的数据清洗入库链路
