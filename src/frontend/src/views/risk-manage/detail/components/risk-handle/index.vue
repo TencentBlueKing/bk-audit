@@ -28,6 +28,7 @@
         class="mr16"
         :data="data"
         :last-ticket-history="_.last(ticketHistory)"
+        style="margin-left: auto;"
         :user-info="userInfo"
         @update="handleUpdate" />
       <!-- 重开 -->
@@ -35,6 +36,7 @@
         v-if="data.status==='closed' && data.risk_label ==='normal'"
         class="mr16"
         :data="data"
+        style="margin-left: auto;"
         :user-info="userInfo"
         @update="handleUpdate" />
 
