@@ -235,6 +235,7 @@
   });
 
   const handleUpdate = () => {
+    isInit = false;
     emits('update');
   };
   const getIndexByTag = (tag: string) => {

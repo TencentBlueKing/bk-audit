@@ -34,7 +34,8 @@
         <div class="right">
           <risk-handle
             :data="riskData"
-            :risk-id="riskData.risk_id" />
+            :risk-id="riskData.risk_id"
+            @update="handleUpdate" />
         </div>
       </scroll-faker>
     </div>
