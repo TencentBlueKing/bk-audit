@@ -288,7 +288,7 @@
               <p>`,
           content: '<template/>',
           icon: <span style='background: #F0F1F5;width: 26px;height: 26px;border-radius: 50%;display: inline-block;text-align:center;line-height: 26px;'>
-            <audit-icon type={ historyActionMap[item.action].icon }  style='color: #989CA7;font-size: 16px;'/>
+            <auditIcon type={ historyActionMap[item.action].icon }  style='color: #989CA7;font-size: 16px;'/>
           </span>,
         };
         if (!['ForApprove', 'AutoProcess'].includes(item.action)) {
