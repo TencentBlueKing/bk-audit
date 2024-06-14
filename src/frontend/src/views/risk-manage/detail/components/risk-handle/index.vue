@@ -18,36 +18,35 @@
   <div
     ref="rootRef"
     class="risk-manage-detail-handle-part">
+    <div class="title mb16">
+      工单处理
+    </div>
     <div class="header">
-      <div class="title">
-        工单处理
+      <div style="margin-right: auto;">
+        <!-- 标记误报 / 解除误报 -->
+        <mark-misreport-btn
+          v-if="(data.risk_label === 'misreport')|| (data.risk_label==='normal')"
+          class="mr16"
+          :data="data"
+          :last-ticket-history="_.last(ticketHistory)"
+          :user-info="userInfo"
+          @update="handleUpdate" />
+        <!-- 重开 -->
+        <reopen-btn
+          v-if="data.status==='closed' && data.risk_label ==='normal'"
+          class="mr16"
+          :data="data"
+          :user-info="userInfo"
+          @update="handleUpdate" />
+        <!-- 跳转到风险总结的锚点 -->
+        <span id="risk-manage-content-btn" />
+        <!-- 风险总结 -->
+        <risk-content-btn
+          v-if="data.status==='closed'"
+          :data="data"
+          :user-info="userInfo"
+          @update="handleUpdate" />
       </div>
-      <!-- 标记误报 / 解除误报 -->
-      <mark-misreport-btn
-        v-if="(data.risk_label === 'misreport')|| (data.risk_label==='normal')"
-        class="mr16"
-        :data="data"
-        :last-ticket-history="_.last(ticketHistory)"
-        style="margin-left: auto;"
-        :user-info="userInfo"
-        @update="handleUpdate" />
-      <!-- 重开 -->
-      <reopen-btn
-        v-if="data.status==='closed' && data.risk_label ==='normal'"
-        class="mr16"
-        :data="data"
-        style="margin-left: auto;"
-        :user-info="userInfo"
-        @update="handleUpdate" />
-
-      <!-- 跳转到风险总结的锚点 -->
-      <span id="risk-manage-content-btn" />
-      <!-- 风险总结 -->
-      <risk-content-btn
-        v-if="data.status==='closed'"
-        :data="data"
-        :user-info="userInfo"
-        @update="handleUpdate" />
     </div>
     <bk-timeline
       v-if="list && list.length"
@@ -350,20 +349,20 @@
 </script>
 <style scoped lang="postcss">
 .risk-manage-detail-handle-part {
-  padding: 14px;
+  padding: 0 14px 14px;
+
+  .title {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
+  }
 
   .header {
     display: flex;
-    padding-bottom: 16px;
+    padding-bottom: 20px;
     justify-content: space-between;
     align-items: center;
-
-    .title {
-      font-size: 14px;
-      font-weight: 700;
-      line-height: 22px;
-      color: #313238;
-    }
   }
 }
 

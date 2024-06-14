@@ -18,7 +18,7 @@ import { InfoBox } from 'bkui-vue';
 
 import i18n from '@language/index.js';
 
-export const changeConfirm = (message = '离开将会导致未保存信息丢失') => {
+export const changeConfirm = (message = '离开将会导致未保存信息丢失'): Promise<boolean> => {
   const { t, te } = i18n.global;
   if (!window.changeConfirm || window.changeConfirm === 'popover') {
     return Promise.resolve(true);
