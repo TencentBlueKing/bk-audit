@@ -86,7 +86,6 @@
             filterable
             :loading="applicationLoading"
             :placeholder="t('请选择')"
-            style="width: 480px;"
             @change="handlePaIdChange">
             <bk-option
               v-for="item in filterProcessApplicationList"
@@ -101,7 +100,7 @@
             class="is-required mr16"
             :label="t('套餐参数')"
             property="pa_params">
-            <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
+            <div style="padding: 16px 12px;background: rgb(245 247 250 / 100%)">
               <template
                 v-for="(val, index) in Object.values(paramsDetailData)"
                 :key="`${val.key}-${index}`">
