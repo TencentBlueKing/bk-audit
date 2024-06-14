@@ -21,9 +21,10 @@ from typing import List
 
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
+from blueapps.contrib.celery_tools.periodic import periodic_task
+from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
-from celery.task import periodic_task, task
 from django.conf import settings
 from django.utils.translation import gettext
 
@@ -46,7 +47,7 @@ from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.models import Strategy
 
 
-@task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def call_controller(func_name: str, strategy_id: int, *args, **kwargs):
     """
     call controller async
@@ -58,7 +59,7 @@ def call_controller(func_name: str, strategy_id: int, *args, **kwargs):
     controller_func(*args, **kwargs)
 
 
-@task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def check_flow_status(strategy_id: int, success_status: str, failed_status: str, other_status: str):
     """
     check flow status
@@ -148,7 +149,7 @@ def auth_rt():
         AssetAuthHandler(asset).auth()
 
 
-@task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def toggle_monitor(strategy_id: int, is_active: bool):
     """
     切换BKBASE数据监控开关状态
