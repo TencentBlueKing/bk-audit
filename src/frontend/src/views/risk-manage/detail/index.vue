@@ -157,7 +157,7 @@
   }
 
   .right {
-    max-height: calc(100vh - 144px);
+    max-height: 98vh;
   }
 }
 </style>

@@ -381,8 +381,8 @@
 
     .list {
       display: inline-block;
-      width: 164px;
       height: 500px;
+      min-width: 164px;
       padding: 4px 0;
       text-align: center;
       background: #f5f7fa;
@@ -410,7 +410,7 @@
     }
 
     .list-item-detail {
-      flex: 1;
+      width: calc(100% - 164px);
       padding-left: 16px;
 
       .data-info {
@@ -451,7 +451,7 @@
 
       .evidence-info {
         display: flex;
-        width: 1000px;
+        max-width: 1000px;
         border-top: 1px solid #ecedf1;
         border-left: 1px solid #ecedf1;
 
