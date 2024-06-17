@@ -78,7 +78,7 @@
       <!-- 处理套餐 -->
       <template v-else-if="formData.method === 'ProcessPackage'">
         <bk-form-item
-          class="is-required mr16"
+          class="is-required"
           :label="t('处理套餐', { text: 'Tools' })"
           property="pa_id">
           <bk-select
@@ -97,7 +97,7 @@
         <bk-loading :loading="detailLoading">
           <bk-form-item
             v-if="Object.keys(paramsDetailData)?.length"
-            class="is-required mr16"
+            class="is-required"
             :label="t('套餐参数')"
             property="pa_params">
             <div style="padding: 16px 12px;background: rgb(245 247 250 / 100%)">
