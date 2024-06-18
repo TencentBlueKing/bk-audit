@@ -44,6 +44,10 @@
             color: #181818;
         }
 
+        .text-value-bold {
+            font-weight: bold;
+        }
+
         .content-button {
             background: #618dff;
             color: white;
@@ -78,8 +82,8 @@
         {% for content_config in content.content_configs %}
             <tr>
                 <td class="content-config-label" style="width: 100px">
-                    <div class="text-value"
-                         style="margin: 6px 0 ; font-size: 14px; color: #181818">{{ content_config.display_name }}:
+                    <div class="text-value text-value-bold"
+                         style="margin: 6px 0 ; font-size: 14px; color: #181818; font-weight: bold">{{ content_config.display_name }}
                     </div>
                 </td>
                 <td>

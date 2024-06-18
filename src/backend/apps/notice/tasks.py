@@ -15,13 +15,38 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import time
 
-from blueapps.core.celery import celery_app
-from django.conf import settings
+from blueapps.contrib.celery_tools.periodic import periodic_task
+from celery.schedules import crontab
+
+from apps.notice.handlers import NoticeHandler
+from apps.notice.models import NoticeLogV2
+from core.lock import lock
 
 
-@celery_app.task(queue="notice", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-def send_notice(*args, **kwargs):
-    from apps.notice.handlers import NoticeHandler
+@periodic_task(queue="notice", run_every=(crontab(minute="*")))
+@lock(lock_name="celery:send_notice_from_db")
+def send_notice_from_db():
+    """
+    真实发送通知到用户
+    """
 
-    NoticeHandler(*args, **kwargs).send()
+    # 初始化调度时间
+    schedule_time = time.time()
+
+    # 获取聚合键
+    schedule_configs = NoticeLogV2.objects.values("relate_type", "agg_key").distinct()
+
+    # 逐个执行
+    for schedule_config in schedule_configs:
+        NoticeHandler(
+            schedule_time=schedule_time,
+            relate_type=schedule_config["relate_type"],
+            agg_key=schedule_config["agg_key"],
+            notice_logs=NoticeLogV2.objects.filter(
+                relate_type=schedule_config["relate_type"],
+                agg_key=schedule_config["agg_key"],
+                schedule_at__isnull=True,
+            ).order_by("create_at"),
+        ).send()

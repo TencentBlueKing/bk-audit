@@ -16,13 +16,9 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import datetime
-
 from django.contrib import admin
-from django.utils.translation import gettext_lazy
-from rest_framework.settings import api_settings
 
-from apps.notice.models import NoticeGroup, NoticeLog
+from apps.notice.models import NoticeGroup, NoticeLogV2
 
 
 @admin.register(NoticeGroup)
@@ -32,12 +28,20 @@ class NoticeGroupAdmin(admin.ModelAdmin):
     search_fields = ["group_id", "group_name"]
 
 
-@admin.register(NoticeLog)
-class NoticeLogAdmin(admin.ModelAdmin):
-    list_display = ["log_id", "msg_type", "receivers", "title", "send_at_str", "trace_id", "is_success", "is_duplicate"]
-    list_filter = ["msg_type", "is_success", "is_duplicate"]
-    search_fields = ["receivers", "title", "trace_id"]
-
-    @admin.display(description=gettext_lazy("发送时间"))
-    def send_at_str(self, inst: NoticeLog) -> str:
-        return datetime.datetime.fromtimestamp(inst.send_at / 1000).strftime(api_settings.DATETIME_FORMAT)
+@admin.register(NoticeLogV2)
+class NoticeLogV2Admin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "relate_type",
+        "relate_id",
+        "agg_key",
+        "msg_type",
+        "receivers",
+        "title",
+        "create_at",
+        "schedule_at",
+        "schedule_result",
+    ]
+    list_filter = ["relate_type", "schedule_result"]
+    search_fields = ["title", "agg_key", "relate_id"]
+    ordering = ["-id"]
