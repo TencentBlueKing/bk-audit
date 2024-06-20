@@ -21,6 +21,7 @@ from bk_resource.utils.common_utils import get_md5
 from django.db import models
 from django.utils.translation import gettext_lazy
 
+from apps.notice.constants import RelateType
 from core.models import OperateRecordModel, SoftDeleteModel
 
 
@@ -45,10 +46,17 @@ class NoticeContent:
 
     def to_string(self) -> str:
         data = [
-            "{}: {}".format(content_config.display_name, content_config.value)
+            (
+                "{}: {}".format(content_config.display_name, content_config.value)
+                if content_config.display_name
+                else content_config.value
+            )
             for content_config in self.content_configs
         ]
         return "\n".join(data)
+
+    def __str__(self):
+        return self.to_string()
 
 
 class NoticeButton:
@@ -132,3 +140,30 @@ class NoticeLog(OperateRecordModel):
     @classmethod
     def build_hash(cls, receivers: list, msg_type: str, title: str, content: NoticeContent) -> str:
         return get_md5({"receiver": receivers, "msg_type": msg_type, "title": title, "content": content.to_string()})
+
+
+class NoticeLogV2(models.Model):
+    """
+    消息记录 V2
+    """
+
+    id = models.BigAutoField(gettext_lazy("ID"), primary_key=True)
+    relate_type = models.CharField(gettext_lazy("关联类型"), choices=RelateType.choices, max_length=16, db_index=True)
+    relate_id = models.CharField(gettext_lazy("关联ID"), max_length=64, null=True, blank=True, db_index=True)
+    agg_key = models.CharField(gettext_lazy("聚合标识"), max_length=64, null=True, blank=True, db_index=True)
+    msg_type = models.JSONField(gettext_lazy("消息类型"), default=list)
+    receivers = models.JSONField(gettext_lazy("接收人"), default=list)
+    title = models.TextField(gettext_lazy("消息标题"), null=True, blank=True)
+    content = models.TextField(gettext_lazy("消息内容"), null=True, blank=True)
+    create_at = models.DateTimeField(gettext_lazy("创建时间"), auto_now_add=True, db_index=True)
+    schedule_at = models.DateTimeField(gettext_lazy("发送时间"), null=True, blank=True, db_index=True)
+    schedule_result = models.BooleanField(gettext_lazy("发送结果"), null=True, blank=True, db_index=True)
+    debug_info = models.TextField(gettext_lazy("发送调试信息"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = gettext_lazy("通知记录")
+        verbose_name_plural = verbose_name
+        ordering = ["-id"]
+        index_together = [
+            ["relate_type", "agg_key", "schedule_at", "create_at"],
+        ]

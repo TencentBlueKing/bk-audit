@@ -16,32 +16,42 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.contrib import admin
+import abc
+from typing import List
 
-from apps.notice.models import NoticeGroup, NoticeLogV2
+from bk_resource import APIResource
 
-
-@admin.register(NoticeGroup)
-class NoticeGroupAdmin(admin.ModelAdmin):
-    list_display = ["group_id", "group_name", "group_member", "description", "is_deleted"]
-    list_filter = ["is_deleted"]
-    search_fields = ["group_id", "group_name"]
+from apps.notice.models import NoticeButton, NoticeContent
 
 
-@admin.register(NoticeLogV2)
-class NoticeLogV2Admin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "relate_type",
-        "relate_id",
-        "agg_key",
-        "msg_type",
-        "receivers",
-        "title",
-        "create_at",
-        "schedule_at",
-        "schedule_result",
-    ]
-    list_filter = ["relate_type", "schedule_result"]
-    search_fields = ["title", "agg_key", "relate_id"]
-    ordering = ["-id"]
+class Sender:
+    """
+    发送器基类
+    """
+
+    @property
+    @abc.abstractmethod
+    def api_resource(self) -> APIResource:
+        raise NotImplementedError()
+
+    def __init__(
+        self,
+        receivers: List[str],
+        title: str,
+        content: NoticeContent,
+        button: NoticeButton = None,
+        **configs,
+    ):
+        self.receivers = receivers
+        self.title = title
+        self.content = content
+        self.button = button
+        self.configs = configs
+
+    @abc.abstractmethod
+    def _build_params(self) -> dict:
+        raise NotImplementedError()
+
+    def send(self) -> (bool, str):
+        params = self._build_params()
+        return self.api_resource(**params)
