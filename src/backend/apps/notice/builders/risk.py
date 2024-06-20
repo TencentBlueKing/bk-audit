@@ -47,8 +47,17 @@ class RiskBuilder(Builder):
             self.strategy = Strategy.objects.filter(strategy_id=self.risk.strategy_id).first()
 
     def build_msg(self, *args, **kwargs) -> BUILD_RESPONSE_TYPE:
+        is_todo = f"is_todo:{True}" in self.notice_log.agg_key
+
         # 构造标题
-        title = self.notice_log.title
+        if is_todo:
+            title = "【{}】{} - {}".format(gettext("BkAudit"), gettext("风险单待办提醒"), self.strategy.strategy_name)
+        else:
+            title = "【{}】{} - {}".format(
+                gettext("BkAudit"),
+                gettext("新增风险提醒"),
+                self.strategy.strategy_name,
+            )
 
         # 构造内容
         risk_time = self.risk.event_time.astimezone(timezone.get_current_timezone())
@@ -61,7 +70,7 @@ class RiskBuilder(Builder):
                     key="notice_info",
                     name="",
                     value=(gettext("您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息：") % self.agg_count)
-                    if "待办" in title or "Pending" in title
+                    if is_todo
                     else (gettext("发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息：") % self.agg_count),
                 )
             ]
@@ -98,7 +107,15 @@ class RiskBuilder(Builder):
         )
         content = NoticeContent(*notice_contents)
 
-        button = NoticeButton(text=gettext("Show Detail"), url=risk_url)
+        if self.need_agg:
+            if is_todo:
+                url = "{}/handle-manage/list".format(get_saas_url(settings.APP_CODE))
+            else:
+                url = "{}/risk-manage/list".format(get_saas_url(settings.APP_CODE))
+        else:
+            url = risk_url
+
+        button = NoticeButton(text=gettext("Show Detail"), url=url)
 
         return title, content, button, {}
 

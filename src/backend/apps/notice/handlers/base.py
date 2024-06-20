@@ -165,8 +165,8 @@ class NoticeHandler:
 
         errors = errors or []
 
-        notice_log.title = title
-        notice_log.content = content
+        notice_log.title = title if title else notice_log.title
+        notice_log.content = content if content else notice_log.content
         notice_log.schedule_at = timezone.now()
         notice_log.schedule_result = bool(
             any([len(notice_log.msg_type) <= 0, len(notice_log.msg_type) > len(errors)])  # 没有通知渠道  # 错误数小于通知渠道数

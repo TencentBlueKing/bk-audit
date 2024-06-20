@@ -181,15 +181,8 @@ class RiskHandler:
         if not notice_groups:
             return
 
-        # 构造标题
-        title = "【{}】{} - {}".format(
-            gettext("BkAudit"),
-            gettext("新增风险提醒"),
-            strategy.strategy_name,
-        )
-
         # 发送通知
-        self.send_notice(risk=risk, notice_groups=notice_groups, title=title)
+        self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
 
         # 更新风险的通知人员名单
         notice_users = []
@@ -199,7 +192,7 @@ class RiskHandler:
         risk.save(update_fields=["notice_users"])
 
     @classmethod
-    def send_notice(cls, risk: Risk, notice_groups: Union[QuerySet, List[NoticeGroup]], title: str) -> None:
+    def send_notice(cls, risk: Risk, notice_groups: Union[QuerySet, List[NoticeGroup]], is_todo: bool) -> None:
         """
         发送通知
         """
@@ -209,8 +202,7 @@ class RiskHandler:
             resource.notice.send_notice(
                 relate_type=RelateType.RISK,
                 relate_id=risk.pk,
-                agg_key=f"notice_group:{notice_group.group_id}::strategy:{risk.strategy_id}",
+                agg_key=f"notice_group:{notice_group.group_id}::strategy:{risk.strategy_id}::is_todo:{is_todo}",
                 msg_type=[c.get("msg_type") for c in notice_group.notice_config if "msg_type" in c],
                 receivers=notice_group.group_member,
-                title=title,
             )
