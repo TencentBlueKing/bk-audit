@@ -22,6 +22,7 @@ import math
 import re
 from typing import List, Union
 
+from bk_resource import resource
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db.models import Q, QuerySet
@@ -30,21 +31,14 @@ from django.utils.translation import gettext
 from rest_framework.settings import api_settings
 
 from apps.meta.models import GlobalMetaConfig
-from apps.meta.utils.saas import get_saas_url
+from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
-from apps.notice.models import (
-    NoticeButton,
-    NoticeContent,
-    NoticeContentConfig,
-    NoticeGroup,
-)
-from apps.notice.tasks import send_notice
+from apps.notice.models import NoticeGroup
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
     EVENT_TYPE_SPLIT_REGEX,
     RISK_SYNC_BATCH_SIZE,
     RISK_SYNC_START_TIME_KEY,
-    EventMappingFields,
     RiskStatus,
 )
 from services.web.risk.handlers import EventHandler
@@ -63,7 +57,7 @@ class RiskHandler:
         从事件生成风险
         """
 
-        events = self.load_events(start_time=start_time, end_time=end_time)
+        events = self.load_events(start_time, end_time)
         for event in events:
             try:
                 is_create, risk = self.create_risk(event)
@@ -187,15 +181,8 @@ class RiskHandler:
         if not notice_groups:
             return
 
-        # 构造标题
-        title = "【{}】{} - {}".format(
-            gettext("BkAudit"),
-            gettext("新增风险提醒"),
-            strategy.strategy_name,
-        )
-
         # 发送通知
-        self.send_notice(risk=risk, notice_groups=notice_groups, title=title, strategy=strategy)
+        self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
 
         # 更新风险的通知人员名单
         notice_users = []
@@ -205,66 +192,17 @@ class RiskHandler:
         risk.save(update_fields=["notice_users"])
 
     @classmethod
-    def send_notice(
-        cls,
-        risk: Risk,
-        notice_groups: Union[QuerySet, List[NoticeGroup]],
-        title: str,
-        strategy: Strategy = None,
-        show_handle: bool = False,
-        skip_recent_check: bool = True,
-    ) -> None:
+    def send_notice(cls, risk: Risk, notice_groups: Union[QuerySet, List[NoticeGroup]], is_todo: bool) -> None:
         """
         发送通知
         """
 
-        # 构造内容
-        risk_time = risk.event_time.astimezone(timezone.get_current_timezone())
-        risk_url = "{}/risk-manage/detail/{}{}".format(
-            get_saas_url(settings.APP_CODE), risk.risk_id, "?tab=handleRisk" if show_handle else ""
-        )
-        notice_contents = [
-            NoticeContentConfig(
-                key="risk_id", name=gettext("Risk ID"), value=f'<a href="{risk_url}">{risk.risk_id}</a>'
-            ),
-            NoticeContentConfig(
-                key=EventMappingFields.EVENT_CONTENT.field_name,
-                name=gettext("风险描述"),
-                value=risk.event_content or "- -",
-            ),
-        ]
-        if strategy:
-            notice_contents.append(
-                NoticeContentConfig(
-                    key="strategy", name=gettext("命中策略"), value=f"{strategy.strategy_name}({strategy.strategy_id})"
-                )
-            )
-        notice_contents.extend(
-            [
-                NoticeContentConfig(
-                    key=EventMappingFields.OPERATOR.field_name,
-                    name=gettext("责任人"),
-                    value="; ".join(risk.operator if isinstance(risk.operator, list) else []) or "- -",
-                ),
-                NoticeContentConfig(
-                    key=EventMappingFields.EVENT_TIME.field_name,
-                    name=gettext("风险发现时间"),
-                    value=risk_time.strftime(api_settings.DATETIME_FORMAT),
-                ),
-            ]
-        )
-        content = NoticeContent(*notice_contents)
-        button = NoticeButton(
-            text=gettext("Show Detail"),
-            url=risk_url,
-        )
-
         # 发送通知
         for notice_group in notice_groups:
-            send_notice.delay(
-                notice_group=notice_group,
-                title=title,
-                content=content,
-                button=button,
-                skip_recent_check=skip_recent_check,
+            resource.notice.send_notice(
+                relate_type=RelateType.RISK,
+                relate_id=risk.pk,
+                agg_key=f"notice_group:{notice_group.group_id}::strategy:{risk.strategy_id}::is_todo:{is_todo}",
+                msg_type=[c.get("msg_type") for c in notice_group.notice_config if "msg_type" in c],
+                receivers=notice_group.group_member,
             )

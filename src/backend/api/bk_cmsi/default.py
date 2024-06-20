@@ -18,7 +18,10 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
+import requests
 from bk_resource import BkApiResource
+from bk_resource.exceptions import APIRequestError
+from bk_resource.utils.logger import logger
 from django.utils.translation import gettext_lazy
 
 from api.domains import BK_CMSI_API_URL
@@ -28,6 +31,24 @@ class CMSIResource(BkApiResource, abc.ABC):
     base_url = BK_CMSI_API_URL
     module_name = "bk_cmsi"
     IS_STANDARD_FORMAT = False
+
+    def parse_response(self, response: requests.Response) -> any:
+        data = super().parse_response(response)
+        if not data.get("result", True) and data.get("code") != 0:
+            msg = data.get("message", "")
+            logger.error(
+                "【Module: %s】【Action: %s】get error：%s",
+                self.module_name,
+                self.action,
+                msg,
+                extra=dict(module_name=self.module_name, url=response.request.url),
+            )
+            raise APIRequestError(
+                module_name=self.module_name,
+                url=self.action,
+                result=data,
+            )
+        return data
 
 
 class GetMsgType(CMSIResource):

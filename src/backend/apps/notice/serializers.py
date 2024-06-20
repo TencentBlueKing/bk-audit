@@ -17,14 +17,20 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import re
+from typing import List
 
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
-from apps.notice.constants import ADMIN_NOTICE_GROUP_ID, NOTICE_GROUP_NAME_REGEX
+from apps.meta.models import GlobalMetaConfig
+from apps.notice.constants import (
+    ADMIN_NOTICE_GROUP_ID,
+    NOTICE_GROUP_NAME_REGEX,
+    NOTICE_WHITELIST_USER_KEY,
+)
 from apps.notice.exceptions import NoticeGroupNameDuplicate
-from apps.notice.models import NoticeGroup
+from apps.notice.models import NoticeGroup, NoticeLogV2
 
 
 class GetMsgTypeResponseSerializer(serializers.Serializer):
@@ -189,3 +195,22 @@ class DeleteNoticeGroupRequestSerializer(serializers.Serializer):
         if group_id == ADMIN_NOTICE_GROUP_ID:
             raise serializers.ValidationError(gettext("内置通知组禁止删除"))
         return group_id
+
+
+class SendNoticeSerializer(serializers.ModelSerializer):
+    """
+    发送消息
+    """
+
+    msg_type = serializers.ListField(label=gettext_lazy("消息类型"), child=serializers.CharField())
+    receivers = serializers.ListField(label=gettext_lazy("接收人"), child=serializers.CharField())
+
+    class Meta:
+        model = NoticeLogV2
+        fields = ["relate_type", "relate_id", "agg_key", "msg_type", "receivers", "title", "content"]
+
+    def validate_receivers(self, receivers: List[str]) -> List[str]:
+        whitelist_users = GlobalMetaConfig.get(NOTICE_WHITELIST_USER_KEY, default=[])
+        if not whitelist_users:
+            return receivers
+        return [u for u in receivers if u in whitelist_users]
