@@ -55,13 +55,14 @@ class RiskBuilder(Builder):
         risk_url = "{}/risk-manage/detail/{}".format(get_saas_url(settings.APP_CODE), self.risk.risk_id)
 
         # 聚合增加内容
+        is_todo = "待办" in title or "Pending" in title
         if self.need_agg:
             notice_contents = [
                 NoticeContentConfig(
                     key="notice_info",
                     name="",
                     value=(gettext("您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息：") % self.agg_count)
-                    if "待办" in title or "Pending" in title
+                    if is_todo
                     else (gettext("发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息：") % self.agg_count),
                 )
             ]
@@ -98,7 +99,15 @@ class RiskBuilder(Builder):
         )
         content = NoticeContent(*notice_contents)
 
-        button = NoticeButton(text=gettext("Show Detail"), url=risk_url)
+        if self.need_agg:
+            if is_todo:
+                url = "{}/handle-manage/list".format(get_saas_url(settings.APP_CODE))
+            else:
+                url = "{}/risk-manage/list".format(get_saas_url(settings.APP_CODE))
+        else:
+            url = risk_url
+
+        button = NoticeButton(text=gettext("Show Detail"), url=url)
 
         return title, content, button, {}
 
