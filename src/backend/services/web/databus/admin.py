@@ -98,6 +98,16 @@ class RedisConfigAdmin(admin.ModelAdmin):
 
 @admin.register(Snapshot)
 class SnapshotAdmin(admin.ModelAdmin):
-    list_display = ["id", "system_id", "resource_type_id", "bkbase_data_id", "bkbase_table_id", "is_public", "status"]
+    list_display = [
+        "id",
+        "system_id",
+        "resource_type_id",
+        "bkbase_data_id",
+        "storage_type",
+        "status",
+        "bkbase_processing_id",
+        "hdfs_status",
+        "bkbase_hdfs_processing_id",
+    ]
     search_fields = ["system_id", "resource_type_id"]
     ordering = ["system_id", "resource_type_id"]
