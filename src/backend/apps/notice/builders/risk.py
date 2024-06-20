@@ -54,13 +54,17 @@ class RiskBuilder(Builder):
         risk_time = self.risk.event_time.astimezone(timezone.get_current_timezone())
         risk_url = "{}/risk-manage/detail/{}".format(get_saas_url(settings.APP_CODE), self.risk.risk_id)
 
-        if "待办" in title or "Pending" in title:
-            value = gettext("您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息") % self.agg_count
-        else:
-            value = gettext("发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息") % self.agg_count
         # 聚合增加内容
         if self.need_agg:
-            notice_contents = [NoticeContentConfig(key="notice_info", name="", value=value)]
+            notice_contents = [
+                NoticeContentConfig(
+                    key="notice_info",
+                    name="",
+                    value=(gettext("您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息") % self.agg_count)
+                    if "待办" in title or "Pending" in title
+                    else (gettext("发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息") % self.agg_count),
+                )
+            ]
         else:
             notice_contents = []
 
