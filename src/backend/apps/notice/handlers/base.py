@@ -92,7 +92,7 @@ class NoticeHandler:
             if agg_notice_log is not None:
                 self.done(
                     notice_log=notice_log,
-                    debug_info=json.dumps({"AggNoticeLogID": agg_notice_log.id}),
+                    debug_info=json.dumps({"AggNoticeLogID": agg_notice_log.id}, ensure_ascii=False),
                 )
                 continue
             # 无聚合周期或未达到最大发送次数时直接发送
@@ -147,7 +147,13 @@ class NoticeHandler:
                 debug_info.append({"Error": str(err), "Traceback": str(traceback.format_exc())})
 
         # 存储记录
-        self.done(notice_log=notice_log, errors=errors, debug_info=json.dumps(debug_info), title=title, content=content)
+        self.done(
+            notice_log=notice_log,
+            errors=errors,
+            debug_info=json.dumps(debug_info, ensure_ascii=False),
+            title=title,
+            content=content,
+        )
 
     @classmethod
     def done(
