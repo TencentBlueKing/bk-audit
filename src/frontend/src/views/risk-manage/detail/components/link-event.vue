@@ -16,77 +16,200 @@
 -->
 <template>
   <div class="risk-manage-detail-linkevent-part">
-    <bk-loading :loading="listLoading">
-      <render-list
-        ref="listRef"
-        :border="['row']"
-        :columns="column"
-        :data-source="dataSource"
-        is-need-hide-clear-search-tip />
-    </bk-loading>
+    <div class="title">
+      关联事件
+    </div>
+    <div class="body">
+      <template v-if="linkEventList.length">
+        <div class="list">
+          <scroll-faker @scroll="handleScroll">
+            <transition name="draw">
+              <div>
+                <div
+                  v-for="(item, index) in linkEventList"
+                  :key="index"
+                  class="list-item"
+                  :class="[
+                    { active: active === index },
+                  ]"
+                  @click="handlerSelect(item, index)">
+                  {{ item.event_time }}
+                </div>
+              </div>
+            </transition>
+          </scroll-faker>
+        </div>
+        <div class="list-item-detail">
+          <div class="title">
+            基本信息
+          </div>
+          <div
+            v-if="eventItem.event_id"
+            class="base-info">
+            <render-info-block
+              class="flex mt16"
+              style="margin-bottom: 12px;">
+              <render-info-item
+                :label="t('事件ID')"
+                :label-width="labelWidth">
+                {{ eventItem.event_id }}
+              </render-info-item>
+              <render-info-item
+                :label="t('责任人')"
+                :label-width="labelWidth">
+                {{ eventItem.operator }}
+              </render-info-item>
+            </render-info-block>
+            <render-info-block
+              class="flex mt16"
+              style="margin-bottom: 12px;">
+              <render-info-item
+                :label="t('命中策略')"
+                :label-width="labelWidth">
+                <bk-button
+                  v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
+                  text
+                  theme="primary"
+                  @click="handlerStrategy()">
+                  {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
+                </bk-button>
+                <span v-else> -- </span>
+              </render-info-item>
+              <render-info-item
+                :label="t('事件描述')"
+                :label-width="labelWidth">
+                {{ eventItem.event_content }}
+              </render-info-item>
+            </render-info-block>
+          </div>
+          <bk-exception
+            v-else
+            class="exception-part"
+            scene="part"
+            type="empty">
+            {{ t('暂无数据') }}
+          </bk-exception>
+          <div class="title">
+            事件数据
+          </div>
+          <div
+            v-if="eventItemDataKeyArr.length"
+            class="data-info">
+            <div
+              v-for="(keyArr, keyIndex) in eventItemDataKeyArr"
+              :key="keyIndex"
+              class="flex">
+              <div
+                v-for="(key, index) in keyArr"
+                :key="index"
+                class="flex data-info-item">
+                <div class="data-info-item-key">
+                  <span>{{ key }}</span>
+                </div>
+                <div class="data-info-item-value">
+                  <div
+                    v-bk-tooltips="{
+                      content: JSON.stringify(eventItem.event_data[key]),
+                      disabled: !showTooltips,
+                      extCls:'evidence-info-value-tooltips',
+                    }"
+                    @mouseenter="handlerEnter($event)">
+                    <span>{{ eventItem.event_data[key] }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <bk-exception
+            v-else
+            class="exception-part"
+            scene="part"
+            type="empty">
+            {{ t('暂无数据') }}
+          </bk-exception>
+          <div class="title">
+            事件证据
+          </div>
+          <div
+            v-if="eventItemEvidence.length"
+            class="evidence-info mt16">
+            <div class="evidence-info-key">
+              <div
+                v-for="(key, keyIndex) in Object.keys(eventItemEvidence[0])"
+                :key="keyIndex">
+                <div class="evidence-info-item-text">
+                  {{ key }}
+                </div>
+              </div>
+            </div>
+            <scroll-faker style="width: calc(100% - 160px)">
+              <div class="evidence-info-value-wrap">
+                <div
+                  v-for="(item, index) in eventItemEvidence"
+                  :key="index"
+                  class="evidence-info-value">
+                  <div
+                    v-for="(value, valueIndex) in Object.values(item)"
+                    :key="valueIndex">
+                    <div
+                      v-bk-tooltips="{
+                        content: String(value),
+                        disabled: !showTooltips,
+                        extCls:'evidence-info-value-tooltips',
+                      }"
+                      class="evidence-info-item-text"
+                      @mouseenter="handlerEnter($event)">
+                      <span> {{ value }} </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </scroll-faker>
+          </div>
+          <bk-exception
+            v-else
+            class="exception-part"
+            scene="part"
+            type="empty">
+            {{ t('暂无数据') }}
+          </bk-exception>
+        </div>
+      </template>
+      <bk-exception
+        v-else
+        class="exception-part"
+        scene="part"
+        type="empty">
+        {{ t('暂无数据') }}
+      </bk-exception>
+    </div>
   </div>
-
-  <!-- 事件证据 -->
-  <audit-sideslider
-    ref="sidesliderRef"
-    v-model:isShow="showEventEvidenceSlider"
-    :show-footer="false"
-    show-header-slot
-    title=""
-    :width="960">
-    <template #header>
-      <div>
-        <span> {{ t('事件证据') }}</span>
-        <span style="padding-left: 8px;margin-left: 8px;font-size: 12px;color: #979ba5;border-left: 1px solid #dcdee5;">
-          {{ t('事件ID：') }}{{ eventItem.event_id || `${eventItem.strategy_id}-${eventItem.raw_event_id }` }}
-        </span>
-      </div>
-    </template>
-    <div style="padding: 24px 40px;">
-      <bk-table
-        :border="['row']"
-        class="evidence-table"
-        :columns="evidenceColumn"
-        :data="evidenceData" />
-    </div>
-  </audit-sideslider>
-  <audit-sideslider
-    ref="sidesliderRef"
-    v-model:isShow="showEventDataSlider"
-    :show-footer="false"
-    show-header-slot
-    title=""
-    :width="960">
-    <template #header>
-      {{ t('事件数据字段') }}
-    </template>
-    <div style="padding: 24px 40px;">
-      <bk-table
-        :border="['row']"
-        class="evidence-table"
-        :columns="eventDataColumn"
-        :data="eventDataList" />
-    </div>
-  </audit-sideslider>
 </template>
 
 <script setup lang='tsx'>
-  import dayjs from 'dayjs';
+  import _ from 'lodash';
   import {
-    nextTick,
+    computed,
+    onBeforeUnmount,
+    onMounted,
     ref,
     watch,
   } from 'vue';
   import {
     useI18n,
   } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import EventManageService from '@service/event-manage';
 
   import EventModel from '@model/event/event';
   import type RiskManageModel from '@model/risk/risk';
 
-  import Tooltips from '@components/show-tooltips-text/index.vue';
+  import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
+
+  import RenderInfoItem from './render-info-item.vue';
+
+  import useRequest from '@/hooks/use-request';
 
   interface Props{
     strategyList: Array<{
@@ -96,238 +219,282 @@
     data: RiskManageModel
   }
   const props = defineProps<Props>();
-  const dataSource = EventManageService.fetchEventList;
-  const { t } = useI18n();
-  const column = [
-    {
-      label: () => t('事件 ID'),
-      showOverflowTooltip: true,
-      render: ({ data }: { data: EventModel }) => <span>
-        {(data.event_id || `${data.strategy_id}-${data.raw_event_id}`)}
-      </span>,
-    },
-    {
-      label: () => t('事件描述'),
-      showOverflowTooltip: true,
-      render: ({ data }: { data: EventModel }) => (data.event_content || '--'),
-    },
-    {
-      label: () => t('命中策略(ID)'),
-      field: () => 'event_content',
-      render: ({ data }: { data: EventModel }) => {
-        const label = props.strategyList.find(item => item.value === data.strategy_id)?.label;
-        const to = {
-          name: 'strategyList',
-          query: {
-            strategy_id: data.strategy_id,
-          },
-        };
-        return label ? (
-          <router-link to={to} target='_blank'>
-            <Tooltips data={(`${label}(${data.strategy_id})`)} />
-          </router-link>
-          ) : (
-          <span>--</span>
-        );
-      },
-    },
-    {
-      label: () => t('责任人'),
-      field: () => 'event_content',
-      showOverflowTooltip: true,
-      render: ({ data }: { data: EventModel }) => (data.operator || '--'),
-    },
-    {
-      label: () => t('事件数据字段'),
-      field: () => 'event_content',
-      showOverflowTooltip: true,
-      render: ({ data }: { data: EventModel }) => {
-        if (data.event_data) {
-          return <a onClick={() => handleShowEventData(data)}>{getStrByObject(data.event_data)}</a>;
-        }
-        return '--';
-      }
-      ,
-    },
-    {
-      label: () => t('事件证据'),
-      field: () => 'event_evidence',
-      // showOverflowTooltip: true,
-      render: ({ data }: { data: EventModel }) => {
-        if (data.event_evidence) {
-          return <a onClick={() => handleShowEvidence(data)}>{data.event_evidence}</a>;
-        }
-        return (<a>--</a>);
-      },
-    },
-    {
-      label: () => t('发现时间'),
-      width: 170,
-      render: ({ data }: { data: EventModel }) => {
-        if (data.event_time) {
-          return dayjs(data.event_time).format('YYYY-MM-DD HH:mm:ss');
-        }
-        return '--';
-      },
-    },
-  ];
+  const router = useRouter();
+  const { t, locale } = useI18n();
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
+  const linkEventList = ref<Array<EventModel>>([]); // 事件列表
+  const currentPage = ref(1); // 当前页数
+  const active = ref<number>(0);
+  const eventItem = ref(new EventModel()); // 当前选中事件
+  const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
+  const eventItemEvidence = ref<Array<Record<string, any>>>([]); // 当前选中事件-事件证据
+  const showTooltips = ref(false); // 是否显示tooltips
 
-  const initEvidenceColumn = [
-    {
-      label: () => t('账号名 (account_name)'),
-      field: () => 'account_name',
-    },
-    {
-      label: () => t('账号所属人 (account_owner)'),
-      field: () => 'account_owner',
-    },
-    {
-      label: () => t('账号创建事件 (create_time)'),
-      field: () => 'create_time',
-    },
-  ] as any[];
-
-
-  const evidenceColumn = ref(initEvidenceColumn);
-  const evidenceData = ref<Record<string, any>[]>([]);
-
-  const eventDataColumn = ref([
-    {
-      label: () => t('字段'),
-      field: () => 'key',
-      render: ({ data }: { data: {key: string} }) => <Tooltips data = { data.key} />,
-    },
-    {
-      label: () => t('字段值'),
-      field: () => 'val',
-      render: ({ data }: { data: { val: string, hasTooltips: boolean } }) => (
-        <div
-          v-bk-tooltips={{
-            content: data.val,
-            placement: 'top',
-            extCls: 'val-tooltips',
-            disabled: !data.hasTooltips,
-          }}
-          class='val-tooltips-text'>
-          { data.val || '--' }
-        </div>
-      ),
-    },
-  ]);
-  const eventDataList = ref<Record<string, any>[]>([]);
-
-  const showEventEvidenceSlider = ref(false);
-  const showEventDataSlider = ref(false);
-  const listRef = ref();
-  const listLoading = ref(false);
-  const eventItem = ref(new EventModel());
-
-  const getStrByObject = (data: Record<string, any>) => {
-    const strList: string[] = [];
-    Object.keys(data).forEach((key) => {
-      strList.push(`${key} : ${data[key]}`);
-    });
-    return strList.join('\n');
-  };
-  // 判断数据字段是否显示tooltips
-  const hasTooltips = (text: string) => {
-    const tempDiv = document.createElement('div');
-    // 防止span影响页面布局
-    tempDiv.style.position = 'absolute';
-    tempDiv.style.whiteSpace = 'nowrap';
-    tempDiv.style.visibility = 'hidden';
-    tempDiv.textContent = text;
-    document.body.appendChild(tempDiv);
-    const width = tempDiv.offsetWidth;
-    // 移除临时的span元素
-    document.body.removeChild(tempDiv);
-    return width > 300;
-  };
-  // 事件数据字段
-  const handleShowEventData = (data: EventModel) => {
-    showEventDataSlider.value = true;
-    const tableData = Object.keys(data.event_data).map((key) => {
-      const val = data.event_data[key] ? JSON.stringify(data.event_data[key]) : '';
-      return {
-        key,
-        val,
-        hasTooltips: hasTooltips(val),
-      };
-    });
-    eventDataList.value = tableData;
-  };
-  const handleShowEvidence = (data: EventModel) => {
-    const evidenceList = JSON.parse(data.event_evidence) as Record<string, any>[];
-    if (evidenceList && evidenceList.length) {
-      evidenceColumn.value = [];
-      Object.keys(evidenceList[0]).forEach((key, index) => {
-        const params: Record<string, any> = {
-          label: () => key,
-          field: () => key,
-          showOverflowTooltip: true,
-          render: ({ data }: { data: Record<string, any> }) => JSON.stringify(data[key]) || '--',
-        };
-        if (index < 4) {
-          params.minWidth = index === 0 ? 260 : 200;
-        } else {
-          params.minWidth = 100;
-        }
-        evidenceColumn.value.push(params);
+  const handleScroll = (event: Event) => {
+    const target = event.target as HTMLDivElement;
+    // 下拉触底没有加载完时，继续获取列表
+    // eslint-disable-next-line max-len
+    if ((target.scrollTop + target.clientHeight === target.scrollHeight) && linkEventList.value.length < linkEventData.value.total) {
+      currentPage.value += 1;
+      fetchLinkEvent({
+        start_time: props.data.event_time,
+        end_time: props.data.event_end_time,
+        risk_id: props.data.risk_id,
+        page: currentPage.value,
+        page_size: 50,
       });
-    } else {
-      evidenceColumn.value = initEvidenceColumn;
     }
-    evidenceData.value = evidenceList || [];
-    eventItem.value = data;
-    showEventEvidenceSlider.value = true;
   };
+
+  // 是否显示tooltips
+  const handlerEnter = (event: Event) => {
+    // 获取div宽度
+    const target = event?.target as HTMLDivElement;
+    const parentWidth = target.offsetWidth;
+    // 获取子元素宽度
+    const span = target.firstElementChild as HTMLSpanElement;
+    const spanWidth = span.offsetWidth;
+    showTooltips.value = spanWidth > parentWidth;
+  };
+
+  // 过滤事件数据，只保留有数据的key
+  const getEventDataKey = (eventDataKey: Record<string, any>) => {
+    const eventDataKeys = Object.keys(eventDataKey);
+    return eventDataKeys.filter((key) => {
+      const value = eventItem.value.event_data[key];
+      if (typeof value !== 'object' && value !== null && value !== '') {
+        return true;
+      }
+      if ((_.isArray(value) || _.isObject(value)) && !_.isEmpty(value)) {
+        return true;
+      }
+      return false;
+    });
+  };
+
+  // 转为二维数组
+  const group = (array: Array<any>, subGroupLength: number = 2) => {
+    let index = 0;
+    const newArray = [];
+    while (index < array.length) {
+      newArray.push(array.slice(index, index += subGroupLength));
+    }
+    return newArray;
+  };
+
+  const handlerSelect = (item: EventModel, index: number) => {
+    eventItem.value = item;
+    active.value = index;
+    // 事件数据
+    const eventDataKey = getEventDataKey(eventItem.value.event_data);
+    eventItemDataKeyArr.value = group(eventDataKey);
+    // 事件证据
+    eventItemEvidence.value = JSON.parse(eventItem.value.event_evidence);
+  };
+
+
+  const handlerStrategy = () => {
+    const to = router.resolve({
+      name: 'strategyList',
+      query: {
+        strategy_id: eventItem.value.strategy_id,
+      },
+    });
+    window.open(to.href, '_blank');
+  };
+
+  const {
+    data: linkEventData,
+    run: fetchLinkEvent,
+  } = useRequest(EventManageService.fetchEventList, {
+    defaultValue: {
+      results: [],
+      page: 1,
+      num_pages: 1,
+      total: 1,
+    },
+    onSuccess() {
+      if (linkEventData.value.results.length) {
+        // 触底加载，拼接
+        linkEventList.value = [...linkEventList.value, ...linkEventData.value.results];
+
+        // 默认获取第一个
+        // eslint-disable-next-line prefer-destructuring
+        eventItem.value = linkEventList.value[0];
+        // 事件数据
+        const eventDataKey = getEventDataKey(eventItem.value.event_data);
+        eventItemDataKeyArr.value = group(eventDataKey);
+        // 事件证据
+        eventItemEvidence.value = JSON.parse(eventItem.value.event_evidence);
+      }
+    },
+  });
+
   watch(() => props.data, (data) => {
-    if (data) {
-      nextTick(() => {
-        if (listRef.value) {
-          listRef.value.fetchData({
-            start_time: data.event_time,
-            end_time: data.event_end_time,
-            risk_id: data.risk_id,
-          });
-        }
+    if (data.risk_id) {
+      fetchLinkEvent({
+        start_time: data.event_time,
+        end_time: data.event_end_time,
+        risk_id: data.risk_id,
+        page: currentPage.value,
+        page_size: 50,
       });
     }
   }, {
     immediate: true,
   });
+
+  onMounted(() => {
+    const observer = new MutationObserver(() => {
+      const detail = document.querySelector('.list-item-detail');
+      const list = document.querySelector('.list') as HTMLDivElement;
+      if (detail && list) {
+        // 设置左边list的高度和右边详情一样高
+        list.style.height = `${detail.scrollHeight}px`;
+      }
+    });
+    observer.observe(document.querySelector('.body') as Node, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+    });
+
+    onBeforeUnmount(() => {
+      observer.takeRecords();
+      observer.disconnect();
+    });
+  });
 </script>
 <style  lang="postcss">
 .risk-manage-detail-linkevent-part {
-  padding: 6px 14px 14px;
-
-  .linkevent-table :deep(thead th) {
-    background-color: #f5f7fa;
+  .title {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
   }
 
-  .evidence-table :deep(thead th) {
-    background-color: #f5f7fa;
-  }
+  .body {
+    display: flex;
+    margin-top: 14px;
 
-  .evidence-table :deep(.bk-table-body) {
-    max-height: calc(100vh - 100px);
+    .list {
+      display: inline-block;
+      height: 500px;
+      min-width: 164px;
+      padding: 4px 0;
+      text-align: center;
+      background: #f5f7fa;
+      border-radius: 4px;
+
+      .list-item {
+        height: 32px;
+        line-height: 32px;
+        cursor: pointer;
+
+        &:hover {
+          background-color: #eaebf0;
+        }
+      }
+
+      .active {
+        color: #3a84ff !important;
+        background: #e1ecff;
+        border-left: 2px solid #3a84ff;
+
+        &:hover {
+          background: #e1ecff !important;
+        }
+      }
+    }
+
+    .list-item-detail {
+      width: calc(100% - 164px);
+      padding-left: 16px;
+
+      .data-info {
+        margin: 16px 0;
+        border-top: 1px solid #ecedf1;
+        border-left: 1px solid #ecedf1;
+
+        .data-info-item {
+          width: 50%;
+
+          .data-info-item-key,
+          .data-info-item-value {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-right: 1px solid #ecedf1;
+            border-bottom: 1px solid #ecedf1;
+          }
+
+          .data-info-item-key {
+            width: 160px;
+            background-color: #fafbfd;
+            justify-self: flex-end;
+
+            & > span {
+              display: inline-block;
+              width: 100%;
+              text-align: right;
+            }
+          }
+
+          .data-info-item-value {
+            flex: 1;
+            word-break: break-all;
+          }
+        }
+      }
+
+      .evidence-info {
+        display: flex;
+        max-width: 1000px;
+        border-top: 1px solid #ecedf1;
+        border-left: 1px solid #ecedf1;
+
+        .evidence-info-value-wrap {
+          display: flex;
+          flex-wrap: nowrap;
+        }
+
+        .evidence-info-key,
+        .evidence-info-value {
+          display: inline-block;
+          width: 168px;
+          flex: 1;
+
+          & > div {
+            height: 32px;
+            padding: 0 12px;
+            line-height: 32px;
+            border-right: 1px solid #ecedf1;
+            border-bottom: 1px solid #ecedf1;
+
+            .evidence-info-item-text {
+              width: 100%;
+              height: 100%;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              word-break: break-all;
+              white-space: nowrap;
+            }
+          }
+        }
+
+        .evidence-info-key {
+          width: 160px;
+          text-align: right;
+          background-color: #fafbfd;
+        }
+      }
+    }
   }
 }
 
-.bk-popover {
-  max-width: 750px;
-  word-break: break-all;
-}
-
-.val-tooltips-text {
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.val-tooltips {
-  max-width: 300px;
-  word-break: break-all;
+.evidence-info-value-tooltips {
+  max-width: 80%
 }
 </style>

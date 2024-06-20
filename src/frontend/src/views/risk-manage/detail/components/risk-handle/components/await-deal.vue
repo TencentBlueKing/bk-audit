@@ -18,6 +18,7 @@
   <div class="risk-await-deal-wrap">
     <audit-form
       ref="formRef"
+      form-type="vertical"
       :model="formData"
       :rules="rules">
       <bk-form-item
@@ -77,7 +78,7 @@
       <!-- 处理套餐 -->
       <template v-else-if="formData.method === 'ProcessPackage'">
         <bk-form-item
-          class="is-required mr16"
+          class="is-required"
           :label="t('处理套餐', { text: 'Tools' })"
           property="pa_id">
           <bk-select
@@ -85,7 +86,6 @@
             filterable
             :loading="applicationLoading"
             :placeholder="t('请选择')"
-            style="width: 480px;"
             @change="handlePaIdChange">
             <bk-option
               v-for="item in filterProcessApplicationList"
@@ -97,10 +97,10 @@
         <bk-loading :loading="detailLoading">
           <bk-form-item
             v-if="Object.keys(paramsDetailData)?.length"
-            class="is-required mr16"
+            class="is-required"
             :label="t('套餐参数')"
             property="pa_params">
-            <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
+            <div style="padding: 16px 12px;background: rgb(245 247 250 / 100%)">
               <template
                 v-for="(val, index) in Object.values(paramsDetailData)"
                 :key="`${val.key}-${index}`">

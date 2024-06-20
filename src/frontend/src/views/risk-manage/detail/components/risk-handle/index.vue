@@ -18,31 +18,35 @@
   <div
     ref="rootRef"
     class="risk-manage-detail-handle-part">
-    <div style="padding-bottom: 16px;margin-left: 14px;">
-      <!-- 标记误报 / 解除误报 -->
-      <mark-misreport-btn
-        v-if="(data.risk_label === 'misreport')|| (data.risk_label==='normal')"
-        class="mr16"
-        :data="data"
-        :last-ticket-history="_.last(ticketHistory)"
-        :user-info="userInfo"
-        @update="handleUpdate" />
-      <!-- 重开 -->
-      <reopen-btn
-        v-if="data.status==='closed' && data.risk_label ==='normal'"
-        class="mr16"
-        :data="data"
-        :user-info="userInfo"
-        @update="handleUpdate" />
-
-      <!-- 跳转到风险总结的锚点 -->
-      <span id="risk-manage-content-btn" />
-      <!-- 风险总结 -->
-      <risk-content-btn
-        v-if="data.status==='closed'"
-        :data="data"
-        :user-info="userInfo"
-        @update="handleUpdate" />
+    <div class="title mb16">
+      工单处理
+    </div>
+    <div class="header">
+      <div style="margin-right: auto;">
+        <!-- 标记误报 / 解除误报 -->
+        <mark-misreport-btn
+          v-if="(data.risk_label === 'misreport')|| (data.risk_label==='normal')"
+          class="mr16"
+          :data="data"
+          :last-ticket-history="_.last(ticketHistory)"
+          :user-info="userInfo"
+          @update="handleUpdate" />
+        <!-- 重开 -->
+        <reopen-btn
+          v-if="data.status==='closed' && data.risk_label ==='normal'"
+          class="mr16"
+          :data="data"
+          :user-info="userInfo"
+          @update="handleUpdate" />
+        <!-- 跳转到风险总结的锚点 -->
+        <span id="risk-manage-content-btn" />
+        <!-- 风险总结 -->
+        <risk-content-btn
+          v-if="data.status==='closed'"
+          :data="data"
+          :user-info="userInfo"
+          @update="handleUpdate" />
+      </div>
     </div>
     <bk-timeline
       v-if="list && list.length"
@@ -107,7 +111,7 @@
   }
   interface Props{
     data: RiskManageModel,
-    riskId: string,
+    riskId: number,
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -232,6 +236,7 @@
   });
 
   const handleUpdate = () => {
+    isInit = false;
     emits('update');
   };
   const getIndexByTag = (tag: string) => {
@@ -284,8 +289,8 @@
                 <span style='color: #979BA5;margin-left: 8px;'>${item.time}</span>
               <p>`,
           content: '<template/>',
-          icon: <span style='background: #F0F1F5;width: 26px;height: 26px;border-radius: 50%;display: inline-block;text-align:center;line-height: 26px;'>
-            <audit-icon type={ historyActionMap[item.action].icon }  style='color: #989CA7;font-size: 16px;'/>
+          icon: () => <span style='background: #F0F1F5;width: 26px;height: 26px;border-radius: 50%;display: inline-block;text-align:center;line-height: 26px;'>
+            <audit-icon type={ historyActionMap[item.action].icon }  style='color: #989CA7;font-size: 16px;' />
           </span>,
         };
         if (!['ForApprove', 'AutoProcess'].includes(item.action)) {
@@ -319,7 +324,7 @@
                 <span style='color: #979BA5;margin-left: 8px;'>${item.time}</span>
               <p>`,
           content: '<template/>',
-          icon: <span style='background: #F0F1F5;width: 26px;height: 26px;border-radius: 50%;display: inline-block;text-align:center;line-height: 26px;'>
+          icon: () => <span style='background: #F0F1F5;width: 26px;height: 26px;border-radius: 50%;display: inline-block;text-align:center;line-height: 26px;'>
             <audit-icon type={ historyActionMap[item.action].icon }  style='color: #989CA7;font-size: 16px;'/>
           </span>,
         });
@@ -343,11 +348,25 @@
   });
 </script>
 <style scoped lang="postcss">
-.risk-manage-detail-handle-part{
-  padding: 14px;
+.risk-manage-detail-handle-part {
+  padding: 0 14px 14px;
+
+  .title {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
+  }
+
+  .header {
+    display: flex;
+    padding-bottom: 20px;
+    justify-content: space-between;
+    align-items: center;
+  }
 }
 
-.risk-handle-timeline{
+.risk-handle-timeline {
   :deep(.bk-timeline-dot .bk-timeline-content) {
     max-width: 100%;
   }
