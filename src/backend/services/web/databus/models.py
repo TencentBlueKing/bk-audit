@@ -176,9 +176,9 @@ class Snapshot(SoftDeleteModel):
 
     system_id = models.CharField(gettext_lazy("系统ID"), max_length=64)
     resource_type_id = models.CharField(gettext_lazy("资源类型ID"), max_length=64)
-    bkbase_data_id = models.IntegerField(gettext_lazy("接入ID"), null=True)
-    bkbase_processing_id = models.CharField(gettext_lazy("清洗ID"), max_length=255, null=True)
-    bkbase_table_id = models.CharField(gettext_lazy("入库表"), max_length=255, null=True)
+    bkbase_data_id = models.IntegerField(gettext_lazy("接入ID"), null=True, blank=True)
+    bkbase_processing_id = models.CharField(gettext_lazy("清洗ID"), max_length=255, null=True, blank=True)
+    bkbase_table_id = models.CharField(gettext_lazy("入库表"), max_length=255, null=True, blank=True)
     is_public = models.BooleanField(gettext_lazy("是否公共"), default=False)
     status = models.CharField(
         gettext_lazy("状态"),
@@ -187,8 +187,10 @@ class Snapshot(SoftDeleteModel):
         default=SnapshotRunningStatus.CLOSED.value,
         db_index=True,
     )
-    bkbase_hdfs_processing_id = models.CharField(gettext_lazy("BKBase HDFS Processing ID"), max_length=255, null=True)
-    bkbase_hdfs_table_id = models.CharField(gettext_lazy("BKBase HDFS Table ID"), max_length=255, null=True)
+    bkbase_hdfs_processing_id = models.CharField(
+        gettext_lazy("BKBase HDFS Processing ID"), max_length=255, null=True, blank=True
+    )
+    bkbase_hdfs_table_id = models.CharField(gettext_lazy("BKBase HDFS Table ID"), max_length=255, null=True, blank=True)
     hdfs_status = models.CharField(
         gettext_lazy("HDFS Status"),
         max_length=32,
