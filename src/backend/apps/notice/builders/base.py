@@ -1,9 +1,27 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+"""
+
 import abc
 from typing import Callable, Optional, Tuple
 
 from apps.notice.models import NoticeButton, NoticeContent, NoticeLogV2
 
-BUILD_RESPONSE_T = Tuple[str, NoticeContent, Optional[NoticeButton], dict]
+BUILD_RESPONSE_TYPE = Tuple[str, NoticeContent, Optional[NoticeButton], dict]
 
 
 class Builder:
@@ -17,26 +35,26 @@ class Builder:
         self.need_agg = need_agg
         self.agg_count = agg_count
 
-    def build_msg(self, msg_type: str) -> BUILD_RESPONSE_T:
-        _builder: Callable[[], BUILD_RESPONSE_T] = getattr(self, f"build_{msg_type}")
+    def build_msg(self, msg_type: str) -> BUILD_RESPONSE_TYPE:
+        _builder: Callable[[], BUILD_RESPONSE_TYPE] = getattr(self, f"build_{msg_type}")
         return _builder()
 
     @abc.abstractmethod
-    def build_mail(self) -> BUILD_RESPONSE_T:
+    def build_mail(self) -> BUILD_RESPONSE_TYPE:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def build_rtx(self) -> BUILD_RESPONSE_T:
+    def build_rtx(self) -> BUILD_RESPONSE_TYPE:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def build_sms(self) -> BUILD_RESPONSE_T:
+    def build_sms(self) -> BUILD_RESPONSE_TYPE:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def build_voice(self) -> BUILD_RESPONSE_T:
+    def build_voice(self) -> BUILD_RESPONSE_TYPE:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def build_weixin(self) -> BUILD_RESPONSE_T:
+    def build_weixin(self) -> BUILD_RESPONSE_TYPE:
         raise NotImplementedError()
