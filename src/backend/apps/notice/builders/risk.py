@@ -60,9 +60,9 @@ class RiskBuilder(Builder):
                 NoticeContentConfig(
                     key="notice_info",
                     name="",
-                    value=(gettext("您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息") % self.agg_count)
+                    value=(gettext("您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息：") % self.agg_count)
                     if "待办" in title or "Pending" in title
-                    else (gettext("发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息") % self.agg_count),
+                    else (gettext("发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息：") % self.agg_count),
                 )
             ]
         else:

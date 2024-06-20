@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-19 19:48+0800\n"
+"POT-Creation-Date: 2024-06-20 10:12+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1448,12 +1448,12 @@ msgid "Notice"
 msgstr "Notice"
 
 #, python-format
-msgid "您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息"
-msgstr "You have %d risks pending. Please visit the Audit Center promptly to review and address them. Here is one of the risk details"
+msgid "您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息："
+msgstr "You have %d risks pending. Please visit the Audit Center promptly to review and address them. Here is one of the risk details: "
 
 #, python-format
-msgid "发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息"
-msgstr "A total of %d new risks have been detected. Please visit Audit Center for details. Here is one of the risk details"
+msgid "发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息："
+msgstr "A total of %d new risks have been detected. Please visit Audit Center for details. Here is one of the risk details: "
 
 msgid "Risk ID"
 msgstr "Risk ID"

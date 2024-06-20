@@ -36,7 +36,9 @@ def send_notice_from_db():
     schedule_time = time.time()
 
     # 获取聚合键
-    schedule_configs = NoticeLogV2.objects.values("relate_type", "agg_key").distinct()
+    schedule_configs = (
+        NoticeLogV2.objects.values("relate_type", "agg_key").order_by("relate_type", "agg_key").distinct()
+    )
 
     # 逐个执行
     for schedule_config in schedule_configs:
