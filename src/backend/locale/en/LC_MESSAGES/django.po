@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-05-08 15:06+0800\n"
+"POT-Creation-Date: 2024-06-19 19:48+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1444,11 +1444,34 @@ msgstr "Resource Type Name"
 msgid "用户信息"
 msgstr "User Info"
 
-msgid "发送时间"
-msgstr "Send At"
-
 msgid "Notice"
 msgstr "Notice"
+
+#, python-format
+msgid "您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息"
+msgstr "You have %d risks pending. Please visit the Audit Center promptly to review and address them. Here is one of the risk details"
+
+#, python-format
+msgid "发现共%d条新风险，请点击前往审计中心查看详情，以下为其中1个风险信息"
+msgstr "A total of %d new risks have been detected. Please visit Audit Center for details. Here is one of the risk details"
+
+msgid "Risk ID"
+msgstr "Risk ID"
+
+msgid "风险描述"
+msgstr "Risk Description"
+
+msgid "命中策略"
+msgstr "Match Strategy"
+
+msgid "责任人"
+msgstr "Operator"
+
+msgid "风险发现时间"
+msgstr "Risk Discover Time"
+
+msgid "Show Detail"
+msgstr "Show Detail"
 
 msgid "审计中心管理员"
 msgstr "BK Audit Administrator"
@@ -1468,11 +1491,17 @@ msgstr "Voice"
 msgid "短信"
 msgstr "SMS"
 
+msgid "风险"
+msgstr "Risk"
+
+msgid "异常"
+msgstr "Error"
+
 msgid "通知组名称重复"
 msgstr "Notice Group Name Duplicate"
 
-msgid "此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"
-msgstr "Sent by Blueking Audit Center"
+msgid "消息构造器不存在"
+msgstr "Msg Builer Not Exists"
 
 msgid "异常信息"
 msgstr "Error Msg"
@@ -1510,6 +1539,9 @@ msgstr "Msg Hash"
 msgid "收件人"
 msgstr "Receiver"
 
+msgid "发送时间"
+msgstr "Send At"
+
 msgid "Trace ID"
 msgstr "TraceID"
 
@@ -1522,8 +1554,35 @@ msgstr "Is Duplicated"
 msgid "消息记录"
 msgstr "Msg Record"
 
+msgid "关联类型"
+msgstr "Relate Type"
+
+msgid "关联ID"
+msgstr "Relate ID"
+
+msgid "聚合标识"
+msgstr "Agg Key"
+
 msgid "消息类型"
 msgstr "Msg Type"
+
+msgid "接收人"
+msgstr "Receiver"
+
+msgid "消息标题"
+msgstr "Notice Title"
+
+msgid "消息内容"
+msgstr "Notice Content"
+
+msgid "发送结果"
+msgstr "Send Result"
+
+msgid "发送调试信息"
+msgstr "Send Debug Info"
+
+msgid "通知记录"
+msgstr "Notice Log"
 
 msgid "通知组列表"
 msgstr "Notice Group List"
@@ -1539,6 +1598,9 @@ msgstr "Create Notice Group"
 
 msgid "更新通知组"
 msgstr "Update Notice Group"
+
+msgid "此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"
+msgstr "Sent by Blueking Audit Center"
 
 msgid "Icon"
 msgstr "Icon"
@@ -1708,6 +1770,9 @@ msgstr "View Audit Report"
 msgid "查看报表(组织架构)"
 msgstr "View Audit Report by Department"
 
+msgid "查看报表(标签)"
+msgstr "View Audit Report bg Tag"
+
 msgid "采集新建"
 msgstr "Create Collection"
 
@@ -1739,9 +1804,6 @@ msgstr "Department"
 
 msgid "审计报表"
 msgstr "Audit Report"
-
-msgid "风险"
-msgstr "Risk"
 
 msgid "敏感操作"
 msgstr "Sensitive Action"
@@ -2702,12 +2764,6 @@ msgstr "Risk"
 msgid "风险ID"
 msgstr "Risk ID"
 
-msgid "风险描述"
-msgstr "Risk Description"
-
-msgid "责任人"
-msgstr "Operator"
-
 msgid "风险等级"
 msgstr "Risk Level"
 
@@ -2783,18 +2839,6 @@ msgstr "BkAudit"
 
 msgid "新增风险提醒"
 msgstr "New Risk"
-
-msgid "Risk ID"
-msgstr "Risk ID"
-
-msgid "命中策略"
-msgstr "Match Startegy"
-
-msgid "风险发现时间"
-msgstr "Risk Discover Time"
-
-msgid "Show Detail"
-msgstr "Show Detail"
 
 msgid "默认流转"
 msgstr "Default"

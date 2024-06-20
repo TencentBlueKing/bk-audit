@@ -215,9 +215,7 @@ class RiskFlowBaseHandler:
         title = "【{}】{}{}".format(
             gettext("BkAudit"), gettext("风险单待办提醒"), f"- {strategy.strategy_name}" if strategy else ""
         )
-        RiskHandler.send_notice(
-            risk=self.risk, notice_groups=[notice_group], title=title, strategy=strategy, show_handle=True
-        )
+        RiskHandler.send_notice(risk=self.risk, notice_groups=[notice_group], title=title)
 
 
 class NewRisk(RiskFlowBaseHandler):

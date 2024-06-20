@@ -31,6 +31,14 @@ BK_AUDIT_MAIL_DEFAULT_TEMPLATE = "templates/notice/mail.html"
 
 NOTICE_WHITELIST_USER_KEY = "NOTICE_WHITELIST_USER"
 
+NOTICE_AGG_DURATION_KEY = "NOTICE_AGG_DURATION"
+DEFAULT_NOTICE_AGG_DURATION = 0  # 默认不聚合
+
+NOTICE_AGG_MAX_NOTICE_KEY = "NOTICE_AGG_MAX_NOTICE"
+DEFAULT_NOTICE_AGG_MAX_NOTICE = 0  # 默认不聚合
+
+NOTICE_LAST_AGG_TIME_KEY = "notice:last_agg_time:{relate_type}:{agg_key}"
+
 
 class MsgType(TextChoices):
     """
@@ -42,3 +50,12 @@ class MsgType(TextChoices):
     MAIL = "mail", gettext_lazy("邮件")
     VOICE = "voice", gettext_lazy("语音")
     SMS = "sms", gettext_lazy("短信")
+
+
+class RelateType(TextChoices):
+    """
+    通知关联类型
+    """
+
+    RISK = "risk", gettext_lazy("风险")
+    ERROR = "error", gettext_lazy("异常")

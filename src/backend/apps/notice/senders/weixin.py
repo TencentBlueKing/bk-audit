@@ -16,32 +16,24 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.contrib import admin
+from bk_resource import api
 
-from apps.notice.models import NoticeGroup, NoticeLogV2
-
-
-@admin.register(NoticeGroup)
-class NoticeGroupAdmin(admin.ModelAdmin):
-    list_display = ["group_id", "group_name", "group_member", "description", "is_deleted"]
-    list_filter = ["is_deleted"]
-    search_fields = ["group_id", "group_name"]
+from apps.notice.senders.base import Sender
 
 
-@admin.register(NoticeLogV2)
-class NoticeLogV2Admin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "relate_type",
-        "relate_id",
-        "agg_key",
-        "msg_type",
-        "receivers",
-        "title",
-        "create_at",
-        "schedule_at",
-        "schedule_result",
-    ]
-    list_filter = ["relate_type", "schedule_result"]
-    search_fields = ["title", "agg_key", "relate_id"]
-    ordering = ["-id"]
+class WeixinSender(Sender):
+    """
+    发送微信消息
+    """
+
+    api_resource = api.bk_cmsi.send_weixin
+
+    def _build_params(self) -> dict:
+        return {
+            "receiver__username": self.receivers,
+            "data": {
+                "heading": self.title,
+                "message": self.content.to_string(),
+                **self.configs,
+            },
+        }

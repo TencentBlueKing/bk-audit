@@ -26,7 +26,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
 from apps.notice.constants import MsgType
-from apps.notice.models import NoticeGroup
+from apps.notice.models import NoticeGroup, NoticeLogV2
 from apps.notice.serializers import (
     CreateNoticeGroupRequestSerializer,
     CreateNoticeGroupResponseSerializer,
@@ -38,6 +38,7 @@ from apps.notice.serializers import (
     NoticeGroupInfoSerializer,
     RetrieveNoticeGroupRequestSerializer,
     RetrieveNoticeGroupResponseSerializer,
+    SendNoticeSerializer,
     UpdateNoticeGroupRequestSerializer,
     UpdateNoticeGroupResponseSerializer,
 )
@@ -162,3 +163,11 @@ class DeleteNoticeGroup(NoticeMeta):
         # 删除
         self.add_audit_instance_to_context(instance=notice_group.audit_instance)
         notice_group.delete()
+
+
+class SendNotice(NoticeMeta):
+    name = gettext_lazy("发送消息")
+    RequestSerializer = SendNoticeSerializer
+
+    def perform_request(self, validated_request_data):
+        NoticeLogV2.objects.create(**validated_request_data)
