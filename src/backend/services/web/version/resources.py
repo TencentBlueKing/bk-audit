@@ -22,6 +22,7 @@ from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
 from django.utils.translation import gettext_lazy
+from mistune import HTMLRenderer
 from rest_framework import serializers
 
 from apps.audit.resources import AuditMixinResource
@@ -84,7 +85,7 @@ class VersionInfoResource(AuditMixinResource):
             version=get_version_id(version_log.version), username=get_request_username()
         )
         try:
-            parser = mistune.Markdown(hard_wrap=True)
+            parser = mistune.Markdown(renderer=HTMLRenderer())
             html_version_log = parser(version_log.content)
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception("[Log Parse Error] Version => %s; err => %s", version, err)
