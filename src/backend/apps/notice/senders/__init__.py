@@ -16,32 +16,23 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.contrib import admin
+from typing import Dict
 
-from apps.notice.models import NoticeGroup, NoticeLogV2
+from apps.notice.constants import MsgType
+from apps.notice.senders.mail import MailSender
+from apps.notice.senders.rtx import RTXSender
+from apps.notice.senders.sms import SMSSender
+from apps.notice.senders.voice import VoiceSender
+from apps.notice.senders.weixin import WeixinSender
 
+SENDERS: Dict = {
+    MsgType.RTX: RTXSender,
+    MsgType.MAIL: MailSender,
+    MsgType.SMS: SMSSender,
+    MsgType.VOICE: VoiceSender,
+    MsgType.WEIXIN: WeixinSender,
+}
 
-@admin.register(NoticeGroup)
-class NoticeGroupAdmin(admin.ModelAdmin):
-    list_display = ["group_id", "group_name", "group_member", "description", "is_deleted"]
-    list_filter = ["is_deleted"]
-    search_fields = ["group_id", "group_name"]
-
-
-@admin.register(NoticeLogV2)
-class NoticeLogV2Admin(admin.ModelAdmin):
-    list_display = [
-        "id",
-        "relate_type",
-        "relate_id",
-        "agg_key",
-        "msg_type",
-        "receivers",
-        "title",
-        "create_at",
-        "schedule_at",
-        "schedule_result",
-    ]
-    list_filter = ["relate_type", "schedule_result"]
-    search_fields = ["title", "agg_key", "relate_id"]
-    ordering = ["-id"]
+__all__ = [
+    "SENDERS",
+]
