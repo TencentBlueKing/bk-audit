@@ -202,6 +202,7 @@ class Snapshot(SoftDeleteModel):
         default=SnapShotStorageChoices.REDIS.value,
         db_index=True,
     )
+    pull_config = models.JSONField(gettext_lazy("拉取配置"), default=dict, null=True, blank=True)
     auth_rt = models.BooleanField(gettext_lazy("is RT Authorized"), default=False)
 
     class Meta:
