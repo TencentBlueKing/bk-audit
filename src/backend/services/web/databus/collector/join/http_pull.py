@@ -27,6 +27,8 @@ from apps.meta.models import ResourceType, System
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     JOIN_DATA_RT_FORMAT,
+    DefaultPullConfig,
+    SensitivityChoice,
     SnapShotStorageChoices,
 )
 from services.web.databus.models import Snapshot
@@ -83,6 +85,9 @@ class HttpPullHandler:
 
     @property
     def config(self):
+        # 获取参数配置
+        pull_config = self.snapshot.pull_config or {}
+        # 配置
         return {
             "bk_username": bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
             "data_scenario": "http",
@@ -99,7 +104,7 @@ class HttpPullHandler:
                 "description": "",
                 "tags": [],
                 "raw_data_name": self.config_name,
-                "sensitivity": "private",
+                "sensitivity": pull_config.get("sensitivity", SensitivityChoice.PRIVATE),
                 "data_encoding": "UTF-8",
                 "raw_data_alias": self.config_name,
                 "data_region": "inland",
@@ -108,7 +113,7 @@ class HttpPullHandler:
                 "collection_model": {
                     "collection_type": "pull",
                     "increment_field": "",
-                    "period": 1,
+                    "period": int(pull_config.get("period", DefaultPullConfig.period)),
                     "time_format": "Unix Time Stamp(milliseconds)",
                 },
                 "filters": {},
@@ -127,13 +132,13 @@ class HttpPullHandler:
                                     "format": "Unix Time Stamp(milliseconds)",
                                     "delay": {
                                         "unit": "minute",
-                                        "value": 1,
+                                        "value": int(pull_config.get("delay", DefaultPullConfig.delay)),
                                     },
                                 },
                                 "page": {
                                     "enabled": True,
                                     "total_path": ".data.count",
-                                    "limit": 1000,
+                                    "limit": int(pull_config.get("limit", DefaultPullConfig.limit)),
                                     "start_offset": 0,
                                 },
                                 "url_params": {},

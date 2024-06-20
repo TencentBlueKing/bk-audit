@@ -110,6 +110,19 @@ CollectorParamConditionTypeEnum = _CollectorParamConditionTypeEnum
 CollectorParamConditionMatchType = _CollectorParamConditionMatchType
 
 
+class DefaultPullConfig:
+    period = 1
+    delay = 1
+    limit = 1000
+
+
+class SensitivityChoice(TextChoices):
+    PUBLIC = "public", gettext_lazy("公开")
+    PRIVATE = "private", gettext_lazy("私有")
+    CONFIDENTIAL = "confidential", gettext_lazy("机密")
+    TOP_SECRET = "topsecret", gettext_lazy("绝密")
+
+
 class EnvironmentChoice(TextChoices):
     CONTAINER = "container", gettext_lazy("容器")
 
