@@ -17,11 +17,11 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, TypeAlias
 
 from apps.notice.models import NoticeButton, NoticeContent, NoticeLogV2
 
-BUILD_RESPONSE_TYPE = Tuple[str, NoticeContent, Optional[NoticeButton], dict]
+BUILD_RESPONSE_TYPE: TypeAlias = Tuple[str, NoticeContent, Optional[NoticeButton], dict]
 
 
 class Builder:

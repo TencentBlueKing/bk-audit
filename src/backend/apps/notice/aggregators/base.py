@@ -50,7 +50,7 @@ class Aggregator:
 
     def load_agg_config(self) -> (bool, int, int):
         """
-        获取聚合配置: int(聚合周期), int(最大发送次数)
+        获取聚合配置: bool(是否需要调度), int(聚合周期), int(最大发送次数)
         """
 
         # 使用默认配置
