@@ -47,7 +47,6 @@ from services.web.risk.constants import (
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.rule import RiskRuleHandler
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
-from services.web.strategy_v2.models import Strategy
 
 
 class RiskFlowBaseHandler:
@@ -211,11 +210,7 @@ class RiskFlowBaseHandler:
             ),
         )
         # 构造通知内容
-        strategy = Strategy.objects.filter(strategy_id=self.risk.strategy_id).first()
-        title = "【{}】{}{}".format(
-            gettext("BkAudit"), gettext("风险单待办提醒"), f"- {strategy.strategy_name}" if strategy else ""
-        )
-        RiskHandler.send_notice(risk=self.risk, notice_groups=[notice_group], title=title)
+        RiskHandler.send_notice(risk=self.risk, notice_groups=[notice_group], is_todo=True)
 
 
 class NewRisk(RiskFlowBaseHandler):

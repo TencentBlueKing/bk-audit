@@ -47,15 +47,23 @@ class RiskBuilder(Builder):
             self.strategy = Strategy.objects.filter(strategy_id=self.risk.strategy_id).first()
 
     def build_msg(self, *args, **kwargs) -> BUILD_RESPONSE_TYPE:
+        is_todo = f"is_todo:{True}" in self.notice_log.agg_key
+
         # 构造标题
-        title = self.notice_log.title
+        if is_todo:
+            title = "【{}】{} - {}".format(gettext("BkAudit"), gettext("风险单待办提醒"), self.strategy.strategy_name)
+        else:
+            title = "【{}】{} - {}".format(
+                gettext("BkAudit"),
+                gettext("新增风险提醒"),
+                self.strategy.strategy_name,
+            )
 
         # 构造内容
         risk_time = self.risk.event_time.astimezone(timezone.get_current_timezone())
         risk_url = "{}/risk-manage/detail/{}".format(get_saas_url(settings.APP_CODE), self.risk.risk_id)
 
         # 聚合增加内容
-        is_todo = "待办" in title or "Pending" in title
         if self.need_agg:
             notice_contents = [
                 NoticeContentConfig(
