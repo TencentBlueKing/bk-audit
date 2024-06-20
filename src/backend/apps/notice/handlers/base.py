@@ -112,8 +112,8 @@ class NoticeHandler:
         发送消息
         """
 
-        # 没有接收人直接完成
-        if not notice_log.receivers:
+        # 没有接收人或没有通知方式直接完成
+        if not notice_log.receivers or not notice_log.msg_type:
             self.done(notice_log=notice_log)
 
         # 获取构造器
