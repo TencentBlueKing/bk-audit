@@ -120,6 +120,10 @@
     margin-top: 8px;
     background: #f5f7fa;
     border-radius: 4px;
+
+    .render-info-item {
+      align-items: flex-start;
+    }
   }
 }
 </style>

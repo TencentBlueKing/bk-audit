@@ -98,8 +98,7 @@
         </render-info-item>
         <render-info-item
           :label="t('处理规则', { text: 'Rules' })"
-          :label-width="labelWidth"
-          style="width: 100%;">
+          :label-width="labelWidth">
           <router-link
             v-if="riskRule"
             target="_blank"
@@ -169,8 +168,7 @@
         </render-info-item>
         <render-info-item
           :label="t('当前处理人')"
-          :label-width="labelWidth"
-          style="width: 100%;">
+          :label-width="labelWidth">
           <edit-tag :data="data.current_operator || ''" />
         </render-info-item>
       </render-info-block>
@@ -302,7 +300,8 @@
   box-shadow: 0 2px 4px 0 #1919290d;
 
   .render-info-item {
-    min-width: 400px;
+    width: 50%;
+    align-items: flex-start;
   }
 
   .show-more-condition-btn {

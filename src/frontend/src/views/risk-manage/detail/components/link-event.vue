@@ -44,7 +44,7 @@
             基本信息
           </div>
           <div
-            v-if="eventItem.event_id"
+            v-if="eventItem.event_id || eventItem.strategy_id"
             class="base-info">
             <render-info-block
               class="flex mt16"
@@ -218,10 +218,14 @@
     }>,
     data: RiskManageModel
   }
+  interface Emits {
+    (e: 'changeHeight', height: number): void
+  }
   const props = defineProps<Props>();
+  const emit = defineEmits<Emits>();
   const router = useRouter();
   const { t, locale } = useI18n();
-  const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
   const linkEventList = ref<Array<EventModel>>([]); // 事件列表
   const currentPage = ref(1); // 当前页数
   const active = ref<number>(0);
@@ -351,6 +355,8 @@
       if (detail && list) {
         // 设置左边list的高度和右边详情一样高
         list.style.height = `${detail.scrollHeight}px`;
+        console.log(111);
+        emit('changeHeight', detail.scrollHeight);
       }
     });
     observer.observe(document.querySelector('.body') as Node, {
@@ -383,7 +389,7 @@
       display: inline-block;
       height: 500px;
       min-width: 164px;
-      padding: 4px 0;
+      overflow: hidden;
       text-align: center;
       background: #f5f7fa;
       border-radius: 4px;
@@ -412,6 +418,17 @@
     .list-item-detail {
       width: calc(100% - 164px);
       padding-left: 16px;
+
+      .base-info {
+        .render-info-item {
+          width: 50%;
+          align-items: flex-start;
+
+          .info-value {
+            word-break: break-all;
+          }
+        }
+      }
 
       .data-info {
         margin: 16px 0;
