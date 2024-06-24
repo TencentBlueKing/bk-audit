@@ -343,6 +343,9 @@ BK_AUDIT_SETTINGS = {
     "formatter": "apps.audit.formatters.AuditFormatter",
 }
 
+# 全局配置
+BK_SHARED_RES_URL = os.getenv("BKAPP_BK_SHARED_RES_URL", os.getenv("BKPAAS_SHARED_RES_URL", ""))
+
 """
 以下为框架代码 请勿修改
 """
