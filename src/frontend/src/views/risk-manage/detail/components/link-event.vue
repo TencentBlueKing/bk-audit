@@ -355,7 +355,6 @@
       if (detail && list) {
         // 设置左边list的高度和右边详情一样高
         list.style.height = `${detail.scrollHeight}px`;
-        console.log(111);
         emit('changeHeight', detail.scrollHeight);
       }
     });
