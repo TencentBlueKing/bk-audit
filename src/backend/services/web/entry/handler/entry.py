@@ -98,6 +98,8 @@ class EntryHandler(object):
             # 加密算法
             "public_key": asymmetric_cipher.export_public_key(),
             "encryption_algorithm": settings.BKCRYPTO["ASYMMETRIC_CIPHER_TYPE"],
+            # 全局配置
+            "shared_res_url": settings.BK_SHARED_RES_URL,
         }
         return data
 
