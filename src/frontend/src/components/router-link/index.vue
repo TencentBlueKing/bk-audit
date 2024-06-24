@@ -17,7 +17,7 @@
 <template>
   <div
     v-if="routerLink"
-    class="audit-router-link">
+    id="audit-router-link">
     <bk-button
       v-bk-tooltips="t('复制链接')"
       text
@@ -28,6 +28,9 @@
         type="link" />
     </bk-button>
   </div>
+  <div
+    v-else
+    id="audit-router-link" />
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
@@ -44,7 +47,7 @@
 
 </script>
 <style lang="postcss">
-  .audit-router-link {
+  #audit-router-link {
     display: inline-block;
     padding-left: 8px;
   }

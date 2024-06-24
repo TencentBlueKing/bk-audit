@@ -42,6 +42,17 @@
         </div>
       </scroll-faker>
     </div>
+    <teleport to="#audit-router-link">
+      <bk-button
+        v-bk-tooltips="t('复制链接')"
+        text
+        theme="primary"
+        @click="handleCopyLink()">
+        <audit-icon
+          style="font-size: 14px;"
+          type="link" />
+      </bk-button>
+    </teleport>
   </bk-loading>
 </template>
 
@@ -63,7 +74,6 @@
 
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
-  import useRouterLink from '@hooks/use-router-link';
 
   import {
     execCopy,
@@ -135,11 +145,11 @@
     clearTimeout(timeout);
   });
 
-
-  useRouterLink(() => {
+  const handleCopyLink = () => {
     const route = window.location.href;
     execCopy(route, t('复制成功'));
-  });
+  };
+
   useRouterBack(() => {
     router.push({
       name: route.name === 'riskManageDetail'
