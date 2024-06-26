@@ -42,7 +42,7 @@
         </div>
       </scroll-faker>
     </div>
-    <teleport to="#audit-router-link">
+    <teleport to="#teleport-router-link">
       <bk-button
         v-bk-tooltips="t('复制链接')"
         text
