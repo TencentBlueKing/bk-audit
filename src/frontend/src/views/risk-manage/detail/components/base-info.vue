@@ -97,7 +97,7 @@
           </template>
         </render-info-item>
         <render-info-item
-          :label="t('处理规则', { text: 'Rules' })"
+          :label="t('处理规则')"
           :label-width="labelWidth">
           <router-link
             v-if="riskRule"

@@ -30,11 +30,7 @@
         :config-data="configData">
         <template #header>
           <router-back />
-          <span>{{
-            pageTitle === '处理规则' ?
-              t(pageTitle, { text: 'Rules' }) :
-              pageTitle === '处理套餐' ?
-                t(pageTitle, { text: 'Tools' }) : t(pageTitle) }}</span>
+          <span>{{ t(pageTitle) }}</span>
           <div
             id="teleport-router-link"
             style="margin-left: 14px;" />

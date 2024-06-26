@@ -17,11 +17,11 @@
 export default {
   ruleManage: {
 
-    处理规则: '{ text }',
+    处理规则: 'Rules | New',
     查看套餐详情: 'Detail',
     套餐参数: 'Parameter',
     冻结账号: 'Account freezing',
-    处理套餐: '{ text }',
+    处理套餐: 'Tools | New',
     适用范围: 'Usage',
     待我处理: 'My Open Tickets',
     套餐参数不能为空: 'Tool parameter is required',

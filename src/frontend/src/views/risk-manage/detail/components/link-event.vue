@@ -17,7 +17,7 @@
 <template>
   <div class="risk-manage-detail-linkevent-part">
     <div class="title">
-      关联事件
+      {{ t('关联事件') }}
     </div>
     <div class="body">
       <template v-if="linkEventList.length">
@@ -41,7 +41,7 @@
         </div>
         <div class="list-item-detail">
           <div class="title">
-            基本信息
+            {{ t('基本信息') }}
           </div>
           <div
             v-if="eventItem.event_id || eventItem.strategy_id"
@@ -90,7 +90,7 @@
             {{ t('暂无数据') }}
           </bk-exception>
           <div class="title">
-            事件数据
+            {{ t('事件数据') }}
           </div>
           <div
             v-if="eventItemDataKeyArr.length"
@@ -128,7 +128,7 @@
             {{ t('暂无数据') }}
           </bk-exception>
           <div class="title">
-            事件证据
+            {{ t('事件证据') }}
           </div>
           <div
             v-if="eventItemEvidence.length"
