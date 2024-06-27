@@ -18,13 +18,13 @@
   <audit-navigation @menu-flod="handleSideMenuFlodChange">
     <template #logo>
       <img
-        src="@images/logo.png"
+        :src="blueKingConfig.appLogo"
         style="width: 28px; margin-left: 16px;cursor: pointer;"
         @click="handleRouterChange('handleManage')">
       <span
         class="site-title"
         @click="handleRouterChange('handleManage')">
-        {{ configData.site_title }}
+        {{ blueKingConfig.i18n.name }}
       </span>
     </template>
     <template #header>
@@ -198,6 +198,7 @@
 </template>
 <script setup lang="ts">
 
+  import { storeToRefs } from 'pinia';
   import {
     defineExpose,
     onBeforeUnmount,
@@ -222,6 +223,8 @@
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
 
+  import { useStore } from '@/stores';
+
   interface Exposes {
     titleRef: Ref<string>
   }
@@ -243,6 +246,9 @@
   const handleSideMenuFlodChange = (value: boolean) => {
     isMenuFlod.value = !value;
   };
+
+  const store = useStore();
+  const { blueKingConfig } = storeToRefs(store);
 
   // 是否展示审计报表导航
   const {

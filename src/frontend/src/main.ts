@@ -20,8 +20,17 @@ import { createApp } from 'vue';
 import Aegis from 'aegis-web-sdk';
 import BkuiVue from 'bkui-vue';
 import { bkTooltips } from 'bkui-vue/lib/directives';
+import { createPinia } from 'pinia';
+import { useStore } from '@/stores';
+import {
+  getPlatformConfig,
+  setShortcutIcon,
+  setDocumentTitle,
+} from '@blueking/platform-config';
 
 import RootManageService from '@service/root-manage';
+import ConfigModel from '@model/root/config';
+import BlueKingConfigModel from '@model/root/blue-king-config';
 
 import ApplyPermissionCatch from '@components/apply-permission/catch.vue';
 import AuditForm from '@components/audit-form/index.vue';
@@ -60,11 +69,32 @@ import('@blueking/notice-component/dist/style.css');
 
 window.changeConfirm = false;
 
+/**
+ * @desc 获取蓝鲸配置信息
+ */
+const fetchBlueKingConfig = async (config: ConfigModel): Promise<BlueKingConfigModel> => {
+  const defaults = {
+    version: config.version,
+    appLogo: '/static/images/logo.png',
+    favIcon: '/static/images/favicon.ico',
+    name: config.site_title,
+    nameEn: config.site_title,
+    brandName: config.title.split(' | ')[1],
+    brandNameEn: config.title.split(' | ')[1],
+  };
+
+  if (config.shared_res_url) {
+    return getPlatformConfig(`${config.shared_res_url}/bk_audit/base.js`, defaults);
+  }
+  return getPlatformConfig(defaults);
+};
+
 RootManageService.config()
-  .then((config) => {
+  .then(async (config) => {
     document.title = config.title;
     const BKApp = createApp(App);
 
+    BKApp.use(createPinia());
     BKApp.use(BkuiVue);
     BKApp.use(i18n);
     BKApp.use(createRouter(config));
@@ -90,8 +120,6 @@ RootManageService.config()
     BKApp.directive('bk-tooltips', bkTooltips);
     BKApp.directive('cursor', cursor);
 
-    BKApp.mount('#app');
-
     // TAM前端监控
     setTimeout(() => {
       if (config.aegis_id) {
@@ -103,5 +131,15 @@ RootManageService.config()
         });
       }
     });
+
+    const store = useStore();
+    store.updateConfigs(config);
+
+    const blueKingConfig = await fetchBlueKingConfig(config);
+    store.updateBlueKingConfig(blueKingConfig);
+    setShortcutIcon(blueKingConfig.favIcon);
+    setDocumentTitle(blueKingConfig.i18n);
+
+    BKApp.mount('#app');
   });
 

@@ -14,39 +14,26 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 -->
+<!-- eslint-disable vue/no-v-html -->
 <template>
   <div
     id="search-page-footer"
     class="search-page-footer">
+    <div
+      v-html="blueKingConfig.i18n.footerInfoHTML" />
     <div>
-      <p>
-        <a
-          v-for="(item, index) in data.footer"
-          :key="index"
-          class="footer-content"
-          :href="item.url"
-          target="_blank">
-          <span class="y-axis"> | </span>
-          {{ item.text }}</a>
-      </p>
-    </div> <div>
-      <p>{{ data.copyright }} {{ data.version }}</p>
+      <p>{{ blueKingConfig.footerCopyrightContent }}</p>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-  import RootManageService from '@service/root-manage';
+  import { storeToRefs } from 'pinia';
 
-  import ConfigModel from '@model/root/config';
+  import { useStore } from '@/stores';
 
-  import useRequest from '@hooks/use-request';
+  const store = useStore();
+  const { blueKingConfig } = storeToRefs(store);
 
-  const {
-    data,
-  } =  useRequest(RootManageService.config, {
-    defaultValue: new ConfigModel(),
-    manual: true,
-  });
 </script>
 <style lang="postcss">
   .search-page-footer {

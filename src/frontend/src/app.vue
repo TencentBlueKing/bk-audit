@@ -117,6 +117,7 @@
   import bkuiLocalEN from 'bkui-vue/dist/locale/en.esm.js';
   import bkuiLocalZHCN from 'bkui-vue/dist/locale/zh-cn.esm.js';
   import Cookie from 'js-cookie';
+  import { storeToRefs } from 'pinia';
   import {
     computed,
     ref,
@@ -129,10 +130,8 @@
 
   import AccountManageService from '@service/account-manage';
   import EntryManageService from '@service/entry-manage';
-  import RootManageService from '@service/root-manage';
 
   import AccountModel from '@model/account/account';
-  import ConfigModel from '@model/root/config';
 
   import useRequest from '@hooks/use-request';
 
@@ -143,6 +142,12 @@
   import WaterMark from '@utils/assist/water-mark';
 
   import Layout from './layout.vue';
+
+  import { useStore } from '@/stores';
+
+  const store = useStore();
+  const { configs: configData } = storeToRefs(store);
+
 
   const { locale, t } = useI18n();
   const route = useRoute();
@@ -164,13 +169,6 @@
   const handleVersionLog = () => {
     isShowVersionLog.value = true;
   };
-
-  const {
-    data: configData,
-  } =  useRequest(RootManageService.config, {
-    defaultValue: new ConfigModel(),
-    manual: true,
-  });
 
   const {
     run: fetchLogout,

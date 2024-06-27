@@ -17,6 +17,7 @@
   "dependencies": {
     "@blueking/login-modal": "^1.0.1",
     "@blueking/notice-component": "2.0.5",
+    "@blueking/platform-config": "^1.0.2",
     "@types/sortablejs": "1.15.4",
     "@types/yamljs": "0.2.33",
     "@vueup/vue-quill": "1.2.0",
@@ -33,6 +34,7 @@
     "js-cookie": "3.0.5",
     "mitt": "3.0.1",
     "monaco-editor": "0.44.0",
+    "pinia": "^2.1.7",
     "screenfull": "6.0.2",
     "sortablejs": "1.15.0",
     "tippy.js": "6.3.7",

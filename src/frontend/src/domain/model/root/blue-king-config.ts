@@ -14,44 +14,31 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-/// <reference types="vite/client" />
 
-interface ImportMetaEnv {
-  readonly VITE_AJAX_URL_PREFIX: string
-  readonly DEV_DOMAIN: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
-
-declare module '*.js' {
-  const css: string;
-  export default js;
-}
-
-declare interface Window {
-  PROJECT_CONFIG: {
-    AJAX_URL_PREFIX: string,
-    NAMESPACE: string
+export default class BlueKingConfig {
+  version: string;
+  appLogo: string;
+  name: string;
+  nameEn: string;
+  brandName: string;
+  brandNameEn: string;
+  footerCopyrightContent: string;
+  favIcon: string;
+  i18n: {
+    brandName: string;
+    name: string;
+    footerInfoHTML: string;
   };
-  changeConfirm: boolean | 'popover';
-  testmessage: any;
-  BkVisionSDK: any;
+
+  constructor(payload = {} as BlueKingConfig) {
+    this.version = payload.version;
+    this.appLogo = payload.appLogo;
+    this.name = payload.name;
+    this.nameEn = payload.name;
+    this.brandName = payload.name;
+    this.brandNameEn = payload.name;
+    this.footerCopyrightContent = payload.footerCopyrightContent;
+    this.favIcon = payload.favIcon;
+    this.i18n = payload.i18n;
+  }
 }
-
-declare module 'js-cookie'
-
-declare module '@blueking/notice-component';
-
-declare module '@blueking/login-modal';
-
-declare module '@blueking/platform-config';
-
-interface URLSearchParams {
-  keys(): string[];
-}
-
-type ValueOf<T> = T[keyof T];
-
-

@@ -51,6 +51,8 @@ export default class Config {
     query_string: string;
   };
   bk_biz_id: number;
+  shared_res_url: string;
+
   constructor(payload = {} as Config) {
     this.aegis_id = payload.aegis_id;
     this.app_code = payload.app_code;
@@ -71,6 +73,7 @@ export default class Config {
     this.help_info = payload.help_info;
     this.language = payload.language;
     this.bk_biz_id = payload.bk_biz_id;
+    this.shared_res_url = payload.shared_res_url;
 
     this.help_info = this.initHelpInfo(payload.help_info);
   }
