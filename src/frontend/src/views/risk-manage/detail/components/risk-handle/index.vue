@@ -19,7 +19,7 @@
     ref="rootRef"
     class="risk-manage-detail-handle-part">
     <div class="title mb16">
-      工单处理
+      {{ t('工单处理') }}
     </div>
     <div class="header">
       <div style="margin-right: auto;">

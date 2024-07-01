@@ -26,12 +26,15 @@
         <div class="link-event-wrap">
           <link-event
             :data="riskData"
-            :strategy-list="strategyList" />
+            :strategy-list="strategyList"
+            @change-height="handleChangeHeight" />
         </div>
       </div>
       <!-- 事件处理 -->
       <scroll-faker style="width: 368px;">
-        <div class="right">
+        <div
+          class="right"
+          :style="{height: handleHeight + 'px'}">
           <risk-handle
             :data="riskData"
             :risk-id="riskData.risk_id"
@@ -39,12 +42,24 @@
         </div>
       </scroll-faker>
     </div>
+    <teleport to="#teleport-router-link">
+      <bk-button
+        v-bk-tooltips="t('复制链接')"
+        text
+        theme="primary"
+        @click="handleCopyLink()">
+        <audit-icon
+          style="font-size: 14px;"
+          type="link" />
+      </bk-button>
+    </teleport>
   </bk-loading>
 </template>
 
 <script setup lang='ts'>
   import {
     onUnmounted,
+    ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -59,7 +74,6 @@
 
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
-  import useRouterLink from '@hooks/use-router-link';
 
   import {
     execCopy,
@@ -72,7 +86,12 @@
   const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
+  const handleHeight = ref(800);
   let timeout: undefined | number = undefined;
+
+  const handleChangeHeight = (height: number) => {
+    handleHeight.value = height + 180;
+  };
 
   const {
     loading: strategyLoading,
@@ -126,11 +145,11 @@
     clearTimeout(timeout);
   });
 
-
-  useRouterLink(() => {
+  const handleCopyLink = () => {
     const route = window.location.href;
     execCopy(route, t('复制成功'));
-  });
+  };
+
   useRouterBack(() => {
     router.push({
       name: route.name === 'riskManageDetail'
@@ -154,10 +173,6 @@
       border-radius: 2px;
       box-shadow: 0 2px 4px 0 #1919290d;
     }
-  }
-
-  .right {
-    max-height: 98vh;
   }
 }
 </style>

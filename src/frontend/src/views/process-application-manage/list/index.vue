@@ -33,7 +33,7 @@
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
-          {{ t('处理套餐', { text: 'New' }) }}
+          {{ t('处理套餐', 2) }}
         </auth-button>
         <bk-search-select
           v-model="searchKey"
