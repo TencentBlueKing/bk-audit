@@ -54,7 +54,7 @@
       <div
         class="scrollbar-inner"
         :style="{ width: `${boxState.contentScrollWidth}px` }">
-&nbsp;
+        &nbsp;
       </div>
     </div>
   </div>
@@ -139,8 +139,8 @@
   }, 30);
   // 水平滚动条滚动
   const handleHorizontalScroll = _.throttle((event) => {
-    if (isVerticalScroll.value) {
-      scrollContent.value.scrollTop = event.target.scrollLeft;
+    if (horizontalScrollbar.value) {
+      scrollContent.value.scrollLeft = event.target.scrollLeft;
     }
   }, 30);
 
@@ -198,8 +198,7 @@
 
     & > .scroll-faker-content {
       height: 100%;
-      overflow-x: scroll;
-      overflow-y: scroll;
+      overflow: scroll scroll;
 
       &::-webkit-scrollbar {
         width: 0;
@@ -212,7 +211,7 @@
       z-index: 2;
       cursor: pointer;
       opacity: 0%;
-      transition: 0.15s;
+      transition: .15s;
 
       &::-webkit-scrollbar-thumb {
         background-color: rgb(151 155 165 / 80%);
@@ -236,8 +235,7 @@
       right: 0;
       bottom: 0;
       width: 14px;
-      overflow-x: hidden;
-      overflow-y: scroll;
+      overflow: hidden scroll;
 
       &::-webkit-scrollbar {
         width: 6px;
@@ -260,8 +258,7 @@
       bottom: 0;
       left: 0;
       height: 14px;
-      overflow-x: scroll;
-      overflow-y: hidden;
+      overflow: scroll hidden;
 
       &::-webkit-scrollbar {
         height: 6px;

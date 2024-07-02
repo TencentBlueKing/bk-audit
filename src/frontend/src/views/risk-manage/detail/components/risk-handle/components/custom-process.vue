@@ -28,7 +28,7 @@
         <span v-else-if="data.custom_action === 'TransOperator'">
           {{ t('转单给') }}{{ data.new_operators?.join(',') }}
         </span>
-        <span v-else>{{ t('处理套餐', { text: 'Tools'}) }} </span>
+        <span v-else>{{ t('处理套餐') }} </span>
       </render-info-item>
       <template v-if="data.custom_action === 'AutoProcess'">
         <render-info-item
@@ -120,6 +120,10 @@
     margin-top: 8px;
     background: #f5f7fa;
     border-radius: 4px;
+
+    .render-info-item {
+      align-items: flex-start;
+    }
   }
 }
 </style>

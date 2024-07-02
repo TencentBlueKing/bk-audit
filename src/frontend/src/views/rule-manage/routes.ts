@@ -15,10 +15,6 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-import i18n from '@/language/index.js';
-
-const { t } = i18n.global;
-
 export default {
   path: '/rule-manage',
   component: () => import('@views/rule-manage/index.vue'),
@@ -35,7 +31,7 @@ export default {
       component: () => import('@views/rule-manage/list/index.vue'),
       name: 'ruleManageList',
       meta: {
-        title: t('处理规则'),
+        title: '处理规则',
         // skeleton: 'noticeGroupList',
       },
     },
@@ -44,7 +40,7 @@ export default {
       component: () => import('@views/rule-manage/create/index.vue'),
       name: 'riskRuleCreate',
       meta: {
-        title: t('新建处理规则'),
+        title: '新建处理规则',
         // skeleton: 'strategyCreate',
       },
     },
@@ -53,7 +49,7 @@ export default {
       component: () => import('@views/rule-manage/create/index.vue'),
       name: 'riskRuleEdit',
       meta: {
-        title: t('编辑处理规则'),
+        title: '编辑处理规则',
         // skeleton: 'strategyCreate',
       },
     },
@@ -62,7 +58,7 @@ export default {
       component: () => import('@views/rule-manage/create/index.vue'),
       name: 'riskRuleClone',
       meta: {
-        title: t('克隆处理规则'),
+        title: '克隆处理规则',
         // skeleton: 'strategyCreate',
       },
     },

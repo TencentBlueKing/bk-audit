@@ -30,12 +30,10 @@
         :config-data="configData">
         <template #header>
           <router-back />
-          <span>{{
-            pageTitle === '处理规则' ?
-              t(pageTitle, { text: 'Rules' }) :
-              pageTitle === '处理套餐' ?
-                t(pageTitle, { text: 'Tools' }) : t(pageTitle) }}</span>
-          <use-router-link />
+          <span>{{ t(pageTitle) }}</span>
+          <div
+            id="teleport-router-link"
+            style="margin-left: 14px;" />
           <div
             id="teleport-nav-step"
             style="flex: 1;" />
@@ -137,7 +135,6 @@
   import useRequest from '@hooks/use-request';
 
   import RouterBack from '@components/router-back/index.vue';
-  import UseRouterLink from '@components/router-link/index.vue';
   import VersionLog from '@components/version-log/index.vue';
 
   import WaterMark from '@utils/assist/water-mark';
