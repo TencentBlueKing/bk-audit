@@ -46,6 +46,8 @@ declare module '@blueking/notice-component';
 
 declare module '@blueking/login-modal';
 
+declare module '@blueking/platform-config';
+
 interface URLSearchParams {
   keys(): string[];
 }

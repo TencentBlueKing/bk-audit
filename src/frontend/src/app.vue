@@ -127,12 +127,11 @@
 
   import AccountManageService from '@service/account-manage';
   import EntryManageService from '@service/entry-manage';
-  import RootManageService from '@service/root-manage';
 
   import AccountModel from '@model/account/account';
-  import ConfigModel from '@model/root/config';
 
   import useRequest from '@hooks/use-request';
+  import useStore from '@hooks/use-store';
 
   import RouterBack from '@components/router-back/index.vue';
   import VersionLog from '@components/version-log/index.vue';
@@ -140,6 +139,8 @@
   import WaterMark from '@utils/assist/water-mark';
 
   import Layout from './layout.vue';
+
+  const { configs: configData } = useStore();
 
   const { locale, t } = useI18n();
   const route = useRoute();
@@ -161,13 +162,6 @@
   const handleVersionLog = () => {
     isShowVersionLog.value = true;
   };
-
-  const {
-    data: configData,
-  } =  useRequest(RootManageService.config, {
-    defaultValue: new ConfigModel(),
-    manual: true,
-  });
 
   const {
     run: fetchLogout,

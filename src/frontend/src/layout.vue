@@ -18,13 +18,13 @@
   <audit-navigation @menu-flod="handleSideMenuFlodChange">
     <template #logo>
       <img
-        src="@images/logo.png"
+        :src="blueKingConfig.appLogo"
         style="width: 28px; margin-left: 16px;cursor: pointer;"
         @click="handleRouterChange('handleManage')">
       <span
         class="site-title"
         @click="handleRouterChange('handleManage')">
-        {{ configData.site_title }}
+        {{ blueKingConfig.i18n.name }}
       </span>
     </template>
     <template #header>
@@ -197,7 +197,6 @@
   </audit-navigation>
 </template>
 <script setup lang="ts">
-
   import {
     defineExpose,
     onBeforeUnmount,
@@ -216,6 +215,7 @@
 
   import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
+  import useStore from '@hooks/use-store';
 
   import AuditMenu from '@components/audit-menu/index.vue';
   import AuditMenuItem from '@components/audit-menu/item.vue';
@@ -243,6 +243,8 @@
   const handleSideMenuFlodChange = (value: boolean) => {
     isMenuFlod.value = !value;
   };
+
+  const { blueKingConfig } = useStore();
 
   // 是否展示审计报表导航
   const {
