@@ -197,8 +197,6 @@
   </audit-navigation>
 </template>
 <script setup lang="ts">
-
-  import { storeToRefs } from 'pinia';
   import {
     defineExpose,
     onBeforeUnmount,
@@ -217,13 +215,12 @@
 
   import useEventBus from '@hooks/use-event-bus';
   import useRequest from '@hooks/use-request';
+  import useStore from '@hooks/use-store';
 
   import AuditMenu from '@components/audit-menu/index.vue';
   import AuditMenuItem from '@components/audit-menu/item.vue';
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
-
-  import { useStore } from '@/stores';
 
   interface Exposes {
     titleRef: Ref<string>
@@ -247,8 +244,7 @@
     isMenuFlod.value = !value;
   };
 
-  const store = useStore();
-  const { blueKingConfig } = storeToRefs(store);
+  const { blueKingConfig } = useStore();
 
   // 是否展示审计报表导航
   const {

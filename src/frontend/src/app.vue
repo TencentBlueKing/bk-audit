@@ -117,7 +117,6 @@
   import bkuiLocalEN from 'bkui-vue/dist/locale/en.esm.js';
   import bkuiLocalZHCN from 'bkui-vue/dist/locale/zh-cn.esm.js';
   import Cookie from 'js-cookie';
-  import { storeToRefs } from 'pinia';
   import {
     computed,
     ref,
@@ -134,6 +133,7 @@
   import AccountModel from '@model/account/account';
 
   import useRequest from '@hooks/use-request';
+  import useStore from '@hooks/use-store';
 
   import RouterBack from '@components/router-back/index.vue';
   import UseRouterLink from '@components/router-link/index.vue';
@@ -143,11 +143,7 @@
 
   import Layout from './layout.vue';
 
-  import { useStore } from '@/stores';
-
-  const store = useStore();
-  const { configs: configData } = storeToRefs(store);
-
+  const { configs: configData } = useStore();
 
   const { locale, t } = useI18n();
   const route = useRoute();

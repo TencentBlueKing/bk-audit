@@ -20,8 +20,7 @@ import { createApp } from 'vue';
 import Aegis from 'aegis-web-sdk';
 import BkuiVue from 'bkui-vue';
 import { bkTooltips } from 'bkui-vue/lib/directives';
-import { createPinia } from 'pinia';
-import { useStore } from '@/stores';
+import useStore from '@hooks/use-store';
 import {
   getPlatformConfig,
   setShortcutIcon,
@@ -69,6 +68,8 @@ import('@blueking/notice-component/dist/style.css');
 
 window.changeConfirm = false;
 
+const { updateConfigs, updateBlueKingConfig } = useStore();
+
 /**
  * @desc 获取蓝鲸配置信息
  */
@@ -82,11 +83,7 @@ const fetchBlueKingConfig = async (config: ConfigModel): Promise<BlueKingConfigM
     brandName: config.title.split(' | ')[1],
     brandNameEn: config.title.split(' | ')[1],
   };
-
-  if (config.shared_res_url) {
-    return getPlatformConfig(`${config.shared_res_url}/bk_audit/base.js`, defaults);
-  }
-  return getPlatformConfig(defaults);
+  return getPlatformConfig(`${config.shared_res_url}/bk_audit/base.js`, defaults);
 };
 
 RootManageService.config()
@@ -94,7 +91,6 @@ RootManageService.config()
     document.title = config.title;
     const BKApp = createApp(App);
 
-    BKApp.use(createPinia());
     BKApp.use(BkuiVue);
     BKApp.use(i18n);
     BKApp.use(createRouter(config));
@@ -132,11 +128,10 @@ RootManageService.config()
       }
     });
 
-    const store = useStore();
-    store.updateConfigs(config);
+    updateConfigs(config);
 
     const blueKingConfig = await fetchBlueKingConfig(config);
-    store.updateBlueKingConfig(blueKingConfig);
+    updateBlueKingConfig(blueKingConfig);
     setShortcutIcon(blueKingConfig.favIcon);
     setDocumentTitle(blueKingConfig.i18n);
 

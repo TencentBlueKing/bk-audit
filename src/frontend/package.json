@@ -34,7 +34,6 @@
     "js-cookie": "3.0.5",
     "mitt": "3.0.1",
     "monaco-editor": "0.44.0",
-    "pinia": "^2.1.7",
     "screenfull": "6.0.2",
     "sortablejs": "1.15.0",
     "tippy.js": "6.3.7",
