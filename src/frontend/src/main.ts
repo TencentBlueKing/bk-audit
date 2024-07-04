@@ -67,7 +67,7 @@ import('@blueking/notice-component/dist/style.css');
 
 window.changeConfirm = false;
 
-const { updateConfigs, updateBlueKingConfig } = useStore();
+const { blueKingConfig } = useStore();
 
 /**
  * @desc 获取蓝鲸配置信息
@@ -126,12 +126,10 @@ RootManageService.config()
       }
     });
 
-    updateConfigs(config);
-
-    const blueKingConfig = await fetchBlueKingConfig(config);
-    updateBlueKingConfig(blueKingConfig);
-    setShortcutIcon(blueKingConfig.favIcon);
-    setDocumentTitle(blueKingConfig.i18n);
+    const result = await fetchBlueKingConfig(config);
+    blueKingConfig.value =  result;
+    setShortcutIcon(blueKingConfig.value.favIcon);
+    setDocumentTitle(blueKingConfig.value.i18n);
 
     BKApp.mount('#app');
   });
