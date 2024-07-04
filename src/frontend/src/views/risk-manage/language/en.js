@@ -111,5 +111,8 @@ export default {
     字段值: 'Value',
     人工转单成功: 'Reassign successfully',
     重开: 'Yes',
+    事件数据: 'Event data',
+    工单处理: 'Deal with',
+    命中策略: 'Related strategy',
   },
 };

@@ -33,7 +33,7 @@
             <audit-icon
               style="margin-right: 8px;font-size: 14px;"
               type="add" />
-            {{ t('处理规则', { text: 'New'}) }}
+            {{ t('处理规则', 2) }}
           </auth-button>
           <auth-button
             action-id="edit_rule"

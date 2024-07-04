@@ -64,7 +64,7 @@
       </render-info-block>
 
       <render-info-block>
-        <render-info-item :label="t('处理套餐', { text: 'Tools'})">
+        <render-info-item :label="t('处理套餐')">
           {{ processApplication || '--' }}
         </render-info-item>
       </render-info-block>

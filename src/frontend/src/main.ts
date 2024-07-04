@@ -41,7 +41,6 @@ import AuditUserSelector from '@components/audit-user-selector/index.vue';
 import AuthButton from '@components/auth/button.vue';
 import AuthComponent from '@components/auth/component';
 import AuthOption from '@components/auth/option.vue';
-import AuthRouterLink from '@components/auth/router-link.vue';
 import AuthSwitch from '@components/auth/switch.vue';
 import RenderList from '@components/render-list/index.vue';
 import RenderSensitivityLevel from '@components/render-sensitivity-level/index.vue';
@@ -106,7 +105,6 @@ RootManageService.config()
     BKApp.component('AuthComponent', AuthComponent);
     BKApp.component('AuthOption', AuthOption);
     BKApp.component('AuthSwitch', AuthSwitch);
-    BKApp.component('AuthRouterLink', AuthRouterLink);
     BKApp.component('RenderList', RenderList);
     BKApp.component('RenderSensitivityLevel', RenderSensitivityLevel);
     BKApp.component('ScrollFaker', ScrollFaker);

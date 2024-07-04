@@ -119,13 +119,13 @@
               <audit-icon
                 class="menu-item-icon"
                 type="insert" />
-              {{ t('处理规则', { text: 'Rules' }) }}
+              {{ t('处理规则') }}
             </audit-menu-item>
             <audit-menu-item index="applicationManage">
               <audit-icon
                 class="menu-item-icon"
                 type="taocanchulizhong" />
-              {{ t('处理套餐', { text: 'Tools'}) }}
+              {{ t('处理套餐') }}
             </audit-menu-item>
           </audit-menu-item-group>
           <audit-menu-item-group>

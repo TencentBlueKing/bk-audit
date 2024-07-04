@@ -147,6 +147,7 @@
     defaultValue: null,
     onSuccess() {
       window.changeConfirm = false;
+      showSlider.value = false;
       emits('update');
       messageSuccess(isEdit.value ? t('编辑成功') : t('新建成功'));
     },
