@@ -18,13 +18,13 @@
   <audit-navigation @menu-flod="handleSideMenuFlodChange">
     <template #logo>
       <img
-        src="@images/logo.png"
+        :src="platformConfig.appLogo"
         style="width: 28px; margin-left: 16px;cursor: pointer;"
         @click="handleRouterChange('handleManage')">
       <span
         class="site-title"
         @click="handleRouterChange('handleManage')">
-        {{ configData.site_title }}
+        {{ platformConfig.i18n.name }}
       </span>
     </template>
     <template #header>
@@ -197,7 +197,6 @@
   </audit-navigation>
 </template>
 <script setup lang="ts">
-
   import {
     defineExpose,
     onBeforeUnmount,
@@ -215,6 +214,7 @@
   import ConfigModel from '@model/root/config';
 
   import useEventBus from '@hooks/use-event-bus';
+  import usePlatformConfig from '@hooks/use-platform-config';
   import useRequest from '@hooks/use-request';
 
   import AuditMenu from '@components/audit-menu/index.vue';
@@ -243,6 +243,8 @@
   const handleSideMenuFlodChange = (value: boolean) => {
     isMenuFlod.value = !value;
   };
+
+  const platformConfig = usePlatformConfig();
 
   // 是否展示审计报表导航
   const {

@@ -60,7 +60,7 @@ import('@blueking/notice-component/dist/style.css');
 window.changeConfirm = false;
 
 RootManageService.config()
-  .then((config) => {
+  .then(async (config) => {
     document.title = config.title;
     const BKApp = createApp(App);
 
@@ -88,8 +88,6 @@ RootManageService.config()
     BKApp.directive('bk-tooltips', bkTooltips);
     BKApp.directive('cursor', cursor);
 
-    BKApp.mount('#app');
-
     // TAM前端监控
     setTimeout(() => {
       if (config.aegis_id) {
@@ -101,5 +99,7 @@ RootManageService.config()
         });
       }
     });
+
+    BKApp.mount('#app');
   });
 
