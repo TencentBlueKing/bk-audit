@@ -47,9 +47,9 @@ declare module '@blueking/notice-component';
 declare module '@blueking/login-modal';
 
 declare module '@blueking/platform-config' {
-	export function getPlatformConfig(url: string, options: Recrod<string, any>): Promise<any>;
-	export function setDocumentTitle(params: Recrod<string, any>): void;
-	export function setShortcutIcon(params: string): void;
+  export function getPlatformConfig(url: string, options: Recrod<string, any>): Promise<any>;
+  export function setDocumentTitle(params: Recrod<string, any>): void;
+  export function setShortcutIcon(params: string): void;
 }
 
 interface URLSearchParams {
