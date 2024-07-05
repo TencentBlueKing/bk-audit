@@ -20,16 +20,16 @@
     id="search-page-footer"
     class="search-page-footer">
     <div
-      v-html="blueKingConfig.i18n.footerInfoHTML" />
+      v-html="platformConfig.i18n.footerInfoHTML" />
     <div>
-      <p>{{ blueKingConfig.footerCopyrightContent }}</p>
+      <p>{{ platformConfig.footerCopyrightContent }}</p>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-  import useStore from '@hooks/use-store';
+  import usePlatformConfig from '@/hooks/use-platform-config';
 
-  const { blueKingConfig } = useStore();
+  const platformConfig = usePlatformConfig();
 
 </script>
 <style lang="postcss">

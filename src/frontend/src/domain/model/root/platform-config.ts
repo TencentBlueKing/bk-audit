@@ -15,23 +15,47 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-export default class BlueKingConfig {
+export default class PlatformConfig {
   version: string;
-  appLogo: string;
+  bkAppCode: string;
   name: string;
   nameEn: string;
+  appLogo: string;
+  helperText: string;
+  helperTextEn: string;
+  helperLink: string;
+  brandImg: string;
+  brandImgEn: string;
   brandName: string;
-  brandNameEn: string;
-  footerCopyrightContent: string;
   favIcon: string;
+  brandNameEn: string;
+  footerInfo: string;
+  footerInfoEn: string;
+  footerCopyright: string;
+  footerInfoHTML: string;
+  footerInfoHTMLEn: string;
+  footerCopyrightContent: string;
   i18n: {
-    brandName: string;
     name: string;
+    helperText: string;
+    brandImg: string;
+    brandName: string;
     footerInfoHTML: string;
   };
 
-  constructor(payload = {} as BlueKingConfig) {
+  constructor(payload = {} as PlatformConfig) {
     this.version = payload.version;
+    this.bkAppCode = payload.bkAppCode;
+    this.helperText = payload.helperText;
+    this.helperTextEn = payload.helperTextEn;
+    this.helperLink = payload.helperLink;
+    this.brandImg = payload.brandImg;
+    this.brandImgEn = payload.brandImgEn;
+    this.footerInfo = payload.footerInfo;
+    this.footerInfoEn = payload.footerInfoEn;
+    this.footerCopyright = payload.footerCopyright;
+    this.footerInfoHTML = payload.footerInfoHTML;
+    this.footerInfoHTMLEn = payload.footerInfoHTMLEn;
     this.appLogo = payload.appLogo;
     this.name = payload.name;
     this.nameEn = payload.name;
