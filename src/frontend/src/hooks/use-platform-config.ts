@@ -57,10 +57,10 @@ export default () => {
         version: config.version,
         appLogo: '/static/images/logo.png',
         favIcon: '/static/images/favicon.ico',
-        name: config.site_title,
-        nameEn: config.site_title,
-        brandName: config.title.split(' | ')[1],
-        brandNameEn: config.title.split(' | ')[1],
+        name: '蓝鲸审计中心',
+        nameEn: 'BK Audit',
+        brandName: '腾讯蓝鲸智云',
+        brandNameEn: 'BlueKing',
       }).then((data: PlatformConfigModel) => {
         isInit = true;
         platformConfig.value = data;
