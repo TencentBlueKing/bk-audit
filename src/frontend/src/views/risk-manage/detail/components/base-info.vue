@@ -182,7 +182,7 @@
           :class="{ active: isShowMore }"
           style=" margin-right: 5px;"
           type="angle-double-down" />
-        {{ t('更多选项') }}
+        {{ t('展开全部字段') }}
       </bk-button>
     </div>
   </div>
@@ -311,7 +311,7 @@
     box-shadow: 0 2px 4px 0 #1919290d;
 
     .show-more-btn {
-      width: 104px;
+      width: 120px;
       height: 22px;
       color: #fff;
       background: #c4c6cc;;
