@@ -114,5 +114,7 @@ export default {
     事件数据: 'Event data',
     工单处理: 'Deal with',
     命中策略: 'Related strategy',
+    展开全部字段: 'Expand all fields',
+    选择套餐: 'Choose Tool',
   },
 };
