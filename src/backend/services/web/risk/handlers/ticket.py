@@ -402,10 +402,13 @@ class ForApprove(RiskFlowBaseHandler):
         # 首次发起需要记录
         if process_result.get("ticket"):
             return super().record_history(process_result, **kwargs)
-        # 已有单据则更新状态
+        # 已有单据且状态不同则更新状态
         if "status" in process_result:
-            self.risk.last_history.process_result.update(process_result)
-            self.risk.last_history.save(update_fields=["process_result"])
+            history_status = self.risk.last_history.process_result.get("status") or {}
+            current_status = process_result.get("status") or {}
+            if current_status.get("current_status") != history_status.get("current_status"):
+                self.risk.last_history.process_result.update(process_result)
+                self.risk.last_history.save(update_fields=["process_result"])
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         return kwargs
@@ -503,10 +506,13 @@ class AutoProcess(RiskFlowBaseHandler):
         # 首次执行记录完整信息
         if "task" in process_result:
             return super().record_history(process_result, **kwargs)
-        # 已有单据则跳过
+        # 已有单据且状态不同则更新状态
         if "status" in process_result:
-            self.risk.last_history.process_result.update(process_result)
-            self.risk.last_history.save(update_fields=["process_result"])
+            current_status = process_result.get("status") or {}
+            history_status = self.risk.last_history.process_result.get("status") or {}
+            if current_status.get("state") != history_status.get("state"):
+                self.risk.last_history.process_result.update(process_result)
+                self.risk.last_history.save(update_fields=["process_result"])
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:
         history = {**kwargs}
