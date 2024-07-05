@@ -34,7 +34,7 @@
       <scroll-faker style="width: 368px;">
         <div
           class="right"
-          :style="{height: handleHeight + 'px'}">
+          :style="{height: typeof handleHeight === 'string' ? handleHeight : handleHeight + 'px'}">
           <risk-handle
             :data="riskData"
             :risk-id="riskData.risk_id"
@@ -86,7 +86,7 @@
   const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
-  const handleHeight = ref(800);
+  const handleHeight = ref<number | string>('calc(100vh - 138px)');
   let timeout: undefined | number = undefined;
 
   const handleChangeHeight = (height: number) => {
