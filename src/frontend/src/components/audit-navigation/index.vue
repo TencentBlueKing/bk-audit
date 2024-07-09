@@ -71,15 +71,13 @@
         'show-notice-navigation-main': showNotice.enabled
       }"
       :style="mainStyles">
-      <div class="page-title">
-        <slot name="header" />
-      </div>
-      <!-- <div
-        class="audit-navigation-body-header"
-        :style="bodyHeaderStyles">
-        <slot name="header" />
-      </div> -->
+      <page-header @is-mounted="isMounted">
+        <template #header>
+          <slot name="header" />
+        </template>
+      </page-header>
       <scroll-faker
+        v-if="isHeaderMounted"
         id="auditNavigationContent"
         ref="contentScroll"
         :style="scrollStyles">
@@ -109,6 +107,8 @@
 
   import NoticeComponent from '@blueking/notice-component';
 
+  import PageHeader from './header.vue';
+
   import useRequest from '@/hooks/use-request';
 
   interface Emits{
@@ -130,6 +130,7 @@
   const isSideMenuHover = ref(false);
   const pageWidth = ref(PAGE_MIN_WIDTH);
   const sideLeftExpandWidth = ref();
+  const isHeaderMounted = ref(false);
 
   const realSideWidth = computed(() => (
     isSideMenuFixed.value
@@ -239,6 +240,10 @@
     manual: true,
   });
 
+  const isMounted = () => {
+    isHeaderMounted.value = true;
+  };
+
   onMounted(() => {
     init();
     emit('menu-flod', !isSideMenuFixed.value);
@@ -271,25 +276,6 @@
     .audit-navigation-main {
       margin-left: 220px;
     }
-  }
-
-  .page-title {
-    /* 解决投影被遮挡问题 */
-    position: relative;
-    z-index: 1;
-    display: flex;
-    height: 52px;
-    padding: 0 20px;
-    margin-left: 1px;
-    font-size: 16px;
-    line-height: 52px;
-    color: #313238;
-    background: #fff;
-    transform: translate3d(0, 0, 0);
-
-    /* box-shadow: 0 1px 0 0 #eaebf0; */
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
-    align-items: center;
   }
 
   .audit-navigation-header {

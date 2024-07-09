@@ -55,8 +55,8 @@ export default () => {
     onSuccess: (config) => {
       getPlatformConfig(`${config.shared_res_url}/bk_audit/base.js`, {
         version: config.version,
-        appLogo: '/static/images/logo.png',
-        favIcon: '/static/images/favicon.ico',
+        appLogo: '/images/logo.png',
+        favIcon: '/images/favicon.ico',
         name: '蓝鲸审计中心',
         nameEn: 'BK Audit',
         brandName: '腾讯蓝鲸智云',
