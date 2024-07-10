@@ -268,7 +268,7 @@ export default {
     '暂不支持跨业务数据源，仅可选择审计中心业务': 'Only data sources belonging to  Audit Center can be choosen now',
     '确认删除采集任务？': 'Are you sure you want to delete?',
     '删除后不可直接找回，需要重新接入': 'You can\'t retrieve it directly after deletion, you need to access it again',
-    '基础数据加载失败，请刷新重试': '基础数据加载失败，请刷新重试',
+    '基础数据加载失败，请刷新重试': 'Basic data loading failed, please refresh and try again',
     '复杂的过滤条件（超过5个）会影响机器性能': 'The more complex filtering conditions are, the higher requirements for machine performance.',
     第: '',
     列: 'th col',

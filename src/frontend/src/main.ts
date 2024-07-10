@@ -50,6 +50,7 @@ import createRouter from '@router/index';
 import i18n from '@language/index.js';
 
 import App from './app.vue';
+import Exception from './exception.vue';
 
 import('tippy.js/dist/tippy.css');
 import('tippy.js/themes/light.css');
@@ -104,6 +105,14 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
 
     // 水印
     WaterMark(data.watermark.items[0].data);
+
+    BKApp.mount('#app');
+  })
+  .catch(() => {
+    const BKApp = createApp(Exception);
+
+    BKApp.use(BkuiVue);
+    BKApp.use(i18n);
 
     BKApp.mount('#app');
   });
