@@ -22,6 +22,7 @@ import BkuiVue from 'bkui-vue';
 import { bkTooltips } from 'bkui-vue/lib/directives';
 
 import RootManageService from '@service/root-manage';
+import EntryManageService from '@service/entry-manage';
 
 import ApplyPermissionCatch from '@components/apply-permission/catch.vue';
 import AuditForm from '@components/audit-form/index.vue';
@@ -39,6 +40,8 @@ import RenderSensitivityLevel from '@components/render-sensitivity-level/index.v
 import ScrollFaker from '@components/scroll-faker/index.vue';
 import SkeletonLoading from '@components/skeleton-loading/index.vue';
 import SmartAction from '@components/smart-action/index.vue';
+
+import WaterMark from '@utils/assist/water-mark';
 
 import cursor from '@directives/cursor';
 
@@ -59,9 +62,8 @@ import('@blueking/notice-component/dist/style.css');
 
 window.changeConfirm = false;
 
-RootManageService.config()
-  .then(async (config) => {
-    document.title = config.title;
+Promise.all([RootManageService.config(), EntryManageService.watermark()])
+  .then(([config, data]) => {
     const BKApp = createApp(App);
 
     BKApp.use(BkuiVue);
@@ -100,6 +102,8 @@ RootManageService.config()
       }
     });
 
+    // 水印
+    WaterMark(data.watermark.items[0].data);
+
     BKApp.mount('#app');
   });
-
