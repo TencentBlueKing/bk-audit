@@ -51,7 +51,7 @@
           </bk-form-item>
           <p
             v-if="data.status === 'auto_process'"
-            style="display: flex; align-items: center;color: #63656e;">
+            style="display: flex; margin-top: 24px;color: #63656e; align-items: center;">
             <bk-checkbox v-model="isForce" />
             <span style="margin-left: 4px;">{{ t('强制终止套餐') }}</span>
           </p>

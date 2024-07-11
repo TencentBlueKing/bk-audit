@@ -22,6 +22,7 @@ import BkuiVue from 'bkui-vue';
 import { bkTooltips } from 'bkui-vue/lib/directives';
 
 import RootManageService from '@service/root-manage';
+import EntryManageService from '@service/entry-manage';
 
 import ApplyPermissionCatch from '@components/apply-permission/catch.vue';
 import AuditForm from '@components/audit-form/index.vue';
@@ -33,12 +34,15 @@ import AuditUserSelector from '@components/audit-user-selector/index.vue';
 import AuthButton from '@components/auth/button.vue';
 import AuthComponent from '@components/auth/component';
 import AuthOption from '@components/auth/option.vue';
+import AuthRouterLink from '@components/auth/router-link.vue';
 import AuthSwitch from '@components/auth/switch.vue';
 import RenderList from '@components/render-list/index.vue';
 import RenderSensitivityLevel from '@components/render-sensitivity-level/index.vue';
 import ScrollFaker from '@components/scroll-faker/index.vue';
 import SkeletonLoading from '@components/skeleton-loading/index.vue';
 import SmartAction from '@components/smart-action/index.vue';
+
+import WaterMark from '@utils/assist/water-mark';
 
 import cursor from '@directives/cursor';
 
@@ -47,6 +51,7 @@ import createRouter from '@router/index';
 import i18n from '@language/index.js';
 
 import App from './app.vue';
+import Exception from './exception.vue';
 
 import('tippy.js/dist/tippy.css');
 import('tippy.js/themes/light.css');
@@ -59,9 +64,8 @@ import('@blueking/notice-component/dist/style.css');
 
 window.changeConfirm = false;
 
-RootManageService.config()
-  .then(async (config) => {
-    document.title = config.title;
+Promise.all([RootManageService.config(), EntryManageService.watermark()])
+  .then(([config, data]) => {
     const BKApp = createApp(App);
 
     BKApp.use(BkuiVue);
@@ -79,6 +83,7 @@ RootManageService.config()
     BKApp.component('AuthComponent', AuthComponent);
     BKApp.component('AuthOption', AuthOption);
     BKApp.component('AuthSwitch', AuthSwitch);
+    BKApp.component('AuthRouterLink', AuthRouterLink);
     BKApp.component('RenderList', RenderList);
     BKApp.component('RenderSensitivityLevel', RenderSensitivityLevel);
     BKApp.component('ScrollFaker', ScrollFaker);
@@ -100,6 +105,16 @@ RootManageService.config()
       }
     });
 
+    // 水印
+    WaterMark(data.watermark.items[0].data);
+
+    BKApp.mount('#app');
+  })
+  .catch(() => {
+    const BKApp = createApp(Exception);
+
+    BKApp.use(BkuiVue);
+    BKApp.use(i18n);
+
     BKApp.mount('#app');
   });
-

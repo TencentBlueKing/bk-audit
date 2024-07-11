@@ -327,6 +327,7 @@
     defaultValue: null,
     onSuccess() {
       emits('update');
+      handleChangeMethod('closeOrder');
       messageSuccess(t('人工转单成功'));
     },
   });

@@ -64,7 +64,7 @@
             v-bk-tooltips="t('复制链接')"
             text
             theme="primary"
-            @click="handleCopyLink()">
+            @click="handleCopyLink">
             <audit-icon
               style="font-size: 14px;"
               type="link" />
@@ -409,7 +409,7 @@
 </script>
 <style lang="postcss">
 
-.show-tooltips-text{
+.show-tooltips-text {
   width: 100%;
   max-width: 100%;
 }

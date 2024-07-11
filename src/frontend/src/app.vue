@@ -16,100 +16,86 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-loading
-    :loading="watermarkLoading"
-    mode="spin"
-    style="height: 100vh;"
-    theme="primary">
-    <bk-config-provider
-      :locale="bkuiLocal">
-      <layout
-        v-if="isWatermarkSuccess"
-        ref="layoutRef"
-        class="layout-box"
-        :config-data="configData">
-        <template #header>
-          <router-back />
-          <span>{{ t(pageTitle) }}</span>
-          <div
-            id="teleport-router-link"
-            style="margin-left: 14px;" />
-          <div
-            id="teleport-nav-step"
-            style="flex: 1;" />
-        </template>
-        <template #headerRight>
-          <bk-dropdown class="site-top-dropdown-menu">
-            <div class="site-help-btn">
-              <audit-icon
-                style="font-size: 19px;"
-                :type="locale === 'zh-CN' ? 'lang-zh' : 'lang-en'" />
-            </div>
-            <template #content>
-              <bk-dropdown-menu>
-                <bk-dropdown-item
-                  class="language-option-item"
-                  :class="{
-                    'active': locale === 'zh-CN'
-                  }"
-                  @click="handleSwitchLang('zh-CN')">
-                  <audit-icon type="lang-zh" />
-                  <span>简体中文</span>
-                </bk-dropdown-item>
-                <bk-dropdown-item
-                  class="language-option-item"
-                  :class="{
-                    'active': locale === 'en-US'
-                  }"
-                  @click="handleSwitchLang('en')">
-                  <audit-icon type="lang-en" />
-                  <span>English</span>
-                </bk-dropdown-item>
-              </bk-dropdown-menu>
-            </template>
-          </bk-dropdown>
-          <bk-dropdown class="site-top-dropdown-menu">
-            <div class="site-help-btn">
-              <audit-icon
-                class="version-log-icon"
-                type="help-document-fill" />
-            </div>
-            <template #content>
-              <bk-dropdown-menu>
-                <bk-dropdown-item @click="handleVersionLog">
-                  {{ t('版本日志') }}
-                </bk-dropdown-item>
-              </bk-dropdown-menu>
-            </template>
-          </bk-dropdown>
-          <bk-dropdown class="site-top-dropdown-menu">
-            <div class="account-info-btn">
-              <span>{{ userInfo.username }}</span>
-              <audit-icon
-                class="logout-btn"
-                type="angle-fill-down" />
-            </div>
-            <template #content>
-              <bk-dropdown-menu>
-                <bk-dropdown-item @click="handleLogout">
-                  {{ t('退出登录') }}
-                </bk-dropdown-item>
-              </bk-dropdown-menu>
-            </template>
-          </bk-dropdown>
-        </template>
-        <router-view />
-        <version-log v-model:is-show="isShowVersionLog" />
-      </layout>
-      <bk-exception
-        v-else-if="!watermarkLoading"
-        class="exception-wrap-item exception-part exception-gray"
-        :description="t('基础数据加载失败，请刷新重试')"
-        scene="part"
-        style="padding-top: 17%;"
-        type="500" />
-    </bk-config-provider>
-  </bk-loading>
+  <bk-config-provider
+    :locale="bkuiLocal">
+    <layout
+      ref="layoutRef"
+      class="layout-box"
+      :config-data="configData">
+      <template #header>
+        <router-back />
+        <span>{{ t(pageTitle) }}</span>
+        <div
+          id="teleport-router-link"
+          style="margin-left: 14px;" />
+        <div
+          id="teleport-nav-step"
+          style="flex: 1;" />
+      </template>
+      <template #headerRight>
+        <bk-dropdown class="site-top-dropdown-menu">
+          <div class="site-help-btn">
+            <audit-icon
+              style="font-size: 19px;"
+              :type="locale === 'zh-CN' ? 'lang-zh' : 'lang-en'" />
+          </div>
+          <template #content>
+            <bk-dropdown-menu>
+              <bk-dropdown-item
+                class="language-option-item"
+                :class="{
+                  'active': locale === 'zh-CN'
+                }"
+                @click="handleSwitchLang('zh-CN')">
+                <audit-icon type="lang-zh" />
+                <span>简体中文</span>
+              </bk-dropdown-item>
+              <bk-dropdown-item
+                class="language-option-item"
+                :class="{
+                  'active': locale === 'en-US'
+                }"
+                @click="handleSwitchLang('en')">
+                <audit-icon type="lang-en" />
+                <span>English</span>
+              </bk-dropdown-item>
+            </bk-dropdown-menu>
+          </template>
+        </bk-dropdown>
+        <bk-dropdown class="site-top-dropdown-menu">
+          <div class="site-help-btn">
+            <audit-icon
+              class="version-log-icon"
+              type="help-document-fill" />
+          </div>
+          <template #content>
+            <bk-dropdown-menu>
+              <bk-dropdown-item @click="handleVersionLog">
+                {{ t('版本日志') }}
+              </bk-dropdown-item>
+            </bk-dropdown-menu>
+          </template>
+        </bk-dropdown>
+        <bk-dropdown class="site-top-dropdown-menu">
+          <div class="account-info-btn">
+            <span>{{ userInfo.username }}</span>
+            <audit-icon
+              class="logout-btn"
+              type="angle-fill-down" />
+          </div>
+          <template #content>
+            <bk-dropdown-menu>
+              <bk-dropdown-item @click="handleLogout">
+                {{ t('退出登录') }}
+              </bk-dropdown-item>
+            </bk-dropdown-menu>
+          </template>
+        </bk-dropdown>
+      </template>
+      <router-view />
+      <version-log v-model:is-show="isShowVersionLog" />
+    </layout>
+  </bk-config-provider>
 </template>
 <script setup lang="ts">
   import bkuiLocalEN from 'bkui-vue/dist/locale/en.esm.js';
@@ -137,14 +123,11 @@
   import RouterBack from '@components/router-back/index.vue';
   import VersionLog from '@components/version-log/index.vue';
 
-  import WaterMark from '@utils/assist/water-mark';
-
   import Layout from './layout.vue';
 
   const { locale, t } = useI18n();
   const route = useRoute();
   const isShowVersionLog = ref(false);
-  const isWatermarkSuccess = ref(false);
 
   const bkuiLocal = locale.value === 'en-US' ? bkuiLocalEN : bkuiLocalZHCN;
   const steps = ref<Array<{ title: string }>>([]);
@@ -172,24 +155,6 @@
   const {
     run: fetchLogout,
   } = useRequest(EntryManageService.fetchLogout);
-
-  const  {
-    loading: watermarkLoading,
-  } = useRequest(EntryManageService.watermark, {
-    defaultValue: null,
-    manual: true,
-    onSuccess(data) {
-      if (data) {
-        if (!data.enabled) {
-          isWatermarkSuccess.value = true;
-          return;
-        }
-        const src = data.watermark.items[0].data;
-        WaterMark(src);
-        isWatermarkSuccess.value = true;
-      }
-    },
-  });
 
   const handleLogout = async () => {
     await fetchLogout();

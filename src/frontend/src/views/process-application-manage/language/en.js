@@ -54,5 +54,6 @@ export default {
     '套餐启用后，新建/编辑处理规则时可以选择该套餐，请确认是否启用？': 'After the tool is enabled, processing rule can be applied to this tool, are you sure ?',
     编辑处理套餐: 'Edit Tool',
     克隆处理套餐: 'Clone Tool',
+    强制终止套餐: 'Forced Termination Tool',
   },
 };
