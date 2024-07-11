@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-20 10:12+0800\n"
+"POT-Creation-Date: 2024-07-11 16:22+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1447,6 +1447,15 @@ msgstr "用户信息"
 msgid "Notice"
 msgstr "通知"
 
+msgid "BkAudit"
+msgstr "蓝鲸审计中心"
+
+msgid "风险单待办提醒"
+msgstr "风险单待办提醒"
+
+msgid "新增风险提醒"
+msgstr "新增风险提醒"
+
 #, python-format
 msgid "您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息："
 msgstr "您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息："
@@ -2302,6 +2311,9 @@ msgstr "正则表达式不能为空"
 msgid "启用数据关联"
 msgstr "启用数据关联"
 
+msgid "拉取类型"
+msgstr "拉取类型"
+
 msgid "Storage Type"
 msgstr "存储类型"
 
@@ -2410,6 +2422,18 @@ msgstr "作为默认插件"
 msgid "插件场景"
 msgstr "插件场景"
 
+msgid "公开"
+msgstr "公开"
+
+msgid "私有"
+msgstr "私有"
+
+msgid "机密"
+msgstr "机密"
+
+msgid "绝密"
+msgstr "绝密"
+
 msgid "容器"
 msgstr "容器"
 
@@ -2475,6 +2499,12 @@ msgstr "布尔"
 
 msgid "Null"
 msgstr "空"
+
+msgid "增量"
+msgstr "增量"
+
+msgid "全量"
+msgstr "全量"
 
 msgid "Field Type Not Match"
 msgstr "字段类型不匹配"
@@ -2595,6 +2625,9 @@ msgstr "BKBase HDFS Table ID"
 
 msgid "HDFS Status"
 msgstr "HDFS Status"
+
+msgid "拉取配置"
+msgstr "拉取配置"
 
 msgid "is RT Authorized"
 msgstr "RT是否授权"
@@ -2834,17 +2867,8 @@ msgstr "创建风险失败"
 msgid "Strategy ID: %s; Raw Event ID:\t%s"
 msgstr "策略ID: %s; 原始事件ID:\t%s"
 
-msgid "BkAudit"
-msgstr "蓝鲸审计中心"
-
-msgid "新增风险提醒"
-msgstr "新增风险提醒"
-
 msgid "默认流转"
 msgstr "默认流转"
-
-msgid "风险单待办提醒"
-msgstr "风险单待办提醒"
 
 msgid "流转新风险"
 msgstr "流转新风险"

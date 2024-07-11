@@ -28,6 +28,7 @@ from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     JOIN_DATA_RT_FORMAT,
     DefaultPullConfig,
+    JoinDataPullType,
     SensitivityChoice,
     SnapShotStorageChoices,
 )
@@ -42,6 +43,8 @@ class HttpPullHandler:
         self.resource_type_id = resource_type.resource_type_id
         self.snapshot = snapshot
         self.storage_type = storage_type
+        self.pull_config = self.snapshot.pull_config or {}
+        self.pull_type = self.snapshot.pull_type
 
     def update_or_create(self):
         params = self.config
@@ -84,9 +87,48 @@ class HttpPullHandler:
         )
 
     @property
+    def pull_sensitivity(self) -> str:
+        return self.pull_config.get("sensitivity", SensitivityChoice.PRIVATE)
+
+    @property
+    def pull_period(self) -> int:
+        default_period = (
+            DefaultPullConfig.period if self.pull_type == JoinDataPullType.PARTIAL else DefaultPullConfig.full_period
+        )
+        return int(self.pull_config.get("period", default_period))
+
+    @property
+    def pull_delay(self) -> int:
+        return int(self.pull_config.get("delay", DefaultPullConfig.delay))
+
+    @property
+    def pull_pagesize(self) -> int:
+        return int(self.pull_config.get("limit", DefaultPullConfig.limit))
+
+    @property
+    def pull_content(self) -> str:
+        return (
+            (
+                "{"
+                f'"type": "{self.resource_type_id}", '
+                '"method": "fetch_instance_list", '
+                '"filter": {"start_time": <start>, "end_time": <end>}, '
+                '"page": {"offset": <offset>, "limit": <limit>}'
+                "}"
+            )
+            if self.pull_type == JoinDataPullType.PARTIAL
+            else (
+                "{"
+                f'"type": "{self.resource_type_id}", '
+                '"method": "fetch_instance_list", '
+                '"filter": {"start_time": 0, "end_time": <end>}, '
+                '"page": {"offset": <offset>, "limit": <limit>}'
+                "}"
+            )
+        )
+
+    @property
     def config(self):
-        # 获取参数配置
-        pull_config = self.snapshot.pull_config or {}
         # 配置
         return {
             "bk_username": bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
@@ -104,7 +146,7 @@ class HttpPullHandler:
                 "description": "",
                 "tags": [],
                 "raw_data_name": self.config_name,
-                "sensitivity": pull_config.get("sensitivity", SensitivityChoice.PRIVATE),
+                "sensitivity": self.pull_sensitivity,
                 "data_encoding": "UTF-8",
                 "raw_data_alias": self.config_name,
                 "data_region": "inland",
@@ -113,7 +155,7 @@ class HttpPullHandler:
                 "collection_model": {
                     "collection_type": "pull",
                     "increment_field": "",
-                    "period": int(pull_config.get("period", DefaultPullConfig.period)),
+                    "period": self.pull_period,
                     "time_format": "Unix Time Stamp(milliseconds)",
                 },
                 "filters": {},
@@ -132,24 +174,17 @@ class HttpPullHandler:
                                     "format": "Unix Time Stamp(milliseconds)",
                                     "delay": {
                                         "unit": "minute",
-                                        "value": int(pull_config.get("delay", DefaultPullConfig.delay)),
+                                        "value": self.pull_delay,
                                     },
                                 },
                                 "page": {
                                     "enabled": True,
                                     "total_path": ".data.count",
-                                    "limit": int(pull_config.get("limit", DefaultPullConfig.limit)),
+                                    "limit": self.pull_pagesize,
                                     "start_offset": 0,
                                 },
                                 "url_params": {},
-                                "content": (
-                                    "{"
-                                    f'"type": "{self.resource_type_id}", '
-                                    '"method": "fetch_instance_list", '
-                                    '"filter": {"start_time": <start>, "end_time": <end>}, '
-                                    '"page": {"offset": <offset>, "limit": <limit>}'
-                                    "}"
-                                ),
+                                "content": self.pull_content,
                             },
                         }
                     ]

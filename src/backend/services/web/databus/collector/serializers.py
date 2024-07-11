@@ -35,6 +35,7 @@ from services.web.databus.constants import (
     DEFAULT_TARGET_OBJECT_TYPE,
     ContainerCollectorType,
     EtlConfigEnum,
+    JoinDataPullType,
     LogReportStatus,
     SnapShotStorageChoices,
     TargetNodeTypeChoices,
@@ -219,6 +220,11 @@ class ToggleJoinDataRequestSerializer(serializers.Serializer):
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
     resource_type_id = serializers.CharField(label=gettext_lazy("资源类型ID"))
     is_enabled = serializers.BooleanField(label=gettext_lazy("启用数据关联"))
+    pull_type = serializers.ChoiceField(
+        label=gettext_lazy("拉取类型"),
+        choices=JoinDataPullType.choices,
+        default=JoinDataPullType.PARTIAL,
+    )
     storage_type = serializers.ChoiceField(
         label=gettext_lazy("Storage Type"),
         choices=SnapShotStorageChoices.choices,

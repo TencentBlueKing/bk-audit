@@ -493,7 +493,8 @@ class ToggleJoinDataResource(CollectorMeta):
             else:
                 snapshot.status = SnapshotRunningStatus.get_status(is_enabled)
             snapshot.storage_type = validated_request_data["storage_type"]
-            snapshot.save(update_fields=["status", "hdfs_status", "storage_type"])
+            snapshot.pull_type = validated_request_data["pull_type"]
+            snapshot.save(update_fields=["status", "hdfs_status", "storage_type", "pull_type"])
         else:
             if snapshot.storage_type == SnapShotStorageChoices.REDIS:
                 JoinDataHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
