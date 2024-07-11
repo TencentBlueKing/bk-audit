@@ -111,9 +111,10 @@ CollectorParamConditionMatchType = _CollectorParamConditionMatchType
 
 
 class DefaultPullConfig:
-    period = 1
-    delay = 1
-    limit = 1000
+    period = 1  # minute
+    full_period = 60 * 24  # minute
+    delay = 1  # minute
+    limit = 1000  # count
 
 
 class SensitivityChoice(TextChoices):
@@ -204,3 +205,8 @@ class JsonSchemaFieldType(TextChoices):
             return bkbase_field_map[field_type]
         except KeyError:
             raise FieldTypeNotMatchError()
+
+
+class JoinDataPullType(TextChoices):
+    PARTIAL = "partial", gettext_lazy("增量")
+    FULL = "full", gettext_lazy("全量")
