@@ -106,7 +106,9 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     });
 
     // 水印
-    WaterMark(data.watermark.items[0].data);
+    if (data.enabled) {
+      WaterMark(data.watermark.items[0].data);
+    }
 
     BKApp.mount('#app');
   })
