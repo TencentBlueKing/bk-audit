@@ -101,6 +101,7 @@ from services.web.databus.constants import (
     EnvironmentChoice,
     EtlConfigEnum,
     EtlProcessorChoice,
+    JoinDataPullType,
     LogReportStatus,
     SnapshotRunningStatus,
     SnapShotStorageChoices,
@@ -139,6 +140,7 @@ class SnapshotStatusResource(CollectorMeta):
                         "status": SnapshotRunningStatus.CLOSED.value,
                         "hdfs_status": SnapshotRunningStatus.CLOSED.value,
                         "bkbase_url": None,
+                        "pull_type": JoinDataPullType.PARTIAL,
                     }
                 )
                 continue
@@ -158,6 +160,7 @@ class SnapshotStatusResource(CollectorMeta):
                         or item.status == SnapshotRunningStatus.RUNNING
                     )
                     else None,
+                    "pull_type": item.pull_type,
                 }
             )
         return result_dict
