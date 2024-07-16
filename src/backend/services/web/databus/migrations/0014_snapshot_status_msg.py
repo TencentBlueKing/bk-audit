@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('databus', '0013_snapshot_pull_type'),
+        ("databus", "0013_snapshot_pull_type"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='snapshot',
-            name='status_msg',
-            field=models.TextField(blank=True, null=True, verbose_name='状态信息'),
+            model_name="snapshot",
+            name="status_msg",
+            field=models.TextField(blank=True, null=True, verbose_name="状态信息"),
         ),
     ]
