@@ -160,8 +160,8 @@ class CollectorManage extends ModuleBase {
       bkbase_url: string,
       system_id: string,
       status:string,
-      hdfs_status: string,
-      pull_type: string,
+      hdfs_status: 'failed' | 'preparing' | 'running' | 'closed',
+      pull_type: 'partial' | 'full',
     }>>(`${this.path}/collectors/snapshot_status/`, {
       params,
     });

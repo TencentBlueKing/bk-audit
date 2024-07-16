@@ -53,26 +53,28 @@
   import CollectorManageService from '@service/collector-manage';
 
   import JoinDataModel from '@model/collector/join-data';
+  import type SystemResourceTypeModel from '@model/meta/system-resource-type';
 
   import useRequest from '@/hooks/use-request';
 
   interface Props{
-    data: Record<string, any>;
-    type: string,
-    status: string,
+    data: SystemResourceTypeModel;
+    type: 'partial' | 'full',
+    status: 'failed' | 'preparing' | 'running' | 'closed',
   }
   interface Emits {
     (e: 'changeStatus'): void
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+
   const route = useRoute();
 
   const { t, locale } = useI18n();
 
   const isShow = ref(false);
 
-  const statusStyle: Record<string, Record<'background'|'color'|'borderColor'|'width', string>> = {
+  const statusStyle = {
     full: {
       background: '#dedafc99',
       color: '#7D70E0',
@@ -87,7 +89,7 @@
     },
   };
 
-  const dropdownList = ref([{ name: t('增量更新'), id: 'partial' }, { name: t('全量更新'), id: 'full' }]);
+  const dropdownList = [{ name: t('增量更新'), id: 'partial' }, { name: t('全量更新'), id: 'full' }];
 
   // 更改数据录入任务更新方式
   const {
