@@ -141,6 +141,7 @@ class SnapshotStatusResource(CollectorMeta):
                         "hdfs_status": SnapshotRunningStatus.CLOSED.value,
                         "bkbase_url": None,
                         "pull_type": JoinDataPullType.PARTIAL,
+                        "status_msg": "",
                     }
                 )
                 continue
@@ -161,6 +162,7 @@ class SnapshotStatusResource(CollectorMeta):
                     )
                     else None,
                     "pull_type": item.pull_type,
+                    "status_msg": item.status_msg,
                 }
             )
         return result_dict
