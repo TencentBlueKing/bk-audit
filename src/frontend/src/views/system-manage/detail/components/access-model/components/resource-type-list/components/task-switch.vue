@@ -96,6 +96,7 @@
       system_id: route.params.id,
       resource_type_id: props.data.resource_type_id,
       is_enabled: value,
+      pull_type: 'partial', // 操作栏操作默认增量更新
     });
   };
 

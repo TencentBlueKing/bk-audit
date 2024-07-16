@@ -28,6 +28,7 @@ from services.web.databus.constants import (
     DEFAULT_STORAGE_SHARD_SIZE,
     DEFAULT_STORAGE_SHARDS,
     CustomTypeEnum,
+    JoinDataPullType,
     PluginSceneChoices,
     SnapshotRunningStatus,
     SnapShotStorageChoices,
@@ -203,6 +204,9 @@ class Snapshot(SoftDeleteModel):
         choices=SnapShotStorageChoices.choices,
         default=SnapShotStorageChoices.REDIS.value,
         db_index=True,
+    )
+    pull_type = models.CharField(
+        gettext_lazy("拉取类型"), max_length=16, choices=JoinDataPullType.choices, default=JoinDataPullType.PARTIAL
     )
     pull_config = models.JSONField(gettext_lazy("拉取配置"), default=dict, null=True, blank=True)
     auth_rt = models.BooleanField(gettext_lazy("is RT Authorized"), default=False)

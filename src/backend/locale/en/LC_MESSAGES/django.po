@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-06-20 10:12+0800\n"
+"POT-Creation-Date: 2024-07-11 16:22+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1447,6 +1447,15 @@ msgstr "User Info"
 msgid "Notice"
 msgstr "Notice"
 
+msgid "BkAudit"
+msgstr "BkAudit"
+
+msgid "风险单待办提醒"
+msgstr "Risk Ticket Pending Remind"
+
+msgid "新增风险提醒"
+msgstr "New Risk"
+
 #, python-format
 msgid "您有共%d条风险待处理，请及时前往审计中心查看处理，以下为其中1个风险信息："
 msgstr "You have %d risks pending. Please visit the Audit Center promptly to review and address them. Here is one of the risk details: "
@@ -2302,6 +2311,9 @@ msgstr "Regexp expression cannot be empty"
 msgid "启用数据关联"
 msgstr "Enable Join Data"
 
+msgid "拉取类型"
+msgstr "Pull Type"
+
 msgid "Storage Type"
 msgstr "Storage Type"
 
@@ -2410,6 +2422,18 @@ msgstr "As Default Plugin"
 msgid "插件场景"
 msgstr "Plugin Scene"
 
+msgid "公开"
+msgstr "Public"
+
+msgid "私有"
+msgstr "Private"
+
+msgid "机密"
+msgstr "Confidential"
+
+msgid "绝密"
+msgstr "Top Secret"
+
 msgid "容器"
 msgstr "Container"
 
@@ -2475,6 +2499,12 @@ msgstr "Boolean"
 
 msgid "Null"
 msgstr "Null"
+
+msgid "增量"
+msgstr "Partial"
+
+msgid "全量"
+msgstr "Full"
 
 msgid "Field Type Not Match"
 msgstr "Field Type Not Match"
@@ -2595,6 +2625,9 @@ msgstr "BKBase HDFS Table ID"
 
 msgid "HDFS Status"
 msgstr "HDFS Status"
+
+msgid "拉取配置"
+msgstr "Pull Config"
 
 msgid "is RT Authorized"
 msgstr "is RT Authorized"
@@ -2834,17 +2867,8 @@ msgstr "Create Risk Failed"
 msgid "Strategy ID: %s; Raw Event ID:\t%s"
 msgstr "Strategy ID: %s; Raw Event ID:\t%s"
 
-msgid "BkAudit"
-msgstr "BkAudit"
-
-msgid "新增风险提醒"
-msgstr "New Risk"
-
 msgid "默认流转"
 msgstr "Default"
-
-msgid "风险单待办提醒"
-msgstr "Risk Ticket Pending Remind"
 
 msgid "流转新风险"
 msgstr "New Risk"

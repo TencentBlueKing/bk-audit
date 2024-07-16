@@ -101,6 +101,7 @@ from services.web.databus.constants import (
     EnvironmentChoice,
     EtlConfigEnum,
     EtlProcessorChoice,
+    JoinDataPullType,
     LogReportStatus,
     SnapshotRunningStatus,
     SnapShotStorageChoices,
@@ -139,6 +140,7 @@ class SnapshotStatusResource(CollectorMeta):
                         "status": SnapshotRunningStatus.CLOSED.value,
                         "hdfs_status": SnapshotRunningStatus.CLOSED.value,
                         "bkbase_url": None,
+                        "pull_type": JoinDataPullType.PARTIAL,
                     }
                 )
                 continue
@@ -158,6 +160,7 @@ class SnapshotStatusResource(CollectorMeta):
                         or item.status == SnapshotRunningStatus.RUNNING
                     )
                     else None,
+                    "pull_type": item.pull_type,
                 }
             )
         return result_dict
@@ -493,7 +496,8 @@ class ToggleJoinDataResource(CollectorMeta):
             else:
                 snapshot.status = SnapshotRunningStatus.get_status(is_enabled)
             snapshot.storage_type = validated_request_data["storage_type"]
-            snapshot.save(update_fields=["status", "hdfs_status", "storage_type"])
+            snapshot.pull_type = validated_request_data["pull_type"]
+            snapshot.save(update_fields=["status", "hdfs_status", "storage_type", "pull_type"])
         else:
             if snapshot.storage_type == SnapShotStorageChoices.REDIS:
                 JoinDataHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()

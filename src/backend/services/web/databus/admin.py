@@ -104,6 +104,7 @@ class SnapshotAdmin(admin.ModelAdmin):
         "resource_type_id",
         "bkbase_data_id",
         "storage_type",
+        "pull_type",
         "status",
         "bkbase_processing_id",
         "hdfs_status",
