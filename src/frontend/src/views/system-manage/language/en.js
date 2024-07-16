@@ -276,5 +276,8 @@ export default {
     '复制成功 {num} 个 IP': 'Copy {num} IPs successfully',
     生成中: 'Processing',
     'IP格式有误或不存在，检查后重试！': 'Some IPs do not exist, please remove them and try again!',
+    数据更新方式: 'Data update method',
+    增量更新: 'Incremental',
+    全量更新: 'Full',
   },
 };

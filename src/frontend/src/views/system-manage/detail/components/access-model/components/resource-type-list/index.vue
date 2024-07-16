@@ -52,6 +52,7 @@
 
   import useRequest from '@hooks/use-request';
 
+  import DataUpdateTag from './components/data-update-tag.vue';
   import JobPlan from './components/job-plan.vue';
   import StatusTag from './components/status-tag.vue';
   import TaskSwitch from './components/task-switch.vue';
@@ -111,6 +112,17 @@
             />
             <span class="ml5">schema</span>
           </div>
+      ),
+    },
+    {
+      label: () => t('数据更新方式'),
+      width: '150px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+        <DataUpdateTag
+          data={data}
+          type={snapShotStatusList.value[data.resource_type_id]?.pull_type}
+          status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status}
+          onChangeStatus={() => handleDataStatus()} />
       ),
     },
     {
@@ -230,6 +242,18 @@
     .schema-icon {
       font-size: 14px;
       vertical-align: sub;
+    }
+
+    .bk-table {
+      .hover-highlight {
+        &:hover {
+          td:not(.empty-cell) {
+            .type-edit {
+              display: block;
+            }
+          }
+        }
+      }
     }
   }
 </style>

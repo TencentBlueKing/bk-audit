@@ -26,13 +26,13 @@
   import { useI18n } from 'vue-i18n';
 
   interface Props{
-    status: string,
+    status: 'failed' | 'preparing' | 'running' | 'closed',
   }
   const props = defineProps<Props>();
 
   const { t } = useI18n();
 
-  const statusStyle: Record<string, Record<'background'|'color', string>> = {
+  const statusStyle = {
     closed: {
       background: '#F0F1F5',
       color: '#979BA5',
