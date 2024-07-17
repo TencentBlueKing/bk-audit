@@ -117,9 +117,11 @@ class JoinDataHandler:
             self.update_log_clean_link()
             # 更新状态
             self.update_status(SnapshotRunningStatus.RUNNING.value)
+            self.snapshot.status_msg = ""
             self.snapshot.save()
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             self.update_status(SnapshotRunningStatus.FAILED.value)
+            self.snapshot.status_msg = str(err)
             self.snapshot.save()
             title = gettext("JoinDataCreateFailed")
             content = gettext("Error: %s") % str(err)
