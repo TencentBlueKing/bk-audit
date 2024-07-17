@@ -162,6 +162,7 @@ class CollectorManage extends ModuleBase {
       status:string,
       hdfs_status: 'failed' | 'preparing' | 'running' | 'closed',
       pull_type: 'partial' | 'full',
+      status_msg: string,
     }>>(`${this.path}/collectors/snapshot_status/`, {
       params,
     });

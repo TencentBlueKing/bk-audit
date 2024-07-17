@@ -16,6 +16,10 @@
 -->
 <template>
   <div
+    v-bk-tooltips="{
+      content: statusMsg,
+      disabled: status !== 'failed' || !statusMsg
+    }"
     class="status-tag"
     :style="styles">
     {{ renderText }}
@@ -27,6 +31,7 @@
 
   interface Props{
     status: 'failed' | 'preparing' | 'running' | 'closed',
+    statusMsg: string,
   }
   const props = defineProps<Props>();
 
