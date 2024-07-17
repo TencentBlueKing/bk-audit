@@ -130,7 +130,8 @@
       width: '150px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <StatusTag
-          status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status} />
+          status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status}
+          statusMsg={snapShotStatusList.value[data.resource_type_id]?.status_msg} />
       ),
     },
   ];
