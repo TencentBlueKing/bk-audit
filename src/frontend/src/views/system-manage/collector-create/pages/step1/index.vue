@@ -101,13 +101,14 @@
                       :value="item.id">
                       <div style="display: flex;">
                         <span>{{ item.name }}({{ item.id }})</span>
-                        <span
-                          class="business-type"
-                          :class="{
-                            'business-type-active': item.space_type_id === 'bkcc'
-                          }">
+                        <bk-tag
+                          :style="{
+                            'margin-left': '12px',
+                            'background': item.space_type_id !== 'bkcc' ? '#f0f1f5' : ''
+                          }"
+                          theme="danger">
                           {{ item.space_type_name }}
-                        </span>
+                        </bk-tag>
                       </div>
                     </auth-component>
                   </template>
@@ -781,20 +782,5 @@
       content: '*';
     }
   }
-}
-
-.business-type {
-  height: 25px;
-  padding: 0 5px;
-  margin-top: 3px;
-  line-height: 25px;
-  color: #979ba5;
-  background: #f0f1f5;
-  border-radius: 2px;
-}
-
-.business-type-active {
-  color: #ea3536;
-  background: #feebea;
 }
 </style>
