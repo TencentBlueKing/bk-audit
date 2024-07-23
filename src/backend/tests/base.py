@@ -31,6 +31,6 @@ class TestCase(_TestCase):
     app_secret = settings.SECRET_KEY
     namespace = settings.DEFAULT_NAMESPACE
     bk_biz_id = settings.DEFAULT_BK_BIZ_ID
-    system_id = settings.APP_CODE
+    system_id = settings.BK_IAM_SYSTEM_ID
     resource = _resource
     api = _api

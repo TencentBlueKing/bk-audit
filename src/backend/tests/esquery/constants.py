@@ -56,10 +56,10 @@ ES_QUERY_SEARCH_API_RESP = {
 }
 GET_AUTH_SYSTEMS_API_RESP = [
     [
-        {"permission": {"search_regular_event": "test"}, "id": settings.APP_CODE},
-        {"permission": {"view_system": "test"}, "id": settings.APP_CODE},
+        {"permission": {"search_regular_event": "test"}, "id": settings.BK_IAM_SYSTEM_ID},
+        {"permission": {"view_system": "test"}, "id": settings.BK_IAM_SYSTEM_ID},
     ],
-    [settings.APP_CODE],
+    [settings.BK_IAM_SYSTEM_ID],
 ]
 SEARCH_PARAMS = {
     "namespace": settings.DEFAULT_NAMESPACE,
