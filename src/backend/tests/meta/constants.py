@@ -34,16 +34,18 @@ from apps.meta.constants import (
     LIST_USER_PAGE_SIZE,
     LIST_USERS_LOOKUP_FIELD,
     RETRIEVE_USER_FIELDS,
+    CollectorParamConditionMatchType,
+    CollectorParamConditionTypeEnum,
     ConfigLevelChoices,
     SpaceType,
 )
 from apps.meta.models import System
 from apps.meta.utils.fields import EVENT_ID
-from apps.meta.utils.saas import get_saas_url
 from apps.permission.constants import IAMSystems
 from apps.permission.handlers.actions import ActionEnum
 from core.choices import TextChoices
 from core.utils.tools import choices_to_dict, trans_object_local
+from services.web.databus.constants import JoinDataPullType
 from tests.databus.collector.constants import (
     COLLECTOR_STATUS_RESULT as _COLLECTOR_STATUS_RESULT,
 )
@@ -70,10 +72,10 @@ class PermissionMock(mock.MagicMock):
 # Base
 RESOURCE_TYPE_ID = "biz"
 SYSTEM_DATA1 = {
-    "system_id": settings.APP_CODE + "test",
+    "system_id": settings.BK_IAM_SYSTEM_ID + "test",
     "namespace": settings.DEFAULT_NAMESPACE,
-    "name": settings.APP_CODE + "test",
-    "name_en": settings.APP_CODE + "test",
+    "name": settings.BK_IAM_SYSTEM_ID + "test",
+    "name_en": settings.BK_IAM_SYSTEM_ID + "test",
     "clients": None,
     "provider_config": None,
     "logo_url": "",
@@ -81,10 +83,10 @@ SYSTEM_DATA1 = {
     "description": None,
 }
 SYSTEM_DATA2 = {
-    "system_id": settings.APP_CODE,
+    "system_id": settings.BK_IAM_SYSTEM_ID,
     "namespace": settings.DEFAULT_NAMESPACE,
-    "name": settings.APP_CODE,
-    "name_en": settings.APP_CODE,
+    "name": settings.BK_IAM_SYSTEM_ID,
+    "name_en": settings.BK_IAM_SYSTEM_ID,
     "clients": None,
     "provider_config": {"host": _SYSTEM_HOST},
     "logo_url": "https://bk.tencent.com",
@@ -120,12 +122,12 @@ SYSTEM_BULK_DATA.append(
 )
 
 SYSTEM_ROLE_DATA = {
-    "system_id": settings.APP_CODE,
+    "system_id": settings.BK_IAM_SYSTEM_ID,
     "role": IAM_MANAGER_ROLE,
     "username": USERNAME,
 }
 RESOURCE_TYPE_DATA = {
-    "system_id": settings.APP_CODE,
+    "system_id": settings.BK_IAM_SYSTEM_ID,
     "resource_type_id": RESOURCE_TYPE_ID,
     "name": "业务",
     "name_en": "business",
@@ -136,7 +138,7 @@ RESOURCE_TYPE_DATA = {
 }
 SNAPSHOT_RUNNING_STATUS_CLOSED = "closed"
 SNAPSHOT_DATA = {
-    "system_id": settings.APP_CODE,
+    "system_id": settings.BK_IAM_SYSTEM_ID,
     "resource_type_id": RESOURCE_TYPE_ID,
     "bkbase_data_id": 1,
     "bkbase_processing_id": None,
@@ -263,37 +265,45 @@ SYSTEM_LIST_ALL_DATA = [
 SYSTEM_LIST_ALL_OF_ACTION_IDS_PARAMS = {"namespace": settings.DEFAULT_NAMESPACE}
 SYSTEM_LIST_ALL_OF_ACTION_IDS_DATA = [
     {
-        "id": settings.APP_CODE,
-        "name": settings.APP_CODE,
+        "id": settings.BK_IAM_SYSTEM_ID,
+        "name": settings.BK_IAM_SYSTEM_ID,
     }
 ]
 
 # System Info
-SYSTEM_INFO_PARAMS = {"system_id": settings.APP_CODE}
+SYSTEM_INFO_PARAMS = {"system_id": settings.BK_IAM_SYSTEM_ID}
 SYSTEM_DATA_COPY = copy.deepcopy(SYSTEM_DATA2)
 SYSTEM_DATA_COPY.update({"managers": [USERNAME]})
 SYSTEM_INFO_DATA = SYSTEM_DATA_COPY
 
 # Resource Type List
-RESOURCE_TYPE_LIST_PARAMS = {"system_id": settings.APP_CODE}
+RESOURCE_TYPE_LIST_PARAMS = {"system_id": settings.BK_IAM_SYSTEM_ID}
 RESOURCE_TYPE_LIST_DATA = copy.deepcopy(RESOURCE_TYPE_DATA)
 RESOURCE_TYPE_LIST_DATA.update(
     {
         "status": SNAPSHOT_DATA["status"],
-        "bkbase_url": get_saas_url(settings.BKBASE_APP_CODE)
-        + str(settings.BK_BASE_ACCESS_URL).rstrip("/")
-        + "/"
-        + str(SNAPSHOT_DATA["bkbase_data_id"]),
+        "bkbase_url": None,
+        "hdfs_status": "closed",
+        "pull_type": "partial",
+        "status_msg": None,
     }
 )
 RESOURCE_TYPE_LIST_DATA2 = copy.deepcopy(RESOURCE_TYPE_DATA)
-RESOURCE_TYPE_LIST_DATA2.update({"status": SNAPSHOT_RUNNING_STATUS_CLOSED, "bkbase_url": None})
+RESOURCE_TYPE_LIST_DATA2.update(
+    {
+        "status": SNAPSHOT_RUNNING_STATUS_CLOSED,
+        "bkbase_url": None,
+        "hdfs_status": "closed",
+        "pull_type": JoinDataPullType.PARTIAL,
+        "status_msg": "",
+    }
+)
 
 # System Filter
 GET_AUTH_SYSTEMS_API_RESP = copy.deepcopy(_GET_AUTH_SYSTEMS_API_RESP)
 SYSTEM_FILTER_PARAMS = {
     "namespace": settings.DEFAULT_NAMESPACE,
-    "system_ids": settings.APP_CODE,
+    "system_ids": settings.BK_IAM_SYSTEM_ID,
 }
 SYSTEM_FILTER_OF_NOT_SYSTEM_IDS_PARAMS = {
     "namespace": settings.DEFAULT_NAMESPACE,
@@ -325,15 +335,6 @@ class EtlConfigEnum(TextChoices):
     BK_LOG_JSON = "bk_log_json", gettext_lazy("JSON")
     BK_LOG_DELIMITER = "bk_log_delimiter", gettext_lazy("分隔符")
     BK_LOG_REGEXP = "bk_log_regexp", gettext_lazy("正则")
-
-
-class CollectorParamConditionTypeEnum(TextChoices):
-    MATCH = "match", gettext_lazy("字符串过滤")
-    SEPARATOR = "separator", gettext_lazy("分隔符过滤")
-
-
-class CollectorParamConditionMatchType(TextChoices):
-    INCLUDE = "include", gettext_lazy("保留匹配字符串")
 
 
 GET_GLOBALS_DATA = {
@@ -403,7 +404,7 @@ GET_CACHE_OF_RESOURCE_TYPE_API_RESP = [
     }
 ]
 RESOURCE_TYPE_SCHEMA_PARAMS = {
-    "system_id": settings.APP_CODE,
+    "system_id": settings.BK_IAM_SYSTEM_ID,
     "resource_type_id": RESOURCE_TYPE_ID,
 }
 

@@ -49,7 +49,7 @@ PLUGIN_DATA = copy.deepcopy(_PLUGIN_DATA)
 COLLECTOR_ID = 1
 COLLECTOR_NAME = "test_collector"
 COLLECTOR_DATA = {
-    "system_id": settings.APP_CODE,
+    "system_id": settings.BK_IAM_SYSTEM_ID,
     "bk_biz_id": int(settings.DEFAULT_BK_BIZ_ID),
     "collector_plugin_id": PLUGIN_ID,
     "collector_config_id": COLLECTOR_ID,
@@ -271,7 +271,7 @@ ETL_PREVIEW_RESULT = [{"key": "date", "path": "date", "val": "2022-01-01 00:00:0
 SYSTEM_HOST = "https://bk.tencent.com"
 SYSTEM_TOKEN = "1234567890"
 RESOURCE_TYPE_ID = "system"
-TOGGLE_JOIN_DATA = {"is_enabled": True, "system_id": settings.APP_CODE, "resource_type_id": RESOURCE_TYPE_ID}
+TOGGLE_JOIN_DATA = {"is_enabled": True, "system_id": settings.BK_IAM_SYSTEM_ID, "resource_type_id": RESOURCE_TYPE_ID}
 
 
 class SessionMock(mock.MagicMock):
