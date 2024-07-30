@@ -364,10 +364,11 @@ class RetryAutoProcess(RiskMeta):
             node.status = TicketNodeStatus.RUNNING
             node.process_result["status"]["state"] = SOPSTaskStatus.RUNNING
             node.save(update_fields=["status", "process_result"])
-            # 若最后一个节点为处理套餐节点，则更新状态为自动处理中
+            # 若最后一个节点为处理套餐节点，则更新状态为自动处理中，并清理处理人
             if risk.last_history.id == node.id:
                 risk.status = RiskStatus.AUTO_PROCESS
-                risk.save(update_fields=["status"])
+                risk.current_operator = []
+                risk.save(update_fields=["status", "current_operator"])
         # 更新节点信息
         sync_auto_result.apply_async(countdown=60, kwargs={"node_id": node.id})
 
