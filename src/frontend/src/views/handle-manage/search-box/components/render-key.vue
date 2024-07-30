@@ -105,6 +105,7 @@
   const handleReset = () => {
     localSearchModel.value = {
       datetime: ['', ''],
+      datetime_origin: ['', ''],
     };
     emits('update:modelValue', localSearchModel.value);
     emits('clear');

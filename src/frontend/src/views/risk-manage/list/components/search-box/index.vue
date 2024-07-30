@@ -83,6 +83,10 @@
       dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       dayjs().format('YYYY-MM-DD HH:mm:ss'),
     ],
+    datetime_origin: [
+      'now-6M',
+      'now',
+    ],
   });
 
   // 解析 url 上面附带的查询参数
@@ -100,6 +104,7 @@
   });
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
     searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
+    searchModel.value.datetime_origin = urlSearchParams.datetime_origin.split(',');
   }
 
   const handleRenderTypeChange = () => {
@@ -133,6 +138,7 @@
   const handleClear = () => {
     searchModel.value = {
       datetime: ['', ''],
+      datetime_origin: ['', ''],
     };
     handleSubmit();
   };
@@ -170,7 +176,7 @@
       background: #dcdee5;
       border-radius: 0 0 8px 8px;
       transform: translate(-50%, 100%);
-      transition: all 0.15s;
+      transition: all .15s;
 
       &:hover {
         background: #c4c6cc;

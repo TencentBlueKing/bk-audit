@@ -38,6 +38,7 @@ declare interface Window {
   changeConfirm: boolean | 'popover';
   testmessage: any;
   BkVisionSDK: any;
+  timezone: string;
 }
 
 declare module 'js-cookie'
@@ -45,6 +46,8 @@ declare module 'js-cookie'
 declare module '@blueking/notice-component';
 
 declare module '@blueking/login-modal';
+
+declare module '@blueking/date-picker';
 
 declare module '@blueking/platform-config' {
   export function getPlatformConfig(url: string, options: Recrod<string, any>): Promise<any>;

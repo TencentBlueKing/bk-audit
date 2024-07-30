@@ -82,6 +82,10 @@
       dayjs(Date.now() - 3600000).format('YYYY-MM-DD HH:mm:ss'),
       dayjs().format('YYYY-MM-DD HH:mm:ss'),
     ],
+    datetime_origin: [
+      'now-1h',
+      'now',
+    ],
   });
 
   // 解析 url 上面附带的查询参数
@@ -98,6 +102,7 @@
   });
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
     searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
+    searchModel.value.datetime_origin = urlSearchParams.datetime_origin.split(',');
   }
 
   const handleRenderTypeChange = () => {
@@ -136,9 +141,15 @@
   defineExpose<Exposes>({
     clearValue() {
       searchModel.value = {
+        // 用于查询的date参数
         datetime: [
           dayjs(Date.now() - 3600000).format('YYYY-MM-DD HH:mm:ss'),
           dayjs().format('YYYY-MM-DD HH:mm:ss'),
+        ],
+        // 用于now语法的date参数（只用使用now语法，选择最近时间才会实时更新）
+        datetime_origin: [
+          'now-1h',
+          'now',
         ],
       };
       handleSubmit();
@@ -169,7 +180,7 @@
       background: #dcdee5;
       border-radius: 0 0 8px 8px;
       transform: translate(-50%, 100%);
-      transition: all 0.15s;
+      transition: all .15s;
 
       &:hover {
         background: #c4c6cc;

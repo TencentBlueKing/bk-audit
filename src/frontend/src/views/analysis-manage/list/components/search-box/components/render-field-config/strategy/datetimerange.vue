@@ -16,29 +16,27 @@
 -->
 <template>
   <div>
-    <bk-date-picker
-      append-to-body
-      :clearable="false"
-      :disable-date="disableDate"
-      :model-value="defaultValue"
+    <date-picker
+      v-model="localValue"
       :placeholder="`请选择${config.label}`"
-      shortcut-close
-      :shortcuts="shortcuts"
       style="width: 100%;"
-      type="datetimerange"
-      @change="handleChange" />
+      @update:model-value="handleChange" />
   </div>
 </template>
 <script setup lang="ts">
-  // import dayjs from 'dayjs';
-  import { useI18n } from 'vue-i18n';
+  import dayjs from 'dayjs';
+  import { ref, watch } from 'vue';
+
+  import { DateRange } from '@blueking/date-picker';
 
   import type { IFieldConfig } from '../config';
 
   interface Props {
     config: IFieldConfig,
+    // eslint-disable-next-line vue/no-unused-properties
     defaultValue?: [string, string],
     name: string,
+    model: Record<string, any>
   }
   interface Emits {
     (e: 'change', name: string, value: Props['defaultValue']): void
@@ -46,86 +44,32 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-
-  interface TShortcut {
-    text: string,
-    value: () => [Date, Date]
-  }
+  const localValue = ref(props.model.datetime_origin);
 
   interface Exposes {
     getValue: ()=> Promise<Record<string, any>|string>
   }
-  const { t } = useI18n();
-  const shortcuts: Array<TShortcut> = [
-    {
-      text: t('近 1 小时'),
-      value() {
-        const end = new Date();
-        const start = new Date();
-        start.setTime(start.getTime() - 3600000);
-        return [
-          start, end,
-        ];
-      },
-    },
-    {
-      text: t('近 1 天'),
-      value() {
-        const end = new Date();
-        const start = new Date();
-        start.setTime(start.getTime() - 86400000);
-        return [
-          start, end,
-        ];
-      },
-    },
-    {
-      text: t('近 3 天'),
-      value() {
-        const end = new Date();
-        const start = new Date();
-        start.setTime(start.getTime() - 259200000);
-        return [
-          start, end,
-        ];
-      },
-    },
-    {
-      text: t('近 7 天'),
-      value() {
-        const end = new Date();
-        const start = new Date();
-        start.setTime(start.getTime() - 604800000);
-        return [
-          start, end,
-        ];
-      },
-    },
-    {
-      text: t('近 30 天'),
-      value() {
-        const end = new Date();
-        const start = new Date();
-        start.setTime(start.getTime() - 2592000000);
-        return [
-          start, end,
-        ];
-      },
-    },
-  ];
 
-  const disableDate = (date: number | Date): boolean => date.valueOf() > Date.now();
-
-  const handleChange = (value: Props['defaultValue']) => {
-    emits('change', props.name, value);
+  const handleChange = (value: [string|number, string|number]) => {
+    // 更新datetime_origin，用于刷新页面正确填充对应格式日期
+    emits('change', 'datetime_origin', value.map(item => (typeof item === 'number'
+      ? dayjs(item).format('YYYY-MM-DD HH:mm:ss') : item)) as Props['defaultValue']);
   };
+
+  watch(() => props.model.datetime_origin, (date) => {
+    localValue.value = date;
+  });
+
   defineExpose<Exposes>({
     getValue() {
-      if (props.config.validator && !props.config.validator(props.defaultValue)) {
+      if (props.config.validator && !props.config.validator(localValue)) {
         return Promise.reject(`${props.name} error`);
       }
+      // 每次点击搜索时获取最新的date数据
+      const date = new DateRange(localValue.value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
+      emits('change', props.name, [date.startDisplayText, date.endDisplayText]);
       return Promise.resolve({
-        [props.name]: props.defaultValue,
+        [props.name]: localValue,
       });
     },
   });

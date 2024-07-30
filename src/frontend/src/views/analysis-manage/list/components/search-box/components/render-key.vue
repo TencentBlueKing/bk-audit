@@ -162,6 +162,10 @@
         dayjs(Date.now() - 900000).format('YYYY-MM-DD HH:mm:ss'),
         dayjs().format('YYYY-MM-DD HH:mm:ss'),
       ],
+      datetime_origin: [
+        'now-15m',
+        'now',
+      ],
     };
   };
 </script>
@@ -194,7 +198,7 @@
 
       .active {
         transform: rotateZ(-180deg);
-        transition: all 0.15s;
+        transition: all .15s;
       }
     }
   }
