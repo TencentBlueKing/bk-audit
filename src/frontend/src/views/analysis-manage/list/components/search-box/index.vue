@@ -102,6 +102,8 @@
   });
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
     searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
+  }
+  if (urlSearchParams.datetime_origin) {
     searchModel.value.datetime_origin = urlSearchParams.datetime_origin.split(',');
   }
 

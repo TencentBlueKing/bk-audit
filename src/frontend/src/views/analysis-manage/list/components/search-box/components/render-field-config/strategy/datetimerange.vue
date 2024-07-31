@@ -18,8 +18,8 @@
   <div>
     <date-picker
       v-model="localValue"
+      class="date-picker"
       :placeholder="`请选择${config.label}`"
-      style="width: 100%;"
       @update:model-value="handleChange" />
   </div>
 </template>
@@ -75,18 +75,12 @@
   });
 </script>
 <style lang="postcss" scoped>
-  .dateranttime-custom-shortcuts {
-    line-height: 32px;
-    color: rgb(99 101 110);
+  :deep(.date-picker) {
+    display: flex;
+    width: 100%;
 
-    .shortcuts-item {
-      padding: 0 16px;
-      cursor: pointer;
-
-      &:hover {
-        color: rgb(58 132 255);
-        background-color: rgb(225 236 255);
-      }
+    .date-content {
+      flex: 1;
     }
   }
 </style>
