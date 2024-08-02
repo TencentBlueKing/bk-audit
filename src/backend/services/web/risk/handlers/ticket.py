@@ -47,6 +47,7 @@ from services.web.risk.constants import (
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.rule import RiskRuleHandler
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
+from services.web.strategy_v2.models import Strategy
 
 
 class RiskFlowBaseHandler:
@@ -89,6 +90,21 @@ class RiskFlowBaseHandler:
         """
 
         return GlobalMetaConfig.get(config_key=SECURITY_PERSON_KEY)
+
+    def load_processor(self) -> List[str]:
+        """
+        获取处理人
+        """
+
+        # 获取策略
+        strategy: Strategy = Strategy.objects.filter(strategy_id=self.risk.strategy_id).first()
+        if not strategy:
+            return []
+        # 获取处理组成员
+        processor_groups: List[NoticeGroup] = list(
+            NoticeGroup.objects.filter(group_id__in=strategy.processor_groups or [])
+        )
+        return list({member for processor_group in processor_groups for member in processor_group.group_member})
 
     def load_last_operator(self) -> List[str]:
         """
@@ -247,7 +263,9 @@ class NewRisk(RiskFlowBaseHandler):
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
         # 有处理套餐则当前处理人为空，否则为安全责任人
         self.risk.current_operator = (
-            [] if self.process_application and self.risk.operator else self.load_security_person()
+            []
+            if self.process_application and self.risk.operator
+            else self.load_processor() or self.load_security_person()
         )
         self.risk.save(update_fields=["current_operator"])
 
@@ -372,7 +390,9 @@ class ForApprove(RiskFlowBaseHandler):
         if (current_status in TicketStatus.get_success_status() and not approve_result) or (
             current_status in TicketStatus.get_failed_status()
         ):
-            self.risk.current_operator = self.load_last_operator() or self.load_security_person()
+            self.risk.current_operator = (
+                self.load_last_operator() or self.load_processor() or self.load_security_person()
+            )
         # 其他情况处理人为空
         else:
             self.risk.current_operator = []
@@ -481,7 +501,9 @@ class AutoProcess(RiskFlowBaseHandler):
             process_result["status"]["state"] in SOPSTaskStatus.get_failed_status()
             or (process_result["status"]["state"] in SOPSTaskStatus.get_success_status() and not auto_close_risk)
         ):
-            self.risk.current_operator = self.load_last_operator() or self.load_security_person()
+            self.risk.current_operator = (
+                self.load_last_operator() or self.load_processor() or self.load_security_person()
+            )
         # 其他情况处理人为空
         else:
             self.risk.current_operator = []
@@ -717,7 +739,7 @@ class OperateFailed(RiskFlowBaseHandler):
         self.risk.save(update_fields=["status"])
 
     def update_operator(self, process_result: dict, *args, **kwargs) -> None:
-        self.risk.current_operator = self.load_security_person()
+        self.risk.current_operator = self.load_processor() or self.load_security_person()
         self.risk.save(update_fields=["current_operator"])
 
     def build_history(self, process_result: dict, *args, **kwargs) -> dict:

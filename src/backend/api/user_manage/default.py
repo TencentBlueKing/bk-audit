@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import base64
 import os
+from typing import Optional
 
 from bk_resource import BkApiResource
 from bk_resource.utils.cache import CacheTypeItem
@@ -26,6 +27,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.domains import USER_MANAGE_URL
+from core.constants import TimeEnum
 
 
 class UserManageResource(BkApiResource, abc.ABC):
@@ -43,6 +45,30 @@ class RetrieveUser(UserManageResource):
     name = gettext_lazy("获取单个用户信息")
     method = "GET"
     action = "/retrieve_user/"
+    cache_type = CacheTypeItem(key="RetrieveUser", timeout=TimeEnum.ONE_HOUR_SECOND.value, user_related=False)
+    platform_authorization = True
+
+
+class RetrieveLeaderResource(UserManageResource):
+    """获取单个用户的leader信息 ."""
+
+    name = gettext_lazy("获取单个用户的leader信息")
+    platform_authorization = True
+
+    @property
+    def action(self):
+        return
+
+    def perform_request(self, validated_request_data) -> Optional[str]:
+        # 获取用户信息
+        user_info = RetrieveUser().perform_request(validated_request_data)
+        # 解析出leader信息
+        leader_infos = user_info.get("leader", [])
+        if leader_infos:
+            leader_info = leader_infos[0]
+        else:
+            leader_info = {}
+        return leader_info.get("username")
 
 
 class ListUserDepartments(UserManageResource):

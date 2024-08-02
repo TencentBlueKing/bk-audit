@@ -93,6 +93,7 @@ class Risk(models.Model):
         choices=RiskLabel.choices,
     )
     last_operate_time = models.DateTimeField(gettext_lazy("Last Operate Time"), auto_now=True, db_index=True)
+    title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
 
     class Meta:
         verbose_name = gettext_lazy("Risk")

@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import datetime
+import json
 from collections import defaultdict
 from typing import List
 
@@ -58,11 +59,14 @@ from services.web.analyze.controls.base import Controller
 from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control
 from services.web.analyze.tasks import call_controller
+from services.web.risk.constants import EventMappingFields
+from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     LOCAL_UPDATE_FIELDS,
     MappingType,
+    RiskLevel,
     StrategyAlgorithmOperator,
     StrategyOperator,
     StrategyStatusChoices,
@@ -75,6 +79,8 @@ from services.web.strategy_v2.serializers import (
     BKMStrategySerializer,
     CreateStrategyRequestSerializer,
     CreateStrategyResponseSerializer,
+    GetEventInfoFieldsRequestSerializer,
+    GetEventInfoFieldsResponseSerializer,
     GetRTFieldsRequestSerializer,
     GetRTFieldsResponseSerializer,
     GetStrategyCommonResponseSerializer,
@@ -524,6 +530,7 @@ class GetStrategyCommon(StrategyV2Base):
             "strategy_status": choices_to_dict(StrategyStatusChoices, val="value", name="label"),
             "offset_unit": choices_to_dict(OffsetUnit, val="value", name="label"),
             "mapping_type": choices_to_dict(MappingType, val="value", name="label"),
+            "risk_level": choices_to_dict(RiskLevel, val="value", name="label"),
         }
 
 
@@ -583,3 +590,47 @@ class GetStrategyStatus(StrategyV2Base):
             s.strategy_id: {"status": s.status, "status_msg": s.status_msg}
             for s in Strategy.objects.filter(strategy_id__in=validated_request_data["strategy_ids"])
         }
+
+
+class GetEventInfoFields(StrategyV2Base):
+    name = gettext_lazy("Get Event Info Fields")
+    RequestSerializer = GetEventInfoFieldsRequestSerializer
+    ResponseSerializer = GetEventInfoFieldsResponseSerializer
+
+    def get_event_basic_field_configs(self) -> List[dict]:
+        """
+        获取基础字段
+        """
+
+        return [
+            {"field_name": field.field_name, "display_name": field.alias_name, "description": str(field.description)}
+            for field in EventMappingFields().fields
+        ]
+
+    def perform_request(self, validated_request_data):
+        # 获取基础字段
+        result = {"event_basic_field_configs": self.get_event_basic_field_configs()}
+        strategy_id = validated_request_data.get("strategy_id")
+        if not strategy_id:
+            return result
+        # check permission
+        if not ActionPermission(actions=[ActionEnum.EDIT_STRATEGY]).has_permission(
+            request=get_local_request(), view=self
+        ):
+            return result
+        strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
+        event_data_field_configs = []
+        risk: Risk = Risk.objects.filter(strategy_id=strategy.strategy_id).order_by("-event_time").first()
+        # 获取事件数据字段
+        event_data: dict = risk.event_data or {}
+        for key in event_data.keys():
+            event_data_field_configs.append({"field_name": key, "display_name": key, "description": ""})
+        result["event_data_field_configs"] = event_data_field_configs
+        # 获取事件证据字段
+        event_evidence_field_configs = []
+        event_evidence: List[dict] = json.loads(risk.event_evidence or "[]")
+        if event_evidence:
+            for key in event_evidence[0].keys():
+                event_evidence_field_configs.append({"field_name": key, "display_name": key, "description": ""})
+        result["event_evidence_field_configs"] = event_evidence_field_configs
+        return result

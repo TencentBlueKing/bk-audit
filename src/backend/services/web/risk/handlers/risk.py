@@ -20,7 +20,7 @@ import datetime
 import json
 import math
 import re
-from typing import List, Union
+from typing import List, Optional, Union
 
 from bk_resource import resource
 from blueapps.utils.logger import logger
@@ -34,6 +34,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
+from core.render import jinja_render
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
     EVENT_TYPE_SPLIT_REGEX,
@@ -43,7 +44,7 @@ from services.web.risk.constants import (
 )
 from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
-from services.web.risk.serializers import CreateRiskSerializer
+from services.web.risk.serializers import CreateRiskSerializer, RiskInfoSerializer
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
 
@@ -99,6 +100,19 @@ class RiskHandler:
         GlobalMetaConfig.set(config_key=RISK_SYNC_START_TIME_KEY, config_value=math.floor(end_time.timestamp()))
 
         return data
+
+    def render_risk_title(self, risk: Risk) -> Optional[str]:
+        """
+        生成风险标题
+        """
+
+        strategy: Strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
+        if not strategy or not strategy.risk_title:
+            return
+        risk_content = RiskInfoSerializer(risk).data
+        if risk_content.get("event_evidence"):
+            risk_content["event_evidence"] = json.loads(risk_content["event_evidence"])[0]
+        return jinja_render(strategy.risk_title, risk_content)
 
     def create_risk(self, event: dict) -> (bool, Risk):
         """
@@ -156,6 +170,7 @@ class RiskHandler:
             event_source=event.get("event_source"),
             operator=self.parse_operator(event.get("operator")),
             tags=list(StrategyTag.objects.filter(strategy_id=event["strategy_id"]).values_list("tag_id", flat=True)),
+            title=self.render_risk_title(risk),
         )
 
     def parse_operator(self, operator: str) -> List[str]:
