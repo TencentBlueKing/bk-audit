@@ -28,13 +28,14 @@ from django.conf import settings
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext
+from jinja2.exceptions import UndefinedError
 from rest_framework.settings import api_settings
 
 from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
-from core.render import jinja_render
+from core.render import Jinja2Renderer
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
     EVENT_TYPE_SPLIT_REGEX,
@@ -44,6 +45,7 @@ from services.web.risk.constants import (
 )
 from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
+from services.web.risk.render import RiskTitleUndefined
 from services.web.risk.serializers import CreateRiskSerializer, RiskInfoSerializer
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -110,15 +112,19 @@ class RiskHandler:
         if not strategy or not strategy.risk_title:
             return
         risk_content = RiskInfoSerializer(risk).data
-        event_evidence = {}
         if risk_content.get("event_evidence"):
-            # 事件证据为字符串需要转换成列表，并取第一条字典数据
-            try:
-                event_evidence = json.loads(risk_content["event_evidence"])[0]
-            except json.JSONDecodeError:
-                pass
-        risk_content["event_evidence"] = event_evidence
-        return jinja_render(strategy.risk_title, risk_content)
+            risk_content["event_evidence"] = json.loads(risk_content["event_evidence"])[0]
+        try:
+            risk_title = Jinja2Renderer(undefined=RiskTitleUndefined).jinja_render(strategy.risk_title, risk_content)
+            return risk_title
+        except UndefinedError as err:
+            logger.exception(
+                "[RenderRiskTitleFailed] risk_title: %s; risk_content: %s; err: %s",
+                strategy.risk_title,
+                risk_content,
+                err,
+            )
+            return strategy.risk_title
 
     def create_risk(self, event: dict) -> (bool, Risk):
         """
