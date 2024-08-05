@@ -523,9 +523,10 @@
         id: string;
         name: string
       }>);
-      data.forEach((item) => {
-        strategyTagMap.value[item.tag_id] = item.tag_name;
-      });
+      strategyTagMap.value = data.reduce<Record<string, string>>((acc, item) => {
+        acc[item.tag_id] = item.tag_name;
+        return acc;
+      }, {});
     },
   });
   // 获取方案列表
