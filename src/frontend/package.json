@@ -15,6 +15,7 @@
     "prepare": "cd ../.. && husky install src/frontend/.husky"
   },
   "dependencies": {
+    "@blueking/date-picker": "^2.0.0-beta.23",
     "@blueking/login-modal": "^1.0.1",
     "@blueking/notice-component": "2.0.5",
     "@blueking/platform-config": "^1.0.2",
