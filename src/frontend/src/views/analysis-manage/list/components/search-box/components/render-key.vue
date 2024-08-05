@@ -182,7 +182,7 @@
 
   const init = () => {
     const windowInnerWidth = window.innerWidth;
-    boxRowStyle.value = windowInnerWidth < 1670 ? {
+    boxRowStyle.value = windowInnerWidth < 1720 ? {
       'grid-template-columns': 'repeat(3, 1fr)',
     } : {
       'grid-template-columns': 'repeat(4, 1fr)',
