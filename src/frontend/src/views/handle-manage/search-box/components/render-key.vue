@@ -16,7 +16,9 @@
 -->
 <template>
   <div class="render-form-serach-key">
-    <div class="box-row">
+    <div
+      class="box-row"
+      :style="boxRowStyle">
       <template
         v-for="(fieldItem, fieldName) in defaultFieldList"
         :key="fieldName">
@@ -44,7 +46,10 @@
   </div>
 </template>
 <script setup lang="ts">
+  import _ from 'lodash';
   import {
+    onBeforeUnmount,
+    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -110,6 +115,28 @@
     emits('update:modelValue', localSearchModel.value);
     emits('clear');
   };
+
+  const boxRowStyle = ref({
+    'grid-template-columns': 'repeat(4, 1fr)',
+  });
+
+  const init = () => {
+    const windowInnerWidth = window.innerWidth;
+    boxRowStyle.value = windowInnerWidth < 1670 ? {
+      'grid-template-columns': 'repeat(3, 1fr)',
+    } : {
+      'grid-template-columns': 'repeat(4, 1fr)',
+    };
+  };
+  const resizeHandler = _.throttle(init, 100);
+
+  onMounted(() => {
+    init();
+    window.addEventListener('resize', resizeHandler);
+  });
+  onBeforeUnmount(() => {
+    window.removeEventListener('resize', resizeHandler);
+  });
 </script>
 <style lang="postcss">
   .render-form-serach-key {
@@ -117,26 +144,19 @@
     padding: 16px 24px;
 
     .box-row {
+      display: grid;
       margin-bottom: 12px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px 16px;
 
       .box-column {
         display: inline-block;
-        width: 25%;
-        padding-right: 16px;
-
-        &:nth-child(4n) {
-          padding-right: 0;
-        }
-
-        &:nth-child(n + 5) {
-          margin-top: 16px;
-        }
       }
     }
 
     .show-more-condition-btn {
       display: inline-block;
-      margin-top: 48px;
+      margin-top: 35px;
 
       .active {
         transform: rotateZ(-180deg);
