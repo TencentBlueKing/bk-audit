@@ -67,7 +67,8 @@ class StrategyTest(TestCase):
                 "risk_level": RiskLevel.HIGH.value,
                 "risk_hazard": "",
                 "risk_guidance": "",
-                "risk_title": "",
+                "risk_title": "risk title",
+                "processor_groups": ["123"],
             }
         )
         return resource.strategy_v2.create_strategy(**params)
@@ -85,7 +86,8 @@ class StrategyTest(TestCase):
                 "risk_level": RiskLevel.HIGH.value,
                 "risk_hazard": "",
                 "risk_guidance": "",
-                "risk_title": "",
+                "risk_title": "risk_title",
+                "processor_groups": ["123"],
             }
         )
         data = resource.strategy_v2.update_strategy(**params)

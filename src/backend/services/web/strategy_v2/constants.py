@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import TypedDict
 
 from django.utils.translation import gettext_lazy
 
@@ -114,6 +115,7 @@ class TableType(TextChoices):
 
     EVENT_LOG = "EventLog", gettext_lazy("Event Log")
     BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
+
     # BIZ_ASSET = "BizAsset", gettext_lazy("Biz Asset")
 
     @classmethod
@@ -166,3 +168,14 @@ class RiskLevel(TextChoices):
     HIGH = "HIGH", gettext_lazy("高")
     MIDDLE = "MIDDLE", gettext_lazy("中")
     LOW = "LOW", gettext_lazy("低")
+
+
+class EventInfoField(TypedDict):
+    """
+    事件信息字段
+    """
+
+    field_name: str
+    display_name: str
+    description: str
+    example: str

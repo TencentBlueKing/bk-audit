@@ -76,10 +76,15 @@ class StrategyTagsViewSet(ResourceViewSet):
 
 
 class StrategyFieldsViewSet(ResourceViewSet):
+    def get_permissions(self):
+        if self.action in ["fields_config"]:
+            return [IAMPermission(actions=[ActionEnum.CREATE_STRATEGY])]
+        return []
+
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_strategy_fields),
         ResourceRoute("GET", resource.strategy_v2.get_strategy_field_value, endpoint="value"),
-        ResourceRoute("GET", resource.strategy_v2.get_event_info_fields, endpoint="event"),
+        ResourceRoute("GET", resource.strategy_v2.get_event_fields_config, endpoint="fields_config"),
     ]
 
 

@@ -32,6 +32,7 @@ from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
     ConnectorChoices,
+    RiskLevel,
     StrategyAlgorithmOperator,
     StrategyOperator,
     TableType,
@@ -63,6 +64,11 @@ class CreateStrategyRequestSerializer(serializers.ModelSerializer):
     )
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+    )
+    risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
+    risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
+    processor_groups = serializers.ListField(
+        label=gettext_lazy("Processor Groups"), child=serializers.CharField(label=gettext_lazy("Processor Group"))
     )
 
     class Meta:
@@ -127,6 +133,10 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
     )
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+    )
+    risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
+    processor_groups = serializers.ListField(
+        label=gettext_lazy("Processor Groups"), child=serializers.CharField(label=gettext_lazy("Processor Group"))
     )
 
     class Meta:

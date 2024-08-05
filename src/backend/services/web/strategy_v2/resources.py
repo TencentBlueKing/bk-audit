@@ -65,6 +65,7 @@ from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     LOCAL_UPDATE_FIELDS,
+    EventInfoField,
     MappingType,
     RiskLevel,
     StrategyAlgorithmOperator,
@@ -592,20 +593,38 @@ class GetStrategyStatus(StrategyV2Base):
         }
 
 
-class GetEventInfoFields(StrategyV2Base):
+class GetEventFieldsConfig(StrategyV2Base):
     name = gettext_lazy("Get Event Info Fields")
     RequestSerializer = GetEventInfoFieldsRequestSerializer
     ResponseSerializer = GetEventInfoFieldsResponseSerializer
 
-    def get_event_basic_field_configs(self) -> List[dict]:
+    @classmethod
+    def get_event_basic_field_configs(cls) -> List[EventInfoField]:
         """
         获取基础字段
         """
 
-        return [
-            {"field_name": field.field_name, "display_name": field.alias_name, "description": str(field.description)}
-            for field in EventMappingFields().fields
+        field_configs = []
+        basic_fields = [
+            EventMappingFields.EVENT_ID,
+            EventMappingFields.EVENT_CONTENT,
+            EventMappingFields.RAW_EVENT_ID,
+            EventMappingFields.STRATEGY_ID,
+            EventMappingFields.EVENT_TYPE,
+            EventMappingFields.EVENT_TIME,
+            EventMappingFields.EVENT_SOURCE,
+            EventMappingFields.OPERATOR,
         ]
+        for field in basic_fields:
+            field_configs.append(
+                EventInfoField(
+                    field_name=field.field_name,
+                    display_name=field.alias_name,
+                    description=str(field.description),
+                    example=EventMappingFields.gen_example(field),
+                )
+            )
+        return field_configs
 
     def perform_request(self, validated_request_data):
         # 获取基础字段
@@ -613,24 +632,23 @@ class GetEventInfoFields(StrategyV2Base):
         strategy_id = validated_request_data.get("strategy_id")
         if not strategy_id:
             return result
-        # check permission
-        if not ActionPermission(actions=[ActionEnum.EDIT_STRATEGY]).has_permission(
-            request=get_local_request(), view=self
-        ):
-            return result
         strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         event_data_field_configs = []
         risk: Risk = Risk.objects.filter(strategy_id=strategy.strategy_id).order_by("-event_time").first()
         # 获取事件数据字段
         event_data: dict = risk.event_data or {}
         for key in event_data.keys():
-            event_data_field_configs.append({"field_name": key, "display_name": key, "description": ""})
+            event_data_field_configs.append(
+                EventInfoField(field_name=key, display_name=key, description="", example="")
+            )
         result["event_data_field_configs"] = event_data_field_configs
         # 获取事件证据字段
         event_evidence_field_configs = []
         event_evidence: List[dict] = json.loads(risk.event_evidence or "[]")
         if event_evidence:
             for key in event_evidence[0].keys():
-                event_evidence_field_configs.append({"field_name": key, "display_name": key, "description": ""})
+                event_evidence_field_configs.append(
+                    EventInfoField(field_name=key, display_name=key, description="", example="")
+                )
         result["event_evidence_field_configs"] = event_evidence_field_configs
         return result
