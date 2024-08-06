@@ -82,24 +82,18 @@
   import { useI18n } from 'vue-i18n';
 
   import StrategyModel from '@model/strategy/strategy';
+  import type { EventItem } from '@model/strategy/strategy-field-event';
 
   import CardPartVue from '../step1/components/card-part.vue';
 
   import EventInfoTable from './components/event-info-table.vue';
   import VariableTable from './components/variable-table.vue';
 
-  interface Variable {
-    field_name: string,
-    description: string
-    display_name: string;
-    is_priority: boolean;
-  }
-
   interface IFormData {
     risk_title: string,
-    event_evidence_field_configs: Array<Variable>,
-    event_data_field_configs: Array<Variable>,
-    event_basic_field_configs: Array<Variable>,
+    event_evidence_field_configs: Array<EventItem>,
+    event_data_field_configs: Array<EventItem>,
+    event_basic_field_configs: Array<EventItem>,
   }
 
   interface Emits {

@@ -31,20 +31,13 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+  import StrategyFieldEvent, { type EventItem } from '@model/strategy/strategy-field-event';
 
   import {
     execCopy,
   } from '@utils/assist';
 
   import useRequest from '@/hooks/use-request';
-
-  interface Variable {
-    field_name: string,
-    description: string
-    display_name: string;
-    is_priority: boolean;
-  }
 
   interface Props {
     strategyId: number
@@ -57,10 +50,10 @@
   const tableColumn = ref([
     {
       label: () => t('变量名称'),
-      render: ({ data }: {data: any}) => <div
+      render: ({ data }: {data: EventItem}) => <div
         style='width: 100%; height: 100%;'
-        onClick={() => handleVariableCopy(data.field_name)}>
-         { data.field_name }
+        onClick={() => handleVariableCopy(data.prefix, data.field_name)}>
+          { `{{${data.field_name}}}` }
         </div>,
     },
     {
@@ -69,12 +62,14 @@
     },
     {
       label: () => t('实例'),
-      field: () => 'example',
+      render: ({ data }: {data: any}) => <div>
+          {data.example || '--'}
+        </div>,
       width: 160,
     },
   ]);
 
-  const variableData = ref<Array<Variable>>([]);
+  const variableData = ref<Array<EventItem>>([]);
 
   useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
@@ -91,8 +86,8 @@
     manual: true,
   });
 
-  const handleVariableCopy = (value: string) => {
-    execCopy(`\${${value}}`, t(`变量${value}复制成功`));
+  const handleVariableCopy = (prefix: string, value: string) => {
+    execCopy(`\${{${prefix}${value}}}`, t(`变量${value}复制成功`));
   };
 </script>
 <style lang="postcss" scoped>

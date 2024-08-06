@@ -14,12 +14,12 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-type EventItem = {
+export type EventItem = {
   field_name: string,
   description: string
   display_name: string;
   is_priority: boolean;
-  group?: string;
+  prefix: string;
   example?: string
 }
 
@@ -36,6 +36,7 @@ export default class StrategyField {
         is_priority: item.is_priority || false,
         description: item.description,
         example: item.example,
+        prefix: '',
       }))) || [];
     this.event_data_field_configs = (payload.event_data_field_configs
       && payload.event_data_field_configs.map(item => ({
@@ -44,6 +45,7 @@ export default class StrategyField {
         is_priority: item.is_priority || false,
         description: item.description,
         example: item.example,
+        prefix: 'event_data.',
       }))) || [];
     this.event_evidence_field_configs = (payload.event_evidence_field_configs
       && payload.event_evidence_field_configs.map(item => ({
@@ -52,6 +54,7 @@ export default class StrategyField {
         is_priority: item.is_priority || false,
         description: item.description,
         example: item.example,
+        prefix: 'event_evidence.',
       }))) || [];
   }
 }

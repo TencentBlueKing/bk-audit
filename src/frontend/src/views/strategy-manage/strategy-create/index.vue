@@ -49,6 +49,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import StrategyModel from '@model/strategy/strategy';
+  import type { EventItem } from '@model/strategy/strategy-field-event';
 
   import Step1 from './components/step1/index.vue';
   import Step2 from './components/step2/index.vue';
@@ -56,13 +57,6 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
-
-  interface Variable {
-    field_name: string,
-    description: string
-    display_name: string;
-    is_priority: boolean;
-  }
 
   interface IFormData {
     strategy_id?: number,
@@ -77,9 +71,9 @@
     risk_hazard: string,
     risk_guidance: string,
     risk_title: string,
-    event_evidence_field_configs: Array<Variable>,
-    event_data_field_configs: Array<Variable>,
-    event_basic_field_configs: Array<Variable>,
+    event_evidence_field_configs: Array<EventItem>,
+    event_data_field_configs: Array<EventItem>,
+    event_basic_field_configs: Array<EventItem>,
     processor_groups: [],
     notice_groups: []
   }

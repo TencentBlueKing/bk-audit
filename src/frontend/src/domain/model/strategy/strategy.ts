@@ -15,12 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-interface Variable {
-  field_name: string,
-  description: string
-  display_name: string;
-  is_priority: boolean;
-}
+import type { EventItem } from '@model/strategy/strategy-field-event';
+
 export default class Strategy {
   strategy_id: number;
   strategy_name: string;
@@ -69,9 +65,9 @@ export default class Strategy {
   risk_hazard: string;
   risk_guidance: string;
   risk_title: string;
-  event_evidence_field_configs: Array<Variable>;
-  event_data_field_configs: Array<Variable>;
-  event_basic_field_configs: Array<Variable>;
+  event_evidence_field_configs: Array<EventItem>;
+  event_data_field_configs: Array<EventItem>;
+  event_basic_field_configs: Array<EventItem>;
   processor_groups: Array<number>;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
