@@ -28,7 +28,7 @@ from bk_resource.exceptions import APIRequestError
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, QuerySet
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
@@ -87,6 +87,7 @@ from services.web.strategy_v2.serializers import (
     GetRTFieldsRequestSerializer,
     GetRTFieldsResponseSerializer,
     GetStrategyCommonResponseSerializer,
+    GetStrategyDisplayInfoRequestSerializer,
     GetStrategyFieldValueRequestSerializer,
     GetStrategyFieldValueResponseSerializer,
     GetStrategyStatusRequestSerializer,
@@ -666,4 +667,23 @@ class GetEventFieldsConfig(StrategyV2Base):
             "event_basic_field_configs": self.get_event_basic_field_configs(risk, has_permission),
             "event_data_field_configs": self.get_event_data_field_configs(risk, has_permission),
             "event_evidence_field_configs": self.get_event_evidence_field_configs(risk, has_permission),
+        }
+
+
+class GetStrategyDisplayInfo(StrategyV2Base):
+    """
+    获取策略展示信息
+    """
+
+    name = gettext_lazy("获取策略展示信息")
+    RequestSerializer = GetStrategyDisplayInfoRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        strategy_ids = validated_request_data["strategy_ids"]
+        strategies: QuerySet[Strategy] = Strategy.objects.filter(strategy_id__in=strategy_ids).only("risk_level")
+        return {
+            strategy.strategy_id: {
+                "risk_level": strategy.risk_level,
+            }
+            for strategy in strategies
         }

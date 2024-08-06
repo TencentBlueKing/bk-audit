@@ -536,3 +536,13 @@ class GetEventInfoFieldsResponseSerializer(serializers.Serializer):
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"), child=EventInfoFieldSerializer(), required=False
     )
+
+
+class GetStrategyDisplayInfoRequestSerializer(serializers.Serializer):
+    strategy_ids = serializers.CharField(label=gettext_lazy("Strategy IDs"))
+
+    def validate_strategy_ids(self, strategy_ids: str) -> List[int]:
+        try:
+            return [int(s) for s in strategy_ids.split(",") if s]
+        except ValueError:
+            raise serializers.ValidationError(gettext("Strategy ID Invalid"))
