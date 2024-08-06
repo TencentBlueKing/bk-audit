@@ -1,14 +1,11 @@
 # -*- coding: utf-8 -*-
 
 import json
-import logging
 import re
 from typing import Dict, List, Union
 
 from django.utils import translation
 from jinja2 import Environment
-
-logger = logging.getLogger(__name__)
 
 
 def jinja2_environment(**options: Dict) -> Environment:

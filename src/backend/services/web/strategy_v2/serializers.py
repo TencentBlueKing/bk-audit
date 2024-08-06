@@ -68,7 +68,7 @@ class CreateStrategyRequestSerializer(serializers.ModelSerializer):
     risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
     risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
     processor_groups = serializers.ListField(
-        label=gettext_lazy("Processor Groups"), child=serializers.CharField(label=gettext_lazy("Processor Group"))
+        label=gettext_lazy("Processor Groups"), child=serializers.IntegerField(label=gettext_lazy("Processor Group"))
     )
 
     class Meta:
@@ -136,7 +136,7 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
     )
     risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
     processor_groups = serializers.ListField(
-        label=gettext_lazy("Processor Groups"), child=serializers.CharField(label=gettext_lazy("Processor Group"))
+        label=gettext_lazy("Processor Groups"), child=serializers.IntegerField(label=gettext_lazy("Processor Group"))
     )
 
     class Meta:
@@ -525,8 +525,8 @@ class GetEventInfoFieldsResponseSerializer(serializers.Serializer):
         label=gettext_lazy("Event Basic Field Configs"), child=EventInfoFieldSerializer()
     )
     event_data_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Data Field Configs"), child=EventInfoFieldSerializer()
+        label=gettext_lazy("Event Data Field Configs"), child=EventInfoFieldSerializer(), required=False
     )
     event_evidence_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Evidence Field Configs"), child=EventInfoFieldSerializer()
+        label=gettext_lazy("Event Evidence Field Configs"), child=EventInfoFieldSerializer(), required=False
     )

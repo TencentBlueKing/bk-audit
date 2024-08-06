@@ -200,10 +200,7 @@ class RiskHandler:
         self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
 
         # 更新风险的通知人员名单
-        notice_users = []
-        for notice_group in notice_groups:
-            notice_users.extend(notice_group.group_member if isinstance(notice_group.group_member, list) else [])
-        risk.notice_users = notice_users
+        risk.notice_users = NoticeGroup.parse_members(notice_groups)
         risk.save(update_fields=["notice_users"])
 
     @classmethod

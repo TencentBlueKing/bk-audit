@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import List
 
 from bk_audit.log.models import AuditInstance
 from bk_resource.utils.common_utils import get_md5
@@ -112,6 +113,14 @@ class NoticeGroup(SoftDeleteModel):
     @property
     def audit_instance(self):
         return NoticeGroupAuditInstance(self)
+
+    @classmethod
+    def parse_members(cls, processor_groups: List["NoticeGroup"]) -> List[str]:
+        """
+        解析处理组成员
+        """
+
+        return list({member for processor_group in processor_groups for member in processor_group.group_member})
 
 
 class NoticeLog(OperateRecordModel):

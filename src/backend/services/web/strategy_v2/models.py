@@ -52,8 +52,8 @@ class Strategy(SoftDeleteModel):
     )
     risk_hazard = models.TextField(gettext_lazy("Risk Hazard"), null=True, blank=True, default=None)
     risk_guidance = models.TextField(gettext_lazy("Risk Guidance"), null=True, blank=True, default=None)
-    risk_title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
-    processor_groups = models.JSONField(gettext_lazy("Processor"), default=dict, null=True, blank=True)
+    risk_title = models.CharField(gettext_lazy("Risk Title"), max_length=255, null=True, blank=True, default=None)
+    processor_groups = models.JSONField(gettext_lazy("Processor"), default=list, null=True, blank=True)
     event_basic_field_configs = models.JSONField(
         gettext_lazy("Event field Configs"), default=dict, null=True, blank=True
     )
