@@ -635,6 +635,8 @@ class GetEventFieldsConfig(StrategyV2Base):
         strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         event_data_field_configs = []
         risk: Risk = Risk.objects.filter(strategy_id=strategy.strategy_id).order_by("-event_time").first()
+        if not risk:
+            return result
         # 获取事件数据字段
         event_data: dict = risk.event_data or {}
         for key in event_data.keys():
