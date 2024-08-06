@@ -19,6 +19,7 @@ import type AiopsDetailModel from '@model/strategy/aiops-detail';
 import type AiopsPlanModel from '@model/strategy/aiops-plan';
 import type CommonDataModel from '@model/strategy/common-data';
 import type StrategyModel from '@model/strategy/strategy';
+import type StrategyFieldEvent from '@model/strategy/strategy-field-event';
 // import type StrategyFieldModel from '@model/strategy/strategy-field';
 // import type StrategyConfigListModel from '@model/strategy/strategy-config-list';
 import type StrategyTag from '@model/strategy/strategy-tag';
@@ -41,7 +42,7 @@ class Strategy extends ModuleBase {
     label?: string,
     name?: string,
     page: number,
-    page_size : number
+    page_size: number
   }, payload = {} as IRequestPayload) {
     return Request.get<IRequestResponsePaginationData<StrategyModel>>(`${this.path}/strategy/`, {
       params,
@@ -128,7 +129,7 @@ class Strategy extends ModuleBase {
 
   // 获取变量值
   getStrategyFieldValue(params: {
-    field_name : string
+    field_name: string
   }) {
     return Request.get<Array<{
       label: string,
@@ -158,9 +159,9 @@ class Strategy extends ModuleBase {
   }
   // 获取表格的字段列表
   getTableRtFields(params: {
-    table_id : string
+    table_id: string
   }) {
-    return Request.get < Array<{
+    return Request.get<Array<{
       field_type: string;
       label: string;
       value: string;
@@ -211,7 +212,7 @@ class Strategy extends ModuleBase {
     interval: number,
     conditions: Array<Record<string, string>>,
     page: number,
-    page_size : number
+    page_size: number
   }, payload = {} as IRequestPayload) {
     return Request.post<IRequestResponsePaginationData<SearchModel>>(`${this.path}/unify_query/recent_log/`, {
       params,
@@ -223,16 +224,107 @@ class Strategy extends ModuleBase {
     return Request.get<Record<string, any>>(`${this.path}/aiops_plan/`);
   }
   // 获取算法详情
-  getAiopsPlanById(params: {id: string}) {
+  getAiopsPlanById(params: { id: string }) {
     return Request.get<AiopsPlanModel>(`${this.path}/aiops_plan/${params.id}/`);
   }
   // 获取结果表字段
-  getRtfields(params: {system_id: string}) {
+  getRtfields(params: { system_id: string }) {
     return Request.get<Record<string, Record<string, string>>>(`${this.path}/aiops_meta/rt_fields/`, { params });
   }
   // 获取aiops策略详情
-  getAiopsById(params: {id: string}) {
+  getAiopsById(params: { id: string }) {
     return Request.get<AiopsDetailModel>(`${this.path}/strategies/${params.id}/aiops_detail/`, { params });
+  }
+  // 获取aiops策略详情
+  getStrategyEvent(params: { id: string }) {
+    return Request.get<StrategyFieldEvent>(`${this.path}/strategy_fields/fields_config/`, { params });
+    // const data: Promise<{
+    //   data: StrategyFieldEvent
+    // }> = new Promise((resolve) => {
+    //   resolve({
+    //     data: {
+    //       event_evidence_field_configs: [
+    //         {
+    //           field_name: 'case_id',
+    //           display_name: '事件证据',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'case_id',
+    //           display_name: '事件证据',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'case_id',
+    //           display_name: '事件证据',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //       ],
+    //       event_data_field_configs: [
+    //         {
+    //           field_name: 'event_data',
+    //           display_name: '事件数据字段',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'event_data',
+    //           display_name: '事件数据字段',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'event_data',
+    //           display_name: '事件数据字段',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'event_data',
+    //           display_name: '事件数据字段',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //       ],
+    //       event_basic_field_configs: [
+    //         {
+    //           field_name: 'case_id',
+    //           display_name: '事件ID',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'case_id',
+    //           display_name: '事件ID',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'case_id',
+    //           display_name: '事件ID',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'case_id',
+    //           display_name: '事件ID',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //         {
+    //           field_name: 'case_id',
+    //           display_name: '事件ID',
+    //           is_priority: false,
+    //           description: '',
+    //         },
+    //       ],
+    //     },
+    //   });
+    // });
+    // return data;
   }
 }
 

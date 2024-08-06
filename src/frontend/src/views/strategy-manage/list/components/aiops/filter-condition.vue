@@ -67,7 +67,7 @@
 
   import useRequest from '@hooks/use-request';
 
-  import type { ConditionData } from '@views/strategy-manage/strategy-create/components/aiops/components/components/filter-condition.vue';
+  import type { ConditionData } from '@views/strategy-manage/strategy-create/components/step1/components/aiops/components/components/filter-condition.vue';
 
   import RenderInfoBlock from '../render-info-block.vue';
   import RenderInfoItem from '../render-info-item.vue';

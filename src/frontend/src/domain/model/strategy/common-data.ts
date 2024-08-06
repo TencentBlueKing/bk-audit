@@ -29,6 +29,7 @@ export default class CommonData {
   filter_operator: Array<ItemType>;
   algorithm_operator: Array<ItemType>;
   strategy_status: Array<ItemType>;
+  risk_level: Array<ItemType>;
 
   constructor(payload = {} as CommonData) {
     this.offset_unit = payload.offset_unit || [];
@@ -38,6 +39,7 @@ export default class CommonData {
     this.filter_operator = payload.filter_operator || [];
     this.algorithm_operator = payload.algorithm_operator || [];
     this.strategy_status = payload.strategy_status || [];
+    this.risk_level = payload.risk_level || [];
   }
 }
 

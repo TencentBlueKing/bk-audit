@@ -15,49 +15,59 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="collapse-panel">
-    <div
-      class="collapse-panel-title"
-      :style="titleStyle"
-      @click="handleClick">
-      <audit-icon :type="isCollapseActive?'angle-fill-down':'angle-fill-rignt'" />
-      {{ label }}
-    </div>
-    <transition>
-      <div v-show="isCollapseActive">
-        <slot />
-      </div>
-    </transition>
-  </div>
+  <collapse-panel
+    class="table-panel"
+    :is-active="isActive"
+    :label="label"
+    style=" margin-bottom: 12px;background: #f0f1f5;">
+    <multiple-render-field
+      ref="fieldRef"
+      :configs="configs"
+      :data="data"
+      :system-id="systemId"
+      :trigger-error="triggerError" />
+  </collapse-panel>
 </template>
-<script setup lang="ts">
+<script setup lang="tsx">
   import {
     ref,
   } from 'vue';
 
+  import CollapsePanel from './collapse-panel.vue';
+  import MultipleRenderField from './multiple-render-field.vue';
+
   interface Props {
-    label?:string,
-    titleStyle?: string,
-    isActive: boolean,
+    data: Record<string, any>[];
+    label: string;
+    configs: Record<string, any>[];
+    systemId: string;
+    triggerError?: boolean;
+  }
+
+  interface Exposes {
+    getValue: () => void;
+    getFields: () => void
   }
 
   const props = defineProps<Props>();
-  // eslint-disable-next-line vue/no-setup-props-destructure
-  const isCollapseActive = ref(props.isActive);
-  const handleClick = () => {
-    isCollapseActive.value = !isCollapseActive.value;
-  };
+
+  const isActive = ref(true);
+  const fieldRef = ref();
+
+  defineExpose<Exposes>({
+    getValue() {
+      return fieldRef.value.getValue();
+    },
+    getFields() {
+      return { [props.systemId]: fieldRef.value.getFields() };
+    },
+  });
 </script>
 <style lang="postcss">
-  .collapse-panel {
+  .table-panel {
     .collapse-panel-title {
-      height: 40px;
-      padding: 0 12px;
-      font-weight: 700;
-      line-height: 40px;
-      color: #313238;
-      cursor: pointer;
-      background: #DCDEE5;
+      color: #63656e;
+      background: #eaebf0;
     }
   }
 </style>

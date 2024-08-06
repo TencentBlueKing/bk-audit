@@ -15,59 +15,49 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <collapse-panel
-    class="table-panel"
-    :is-active="isActive"
-    :label="label"
-    style=" margin-bottom: 12px;background: #F0F1F5;">
-    <multiple-render-field
-      ref="fieldRef"
-      :configs="configs"
-      :data="data"
-      :system-id="systemId"
-      :trigger-error="triggerError" />
-  </collapse-panel>
+  <div class="collapse-panel">
+    <div
+      class="collapse-panel-title"
+      :style="titleStyle"
+      @click="handleClick">
+      <audit-icon :type="isCollapseActive?'angle-fill-down':'angle-fill-rignt'" />
+      {{ label }}
+    </div>
+    <transition>
+      <div v-show="isCollapseActive">
+        <slot />
+      </div>
+    </transition>
+  </div>
 </template>
-<script setup lang="tsx">
+<script setup lang="ts">
   import {
     ref,
   } from 'vue';
 
-  import CollapsePanel from './collapse-panel.vue';
-  import MultipleRenderField from './multiple-render-field.vue';
-
   interface Props {
-    data: Record<string, any>[];
-    label: string;
-    configs: Record<string, any>[];
-    systemId: string;
-    triggerError?: boolean;
-  }
-
-  interface Exposes {
-    getValue: () => void;
-    getFields: () => void
+    label?:string,
+    titleStyle?: string,
+    isActive: boolean,
   }
 
   const props = defineProps<Props>();
-
-  const isActive = ref(true);
-  const fieldRef = ref();
-
-  defineExpose<Exposes>({
-    getValue() {
-      return fieldRef.value.getValue();
-    },
-    getFields() {
-      return { [props.systemId]: fieldRef.value.getFields() };
-    },
-  });
+  // eslint-disable-next-line vue/no-setup-props-destructure
+  const isCollapseActive = ref(props.isActive);
+  const handleClick = () => {
+    isCollapseActive.value = !isCollapseActive.value;
+  };
 </script>
 <style lang="postcss">
-  .table-panel {
+  .collapse-panel {
     .collapse-panel-title {
-      color: #63656e;
-      background: #eaebf0;
+      height: 40px;
+      padding: 0 12px;
+      font-weight: 700;
+      line-height: 40px;
+      color: #313238;
+      cursor: pointer;
+      background: #dcdee5;
     }
   }
 </style>

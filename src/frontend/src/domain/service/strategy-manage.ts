@@ -16,6 +16,7 @@
 */
 import SearchModel from '@model/es-query/search';
 import StrategyModel from '@model/strategy/strategy';
+import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
 import StrategySource from '../source/strategy-manage';
 
@@ -25,10 +26,10 @@ export default {
    * @param { Object } params
    */
   fetchStrategyList(params: {
-      label?: string
-      name?: string,
-      page: number,
-      page_size : number
+    label?: string
+    name?: string,
+    page: number,
+    page_size: number
   }) {
     return StrategySource.getStrategyList(
       params,
@@ -47,7 +48,7 @@ export default {
    */
   saveStrategy(params: Record<string, any>) {
     return StrategySource.saveStrategy(params)
-      .then(({ data }) =>  data);
+      .then(({ data }) => data);
   },
   /**
    * @desc 获取所有策略下拉列表
@@ -94,7 +95,7 @@ export default {
    * @desc 删除告警策略
    * @param { Number } id
    */
-  remove(params: {id: number}) {
+  remove(params: { id: number }) {
     return StrategySource.deleteStrategy(params)
       .then(({ data }) => data);
   },
@@ -128,7 +129,7 @@ export default {
    * @param { String } field_name
    */
   fetchStrategyFieldValue(params: {
-    field_name : string
+    field_name: string
   }) {
     return StrategySource.getStrategyFieldValue(params)
       .then(({ data }) => data);
@@ -147,7 +148,7 @@ export default {
    * @desc 获取表格下的rt字段
    */
   fetchTableRtFields(params: {
-    table_id : string
+    table_id: string
   }) {
     return StrategySource.getTableRtFields(params)
       .then(({ data }) => data);
@@ -195,7 +196,7 @@ export default {
     interval: number,
     conditions: Array<Record<string, string>>,
     page: number,
-    page_size : number
+    page_size: number
   }) {
     return StrategySource.getRecentLog(params)
       .then(({ data }) => ({
@@ -215,7 +216,7 @@ export default {
    * @desc 获取算法详情
    * @param { String } id
    */
-  fetchAiopsPlanById(params: { id: string}) {
+  fetchAiopsPlanById(params: { id: string }) {
     return StrategySource.getAiopsPlanById(params)
       .then(({ data }) => data);
   },
@@ -224,7 +225,7 @@ export default {
    * @desc 获取结果表字段
    * @param { String } system_id
    */
-  fetchRtfields(params: { system_id : string}) {
+  fetchRtfields(params: { system_id: string }) {
     return StrategySource.getRtfields(params)
       .then(({ data }) => data);
   },
@@ -233,8 +234,17 @@ export default {
    * @desc 获取aiops策略详情
    * @param { String } id
    */
-  fetchAiopsById(params: { id : string}) {
+  fetchAiopsById(params: { id: string }) {
     return StrategySource.getAiopsById(params)
       .then(({ data }) => data);
+  },
+
+  /**
+  * @desc 获取策略事件信息
+  * @param { String } id
+  */
+  fetchStrategyEvent(params: { id: string }) {
+    return StrategySource.getStrategyEvent(params)
+      .then(({ data }) => new StrategyFieldEvent(data));
   },
 };
