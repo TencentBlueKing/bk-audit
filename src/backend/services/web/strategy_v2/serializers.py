@@ -513,8 +513,8 @@ class EventInfoFieldSerializer(serializers.Serializer):
 
     field_name = serializers.CharField(label=gettext_lazy("Name"))
     display_name = serializers.CharField(label=gettext_lazy("Display Name"))
-    description = serializers.CharField(label=gettext_lazy("Description"))
-    example = serializers.CharField(label=gettext_lazy("Example"))
+    description = serializers.CharField(label=gettext_lazy("Description"), allow_blank=True)
+    example = serializers.CharField(label=gettext_lazy("Example"), allow_blank=True)
 
 
 class GetEventInfoFieldsResponseSerializer(serializers.Serializer):
