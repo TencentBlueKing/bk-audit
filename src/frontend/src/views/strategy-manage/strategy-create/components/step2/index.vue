@@ -103,6 +103,11 @@
         @click="handleNext">
         {{ t('下一步') }}
       </bk-button>
+      <bk-button
+        style="margin-left: 48px;"
+        @click="handlePreview">
+        {{ t('预览') }}
+      </bk-button>
     </template>
   </smart-action>
 </template>
@@ -128,6 +133,7 @@
   interface Emits {
     (e: 'previousStep', step: number): void;
     (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'showPreview'): void;
   }
   interface Props {
     data: StrategyModel
@@ -158,6 +164,13 @@
         trigger: 'change',
       },
     ],
+  };
+
+  const handlePreview = () => {
+    // 预览前更新一次formData，用于查看重点信息
+    const params: IFormData = Object.assign({}, formData.value, eventRef.value.getData());
+    emits('nextStep', 2, params);
+    emits('showPreview');
   };
 
   const handlePrevious = () => {

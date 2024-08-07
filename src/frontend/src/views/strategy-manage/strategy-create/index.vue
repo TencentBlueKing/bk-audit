@@ -33,8 +33,20 @@
       @fetch-edit-data="handleEdit"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: any) => currentStep = step"
+      @show-preview="showPreview = true"
       @submit="handleSubmit" />
   </keep-alive>
+
+  <audit-sideslider
+    ref="sidesliderRef"
+    v-model:isShow="showPreview"
+    :show-footer="false"
+    title="风险单预览"
+    :width="960">
+    <div>
+      <preview :risk-data="formData" />
+    </div>
+  </audit-sideslider>
 </template>
 
 <script setup lang='ts'>
@@ -51,6 +63,7 @@
   import StrategyModel from '@model/strategy/strategy';
   import type { EventItem } from '@model/strategy/strategy-field-event';
 
+  import Preview from './components/preview/index.vue';
   import Step1 from './components/step1/index.vue';
   import Step2 from './components/step2/index.vue';
   import Step3 from './components/step3/index.vue';
@@ -98,6 +111,7 @@
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
 
   let isSwitchSuccess = false;
+  const showPreview = ref(false);
   const controlTypeId = ref('');// 方案类型id
   const isEditMode = route.name === 'strategyEdit';
   const editData = ref(new StrategyModel());
