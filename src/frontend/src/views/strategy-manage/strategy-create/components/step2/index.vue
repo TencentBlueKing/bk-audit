@@ -41,10 +41,39 @@
                 theme="light"
                 trigger="click"
                 width="490">
-                <bk-input
-                  v-model.trim="formData.risk_title"
-                  :placeholder="t('请输入风险单名称')"
-                  style="width: 100%;" />
+                <div
+                  class="variable-input"
+                  :class="[variableInputActive ? 'active' : '']">
+                  <div
+                    class="variable-input-content"
+                    @click="handleClick">
+                    <ul class="list">
+                      <li
+                        v-for="(item, index) in displayRiskTitle"
+                        :key="index">
+                        <span
+                          :class="[item.startsWith('$\{\{') && item.endsWith('}}') ? 'is-variable' : '']">
+                          {{ item }}
+                        </span>
+                      </li>
+                      <li
+                        v-if="variableInputActive"
+                        class="list-item-input">
+                        <input
+                          ref="inputRef"
+                          v-model.trim="riskTitleValue"
+                          class="input"
+                          type="text"
+                          @keydown="handleKeyDown">
+                      </li>
+                    </ul>
+                    <p
+                      v-if="!variableInputActive && !formData.risk_title"
+                      class="placeholder">
+                      {{ t('请输入风险单名称') }}
+                    </p>
+                  </div>
+                </div>
                 <template #content>
                   <variable-table :strategy-id="data.strategy_id" />
                 </template>
@@ -65,12 +94,12 @@
     <template #action>
       <bk-button
         class="w88"
-        theme="primary"
         @click="handlePrevious">
         {{ t('上一步') }}
       </bk-button>
       <bk-button
         class="ml8"
+        theme="primary"
         @click="handleNext">
         {{ t('下一步') }}
       </bk-button>
@@ -78,7 +107,7 @@
   </smart-action>
 </template>
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyModel from '@model/strategy/strategy';
@@ -110,7 +139,10 @@
   const { t } = useI18n();
   const formRef = ref();
   const eventRef = ref();
+  const inputRef = ref();
 
+  const riskTitleValue = ref('');
+  const variableInputActive = ref(false);
   const formData = ref<IFormData>({
     risk_title: '',
     event_evidence_field_configs: [],
@@ -139,12 +171,38 @@
     });
   };
 
+  const handleClick = () => {
+    // active
+    variableInputActive.value = !variableInputActive.value;
+    // focus
+    nextTick(() => {
+      inputRef.value.focus();
+    });
+    // 赋值
+    if (riskTitleValue.value) {
+      formData.value.risk_title += riskTitleValue.value;
+    }
+    // 清空本次输入内容
+    riskTitleValue.value = '';
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.code === 'Backspace' && displayRiskTitle.value?.length) {
+      // 顺序删除
+      const displayRiskTitleArray = displayRiskTitle.value;
+      displayRiskTitleArray.splice(displayRiskTitleArray.length - 1, 1);
+      formData.value.risk_title = displayRiskTitleArray.join('');
+    }
+  };
+
   // 编辑
   watch(() => props.data, (data) => {
     formData.value.risk_title = data.risk_title;
   }, {
     immediate: true,
   });
+
+  const displayRiskTitle = computed(() => formData.value.risk_title.match(/\$\{\{[^}]+\}\}|./g));
 
   const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
 </script>
@@ -160,6 +218,46 @@
       flex: 1;
       max-width: 1280px;
     }
+  }
+
+  .variable-input {
+    color: #63656e;
+    border: 1px solid #c4c6cc;
+
+    .variable-input-content {
+      min-height: 32px;
+      padding-left: 5px;
+      cursor: pointer;
+
+      .placeholder {
+        color: #c4c6cc;
+      }
+
+      .list {
+        display: flex;
+
+        .is-variable {
+          padding: 5px;
+          margin: 0 5px;
+          background-color: #f2f3f6;
+        }
+
+        .list-item-input {
+          flex: 1;
+
+          .input {
+            width: 100%;
+            border: none;
+            outline: none;
+          }
+        }
+      }
+    }
+  }
+
+  .active {
+    cursor: text;
+    border-color: #3a84ff;
   }
 }
 </style>

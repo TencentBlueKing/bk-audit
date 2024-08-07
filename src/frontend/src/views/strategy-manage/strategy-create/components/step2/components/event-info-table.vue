@@ -37,22 +37,25 @@
               v-for="(config, configIndex) in item"
               :key="configIndex"
               class="value-item">
-              <div
+              <template
                 v-for="(value, valueKey, valueIndex) in config"
-                :key="valueIndex"
-                class="item">
-                <template v-if="valueKey === 'is_priority'">
-                  <bk-switcher v-model="config.is_priority" />
-                </template>
-                <template v-else-if="valueKey === 'description'">
-                  <bk-input
-                    v-model="config.description"
-                    behavior="simplicity" />
-                </template>
-                <template v-else-if="valueKey !== 'example'">
-                  {{ value }}
-                </template>
-              </div>
+                :key="valueIndex">
+                <div
+                  v-if="!['example', 'prefix'].includes(valueKey)"
+                  class="item">
+                  <template v-if="valueKey === 'is_priority'">
+                    <bk-switcher v-model="config.is_priority" />
+                  </template>
+                  <template v-else-if="valueKey === 'description'">
+                    <bk-input
+                      v-model="config.description"
+                      behavior="simplicity" />
+                  </template>
+                  <template v-else>
+                    {{ value }}
+                  </template>
+                </div>
+              </template>
             </div>
           </template>
           <div

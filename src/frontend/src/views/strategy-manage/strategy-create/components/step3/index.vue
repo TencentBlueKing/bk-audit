@@ -159,12 +159,12 @@
     <template #action>
       <bk-button
         class="w88"
-        theme="primary"
         @click="handlePrevious">
         {{ t('上一步') }}
       </bk-button>
       <bk-button
         class="ml8"
+        theme="primary"
         @click="submit">
         {{ t('提交') }}
       </bk-button>
