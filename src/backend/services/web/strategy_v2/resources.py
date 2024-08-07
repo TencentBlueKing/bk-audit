@@ -59,7 +59,7 @@ from services.web.analyze.controls.base import Controller
 from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control
 from services.web.analyze.tasks import call_controller
-from services.web.risk.constants import EventMappingFields
+from services.web.risk.constants import EVENT_BASIC_FIELDS, EventMappingFields
 from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
@@ -601,21 +601,11 @@ class GetEventFieldsConfig(StrategyV2Base):
     @classmethod
     def get_event_basic_field_configs(cls) -> List[EventInfoField]:
         """
-        获取基础字段
+        基础字段
         """
 
         field_configs = []
-        basic_fields = [
-            EventMappingFields.EVENT_ID,
-            EventMappingFields.EVENT_CONTENT,
-            EventMappingFields.RAW_EVENT_ID,
-            EventMappingFields.STRATEGY_ID,
-            EventMappingFields.EVENT_TYPE,
-            EventMappingFields.EVENT_TIME,
-            EventMappingFields.EVENT_SOURCE,
-            EventMappingFields.OPERATOR,
-        ]
-        for field in basic_fields:
+        for field in EVENT_BASIC_FIELDS:
             field_configs.append(
                 EventInfoField(
                     field_name=field.field_name,
@@ -626,25 +616,26 @@ class GetEventFieldsConfig(StrategyV2Base):
             )
         return field_configs
 
-    def perform_request(self, validated_request_data):
-        # 获取基础字段
-        result = {"event_basic_field_configs": self.get_event_basic_field_configs()}
-        strategy_id = validated_request_data.get("strategy_id")
-        if not strategy_id:
-            return result
-        strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
+    @classmethod
+    def get_event_data_field_configs(cls, risk: Risk) -> List[EventInfoField]:
+        """
+        事件数据字段
+        """
+
         event_data_field_configs = []
-        risk: Risk = Risk.objects.filter(strategy_id=strategy.strategy_id).order_by("-event_time").first()
-        if not risk:
-            return result
-        # 获取事件数据字段
         event_data: dict = risk.event_data or {}
         for key in event_data.keys():
             event_data_field_configs.append(
                 EventInfoField(field_name=key, display_name=key, description="", example="")
             )
-        result["event_data_field_configs"] = event_data_field_configs
-        # 获取事件证据字段
+        return event_data_field_configs
+
+    @classmethod
+    def get_event_evidence_field_configs(cls, risk: Risk) -> List[EventInfoField]:
+        """
+        事件证据字段
+        """
+
         event_evidence_field_configs = []
         event_evidence: List[dict] = json.loads(risk.event_evidence or "[]")
         if event_evidence:
@@ -652,5 +643,20 @@ class GetEventFieldsConfig(StrategyV2Base):
                 event_evidence_field_configs.append(
                     EventInfoField(field_name=key, display_name=key, description="", example="")
                 )
-        result["event_evidence_field_configs"] = event_evidence_field_configs
+        return event_evidence_field_configs
+
+    def perform_request(self, validated_request_data):
+        # 获取基础字段
+        result = {"event_basic_field_configs": self.get_event_basic_field_configs()}
+        strategy_id = validated_request_data.get("strategy_id")
+        if not strategy_id:
+            return result
+        strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
+        risk: Risk = Risk.objects.filter(strategy_id=strategy.strategy_id).order_by("-event_time").first()
+        if not risk:
+            return result
+        # 获取事件数据字段
+        result["event_data_field_configs"] = self.get_event_data_field_configs(risk)
+        # 获取事件证据字段
+        result["event_evidence_field_configs"] = self.get_event_evidence_field_configs(risk)
         return result

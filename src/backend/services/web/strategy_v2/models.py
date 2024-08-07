@@ -55,10 +55,10 @@ class Strategy(SoftDeleteModel):
     risk_title = models.CharField(gettext_lazy("Risk Title"), max_length=255, null=True, blank=True, default=None)
     processor_groups = models.JSONField(gettext_lazy("Processor"), default=list, null=True, blank=True)
     event_basic_field_configs = models.JSONField(
-        gettext_lazy("Event field Configs"), default=dict, null=True, blank=True
+        gettext_lazy("Event field Configs"), default=list, null=True, blank=True
     )
-    event_data_field_configs = models.JSONField(gettext_lazy("Event Data Configs"), default=dict, null=True, blank=True)
-    event_evidence_field_configs = models.JSONField(gettext_lazy("Event Evidence Configs"), default=dict, null=True)
+    event_data_field_configs = models.JSONField(gettext_lazy("Event Data Configs"), default=list, null=True, blank=True)
+    event_evidence_field_configs = models.JSONField(gettext_lazy("Event Evidence Configs"), default=list, null=True)
 
     class Meta:
         verbose_name = gettext_lazy("Strategy")
