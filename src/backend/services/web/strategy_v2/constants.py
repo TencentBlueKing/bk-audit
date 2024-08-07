@@ -115,7 +115,6 @@ class TableType(TextChoices):
 
     EVENT_LOG = "EventLog", gettext_lazy("Event Log")
     BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
-
     # BIZ_ASSET = "BizAsset", gettext_lazy("Biz Asset")
 
     @classmethod

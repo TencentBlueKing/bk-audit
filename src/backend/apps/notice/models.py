@@ -15,11 +15,12 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import List
+from typing import List, Union
 
 from bk_audit.log.models import AuditInstance
 from bk_resource.utils.common_utils import get_md5
 from django.db import models
+from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy
 
 from apps.notice.constants import RelateType
@@ -114,13 +115,24 @@ class NoticeGroup(SoftDeleteModel):
     def audit_instance(self):
         return NoticeGroupAuditInstance(self)
 
+    @property
+    def members(self) -> List[str]:
+        """
+        处理组成员
+        """
+
+        return list({member for member in self.group_member})
+
     @classmethod
-    def parse_members(cls, processor_groups: List["NoticeGroup"]) -> List[str]:
+    def parse_members(cls, processor_groups: Union[QuerySet["NoticeGroup"], List["NoticeGroup"]]) -> List[str]:
         """
         解析处理组成员
         """
 
-        return list({member for processor_group in processor_groups for member in processor_group.group_member})
+        members = set()
+        for processor_group in processor_groups:
+            members.update(processor_group.members)
+        return list(members)
 
 
 class NoticeLog(OperateRecordModel):

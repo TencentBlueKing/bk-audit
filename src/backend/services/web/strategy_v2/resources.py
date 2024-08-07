@@ -59,7 +59,7 @@ from services.web.analyze.controls.base import Controller
 from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control
 from services.web.analyze.tasks import call_controller
-from services.web.risk.constants import EVENT_BASIC_FIELDS, EventMappingFields
+from services.web.risk.constants import EVENT_BASIC_EXCLUDE_FIELDS, EventMappingFields
 from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
@@ -604,17 +604,16 @@ class GetEventFieldsConfig(StrategyV2Base):
         基础字段
         """
 
-        field_configs = []
-        for field in EVENT_BASIC_FIELDS:
-            field_configs.append(
-                EventInfoField(
-                    field_name=field.field_name,
-                    display_name=field.alias_name,
-                    description=str(field.description),
-                    example=EventMappingFields.gen_example(field),
-                )
+        return [
+            EventInfoField(
+                field_name=field.field_name,
+                display_name=field.alias_name,
+                description=str(field.description),
+                example=EventMappingFields.gen_example(field),
             )
-        return field_configs
+            for field in EventMappingFields().fields
+            if field not in EVENT_BASIC_EXCLUDE_FIELDS
+        ]
 
     @classmethod
     def get_event_data_field_configs(cls, risk: Risk) -> List[EventInfoField]:
@@ -622,13 +621,10 @@ class GetEventFieldsConfig(StrategyV2Base):
         事件数据字段
         """
 
-        event_data_field_configs = []
-        event_data: dict = risk.event_data or {}
-        for key in event_data.keys():
-            event_data_field_configs.append(
-                EventInfoField(field_name=key, display_name=key, description="", example="")
-            )
-        return event_data_field_configs
+        return [
+            EventInfoField(field_name=key, display_name=key, description="", example="")
+            for key in (risk.event_data or {}).keys()
+        ]
 
     @classmethod
     def get_event_evidence_field_configs(cls, risk: Risk) -> List[EventInfoField]:
@@ -636,14 +632,16 @@ class GetEventFieldsConfig(StrategyV2Base):
         事件证据字段
         """
 
-        event_evidence_field_configs = []
-        event_evidence: List[dict] = json.loads(risk.event_evidence or "[]")
-        if event_evidence:
-            for key in event_evidence[0].keys():
-                event_evidence_field_configs.append(
-                    EventInfoField(field_name=key, display_name=key, description="", example="")
-                )
-        return event_evidence_field_configs
+        event_evidence = {}
+        if risk.event_evidence:
+            try:
+                event_evidence = json.loads(risk.event_evidence)[0]
+            except json.JSONDecodeError:
+                pass
+        return [
+            EventInfoField(field_name=key, display_name=key, description="", example="")
+            for key in event_evidence.keys()
+        ]
 
     def perform_request(self, validated_request_data):
         # 获取基础字段

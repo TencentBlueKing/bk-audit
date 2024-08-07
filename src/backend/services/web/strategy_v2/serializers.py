@@ -151,7 +151,6 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
             "tags",
             "notice_groups",
             "description",
-            "risk_level",
             "risk_hazard",
             "risk_guidance",
             "risk_title",

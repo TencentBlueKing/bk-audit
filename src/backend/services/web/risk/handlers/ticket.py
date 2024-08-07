@@ -98,12 +98,11 @@ class RiskFlowBaseHandler:
         """
 
         # 获取策略
-        strategy: Strategy = Strategy.objects.filter(strategy_id=self.risk.strategy_id).first()
-        if not strategy:
+        if not self.strategy:
             return self.load_security_person()
         # 获取处理组成员
         processor_groups: List[NoticeGroup] = list(
-            NoticeGroup.objects.filter(group_id__in=strategy.processor_groups or [])
+            NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or [])
         )
         return NoticeGroup.parse_members(processor_groups=processor_groups) or self.load_security_person()
 

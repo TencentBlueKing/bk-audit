@@ -26,7 +26,6 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.domains import USER_MANAGE_URL
-from core.constants import TimeEnum
 
 
 class UserManageResource(BkApiResource, abc.ABC):
@@ -44,7 +43,6 @@ class RetrieveUser(UserManageResource):
     name = gettext_lazy("获取单个用户信息")
     method = "GET"
     action = "/retrieve_user/"
-    cache_type = CacheTypeItem(key="RetrieveUser", timeout=TimeEnum.ONE_HOUR_SECOND.value, user_related=False)
 
 
 class ListUserDepartments(UserManageResource):

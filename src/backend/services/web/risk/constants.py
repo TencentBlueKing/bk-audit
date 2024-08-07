@@ -392,14 +392,8 @@ class RiskFields:
     RISK_DATA = Field(field_name="risk_data", alias_name=gettext_lazy("拓展数据"))
 
 
-# 事件基本字段
-EVENT_BASIC_FIELDS = [
-    EventMappingFields.EVENT_ID,
-    EventMappingFields.EVENT_CONTENT,
-    EventMappingFields.RAW_EVENT_ID,
-    EventMappingFields.STRATEGY_ID,
-    EventMappingFields.EVENT_TYPE,
-    EventMappingFields.EVENT_TIME,
-    EventMappingFields.EVENT_SOURCE,
-    EventMappingFields.OPERATOR,
+# 事件排除字段
+EVENT_BASIC_EXCLUDE_FIELDS = [
+    EventMappingFields.EVENT_EVIDENCE,
+    EventMappingFields.EVENT_DATA,
 ]
