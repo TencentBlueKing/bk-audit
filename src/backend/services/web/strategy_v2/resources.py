@@ -598,11 +598,7 @@ class GetEventFieldsConfig(StrategyV2Base):
     RequestSerializer = GetEventInfoFieldsRequestSerializer
     ResponseSerializer = GetEventInfoFieldsResponseSerializer
 
-    risk: Optional[Risk] = None
-    has_permission: bool = False
-
-    @property
-    def event_basic_field_configs(self) -> List[EventInfoField]:
+    def get_event_basic_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
         """
         基础字段
         """
@@ -612,43 +608,37 @@ class GetEventFieldsConfig(StrategyV2Base):
                 field_name=field.field_name,
                 display_name=field.alias_name,
                 description=str(field.description),
-                example=getattr(self.risk, field.field_name, "") if self.risk and self.has_permission else "",
+                example=getattr(risk, field.field_name, "") if risk and has_permission else "",
             )
             for field in EventMappingFields().fields
             if field not in EVENT_BASIC_EXCLUDE_FIELDS
         ]
 
-    @property
-    def event_data_field_configs(self) -> List[EventInfoField]:
+    def get_event_data_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
         """
         事件数据字段
         """
 
-        if not self.risk:
+        if not risk:
             return []
         return [
-            EventInfoField(
-                field_name=key, display_name=key, description="", example=value if self.has_permission else ""
-            )
-            for key, value in (self.risk.event_data or {}).items()
+            EventInfoField(field_name=key, display_name=key, description="", example=value if has_permission else "")
+            for key, value in (risk.event_data or {}).items()
         ]
 
-    @property
-    def event_evidence_field_configs(self) -> List[EventInfoField]:
+    def get_event_evidence_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
         """
         事件证据字段
         """
 
-        if not self.risk:
+        if not risk:
             return []
         try:
-            event_evidence = json.loads(self.risk.event_evidence)[0]
+            event_evidence = json.loads(risk.event_evidence)[0]
         except (json.JSONDecodeError, IndexError, KeyError):
             event_evidence = {}
         return [
-            EventInfoField(
-                field_name=key, display_name=key, description="", example=value if self.has_permission else ""
-            )
+            EventInfoField(field_name=key, display_name=key, description="", example=value if has_permission else "")
             for key, value in event_evidence.items()
         ]
 
@@ -658,17 +648,18 @@ class GetEventFieldsConfig(StrategyV2Base):
         # 有权限: 字段样例为风险值
         # 无权限: 字段样例为空
         strategy_id = validated_request_data.get("strategy_id")
-        self.risk = Risk.objects.filter(strategy_id=strategy_id).order_by("-event_time").first()
+        risk: Optional[Risk] = Risk.objects.filter(strategy_id=strategy_id).order_by("-event_time").first()
         # 权限认证
+        has_permission = False
         if (
-            self.risk
+            risk
             and TicketPermission.objects.filter(
-                risk_id=self.risk.risk_id, action=ActionEnum.LIST_RISK.id, operator=get_request_username()
+                risk_id=risk.risk_id, action=ActionEnum.LIST_RISK.id, operator=get_request_username()
             ).exists()
         ):
-            self.has_permission = True
+            has_permission = True
         return {
-            "event_basic_field_configs": self.event_basic_field_configs,
-            "event_data_field_configs": self.event_data_field_configs,
-            "event_evidence_field_configs": self.event_evidence_field_configs,
+            "event_basic_field_configs": self.get_event_basic_field_configs(risk, has_permission),
+            "event_data_field_configs": self.get_event_data_field_configs(risk, has_permission),
+            "event_evidence_field_configs": self.get_event_evidence_field_configs(risk, has_permission),
         }

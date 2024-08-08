@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from bk_resource import CacheResource, api
+from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.cache import CacheTypeItem
 from django.utils.translation import gettext_lazy
 
@@ -26,10 +27,9 @@ class RetrieveLeader(CacheResource):
     cache_type = CacheTypeItem(key="retrieve_leader", timeout=60 * 60, user_related=False)
 
     def perform_request(self, validated_request_data):
-        # 获取用户信息
-        user_info = api.user_manage.retrieve_user(validated_request_data)
-        # 解析出leader信息
         try:
+            # 获取用户信息&解析出leader信息
+            user_info = api.user_manage.retrieve_user(validated_request_data)
             return user_info.get("leader", [])[0].get("username", "")
-        except IndexError:
+        except (IndexError, APIRequestError):
             return ""
