@@ -35,6 +35,7 @@ class NoticeViewSet(ResourceViewSet):
 
     resource_routes = [
         ResourceRoute("GET", resource.notice.get_msg_type, endpoint="msg_type"),
+        ResourceRoute("GET", resource.notice.get_notice_common, endpoint="common"),
     ]
 
 
