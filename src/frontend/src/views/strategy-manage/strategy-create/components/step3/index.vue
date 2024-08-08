@@ -174,6 +174,7 @@
 <script setup lang="ts">
   import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import IamManageService from '@service/iam-manage';
   import NoticeManageService from '@service/notice-group';
@@ -201,7 +202,12 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
+  const route = useRoute();
   const { t } = useI18n();
+
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
+
   const groupSelectRef = ref();
   const formRef = ref();
 
@@ -264,7 +270,7 @@
     formData.value.notice_groups = Array.isArray(data.notice_groups) ? data.notice_groups : [];
     formData.value.processor_groups = Array.isArray(data.processor_groups) ? data.processor_groups : [];
   }, {
-    immediate: true,
+    immediate: isEditMode || isCloneMode,
   });
 
   const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');

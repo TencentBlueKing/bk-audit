@@ -103,6 +103,27 @@
     event_evidence_field_configs: t('事件证据'),
   };
 
+  const setEditData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
+    if (props.data[key].length && tableData.value[key].length) {
+      tableData.value[key] = tableData.value[key].map((item) => {
+        const editItem = props.data[key].find(edItem => edItem.field_name === item.field_name);
+        if (editItem) {
+          return {
+            field_name: item.field_name,
+            display_name: item.display_name,
+            is_priority: editItem.is_priority,
+            description: editItem.description,
+            example: item.example,
+            prefix: '',
+          };
+        }
+        return {
+          ...item,
+        };
+      });
+    }
+  };
+
   const {
     data: tableData,
   } = useRequest(StrategyManageService.fetchStrategyEvent, {
@@ -111,16 +132,10 @@
       strategy_id: props.strategyId,
     },
     onSuccess: () => {
-      // 编辑
-      if (props.data.event_basic_field_configs.length) {
-        tableData.value.event_basic_field_configs = props.data.event_basic_field_configs;
-      }
-      if (props.data.event_data_field_configs.length) {
-        tableData.value.event_data_field_configs = props.data.event_data_field_configs;
-      }
-      if (props.data.event_evidence_field_configs.length) {
-        tableData.value.event_evidence_field_configs = props.data.event_evidence_field_configs;
-      }
+      // 编辑填充内容（是否重点展示、字段说明）
+      setEditData('event_basic_field_configs');
+      setEditData('event_data_field_configs');
+      setEditData('event_evidence_field_configs');
     },
     manual: true,
   });

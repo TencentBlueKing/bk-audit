@@ -115,6 +115,7 @@
 <script setup lang="ts">
   import { computed, nextTick, onActivated, onDeactivated, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import StrategyModel from '@model/strategy/strategy';
   import type { EventItem } from '@model/strategy/strategy-field-event';
@@ -143,10 +144,15 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
+  const route = useRoute();
   const { t } = useI18n();
+
   const formRef = ref();
   const eventRef = ref();
   const inputRef = ref();
+
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
 
   const isShow = ref(false);
   const riskTitleValue = ref('');
@@ -222,7 +228,7 @@
   watch(() => props.data, (data) => {
     formData.value.risk_title = data.risk_title;
   }, {
-    immediate: true,
+    immediate: isEditMode || isCloneMode,
   });
 
   onActivated(() => {
