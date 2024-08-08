@@ -52,7 +52,7 @@
       label: () => t('变量名称'),
       render: ({ data }: {data: EventItem}) => <div
         style='width: 100%; height: 100%;'
-        onClick={() => handleVariableCopy(data.prefix, data.field_name)}>
+        onClick={e => handleVariableCopy(e, data.prefix, data.field_name)}>
           { `{{${data.field_name}}}` }
         </div>,
     },
@@ -86,8 +86,9 @@
     manual: true,
   });
 
-  const handleVariableCopy = (prefix: string, value: string) => {
-    execCopy(`\${{${prefix}${value}}}`, t(`变量${value}复制成功`));
+  const handleVariableCopy = (e: Event, prefix: string, value: string) => {
+    e.stopPropagation();
+    execCopy(`{{${prefix}${value}}}`, t(`变量${value}复制成功`));
   };
 </script>
 <style lang="postcss" scoped>

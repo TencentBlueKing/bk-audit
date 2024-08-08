@@ -36,23 +36,24 @@
                 class="variable-popover"
                 :component-event-delay="300"
                 disable-outside-click
+                :is-show="isShow"
                 :offset="8"
                 placement="bottom-start"
                 theme="light"
-                trigger="click"
+                trigger="manual"
                 width="490">
                 <div
                   class="variable-input"
                   :class="[variableInputActive ? 'active' : '']">
                   <div
                     class="variable-input-content"
-                    @click="handleClick">
+                    @click.stop="() => handleClick('origin')">
                     <ul class="list">
                       <li
                         v-for="(item, index) in displayRiskTitle"
                         :key="index">
                         <span
-                          :class="[item.startsWith('$\{\{') && item.endsWith('}}') ? 'is-variable' : '']">
+                          :class="[item.startsWith('{{') && item.endsWith('}}') ? 'is-variable' : '']">
                           {{ item }}
                         </span>
                       </li>
@@ -112,7 +113,7 @@
   </smart-action>
 </template>
 <script setup lang="ts">
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, nextTick, onActivated, onDeactivated, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyModel from '@model/strategy/strategy';
@@ -147,6 +148,7 @@
   const eventRef = ref();
   const inputRef = ref();
 
+  const isShow = ref(false);
   const riskTitleValue = ref('');
   const variableInputActive = ref(false);
   const formData = ref<IFormData>({
@@ -184,12 +186,20 @@
     });
   };
 
-  const handleClick = () => {
+  const handleClick = (type: string | Event) => {
+    // 点击输入框，切换展示pop
+    if (typeof type === 'string') {
+      isShow.value = !isShow.value;
+    }
+    // 点击页面其他地方,且是打开状态，关闭pop
+    if (typeof type !== 'string' && isShow.value) {
+      isShow.value = false;
+    }
     // active
     variableInputActive.value = !variableInputActive.value;
     // focus
     nextTick(() => {
-      inputRef.value.focus();
+      inputRef.value?.focus();
     });
     // 赋值
     if (riskTitleValue.value) {
@@ -215,7 +225,19 @@
     immediate: true,
   });
 
-  const displayRiskTitle = computed(() => formData.value.risk_title.match(/\$\{\{[^}]+\}\}|./g));
+  onActivated(() => {
+    window.addEventListener('click', handleClick);
+  });
+
+  onDeactivated(() => {
+    window.removeEventListener('click', handleClick);
+  });
+
+  onUnmounted(() => {
+    window.removeEventListener('click', handleClick);
+  });
+
+  const displayRiskTitle = computed(() => formData.value.risk_title.match(/\{\{[^}]+\}\}|./g));
 
   const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
 </script>
