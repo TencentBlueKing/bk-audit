@@ -110,30 +110,6 @@ class EventMappingFields:
     审计事件标准字段
     """
 
-    @classmethod
-    def gen_example(cls, field: Field) -> str:
-        """
-        生成字段示例
-        """
-
-        example = ""
-        match field:
-            case cls.EVENT_ID:
-                example = ""
-            case cls.EVENT_CONTENT:
-                example = "测试风险"
-            case cls.RAW_EVENT_ID:
-                example = "1234567890123456"
-            case cls.EVENT_TYPE:
-                example = "SuperPermission"
-            case cls.EVENT_TIME:
-                example = "2024-01-01 00:00:00"
-            case cls.EVENT_SOURCE:
-                example = EventSourceTypeChoices.BKM.value
-            case cls.OPERATOR:
-                example = "admin"
-        return example
-
     @property
     def fields(self):
         return [
@@ -394,6 +370,7 @@ class RiskFields:
 
 # 事件排除字段
 EVENT_BASIC_EXCLUDE_FIELDS = [
+    EventMappingFields.EVENT_ID,
     EventMappingFields.EVENT_EVIDENCE,
     EventMappingFields.EVENT_DATA,
 ]

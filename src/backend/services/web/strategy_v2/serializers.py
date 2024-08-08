@@ -68,7 +68,9 @@ class CreateStrategyRequestSerializer(serializers.ModelSerializer):
     risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
     risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
     processor_groups = serializers.ListField(
-        label=gettext_lazy("Processor Groups"), child=serializers.IntegerField(label=gettext_lazy("Processor Group"))
+        label=gettext_lazy("Processor Groups"),
+        child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
+        allow_empty=False,
     )
 
     class Meta:
@@ -136,7 +138,9 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
     )
     risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
     processor_groups = serializers.ListField(
-        label=gettext_lazy("Processor Groups"), child=serializers.IntegerField(label=gettext_lazy("Processor Group"))
+        label=gettext_lazy("Processor Groups"),
+        child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
+        allow_empty=False,
     )
 
     class Meta:

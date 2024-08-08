@@ -124,15 +124,12 @@ class NoticeGroup(SoftDeleteModel):
         return list({member for member in self.group_member})
 
     @classmethod
-    def parse_members(cls, processor_groups: Union[QuerySet["NoticeGroup"], List["NoticeGroup"]]) -> List[str]:
+    def parse_members(cls, groups: Union[QuerySet["NoticeGroup"], List["NoticeGroup"]]) -> List[str]:
         """
         解析处理组成员
         """
 
-        members = set()
-        for processor_group in processor_groups:
-            members.update(processor_group.members)
-        return list(members)
+        return list({member for group in groups for member in group.members})
 
 
 class NoticeLog(OperateRecordModel):

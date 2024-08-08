@@ -20,7 +20,7 @@ import abc
 import datetime
 import json
 from collections import defaultdict
-from typing import List
+from typing import List, Optional
 
 from bk_resource import api, resource
 from bk_resource.base import Empty
@@ -60,7 +60,7 @@ from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control
 from services.web.analyze.tasks import call_controller
 from services.web.risk.constants import EVENT_BASIC_EXCLUDE_FIELDS, EventMappingFields
-from services.web.risk.models import Risk
+from services.web.risk.models import Risk, TicketPermission
 from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
@@ -598,8 +598,11 @@ class GetEventFieldsConfig(StrategyV2Base):
     RequestSerializer = GetEventInfoFieldsRequestSerializer
     ResponseSerializer = GetEventInfoFieldsResponseSerializer
 
-    @classmethod
-    def get_event_basic_field_configs(cls) -> List[EventInfoField]:
+    risk: Optional[Risk] = None
+    has_permission: bool = False
+
+    @property
+    def event_basic_field_configs(self) -> List[EventInfoField]:
         """
         基础字段
         """
@@ -609,52 +612,63 @@ class GetEventFieldsConfig(StrategyV2Base):
                 field_name=field.field_name,
                 display_name=field.alias_name,
                 description=str(field.description),
-                example=EventMappingFields.gen_example(field),
+                example=getattr(self.risk, field.field_name, "") if self.risk and self.has_permission else "",
             )
             for field in EventMappingFields().fields
             if field not in EVENT_BASIC_EXCLUDE_FIELDS
         ]
 
-    @classmethod
-    def get_event_data_field_configs(cls, risk: Risk) -> List[EventInfoField]:
+    @property
+    def event_data_field_configs(self) -> List[EventInfoField]:
         """
         事件数据字段
         """
 
+        if not self.risk:
+            return []
         return [
-            EventInfoField(field_name=key, display_name=key, description="", example="")
-            for key in (risk.event_data or {}).keys()
+            EventInfoField(
+                field_name=key, display_name=key, description="", example=value if self.has_permission else ""
+            )
+            for key, value in (self.risk.event_data or {}).items()
         ]
 
-    @classmethod
-    def get_event_evidence_field_configs(cls, risk: Risk) -> List[EventInfoField]:
+    @property
+    def event_evidence_field_configs(self) -> List[EventInfoField]:
         """
         事件证据字段
         """
 
-        event_evidence = {}
-        if risk.event_evidence:
-            try:
-                event_evidence = json.loads(risk.event_evidence)[0]
-            except json.JSONDecodeError:
-                pass
+        if not self.risk:
+            return []
+        try:
+            event_evidence = json.loads(self.risk.event_evidence)[0]
+        except (json.JSONDecodeError, IndexError, KeyError):
+            event_evidence = {}
         return [
-            EventInfoField(field_name=key, display_name=key, description="", example="")
-            for key in event_evidence.keys()
+            EventInfoField(
+                field_name=key, display_name=key, description="", example=value if self.has_permission else ""
+            )
+            for key, value in event_evidence.items()
         ]
 
     def perform_request(self, validated_request_data):
-        # 获取基础字段
-        result = {"event_basic_field_configs": self.get_event_basic_field_configs()}
+        # 风险不存在: 基础字段
+        # 风险存在: 基础字段 + 事件数据字段 + 事件证据字段
+        # 有权限: 字段样例为风险值
+        # 无权限: 字段样例为空
         strategy_id = validated_request_data.get("strategy_id")
-        if not strategy_id:
-            return result
-        strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
-        risk: Risk = Risk.objects.filter(strategy_id=strategy.strategy_id).order_by("-event_time").first()
-        if not risk:
-            return result
-        # 获取事件数据字段
-        result["event_data_field_configs"] = self.get_event_data_field_configs(risk)
-        # 获取事件证据字段
-        result["event_evidence_field_configs"] = self.get_event_evidence_field_configs(risk)
-        return result
+        self.risk = Risk.objects.filter(strategy_id=strategy_id).order_by("-event_time").first()
+        # 权限认证
+        if (
+            self.risk
+            and TicketPermission.objects.filter(
+                risk_id=self.risk.risk_id, action=ActionEnum.LIST_RISK.id, operator=get_request_username()
+            ).exists()
+        ):
+            self.has_permission = True
+        return {
+            "event_basic_field_configs": self.event_basic_field_configs,
+            "event_data_field_configs": self.event_data_field_configs,
+            "event_evidence_field_configs": self.event_evidence_field_configs,
+        }

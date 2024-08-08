@@ -16,20 +16,20 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import Resource, api
+from bk_resource import CacheResource, api
+from bk_resource.utils.cache import CacheTypeItem
 from django.utils.translation import gettext_lazy
 
 
-class RetrieveLeader(Resource):
+class RetrieveLeader(CacheResource):
     name = gettext_lazy("获取单个用户的leader信息")
+    cache_type = CacheTypeItem(key="retrieve_leader", timeout=60 * 60, user_related=False)
 
     def perform_request(self, validated_request_data):
         # 获取用户信息
         user_info = api.user_manage.retrieve_user(validated_request_data)
         # 解析出leader信息
-        leader_infos = user_info.get("leader", [])
-        if leader_infos:
-            leader_info = leader_infos[0]
-        else:
-            leader_info = {}
-        return leader_info.get("username")
+        try:
+            return user_info.get("leader", [])[0].get("username", "")
+        except IndexError:
+            return ""

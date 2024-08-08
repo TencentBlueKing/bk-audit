@@ -104,7 +104,7 @@ class RiskFlowBaseHandler:
         processor_groups: List[NoticeGroup] = list(
             NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or [])
         )
-        return NoticeGroup.parse_members(processor_groups=processor_groups) or self.load_security_person()
+        return NoticeGroup.parse_members(groups=processor_groups) or self.load_security_person()
 
     def load_last_operator(self) -> List[str]:
         """
