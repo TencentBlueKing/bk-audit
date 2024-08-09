@@ -36,6 +36,7 @@ from services.web.risk.models import (
     RiskRule,
     TicketNode,
 )
+from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.serializers import EventFieldSerializer
 
@@ -196,6 +197,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"), required=False, allow_null=True, allow_blank=True, choices=OrderTypeChoices.choices
     )
+    risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices, required=False)
 
     def validate(self, attrs: dict) -> dict:
         # 校验
@@ -223,6 +225,11 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["tags__contains"] = data.pop("tags")
         if data.get("event_content"):
             data["event_content__contains"] = data.pop("event_content")
+        # 风险等级
+        if data.get("risk_level"):
+            data["strategy_id__in="] = list(
+                Strategy.objects.filter(risk_level=data.pop("risk_level")).values_list("strategy_id", flat=True)
+            )
         # 格式转换
         for key, val in attrs.items():
             if key in ["event_time__gte", "event_time__lt", "order_type", "order_field"]:
