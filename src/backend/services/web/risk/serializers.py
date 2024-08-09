@@ -36,7 +36,7 @@ from services.web.risk.models import (
     RiskRule,
     TicketNode,
 )
-from services.web.strategy_v2.constants import RiskLevel
+from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.serializers import EventFieldSerializer
 
 
@@ -547,19 +547,27 @@ class GetRiskFieldsByStrategyResponseSerializer(serializers.Serializer):
     unique = serializers.BooleanField(default=False)
 
 
-class RetrieveRiskStrategyInfoResponseSerializer(serializers.Serializer):
-    risk_level = serializers.ChoiceField(
-        label=gettext_lazy("Risk Level"), choices=RiskLevel.choices, required=False, allow_null=True
-    )
-    risk_hazard = serializers.CharField(label=gettext_lazy("Risk Hazard"), required=False, allow_null=True)
-    risk_guidance = serializers.CharField(label=gettext_lazy("Risk Guidance"), required=False, allow_null=True)
-
+class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
     event_basic_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
     )
     event_data_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+        label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
     )
     event_evidence_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Evidence Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+        label=gettext_lazy("Event Evidence Field Configs"),
+        child=EventFieldSerializer(),
+        required=False,
+        allow_empty=True,
     )
+
+    class Meta:
+        model = Strategy
+        fields = [
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
+        ]

@@ -81,6 +81,7 @@ from services.web.risk.serializers import (
     UpdateRiskLabelReqSerializer,
 )
 from services.web.risk.tasks import process_one_risk, sync_auto_result
+from services.web.strategy_v2.models import Strategy
 
 
 class RiskMeta(AuditMixinResource, abc.ABC):
@@ -107,23 +108,12 @@ class RetrieveRisk(RiskMeta):
 
 class RetrieveRiskStrategyInfo(RiskMeta):
     name = gettext_lazy("获取风险策略信息")
-    audit_action = ActionEnum.LIST_RISK
     ResponseSerializer = RetrieveRiskStrategyInfoResponseSerializer
 
     def perform_request(self, validated_request_data):
         risk: Risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
-        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
-        strategy: Strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
-        if not strategy:
-            return {}
-        return {
-            "risk_level": strategy.risk_level,
-            "risk_hazard": strategy.risk_hazard,
-            "risk_guidance": strategy.risk_guidance,
-            "event_basic_field_configs": strategy.event_basic_field_configs,
-            "event_data_field_configs": strategy.event_data_field_configs,
-            "event_evidence_field_configs": strategy.event_evidence_field_configs,
-        }
+        strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
+        return strategy or {}
 
 
 class RetrieveRiskAPIGW(RetrieveRisk):

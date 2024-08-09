@@ -112,8 +112,12 @@ class RiskHandler:
         if not strategy or not strategy.risk_title:
             return
         risk_content = RiskInfoSerializer(risk).data
-        if risk_content.get("event_evidence"):
-            risk_content["event_evidence"] = json.loads(risk_content["event_evidence"])[0]
+        # 事件证据为字符串需要转换成列表，并取第一条字典数据
+        try:
+            event_evidence = json.loads(risk.event_evidence)[0]
+        except (json.JSONDecodeError, IndexError, KeyError):
+            event_evidence = {}
+        risk_content["event_evidence"] = event_evidence
         try:
             risk_title = Jinja2Renderer(undefined=RiskTitleUndefined).jinja_render(strategy.risk_title, risk_content)
             return risk_title
