@@ -49,6 +49,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.exceptions import PermissionException
 from core.utils.tools import choices_to_dict
 from services.web.analyze.constants import (
     ControlTypeChoices,
@@ -653,10 +654,14 @@ class GetEventFieldsConfig(StrategyV2Base):
         # 无权限: 字段样例为空
         strategy_id = validated_request_data.get("strategy_id")
         risk: Optional[Risk] = Risk.objects.filter(strategy_id=strategy_id).order_by("-event_time").first()
-        # 权限认证
-        has_permission = RiskViewPermission.has_risk_permission(
-            risk_id=risk.risk_id, actions=[ActionEnum.LIST_RISK], operator=get_request_username()
-        )
+        has_permission = False
+        if risk:
+            # 权限认证
+            permission = RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK)
+            try:
+                has_permission = permission.has_risk_permission(risk_id=risk.risk_id, operator=get_request_username())
+            except PermissionException:
+                pass
         return {
             "event_basic_field_configs": self.get_event_basic_field_configs(risk, has_permission),
             "event_data_field_configs": self.get_event_data_field_configs(risk, has_permission),
