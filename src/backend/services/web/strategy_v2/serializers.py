@@ -15,7 +15,6 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
 from typing import List
 
 from django.utils.translation import gettext, gettext_lazy
@@ -33,12 +32,20 @@ from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
     ConnectorChoices,
+    RiskLevel,
     StrategyAlgorithmOperator,
     StrategyOperator,
     TableType,
 )
 from services.web.strategy_v2.exceptions import SchedulePeriodInvalid
 from services.web.strategy_v2.models import Strategy
+
+
+class EventFieldSerializer(serializers.Serializer):
+    field_name = serializers.CharField(label=gettext_lazy("Field Name"))
+    display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
+    is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
+    description = serializers.CharField(label=gettext_lazy("Field Description"))
 
 
 class CreateStrategyRequestSerializer(serializers.ModelSerializer):
@@ -48,6 +55,22 @@ class CreateStrategyRequestSerializer(serializers.ModelSerializer):
 
     tags = serializers.ListField(
         label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), default=list
+    )
+    event_basic_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+    )
+    event_data_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+    )
+    event_evidence_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Evidence Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+    )
+    risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
+    risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
+    processor_groups = serializers.ListField(
+        label=gettext_lazy("Processor Groups"),
+        child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
+        allow_empty=False,
     )
 
     class Meta:
@@ -61,6 +84,14 @@ class CreateStrategyRequestSerializer(serializers.ModelSerializer):
             "tags",
             "notice_groups",
             "description",
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+            "risk_title",
+            "processor_groups",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -96,6 +127,22 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
         label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), default=list
     )
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    event_basic_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+    )
+    event_data_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+    )
+    event_evidence_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Evidence Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+    )
+    risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
+    processor_groups = serializers.ListField(
+        label=gettext_lazy("Processor Groups"),
+        child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
+        allow_empty=False,
+    )
+    risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
 
     class Meta:
         model = Strategy
@@ -109,6 +156,14 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
             "tags",
             "notice_groups",
             "description",
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+            "risk_title",
+            "processor_groups",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -193,7 +248,19 @@ class StrategyInfoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Strategy
-        fields = ["namespace", "strategy_id", "strategy_name", "control_id", "control_version", "notice_groups"]
+        fields = [
+            "namespace",
+            "strategy_id",
+            "strategy_name",
+            "control_id",
+            "control_version",
+            "notice_groups",
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+            "risk_title",
+            "processor_groups",
+        ]
 
 
 class ToggleStrategyRequestSerializer(serializers.Serializer):
@@ -319,6 +386,7 @@ class GetStrategyCommonResponseSerializer(serializers.Serializer):
     strategy_status = ChoiceListSerializer(label=gettext_lazy("Strategy Status"), many=True)
     offset_unit = ChoiceListSerializer(label=gettext_lazy("Offset Unit"), many=True)
     mapping_type = ChoiceListSerializer(label=gettext_lazy("Mapping Type"), many=True)
+    risk_level = ChoiceListSerializer(label=gettext_lazy("Risk Level"), many=True)
 
 
 class AIOPSDataSourceFilterSerializer(serializers.Serializer):
@@ -433,3 +501,38 @@ class RetryStrategyRequestSerializer(serializers.Serializer):
     """
 
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+
+
+class GetEventInfoFieldsRequestSerializer(serializers.Serializer):
+    """
+    Get Event Info Fields
+    """
+
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"), required=False)
+
+
+class EventInfoFieldSerializer(serializers.Serializer):
+    """
+    Get Event Info Fields
+    """
+
+    field_name = serializers.CharField(label=gettext_lazy("Name"))
+    display_name = serializers.CharField(label=gettext_lazy("Display Name"))
+    description = serializers.CharField(label=gettext_lazy("Description"), allow_blank=True)
+    example = serializers.CharField(label=gettext_lazy("Example"), allow_blank=True)
+
+
+class GetEventInfoFieldsResponseSerializer(serializers.Serializer):
+    """
+    Get Event Info Fields
+    """
+
+    event_basic_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Basic Field Configs"), child=EventInfoFieldSerializer()
+    )
+    event_data_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Data Field Configs"), child=EventInfoFieldSerializer(), required=False
+    )
+    event_evidence_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Evidence Field Configs"), child=EventInfoFieldSerializer(), required=False
+    )

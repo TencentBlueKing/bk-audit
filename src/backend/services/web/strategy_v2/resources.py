@@ -18,8 +18,9 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import datetime
+import json
 from collections import defaultdict
-from typing import List
+from typing import List, Optional
 
 from bk_resource import api, resource
 from bk_resource.base import Empty
@@ -48,6 +49,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.exceptions import PermissionException
 from core.utils.tools import choices_to_dict
 from services.web.analyze.constants import (
     ControlTypeChoices,
@@ -58,11 +60,16 @@ from services.web.analyze.controls.base import Controller
 from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control
 from services.web.analyze.tasks import call_controller
+from services.web.risk.constants import EVENT_BASIC_EXCLUDE_FIELDS, EventMappingFields
+from services.web.risk.models import Risk
+from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     LOCAL_UPDATE_FIELDS,
+    EventInfoField,
     MappingType,
+    RiskLevel,
     StrategyAlgorithmOperator,
     StrategyOperator,
     StrategyStatusChoices,
@@ -75,6 +82,8 @@ from services.web.strategy_v2.serializers import (
     BKMStrategySerializer,
     CreateStrategyRequestSerializer,
     CreateStrategyResponseSerializer,
+    GetEventInfoFieldsRequestSerializer,
+    GetEventInfoFieldsResponseSerializer,
     GetRTFieldsRequestSerializer,
     GetRTFieldsResponseSerializer,
     GetStrategyCommonResponseSerializer,
@@ -196,6 +205,9 @@ class UpdateStrategy(StrategyV2Base):
         # check control
         if strategy.control_id != validated_request_data["control_id"]:
             raise ControlChangeError()
+        # check risk_level
+        if strategy.risk_level is not None:
+            validated_request_data.pop("risk_level")
         # save strategy
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
@@ -524,6 +536,7 @@ class GetStrategyCommon(StrategyV2Base):
             "strategy_status": choices_to_dict(StrategyStatusChoices, val="value", name="label"),
             "offset_unit": choices_to_dict(OffsetUnit, val="value", name="label"),
             "mapping_type": choices_to_dict(MappingType, val="value", name="label"),
+            "risk_level": choices_to_dict(RiskLevel, val="value", name="label"),
         }
 
 
@@ -582,4 +595,75 @@ class GetStrategyStatus(StrategyV2Base):
         return {
             s.strategy_id: {"status": s.status, "status_msg": s.status_msg}
             for s in Strategy.objects.filter(strategy_id__in=validated_request_data["strategy_ids"])
+        }
+
+
+class GetEventFieldsConfig(StrategyV2Base):
+    name = gettext_lazy("Get Event Info Fields")
+    RequestSerializer = GetEventInfoFieldsRequestSerializer
+    ResponseSerializer = GetEventInfoFieldsResponseSerializer
+
+    def get_event_basic_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
+        """
+        基础字段
+        """
+
+        return [
+            EventInfoField(
+                field_name=field.field_name,
+                display_name=field.alias_name,
+                description=str(field.description),
+                example=getattr(risk, field.field_name, "") if risk and has_permission else "",
+            )
+            for field in EventMappingFields().fields
+            if field not in EVENT_BASIC_EXCLUDE_FIELDS
+        ]
+
+    def get_event_data_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
+        """
+        事件数据字段
+        """
+
+        if not risk:
+            return []
+        return [
+            EventInfoField(field_name=key, display_name=key, description="", example=value if has_permission else "")
+            for key, value in (risk.event_data or {}).items()
+        ]
+
+    def get_event_evidence_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
+        """
+        事件证据字段
+        """
+
+        if not risk:
+            return []
+        try:
+            event_evidence = json.loads(risk.event_evidence)[0]
+        except (json.JSONDecodeError, IndexError, KeyError):
+            event_evidence = {}
+        return [
+            EventInfoField(field_name=key, display_name=key, description="", example=value if has_permission else "")
+            for key, value in event_evidence.items()
+        ]
+
+    def perform_request(self, validated_request_data):
+        # 风险不存在: 基础字段
+        # 风险存在: 基础字段 + 事件数据字段 + 事件证据字段
+        # 有权限: 字段样例为风险值
+        # 无权限: 字段样例为空
+        strategy_id = validated_request_data.get("strategy_id")
+        risk: Optional[Risk] = Risk.objects.filter(strategy_id=strategy_id).order_by("-event_time").first()
+        has_permission = False
+        if risk:
+            # 权限认证
+            permission = RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK)
+            try:
+                has_permission = permission.has_risk_permission(risk_id=risk.risk_id, operator=get_request_username())
+            except PermissionException:
+                pass
+        return {
+            "event_basic_field_configs": self.get_event_basic_field_configs(risk, has_permission),
+            "event_data_field_configs": self.get_event_data_field_configs(risk, has_permission),
+            "event_evidence_field_configs": self.get_event_evidence_field_configs(risk, has_permission),
         }

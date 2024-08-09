@@ -43,6 +43,7 @@ INSTALLED_APPS += (
     "apps.bk_crypto",
     "apps.sops",
     "apps.itsm",
+    "apps.user_manage",
     "bk_resource",
     "rest_framework",
     "drf_yasg",
