@@ -31,18 +31,18 @@ class RiskViewPermission(InstanceActionPermission):
 
     def has_risk_permission(self, risk_id: str, operator: str) -> bool:
         """
-        风险查看权限
+        校验风险权限
         """
 
-        if self._has_risk_permission(risk_id, operator):
+        if self.has_risk_local_permission(risk_id, operator):
             return True
         resource = self.resource_meta.create_instance(risk_id)
         self.resources = [resource]
         return IAMPermission.has_permission(self, None, None)
 
-    def _has_risk_permission(self, risk_id: str, operator: str) -> bool:
+    def has_risk_local_permission(self, risk_id: str, operator: str) -> bool:
         """
-        校验风险权限
+        校验本地风险权限
         """
 
         return all(
@@ -54,7 +54,7 @@ class RiskViewPermission(InstanceActionPermission):
 
     def has_permission(self, request, view):
         risk_id = view.kwargs.get(self.lookup_field) or self.get_instance_id()
-        if self._has_risk_permission(risk_id, request.user.username):
+        if self.has_risk_local_permission(risk_id, request.user.username):
             return True
         return super().has_permission(request, view)
 
