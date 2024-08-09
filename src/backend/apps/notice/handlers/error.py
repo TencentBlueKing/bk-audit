@@ -38,16 +38,17 @@ class ErrorMsgHandler:
 
     def send(self):
         notice_group: NoticeGroup = NoticeGroup.objects.get(group_id=ADMIN_NOTICE_GROUP_ID)
+        receivers = notice_group.parse_members()
         resource.notice.send_notice(
             relate_type=RelateType.ERROR,
             relate_id=self.get_current_trace_id(self.__class__.__name__),
             agg_key=None,
             msg_type=[c.get("msg_type") for c in notice_group.notice_config if "msg_type" in c],
-            receivers=notice_group.group_member,
+            receivers=receivers,
             title=self.title,
             content=self.content.to_string(),
         )
-        logger.info("[SendErrorMsgDone] NoticeGroup => %s; Members => %s", notice_group.pk, notice_group.group_member)
+        logger.info("[SendErrorMsgDone] NoticeGroup => %s; Members => %s", notice_group.pk, receivers)
 
     def build_content(self, content: str) -> NoticeContent:
         return NoticeContent(

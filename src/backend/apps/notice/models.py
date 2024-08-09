@@ -15,16 +15,18 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import List, Union
+from typing import List, Optional, Union
 
 from bk_audit.log.models import AuditInstance
+from bk_resource import resource
 from bk_resource.utils.common_utils import get_md5
 from django.db import models
 from django.db.models import QuerySet
 from django.utils.translation import gettext_lazy
 
-from apps.notice.constants import RelateType
+from apps.notice.constants import MemberVariable, RelateType
 from core.models import OperateRecordModel, SoftDeleteModel
+from services.web.risk.models import Risk
 
 
 class NoticeContentConfig:
@@ -115,21 +117,41 @@ class NoticeGroup(SoftDeleteModel):
     def audit_instance(self):
         return NoticeGroupAuditInstance(self)
 
-    @property
-    def members(self) -> List[str]:
+    @classmethod
+    def transform_member_variable(cls, member: str, risk: Optional[Risk]) -> str:
         """
-        处理组成员
+        转换成员变量
         """
 
-        return list({member for member in self.group_member})
+        match member:
+            case MemberVariable.OPERATOR.value:
+                return risk.operator if risk else ""
+            case MemberVariable.OPERATOR_SUPERIOR.value:
+                return resource.user_manage.retrieve_leader(id=risk.operator) if risk else ""
+        return member
+
+    def parse_members(self, risk: Optional[Risk] = None) -> List[str]:
+        """
+        解析成员
+        """
+
+        return list(
+            {
+                parsed_member
+                for member in self.group_member
+                if (parsed_member := self.transform_member_variable(member, risk))
+            }
+        )
 
     @classmethod
-    def parse_members(cls, groups: Union[QuerySet["NoticeGroup"], List["NoticeGroup"]]) -> List[str]:
+    def parse_groups(
+        cls, groups: Union[QuerySet["NoticeGroup"], List["NoticeGroup"]], risk: Optional[Risk] = None
+    ) -> List[str]:
         """
         解析处理组成员
         """
 
-        return list({member for group in groups for member in group.members})
+        return list({member for group in groups for member in group.parse_members(risk)})
 
 
 class NoticeLog(OperateRecordModel):

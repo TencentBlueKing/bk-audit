@@ -59,3 +59,12 @@ class RelateType(TextChoices):
 
     RISK = "risk", gettext_lazy("风险")
     ERROR = "error", gettext_lazy("异常")
+
+
+class MemberVariable(TextChoices):
+    """
+    成员变量
+    """
+
+    OPERATOR = "$OPERATOR", gettext_lazy("责任人")
+    OPERATOR_SUPERIOR = "$OPERATOR_SUPERIOR", gettext_lazy("责任人上级")
