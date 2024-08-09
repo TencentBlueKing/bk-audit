@@ -55,13 +55,16 @@
           :label="t('风险等级')"
           :label-width="labelWidth">
           <span
+            v-if="data.risk_level"
             :style="{
               'background-color': riskLevelMap[data.risk_level].color,
               padding: '3px 8px',
-              'border-radius': '3px'
+              'border-radius': '3px',
+              color: 'white'
             }">
             {{ riskLevelMap[data.risk_level].label }}
           </span>
+          <span v-else>{{ t('以实际内容为准') }}</span>
         </render-info-item>
         <render-info-item
           :label="t('风险命中策略')"
@@ -87,7 +90,7 @@
         class="flex "
         style="margin-bottom: 12px;">
         <render-info-item
-          :label="t('处理危害')"
+          :label="t('风险危害')"
           :label-width="labelWidth">
           {{ data.risk_hazard }}
         </render-info-item>
@@ -171,13 +174,16 @@
           :label="t('风险等级')"
           :label-width="labelWidth">
           <span
+            v-if="data.risk_level"
             :style="{
               'background-color': riskLevelMap[data.risk_level].color,
               padding: '3px 8px',
-              'border-radius': '3px'
+              'border-radius': '3px',
+              color: 'white'
             }">
             {{ riskLevelMap[data.risk_level].label }}
           </span>
+          <span v-else>{{ t('以实际内容为准') }}</span>
         </render-info-item>
         <render-info-item
           :label="t('处理状态')"
@@ -210,7 +216,7 @@
         class="flex "
         style="margin-bottom: 12px;">
         <render-info-item
-          :label="t('处理危害')"
+          :label="t('风险危害')"
           :label-width="labelWidth">
           {{ data.risk_hazard }}
         </render-info-item>
