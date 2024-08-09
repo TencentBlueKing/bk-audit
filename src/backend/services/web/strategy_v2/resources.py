@@ -60,7 +60,8 @@ from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control
 from services.web.analyze.tasks import call_controller
 from services.web.risk.constants import EVENT_BASIC_EXCLUDE_FIELDS, EventMappingFields
-from services.web.risk.models import Risk, TicketPermission
+from services.web.risk.models import Risk
+from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
@@ -203,6 +204,9 @@ class UpdateStrategy(StrategyV2Base):
         # check control
         if strategy.control_id != validated_request_data["control_id"]:
             raise ControlChangeError()
+        # check risk_level
+        if strategy.risk_level is not None:
+            validated_request_data.pop("risk_level")
         # save strategy
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
@@ -650,14 +654,9 @@ class GetEventFieldsConfig(StrategyV2Base):
         strategy_id = validated_request_data.get("strategy_id")
         risk: Optional[Risk] = Risk.objects.filter(strategy_id=strategy_id).order_by("-event_time").first()
         # 权限认证
-        has_permission = False
-        if (
-            risk
-            and TicketPermission.objects.filter(
-                risk_id=risk.risk_id, action=ActionEnum.LIST_RISK.id, operator=get_request_username()
-            ).exists()
-        ):
-            has_permission = True
+        has_permission = RiskViewPermission.has_risk_permission(
+            risk_id=risk.risk_id, actions=[ActionEnum.LIST_RISK], operator=get_request_username()
+        )
         return {
             "event_basic_field_configs": self.get_event_basic_field_configs(risk, has_permission),
             "event_data_field_configs": self.get_event_data_field_configs(risk, has_permission),

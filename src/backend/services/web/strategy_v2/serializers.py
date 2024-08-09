@@ -142,6 +142,7 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
         child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
         allow_empty=False,
     )
+    risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
 
     class Meta:
         model = Strategy
@@ -155,6 +156,7 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
             "tags",
             "notice_groups",
             "description",
+            "risk_level",
             "risk_hazard",
             "risk_guidance",
             "risk_title",

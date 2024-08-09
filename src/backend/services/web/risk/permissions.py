@@ -15,10 +15,11 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import List
 
 from django.shortcuts import get_object_or_404
 
-from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.actions import ActionEnum, ActionMeta
 from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.risk.models import Risk, TicketPermission
@@ -29,16 +30,22 @@ class RiskViewPermission(InstanceActionPermission):
     风险查看权限
     """
 
+    @classmethod
+    def has_risk_permission(cls, risk_id: str, actions: List[ActionMeta], operator: str) -> bool:
+        """
+        风险查看权限
+        """
+
+        return all(
+            [
+                TicketPermission.objects.filter(risk_id=risk_id, action=action.id, operator=operator).exists()
+                for action in actions
+            ]
+        )
+
     def has_permission(self, request, view):
         risk_id = view.kwargs.get(self.lookup_field) or self.get_instance_id()
-        if all(
-            [
-                TicketPermission.objects.filter(
-                    risk_id=risk_id, action=action.id, operator=request.user.username
-                ).exists()
-                for action in self.actions
-            ]
-        ):
+        if self.has_risk_permission(risk_id, self.actions, request.user.username):
             return True
         return super().has_permission(request, view)
 
