@@ -46,7 +46,7 @@ class EventFieldSerializer(serializers.Serializer):
     field_name = serializers.CharField(label=gettext_lazy("Field Name"))
     display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
     is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
-    description = serializers.CharField(label=gettext_lazy("Field Description"))
+    description = serializers.CharField(label=gettext_lazy("Field Description"), default="", allow_blank=True)
 
 
 class CreateStrategyRequestSerializer(serializers.ModelSerializer):
@@ -525,11 +525,13 @@ class EventInfoFieldSerializer(serializers.Serializer):
     def to_internal_value(self, data):
         # example 可能是 list 或 bool，均转换为字符串进行展示
         example = data["example"]
-        if isinstance(example, (bool, list, dict)):
-            try:
+        try:
+            if isinstance(example, (list, dict)):
                 data["example"] = json.dumps(example)
-            except Exception:  # NOCC:broad-except(需要处理所有错误)
-                data["example"] = str(example)
+        except Exception:  # NOCC:broad-except(需要处理所有错误)
+            pass
+        finally:
+            data["example"] = str(example)
         return super().to_internal_value(data)
 
 
@@ -547,3 +549,13 @@ class GetEventInfoFieldsResponseSerializer(serializers.Serializer):
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"), child=EventInfoFieldSerializer(), required=False
     )
+
+
+class GetStrategyDisplayInfoRequestSerializer(serializers.Serializer):
+    strategy_ids = serializers.CharField(label=gettext_lazy("Strategy IDs"))
+
+    def validate_strategy_ids(self, strategy_ids: str) -> List[int]:
+        try:
+            return [int(s) for s in strategy_ids.split(",") if s]
+        except ValueError:
+            raise serializers.ValidationError(gettext("Strategy ID Invalid"))
