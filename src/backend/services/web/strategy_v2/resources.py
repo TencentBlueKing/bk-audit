@@ -611,8 +611,8 @@ class GetEventFieldsConfig(StrategyV2Base):
         return [
             EventInfoField(
                 field_name=field.field_name,
-                display_name=field.alias_name,
-                description=str(field.description),
+                display_name=field.description,
+                description="",
                 example=getattr(risk, field.field_name, "") if risk and has_permission else "",
             )
             for field in EventMappingFields().fields
