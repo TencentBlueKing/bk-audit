@@ -78,6 +78,15 @@ export default {
       .then(({ data }) => data);
   },
   /**
+  * @desc 获取风险策略信息
+  */
+  fetchRiskInfo(params: {
+    id: string
+  }) {
+    return RiskManageSource.getRiskInfo(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 人工执行处理套餐
    * @params risk_id
    */
@@ -149,7 +158,7 @@ export default {
     risk_id: string,
     new_operators: string[],
     description: string
-   }) {
+  }) {
     return RiskManageSource.transRisk(params)
       .then(({ data }) => data);
   },

@@ -60,7 +60,12 @@
                         <div
                           v-if="!['example', 'prefix'].includes(valueKey)"
                           class="item">
-                          {{ value }}
+                          <div v-if="typeof value === 'boolean'">
+                            {{ value ? '是' : '否' }}
+                          </div>
+                          <div v-else>
+                            {{ value }}
+                          </div>
                         </div>
                       </template>
                     </div>

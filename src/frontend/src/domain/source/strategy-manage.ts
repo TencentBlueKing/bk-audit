@@ -238,93 +238,18 @@ class Strategy extends ModuleBase {
   // 获取aiops策略详情
   getStrategyEvent(params: { id: string }) {
     return Request.get<StrategyFieldEvent>(`${this.path}/strategy_fields/fields_config/`, { params });
-    // const data: Promise<{
-    //   data: StrategyFieldEvent
-    // }> = new Promise((resolve) => {
-    //   resolve({
-    //     data: {
-    //       event_evidence_field_configs: [
-    //         {
-    //           field_name: 'case_id',
-    //           display_name: '事件证据',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'case_id',
-    //           display_name: '事件证据',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'case_id',
-    //           display_name: '事件证据',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //       ],
-    //       event_data_field_configs: [
-    //         {
-    //           field_name: 'event_data',
-    //           display_name: '事件数据字段',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'event_data',
-    //           display_name: '事件数据字段',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'event_data',
-    //           display_name: '事件数据字段',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'event_data',
-    //           display_name: '事件数据字段',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //       ],
-    //       event_basic_field_configs: [
-    //         {
-    //           field_name: 'case_id',
-    //           display_name: '事件ID',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'case_id',
-    //           display_name: '事件ID',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'case_id',
-    //           display_name: '事件ID',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'case_id',
-    //           display_name: '事件ID',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //         {
-    //           field_name: 'case_id',
-    //           display_name: '事件ID',
-    //           is_priority: false,
-    //           description: '',
-    //         },
-    //       ],
-    //     },
-    //   });
-    // });
-    // return data;
+  }
+  // 获取风险单风险等级
+  getRiskLevel(params: {
+    strategy_ids: string,
+  }) {
+    return Request.get<{
+      [key: string]: {
+        risk_level: string
+      }
+    }>(`${this.path}/strategy/display_info/`, {
+      params,
+    });
   }
 }
 

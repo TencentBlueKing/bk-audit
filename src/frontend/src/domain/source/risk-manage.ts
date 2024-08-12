@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 import type RiskManageModel from '@model/risk/risk';
+import type StrategyInfo from '@model/risk/strategy-info';
 
 import Request, {
   type IRequestPayload,
@@ -75,6 +76,12 @@ class RiskManage extends ModuleBase {
     return Request.get<RiskManageModel>(`${this.module}/${params.id}/`, {
       params,
     });
+  }
+  // 获取风险策略信息
+  getRiskInfo(params: {
+    id: string,
+  }) {
+    return Request.get<StrategyInfo>(`${this.module}/${params.id}/strategy_info/`);
   }
   // 人工执行处理套餐
   autoProcess(params: {

@@ -19,13 +19,13 @@
     <div class="risk-manage-detail-wrap mb12">
       <div class="left">
         <base-info
-          :data="riskData"
+          :data="detailData"
           :risk-status-common="riskStatusCommon"
           :strategy-list="strategyList" />
         <!-- 关联事件 -->
         <div class="link-event-wrap">
           <link-event
-            :data="riskData"
+            :data="detailData"
             :strategy-list="strategyList"
             @change-height="handleChangeHeight" />
         </div>
@@ -58,6 +58,7 @@
 
 <script setup lang='ts'>
   import {
+    computed,
     onUnmounted,
     ref,
   } from 'vue';
@@ -71,6 +72,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import RiskManageModel from '@model/risk/risk';
+  import StrategyInfo from '@model/risk/strategy-info';
 
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
@@ -127,7 +129,19 @@
       }
     },
   });
-
+  // 获取策略信息
+  const {
+    data: strategyInfoData,
+  } = useRequest(RiskManageService.fetchRiskInfo, {
+    defaultValue: new StrategyInfo(),
+    defaultParams: {
+      id: route.params.riskId,
+    },
+    manual: true,
+    onSuccess() {
+      console.log(strategyInfoData);
+    },
+  });
 
   const handleUpdate = () => {
     fetchRiskList({
@@ -149,6 +163,12 @@
     const route = window.location.href;
     execCopy(route, t('复制成功'));
   };
+
+  // 合并数据
+  const detailData = computed(() => ({
+    ...riskData.value,
+    ...strategyInfoData.value,
+  }));
 
   useRouterBack(() => {
     router.push({

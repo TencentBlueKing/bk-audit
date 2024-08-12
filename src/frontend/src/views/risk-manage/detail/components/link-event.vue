@@ -40,7 +40,34 @@
           </scroll-faker>
         </div>
         <div class="list-item-detail">
-          <div class="title">
+          <div class="important-information">
+            <div class="title">
+              {{ t('重点信息') }}
+            </div>
+            <template v-if="importantInformation.length">
+              <render-info-block
+                v-for="(item, index) in importantInformation"
+                :key="index"
+                class="flex mt16"
+                style="margin-bottom: 12px;">
+                <render-info-item
+                  v-for="(subItem, subIndex) in item"
+                  :key="subIndex"
+                  :label="subItem.description"
+                  :label-width="labelWidth">
+                  {{ subItem.field_name }}
+                </render-info-item>
+              </render-info-block>
+            </template>
+            <bk-exception
+              v-else
+              class="exception-part"
+              scene="part"
+              type="empty">
+              {{ t('暂无数据') }}
+            </bk-exception>
+          </div>
+          <div class="title mt16">
             {{ t('基本信息') }}
           </div>
           <div
@@ -204,6 +231,7 @@
 
   import EventModel from '@model/event/event';
   import type RiskManageModel from '@model/risk/risk';
+  import type StrategyInfo from '@model/risk/strategy-info';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
@@ -216,7 +244,7 @@
       label: string,
       value: number
     }>,
-    data: RiskManageModel
+    data: RiskManageModel & StrategyInfo
   }
   interface Emits {
     (e: 'changeHeight', height: number): void
@@ -348,6 +376,20 @@
     immediate: true,
   });
 
+  // 重点信息
+  const importantInformation = computed(() => {
+    const arr = [
+      ...props.data.event_basic_field_configs.filter(item => item.is_priority),
+      ...props.data.event_data_field_configs.filter(item => item.is_priority),
+      ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
+    ];
+    const groups = [];
+    for (let i = 0; i < arr.length; i += 2) {
+      groups.push(arr.slice(i, i + 2));
+    }
+    return groups;
+  });
+
   onMounted(() => {
     const observer = new MutationObserver(() => {
       const detail = document.querySelector('.list-item-detail');
@@ -418,6 +460,25 @@
       width: calc(100% - 164px);
       padding-left: 16px;
 
+      .important-information {
+        padding: 12px 0;
+        background-color: #fafbfd;
+
+        .title {
+          padding-left: 16px;
+          border-left: 3px solid #3a84ff;
+        }
+
+        .render-info-item {
+          width: 50%;
+          align-items: flex-start;
+
+          .info-value {
+            word-break: break-all;
+          }
+        }
+      }
+
       .base-info {
         .render-info-item {
           width: 50%;
@@ -431,8 +492,7 @@
 
       .data-info {
         margin: 16px 0;
-        border-top: 1px solid #ecedf1;
-        border-left: 1px solid #ecedf1;
+        border: 1px solid #ecedf1;
 
         .data-info-item {
           width: 50%;
@@ -443,7 +503,6 @@
             align-items: center;
             padding: 6px 12px;
             border-right: 1px solid #ecedf1;
-            border-bottom: 1px solid #ecedf1;
           }
 
           .data-info-item-key {

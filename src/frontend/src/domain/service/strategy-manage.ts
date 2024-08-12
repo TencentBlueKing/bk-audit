@@ -247,4 +247,14 @@ export default {
     return StrategySource.getStrategyEvent(params)
       .then(({ data }) => new StrategyFieldEvent(data));
   },
+
+  /**
+* @desc 获取风险单风险等级
+*/
+  fetchRiskLevel(params: {
+    strategy_ids: string
+  }) {
+    return StrategySource.getRiskLevel(params)
+      .then(({ data }) => data);
+  },
 };

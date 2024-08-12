@@ -71,7 +71,7 @@ export default class Event {
     new_operators: string[],
     description: string, // 误报说明
 
-    custom_action :string, // CustomProcess
+    custom_action: string, // CustomProcess
     pa_id: string, // 套餐id
     pa_params: Record<string, any>// 套餐参数
 

@@ -81,7 +81,7 @@
                   <bk-button
                     v-for="item in riskLevelList"
                     :key="item.value"
-                    :disabled="isEditMode || isCloneMode"
+                    :disabled="(isEditMode || isCloneMode) && formData.risk_level"
                     :loading="commonLoading"
                     :selected="formData.risk_level === item.value"
                     @click="handleLevel(item.value)">
