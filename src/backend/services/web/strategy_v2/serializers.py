@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import json
 from typing import List
 
 from django.utils.translation import gettext, gettext_lazy
@@ -519,7 +520,17 @@ class EventInfoFieldSerializer(serializers.Serializer):
     field_name = serializers.CharField(label=gettext_lazy("Name"))
     display_name = serializers.CharField(label=gettext_lazy("Display Name"))
     description = serializers.CharField(label=gettext_lazy("Description"), allow_blank=True)
-    example = serializers.CharField(label=gettext_lazy("Example"), allow_blank=True)
+    example = serializers.CharField(label=gettext_lazy("Example"), allow_blank=True, allow_null=True)
+
+    def to_internal_value(self, data):
+        # example 可能是 list 或 bool，均转换为字符串进行展示
+        example = data["example"]
+        if isinstance(example, (bool, list, dict)):
+            try:
+                data["example"] = json.dumps(example)
+            except Exception:  # NOCC:broad-except(需要处理所有错误)
+                data["example"] = str(example)
+        return super().to_internal_value(data)
 
 
 class GetEventInfoFieldsResponseSerializer(serializers.Serializer):
