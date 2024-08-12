@@ -61,6 +61,7 @@ class StrategyViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.strategy_v2.get_strategy_common, endpoint="common"),
         ResourceRoute("GET", resource.strategy_v2.get_strategy_status, endpoint="status"),
         ResourceRoute("PUT", resource.strategy_v2.retry_strategy, pk_field="strategy_id", endpoint="retry"),
+        ResourceRoute("GET", resource.strategy_v2.get_strategy_display_info, endpoint="display_info"),
     ]
 
 
