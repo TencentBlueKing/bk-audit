@@ -21,7 +21,7 @@ export interface IFieldConfig {
   label: string,
   type: string,
   required: boolean,
-  validator?: (value: any)=> boolean,
+  validator?: (value: any) => boolean,
   message?: string,
   service?: (params?: Record<string, any>) => Promise<Array<any>>,
   labelName?: string,
@@ -89,5 +89,24 @@ export default {
     label: '风险描述',
     type: 'string',
     required: false,
+  },
+  risk_level: {
+    label: '风险等级',
+    type: 'select',
+    required: false,
+    service: () => new Promise(resolve => resolve([
+      {
+        id: 'HIGH',
+        name: '高',
+      },
+      {
+        id: 'MIDDLE',
+        name: '中',
+      },
+      {
+        id: 'LOW',
+        name: '低',
+      },
+    ])),
   },
 } as Record<string, IFieldConfig>;
