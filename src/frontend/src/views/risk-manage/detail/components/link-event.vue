@@ -53,9 +53,14 @@
                 <render-info-item
                   v-for="(subItem, subIndex) in item"
                   :key="subIndex"
-                  :label="subItem.description"
+                  :description="subItem.description"
+                  :label="subItem.display_name"
                   :label-width="labelWidth">
-                  {{ subItem.field_name }}
+                  {{
+                    eventItem[subItem.field_name as keyof typeof eventItem] ||
+                      eventItem.event_data[subItem.field_name] ||
+                      (eventItemEvidence && eventItemEvidence.map(item => item[subItem.field_name]).join(';'))
+                  }}
                 </render-info-item>
               </render-info-block>
             </template>

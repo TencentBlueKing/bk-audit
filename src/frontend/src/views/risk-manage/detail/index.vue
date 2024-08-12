@@ -138,9 +138,6 @@
       id: route.params.riskId,
     },
     manual: true,
-    onSuccess() {
-      console.log(strategyInfoData);
-    },
   });
 
   const handleUpdate = () => {
