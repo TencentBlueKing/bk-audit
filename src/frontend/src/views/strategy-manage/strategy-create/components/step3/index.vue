@@ -158,7 +158,6 @@
     </div>
     <template #action>
       <bk-button
-        class="w88"
         @click="handlePrevious">
         {{ t('上一步') }}
       </bk-button>
@@ -168,13 +167,18 @@
         @click="submit">
         {{ t('提交') }}
       </bk-button>
+      <bk-button
+        class="ml8"
+        @click="handleCancel">
+        {{ t('取消') }}
+      </bk-button>
     </template>
   </smart-action>
 </template>
 <script setup lang="ts">
   import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import IamManageService from '@service/iam-manage';
   import NoticeManageService from '@service/notice-group';
@@ -202,6 +206,7 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
+  const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
 
@@ -217,11 +222,11 @@
   });
 
   const rules = {
-    processor_group: [
+    processor_groups: [
       {
         validator: (value: Array<any>) => !!value.length,
         message: t('风险单处理人不能为空'),
-        trigger: 'blur',
+        trigger: 'change',
       },
     ],
   };
@@ -255,6 +260,12 @@
 
   const handlePrevious = () => {
     emits('previousStep', 2);
+  };
+
+  const handleCancel = () => {
+    router.push({
+      name: 'strategyList',
+    });
   };
 
   const submit = () => {

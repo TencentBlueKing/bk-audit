@@ -81,7 +81,7 @@
                   <bk-button
                     v-for="item in riskLevelList"
                     :key="item.value"
-                    :disabled="(isEditMode || isCloneMode) && Boolean(formData.risk_level)"
+                    :disabled="canEditRiskLevel"
                     :loading="commonLoading"
                     :selected="formData.risk_level === item.value"
                     @click="handleLevel(item.value)">
@@ -194,7 +194,6 @@
       </div>
       <template #action>
         <bk-button
-          class="w88"
           :disabled="tagLoading"
           theme="primary"
           @click="handleNext">
@@ -303,6 +302,7 @@
     name: string
   }>>([]);
   const controlTypeId = ref('');// 方案类型id
+  const canEditRiskLevel = ref(false);
   const formData = ref<IFormData>({
     strategy_name: '',
     tags: [],
@@ -353,11 +353,6 @@
           return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
         },
         message: t('标签不能为纯数字'),
-        trigger: 'change',
-      },
-      {
-        validator: (value: Array<any>) => value.length > 0,
-        message: t('标签不能为空'),
         trigger: 'change',
       },
     ],
@@ -561,6 +556,9 @@
     formData.value.risk_hazard = editData.risk_hazard;
     formData.value.risk_guidance = editData.risk_guidance;
     formData.value.risk_level = editData.risk_level;
+
+    // 是否允许编辑风险等级
+    canEditRiskLevel.value = !!editData.risk_level;
 
     const controlItem = controlMap.value[editData.control_id];
     if (controlItem) {
@@ -792,7 +790,7 @@
           padding: 0 35px;
           font-size: 12px;
 
-          &:first-child:hover {
+          &:first-child:hover:not(.is-disabled) {
             color: #ea3636;
             border-color: #ea3636;
           }
@@ -803,7 +801,7 @@
             border-color: #ea3636;
           }
 
-          &:nth-child(2):hover {
+          &:nth-child(2):hover:not(.is-disabled) {
             color: #ff9c01;
             border-color: #ff9c01;
           }
@@ -814,7 +812,7 @@
             border-color: #ff9c01;
           }
 
-          &:hover {
+          &:hover:not(.is-disabled) {
             color: #979ba5;
             border-color: #979ba5;
           }

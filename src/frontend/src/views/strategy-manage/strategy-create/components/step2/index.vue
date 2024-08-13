@@ -94,7 +94,6 @@
     </div>
     <template #action>
       <bk-button
-        class="w88"
         @click="handlePrevious">
         {{ t('上一步') }}
       </bk-button>
@@ -103,6 +102,11 @@
         theme="primary"
         @click="handleNext">
         {{ t('下一步') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
+        @click="handleCancel">
+        {{ t('取消') }}
       </bk-button>
       <bk-button
         style="margin-left: 48px;"
@@ -115,7 +119,7 @@
 <script setup lang="ts">
   import { computed, nextTick, onActivated, onDeactivated, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import StrategyModel from '@model/strategy/strategy';
   import type { EventItem } from '@model/strategy/strategy-field-event';
@@ -144,6 +148,7 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
+  const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
 
@@ -183,6 +188,12 @@
 
   const handlePrevious = () => {
     emits('previousStep', 1);
+  };
+
+  const handleCancel = () => {
+    router.push({
+      name: 'strategyList',
+    });
   };
 
   const handleNext = () => {
@@ -226,7 +237,7 @@
 
   // 编辑
   watch(() => props.data, (data) => {
-    formData.value.risk_title = data.risk_title;
+    formData.value.risk_title = data.risk_title || '';
   }, {
     immediate: isEditMode || isCloneMode,
   });

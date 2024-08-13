@@ -19,7 +19,14 @@
     <div
       class="info-label"
       :style="labelStyle">
-      {{ label }}:
+      <span
+        v-bk-tooltips="{
+          disabled: !description,
+          content: description
+        }"
+        :class="[description ? 'tips' : '']">
+        {{ label }}:
+      </span>
     </div>
     <div class="info-value">
       <slot />
@@ -34,6 +41,7 @@
   interface Props{
     label: string,
     labelWidth?: number,
+    description?: string,
   }
 
   const props = defineProps<Props>();

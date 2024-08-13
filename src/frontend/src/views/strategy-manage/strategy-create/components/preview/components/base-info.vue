@@ -292,8 +292,7 @@
       name: string,
     }>,
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const props = defineProps<Props>();
+  defineProps<Props>();
   const statusToMap: Record<string, {
     tag: 'info' | 'warning' | 'success' | 'danger' | undefined,
     icon: string,

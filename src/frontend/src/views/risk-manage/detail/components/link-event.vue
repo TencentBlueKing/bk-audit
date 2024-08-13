@@ -130,7 +130,7 @@
             <div
               v-for="(keyArr, keyIndex) in eventItemDataKeyArr"
               :key="keyIndex"
-              class="flex">
+              class="flex data-info-row">
               <div
                 v-for="(key, index) in keyArr"
                 :key="index"
@@ -499,6 +499,19 @@
         margin: 16px 0;
         border: 1px solid #ecedf1;
 
+        .data-info-row:last-child {
+          .data-info-item-key,
+          .data-info-item-value {
+            border-bottom: 0;
+          }
+        }
+
+        .data-info-item:last-child {
+          .data-info-item-value {
+            border-right: 0;
+          }
+        }
+
         .data-info-item {
           width: 50%;
 
@@ -508,6 +521,7 @@
             align-items: center;
             padding: 6px 12px;
             border-right: 1px solid #ecedf1;
+            border-bottom: 1px solid #ecedf1;
           }
 
           .data-info-item-key {

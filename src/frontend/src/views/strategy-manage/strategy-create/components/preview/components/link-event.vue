@@ -47,7 +47,8 @@
               <render-info-item
                 v-for="(subItem, subIndex) in item"
                 :key="subIndex"
-                :label="subItem.description"
+                :description="subItem.description"
+                :label="subItem.display_name"
                 :label-width="labelWidth">
                 {{ t('以实际内容为准') }}
               </render-info-item>
@@ -111,49 +112,98 @@
         </div>
         <div
           class="data-info">
-          <div
-            v-for="(item) in 4"
-            :key="item"
-            class="flex">
+          <template v-if="eventData.length">
             <div
-              v-for="(subItem) in 2"
-              :key="subItem"
-              class="flex data-info-item">
-              <div class="data-info-item-key">
-                <span>{{ t('以实际内容为准') }}</span>
-              </div>
-              <div class="data-info-item-value">
-                <span>{{ t('以实际内容为准') }}</span>
+              v-for="(item, index) in eventData"
+              :key="index"
+              class="flex data-info-row">
+              <div
+                v-for="(subItem, subIndex) in item"
+                :key="subIndex"
+                class="flex data-info-item">
+                <div class="data-info-item-key">
+                  <span>{{ subItem.display_name }}</span>
+                </div>
+                <div class="data-info-item-value">
+                  <span>{{ t('以实际内容为准') }}</span>
+                </div>
               </div>
             </div>
-          </div>
+          </template>
+          <template v-else>
+            <div
+              v-for="(item) in 4"
+              :key="item"
+              class="flex data-info-row">
+              <div
+                v-for="(subItem) in 2"
+                :key="subItem"
+                class="flex data-info-item">
+                <div class="data-info-item-key">
+                  <span>{{ t('以实际内容为准') }}</span>
+                </div>
+                <div class="data-info-item-value">
+                  <span>{{ t('以实际内容为准') }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
         <div class="title mb16">
           {{ t('事件证据') }}
         </div>
-        <div
-          v-for="(item) in 4"
-          :key="item"
-          class="evidence-info">
-          <div class="evidence-info-key">
-            <div>
-              <div class="evidence-info-item-text">
-                {{ t('以实际内容为准') }}
-              </div>
-            </div>
-          </div>
+        <template v-if="evidenceData.length">
           <div
-            v-for="(subItem) in 3"
-            :key="subItem"
-            class="evidence-info-value-wrap">
-            <div
-              class="evidence-info-value">
+            v-for="(item, index) in evidenceData"
+            :key="index"
+            class="evidence-info"
+            :style="{borderTop: index == 0 ? '1px solid #ecedf1' : '0px'} ">
+            <div class="evidence-info-key">
               <div>
-                <span> {{ t('以实际内容为准') }} </span>
+                <div class="evidence-info-item-text">
+                  {{ item.field_name }}
+                </div>
+              </div>
+            </div>
+            <div
+              v-for="(subItem) in 3"
+              :key="subItem"
+              class="evidence-info-value-wrap">
+              <div
+                class="evidence-info-value">
+                <div>
+                  <span> {{ t('以实际内容为准') }} </span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </template>
+        <template v-else>
+          <div
+            v-for="(item, index) in 4"
+            :key="index"
+            class="evidence-info"
+            :style="{borderTop: index == 0 ? '1px solid #ecedf1' : '0px'} ">
+            <div class="evidence-info-key">
+              <div>
+                <div class="evidence-info-item-text">
+                  {{ t('以实际内容为准') }}{{ index }}
+                </div>
+              </div>
+            </div>
+            <div
+              v-for="(subItem) in 3"
+              :key="subItem"
+              class="evidence-info-value-wrap">
+              <div
+                class="evidence-info-value">
+                <div>
+                  <span> {{ t('以实际内容为准') }} </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -198,10 +248,17 @@
     data: IFormData
   }
   const props = defineProps<Props>();
-  console.log(props.data);
   const { t, locale } = useI18n();
   const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
   const active = ref<number>(0);
+
+  const getData = (arr: Array<EventItem>) => {
+    const groups = [];
+    for (let i = 0; i < arr.length; i += 2) {
+      groups.push(arr.slice(i, i + 2));
+    }
+    return groups;
+  };
 
   // 重点信息
   const importantInformation = computed(() => {
@@ -210,14 +267,14 @@
       ...props.data.event_data_field_configs.filter(item => item.is_priority),
       ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
     ];
-    const groups = [];
-    for (let i = 0; i < arr.length; i += 2) {
-      groups.push(arr.slice(i, i + 2));
-    }
-    return groups;
+    return getData(arr);
   });
 
-  console.log(importantInformation.value);
+  // 事件数据
+  const eventData = computed(() => getData(props.data.event_data_field_configs));
+
+  // 事件证据
+  const evidenceData = computed(() => props.data.event_evidence_field_configs);
 </script>
 <style  lang="postcss">
 .risk-manage-detail-linkevent-part {
@@ -298,8 +355,20 @@
 
       .data-info {
         margin: 16px 0;
-        border-top: 1px solid #ecedf1;
-        border-left: 1px solid #ecedf1;
+        border: 1px solid #ecedf1;
+
+        .data-info-row:last-child {
+          .data-info-item-key,
+          .data-info-item-value {
+            border-bottom: 0;
+          }
+        }
+
+        .data-info-item:last-child {
+          .data-info-item-value {
+            border-right: 0;
+          }
+        }
 
         .data-info-item {
           width: 50%;
@@ -335,7 +404,6 @@
       .evidence-info {
         display: flex;
         max-width: 1000px;
-        border-top: 1px solid #ecedf1;
         border-left: 1px solid #ecedf1;
 
         .evidence-info-value-wrap {

@@ -46,7 +46,7 @@
               :key="index">
               <div class="body">
                 <div class="group">
-                  <span> {{ groupMap[key] }}</span>
+                  <span> {{ groupMap[key] }} </span>
                 </div>
                 <div class="value-row">
                   <template v-if="item && item.length">
@@ -63,7 +63,12 @@
                           <div v-if="typeof value === 'boolean'">
                             {{ value ? '是' : '否' }}
                           </div>
-                          <div v-else>
+                          <div
+                            v-else
+                            v-bk-tooltips="{
+                              disabled: value && value.length < 15,
+                              content: value
+                            }">
                             {{ value }}
                           </div>
                         </div>
@@ -93,6 +98,7 @@
   import { useI18n } from 'vue-i18n';
 
   import type StrategyModel from '@model/strategy/strategy';
+  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
   import collapsePanel from './collapse-panel.vue';
   import RenderInfoBlock from './render-info-block.vue';
@@ -113,18 +119,20 @@
     event_evidence_field_configs: t('事件证据'),
   };
 
-  const tableData = computed(() => ({
-    event_basic_field_configs: props.data.event_basic_field_configs,
-    event_data_field_configs: props.data.event_data_field_configs,
-    event_evidence_field_configs: props.data.event_evidence_field_configs,
-  }));
+  const tableData = computed(() => {
+    const data = {
+      event_basic_field_configs: props.data.event_basic_field_configs,
+      event_data_field_configs: props.data.event_data_field_configs,
+      event_evidence_field_configs: props.data.event_evidence_field_configs,
+    };
+    return new StrategyFieldEvent(data);
+  });
 </script>
 <style lang="postcss">
 .risk-display {
   .event-table {
     @mixin item-styles {
       padding-left: 12px;
-      border-right: 1px solid #dcdee5;
       border-bottom: 1px solid #dcdee5;
     }
 
@@ -146,15 +154,13 @@
 
         &:first-child {
           width: 72px;
+          border-right: 1px solid #dcdee5;
         }
 
         &:nth-child(2),
-        &:nth-child(3) {
-          width: 240px;
-        }
-
+        &:nth-child(3),
         &:nth-child(4) {
-          width: 120px;
+          width: 160px;
         }
 
         &:last-child {
@@ -173,6 +179,7 @@
         display: flex;
         width: 72px;
         padding: 0;
+        border-right: 1px solid #dcdee5;
         align-items: center;
         justify-content: center;
       }
@@ -189,16 +196,20 @@
             @include  item-styles;
 
             &:nth-child(1),
-            &:nth-child(2) {
-              width: 240px;
-            }
-
+            &:nth-child(2),
             &:nth-child(3) {
-              width: 120px;
+              width: 160px;
             }
 
             &:last-child {
               flex: 1;
+
+              div {
+                width: 270px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              }
             }
           }
         }

@@ -20,9 +20,9 @@
       <render-info-item
         class="group-render-item"
         :label="t('风险单处理人')">
-        <span v-if="data.notice_groups.length">
+        <span v-if="data.processor_groups.length">
           <router-link
-            v-for="item in data.notice_groups"
+            v-for="item in data.processor_groups"
             :key="item"
             class="notice-box"
             :to="{
@@ -43,9 +43,9 @@
       <render-info-item
         class="group-render-item"
         :label="t('关注人')">
-        <span v-if="data.processor_groups.length">
+        <span v-if="data.notice_groups.length">
           <router-link
-            v-for="item in data.processor_groups"
+            v-for="item in data.notice_groups"
             :key="item"
             class="notice-box"
             :to="{

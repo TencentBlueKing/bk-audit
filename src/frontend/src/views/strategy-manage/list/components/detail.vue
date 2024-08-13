@@ -51,8 +51,7 @@
     userGroupList: Array<{id: number, name: string}>
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const props = defineProps<Props>();
+  defineProps<Props>();
   const renderCom = computed(() => comMap[active.value]);
   const comMap: Record<string, any> = {
     riskDetection: RiskDetection,

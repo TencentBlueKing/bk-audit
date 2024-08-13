@@ -66,9 +66,7 @@
     riskData: IFormData
   }
 
-  const props = defineProps<Props>();
-
-  console.log(props.riskData);
+  defineProps<Props>();
 
   const {
     data: riskStatusCommon,
