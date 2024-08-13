@@ -17,7 +17,7 @@
 <template>
   <div class="detail-base-info">
     <div class="title">
-      {{ data.risk_title }}
+      {{ data.title }}
     </div>
     <template v-if="isShowMore">
       <render-info-block
@@ -390,6 +390,14 @@
   border-top: 6px solid #ffb848;
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 #1919290d;
+
+  .title {
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
+  }
 
   .render-info-item {
     width: 50%;

@@ -366,6 +366,7 @@
 <style lang="postcss" scoped>
 .detail-base-info {
   .title {
+    margin-bottom: 10px;
     font-size: 14px;
     font-weight: 700;
     line-height: 22px;

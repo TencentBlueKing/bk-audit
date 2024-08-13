@@ -82,6 +82,7 @@ export default class Event {
   risk_label: string;
   permission: Record<string, boolean>;
   experiences: number;// 风险总结
+  title: string;
 
   constructor(payload = {} as Event) {
     this.risk_id = payload.risk_id;
@@ -108,5 +109,6 @@ export default class Event {
     this.risk_label = payload.risk_label;
     this.permission = payload.permission;
     this.experiences = payload.experiences;
+    this.title = payload.title;
   }
 }
