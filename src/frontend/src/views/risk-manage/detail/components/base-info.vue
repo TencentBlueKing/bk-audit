@@ -19,7 +19,7 @@
     <div class="title">
       {{ data.title }}
     </div>
-    <template v-if="isShowMore">
+    <div v-show="isShowMore">
       <render-info-block
         class="flex mt16"
         style="margin-bottom: 12px;">
@@ -169,9 +169,9 @@
           <edit-tag :data="data.notice_users || ''" />
         </render-info-item>
       </render-info-block>
-    </template>
+    </div>
     <!-- 折叠 -->
-    <template v-else>
+    <div v-show="!isShowMore">
       <render-info-block
         class="flex mt16"
         style="margin-bottom: 12px;">
@@ -246,7 +246,7 @@
           {{ data.risk_guidance || '--' }}
         </render-info-item>
       </render-info-block>
-    </template>
+    </div>
     <div class="show-more-condition-btn">
       <bk-button
         class="show-more-btn"
