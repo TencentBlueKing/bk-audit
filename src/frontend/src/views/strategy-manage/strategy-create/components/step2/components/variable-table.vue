@@ -39,11 +39,15 @@
 
   import useRequest from '@/hooks/use-request';
 
+  interface Emits {
+    (e: 'isCopy'): void;
+  }
   interface Props {
     strategyId: number
   }
 
   const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
 
@@ -88,6 +92,7 @@
 
   const handleVariableCopy = (e: Event, prefix: string, value: string) => {
     e.stopPropagation();
+    emits('isCopy');
     execCopy(`{{${prefix}${value}}}`, t(`变量${value}复制成功`));
   };
 </script>

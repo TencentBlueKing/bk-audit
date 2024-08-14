@@ -76,7 +76,9 @@
                   </div>
                 </div>
                 <template #content>
-                  <variable-table :strategy-id="data.strategy_id" />
+                  <variable-table
+                    :strategy-id="data.strategy_id"
+                    @is-copy="handleCopy" />
                 </template>
               </bk-popover>
             </bk-form-item>
@@ -160,6 +162,7 @@
   const isCloneMode = route.name === 'strategyClone';
 
   const isShow = ref(false);
+  const isCopy = ref(false);
   const riskTitleValue = ref('');
   const variableInputActive = ref(false);
   const formData = ref<IFormData>({
@@ -204,35 +207,47 @@
   };
 
   const handleClick = (type: string | Event) => {
-    // 点击输入框，切换展示pop
-    if (typeof type === 'string') {
+    console.log(isCopy.value);
+    // 点击输入框，如果是复制了参数，不关闭
+    if (typeof type === 'string' && !isCopy.value) {
       isShow.value = !isShow.value;
+      // focus
+      nextTick(() => {
+        inputRef.value?.focus();
+      });
+      // active
+      variableInputActive.value = !variableInputActive.value;
     }
     // 点击页面其他地方,且是打开状态，关闭pop
     if (typeof type !== 'string' && isShow.value) {
       isShow.value = false;
+      isCopy.value = false;
+      variableInputActive.value = false;
+
+      // 如果有值
+      if (riskTitleValue.value) {
+        // 赋值
+        formData.value.risk_title += riskTitleValue.value;
+        // 清空本次输入内容
+        riskTitleValue.value = '';
+      }
     }
-    // active
-    variableInputActive.value = !variableInputActive.value;
-    // focus
-    nextTick(() => {
-      inputRef.value?.focus();
-    });
-    // 赋值
-    if (riskTitleValue.value) {
-      formData.value.risk_title += riskTitleValue.value;
-    }
-    // 清空本次输入内容
-    riskTitleValue.value = '';
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // 如果pop还是打开状态，input有值，删除input里面的值
+    if (isShow.value && riskTitleValue.value) return;
     if (e.code === 'Backspace' && displayRiskTitle.value?.length) {
       // 顺序删除
       const displayRiskTitleArray = displayRiskTitle.value;
       displayRiskTitleArray.splice(displayRiskTitleArray.length - 1, 1);
       formData.value.risk_title = displayRiskTitleArray.join('');
     }
+  };
+
+  // 点击复制后，再点击input不关闭pop
+  const handleCopy = () => {
+    isCopy.value = true;
   };
 
   // 编辑
@@ -247,6 +262,9 @@
   });
 
   onDeactivated(() => {
+    isShow.value = false;
+    isCopy.value = false;
+    variableInputActive.value = false;
     window.removeEventListener('click', handleClick);
   });
 
@@ -254,7 +272,7 @@
     window.removeEventListener('click', handleClick);
   });
 
-  const displayRiskTitle = computed(() => formData.value.risk_title.match(/\{\{[^}]+\}\}|./g));
+  const displayRiskTitle = computed(() => formData.value.risk_title.match(/\{\{[^{}]*}}|./g));
 
   const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
 </script>
