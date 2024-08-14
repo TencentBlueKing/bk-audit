@@ -400,7 +400,7 @@
   }
 
   .render-info-item {
-    width: 50%;
+    min-width: 50%;
     align-items: flex-start;
   }
 

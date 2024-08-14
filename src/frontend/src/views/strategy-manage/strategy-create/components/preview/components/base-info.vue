@@ -380,7 +380,7 @@
   box-shadow: 0 2px 4px 0 #1919290d;
 
   .render-info-item {
-    width: 50%;
+    min-width: 50%;
     align-items: flex-start;
   }
 
