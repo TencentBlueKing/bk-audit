@@ -147,6 +147,7 @@
       {
         label: () => t('操作'),
         width: locale.value === 'en-US' ? 230 : 150,
+        fixed: 'right',
         render: ({ data }: {data: SystemResourceTypeModel}) => <TaskSwitch
           data={data}
           bkbaseUrl={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
