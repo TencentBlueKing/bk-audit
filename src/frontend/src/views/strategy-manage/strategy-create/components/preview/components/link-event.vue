@@ -28,8 +28,9 @@
             class="list-item"
             :class="[
               { active: active === index },
-            ]">
-            2024-04-12 02:00:00
+            ]"
+            @click="() => active = index">
+            {{ `2024-04-1${index} 02:00:00` }}
           </div>
         </div>
       </div>
