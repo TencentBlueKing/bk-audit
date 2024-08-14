@@ -49,7 +49,10 @@
                   <template v-else-if="valueKey === 'description'">
                     <bk-input
                       v-model="config.description"
-                      behavior="simplicity" />
+                      autosize
+                      behavior="simplicity"
+                      :maxlength="100"
+                      type="textarea" />
                   </template>
                   <template v-else>
                     {{ value }}
@@ -60,10 +63,11 @@
           </template>
           <div
             v-else
-            class="value-item">
+            class="value-item"
+            style="height: 100%;">
             <div
               class="item"
-              style="color: #979ba5; text-align: center;">
+              style="color: #979ba5; text-align: center">
               暂未获取到相关字段，请先进入下一步
             </div>
           </div>
@@ -149,9 +153,11 @@
 <style lang="postcss" scoped>
 .event-table {
   @mixin item-styles {
-    padding-left: 12px;
+    display: flex;
+    padding: 12px;
     border-right: 1px solid #dcdee5;
     border-bottom: 1px solid #dcdee5;
+    align-items: center;
   }
 
   display: flex;
@@ -169,6 +175,9 @@
 
     .item {
       @include  item-styles;
+
+      padding-right: 0;
+      background-color: #f5f7fa;
 
       &:first-child {
         width: 72px;
@@ -209,8 +218,6 @@
 
       .value-item {
         display: flex;
-        height: 42px;
-        line-height: 42px;
 
         .item {
           @include  item-styles;
@@ -228,6 +235,10 @@
 
           &:last-child {
             flex: 1;
+          }
+
+          :deep(.bk-textarea) {
+            border: none;
           }
         }
       }
