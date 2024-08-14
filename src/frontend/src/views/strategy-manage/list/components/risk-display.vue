@@ -140,6 +140,7 @@
     margin-bottom: 10px;
     color: #63656e;
     border-top: 1px solid #dcdee5;
+    border-right: 1px solid #dcdee5;
     border-left: 1px solid #dcdee5;
     flex-direction: column;
 
@@ -158,9 +159,12 @@
         }
 
         &:nth-child(2),
-        &:nth-child(3),
+        &:nth-child(3) {
+          width: 180px;
+        }
+
         &:nth-child(4) {
-          width: 160px;
+          width: 100px;
         }
 
         &:last-child {
@@ -196,9 +200,12 @@
             @include  item-styles;
 
             &:nth-child(1),
-            &:nth-child(2),
+            &:nth-child(2) {
+              width: 180px;
+            }
+
             &:nth-child(3) {
-              width: 160px;
+              width: 100px;
             }
 
             &:last-child {
