@@ -89,7 +89,7 @@
                   </bk-button>
                 </bk-button-group>
               </bk-form-item>
-              <div class="flex-center">
+              <div class="flex">
                 <bk-form-item
                   class="mr16"
                   :label="t('风险危害')"
@@ -790,34 +790,34 @@
           padding: 0 35px;
           font-size: 12px;
 
-          &:first-child:hover:not(.is-disabled) {
+          &:first-child:hover:not(.is-disabled, .is-selected) {
             color: #ea3636;
             border-color: #ea3636;
           }
 
-          &:first-child.is-selected:not(.is-disabled) {
+          &:first-child.is-selected {
             color: #fff;
             background-color: #ea3636;
             border-color: #ea3636;
           }
 
-          &:nth-child(2):hover:not(.is-disabled) {
+          &:nth-child(2):hover:not(.is-disabled, .is-selected) {
             color: #ff9c01;
             border-color: #ff9c01;
           }
 
-          &:nth-child(2).is-selected:not(.is-disabled) {
+          &:nth-child(2).is-selected {
             color: #fff;
             background-color: #ff9c01;
             border-color: #ff9c01;
           }
 
-          &:hover:not(.is-disabled) {
+          &:hover:not(.is-disabled, .is-selected) {
             color: #979ba5;
             border-color: #979ba5;
           }
 
-          &.is-selected:not(.is-disabled) {
+          &.is-selected {
             color: #fff;
             background-color: #979ba5;
             border-color: #979ba5;
