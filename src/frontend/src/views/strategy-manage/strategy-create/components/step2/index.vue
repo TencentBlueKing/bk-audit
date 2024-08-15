@@ -207,7 +207,6 @@
   };
 
   const handleClick = (type: string | Event) => {
-    console.log(isCopy.value);
     // 点击输入框，如果是复制了参数，不关闭
     if (typeof type === 'string' && !isCopy.value) {
       isShow.value = !isShow.value;
@@ -274,7 +273,7 @@
 
   const displayRiskTitle = computed(() => formData.value.risk_title.match(/\{\{[^{}]*}}|./g));
 
-  const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
 </script>
 <style lang="postcss" scoped>
 .create-strategy-page {

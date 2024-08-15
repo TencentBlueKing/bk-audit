@@ -284,9 +284,13 @@
     immediate: isEditMode || isCloneMode,
   });
 
-  const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
 </script>
 <style lang="postcss" scoped>
+.create-strategy-main {
+  margin-bottom: 32px;
+}
+
 .refresh {
   padding: 0 12px;
   color: #979ba5;

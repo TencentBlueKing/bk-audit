@@ -67,7 +67,7 @@
             style="height: 100%;">
             <div
               class="item"
-              style="color: #979ba5; text-align: center">
+              style="color: #979ba5; justify-content: center;">
               暂未获取到相关字段，请先进入下一步
             </div>
           </div>

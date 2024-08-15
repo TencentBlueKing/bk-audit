@@ -264,7 +264,7 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
-  const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
 
   const router = useRouter();
   const route = useRoute();

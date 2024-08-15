@@ -410,13 +410,13 @@
         .evidence-info-value-wrap {
           display: flex;
           flex-wrap: nowrap;
+          width: 100%;
         }
 
         .evidence-info-key,
         .evidence-info-value {
           display: inline-block;
           width: 168px;
-          flex: 1;
 
           & > div {
             height: 32px;
@@ -436,8 +436,12 @@
           }
         }
 
+        .evidence-info-value {
+          flex: 1;
+        }
+
         .evidence-info-key {
-          width: 160px;
+          min-width: 160px;
           text-align: right;
           background-color: #fafbfd;
         }

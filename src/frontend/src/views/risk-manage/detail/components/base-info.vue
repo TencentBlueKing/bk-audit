@@ -19,7 +19,7 @@
     <div class="title">
       {{ data.title }}
     </div>
-    <div v-show="isShowMore">
+    <template v-if="isShowMore">
       <render-info-block
         class="flex mt16"
         style="margin-bottom: 12px;">
@@ -149,7 +149,7 @@
           <span v-else>--</span>
         </render-info-item>
       </render-info-block>
-      <render-info-block style="display: flex;">
+      <render-info-block style="display: flex; margin-bottom: 12px">
         <render-info-item
           :label="t('责任人')"
           :label-width="labelWidth">
@@ -169,9 +169,9 @@
           <edit-tag :data="data.notice_users || ''" />
         </render-info-item>
       </render-info-block>
-    </div>
+    </template>
     <!-- 折叠 -->
-    <div v-show="!isShowMore">
+    <template v-else>
       <render-info-block
         class="flex mt16"
         style="margin-bottom: 12px;">
@@ -246,7 +246,7 @@
           {{ data.risk_guidance || '--' }}
         </render-info-item>
       </render-info-block>
-    </div>
+    </template>
     <div class="show-more-condition-btn">
       <bk-button
         class="show-more-btn"
