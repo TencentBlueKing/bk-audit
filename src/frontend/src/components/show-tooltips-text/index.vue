@@ -22,6 +22,7 @@
   </div>
 </template>
 <script setup lang="ts">
+  import DOMPurify from 'dompurify';
   import tippy, {
     type Instance,
     type SingleTarget,
@@ -43,11 +44,13 @@
 
   let tippyIns: Instance;
 
+  const getSafeContent = (content: string) => DOMPurify.sanitize(content);
+
   watch(() => props.data, (data) => {
     nextTick(() => {
       if (hanldeIsShowTippy()) {
         tippyIns = tippy(rootRef.value as SingleTarget, {
-          content: `<div style="max-width: 300px; word-break: break-all;">${data}</div>`,
+          content: getSafeContent(`<div style="max-width: 300px; word-break: break-all;">${data}</div>`),
           placement: 'top',
           allowHTML: true,
           appendTo: () => document.body,
