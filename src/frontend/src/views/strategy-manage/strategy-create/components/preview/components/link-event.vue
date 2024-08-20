@@ -326,6 +326,7 @@
 
       .important-information {
         padding: 12px 0;
+        margin-bottom: 24px;
         background-color: #fafbfd;
 
         .title {
@@ -344,6 +345,8 @@
       }
 
       .base-info {
+        margin-bottom: 24px;
+
         .render-info-item {
           width: 50%;
           align-items: flex-start;
@@ -355,7 +358,7 @@
       }
 
       .data-info {
-        margin: 16px 0;
+        margin: 16px 0 24px;
         border: 1px solid #ecedf1;
 
         .data-info-row:last-child {
@@ -448,9 +451,5 @@
       }
     }
   }
-}
-
-.evidence-info-value-tooltips {
-  max-width: 80%
 }
 </style>
