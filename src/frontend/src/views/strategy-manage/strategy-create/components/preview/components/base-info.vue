@@ -92,7 +92,7 @@
         <render-info-item
           :label="t('风险危害')"
           :label-width="labelWidth">
-          {{ data.risk_hazard }}
+          {{ data.risk_hazard || '--' }}
         </render-info-item>
       </render-info-block>
       <render-info-block
@@ -101,7 +101,7 @@
         <render-info-item
           :label="t('处理指引')"
           :label-width="labelWidth">
-          {{ data.risk_guidance }}
+          {{ data.risk_guidance || '--' }}
         </render-info-item>
       </render-info-block>
       <render-info-block
@@ -218,7 +218,7 @@
         <render-info-item
           :label="t('风险危害')"
           :label-width="labelWidth">
-          {{ data.risk_hazard }}
+          {{ data.risk_hazard || '--' }}
         </render-info-item>
       </render-info-block>
       <render-info-block
@@ -227,7 +227,7 @@
         <render-info-item
           :label="t('处理指引')"
           :label-width="labelWidth">
-          {{ data.risk_guidance }}
+          {{ data.risk_guidance || '--' }}
         </render-info-item>
       </render-info-block>
     </template>

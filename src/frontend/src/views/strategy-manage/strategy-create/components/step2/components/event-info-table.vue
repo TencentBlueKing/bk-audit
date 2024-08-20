@@ -230,7 +230,6 @@
 
           &:nth-child(3) {
             width: 120px;
-            background-color: #f5f7fa;
           }
 
           &:last-child {
