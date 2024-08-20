@@ -119,7 +119,7 @@
       subtree: true,
       childList: true,
       characterData: true,
-      attributes: true,
+      // attributes: true,
     });
     calcOffsetLeft();
     smartPosition();
