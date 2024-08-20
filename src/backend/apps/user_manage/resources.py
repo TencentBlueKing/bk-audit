@@ -24,7 +24,7 @@ from django.utils.translation import gettext_lazy
 
 class RetrieveLeader(CacheResource):
     name = gettext_lazy("获取单个用户的leader信息")
-    cache_type = CacheTypeItem(key="retrieve_leader", timeout=60 * 60, user_related=False)
+    cache_type = CacheTypeItem(key="RetrieveLeader", timeout=60 * 60, user_related=False)
 
     def perform_request(self, validated_request_data):
         try:

@@ -35,6 +35,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
+from apps.notice.parser import MemberVariableParser
 from core.render import Jinja2Renderer
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
@@ -220,7 +221,7 @@ class RiskHandler:
         self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
 
         # 更新风险的通知人员名单
-        risk.notice_users = NoticeGroup.parse_members(notice_groups)
+        risk.notice_users = NoticeGroup.parse_groups(notice_groups, parser=MemberVariableParser(operator=risk.operator))
         risk.save(update_fields=["notice_users"])
 
     @classmethod
@@ -236,5 +237,5 @@ class RiskHandler:
                 relate_id=risk.pk,
                 agg_key=f"notice_group:{notice_group.group_id}::strategy:{risk.strategy_id}::is_todo:{is_todo}",
                 msg_type=[c.get("msg_type") for c in notice_group.notice_config if "msg_type" in c],
-                receivers=notice_group.group_member,
+                receivers=notice_group.parse_members(),
             )

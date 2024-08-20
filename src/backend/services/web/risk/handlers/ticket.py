@@ -33,6 +33,7 @@ from apps.itsm.constants import TicketStatus
 from apps.meta.models import GlobalMetaConfig, Tag
 from apps.meta.utils.saas import get_saas_url
 from apps.notice.models import NoticeGroup
+from apps.notice.parser import MemberVariableParser
 from apps.permission.handlers.actions import ActionEnum
 from apps.sops.constants import SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
@@ -104,7 +105,8 @@ class RiskFlowBaseHandler:
         processor_groups: List[NoticeGroup] = list(
             NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or [])
         )
-        return NoticeGroup.parse_members(groups=processor_groups) or self.load_security_person()
+        parser = MemberVariableParser(operator=self.risk.operator)
+        return NoticeGroup.parse_groups(groups=processor_groups, parser=parser) or self.load_security_person()
 
     def load_last_operator(self) -> List[str]:
         """
