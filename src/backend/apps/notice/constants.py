@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import Optional
 
 from django.utils.translation import gettext_lazy
 
@@ -59,3 +60,20 @@ class RelateType(TextChoices):
 
     RISK = "risk", gettext_lazy("风险")
     ERROR = "error", gettext_lazy("异常")
+
+
+class MemberVariable(TextChoices):
+    """
+    成员变量
+    """
+
+    OPERATOR = "$OPERATOR", gettext_lazy("责任人")
+    OPERATOR_SUPERIOR = "$OPERATOR_SUPERIOR", gettext_lazy("责任人上级")
+
+    @classmethod
+    def match(cls, key: str) -> Optional["MemberVariable"]:
+        """
+        匹配成员变量
+        """
+
+        return cls._value2member_map_.get(key)

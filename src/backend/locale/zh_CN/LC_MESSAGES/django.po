@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-07-16 15:07+0800\n"
+"POT-Creation-Date: 2024-08-21 14:51+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1506,6 +1506,9 @@ msgstr "风险"
 msgid "异常"
 msgstr "异常"
 
+msgid "责任人上级"
+msgstr "责任人上级"
+
 msgid "通知组名称重复"
 msgstr "通知组名称重复"
 
@@ -1608,6 +1611,9 @@ msgstr "创建通知组"
 msgid "更新通知组"
 msgstr "更新通知组"
 
+msgid "Get Notice Common"
+msgstr "获取策略通用参数"
+
 msgid "此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"
 msgstr "此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"
 
@@ -1629,6 +1635,9 @@ msgstr "通知组名称不能包含特殊字符 %s"
 
 msgid "内置通知组禁止删除"
 msgstr "内置通知组禁止删除"
+
+msgid "Member Variable"
+msgstr "成员变量"
 
 msgid "权限中心异常"
 msgstr "权限中心异常"
@@ -1874,6 +1883,12 @@ msgstr "获取执行模板详情"
 msgid "获取任务状态常量"
 msgstr "获取任务状态常量"
 
+msgid "用户管理"
+msgstr "用户管理"
+
+msgid "获取单个用户的leader信息"
+msgstr "获取单个用户信息"
+
 msgid "审计中心"
 msgstr "审计中心"
 
@@ -1939,6 +1954,15 @@ msgstr "管理员请求"
 
 msgid "Token Invalid"
 msgstr "Token验证失败"
+
+msgid "Label"
+msgstr "标签"
+
+msgid "Value"
+msgstr "值"
+
+msgid "Config"
+msgstr "配置"
 
 msgid "数据拉取"
 msgstr "数据拉取"
@@ -3390,6 +3414,18 @@ msgstr "获取RT字段"
 msgid "Get Strategy Status"
 msgstr "获取策略状态"
 
+msgid "Field Name"
+msgstr "字段名称"
+
+msgid "Field Display Name"
+msgstr "字段显示名称"
+
+msgid "Is Priority"
+msgstr "是否优先"
+
+msgid "Field Description"
+msgstr "字段描述"
+
 msgid "Control Version not Exists"
 msgstr "控件版本不存在"
 
@@ -3404,9 +3440,6 @@ msgstr "策略数量"
 
 msgid "Key"
 msgstr "键"
-
-msgid "Value"
-msgstr "值"
 
 msgid "Method"
 msgstr "方法"
@@ -3435,14 +3468,8 @@ msgstr "检测算法"
 msgid "Detects"
 msgstr "识别条件"
 
-msgid "Field Name"
-msgstr "字段名称"
-
 msgid "System ID"
 msgstr "系统ID"
-
-msgid "Label"
-msgstr "标签"
 
 msgid "Children"
 msgstr "子数据"
@@ -3452,9 +3479,6 @@ msgstr "操作ID"
 
 msgid "Field Type"
 msgstr "字段类型"
-
-msgid "Config"
-msgstr "配置"
 
 msgid "Strategy Operator"
 msgstr "策略操作符"

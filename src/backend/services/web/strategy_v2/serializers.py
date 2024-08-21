@@ -22,6 +22,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
+from core.serializers import ChoiceListSerializer
 from services.web.analyze.constants import (
     FilterConnector,
     FilterOperator,
@@ -39,6 +40,13 @@ from services.web.strategy_v2.constants import (
 )
 from services.web.strategy_v2.exceptions import SchedulePeriodInvalid
 from services.web.strategy_v2.models import Strategy
+
+
+class EventFieldSerializer(serializers.Serializer):
+    field_name = serializers.CharField(label=gettext_lazy("Field Name"))
+    display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
+    is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
+    description = serializers.CharField(label=gettext_lazy("Field Description"))
 
 
 class CreateStrategyRequestSerializer(serializers.ModelSerializer):
@@ -295,16 +303,6 @@ class ListStrategyFieldsResponseSerializer(serializers.Serializer):
     description = serializers.CharField(label=gettext_lazy("Description"))
     field_type = serializers.CharField(label=gettext_lazy("Field Type"))
     is_dimension = serializers.BooleanField(label=gettext_lazy("Dimension"))
-
-
-class ChoiceListSerializer(serializers.Serializer):
-    """
-    Choice List
-    """
-
-    label = serializers.CharField(label=gettext_lazy("Label"), allow_blank=True, allow_null=True)
-    value = serializers.CharField(label=gettext_lazy("Value"))
-    config = serializers.JSONField(label=gettext_lazy("Config"), required=False)
 
 
 class GetStrategyCommonResponseSerializer(serializers.Serializer):
