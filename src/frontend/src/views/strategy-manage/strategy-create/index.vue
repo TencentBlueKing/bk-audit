@@ -34,7 +34,7 @@
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: any) => currentStep = step"
       @show-preview="showPreview = true"
-      @submit="handleSubmit" />
+      @submit-data="handleSubmit" />
   </keep-alive>
 
   <audit-sideslider

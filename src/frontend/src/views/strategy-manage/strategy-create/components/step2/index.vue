@@ -233,7 +233,20 @@
     }
   };
 
+  const getClipboardContent = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      riskTitleValue.value += text;
+    } catch (err) {
+      console.error('Failed to read clipboard contents: ', err);
+    }
+  };
+
   const handleKeyDown = (e: KeyboardEvent) => {
+    // enter粘贴
+    if (e.code === 'Enter') {
+      getClipboardContent();
+    }
     // 如果pop还是打开状态，input有值，删除input里面的值
     if (isShow.value && riskTitleValue.value) return;
     if (e.code === 'Backspace' && displayRiskTitle.value?.length) {

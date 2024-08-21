@@ -197,7 +197,7 @@
   interface Emits {
     (e: 'previousStep', step: number): void;
     (e: 'nextStep', step: number, params: IFormData): void;
-    (e: 'submit'): void;
+    (e: 'submitData'): void;
   }
   interface Props {
     data: StrategyModel
@@ -272,7 +272,7 @@
     formRef.value.validate().then(() => {
       // 先更新formData, 最后一步step不变
       emits('nextStep', 3, formData.value);
-      emits('submit');
+      emits('submitData');
     });
   };
 

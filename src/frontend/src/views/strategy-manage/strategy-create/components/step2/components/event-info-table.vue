@@ -21,7 +21,14 @@
         v-for="(item, index) in column"
         :key="index"
         class="item">
-        {{ item }}
+        <span
+          v-bk-tooltips="{
+            disabled: !item.tips,
+            content: item.tips
+          }"
+          :class="[item.tips ? 'tips' : '']">
+          {{ item.label }}
+        </span>
       </div>
     </div>
     <template
@@ -99,7 +106,13 @@
 
   const { t } = useI18n();
 
-  const column = [t('事件分组'), t('字段名称'), t('字段显示名'), t('重点展示'), t('字段说明')];
+  const column = [
+    { label: t('事件分组') },
+    { label: t('字段名称') },
+    { label: t('字段显示名') },
+    { label: t('重点展示'), tips: t('开始后将在单据里优先展示') },
+    { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
+  ];
 
   const groupMap = {
     event_basic_field_configs: t('基本信息'),
@@ -170,7 +183,6 @@
   .head {
     display: flex;
     height: 42px;
-    line-height: 42px;
     background-color: #f5f7fa;
 
     .item {
