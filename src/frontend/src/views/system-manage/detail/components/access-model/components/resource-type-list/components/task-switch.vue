@@ -20,21 +20,20 @@
       action-id="manage_global_setting"
       :permission="data.permission.manage_global_setting">
       <audit-popconfirm
+        v-if="status === 'running'"
         :confirm-handler="handleSubmit"
         :content="t('任务停止后, 所有与该任务有关的清洗、入库任务都会停止。同时, 引用了该数据源的其他任务也会受到影响')"
         :title="t('请确认是否停止任务')">
         <bk-button
           v-bk-tooltips="t('停用后, 资源的详细数据将会失效')"
-          :disabled="['preparing','failed','closed'].includes(status)"
           text
           theme="primary">
           {{ t('停用') }}
         </bk-button>
       </audit-popconfirm>
       <bk-button
+        v-if="status === 'closed' || status === 'failed'"
         v-bk-tooltips="t('启用后, 资源的详细数据将会生效')"
-        class="ml8"
-        :disabled="['preparing', 'running'].includes(status)"
         text
         theme="primary"
         @click="handleJoinData(true)">

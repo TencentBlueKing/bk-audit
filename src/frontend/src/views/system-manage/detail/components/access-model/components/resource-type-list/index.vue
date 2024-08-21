@@ -146,7 +146,7 @@
       ...baseTableColumn,
       {
         label: () => t('操作'),
-        width: locale.value === 'en-US' ? 230 : 150,
+        width: locale.value === 'en-US' ? 200 : 120,
         fixed: 'right',
         render: ({ data }: {data: SystemResourceTypeModel}) => <TaskSwitch
           data={data}
