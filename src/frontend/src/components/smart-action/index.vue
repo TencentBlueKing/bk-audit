@@ -102,7 +102,7 @@
       top,
       left,
     } = placeholderRef.value.getBoundingClientRect();
-    isFixed.value = height + top + 20 > window.innerHeight;
+    isFixed.value = height + top + 50 > window.innerHeight;
     paddingLeft.value = left;
     setTimeout(() => {
       isPlaceholderShow.value = true;
