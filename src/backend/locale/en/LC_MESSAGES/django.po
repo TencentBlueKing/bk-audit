@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-07-16 15:07+0800\n"
+"POT-Creation-Date: 2024-08-21 16:30+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1874,6 +1874,12 @@ msgstr "Get Template Detail"
 msgid "获取任务状态常量"
 msgstr "List Task Status Constants"
 
+msgid "用户管理"
+msgstr "User Management"
+
+msgid "获取单个用户的leader信息"
+msgstr "Retrieve User Leader"
+
 msgid "审计中心"
 msgstr "BK Audit"
 
@@ -2949,6 +2955,9 @@ msgstr "Risk Label"
 msgid "Last Operate Time"
 msgstr "Last Operate Time"
 
+msgid "Risk Title"
+msgstr "Risk Title"
+
 msgid "UUID"
 msgstr "UUID"
 
@@ -3024,6 +3033,9 @@ msgstr "Authorized Time"
 msgid "Ticket Permission"
 msgstr "Ticket Permission"
 
+msgid "(未获取到变量值:%s)"
+msgstr "(Variable value not obtained:%s)"
+
 msgid "创建事件"
 msgstr "Create Event"
 
@@ -3059,6 +3071,9 @@ msgstr "Approve Build In Fields"
 
 msgid "获取风险详情"
 msgstr "Get Risk Detail"
+
+msgid "获取风险策略信息"
+msgstr "Obtain Risk Strategy Information"
 
 msgid "获取风险列表"
 msgstr "List Risk"
@@ -3178,6 +3193,9 @@ msgstr "Risk Type"
 msgid "Event Content"
 msgstr "Event Content"
 
+msgid "Risk Level"
+msgstr "Risk Level"
+
 msgid "未配置审批流"
 msgstr "Approve Service Not Set"
 
@@ -3207,6 +3225,15 @@ msgstr "New Operator"
 
 msgid "不能转单给自己"
 msgstr "Not allowed to trans to yourself"
+
+msgid "Event Basic Field Configs"
+msgstr "Event Basic Field Configs"
+
+msgid "Event Data Field Configs"
+msgstr "Event Data Field Configs"
+
+msgid "Event Evidence Field Configs"
+msgstr "Event Evidence Field Configs"
 
 msgid "Sync BKM Alert Failed"
 msgstr "Sync BKM Alert Failed"
@@ -3305,6 +3332,15 @@ msgstr "Public Field"
 msgid "Extend Field"
 msgstr "Extend Field"
 
+msgid "高"
+msgstr "High"
+
+msgid "中"
+msgstr "Middle"
+
+msgid "低"
+msgstr "Low"
+
 msgid "Control Changed"
 msgstr "Control Changed"
 
@@ -3338,6 +3374,24 @@ msgstr "Backend Data"
 
 msgid "Notice Groups"
 msgstr "Notice Groups"
+
+msgid "Processor"
+msgstr "Processor"
+
+msgid "Risk Hazard"
+msgstr "Risk Hazard"
+
+msgid "Risk Guidance"
+msgstr "Risk Guidance"
+
+msgid "Event Field Configs"
+msgstr "Event Field Configs"
+
+msgid "Event Data Configs"
+msgstr "Event Data Configs"
+
+msgid "Event Evidence Configs"
+msgstr "Event Evidence Configs"
 
 msgid "Strategy"
 msgstr "Strategy"
@@ -3390,6 +3444,30 @@ msgstr "Get RT Fields"
 msgid "Get Strategy Status"
 msgstr "Get Strategy Status"
 
+msgid "Get Event Info Fields"
+msgstr "Get Event Info Fields"
+
+msgid "获取策略展示信息"
+msgstr "Get Strategy Display Information"
+
+msgid "Field Name"
+msgstr "Field Name"
+
+msgid "Field Display Name"
+msgstr "Field Display Name"
+
+msgid "Is Priority"
+msgstr "Is Priority"
+
+msgid "Field Description"
+msgstr "Field Description"
+
+msgid "Processor Groups"
+msgstr "Processor Groups"
+
+msgid "Processor Group"
+msgstr "Processor Group"
+
 msgid "Control Version not Exists"
 msgstr "Control Version not Exists"
 
@@ -3434,9 +3512,6 @@ msgstr "Algorithms"
 
 msgid "Detects"
 msgstr "Detects"
-
-msgid "Field Name"
-msgstr "Field Name"
 
 msgid "System ID"
 msgstr "System ID"
@@ -3524,6 +3599,12 @@ msgstr "Strategy IDs"
 
 msgid "Strategy ID Invalid"
 msgstr "Strategy ID Invalid"
+
+msgid "Display Name"
+msgstr "Display Name"
+
+msgid "Example"
+msgstr "Example"
 
 msgid "版本日志"
 msgstr "Version Log"
