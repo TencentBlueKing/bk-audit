@@ -16,21 +16,10 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import api as _api
-from bk_resource import resource as _resource
-from django.conf import settings
-from django.test import TestCase as _TestCase
+from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
-class TestCase(_TestCase):
-    """
-    Base Test Case for Bk Audit
-    """
-
-    app_code = settings.APP_CODE
-    app_secret = settings.SECRET_KEY
-    namespace = settings.DEFAULT_NAMESPACE
-    bk_biz_id = settings.DEFAULT_BK_BIZ_ID
-    system_id = settings.BK_IAM_SYSTEM_ID
-    resource = _resource
-    api = _api
+class UserManageConfig(AppConfig):
+    name = "apps.user_manage"
+    verbose_name = gettext_lazy("用户管理")

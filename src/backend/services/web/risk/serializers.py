@@ -36,6 +36,8 @@ from services.web.risk.models import (
     RiskRule,
     TicketNode,
 )
+from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.serializers import EventFieldSerializer
 
 
 class CreateEventSerializer(serializers.Serializer):
@@ -193,6 +195,9 @@ class ListRiskRequestSerializer(serializers.Serializer):
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"), required=False, allow_null=True, allow_blank=True, choices=OrderTypeChoices.choices
+    )
+    risk_level = serializers.CharField(
+        label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
 
     def validate(self, attrs: dict) -> dict:
@@ -543,3 +548,29 @@ class GetRiskFieldsByStrategyResponseSerializer(serializers.Serializer):
     key = serializers.CharField()
     name = serializers.CharField()
     unique = serializers.BooleanField(default=False)
+
+
+class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
+    event_basic_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
+    )
+    event_data_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
+    )
+    event_evidence_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Evidence Field Configs"),
+        child=EventFieldSerializer(),
+        required=False,
+        allow_empty=True,
+    )
+
+    class Meta:
+        model = Strategy
+        fields = [
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
+        ]

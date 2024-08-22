@@ -98,6 +98,7 @@
   const formRef = ref();
   const aiopsRef = ref();
   const formData = ref<Record<string, any>>({});
+  const strategyTagMap = ref<Record<string, string>>({});
   const rules = {
     'configs.data_source.system_id': [
       {
@@ -178,6 +179,18 @@
     ],
   };
 
+  // 获取标签列表
+  useRequest(StrategyManageService.fetchStrategyTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess(data) {
+      strategyTagMap.value = data.reduce<Record<string, string>>((acc, item) => {
+        acc[item.tag_id] = item.tag_name;
+        return acc;
+      }, {});
+    },
+  });
+
   // 编辑状态获取数据
   const {
     loading: isEditDataLoading,
@@ -247,6 +260,10 @@
           ...params.configs.data_source,
           fields,
         };
+      }
+      if (params.tags) {
+        // eslint-disable-next-line max-len
+        params.tags = params.tags.map((item: string) => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
       }
       InfoBox({
         title: t('升级确认'),

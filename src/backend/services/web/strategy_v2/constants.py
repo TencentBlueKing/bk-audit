@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import TypedDict
 
 from django.utils.translation import gettext_lazy
 
@@ -28,7 +29,17 @@ HAS_UPDATE_TAG_ID = "-1"
 HAS_UPDATE_TAG_NAME = gettext_lazy("Upgradable")
 
 # 本地更新字段，这些字段不会传递给后端策略，不会导致策略输出变化
-LOCAL_UPDATE_FIELDS = ["strategy_name", "tags", "notice_groups", "description"]
+LOCAL_UPDATE_FIELDS = [
+    "strategy_name",
+    "tags",
+    "notice_groups",
+    "description",
+    "risk_level",
+    "risk_hazard",
+    "risk_guidance",
+    "risk_title",
+    "processor_groups",
+]
 
 # 策略可用的调度时间依赖于事件的查询周期
 STRATEGY_SCHEDULE_TIME = max(1, RISK_EVENTS_SYNC_TIME - 1)  # day
@@ -146,3 +157,24 @@ class MappingType(TextChoices):
 
     PUBLIC = "public", gettext_lazy("Public Field")
     ACTION = "action", gettext_lazy("Extend Field")
+
+
+class RiskLevel(TextChoices):
+    """
+    风险等级
+    """
+
+    HIGH = "HIGH", gettext_lazy("高")
+    MIDDLE = "MIDDLE", gettext_lazy("中")
+    LOW = "LOW", gettext_lazy("低")
+
+
+class EventInfoField(TypedDict):
+    """
+    事件信息字段
+    """
+
+    field_name: str
+    display_name: str
+    description: str
+    example: str

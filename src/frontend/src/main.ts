@@ -41,6 +41,7 @@ import RenderSensitivityLevel from '@components/render-sensitivity-level/index.v
 import ScrollFaker from '@components/scroll-faker/index.vue';
 import SkeletonLoading from '@components/skeleton-loading/index.vue';
 import SmartAction from '@components/smart-action/index.vue';
+import DatePicker from '@blueking/date-picker';
 
 import WaterMark from '@utils/assist/water-mark';
 
@@ -61,6 +62,7 @@ import('@lib/bk-icon/iconcool.js');
 import('@/css/reset.css');
 import('@/css/common.css');
 import('@blueking/notice-component/dist/style.css');
+import('@blueking/date-picker/vue3/vue3.css');
 
 window.changeConfirm = false;
 
@@ -89,6 +91,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     BKApp.component('ScrollFaker', ScrollFaker);
     BKApp.component('SkeletonLoading', SkeletonLoading);
     BKApp.component('SmartAction', SmartAction);
+    BKApp.component('DatePicker', DatePicker);
 
     BKApp.directive('bk-tooltips', bkTooltips);
     BKApp.directive('cursor', cursor);

@@ -969,66 +969,6 @@
             }
         },
         {
-            "operation": "upsert_action",
-            "data": {
-                "id": "view_panel",
-                "name": "查看报表(组织架构)",
-                "name_en": "View Audit Report by Department",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk_usermgr",
-                        "id": "department",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk_usermgr",
-                                "id": "department",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_base_panel",
-                    "view_base_panel_v2"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "view_tag_panel",
-                "name": "查看报表(标签)",
-                "name_en": "View Audit Report by Tag",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "tag",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "tag_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_base_panel",
-                    "view_base_panel_v2"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
             "operation": "upsert_action_groups",
             "data": [
                 {
@@ -1056,12 +996,6 @@
                                 },
                                 {
                                     "id": "view_base_panel_v2"
-                                },
-                                {
-                                    "id": "view_panel"
-                                },
-                                {
-                                    "id": "view_tag_panel"
                                 }
                             ]
                         }

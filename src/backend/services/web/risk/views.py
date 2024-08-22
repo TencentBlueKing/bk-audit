@@ -84,7 +84,7 @@ class RisksViewSet(ResourceViewSet):
             "process_risk_ticket",
         ]:
             return [RiskTicketPermission()]
-        if self.action in ["retrieve"]:
+        if self.action in ["retrieve", "strategy_info"]:
             return [
                 RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK, lookup_field="pk")
             ]
@@ -92,6 +92,7 @@ class RisksViewSet(ResourceViewSet):
 
     resource_routes = [
         ResourceRoute("GET", resource.risk.retrieve_risk, pk_field="risk_id"),
+        ResourceRoute("GET", resource.risk.retrieve_risk_strategy_info, pk_field="risk_id", endpoint="strategy_info"),
         ResourceRoute(
             "GET",
             resource.risk.list_risk,

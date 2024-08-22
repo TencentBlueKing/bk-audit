@@ -16,21 +16,20 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import api as _api
-from bk_resource import resource as _resource
-from django.conf import settings
-from django.test import TestCase as _TestCase
+from bk_resource import CacheResource, api
+from bk_resource.exceptions import APIRequestError
+from bk_resource.utils.cache import CacheTypeItem
+from django.utils.translation import gettext_lazy
 
 
-class TestCase(_TestCase):
-    """
-    Base Test Case for Bk Audit
-    """
+class RetrieveLeader(CacheResource):
+    name = gettext_lazy("获取单个用户的leader信息")
+    cache_type = CacheTypeItem(key="retrieve_leader", timeout=60 * 60, user_related=False)
 
-    app_code = settings.APP_CODE
-    app_secret = settings.SECRET_KEY
-    namespace = settings.DEFAULT_NAMESPACE
-    bk_biz_id = settings.DEFAULT_BK_BIZ_ID
-    system_id = settings.BK_IAM_SYSTEM_ID
-    resource = _resource
-    api = _api
+    def perform_request(self, validated_request_data):
+        try:
+            # 获取用户信息&解析出leader信息
+            user_info = api.user_manage.retrieve_user(validated_request_data)
+            return user_info.get("leader", [])[0].get("username", "")
+        except (IndexError, APIRequestError):
+            return ""
