@@ -236,15 +236,29 @@
   const getClipboardContent = async () => {
     try {
       const text = await navigator.clipboard.readText();
-      riskTitleValue.value += text;
+      // 如果输入有值
+      if (riskTitleValue.value) {
+        // 赋值
+        formData.value.risk_title += riskTitleValue.value;
+        // 清空本次输入内容
+        riskTitleValue.value = '';
+      } else {
+        // 没有值，用最后一次复制内容
+        formData.value.risk_title += text;
+      }
     } catch (err) {
       console.error('Failed to read clipboard contents: ', err);
     }
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    // enter粘贴
+    // enter生成tag
     if (e.code === 'Enter') {
+      // 失去焦点，关闭pop
+      isShow.value = false;
+      isCopy.value = false;
+      variableInputActive.value = false;
+      inputRef.value?.blur();
       getClipboardContent();
     }
     // 如果pop还是打开状态，input有值，删除input里面的值
@@ -317,6 +331,8 @@
 
       .list {
         display: flex;
+        max-width: 100%;
+        flex-wrap: wrap;
 
         .is-variable {
           padding: 5px;
