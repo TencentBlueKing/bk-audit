@@ -39,7 +39,7 @@ INIT_FIELDS_FINISHED_KEY = "init_fields_finished_check"
 DEFAULT_WEB_TITLE = gettext_lazy("审计中心 | 腾讯蓝鲸智云")
 DEFAULT_WEB_TITLE_KEY = "web_title"
 
-DEFAULT_WEB_SITE_TITLE = gettext_lazy("蓝鲸审计中心")
+DEFAULT_WEB_SITE_TITLE = gettext_lazy("审计中心 | 蓝鲸智云")
 DEFAULT_WEB_SITE_TITLE_KEY = "web_site_title"
 
 DEFAULT_QUERY_STRING_HELP_KEY = "query_string_help"
