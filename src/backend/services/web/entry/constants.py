@@ -36,7 +36,7 @@ INIT_PLUGIN_FISHED_KEY = "init_plugin_finished_check"
 INIT_SNAPSHOT_FINISHED_KEY = "init_snapshot_finished_check"
 INIT_FIELDS_FINISHED_KEY = "init_fields_finished_check"
 
-DEFAULT_WEB_TITLE = gettext_lazy("审计中心 | 腾讯蓝鲸智云")
+DEFAULT_WEB_TITLE = gettext_lazy("审计中心 | 蓝鲸智云")
 DEFAULT_WEB_TITLE_KEY = "web_title"
 
 DEFAULT_WEB_SITE_TITLE = gettext_lazy("蓝鲸审计中心")
