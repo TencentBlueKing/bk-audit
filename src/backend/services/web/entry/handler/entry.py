@@ -22,7 +22,6 @@ from bk_resource import resource
 from blueapps.account.conf import ConfFixture  # noqa
 from blueapps.utils.logger import logger
 from django.conf import settings
-from django.utils.translation import gettext
 
 from apps.bk_crypto.crypto import asymmetric_cipher
 from apps.feature.handlers import FeatureHandler
@@ -32,14 +31,6 @@ from services.web.entry.constants import (
     DEFAULT_QUERY_STRING_HELP_KEY,
     DEFAULT_SCHEMA_HELP,
     DEFAULT_SCHEMA_HELP_KEY,
-    DEFAULT_WEB_COPYRIGHT,
-    DEFAULT_WEB_COPYRIGHT_KEY,
-    DEFAULT_WEB_FOOTER,
-    DEFAULT_WEB_FOOTER_KEY,
-    DEFAULT_WEB_SITE_TITLE,
-    DEFAULT_WEB_SITE_TITLE_KEY,
-    DEFAULT_WEB_TITLE,
-    DEFAULT_WEB_TITLE_KEY,
 )
 
 
@@ -82,10 +73,6 @@ class EntryHandler(object):
             # TAM
             "aegis_id": settings.AEGIS_ID,
             # 页面信息
-            "title": cls.get_title(),
-            "footer": cls.get_footer(),
-            "copyright": cls.get_copyright(),
-            "site_title": cls.get_site_title(),
             "help_info": {"query_string": cls.get_query_help(), "schema": cls.get_schema_help()},
             # 语言
             "language": {
@@ -103,29 +90,6 @@ class EntryHandler(object):
             "version": cls.get_version(),
         }
         return data
-
-    @classmethod
-    def get_title(cls):
-        return gettext(GlobalMetaConfig.get(DEFAULT_WEB_TITLE_KEY, default="")) or DEFAULT_WEB_TITLE
-
-    @classmethod
-    def get_footer(cls):
-        footer = GlobalMetaConfig.get(DEFAULT_WEB_FOOTER_KEY, default=[])
-        if not footer:
-            return DEFAULT_WEB_FOOTER
-        for item in footer:
-            item["text"] = gettext(item.get("text", ""))
-        return footer
-
-    @classmethod
-    def get_copyright(cls):
-        copyright_msg = GlobalMetaConfig.get(DEFAULT_WEB_COPYRIGHT_KEY, default=DEFAULT_WEB_COPYRIGHT)
-        version = cls.get_version()
-        return f"{copyright_msg} {version}" if version else copyright_msg
-
-    @classmethod
-    def get_site_title(cls):
-        return GlobalMetaConfig.get(DEFAULT_WEB_SITE_TITLE_KEY, default=DEFAULT_WEB_SITE_TITLE)
 
     @classmethod
     def get_version(cls):

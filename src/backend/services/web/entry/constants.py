@@ -16,8 +16,6 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import datetime
-
 from django.utils.translation import gettext_lazy
 
 from core.choices import TextChoices
@@ -35,12 +33,6 @@ INIT_REDIS_FISHED_KEY = "init_redis_finished_check"
 INIT_PLUGIN_FISHED_KEY = "init_plugin_finished_check"
 INIT_SNAPSHOT_FINISHED_KEY = "init_snapshot_finished_check"
 INIT_FIELDS_FINISHED_KEY = "init_fields_finished_check"
-
-DEFAULT_WEB_TITLE = gettext_lazy("审计中心 | 腾讯蓝鲸智云")
-DEFAULT_WEB_TITLE_KEY = "web_title"
-
-DEFAULT_WEB_SITE_TITLE = gettext_lazy("蓝鲸审计中心")
-DEFAULT_WEB_SITE_TITLE_KEY = "web_site_title"
 
 DEFAULT_QUERY_STRING_HELP_KEY = "query_string_help"
 DEFAULT_QUERY_STRING_HELP_ENV_KEY = "BKAPP_QUERY_STRING_HELP"
@@ -65,27 +57,3 @@ TENCENT_WEB_FOOTER = [
         "url": "",
     },
 ]
-DEFAULT_WEB_FOOTER = [
-    {
-        "type": WebLinkEnum.WEB_LINK.value,
-        "type_description": WebLinkEnum.WEB_LINK.label,
-        "text": gettext_lazy("技术支持"),
-        "url": "https://wpa1.qq.com/KziXGWJs?_type=wpa&qidian=true",
-    },
-    {
-        "type": WebLinkEnum.WEB_LINK.value,
-        "type_description": WebLinkEnum.WEB_LINK.label,
-        "text": gettext_lazy("社区论坛"),
-        "url": "https://bk.tencent.com/s-mart/community/",
-    },
-    {
-        "type": WebLinkEnum.WEB_LINK.value,
-        "type_description": WebLinkEnum.WEB_LINK.label,
-        "text": gettext_lazy("产品官网"),
-        "url": "https://bk.tencent.com/index/",
-    },
-]
-DEFAULT_WEB_FOOTER_KEY = "web_footer"
-
-DEFAULT_WEB_COPYRIGHT = f"Copyright © 2012-{datetime.datetime.now().year} Tencent BlueKing. All Rights Reserved."
-DEFAULT_WEB_COPYRIGHT_KEY = "web_copyright"

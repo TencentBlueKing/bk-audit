@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-21 16:30+0800\n"
+"POT-Creation-Date: 2024-08-23 11:58+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2740,26 +2740,11 @@ msgstr "Health Check"
 msgid "超链接"
 msgstr "Hyperlink"
 
-msgid "审计中心 | 腾讯蓝鲸智云"
-msgstr "BK Audit | Tencent BlueKing"
-
-msgid "蓝鲸审计中心"
-msgstr "BK Audit"
-
 msgid "联系BK助手"
 msgstr "Contact BK Customer Service"
 
 msgid "蓝鲸桌面"
 msgstr "BlueKing Desktop"
-
-msgid "技术支持"
-msgstr "Technical Support"
-
-msgid "社区论坛"
-msgstr "Community Forum"
-
-msgid "产品官网"
-msgstr "Official Website"
 
 msgid "ES检索"
 msgstr "ES Query"

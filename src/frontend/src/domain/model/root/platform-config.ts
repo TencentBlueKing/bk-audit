@@ -41,6 +41,7 @@ export default class PlatformConfig {
     brandImg: string;
     brandName: string;
     footerInfoHTML: string;
+    productName: string;
   };
 
   constructor(payload = {} as PlatformConfig) {
