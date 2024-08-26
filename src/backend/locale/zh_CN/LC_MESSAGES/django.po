@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-23 11:58+0800\n"
+"POT-Creation-Date: 2024-08-26 10:55+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1874,6 +1874,12 @@ msgstr "获取执行模板详情"
 msgid "获取任务状态常量"
 msgstr "获取任务状态常量"
 
+msgid "用户管理"
+msgstr "用户管理"
+
+msgid "获取单个用户的leader信息"
+msgstr "获取单个用户的leader信息"
+
 msgid "审计中心"
 msgstr "审计中心"
 
@@ -2934,6 +2940,9 @@ msgstr "风险标签"
 msgid "Last Operate Time"
 msgstr "最后处理时间"
 
+msgid "Risk Title"
+msgstr "风险标题"
+
 msgid "UUID"
 msgstr "UUID"
 
@@ -3009,6 +3018,10 @@ msgstr "授权时间"
 msgid "Ticket Permission"
 msgstr "单据权限"
 
+#, python-format
+msgid "(未获取到变量值:%s)"
+msgstr "(未获取到变量值:%s)"
+
 msgid "创建事件"
 msgstr "创建事件"
 
@@ -3044,6 +3057,9 @@ msgstr "审批内置字段"
 
 msgid "获取风险详情"
 msgstr "获取风险详情"
+
+msgid "获取风险策略信息"
+msgstr "获取风险策略信息"
 
 msgid "获取风险列表"
 msgstr "获取风险列表"
@@ -3163,6 +3179,9 @@ msgstr "风险类型"
 msgid "Event Content"
 msgstr "事件详情"
 
+msgid "Risk Level"
+msgstr "风险等级"
+
 msgid "未配置审批流"
 msgstr "未配置审批流"
 
@@ -3192,6 +3211,15 @@ msgstr "新处理人"
 
 msgid "不能转单给自己"
 msgstr "不能转单给自己"
+
+msgid "Event Basic Field Configs"
+msgstr "事件基本字段配置"
+
+msgid "Event Data Field Configs"
+msgstr "事件数据字段配置"
+
+msgid "Event Evidence Field Configs"
+msgstr "事件证据字段配置"
 
 msgid "Sync BKM Alert Failed"
 msgstr "同步监控告警异常"
@@ -3290,6 +3318,15 @@ msgstr "公共字段"
 msgid "Extend Field"
 msgstr "拓展字段"
 
+msgid "高"
+msgstr "高"
+
+msgid "中"
+msgstr "中"
+
+msgid "低"
+msgstr "低"
+
 msgid "Control Changed"
 msgstr "控件切换"
 
@@ -3323,6 +3360,24 @@ msgstr "后台数据"
 
 msgid "Notice Groups"
 msgstr "通知组"
+
+msgid "Processor"
+msgstr "处理人"
+
+msgid "Risk Hazard"
+msgstr "风险危害"
+
+msgid "Risk Guidance"
+msgstr "风险处理指引"
+
+msgid "Event Field Configs"
+msgstr "事件字段配置"
+
+msgid "Event Data Configs"
+msgstr "事件数据字段配置"
+
+msgid "Event Evidence Configs"
+msgstr "事件证据字段配置"
 
 msgid "Strategy"
 msgstr "策略"
@@ -3375,6 +3430,30 @@ msgstr "获取RT字段"
 msgid "Get Strategy Status"
 msgstr "获取策略状态"
 
+msgid "Get Event Info Fields"
+msgstr "获取事件信息字段"
+
+msgid "获取策略展示信息"
+msgstr "获取策略展示信息"
+
+msgid "Field Name"
+msgstr "字段名称"
+
+msgid "Field Display Name"
+msgstr "字段展示名称"
+
+msgid "Is Priority"
+msgstr "是否优先"
+
+msgid "Field Description"
+msgstr "字段描述"
+
+msgid "Processor Groups"
+msgstr "处理组"
+
+msgid "Processor Group"
+msgstr "处理组"
+
 msgid "Control Version not Exists"
 msgstr "控件版本不存在"
 
@@ -3419,9 +3498,6 @@ msgstr "检测算法"
 
 msgid "Detects"
 msgstr "识别条件"
-
-msgid "Field Name"
-msgstr "字段名称"
 
 msgid "System ID"
 msgstr "系统ID"
@@ -3509,6 +3585,12 @@ msgstr "策略ID"
 
 msgid "Strategy ID Invalid"
 msgstr "策略ID不合法"
+
+msgid "Display Name"
+msgstr "字段展示名称"
+
+msgid "Example"
+msgstr "样例"
 
 msgid "版本日志"
 msgstr "版本日志"
