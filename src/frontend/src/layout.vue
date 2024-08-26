@@ -24,7 +24,7 @@
       <span
         class="site-title"
         @click="handleRouterChange('handleManage')">
-        {{ platformConfig.i18n.name }}
+        {{ platformConfig.i18n.productName }}
       </span>
     </template>
     <template #header>
