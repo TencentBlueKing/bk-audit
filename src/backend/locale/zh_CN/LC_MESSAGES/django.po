@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-07-16 15:07+0800\n"
+"POT-Creation-Date: 2024-08-23 11:58+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2734,26 +2734,11 @@ msgstr "健康检测"
 msgid "超链接"
 msgstr "超链接"
 
-msgid "审计中心 | 腾讯蓝鲸智云"
-msgstr "审计中心 | 腾讯蓝鲸智云"
-
-msgid "蓝鲸审计中心"
-msgstr "蓝鲸审计中心"
-
 msgid "联系BK助手"
 msgstr "联系BK助手"
 
 msgid "蓝鲸桌面"
 msgstr "蓝鲸桌面"
-
-msgid "技术支持"
-msgstr "技术支持"
-
-msgid "社区论坛"
-msgstr "社区论坛"
-
-msgid "产品官网"
-msgstr "产品官网"
 
 msgid "ES检索"
 msgstr "ES检索"
