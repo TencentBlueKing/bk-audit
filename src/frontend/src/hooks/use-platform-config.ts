@@ -43,6 +43,7 @@ const platformConfig = ref({
     brandImg: '...',
     brandName: '...',
     footerInfoHTML: '...',
+    productName: '',
   },
 });
 
@@ -57,10 +58,21 @@ export default () => {
         version: config.version,
         appLogo: '/images/logo.png',
         favIcon: '/images/favicon.ico',
+        bkAppCode: 'bk-audit',
         name: '审计中心',
         nameEn: 'Audit',
+        helperText: '联系 BK助手',
+        helperTextEn: 'Contact BK Assistant',
+        helperLink: 'wxwork://message/?username=BK%E5%8A%A9%E6%89%8B',
+        brandImg: 'http://example.com/generic/blueking/bk-config/bk_audit/brand.png?preview=true',
+        brandImgEn: 'http://example.com/generic/blueking/bk-config/bk_audit/brand.png?preview=true',
         brandName: '蓝鲸智云',
         brandNameEn: 'Tencent BlueKing',
+        footerInfo: '[技术支持](https://wpa1.qq.com/KziXGWJs?_type=wpa&qidian=true) | [社区论坛](https://bk.tencent.com/s-mart/community/) | [产品官网](https://bk.tencent.com/index/)',
+        footerInfoEn: '[Support](https://wpa1.qq.com/KziXGWJs?_type=wpa&qidian=true) | [Forum](https://bk.tencent.com/s-mart/community/) | [Official](https://bk.tencent.com/index/)',
+        footerCopyright: 'Copyright © 2012 Tencent BlueKing. All Rights Reserved. {{version}}',
+        productName: '蓝鲸审计中心',
+        productNameEn: 'BK Audit',
       }).then((data: PlatformConfigModel) => {
         isInit = true;
         platformConfig.value = data;
