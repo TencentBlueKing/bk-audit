@@ -31,7 +31,7 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import StrategyFieldEvent, { type EventItem } from '@model/strategy/strategy-field-event';
+  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
   import {
     execCopy,
@@ -54,7 +54,7 @@
   const tableColumn = ref([
     {
       label: () => t('变量名称'),
-      render: ({ data }: {data: EventItem}) => <div
+      render: ({ data }: { data: StrategyFieldEvent['event_basic_field_configs'][0]}) => <div
         style='width: 100%; height: 100%;'
         onClick={e => handleVariableCopy(e, data.prefix, data.field_name)}>
           { `{{${data.field_name}}}` }
@@ -73,7 +73,7 @@
     },
   ]);
 
-  const variableData = ref<Array<EventItem>>([]);
+  const variableData = ref<StrategyFieldEvent['event_basic_field_configs']>([]);
 
   useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
