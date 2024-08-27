@@ -38,6 +38,7 @@
     computed,
     ref,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   import type StrategyModel from '@model/strategy/strategy';
 
@@ -52,6 +53,8 @@
   }
 
   defineProps<Props>();
+  const { t } = useI18n();
+
   const renderCom = computed(() => comMap[active.value]);
   const comMap: Record<string, any> = {
     riskDetection: RiskDetection,
@@ -60,9 +63,9 @@
   };
 
   const panels = [
-    { name: 'riskDetection', label: '风险发现' },
-    { name: 'riskDisplay', label: '单据展示' },
-    { name: 'riskOther', label: '其他配置' },
+    { name: 'riskDetection', label: t('风险发现') },
+    { name: 'riskDisplay', label: t('单据展示') },
+    { name: 'riskOther', label: t('其他配置') },
   ];
   const active = ref<keyof typeof comMap>('riskDetection');
 

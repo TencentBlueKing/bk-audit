@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="title">
-    变量列表
+    {{ t('变量列表') }}
   </div>
   <bk-table
     ref="variableTable"
@@ -93,7 +93,7 @@
   const handleVariableCopy = (e: Event, prefix: string, value: string) => {
     e.stopPropagation();
     emits('isCopy');
-    execCopy(`{{${prefix}${value}}}`, t(`变量${value}复制成功`));
+    execCopy(`{{${prefix}${value}}}`, t('变量 {variable} 复制成功', { variable: `{{${value}}}` }));
   };
 </script>
 <style lang="postcss" scoped>

@@ -295,6 +295,8 @@
     }>,
   }
   const props = defineProps<Props>();
+  const { t, locale } = useI18n();
+
   const statusToMap: Record<string, {
     tag: 'info' | 'warning' | 'success' | 'danger' | undefined,
     icon: string,
@@ -331,19 +333,18 @@
     color: string,
   }> =  {
     HIGH: {
-      label: '高',
+      label: t('高'),
       color: '#ea3636',
     },
     MIDDLE: {
-      label: '中',
+      label: t('中'),
       color: '#ff9c01',
     },
     LOW: {
-      label: '低',
+      label: t('低'),
       color: '#979ba5',
     },
   };
-  const { t, locale } = useI18n();
 
   const isShowMore = ref(false);
   const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));

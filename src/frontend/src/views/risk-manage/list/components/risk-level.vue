@@ -30,6 +30,10 @@
 
 <script setup lang='ts'>
 
+  import {
+    useI18n,
+  } from 'vue-i18n';
+
   import type RiskManageModel from '@model/risk/risk';
 
   interface Props{
@@ -40,23 +44,24 @@
     },
     data: RiskManageModel,
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const props = defineProps<Props>();
+
+  defineProps<Props>();
+  const { t } = useI18n();
 
   const riskLevelMap: Record<string, {
     label: string,
     color: string,
   }> =  {
     HIGH: {
-      label: '高',
+      label: t('高'),
       color: '#ea3636',
     },
     MIDDLE: {
-      label: '中',
+      label: t('中'),
       color: '#ff9c01',
     },
     LOW: {
-      label: '低',
+      label: t('低'),
       color: '#979ba5',
     },
   };

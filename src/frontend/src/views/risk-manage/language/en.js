@@ -116,5 +116,8 @@ export default {
     命中策略: 'Related strategy',
     展开全部字段: 'Expand all fields',
     选择套餐: 'Choose Tool',
+    高: 'High',
+    中: 'Middle',
+    低: 'Low',
   },
 };

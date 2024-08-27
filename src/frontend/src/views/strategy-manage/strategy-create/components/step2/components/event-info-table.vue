@@ -20,7 +20,8 @@
       <div
         v-for="(item, index) in column"
         :key="index"
-        class="item">
+        class="item"
+        :style="{width: (locale === 'en-US' && index === 0) ? '141px' : ''}">
         <span
           v-bk-tooltips="{
             disabled: !item.tips,
@@ -35,8 +36,10 @@
       v-for="(item, key, index) in tableData"
       :key="index">
       <div class="body">
-        <div class="group">
-          <span> {{ groupMap[key] }}</span>
+        <div
+          class="group"
+          :style="{width: locale === 'en-US' ? '150px' : ''}">
+          <span> {{ groupMap[key] }} </span>
         </div>
         <div class="value-row">
           <template v-if="item && item.length">
@@ -51,7 +54,9 @@
                   v-if="!['example', 'prefix'].includes(valueKey)"
                   class="item">
                   <template v-if="valueKey === 'is_priority'">
-                    <bk-switcher v-model="config.is_priority" />
+                    <bk-switcher
+                      v-model="config.is_priority"
+                      theme="primary" />
                   </template>
                   <template v-else-if="valueKey === 'description'">
                     <bk-input
@@ -75,7 +80,7 @@
             <div
               class="item"
               style="color: #979ba5; justify-content: center;">
-              暂未获取到相关字段，请先进入下一步
+              {{ t('暂未获取到相关字段，请先进入下一步') }}
             </div>
           </div>
         </div>
@@ -104,13 +109,13 @@
 
   const props = defineProps<Props>();
 
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const column = [
     { label: t('事件分组') },
     { label: t('字段名称') },
     { label: t('字段显示名') },
-    { label: t('重点展示'), tips: t('开始后将在单据里优先展示') },
+    { label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
     { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
   ];
 

@@ -37,7 +37,8 @@
               <div
                 v-for="(item, index) in column"
                 :key="index"
-                class="item">
+                class="item"
+                :style="{width: (locale === 'en-US' && index === 0) ? '137px' : ''}">
                 {{ item }}
               </div>
             </div>
@@ -45,7 +46,9 @@
               v-for="(item, key, index) in tableData"
               :key="index">
               <div class="body">
-                <div class="group">
+                <div
+                  class="group"
+                  :style="{width: locale === 'en-US' ? '150px' : ''}">
                   <span> {{ groupMap[key] }} </span>
                 </div>
                 <div class="value-row">
@@ -61,7 +64,7 @@
                           v-if="!['example', 'prefix'].includes(valueKey)"
                           class="item">
                           <div v-if="typeof value === 'boolean'">
-                            {{ value ? '是' : '否' }}
+                            {{ value ? t('是') : t('否') }}
                           </div>
                           <div
                             v-else
@@ -109,7 +112,7 @@
   }
 
   const props = defineProps<Props>();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
 
   const column = [t('事件分组'), t('字段名称'), t('字段显示名'), t('重点展示'), t('字段说明')];
 
@@ -212,7 +215,6 @@
               flex: 1;
 
               div {
-                width: 270px;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
