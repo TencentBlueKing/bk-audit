@@ -15,16 +15,16 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-import type { EventItem } from '../strategy/strategy-field-event';
+import StrategyFieldEvent from '../strategy/strategy-field-event';
 
 export default class StrategyInfo {
   risk_title: string;
   risk_level: string;
   risk_guidance: string;
   risk_hazard: string;
-  event_evidence_field_configs: Array<EventItem>;
-  event_data_field_configs: Array<EventItem>;
-  event_basic_field_configs: Array<EventItem>;
+  event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
+  event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
+  event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
 
   constructor(payload = {} as StrategyInfo) {
     this.risk_title = payload.risk_title;

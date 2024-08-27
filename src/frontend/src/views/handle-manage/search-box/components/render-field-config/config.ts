@@ -74,7 +74,7 @@ export default {
     label: '风险等级',
     type: 'select',
     required: false,
-    service: () => new Promise(resolve => resolve([
+    service: () => Promise.resolve([
       {
         id: 'HIGH',
         name: '高',
@@ -87,6 +87,6 @@ export default {
         id: 'LOW',
         name: '低',
       },
-    ])),
+    ]),
   },
 } as Record<string, IFieldConfig>;

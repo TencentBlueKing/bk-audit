@@ -41,7 +41,7 @@
     ref="sidesliderRef"
     v-model:isShow="showPreview"
     :show-footer="false"
-    title="风险单预览"
+    :title="t('风险单预览')"
     :width="960">
     <div>
       <preview :risk-data="formData" />
@@ -61,7 +61,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import StrategyModel from '@model/strategy/strategy';
-  import type { EventItem } from '@model/strategy/strategy-field-event';
+  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
   import Preview from './components/preview/index.vue';
   import Step1 from './components/step1/index.vue';
@@ -84,9 +84,9 @@
     risk_hazard: string,
     risk_guidance: string,
     risk_title: string,
-    event_evidence_field_configs: Array<EventItem>,
-    event_data_field_configs: Array<EventItem>,
-    event_basic_field_configs: Array<EventItem>,
+    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
+    event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
+    event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     processor_groups: [],
     notice_groups: []
   }
@@ -102,9 +102,9 @@
     3: Step3,
   };
   const steps = [
-    { title: '风险发现' },
-    { title: '单据展示' },
-    { title: '其他配置' },
+    { title: t('风险发现') },
+    { title: t('单据展示') },
+    { title: t('其他配置') },
   ];
   const currentStep = ref(1);
 

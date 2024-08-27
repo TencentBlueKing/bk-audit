@@ -28,10 +28,10 @@
             :to="{
               name:'noticeGroupList',
               query:{
-                keyword: userGroupList.find((list: DictObject) => list.id === item)?.name
+                keyword: userGroupList.find(list => list.id === item)?.name
               }
             }">
-            {{ userGroupList.find((list: DictObject) => list.id === item)?.name }}
+            {{ userGroupList.find(list => list.id === item)?.name }}
           </router-link>
         </span>
         <span v-else>
@@ -51,10 +51,10 @@
             :to="{
               name:'noticeGroupList',
               query:{
-                keyword: userGroupList.find((list: DictObject) => list.id === item)?.name
+                keyword: userGroupList.find(list => list.id === item)?.name
               }
             }">
-            {{ userGroupList.find((list: DictObject) => list.id === item)?.name }}
+            {{ userGroupList.find(list => list.id === item)?.name }}
           </router-link>
         </span>
         <span v-else>
@@ -76,13 +76,8 @@
     data: StrategyModel,
     userGroupList: Array<{id: number, name: string}>
   }
-  interface DictObject {
-    id: number | string,
-    name: string
-  }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const props = defineProps<Props>();
+  defineProps<Props>();
   const { t } = useI18n();
 </script>
 <style lang="postcss">

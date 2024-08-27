@@ -405,14 +405,8 @@
     startPolling(results);
     if (!results.length) return;
     // 获取对应风险等级
-    const strategyIds = results.reduce((acc, item, index) => {
-      if (index === 0) {
-        return `${item.strategy_id}`;
-      }
-      return `${acc},${item.strategy_id}`;
-    }, '');
     fetchRiskLevel({
-      strategy_ids: strategyIds,
+      strategy_ids: results.map(item => item.strategy_id).join(','),
     });
   };
   //   // 开始轮训

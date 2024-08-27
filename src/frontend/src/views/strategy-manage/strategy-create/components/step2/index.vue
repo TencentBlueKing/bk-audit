@@ -47,7 +47,7 @@
                   :class="[variableInputActive ? 'active' : '']">
                   <div
                     class="variable-input-content"
-                    @click.stop="() => handleClick('origin')">
+                    @click.stop="(e) => handleClick(e, 'origin')">
                     <ul class="list">
                       <li
                         v-for="(item, index) in displayRiskTitle"
@@ -124,7 +124,7 @@
   import { useRoute, useRouter } from 'vue-router';
 
   import StrategyModel from '@model/strategy/strategy';
-  import type { EventItem } from '@model/strategy/strategy-field-event';
+  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
   import CardPartVue from '../step1/components/card-part.vue';
 
@@ -133,9 +133,9 @@
 
   interface IFormData {
     risk_title: string,
-    event_evidence_field_configs: Array<EventItem>,
-    event_data_field_configs: Array<EventItem>,
-    event_basic_field_configs: Array<EventItem>,
+    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
+    event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
+    event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
   }
 
   interface Emits {
@@ -206,9 +206,9 @@
     });
   };
 
-  const handleClick = (type: string | Event) => {
+  const handleClick = (e: Event, origin?: 'origin') => {
     // 点击输入框，如果是复制了参数，不关闭
-    if (typeof type === 'string' && !isCopy.value) {
+    if (origin && !isCopy.value) {
       isShow.value = !isShow.value;
       // focus
       nextTick(() => {
@@ -218,7 +218,7 @@
       variableInputActive.value = !variableInputActive.value;
     }
     // 点击页面其他地方,且是打开状态，关闭pop
-    if (typeof type !== 'string' && isShow.value) {
+    if (!origin && isShow.value) {
       isShow.value = false;
       isCopy.value = false;
       variableInputActive.value = false;
@@ -230,6 +230,7 @@
         // 清空本次输入内容
         riskTitleValue.value = '';
       }
+      formRef.value.validate('risk_title');
     }
   };
 
@@ -283,6 +284,10 @@
     immediate: isEditMode || isCloneMode,
   });
 
+  const displayRiskTitle = computed(() => formData.value.risk_title.match(/\{\{[^{}]*}}|./g));
+
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
+
   onActivated(() => {
     window.addEventListener('click', handleClick);
   });
@@ -298,9 +303,6 @@
     window.removeEventListener('click', handleClick);
   });
 
-  const displayRiskTitle = computed(() => formData.value.risk_title.match(/\{\{[^{}]*}}|./g));
-
-  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
 </script>
 <style lang="postcss" scoped>
 .create-strategy-page {

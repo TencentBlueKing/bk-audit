@@ -35,7 +35,7 @@
 <script setup lang="ts">
   import RiskManageService from '@service/risk-manage';
 
-  import type { EventItem } from '@model/strategy/strategy-field-event';
+  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
   import BaseInfo from './components/base-info.vue';
   import LinkEvent from './components/link-event.vue';
@@ -55,9 +55,9 @@
     risk_hazard: string,
     risk_guidance: string,
     risk_title: string,
-    event_evidence_field_configs: Array<EventItem>,
-    event_data_field_configs: Array<EventItem>,
-    event_basic_field_configs: Array<EventItem>,
+    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
+    event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
+    event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     processor_groups: [],
     notice_groups: []
   }

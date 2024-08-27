@@ -74,7 +74,7 @@ export default {
     label: '风险标记',
     type: 'select',
     required: false,
-    service: () => new Promise(resolve => resolve([
+    service: () => Promise.resolve([
       {
         id: 'normal',
         name: '正常',
@@ -83,7 +83,7 @@ export default {
         id: 'misreport',
         name: '误报',
       },
-    ])),
+    ]),
   },
   event_content: {
     label: '风险描述',
@@ -94,7 +94,7 @@ export default {
     label: '风险等级',
     type: 'select',
     required: false,
-    service: () => new Promise(resolve => resolve([
+    service: () => Promise.resolve([
       {
         id: 'HIGH',
         name: '高',
@@ -107,6 +107,6 @@ export default {
         id: 'LOW',
         name: '低',
       },
-    ])),
+    ]),
   },
 } as Record<string, IFieldConfig>;

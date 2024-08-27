@@ -219,11 +219,11 @@
     useI18n,
   } from 'vue-i18n';
 
+  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
   import RenderInfoItem from './render-info-item.vue';
-
-  import type { EventItem } from '@/domain/model/strategy/strategy-field-event';
 
   interface IFormData {
     strategy_id?: number,
@@ -238,9 +238,9 @@
     risk_hazard: string,
     risk_guidance: string,
     risk_title: string,
-    event_evidence_field_configs: Array<EventItem>,
-    event_data_field_configs: Array<EventItem>,
-    event_basic_field_configs: Array<EventItem>,
+    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
+    event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
+    event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     processor_groups: [],
     notice_groups: []
   }
@@ -253,7 +253,7 @@
   const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
   const active = ref<number>(0);
 
-  const getData = (arr: Array<EventItem>) => {
+  const getData = (arr: StrategyFieldEvent['event_basic_field_configs']) => {
     const groups = [];
     for (let i = 0; i < arr.length; i += 2) {
       groups.push(arr.slice(i, i + 2));

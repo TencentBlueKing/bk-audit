@@ -14,7 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-export type EventItem = {
+type EventItem = {
   field_name: string,
   description: string
   display_name: string;
@@ -23,38 +23,25 @@ export type EventItem = {
   example?: string
 }
 
-export default class StrategyField {
+export default class StrategyFieldEvent {
   event_basic_field_configs: Array<EventItem>;
   event_data_field_configs: Array<EventItem>;
   event_evidence_field_configs: Array<EventItem>;
 
-  constructor(payload = {} as StrategyField) {
-    this.event_basic_field_configs = (payload.event_basic_field_configs
-      && payload.event_basic_field_configs.map(item => ({
-        field_name: item.field_name,
-        display_name: item.display_name,
-        is_priority: item.is_priority || false,
-        description: item.description,
-        example: item.example,
-        prefix: '',
-      }))) || [];
-    this.event_data_field_configs = (payload.event_data_field_configs
-      && payload.event_data_field_configs.map(item => ({
-        field_name: item.field_name,
-        display_name: item.display_name,
-        is_priority: item.is_priority || false,
-        description: item.description,
-        example: item.example,
-        prefix: 'event_data.',
-      }))) || [];
-    this.event_evidence_field_configs = (payload.event_evidence_field_configs
-      && payload.event_evidence_field_configs.map(item => ({
-        field_name: item.field_name,
-        display_name: item.display_name,
-        is_priority: item.is_priority || false,
-        description: item.description,
-        example: item.example,
-        prefix: 'event_evidence.',
-      }))) || [];
+  constructor(payload = {} as StrategyFieldEvent) {
+    this.event_basic_field_configs = StrategyFieldEvent.processingData(payload.event_basic_field_configs, '');
+    this.event_data_field_configs = StrategyFieldEvent.processingData(payload.event_data_field_configs, 'event_data');
+    this.event_evidence_field_configs = StrategyFieldEvent.processingData(payload.event_evidence_field_configs, 'event_evidence');
+  }
+
+  static processingData(data: Array<EventItem>, prefix = '') {
+    return (data && data.map(item => ({
+      field_name: item.field_name,
+      display_name: item.display_name,
+      is_priority: item.is_priority || false,
+      description: item.description,
+      example: item.example,
+      prefix,
+    }))) || [];
   }
 }

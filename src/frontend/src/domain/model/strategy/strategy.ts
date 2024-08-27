@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-import type { EventItem } from '@model/strategy/strategy-field-event';
+import StrategyFieldEvent from '../strategy/strategy-field-event';
 
 export default class Strategy {
   strategy_id: number;
@@ -65,9 +65,9 @@ export default class Strategy {
   risk_hazard: string;
   risk_guidance: string;
   risk_title: string;
-  event_evidence_field_configs: Array<EventItem>;
-  event_data_field_configs: Array<EventItem>;
-  event_basic_field_configs: Array<EventItem>;
+  event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
+  event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
+  event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
   processor_groups: Array<number>;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;

@@ -255,6 +255,8 @@
 
   import RiskManageService from '@service/risk-manage';
 
+  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+
   import useRequest from '@hooks/use-request';
 
   import EditTag from '@components/edit-box/tag.vue';
@@ -262,8 +264,6 @@
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
   import RenderInfoItem from './render-info-item.vue';
-
-  import type { EventItem } from '@/domain/model/strategy/strategy-field-event';
 
   interface IFormData {
     strategy_id?: number,
@@ -278,9 +278,9 @@
     risk_hazard: string,
     risk_guidance: string,
     risk_title: string,
-    event_evidence_field_configs: Array<EventItem>,
-    event_data_field_configs: Array<EventItem>,
-    event_basic_field_configs: Array<EventItem>,
+    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
+    event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
+    event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     processor_groups: [],
     notice_groups: []
   }
