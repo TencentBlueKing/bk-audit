@@ -21,7 +21,7 @@
         v-for="(item, index) in column"
         :key="index"
         class="item"
-        :style="{width: (locale === 'en-US' && index === 0) ? '141px' : ''}">
+        :style="{minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px'}">
         <span
           v-bk-tooltips="{
             disabled: !item.tips,
@@ -33,56 +33,16 @@
       </div>
     </div>
     <template
-      v-for="(item, key, index) in tableData"
-      :key="index">
+      v-for="(item, key) in tableData"
+      :key="key">
       <div class="body">
         <div
           class="group"
-          :style="{width: locale === 'en-US' ? '150px' : ''}">
+          :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
           <span> {{ groupMap[key] }} </span>
         </div>
         <div class="value-row">
-          <template v-if="item && item.length">
-            <div
-              v-for="(config, configIndex) in item"
-              :key="configIndex"
-              class="value-item">
-              <template
-                v-for="(value, valueKey, valueIndex) in config"
-                :key="valueIndex">
-                <div
-                  v-if="!['example', 'prefix'].includes(valueKey)"
-                  class="item">
-                  <template v-if="valueKey === 'is_priority'">
-                    <bk-switcher
-                      v-model="config.is_priority"
-                      theme="primary" />
-                  </template>
-                  <template v-else-if="valueKey === 'description'">
-                    <bk-input
-                      v-model="config.description"
-                      autosize
-                      behavior="simplicity"
-                      :maxlength="100"
-                      type="textarea" />
-                  </template>
-                  <template v-else>
-                    {{ value }}
-                  </template>
-                </div>
-              </template>
-            </div>
-          </template>
-          <div
-            v-else
-            class="value-item"
-            style="height: 100%;">
-            <div
-              class="item"
-              style="color: #979ba5; justify-content: center;">
-              {{ t('暂未获取到相关字段，请先进入下一步') }}
-            </div>
-          </div>
+          <value-item :item="item" />
         </div>
       </div>
     </template>
@@ -95,6 +55,8 @@
 
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+
+  import ValueItem from './valueItem.vue';
 
   import useRequest from '@/hooks/use-request';
 
@@ -172,7 +134,7 @@
 .event-table {
   @mixin item-styles {
     display: flex;
-    padding: 12px;
+    padding: 0 12px;
     border-right: 1px solid #dcdee5;
     border-bottom: 1px solid #dcdee5;
     align-items: center;
@@ -193,12 +155,7 @@
     .item {
       @include  item-styles;
 
-      padding-right: 0;
       background-color: #f5f7fa;
-
-      &:first-child {
-        width: 72px;
-      }
 
       &:nth-child(2),
       &:nth-child(3) {
@@ -223,41 +180,13 @@
       @include  item-styles;
 
       display: flex;
-      width: 72px;
-      padding: 0;
       background-color: #f5f7fa;
       align-items: center;
       justify-content: center;
     }
 
     .value-row {
-      width: calc(100% - 72px);
-
-      .value-item {
-        display: flex;
-
-        .item {
-          @include  item-styles;
-
-          &:nth-child(1),
-          &:nth-child(2) {
-            width: 240px;
-            background-color: #f5f7fa;
-          }
-
-          &:nth-child(3) {
-            width: 120px;
-          }
-
-          &:last-child {
-            flex: 1;
-          }
-
-          :deep(.bk-textarea) {
-            border: none;
-          }
-        }
-      }
+      width: calc(100% - 80px);
     }
   }
 }

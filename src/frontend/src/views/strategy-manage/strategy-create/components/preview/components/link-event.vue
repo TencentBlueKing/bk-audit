@@ -253,26 +253,25 @@
   const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
   const active = ref<number>(0);
 
-  const getData = (arr: StrategyFieldEvent['event_basic_field_configs']) => {
-    const groups = [];
-    for (let i = 0; i < arr.length; i += 2) {
-      groups.push(arr.slice(i, i + 2));
+  // 转为二维数组
+  const group = (array: Array<any>, subGroupLength: number = 2) => {
+    let index = 0;
+    const newArray = [];
+    while (index < array.length) {
+      newArray.push(array.slice(index, index += subGroupLength));
     }
-    return groups;
+    return newArray;
   };
 
   // 重点信息
-  const importantInformation = computed(() => {
-    const arr = [
-      ...props.data.event_basic_field_configs.filter(item => item.is_priority),
-      ...props.data.event_data_field_configs.filter(item => item.is_priority),
-      ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
-    ];
-    return getData(arr);
-  });
+  const importantInformation = computed(() => group([
+    ...props.data.event_basic_field_configs.filter(item => item.is_priority),
+    ...props.data.event_data_field_configs.filter(item => item.is_priority),
+    ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
+  ]));
 
   // 事件数据
-  const eventData = computed(() => getData(props.data.event_data_field_configs));
+  const eventData = computed(() => group(props.data.event_data_field_configs));
 
   // 事件证据
   const evidenceData = computed(() => props.data.event_evidence_field_configs);

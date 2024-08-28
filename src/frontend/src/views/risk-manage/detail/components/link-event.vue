@@ -382,18 +382,11 @@
   });
 
   // 重点信息
-  const importantInformation = computed(() => {
-    const arr = [
-      ...props.data.event_basic_field_configs.filter(item => item.is_priority),
-      ...props.data.event_data_field_configs.filter(item => item.is_priority),
-      ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
-    ];
-    const groups = [];
-    for (let i = 0; i < arr.length; i += 2) {
-      groups.push(arr.slice(i, i + 2));
-    }
-    return groups;
-  });
+  const importantInformation = computed(() => group([
+    ...props.data.event_basic_field_configs.filter(item => item.is_priority),
+    ...props.data.event_data_field_configs.filter(item => item.is_priority),
+    ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
+  ]));
 
   onMounted(() => {
     const observer = new MutationObserver(() => {

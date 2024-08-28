@@ -38,55 +38,24 @@
                 v-for="(item, index) in column"
                 :key="index"
                 class="item"
-                :style="{width: (locale === 'en-US' && index === 0) ? '137px' : ''}">
+                :style="{
+                  minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
+                  borderRight: index === 0 ? '1px solid #dcdee5' : ''
+                }">
                 {{ item }}
               </div>
             </div>
             <template
-              v-for="(item, key, index) in tableData"
-              :key="index">
+              v-for="(item, key) in tableData"
+              :key="key">
               <div class="body">
                 <div
                   class="group"
-                  :style="{width: locale === 'en-US' ? '150px' : ''}">
+                  :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
                   <span> {{ groupMap[key] }} </span>
                 </div>
                 <div class="value-row">
-                  <template v-if="item && item.length">
-                    <div
-                      v-for="(config, configIndex) in item"
-                      :key="configIndex"
-                      class="value-item">
-                      <template
-                        v-for="(value, valueKey, valueIndex) in config"
-                        :key="valueIndex">
-                        <div
-                          v-if="!['example', 'prefix'].includes(valueKey)"
-                          class="item">
-                          <div v-if="typeof value === 'boolean'">
-                            {{ value ? t('是') : t('否') }}
-                          </div>
-                          <div
-                            v-else
-                            v-bk-tooltips="{
-                              disabled: value && value.length < 15,
-                              content: value
-                            }">
-                            {{ value }}
-                          </div>
-                        </div>
-                      </template>
-                    </div>
-                  </template>
-                  <div
-                    v-else
-                    class="value-item">
-                    <div
-                      class="item"
-                      style="color: #979ba5; text-align: center;">
-                      {{ t('暂无数据') }}
-                    </div>
-                  </div>
+                  <value-item :item="item" />
                 </div>
               </div>
             </template>
@@ -106,6 +75,7 @@
   import collapsePanel from './collapse-panel.vue';
   import RenderInfoBlock from './render-info-block.vue';
   import RenderInfoItem from './render-info-item.vue';
+  import ValueItem from './valueItem.vue';
 
   interface Props {
     data: StrategyModel,
@@ -135,7 +105,7 @@
 .risk-display {
   .event-table {
     @mixin item-styles {
-      padding-left: 12px;
+      padding: 0 12px;
       border-bottom: 1px solid #dcdee5;
     }
 
@@ -155,11 +125,6 @@
 
       .item {
         @include  item-styles;
-
-        &:first-child {
-          width: 72px;
-          border-right: 1px solid #dcdee5;
-        }
 
         &:nth-child(2),
         &:nth-child(3) {
@@ -184,44 +149,13 @@
         @include  item-styles;
 
         display: flex;
-        width: 72px;
-        padding: 0;
         border-right: 1px solid #dcdee5;
         align-items: center;
         justify-content: center;
       }
 
       .value-row {
-        width: calc(100% - 72px);
-
-        .value-item {
-          display: flex;
-          height: 42px;
-          line-height: 42px;
-
-          .item {
-            @include  item-styles;
-
-            &:nth-child(1),
-            &:nth-child(2) {
-              width: 180px;
-            }
-
-            &:nth-child(3) {
-              width: 100px;
-            }
-
-            &:last-child {
-              flex: 1;
-
-              div {
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-              }
-            }
-          }
-        }
+        width: calc(100% - 80px);
       }
     }
   }
