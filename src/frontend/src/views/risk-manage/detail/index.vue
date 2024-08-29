@@ -26,15 +26,12 @@
         <div class="link-event-wrap">
           <link-event
             :data="detailData"
-            :strategy-list="strategyList"
-            @change-height="handleChangeHeight" />
+            :strategy-list="strategyList" />
         </div>
       </div>
       <!-- 事件处理 -->
       <scroll-faker style="width: 368px;">
-        <div
-          class="right"
-          :style="{height: typeof handleHeight === 'string' ? handleHeight : handleHeight + 'px'}">
+        <div class="right">
           <risk-handle
             :data="riskData"
             :risk-id="riskData.risk_id"
@@ -59,8 +56,8 @@
 <script setup lang='ts'>
   import {
     computed,
-    onUnmounted,
-    ref,
+    onBeforeUnmount,
+    onMounted,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -88,12 +85,7 @@
   const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
-  const handleHeight = ref<number | string>('calc(100vh - 138px)');
   let timeout: undefined | number = undefined;
-
-  const handleChangeHeight = (height: number) => {
-    handleHeight.value = height + 180;
-  };
 
   const {
     loading: strategyLoading,
@@ -152,9 +144,6 @@
       handleUpdate();
     }, 60 * 1000);
   };
-  onUnmounted(() => {
-    clearTimeout(timeout);
-  });
 
   const handleCopyLink = () => {
     const route = window.location.href;
@@ -172,6 +161,28 @@
       name: route.name === 'riskManageDetail'
         ? 'riskManageList'
         : 'handleManageList',
+    });
+  });
+
+  onMounted(() => {
+    const observer = new MutationObserver(() => {
+      const left = document.querySelector('.left');
+      const right = document.querySelector('.right') as HTMLDivElement;
+      if (left && right) {
+        right.style.height = `${left.scrollHeight}px`;
+      }
+    });
+    observer.observe(document.querySelector('.left') as Node, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+    });
+
+    onBeforeUnmount(() => {
+      observer.takeRecords();
+      observer.disconnect();
+      clearTimeout(timeout);
     });
   });
 </script>

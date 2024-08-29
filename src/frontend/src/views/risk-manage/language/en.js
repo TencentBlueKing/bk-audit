@@ -119,5 +119,6 @@ export default {
     高: 'High',
     中: 'Middle',
     低: 'Low',
+    转单给: 'Transfer order to',
   },
 };

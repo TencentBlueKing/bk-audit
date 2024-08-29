@@ -30,7 +30,7 @@ export default {
     新建处理规则: 'New Rule',
     风险: 'Auto Processing',
     规则名称: 'Name',
-    套餐执行成功后自动关单: 'Automatically close the ticket after successful execution of the tool',
+    套餐执行成功后自动关单: 'Auto-close order after execution',
     规则ID: 'Rule ID',
     批量调整优先级: 'Re-prioritize',
     '规则ID、规则名称、最近更新人、启停状态': 'Search by Rule ID / Rule name / Last modified by / Status',

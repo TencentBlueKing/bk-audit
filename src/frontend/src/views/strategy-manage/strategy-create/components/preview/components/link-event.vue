@@ -74,137 +74,139 @@
             </render-info-block>
           </template>
         </div>
-        <div class="title">
-          {{ t('基本信息') }}
-        </div>
-        <div
-          class="base-info">
-          <render-info-block
-            class="flex mt16"
-            style="margin-bottom: 12px;">
-            <render-info-item
-              :label="t('事件ID')"
-              :label-width="labelWidth">
-              {{ t('以实际内容为准') }}
-            </render-info-item>
-            <render-info-item
-              :label="t('责任人')"
-              :label-width="labelWidth">
-              {{ t('以实际内容为准') }}
-            </render-info-item>
-          </render-info-block>
-          <render-info-block
-            class="flex mt16"
-            style="margin-bottom: 12px;">
-            <render-info-item
-              :label="t('命中策略')"
-              :label-width="labelWidth">
-              {{ data.strategy_name }}
-            </render-info-item>
-            <render-info-item
-              :label="t('事件描述')"
-              :label-width="labelWidth">
-              {{ t('以实际内容为准') }}
-            </render-info-item>
-          </render-info-block>
-        </div>
-        <div class="title">
-          {{ t('事件数据') }}
-        </div>
-        <div
-          class="data-info">
-          <template v-if="eventData.length">
-            <div
-              v-for="(item, index) in eventData"
-              :key="index"
-              class="flex data-info-row">
+        <div style="padding-left: 12px">
+          <div class="title">
+            {{ t('基本信息') }}
+          </div>
+          <div
+            class="base-info">
+            <render-info-block
+              class="flex mt16"
+              style="margin-bottom: 12px;">
+              <render-info-item
+                :label="t('事件ID')"
+                :label-width="labelWidth">
+                {{ t('以实际内容为准') }}
+              </render-info-item>
+              <render-info-item
+                :label="t('责任人')"
+                :label-width="labelWidth">
+                {{ t('以实际内容为准') }}
+              </render-info-item>
+            </render-info-block>
+            <render-info-block
+              class="flex mt16"
+              style="margin-bottom: 12px;">
+              <render-info-item
+                :label="t('命中策略')"
+                :label-width="labelWidth">
+                {{ data.strategy_name }}
+              </render-info-item>
+              <render-info-item
+                :label="t('事件描述')"
+                :label-width="labelWidth">
+                {{ t('以实际内容为准') }}
+              </render-info-item>
+            </render-info-block>
+          </div>
+          <div class="title">
+            {{ t('事件数据') }}
+          </div>
+          <div
+            class="data-info">
+            <template v-if="eventData.length">
               <div
-                v-for="(subItem, subIndex) in item"
-                :key="subIndex"
-                class="flex data-info-item">
-                <div class="data-info-item-key">
-                  <span>{{ subItem.display_name }}</span>
+                v-for="(item, index) in eventData"
+                :key="index"
+                class="flex data-info-row">
+                <div
+                  v-for="(subItem, subIndex) in item"
+                  :key="subIndex"
+                  class="flex data-info-item">
+                  <div class="data-info-item-key">
+                    <span>{{ subItem.display_name }}</span>
+                  </div>
+                  <div class="data-info-item-value">
+                    <span>{{ t('以实际内容为准') }}</span>
+                  </div>
                 </div>
-                <div class="data-info-item-value">
-                  <span>{{ t('以实际内容为准') }}</span>
+              </div>
+            </template>
+            <template v-else>
+              <div
+                v-for="(item) in 4"
+                :key="item"
+                class="flex data-info-row">
+                <div
+                  v-for="(subItem) in 2"
+                  :key="subItem"
+                  class="flex data-info-item">
+                  <div class="data-info-item-key">
+                    <span>{{ t('以实际内容为准') }}</span>
+                  </div>
+                  <div class="data-info-item-value">
+                    <span>{{ t('以实际内容为准') }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+          <div class="title mb16">
+            {{ t('事件证据') }}
+          </div>
+          <template v-if="evidenceData.length">
+            <div
+              v-for="(item, index) in evidenceData"
+              :key="index"
+              class="evidence-info"
+              :style="{borderTop: index == 0 ? '1px solid #ecedf1' : '0px'} ">
+              <div class="evidence-info-key">
+                <div>
+                  <div class="evidence-info-item-text">
+                    {{ item.field_name }}
+                  </div>
+                </div>
+              </div>
+              <div
+                v-for="(subItem) in 3"
+                :key="subItem"
+                class="evidence-info-value-wrap">
+                <div
+                  class="evidence-info-value">
+                  <div>
+                    <span> {{ t('以实际内容为准') }} </span>
+                  </div>
                 </div>
               </div>
             </div>
           </template>
           <template v-else>
             <div
-              v-for="(item) in 4"
-              :key="item"
-              class="flex data-info-row">
-              <div
-                v-for="(subItem) in 2"
-                :key="subItem"
-                class="flex data-info-item">
-                <div class="data-info-item-key">
-                  <span>{{ t('以实际内容为准') }}</span>
+              v-for="(item, index) in 4"
+              :key="index"
+              class="evidence-info"
+              :style="{borderTop: index == 0 ? '1px solid #ecedf1' : '0px'} ">
+              <div class="evidence-info-key">
+                <div>
+                  <div class="evidence-info-item-text">
+                    {{ t('以实际内容为准') }}{{ index }}
+                  </div>
                 </div>
-                <div class="data-info-item-value">
-                  <span>{{ t('以实际内容为准') }}</span>
+              </div>
+              <div
+                v-for="(subItem) in 3"
+                :key="subItem"
+                class="evidence-info-value-wrap">
+                <div
+                  class="evidence-info-value">
+                  <div>
+                    <span> {{ t('以实际内容为准') }} </span>
+                  </div>
                 </div>
               </div>
             </div>
           </template>
         </div>
-        <div class="title mb16">
-          {{ t('事件证据') }}
-        </div>
-        <template v-if="evidenceData.length">
-          <div
-            v-for="(item, index) in evidenceData"
-            :key="index"
-            class="evidence-info"
-            :style="{borderTop: index == 0 ? '1px solid #ecedf1' : '0px'} ">
-            <div class="evidence-info-key">
-              <div>
-                <div class="evidence-info-item-text">
-                  {{ item.field_name }}
-                </div>
-              </div>
-            </div>
-            <div
-              v-for="(subItem) in 3"
-              :key="subItem"
-              class="evidence-info-value-wrap">
-              <div
-                class="evidence-info-value">
-                <div>
-                  <span> {{ t('以实际内容为准') }} </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-        <template v-else>
-          <div
-            v-for="(item, index) in 4"
-            :key="index"
-            class="evidence-info"
-            :style="{borderTop: index == 0 ? '1px solid #ecedf1' : '0px'} ">
-            <div class="evidence-info-key">
-              <div>
-                <div class="evidence-info-item-text">
-                  {{ t('以实际内容为准') }}{{ index }}
-                </div>
-              </div>
-            </div>
-            <div
-              v-for="(subItem) in 3"
-              :key="subItem"
-              class="evidence-info-value-wrap">
-              <div
-                class="evidence-info-value">
-                <div>
-                  <span> {{ t('以实际内容为准') }} </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
       </div>
     </div>
   </div>
@@ -321,7 +323,7 @@
 
     .list-item-detail {
       width: calc(100% - 164px);
-      padding-left: 16px;
+      padding-left: 12px;
 
       .important-information {
         padding: 12px 0;
@@ -329,7 +331,7 @@
         background-color: #fafbfd;
 
         .title {
-          padding-left: 16px;
+          padding-left: 8px;
           border-left: 3px solid #3a84ff;
         }
 
