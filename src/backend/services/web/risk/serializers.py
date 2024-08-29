@@ -574,3 +574,11 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
             "event_data_field_configs",
             "event_evidence_field_configs",
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # 对基础字段描述进行国际化
+        event_basic_field_configs = data.get("event_basic_field_configs") or []
+        for config in event_basic_field_configs:
+            config["display_name"] = gettext(config["display_name"])
+        return data
