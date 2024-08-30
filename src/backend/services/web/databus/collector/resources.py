@@ -97,6 +97,7 @@ from services.web.databus.constants import (
     DEFAULT_CATEGORY_ID,
     DEFAULT_COLLECTOR_SCENARIO,
     DEFAULT_LAST_TIME_TIMESTAMP,
+    PULL_HANDLER_PRE_CHECK_TIMEOUT,
     CustomTypeEnum,
     EnvironmentChoice,
     EtlConfigEnum,
@@ -463,7 +464,12 @@ class ToggleJoinDataResource(CollectorMeta):
         pull_handler = HttpPullHandler(system, resource_type, Snapshot(), SnapShotStorageChoices.REDIS.value)
         web = requests.session()
         try:
-            resp = web.post(pull_handler.url, json=body, headers={"Authorization": pull_handler.authorization})
+            resp = web.post(
+                pull_handler.url,
+                json=body,
+                headers={"Authorization": pull_handler.authorization},
+                timeout=PULL_HANDLER_PRE_CHECK_TIMEOUT,
+            )
             content = resp.json()
             status = resp.status_code
             result = content.get("result", True)
