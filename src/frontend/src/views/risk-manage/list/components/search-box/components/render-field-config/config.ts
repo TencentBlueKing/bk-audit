@@ -94,19 +94,8 @@ export default {
     label: '风险等级',
     type: 'select',
     required: false,
-    service: () => Promise.resolve([
-      {
-        id: 'HIGH',
-        name: '高',
-      },
-      {
-        id: 'MIDDLE',
-        name: '中',
-      },
-      {
-        id: 'LOW',
-        name: '低',
-      },
-    ]),
+    labelName: 'label',
+    valName: 'value',
+    service: () => Promise.resolve(StrategyManageService.fetchStrategyCommon().then(data => data.risk_level)),
   },
 } as Record<string, IFieldConfig>;

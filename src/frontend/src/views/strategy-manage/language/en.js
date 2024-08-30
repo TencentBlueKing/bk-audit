@@ -211,5 +211,7 @@ export default {
     预览: 'Preview',
     开启后将在单据里优先展示: 'After opening, it will be displayed first in the ticket',
     '在单据页，鼠标移入label，即可显示字段说明': 'On the ticket page, move the mouse into the label to display the field description',
+    请输入风险单名称: 'Please enter the name of the risk order',
+    请选择通知组: 'Please select a notification group',
   },
 };
