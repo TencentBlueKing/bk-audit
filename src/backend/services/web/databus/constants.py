@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import os
 
 from django.utils.translation import gettext_lazy
 
@@ -108,6 +109,8 @@ ContainerCollectorType = _ContainerCollectorType
 EtlConfigEnum = _EtlConfigEnum
 CollectorParamConditionTypeEnum = _CollectorParamConditionTypeEnum
 CollectorParamConditionMatchType = _CollectorParamConditionMatchType
+
+PULL_HANDLER_PRE_CHECK_TIMEOUT = int(os.getenv("BKAPP_PULL_HANDLER_PRE_CHECK_TIMEOUT", 5))  # ss
 
 
 class DefaultPullConfig:
