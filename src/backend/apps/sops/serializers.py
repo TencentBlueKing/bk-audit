@@ -21,5 +21,5 @@ from rest_framework import serializers
 
 class GetTemplatesRespSerializer(serializers.Serializer):
     id = serializers.IntegerField()
-    name = serializers.CharField()
+    name = serializers.CharField(allow_blank=True)
     url = serializers.CharField(required=False, allow_null=True, allow_blank=True)
