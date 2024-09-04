@@ -79,10 +79,9 @@
   import useRequest from '@hooks/use-request';
 
   import AiopsPart from '@views/strategy-manage/strategy-create/components/step1/components/aiops/index.vue';
+  import CardPart from '@views/strategy-manage/strategy-create/components/step1/components/card-part.vue';
 
   import { changeConfirm } from '@utils/assist';
-
-  import CardPart from '../../../card-part.vue';
 
   interface Emits{
     (e:'change', step: number): void,

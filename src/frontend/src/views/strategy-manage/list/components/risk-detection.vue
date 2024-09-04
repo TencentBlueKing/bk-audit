@@ -76,13 +76,13 @@
       style="margin-top: 24px;">
       <render-info-block class="mt16">
         <render-info-item :label="t('方案名称')">
-          {{ controlName }} - V{{ data.control_version }}
+          {{ currentControl?.control_name || '--' }} - V{{ data.control_version }}
         </render-info-item>
       </render-info-block>
 
       <bk-loading :loading="controlLoading">
         <component
-          :is="comMap[controlTypeId]"
+          :is="comMap[currentControl?.control_id || '--']"
           ref="comRef"
           :data="data" />
       </bk-loading>
@@ -114,10 +114,8 @@
 
   const props = defineProps<Props>();
   const { t } = useI18n();
-  const controlTypeId = computed(() => controlList.value
-    .find(item => item.control_id === props.data.control_id)?.control_type_id || '');// 方案类型id
-  const controlName = computed(() => controlList.value
-    .find(item => item.control_id === props.data.control_id)?.control_name || '--');// 方案名称
+  const currentControl = computed(() => controlList.value
+    .find(item => item.control_id === props.data.control_id));// 当前方案
   const comMap: Record<string, any> = {
     BKM: FilterCondition,
     AIOps: RenderAiops,

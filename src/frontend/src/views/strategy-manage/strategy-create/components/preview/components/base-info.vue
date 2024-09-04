@@ -111,7 +111,7 @@
           :label="t('处理状态')"
           :label-width="labelWidth">
           <template v-if="statusToMap[data.status]">
-            <bk-tag :theme="statusToMap[data.status].tag">
+            <bk-tag :theme="statusToMap[data.status].theme">
               <p style="display: flex;align-items: center;">
                 <audit-icon
                   :style="`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`"
@@ -189,7 +189,7 @@
           :label="t('处理状态')"
           :label-width="labelWidth">
           <template v-if="statusToMap[data.status]">
-            <bk-tag :theme="statusToMap[data.status].tag">
+            <bk-tag :theme="statusToMap[data.status].theme">
               <p style="display: flex;align-items: center;">
                 <audit-icon
                   :style="`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`"
@@ -294,32 +294,32 @@
   }
   defineProps<Props>();
   const statusToMap: Record<string, {
-    tag: 'info' | 'warning' | 'success' | 'danger' | undefined,
+    theme: 'info' | 'warning' | 'success' | 'danger' | undefined,
     icon: string,
     color: string,
   }> = {
     new: {
-      tag: 'info',
+      theme: 'info',
       icon: 'auto',
       color: '#3A84FF',
     },
     closed: {
-      tag: undefined,
+      theme: undefined,
       icon: 'corret-fill',
       color: '#979BA5',
     },
     await_deal: {
-      tag: 'warning',
+      theme: 'warning',
       icon: 'daichuli',
       color: '#FF9E00',
     },
     for_approve: {
-      tag: 'info',
+      theme: 'info',
       icon: 'auto',
       color: '#3A84FF',
     },
     auto_process: {
-      tag: 'success',
+      theme: 'success',
       icon: 'taocanchulizhong',
       color: '#0CA668',
     },

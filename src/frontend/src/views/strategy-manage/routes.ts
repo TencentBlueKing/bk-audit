@@ -63,7 +63,7 @@ export default {
     },
     {
       path: 'upgrade/:strategyId/:controlId',
-      component: () => import('@views/strategy-manage/strategy-create/components/step1/components/upgrade/index.vue'),
+      component: () => import('@views/strategy-manage/strategy-create/upgrade/index.vue'),
       name: 'strategyUpgrade',
       meta: {
         title: '升级详情',
