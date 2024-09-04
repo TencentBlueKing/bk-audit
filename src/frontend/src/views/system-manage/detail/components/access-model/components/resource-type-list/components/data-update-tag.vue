@@ -25,6 +25,10 @@
       :is-show="isShow"
       trigger="manual">
       <audit-icon
+        v-bk-tooltips="{
+          content: t('请在启用后操作'),
+          disabled: status ==='running',
+        }"
         class="type-edit"
         :class="[status !=='running' ? 'type-edit-disabled' : '' ]"
         :style="{display: isShow ? 'block' : ''}"

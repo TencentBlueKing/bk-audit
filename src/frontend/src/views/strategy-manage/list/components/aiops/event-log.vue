@@ -90,7 +90,7 @@
 
   import useRequest from '@hooks/use-request';
 
-  import CollapsePanel from '@views/strategy-manage/strategy-create/components/aiops/components/components/collapse-panel.vue';
+  import CollapsePanel from '@views/strategy-manage/strategy-create/components/step1/components/aiops/components/components/collapse-panel.vue';
 
   import RenderInfoBlock from '../render-info-block.vue';
   import RenderInfoItem from '../render-info-item.vue';

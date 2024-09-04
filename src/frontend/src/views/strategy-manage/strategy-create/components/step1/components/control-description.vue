@@ -103,14 +103,12 @@
 <style scoped lang="postcss">
 .diff-text {
   height: 100%;
+  max-width: calc(100% - 1280px);
   min-width: 246px;
-  margin-right: 24px;
-  margin-left: 12px;
+  padding-left: 12px;
   color: #63656e;
   background: #f5f7fa;
-
-  /* flex: 0 0 236px; */
-  flex-shrink: 0;
+  flex: 1;
 
 
   .exception-empty-part {
@@ -125,7 +123,7 @@
 
     >.tip {
       font-size: 12px;
-      color: #63656e;
+      color: #979ba5;
     }
   }
 

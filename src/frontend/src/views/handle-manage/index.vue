@@ -59,6 +59,7 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import MarkRiskLabel from './components/mark-risk-label.vue';
+  import RiskLevel from './components/risk-level.vue';
   import SearchBox from './search-box/index.vue';
 
   const dataSource = RiskManageService.fetchTodoRiskList;
@@ -127,6 +128,14 @@
       field: () => 'event_content',
       minWidth: 320,
       render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.event_content} />,
+    },
+    {
+      label: () => t('风险等级'),
+      field: () => 'risk_id',
+      minWidth: 320,
+      render: ({ data }: { data: RiskManageModel }) => <>
+          <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
+        </>,
     },
     {
       label: () => t('风险标签'),
@@ -375,10 +384,22 @@
   });
 
 
+  const {
+    data: levelData,
+    run: fetchRiskLevel,
+  } = useRequest(StrategyManageService.fetchRiskLevel, {
+    defaultValue: {},
+  });
+
   // 记录轮训的数据
   const pollingDataMap = ref<Record<string, RiskManageModel>>({});
   const handleRequestSuccess = ({ results }: {results: Array<RiskManageModel>}) => {
     startPolling(results);
+    if (!results.length) return;
+    // 获取对应风险等级
+    fetchRiskLevel({
+      strategy_ids: results.map(item => item.strategy_id).join(','),
+    });
   };
   // 开始轮训
   const startPolling = (results: Array<RiskManageModel>) => {
@@ -438,6 +459,7 @@
       operator: '',
       status: '',
       event_content: '',
+      risk_level: '',
     };
     listRef.value.fetchData({
       ...params,

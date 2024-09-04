@@ -279,5 +279,6 @@ export default {
     数据更新方式: 'Data update method',
     增量更新: 'Incremental',
     全量更新: 'Full',
+    请在启用后操作: 'Please operate after enabling',
   },
 };

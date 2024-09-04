@@ -40,139 +40,173 @@
           </scroll-faker>
         </div>
         <div class="list-item-detail">
-          <div class="title">
-            {{ t('基本信息') }}
-          </div>
-          <div
-            v-if="eventItem.event_id || eventItem.strategy_id"
-            class="base-info">
-            <render-info-block
-              class="flex mt16"
-              style="margin-bottom: 12px;">
-              <render-info-item
-                :label="t('事件ID')"
-                :label-width="labelWidth">
-                {{ eventItem.event_id }}
-              </render-info-item>
-              <render-info-item
-                :label="t('责任人')"
-                :label-width="labelWidth">
-                {{ eventItem.operator }}
-              </render-info-item>
-            </render-info-block>
-            <render-info-block
-              class="flex mt16"
-              style="margin-bottom: 12px;">
-              <render-info-item
-                :label="t('命中策略')"
-                :label-width="labelWidth">
-                <bk-button
-                  v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
-                  text
-                  theme="primary"
-                  @click="handlerStrategy()">
-                  {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
-                </bk-button>
-                <span v-else> -- </span>
-              </render-info-item>
-              <render-info-item
-                :label="t('事件描述')"
-                :label-width="labelWidth">
-                {{ eventItem.event_content }}
-              </render-info-item>
-            </render-info-block>
-          </div>
-          <bk-exception
-            v-else
-            class="exception-part"
-            scene="part"
-            type="empty">
-            {{ t('暂无数据') }}
-          </bk-exception>
-          <div class="title">
-            {{ t('事件数据') }}
-          </div>
-          <div
-            v-if="eventItemDataKeyArr.length"
-            class="data-info">
-            <div
-              v-for="(keyArr, keyIndex) in eventItemDataKeyArr"
-              :key="keyIndex"
-              class="flex">
-              <div
-                v-for="(key, index) in keyArr"
+          <div class="important-information">
+            <div class="title">
+              {{ t('重点信息') }}
+            </div>
+            <template v-if="importantInformation.length">
+              <render-info-block
+                v-for="(item, index) in importantInformation"
                 :key="index"
-                class="flex data-info-item">
-                <div class="data-info-item-key">
-                  <span>{{ key }}</span>
-                </div>
-                <div class="data-info-item-value">
-                  <div
-                    v-bk-tooltips="{
-                      content: JSON.stringify(eventItem.event_data[key]),
-                      disabled: !showTooltips,
-                      extCls:'evidence-info-value-tooltips',
-                    }"
-                    @mouseenter="handlerEnter($event)">
-                    <span>{{ eventItem.event_data[key] }}</span>
-                  </div>
-                </div>
-              </div>
+                class="flex mt16"
+                style="margin-bottom: 12px;">
+                <render-info-item
+                  v-for="(subItem, subIndex) in item"
+                  :key="subIndex"
+                  :description="subItem.description"
+                  :label="subItem.display_name"
+                  :label-width="labelWidth">
+                  {{
+                    eventItem[subItem.field_name as keyof typeof eventItem] ||
+                      eventItem.event_data[subItem.field_name] ||
+                      (eventItemEvidence && eventItemEvidence.map(item => item[subItem.field_name]).join(';'))
+                  }}
+                </render-info-item>
+              </render-info-block>
+            </template>
+            <bk-exception
+              v-else
+              class="exception-part"
+              scene="part"
+              type="empty">
+              {{ t('暂无数据') }}
+            </bk-exception>
+          </div>
+          <div style="padding-left: 12px">
+            <div class="title mt16">
+              {{ t('基本信息') }}
             </div>
-          </div>
-          <bk-exception
-            v-else
-            class="exception-part"
-            scene="part"
-            type="empty">
-            {{ t('暂无数据') }}
-          </bk-exception>
-          <div class="title">
-            {{ t('事件证据') }}
-          </div>
-          <div
-            v-if="eventItemEvidence.length"
-            class="evidence-info mt16">
-            <div class="evidence-info-key">
+            <div
+              v-if="eventItem.event_id || eventItem.strategy_id"
+              class="base-info">
+              <render-info-block
+                class="flex mt16"
+                style="margin-bottom: 12px;">
+                <render-info-item
+                  :label="t('事件ID')"
+                  :label-width="labelWidth">
+                  {{ eventItem.event_id }}
+                </render-info-item>
+                <render-info-item
+                  :label="t('责任人')"
+                  :label-width="labelWidth">
+                  {{ eventItem.operator }}
+                </render-info-item>
+              </render-info-block>
+              <render-info-block
+                class="flex mt16"
+                style="margin-bottom: 12px;">
+                <render-info-item
+                  :label="t('命中策略')"
+                  :label-width="labelWidth">
+                  <bk-button
+                    v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
+                    text
+                    theme="primary"
+                    @click="handlerStrategy()">
+                    {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
+                  </bk-button>
+                  <span v-else> -- </span>
+                </render-info-item>
+                <render-info-item
+                  :label="t('事件描述')"
+                  :label-width="labelWidth">
+                  {{ eventItem.event_content }}
+                </render-info-item>
+              </render-info-block>
+            </div>
+            <bk-exception
+              v-else
+              class="exception-part"
+              scene="part"
+              type="empty">
+              {{ t('暂无数据') }}
+            </bk-exception>
+            <div class="title">
+              {{ t('事件数据') }}
+            </div>
+            <div
+              v-if="eventItemDataKeyArr.length"
+              class="data-info">
               <div
-                v-for="(key, keyIndex) in Object.keys(eventItemEvidence[0])"
-                :key="keyIndex">
-                <div class="evidence-info-item-text">
-                  {{ key }}
-                </div>
-              </div>
-            </div>
-            <scroll-faker style="width: calc(100% - 160px)">
-              <div class="evidence-info-value-wrap">
+                v-for="(keyArr, keyIndex) in eventItemDataKeyArr"
+                :key="keyIndex"
+                class="flex data-info-row">
                 <div
-                  v-for="(item, index) in eventItemEvidence"
+                  v-for="(key, index) in keyArr"
                   :key="index"
-                  class="evidence-info-value">
-                  <div
-                    v-for="(value, valueIndex) in Object.values(item)"
-                    :key="valueIndex">
+                  class="flex data-info-item">
+                  <div class="data-info-item-key">
+                    <span>{{ key }}</span>
+                  </div>
+                  <div class="data-info-item-value">
                     <div
                       v-bk-tooltips="{
-                        content: String(value),
+                        content: JSON.stringify(eventItem.event_data[key]),
                         disabled: !showTooltips,
                         extCls:'evidence-info-value-tooltips',
                       }"
-                      class="evidence-info-item-text"
                       @mouseenter="handlerEnter($event)">
-                      <span> {{ value }} </span>
+                      <span>{{ eventItem.event_data[key] }}</span>
                     </div>
                   </div>
                 </div>
               </div>
-            </scroll-faker>
+            </div>
+            <bk-exception
+              v-else
+              class="exception-part"
+              scene="part"
+              type="empty">
+              {{ t('暂无数据') }}
+            </bk-exception>
+            <div class="title">
+              {{ t('事件证据') }}
+            </div>
+            <div
+              v-if="eventItemEvidence.length"
+              class="evidence-info mt16">
+              <div class="evidence-info-key">
+                <div
+                  v-for="(key, keyIndex) in Object.keys(eventItemEvidence[0])"
+                  :key="keyIndex">
+                  <div class="evidence-info-item-text">
+                    {{ key }}
+                  </div>
+                </div>
+              </div>
+              <scroll-faker style="width: calc(100% - 160px)">
+                <div class="evidence-info-value-wrap">
+                  <div
+                    v-for="(item, index) in eventItemEvidence"
+                    :key="index"
+                    class="evidence-info-value">
+                    <div
+                      v-for="(value, valueIndex) in Object.values(item)"
+                      :key="valueIndex">
+                      <div
+                        v-bk-tooltips="{
+                          content: String(value),
+                          disabled: !showTooltips,
+                          extCls:'evidence-info-value-tooltips',
+                        }"
+                        class="evidence-info-item-text"
+                        @mouseenter="handlerEnter($event)">
+                        <span> {{ value }} </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </scroll-faker>
+            </div>
+            <bk-exception
+              v-else
+              class="exception-part"
+              scene="part"
+              type="empty">
+              {{ t('暂无数据') }}
+            </bk-exception>
           </div>
-          <bk-exception
-            v-else
-            class="exception-part"
-            scene="part"
-            type="empty">
-            {{ t('暂无数据') }}
-          </bk-exception>
         </div>
       </template>
       <bk-exception
@@ -204,6 +238,7 @@
 
   import EventModel from '@model/event/event';
   import type RiskManageModel from '@model/risk/risk';
+  import type StrategyInfo from '@model/risk/strategy-info';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
@@ -216,13 +251,9 @@
       label: string,
       value: number
     }>,
-    data: RiskManageModel
-  }
-  interface Emits {
-    (e: 'changeHeight', height: number): void
+    data: RiskManageModel & StrategyInfo
   }
   const props = defineProps<Props>();
-  const emit = defineEmits<Emits>();
   const router = useRouter();
   const { t, locale } = useI18n();
   const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
@@ -348,6 +379,13 @@
     immediate: true,
   });
 
+  // 重点信息
+  const importantInformation = computed(() => group([
+    ...props.data.event_basic_field_configs.filter(item => item.is_priority),
+    ...props.data.event_data_field_configs.filter(item => item.is_priority),
+    ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
+  ]));
+
   onMounted(() => {
     const observer = new MutationObserver(() => {
       const detail = document.querySelector('.list-item-detail');
@@ -355,7 +393,6 @@
       if (detail && list) {
         // 设置左边list的高度和右边详情一样高
         list.style.height = `${detail.scrollHeight}px`;
-        emit('changeHeight', detail.scrollHeight);
       }
     });
     observer.observe(document.querySelector('.body') as Node, {
@@ -416,9 +453,31 @@
 
     .list-item-detail {
       width: calc(100% - 164px);
-      padding-left: 16px;
+      padding-left: 12px;
+
+      .important-information {
+        padding: 12px 0;
+        margin-bottom: 24px;
+        background-color: #fafbfd;
+
+        .title {
+          padding-left: 8px;
+          border-left: 3px solid #3a84ff;
+        }
+
+        .render-info-item {
+          width: 50%;
+          align-items: flex-start;
+
+          .info-value {
+            word-break: break-all;
+          }
+        }
+      }
 
       .base-info {
+        margin-bottom: 24px;
+
         .render-info-item {
           width: 50%;
           align-items: flex-start;
@@ -430,9 +489,21 @@
       }
 
       .data-info {
-        margin: 16px 0;
-        border-top: 1px solid #ecedf1;
-        border-left: 1px solid #ecedf1;
+        margin: 16px 0 24px;
+        border: 1px solid #ecedf1;
+
+        .data-info-row:last-child {
+          .data-info-item-key,
+          .data-info-item-value {
+            border-bottom: 0;
+          }
+        }
+
+        .data-info-item:last-child {
+          .data-info-item-value {
+            border-right: 0;
+          }
+        }
 
         .data-info-item {
           width: 50%;

@@ -18,22 +18,23 @@
 <template>
   <div class="risk-content-item">
     <div class="risk-content-title">
-      <span style="color: #63656E;">{{ data.created_by }} {{ t('添加风险总结') }}</span>
-      <span style=" margin-left: 8px;color: #979BA5;">{{ data.created_at }}</span>
+      <span style="color: #63656e;">{{ data.created_by }} {{ t('添加风险总结') }}</span>
+      <span style=" margin-left: 8px;color: #979ba5;">{{ data.created_at }}</span>
       <audit-icon
         v-if="showEditBtn"
-        style="margin-left: 10px;color: #3A84FF;cursor: pointer;"
+        style="margin-left: 5px;color: #3a84ff;cursor: pointer;"
         type="edit-fill"
         @click="handleEdit" />
     </div>
     <div
       class="rich-html"
-      style="padding: 8px;margin-top: 8px;background: #F5F7FA;border-radius: 4px;"
-      v-html="data.content" />
+      style="padding: 8px;margin-top: 8px;background: #f5f7fa;border-radius: 4px;"
+      v-html="getSafeContent(data.content)" />
   </div>
 </template>
 
 <script setup lang='ts'>
+  import DOMPurify from 'dompurify';
   import {
     useI18n,
   } from 'vue-i18n';
@@ -54,34 +55,36 @@
   const handleEdit = () => {
     emits('edit');
   };
+
+  const getSafeContent = (content: string) => DOMPurify.sanitize(content);
 </script>
 <style lang="postcss">
-.rich-html{
-  ul{
+.rich-html {
+  ul {
     padding-left: 15px;
 
-    li{
+    li {
       list-style: disc !important;
     }
   }
 
-  ol{
+  ol {
     padding-left: 13px;
 
-    li{
+    li {
       list-style: decimal;
     }
   }
 }
 
-.risk-content-item{
+.risk-content-item {
   padding: 10px 16px;
-  background: #FFF;
-  border: 1px solid #EAEBF0;
+  background: #fff;
+  border: 1px solid #eaebf0;
   border-radius: 6px;
   box-shadow: 0 2px 6px 0 #0000000a;
 
-  .risk-content-title{
+  .risk-content-title {
     display: flex;
     font-size: 12px;
     align-items: center;
