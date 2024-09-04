@@ -23,7 +23,7 @@ from django.utils.translation import gettext_lazy
 
 from core.models import OperateRecordModel, SoftDeleteModel
 from services.web.analyze.models import Control, ControlVersion
-from services.web.strategy_v2.constants import StrategyStatusChoices
+from services.web.strategy_v2.constants import RiskLevel, StrategyStatusChoices
 
 
 class Strategy(SoftDeleteModel):
@@ -46,7 +46,19 @@ class Strategy(SoftDeleteModel):
     status_msg = models.TextField(gettext_lazy("Status Message"), null=True, blank=True)
     backend_data = models.JSONField(gettext_lazy("Backend Data"), default=dict, null=True, blank=True)
     notice_groups = models.JSONField(gettext_lazy("Notice Groups"), default=list, null=True, blank=True)
+    processor_groups = models.JSONField(gettext_lazy("Processor"), default=list, null=True, blank=True)
     description = models.TextField(gettext_lazy("Description"), null=True, blank=True)
+    risk_level = models.CharField(
+        gettext_lazy("Risk Level"), choices=RiskLevel.choices, max_length=16, null=True, default=None
+    )
+    risk_hazard = models.TextField(gettext_lazy("Risk Hazard"), null=True, blank=True, default=None)
+    risk_guidance = models.TextField(gettext_lazy("Risk Guidance"), null=True, blank=True, default=None)
+    risk_title = models.CharField(gettext_lazy("Risk Title"), max_length=255, null=True, blank=True, default=None)
+    event_basic_field_configs = models.JSONField(
+        gettext_lazy("Event Field Configs"), default=list, null=True, blank=True
+    )
+    event_data_field_configs = models.JSONField(gettext_lazy("Event Data Configs"), default=list, null=True, blank=True)
+    event_evidence_field_configs = models.JSONField(gettext_lazy("Event Evidence Configs"), default=list, null=True)
 
     class Meta:
         verbose_name = gettext_lazy("Strategy")

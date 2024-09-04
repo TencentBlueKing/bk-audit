@@ -61,6 +61,7 @@ class StrategyViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.strategy_v2.get_strategy_common, endpoint="common"),
         ResourceRoute("GET", resource.strategy_v2.get_strategy_status, endpoint="status"),
         ResourceRoute("PUT", resource.strategy_v2.retry_strategy, pk_field="strategy_id", endpoint="retry"),
+        ResourceRoute("GET", resource.strategy_v2.get_strategy_display_info, endpoint="display_info"),
     ]
 
 
@@ -76,9 +77,15 @@ class StrategyTagsViewSet(ResourceViewSet):
 
 
 class StrategyFieldsViewSet(ResourceViewSet):
+    def get_permissions(self):
+        if self.action in ["fields_config"]:
+            return [IAMPermission(actions=[ActionEnum.LIST_STRATEGY])]
+        return []
+
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_strategy_fields),
         ResourceRoute("GET", resource.strategy_v2.get_strategy_field_value, endpoint="value"),
+        ResourceRoute("GET", resource.strategy_v2.get_event_fields_config, endpoint="fields_config"),
     ]
 
 

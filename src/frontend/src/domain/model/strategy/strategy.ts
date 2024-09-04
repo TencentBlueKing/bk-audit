@@ -15,6 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import StrategyFieldEvent from '../strategy/strategy-field-event';
+
 export default class Strategy {
   strategy_id: number;
   strategy_name: string;
@@ -59,6 +61,14 @@ export default class Strategy {
   permission: Record<string, boolean>;
   notice_groups: Array<number>;
   description: string;
+  risk_level: string;
+  risk_hazard: string;
+  risk_guidance: string;
+  risk_title: string;
+  event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
+  event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
+  event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
+  processor_groups: Array<number>;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -77,6 +87,14 @@ export default class Strategy {
     this.permission = payload.permission;
     this.notice_groups = payload.notice_groups;
     this.description = payload.description;
+    this.risk_level = payload.risk_level;
+    this.risk_hazard = payload.risk_hazard;
+    this.risk_guidance = payload.risk_guidance;
+    this.risk_title = payload.risk_title;
+    this.event_evidence_field_configs = payload.event_evidence_field_configs;
+    this.event_data_field_configs = payload.event_data_field_configs;
+    this.event_basic_field_configs = payload.event_basic_field_configs;
+    this.processor_groups = payload.processor_groups;
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {

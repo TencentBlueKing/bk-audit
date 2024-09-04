@@ -20,7 +20,7 @@ import datetime
 import json
 import math
 import re
-from typing import List, Union
+from typing import List, Optional, Union
 
 from bk_resource import resource
 from blueapps.utils.logger import logger
@@ -28,12 +28,14 @@ from django.conf import settings
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext
+from jinja2 import UndefinedError
 from rest_framework.settings import api_settings
 
 from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
+from core.render import Jinja2Renderer
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
     EVENT_TYPE_SPLIT_REGEX,
@@ -43,6 +45,7 @@ from services.web.risk.constants import (
 )
 from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
+from services.web.risk.render import RiskTitleUndefined
 from services.web.risk.serializers import CreateRiskSerializer
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -100,6 +103,50 @@ class RiskHandler:
 
         return data
 
+    @classmethod
+    def render_risk_title(cls, create_params: dict) -> Optional[str]:
+        """
+        生成风险标题
+        """
+
+        strategy: Strategy = Strategy.objects.filter(strategy_id=create_params["strategy_id"]).first()
+        if not strategy or not strategy.risk_title:
+            return
+        # 事件证据为字符串需要转换成列表，并取第一条字典数据
+        try:
+            event_evidence = json.loads(create_params["event_evidence"])[0]
+        except (json.JSONDecodeError, IndexError, KeyError):
+            event_evidence = {}
+        create_params["event_evidence"] = event_evidence
+        try:
+            risk_title = Jinja2Renderer(undefined=RiskTitleUndefined).jinja_render(strategy.risk_title, create_params)
+            return risk_title
+        except UndefinedError as err:
+            logger.exception(
+                "[RenderRiskTitleFailed] risk_title: %s; risk_content: %s; err: %s",
+                strategy.risk_title,
+                create_params,
+                err,
+            )
+            return strategy.risk_title
+
+    def gen_risk_create_params(self, event: dict) -> dict:
+        create_params = {
+            "event_content": event.get("event_content"),
+            "raw_event_id": event["raw_event_id"],
+            "strategy_id": event["strategy_id"],
+            "event_evidence": event.get("event_evidence"),
+            "event_type": self.parse_event_type(event.get("event_type")),
+            "event_data": event.get("event_data"),
+            "event_time": datetime.datetime.fromtimestamp(event["event_time"] / 1000),
+            "event_end_time": datetime.datetime.fromtimestamp(event["event_time"] / 1000),
+            "event_source": event.get("event_source"),
+            "operator": self.parse_operator(event.get("operator")),
+            "tags": list(StrategyTag.objects.filter(strategy_id=event["strategy_id"]).values_list("tag_id", flat=True)),
+        }
+        create_params["title"] = self.render_risk_title(create_params)
+        return create_params
+
     def create_risk(self, event: dict) -> (bool, Risk):
         """
         创建或更新风险
@@ -144,19 +191,7 @@ class RiskHandler:
             return False, None
 
         # 不存在则创建
-        return True, Risk.objects.create(
-            event_content=event.get("event_content"),
-            raw_event_id=event["raw_event_id"],
-            strategy_id=event["strategy_id"],
-            event_evidence=event.get("event_evidence"),
-            event_type=self.parse_event_type(event.get("event_type")),
-            event_data=event.get("event_data"),
-            event_time=datetime.datetime.fromtimestamp(event["event_time"] / 1000),
-            event_end_time=datetime.datetime.fromtimestamp(event["event_time"] / 1000),
-            event_source=event.get("event_source"),
-            operator=self.parse_operator(event.get("operator")),
-            tags=list(StrategyTag.objects.filter(strategy_id=event["strategy_id"]).values_list("tag_id", flat=True)),
-        )
+        return True, Risk.objects.create(**self.gen_risk_create_params(event))
 
     def parse_operator(self, operator: str) -> List[str]:
         operator = operator or ""
@@ -185,10 +220,7 @@ class RiskHandler:
         self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
 
         # 更新风险的通知人员名单
-        notice_users = []
-        for notice_group in notice_groups:
-            notice_users.extend(notice_group.group_member if isinstance(notice_group.group_member, list) else [])
-        risk.notice_users = notice_users
+        risk.notice_users = NoticeGroup.parse_members(notice_groups)
         risk.save(update_fields=["notice_users"])
 
     @classmethod

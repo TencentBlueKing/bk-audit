@@ -19,22 +19,19 @@
     <div class="risk-manage-detail-wrap mb12">
       <div class="left">
         <base-info
-          :data="riskData"
+          :data="detailData"
           :risk-status-common="riskStatusCommon"
           :strategy-list="strategyList" />
         <!-- 关联事件 -->
         <div class="link-event-wrap">
           <link-event
-            :data="riskData"
-            :strategy-list="strategyList"
-            @change-height="handleChangeHeight" />
+            :data="detailData"
+            :strategy-list="strategyList" />
         </div>
       </div>
       <!-- 事件处理 -->
       <scroll-faker style="width: 368px;">
-        <div
-          class="right"
-          :style="{height: typeof handleHeight === 'string' ? handleHeight : handleHeight + 'px'}">
+        <div class="right">
           <risk-handle
             :data="riskData"
             :risk-id="riskData.risk_id"
@@ -58,8 +55,9 @@
 
 <script setup lang='ts'>
   import {
-    onUnmounted,
-    ref,
+    computed,
+    onBeforeUnmount,
+    onMounted,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -71,6 +69,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import RiskManageModel from '@model/risk/risk';
+  import StrategyInfo from '@model/risk/strategy-info';
 
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
@@ -86,12 +85,7 @@
   const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
-  const handleHeight = ref<number | string>('calc(100vh - 138px)');
   let timeout: undefined | number = undefined;
-
-  const handleChangeHeight = (height: number) => {
-    handleHeight.value = height + 180;
-  };
 
   const {
     loading: strategyLoading,
@@ -127,7 +121,16 @@
       }
     },
   });
-
+  // 获取策略信息
+  const {
+    data: strategyInfoData,
+  } = useRequest(RiskManageService.fetchRiskInfo, {
+    defaultValue: new StrategyInfo(),
+    defaultParams: {
+      id: route.params.riskId,
+    },
+    manual: true,
+  });
 
   const handleUpdate = () => {
     fetchRiskList({
@@ -141,20 +144,45 @@
       handleUpdate();
     }, 60 * 1000);
   };
-  onUnmounted(() => {
-    clearTimeout(timeout);
-  });
 
   const handleCopyLink = () => {
     const route = window.location.href;
     execCopy(route, t('复制成功'));
   };
 
+  // 合并数据
+  const detailData = computed(() => ({
+    ...riskData.value,
+    ...strategyInfoData.value,
+  }));
+
   useRouterBack(() => {
     router.push({
       name: route.name === 'riskManageDetail'
         ? 'riskManageList'
         : 'handleManageList',
+    });
+  });
+
+  onMounted(() => {
+    const observer = new MutationObserver(() => {
+      const left = document.querySelector('.left');
+      const right = document.querySelector('.right') as HTMLDivElement;
+      if (left && right) {
+        right.style.height = `${left.scrollHeight}px`;
+      }
+    });
+    observer.observe(document.querySelector('.left') as Node, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+    });
+
+    onBeforeUnmount(() => {
+      observer.takeRecords();
+      observer.disconnect();
+      clearTimeout(timeout);
     });
   });
 </script>

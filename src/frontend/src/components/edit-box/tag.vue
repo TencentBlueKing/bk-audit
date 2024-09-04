@@ -205,7 +205,9 @@
   let resizeObserver: any;
   onMounted(() => {
     calcRenderTagNum();
-    dynamicCalcWidth();
+    setTimeout(() => {
+      dynamicCalcWidth();
+    });
 
     const resizeObserver = new ResizeObserver(throttle(() => {
       calcRenderTagNum();

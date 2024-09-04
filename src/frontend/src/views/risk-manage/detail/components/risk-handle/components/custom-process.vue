@@ -26,7 +26,7 @@
       <render-info-item :label="t('处理方法')">
         <span v-if="data.custom_action === 'CloseRisk'">{{ t('人工关单') }}</span>
         <span v-else-if="data.custom_action === 'TransOperator'">
-          {{ t('转单给') }}{{ data.new_operators?.join(',') }}
+          {{ t('转单给') }} {{ data.new_operators?.join(',') }}
         </span>
         <span v-else>{{ t('处理套餐') }} </span>
       </render-info-item>

@@ -16,6 +16,9 @@
 -->
 <template>
   <div class="detail-base-info">
+    <div class="title">
+      {{ data.title }}
+    </div>
     <template v-if="isShowMore">
       <render-info-block
         class="flex mt16"
@@ -49,6 +52,21 @@
         class="flex mt16"
         style="margin-bottom: 12px;">
         <render-info-item
+          :label="t('风险等级')"
+          :label-width="labelWidth">
+          <span
+            v-if="data.risk_level"
+            :style="{
+              'background-color': riskLevelMap[data.risk_level].color,
+              padding: '3px 8px',
+              'border-radius': '3px',
+              color: 'white'
+            }">
+            {{ riskLevelMap[data.risk_level].label }}
+          </span>
+          <span v-else>--</span>
+        </render-info-item>
+        <render-info-item
           :label="t('风险命中策略')"
           :label-width="labelWidth">
           <router-link
@@ -64,6 +82,15 @@
           </router-link>
           <span v-else>--</span>
         </render-info-item>
+      </render-info-block>
+      <render-info-block
+        class="flex "
+        style="margin-bottom: 12px;">
+        <render-info-item
+          :label="t('最后发现时间')"
+          :label-width="labelWidth">
+          {{ data.event_end_time || '--' }}
+        </render-info-item>
         <render-info-item
           :label="t('首次发现时间')"
           :label-width="labelWidth">
@@ -74,9 +101,18 @@
         class="flex "
         style="margin-bottom: 12px;">
         <render-info-item
-          :label="t('最后发现时间')"
+          :label="t('风险危害')"
           :label-width="labelWidth">
-          {{ data.event_end_time || '--' }}
+          {{ data.risk_hazard || '--' }}
+        </render-info-item>
+      </render-info-block>
+      <render-info-block
+        class="flex "
+        style="margin-bottom: 12px;">
+        <render-info-item
+          :label="t('处理指引')"
+          :label-width="labelWidth">
+          {{ data.risk_guidance || '--' }}
         </render-info-item>
       </render-info-block>
       <render-info-block
@@ -86,7 +122,7 @@
           :label="t('处理状态')"
           :label-width="labelWidth">
           <template v-if="statusToMap[data.status]">
-            <bk-tag :theme="statusToMap[data.status].tag">
+            <bk-tag :theme="statusToMap[data.status].theme">
               <p style="display: flex;align-items: center;">
                 <audit-icon
                   :style="`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`"
@@ -113,7 +149,7 @@
           <span v-else>--</span>
         </render-info-item>
       </render-info-block>
-      <render-info-block style="display: flex;">
+      <render-info-block style="display: flex; margin-bottom: 12px">
         <render-info-item
           :label="t('责任人')"
           :label-width="labelWidth">
@@ -134,6 +170,7 @@
         </render-info-item>
       </render-info-block>
     </template>
+    <!-- 折叠 -->
     <template v-else>
       <render-info-block
         class="flex mt16"
@@ -153,10 +190,25 @@
         class="flex "
         style="margin-bottom: 12px;">
         <render-info-item
+          :label="t('风险等级')"
+          :label-width="labelWidth">
+          <span
+            v-if="data.risk_level"
+            :style="{
+              'background-color': riskLevelMap[data.risk_level].color,
+              padding: '3px 8px',
+              'border-radius': '3px',
+              color: 'white'
+            }">
+            {{ riskLevelMap[data.risk_level].label }}
+          </span>
+          <span v-else>--</span>
+        </render-info-item>
+        <render-info-item
           :label="t('处理状态')"
           :label-width="labelWidth">
           <template v-if="statusToMap[data.status]">
-            <bk-tag :theme="statusToMap[data.status].tag">
+            <bk-tag :theme="statusToMap[data.status].theme">
               <p style="display: flex;align-items: center;">
                 <audit-icon
                   :style="`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`"
@@ -166,10 +218,32 @@
             </bk-tag>
           </template>
         </render-info-item>
+      </render-info-block>
+      <render-info-block
+        class="flex "
+        style="margin-bottom: 12px;">
         <render-info-item
           :label="t('当前处理人')"
           :label-width="labelWidth">
           <edit-tag :data="data.current_operator || ''" />
+        </render-info-item>
+      </render-info-block>
+      <render-info-block
+        class="flex "
+        style="margin-bottom: 12px;">
+        <render-info-item
+          :label="t('风险危害')"
+          :label-width="labelWidth">
+          {{ data.risk_hazard || '--' }}
+        </render-info-item>
+      </render-info-block>
+      <render-info-block
+        class="flex "
+        style="margin-bottom: 12px;">
+        <render-info-item
+          :label="t('处理指引')"
+          :label-width="labelWidth">
+          {{ data.risk_guidance || '--' }}
         </render-info-item>
       </render-info-block>
     </template>
@@ -199,6 +273,7 @@
   import RiskRuleManageService from '@service/rule-manage';
 
   import type RiskManageModel from '@model/risk/risk';
+  import type StrategyInfo from '@model/risk/strategy-info';
 
   import useRequest from '@hooks/use-request';
 
@@ -209,7 +284,7 @@
   import RenderInfoItem from './render-info-item.vue';
 
   interface Props{
-    data: RiskManageModel,
+    data: RiskManageModel & StrategyInfo
     strategyList: Array<{
       label: string,
       value: number
@@ -220,38 +295,56 @@
     }>,
   }
   const props = defineProps<Props>();
+  const { t, locale } = useI18n();
+
   const statusToMap: Record<string, {
-    tag: 'info' | 'warning' | 'success' | 'danger' | undefined,
+    theme: 'info' | 'warning' | 'success' | 'danger' | undefined,
     icon: string,
     color: string,
   }> = {
     new: {
-      tag: 'info',
+      theme: 'info',
       icon: 'auto',
       color: '#3A84FF',
     },
     closed: {
-      tag: undefined,
+      theme: undefined,
       icon: 'corret-fill',
       color: '#979BA5',
     },
     await_deal: {
-      tag: 'warning',
+      theme: 'warning',
       icon: 'daichuli',
       color: '#FF9E00',
     },
     for_approve: {
-      tag: 'info',
+      theme: 'info',
       icon: 'auto',
       color: '#3A84FF',
     },
     auto_process: {
-      tag: 'success',
+      theme: 'success',
       icon: 'taocanchulizhong',
       color: '#0CA668',
     },
   };
-  const { t, locale } = useI18n();
+  const riskLevelMap: Record<string, {
+    label: string,
+    color: string,
+  }> =  {
+    HIGH: {
+      label: t('高'),
+      color: '#ea3636',
+    },
+    MIDDLE: {
+      label: t('中'),
+      color: '#ff9c01',
+    },
+    LOW: {
+      label: t('低'),
+      color: '#979ba5',
+    },
+  };
 
   const isShowMore = ref(false);
   const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
@@ -299,8 +392,16 @@
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 #1919290d;
 
+  .title {
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 22px;
+    color: #313238;
+  }
+
   .render-info-item {
-    width: 50%;
+    min-width: 50%;
     align-items: flex-start;
   }
 

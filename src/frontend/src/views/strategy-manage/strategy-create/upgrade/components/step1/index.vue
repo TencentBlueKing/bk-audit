@@ -133,9 +133,9 @@
 
   import useRequest from '@hooks/use-request';
 
-  import type { ControlType } from '@views/strategy-manage/strategy-create/index.vue';
-
   import Card from './components/card.vue';
+
+  import type { ControlType } from '@/views/strategy-manage/strategy-create/components/step1/index.vue';
 
   interface Emits {
     (e: 'change', step: number): void,

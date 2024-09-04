@@ -260,7 +260,7 @@
             </span>
           </bk-form-item>
           <bk-form-item
-            class="mb0"
+            class="mb0 ml8"
             label=""
             label-width="0">
             <bk-select
@@ -308,7 +308,7 @@
             </bk-select>
           </bk-form-item>
           <bk-form-item
-            class="mb0 ml5"
+            class="mb0 ml8"
             label=""
             label-width="0"
             property="configs.algorithms.threshold">

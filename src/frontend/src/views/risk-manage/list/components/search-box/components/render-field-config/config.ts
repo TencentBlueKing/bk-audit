@@ -21,7 +21,7 @@ export interface IFieldConfig {
   label: string,
   type: string,
   required: boolean,
-  validator?: (value: any)=> boolean,
+  validator?: (value: any) => boolean,
   message?: string,
   service?: (params?: Record<string, any>) => Promise<Array<any>>,
   labelName?: string,
@@ -74,7 +74,7 @@ export default {
     label: '风险标记',
     type: 'select',
     required: false,
-    service: () => new Promise(resolve => resolve([
+    service: () => Promise.resolve([
       {
         id: 'normal',
         name: '正常',
@@ -83,11 +83,19 @@ export default {
         id: 'misreport',
         name: '误报',
       },
-    ])),
+    ]),
   },
   event_content: {
     label: '风险描述',
     type: 'string',
     required: false,
+  },
+  risk_level: {
+    label: '风险等级',
+    type: 'select',
+    required: false,
+    labelName: 'label',
+    valName: 'value',
+    service: () => Promise.resolve(StrategyManageService.fetchStrategyCommon().then(data => data.risk_level)),
   },
 } as Record<string, IFieldConfig>;

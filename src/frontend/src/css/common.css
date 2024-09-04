@@ -111,3 +111,15 @@
   color: #d5d7db;
   background-color: #fff;
 }
+
+.collapse-card-title {
+  .collapse-panel-title {
+    .icon-angle-right-fill {
+      margin-right: 3px;
+    }
+
+    .icon-down-shape {
+      margin-right: 3px;
+    }
+  }
+}

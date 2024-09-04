@@ -26,6 +26,7 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from core.utils.tools import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
+from services.web.strategy_v2.constants import RiskLevel
 from tests.base import TestCase
 from tests.databus.collector_plugin.test_collector_plugin import CollectorPluginTest
 from tests.strategy_v2.constants import (
@@ -59,7 +60,17 @@ class StrategyTest(TestCase):
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
     def _create_bkm_strategy(self) -> dict:
         params = copy.deepcopy(BKM_STRATEGY_DATA)
-        params.update({"control_id": self.c_version.control_id, "control_version": self.c_version.control_version})
+        params.update(
+            {
+                "control_id": self.c_version.control_id,
+                "control_version": self.c_version.control_version,
+                "risk_level": RiskLevel.HIGH.value,
+                "risk_hazard": "",
+                "risk_guidance": "",
+                "risk_title": "risk title",
+                "processor_groups": ["123"],
+            }
+        )
         return resource.strategy_v2.create_strategy(**params)
 
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
@@ -72,6 +83,11 @@ class StrategyTest(TestCase):
                 "strategy_id": data["strategy_id"],
                 "control_id": self.c_version.control_id,
                 "control_version": self.c_version.control_version,
+                "risk_level": RiskLevel.HIGH.value,
+                "risk_hazard": "",
+                "risk_guidance": "",
+                "risk_title": "risk_title",
+                "processor_groups": ["123"],
             }
         )
         data = resource.strategy_v2.update_strategy(**params)

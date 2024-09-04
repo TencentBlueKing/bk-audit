@@ -74,12 +74,14 @@ from services.web.risk.serializers import (
     ListRiskRequestSerializer,
     ListRiskResponseSerializer,
     ReopenRiskReqSerializer,
+    RetrieveRiskStrategyInfoResponseSerializer,
     RetryAutoProcessReqSerializer,
     RiskInfoSerializer,
     TicketNodeSerializer,
     UpdateRiskLabelReqSerializer,
 )
 from services.web.risk.tasks import process_one_risk, sync_auto_result
+from services.web.strategy_v2.models import Strategy
 
 
 class RiskMeta(AuditMixinResource, abc.ABC):
@@ -102,6 +104,16 @@ class RetrieveRisk(RiskMeta):
         nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
         risk["ticket_history"] = TicketNodeSerializer(nodes, many=True).data
         return risk
+
+
+class RetrieveRiskStrategyInfo(RiskMeta):
+    name = gettext_lazy("获取风险策略信息")
+    ResponseSerializer = RetrieveRiskStrategyInfoResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        risk: Risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+        strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
+        return strategy or {}
 
 
 class RetrieveRiskAPIGW(RetrieveRisk):
@@ -143,6 +155,10 @@ class ListRisk(RiskMeta):
     def load_risks(self, validated_request_data: dict) -> QuerySet:
         # 构造表达式
         q = Q()
+        # 风险等级
+        risk_level = validated_request_data.pop("risk_level", None)
+        if risk_level:
+            q &= Q(strategy_id__in=Strategy.objects.filter(risk_level__in=risk_level).values("strategy_id"))
         for key, val in validated_request_data.items():
             if not val:
                 continue

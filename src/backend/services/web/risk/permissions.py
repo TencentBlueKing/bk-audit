@@ -29,16 +29,32 @@ class RiskViewPermission(InstanceActionPermission):
     风险查看权限
     """
 
-    def has_permission(self, request, view):
-        risk_id = view.kwargs.get(self.lookup_field) or self.get_instance_id()
-        if all(
+    def has_risk_permission(self, risk_id: str, operator: str) -> bool:
+        """
+        校验风险权限
+        """
+
+        if self.has_risk_local_permission(risk_id, operator):
+            return True
+        resource = self.resource_meta.create_instance(risk_id)
+        self.resources = [resource]
+        return IAMPermission.has_permission(self, None, None)
+
+    def has_risk_local_permission(self, risk_id: str, operator: str) -> bool:
+        """
+        校验本地风险权限
+        """
+
+        return all(
             [
-                TicketPermission.objects.filter(
-                    risk_id=risk_id, action=action.id, operator=request.user.username
-                ).exists()
+                TicketPermission.objects.filter(risk_id=risk_id, action=action.id, operator=operator).exists()
                 for action in self.actions
             ]
-        ):
+        )
+
+    def has_permission(self, request, view):
+        risk_id = view.kwargs.get(self.lookup_field) or self.get_instance_id()
+        if self.has_risk_local_permission(risk_id, request.user.username):
             return True
         return super().has_permission(request, view)
 
