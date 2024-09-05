@@ -24,11 +24,14 @@
         :key="item.name"
         :label="item.label"
         :name="item.name">
-        <component
-          :is="renderCom"
-          :data="data"
-          :strategy-map="strategyMap"
-          :user-group-list="userGroupList" />
+        <scroll-faker>
+          <component
+            :is="renderCom"
+            :data="data"
+            :strategy-map="strategyMap"
+            style="height: 100%;"
+            :user-group-list="userGroupList" />
+        </scroll-faker>
       </bk-tab-panel>
     </bk-tab>
   </div>
@@ -80,6 +83,10 @@
 
     .bk-tab-header {
       margin-left: 24px;
+    }
+
+    .bk-tab-content {
+      height: 100%;
     }
   }
 }
