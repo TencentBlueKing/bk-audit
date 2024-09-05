@@ -6,6 +6,8 @@
 
 [(English Documents Available)](./readme_en.md)
 
+> 重要提示: 分支在开发过程中可能处于不稳定或者不可用状态，请通过 [Releases](https://github.com/TencentBlueKing/bk-audit/releases) 获取稳定的二进制文件
+
 ## Overview
 
 蓝鲸审计中心旨在基于蓝鲸生态打造行业标杆性审计产品，通过蓝鲸底层能力，提供人员操作审计、业务资产审计、业务合规审计等丰富的审计服务

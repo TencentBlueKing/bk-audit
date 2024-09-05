@@ -4,6 +4,8 @@
 [![Release Version](https://img.shields.io/badge/release-1.15.0-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/pulls)
 
+> Important Note: All branch may be unstable or unavailable during development. Please obtain stable binary files through [Releases](https://github.com/TencentBlueKing/bk-audit/releases).
+
 ## Overview
 
 The BK Audit Center aims to create benchmark audit products based on the BK ecosystem, and through the underlying capabilities of BK, it provides a variety of audit services such as personnel operation audit, business asset audit, and business compliance audit.
