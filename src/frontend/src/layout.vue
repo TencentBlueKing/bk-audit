@@ -292,7 +292,7 @@
 #app {
   .site-title {
     padding-left: 16px;
-    font-size: 18px;
+    font-size: 16px;
     color: #eaebf0;
     word-break: keep-all;
     white-space: nowrap;
