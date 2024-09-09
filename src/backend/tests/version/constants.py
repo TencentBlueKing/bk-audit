@@ -15,14 +15,15 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+
 from unittest import mock
 
-from blueapps.account.components.bk_ticket.models import UserProxy
+from django.contrib.auth import get_user_model
 
 
 class GetLocalRequestMock(mock.MagicMock):
     COOKIES = {"bk_token": ""}
-    user = UserProxy(username="admin")
+    user = get_user_model()(username="admin")
 
 
 # Version Info

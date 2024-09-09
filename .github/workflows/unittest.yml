@@ -1,0 +1,98 @@
+name: Unittest
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+      redis:
+        image: redis:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    env:
+      BKPAAS_APP_MODULE_NAME: "api"
+      BKAPP_DEPLOY_SERVICE: "web"
+      DJANGO_SETTINGS_MODULE: "settings"
+      BKAPP_IS_KUBERNETES: "True"
+      BKPAAS_MAJOR_VERSION: "3"
+      BKPAAS_ENGINE_REGION: "open"
+      BKPAAS_URL: "https://paas.example.com"
+      BKPAAS_BK_DOMAIN: "paas.example.com"
+      BKPAAS_APP_ID: "bk_audit"
+      BKPAAS_APP_SECRET: "bk_audit"
+      BKAPP_BK_APIGW_NAME: "bk-audit"
+      BK_API_URL_TMPL: "https://bkapi.paas.example.com/api/{api_name}"
+      BK_COMPONENT_API_URL: "https://bkapi.paas.example.com"
+      BKAPP_IAM_SYSTEM_ID: "bk-audit"
+      BKAPP_IAM_SYSTEM_NAME: "审计中心"
+      MYSQL_HOST: "127.0.0.1"
+      MYSQL_PORT: "3306"
+      MYSQL_NAME: "bk_audit"
+      MYSQL_USER: "root"
+      MYSQL_PASSWORD: "root"
+      REDIS_HOST: "127.0.0.1"
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      REDIS_PASSWORD: ""
+      REDIS_KEY_PREFIX: "bk_audit"
+      BKAPP_PLATFORM_AUTH_ACCESS_USERNAME: "admin"
+      BKAPP_PLATFORM_AUTH_ACCESS_TOKEN: "admin"
+      BKAPP_BK_IAM_APIGATEWAY_URL: "https://bkapi.paas.example.com/api/bk-iam/prod"
+      BKAPP_BK_IAM_RESOURCE_API_HOST: "https://bkaudit-api.paas.example.com/"
+      BKPAAS_IAM_URL: "http://bkiam.paas.example.com"
+      BKAPP_BK_AUDIT_SAAS_URL: "http://bkaudit.paas.example.com"
+      BKAPP_BK_AUDIT_PULLER_SAAS_URL: "http://bkaudit-puller.paas.example.com"
+      BKAPP_BK_ITSM_SAAS_URL: "http://apps.paas.example.com/bk--itsm"
+      BKAPP_BK_SOPS_SAAS_URL: "http://apps.paas.example.com/bk--sops"
+      BKAPP_BK_DATAWEB_SAAS_URL: "http://apps.paas.example.com/bk--dataweb"
+      BKAPP_ADMIN_USERNAMES: "admin"
+      BKAPP_SKIP_IAM_MIGRATION: "True"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          cd src/backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements_dev.txt
+      - name: Create DB
+        run: |
+          mysql -h$MYSQL_HOST -u$MYSQL_USER -p$MYSQL_PASSWORD -P$MYSQL_PORT -e "CREATE DATABASE $MYSQL_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+      - name: Run migrations
+        run: |
+          cd src/backend
+          python manage.py migrate
+      - name: Run tests
+        run: |
+          cd src/backend
+          pytest --cov=.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

@@ -16,11 +16,18 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import os
+
 from django.db import migrations
 from iam.contrib.iam_migration.migrator import IAMMigrator
 
+from core.utils.distutils import strtobool
+
 
 def iam_migrate(*args, **kwargs):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
+
     migrator = IAMMigrator("initial.json")
     migrator.migrate()
 
