@@ -213,9 +213,9 @@
   justify-content: center;
 
   &:hover {
-    color: #3a84ff;
+    color: #fff;
     cursor: pointer;
-    background: #f0f1f5;
+    background: #303d55;
     border-radius: 100%;
   }
 }
