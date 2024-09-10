@@ -23,6 +23,7 @@
       :columns="tableColumn"
       :data-source="dataSource"
       @clear-search="handleClearSearch"
+      @request-success="handleRequestSuccess"
       @row-click="handleRowClick">
       <template #expandRow="{ row }">
         <row-expand-content
@@ -81,7 +82,8 @@
   interface Exposes {
     loading: Ref<boolean>,
   }
-  const initColumn:InstanceType<typeof Table>['$props']['columns'] = [
+
+  const initColumn: InstanceType<typeof Table>['$props']['columns'] = [
     {
       label: () => '',
       type: 'expand',
@@ -98,24 +100,33 @@
     },
     {
       label: () => t('操作人'),
+      field: 'username',
       render: ({ data }: {data: SearchModel}) => (
         data.username
           ? <RenderUser key={data.bk_receive_time} data={data}/>
           : '--'
       ),
       width: '100px',
+      filter: {
+        list: [],
+      },
     },
     {
       label: () => t('来源系统(ID)'),
+      field: 'system_info.name',
       render: ({ data }: {data: SearchModel}) => (
         data.system_id
           ? <RenderSystem data={data}/>
           : '--'
       ),
       minWidth: 140,
+      filter: {
+        list: [],
+      },
     },
     {
       label: () => t('操作事件名(ID)'),
+      field: 'snapshot_action_info.name',
       render: ({ data }: {data: SearchModel}) => {
         if (data.action_id) {
           if (!_.isEmpty(data.snapshot_action_info)) {
@@ -126,9 +137,13 @@
         return '--';
       },
       minWidth: 160,
+      filter: {
+        list: [],
+      },
     },
     {
       label: () => t('资源类型(ID)'),
+      field: 'snapshot_resource_type_info.name',
       render: ({ data }: {data: SearchModel}) => {
         if (data.resource_type_id) {
           if (!_.isEmpty(data.snapshot_resource_type_info)) {
@@ -139,6 +154,9 @@
         return '--';
       },
       minWidth: 150,
+      filter: {
+        list: [],
+      },
     },
     {
       label: () => t('资源实例(ID)'),
@@ -165,21 +183,29 @@
     },
     {
       label: () => t('操作结果(Code)'),
+      field: 'result_code',
       minWidth: 160,
       render: ({ data }: {data: SearchModel}) => (
         data.result_code
           ? <RenderResult key={data.bk_receive_time} data={data}/>
           : '--'
       ),
+      filter: {
+        list: [],
+      },
     },
     {
       label: () => t('操作途径'),
+      field: 'access_type',
       render: ({ data }: {data: SearchModel}) => (
         <span>
           {data.access_type || '--'}
         </span>
       ),
       minWidth: 120,
+      filter: {
+        list: [],
+      },
     },
   ];
   // const fixedColum:InstanceType<typeof Table>['$props']['columns'] = [{
@@ -219,6 +245,40 @@
     },
     manual: true,
   });
+
+  const getValueFromPath = (obj: any, path: string) => {
+    // 将路径按点拆分成数组
+    const keys = path.split('.');
+
+    // 遍历路径数组，逐层获取对象的值
+    return keys.reduce((acc, key) => {
+      // 如果acc为空或undefined，直接返回undefined
+      if (acc === undefined) {
+        return undefined;
+      }
+      // 获取当前层级的值
+      return acc[key];
+    }, obj);
+  };
+
+  // 根据返回内容生成列筛选项
+  const handleRequestSuccess = (data: Array<SearchModel>) => {
+    tableColumn.value = tableColumn.value?.map((item) => {
+      if (item.filter) {
+        const values = data.map(obj => getValueFromPath(obj, item.field as string));
+        const lists = [...new Set(values)].map(value => ({
+          text: value === undefined ? '--' : value,
+          value,
+        }));
+        // eslint-disable-next-line no-param-reassign
+        item.filter = {
+          list: lists,
+          height: lists.length > 15 ? 480 :  lists.length * 32,
+        };
+      }
+      return item;
+    });
+  };
 
   const handleUpdateField = () => {
     fetchCustomFields({
