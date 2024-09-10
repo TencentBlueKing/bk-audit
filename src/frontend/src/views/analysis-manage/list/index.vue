@@ -34,7 +34,9 @@
         ref="resultRef"
         :filter="searchModel"
         @clear-search="handleClearSearch" />
-      <search-page-footer />
+      <div style="height: 52px; margin-top: 24px;">
+        <search-page-footer />
+      </div>
     </div>
   </skeleton-loading>
 </template>
