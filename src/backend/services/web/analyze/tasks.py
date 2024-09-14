@@ -31,6 +31,7 @@ from django.utils.translation import gettext
 from apps.notice.constants import MsgType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
+from apps.notice.parser import IgnoreMemberVariableParser
 from core.lock import lock
 from services.web.analyze.constants import (
     BKBASE_ERROR_LOG_LEVEL,
@@ -163,7 +164,10 @@ def toggle_monitor(strategy_id: int, is_active: bool):
 
     # 获取通知组并判定关键参数存在
     notice_groups: List[NoticeGroup] = list(NoticeGroup.objects.filter(group_id__in=strategy.notice_groups))
-    receivers = [{"receiver_type": "user", "username": member} for member in NoticeGroup.parse_members(notice_groups)]
+    receivers = [
+        {"receiver_type": "user", "username": member}
+        for member in IgnoreMemberVariableParser().parse_groups(notice_groups)
+    ]
     notify_config = list(
         {
             config["msg_type"]

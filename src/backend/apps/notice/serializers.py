@@ -31,6 +31,7 @@ from apps.notice.constants import (
 )
 from apps.notice.exceptions import NoticeGroupNameDuplicate
 from apps.notice.models import NoticeGroup, NoticeLogV2
+from core.serializers import ChoiceListSerializer
 
 
 class GetMsgTypeResponseSerializer(serializers.Serializer):
@@ -214,3 +215,11 @@ class SendNoticeSerializer(serializers.ModelSerializer):
         if not whitelist_users:
             return receivers
         return [u for u in receivers if u in whitelist_users]
+
+
+class GetNoticeCommonResponseSerializer(serializers.Serializer):
+    """
+    Get Notice Common
+    """
+
+    member_variable = ChoiceListSerializer(label=gettext_lazy("Member Variable"), many=True)
