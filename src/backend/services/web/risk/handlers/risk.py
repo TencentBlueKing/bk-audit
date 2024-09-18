@@ -45,6 +45,7 @@ from services.web.risk.constants import (
 )
 from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
+from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.render import RiskTitleUndefined
 from services.web.risk.serializers import CreateRiskSerializer
 from services.web.strategy_v2.models import Strategy, StrategyTag
@@ -220,7 +221,7 @@ class RiskHandler:
         self.send_notice(risk=risk, notice_groups=notice_groups, is_todo=False)
 
         # 更新风险的通知人员名单
-        risk.notice_users = NoticeGroup.parse_members(notice_groups)
+        risk.notice_users = RiskNoticeParser(risk=risk).parse_groups(notice_groups)
         risk.save(update_fields=["notice_users"])
 
     @classmethod
@@ -236,5 +237,5 @@ class RiskHandler:
                 relate_id=risk.pk,
                 agg_key=f"notice_group:{notice_group.group_id}::strategy:{risk.strategy_id}::is_todo:{is_todo}",
                 msg_type=[c.get("msg_type") for c in notice_group.notice_config if "msg_type" in c],
-                receivers=notice_group.group_member,
+                receivers=RiskNoticeParser(risk=risk).parse_group(notice_group),
             )
