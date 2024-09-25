@@ -273,7 +273,8 @@
         // eslint-disable-next-line no-param-reassign
         item.filter = {
           list: lists,
-          height: lists.length > 15 ? 480 :  lists.length * 32,
+          height: lists.length * 32,
+          maxHeight: 192,
         };
       }
       return item;
