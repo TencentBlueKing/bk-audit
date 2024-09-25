@@ -53,5 +53,7 @@ export default {
     编辑成功: 'Edit successfully',
     新建成功: 'New successfully',
     克隆成功: 'Clone successfully',
+    无可选变量: 'No optional variables',
+    '请输入用户名，或通过输入$使用变量': 'Please enter a username, or use a variable by entering $',
   },
 };
