@@ -128,6 +128,7 @@ def process_risk_ticket(*, risk_id: str = None):
     if settings.ENABLE_PROCESS_RISK_WHITELIST:
         risks = risks.filter(strategy_id__in=settings.PROCESS_RISK_WHITELIST)
 
+    logger_celery.info("[ProcessRiskTicket] Total %s", len(risks))
     # 逐个处理
     for risk in risks:
         if settings.ENABLE_MULTI_PROCESS_RISK:
