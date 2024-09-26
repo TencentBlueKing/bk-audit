@@ -70,6 +70,7 @@ class RiskHandler:
                     from services.web.risk.tasks import process_risk_ticket
 
                     process_risk_ticket(risk_id=risk.risk_id)
+                    logger.info("[CreateRiskSuccess] Risk %s", risk.risk_id)
             except Exception as err:  # NOCC:broad-except(需要处理所有错误)
                 logger.exception("[CreateRiskFailed] Event: %s; Error: %s", json.dumps(event), err)
                 ErrorMsgHandler(

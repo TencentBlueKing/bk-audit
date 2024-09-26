@@ -22,7 +22,10 @@ import json
 from typing import List
 
 from bk_resource import api, resource
+from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
+from blueapps.utils.logger import logger
+from client_throttler.exceptions import RetryTimeout
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -435,6 +438,16 @@ class AutoProcess(RiskFlowBaseHandler):
 
     name = gettext_lazy("自动套餐处理")
     allowed_status = [RiskStatus.AUTO_PROCESS, RiskStatus.FOR_APPROVE, RiskStatus.AWAIT_PROCESS]
+
+    def run(self, *args, **kwargs) -> None:
+        """
+        处理风险单
+        """
+
+        try:
+            return super().run(*args, **kwargs)
+        except (RetryTimeout, APIRequestError) as e:
+            logger.warning("[AutoProcess] Api Request Error: %s", e)
 
     def process(self, pa_config: dict = None, **kwargs) -> dict:
         """
