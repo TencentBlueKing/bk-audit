@@ -33,6 +33,7 @@ class BKSOps(BkApiResource, abc.ABC):
     base_url = BK_SOPS_API_URL
     platform_authorization = True
     rate_limit = settings.SOPS_API_RATE_LIMIT
+    max_retry_duration = settings.SOPS_API_MAX_RETRY_DURATION
 
     def perform_request(self, validated_request_data):
         return Throttler(
@@ -40,6 +41,7 @@ class BKSOps(BkApiResource, abc.ABC):
                 func=super().perform_request,
                 key=f"{self.__module__}.{self.__class__.__name__}",
                 rate=self.rate_limit,
+                max_retry_duration=self.max_retry_duration,
             )
         )(validated_request_data)
 
