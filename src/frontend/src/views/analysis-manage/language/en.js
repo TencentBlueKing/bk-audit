@@ -136,5 +136,6 @@ export default {
     管理空间ID: 'scope id',
     取消: 'Cancel',
     '取消(No)': 'No',
+    请输入原始日志: 'Please enter the Raw logs',
   },
 };
