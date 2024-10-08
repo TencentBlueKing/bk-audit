@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-08-26 10:55+0800\n"
+"POT-Creation-Date: 2024-09-12 13:19+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1506,6 +1506,9 @@ msgstr "Risk"
 msgid "异常"
 msgstr "Error"
 
+msgid "责任人上级"
+msgstr "Person Superior"
+
 msgid "通知组名称重复"
 msgstr "Notice Group Name Duplicate"
 
@@ -1608,6 +1611,9 @@ msgstr "Create Notice Group"
 msgid "更新通知组"
 msgstr "Update Notice Group"
 
+msgid "Get Notice Common"
+msgstr "Get Strategy Common"
+
 msgid "此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"
 msgstr "Sent by Blueking Audit Center"
 
@@ -1629,6 +1635,9 @@ msgstr "Notice Group Name Invalid with %s"
 
 msgid "内置通知组禁止删除"
 msgstr "Build in notice group is not allowed to delete"
+
+msgid "Member Variable"
+msgstr "Member Variable"
 
 msgid "权限中心异常"
 msgstr "IAM Error"
@@ -1945,6 +1954,15 @@ msgstr "Admin Required"
 
 msgid "Token Invalid"
 msgstr "Token Invalid"
+
+msgid "Label"
+msgstr "Label"
+
+msgid "Value"
+msgstr "Value"
+
+msgid "Config"
+msgstr "Config"
 
 msgid "数据拉取"
 msgstr "Data Pull"
@@ -3469,9 +3487,6 @@ msgstr "Strategy Count"
 msgid "Key"
 msgstr "Key"
 
-msgid "Value"
-msgstr "Value"
-
 msgid "Method"
 msgstr "Method"
 
@@ -3502,9 +3517,6 @@ msgstr "Detects"
 msgid "System ID"
 msgstr "System ID"
 
-msgid "Label"
-msgstr "Label"
-
 msgid "Children"
 msgstr "Children"
 
@@ -3513,9 +3525,6 @@ msgstr "Action ID"
 
 msgid "Field Type"
 msgstr "Field Type"
-
-msgid "Config"
-msgstr "Config"
 
 msgid "Strategy Operator"
 msgstr "Strategy Operator"

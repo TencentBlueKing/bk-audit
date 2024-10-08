@@ -125,6 +125,14 @@ export default {
       }));
   },
   /**
+   * @desc 获取通知组变量列表
+   * @param { Object } params
+   */
+  fetchVariableList() {
+    return MetaManageSource.getVariableList()
+      .then(({ data }) => data.member_variable);
+  },
+  /**
    * @desc 获取标准字段
    * @param { Boolean } is_etl
    */

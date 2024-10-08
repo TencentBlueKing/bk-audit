@@ -106,6 +106,13 @@ class MetaManage extends ModuleBase {
       params,
     });
   }
+  // 获取通知组变量列表
+  getVariableList() {
+    return Request.get<{member_variable: Array<{
+      label: string,
+      value: string
+    }>}>('/api/v1/notice/common/');
+  }
   // 获取标准字段
   getStandardField(params?: Record<'is_etl', boolean>) {
     return Request.get<Array<StandardFieldModel>>(`${this.module}/fields/`, {

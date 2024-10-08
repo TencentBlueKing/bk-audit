@@ -45,13 +45,13 @@
             :label="t('通知对象')"
             label-width="135"
             property="group_member">
-            <audit-user-selector
+            <user-variable-select
               allow-create
               class="form-item-common"
               :collapse-tags="collapseTags"
               :model-value="formData.group_member"
               :multiple="multiple"
-              :placeholder="t('请选择通知对象')"
+              :placeholder="t('请输入用户名，或通过输入$使用变量')"
               @change="handleNoticeReceiver" />
             <bk-alert
               class="form-item-common mt8"
@@ -139,6 +139,8 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
+
+  import UserVariableSelect from './user-variable-select.vue';
 
   import getAssetsFile from '@/utils/getAssetsFile';
 
@@ -317,7 +319,7 @@
   background-color: white;
 
   :deep(.bk-select .bk-select-trigger .bk-select-tag-input) {
-    width: 20%;
+    width: 330px;
   }
 
   .form-item-common {
