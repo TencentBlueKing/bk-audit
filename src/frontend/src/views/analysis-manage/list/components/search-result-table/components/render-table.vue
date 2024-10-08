@@ -97,8 +97,6 @@
     IRequestResponsePaginationData,
   } from '@utils/request';
 
-  import { getOffset } from '@/utils/assist';
-
   interface Props {
     columns: InstanceType<typeof Table>['$props']['columns'],
     dataSource: (params: any)=> Promise<IRequestResponsePaginationData<any>>,
@@ -125,7 +123,7 @@
   const pagination = reactive<IPagination>({
     count: 0,
     current: 1,
-    limit: 10,
+    limit: 50,
     limitList: [10, 20, 50, 100],
     align: 'right',
     layout: ['total', 'limit', 'list'],
@@ -211,38 +209,13 @@
     emits('clearSearch');
   };
 
-  const tableHeaderHeight = 42;
-  const tableRowHeight = 42;
-  const calcPageLimit = () => {
-    const windowInnerHeight = window.innerHeight;
-    const pageOffsetTop = 185;
-    const tableFooterHeight = 60;
-    const copyrightHeight = 72;
-
-    const tableRowTotalHeight = windowInnerHeight
-      - pageOffsetTop
-      - tableHeaderHeight
-      - tableFooterHeight
-      - copyrightHeight;
-
-    const rowNum = Math.floor(tableRowTotalHeight / tableRowHeight);
-    const pageLimit = new Set([
-      ...pagination.limitList,
-      rowNum,
-    ]);
-    pagination.limit = rowNum;
-    pagination.limitList = [...pageLimit].sort((a, b) => a - b);
-  };
-
   const calcTableHeight = _.throttle(() => {
     const windowInnerHeight = window.innerHeight;
-    const { top } = getOffset(rootRef.value);
-    tableMaxHeight.value = windowInnerHeight - top - 120;
+    tableMaxHeight.value = windowInnerHeight - 250;
   }, 100);
 
   onMounted(() => {
     parseURL();
-    calcPageLimit();
     calcTableHeight();
     window.addEventListener('resize', calcTableHeight);
     const observer = new MutationObserver(() => {
