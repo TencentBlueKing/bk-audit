@@ -21,11 +21,13 @@ import os
 
 from billiard.exceptions import SoftTimeLimitExceeded
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError
 from bk_resource.settings import bk_resource_settings
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
+from client_throttler.exceptions import RetryTimeout
 from django.conf import settings
 from django.core.cache import cache as _cache
 from django.db import transaction
@@ -128,6 +130,7 @@ def process_risk_ticket(*, risk_id: str = None):
     if settings.ENABLE_PROCESS_RISK_WHITELIST:
         risks = risks.filter(strategy_id__in=settings.PROCESS_RISK_WHITELIST)
 
+    logger_celery.info("[ProcessRiskTicket] Total %s", len(risks))
     # 逐个处理
     for risk in risks:
         if settings.ENABLE_MULTI_PROCESS_RISK:
@@ -236,7 +239,11 @@ def sync_auto_result(node_id: str = None):
             elif node.action == AutoProcess.__name__:
                 task_id = node.process_result.get("task", {}).get("task_id", "")
                 if task_id:
-                    status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                    try:
+                        status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                    except (RetryTimeout, APIRequestError) as e:
+                        logger_celery.warning("sync_auto_result Api Request Error: %s", e)
+                        continue
                     node.process_result["status"] = status
                     node.status = (
                         TicketNodeStatus.FINISHED

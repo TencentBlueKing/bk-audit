@@ -33,13 +33,18 @@ class BKSOps(BkApiResource, abc.ABC):
     base_url = BK_SOPS_API_URL
     platform_authorization = True
     rate_limit = settings.SOPS_API_RATE_LIMIT
+    max_retry_duration = settings.SOPS_API_MAX_RETRY_DURATION
+    enable_throttler = True
 
     def perform_request(self, validated_request_data):
+        if not self.enable_throttler:
+            return super().perform_request(validated_request_data)
         return Throttler(
             config=ThrottlerConfig(
                 func=super().perform_request,
                 key=f"{self.__module__}.{self.__class__.__name__}",
                 rate=self.rate_limit,
+                max_retry_duration=self.max_retry_duration,
             )
         )(validated_request_data)
 
@@ -79,6 +84,7 @@ class GetTaskStatus(BKSOps):
     method = "GET"
     action = "/get_task_status/{task_id}/{bk_biz_id}/"
     url_keys = ["task_id", "bk_biz_id"]
+    enable_throttler = False
 
     def parse_response(self, response: requests.Response):
         data = super().parse_response(response)
