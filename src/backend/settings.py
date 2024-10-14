@@ -23,6 +23,7 @@ import sys
 from warnings import warn
 
 import environ
+import pymysql
 
 # 读取环境变量文件
 # 配置优先级 环境变量 -> .env文件 -> settings.py
@@ -47,6 +48,9 @@ if DEPLOY_SERVICE not in os.listdir("services"):
 # 添加代码源
 sys.path.append(os.path.join(os.getcwd(), f"services/{DEPLOY_SERVICE}"))
 sys.path.append(os.path.join(os.getcwd(), "apps"))
+
+# pysql 初始化
+pymysql.install_as_MySQLdb()
 
 
 def load_settings(module_path: str, raise_exception: bool = True):
