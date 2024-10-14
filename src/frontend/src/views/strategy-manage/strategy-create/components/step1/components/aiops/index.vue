@@ -73,51 +73,71 @@
       </collapse-panel>
 
       <collapse-panel
-        v-if="formData.configs.data_source.source_type !== 'stream_source'"
         :is-active="isActive"
         :label="t('调度配置')"
         style="margin-bottom: 12px;">
         <div class="dispatch-wrap">
-          <span
-            v-bk-tooltips="t('策略运行的周期')"
-            class="label-is-required"
-            style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
-            {{ t('调度周期') }}
-          </span>
-          <div class="flex-center">
-            <bk-form-item
-              class="is-required no-label"
-              label-width="0"
-              property="configs.aiops_config.count_freq"
-              style="margin-bottom: 12px;">
-              <bk-input
-                v-model="formData.configs.aiops_config.count_freq"
-                class="schedule-input"
-                :min="1"
-                onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
-                :placeholder="t('请输入')"
-                type="number"
-                @change="handleAiopsConfig" />
-            </bk-form-item>
-            <bk-form-item
-              class="is-required no-label"
-              label-width="0"
-              property="configs.aiops_config.schedule_period"
-              style="margin-bottom: 12px;">
-              <bk-select
-                v-model="formData.configs.aiops_config.schedule_period"
-                class="schedule-select"
-                :clearable="false"
-                style="width: 68px;"
-                @change="handleAiopsConfig">
-                <bk-option
-                  v-for="(item, index) in commonData.offset_unit"
-                  :key="index"
-                  :label="item.label"
-                  :value="item.value" />
-              </bk-select>
-            </bk-form-item>
-          </div>
+          <bk-form-item
+            :label="t('调度方式')"
+            property="source_type"
+            style="margin-bottom: 12px;">
+            <bk-radio-group
+              v-model="formData.configs.data_source.source_type"
+              @change="handleSourceTypeChange">
+              <bk-radio label="batch_join_source">
+                {{ t('固定周期调度') }}
+              </bk-radio>
+              <bk-radio label="stream_source">
+                <span
+                  v-bk-tooltips="t('策略实时运行')"
+                  style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+                  {{ t('实时调度') }}
+                </span>
+              </bk-radio>
+            </bk-radio-group>
+          </bk-form-item>
+          <template v-if="formData.configs.data_source.source_type !== 'stream_source'">
+            <span
+              v-bk-tooltips="t('策略运行的周期')"
+              class="label-is-required"
+              style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+              {{ t('调度周期') }}
+            </span>
+            <div class="flex-center">
+              <bk-form-item
+                class="is-required no-label"
+                label-width="0"
+                property="configs.aiops_config.count_freq"
+                style="margin-bottom: 12px;">
+                <bk-input
+                  v-model="formData.configs.aiops_config.count_freq"
+                  class="schedule-input"
+                  :min="1"
+                  onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
+                  :placeholder="t('请输入')"
+                  type="number"
+                  @change="handleAiopsConfig" />
+              </bk-form-item>
+              <bk-form-item
+                class="is-required no-label"
+                label-width="0"
+                property="configs.aiops_config.schedule_period"
+                style="margin-bottom: 12px;">
+                <bk-select
+                  v-model="formData.configs.aiops_config.schedule_period"
+                  class="schedule-select"
+                  :clearable="false"
+                  style="width: 68px;"
+                  @change="handleAiopsConfig">
+                  <bk-option
+                    v-for="(item, index) in commonData.offset_unit"
+                    :key="index"
+                    :label="item.label"
+                    :value="item.value" />
+                </bk-select>
+              </bk-form-item>
+            </div>
+          </template>
         </div>
       </collapse-panel>
     </bk-form-item>
@@ -279,6 +299,18 @@
   const handleUpdateDataSource = (dataSource: Record<string, any>) => {
     if (!isInit) return;
     emits('updateDataSource', dataSource);
+  };
+  const handleSourceTypeChange = (type: string) => {
+    if (type === 'stream_source') {
+      formData.value.configs.aiops_config = {
+        count_freq: '',
+        schedule_period: 'hour',
+      };
+    }
+    emits('updateAiopsConfig', formData.value.configs.data_source.source_type !== 'stream_source'
+      ? formData.value.configs.aiops_config
+      : undefined);
+    emits('updateDataSource', formData.value.configs.data_source);
   };
 
   watch(() => props.controlDetail, (data) => {

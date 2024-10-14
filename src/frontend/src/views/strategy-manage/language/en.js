@@ -213,5 +213,9 @@ export default {
     '在单据页，鼠标移入label，即可显示字段说明': 'On the ticket page, move the mouse into the label to display the field description',
     请输入风险单名称: 'Please enter the name of the risk order',
     请选择通知组: 'Please select a notification group',
+    调度方式: 'Scheduling method',
+    固定周期调度: 'Periodic scheduling',
+    实时调度: 'Real-time scheduling',
+    策略实时运行: 'Strategies run in real time',
   },
 };
