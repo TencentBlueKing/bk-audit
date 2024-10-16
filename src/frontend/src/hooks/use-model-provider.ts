@@ -39,6 +39,8 @@ const findProvider = (componentInstance: ComponentInternalInstance | null): Comp
         search([child.subTree]);
       } else if (child.component) {
         search([child.component]);
+      } else {
+        search(child.children);
       }
     });
   };
