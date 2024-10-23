@@ -60,10 +60,6 @@ class OperateRecordQuerySet(models.query.QuerySet):
         重写ORM 更新方法
         """
 
-        # 后台任务不处理
-        if is_backend():
-            return super().update(**kwargs)
-
         # 是否跳过更新时间或更新人，某些特殊场景下使用
         if kwargs.pop("skip_update_time", False):
             kwargs.pop("updated_at", None)
@@ -92,10 +88,6 @@ class OperateRecordModelManager(models.Manager):
     def create(self, *args, **kwargs):
         """创建数据 自动填写通用字段"""
 
-        # 后台任务不处理
-        if is_backend():
-            return super().create(*args, **kwargs)
-
         kwargs.update(
             {
                 "created_at": kwargs.get("created_at") or timezone.now(),
@@ -109,10 +101,6 @@ class OperateRecordModelManager(models.Manager):
     def bulk_create(self, objs, *args, **kwargs):
         """创建数据 自动填写通用字段"""
 
-        # 后台任务不处理
-        if is_backend():
-            return super().bulk_create(objs, *args, **kwargs)
-
         for obj in objs:
             obj.created_at = obj.created_at or timezone.now()
             obj.created_by = obj.created_by or get_request_username()
@@ -122,10 +110,6 @@ class OperateRecordModelManager(models.Manager):
 
     def bulk_update(self, objs, *args, **kwargs):
         """更新数据 自动填写通用字段"""
-
-        # 后台任务不处理
-        if is_backend():
-            return super().bulk_update(objs, *args, **kwargs)
 
         for obj in objs:
             obj.created_at = obj.created_at or timezone.now()
