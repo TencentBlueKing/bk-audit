@@ -31,6 +31,7 @@ from services.web.databus.storage.serializers import (
     CreateRedisRequestSerializer,
     StorageCreateRequestSerializer,
 )
+from services.web.databus.tasks import create_or_update_plugin_etl
 from services.web.entry.constants import (
     INIT_ES_FISHED_KEY,
     INIT_FIELDS_FINISHED_KEY,
@@ -80,6 +81,7 @@ class SystemInitHandler:
         self.init_redis()
         self.init_snapshot()
         self.init_event()
+        self.create_or_update_plugin_etl()
         print("[Main] Init Finished")
 
     def pre_init(self):
@@ -158,3 +160,9 @@ class SystemInitHandler:
         print("[InitEvent] Start")
         EventHandler().update_or_create_rt()
         print("[InitEvent] Stop")
+
+    def create_or_update_plugin_etl(self):
+        """创建或更新采集入库"""
+        print("[CreateOrUpdatePluginEtl] Start")
+        create_or_update_plugin_etl()
+        print("[CreateOrUpdatePluginEtl] Stop")
