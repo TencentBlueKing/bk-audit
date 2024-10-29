@@ -302,7 +302,7 @@ class DataIdInfoSerializer(serializers.Serializer):
     bk_biz_id = serializers.IntegerField(label=gettext_lazy("业务ID"))
     raw_data_name = serializers.CharField(label=gettext_lazy("数据源名称"))
     raw_data_alias = serializers.CharField(label=gettext_lazy("数据源别名"))
-    custom_type = serializers.CharField(label=gettext_lazy("接入场景"))
+    custom_type = serializers.CharField(label=gettext_lazy("接入场景"), allow_null=True)
 
     def to_internal_value(self, data: dict) -> dict:
         data["bk_data_id"] = data.pop("id", None)
