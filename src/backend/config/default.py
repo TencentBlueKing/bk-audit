@@ -348,6 +348,19 @@ BK_AUDIT_SETTINGS = {
 # 全局配置
 BK_SHARED_RES_URL = os.getenv("BKAPP_BK_SHARED_RES_URL", os.getenv("BKPAAS_SHARED_RES_URL", ""))
 
+# CORS 允许的 header
+CORS_ALLOW_HEADERS = [
+    "x-requested-with",
+    "content-type",
+    "accept,origin",
+    "authorization",
+    "x-csrftoken",
+    "user-agent",
+    "accept-encoding",
+    "time-zone",
+    *os.getenv("BKAPP_CORS_ALLOW_HEADERS", "").split(","),
+]
+
 """
 以下为框架代码 请勿修改
 """
