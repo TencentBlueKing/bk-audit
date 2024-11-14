@@ -171,7 +171,7 @@ class RiskHandler:
                     & Q(
                         ~Q(status=RiskStatus.CLOSED)
                         | Q(
-                            event_end_time__lte=datetime.datetime.fromtimestamp(
+                            event_end_time__gte=datetime.datetime.fromtimestamp(
                                 event["event_time"] / 1000, tz=timezone.get_default_timezone()
                             )
                         )
