@@ -199,7 +199,7 @@ class CollectorLogOriginSerializer(serializers.Serializer):
     gseindex = serializers.IntegerField(required=False, allow_null=True)
     hostname = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     ip = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    items = CollectorLogItemsSerializer(many=True)
+    items = CollectorLogItemsSerializer(required=False, many=True)
     time = serializers.IntegerField(required=False, allow_null=True)
     utctime = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
