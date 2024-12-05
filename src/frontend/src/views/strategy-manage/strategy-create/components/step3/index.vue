@@ -200,7 +200,7 @@
     (e: 'submitData'): void;
   }
   interface Props {
-    data: StrategyModel
+    editData: StrategyModel
   }
 
   const props = defineProps<Props>();
@@ -277,7 +277,7 @@
   };
 
   // 编辑
-  watch(() => props.data, (data) => {
+  watch(() => props.editData, (data) => {
     formData.value.notice_groups = Array.isArray(data.notice_groups) ? data.notice_groups : [];
     formData.value.processor_groups = Array.isArray(data.processor_groups) ? data.processor_groups : [];
   }, {

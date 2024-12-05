@@ -77,7 +77,7 @@
                 </div>
                 <template #content>
                   <variable-table
-                    :strategy-id="data.strategy_id"
+                    :strategy-id="editData.strategy_id"
                     @is-copy="handleCopy" />
                 </template>
               </bk-popover>
@@ -88,8 +88,8 @@
           <template #content>
             <event-info-table
               ref="eventRef"
-              :data="data"
-              :strategy-id="data.strategy_id" />
+              :data="editData"
+              :strategy-id="editData.strategy_id" />
           </template>
         </card-part-vue>
       </audit-form>
@@ -144,7 +144,7 @@
     (e: 'showPreview'): void;
   }
   interface Props {
-    data: StrategyModel
+    editData: StrategyModel
   }
 
   const props = defineProps<Props>();
@@ -278,7 +278,7 @@
   };
 
   // 编辑
-  watch(() => props.data, (data) => {
+  watch(() => props.editData, (data) => {
     formData.value.risk_title = data.risk_title || '';
   }, {
     immediate: isEditMode || isCloneMode,

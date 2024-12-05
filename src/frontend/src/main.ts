@@ -36,6 +36,7 @@ import AuthComponent from '@components/auth/component';
 import AuthOption from '@components/auth/option.vue';
 import AuthRouterLink from '@components/auth/router-link.vue';
 import AuthSwitch from '@components/auth/switch.vue';
+import AuthCollapsePanel from '@components/audit-collapse-panel/index.vue';
 import RenderList from '@components/render-list/index.vue';
 import RenderSensitivityLevel from '@components/render-sensitivity-level/index.vue';
 import ScrollFaker from '@components/scroll-faker/index.vue';
@@ -86,6 +87,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     BKApp.component('AuthOption', AuthOption);
     BKApp.component('AuthSwitch', AuthSwitch);
     BKApp.component('AuthRouterLink', AuthRouterLink);
+    BKApp.component('AuthCollapsePanel', AuthCollapsePanel);
     BKApp.component('RenderList', RenderList);
     BKApp.component('RenderSensitivityLevel', RenderSensitivityLevel);
     BKApp.component('ScrollFaker', ScrollFaker);

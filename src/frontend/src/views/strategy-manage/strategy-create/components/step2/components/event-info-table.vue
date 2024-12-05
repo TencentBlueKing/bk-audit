@@ -83,7 +83,7 @@
 
   const groupMap = {
     event_basic_field_configs: t('基本信息'),
-    event_data_field_configs: t('事件数据'),
+    event_data_field_configs: t('事件结果'),
     event_evidence_field_configs: t('事件证据'),
   };
 
