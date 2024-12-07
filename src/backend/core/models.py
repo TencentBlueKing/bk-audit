@@ -151,10 +151,6 @@ class OperateRecordModel(models.Model):
         non-SQL backends), respectively. Normally, they should not be set.
         """
 
-        # 后台任务不处理
-        if is_backend():
-            return super().save(*args, **kwargs)
-
         operator = get_request_username()
         if not self.created_by:
             self.created_by = operator
