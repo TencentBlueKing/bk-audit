@@ -30,7 +30,7 @@
             property="test">
             <bk-radio-group v-model="reportMethod">
               <bk-radio-button
-                v-for="item in reportMethodRadioList"
+                v-for="item in reportMethodRadioList.filter(item => showBkbase.enabled || item.id !== 'bkbase')"
                 :key="item.id"
                 class="form-raido-common"
                 :disabled="isEditMode"
@@ -334,7 +334,7 @@
     yaml_config: '',
   });
   const reportMethod = ref('newlog');
-  const reportMethodRadioList = [
+  const reportMethodRadioList = ref([
     {
       id: 'newlog',
       name: t('新建日志采集'),
@@ -343,7 +343,7 @@
       id: 'bkbase',
       name: t('计算平台已有数据源'),
     },
-  ];
+  ]);
   type environmentType = keyof typeof comMap
   const isEditMode = route.name === 'collectorEdit' || route.name === 'dataIdEdit';
   const formRef = ref();
@@ -517,6 +517,18 @@
       },
     });
   }
+
+  const {
+    data: showBkbase,
+  }  = useRequest(CollectorManageService.fetchBkbaseFeature, {
+    defaultValue: {
+      enabled: false,
+    },
+    defaultParams: {
+      feature_id: 'bkbase_data_source',
+    },
+    manual: true,
+  });
 
 
   const {
