@@ -41,7 +41,9 @@ declare interface Window {
   timezone: string;
 }
 
-declare module 'js-cookie'
+declare module 'js-cookie';
+
+declare module 'dompurify';
 
 declare module '@blueking/notice-component';
 

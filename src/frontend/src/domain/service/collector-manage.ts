@@ -317,4 +317,11 @@ export default {
     return CollectorSource.createApiPush(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 是否显示：上报方式，计算平台已有数据源
+   */
+  fetchBkbaseFeature(params: {feature_id: string}) {
+    return CollectorSource.getBkbaseFeature(params)
+      .then(({ data }) => data);
+  },
 };
