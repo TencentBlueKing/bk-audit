@@ -341,6 +341,12 @@
         trigger: 'change',
       },
     ],
+    'configs.config_type': [
+      {
+        validator: (value: Array<string>) => !!value,
+        message: t('数据源不能为空'),
+        trigger: 'change',
+      }],
     'configs.data_source.system_id': [
       {
         validator: (value: Array<string>) => !!value && value.length > 0,

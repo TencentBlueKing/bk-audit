@@ -31,6 +31,7 @@ export default class CommonData {
   strategy_status: Array<ItemType>;
   risk_level: Array<ItemType>;
   strategy_way: Array<ItemType>;
+  customize_table_type: Array<ItemType>;
 
   constructor(payload = {} as CommonData) {
     this.offset_unit = payload.offset_unit || [];
@@ -42,6 +43,7 @@ export default class CommonData {
     this.strategy_status = payload.strategy_status || [];
     this.risk_level = payload.risk_level || [];
     this.strategy_way = payload.strategy_way || [];
+    this.customize_table_type = payload.customize_table_type || [];
   }
 }
 

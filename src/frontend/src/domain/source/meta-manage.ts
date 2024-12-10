@@ -14,6 +14,7 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import type DateSheetModel from '@model/meta/data-sheet';
 import type EventSourceAppModel from '@model/meta/event-source-app';
 import type GlobalsModel from '@model/meta/globals';
 import type NamespaceModel from '@model/meta/namespace';
@@ -80,6 +81,36 @@ class MetaManage extends ModuleBase {
   getAllActionBySysetemId(params: Record<'id', string>, payload = {} as IRequestPayload) {
     return Request.get<Array<SystemActionModel>>(`${this.path}/systems/${params.id}/actions/`, {
       payload,
+    });
+  }
+  // 获取数据表
+  getDataSheet(params: Record<string, any>) {
+    // return Request.get<Array<DateSheetModel>>(`${this.path}/data_sheet/list_sheet/`, {
+    //   params,
+    // });
+    console.log(params);
+    return Promise.resolve<{
+      data: Array<DateSheetModel>
+    }>({
+      data: [{
+        id: 1,
+        name: '数据表1',
+      }],
+    });
+  }
+  // 获取关联数据表
+  getLinkDataSheet(params: Record<string, any>) {
+    // return Request.get<Array<DateSheetModel>>(`${this.path}/link_data_sheet/list_sheet/`, {
+    //   params,
+    // });
+    console.log(params);
+    return Promise.resolve<{
+      data: Array<DateSheetModel>
+    }>({
+      data: [{
+        id: 1,
+        name: '关联表1',
+      }],
     });
   }
   // 操作列表(搜索)

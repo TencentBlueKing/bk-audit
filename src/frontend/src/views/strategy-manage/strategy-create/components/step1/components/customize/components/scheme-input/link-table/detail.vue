@@ -1,0 +1,154 @@
+<template>
+  <div
+    v-if="linkDataDetail.links && linkDataDetail.links.length"
+    class="link-data-detail">
+    <bk-alert
+      v-if="linkDataDetail.has_refresh"
+      theme="warning">
+      <template #title>
+        {{ t('该联表数据有更新，请确认是否刷新同步') }}
+        <bk-button
+          style="margin: 0 16px;"
+          text
+          theme="primary"
+          @click="handleRefreshLinkData">
+          {{ t('刷新') }}
+        </bk-button>
+        <router-link
+          target="_blank"
+          :to="{
+            name: '',
+            query: {
+              id: linkDataSheetId,
+            },
+          }">
+          {{ t('前往查看详情查看') }}
+        </router-link>
+      </template>
+    </bk-alert>
+    <div class="detail-wrapper">
+      <div style="display: flex; justify-content: space-between;">
+        <span>{{ t('连表预览') }}</span>
+        <div class="operation">
+          <span>{{ t('找不到合适的数据？') }}</span>
+          <router-link
+            style="margin: 0 16px;"
+            target="_blank"
+            :to="{
+              name: '',
+            }">
+            {{ t('立即新建联表') }}
+          </router-link>
+          <router-link
+            target="_blank"
+            :to="{
+              name: '',
+            }">
+            {{ t('前往联表管理') }}
+          </router-link>
+        </div>
+      </div>
+      <div
+        v-for="(item, index) in linkDataDetail.links"
+        :key="index"
+        style="margin-bottom: 10px;">
+        <div class="detail-table">
+          <div class="detail-table-head">
+            <div class="left-name">
+              {{ item.left_dataset_name }}
+            </div>
+            <div class="join-type">
+              <relation-ship :join-type="item.join_type" />
+            </div>
+            <div class="right-name">
+              {{ item.right_dataset_name }}
+            </div>
+          </div>
+          <template
+            v-for="(field, fieldIndex) in item.link_fields"
+            :key="fieldIndex">
+            <div class="detail-table-body">
+              <div class="left-field">
+                {{ field.left_field }}
+              </div>
+              <div style="width: 40px; text-align: center;">
+                =
+              </div>
+              <div class="right-field">
+                {{ field.right_field }}
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+<script setup lang="ts">
+  import { useI18n } from 'vue-i18n';
+
+  import LinkDataDetailModel from '@model/link-data/link-data-detail';
+
+  import RelationShip from './relation-ship.vue';
+
+  interface Emits {
+    (e: 'handleRefreshLinkData'): void;
+  }
+  interface Props {
+    linkDataDetail: LinkDataDetailModel
+    linkDataSheetId: string
+  }
+
+  defineProps<Props>();
+  const emit = defineEmits<Emits>();
+  const { t } = useI18n();
+
+  const handleRefreshLinkData = () => {
+    emit('handleRefreshLinkData');
+  };
+</script>
+<style scoped lang="postcss">
+.link-data-detail {
+  .detail-wrapper {
+    padding: 16px;
+    margin-top: 8px;
+    background-color: #f5f7fa;
+
+    .detail-table {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .detail-table-head,
+    .detail-table-body {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      flex: 1;
+
+      .right-name,
+      .left-name {
+        padding: 5px 8px;
+        background-color: #eaebf0;
+        border: 1px solid #dcdee5;
+      }
+
+      .right-field,
+      .left-field {
+        padding: 5px 8px;
+        background-color: #fff;
+        border: 1px solid #dcdee5;
+      }
+
+      .join-type {
+        display: flex;
+        height: 80%;
+        padding: 0 5px;
+        margin: auto;
+        background-color: #e1ecff;
+        align-items: center
+      }
+    }
+  }
+}
+</style>

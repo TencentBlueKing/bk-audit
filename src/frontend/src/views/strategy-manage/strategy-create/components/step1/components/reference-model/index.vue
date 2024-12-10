@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="reference-model">
+  <div class="strategy-reference-model">
     <bk-form-item
       class="is-required"
       :label="t('模型方案')"
@@ -272,16 +272,17 @@
     });
   };
 
-  const handleUpdateConfigType = (configType: string) => {
-    formData.value.configs.config_type = configType;
-  };
-
   // 更新内置模型config参数
   const handleUpdateConfigs = (configs: Record<string, any>) => {
     formData.value.configs = {
       ...formData.value.configs,
       ...configs,
     };
+  };
+
+  // 切换AI模型数据源类型
+  const handleUpdateConfigType = (configType: string) => {
+    formData.value.configs.config_type = configType;
   };
 
   // 更新AI模型config参数
@@ -292,6 +293,7 @@
     };
   };
 
+  // 更新AI模型config.aiops_config，调度周期
   const handleUpdateAiopsConfig = (aiopsConfig: Record<string, any>) => {
     if (aiopsConfig) {
       formData.value.configs.aiops_config = {
@@ -352,10 +354,10 @@
   position: absolute;
   top: 50%;
   right: 30px;
-  line-height: normal;
   padding: 3px 10px;
   font-size: 12px;
   font-weight: normal;
+  line-height: normal;
   color: #3a84ff;
   background: #edf4ff;
   border-radius: 2px;
