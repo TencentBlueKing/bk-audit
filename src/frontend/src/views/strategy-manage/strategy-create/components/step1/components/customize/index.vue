@@ -16,15 +16,15 @@
 -->
 <template>
   <div class="strategy-customize">
-    <bk-form-item
-      label=""
-      label-width="0"
-      required>
-      <auth-collapse-panel
-        is-active
-        :label="t('规则配置')"
-        style="margin-bottom: 14px;">
-        <div class="customize-rule">
+    <auth-collapse-panel
+      is-active
+      :label="t('规则配置')"
+      style="margin-bottom: 14px;">
+      <div class="customize-rule">
+        <bk-form-item
+          label=""
+          label-width="0"
+          required>
           <span
             class="label-is-required"
             style="color: #63656e;">
@@ -62,9 +62,17 @@
             :link-data-detail="linkDataDetail"
             :link-data-sheet-id="formData.configs.data_source.link_data_sheet_id"
             @handle-refresh-link-data="handleRefreshLinkData" />
-        </div>
-      </auth-collapse-panel>
-    </bk-form-item>
+        </bk-form-item>
+        <bk-form-item
+          :label="t('预期结果')"
+          label-width="160"
+          property="control_id">
+          <expected-results
+            :aggregate-list="aggregateList"
+            @update-expected-result="handleUpdateExpectedResult" />
+        </bk-form-item>
+      </div>
+    </auth-collapse-panel>
   </div>
 </template>
 <script setup lang="ts">
@@ -77,6 +85,7 @@
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
   import CommonDataModel from '@model/strategy/common-data';
 
+  import ExpectedResults from './components/expected-results/index.vue';
   import EventLogComponent from './components/scheme-input/event-log.vue';
   import LinkDataDetailComponent from './components/scheme-input/link-table/detail.vue';
   import LinkDataComponent from './components/scheme-input/link-table/index.vue';
@@ -84,6 +93,15 @@
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
 
   import useRequest from '@/hooks/use-request';
+
+  interface ResultItem {
+    uid: string,
+    name: string,
+    type: string,
+    aggregate: string,
+    display_name: string,
+    is_joined: boolean,
+  }
 
   interface IFormData {
     configs: {
@@ -95,6 +113,7 @@
         link_data_sheet_id: string,
       },
       config_type: string,
+      expected_result: Array<ResultItem>
     },
   }
   interface Emits {
@@ -137,9 +156,11 @@
         link_data_sheet_id: '',
       },
       config_type: '',
+      expected_result: [],
     },
   });
   const customizeTableTypeList = ref<Array<Record<string, any>>>([]);
+  const aggregateList = ref<Array<Record<string, any>>>([]);
 
   const {
     data: commonData,
@@ -181,6 +202,28 @@
           },
         },
       ];
+      aggregateList.value = commonData.value.aggregate || [{
+        label: '求和',
+        value: 'SUM',
+      }, {
+        label: '最小值',
+        value: 'MIN',
+      }, {
+        label: '最大值',
+        value: 'MAX',
+      }, {
+        label: '计数',
+        value: 'COUNT',
+      }, {
+        label: '去重计数',
+        value: 'DISCOUNT',
+      }, {
+        label: '平均值',
+        value: 'AVG',
+      }, {
+        label: '不聚和',
+        value: 'null',
+      }];
     },
   });
 
@@ -210,6 +253,10 @@
       ...formData.value.configs.data_source,
       ...dataSource,
     };
+  };
+
+  const handleUpdateExpectedResult = (expectedResult: Array<ResultItem>) => {
+    formData.value.configs.expected_result = expectedResult;
   };
 
   const handleUpdateLinkDataDetail = (detail: LinkDataDetailModel) => {
@@ -246,7 +293,7 @@
       gap: 8px;
 
       :deep(.bk-form-item) {
-        margin-bottom: 8px;
+        margin-bottom: 0;
       }
 
       .no-label .bk-form-label::after {

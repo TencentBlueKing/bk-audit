@@ -35,6 +35,17 @@ export default class AiopsDetail {
 		}>
 	}>;
 
+  // {
+  //   left_dataset_uid: 'aYuCYsCZbXrYmEcx4fgpKW',
+  //   left_dataset_name: 'a操作日志表',
+  //   right_dataset_uid: '3uewK9ytd2nqVS6qMfgsru',
+  //   right_dataset_name: 'a资产表',
+  //   join_type: 'left_join',
+  //   link_fields: [{
+  //     left_field: '35NShkXqzsUpScA3qomU4a',
+  //     right_field: '3kaFQmGGaY4DVYeUfqKDiV',
+  //   }],
+  // },
   constructor(payload = {} as AiopsDetail) {
     this.table_name = payload.table_name;
     this.tag = payload.tag;
@@ -44,26 +55,6 @@ export default class AiopsDetail {
     this.updated_by = payload.updated_by;
     this.updated_at = payload.updated_at;
     this.has_refresh = payload.has_refresh;
-    this.links = payload.links ||  [{
-      left_dataset_uid: 'aYuCYsCZbXrYmEcx4fgpKW',
-      left_dataset_name: 'a操作日志表',
-      right_dataset_uid: '3uewK9ytd2nqVS6qMfgsru',
-      right_dataset_name: 'a资产表',
-      join_type: 'left_join',
-      link_fields: [{
-        left_field: '35NShkXqzsUpScA3qomU4a',
-        right_field: '3kaFQmGGaY4DVYeUfqKDiV',
-      }],
-    }, {
-      left_dataset_uid: 'aYuCYsCZbXrYmEcx4fgpKW',
-      left_dataset_name: 'a操作日志表',
-      right_dataset_uid: 'iwVLoWSeEerkTRmEFcJSpJ',
-      right_dataset_name: 'a资产表',
-      join_type: 'right_join',
-      link_fields: [{
-        left_field: 'JUoBPb2WJnuGDEobrNAPME',
-        right_field: '3kmtV24MNjmF47RSJofsxp',
-      }],
-    }];
+    this.links = payload.links;
   }
 }
