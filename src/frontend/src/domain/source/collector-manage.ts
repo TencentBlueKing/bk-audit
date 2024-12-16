@@ -238,6 +238,10 @@ class CollectorManage extends ModuleBase {
       payload,
     });
   }
+  // 判断上报方式，计算平台已有数据源是否显示
+  getBkbaseFeature(params: {feature_id: string}) {
+    return Request.get<Record<'enabled', boolean>>(`/api/v1/feature/${params.feature_id}/`);
+  }
 }
 
 export default new CollectorManage();
