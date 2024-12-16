@@ -54,6 +54,7 @@
 
   interface Expose {
     refreshLinkData: () => void,
+    resetFormData: () => void,
   }
   interface Emits {
     (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
@@ -110,6 +111,9 @@
   defineExpose<Expose>({
     refreshLinkData: () => {
       fetchLinkDataSheetDetail({ id: formData.value.configs.data_source.link_data_sheet_id });
+    },
+    resetFormData: () => {
+      formData.value.configs.data_source.link_data_sheet_id = '';
     },
   });
 </script>

@@ -32,8 +32,8 @@
             <div class="field-pop-select-list">
               <scroll-faker>
                 <div
-                  v-for="(item, index) in filedOptions"
-                  :key="item.name"
+                  v-for="(item, index) in tableFields"
+                  :key="item.raw_name"
                   class="field-pop-select-item"
                   :class="[selectIndex === index ? 'select-item-active' : '']"
                   @click="() => handleSelectField(index, item)">
@@ -43,7 +43,7 @@
                       type="user" />
                     <span>{{ item.display_name }}</span>
                   </div>
-                  <div>{{ item.name }}</div>
+                  <div>{{ item.raw_name }}</div>
                 </div>
               </scroll-faker>
             </div>
@@ -87,22 +87,15 @@
   import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  interface FiledOption {
-    uid: string,
-    name: string,
-    type: string,
-    display_name: string,
-    is_joined: boolean,
-  }
-  interface ResultItem extends FiledOption {
-    aggregate: string
-  }
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
   interface Emits {
-    (e: 'addExpectedResult', item: ResultItem): void;
+    (e: 'addExpectedResult', item: DatabaseTableFieldModel): void;
   }
   interface Props {
     aggregateList: Array<Record<string, any>>
-    expectedResultList: Array<ResultItem>
+    expectedResultList: Array<DatabaseTableFieldModel>
+    tableFields: Array<DatabaseTableFieldModel>
   }
 
   const props = defineProps<Props>();
@@ -112,29 +105,7 @@
   const isShow = ref(false);
   const selectIndex = ref(-1);
   const localAggregateList = ref<Array<Record<string, any>>>([]);
-  const formData = ref<ResultItem>({
-    uid: '',
-    name: '',
-    type: '',
-    display_name: '',
-    is_joined: false,
-    aggregate: '',
-  });
-
-
-  const filedOptions = ref<Array<FiledOption>>([{
-    uid: 'fr93yxgtrUtMCZ8DjkTh7F',
-    name: 'dtEventTime',
-    type: 'datetime',
-    display_name: '时间',
-    is_joined: false,
-  }, {
-    uid: 'fr93yxgtrUtMCZ8DjkTh7G',
-    name: 'user',
-    type: 'string',
-    display_name: '人员',
-    is_joined: false,
-  }]);
+  const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
 
   const handleShowPop = () => {
     isShow.value = true;
@@ -145,10 +116,11 @@
     }));
   };
 
-  const handleSelectField = (index: number, field: FiledOption) => {
+  const handleSelectField = (index: number, field: DatabaseTableFieldModel) => {
     selectIndex.value = index;
     // 同一字段不能重复添加同一聚合算法
-    const hasAggregate = props.expectedResultList.filter(item => (item.uid + item.name) === (field.uid + item.name));
+    // eslint-disable-next-line max-len
+    const hasAggregate = props.expectedResultList.filter(item => (item.rt_id + item.raw_name) === (field.rt_id +  item.raw_name));
     if (hasAggregate.length) {
       localAggregateList.value = localAggregateList.value.map((item) => {
         if (hasAggregate.some(element => element.aggregate === item.value)) {

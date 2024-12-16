@@ -49,6 +49,10 @@
 
   import useRequest from '@hooks/use-request';
 
+  interface Expose {
+    resetFormData: () => void,
+  }
+
   interface Emits {
     (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
   }
@@ -84,4 +88,10 @@
   const handleChangeDataSheet = () => {
     emits('updateDataSource', formData.value.configs.data_source);
   };
+
+  defineExpose<Expose>({
+    resetFormData: () => {
+      formData.value.configs.data_source.data_sheet_id = '';
+    },
+  });
 </script>

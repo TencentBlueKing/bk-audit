@@ -62,6 +62,10 @@
 
   import useRequest from '@hooks/use-request';
 
+  interface Expose {
+    resetFormData: () => void,
+  }
+
   interface Emits {
     (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
   }
@@ -93,6 +97,7 @@
     defaultValue: [],
     manual: true,
     onSuccess(data) {
+      console.log(111);
       const ids = data.map(item => item.id).join(',');
       fetchBatchSystemCollectorStatusList({
         system_ids: ids,
@@ -126,6 +131,12 @@
   const handleChangeSystem = () => {
     emits('updateDataSource', formData.value.configs.data_source);
   };
+
+  defineExpose<Expose>({
+    resetFormData: () => {
+      formData.value.configs.data_source.system_id = [];
+    },
+  });
 </script>
 
 

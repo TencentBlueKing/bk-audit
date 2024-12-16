@@ -145,6 +145,15 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 获取表字段
+   */
+  fetDatabaseTableFields(params: {
+    table_id: string;
+  }) {
+    return StrategySource.getDatabaseTableFields(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取表格下的rt字段
    */
   fetchTableRtFields(params: {

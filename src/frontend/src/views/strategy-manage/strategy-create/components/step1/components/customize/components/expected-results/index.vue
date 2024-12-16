@@ -19,9 +19,9 @@
     class="panel-edit flex"
     item-key="name"
     :list="expectedResultList">
-    <template #item="{ element, index }: { element: ResultItem, index: number }">
+    <template #item="{ element, index }: { element: DatabaseTableFieldModel, index: number }">
       <div
-        :key="element.name + element.aggregate + element.display_name"
+        :key="element.raw_name + element.aggregate + element.display_name"
         class="query-field flex-center-wrap">
         <tooltips
           class="dragging-handle"
@@ -37,6 +37,7 @@
       <add-fields
         :aggregate-list="aggregateList"
         :expected-result-list="expectedResultList"
+        :table-fields="tableFields"
         @add-expected-result="handleAdd" />
       <div
         v-bk-tooltips="t('清空选项')"
@@ -54,49 +55,36 @@
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import AddFields from './add-fields.vue';
 
-  interface ResultItem {
-    uid: string,
-    name: string,
-    type: string,
-    aggregate: string,
-    display_name: string,
-    is_joined: boolean,
-  }
   interface Emits {
-    (e: 'updateExpectedResult', value: Array<ResultItem>): void;
+    (e: 'updateExpectedResult', value: Array<DatabaseTableFieldModel>): void;
   }
   interface Props {
     aggregateList: Array<Record<string, any>>
+    tableFields: Array<DatabaseTableFieldModel>
   }
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  // {
-  //   uid: 'fr93yxgtrUtMCZ8DjkTh7F',
-  //   name: 'dtEventTime',
-  //   type: 'datetime',
-  //   aggregate: 'SUM',
-  //   display_name: '时间',
-  //   is_joined: false,
-  // }
-  const expectedResultList = ref<Array<ResultItem>>([]);
+  const expectedResultList = ref<Array<DatabaseTableFieldModel>>([]);
 
   const updateExpectedResult = () => {
     emits('updateExpectedResult', expectedResultList.value);
   };
 
-  const getMetricName = (element: ResultItem) => {
+  const getMetricName = (element: DatabaseTableFieldModel) => {
     const item = props.aggregateList.find(item => item.value === element.aggregate);
     return t(`[${item?.label}] ${element.display_name}`);
   };
 
-  const handleAdd = (item: ResultItem) => {
+  const handleAdd = (item: DatabaseTableFieldModel) => {
     expectedResultList.value.push(item);
     updateExpectedResult();
   };

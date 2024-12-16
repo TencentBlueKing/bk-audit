@@ -36,7 +36,7 @@
               label-width="0"
               property="configs.config_type">
               <bk-select
-                v-model="formData.configs.config_type"
+                v-model="configType"
                 :disabled="isEditMode || isCloneMode || isUpgradeMode"
                 filterable
                 :placeholder="t('请选择数据源类型')"
@@ -69,14 +69,25 @@
           property="control_id">
           <expected-results
             :aggregate-list="aggregateList"
+            :table-fields="tableFields"
             @update-expected-result="handleUpdateExpectedResult" />
+        </bk-form-item>
+        <bk-form-item
+          :label="t('风险发现规则')"
+          label-width="160"
+          property="rules">
+          <rules-component
+            :table-fields="tableFields"
+            @update-where="handleUpdateWhere" />
         </bk-form-item>
       </div>
     </auth-collapse-panel>
   </div>
 </template>
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import _ from 'lodash';
+  import { h, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -84,8 +95,12 @@
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
   import CommonDataModel from '@model/strategy/common-data';
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
+  import AuditIcon from '@components/audit-icon';
 
   import ExpectedResults from './components/expected-results/index.vue';
+  import RulesComponent from './components/rules/index.vue';
   import EventLogComponent from './components/scheme-input/event-log.vue';
   import LinkDataDetailComponent from './components/scheme-input/link-table/detail.vue';
   import LinkDataComponent from './components/scheme-input/link-table/index.vue';
@@ -94,15 +109,18 @@
 
   import useRequest from '@/hooks/use-request';
 
-  interface ResultItem {
-    uid: string,
-    name: string,
-    type: string,
-    aggregate: string,
-    display_name: string,
-    is_joined: boolean,
+  interface Where {
+    operator: 'and' | 'or' ;
+    conditions: Array<{
+      operator: 'and' | 'or';
+      conditions: Array<{
+        field: DatabaseTableFieldModel;
+        operation: string;
+        filter: string;
+        filters: string[];
+      }>
+    }>;
   }
-
   interface IFormData {
     configs: {
       data_source: {
@@ -113,7 +131,8 @@
         link_data_sheet_id: string,
       },
       config_type: string,
-      expected_result: Array<ResultItem>
+      select: Array<DatabaseTableFieldModel>
+      where: Where
     },
   }
   interface Emits {
@@ -156,11 +175,16 @@
         link_data_sheet_id: '',
       },
       config_type: '',
-      expected_result: [],
+      select: [],
+      where: {
+        operator: 'and',
+        conditions: [],
+      },
     },
   });
   const customizeTableTypeList = ref<Array<Record<string, any>>>([]);
   const aggregateList = ref<Array<Record<string, any>>>([]);
+  const configType = ref('');
 
   const {
     data: commonData,
@@ -235,28 +259,76 @@
     defaultValue: [],
   });
 
+  // 获取表字段
+  const {
+    data: tableFields,
+    run: fetDatabaseTableFields,
+  } = useRequest(StrategyManageService.fetDatabaseTableFields, {
+    defaultValue: [],
+  });
+
   // 切换数据源类型： 默认使用离线模式batch_join_source，不切换类型
-  const handleDataSourceType = (item: boolean | string | number) => {
-    formData.value.configs.data_source = {
-      ...formData.value.configs.data_source,
-      ...initDataSource.value,
-    };
-    if (item !== '') {
-      fetchTable({
-        table_type: item,
+  const handleDataSourceType = (item: string) => {
+    if (formData.value.configs.config_type === '') {
+      formData.value.configs.config_type = item;
+    } else {
+      InfoBox({
+        title: () =>  h('div', [
+          h(AuditIcon, {
+            type: 'alert',
+            style: {
+              fontSize: '42px',
+              color: '#FFF8C3',
+            },
+          }),
+          h('div', t('切换数据源请注意')),
+        ]),
+        subTitle: t('切换后，已配置的数据将被清空。是否继续？'),
+        confirmText: t('继续切换'),
+        cancelText: t('取消'),
+        headerAlign: 'center',
+        contentAlign: 'center',
+        footerAlign: 'center',
+        onConfirm() {
+          formData.value.configs.config_type = item;
+          // 重置数据
+          formData.value.configs.data_source = {
+            ...formData.value.configs.data_source,
+            ...initDataSource.value,
+          };
+          configRef.value?.resetFormData();
+          if (item !== '') {
+            fetchTable({
+              table_type: item,
+            });
+          }
+        },
+        onClose() {
+          configType.value = formData.value.configs.config_type;
+        },
       });
     }
   };
 
   const handleUpdateDataSource = (dataSource: Record<string, any>) => {
+    const keys = Object.keys(dataSource);
+    if (!_.isEmpty(dataSource[keys[0]])) {
+      fetDatabaseTableFields({
+        table_id: dataSource,
+      });
+    }
     formData.value.configs.data_source = {
       ...formData.value.configs.data_source,
       ...dataSource,
     };
   };
 
-  const handleUpdateExpectedResult = (expectedResult: Array<ResultItem>) => {
-    formData.value.configs.expected_result = expectedResult;
+  const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
+    formData.value.configs.select = expectedResult;
+  };
+
+  const handleUpdateWhere = (where: Where) => {
+    formData.value.configs.where = where;
   };
 
   const handleUpdateLinkDataDetail = (detail: LinkDataDetailModel) => {
@@ -303,6 +375,10 @@
       .no-label .bk-form-label {
         padding-right: 0;
       }
+    }
+
+    :deep(.bk-infobox-title) {
+      margin-top: 0;
     }
   }
 }

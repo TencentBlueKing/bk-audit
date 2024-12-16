@@ -58,6 +58,9 @@
     useRoute,
   } from 'vue-router';
 
+  interface Expose {
+    resetFormData: () => void,
+  }
   interface Props {
     tableData: Array<{
       label: string;
@@ -115,6 +118,12 @@
     }
   }, {
     immediate: true,
+  });
+
+  defineExpose<Expose>({
+    resetFormData: () => {
+      formData.value.configs.data_source.result_table_id = [];
+    },
   });
 </script>
 
