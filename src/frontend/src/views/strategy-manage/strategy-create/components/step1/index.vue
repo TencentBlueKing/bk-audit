@@ -356,7 +356,19 @@
     'configs.data_source.result_table_id': [
       {
         validator: (value: Array<string>) => !!value && value.length > 0,
-        message: t('不能为空'),
+        message: t('资产不能为空'),
+        trigger: 'change',
+      }],
+    'configs.data_source.data_sheet_id': [
+      {
+        validator: (value: Array<string>) => !!value,
+        message: t('其他数据不能为空'),
+        trigger: 'change',
+      }],
+    'configs.data_source.link_data_sheet_id': [
+      {
+        validator: (value: Array<string>) => !!value,
+        message: t('联表数据不能为空'),
         trigger: 'change',
       }],
     'configs.data_source.bk_biz_id': [
@@ -530,7 +542,7 @@
     const tastQueue = [formRef.value.validate()];
     // 有配置组件
     if (formData.value.strategy_way) {
-      tastQueue.push(comRef.value.getValue());
+      tastQueue.push(comRef.value.getValue?.());
     }
     Promise.all(tastQueue).then(() => {
       if (!isEditMode) {

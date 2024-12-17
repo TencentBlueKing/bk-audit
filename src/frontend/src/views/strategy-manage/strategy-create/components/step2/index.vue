@@ -89,6 +89,7 @@
             <event-info-table
               ref="eventRef"
               :data="editData"
+              :select="select"
               :strategy-id="editData.strategy_id" />
           </template>
         </card-part-vue>
@@ -123,6 +124,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
@@ -144,7 +146,8 @@
     (e: 'showPreview'): void;
   }
   interface Props {
-    editData: StrategyModel
+    editData: StrategyModel,
+    select: Array<DatabaseTableFieldModel>
   }
 
   const props = defineProps<Props>();

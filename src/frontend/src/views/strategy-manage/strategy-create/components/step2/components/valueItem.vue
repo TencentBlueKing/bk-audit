@@ -15,6 +15,15 @@
               v-model="config.is_priority"
               theme="primary" />
           </template>
+          <template v-else-if="valueKey === 'field_mapping'">
+            <bk-select v-model="config.field_mapping">
+              <bk-option
+                v-for="(selectItem, index) in select"
+                :key="index"
+                :label="selectItem.display_name"
+                :value="selectItem.raw_name" />
+            </bk-select>
+          </template>
           <template v-else-if="valueKey === 'description'">
             <bk-input
               v-model="config.description"
@@ -45,10 +54,12 @@
 <script setup lang='ts'>
   import { useI18n } from 'vue-i18n';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
   interface Props {
     item: StrategyFieldEvent['event_basic_field_configs'],
+    select: Array<DatabaseTableFieldModel>
   }
 
   defineProps<Props>();

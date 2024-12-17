@@ -75,7 +75,7 @@
         <bk-form-item
           :label="t('风险发现规则')"
           label-width="160"
-          property="rules"
+          property="configs.where"
           required>
           <rules-component
             :table-fields="tableFields"
@@ -91,7 +91,6 @@
         <bk-form-item
           :label="t('调度方式')"
           property="source_type"
-          required
           style="margin-bottom: 12px;">
           <bk-radio-group
             v-model="formData.configs.data_source.source_type"
@@ -181,7 +180,7 @@
     conditions: Array<{
       operator: 'and' | 'or';
       conditions: Array<{
-        field: DatabaseTableFieldModel;
+        field: DatabaseTableFieldModel | '';
         operation: string;
         filter: string;
         filters: string[];
@@ -208,6 +207,9 @@
   }
   interface Emits {
     (e: 'updateFormData', value: IFormData): void;
+  }
+  interface Expose {
+    getFields: () => IFormData
   }
 
   const emits = defineEmits<Emits>();
@@ -385,8 +387,8 @@
     }
   };
 
+  // 更新数据源后，获取对应表字段
   const handleUpdateDataSource = (dataSource: Record<string, any>) => {
-    // 获取对应表的字段
     const keys = Object.keys(dataSource);
     if (!_.isEmpty(dataSource[keys[0]])) {
       fetDatabaseTableFields({
@@ -399,18 +401,22 @@
     };
   };
 
+  // 更新预期数据
   const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
     formData.value.configs.select = expectedResult;
   };
 
+  // 更新风险规则
   const handleUpdateWhere = (where: Where) => {
     formData.value.configs.where = where;
   };
 
+  // 获取联表详情
   const handleUpdateLinkDataDetail = (detail: LinkDataDetailModel) => {
     linkDataDetail.value = detail;
   };
 
+  // 刷新联表详情
   const handleRefreshLinkData = () => {
     configRef.value?.refreshLinkData();
   };
@@ -432,6 +438,13 @@
     emits('updateFormData', data);
   }, {
     deep: true,
+  });
+
+  defineExpose<Expose>({
+    // 获取提交参数
+    getFields() {
+      return formData.value;
+    },
   });
 </script>
 <style scoped lang="postcss">

@@ -29,6 +29,7 @@
       ref="comRef"
       :edit-data="editData"
       :is-edit-data-loading="isEditDataLoading"
+      :select="formData.configs.select"
       style="margin-bottom: 24px;"
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"

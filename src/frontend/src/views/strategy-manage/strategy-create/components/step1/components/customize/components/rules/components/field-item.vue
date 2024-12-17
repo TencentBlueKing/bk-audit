@@ -29,6 +29,7 @@
       v-if="index < conditions.conditions.length - 1"
       class="column-line" />
     <bk-select
+      v-model="condition.field"
       filterable
       :placeholder="t('请选择字段')"
       style="flex: 1;"
@@ -37,19 +38,32 @@
         v-for="item in tableFields"
         :key="item.raw_name"
         :label="item.display_name"
-        :value="item.raw_name" />
+        :value="item" />
     </bk-select>
     <bk-select
+      v-model="condition.operation"
       filterable
-      :placeholder="t('请选择规则')"
-      @change="handleSelectField">
+      :placeholder="t('请选择规则')">
       <bk-option
-        v-for="item in tableFields"
-        :key="item.raw_name"
-        :label="item.display_name"
-        :value="item.raw_name" />
+        v-for="item in ruleData.rulesList"
+        :key="item.value"
+        :label="item.name"
+        :value="item.value" />
+    </bk-select>
+    <bk-select
+      v-if="ruleData.enumList.length"
+      v-model="condition.filters"
+      filterable
+      :placeholder="t('请选择枚举值')">
+      <bk-option
+        v-for="item in ruleData.enumList"
+        :key="item.value"
+        :label="item.name"
+        :value="item.value" />
     </bk-select>
     <bk-input
+      v-else
+      v-model="condition.filter"
       :placeholder="t('请输入数值')"
       show-word-limit />
     <div class="icon-group">
@@ -73,7 +87,11 @@
   import { computed } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import StrategyManageService from '@service/strategy-manage';
+
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
+  import useRequest from '@/hooks/use-request';
 
   interface Emits {
     (e: 'updateFieldItemList', value: string, conditionsIndex: number): void;
@@ -83,7 +101,7 @@
     conditions: {
       operator: 'and' | 'or';
       conditions: Array<{
-        field: DatabaseTableFieldModel;
+        field: DatabaseTableFieldModel | '';
         operation: string;
         filter: string;
         filters: string[];
@@ -98,6 +116,17 @@
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
 
+  // 获取对应规则和枚举值列表
+  const {
+    data: ruleData,
+    run: fetchFiledRules,
+  } = useRequest(StrategyManageService.fetchFiledRules, {
+    defaultValue: {
+      rulesList: [],
+      enumList: [],
+    },
+  });
+
   const handleAdd = () => {
     emits('updateFieldItemList', 'add', props.conditionsIndex);
   };
@@ -109,8 +138,10 @@
     emits('updateFieldItemList', 'delete', props.conditionsIndex);
   };
 
-  const handleSelectField = () => {
-    console.log(111);
+  const handleSelectField = (value: DatabaseTableFieldModel) => {
+    fetchFiledRules({
+      data: value,
+    });
   };
 </script>
 <style scoped lang="postcss">

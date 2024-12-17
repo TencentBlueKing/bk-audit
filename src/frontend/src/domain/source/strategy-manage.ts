@@ -184,6 +184,35 @@ class Strategy extends ModuleBase {
       }],
     });
   }
+  // 获取表字段对应的规则和枚举值列表
+  gethFiledRules(params: {
+    field: DatabaseTableFieldModel;
+  }) {
+    // return Request.get<{
+    //    rulesList: Array<Record<string, any>>,
+    //    enumList:  Array<Record<string, any>>
+    //  }>(`${this.path}/strategy_database_table_fields/`, {
+    //   params,
+    // });
+    console.log(params);
+    return Promise.resolve<{
+      data: {
+        rulesList: Array<Record<string, any>>,
+        enumList:  Array<Record<string, any>>
+      }
+    }>({
+      data: {
+        rulesList: [{
+          value: '=',
+          name: '=',
+        }, {
+          value: '!',
+          name: '!',
+        }],
+        enumList: [],
+      },
+    });
+  }
   // 获取表格的字段列表
   getTableRtFields(params: {
     table_id: string

@@ -73,7 +73,7 @@
     conditions: Array<{
       operator: 'and' | 'or';
       conditions: Array<{
-        field: DatabaseTableFieldModel;
+        field: DatabaseTableFieldModel | '';
         operation: string;
         filter: string;
         filters: string[];
@@ -96,7 +96,7 @@
     conditions: [{
       operator: 'and',
       conditions: [{
-        field: new DatabaseTableFieldModel(),
+        field: '',
         operation: '',
         filter: '',
         filters: [],
@@ -109,7 +109,7 @@
     where.value.conditions.push({
       operator: 'and',
       conditions: [{
-        field: new DatabaseTableFieldModel(),
+        field: '',
         operation: '',
         filter: '',
         filters: [],
@@ -120,7 +120,7 @@
   const handleUpdateFieldItemList = (value: string, conditionsIndex: number) => {
     if (value === 'add') {
       where.value.conditions[conditionsIndex].conditions.push({
-        field: new DatabaseTableFieldModel(),
+        field: '',
         operation: '',
         filter: '',
         filters: [],

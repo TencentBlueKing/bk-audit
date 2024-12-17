@@ -97,7 +97,6 @@
     defaultValue: [],
     manual: true,
     onSuccess(data) {
-      console.log(111);
       const ids = data.map(item => item.id).join(',');
       fetchBatchSystemCollectorStatusList({
         system_ids: ids,

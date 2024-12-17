@@ -42,7 +42,9 @@
           <span> {{ groupMap[key] }} </span>
         </div>
         <div class="value-row">
-          <value-item :item="item" />
+          <value-item
+            :item="item"
+            :select="select" />
         </div>
       </div>
     </template>
@@ -53,6 +55,7 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
@@ -66,7 +69,8 @@
 
   interface Props {
     strategyId: number,
-    data: StrategyModel
+    data: StrategyModel,
+    select: Array<DatabaseTableFieldModel>
   }
 
   const props = defineProps<Props>();
@@ -78,6 +82,7 @@
     { label: t('字段名称') },
     { label: t('字段显示名') },
     { label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
+    { label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
     { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
   ];
 
@@ -96,6 +101,7 @@
             field_name: item.field_name,
             display_name: item.display_name,
             is_priority: editItem.is_priority,
+            field_mapping: item.field_mapping,
             description: editItem.description,
             example: item.example,
             prefix: '',
@@ -116,6 +122,7 @@
       strategy_id: props.strategyId,
     },
     onSuccess: () => {
+      console.log(tableData.value);
       // 编辑填充内容（是否重点展示、字段说明）
       setEditData('event_basic_field_configs');
       setEditData('event_data_field_configs');
@@ -164,6 +171,10 @@
 
       &:nth-child(4) {
         width: 120px;
+      }
+
+      &:nth-child(5) {
+        width: 192px;
       }
 
       &:last-child {
