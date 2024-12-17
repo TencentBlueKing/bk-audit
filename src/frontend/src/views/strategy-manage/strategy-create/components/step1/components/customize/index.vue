@@ -75,11 +75,78 @@
         <bk-form-item
           :label="t('风险发现规则')"
           label-width="160"
-          property="rules">
+          property="rules"
+          required>
           <rules-component
             :table-fields="tableFields"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
+      </div>
+    </auth-collapse-panel>
+    <auth-collapse-panel
+      is-active
+      :label="t('调度配置')"
+      style="margin-bottom: 12px;">
+      <div class="dispatch-wrap">
+        <bk-form-item
+          :label="t('调度方式')"
+          property="source_type"
+          required
+          style="margin-bottom: 12px;">
+          <bk-radio-group
+            v-model="formData.configs.data_source.source_type"
+            @change="handleSourceTypeChange">
+            <bk-radio label="batch_join_source">
+              {{ t('固定周期调度') }}
+            </bk-radio>
+            <bk-radio label="stream_source">
+              <span
+                v-bk-tooltips="t('策略实时运行')"
+                style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+                {{ t('实时调度') }}
+              </span>
+            </bk-radio>
+          </bk-radio-group>
+        </bk-form-item>
+        <template v-if="formData.configs.data_source.source_type !== 'stream_source'">
+          <span
+            v-bk-tooltips="t('策略运行的周期')"
+            class="label-is-required circle">
+            {{ t('调度周期') }}
+          </span>
+          <div class="flex-center">
+            <bk-form-item
+              class="is-required no-label"
+              label-width="0"
+              property="configs.aiops_config.count_freq"
+              style="margin-bottom: 12px;">
+              <bk-input
+                v-model="formData.configs.aiops_config.count_freq"
+                class="schedule-input"
+                :min="1"
+                onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
+                :placeholder="t('请输入')"
+                type="number" />
+            </bk-form-item>
+            <bk-form-item
+              class="is-required no-label"
+              label-width="0"
+              property="configs.aiops_config.schedule_period"
+              style="margin-bottom: 12px;">
+              <bk-select
+                v-model="formData.configs.aiops_config.schedule_period"
+                class="schedule-select"
+                :clearable="false"
+                style="width: 68px;">
+                <bk-option
+                  v-for="(item, index) in commonData.offset_unit"
+                  :key="index"
+                  :label="item.label"
+                  :value="item.value" />
+              </bk-select>
+            </bk-form-item>
+          </div>
+        </template>
       </div>
     </auth-collapse-panel>
   </div>
@@ -131,8 +198,12 @@
         link_data_sheet_id: string,
       },
       config_type: string,
-      select: Array<DatabaseTableFieldModel>
-      where: Where
+      select: Array<DatabaseTableFieldModel>,
+      where: Where,
+      aiops_config: {
+        count_freq: string,
+        schedule_period: string,
+      },
     },
   }
   interface Emits {
@@ -179,6 +250,10 @@
       where: {
         operator: 'and',
         conditions: [],
+      },
+      aiops_config: {
+        count_freq: '',
+        schedule_period: 'hour',
       },
     },
   });
@@ -311,6 +386,7 @@
   };
 
   const handleUpdateDataSource = (dataSource: Record<string, any>) => {
+    // 获取对应表的字段
     const keys = Object.keys(dataSource);
     if (!_.isEmpty(dataSource[keys[0]])) {
       fetDatabaseTableFields({
@@ -339,6 +415,19 @@
     configRef.value?.refreshLinkData();
   };
 
+  const handleSourceTypeChange = (type: string) => {
+    if (type === 'stream_source') {
+      formData.value.configs.aiops_config = {
+        count_freq: '',
+        schedule_period: 'hour',
+      };
+    }
+    // 非周期不需要aiops_config
+    formData.value.configs.data_source.source_type !== 'stream_source'
+      ? formData.value.configs.aiops_config
+      : undefined;
+  };
+
   watch(() => formData.value, (data) => {
     emits('updateFormData', data);
   }, {
@@ -347,17 +436,25 @@
 </script>
 <style scoped lang="postcss">
 .strategy-customize {
+  .label-is-required::after {
+    position: absolute;
+    width: 14px;
+    line-height: 32px;
+    color: #ea3636;
+    text-align: center;
+    content: '*';
+  }
+
+  .no-label .bk-form-label::after {
+    content: '';
+  }
+
+  .no-label .bk-form-label {
+    padding-right: 0;
+  }
+
   .customize-rule {
     padding: 16px 32px 24px;
-
-    .label-is-required::after {
-      position: absolute;
-      width: 14px;
-      line-height: 32px;
-      color: #ea3636;
-      text-align: center;
-      content: '*';
-    }
 
     .select-group {
       display: grid;
@@ -367,18 +464,26 @@
       :deep(.bk-form-item) {
         margin-bottom: 0;
       }
-
-      .no-label .bk-form-label::after {
-        content: '';
-      }
-
-      .no-label .bk-form-label {
-        padding-right: 0;
-      }
     }
 
     :deep(.bk-infobox-title) {
       margin-top: 0;
+    }
+  }
+
+  .dispatch-wrap {
+    padding: 16px 24px;
+
+    .flex-center {
+      display: flex;
+      align-items: center;
+    }
+
+    .circle {
+      line-height: 32px;
+      color: #63656e;
+      cursor: pointer;
+      border-bottom: 1px dashed #979ba5;
     }
   }
 }

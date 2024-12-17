@@ -40,12 +40,18 @@
         :table-fields="tableFields"
         @add-expected-result="handleAdd" />
       <div
+        v-if="expectedResultList.length"
         v-bk-tooltips="t('清空选项')"
         class="clear-fields-btn flex-center-wrap">
         <audit-icon
           class="clear-field-icon"
           type="delete"
           @click="handleClear" />
+      </div>
+      <div
+        v-else
+        style="margin-left: 8px; color: #979ba5; user-select: none;">
+        {{ t('未配置时，默认查询语句为 select *') }}
       </div>
     </template>
   </vuedraggable>
