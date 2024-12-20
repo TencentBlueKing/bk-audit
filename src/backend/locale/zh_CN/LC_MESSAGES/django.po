@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-12 13:19+0800\n"
+"POT-Creation-Date: 2024-12-20 16:18+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,6 +17,12 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "用户"
+msgstr "用户"
+
+msgid "Token"
+msgstr "Token"
 
 msgid "创建入库"
 msgstr "创建入库"
@@ -137,6 +143,18 @@ msgstr "获取告警策略配置详情"
 
 msgid "修改部分告警策略配置配置"
 msgstr "修改部分告警策略配置配置"
+
+msgid "App Code"
+msgstr "App Code"
+
+msgid "SQL"
+msgstr "SQL"
+
+msgid "Storage"
+msgstr "存储类型"
+
+msgid "认证方式"
+msgstr "认证方式"
 
 msgid "获取消息类型"
 msgstr "获取消息类型"
@@ -3270,6 +3288,9 @@ msgstr "策略 (V2)"
 msgid "Upgradable"
 msgstr "可升级"
 
+msgid "No Tag"
+msgstr "无标签"
+
 msgid "Disabled"
 msgstr "已停用"
 
@@ -3327,6 +3348,9 @@ msgstr "操作记录"
 msgid "Asset Data"
 msgstr "资源数据"
 
+msgid "Biz RT"
+msgstr "业务 RT"
+
 msgid "Static"
 msgstr "静态"
 
@@ -3345,6 +3369,36 @@ msgstr "中"
 msgid "低"
 msgstr "低"
 
+msgid "规则策略"
+msgstr "规则策略"
+
+msgid "模型策略"
+msgstr "模型策略"
+
+msgid "内连接"
+msgstr "内连接"
+
+msgid "左连接"
+msgstr "左连接"
+
+msgid "右连接"
+msgstr "右连接"
+
+msgid "全连接"
+msgstr "全连接"
+
+msgid "Link Table Name"
+msgstr "联表名称"
+
+msgid "Updated At"
+msgstr "更新时间"
+
+msgid "Updated By"
+msgstr "更新人"
+
+msgid "Kafka"
+msgstr "Kafka"
+
 msgid "Control Changed"
 msgstr "控件切换"
 
@@ -3361,14 +3415,26 @@ msgstr "策略状态异常"
 msgid "调度周期超过允许的范围(%s天)"
 msgstr "调度周期超过允许的范围(%s天)"
 
+msgid "联表存在关联策略"
+msgstr "联表存在关联策略"
+
 msgid "Strategy Name"
 msgstr "策略名称"
 
 msgid "Version"
 msgstr "版本"
 
+msgid "Strategy Type"
+msgstr "策略类型"
+
 msgid "Configs"
 msgstr "配置"
+
+msgid "Link Table UID"
+msgstr "联表 UID"
+
+msgid "Link Table Version"
+msgstr "联表版本"
 
 msgid "Status Message"
 msgstr "状态说明"
@@ -3402,6 +3468,12 @@ msgstr "策略"
 
 msgid "Strategy Tag"
 msgstr "策略标签"
+
+msgid "Link Table"
+msgstr "联表"
+
+msgid "Link Table Tag"
+msgstr "联表标签"
 
 msgid "Create Strategy"
 msgstr "创建策略"
@@ -3453,6 +3525,30 @@ msgstr "获取事件信息字段"
 
 msgid "获取策略展示信息"
 msgstr "获取策略展示信息"
+
+msgid "创建联表"
+msgstr "创建联表"
+
+msgid "更新联表"
+msgstr "更新联表"
+
+msgid "LinkTable not found: %s"
+msgstr "联表未找到：%s"
+
+msgid "删除联表"
+msgstr "删除联表"
+
+msgid "查询联表列表"
+msgstr "查询联表列表"
+
+msgid "查询所有联表"
+msgstr "查询所有联表"
+
+msgid "查询联表详情"
+msgstr "查询联表详情"
+
+msgid "查询联表标签列表"
+msgstr "查询联表标签列表"
 
 msgid "Field Name"
 msgstr "字段名称"
@@ -3601,6 +3697,39 @@ msgstr "字段展示名称"
 msgid "Example"
 msgstr "样例"
 
+msgid "System IDs"
+msgstr "系统ID"
+
+msgid "System IDs is required"
+msgstr "系统 ID 是必须的"
+
+msgid "Left Table Field"
+msgstr "左表字段"
+
+msgid "Right Table Field"
+msgstr "右表字段"
+
+msgid "Join Type"
+msgstr "连接类型"
+
+msgid "Link Fields"
+msgstr "连接字段"
+
+msgid "Left Table"
+msgstr "左表"
+
+msgid "Right Table"
+msgstr "右表"
+
+msgid "Links"
+msgstr "连接"
+
+msgid "Link Table Config"
+msgstr "联表配置"
+
+msgid "Link Table Count"
+msgstr "联表数"
+
 msgid "版本日志"
 msgstr "版本日志"
 
@@ -3660,9 +3789,6 @@ msgstr "您暂时不能访问该站点的后台管理，这是以下原因造成
 
 msgid "你还没登录，请重新刷新页面！"
 msgstr "你还没登录，请重新刷新页面！"
-
-msgid "用户"
-msgstr "用户"
 
 msgid "未激活！"
 msgstr "未激活"
