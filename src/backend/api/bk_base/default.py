@@ -27,6 +27,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_base.constants import UNSUPPORTED_CODE
+from api.bk_base.serializers import QuerySyncRequestSerializer
 from api.domains import BK_BASE_API_URL
 
 
@@ -323,3 +324,14 @@ class EditAlertConfigs(BkBaseResource):
     action = "/v3/datamanage/dmonitor/alert_configs/{alert_config_id}/"
     method = "PATCH"
     url_keys = ["alert_config_id"]
+
+
+class QuerySyncResource(BkBaseResource):
+    """
+    查询数据
+    """
+
+    action = "/v3/queryengine/query_sync/"
+    method = "POST"
+    TIMEOUT = 60 * 5
+    RequestSerializer = QuerySyncRequestSerializer

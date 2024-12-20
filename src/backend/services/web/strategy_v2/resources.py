@@ -29,6 +29,7 @@ from blueapps.utils.request_provider import get_local_request, get_request_usern
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q, QuerySet
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
@@ -50,6 +51,7 @@ from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
+from core.utils.page import paginate_queryset
 from core.utils.tools import choices_to_dict
 from services.web.analyze.constants import (
     ControlTypeChoices,
@@ -67,23 +69,42 @@ from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     LOCAL_UPDATE_FIELDS,
+    NO_TAG_ID,
+    NO_TAG_NAME,
     EventInfoField,
+    LinkTableJoinType,
+    LinkTableTableType,
     MappingType,
     RiskLevel,
     StrategyAlgorithmOperator,
     StrategyOperator,
     StrategyStatusChoices,
+    StrategyType,
     TableType,
 )
-from services.web.strategy_v2.exceptions import ControlChangeError, StrategyPendingError
-from services.web.strategy_v2.models import Strategy, StrategyAuditInstance, StrategyTag
+from services.web.strategy_v2.exceptions import (
+    ControlChangeError,
+    LinkTableHasStrategy,
+    StrategyPendingError,
+)
+from services.web.strategy_v2.models import (
+    LinkTable,
+    LinkTableTag,
+    Strategy,
+    StrategyAuditInstance,
+    StrategyTag,
+)
 from services.web.strategy_v2.serializers import (
     AIOPSConfigSerializer,
     BKMStrategySerializer,
+    CreateLinkTableRequestSerializer,
+    CreateLinkTableResponseSerializer,
     CreateStrategyRequestSerializer,
     CreateStrategyResponseSerializer,
     GetEventInfoFieldsRequestSerializer,
     GetEventInfoFieldsResponseSerializer,
+    GetLinkTableRequestSerializer,
+    GetLinkTableResponseSerializer,
     GetRTFieldsRequestSerializer,
     GetRTFieldsResponseSerializer,
     GetStrategyCommonResponseSerializer,
@@ -91,6 +112,10 @@ from services.web.strategy_v2.serializers import (
     GetStrategyFieldValueRequestSerializer,
     GetStrategyFieldValueResponseSerializer,
     GetStrategyStatusRequestSerializer,
+    ListLinkTableAllResponseSerializer,
+    ListLinkTableRequestSerializer,
+    ListLinkTableResponseSerializer,
+    ListLinkTableTagsResponseSerializer,
     ListStrategyFieldsRequestSerializer,
     ListStrategyFieldsResponseSerializer,
     ListStrategyRequestSerializer,
@@ -100,6 +125,8 @@ from services.web.strategy_v2.serializers import (
     RetryStrategyRequestSerializer,
     StrategyInfoSerializer,
     ToggleStrategyRequestSerializer,
+    UpdateLinkTableRequestSerializer,
+    UpdateLinkTableResponseSerializer,
     UpdateStrategyRequestSerializer,
     UpdateStrategyResponseSerializer,
 )
@@ -289,6 +316,9 @@ class ListStrategy(StrategyV2Base):
                 for item in validated_request_data[key]:
                     q |= Q(**{f"{key}__contains": item})
                 queryset = queryset.filter(q)
+        # link_table_uid filter
+        if validated_request_data.get("link_table_uid"):
+            queryset = queryset.filter(link_table_uid=validated_request_data["link_table_uid"])
         # add tags
         all_tags = StrategyTag.objects.filter(strategy_id__in=queryset.values("strategy_id"))
         tag_map = defaultdict(list)
@@ -530,14 +560,14 @@ class GetStrategyCommon(StrategyV2Base):
             "strategy_operator": choices_to_dict(StrategyOperator, val="value", name="label"),
             "filter_operator": choices_to_dict(FilterOperator, val="value", name="label"),
             "algorithm_operator": choices_to_dict(StrategyAlgorithmOperator, val="value", name="label"),
-            "table_type": [
-                {"value": value, "label": str(label), "config": TableType.get_config(value)}
-                for value, label in TableType.choices
-            ],
+            "table_type": [{"value": value, "label": str(label)} for value, label in TableType.choices],
             "strategy_status": choices_to_dict(StrategyStatusChoices, val="value", name="label"),
             "offset_unit": choices_to_dict(OffsetUnit, val="value", name="label"),
             "mapping_type": choices_to_dict(MappingType, val="value", name="label"),
             "risk_level": choices_to_dict(RiskLevel, val="value", name="label"),
+            "strategy_type": choices_to_dict(StrategyType, val="value", name="label"),
+            "link_table_join_type": choices_to_dict(LinkTableJoinType, val="value", name="label"),
+            "link_table_table_type": choices_to_dict(LinkTableTableType, val="value", name="label"),
         }
 
 
@@ -682,3 +712,192 @@ class GetStrategyDisplayInfo(StrategyV2Base):
         strategy_ids = validated_request_data["strategy_ids"]
         strategies: QuerySet[Strategy] = Strategy.objects.filter(strategy_id__in=strategy_ids).only("risk_level")
         return {strategy.strategy_id: {"risk_level": strategy.risk_level} for strategy in strategies}
+
+
+class LinkTableBase(AuditMixinResource, abc.ABC):
+    tags = ["LinkTable"]
+
+    def _save_tags(self, link_table_uid: str, tag_names: list) -> None:
+        LinkTableTag.objects.filter(link_table_uid=link_table_uid).delete()
+        if not tag_names:
+            return
+        tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names])
+        LinkTableTag.objects.bulk_create(
+            [LinkTableTag(link_table_uid=link_table_uid, tag_id=t["tag_id"]) for t in tags]
+        )
+
+
+class CreateLinkTable(LinkTableBase):
+    name = gettext_lazy("创建联表")
+    RequestSerializer = CreateLinkTableRequestSerializer
+    ResponseSerializer = CreateLinkTableResponseSerializer
+
+    @transaction.atomic()
+    def create_link_table(self, validated_request_data) -> LinkTable:
+        # pop tag
+        tag_names = validated_request_data.pop("tags", [])
+        # save link table
+        link_table: LinkTable = LinkTable.objects.create(**validated_request_data, version=1)
+        # save tag
+        self._save_tags(link_table_uid=link_table.uid, tag_names=tag_names)
+        return link_table
+
+    def perform_request(self, validated_request_data):
+        return self.create_link_table(validated_request_data)
+
+
+class UpdateLinkTable(LinkTableBase):
+    name = gettext_lazy("更新联表")
+    RequestSerializer = UpdateLinkTableRequestSerializer
+    ResponseSerializer = UpdateLinkTableResponseSerializer
+
+    @transaction.atomic()
+    def update_link_table(self, validated_request_data) -> LinkTable:
+        """
+        更新联表
+        如果更新联表的配置信息，则需要创建新版本的联表
+        """
+        uid = validated_request_data["uid"]
+        tags = validated_request_data.pop("tags", Empty())
+        # 获取最新版本的联表
+        link_table = LinkTable.last_version_link_table(uid=uid)
+        if not link_table:
+            raise Http404(gettext("LinkTable not found: %s") % uid)
+        # 更新或创建新版本联表
+        need_update_config = "config" in validated_request_data.keys()
+        if not need_update_config:
+            for key, value in validated_request_data.items():
+                setattr(link_table, key, value)
+            link_table.save(update_fields=validated_request_data.keys())
+        else:
+            create_link_table_params = {
+                "namespace": link_table.namespace,
+                "uid": link_table.uid,
+                "version": link_table.version + 1,
+                "name": link_table.name,
+                "config": link_table.config,
+                "description": link_table.description,
+                "created_at": link_table.created_at,
+                "created_by": link_table.created_by,
+                **validated_request_data,
+            }
+            link_table = LinkTable.objects.create(**create_link_table_params)
+        # save tag
+        if not isinstance(tags, Empty):
+            self._save_tags(link_table_uid=link_table.uid, tag_names=tags)
+        return link_table
+
+    def perform_request(self, validated_request_data):
+        return self.update_link_table(validated_request_data=validated_request_data)
+
+
+class DeleteLinkTable(LinkTableBase):
+    name = gettext_lazy("删除联表")
+
+    def perform_request(self, validated_request_data):
+        uid = validated_request_data["uid"]
+        # 如果有策略使用了该联表则不能删除
+        if Strategy.objects.filter(strategy_type=StrategyType.RULE, link_table_uid=uid).exists():
+            raise LinkTableHasStrategy()
+        LinkTable.objects.filter(uid=uid).delete()
+
+
+class ListLinkTable(LinkTableBase):
+    name = gettext_lazy("查询联表列表")
+    RequestSerializer = ListLinkTableRequestSerializer
+    bind_request = True
+
+    def perform_request(self, validated_request_data):
+        request = validated_request_data.pop("_request")
+        tags = validated_request_data.pop("tags", [])
+        sort = validated_request_data.pop("sort", [])
+        no_tag = validated_request_data.pop("no_tag", False)
+        # 获取最新版本的联表
+        link_tables = LinkTable.list_max_version_link_table().filter(**validated_request_data)
+        # 过滤标签
+        if no_tag:
+            link_table_uids = LinkTableTag.objects.values_list("link_table_uid").distinct()
+            link_tables = link_tables.exclude(uid__in=link_table_uids)
+        elif tags:
+            link_table_uids = LinkTableTag.objects.filter(tag_id__in=tags).values_list("link_table_uid")
+            link_tables = link_tables.filter(uid__in=link_table_uids)
+        # 排序
+        if sort:
+            link_tables = link_tables.order_by(*sort)
+        # 分页
+        link_tables, page = paginate_queryset(queryset=link_tables, request=request)
+        link_table_uids = link_tables.values("uid")
+        # 填充标签
+        all_tags = LinkTableTag.objects.filter(link_table_uid__in=link_table_uids)
+        tag_map = defaultdict(list)
+        for t in all_tags:
+            tag_map[t.link_table_uid].append(t.tag_id)
+        # 填充关联的策略数
+        strategies = {
+            strategy["link_table_uid"]: strategy["count"]
+            for strategy in Strategy.objects.filter(strategy_type=StrategyType.RULE, link_table_uid__in=link_table_uids)
+            .values("link_table_uid")
+            .annotate(count=Count("link_table_uid"))
+        }
+        for link_table in link_tables:
+            # 填充关联的策略数
+            setattr(link_table, "strategy_count", strategies.get(link_table.uid, 0))
+            # 填充标签
+            setattr(link_table, "tags", tag_map.get(link_table.uid, []))
+        # 响应
+        return page.get_paginated_response(data=ListLinkTableResponseSerializer(instance=link_tables, many=True).data)
+
+
+class ListLinkTableAll(LinkTableBase):
+    name = gettext_lazy("查询所有联表")
+    ResponseSerializer = ListLinkTableAllResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        return LinkTable.list_max_version_link_table()
+
+
+class GetLinkTable(LinkTableBase):
+    name = gettext_lazy("查询联表详情")
+    RequestSerializer = GetLinkTableRequestSerializer
+    ResponseSerializer = GetLinkTableResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        uid = validated_request_data["uid"]
+        version = validated_request_data.get("version")
+        if version:
+            link_table = get_object_or_404(LinkTable, uid=uid, version=version)
+        else:
+            link_table = LinkTable.last_version_link_table(uid)
+        if not link_table:
+            raise Http404(gettext("LinkTable not found: %s") % uid)
+        return link_table
+
+
+class ListLinkTableTags(LinkTableBase):
+    name = gettext_lazy("查询联表标签列表")
+    ResponseSerializer = ListLinkTableTagsResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        # load all tags
+        tag_count = list(
+            LinkTableTag.objects.all().values("tag_id").annotate(link_table_count=Count("tag_id")).order_by()
+        )
+        tag_map = {t.tag_id: {"name": t.tag_name} for t in Tag.objects.all()}
+        for t in tag_count:
+            t.update({"tag_name": tag_map.get(t["tag_id"], {}).get("name", t["tag_id"])})
+        # sort
+        tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
+        # add no tags
+        tag_count = [
+            {
+                "tag_name": str(NO_TAG_NAME),
+                "tag_id": NO_TAG_ID,
+                "link_table_count": LinkTable.objects.exclude(
+                    uid__in=LinkTableTag.objects.values_list("link_table_uid").distinct()
+                ).count(),
+            }
+        ] + tag_count
+        # response
+        return tag_count

@@ -25,7 +25,12 @@ from apps.meta.models import Tag
 from core.utils.tools import choices_to_items
 from services.web.analyze.constants import ControlTypeChoices
 from services.web.analyze.models import Control
-from services.web.strategy_v2.models import Strategy, StrategyTag
+from services.web.strategy_v2.models import (
+    LinkTable,
+    LinkTableTag,
+    Strategy,
+    StrategyTag,
+)
 
 
 @admin.register(Strategy)
@@ -55,3 +60,24 @@ class StrategyAdmin(admin.ModelAdmin):
         tag_ids = StrategyTag.objects.filter(strategy_id=inst.strategy_id).values("tag_id")
         tags = Tag.objects.filter(tag_id__in=tag_ids)
         return [t.tag_name for t in tags]
+
+
+@admin.register(LinkTable)
+class LinkTableAdmin(admin.ModelAdmin):
+    list_display = (
+        "uid",
+        "name",
+        "namespace",
+        "version",
+        "created_at",
+        "updated_at",
+    )
+    list_filter = ("namespace",)
+    search_fields = ("name", "uid")
+
+
+@admin.register(LinkTableTag)
+class LinkTableTagAdmin(admin.ModelAdmin):
+    list_display = ("id", "link_table_uid", "tag_id", "created_at", "updated_at")
+    list_filter = ("created_at",)
+    search_fields = ("link_table_uid", "tag_id")
