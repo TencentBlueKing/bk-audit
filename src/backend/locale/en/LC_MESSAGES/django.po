@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-12 13:19+0800\n"
+"POT-Creation-Date: 2024-12-20 16:18+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,6 +17,12 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "用户"
+msgstr "User"
+
+msgid "Token"
+msgstr "Token"
 
 msgid "创建入库"
 msgstr "Create Storage"
@@ -137,6 +143,18 @@ msgstr "Get Alert Config Detail"
 
 msgid "修改部分告警策略配置配置"
 msgstr "Edit Alert Config"
+
+msgid "App Code"
+msgstr "App Code"
+
+msgid "SQL"
+msgstr "SQL"
+
+msgid "Storage"
+msgstr "Storage"
+
+msgid "认证方式"
+msgstr "Auth Type"
 
 msgid "获取消息类型"
 msgstr "Get Msg Type"
@@ -3270,6 +3288,9 @@ msgstr "Strategy V2"
 msgid "Upgradable"
 msgstr "Upgradable"
 
+msgid "No Tag"
+msgstr "No Tag"
+
 msgid "Disabled"
 msgstr "Disabled"
 
@@ -3327,6 +3348,9 @@ msgstr "Event Log"
 msgid "Asset Data"
 msgstr "Asset Data"
 
+msgid "Biz RT"
+msgstr "Biz RT"
+
 msgid "Static"
 msgstr "Static"
 
@@ -3345,6 +3369,36 @@ msgstr "Middle"
 msgid "低"
 msgstr "Low"
 
+msgid "规则策略"
+msgstr "Rule"
+
+msgid "模型策略"
+msgstr "Model"
+
+msgid "内连接"
+msgstr "inner_join"
+
+msgid "左连接"
+msgstr "left_join"
+
+msgid "右连接"
+msgstr "right_join"
+
+msgid "全连接"
+msgstr "full_outer_join"
+
+msgid "Link Table Name"
+msgstr "Link Table Name"
+
+msgid "Updated At"
+msgstr "Update At"
+
+msgid "Updated By"
+msgstr "Update User"
+
+msgid "Kafka"
+msgstr "Kafka"
+
 msgid "Control Changed"
 msgstr "Control Changed"
 
@@ -3361,14 +3415,26 @@ msgstr "Strategy Status Unexpected"
 msgid "调度周期超过允许的范围(%s天)"
 msgstr "Schedule period grater than %s day"
 
+msgid "联表存在关联策略"
+msgstr "Link Table with associated strategies."
+
 msgid "Strategy Name"
 msgstr "Strategy Name"
 
 msgid "Version"
 msgstr "Version"
 
+msgid "Strategy Type"
+msgstr "Strategy Type"
+
 msgid "Configs"
 msgstr "Configs"
+
+msgid "Link Table UID"
+msgstr "Link Table UID"
+
+msgid "Link Table Version"
+msgstr "Link Table Version"
 
 msgid "Status Message"
 msgstr "Statu Message"
@@ -3402,6 +3468,12 @@ msgstr "Strategy"
 
 msgid "Strategy Tag"
 msgstr "Strategy Tag"
+
+msgid "Link Table"
+msgstr "Link Table"
+
+msgid "Link Table Tag"
+msgstr "Link Table Tag"
 
 msgid "Create Strategy"
 msgstr "Create Strategy"
@@ -3453,6 +3525,30 @@ msgstr "Get Event Info Fields"
 
 msgid "获取策略展示信息"
 msgstr "Get Strategy Display Information"
+
+msgid "创建联表"
+msgstr "Create Join Table"
+
+msgid "更新联表"
+msgstr "Update Join Table"
+
+msgid "LinkTable not found: %s"
+msgstr "Link Table not found: %s"
+
+msgid "删除联表"
+msgstr "Delete Join Table"
+
+msgid "查询联表列表"
+msgstr "Query Join Table List"
+
+msgid "查询所有联表"
+msgstr "Query All Join Tables"
+
+msgid "查询联表详情"
+msgstr "Query Join Table Details"
+
+msgid "查询联表标签列表"
+msgstr "Query Join Table Tags List"
 
 msgid "Field Name"
 msgstr "Field Name"
@@ -3601,6 +3697,56 @@ msgstr "Display Name"
 msgid "Example"
 msgstr "Example"
 
+#, fuzzy
+#| msgid "System ID"
+msgid "System IDs"
+msgstr "System IDs"
+
+msgid "System IDs is required"
+msgstr "System IDs are required"
+
+#, fuzzy
+#| msgid "Get RT Fields"
+msgid "Left Table Field"
+msgstr "Left Table Field"
+
+#, fuzzy
+#| msgid "Get RT Fields"
+msgid "Right Table Field"
+msgstr "Right Table Field"
+
+#, fuzzy
+#| msgid "Control Type"
+msgid "Join Type"
+msgstr "Join Type"
+
+#, fuzzy
+#| msgid "Fields"
+msgid "Link Fields"
+msgstr "Link Fields"
+
+#, fuzzy
+#| msgid "List Tables"
+msgid "Left Table"
+msgstr "Left Table"
+
+#, fuzzy
+#| msgid "List Tables"
+msgid "Right Table"
+msgstr "Right Table"
+
+msgid "Links"
+msgstr "Links"
+
+#, fuzzy
+#| msgid "Variable Config"
+msgid "Link Table Config"
+msgstr "Link Table Configuration"
+
+msgid "Link Table Count"
+msgstr "Link Table Count"
+
+
 msgid "版本日志"
 msgstr "Version Log"
 
@@ -3660,9 +3806,6 @@ msgstr "You cannot visit admin, caused by: "
 
 msgid "你还没登录，请重新刷新页面！"
 msgstr "Please login and reafresh this page"
-
-msgid "用户"
-msgstr "User"
 
 msgid "未激活！"
 msgstr "Inactivated"
