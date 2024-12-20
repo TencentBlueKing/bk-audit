@@ -15,5 +15,17 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from django.utils.translation import gettext_lazy
+
+from core.choices import TextChoices
 
 UNSUPPORTED_CODE = "1500404"
+
+
+class AuthType(TextChoices):
+    """
+    认证方式
+    """
+
+    USER = "user", gettext_lazy("用户")
+    TOKEN = "token", gettext_lazy("Token")

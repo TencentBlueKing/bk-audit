@@ -22,7 +22,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
-from core.serializers import ChoiceListSerializer
+from core.serializers import ChoiceListSerializer, OrderSerializer
 from services.web.analyze.constants import (
     FilterConnector,
     FilterOperator,
@@ -34,13 +34,16 @@ from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
     ConnectorChoices,
+    LinkTableJoinType,
+    LinkTableTableType,
+    ListLinkTableSortField,
     RiskLevel,
     StrategyAlgorithmOperator,
     StrategyOperator,
     TableType,
 )
 from services.web.strategy_v2.exceptions import SchedulePeriodInvalid
-from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.models import LinkTable, Strategy
 
 
 class EventFieldSerializer(serializers.Serializer):
@@ -208,8 +211,13 @@ class ListStrategyRequestSerializer(serializers.Serializer):
     status = serializers.CharField(label=gettext_lazy("Status"), required=False)
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
-        label=gettext_lazy("排序方式"), required=False, allow_null=True, allow_blank=True, choices=OrderTypeChoices.choices
+        label=gettext_lazy("排序方式"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        choices=OrderTypeChoices.choices,
     )
+    link_table_uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
@@ -550,3 +558,162 @@ class GetStrategyDisplayInfoRequestSerializer(serializers.Serializer):
             return [int(s) for s in strategy_ids.split(",") if s]
         except ValueError:
             raise serializers.ValidationError(gettext("Strategy ID Invalid"))
+
+
+class LinkTableInfoSerializer(serializers.ModelSerializer):
+    """
+    LinkTable Info
+    """
+
+    class Meta:
+        model = LinkTable
+        fields = ["namespace", "uid", "name", "version", "description"]
+
+
+class LinkTableConfigTableSerializer(serializers.Serializer):
+    """
+    联表配置表
+    """
+
+    rt_id = serializers.CharField(label=gettext_lazy("Result Table ID"))
+    table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=LinkTableTableType.choices)
+    system_ids = serializers.ListField(
+        label=gettext_lazy("System IDs"), child=serializers.CharField(max_length=64), required=False
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs["table_type"] == LinkTableTableType.EVENT_LOG and not attrs.get("system_ids"):
+            raise serializers.ValidationError(gettext("System IDs is required"))
+        return attrs
+
+
+class LinkTableLinkFieldSerializer(serializers.Serializer):
+    """
+    联表连接字段
+    """
+
+    left_field = serializers.CharField(label=gettext_lazy("Left Table Field"))
+    right_field = serializers.CharField(label=gettext_lazy("Right Table Field"))
+
+
+class LinkTableLinkSerializer(serializers.Serializer):
+    """
+    联表连接配置
+    """
+
+    join_type = serializers.ChoiceField(label=gettext_lazy("Join Type"), choices=LinkTableJoinType)
+    link_fields = serializers.ListField(
+        label=gettext_lazy("Link Fields"), child=LinkTableLinkFieldSerializer(), allow_empty=False
+    )
+    left_table = LinkTableConfigTableSerializer(label=gettext_lazy("Left Table"))
+    right_table = LinkTableConfigTableSerializer(label=gettext_lazy("Right Table"))
+
+
+class LinkTableConfigSerializer(serializers.Serializer):
+    """
+    联表配置
+    """
+
+    links = serializers.ListField(label=gettext_lazy("Links"), child=LinkTableLinkSerializer(), allow_empty=False)
+
+
+class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
+    tags = serializers.ListField(
+        label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), default=list
+    )
+    config = LinkTableConfigSerializer(label=gettext_lazy("Link Table Config"))
+
+    class Meta:
+        model = LinkTable
+        fields = ["namespace", "name", "config", "description", "tags"]
+
+
+class CreateLinkTableResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LinkTable
+        fields = [
+            "uid",
+            "version",
+        ]
+
+
+class UpdateLinkTableRequestSerializer(serializers.ModelSerializer):
+    tags = serializers.ListField(
+        label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), required=False
+    )
+    config = LinkTableConfigSerializer(label=gettext_lazy("Link Table Config"), required=False)
+
+    class Meta:
+        model = LinkTable
+        fields = ["uid", "name", "tags", "config", "description"]
+        extra_kwargs = {
+            "name": {"required": False},
+            "description": {"required": False},
+        }
+
+
+class UpdateLinkTableResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LinkTable
+        fields = [
+            "uid",
+            "version",
+        ]
+
+
+class ListLinkTableRequestSerializer(OrderSerializer):
+    order_field = serializers.ChoiceField(
+        label=gettext_lazy("排序字段"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        choices=ListLinkTableSortField.choices,
+    )
+
+    namespace = serializers.CharField(label=gettext_lazy("Namespace"))
+    name__contains = serializers.CharField(label=gettext_lazy("Link Table Name"), required=False)
+    updated_by = serializers.CharField(label=gettext_lazy("Updated By"), required=False)
+    no_tag = serializers.BooleanField(label=gettext_lazy("No Tag"), default=False)
+    tags = serializers.ListField(
+        label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID")), required=False
+    )
+    uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
+
+
+class ListLinkTableAllResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LinkTable
+        fields = ["uid", "name", "version"]
+
+
+class ListLinkTableResponseSerializer(serializers.ModelSerializer):
+    tags = serializers.ListField(
+        label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID"))
+    )
+    strategy_count = serializers.IntegerField(label=gettext_lazy("Strategy Count"))
+
+    class Meta:
+        model = LinkTable
+        exclude = ["config"]
+
+
+class GetLinkTableRequestSerializer(serializers.Serializer):
+    uid = serializers.CharField(label=gettext_lazy("Link Table UID"))
+    version = serializers.IntegerField(label=gettext_lazy("Version"), required=False)
+
+
+class GetLinkTableResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LinkTable
+        fields = "__all__"
+
+
+class ListLinkTableTagsResponseSerializer(serializers.Serializer):
+    """
+    List Link Table Tags
+    """
+
+    tag_id = serializers.CharField(label=gettext_lazy("Tag ID"))
+    tag_name = serializers.CharField(label=gettext_lazy("Tag Name"))
+    link_table_count = serializers.IntegerField(label=gettext_lazy("Link Table Count"))

@@ -94,3 +94,19 @@ class StrategyTableViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.strategy_v2.list_tables),
         ResourceRoute("GET", resource.strategy_v2.get_rt_fields, endpoint="rt_fields"),
     ]
+
+
+class LinkTableViewSet(ResourceViewSet):
+    resource_routes = [
+        ResourceRoute(
+            "GET",
+            resource.strategy_v2.list_link_table,
+            enable_paginate=True,
+        ),
+        ResourceRoute("GET", resource.strategy_v2.get_link_table, pk_field="uid"),
+        ResourceRoute("GET", resource.strategy_v2.list_link_table_all, endpoint="all"),
+        ResourceRoute("POST", resource.strategy_v2.create_link_table),
+        ResourceRoute("PUT", resource.strategy_v2.update_link_table, pk_field="uid"),
+        ResourceRoute("DELETE", resource.strategy_v2.delete_link_table, pk_field="uid"),
+        ResourceRoute("GET", resource.strategy_v2.list_link_table_tags, endpoint="tags"),
+    ]

@@ -20,13 +20,16 @@ from typing import TypedDict
 from django.utils.translation import gettext_lazy
 
 from core.choices import TextChoices
-from services.web.analyze.constants import FlowDataSourceNodeType
 from services.web.risk.constants import RISK_EVENTS_SYNC_TIME
 
 BKMONITOR_AGG_INTERVAL_MIN = 60  # s
 
 HAS_UPDATE_TAG_ID = "-1"
 HAS_UPDATE_TAG_NAME = gettext_lazy("Upgradable")
+
+# 未标签
+NO_TAG_ID = "-2"
+NO_TAG_NAME = gettext_lazy("No Tag")
 
 # 本地更新字段，这些字段不会传递给后端策略，不会导致策略输出变化
 LOCAL_UPDATE_FIELDS = [
@@ -115,23 +118,7 @@ class TableType(TextChoices):
 
     EVENT_LOG = "EventLog", gettext_lazy("Event Log")
     BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
-    # BIZ_ASSET = "BizAsset", gettext_lazy("Biz Asset")
-
-    @classmethod
-    def get_config(cls, table_type: str) -> dict:
-        """
-        获取相关配置信息
-        """
-
-        match table_type:
-            case cls.EVENT_LOG:
-                return {"table_type": cls.EVENT_LOG, "source_type": FlowDataSourceNodeType.REALTIME}
-            case cls.BUILD_ID_ASSET:
-                return {"table_type": cls.BUILD_ID_ASSET, "source_type": FlowDataSourceNodeType.BATCH}
-            # case cls.BIZ_ASSET:
-            #     return {"table_type": cls.BIZ_ASSET, "source_type": FlowDataSourceNodeType.BATCH}
-            case _:
-                return {}
+    BIZ_RT = "BizRt", gettext_lazy("Biz RT")
 
 
 class BKBaseProcessingType(TextChoices):
@@ -178,3 +165,59 @@ class EventInfoField(TypedDict):
     display_name: str
     description: str
     example: str
+
+
+class StrategyType(TextChoices):
+    """
+    策略类型
+    """
+
+    RULE = "rule", gettext_lazy("规则策略")
+    MODEL = "model", gettext_lazy("模型策略")
+
+
+class LinkTableJoinType(TextChoices):
+    """
+    联表连接类型
+    """
+
+    INNER_JOIN = "inner_join", gettext_lazy("内连接")
+    LEFT_JOIN = "left_join", gettext_lazy("左连接")
+    RIGHT_JOIN = "right_join", gettext_lazy("右连接")
+    FULL_OUTER_JOIN = "full_outer_join", gettext_lazy("全连接")
+
+
+class LinkTableTableType(TextChoices):
+    """
+    联表表类型
+    """
+
+    EVENT_LOG = TableType.EVENT_LOG
+    BUILD_ID_ASSET = TableType.BUILD_ID_ASSET
+    BIZ_RT = TableType.BIZ_RT
+
+
+class ListLinkTableSortField(TextChoices):
+    """
+    联表排序字段
+    """
+
+    NAME = "name", gettext_lazy("Link Table Name")
+    UPDATED_AT = "updated_at", gettext_lazy("Updated At")
+    UPDATED_BY = "updated_by", gettext_lazy("Updated By")
+
+
+class BkBaseStorageType(TextChoices):
+    """
+    BKBase 存储类型
+    """
+
+    HDFS = "hdfs", gettext_lazy("HDFS")
+    REDIS = "redis", gettext_lazy("Redis")
+    KAFKA = "kafka", gettext_lazy("Kafka")
+
+
+# 业务下的RT表允许的存储类型
+BIZ_RT_TABLE_ALLOW_STORAGES = {
+    BkBaseStorageType.HDFS.value,
+}

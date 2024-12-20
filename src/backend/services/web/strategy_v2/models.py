@@ -15,15 +15,21 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import Optional
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from django.db import models
+from django.db.models import Max, Q, QuerySet
 from django.utils.translation import gettext_lazy
 
-from core.models import OperateRecordModel, SoftDeleteModel
+from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
 from services.web.analyze.models import Control, ControlVersion
-from services.web.strategy_v2.constants import RiskLevel, StrategyStatusChoices
+from services.web.strategy_v2.constants import (
+    RiskLevel,
+    StrategyStatusChoices,
+    StrategyType,
+)
 
 
 class Strategy(SoftDeleteModel):
@@ -34,9 +40,16 @@ class Strategy(SoftDeleteModel):
     namespace = models.CharField(gettext_lazy("Namespace"), max_length=64)
     strategy_id = models.BigAutoField(gettext_lazy("Strategy ID"), primary_key=True)
     strategy_name = models.CharField(gettext_lazy("Strategy Name"), max_length=64)
-    control_id = models.CharField(gettext_lazy("Control ID"), max_length=64)
-    control_version = models.IntegerField(gettext_lazy("Version"))
+    control_id = models.CharField(gettext_lazy("Control ID"), max_length=64, null=True, blank=True)
+    control_version = models.IntegerField(gettext_lazy("Version"), null=True, blank=True)
+    strategy_type = models.CharField(
+        gettext_lazy("Strategy Type"), choices=StrategyType.choices, default=StrategyType.MODEL, max_length=16
+    )
     configs = models.JSONField(gettext_lazy("Configs"), default=dict, null=True, blank=True)
+    link_table_uid = models.CharField(
+        gettext_lazy("Link Table UID"), max_length=64, null=True, blank=True, db_index=True
+    )
+    link_table_version = models.IntegerField(gettext_lazy("Link Table Version"), null=True, blank=True)
     status = models.CharField(
         gettext_lazy("Status"),
         max_length=64,
@@ -116,5 +129,63 @@ class StrategyTag(OperateRecordModel):
 
     class Meta:
         verbose_name = gettext_lazy("Strategy Tag")
+        verbose_name_plural = verbose_name
+        ordering = ["-id"]
+
+
+class LinkTable(OperateRecordModel):
+    """
+    联表数据
+    """
+
+    namespace = models.CharField(gettext_lazy("Namespace"), max_length=32, db_index=True)
+    uid = UUIDField(gettext_lazy("Link Table UID"))
+    version = models.IntegerField(gettext_lazy("Link Table Version"), db_index=True)
+    name = models.CharField(gettext_lazy("Link Table Name"), max_length=50)
+    config = models.JSONField(gettext_lazy("Config"))
+    description = models.CharField(gettext_lazy("Description"), max_length=200, default="", blank=True, null=True)
+
+    def __str__(self):
+        return str(self.name)
+
+    @property
+    def display_name(self):
+        return self.name
+
+    class Meta:
+        verbose_name = gettext_lazy("Link Table")
+        verbose_name_plural = verbose_name
+        unique_together = [("uid", "version")]
+        ordering = ["namespace", "-updated_at"]
+
+    @classmethod
+    def last_version_link_table(cls, uid: str) -> Optional["LinkTable"]:
+        """
+        获取最新的版本的联表
+        """
+
+        return cls.objects.filter(uid=uid).order_by("-version").first()
+
+    @classmethod
+    def list_max_version_link_table(cls) -> QuerySet["LinkTable"]:
+        """
+        获取最大的版本的联表
+        """
+
+        # 找到每个 uid 的最大 version; order_by() 保证 uid 顺序
+        max_versions = list(cls.objects.values("uid").annotate(max_version=Max("version")).order_by())
+        q = Q()
+        for max_version in max_versions:
+            q |= Q(uid=max_version["uid"], version=max_version["max_version"])
+        # 然后，基于 uid 和对应的最大 version 进行筛选
+        return cls.objects.filter(q)
+
+
+class LinkTableTag(OperateRecordModel):
+    link_table_uid = models.CharField(gettext_lazy("Link Table UID"), max_length=64)
+    tag_id = models.BigIntegerField(gettext_lazy("Tag ID"))
+
+    class Meta:
+        verbose_name = gettext_lazy("Link Table Tag")
         verbose_name_plural = verbose_name
         ordering = ["-id"]
