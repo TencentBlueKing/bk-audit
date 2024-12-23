@@ -33,7 +33,10 @@ from apps.permission.dispatcher import BkAuditResourceApiDispatcher
 from apps.permission.handlers.permission import Permission
 
 try:
-    from services.web.strategy_v2.provider import StrategyResourceProvider
+    from services.web.strategy_v2.provider import (
+        LinkTableProvider,
+        StrategyResourceProvider,
+    )
 except (RuntimeError, ImportError):
     StrategyResourceProvider = None
 
@@ -67,6 +70,9 @@ if RiskResourceProvider is not None:
 
 if PanelResourceProvider is not None:
     resources_dispatcher.register("panel", PanelResourceProvider())
+
+if LinkTableProvider is not None:
+    resources_dispatcher.register("link_table", LinkTableProvider())
 
 router = ResourceRouter()
 router.register_module(views)

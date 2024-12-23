@@ -24,8 +24,11 @@ from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult, SchemaResult
 
 from apps.permission.provider.base import BaseResourceProvider
-from services.web.strategy_v2.models import Strategy
-from services.web.strategy_v2.serializers import StrategyInfoSerializer
+from services.web.strategy_v2.models import LinkTable, Strategy
+from services.web.strategy_v2.serializers import (
+    LinkTableInfoSerializer,
+    StrategyInfoSerializer,
+)
 
 
 class StrategyBaseProvider(BaseResourceProvider):
@@ -138,3 +141,102 @@ class StrategyResourceProvider(StrategyBaseProvider):
     """
 
     resource_type = "strategy"
+
+
+class LinkTableProvider(BaseResourceProvider):
+    attrs = None
+    resource_type = "link_table"
+
+    def list_instance(self, filters, page, **options):
+        queryset = LinkTable.objects.none()
+        with_path = False
+
+        if not (filters.parent or filters.search):
+            queryset = LinkTable.list_max_version_link_table()
+        elif filters.search:
+            # 返回结果需要带上资源拓扑路径信息
+            with_path = True
+
+            keywords = filters.search.get(self.resource_type, [])
+
+            q_filter = Q()
+            for keyword in keywords:
+                q_filter |= Q(name__icontains=keyword)
+            queryset = LinkTable.list_max_version_link_table().filter(q_filter)
+
+        if not with_path:
+            results = [
+                {"id": item.uid, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]
+            ]
+        else:
+            results = [
+                {
+                    "id": item.uid,
+                    "display_name": item.name,
+                    "_bk_iam_path_": [],
+                }
+                for item in queryset[page.slice_from : page.slice_to]
+            ]
+
+        return ListResult(results=results, count=queryset.count())
+
+    def fetch_instance_info(self, filters, **options):
+        ids = []
+        if filters.ids:
+            ids = [i for i in filters.ids]
+
+        queryset = LinkTable.list_max_version_link_table().filter(uid__in=ids)
+
+        results = [{"id": item.uid, "display_name": item.name} for item in queryset]
+        return ListResult(results=results, count=queryset.count())
+
+    def list_instance_by_policy(self, filters, page, **options):
+        expression = filters.expression
+        if not expression:
+            return ListResult(results=[], count=0)
+
+        key_mapping = {
+            f"{self.resource_type}.id": "uid",
+        }
+        converter = PathEqDjangoQuerySetConverter(key_mapping)
+        filters = converter.convert(expression)
+        queryset = LinkTable.list_max_version_link_table().filter(filters)
+        results = [{"id": item.uid, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]]
+
+        return ListResult(results=results, count=queryset.count())
+
+    def search_instance(self, filters, page, **options):
+        queryset = LinkTable.list_max_version_link_table().filter(name__icontains=filters.keyword)
+        results = [{"id": item.uid, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]]
+        return ListResult(results=results, count=queryset.count())
+
+    def fetch_instance_list(self, filter, page, **options):
+        start_time = datetime.datetime.fromtimestamp(int(filter.start_time // 1000))
+        end_time = datetime.datetime.fromtimestamp(int(filter.end_time // 1000))
+        queryset = LinkTable.list_max_version_link_table().filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        results = [
+            {
+                "id": item.uid,
+                "display_name": item.name,
+                "creator": item.created_by,
+                "created_at": item.created_at,
+                "updater": item.updated_by,
+                "updated_at": item.updated_at,
+                "data": LinkTableInfoSerializer(instance=item).data,
+            }
+            for item in queryset[page.slice_from : page.slice_to]
+        ]
+        return ListResult(results=results, count=queryset.count())
+
+    def fetch_resource_type_schema(self, **options):
+        data = get_serializer_fields(LinkTableInfoSerializer)
+        return SchemaResult(
+            properties={
+                item["name"]: {
+                    "type": item["type"].lower(),
+                    "description_en": item["name"],
+                    "description": item["description"],
+                }
+                for item in data
+            }
+        )

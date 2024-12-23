@@ -97,11 +97,37 @@ class StrategyTableViewSet(ResourceViewSet):
 
 
 class LinkTableViewSet(ResourceViewSet):
+    def get_permissions(self):
+        if self.action in ["list", "tags"]:
+            return [IAMPermission(actions=[ActionEnum.LIST_LINK_TABLE])]
+        if self.action in ["create"]:
+            return [IAMPermission(actions=[ActionEnum.CREATE_LINK_TABLE])]
+        if self.action in ["update"]:
+            return [
+                InstanceActionPermission(actions=[ActionEnum.EDIT_LINK_TABLE], resource_meta=ResourceEnum.LINK_TABLE)
+            ]
+        if self.action in ["destroy"]:
+            return [
+                InstanceActionPermission(actions=[ActionEnum.DELETE_LINK_TABL], resource_meta=ResourceEnum.LINK_TABLE)
+            ]
+        if self.action in ["retrieve"]:
+            return [
+                InstanceActionPermission(actions=[ActionEnum.VIEW_LINK_TABLE], resource_meta=ResourceEnum.LINK_TABLE)
+            ]
+        return []
+
     resource_routes = [
         ResourceRoute(
             "GET",
             resource.strategy_v2.list_link_table,
             enable_paginate=True,
+            decorators=[
+                insert_permission_field(
+                    actions=[ActionEnum.VIEW_LINK_TABLE, ActionEnum.EDIT_LINK_TABLE, ActionEnum.DELETE_LINK_TABL],
+                    id_field=lambda item: item["uid"],
+                    data_field=lambda data: data["results"],
+                )
+            ],
         ),
         ResourceRoute("GET", resource.strategy_v2.get_link_table, pk_field="uid"),
         ResourceRoute("GET", resource.strategy_v2.list_link_table_all, endpoint="all"),
