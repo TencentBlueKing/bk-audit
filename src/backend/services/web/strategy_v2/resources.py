@@ -743,7 +743,13 @@ class CreateLinkTable(LinkTableBase):
         return link_table
 
     def perform_request(self, validated_request_data):
-        return self.create_link_table(validated_request_data)
+        link_table = self.create_link_table(validated_request_data)
+        # auth
+        username = get_request_username()
+        if username:
+            resource_instance = ResourceEnum.LINK_TABLE.create_instance(link_table.uid)
+            Permission(username).grant_creator_action(resource_instance)
+        return link_table
 
 
 class UpdateLinkTable(LinkTableBase):
