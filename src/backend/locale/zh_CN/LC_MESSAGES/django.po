@@ -3657,7 +3657,7 @@ msgid "Link Table Join Type"
 msgstr "联表连接类型"
 
 msgid "Link Table Table Type"
-msgstr "联表标签"
+msgstr "联表表类型"
 
 msgid "Connector"
 msgstr "连接器"
