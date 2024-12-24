@@ -736,7 +736,20 @@
                 "name_en": "View Link Table",
                 "type": "view",
                 "version": 1,
-                "related_resource_types": [],
+                "related_resource_types": [
+                    {
+                        "system_id": "bk-audit",
+                        "id": "link_table",
+                        "selection_mode": "instance",
+                        "related_instance_selections": [
+                            {
+                                "system_id": "bk-audit",
+                                "id": "link_table_list",
+                                "ignore_iam_path": true
+                            }
+                        ]
+                    }
+                ],
                 "related_actions": [
                     "list_link_table"
                 ],
