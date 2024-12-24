@@ -50,3 +50,4 @@ yarn.lock
 .eslintcache
 .stylelintcache
 .env*
+*.pdm-python
