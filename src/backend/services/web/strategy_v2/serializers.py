@@ -387,6 +387,9 @@ class GetStrategyCommonResponseSerializer(serializers.Serializer):
     offset_unit = ChoiceListSerializer(label=gettext_lazy("Offset Unit"), many=True)
     mapping_type = ChoiceListSerializer(label=gettext_lazy("Mapping Type"), many=True)
     risk_level = ChoiceListSerializer(label=gettext_lazy("Risk Level"), many=True)
+    strategy_type = ChoiceListSerializer(label=gettext_lazy("Strategy Type"), many=True)
+    link_table_join_type = ChoiceListSerializer(label=gettext_lazy("Link Table Join Type"), many=True)
+    link_table_table_type = ChoiceListSerializer(label=gettext_lazy("Link Table Table Type"), many=True)
 
 
 class AIOPSDataSourceFilterSerializer(serializers.Serializer):

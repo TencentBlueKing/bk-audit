@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-20 16:18+0800\n"
+"POT-Creation-Date: 2024-12-24 14:31+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1758,6 +1758,21 @@ msgstr "编辑策略"
 msgid "删除策略"
 msgstr "删除策略"
 
+msgid "联表列表访问"
+msgstr "规则列表访问"
+
+msgid "查看联表"
+msgstr "查看联表"
+
+msgid "创建联表"
+msgstr "创建联表"
+
+msgid "编辑联表"
+msgstr "编辑联表"
+
+msgid "删除联表"
+msgstr "删除联表"
+
 msgid "审计风险列表(V2)"
 msgstr "审计风险列表(V2)"
 
@@ -1849,6 +1864,9 @@ msgstr "敏感资源类型"
 
 msgid "审计策略"
 msgstr "审计策略"
+
+msgid "联表"
+msgstr "联表"
 
 msgid "获取IAM系统配置"
 msgstr "获取IAM系统配置"
@@ -3349,7 +3367,7 @@ msgid "Asset Data"
 msgstr "资源数据"
 
 msgid "Biz RT"
-msgstr "业务 RT"
+msgstr "其他数据"
 
 msgid "Static"
 msgstr "静态"
@@ -3526,17 +3544,12 @@ msgstr "获取事件信息字段"
 msgid "获取策略展示信息"
 msgstr "获取策略展示信息"
 
-msgid "创建联表"
-msgstr "创建联表"
-
 msgid "更新联表"
 msgstr "更新联表"
 
+#, python-format
 msgid "LinkTable not found: %s"
 msgstr "联表未找到：%s"
-
-msgid "删除联表"
-msgstr "删除联表"
 
 msgid "查询联表列表"
 msgstr "查询联表列表"
@@ -3639,6 +3652,12 @@ msgstr "偏移量单位"
 
 msgid "Mapping Type"
 msgstr "映射类型"
+
+msgid "Link Table Join Type"
+msgstr "联表连接类型"
+
+msgid "Link Table Table Type"
+msgstr "联表标签"
 
 msgid "Connector"
 msgstr "连接器"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-20 16:18+0800\n"
+"POT-Creation-Date: 2024-12-24 14:31+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1758,6 +1758,21 @@ msgstr "Edit Strategy"
 msgid "删除策略"
 msgstr "Delete Strategy"
 
+msgid "联表列表访问"
+msgstr "List Link Table"
+
+msgid "查看联表"
+msgstr "View Link Table"
+
+msgid "创建联表"
+msgstr "Create Link Table"
+
+msgid "编辑联表"
+msgstr "Edit Link Table"
+
+msgid "删除联表"
+msgstr "Delete Link Table"
+
 msgid "审计风险列表(V2)"
 msgstr "List Risk (V2)"
 
@@ -1849,6 +1864,9 @@ msgstr "Sensitive Resource Type"
 
 msgid "审计策略"
 msgstr "Audit Strategy"
+
+msgid "联表"
+msgstr "Link Table"
 
 msgid "获取IAM系统配置"
 msgstr "Get IAM System COnfig"
@@ -3526,17 +3544,12 @@ msgstr "Get Event Info Fields"
 msgid "获取策略展示信息"
 msgstr "Get Strategy Display Information"
 
-msgid "创建联表"
-msgstr "Create Join Table"
-
 msgid "更新联表"
 msgstr "Update Join Table"
 
+#, python-format
 msgid "LinkTable not found: %s"
 msgstr "Link Table not found: %s"
-
-msgid "删除联表"
-msgstr "Delete Join Table"
 
 msgid "查询联表列表"
 msgstr "Query Join Table List"
@@ -3639,6 +3652,12 @@ msgstr "Offset Unit"
 
 msgid "Mapping Type"
 msgstr "Mapping Type"
+
+msgid "Link Table Join Type"
+msgstr "Link Table Join Type"
+
+msgid "Link Table Table Type"
+msgstr "Link Table Table Type"
 
 msgid "Connector"
 msgstr "Connector"
@@ -3745,7 +3764,6 @@ msgstr "Link Table Configuration"
 
 msgid "Link Table Count"
 msgstr "Link Table Count"
-
 
 msgid "版本日志"
 msgstr "Version Log"
