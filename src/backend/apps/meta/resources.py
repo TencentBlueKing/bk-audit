@@ -391,7 +391,7 @@ class GetAppInfoResource(Meta, CacheMixin, Resource):
             "system_url": str(),
         }
 
-        params = {"id": app_code, "include_deploy_info": 1}
+        params = {"id": app_code, "include_deploy_info": 1, "include_market_info": "true"}
         resp = api.bk_paas.uni_apps_query(params)
 
         if not resp:
@@ -401,7 +401,12 @@ class GetAppInfoResource(Meta, CacheMixin, Resource):
         data.update({"app_name": app_info["name"], "developers": app_info["developers"]})
 
         deploy_info = app_info["deploy_info"] or dict()
-        deploy_url = deploy_info.get("prod", {}).get("url") or deploy_info.get("stag", {}).get("url")
+        market_addres = app_info.get("market_addres") or dict()
+        deploy_url = (
+            deploy_info.get("prod", {}).get("url")
+            or deploy_info.get("stag", {}).get("url")
+            or market_addres.get("market_address")
+        )
         if not deploy_url:
             deploy_url = ""
         data.update(
