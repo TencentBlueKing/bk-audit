@@ -877,6 +877,8 @@ class GetLinkTable(LinkTableBase):
             link_table = LinkTable.last_version_link_table(uid)
         if not link_table:
             raise Http404(gettext("LinkTable not found: %s") % uid)
+        # 填充标签
+        setattr(link_table, "tags", LinkTableTag.objects.filter(link_table_uid=uid).values_list("tag_id", flat=True))
         return link_table
 
 

@@ -707,6 +707,10 @@ class GetLinkTableRequestSerializer(serializers.Serializer):
 
 
 class GetLinkTableResponseSerializer(serializers.ModelSerializer):
+    tags = serializers.ListField(
+        label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID"))
+    )
+
     class Meta:
         model = LinkTable
         fields = "__all__"
