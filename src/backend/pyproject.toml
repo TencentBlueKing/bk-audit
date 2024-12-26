@@ -74,17 +74,35 @@ dependencies = [
     "django-prometheus==2.2.0",
     "numpy==1.24.2",
     "apigw-manager==1.1.5",
-    "packaging<22.0",
     "openpyxl==3.1.2",
     "elasticsearch==7.17.9",
     "pypinyin==0.49.0",
     "bk-crypto-python-sdk==1.1.1",
     "client-throttler==1.1.0",
     "bk-notice-sdk==1.1.1",
+    "pypika==0.48.9",
+    "pydantic==2.10.4",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"
 license = { text = "MIT" }
 
 [dependency-groups]
-dev = ["virtualenv===20.0.8", "virtualenv-clone==0.2.6", "virtualenvwrapper==4.7.1", "pre-commit==2.9.2", "flake8==3.7.8", "seed-isort-config==1.9.2", "coverage==6.2", "pytest==6.2.5", "pytest-cov==3.0.0", "pytest-django==4.4.0", "pytest-xdist==2.4.0", "pytest-html==3.1.1", "xmlrunner==1.7.7", "pyparsing==2.2.0", "PyYAML==6.0"]
+dev = [
+    "virtualenv===20.0.8",
+    "virtualenv-clone==0.2.6",
+    "virtualenvwrapper==4.7.1",
+    "pre-commit==2.9.2",
+    "flake8==3.7.8",
+    "seed-isort-config==1.9.2",
+    "coverage==6.2",
+    "pytest==6.2.5",
+    "pytest-cov==3.0.0",
+    "pytest-django==4.4.0",
+    "pytest-xdist==2.4.0",
+    "pytest-html==3.1.1",
+    "xmlrunner==1.7.7",
+    "pyparsing==2.2.0",
+    "PyYAML==6.0",
+    "packaging==24.2",
+]

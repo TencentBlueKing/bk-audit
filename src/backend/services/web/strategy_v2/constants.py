@@ -20,6 +20,14 @@ from typing import TypedDict
 from django.utils.translation import gettext_lazy
 
 from core.choices import TextChoices
+from core.sql.constants import (
+    AggregateType,
+    FieldType,
+    FilterConnector,
+    JoinType,
+    Operator,
+)
+from services.web.analyze.constants import FlowDataSourceNodeType
 from services.web.risk.constants import RISK_EVENTS_SYNC_TIME
 
 BKMONITOR_AGG_INTERVAL_MIN = 60  # s
@@ -118,7 +126,7 @@ class TableType(TextChoices):
 
     EVENT_LOG = "EventLog", gettext_lazy("Event Log")
     BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
-    BIZ_RT = "BizRt", gettext_lazy("Biz RT")
+    BIZ_RT = "BizRt", gettext_lazy("Other Data")
 
 
 class BKBaseProcessingType(TextChoices):
@@ -176,25 +184,14 @@ class StrategyType(TextChoices):
     MODEL = "model", gettext_lazy("模型策略")
 
 
-class LinkTableJoinType(TextChoices):
-    """
-    联表连接类型
-    """
-
-    INNER_JOIN = "inner_join", gettext_lazy("内连接")
-    LEFT_JOIN = "left_join", gettext_lazy("左连接")
-    RIGHT_JOIN = "right_join", gettext_lazy("右连接")
-    FULL_OUTER_JOIN = "full_outer_join", gettext_lazy("全连接")
-
-
 class LinkTableTableType(TextChoices):
     """
     联表表类型
     """
 
-    EVENT_LOG = TableType.EVENT_LOG
-    BUILD_ID_ASSET = TableType.BUILD_ID_ASSET
-    BIZ_RT = TableType.BIZ_RT
+    EVENT_LOG = TableType.EVENT_LOG.value, TableType.EVENT_LOG.label
+    BUILD_ID_ASSET = TableType.BUILD_ID_ASSET.value, TableType.BUILD_ID_ASSET.label
+    BIZ_RT = TableType.BIZ_RT.value, TableType.BIZ_RT.label
 
 
 class ListLinkTableSortField(TextChoices):
@@ -221,3 +218,35 @@ class BkBaseStorageType(TextChoices):
 BIZ_RT_TABLE_ALLOW_STORAGES = {
     BkBaseStorageType.HDFS.value,
 }
+
+
+class RuleAuditConfigType(TextChoices):
+    """
+    规则审计配置类型
+    """
+
+    EVENT_LOG = TableType.EVENT_LOG.value, TableType.EVENT_LOG.label
+    BUILD_ID_ASSET = TableType.BUILD_ID_ASSET.value, TableType.BUILD_ID_ASSET.label
+    BIZ_RT = TableType.BIZ_RT.value, TableType.BIZ_RT.label
+    LINK_TABLE = "LinkTable", gettext_lazy("Link Table")
+
+
+class RuleAuditSourceType(TextChoices):
+    """
+    规则审计调度类型
+    """
+
+    REALTIME = FlowDataSourceNodeType.REALTIME.value, FlowDataSourceNodeType.REALTIME.label
+    BATCH = FlowDataSourceNodeType.BATCH.value, FlowDataSourceNodeType.BATCH.label
+
+
+# 联表连接类型
+LinkTableJoinType = JoinType
+# 规则审计聚合类型
+RuleAuditAggregateType = AggregateType
+# 规则审计字段类型
+RuleAuditFieldType = FieldType
+# 规则审计条件操作符
+RuleAuditConditionOperator = Operator
+# 规则审计条件连接符
+RuleAuditWhereConnector = FilterConnector
