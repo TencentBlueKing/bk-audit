@@ -665,7 +665,14 @@ class UpdateLinkTableResponseSerializer(serializers.ModelSerializer):
         ]
 
 
-class ListLinkTableRequestSerializer(OrderSerializer):
+class TagsReqSerializer(serializers.Serializer):
+    tags = serializers.CharField(label=gettext_lazy("Tags"), required=False, help_text=gettext_lazy("逗号分隔的标签ID列表"))
+
+    def validate_tags(self, tags: str) -> List[int]:
+        return [int(tag) for tag in tags.split(",") if tag] if tags else []
+
+
+class ListLinkTableRequestSerializer(OrderSerializer, TagsReqSerializer):
     order_field = serializers.ChoiceField(
         label=gettext_lazy("排序字段"),
         required=False,
@@ -678,9 +685,6 @@ class ListLinkTableRequestSerializer(OrderSerializer):
     name__contains = serializers.CharField(label=gettext_lazy("Link Table Name"), required=False)
     updated_by = serializers.CharField(label=gettext_lazy("Updated By"), required=False)
     no_tag = serializers.BooleanField(label=gettext_lazy("No Tag"), default=False)
-    tags = serializers.ListField(
-        label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID")), required=False
-    )
     uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
 
 
