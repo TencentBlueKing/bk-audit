@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-24 14:31+0800\n"
+"POT-Creation-Date: 2024-12-26 16:22+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2000,6 +2000,90 @@ msgstr "值"
 msgid "Config"
 msgstr "配置"
 
+msgid "AND"
+msgstr "AND"
+
+msgid "OR"
+msgstr "OR"
+
+msgid "字符串"
+msgstr "字符串"
+
+msgid "浮点数"
+msgstr "浮点数"
+
+msgid "整数"
+msgstr "整数"
+
+msgid "长整数"
+msgstr "长整数"
+
+msgid "文本"
+msgstr "文本"
+
+msgid "计数"
+msgstr "计数"
+
+msgid "求和"
+msgstr "求和"
+
+msgid "平均值"
+msgstr "平均值"
+
+msgid "最大值"
+msgstr "最大值"
+
+msgid "最小值"
+msgstr "最小值"
+
+msgid "去重计数"
+msgstr "去重计数"
+
+msgid "内连接"
+msgstr "内连接"
+
+msgid "左连接"
+msgstr "左连接"
+
+msgid "右连接"
+msgstr "右连接"
+
+msgid "全连接"
+msgstr "全连接"
+
+msgid "Equal"
+msgstr "="
+
+msgid "NotEqual"
+msgstr "!="
+
+msgid "Regex"
+msgstr "正则"
+
+msgid "NotRegex"
+msgstr "正则(非)"
+
+msgid "Include"
+msgstr "包含"
+
+msgid "Exclude"
+msgstr "不包含"
+
+msgid "表 '{table_name}' 未在配置中声明。"
+msgstr "表 '{table_name}' 未在配置中声明。"
+
+msgid "不支持的 JOIN 类型：'{join_type}'。"
+msgstr "不支持的 JOIN 类型：'{join_type}'。"
+
+msgid "不支持的操作符：'{operator}'。"
+msgstr "不支持的操作符：'{operator}'。"
+
+msgid "不支持的聚合类型：'{aggregate_type}'。"
+msgstr "不支持的聚合类型：'{aggregate_type}'。"
+
+msgid "配置中必须指定 `from_table` 或 `join_tables`。"
+msgstr "配置中必须指定 `from_table` 或 `join_tables`。"
+
 msgid "数据拉取"
 msgstr "数据拉取"
 
@@ -2080,12 +2164,6 @@ msgstr ">="
 
 msgid "<="
 msgstr "<="
-
-msgid "AND"
-msgstr "AND"
-
-msgid "OR"
-msgstr "OR"
 
 msgid "No Failed"
 msgstr "无失败"
@@ -3333,24 +3411,6 @@ msgstr "更新中"
 msgid "Stopping"
 msgstr "停用中"
 
-msgid "Equal"
-msgstr "="
-
-msgid "NotEqual"
-msgstr "!="
-
-msgid "Regex"
-msgstr "正则"
-
-msgid "NotRegex"
-msgstr "正则(非)"
-
-msgid "Include"
-msgstr "包含"
-
-msgid "Exclude"
-msgstr "不包含"
-
 msgid "致命"
 msgstr "致命"
 
@@ -3366,7 +3426,7 @@ msgstr "操作记录"
 msgid "Asset Data"
 msgstr "资源数据"
 
-msgid "Biz RT"
+msgid "Other Data"
 msgstr "其他数据"
 
 msgid "Static"
@@ -3393,18 +3453,6 @@ msgstr "规则策略"
 msgid "模型策略"
 msgstr "模型策略"
 
-msgid "内连接"
-msgstr "内连接"
-
-msgid "左连接"
-msgstr "左连接"
-
-msgid "右连接"
-msgstr "右连接"
-
-msgid "全连接"
-msgstr "全连接"
-
 msgid "Link Table Name"
 msgstr "联表名称"
 
@@ -3416,6 +3464,9 @@ msgstr "更新人"
 
 msgid "Kafka"
 msgstr "Kafka"
+
+msgid "Link Table"
+msgstr "联表"
 
 msgid "Control Changed"
 msgstr "控件切换"
@@ -3436,6 +3487,12 @@ msgstr "调度周期超过允许的范围(%s天)"
 msgid "联表存在关联策略"
 msgstr "联表存在关联策略"
 
+msgid "策略类型不支持"
+msgstr "策略类型不支持"
+
+msgid "策略类型不可修改"
+msgstr "策略类型不可修改"
+
 msgid "Strategy Name"
 msgstr "策略名称"
 
@@ -3447,6 +3504,9 @@ msgstr "策略类型"
 
 msgid "Configs"
 msgstr "配置"
+
+msgid "Rule Audit SQL"
+msgstr "规则审计 SQL"
 
 msgid "Link Table UID"
 msgstr "联表 UID"
@@ -3486,9 +3546,6 @@ msgstr "策略"
 
 msgid "Strategy Tag"
 msgstr "策略标签"
-
-msgid "Link Table"
-msgstr "联表"
 
 msgid "Link Table Tag"
 msgstr "联表标签"
@@ -3575,6 +3632,12 @@ msgstr "是否优先"
 msgid "Field Description"
 msgstr "字段描述"
 
+msgid "control_id and control_version_id are required when strategy_type is model"
+msgstr "当 strategy_type 为 model 时，必须提供 control_id 和 control_version_id"
+
+msgid "link_table_uid and link_table_version are required when strategy_type is rule"
+msgstr "当 strategy_type 为 rule 时，必须提供 link_table_uid 和 link_table_version"
+
 msgid "Processor Groups"
 msgstr "处理组"
 
@@ -3658,6 +3721,24 @@ msgstr "联表连接类型"
 
 msgid "Link Table Table Type"
 msgstr "联表表类型"
+
+msgid "Rule Audit Aggregate Type"
+msgstr "规则审计聚合类型"
+
+msgid "Rule Audit Field Type"
+msgstr "规则审计字段类型"
+
+msgid "Rule Audit Config Type"
+msgstr "规则审计配置类型"
+
+msgid "Rule Audit Source Type"
+msgstr "规则审计来源类型"
+
+msgid "Rule Audit Condition Operator"
+msgstr "规则审计条件运算符"
+
+msgid "Rule Audit Where Connector"
+msgstr "规则审计的 Where 连接符"
 
 msgid "Connector"
 msgstr "连接器"
@@ -3748,6 +3829,63 @@ msgstr "联表配置"
 
 msgid "Link Table Count"
 msgstr "联表数"
+
+msgid "RT ID"
+msgstr "RT ID"
+
+msgid "Raw Name"
+msgstr "原始名称"
+
+msgid "Aggregate"
+msgstr "聚合"
+
+msgid "Remark"
+msgstr "备注"
+
+msgid "UID"
+msgstr "UID"
+
+msgid "Field"
+msgstr "字段"
+
+msgid "Filter"
+msgstr "筛选"
+
+msgid "Filters"
+msgstr "筛选"
+
+msgid "Conditions"
+msgstr "条件"
+
+msgid "Rule Audit Where must have condition or conditions"
+msgstr "规则审计的 Where 必须包含 condition 或 conditions"
+
+msgid "Rule Audit Where can not have condition and conditions at the same time"
+msgstr "规则审计的 Where 不能同时包含 condition 和 conditions"
+
+msgid "Rule Audit Data Source"
+msgstr "规则审计数据源"
+
+msgid "Rule Audit Select"
+msgstr "规则审计选择"
+
+msgid "Rule Audit Where"
+msgstr "规则审计的 Where"
+
+msgid "Rule Audit Schedule Config"
+msgstr "规则审计的调度配置"
+
+#, python-format
+msgid "Config type: %s need rt_id and system_ids"
+msgstr "配置类型：%s 需要 rt_id 和 system_ids"
+
+#, python-format
+msgid "Config type: %s need rt_id"
+msgstr "配置类型：%s 需要 rt_id"
+
+#, python-format
+msgid "Config type: %s need link_table"
+msgstr "配置类型：%s 需要 link_table"
 
 msgid "版本日志"
 msgstr "版本日志"

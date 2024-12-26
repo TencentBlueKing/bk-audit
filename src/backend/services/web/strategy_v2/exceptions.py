@@ -60,3 +60,15 @@ class LinkTableHasStrategy(StrategyV2Exception):
     MESSAGE = gettext_lazy("联表存在关联策略")
     ERROR_CODE = "006"
     STATUS_CODE = 400
+
+
+class StrategyTypeNotSupport(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "007"
+    MESSAGE = gettext_lazy("策略类型不支持")
+
+
+class StrategyTypeCanNotChange(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "008"
+    MESSAGE = gettext_lazy("策略类型不可修改")

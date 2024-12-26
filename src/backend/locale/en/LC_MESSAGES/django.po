@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-24 14:31+0800\n"
+"POT-Creation-Date: 2024-12-26 16:22+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2000,6 +2000,90 @@ msgstr "Value"
 msgid "Config"
 msgstr "Config"
 
+msgid "AND"
+msgstr "AND"
+
+msgid "OR"
+msgstr "OR"
+
+msgid "字符串"
+msgstr "String"
+
+msgid "浮点数"
+msgstr "Float"
+
+msgid "整数"
+msgstr "Integer"
+
+msgid "长整数"
+msgstr "Long Integer"
+
+msgid "文本"
+msgstr "Text"
+
+msgid "计数"
+msgstr "Count"
+
+msgid "求和"
+msgstr "Sum"
+
+msgid "平均值"
+msgstr "Average"
+
+msgid "最大值"
+msgstr "Maximum"
+
+msgid "最小值"
+msgstr "Minimum"
+
+msgid "去重计数"
+msgstr "Distinct Count"
+
+msgid "内连接"
+msgstr "inner_join"
+
+msgid "左连接"
+msgstr "left_join"
+
+msgid "右连接"
+msgstr "right_join"
+
+msgid "全连接"
+msgstr "full_outer_join"
+
+msgid "Equal"
+msgstr "Equal"
+
+msgid "NotEqual"
+msgstr "NotEqual"
+
+msgid "Regex"
+msgstr "Regex"
+
+msgid "NotRegex"
+msgstr "NotRegex"
+
+msgid "Include"
+msgstr "Include"
+
+msgid "Exclude"
+msgstr "Exclude"
+
+msgid "表 '{table_name}' 未在配置中声明。"
+msgstr "Table '{table_name}' is not declared in the configuration."
+
+msgid "不支持的 JOIN 类型：'{join_type}'。"
+msgstr "Unsupported JOIN type: '{join_type}'."
+
+msgid "不支持的操作符：'{operator}'。"
+msgstr "Unsupported operator: '{operator}'."
+
+msgid "不支持的聚合类型：'{aggregate_type}'。"
+msgstr "Unsupported aggregate type: '{aggregate_type}'."
+
+msgid "配置中必须指定 `from_table` 或 `join_tables`。"
+msgstr "`from_table` or `join_tables` must be specified in the configuration."
+
 msgid "数据拉取"
 msgstr "Data Pull"
 
@@ -2080,12 +2164,6 @@ msgstr ">="
 
 msgid "<="
 msgstr "<="
-
-msgid "AND"
-msgstr "AND"
-
-msgid "OR"
-msgstr "OR"
 
 msgid "No Failed"
 msgstr "No Failed"
@@ -3333,24 +3411,6 @@ msgstr "Updating"
 msgid "Stopping"
 msgstr "Stopping"
 
-msgid "Equal"
-msgstr "Equal"
-
-msgid "NotEqual"
-msgstr "NotEqual"
-
-msgid "Regex"
-msgstr "Regex"
-
-msgid "NotRegex"
-msgstr "NotRegex"
-
-msgid "Include"
-msgstr "Include"
-
-msgid "Exclude"
-msgstr "Exclude"
-
 msgid "致命"
 msgstr "Fatal"
 
@@ -3366,8 +3426,8 @@ msgstr "Event Log"
 msgid "Asset Data"
 msgstr "Asset Data"
 
-msgid "Biz RT"
-msgstr "Biz RT"
+msgid "Other Data"
+msgstr "Other Data"
 
 msgid "Static"
 msgstr "Static"
@@ -3393,18 +3453,6 @@ msgstr "Rule"
 msgid "模型策略"
 msgstr "Model"
 
-msgid "内连接"
-msgstr "inner_join"
-
-msgid "左连接"
-msgstr "left_join"
-
-msgid "右连接"
-msgstr "right_join"
-
-msgid "全连接"
-msgstr "full_outer_join"
-
 msgid "Link Table Name"
 msgstr "Link Table Name"
 
@@ -3416,6 +3464,9 @@ msgstr "Update User"
 
 msgid "Kafka"
 msgstr "Kafka"
+
+msgid "Link Table"
+msgstr "Link Table"
 
 msgid "Control Changed"
 msgstr "Control Changed"
@@ -3436,6 +3487,12 @@ msgstr "Schedule period grater than %s day"
 msgid "联表存在关联策略"
 msgstr "Link Table with associated strategies."
 
+msgid "策略类型不支持"
+msgstr "Policy type not supported"
+
+msgid "策略类型不可修改"
+msgstr "Policy type cannot be modified"
+
 msgid "Strategy Name"
 msgstr "Strategy Name"
 
@@ -3447,6 +3504,9 @@ msgstr "Strategy Type"
 
 msgid "Configs"
 msgstr "Configs"
+
+msgid "Rule Audit SQL"
+msgstr "Rule Audit SQL"
 
 msgid "Link Table UID"
 msgstr "Link Table UID"
@@ -3486,9 +3546,6 @@ msgstr "Strategy"
 
 msgid "Strategy Tag"
 msgstr "Strategy Tag"
-
-msgid "Link Table"
-msgstr "Link Table"
 
 msgid "Link Table Tag"
 msgstr "Link Table Tag"
@@ -3575,6 +3632,12 @@ msgstr "Is Priority"
 msgid "Field Description"
 msgstr "Field Description"
 
+msgid "control_id and control_version_id are required when strategy_type is model"
+msgstr "control_id and control_version_id are required when strategy_type is model"
+
+msgid "link_table_uid and link_table_version are required when strategy_type is rule"
+msgstr "link_table_uid and link_table_version are required when strategy_type is rule"
+
 msgid "Processor Groups"
 msgstr "Processor Groups"
 
@@ -3658,6 +3721,24 @@ msgstr "Link Table Join Type"
 
 msgid "Link Table Table Type"
 msgstr "Link Table Table Type"
+
+msgid "Rule Audit Aggregate Type"
+msgstr "Rule Audit Aggregate Type"
+
+msgid "Rule Audit Field Type"
+msgstr "Rule Audit Field Type"
+
+msgid "Rule Audit Config Type"
+msgstr "Rule Audit Config Type"
+
+msgid "Rule Audit Source Type"
+msgstr "Rule Audit Source Type"
+
+msgid "Rule Audit Condition Operator"
+msgstr "Rule Audit Condition Operator"
+
+msgid "Rule Audit Where Connector"
+msgstr "Rule Audit Where Connector"
 
 msgid "Connector"
 msgstr "Connector"
@@ -3764,6 +3845,63 @@ msgstr "Link Table Configuration"
 
 msgid "Link Table Count"
 msgstr "Link Table Count"
+
+msgid "RT ID"
+msgstr "RT ID"
+
+msgid "Raw Name"
+msgstr "Raw Name"
+
+msgid "Aggregate"
+msgstr "Aggregate"
+
+msgid "Remark"
+msgstr "Remark"
+
+msgid "UID"
+msgstr "UID"
+
+msgid "Field"
+msgstr "Field"
+
+msgid "Filter"
+msgstr "Filter"
+
+msgid "Filters"
+msgstr "Filters"
+
+msgid "Conditions"
+msgstr "Conditions"
+
+msgid "Rule Audit Where must have condition or conditions"
+msgstr "Rule Audit Where must have either condition or conditions"
+
+msgid "Rule Audit Where can not have condition and conditions at the same time"
+msgstr "Rule Audit Where cannot have both condition and conditions at the same time"
+
+msgid "Rule Audit Data Source"
+msgstr "Rule Audit Data Source"
+
+msgid "Rule Audit Select"
+msgstr "Rule Audit Select"
+
+msgid "Rule Audit Where"
+msgstr "Rule Audit Where"
+
+msgid "Rule Audit Schedule Config"
+msgstr "Rule Audit Schedule Config"
+
+#, python-format
+msgid "Config type: %s need rt_id and system_ids"
+msgstr "Config type: %s requires rt_id and system_ids"
+
+#, python-format
+msgid "Config type: %s need rt_id"
+msgstr "Config type: %s requires rt_id"
+
+#, python-format
+msgid "Config type: %s need link_table"
+msgstr "Config type: %s requires link_table"
 
 msgid "版本日志"
 msgstr "Version Log"
