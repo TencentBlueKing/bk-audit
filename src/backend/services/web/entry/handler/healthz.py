@@ -147,7 +147,9 @@ class HealthzHandler(object):
             # 检查bk_monitor
             self._check_api(api.bk_monitor.search_notice_group),
             # 检查bk_paas
-            self._check_api(api.bk_paas.uni_apps_query, id=settings.APP_CODE, include_deploy_info=True),
+            self._check_api(
+                api.bk_paas.uni_apps_query, id=settings.APP_CODE, include_deploy_info=True, include_market_info="true"
+            ),
             # 检查user_manage
             self._check_api(api.user_manage.list_users),
         ]
