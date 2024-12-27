@@ -201,7 +201,9 @@ def sync_system_infos():
 
     # 批量请求，API Rate 受限需要降频
     paas_systems = []
-    paas_requests = [{"id": client, "include_deploy_info": 1} for client in client_requests.values()]
+    paas_requests = [
+        {"id": client, "include_deploy_info": 1, "include_market_info": "true"} for client in client_requests.values()
+    ]
     resp = api.bk_paas.uni_apps_query.bulk_request(paas_requests)
     for items in resp:
         for app_info in items:
@@ -236,7 +238,12 @@ def sync_system_infos():
                 continue
             paas_system = client_paas_systems[0]
             deploy_info = paas_system.get("deploy_info") or dict()
-            paas_system_url = deploy_info.get("prod", {}).get("url") or deploy_info.get("stag", {}).get("url")
+            market_addres = paas_system.get("market_addres") or dict()
+            paas_system_url = (
+                deploy_info.get("prod", {}).get("url")
+                or deploy_info.get("stag", {}).get("url")
+                or market_addres.get("market_address")
+            )
             if any(
                 [
                     db_system.logo_url != paas_system["logo_url"],
