@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    v-if="linkDataDetail.links && linkDataDetail.links.length"
+    v-if="linkDataDetail.config.links && linkDataDetail.config.links.length"
     class="link-data-detail">
     <bk-alert
       v-if="linkDataDetail.has_refresh"
@@ -65,19 +65,19 @@
         </div>
       </div>
       <div
-        v-for="(item, index) in linkDataDetail.links"
+        v-for="(item, index) in linkDataDetail.config.links"
         :key="index"
         style="margin-bottom: 10px;">
         <div class="detail-table">
           <div class="detail-table-head">
             <div class="left-name">
-              {{ item.left_dataset_name }}
+              {{ item.left_table.name }}
             </div>
             <div class="join-type">
               <relation-ship :join-type="item.join_type" />
             </div>
             <div class="right-name">
-              {{ item.right_dataset_name }}
+              {{ item.right_table.name }}
             </div>
           </div>
           <template
@@ -104,8 +104,6 @@
   import { useI18n } from 'vue-i18n';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
-
-  import RelationShip from './relation-ship.vue';
 
   interface Emits {
     (e: 'handleRefreshLinkData'): void;
