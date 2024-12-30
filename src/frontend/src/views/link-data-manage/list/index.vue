@@ -338,7 +338,6 @@
         res[item.uid] = item.version;
         return res;
       }, {} as Record<string, number>);
-      console.log(maxVersionMap.value);
     },
   });
 

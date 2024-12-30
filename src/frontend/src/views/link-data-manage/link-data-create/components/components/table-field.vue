@@ -1,3 +1,19 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
 <template>
   <div
     v-for="(field, index) in linkFields"
@@ -9,19 +25,15 @@
         label-width="0"
         property="left_field"
         style="margin-bottom: 8px;">
-        <bk-select
+        <field-select
+          ref="fieldItemRef"
           v-model="field.left_field"
-          filterable
-          :placeholder="t('请选择匹配字段')">
+          :rt-fields="leftFieldsList"
+          theme="background">
           <template #prefix>
             <span style="padding: 0 14px; color: #63656e; border-right: 1px solid #c4c6cc;">{{ t('字段') }}</span>
           </template>
-          <bk-option
-            v-for="item in leftFieldsList"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value" />
-        </bk-select>
+        </field-select>
       </bk-form-item>
     </div>
     <div style="width: 46px; margin-bottom: 8px; text-align: center;">
@@ -33,19 +45,15 @@
         label-width="0"
         property="right_field"
         style="margin-bottom: 8px;">
-        <bk-select
+        <field-select
+          ref="fieldItemRef"
           v-model="field.right_field"
-          filterable
-          :placeholder="t('请选择匹配字段')">
+          :rt-fields="rightFieldsList"
+          theme="background">
           <template #prefix>
             <span style="padding: 0 14px; color: #63656e; border-right: 1px solid #c4c6cc;">{{ t('字段') }}</span>
           </template>
-          <bk-option
-            v-for="item in rightFieldsList"
-            :key="item.value"
-            :label="item.label"
-            :value="item.value" />
-        </bk-select>
+        </field-select>
       </bk-form-item>
     </div>
     <div class="icon-group">
@@ -66,10 +74,17 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import FieldSelect from './field-select.vue';
+
   interface FieldItem {
     field_type: string;
     label: string;
     value: string;
+  }
+
+  interface Exposes {
+    getValue: () => Promise<any>;
+    clearFields: () => void;
   }
 
   interface Props {
@@ -80,6 +95,7 @@
   const props = defineProps<Props>();
 
   const { t } = useI18n();
+  const fieldItemRef = ref();
 
   const linkFields = defineModel<Array<{
     left_field: string;
@@ -116,6 +132,12 @@
 
   // 获取左边表字段
   watch(() => props.leftTableRtId, (data) => {
+    // 切换rt_id，清空字段输入
+    linkFields.value = linkFields.value?.map(field => ({
+      ...field,
+      left_field: '',
+    }));
+    // 获取表字段
     if (data && data.length) {
       const id = Array.isArray(data) ? data[data.length - 1] : data;
       getLeftTableFields(id);
@@ -126,12 +148,28 @@
 
   // 获取右边表字段
   watch(() => props.rightTableRtId, (data) => {
+    // 切换rt_id，清空字段输入
+    linkFields.value =  linkFields.value?.map(field => ({
+      ...field,
+      right_field: '',
+    }));
+    // 获取表字段
     if (data && data.length) {
       const id = Array.isArray(data) ? data[data.length - 1] : data;
       getRightTableFields(id);
     } else {
       rightFieldsList.value = [];
     }
+  });
+
+  defineExpose<Exposes>({
+    clearFields() {
+      if (!fieldItemRef.value) return;
+      (fieldItemRef.value as { clearFields: () => void }[]).map(item => item.clearFields());
+    },
+    getValue() {
+      return Promise.all((fieldItemRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
+    },
   });
 </script>
 <style scoped lang="postcss">

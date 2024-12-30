@@ -75,6 +75,7 @@
             label-width="135"
             property="links">
             <links
+              ref="linksRef"
               v-model:links="formData.config.links" />
           </bk-form-item>
         </audit-form>
@@ -155,6 +156,7 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const formRef = ref();
+  const linksRef = ref();
 
   const showCreate = ref(false);
   const isEditMode = ref(false);
@@ -278,7 +280,12 @@
 
   // 提交
   const handleSubmit = () => {
-    formRef.value.validate().then((validator: IFormData) => {
+    const tastQueue = [formRef.value.validate()];
+    // 有配置组件
+    if (linksRef.value.getValue) {
+      tastQueue.push(linksRef.value.getValue());
+    }
+    Promise.all<IFormData>(tastQueue).then(([validator]) => {
       if (!isEditMode.value) {
         // eslint-disable-next-line no-param-reassign
         delete validator.uid;

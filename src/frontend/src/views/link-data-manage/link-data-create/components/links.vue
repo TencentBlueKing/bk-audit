@@ -39,7 +39,7 @@
               filterable
               :placeholder="t('数据源类型')"
               :prefix="t('数据源')"
-              @select="() => handleSelectLeftTableType(index)">
+              @change="() => handleSelectLeftTableType(index)">
               <!-- 第一个关联，第一张表有所有选项 -->
               <bk-option
                 v-for="item in ( index === 0 ? linkTableTableTypeList : leftTableTypeList)"
@@ -51,7 +51,7 @@
           <!-- 三种数据源，对应的输入类型 -->
           <component
             :is="configTypeMap[link.left_table.table_type]"
-            ref="configRef"
+            ref="tableTypeRef"
             v-model="link.left_table"
             style="flex: 1;" />
         </div>
@@ -77,7 +77,7 @@
               filterable
               :placeholder="t('数据源类型')"
               :prefix="t('数据源')"
-              @select="() => handleSelectRightTableType(index)">
+              @change="() => handleSelectRightTableType(index)">
               <bk-option
                 v-for="item in (index === 0 ? firstRightTableTypeList : linkTableTableTypeList)"
                 :key="item.value"
@@ -89,13 +89,14 @@
           <!-- 三种数据源，对应的输入类型 -->
           <component
             :is="configTypeMap[link.right_table.table_type]"
-            ref="configRef"
+            ref="tableTypeRef"
             v-model="link.right_table"
             style="flex: 1;" />
         </div>
       </div>
       <!-- 对应字段 -->
       <table-field
+        ref="tableFieldRef"
         v-model:linkFields="link.link_fields"
         :left-table-rt-id="link.left_table.rt_id"
         :right-table-rt-id="link.right_table.rt_id" />
@@ -133,7 +134,12 @@
 
   import useRequest from '@/hooks/use-request';
 
+  interface Exposes{
+    getValue: () => Promise<any>;
+  }
+
   const { t } = useI18n();
+  const tableFieldRef = ref();
 
   const links = defineModel<LinkDataDetailModel['config']['links']>('links', {
     default: [{
@@ -174,7 +180,7 @@
   });
 
   const handleSelectLeftTableType = (index: number) => {
-    // 如果重选了主表，全部左表重置
+    // 如果重选了主表，全部重置
     if (index === 0) {
       links.value = links.value.map((item, linkIndex) => ({
         ...item,
@@ -184,24 +190,42 @@
           system_ids: [],
           table_type: linkIndex === 0 ? item.left_table.table_type : '',
         },
+        right_table: {
+          ...item.right_table,
+          rt_id: '',
+          system_ids: [],
+          table_type: '',
+        },
+        link_fields: item.link_fields.map(() => ({
+          left_field: '',
+          right_field: '',
+        })),
       }));
       return;
     }
-    // 其他重新选择数据源后，清空对应rt_id, system_ids
+    // 其他重新选择数据源后，清空对应rt_id, system_ids, link_fields
     links.value[index].left_table = {
       ...links.value[index].left_table,
       rt_id: '',
       system_ids: [],
     };
+    links.value[index].link_fields =  links.value[index].link_fields.map(fieldItem => ({
+      left_field: '',
+      right_field: fieldItem.right_field,
+    }));
   };
 
   const handleSelectRightTableType = (index: number) => {
-    // 清空对应rt_id, system_ids
+    // 清空对应rt_id, system_ids, link_fields
     links.value[index].right_table = {
       ...links.value[index].right_table,
       rt_id: '',
       system_ids: [],
     };
+    links.value[index].link_fields =  links.value[index].link_fields.map(fieldItem => ({
+      left_field: fieldItem.left_field,
+      right_field: '',
+    }));
   };
 
   const configTypeMap: Record<string, any> = {
@@ -245,6 +269,11 @@
     links.value?.splice(index, 1);
   };
 
+  defineExpose<Exposes>({
+    getValue() {
+      return Promise.all((tableFieldRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
+    },
+  });
 </script>
 <style scoped lang="postcss">
 .link-data-table {
@@ -283,7 +312,8 @@
     top: 5px;
     right: 5px;
     font-size: 13px;
-    color: #979ba5;;
+    color: #979ba5;
+    cursor: pointer;
   }
 }
 
