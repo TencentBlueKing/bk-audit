@@ -14,48 +14,34 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-export default class LinkDataDetail {
-  uid: number;
-  name: string;
+export default class LinkData {
+  id: number;
+  uid: string;
+  name: number|string;
   tags: Array<string>;
-  status: string;
-  created_by: string;
-  created_at: string;
+  strategy_count: number;
   updated_by: string;
   updated_at: string;
-  has_refresh: boolean;
-  config: {
-    links: Array<{
-      left_table: {
-        name?: string,
-        rt_id: string | Array<string>,
-        table_type: string,
-        system_ids?: Array<string>
-      }
-      right_table: {
-        name?: string,
-        rt_id: string | Array<string>,
-        table_type: string,
-        system_ids?: Array<string>
-      }
-      join_type: string,
-      link_fields: Array<{
-        left_field: string,
-        right_field: string
-      }>
-    }>;
+  created_by: string;
+  created_at: string;
+  permission: {
+    delete_link_table: boolean
+    edit_link_table: boolean
+    view_link_table: boolean
   };
+  version: number;
 
-  constructor(payload = {} as LinkDataDetail) {
+  constructor(payload = {} as LinkData) {
+    this.id = payload.id;
     this.uid = payload.uid;
     this.name = payload.name;
     this.tags = payload.tags;
-    this.status = payload.status;
-    this.created_by = payload.created_by;
-    this.created_at = payload.created_at;
+    this.strategy_count = payload.strategy_count;
     this.updated_by = payload.updated_by;
     this.updated_at = payload.updated_at;
-    this.has_refresh = payload.has_refresh;
-    this.config = payload.config;
+    this.created_by = payload.created_by;
+    this.created_at = payload.created_at;
+    this.permission = payload.permission;
+    this.version = payload.version;
   }
 }

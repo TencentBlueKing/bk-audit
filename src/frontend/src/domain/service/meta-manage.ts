@@ -78,14 +78,6 @@ export default {
       .then(({ data }) => new SystemModel(data));
   },
   /**
-   * @desc 获取数据表
-   * @param { Object } params
-   */
-  fetchDataSheet(params = {}) {
-    return MetaManageSource.getDataSheet(params)
-      .then(({ data }) => data);
-  },
-  /**
    * @desc 获取关联数据表
    * @param { Object } params
    */

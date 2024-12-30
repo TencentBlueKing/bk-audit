@@ -83,21 +83,6 @@ class MetaManage extends ModuleBase {
       payload,
     });
   }
-  // 获取数据表
-  getDataSheet(params: Record<string, any>) {
-    // return Request.get<Array<DateSheetModel>>(`${this.path}/data_sheet/list_sheet/`, {
-    //   params,
-    // });
-    console.log(params);
-    return Promise.resolve<{
-      data: Array<DateSheetModel>
-    }>({
-      data: [{
-        id: 1,
-        name: '数据表1',
-      }],
-    });
-  }
   // 获取关联数据表
   getLinkDataSheet(params: Record<string, any>) {
     // return Request.get<Array<DateSheetModel>>(`${this.path}/link_data_sheet/list_sheet/`, {

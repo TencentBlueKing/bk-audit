@@ -1,0 +1,349 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <audit-sideslider
+    ref="sidesliderRef"
+    v-model:isShow="showCreate"
+    :show-footer="false"
+    :title="isEditMode ? t('编辑联表') : t('新建联表')"
+    :width="960">
+    <smart-action
+      class="create-link-data"
+      :offset-target="getSmartActionOffsetTarget">
+      <bk-loading :loading="isEditDataLoading">
+        <audit-form
+          ref="formRef"
+          form-type="vertical"
+          :model="formData"
+          :rules="rules">
+          <bk-form-item
+            class="is-required"
+            :label="t('联表数据名称')"
+            label-width="135"
+            property="name">
+            <bk-input
+              v-model="formData.name"
+              class="form-item-common"
+              :maxlength="100"
+              :over-max-length-limit="false"
+              :placeholder="t('请输入通知组名称')"
+              show-word-limit />
+          </bk-form-item>
+          <bk-form-item
+            :label="t('标签')"
+            label-width="135"
+            property="tags"
+            style="flex: 1;">
+            <bk-loading
+              :loading="tagLoading"
+              style="width: 100%;">
+              <bk-select
+                v-model="formData.tags"
+                allow-create
+                class="bk-select"
+                filterable
+                :input-search="false"
+                multiple
+                multiple-mode="tag"
+                :placeholder="t('请选择或输入标签')"
+                :search-placeholder="t('请输入关键字')">
+                <bk-option
+                  v-for="(item, index) in tagData"
+                  :key="index"
+                  :label="item.name"
+                  :value="item.id" />
+              </bk-select>
+            </bk-loading>
+          </bk-form-item>
+          <bk-form-item
+            class="is-required"
+            :label="t('关联关系')"
+            label-width="135"
+            property="links">
+            <links
+              v-model:links="formData.config.links" />
+          </bk-form-item>
+        </audit-form>
+      </bk-loading>
+      <template #action>
+        <bk-button
+          class="w88"
+          :loading="isSubmiting || isEditSubmiting"
+          theme="primary"
+          @click="handleSubmit">
+          {{ isEditMode ? t('保存') : t('提交') }}
+        </bk-button>
+        <bk-button
+          class="ml8"
+          @click="closeDialog">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
+    </smart-action>
+  </audit-sideslider>
+</template>
+<script setup lang="ts">
+  import _ from 'lodash';
+  import { provide, ref  } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  import linkDataManageService from '@service/link-data-manage';
+  import StrategyManageService from '@service/strategy-manage';
+
+  import LinkDataDetailModel from '@model/link-data/link-data-detail';
+
+  import Links from './components/links.vue';
+
+  import useMessage from '@/hooks/use-message';
+  import useRequest from '@/hooks/use-request';
+
+  interface IFormData {
+    uid?: number,
+    name: string,
+    tags: Array<string>,
+    config: {
+      links: LinkDataDetailModel['config']['links']
+    }
+  }
+  interface Emits {
+    (e:'update'):void
+  }
+  interface Exposes {
+    show(uid?:string):void
+  }
+
+  const emits = defineEmits<Emits>();
+
+  const initFormData = {
+    name: '',
+    tags: [],
+    config: {
+      links: [{
+        left_table: {
+          rt_id: '',
+          table_type: '',
+          system_ids: [],
+        },
+        right_table: {
+          rt_id: '',
+          table_type: '',
+          system_ids: [],
+        },
+        join_type: 'left_join',
+        link_fields: [{
+          left_field: '',
+          right_field: '',
+        }],
+      }],
+    },
+  };
+
+  const { t } = useI18n();
+  const { messageSuccess } = useMessage();
+  const formRef = ref();
+
+  const showCreate = ref(false);
+  const isEditMode = ref(false);
+  const tagData = ref<Array<{
+    id: string;
+    name: string
+  }>>([]);
+  const strategyTagMap = ref<Record<string, string>>({});
+  const formData = ref<IFormData>(_.cloneDeep(initFormData));
+  const initLinks = ref<IFormData['config']['links']>([]);
+
+  provide('isEditMode', isEditMode);
+
+  const rules = {
+    name: [
+      {
+        validator: (value: Array<any>) => !!value,
+        message: t('联表数据名称不能为空'),
+        trigger: 'blur',
+      },
+    ],
+    tags: [
+      // 因为校验的是name，但value是id的数组；将item转为name，自定义输入id = name，直接使用item即可
+      {
+        validator: (value: Array<string>) => {
+          const reg = /^[\w\u4e00-\u9fa5-_]+$/;
+          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+        },
+        message: t('标签只允许中文、字母、数字、中划线或下划线组成'),
+        trigger: 'change',
+      },
+      {
+        validator: (value: Array<string>) => {
+          const reg = /\D+/;
+          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+        },
+        message: t('标签不能为纯数字'),
+        trigger: 'change',
+      },
+    ],
+    'config.links': [
+      {
+        validator: (value: Array<any>) => value.length > 0,
+        message: t('关联关系不能为空'),
+        trigger: 'change',
+      },
+    ],
+  };
+
+  const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
+
+  const closeDialog = () => {
+    showCreate.value = false;
+  };
+
+  // 编辑
+  const {
+    run: fetchLinkDataDetail,
+    loading: isEditDataLoading,
+  } = useRequest(linkDataManageService.fetchLinkDataDetail, {
+    defaultValue: new LinkDataDetailModel(),
+    onSuccess: (data) => {
+      initLinks.value = _.cloneDeep(data.config.links);
+      formData.value.uid = data.uid;
+      formData.value.name = data.name;
+      formData.value.tags = data.tags ? data.tags.map(item => item.toString()) : [];
+      formData.value.config.links = data.config.links;
+    },
+  });
+
+  // 获取标签列表
+  const {
+    loading: tagLoading,
+  } = useRequest(StrategyManageService.fetchStrategyTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess(data) {
+      tagData.value = data.reduce((res, item) => {
+        if (item.tag_id !== '-1') {
+          res.push({
+            id: item.tag_id,
+            name: item.tag_name,
+          });
+        }
+        return res;
+      }, [] as Array<{
+        id: string;
+        name: string
+      }>);
+      data.forEach((item) => {
+        strategyTagMap.value[item.tag_id] = item.tag_name;
+      });
+    },
+  });
+
+  // 保存联表
+  const {
+    run: addGroup,
+    loading: isSubmiting,
+  } = useRequest(linkDataManageService.addLinkData, {
+    defaultValue: {},
+    onSuccess: () => {
+      window.changeConfirm = false;
+      messageSuccess(t('新建成功'));
+      showCreate.value = false;
+      emits('update');
+    },
+  });
+  const {
+    run: updateGroup,
+    loading: isEditSubmiting,
+  } = useRequest(linkDataManageService.updateLinkData, {
+    defaultValue: {},
+    onSuccess: () => {
+      window.changeConfirm = false;
+      messageSuccess(t('编辑成功'));
+      showCreate.value = false;
+      emits('update');
+    },
+  });
+
+  // 提交
+  const handleSubmit = () => {
+    formRef.value.validate().then((validator: IFormData) => {
+      if (!isEditMode.value) {
+        // eslint-disable-next-line no-param-reassign
+        delete validator.uid;
+      }
+      const params = { ...validator };
+      // 处理rt_id，如果是数组，取最后一个
+      params.config.links = params.config.links.map((link) => {
+        const leftTableRtId = link.left_table.rt_id;
+        const rightTableRtId = link.right_table.rt_id;
+        return {
+          ...link,
+          left_table: {
+            ...link.left_table,
+            rt_id: (Array.isArray(leftTableRtId) ?  _.last(leftTableRtId)  : leftTableRtId) as string,
+          },
+          right_table: {
+            ...link.right_table,
+            rt_id: (Array.isArray(rightTableRtId) ?  _.last(rightTableRtId)  : rightTableRtId) as string,
+          },
+        };
+      });
+      // 处理tag
+      params.tags = params.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+      const saveLinkData = isEditMode.value ? updateGroup : addGroup;
+      const isNewVersion = !_.isEqual(initLinks.value, params.config.links);
+      // 没有更改config，不传值
+      if (!isNewVersion) {
+        const noConfigParams: {
+          uid?: number,
+          name: string,
+          tags: Array<string>,
+          config?: {
+            links: LinkDataDetailModel['config']['links']
+          }
+        } = {
+          ...params,
+        };
+        delete noConfigParams.config;
+        saveLinkData({
+          ...noConfigParams,
+        });
+      } else {
+        saveLinkData({
+          ...params,
+        });
+      }
+    });
+  };
+
+  defineExpose<Exposes>({
+    show(uid?: string) {
+      formData.value = _.cloneDeep(initFormData);
+      showCreate.value = true;
+      isEditMode.value = !!uid;
+      if (isEditMode.value) {
+        fetchLinkDataDetail({
+          uid,
+        });
+      }
+    },
+  });
+</script>
+<style lang="postcss" scoped>
+.create-link-data {
+  padding: 24px;
+  background-color: white;
+}
+</style>
