@@ -45,6 +45,10 @@ class MetaManage extends ModuleBase {
       payload,
     });
   }
+  // 根据特性id获取特性开关，用于判断是否显示按钮、菜单等
+  getFeature(params: {feature_id: string}) {
+    return Request.get<Record<'enabled', boolean>>(`/api/v1/feature/${params.feature_id}/`);
+  }
   // 获取 Namespace 列表
   getAllNamespace() {
     return Request.get<NamespaceModel>(`${this.module}/namespaces/`);

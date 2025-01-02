@@ -103,19 +103,17 @@
     ref,
   } from 'vue';
 
-  import NoticeService from '@service/notice';
-
   import useEventBus from '@hooks/use-event-bus';
+  import useFeature from '@hooks/use-feature';
 
   import NoticeComponent from '@blueking/notice-component';
-
-  import useRequest from '@/hooks/use-request';
 
   interface Emits{
     (e: 'menu-flod', value: boolean):void
   }
   const emit = defineEmits<Emits>();
   const { emit: emits } = useEventBus();
+  const { feature: showNotice } = useFeature('bknotice');
 
   const apiUrl = `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/api/v1/bk-notice/announcements/`;
   const TOGGLE_CACHE = 'navigation_toggle_status';
@@ -226,18 +224,6 @@
     }
   };
   const resizeHandler = _.throttle(init, 100);
-
-  const {
-    data: showNotice,
-  }  = useRequest(NoticeService.fetchNoticeFeature, {
-    defaultValue: {
-      enabled: false,
-    },
-    defaultParams: {
-      feature_id: 'bknotice',
-    },
-    manual: true,
-  });
 
   onMounted(() => {
     init();
