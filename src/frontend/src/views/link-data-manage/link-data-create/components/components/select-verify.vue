@@ -22,21 +22,7 @@
       'is-errored': isError,
       'is-background-errored-tip': theme === 'background'
     }">
-    <bk-select
-      v-model="modelValue"
-      filterable
-      :placeholder="t('请选择')"
-      @change="attrs.onChange"
-      @update:model-value="onUpdate">
-      <template #prefix>
-        <slot name="prefix" />
-      </template>
-      <bk-option
-        v-for="(item, key) in rtFields"
-        :key="key"
-        :label="item.label"
-        :value="item.value" />
-    </bk-select>
+    <slot />
     <span
       v-if="isError"
       v-bk-tooltips="{content: t('必填项'), placement: 'top'}"
@@ -48,45 +34,38 @@
 </template>
 <script setup lang="ts">
   import {
-    ref,
-    useAttrs,
+    ref, watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   interface Props {
-    rtFields: Array<{
-      label: string;
-      value: string;
-      field_type: string;
-    }>;
     theme?: 'background' | '',
+    defaultValue: string | Array<string> | undefined
   }
 
   interface Expose {
     getValue: () => void,
     clearFields: () => void
   }
-  withDefaults(defineProps<Props>(), {
+  const props = withDefaults(defineProps<Props>(), {
     theme: '',
   });
 
   const { t } = useI18n();
-  const attrs = useAttrs();
 
   const isError = ref(false);
-  const modelValue = defineModel({
-    default: '',
-  });
+  const localValue = ref<string | Array<string> | undefined>();
 
-  const onUpdate = (val: string) => {
-    if (val) {
+  watch(() => props.defaultValue, (val) => {
+    localValue.value = val;
+    if (val && val.length) {
       isError.value = false;
     }
-  };
+  });
 
   defineExpose<Expose>({
     getValue() {
-      if (!modelValue.value) {
+      if (!localValue.value) {
         isError.value = true;
         return Promise.reject(new Error('必填'));
       }
@@ -95,7 +74,7 @@
     },
     clearFields() {
       isError.value = false;
-      modelValue.value = '';
+      localValue.value = '';
     },
   });
 </script>

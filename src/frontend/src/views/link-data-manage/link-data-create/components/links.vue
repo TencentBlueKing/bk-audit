@@ -26,7 +26,6 @@
           <bk-form-item
             class="no-label"
             label-width="0"
-            property="left_table.table_type"
             :style="configTypeMap[link.left_table.table_type] ? {
               width: '150px',
               marginBottom: '8px'
@@ -34,26 +33,38 @@
               flex: 1,
               marginBottom: '8px'
             }">
-            <bk-select
-              v-model="link.left_table.table_type"
-              filterable
-              :placeholder="t('数据源类型')"
-              :prefix="t('数据源')"
-              @change="() => handleSelectLeftTableType(index)">
-              <!-- 第一个关联，第一张表有所有选项 -->
-              <bk-option
-                v-for="item in ( index === 0 ? linkTableTableTypeList : leftTableTypeList)"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value" />
-            </bk-select>
+            <select-verify
+              ref="selectVerifyRef"
+              :default-value="link.left_table.table_type"
+              theme="background">
+              <bk-select
+                v-model="link.left_table.table_type"
+                filterable
+                :placeholder="t('数据源类型')"
+                :prefix="t('数据源')"
+                @change="() => handleSelectLeftTableType(index)">
+                <!-- 第一个关联，第一张表有所有选项 -->
+                <bk-option
+                  v-for="item in ( index === 0 ? linkTableTableTypeList : leftTableTypeList)"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value" />
+              </bk-select>
+            </select-verify>
           </bk-form-item>
           <!-- 三种数据源，对应的输入类型 -->
-          <component
-            :is="configTypeMap[link.left_table.table_type]"
-            ref="tableTypeRef"
-            v-model="link.left_table"
-            style="flex: 1;" />
+          <select-verify
+            ref="selectVerifyRef"
+            :default-value="link.left_table.table_type === 'EventLog' ?
+              link.left_table.system_ids :
+              link.left_table.rt_id"
+            theme="background">
+            <component
+              :is="configTypeMap[link.left_table.table_type]"
+              ref="tableTypeRef"
+              v-model="link.left_table"
+              style="flex: 1;" />
+          </select-verify>
         </div>
         <!-- 关联关系 -->
         <div class="join-type">
@@ -64,7 +75,6 @@
           <bk-form-item
             class="no-label"
             label-width="0"
-            property="right_table.table_type"
             :style="configTypeMap[link.right_table.table_type] ? {
               width: '150px',
               marginBottom: '8px'
@@ -72,26 +82,38 @@
               flex: 1,
               marginBottom: '8px'
             }">
-            <bk-select
-              v-model="link.right_table.table_type"
-              filterable
-              :placeholder="t('数据源类型')"
-              :prefix="t('数据源')"
-              @change="() => handleSelectRightTableType(index)">
-              <bk-option
-                v-for="item in (index === 0 ? firstRightTableTypeList : linkTableTableTypeList)"
-                :key="item.value"
-                :disabled="item.value === link.left_table.table_type"
-                :label="item.label"
-                :value="item.value" />
-            </bk-select>
+            <select-verify
+              ref="selectVerifyRef"
+              :default-value="link.left_table.table_type"
+              theme="background">
+              <bk-select
+                v-model="link.right_table.table_type"
+                filterable
+                :placeholder="t('数据源类型')"
+                :prefix="t('数据源')"
+                @change="() => handleSelectRightTableType(index)">
+                <bk-option
+                  v-for="item in (index === 0 ? firstRightTableTypeList : linkTableTableTypeList)"
+                  :key="item.value"
+                  :disabled="item.value === link.left_table.table_type"
+                  :label="item.label"
+                  :value="item.value" />
+              </bk-select>
+            </select-verify>
           </bk-form-item>
           <!-- 三种数据源，对应的输入类型 -->
-          <component
-            :is="configTypeMap[link.right_table.table_type]"
-            ref="tableTypeRef"
-            v-model="link.right_table"
-            style="flex: 1;" />
+          <select-verify
+            ref="selectVerifyRef"
+            :default-value="link.right_table.table_type === 'EventLog' ?
+              link.right_table.system_ids :
+              link.right_table.rt_id"
+            theme="background">
+            <component
+              :is="configTypeMap[link.right_table.table_type]"
+              ref="tableTypeRef"
+              v-model="link.right_table"
+              style="flex: 1;" />
+          </select-verify>
         </div>
       </div>
       <!-- 对应字段 -->
@@ -130,6 +152,7 @@
   import EventLogComponent from './components/scheme-input/event-log.vue';
   import OtherDataComponent from './components/scheme-input/other.vue';
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
+  import SelectVerify from './components/select-verify.vue';
   import TableField from './components/table-field.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -140,6 +163,7 @@
 
   const { t } = useI18n();
   const tableFieldRef = ref();
+  const selectVerifyRef = ref();
 
   const links = defineModel<LinkDataDetailModel['config']['links']>('links', {
     required: true,
@@ -255,7 +279,10 @@
 
   defineExpose<Exposes>({
     getValue() {
-      return Promise.all((tableFieldRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
+      return Promise.all([
+        (tableFieldRef.value as { getValue: () => any }[])?.map(item => item.getValue()),
+        (selectVerifyRef.value as { getValue: () => any }[])?.map(item => item.getValue()),
+      ]);
     },
   });
 </script>
