@@ -142,23 +142,7 @@
   const tableFieldRef = ref();
 
   const links = defineModel<LinkDataDetailModel['config']['links']>('links', {
-    default: [{
-      left_table: {
-        rt_id: '',
-        table_type: '',
-        system_ids: [],
-      },
-      right_table: {
-        rt_id: '',
-        table_type: '',
-        system_ids: [],
-      },
-      join_type: 'left_join',
-      link_fields: [{
-        left_field: '',
-        right_field: '',
-      }],
-    }],
+    required: true,
   });
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
 

@@ -71,11 +71,7 @@
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
   const modelValue = defineModel<ModelValue>({
-    default: {
-      rt_id: '',
-      table_type: '',
-      system_ids: [],
-    },
+    required: true,
   });
   const { t } = useI18n();
   const statusSystems = ref<Array<Record<string, any>>>([]);

@@ -100,7 +100,9 @@
   const linkFields = defineModel<Array<{
     left_field: string;
     right_field: string;
-  }>>('linkFields');
+  }>>('linkFields', {
+    required: true,
+  });
 
   const leftFieldsList = ref<Array<FieldItem>>([]);
   const rightFieldsList = ref<Array<FieldItem>>([]);

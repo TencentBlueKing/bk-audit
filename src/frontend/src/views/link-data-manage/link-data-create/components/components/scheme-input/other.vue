@@ -52,10 +52,7 @@
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
   const modelValue = defineModel<ModelValue>({
-    default: {
-      rt_id: '',
-      table_type: '',
-    },
+    required: true,
   });
   const { t } = useI18n();
 
