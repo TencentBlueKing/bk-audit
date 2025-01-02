@@ -15,180 +15,184 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="filter-conditon">
-    <bk-form-item
-      :label="t('检测条件')"
-      label-width="160"
-      property="configs.agg_condition"
-      required>
-      <!-- 条件下拉 -->
-      <div
-        v-for="(item, index) in formData.configs.agg_condition"
-        :key="index"
-        class="condition-item">
-        <div style="display: flex;width: 200px;flex: 1;">
-          <span
-            v-if="index"
-            v-bk-tooltips="t('点击切换')"
-            class="condition-equation bold"
-            style="width: 43px;margin-left: 0;border: 1px solid #c4c6cc;"
-            @click="handleTriggerLogicOp(item)">
-            {{ item.condition.toUpperCase() }}
-          </span>
-          <div
-            style="position: relative;flex: 1;">
+  <auth-collapse-panel
+    is-active
+    :label="t('方案配置')"
+    style="margin-bottom: 14px;">
+    <div class="filter-conditon">
+      <bk-form-item
+        :label="t('检测条件')"
+        label-width="160"
+        property="configs.agg_condition"
+        required>
+        <!-- 条件下拉 -->
+        <div
+          v-for="(item, index) in formData.configs.agg_condition"
+          :key="index"
+          class="condition-item">
+          <div style="display: flex;width: 200px;flex: 1;">
+            <span
+              v-if="index"
+              v-bk-tooltips="t('点击切换')"
+              class="condition-equation bold"
+              style="width: 43px;margin-left: 0;border: 1px solid #c4c6cc;"
+              @click="handleTriggerLogicOp(item)">
+              {{ item.condition.toUpperCase() }}
+            </span>
+            <div
+              style="position: relative;flex: 1;">
+              <bk-form-item
+                class="mb0"
+                label=""
+                label-width="0"
+                :property="`configs.agg_condition.${index}.key`"
+                required>
+                <bk-select
+                  v-model="item.key"
+                  filterable
+                  :input-search="false"
+                  :placeholder="t('请选择')"
+                  :search-placeholder="t('请输入关键字')"
+                  @change="(value: string) => handleChangeCondition(value, index)">
+                  <bk-option
+                    v-for="(condition, conditionIndex) in conditions"
+                    :key="conditionIndex"
+                    :label="condition.description"
+                    :value="condition.field_name" />
+                </bk-select>
+              </bk-form-item>
+            </div>
+          </div>
+
+          <!-- 等式 -->
+          <div>
             <bk-form-item
               class="mb0"
               label=""
               label-width="0"
-              :property="`configs.agg_condition.${index}.key`"
+              :property="`configs.agg_condition.${index}.method`"
               required>
+              <!-- 操作人账号特殊处理 -->
+              <bk-input
+                v-if="item.key==='user_identify_src_username'"
+                v-model="item.method"
+                class="condition-equation"
+                :placeholder="t('请输入')" />
               <bk-select
-                v-model="item.key"
+                v-else
+                v-model="item.method"
+                class="condition-equation"
                 filterable
-                :input-search="false"
-                :placeholder="t('请选择')"
-                :search-placeholder="t('请输入关键字')"
-                @change="(value: string) => handleChangeCondition(value, index)">
+                :placeholder="t('请选择')">
                 <bk-option
-                  v-for="(condition, conditionIndex) in conditions"
-                  :key="conditionIndex"
-                  :label="condition.description"
-                  :value="condition.field_name" />
+                  v-for="(operatorItem, valueIndex) in equations.strategy_operator"
+                  :key="valueIndex"
+                  :label="operatorItem.label"
+                  :value="operatorItem.value" />
               </bk-select>
             </bk-form-item>
           </div>
-        </div>
 
-        <!-- 等式 -->
-        <div>
-          <bk-form-item
-            class="mb0"
-            label=""
-            label-width="0"
-            :property="`configs.agg_condition.${index}.method`"
-            required>
-            <!-- 操作人账号特殊处理 -->
-            <bk-input
-              v-if="item.key==='user_identify_src_username'"
-              v-model="item.method"
-              class="condition-equation"
-              :placeholder="t('请输入')" />
-            <bk-select
-              v-else
-              v-model="item.method"
-              class="condition-equation"
-              filterable
-              :placeholder="t('请选择')">
-              <bk-option
-                v-for="(operatorItem, valueIndex) in equations.strategy_operator"
-                :key="valueIndex"
-                :label="operatorItem.label"
-                :value="operatorItem.value" />
-            </bk-select>
-          </bk-form-item>
-        </div>
-
-        <!-- 值 -->
-        <div
-          class="value-box"
-          style="flex: 1;"
-          :style="styles[index]">
-          <bk-form-item
-            class="mb0"
-            label=""
-            label-width="0"
-            :property="`configs.agg_condition.${index}.value`"
-            required
-            :rules="[
-              { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
-            ]">
-            <bk-cascader
-              v-if="dicts[item.key] && dicts[item.key].length"
-              v-model="item.value"
-              class="consition-value"
-              collapse-tags
-              filterable
-              float-mode
-              id-key="value"
-              :list="dicts[item.key]"
-              multiple
-              name-key="label"
-              trigger="hover"
-              @blur="isValueFocus[index]=false"
-              @focus="isValueFocus[index]=true" />
-            <audit-user-selector
-              v-else-if="item.key.includes('username')"
-              v-model="item.value"
-              allow-create
-              class="consition-value" />
-            <bk-tag-input
-              v-else
-              v-model="item.value"
-              allow-create
-              class="consition-value"
-              collapse-tags
-              :content-width="350"
-              has-delete-icon
-              :input-search="false"
-              :list="dicts[item.key]"
-              :loading="fieldLoading"
-              :placeholder="t('请输入并Enter结束')"
-              trigger="focus"
-              @blur="isValueFocus[index] = false"
-              @focus="isValueFocus[index] = true" />
-          </bk-form-item>
-        </div>
-
-        <!-- 添加 删除-->
-        <div class="condition-icon">
+          <!-- 值 -->
           <div
-            v-if="formData.configs.agg_condition.length > 1"
-            v-bk-tooltips="t('删除(Remove)')"
-            class="ml8"
-            @click="handleRemoveCondition(index)">
-            <audit-icon type="reduce-fill" />
+            class="value-box"
+            style="flex: 1;"
+            :style="styles[index]">
+            <bk-form-item
+              class="mb0"
+              label=""
+              label-width="0"
+              :property="`configs.agg_condition.${index}.value`"
+              required
+              :rules="[
+                { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
+              ]">
+              <bk-cascader
+                v-if="dicts[item.key] && dicts[item.key].length"
+                v-model="item.value"
+                class="consition-value"
+                collapse-tags
+                filterable
+                float-mode
+                id-key="value"
+                :list="dicts[item.key]"
+                multiple
+                name-key="label"
+                trigger="hover"
+                @blur="isValueFocus[index]=false"
+                @focus="isValueFocus[index]=true" />
+              <audit-user-selector
+                v-else-if="item.key.includes('username')"
+                v-model="item.value"
+                allow-create
+                class="consition-value" />
+              <bk-tag-input
+                v-else
+                v-model="item.value"
+                allow-create
+                class="consition-value"
+                collapse-tags
+                :content-width="350"
+                has-delete-icon
+                :input-search="false"
+                :list="dicts[item.key]"
+                :loading="fieldLoading"
+                :placeholder="t('请输入并Enter结束')"
+                trigger="focus"
+                @blur="isValueFocus[index] = false"
+                @focus="isValueFocus[index] = true" />
+            </bk-form-item>
+          </div>
+
+          <!-- 添加 删除-->
+          <div class="condition-icon">
+            <div
+              v-if="formData.configs.agg_condition.length > 1"
+              v-bk-tooltips="t('删除(Remove)')"
+              class="ml8"
+              @click="handleRemoveCondition(index)">
+              <audit-icon type="reduce-fill" />
+            </div>
           </div>
         </div>
-      </div>
-      <div
-        style="width: 78px;"
-        @click="handleAddCondition()">
-        <bk-button
-          text
-          theme="primary">
-          <audit-icon type="add" />
-          {{ t('添加条件') }}
-        </bk-button>
-      </div>
-    </bk-form-item>
-    <bk-form-item
-      :description="t('满足检测条件的操作记录的汇聚维度')"
-      :label="t('统计字段')"
-      label-width="160">
-      <bk-select
-        v-model="formData.configs.agg_dimension"
-        class="not-select-close-btn"
-        filterable
-        :input-search="false"
-        multiple
-        multiple-mode="tag"
-        :placeholder="t('请选择')"
-        :search-placeholder="t('请输入关键字')"
-        style="width: 480px;"
-        @change="handleUpdateConfigs">
-        <bk-option
-          v-for="(condition, conditionIndex) in filterConditions"
-          :key="conditionIndex"
-          :label="condition.description"
-          :value="condition.field_name" />
-      </bk-select>
-    </bk-form-item>
-    <span class="form-item-title-required">
-      {{ t('触发规则') }}
-    </span>
-    <div class="flex-center">
-      <!-- <bk-form-item
+        <div
+          style="width: 78px;"
+          @click="handleAddCondition()">
+          <bk-button
+            text
+            theme="primary">
+            <audit-icon type="add" />
+            {{ t('添加条件') }}
+          </bk-button>
+        </div>
+      </bk-form-item>
+      <bk-form-item
+        :description="t('满足检测条件的操作记录的汇聚维度')"
+        :label="t('统计字段')"
+        label-width="160">
+        <bk-select
+          v-model="formData.configs.agg_dimension"
+          class="not-select-close-btn"
+          filterable
+          :input-search="false"
+          multiple
+          multiple-mode="tag"
+          :placeholder="t('请选择')"
+          :search-placeholder="t('请输入关键字')"
+          style="width: 480px;"
+          @change="handleUpdateConfigs">
+          <bk-option
+            v-for="(condition, conditionIndex) in filterConditions"
+            :key="conditionIndex"
+            :label="condition.description"
+            :value="condition.field_name" />
+        </bk-select>
+      </bk-form-item>
+      <span class="form-item-title-required">
+        {{ t('触发规则') }}
+      </span>
+      <div class="flex-center">
+        <!-- <bk-form-item
         class="mb0"
         label=""
         label-width="160">
@@ -227,105 +231,106 @@
           <span>{{ t('的时段内,') }}</span>
         </div>
       </bk-form-item> -->
-      <bk-form-item
-        class="content"
-        label=""
-        label-width="160"
-        property="configs.agg_interval">
-        <div
-          class="rule-item"
-          @mouseenter="isShowTip=true;"
-          @mouseleave="isShowTip=false;">
-          <span>{{ t('每') }}</span>
-          <bk-form-item
-            class="mb0"
-            label=""
-            label-width="0"
-            style="position: relative">
-            <bk-input
-              v-model="formData.configs.agg_interval"
-              class="form-item-common"
-              :min="aggMin"
-              :placeholder="t('请输入')"
-              size="small"
-              style="width: 80px;"
-              type="number"
-              @blur="handleUpdateConfigs" />
-            <span
-              v-bk-tooltips="{content: t('统计周期最小为5分钟'), placement: 'top'}"
-              class="info-tip"
-              :class="{'active':isShowTip}">
-              <audit-icon
-                type="alert" />
-            </span>
-          </bk-form-item>
-          <bk-form-item
-            class="mb0 ml8"
-            label=""
-            label-width="0">
-            <bk-select
-              v-model="timeType"
-              class="bk-select"
-              :clearable="false"
-              size="small"
-              style="width: 80px;">
-              <bk-option
-                v-for="(item, index) in timeTypes"
-                :key="index"
-                :label="t(item.name)"
-                :value="item.id" />
-            </bk-select>
-          </bk-form-item>
-          <span>{{ t('为一个统计周期,') }}</span>
-        </div>
-      </bk-form-item>
-      <bk-form-item
-        class="content"
-        label=""
-        label-width="160">
-        <div
-          class="rule-item"
-          style="display: flex;">
-          <span>{{ t('数据匹配次数') }}</span>
-          <bk-form-item
-            class="mb0"
-            label=""
-            label-width="0"
-            property="configs.algorithms.method">
-            <bk-select
-              v-model="formData.configs.algorithms.method"
-              class="bk-select"
-              filterable
-              :placeholder="t('请选择')"
-              size="small"
-              style="width: 120px;"
-              @change="handleUpdateConfigs">
-              <bk-option
-                v-for="(item) in equations.algorithm_operator"
-                :key="item.value"
-                :label="item.label"
-                :value="item.value" />
-            </bk-select>
-          </bk-form-item>
-          <bk-form-item
-            class="mb0 ml8"
-            label=""
-            label-width="0"
-            property="configs.algorithms.threshold">
-            <bk-input
-              v-model="formData.configs.algorithms.threshold"
-              :min="0"
-              :placeholder="t('请输入')"
-              :show-controls="false"
-              size="small"
-              style="width: 120px;"
-              type="number"
-              @blur="handleUpdateConfigs" />
-          </bk-form-item>
-        </div>
-      </bk-form-item>
+        <bk-form-item
+          class="content"
+          label=""
+          label-width="160"
+          property="configs.agg_interval">
+          <div
+            class="rule-item"
+            @mouseenter="isShowTip=true;"
+            @mouseleave="isShowTip=false;">
+            <span>{{ t('每') }}</span>
+            <bk-form-item
+              class="mb0"
+              label=""
+              label-width="0"
+              style="position: relative">
+              <bk-input
+                v-model="formData.configs.agg_interval"
+                class="form-item-common"
+                :min="aggMin"
+                :placeholder="t('请输入')"
+                size="small"
+                style="width: 80px;"
+                type="number"
+                @blur="handleUpdateConfigs" />
+              <span
+                v-bk-tooltips="{content: t('统计周期最小为5分钟'), placement: 'top'}"
+                class="info-tip"
+                :class="{'active':isShowTip}">
+                <audit-icon
+                  type="alert" />
+              </span>
+            </bk-form-item>
+            <bk-form-item
+              class="mb0 ml8"
+              label=""
+              label-width="0">
+              <bk-select
+                v-model="timeType"
+                class="bk-select"
+                :clearable="false"
+                size="small"
+                style="width: 80px;">
+                <bk-option
+                  v-for="(item, index) in timeTypes"
+                  :key="index"
+                  :label="t(item.name)"
+                  :value="item.id" />
+              </bk-select>
+            </bk-form-item>
+            <span>{{ t('为一个统计周期,') }}</span>
+          </div>
+        </bk-form-item>
+        <bk-form-item
+          class="content"
+          label=""
+          label-width="160">
+          <div
+            class="rule-item"
+            style="display: flex;">
+            <span>{{ t('数据匹配次数') }}</span>
+            <bk-form-item
+              class="mb0"
+              label=""
+              label-width="0"
+              property="configs.algorithms.method">
+              <bk-select
+                v-model="formData.configs.algorithms.method"
+                class="bk-select"
+                filterable
+                :placeholder="t('请选择')"
+                size="small"
+                style="width: 120px;"
+                @change="handleUpdateConfigs">
+                <bk-option
+                  v-for="(item) in equations.algorithm_operator"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value" />
+              </bk-select>
+            </bk-form-item>
+            <bk-form-item
+              class="mb0 ml8"
+              label=""
+              label-width="0"
+              property="configs.algorithms.threshold">
+              <bk-input
+                v-model="formData.configs.algorithms.threshold"
+                :min="0"
+                :placeholder="t('请输入')"
+                :show-controls="false"
+                size="small"
+                style="width: 120px;"
+                type="number"
+                @blur="handleUpdateConfigs" />
+            </bk-form-item>
+          </div>
+        </bk-form-item>
+      </div>
     </div>
-  </div>
+  </auth-collapse-panel>
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
@@ -620,6 +625,8 @@
 }
 
 .filter-conditon {
+  padding: 16px 0px;
+
   .flex-center {
     display: flex;
     align-items: center;

@@ -78,8 +78,8 @@
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
-  import AiopsPart from '@views/strategy-manage/strategy-create/components/step1/components/aiops/index.vue';
   import CardPart from '@views/strategy-manage/strategy-create/components/step1/components/card-part.vue';
+  import AiopsPart from '@views/strategy-manage/strategy-create/components/step1/components/reference-model/components/aiops/index.vue';
 
   import { changeConfirm } from '@utils/assist';
 

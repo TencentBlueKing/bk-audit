@@ -18,6 +18,7 @@ import type SearchModel from '@model/es-query/search';
 import type AiopsDetailModel from '@model/strategy/aiops-detail';
 import type AiopsPlanModel from '@model/strategy/aiops-plan';
 import type CommonDataModel from '@model/strategy/common-data';
+import type DatabaseTableFieldModel from '@model/strategy/database-table-field';
 import type StrategyModel from '@model/strategy/strategy';
 import type StrategyFieldEvent from '@model/strategy/strategy-field-event';
 // import type StrategyFieldModel from '@model/strategy/strategy-field';
@@ -155,6 +156,61 @@ class Strategy extends ModuleBase {
       }>
     }>>(`${this.path}/strategy_table/`, {
       params,
+    });
+  }
+  // 获取表字段
+  getDatabaseTableFields(params: {
+    table_id: string;
+  }) {
+    // return Request.get<Array<DatabaseTableFieldModel>>(`${this.path}/strategy_database_table_fields/`, {
+    //   params,
+    // });
+    console.log(params);
+    return Promise.resolve<{
+      data: Array<DatabaseTableFieldModel>
+    }>({
+      data: [{
+        rt_id: 'fr93yxgtrUtMCZ8DjkTh7F',
+        raw_name: 'dtEventTime',
+        type: 'datetime',
+        display_name: '时间',
+        remark: '',
+      }, {
+        rt_id: 'fr93yxgtrUtMCZ8DjkTh7G',
+        raw_name: 'user',
+        type: 'string',
+        display_name: '人员-1',
+        remark: '',
+      }],
+    });
+  }
+  // 获取表字段对应的规则和枚举值列表
+  gethFiledRules(params: {
+    field: DatabaseTableFieldModel;
+  }) {
+    // return Request.get<{
+    //    rulesList: Array<Record<string, any>>,
+    //    enumList:  Array<Record<string, any>>
+    //  }>(`${this.path}/strategy_database_table_fields/`, {
+    //   params,
+    // });
+    console.log(params);
+    return Promise.resolve<{
+      data: {
+        rulesList: Array<Record<string, any>>,
+        enumList:  Array<Record<string, any>>
+      }
+    }>({
+      data: {
+        rulesList: [{
+          value: '=',
+          name: '=',
+        }, {
+          value: '!',
+          name: '!',
+        }],
+        enumList: [],
+      },
     });
   }
   // 获取表格的字段列表

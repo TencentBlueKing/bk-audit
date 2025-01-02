@@ -24,7 +24,7 @@
   </render-info-block>
   <render-info-block>
     <render-info-item :label="t('输入字段映射')">
-      <collapse-panel
+      <auth-collapse-panel
         v-for="(item,index) in filterSystemIdList"
         :key="`${item}-${index}`"
         class="mb16"
@@ -43,7 +43,7 @@
             :select-fields-map="selectRtFieldsMap"
             :system-id="item" />
         </bk-loading>
-      </collapse-panel>
+      </auth-collapse-panel>
     </render-info-item>
   </render-info-block>
   <render-info-block>
@@ -89,8 +89,6 @@
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
-
-  import CollapsePanel from '@views/strategy-manage/strategy-create/components/step1/components/aiops/components/components/collapse-panel.vue';
 
   import RenderInfoBlock from '../render-info-block.vue';
   import RenderInfoItem from '../render-info-item.vue';

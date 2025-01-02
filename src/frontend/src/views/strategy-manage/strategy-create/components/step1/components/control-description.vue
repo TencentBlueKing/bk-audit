@@ -19,15 +19,15 @@
     class="diff-text">
     <template
       v-if="data && data.extra_config && Object.keys(data.extra_config).length">
-      <collapse-panel
+      <auth-collapse-panel
         is-active
         :label="t('方案描述')"
         title-style="height: 28px;line-height: 28px;background: #F0F1F5;">
         <div class="diff-content">
           {{ data.extra_config.plan_document.content || '--' }}
         </div>
-      </collapse-panel>
-      <collapse-panel
+      </auth-collapse-panel>
+      <auth-collapse-panel
         class="mt24"
         is-active
         :label="t('版本信息')"
@@ -50,8 +50,8 @@
           <p> {{ t('发布人') }} : {{ data.extra_config.developer?.join('、') || '--' }} </p>
           <p> {{ t('发布时间') }} : {{ data.extra_config.updated_at || '--' }} </p>
         </div>
-      </collapse-panel>
-      <collapse-panel
+      </auth-collapse-panel>
+      <auth-collapse-panel
         class="mt24"
         is-active
         :label="t('方案输出')"
@@ -69,7 +69,7 @@
             </span>
           </p>
         </div>
-      </collapse-panel>
+      </auth-collapse-panel>
     </template>
     <div
       v-else
@@ -90,8 +90,6 @@
   import EditTag from '@components/edit-box/tag.vue';
 
   import getAssetsFile from '@utils/getAssetsFile';
-
-  import CollapsePanel from './aiops/components/components/collapse-panel.vue';
 
   interface Props{
     data: Record<string, any> | null

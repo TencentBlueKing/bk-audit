@@ -20,7 +20,6 @@
     :class="{'is-errored':isError}">
     <bk-select
       v-model="localValue"
-      behavior="simplicity"
       class="bk-select"
       :disabled="disabled"
       filterable

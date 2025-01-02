@@ -52,6 +52,17 @@
     </bk-loading>
   </div>
 </template>
+<script lang="ts">
+  const lists = [
+    {
+      connector: 'and', // AND / OR
+      key: '', // 统计字段
+      method: '', //  等式
+      value: [] as Array<string>, // 对应值
+    },
+  ];
+  type ConditionData = typeof lists;
+</script>
 <script setup lang="ts">
   import {
     computed,
@@ -66,8 +77,6 @@
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
-
-  import type { ConditionData } from '@views/strategy-manage/strategy-create/components/step1/components/aiops/components/components/filter-condition.vue';
 
   import RenderInfoBlock from '../render-info-block.vue';
   import RenderInfoItem from '../render-info-item.vue';

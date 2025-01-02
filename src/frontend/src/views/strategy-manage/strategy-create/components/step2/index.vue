@@ -77,7 +77,7 @@
                 </div>
                 <template #content>
                   <variable-table
-                    :strategy-id="data.strategy_id"
+                    :strategy-id="editData.strategy_id"
                     @is-copy="handleCopy" />
                 </template>
               </bk-popover>
@@ -88,8 +88,9 @@
           <template #content>
             <event-info-table
               ref="eventRef"
-              :data="data"
-              :strategy-id="data.strategy_id" />
+              :data="editData"
+              :select="select"
+              :strategy-id="editData.strategy_id" />
           </template>
         </card-part-vue>
       </audit-form>
@@ -123,6 +124,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
@@ -144,7 +146,8 @@
     (e: 'showPreview'): void;
   }
   interface Props {
-    data: StrategyModel
+    editData: StrategyModel,
+    select: Array<DatabaseTableFieldModel>
   }
 
   const props = defineProps<Props>();
@@ -278,7 +281,7 @@
   };
 
   // 编辑
-  watch(() => props.data, (data) => {
+  watch(() => props.editData, (data) => {
     formData.value.risk_title = data.risk_title || '';
   }, {
     immediate: isEditMode || isCloneMode,

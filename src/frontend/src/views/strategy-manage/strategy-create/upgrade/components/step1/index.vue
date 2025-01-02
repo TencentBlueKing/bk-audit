@@ -135,7 +135,15 @@
 
   import Card from './components/card.vue';
 
-  import type { ControlType } from '@/views/strategy-manage/strategy-create/components/step1/index.vue';
+  interface ControlType {
+    control_type_id: string;
+    control_id: string;
+    control_name: string;
+    versions: Array<{
+      control_id: string;
+      control_version: number
+    }>
+  }
 
   interface Emits {
     (e: 'change', step: number): void,

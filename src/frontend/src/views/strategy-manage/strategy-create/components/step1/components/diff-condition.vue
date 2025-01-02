@@ -57,7 +57,7 @@
       label-width="160"
       property="statistics_field"
       required>
-      <collapse-panel
+      <auth-collapse-panel
         :is-active="isActive"
         :label="t('作业平台')"
         style="width: 800px;">
@@ -67,8 +67,8 @@
           :columns="tableColumn"
           :data="diffParamsData"
           style="width: 800px;" />
-      </collapse-panel>
-      <collapse-panel
+      </auth-collapse-panel>
+      <auth-collapse-panel
         class="mt12"
         :is-active="isActive"
         :label="t('节点管理')"
@@ -79,7 +79,7 @@
           :columns="tableColumn"
           :data="diffParamsData"
           style="width: 800px;" />
-      </collapse-panel>
+      </auth-collapse-panel>
     </bk-form-item>
   </div>
 </template>
@@ -88,8 +88,6 @@
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
-
-  import CollapsePanel from './aiops/components/components/collapse-panel.vue';
 
   interface Emits {
     (e: 'updateDiff', value: string): void,

@@ -1,0 +1,259 @@
+<template>
+  <bk-popover
+    ext-cls="field-custom-popover"
+    height="300"
+    :is-show="isShow"
+    theme="light"
+    trigger="manual"
+    width="446">
+    <div class="add-field-btn">
+      <audit-icon
+        type="add"
+        @click="handleShowPop" />
+    </div>
+    <template #content>
+      <div class="add-field-pop-content">
+        <div
+          class="flex"
+          style="flex: 1; min-height: 0;">
+          <div class="field-pop-select">
+            <!-- 搜索框 -->
+            <div class="field-pop-select-search">
+              <bk-input
+                behavior="simplicity"
+                class="mb8">
+                <template #prefix>
+                  <span class="input-icon">
+                    <audit-icon type="search1" />
+                  </span>
+                </template>
+              </bk-input>
+            </div>
+            <div class="field-pop-select-list">
+              <scroll-faker>
+                <div
+                  v-for="(item, index) in tableFields"
+                  :key="item.raw_name"
+                  class="field-pop-select-item"
+                  :class="[selectIndex === index ? 'select-item-active' : '']"
+                  @click="() => handleSelectField(index, item)">
+                  <div>
+                    <audit-icon
+                      style=" margin-right: 4px; font-size: 16px;color: #1ba3fd"
+                      type="user" />
+                    <span>{{ item.display_name }}</span>
+                  </div>
+                  <div>{{ item.raw_name }}</div>
+                </div>
+              </scroll-faker>
+            </div>
+          </div>
+          <div class="field-pop-radio">
+            <div style=" margin-bottom: 8px;color: #313238;">
+              {{ t('聚合算法') }}
+            </div>
+            <bk-radio-group v-model="formData.aggregate">
+              <div class="aggregate-list">
+                <bk-radio
+                  v-for="item in localAggregateList"
+                  :key="item.value"
+                  :disabled="item.disabled"
+                  :label="item.value">
+                  {{ item.label }}
+                </bk-radio>
+              </div>
+            </bk-radio-group>
+          </div>
+        </div>
+        <div class="field-pop-bth">
+          <bk-button
+            class="mr8"
+            size="small"
+            theme="primary"
+            @click="handleAddField">
+            {{ t('确定') }}
+          </bk-button>
+          <bk-button
+            size="small"
+            @click="handleCancel">
+            {{ t('取消') }}
+          </bk-button>
+        </div>
+      </div>
+    </template>
+  </bk-popover>
+</template>
+<script setup lang="ts">
+  import { ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
+  interface Emits {
+    (e: 'addExpectedResult', item: DatabaseTableFieldModel): void;
+  }
+  interface Props {
+    aggregateList: Array<Record<string, any>>
+    expectedResultList: Array<DatabaseTableFieldModel>
+    tableFields: Array<DatabaseTableFieldModel>
+  }
+
+  const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
+  const { t } = useI18n();
+
+  const isShow = ref(false);
+  const selectIndex = ref(-1);
+  const localAggregateList = ref<Array<Record<string, any>>>([]);
+  const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
+
+  const handleShowPop = () => {
+    isShow.value = true;
+    // 重置可选
+    localAggregateList.value = props.aggregateList.map(item => ({
+      ...item,
+      disabled: false,
+    }));
+  };
+
+  const handleSelectField = (index: number, field: DatabaseTableFieldModel) => {
+    selectIndex.value = index;
+    // 同一字段不能重复添加同一聚合算法
+    // eslint-disable-next-line max-len
+    const hasAggregate = props.expectedResultList.filter(item => (item.rt_id + item.raw_name) === (field.rt_id +  item.raw_name));
+    if (hasAggregate.length) {
+      localAggregateList.value = localAggregateList.value.map((item) => {
+        if (hasAggregate.some(element => element.aggregate === item.value)) {
+          return {
+            ...item,
+            disabled: true,
+          };
+        }
+        return item;
+      });
+    }
+    formData.value = {
+      ...field,
+      aggregate: localAggregateList.value.find(item => !item.disabled)?.value, // 选择第一个可选项
+    };
+  };
+
+  const handleCancel = () => {
+    isShow.value = false;
+    selectIndex.value = -1;
+  };
+
+  const handleAddField = () => {
+    handleCancel();
+    emits('addExpectedResult', formData.value);
+  };
+
+  watch(() => props.aggregateList, (data) => {
+    localAggregateList.value = data.map(item => ({
+      ...item,
+      disabled: false,
+    }));
+  }, {
+    immediate: true,
+  });
+</script>
+<style scoped lang="postcss">
+  .add-field-btn {
+    display: flex;
+    width: 26px;
+    height: 26px;
+    margin: 3px 0;
+    font-size: 16px;
+    color: #3a84ff;
+    cursor: pointer;
+    background: #e1ecff;
+    border-radius: 2px;
+    justify-content: center;
+    align-items: center;
+
+    &:hover {
+      color: #fff;
+      background: #3a84ff;
+    }
+  }
+
+  .add-field-pop-content {
+    display: flex;
+    height: 100%;
+    box-shadow: 0 2px 6px #0000001a !important;
+    flex-direction: column;
+
+    .field-pop-select {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+
+      .input-icon {
+        display: flex;
+        padding-left: 8px;
+        font-size: 16px;
+        color: #c4c6cc;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .field-pop-select-list {
+        height: 100%;
+        overflow: auto;
+
+        .field-pop-select-item {
+          display: flex;
+          padding: 0 12px;
+          line-height: 32px;
+          justify-content: space-between;
+          cursor: pointer;
+
+          &:hover {
+            background-color: #f5f7fa;
+          }
+        }
+
+        .select-item-active {
+          color: #3a84ff;
+          background: #e1ecff;
+        }
+
+        .select-item-disabled {
+          color: #c4c6cc;
+          cursor: not-allowed;
+        }
+      }
+    }
+
+    .field-pop-radio {
+      width: 126px;
+      padding: 8px 16px;
+      background: #f5f7fa;
+
+      .aggregate-list {
+        flex: 1;
+
+        :deep(.bk-radio) {
+          padding-bottom: 12px;
+          margin-left: 0;
+        }
+      }
+    }
+
+    .field-pop-bth {
+      display: flex;
+      height: 42px;
+      padding: 0 16px;
+      background: #fafbfd;
+      box-shadow: inset 0 1px #0000001f;
+      align-items: center;
+      justify-content: flex-end;
+    }
+  }
+</style>
+<style>
+  .field-custom-popover {
+    padding: 0 !important;
+  }
+</style>
