@@ -36,9 +36,7 @@
     ref,
   } from 'vue';
 
-  import CollectorManageService from '@service/collector-manage';
-
-  import useRequest from '@hooks/use-request';
+  import useFeature from '@hooks/use-feature';
 
   import ApiPush from './components/api-push.vue';
   import LogCollection from './components/log-collection/index.vue';
@@ -53,17 +51,7 @@
   const apiRef = ref();
   const collectorData = ref < CollectorData >({ id: 0, name: '' });
 
-  const {
-    data: showApiPush,
-  }  = useRequest(CollectorManageService.fetchApiPushFeature, {
-    defaultValue: {
-      enabled: false,
-    },
-    defaultParams: {
-      feature_id: 'bklog_otlp',
-    },
-    manual: true,
-  });
+  const { feature: showApiPush } = useFeature('bklog_otlp');
 
   const handleChecked = (value: {id: number|string, name: string}) => {
     collectorData.value = value;
