@@ -33,12 +33,6 @@ class Statement extends ModuleBase {
       payload,
     });
   }
-
-  getHasBkvision() {
-    return Request.get<{
-      enabled: boolean
-    }>('/api/v1/feature/bkvision/');
-  }
 }
 
 export default new Statement();

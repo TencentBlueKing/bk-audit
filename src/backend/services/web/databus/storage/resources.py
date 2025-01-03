@@ -83,6 +83,11 @@ class UpdateStorageResource(StorageMeta):
         data = api.bk_log.update_storage(validated_request_data)
         StorageOperateLog.create(validated_request_data["cluster_id"])
         self.record_config(data["cluster_config"]["cluster_id"], validated_request_data)
+        # 更新采集插件
+        namespace = validated_request_data["namespace"]
+        CollectorPlugin.objects.filter(
+            namespace=namespace, plugin_scene__in=[PluginSceneChoices.COLLECTOR.value]
+        ).update(storage_changed=True)
         return data
 
 
@@ -104,7 +109,7 @@ class StorageActivateResource(StorageMeta):
         )
         # 设置采集插件
         CollectorPlugin.objects.filter(
-            namespace=namespace, plugin_scene__in=[PluginSceneChoices.COLLECTOR.value, PluginSceneChoices.FLOW.value]
+            namespace=namespace, plugin_scene__in=[PluginSceneChoices.COLLECTOR.value]
         ).update(storage_changed=True)
         return int(default_cluster_config.config_value)
 
