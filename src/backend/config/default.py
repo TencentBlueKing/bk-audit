@@ -363,6 +363,11 @@ CORS_ALLOW_HEADERS = [
     *os.getenv("BKAPP_CORS_ALLOW_HEADERS", "").split(","),
 ]
 
+# 队列存储时长(天)
+DEFAULT_QUEUE_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_QUEUE_STORAGE_EXPIRES", 1))
+# HDFS存储时长(天) -1 表示不限制
+DEFAULT_HDFS_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_HDFS_STORAGE_EXPIRES", -1))
+
 """
 以下为框架代码 请勿修改
 """

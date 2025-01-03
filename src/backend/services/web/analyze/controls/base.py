@@ -24,26 +24,7 @@ from services.web.analyze.models import Control
 from services.web.strategy_v2.models import Strategy
 
 
-class Controller:
-    """
-    Control Strategy and Event
-    """
-
-    def __new__(cls, strategy_id: int, *args, **kwargs) -> "Controller":
-        # check child
-        if cls.__name__ != Controller.__name__:
-            return super().__new__(cls)
-        # load control
-        control_id = Strategy.objects.get(strategy_id=strategy_id).control_id
-        control_type_id = Control.objects.get(control_id=control_id).control_type_id
-        # import controller
-        controller_path = "services.web.analyze.controls.{}.{}Controller".format(
-            control_type_id.lower(), control_type_id
-        )
-        controller_class = import_string(controller_path)
-        # init controller
-        return controller_class(strategy_id)
-
+class BaseControl(abc.ABC):
     def __init__(self, strategy_id: int):
         self.strategy: Strategy = Strategy.objects.get(strategy_id=strategy_id)
 
@@ -86,3 +67,24 @@ class Controller:
         """
 
         raise NotImplementedError()
+
+
+class Controller(BaseControl, abc.ABC):
+    """
+    Control Strategy and Event
+    """
+
+    def __new__(cls, strategy_id: int, *args, **kwargs) -> "Controller":
+        # check child
+        if cls.__name__ != Controller.__name__:
+            return super().__new__(cls)
+        # load control
+        control_id = Strategy.objects.get(strategy_id=strategy_id).control_id
+        control_type_id = Control.objects.get(control_id=control_id).control_type_id
+        # import controller
+        controller_path = "services.web.analyze.controls.{}.{}Controller".format(
+            control_type_id.lower(), control_type_id
+        )
+        controller_class = import_string(controller_path)
+        # init controller
+        return controller_class(strategy_id)

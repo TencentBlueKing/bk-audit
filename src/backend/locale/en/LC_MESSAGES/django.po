@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-26 16:22+0800\n"
+"POT-Creation-Date: 2025-01-03 17:30+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2069,15 +2069,19 @@ msgstr "Include"
 msgid "Exclude"
 msgstr "Exclude"
 
+#, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
 msgstr "Table '{table_name}' is not declared in the configuration."
 
+#, python-brace-format
 msgid "不支持的 JOIN 类型：'{join_type}'。"
 msgstr "Unsupported JOIN type: '{join_type}'."
 
+#, python-brace-format
 msgid "不支持的操作符：'{operator}'。"
 msgstr "Unsupported operator: '{operator}'."
 
+#, python-brace-format
 msgid "不支持的聚合类型：'{aggregate_type}'。"
 msgstr "Unsupported aggregate type: '{aggregate_type}'."
 
@@ -2201,6 +2205,12 @@ msgstr "Data Source"
 msgid "数据开发"
 msgstr "Data Flow"
 
+msgid "规则审计"
+msgstr "Rule Audit"
+
+msgid "控件"
+msgstr "Control"
+
 msgid "Create or Update Flow Failed"
 msgstr "Create or Update Flow Failed"
 
@@ -2213,6 +2223,9 @@ msgstr "Cluster Not Exists"
 
 msgid "Control Not Exists"
 msgstr "Cluster Not Exists"
+
+msgid "Not Support DataSource"
+msgstr "Not Support DataSource"
 
 msgid "操作行为审计"
 msgstr "Operation Audit"
@@ -3493,6 +3506,9 @@ msgstr "Policy type not supported"
 msgid "策略类型不可修改"
 msgstr "Policy type cannot be modified"
 
+msgid "联表配置错误"
+msgstr "Link table configuration error"
+
 msgid "Strategy Name"
 msgstr "Strategy Name"
 
@@ -3632,8 +3648,14 @@ msgstr "Is Priority"
 msgid "Field Description"
 msgstr "Field Description"
 
-msgid "control_id and control_version_id are required when strategy_type is model"
-msgstr "control_id and control_version_id are required when strategy_type is model"
+msgid "Map Field"
+msgstr "Map Field"
+
+msgid "Field Value"
+msgstr "Field Value"
+
+msgid "control_id and control_version are required when strategy_type is model"
+msgstr "control_id and control_version are required when strategy_type is model"
 
 msgid "link_table_uid and link_table_version are required when strategy_type is rule"
 msgstr "link_table_uid and link_table_version are required when strategy_type is rule"
@@ -3842,6 +3864,9 @@ msgstr "Links"
 #| msgid "Variable Config"
 msgid "Link Table Config"
 msgstr "Link Table Configuration"
+
+msgid "逗号分隔的标签ID列表"
+msgstr "Comma-separated tag ID list"
 
 msgid "Link Table Count"
 msgstr "Link Table Count"

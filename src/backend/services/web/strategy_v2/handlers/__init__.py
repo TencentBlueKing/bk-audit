@@ -15,31 +15,3 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-from django.utils.translation import gettext_lazy
-
-from apps.exceptions import CoreException
-
-CONTROL_VERSION_START = 1
-
-
-class AnalyzeException(CoreException):
-    MODULE_CODE = CoreException.Modules.STRATEGY_V2
-
-
-class ClusterNotExists(AnalyzeException):
-    STATUS_CODE = 500
-    ERROR_CODE = "001"
-    MESSAGE = gettext_lazy("Cluster Not Exists")
-
-
-class ControlNotExist(AnalyzeException):
-    STATUS_CODE = 400
-    ERROR_CODE = "002"
-    MESSAGE = gettext_lazy("Control Not Exists")
-
-
-class NotSupportDataSource(AnalyzeException):
-    STATUS_CODE = 400
-    ERROR_CODE = "003"
-    MESSAGE = gettext_lazy("Not Support DataSource")

@@ -38,6 +38,8 @@ BKBASE_DEFAULT_COUNT_FREQ = 1
 BKBASE_ERROR_LOG_LEVEL = "ERROR"
 BKBASE_ORIGIN_DATA_FIELD = "origin_data"
 BKBASE_STRATEGY_ID_FIELD = "strategy_id"
+DEFAULT_QUEUE_STORAGE_CLUSTER_KEY = "default_queue_storage_cluster"
+DEFAULT_HDFS_STORAGE_CLUSTER_KEY = "default_hdfs_storage_cluster"
 
 
 class ControlTypeChoices(TextChoices):
@@ -176,3 +178,12 @@ class ObjectType(TextChoices):
 
     RAW_DATA = "rawdata", gettext_lazy("数据源")
     DATAFLOW = "dataflow", gettext_lazy("数据开发")
+
+
+class BaseControlTypeChoices(TextChoices):
+    """
+    基础控件类型
+    """
+
+    RULE_AUDIT = "rule_audit", gettext_lazy("规则审计")
+    CONTROL = "control", gettext_lazy("控件")
