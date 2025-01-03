@@ -219,6 +219,8 @@
     ref,
   } from 'vue';
 
+  import useFeature from '@hooks/use-feature';
+
   let formData = reactive({
     // 计算平台数据
     bk_data_id: '',
@@ -298,6 +300,7 @@
     searchParams,
     removeSearchParam,
   } = useUrlSearch();
+  const { feature: showBkbase } = useFeature('bkbase_data_source');
   const comMap = {
     physics: RenderPhysics,
     container: RenderContainer,
@@ -517,19 +520,6 @@
       },
     });
   }
-
-  const {
-    data: showBkbase,
-  }  = useRequest(CollectorManageService.fetchBkbaseFeature, {
-    defaultValue: {
-      enabled: false,
-    },
-    defaultParams: {
-      feature_id: 'bkbase_data_source',
-    },
-    manual: true,
-  });
-
 
   const {
     run: fecthDetail,

@@ -229,13 +229,6 @@ export default {
       .then(({ data }) => data);
   },
   /**
-   * @desc 判断资源表格操作列是否显示
-   */
-  fetchResourceFeature() {
-    return CollectorSource.getResourceFeature()
-      .then(({ data }) => data);
-  },
-  /**
    * @desc 清洗字段历史
    * @param { String } id
    */
@@ -281,13 +274,6 @@ export default {
       .then(({ data }) => data);
   },
   /**
-   * @desc 判断API Push是否启用
-   */
-  fetchApiPushFeature(params: {feature_id: string}) {
-    return CollectorSource.getApiPushFeature(params)
-      .then(({ data }) => data);
-  },
-  /**
    * @desc 获取启用状态&上报host （无需单独鉴权）
    */
   fetchApiPushHost(params: {system_id: string}) {
@@ -315,13 +301,6 @@ export default {
    */
   createApiPush(params: {system_id: string}) {
     return CollectorSource.createApiPush(params)
-      .then(({ data }) => data);
-  },
-  /**
-   * @desc 是否显示：上报方式，计算平台已有数据源
-   */
-  fetchBkbaseFeature(params: {feature_id: string}) {
-    return CollectorSource.getBkbaseFeature(params)
       .then(({ data }) => data);
   },
 };

@@ -128,6 +128,7 @@
 
   import type StorageModel from '@model/storage/storage';
 
+  import useFeature from '@hooks/use-feature';
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
@@ -140,6 +141,7 @@
   }
   const isSearching = ref(false);
   const search = ref('');
+  const { feature: showStorageEdit } = useFeature('storage_edit');
   const tableColumn = [
     {
       label: () => 'ID',
@@ -247,23 +249,27 @@
               {t('设为默认')}
             </auth-button>
           </audit-popconfirm>
-          <auth-button
-            permission={data.permission.edit_storage}
-            actionId="edit_storage"
-            text
-            theme="primary"
-            onClick={() => handleEdit(data)}
-            class="ml8">
-            {t('编辑')}
-          </auth-button>
+          {
+            showStorageEdit.value.enabled
+              ? <auth-button
+                  permission={data.permission.edit_storage}
+                  actionId="edit_storage"
+                  text
+                  theme="primary"
+                  onClick={() => handleEdit(data)}
+                  className="ml8">
+                {t('编辑')}
+              </auth-button>
+              : ''
+          }
           <audit-popconfirm
-            title={t('确认删除？')}
-            content={t('删除后不可恢复')}
-            class="ml8"
-            confirmHandler={() => handleRemove(data)}>
+              title={t('确认删除？')}
+              content={t('删除后不可恢复')}
+              class="ml8"
+              confirmHandler={() => handleRemove(data)}>
             <auth-button
-              permission={data.permission.delete_storage}
-              actionId="delete_storage"
+                permission={data.permission.delete_storage}
+                actionId="delete_storage"
               text
               disabled={data.isDefault}
               theme="primary">
