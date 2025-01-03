@@ -16,30 +16,29 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext_lazy
+import uuid
 
-from apps.exceptions import CoreException
+from django.utils.translation import gettext
 
-CONTROL_VERSION_START = 1
-
-
-class AnalyzeException(CoreException):
-    MODULE_CODE = CoreException.Modules.STRATEGY_V2
+from services.web.risk.constants import RiskStatus
+from services.web.risk.handlers.ticket import CloseRisk
+from tests.test_risk.test_tickets.base import RiskContext, TicketTest
 
 
-class ClusterNotExists(AnalyzeException):
-    STATUS_CODE = 500
-    ERROR_CODE = "001"
-    MESSAGE = gettext_lazy("Cluster Not Exists")
+class CloseTest(TicketTest):
+    def test_close(self):
+        """
+        测试关单
+        关键验证：状态，处理人
+        """
 
-
-class ControlNotExist(AnalyzeException):
-    STATUS_CODE = 400
-    ERROR_CODE = "002"
-    MESSAGE = gettext_lazy("Control Not Exists")
-
-
-class NotSupportDataSource(AnalyzeException):
-    STATUS_CODE = 400
-    ERROR_CODE = "003"
-    MESSAGE = gettext_lazy("Not Support DataSource")
+        with RiskContext() as risk:
+            # 运行
+            operator = uuid.uuid1().hex
+            description = gettext("%s 操作关单") % operator
+            CloseRisk(risk_id=risk.risk_id, operator=operator).run(description=description)
+            risk.refresh_from_db()
+            # 风险状态
+            self.assertEquals(risk.status, RiskStatus.CLOSED)
+            # 节点操作人
+            self.assertEquals(risk.last_history.operator, operator)

@@ -21,6 +21,7 @@ from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from django.db import models
 from django.db.models import Max, Q, QuerySet
+from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy
 
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
@@ -46,6 +47,7 @@ class Strategy(SoftDeleteModel):
         gettext_lazy("Strategy Type"), choices=StrategyType.choices, default=StrategyType.MODEL, max_length=16
     )
     configs = models.JSONField(gettext_lazy("Configs"), default=dict, null=True, blank=True)
+    sql = models.TextField(gettext_lazy("Rule Audit SQL"), null=True, blank=True)
     link_table_uid = models.CharField(
         gettext_lazy("Link Table UID"), max_length=64, null=True, blank=True, db_index=True
     )
@@ -179,6 +181,19 @@ class LinkTable(OperateRecordModel):
             q |= Q(uid=max_version["uid"], version=max_version["max_version"])
         # 然后，基于 uid 和对应的最大 version 进行筛选
         return cls.objects.filter(q)
+
+    @cached_property
+    def rt_ids(self) -> list[str]:
+        """
+        获取当前联表中的所有结果表
+        """
+
+        rt_ids = set()
+        links = self.config.get("links", [])
+        for link in links:
+            rt_ids.add(link["left_table"]["rt_id"])
+            rt_ids.add(link["right_table"]["rt_id"])
+        return list(rt_ids)
 
 
 class LinkTableTag(OperateRecordModel):

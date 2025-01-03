@@ -39,7 +39,7 @@ class Field(BaseModel):
     raw_name: str  # 原始字段名称
     display_name: str  # 作为 sql 的列名，唯一
     field_type: FieldType  # 字段类型
-    aggregate: AggregateType = None  # 聚合函数
+    aggregate: Optional[AggregateType] = None  # 聚合函数
 
 
 class LinkField(BaseModel):
@@ -107,7 +107,7 @@ class SqlConfig(BaseModel):
     """
 
     select_fields: List[Field]  # 作为 sql 的列
-    from_table: str  # 主表
+    from_table: str = ""  # 主表
     join_tables: Optional[List[JoinTable]] = None  # 联表
     where: Optional[WhereCondition] = None  # 筛选条件
     group_by: List[Field] = PydanticField(default_factory=list)  # 分组条件；如果未指定但有聚合函数，则会自动添加 group by 条件

@@ -36,6 +36,7 @@ from core.lock import lock
 from services.web.analyze.constants import (
     BKBASE_ERROR_LOG_LEVEL,
     CHECK_FLOW_STATUS_SLEEP_SECONDS,
+    BaseControlTypeChoices,
     FlowStatusChoices,
     ObjectType,
 )
@@ -49,13 +50,16 @@ from services.web.strategy_v2.models import Strategy
 
 
 @celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-def call_controller(func_name: str, strategy_id: int, *args, **kwargs):
+def call_controller(func_name: str, strategy_id: int, base_control_type: str = None, *args, **kwargs):
     """
     call controller async
     """
+    if base_control_type == BaseControlTypeChoices.RULE_AUDIT:
+        from services.web.analyze.controls.rule_audit import RuleAuditController
 
-    # init controller
-    controller = Controller(strategy_id=strategy_id)
+        controller = RuleAuditController(strategy_id=strategy_id)
+    else:
+        controller = Controller(strategy_id=strategy_id)
     controller_func = getattr(controller, func_name, None)
     controller_func(*args, **kwargs)
 
@@ -65,11 +69,6 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
     """
     check flow status
     """
-
-    from services.web.analyze.controls.aiops import AiopsFeature
-
-    if not AiopsFeature(help_text="check_flow_status").available:
-        return
 
     # load strategy
     strategy = Strategy.objects.filter(strategy_id=strategy_id).first()

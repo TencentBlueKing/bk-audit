@@ -24,12 +24,14 @@ from rest_framework import serializers
 from apps.meta.constants import OrderTypeChoices
 from core.serializers import ChoiceListSerializer, OrderSerializer
 from services.web.analyze.constants import (
+    ControlTypeChoices,
     FilterConnector,
     FilterOperator,
     FlowDataSourceNodeType,
     OffsetUnit,
 )
-from services.web.analyze.models import ControlVersion
+from services.web.analyze.exceptions import ControlNotExist
+from services.web.analyze.models import Control, ControlVersion
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
@@ -38,11 +40,21 @@ from services.web.strategy_v2.constants import (
     LinkTableTableType,
     ListLinkTableSortField,
     RiskLevel,
+    RuleAuditAggregateType,
+    RuleAuditConditionOperator,
+    RuleAuditConfigType,
+    RuleAuditFieldType,
+    RuleAuditSourceType,
+    RuleAuditWhereConnector,
     StrategyAlgorithmOperator,
     StrategyOperator,
+    StrategyType,
     TableType,
 )
-from services.web.strategy_v2.exceptions import SchedulePeriodInvalid
+from services.web.strategy_v2.exceptions import (
+    SchedulePeriodInvalid,
+    StrategyTypeNotSupport,
+)
 from services.web.strategy_v2.models import LinkTable, Strategy
 
 
@@ -51,9 +63,59 @@ class EventFieldSerializer(serializers.Serializer):
     display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
     is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
     description = serializers.CharField(label=gettext_lazy("Field Description"), default="", allow_blank=True)
+    map_field = serializers.CharField(label=gettext_lazy("Map Field"), default=None, allow_null=True, allow_blank=True)
+    value = serializers.CharField(label=gettext_lazy("Field Value"), default="", allow_blank=True)
 
 
-class CreateStrategyRequestSerializer(serializers.ModelSerializer):
+class StrategySerializer(serializers.Serializer):
+    strategy_type = serializers.ChoiceField(
+        label=gettext_lazy("Storage Type"), choices=StrategyType.choices, default=StrategyType.MODEL.value
+    )
+
+    def _validate_strategy_type(self, validated_request_data: dict):
+        """
+        校验策略类型
+        """
+
+        strategy_type = validated_request_data["strategy_type"]
+        if strategy_type == StrategyType.MODEL.value:
+            if not (validated_request_data.get("control_id") and validated_request_data.get("control_version")):
+                raise serializers.ValidationError(
+                    gettext("control_id and control_version are required when strategy_type is model"),
+                )
+        elif strategy_type == StrategyType.RULE.value:
+            if not (validated_request_data.get("link_table_uid") and validated_request_data.get("link_table_version")):
+                raise serializers.ValidationError(
+                    gettext("link_table_uid and link_table_version are required when strategy_type is rule"),
+                )
+
+    def _validate_configs(self, validated_request_data: dict):
+        """
+        校验策略配置
+        """
+
+        strategy_type = validated_request_data["strategy_type"]
+        # 模型审计
+        if strategy_type == StrategyType.MODEL.value:
+            control_type_id = Control.objects.get(control_id=validated_request_data["control_id"]).control_type_id
+            if control_type_id == ControlTypeChoices.BKM.value:
+                configs_serializer_class = BKMStrategySerializer
+            elif control_type_id == ControlTypeChoices.AIOPS.value:
+                configs_serializer_class = AIOPSConfigSerializer
+            else:
+                raise ControlNotExist()
+        # 规则审计
+        elif strategy_type == StrategyType.RULE.value:
+            configs_serializer_class = RuleAuditSerializer
+        else:
+            raise StrategyTypeNotSupport()
+        configs_serializer = configs_serializer_class(data=validated_request_data["configs"])
+        configs_serializer.is_valid(raise_exception=True)
+        validated_request_data["configs"] = configs_serializer.validated_data
+        return validated_request_data
+
+
+class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
     """
     Create Strategy
     """
@@ -85,6 +147,9 @@ class CreateStrategyRequestSerializer(serializers.ModelSerializer):
             "strategy_name",
             "control_id",
             "control_version",
+            "link_table_uid",
+            "link_table_version",
+            "strategy_type",
             "configs",
             "tags",
             "notice_groups",
@@ -101,6 +166,8 @@ class CreateStrategyRequestSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
+        # check type
+        self._validate_strategy_type(data)
         # check control
         if not ControlVersion.objects.filter(
             control_id=data["control_id"], control_version=data["control_version"]
@@ -109,7 +176,8 @@ class CreateStrategyRequestSerializer(serializers.ModelSerializer):
         # check name
         if Strategy.objects.filter(strategy_name=attrs["strategy_name"]).exists():
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
-        # return
+        # check configs
+        self._validate_configs(data)
         return data
 
 
@@ -123,7 +191,7 @@ class CreateStrategyResponseSerializer(serializers.ModelSerializer):
         fields = ["strategy_id", "strategy_name"]
 
 
-class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
+class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
     """
     Update Strategy
     """
@@ -157,6 +225,9 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
             "strategy_name",
             "control_id",
             "control_version",
+            "link_table_uid",
+            "link_table_version",
+            "strategy_type",
             "configs",
             "tags",
             "notice_groups",
@@ -173,6 +244,8 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
+        # check type
+        self._validate_strategy_type(data)
         # check control
         if not ControlVersion.objects.filter(
             control_id=data["control_id"], control_version=data["control_version"]
@@ -185,7 +258,8 @@ class UpdateStrategyRequestSerializer(serializers.ModelSerializer):
             .exists()
         ):
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
-        # return
+        # check configs
+        self._validate_configs(data)
         return data
 
 
@@ -390,6 +464,12 @@ class GetStrategyCommonResponseSerializer(serializers.Serializer):
     strategy_type = ChoiceListSerializer(label=gettext_lazy("Strategy Type"), many=True)
     link_table_join_type = ChoiceListSerializer(label=gettext_lazy("Link Table Join Type"), many=True)
     link_table_table_type = ChoiceListSerializer(label=gettext_lazy("Link Table Table Type"), many=True)
+    rule_audit_aggregate_type = ChoiceListSerializer(label=gettext_lazy("Rule Audit Aggregate Type"), many=True)
+    rule_audit_field_type = ChoiceListSerializer(label=gettext_lazy("Rule Audit Field Type"), many=True)
+    rule_audit_config_type = ChoiceListSerializer(label=gettext_lazy("Rule Audit Config Type"), many=True)
+    rule_audit_source_type = ChoiceListSerializer(label=gettext_lazy("Rule Audit Source Type"), many=True)
+    rule_audit_condition_operator = ChoiceListSerializer(label=gettext_lazy("Rule Audit Condition Operator"), many=True)
+    rule_audit_where_connector = ChoiceListSerializer(label=gettext_lazy("Rule Audit Where Connector"), many=True)
 
 
 class AIOPSDataSourceFilterSerializer(serializers.Serializer):
@@ -426,9 +506,9 @@ class AIOPSDataSourceSerializer(serializers.Serializer):
     fields = serializers.JSONField(label=gettext_lazy("Fields"))
 
 
-class AIOPSSceneConfigSerializer(serializers.Serializer):
+class ScheduleConfigSerializer(serializers.Serializer):
     """
-    AIOPS Scene Config
+    Schedule Config
     """
 
     count_freq = serializers.IntegerField(label=gettext_lazy("Schedule Period"), min_value=1)
@@ -444,6 +524,14 @@ class AIOPSSceneConfigSerializer(serializers.Serializer):
         ):
             raise SchedulePeriodInvalid()
         return data
+
+
+class AIOPSSceneConfigSerializer(ScheduleConfigSerializer):
+    """
+    AIOPS Scene Config
+    """
+
+    ...
 
 
 class AIOPSConfigSerializer(serializers.Serializer):
@@ -728,3 +816,131 @@ class ListLinkTableTagsResponseSerializer(serializers.Serializer):
     tag_id = serializers.CharField(label=gettext_lazy("Tag ID"))
     tag_name = serializers.CharField(label=gettext_lazy("Tag Name"))
     link_table_count = serializers.IntegerField(label=gettext_lazy("Link Table Count"))
+
+
+class RuleAuditFieldSerializer(serializers.Serializer):
+    """
+    Rule Audit Field
+    """
+
+    rt_id = serializers.CharField(label=gettext_lazy("RT ID"))
+    raw_name = serializers.CharField(label=gettext_lazy("Raw Name"))
+    display_name = serializers.CharField(label=gettext_lazy("Display Name"))
+    field_type = serializers.ChoiceField(label=gettext_lazy("Field Type"), choices=RuleAuditFieldType.choices)
+    aggregate = serializers.ChoiceField(
+        label=gettext_lazy("Aggregate"), choices=RuleAuditAggregateType.choices, allow_null=True, default=None
+    )
+    remark = serializers.CharField(label=gettext_lazy("Remark"), required=False, default="", allow_blank=True)
+
+
+class RuleAuditLinkTableSerializer(serializers.Serializer):
+    """
+    Rule Audit Link Table
+    """
+
+    uid = serializers.CharField(label=gettext_lazy("UID"))
+    version = serializers.IntegerField(label=gettext_lazy("Version"))
+
+
+class RuleAuditDataSourceSerializer(serializers.Serializer):
+    """
+    Rule Audit DataSource
+    """
+
+    source_type = serializers.ChoiceField(label=gettext_lazy("Source Type"), choices=RuleAuditSourceType.choices)
+    rt_id = serializers.CharField(label=gettext_lazy("Result Table ID"), required=False, allow_blank=True)
+    system_ids = serializers.ListField(
+        label=gettext_lazy("System ID"), child=serializers.CharField(), required=False, allow_empty=True
+    )
+    link_table = RuleAuditLinkTableSerializer(label=gettext_lazy("Link Table"), required=False)
+
+
+class RuleAuditConditionSerializer(serializers.Serializer):
+    """
+    Rule Audit Condition
+    """
+
+    field = RuleAuditFieldSerializer(label=gettext_lazy("Field"))
+    operator = serializers.ChoiceField(label=gettext_lazy("Operator"), choices=RuleAuditConditionOperator.choices)
+    filter = serializers.CharField(label=gettext_lazy("Filter"), default="", allow_blank=True)
+    filters = serializers.ListField(
+        label=gettext_lazy("Filters"), child=serializers.CharField(), default=[], allow_empty=True
+    )
+
+
+class RuleAuditWhereSerializer(serializers.Serializer):
+    """
+    Rule Audit Where
+    """
+
+    connector = serializers.ChoiceField(
+        label=gettext_lazy("Connector"),
+        choices=RuleAuditWhereConnector.choices,
+        default=RuleAuditWhereConnector.AND.value,
+    )
+    conditions = serializers.ListField(
+        label=gettext_lazy("Conditions"), child=serializers.DictField(), required=False, allow_empty=True
+    )
+    condition = RuleAuditConditionSerializer(label=gettext_lazy("Condition"), required=False)
+
+    def to_internal_value(self, instance):
+        """
+        自定义序列化逻辑: 递归解析 conditions
+        """
+
+        ret = super().to_representation(instance)
+
+        # 递归处理 conditions
+        conditions = instance.get('conditions', [])
+        ret['conditions'] = [RuleAuditWhereSerializer(condition, context=self.context).data for condition in conditions]
+
+        return ret
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # conditions 和 condition 必须只有一个存在
+        if not (attrs.get("condition") or attrs.get("conditions")):
+            raise serializers.ValidationError(gettext("Rule Audit Where must have condition or conditions"))
+        if attrs.get("condition") and attrs.get("conditions"):
+            raise serializers.ValidationError(
+                gettext("Rule Audit Where can not have condition and conditions at the same time")
+            )
+        return attrs
+
+
+class RuleAuditSerializer(serializers.Serializer):
+    """
+    Rule Audit
+    """
+
+    config_type = serializers.ChoiceField(
+        label=gettext_lazy("Rule Audit Config Type"), choices=RuleAuditConfigType.choices
+    )
+    data_source = RuleAuditDataSourceSerializer(label=gettext_lazy("Rule Audit Data Source"))
+    select = serializers.ListField(
+        label=gettext_lazy("Rule Audit Select"), child=RuleAuditFieldSerializer(), allow_empty=False
+    )
+    where = RuleAuditWhereSerializer(label=gettext_lazy("Rule Audit Where"), required=False)
+    schedule_config = ScheduleConfigSerializer(label=gettext_lazy("Rule Audit Schedule Config"), required=False)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # 高层校验：确保 config_type 与 data_source 的业务逻辑匹配
+        # 1. 日志需要指定 rt_id,system_ids
+        # 2. 资产和其他数据需要指定 rt_id
+        # 3. 联表需要指定 link_table
+        config_type = attrs["config_type"]
+        data_source = attrs["data_source"]
+        match config_type:
+            case RuleAuditConfigType.EVENT_LOG.value:
+                if not (data_source.get("rt_id") and data_source.get("system_ids")):
+                    raise serializers.ValidationError(
+                        gettext("Config type: %s need rt_id and system_ids") % config_type
+                    )
+            case RuleAuditConfigType.BUILD_ID_ASSET.value | RuleAuditConfigType.BIZ_RT.value:
+                if not data_source.get("rt_id"):
+                    raise serializers.ValidationError(gettext("Config type: %s need rt_id") % config_type)
+            case RuleAuditConfigType.LINK_TABLE.value:
+                if not data_source.get("link_table"):
+                    raise serializers.ValidationError(gettext("Config type: %s need link_table") % config_type)
+        return attrs
