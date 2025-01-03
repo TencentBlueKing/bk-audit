@@ -209,13 +209,11 @@
     useRouter,
   } from 'vue-router';
 
-  import StatementManageService from '@service/statement-manage';
-
   import ConfigModel from '@model/root/config';
 
   import useEventBus from '@hooks/use-event-bus';
+  import useFeature from '@hooks/use-feature';
   import usePlatformConfig from '@hooks/use-platform-config';
-  import useRequest from '@hooks/use-request';
 
   import AuditMenu from '@components/audit-menu/index.vue';
   import AuditMenuItem from '@components/audit-menu/item.vue';
@@ -247,12 +245,7 @@
   const platformConfig = usePlatformConfig();
 
   // 是否展示审计报表导航
-  const {
-    data: hasBkvision,
-  } = useRequest(StatementManageService.fetchHasBkvision, {
-    manual: true,
-    defaultValue: { enabled: false },
-  });
+  const { feature: hasBkvision } = useFeature('bkvision');
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
   on('statement-menuData', (data) => {

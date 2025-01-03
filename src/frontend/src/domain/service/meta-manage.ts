@@ -34,6 +34,14 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 根据特性id获取特性开关
+   * @param { String } feature_id
+   */
+  fetchFeature(params: {feature_id: string}) {
+    return MetaManageSource.getFeature(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取 Namespace 列表
    */
   fetchNamespaceList() {

@@ -164,7 +164,9 @@
   */
   const checkPermission = async () => {
     const { access_global_setting: accessGlobalSetting = false } = await IamManageService.check({ action_ids: 'access_global_setting' });
-    const { enabled = false } = await CollectorManageService.fetchResourceFeature();
+    const { enabled = false } = await MetaManageService.fetchFeature({
+      feature_id: 'bkbase_aiops',
+    });
     controlsPermission.value =  accessGlobalSetting && enabled;
   };
 
