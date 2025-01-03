@@ -154,14 +154,7 @@
       width: '250px',
       render: ({ data }: {data: StorageModel}) => (
         <div>
-          <auth-button
-            permission={data.permission.edit_storage}
-            actionId="edit_storage"
-            text
-            theme="primary"
-            onClick={() => handleEdit(data)}>
-            {data.cluster_config.cluster_name}
-          </auth-button>
+          {data.cluster_config.cluster_name}
           {data.isDefault && <bk-tag class="ml8">{ t('默认') }</bk-tag>}
         </div>
       ),
