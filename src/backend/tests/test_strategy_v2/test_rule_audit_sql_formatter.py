@@ -16,77 +16,68 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from core.sql.builder import BKBaseQueryBuilder
-from core.sql.sql_builder import SQLGenerator
 from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType
 from services.web.strategy_v2.exceptions import LinkTableConfigError
-from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLFormatter
+from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLGenerator
+from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
 
 class TestRuleAuditSQLFormatter(TestCase):
     """
-    单元测试类，用于测试 RuleAuditSQLFormatter 的 JSON 结构和生成的 SQL 语句。
+    测试 RuleAuditSQLFormatter 的 build_sql 方法, 只关注最终产出的 SQL
     """
 
-    def setUp(self):
-        # 实例化 RuleAuditSQLFormatter
-        self.formatter = RuleAuditSQLFormatter()
-
-    def _generate_and_validate(self, config_json, expected_json_dict, expected_sql, mock_link_table_obj=None):
-        """
-        辅助方法：根据配置生成 SqlConfig 和 SQL，并进行断言。
-
-        Args:
-            config_json (dict): 前端传入的配置 JSON。
-            expected_json_dict (dict): 预期的 SqlConfig JSON 结构。
-            expected_sql (str): 预期生成的 SQL 语句。
-            mock_link_table_obj (MagicMock, optional): 模拟的 LinkTable 对象（用于联表场景）。
-        """
-        # 如果提供了 mock_link_table_obj，则设置 mock
+    def _build_and_assert_sql(self, strategy: Strategy, expected_sql: str, mock_link_table_obj=None):
+        formatter = RuleAuditSQLGenerator(strategy)
         if mock_link_table_obj:
             with patch(
-                "services.web.strategy_v2.handlers.rule_audit.get_object_or_404",
-                return_value=mock_link_table_obj,
+                "services.web.strategy_v2.handlers.rule_audit.get_object_or_404", return_value=mock_link_table_obj
             ):
-                sql_config = self.formatter.format(config_json)
+                actual_sql = formatter.build_sql()
         else:
-            sql_config = self.formatter.format(config_json)
+            actual_sql = formatter.build_sql()
 
-        # 序列化 SqlConfig 为 JSON 字符串，并转换为字典
-        actual_json_dict = json.loads(sql_config.model_dump_json())
+        self.assertEqual(actual_sql, expected_sql, f"\n生成的SQL 与预期不一致。\n实际:   {actual_sql}\n期望:   {expected_sql}")
 
-        # 断言 SqlConfig JSON 结构
-        self.assertDictEqual(
-            actual_json_dict,
-            expected_json_dict,
-            f"\n实际 JSON:\n{json.dumps(actual_json_dict, indent=2, ensure_ascii=False)}\n"
-            f"期望 JSON:\n{json.dumps(expected_json_dict, indent=2, ensure_ascii=False)}",
+    def test_single_table_no_where_no_system_ids(self):
+        """
+        最基本的单表配置, 无where, 无system_ids, select中1列
+        """
+        config_json = {
+            "config_type": RuleAuditConfigType.EVENT_LOG,
+            "data_source": {
+                "rt_id": "simple_rt",
+            },
+            "select": [
+                {
+                    "rt_id": "simple_rt",
+                    "raw_name": "fieldA",
+                    "display_name": "字段A",
+                    "field_type": "string",
+                    "aggregate": None,
+                }
+            ],
+            "where": None,  # 无where
+        }
+        event_basic_field_configs = []
+        strategy = Strategy(strategy_id=200, configs=config_json, event_basic_field_configs=event_basic_field_configs)
+
+        expected_sql = (
+            "SELECT JSON_OBJECT('字段A',`sub_table`.`字段A`) `event_data`,200 `strategy_id` "
+            "FROM (SELECT `fieldA` `字段A` FROM `simple_rt`) `sub_table`"
         )
-
-        # 生成 SQL
-        generator = SQLGenerator(query_builder=BKBaseQueryBuilder(), config=sql_config)
-        query = generator.generate()
-        actual_sql = str(query)
-
-        # 断言生成的 SQL 是否与预期一致
-        self.assertEqual(
-            actual_sql,
-            expected_sql,
-            f"\n实际 SQL:\n{actual_sql}\n期望 SQL:\n{expected_sql}",
-        )
+        self._build_and_assert_sql(strategy, expected_sql)
 
     def test_single_table_with_where_and_system_ids(self):
         """
         场景: 单表, config_type=EventLog, 前端有 where, data_source 中含 system_ids
-        验证生成的 SqlConfig JSON 和 SQL 是否与预期完全匹配
         """
         config_json = {
-            "config_type": RuleAuditConfigType.EVENT_LOG,  # "EventLog"
+            "config_type": RuleAuditConfigType.EVENT_LOG,
             "data_source": {"rt_id": "test_rt_id", "system_ids": ["sys_1", "sys_2"]},
             "select": [
                 {
@@ -113,147 +104,62 @@ class TestRuleAuditSQLFormatter(TestCase):
                 },
             },
         }
-
-        expected_json_dict = {
-            "select_fields": [
-                {
-                    "table": "test_rt_id",
-                    "raw_name": "event_id",
-                    "display_name": "事件ID",
-                    "field_type": "string",
-                    "aggregate": None,
-                }
-            ],
-            "from_table": "test_rt_id",
-            "join_tables": [],
-            "where": {
-                "connector": "and",
-                "conditions": [
-                    {
-                        "connector": "and",
-                        "conditions": [],
-                        "condition": {
-                            "field": {
-                                "table": "test_rt_id",
-                                "raw_name": "username",
-                                "display_name": "操作人",
-                                "field_type": "string",
-                                "aggregate": None,
-                            },
-                            "operator": "eq",
-                            "filters": [],
-                            "filter": "admin",
-                        },
-                    },
-                    {
-                        "connector": "and",
-                        "conditions": [],
-                        "condition": {
-                            "field": {
-                                "table": "test_rt_id",
-                                "raw_name": "system_id",
-                                "display_name": "system_id",
-                                "field_type": "string",
-                                "aggregate": None,
-                            },
-                            "operator": "include",
-                            "filters": ["sys_1", "sys_2"],
-                            "filter": "",
-                        },
-                    },
-                ],
-                "condition": None,
-            },
-            "group_by": [],
-            "order_by": [],
-            "pagination": None,
-        }
-
+        event_basic_field_configs = []
+        strategy = Strategy(strategy_id=101, configs=config_json, event_basic_field_configs=event_basic_field_configs)
         expected_sql = (
+            "SELECT JSON_OBJECT('事件ID',`sub_table`.`事件ID`) `event_data`,101 `strategy_id` "
+            "FROM ("
             "SELECT `event_id` `事件ID` "
             "FROM `test_rt_id` "
             "WHERE `username`='admin' "
-            "AND `system_id` IN ('sys_1','sys_2')"
+            "AND `system_id` IN ('sys_1','sys_2')) `sub_table`"
         )
-        # 调用辅助方法进行断言
-        self._generate_and_validate(config_json, expected_json_dict, expected_sql)
+        self._build_and_assert_sql(strategy, expected_sql)
 
-    def test_single_table_no_where_with_system_ids(self):
+    def test_single_table_with_field_mapping(self):
         """
-        场景: 单表, config_type=EventLog, 无前端 where, data_source 中含 system_ids
-        只应生成一条 system_id IN(...) 的 where 条件
+        单表+field_mapping, 测试 target_value / source_field。
         """
         config_json = {
             "config_type": RuleAuditConfigType.EVENT_LOG,
-            "data_source": {"rt_id": "my_single_rt", "system_ids": ["sys_a", "sys_b"]},
+            "data_source": {"rt_id": "my_rt"},
             "select": [
                 {
-                    "rt_id": "my_single_rt",
-                    "raw_name": "id",
-                    "display_name": "ID",
+                    "rt_id": "my_rt",
+                    "raw_name": "colA",
+                    "display_name": "列A",
                     "field_type": "string",
                     "aggregate": None,
-                }
+                },
+                {
+                    "rt_id": "my_rt",
+                    "raw_name": "colB",
+                    "display_name": "列B",
+                    "field_type": "string",
+                    "aggregate": None,
+                },
             ],
             "where": None,
         }
-
-        expected_json_dict = {
-            "select_fields": [
-                {
-                    "table": "my_single_rt",
-                    "raw_name": "id",
-                    "display_name": "ID",
-                    "field_type": "string",
-                    "aggregate": None,
-                }
-            ],
-            "from_table": "my_single_rt",
-            "join_tables": [],
-            "where": {
-                "connector": "and",
-                "conditions": [
-                    {
-                        "connector": "and",
-                        "conditions": [],
-                        "condition": {
-                            "field": {
-                                "table": "my_single_rt",
-                                "raw_name": "system_id",
-                                "display_name": "system_id",
-                                "field_type": "string",
-                                "aggregate": None,
-                            },
-                            "operator": "include",
-                            "filters": ["sys_a", "sys_b"],
-                            "filter": "",
-                        },
-                    }
-                ],
-                "condition": None,
-            },
-            "group_by": [],
-            "order_by": [],
-            "pagination": None,
-        }
+        event_basic_field_configs = [
+            {"field_name": "fixed_col", "map_config": {"target_value": "abcdef"}},
+            {"field_name": "mapped_col", "map_config": {"source_field": "列B"}},
+        ]
+        strategy = Strategy(strategy_id=300, configs=config_json, event_basic_field_configs=event_basic_field_configs)
 
         expected_sql = (
-            "SELECT `my_single_rt`.`id` AS `ID` "
-            "FROM `my_single_rt` "
-            "WHERE (`my_single_rt`.`system_id` IN ('sys_a','sys_b'))"
+            "SELECT JSON_OBJECT('列A',`sub_table`.`列A`,'列B',`sub_table`.`列B`) `event_data`,300 `strategy_id`,"
+            "'abcdef' `fixed_col`,`sub_table`.`列B` `mapped_col` "
+            "FROM (SELECT `colA` `列A`,`colB` `列B` FROM `my_rt`) `sub_table`"
         )
-        expected_sql = "SELECT `id` `ID` " "FROM `my_single_rt` " "WHERE `system_id` IN ('sys_a','sys_b')"
-
-        # 调用辅助方法进行断言
-        self._generate_and_validate(config_json, expected_json_dict, expected_sql)
+        self._build_and_assert_sql(strategy, expected_sql)
 
     @patch("services.web.strategy_v2.handlers.rule_audit.get_object_or_404")
-    def test_link_table_with_system_ids(self, mock_get_obj):
+    def test_link_table_simple(self, mock_get_obj):
         """
-        场景: 联表, 模拟 LinkTable 配置, 注入 system_ids
-        这里演示1条 link, left_table=EVENT_LOG, right_table=Asset
+        测试联表场景, mock 返回 LinkTable
+        只关心 build_sql 的最终结果
         """
-        # 模拟 get_object_or_404 返回的 LinkTable 对象
         mock_link_table_obj = MagicMock()
         mock_link_table_obj.config = {
             "links": [
@@ -262,21 +168,16 @@ class TestRuleAuditSQLFormatter(TestCase):
                     "link_fields": [{"left_field": "event_id", "right_field": "resource_id"}],
                     "left_table": {
                         "rt_id": "log_rt_1",
-                        "table_type": LinkTableTableType.EVENT_LOG,  # EVENT_LOG
+                        "table_type": LinkTableTableType.EVENT_LOG,
                         "system_ids": ["sys_111"],
                     },
-                    "right_table": {
-                        "rt_id": "asset_rt_2",
-                        "table_type": "Asset",
-                        "system_ids": [],
-                    },  # 非EVENT_LOG
+                    "right_table": {"rt_id": "asset_rt_2", "table_type": "Asset", "system_ids": []},
                 }
             ]
         }
-
         config_json = {
-            "config_type": RuleAuditConfigType.LINK_TABLE,  # "LinkTable"
-            "data_source": {"link_table": {"uid": "demo_link_uid", "version": 1}},
+            "config_type": "LinkTable",
+            "data_source": {"link_table": {"uid": "demo_uid", "version": 1}},
             "select": [
                 {
                     "rt_id": "log_rt_1",
@@ -286,235 +187,46 @@ class TestRuleAuditSQLFormatter(TestCase):
                     "aggregate": None,
                 }
             ],
-            "where": None,  # 无前端条件
-        }
-
-        expected_json_dict = {
-            "select_fields": [
-                {
-                    "table": "log_rt_1",
-                    "raw_name": "event_id",
-                    "display_name": "事件ID",
-                    "field_type": "string",
-                    "aggregate": None,
-                }
-            ],
-            "from_table": "log_rt_1",
-            "join_tables": [
-                {
-                    "join_type": "left_join",
-                    "link_fields": [{"left_field": "event_id", "right_field": "resource_id"}],
-                    "left_table": "log_rt_1",
-                    "right_table": "asset_rt_2",
-                }
-            ],
-            "where": {
-                "connector": "and",
-                "conditions": [
-                    {
-                        "connector": "and",
-                        "conditions": [],
-                        "condition": {
-                            "field": {
-                                "table": "log_rt_1",
-                                "raw_name": "system_id",
-                                "display_name": "system_id",
-                                "field_type": "string",
-                                "aggregate": None,
-                            },
-                            "operator": "include",
-                            "filters": ["sys_111"],
-                            "filter": "",
-                        },
-                    }
-                ],
-                "condition": None,
-            },
-            "group_by": [],
-            "order_by": [],
-            "pagination": None,
-        }
-
-        expected_sql = (
-            "SELECT `log_rt_1`.`event_id` `事件ID` "
-            "FROM `log_rt_1` "
-            "LEFT JOIN `asset_rt_2` ON `log_rt_1`.`event_id`=`asset_rt_2`.`resource_id` "
-            "WHERE `log_rt_1`.`system_id` IN ('sys_111')"
-        )
-        # 设置 mock 返回值
-        mock_get_obj.return_value = mock_link_table_obj
-
-        # 调用辅助方法进行断言
-        self._generate_and_validate(
-            config_json,
-            expected_json_dict,
-            expected_sql,
-            mock_link_table_obj=mock_link_table_obj,
-        )
-
-    @patch("services.web.strategy_v2.handlers.rule_audit.get_object_or_404")
-    def test_link_table_with_multiple_links_and_multiple_event_logs(self, mock_get_obj):
-        """
-        场景: 联表配置下, 存在多条 link, 其中多个表都是 EVENT_LOG, 均应注入 system_ids
-        """
-        # 模拟 get_object_or_404 返回的 LinkTable 对象
-        mock_link_table_obj = MagicMock()
-        mock_link_table_obj.config = {
-            "links": [
-                {
-                    "join_type": "left_join",
-                    "link_fields": [{"left_field": "event_id", "right_field": "id1"}],
-                    "left_table": {
-                        "rt_id": "log_rt_A",
-                        "table_type": LinkTableTableType.EVENT_LOG,
-                        "system_ids": ["sys_a1", "sys_a2"],
-                    },
-                    "right_table": {
-                        "rt_id": "log_rt_B",
-                        "table_type": LinkTableTableType.EVENT_LOG,
-                        "system_ids": ["sys_b1"],
-                    },
-                },
-                {
-                    "join_type": "inner_join",
-                    "link_fields": [{"left_field": "id2", "right_field": "id3"}],
-                    "left_table": {
-                        "rt_id": "log_rt_B",
-                        "table_type": LinkTableTableType.EVENT_LOG,
-                        "system_ids": ["sys_b1"],  # 同样: EVENT_LOG
-                    },
-                    "right_table": {
-                        "rt_id": "asset_rt_C",
-                        "table_type": "Asset",
-                        "system_ids": [],
-                    },
-                },
-            ]
-        }
-
-        config_json = {
-            "config_type": RuleAuditConfigType.LINK_TABLE,
-            "data_source": {"link_table": {"uid": "multi_link_uid", "version": 2}},
-            "select": [
-                {
-                    "rt_id": "log_rt_B",
-                    "raw_name": "event_name",
-                    "display_name": "事件名称",
-                    "field_type": "string",
-                    "aggregate": None,
-                }
-            ],
             "where": None,
         }
-
-        expected_json_dict = {
-            "select_fields": [
-                {
-                    "table": "log_rt_B",
-                    "raw_name": "event_name",
-                    "display_name": "事件名称",
-                    "field_type": "string",
-                    "aggregate": None,
-                }
-            ],
-            "from_table": "log_rt_A",  # 第一个 link 的 left_table
-            "join_tables": [
-                {
-                    "join_type": "left_join",
-                    "link_fields": [{"left_field": "event_id", "right_field": "id1"}],
-                    "left_table": "log_rt_A",
-                    "right_table": "log_rt_B",
-                },
-                {
-                    "join_type": "inner_join",
-                    "link_fields": [{"left_field": "id2", "right_field": "id3"}],
-                    "left_table": "log_rt_B",
-                    "right_table": "asset_rt_C",
-                },
-            ],
-            "where": {
-                "connector": "and",
-                "conditions": [
-                    {
-                        "connector": "and",
-                        "conditions": [],
-                        "condition": {
-                            "field": {
-                                "table": "log_rt_A",
-                                "raw_name": "system_id",
-                                "display_name": "system_id",
-                                "field_type": "string",
-                                "aggregate": None,
-                            },
-                            "operator": "include",
-                            "filters": ["sys_a1", "sys_a2"],
-                            "filter": "",
-                        },
-                    },
-                    {
-                        "connector": "and",
-                        "conditions": [],
-                        "condition": {
-                            "field": {
-                                "table": "log_rt_B",
-                                "raw_name": "system_id",
-                                "display_name": "system_id",
-                                "field_type": "string",
-                                "aggregate": None,
-                            },
-                            "operator": "include",
-                            "filters": ["sys_b1"],
-                            "filter": "",
-                        },
-                    },
-                ],
-                "condition": None,
-            },
-            "group_by": [],
-            "order_by": [],
-            "pagination": None,
-        }
+        event_basic_field_configs = [
+            {"field_name": "operator_name", "map_config": {"source_field": "username", "target_value": None}},
+            {"field_name": "bk_biz_id", "map_config": {"target_value": "123"}},
+        ]
+        strategy = Strategy(strategy_id=999, configs=config_json, event_basic_field_configs=event_basic_field_configs)
 
         expected_sql = (
-            "SELECT `log_rt_B`.`event_name` `事件名称` "
-            "FROM `log_rt_A` "
-            "LEFT JOIN `log_rt_B` ON `log_rt_A`.`event_id`=`log_rt_B`.`id1` "
-            "JOIN `asset_rt_C` ON `log_rt_B`.`id2`=`asset_rt_C`.`id3` "
-            "WHERE `log_rt_A`.`system_id` IN ('sys_a1','sys_a2') "
-            "AND `log_rt_B`.`system_id` IN ('sys_b1')"
+            "SELECT JSON_OBJECT('事件ID',`sub_table`.`事件ID`) `event_data`,999 `strategy_id`,"
+            "`sub_table`.`username` `operator_name`,'123' `bk_biz_id` "
+            "FROM ("
+            "SELECT `log_rt_1`.`event_id` `事件ID` "
+            "FROM `log_rt_1` "
+            "LEFT JOIN `asset_rt_2` "
+            "ON `log_rt_1`.`event_id`=`asset_rt_2`.`resource_id` "
+            "WHERE `log_rt_1`.`system_id` IN ('sys_111')) `sub_table`"
         )
-        # 设置 mock 返回值
-        mock_get_obj.return_value = mock_link_table_obj
+        self._build_and_assert_sql(strategy, expected_sql, mock_link_table_obj=mock_link_table_obj)
 
-        # 调用辅助方法进行断言
-        self._generate_and_validate(
-            config_json,
-            expected_json_dict,
-            expected_sql,
-            mock_link_table_obj=mock_link_table_obj,
-        )
-
-    @patch("services.web.strategy_v2.handlers.rule_audit.get_object_or_404")
-    def test_link_table_config_empty_links(self, mock_get_obj):
+    def test_link_table_config_empty_links(self):
         """
-        场景: 联表配置错误, links 为空, 应抛出 ValueError 或自定义异常
+        测试当 links 为空时, build_sql 内部会调用 format => LinkTableConfigError
         """
-        # 模拟 get_object_or_404 返回的 LinkTable 对象
         mock_link_table_obj = MagicMock()
-        mock_link_table_obj.config = {"links": []}  # 空 links
+        mock_link_table_obj.config = {"links": []}
 
-        config_json = {
-            "config_type": RuleAuditConfigType.LINK_TABLE,
-            "data_source": {"link_table": {"uid": "uid_empty_links", "version": 1}},
-            "select": [],
-        }
+        strategy = Strategy(
+            strategy_id=1000,
+            configs={
+                "config_type": "LinkTable",
+                "data_source": {"link_table": {"uid": "emptylinks_uid", "version": 1}},
+                "select": [],
+            },
+            event_basic_field_configs=[],
+        )
 
-        # 设置 mock 返回值
-        mock_get_obj.return_value = mock_link_table_obj
-
-        # 期望: 由于 links 为空, 应该抛出异常
-        with self.assertRaises(LinkTableConfigError):
-            self.formatter.format(config_json)
+        with patch("services.web.strategy_v2.handlers.rule_audit.get_object_or_404", return_value=mock_link_table_obj):
+            with self.assertRaises(LinkTableConfigError):
+                RuleAuditSQLGenerator(strategy).build_sql()
 
 
 if __name__ == "__main__":

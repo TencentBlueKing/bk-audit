@@ -32,6 +32,7 @@ from services.web.analyze.constants import (
 )
 from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control, ControlVersion
+from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
@@ -58,13 +59,31 @@ from services.web.strategy_v2.exceptions import (
 from services.web.strategy_v2.models import LinkTable, Strategy
 
 
+class MapFieldSerializer(serializers.Serializer):
+    source_field = serializers.CharField(
+        label=gettext_lazy("Source Field"), required=False, help_text=gettext_lazy("来源字段的display_name，在查询中唯一")
+    )
+    target_value = serializers.CharField(
+        label=gettext_lazy("Target Value"), required=False, help_text=gettext_lazy("固定值")
+    )
+
+    def validate(self, attrs):
+        # 来源字段和目标值至少设置一个,优先级：目标值>来源字段
+        attrs = super().validate(attrs)
+        if not any([attrs.get("source_field"), attrs.get("target_value")]):
+            raise serializers.ValidationError(gettext("Source Field or Target Value must be set at least one"))
+        return attrs
+
+
 class EventFieldSerializer(serializers.Serializer):
     field_name = serializers.CharField(label=gettext_lazy("Field Name"))
     display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
     is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
     description = serializers.CharField(label=gettext_lazy("Field Description"), default="", allow_blank=True)
-    map_field = serializers.CharField(label=gettext_lazy("Map Field"), default=None, allow_null=True, allow_blank=True)
-    value = serializers.CharField(label=gettext_lazy("Field Value"), default="", allow_blank=True)
+
+
+class EventBasicFieldSerializer(EventFieldSerializer):
+    map_config = MapFieldSerializer(label=gettext_lazy("Map Field"), required=False)
 
 
 class StrategySerializer(serializers.Serializer):
@@ -114,6 +133,22 @@ class StrategySerializer(serializers.Serializer):
         validated_request_data["configs"] = configs_serializer.validated_data
         return validated_request_data
 
+    def _validate_event_basic_field_configs(self, validated_request_data: dict):
+        """
+        校验事件基本信息字段配置
+        """
+
+        strategy_type = validated_request_data["strategy_type"]
+        if strategy_type != StrategyType.RULE.value:
+            return
+        event_basic_field_configs = validated_request_data["event_basic_field_configs"]
+        mapped_fields = {field["field_name"] for field in event_basic_field_configs if field.get("map_config")}
+        # 检查需要配置映射的字段
+        for field in EVENT_BASIC_MAP_FIELDS:
+            if field.field_name not in mapped_fields:
+                raise serializers.ValidationError(gettext("%s Need to configure mapping") % field.description)
+        return validated_request_data
+
 
 class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSerializer):
     """
@@ -124,7 +159,10 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), default=list
     )
     event_basic_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+        label=gettext_lazy("Event Basic Field Configs"),
+        child=EventBasicFieldSerializer(),
+        default=list,
+        allow_empty=True,
     )
     event_data_field_configs = serializers.ListField(
         label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
@@ -178,6 +216,8 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
         # check configs
         self._validate_configs(data)
+        # check event_basic_field_configs
+        self._validate_event_basic_field_configs(data)
         return data
 
 
@@ -201,7 +241,10 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     )
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
     event_basic_field_configs = serializers.ListField(
-        label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
+        label=gettext_lazy("Event Basic Field Configs"),
+        child=EventBasicFieldSerializer(),
+        default=list,
+        allow_empty=True,
     )
     event_data_field_configs = serializers.ListField(
         label=gettext_lazy("Event Data Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
@@ -260,6 +303,8 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
         # check configs
         self._validate_configs(data)
+        # check event_basic_field_configs
+        self._validate_event_basic_field_configs(data)
         return data
 
 

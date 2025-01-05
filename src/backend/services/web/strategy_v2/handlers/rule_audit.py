@@ -15,10 +15,15 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import List, Optional
 
 from django.shortcuts import get_object_or_404
+from pydantic import BaseModel
+from pypika import CustomFunction
+from pypika.terms import Function, ValueWrapper
 
 from apps.meta.utils.fields import SYSTEM_ID
+from core.sql.builder import BKBaseQueryBuilder
 from core.sql.constants import FilterConnector, Operator
 from core.sql.model import (
     Condition,
@@ -28,15 +33,38 @@ from core.sql.model import (
     SqlConfig,
     WhereCondition,
 )
+from core.sql.sql_builder import SQLGenerator
+from services.web.risk.constants import EventMappingFields
 from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType
 from services.web.strategy_v2.exceptions import LinkTableConfigError
-from services.web.strategy_v2.models import LinkTable
+from services.web.strategy_v2.models import LinkTable, Strategy
 
 
-class RuleAuditSQLFormatter:
+class JsonObject(CustomFunction):
+    def __init__(self):
+        super().__init__('JSON_OBJECT', ["*"])
+
+    def __call__(self, *args, **kwargs) -> Function:
+        return Function(self.name, *args, alias=kwargs.get("alias"))
+
+
+class FieldMap(BaseModel):
     """
-    将前端 JSON 格式的审计配置，转换为 SQLGenerator 可识别的 SqlConfig。
+    字段映射,来源字段和固定值至少设置一个,优先级：固定值>来源字段
     """
+
+    source_field: Optional[str] = None  # 来源字段的display_name
+    target_value: Optional[str] = None  # 固定值
+
+
+class RuleAuditSQLGenerator:
+    """
+    规则审计 SQL 生成器
+    """
+
+    def __init__(self, strategy: Strategy):
+        self.strategy = strategy
+        self.query_builder = BKBaseQueryBuilder()
 
     def parse_where_condition(self, where_json: dict) -> WhereCondition:
         """
@@ -205,3 +233,39 @@ class RuleAuditSQLFormatter:
             join_tables=join_tables,
             where=final_where,
         )
+
+    def build_sql(self) -> str:
+        """
+        将规则审计策略生成 sql
+        field_mapping 中的 key 为 select 中的字段名，value 为 FieldMap 对象,用于映射字段
+        """
+
+        config_json: dict = self.strategy.configs
+        event_basic_field_configs: List[dict] = self.strategy.event_basic_field_configs
+        field_mapping = {
+            field["field_name"]: FieldMap(**field["map_config"])
+            for field in event_basic_field_configs
+            if field.get("map_config")
+        }
+        # 1. 生成子查询 (sub_table)
+        sql_config = self.format(config_json)
+        sub_table = SQLGenerator(query_builder=self.query_builder, config=sql_config).generate().as_("sub_table")
+        # 2. 构造 JSON_OBJECT(...) 参数
+        json_obj_args = []
+        for field in sql_config.select_fields:
+            json_obj_args.extend([ValueWrapper(field.display_name), sub_table.field(field.display_name)])
+        # 3. 最外层 select 列表
+        #    3.1 JSON_OBJECT(...) => event_data
+        #    3.2 strategy_id => strategy_id
+        #    3.3 其他字段 => 来自 field_mapping
+        select_fields = [
+            JsonObject()(*json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name),
+            ValueWrapper(self.strategy.strategy_id, EventMappingFields.STRATEGY_ID.field_name),
+        ]
+        for field_name, map_config in field_mapping.items():
+            if map_config.target_value:
+                select_fields.append(ValueWrapper(map_config.target_value, field_name))
+            elif map_config.source_field:
+                select_fields.append(sub_table.field(map_config.source_field).as_(field_name))
+        # 4. 构建最终查询: from sub_table select ...
+        return str(self.query_builder.from_(sub_table).select(*select_fields))

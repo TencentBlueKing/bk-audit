@@ -52,8 +52,6 @@ from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
-from core.sql.builder import BKBaseQueryBuilder
-from core.sql.sql_builder import SQLGenerator
 from core.utils.page import paginate_queryset
 from core.utils.tools import choices_to_dict
 from services.web.analyze.constants import (
@@ -95,7 +93,7 @@ from services.web.strategy_v2.exceptions import (
     StrategyPendingError,
     StrategyTypeCanNotChange,
 )
-from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLFormatter
+from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLGenerator
 from services.web.strategy_v2.models import (
     LinkTable,
     LinkTableTag,
@@ -163,14 +161,12 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             StrategyType.MODEL: BaseControlTypeChoices.CONTROL.value,
         }.get(strategy_type)
 
-    def build_rule_audit_sql(self, configs: dict) -> str:
+    def build_rule_audit_sql(self, strategy: Strategy) -> str:
         """
         构建规则审计SQL
         """
 
-        sql_config = RuleAuditSQLFormatter().format(config_json=configs)
-        sql = str(SQLGenerator(query_builder=BKBaseQueryBuilder(), config=sql_config).generate())
-        return sql
+        return RuleAuditSQLGenerator(strategy).build_sql()
 
 
 class CreateStrategy(StrategyV2Base):
@@ -181,8 +177,6 @@ class CreateStrategy(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         strategy_type = validated_request_data.get("strategy_type")
-        if strategy_type == StrategyType.RULE:
-            validated_request_data["sql"] = self.build_rule_audit_sql()
         with transaction.atomic():
             # pop tag
             tag_names = validated_request_data.pop("tags", [])
@@ -190,6 +184,9 @@ class CreateStrategy(StrategyV2Base):
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
             # save strategy tag
             self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+            if strategy_type == StrategyType.RULE:
+                strategy.sql = self.build_rule_audit_sql(strategy)
+                strategy.save(update_fields=["sql"])
         # create
         try:
             call_controller(
@@ -230,8 +227,6 @@ class UpdateStrategy(StrategyV2Base):
         # 不允许修改策略类型
         if validated_request_data["strategy_type"] != strategy.strategy_type:
             raise StrategyTypeCanNotChange()
-        if strategy.strategy_type == StrategyType.RULE:
-            validated_request_data["sql"] = self.build_rule_audit_sql()
         # save origin data
         instance_origin_data = StrategyInfoSerializer(strategy).data
         # update db
@@ -270,6 +265,10 @@ class UpdateStrategy(StrategyV2Base):
         strategy.save(update_fields=validated_request_data.keys())
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+        # update rule audit sql
+        if strategy.strategy_type == StrategyType.RULE:
+            strategy.sql = self.build_rule_audit_sql(strategy)
+            strategy.save(update_fields=["sql"])
         # return
         return need_update_remote
 
