@@ -335,7 +335,7 @@ class ListStrategy(StrategyV2Base):
             strategy_ids = StrategyTag.objects.filter(tag_id__in=validated_request_data["tag"]).values("strategy_id")
             queryset = queryset.filter(strategy_id__in=strategy_ids)
         # exact filter
-        for key in ["strategy_id", "status"]:
+        for key in ["strategy_id", "status", "strategy_type", "link_table_uid"]:
             if validated_request_data.get(key):
                 queryset = queryset.filter(**{f"{key}__in": validated_request_data[key]})
         # fuzzy filter
@@ -345,9 +345,6 @@ class ListStrategy(StrategyV2Base):
                 for item in validated_request_data[key]:
                     q |= Q(**{f"{key}__contains": item})
                 queryset = queryset.filter(q)
-        # link_table_uid filter
-        if validated_request_data.get("link_table_uid"):
-            queryset = queryset.filter(link_table_uid=validated_request_data["link_table_uid"])
         # add tags
         all_tags = StrategyTag.objects.filter(strategy_id__in=queryset.values("strategy_id"))
         tag_map = defaultdict(list)
