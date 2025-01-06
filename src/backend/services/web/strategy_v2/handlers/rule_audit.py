@@ -15,12 +15,12 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from django.shortcuts import get_object_or_404
 from pydantic import BaseModel
-from pypika import CustomFunction
-from pypika.terms import Function, ValueWrapper
+from pypika import functions as fn
+from pypika.terms import Term, ValueWrapper
 
 from apps.meta.utils.fields import SYSTEM_ID
 from core.sql.builder import BKBaseQueryBuilder
@@ -40,12 +40,30 @@ from services.web.strategy_v2.exceptions import LinkTableConfigError
 from services.web.strategy_v2.models import LinkTable, Strategy
 
 
-class JsonObject(CustomFunction):
-    def __init__(self):
-        super().__init__('JSON_OBJECT', ["*"])
+def make_json_string_expr(pairs: Dict[str, Term | ValueWrapper]):
+    """
+    使用 fn.Concat 构造一个形如: {"key1":"val1","key2":"val2"} 的字符串。
+    返回: fn.Concat(...) 代表一个 PyPika 表达式
+    """
 
-    def __call__(self, *args, **kwargs) -> Function:
-        return Function(self.name, *args, alias=kwargs.get("alias"))
+    segments = [ValueWrapper('{')]
+
+    for i, (json_key, expr) in enumerate(pairs.items()):
+        if i > 0:
+            # 不是第一个就先加逗号
+            segments.append(ValueWrapper(','))
+
+        # 拼接 "key":"value" => "json_key":" + expr + "
+        # key 部分
+        segments.append(ValueWrapper(f'"{json_key}":"'))
+
+        # 值部分
+        # 假设都当成字符串处理 => expr 后面补一个双引号
+        segments.append(expr)  # 这里是子查询列 or ValueWrapper(...)
+        segments.append(ValueWrapper('"'))
+
+    segments.append(ValueWrapper('}'))  # 结尾大括号
+    return fn.Concat(*segments)
 
 
 class FieldMap(BaseModel):
@@ -70,7 +88,7 @@ class RuleAuditSQLGenerator:
         """
         解析前端的 where JSON，转换为内部 WhereCondition（可能是一个条件组或单个条件）。
         """
-        connector = where_json["connector"]
+        connector = where_json.get("connector", FilterConnector.AND)
 
         # 如果是单个 condition
         if condition := where_json.get("condition"):
@@ -251,15 +269,13 @@ class RuleAuditSQLGenerator:
         sql_config = self.format(config_json)
         sub_table = SQLGenerator(query_builder=self.query_builder, config=sql_config).generate().as_("sub_table")
         # 2. 构造 JSON_OBJECT(...) 参数
-        json_obj_args = []
-        for field in sql_config.select_fields:
-            json_obj_args.extend([ValueWrapper(field.display_name), sub_table.field(field.display_name)])
+        json_obj_args = {field.display_name: sub_table.field(field.display_name) for field in sql_config.select_fields}
         # 3. 最外层 select 列表
         #    3.1 JSON_OBJECT(...) => event_data
         #    3.2 strategy_id => strategy_id
         #    3.3 其他字段 => 来自 field_mapping
         select_fields = [
-            JsonObject()(*json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name),
+            make_json_string_expr(json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name),
             ValueWrapper(self.strategy.strategy_id, EventMappingFields.STRATEGY_ID.field_name),
         ]
         for field_name, map_config in field_mapping.items():

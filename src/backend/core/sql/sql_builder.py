@@ -57,7 +57,7 @@ class SQLGenerator:
                 valid_tables.add(join_table.right_table)
         # 记录所有表名对应的 Table 对象
         for table_name in valid_tables:
-            self.table_map[table_name] = Table(table_name)
+            self.table_map[table_name] = Table(table_name).as_(table_name)
 
     def _get_table(self, table_name: str) -> Table:
         """根据表名获取 Table 对象"""
