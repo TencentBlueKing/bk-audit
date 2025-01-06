@@ -74,6 +74,14 @@ class CollectorPlugin(OperateRecordModel):
     def make_table_id(cls, bk_biz_id, collector_plugin_name_en):
         return f"{bk_biz_id}_bklog.{collector_plugin_name_en.lower()}"
 
+    @classmethod
+    def build_result_table_id(cls, bk_biz_id, collector_plugin_name_en):
+        """
+        生成bkbase结果表ID
+        """
+
+        return cls.make_table_id(bk_biz_id, collector_plugin_name_en).replace(".", "_")
+
 
 class CollectorConfig(SoftDeleteModel):
     """

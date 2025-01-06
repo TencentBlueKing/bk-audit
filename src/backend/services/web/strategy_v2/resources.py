@@ -20,6 +20,7 @@ import abc
 import datetime
 import json
 from collections import defaultdict
+from functools import cached_property
 from typing import List, Optional
 
 from bk_resource import api, resource
@@ -54,13 +55,11 @@ from core.exceptions import PermissionException
 from core.utils.page import paginate_queryset
 from core.utils.tools import choices_to_dict
 from services.web.analyze.constants import (
-    ControlTypeChoices,
+    BaseControlTypeChoices,
     FilterOperator,
     OffsetUnit,
 )
-from services.web.analyze.controls.base import Controller
-from services.web.analyze.exceptions import ControlNotExist
-from services.web.analyze.models import Control
+from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
 from services.web.risk.constants import EVENT_BASIC_EXCLUDE_FIELDS, EventMappingFields
 from services.web.risk.models import Risk
@@ -76,6 +75,12 @@ from services.web.strategy_v2.constants import (
     LinkTableTableType,
     MappingType,
     RiskLevel,
+    RuleAuditAggregateType,
+    RuleAuditConditionOperator,
+    RuleAuditConfigType,
+    RuleAuditFieldType,
+    RuleAuditSourceType,
+    RuleAuditWhereConnector,
     StrategyAlgorithmOperator,
     StrategyOperator,
     StrategyStatusChoices,
@@ -86,7 +91,9 @@ from services.web.strategy_v2.exceptions import (
     ControlChangeError,
     LinkTableHasStrategy,
     StrategyPendingError,
+    StrategyTypeCanNotChange,
 )
+from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLGenerator
 from services.web.strategy_v2.models import (
     LinkTable,
     LinkTableTag,
@@ -95,8 +102,6 @@ from services.web.strategy_v2.models import (
     StrategyTag,
 )
 from services.web.strategy_v2.serializers import (
-    AIOPSConfigSerializer,
-    BKMStrategySerializer,
     CreateLinkTableRequestSerializer,
     CreateLinkTableResponseSerializer,
     CreateStrategyRequestSerializer,
@@ -145,17 +150,23 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names])
         StrategyTag.objects.bulk_create([StrategyTag(strategy_id=strategy_id, tag_id=t["tag_id"]) for t in tags])
 
-    def _validate_configs(self, validated_request_data: dict) -> None:
-        control_type_id = Control.objects.get(control_id=validated_request_data["control_id"]).control_type_id
-        if control_type_id == ControlTypeChoices.BKM.value:
-            configs_serializer_class = BKMStrategySerializer
-        elif control_type_id == ControlTypeChoices.AIOPS.value:
-            configs_serializer_class = AIOPSConfigSerializer
-        else:
-            raise ControlNotExist()
-        configs_serializer = configs_serializer_class(data=validated_request_data["configs"])
-        configs_serializer.is_valid(raise_exception=True)
-        validated_request_data["configs"] = configs_serializer.validated_data
+    @staticmethod
+    def get_base_control_type(strategy_type: str) -> Optional[str]:
+        """
+        获取基础控制类型
+        """
+
+        return {
+            StrategyType.RULE: BaseControlTypeChoices.RULE_AUDIT.value,
+            StrategyType.MODEL: BaseControlTypeChoices.CONTROL.value,
+        }.get(strategy_type)
+
+    def build_rule_audit_sql(self, strategy: Strategy) -> str:
+        """
+        构建规则审计SQL
+        """
+
+        return RuleAuditSQLGenerator(strategy).build_sql()
 
 
 class CreateStrategy(StrategyV2Base):
@@ -165,18 +176,22 @@ class CreateStrategy(StrategyV2Base):
     audit_action = ActionEnum.CREATE_STRATEGY
 
     def perform_request(self, validated_request_data):
+        strategy_type = validated_request_data.get("strategy_type")
         with transaction.atomic():
             # pop tag
             tag_names = validated_request_data.pop("tags", [])
-            # check configs
-            self._validate_configs(validated_request_data)
             # save strategy
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
             # save strategy tag
             self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+            if strategy_type == StrategyType.RULE:
+                strategy.sql = self.build_rule_audit_sql(strategy)
+                strategy.save(update_fields=["sql"])
         # create
         try:
-            call_controller(Controller.create.__name__, strategy.strategy_id)
+            call_controller(
+                BaseControl.create.__name__, strategy.strategy_id, self.get_base_control_type(strategy_type)
+            )
         except Exception as err:
             strategy.status = StrategyStatusChoices.START_FAILED
             strategy.status_msg = str(err)
@@ -209,6 +224,9 @@ class UpdateStrategy(StrategyV2Base):
             StrategyStatusChoices.STOPPING,
         ]:
             raise StrategyPendingError()
+        # 不允许修改策略类型
+        if validated_request_data["strategy_type"] != strategy.strategy_type:
+            raise StrategyTypeCanNotChange()
         # save origin data
         instance_origin_data = StrategyInfoSerializer(strategy).data
         # update db
@@ -228,10 +246,11 @@ class UpdateStrategy(StrategyV2Base):
         need_update_remote = False
         # pop tag
         tag_names = validated_request_data.pop("tags", [])
-        # check configs
-        self._validate_configs(validated_request_data)
         # check control
-        if strategy.control_id != validated_request_data["control_id"]:
+        if (
+            validated_request_data["strategy_type"] == StrategyType.MODEL
+            and strategy.control_id != validated_request_data["control_id"]
+        ):
             raise ControlChangeError()
         # check risk_level
         if strategy.risk_level is not None:
@@ -246,6 +265,10 @@ class UpdateStrategy(StrategyV2Base):
         strategy.save(update_fields=validated_request_data.keys())
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+        # update rule audit sql
+        if strategy.strategy_type == StrategyType.RULE:
+            strategy.sql = self.build_rule_audit_sql(strategy)
+            strategy.save(update_fields=["sql"])
         # return
         return need_update_remote
 
@@ -253,7 +276,9 @@ class UpdateStrategy(StrategyV2Base):
         strategy.status = StrategyStatusChoices.UPDATING
         strategy.save(update_fields=["status"])
         try:
-            call_controller(Controller.update.__name__, strategy.strategy_id)
+            call_controller(
+                BaseControl.update.__name__, strategy.strategy_id, self.get_base_control_type(strategy.strategy_type)
+            )
         except Exception as err:
             strategy.status = StrategyStatusChoices.UPDATE_FAILED
             strategy.status_msg = str(err)
@@ -272,7 +297,11 @@ class DeleteStrategy(StrategyV2Base):
         StrategyTag.objects.filter(strategy_id=validated_request_data["strategy_id"]).delete()
         # delete
         try:
-            call_controller(Controller.delete.__name__, validated_request_data["strategy_id"])
+            call_controller(
+                BaseControl.delete.__name__,
+                validated_request_data["strategy_id"],
+                self.get_base_control_type(strategy.strategy_type),
+            )
         except Exception as err:
             strategy.status = StrategyStatusChoices.DELETE_FAILED
             strategy.status_msg = str(err)
@@ -306,7 +335,7 @@ class ListStrategy(StrategyV2Base):
             strategy_ids = StrategyTag.objects.filter(tag_id__in=validated_request_data["tag"]).values("strategy_id")
             queryset = queryset.filter(strategy_id__in=strategy_ids)
         # exact filter
-        for key in ["strategy_id", "status"]:
+        for key in ["strategy_id", "status", "strategy_type", "link_table_uid"]:
             if validated_request_data.get(key):
                 queryset = queryset.filter(**{f"{key}__in": validated_request_data[key]})
         # fuzzy filter
@@ -316,9 +345,6 @@ class ListStrategy(StrategyV2Base):
                 for item in validated_request_data[key]:
                     q |= Q(**{f"{key}__contains": item})
                 queryset = queryset.filter(q)
-        # link_table_uid filter
-        if validated_request_data.get("link_table_uid"):
-            queryset = queryset.filter(link_table_uid=validated_request_data["link_table_uid"])
         # add tags
         all_tags = StrategyTag.objects.filter(strategy_id__in=queryset.values("strategy_id"))
         tag_map = defaultdict(list)
@@ -352,10 +378,11 @@ class ToggleStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
+        controller_cls = self.get_base_control_type(strategy.strategy_type)
         if validated_request_data["toggle"]:
-            call_controller(Controller.enable.__name__, strategy.strategy_id)
+            call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
             return
-        call_controller(Controller.disabled.__name__, strategy.strategy_id)
+        call_controller(BaseControl.disabled.__name__, strategy.strategy_id, controller_cls)
 
 
 class RetryStrategy(StrategyV2Base):
@@ -366,11 +393,13 @@ class RetryStrategy(StrategyV2Base):
         # load strategy
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         # try update
+        controller_cls = self.get_base_control_type(strategy.strategy_type)
+        need_update = strategy.backend_data and (
+            strategy.backend_data.get("id") or strategy.backend_data.get("flow_id")
+        )
+        func_name = BaseControl.update.__name__ if need_update else BaseControl.create.__name__
         try:
-            if strategy.backend_data and (strategy.backend_data.get("id") or strategy.backend_data.get("flow_id")):
-                call_controller(Controller.update.__name__, strategy.strategy_id)
-            else:
-                call_controller(Controller.create.__name__, strategy.strategy_id)
+            call_controller(func_name, strategy.strategy_id, controller_cls)
         except Exception as err:
             strategy.status = StrategyStatusChoices.FAILED
             strategy.status_msg = str(err)
@@ -378,10 +407,22 @@ class RetryStrategy(StrategyV2Base):
             raise err
 
 
-class ListHasUpdateStrategy(StrategyV2Base):
-    name = gettext_lazy("List Has Update Strategy")
+class StrategyJudge:
+    """
+    抽象基类，定义判断策略接口
+    """
 
-    def perform_request(self, validated_request_data):
+    def judge(self, strategy) -> bool:
+        raise NotImplementedError
+
+
+class ControlVersionJudge(StrategyJudge):
+    """
+    判断控制版本是否需要更新
+    """
+
+    @cached_property
+    def controls(self) -> dict:
         # load last control versions
         all_controls = resource.analyze.control()
         controls = {}
@@ -389,14 +430,56 @@ class ListHasUpdateStrategy(StrategyV2Base):
         for cv in all_controls:
             if cv["control_id"] not in controls.keys():
                 controls[cv["control_id"]] = cv["versions"][0]["control_version"]
+        return controls
+
+    def judge(self, strategy) -> bool:
+        return self.controls.get(strategy.control_id, strategy.control_version) > strategy.control_version
+
+
+class LinkTableVersionJudge(StrategyJudge):
+    """
+    判断联表版本是否需要更新
+    """
+
+    @cached_property
+    def link_tables(self) -> dict:
+        # 获取最新版本的联表
+        return {
+            link_table.uid: link_table.version
+            for link_table in list(LinkTable.list_max_version_link_table().only("uid", "version"))
+        }
+
+    def judge(self, strategy) -> bool:
+        return self.link_tables.get(strategy.link_table_uid, 0) > strategy.link_table_version
+
+
+class CompositeJudge(StrategyJudge):
+    """
+    组合多个判断策略
+    """
+
+    def __init__(self, *judges: StrategyJudge):
+        self.judges = judges
+
+    def judge(self, strategy) -> bool:
+        return any(judge.judge(strategy) for judge in self.judges)
+
+    def batch_judge(self, strategies: List[Strategy]) -> List[Strategy]:
+        return [s for s in strategies if self.judge(s)]
+
+
+class ListHasUpdateStrategy(StrategyV2Base):
+    name = gettext_lazy("List Has Update Strategy")
+
+    def perform_request(self, validated_request_data):
         # 获取所有策略
-        all_strategies = Strategy.objects.all()
+        all_strategies: List[Strategy] = list(Strategy.objects.all().defer("configs"))
         # 判断需要更新的数量
-        has_update = []
-        for s in all_strategies:
-            if controls.get(s.control_id, s.control_version) > s.control_version:
-                has_update.append(s)
-        return has_update
+        composite_judge = CompositeJudge(
+            ControlVersionJudge(),
+            LinkTableVersionJudge(),
+        )
+        return composite_judge.batch_judge(all_strategies)
 
 
 class ListStrategyTags(StrategyV2Base):
@@ -568,6 +651,12 @@ class GetStrategyCommon(StrategyV2Base):
             "strategy_type": choices_to_dict(StrategyType, val="value", name="label"),
             "link_table_join_type": choices_to_dict(LinkTableJoinType, val="value", name="label"),
             "link_table_table_type": choices_to_dict(LinkTableTableType, val="value", name="label"),
+            "rule_audit_aggregate_type": choices_to_dict(RuleAuditAggregateType, val="value", name="label"),
+            "rule_audit_field_type": choices_to_dict(RuleAuditFieldType, val="value", name="label"),
+            "rule_audit_config_type": choices_to_dict(RuleAuditConfigType, val="value", name="label"),
+            "rule_audit_source_type": choices_to_dict(RuleAuditSourceType, val="value", name="label"),
+            "rule_audit_condition_operator": choices_to_dict(RuleAuditConditionOperator, val="value", name="label"),
+            "rule_audit_where_connector": choices_to_dict(RuleAuditWhereConnector, val="value", name="label"),
         }
 
 

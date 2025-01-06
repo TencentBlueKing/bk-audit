@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-12-26 16:22+0800\n"
+"POT-Creation-Date: 2025-01-03 17:30+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2069,15 +2069,19 @@ msgstr "包含"
 msgid "Exclude"
 msgstr "不包含"
 
+#, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
 msgstr "表 '{table_name}' 未在配置中声明。"
 
+#, python-brace-format
 msgid "不支持的 JOIN 类型：'{join_type}'。"
 msgstr "不支持的 JOIN 类型：'{join_type}'。"
 
+#, python-brace-format
 msgid "不支持的操作符：'{operator}'。"
 msgstr "不支持的操作符：'{operator}'。"
 
+#, python-brace-format
 msgid "不支持的聚合类型：'{aggregate_type}'。"
 msgstr "不支持的聚合类型：'{aggregate_type}'。"
 
@@ -2201,6 +2205,12 @@ msgstr "数据源"
 msgid "数据开发"
 msgstr "数据开发"
 
+msgid "规则审计"
+msgstr "规则审计"
+
+msgid "控件"
+msgstr "控件"
+
 msgid "Create or Update Flow Failed"
 msgstr "创建或更新任务失败"
 
@@ -2213,6 +2223,9 @@ msgstr "集群不存在"
 
 msgid "Control Not Exists"
 msgstr "控件不存在"
+
+msgid "Not Support DataSource"
+msgstr "不支持的数据源"
 
 msgid "操作行为审计"
 msgstr "操作行为审计"
@@ -3493,6 +3506,9 @@ msgstr "策略类型不支持"
 msgid "策略类型不可修改"
 msgstr "策略类型不可修改"
 
+msgid "联表配置错误"
+msgstr "联表配置错误"
+
 msgid "Strategy Name"
 msgstr "策略名称"
 
@@ -3632,8 +3648,14 @@ msgstr "是否优先"
 msgid "Field Description"
 msgstr "字段描述"
 
-msgid "control_id and control_version_id are required when strategy_type is model"
-msgstr "当 strategy_type 为 model 时，必须提供 control_id 和 control_version_id"
+msgid "Map Field"
+msgstr "映射字段"
+
+msgid "Field Value"
+msgstr "字段值"
+
+msgid "control_id and control_version are required when strategy_type is model"
+msgstr "当 strategy_type 为 model 时，必须提供 control_id 和 control_version"
 
 msgid "link_table_uid and link_table_version are required when strategy_type is rule"
 msgstr "当 strategy_type 为 rule 时，必须提供 link_table_uid 和 link_table_version"
@@ -3826,6 +3848,9 @@ msgstr "连接"
 
 msgid "Link Table Config"
 msgstr "联表配置"
+
+msgid "逗号分隔的标签ID列表"
+msgstr "逗号分隔的标签ID列表"
 
 msgid "Link Table Count"
 msgstr "联表数"

@@ -46,7 +46,7 @@ class CacheLock:
         return cache.delete(self.lock_name)
 
 
-def lock(lock_name: str, *, load_lock_name: callable = None, timeout: int = settings.DEFAULT_CACHE_LOCK_TIMEOUT):
+def lock(lock_name: str = "", *, load_lock_name: callable = None, timeout: int = settings.DEFAULT_CACHE_LOCK_TIMEOUT):
     """
     并发锁装饰器
     """

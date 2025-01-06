@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Dict
+from typing import Dict, Optional
 
 from pypika import Field as PypikaField
 from pypika import Table
@@ -57,7 +57,7 @@ class SQLGenerator:
                 valid_tables.add(join_table.right_table)
         # 记录所有表名对应的 Table 对象
         for table_name in valid_tables:
-            self.table_map[table_name] = Table(table_name)
+            self.table_map[table_name] = Table(table_name).as_(table_name)
 
     def _get_table(self, table_name: str) -> Table:
         """根据表名获取 Table 对象"""
@@ -88,17 +88,19 @@ class SQLGenerator:
         if self.config.from_table:
             query = query.from_(self._get_table(self.config.from_table))
         if self.config.join_tables:
-            query = self._build_join(query)
+            query = self._build_join(self.config.from_table, query)
         return query
 
-    def _build_join(self, query: QueryBuilder) -> QueryBuilder:
+    def _build_join(self, from_table: Optional[str], query: QueryBuilder) -> QueryBuilder:
         """添加 JOIN 子句"""
         for join_table in self.config.join_tables:
             left_table = self._get_table(join_table.left_table)
+            if not from_table:
+                from_table = left_table
+                query = query.from_(from_table)
             right_table = self._get_table(join_table.right_table)
-            join_type_str = join_table.join_type.value.upper()
             try:
-                join_function = getattr(query, join_type_str.lower())
+                join_function = getattr(query, join_table.join_type.value.lower())
             except AttributeError:
                 raise UnsupportedJoinTypeError(join_table.join_type)
             if not join_function:

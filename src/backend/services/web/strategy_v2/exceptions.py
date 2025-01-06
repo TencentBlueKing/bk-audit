@@ -72,3 +72,9 @@ class StrategyTypeCanNotChange(StrategyV2Exception):
     SATUS_CODE = 400
     ERROR_CODE = "008"
     MESSAGE = gettext_lazy("策略类型不可修改")
+
+
+class LinkTableConfigError(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "009"
+    MESSAGE = gettext_lazy("联表配置错误")

@@ -169,6 +169,11 @@ class AIOpsController(Controller):
         if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
             self._toggle_strategy(FlowStatusToggleChoices.STOP.value)
 
+    def check_flow_status(self, strategy_id: int, success_status: str, failed_status: str, other_status: str):
+        if not AiopsFeature(help_text="check_flow_status").available:
+            return
+        return check_flow_status.delay(strategy_id, success_status, failed_status, other_status)
+
     def _toggle_strategy(self, status: str, force: bool = False) -> None:
         # update flow
         params = {
@@ -196,7 +201,7 @@ class AIOpsController(Controller):
                 self.strategy.status = StrategyStatusChoices.STARTING
                 self.strategy.save(update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
-                check_flow_status.delay(
+                self.check_flow_status(
                     strategy_id=self.strategy.strategy_id,
                     success_status=StrategyStatusChoices.RUNNING,
                     failed_status=StrategyStatusChoices.START_FAILED,
@@ -207,7 +212,7 @@ class AIOpsController(Controller):
                 self.strategy.status = StrategyStatusChoices.UPDATING
                 self.strategy.save(update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
-                check_flow_status.delay(
+                self.check_flow_status(
                     strategy_id=self.strategy.strategy_id,
                     success_status=StrategyStatusChoices.RUNNING,
                     failed_status=StrategyStatusChoices.UPDATE_FAILED,
@@ -218,9 +223,9 @@ class AIOpsController(Controller):
                 self.strategy.status = StrategyStatusChoices.STOPPING
                 self.strategy.save(update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=False)
-                check_flow_status.delay(
+                self.check_flow_status(
                     strategy_id=self.strategy.strategy_id,
-                    success_status=StrategyStatusChoices.DISABLED.value,
+                    success_status=StrategyStatusChoices.DISABLED,
                     failed_status=StrategyStatusChoices.STOP_FAILED,
                     other_status=StrategyStatusChoices.STOPPING,
                 )
