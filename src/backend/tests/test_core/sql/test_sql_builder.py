@@ -37,6 +37,7 @@ from core.sql.model import (
     Order,
     Pagination,
     SqlConfig,
+    Table,
     WhereCondition,
 )
 from core.sql.sql_builder import SQLGenerator
@@ -44,8 +45,6 @@ from tests.base import TestCase
 
 
 class TestSQLGenerator(TestCase):
-    """使用 unittest.TestCase 编写的单元测试示例"""
-
     def setUp(self):
         self.query_builder = QueryBuilder()
 
@@ -56,7 +55,7 @@ class TestSQLGenerator(TestCase):
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
                 Field(table="users", raw_name="name", display_name="user_name", field_type=FieldType.STRING),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),  # 新增改动：使用 Table 对象，无 alias
         )
         generator = SQLGenerator(self.query_builder, config)
         query = generator.generate()
@@ -70,13 +69,13 @@ class TestSQLGenerator(TestCase):
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
                 Field(table="orders", raw_name="order_id", display_name="order_id", field_type=FieldType.INT),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             join_tables=[
                 JoinTable(
                     join_type=JoinType.INNER_JOIN,
                     link_fields=[LinkField(left_field="id", right_field="user_id")],
-                    left_table="users",
-                    right_table="orders",
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
                 )
             ],
         )
@@ -90,12 +89,11 @@ class TestSQLGenerator(TestCase):
 
     def test_where_conditions(self):
         """测试条件筛选的 SQL 生成"""
-
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             where=WhereCondition(
                 connector=FilterConnector.AND,
                 conditions=[
@@ -133,12 +131,11 @@ class TestSQLGenerator(TestCase):
 
     def test_invalid_field_source(self):
         """测试无效字段来源的捕获"""
-        self.query_builder = QueryBuilder()
         config = SqlConfig(
             select_fields=[
                 Field(table="invalid_table", raw_name="id", display_name="invalid_id", field_type=FieldType.INT),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
         )
         generator = SQLGenerator(self.query_builder, config)
         with self.assertRaisesRegex(TableNotRegisteredError, r"表 'invalid_table' 未在配置中声明。"):
@@ -146,12 +143,11 @@ class TestSQLGenerator(TestCase):
 
     def test_order_by_with_invalid_table(self):
         """测试排序字段来源不合法时的异常捕获"""
-
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             order_by=[
                 Order(
                     field=Field(
@@ -167,12 +163,11 @@ class TestSQLGenerator(TestCase):
 
     def test_pagination_disabled(self):
         """测试无分页功能的查询"""
-
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
         )
         generator = SQLGenerator(self.query_builder, config)
         query = generator.generate()
@@ -181,7 +176,6 @@ class TestSQLGenerator(TestCase):
 
     def test_multiple_join_tables(self):
         """测试多表 JOIN 的 SQL 生成"""
-
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
@@ -190,19 +184,19 @@ class TestSQLGenerator(TestCase):
                     table="products", raw_name="product_name", display_name="product_name", field_type=FieldType.STRING
                 ),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             join_tables=[
                 JoinTable(
                     join_type=JoinType.INNER_JOIN,
                     link_fields=[LinkField(left_field="id", right_field="user_id")],
-                    left_table="users",
-                    right_table="orders",
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
                 ),
                 JoinTable(
                     join_type=JoinType.LEFT_JOIN,
                     link_fields=[LinkField(left_field="order_id", right_field="id")],
-                    left_table="orders",
-                    right_table="products",
+                    left_table=Table(table_name="orders"),
+                    right_table=Table(table_name="products"),
                 ),
             ],
         )
@@ -217,12 +211,11 @@ class TestSQLGenerator(TestCase):
 
     def test_order_by_multiple_fields(self):
         """测试 ORDER BY 多字段"""
-
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             order_by=[
                 Order(
                     field=Field(table="users", raw_name="age", display_name="user_age", field_type=FieldType.INT),
@@ -237,13 +230,12 @@ class TestSQLGenerator(TestCase):
         generator = SQLGenerator(self.query_builder, config)
         query = generator.generate()
         expected_query = (
-            'SELECT "users"."id" "user_id" ' 'FROM "users" "users" ORDER BY "users"."age" ASC,"users"."name" DESC'
+            'SELECT "users"."id" "user_id" FROM "users" "users" ORDER BY "users"."age" ASC,"users"."name" DESC'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
     def test_group_by_with_having(self):
         """测试 GROUP BY 子句"""
-
         config = SqlConfig(
             select_fields=[
                 Field(
@@ -251,7 +243,7 @@ class TestSQLGenerator(TestCase):
                 ),
                 Field(table="users", raw_name="country", display_name="user_country", field_type=FieldType.STRING),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             group_by=[
                 Field(table="users", raw_name="country", display_name="user_country", field_type=FieldType.STRING),
             ],
@@ -277,7 +269,6 @@ class TestSQLGenerator(TestCase):
         """
         测试自动推导 GROUP BY：如果没有指定 group_by，但存在聚合字段，则对非聚合字段进行分组
         """
-
         config = SqlConfig(
             select_fields=[
                 Field(table="orders", raw_name="id", display_name="order_id", field_type=FieldType.INT),
@@ -289,7 +280,7 @@ class TestSQLGenerator(TestCase):
                     aggregate=AggregateType.SUM,
                 ),
             ],
-            from_table="orders",
+            from_table=Table(table_name="orders"),
         )
         generator = SQLGenerator(self.query_builder, config)
         query = generator.generate()
@@ -302,19 +293,18 @@ class TestSQLGenerator(TestCase):
 
     def test_unsupported_operator(self):
         """测试不支持的 Operator 时抛出异常"""
-
         with self.assertRaises(ValidationError):
             config = SqlConfig(
                 select_fields=[
                     Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
                 ],
-                from_table="users",
+                from_table=Table(table_name="users"),
                 where=WhereCondition(
                     condition=Condition(
                         field=Field(
                             table="users", raw_name="name", display_name="user_name", field_type=FieldType.STRING
                         ),
-                        operator="unknown_op",  # 这里传入一个无效操作符
+                        operator="unknown_op",
                         filter="test",
                         filters=[],
                     )
@@ -327,201 +317,14 @@ class TestSQLGenerator(TestCase):
         """
         测试复杂嵌套的 AND/OR 条件，仅使用 EQ / NEQ / REG / NREG / INCLUDE / EXCLUDE 操作符:
         """
-
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
             ],
-            from_table="users",
-            where=WhereCondition(
-                connector=FilterConnector.AND,  # 顶层使用 AND
-                conditions=[
-                    WhereCondition(
-                        connector=FilterConnector.OR,  # 子条件使用 OR
-                        conditions=[
-                            WhereCondition(
-                                condition=Condition(
-                                    field=Field(
-                                        table="users",
-                                        raw_name="name",
-                                        display_name="user_name",
-                                        field_type=FieldType.STRING,
-                                    ),
-                                    operator=Operator.NEQ,  # name != 'David'
-                                    filter="David",
-                                    filters=[],
-                                )
-                            ),
-                            WhereCondition(
-                                condition=Condition(
-                                    field=Field(
-                                        table="users",
-                                        raw_name="name",
-                                        display_name="user_name",
-                                        field_type=FieldType.STRING,
-                                    ),
-                                    operator=Operator.EQ,  # name = 'Jack'
-                                    filter="Jack",
-                                    filters=[],
-                                )
-                            ),
-                        ],
-                    ),
-                    WhereCondition(
-                        condition=Condition(
-                            field=Field(
-                                table="users",
-                                raw_name="country",
-                                display_name="user_country",
-                                field_type=FieldType.STRING,
-                            ),
-                            operator=Operator.REG,  # country ~ '^Ire'
-                            filter="^Ire",
-                            filters=[],
-                        )
-                    ),
-                ],
-            ),
-        )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
-
-        expected_query = (
-            'SELECT "users"."id" "user_id" '
-            'FROM "users" "users" '
-            'WHERE ("users"."name"<>\'David\' OR "users"."name"=\'Jack\') AND "users"."country" REGEX \'^Ire\''
-        )
-        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
-
-    def test_multiple_aggregates(self):
-        """测试同一条 SELECT 中包含多个聚合字段"""
-
-        config = SqlConfig(
-            select_fields=[
-                Field(
-                    table="orders",
-                    raw_name="id",
-                    display_name="order_count",
-                    field_type=FieldType.INT,
-                    aggregate=AggregateType.COUNT,
-                ),
-                Field(
-                    table="orders",
-                    raw_name="amount",
-                    display_name="amount_max",
-                    field_type=FieldType.INT,
-                    aggregate=AggregateType.MAX,
-                ),
-                Field(table="orders", raw_name="status", display_name="status", field_type=FieldType.STRING),
-            ],
-            from_table="orders",
-        )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
-        # 期望自动分组 "orders"."status"
-        expected_query = (
-            'SELECT COUNT("orders"."id") "order_count",MAX("orders"."amount") "amount_max","orders"."status" "status" '
-            'FROM "orders" "orders" GROUP BY "orders"."status"'
-        )
-        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
-
-    def test_invalid_aggregate_type(self):
-        """测试不支持的聚合类型时，是否正确抛出异常"""
-
-        with self.assertRaises(ValidationError):
-            config = SqlConfig(
-                select_fields=[
-                    Field(
-                        table="orders",
-                        raw_name="price",
-                        display_name="price_custom",
-                        field_type=FieldType.INT,
-                        aggregate="INVALID_AGG",
-                    ),
-                ],
-                from_table="orders",
-            )
-            generator = SQLGenerator(self.query_builder, config)
-            generator.generate()
-
-    def test_multi_join_simple_where(self):
-        """
-        测试多表联表 + 简单 WHERE 条件
-        """
-
-        config = SqlConfig(
-            select_fields=[
-                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
-                Field(table="orders", raw_name="order_id", display_name="order_id", field_type=FieldType.INT),
-                Field(table="products", raw_name="name", display_name="product_name", field_type=FieldType.STRING),
-            ],
-            from_table="users",
-            join_tables=[
-                JoinTable(
-                    join_type=JoinType.INNER_JOIN,
-                    link_fields=[LinkField(left_field="id", right_field="user_id")],
-                    left_table="users",
-                    right_table="orders",
-                ),
-                JoinTable(
-                    join_type=JoinType.LEFT_JOIN,
-                    link_fields=[LinkField(left_field="product_id", right_field="id")],
-                    left_table="orders",
-                    right_table="products",
-                ),
-            ],
-            where=WhereCondition(
-                condition=Condition(
-                    field=Field(
-                        table="users", raw_name="country", display_name="user_country", field_type=FieldType.STRING
-                    ),
-                    operator=Operator.EQ,
-                    filter="Ireland",
-                    filters=[],
-                )
-            ),
-        )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
-        expected_query = (
-            'SELECT "users"."id" "user_id","orders"."order_id" "order_id","products"."name" "product_name" '
-            'FROM "users" "users" '
-            'JOIN "orders" "orders" '
-            'ON "users"."id"="orders"."user_id" '
-            'LEFT JOIN "products" "products" '
-            'ON "orders"."product_id"="products"."id" '
-            'WHERE "users"."country"=\'Ireland\''
-        )
-        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
-
-    def test_multi_join_nested_where(self):
-        """
-        测试多表联表 + 复杂嵌套 WHERE 条件
-        """
-
-        config = SqlConfig(
-            select_fields=[
-                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
-            ],
-            from_table="users",
-            join_tables=[
-                JoinTable(
-                    join_type=JoinType.INNER_JOIN,
-                    link_fields=[LinkField(left_field="id", right_field="user_id")],
-                    left_table="users",
-                    right_table="orders",
-                ),
-                JoinTable(
-                    join_type=JoinType.LEFT_JOIN,
-                    link_fields=[LinkField(left_field="product_id", right_field="id")],
-                    left_table="orders",
-                    right_table="products",
-                ),
-            ],
+            from_table=Table(table_name="users"),
             where=WhereCondition(
                 connector=FilterConnector.AND,
                 conditions=[
-                    # 条件A: (users.name != 'David' OR users.name = 'Jack')
                     WhereCondition(
                         connector=FilterConnector.OR,
                         conditions=[
@@ -553,7 +356,185 @@ class TestSQLGenerator(TestCase):
                             ),
                         ],
                     ),
-                    # 条件B
+                    WhereCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="users",
+                                raw_name="country",
+                                display_name="user_country",
+                                field_type=FieldType.STRING,
+                            ),
+                            operator=Operator.REG,  # country ~ '^Ire'
+                            filter="^Ire",
+                            filters=[],
+                        )
+                    ),
+                ],
+            ),
+        )
+        generator = SQLGenerator(self.query_builder, config)
+        query = generator.generate()
+        expected_query = (
+            'SELECT "users"."id" "user_id" '
+            'FROM "users" "users" '
+            'WHERE ("users"."name"<>\'David\' OR "users"."name"=\'Jack\') AND "users"."country" REGEX \'^Ire\''
+        )
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
+
+    def test_multiple_aggregates(self):
+        """测试同一条 SELECT 中包含多个聚合字段"""
+        config = SqlConfig(
+            select_fields=[
+                Field(
+                    table="orders",
+                    raw_name="id",
+                    display_name="order_count",
+                    field_type=FieldType.INT,
+                    aggregate=AggregateType.COUNT,
+                ),
+                Field(
+                    table="orders",
+                    raw_name="amount",
+                    display_name="amount_max",
+                    field_type=FieldType.INT,
+                    aggregate=AggregateType.MAX,
+                ),
+                Field(table="orders", raw_name="status", display_name="status", field_type=FieldType.STRING),
+            ],
+            from_table=Table(table_name="orders"),
+        )
+        generator = SQLGenerator(self.query_builder, config)
+        query = generator.generate()
+        expected_query = (
+            'SELECT COUNT("orders"."id") "order_count",MAX("orders"."amount") "amount_max","orders"."status" "status" '
+            'FROM "orders" "orders" GROUP BY "orders"."status"'
+        )
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
+
+    def test_invalid_aggregate_type(self):
+        """测试不支持的聚合类型时，是否正确抛出异常"""
+        with self.assertRaises(ValidationError):
+            config = SqlConfig(
+                select_fields=[
+                    Field(
+                        table="orders",
+                        raw_name="price",
+                        display_name="price_custom",
+                        field_type=FieldType.INT,
+                        aggregate="INVALID_AGG",
+                    ),
+                ],
+                from_table=Table(table_name="orders"),
+            )
+            generator = SQLGenerator(self.query_builder, config)
+            generator.generate()
+
+    def test_multi_join_simple_where(self):
+        """
+        测试多表联表 + 简单 WHERE 条件
+        """
+        config = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+                Field(table="orders", raw_name="order_id", display_name="order_id", field_type=FieldType.INT),
+                Field(table="products", raw_name="name", display_name="product_name", field_type=FieldType.STRING),
+            ],
+            from_table=Table(table_name="users"),
+            join_tables=[
+                JoinTable(
+                    join_type=JoinType.INNER_JOIN,
+                    link_fields=[LinkField(left_field="id", right_field="user_id")],
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
+                ),
+                JoinTable(
+                    join_type=JoinType.LEFT_JOIN,
+                    link_fields=[LinkField(left_field="product_id", right_field="id")],
+                    left_table=Table(table_name="orders"),
+                    right_table=Table(table_name="products"),
+                ),
+            ],
+            where=WhereCondition(
+                condition=Condition(
+                    field=Field(
+                        table="users", raw_name="country", display_name="user_country", field_type=FieldType.STRING
+                    ),
+                    operator=Operator.EQ,
+                    filter="Ireland",
+                    filters=[],
+                )
+            ),
+        )
+        generator = SQLGenerator(self.query_builder, config)
+        query = generator.generate()
+        expected_query = (
+            'SELECT "users"."id" "user_id","orders"."order_id" "order_id","products"."name" "product_name" '
+            'FROM "users" "users" '
+            'JOIN "orders" "orders" '
+            'ON "users"."id"="orders"."user_id" '
+            'LEFT JOIN "products" "products" '
+            'ON "orders"."product_id"="products"."id" '
+            'WHERE "users"."country"=\'Ireland\''
+        )
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
+
+    def test_multi_join_nested_where(self):
+        """
+        测试多表联表 + 复杂嵌套 WHERE 条件
+        """
+        config = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+            ],
+            from_table=Table(table_name="users"),
+            join_tables=[
+                JoinTable(
+                    join_type=JoinType.INNER_JOIN,
+                    link_fields=[LinkField(left_field="id", right_field="user_id")],
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
+                ),
+                JoinTable(
+                    join_type=JoinType.LEFT_JOIN,
+                    link_fields=[LinkField(left_field="product_id", right_field="id")],
+                    left_table=Table(table_name="orders"),
+                    right_table=Table(table_name="products"),
+                ),
+            ],
+            where=WhereCondition(
+                connector=FilterConnector.AND,
+                conditions=[
+                    WhereCondition(
+                        connector=FilterConnector.OR,
+                        conditions=[
+                            WhereCondition(
+                                condition=Condition(
+                                    field=Field(
+                                        table="users",
+                                        raw_name="name",
+                                        display_name="user_name",
+                                        field_type=FieldType.STRING,
+                                    ),
+                                    operator=Operator.NEQ,
+                                    filter="David",
+                                    filters=[],
+                                )
+                            ),
+                            WhereCondition(
+                                condition=Condition(
+                                    field=Field(
+                                        table="users",
+                                        raw_name="name",
+                                        display_name="user_name",
+                                        field_type=FieldType.STRING,
+                                    ),
+                                    operator=Operator.EQ,
+                                    filter="Jack",
+                                    filters=[],
+                                )
+                            ),
+                        ],
+                    ),
                     WhereCondition(
                         connector=FilterConnector.AND,
                         conditions=[
@@ -623,7 +604,6 @@ class TestSQLGenerator(TestCase):
         """
         测试联表 + 聚合函数 + 显式分组
         """
-
         config = SqlConfig(
             select_fields=[
                 Field(
@@ -631,7 +611,7 @@ class TestSQLGenerator(TestCase):
                     raw_name="price",
                     display_name="total_price",
                     field_type=FieldType.INT,
-                    aggregate="SUM",
+                    aggregate=AggregateType.SUM,
                 ),
                 Field(
                     table="users",
@@ -640,13 +620,13 @@ class TestSQLGenerator(TestCase):
                     field_type=FieldType.STRING,
                 ),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             join_tables=[
                 JoinTable(
                     join_type=JoinType.INNER_JOIN,
                     link_fields=[LinkField(left_field="id", right_field="user_id")],
-                    left_table="users",
-                    right_table="orders",
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
                 )
             ],
             where=WhereCondition(
@@ -678,10 +658,8 @@ class TestSQLGenerator(TestCase):
         """
         当 group_by 未指定，但出现聚合字段 + 非聚合字段时，应自动对非聚合字段进行分组
         """
-
         config = SqlConfig(
             select_fields=[
-                # 聚合字段
                 Field(
                     table="orders",
                     raw_name="price",
@@ -689,7 +667,6 @@ class TestSQLGenerator(TestCase):
                     field_type=FieldType.INT,
                     aggregate=AggregateType.SUM,
                 ),
-                # 非聚合字段
                 Field(
                     table="orders",
                     raw_name="status",
@@ -697,13 +674,13 @@ class TestSQLGenerator(TestCase):
                     field_type=FieldType.STRING,
                 ),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             join_tables=[
                 JoinTable(
                     join_type=JoinType.INNER_JOIN,
                     link_fields=[LinkField(left_field="id", right_field="user_id")],
-                    left_table="users",
-                    right_table="orders",
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
                 )
             ],
         )
@@ -721,19 +698,18 @@ class TestSQLGenerator(TestCase):
         """
         测试联表 + 排序 + 分页
         """
-
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
                 Field(table="orders", raw_name="order_id", display_name="order_id", field_type=FieldType.INT),
             ],
-            from_table="users",
+            from_table=Table(table_name="users"),
             join_tables=[
                 JoinTable(
                     join_type=JoinType.INNER_JOIN,
                     link_fields=[LinkField(left_field="id", right_field="user_id")],
-                    left_table="users",
-                    right_table="orders",
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
                 )
             ],
             order_by=[
@@ -756,6 +732,44 @@ class TestSQLGenerator(TestCase):
             'LIMIT 10 OFFSET 20'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
+
+    def test_alias_normal_usage(self):
+        """
+        新增用例：测试在 from_table 和 join_tables 中，使用不同 alias 时是否能正确生成 SQL
+        """
+        config = SqlConfig(
+            select_fields=[
+                Field(
+                    table="user_alias",
+                    raw_name="id",
+                    display_name="user_id",
+                    field_type=FieldType.INT,
+                ),
+                Field(
+                    table="order_alias",
+                    raw_name="order_id",
+                    display_name="order_id",
+                    field_type=FieldType.INT,
+                ),
+            ],
+            from_table=Table(table_name="users", alias="user_alias"),
+            join_tables=[
+                JoinTable(
+                    join_type=JoinType.INNER_JOIN,
+                    link_fields=[LinkField(left_field="id", right_field="user_id")],
+                    left_table=Table(table_name="users", alias="user_alias"),
+                    right_table=Table(table_name="orders", alias="order_alias"),
+                )
+            ],
+        )
+        generator = SQLGenerator(self.query_builder, config)
+        query = generator.generate()
+        expected_query = (
+            'SELECT "user_alias"."id" "user_id","order_alias"."order_id" "order_id" '
+            'FROM "users" "user_alias" '
+            'JOIN "orders" "order_alias" ON "user_alias"."id"="order_alias"."user_id"'
+        )
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
 
 if __name__ == "__main__":

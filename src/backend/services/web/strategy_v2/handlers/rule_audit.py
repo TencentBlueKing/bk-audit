@@ -31,6 +31,7 @@ from core.sql.model import (
     JoinTable,
     LinkField,
     SqlConfig,
+    Table,
     WhereCondition,
 )
 from core.sql.sql_builder import SQLGenerator
@@ -130,13 +131,13 @@ class RuleAuditSQLGenerator:
             aggregate=field_json.get("aggregate"),
         )
 
-    def build_system_ids_condition(self, table_rt_id: str, system_ids: list) -> WhereCondition:
+    def build_system_ids_condition(self, table_name: str, system_ids: list) -> WhereCondition:
         """
         根据给定的表 rt_id 及 system_ids 列表，构建一个 AND 条件，用于拼接到最终的 WHERE 中。
         """
         system_condition = Condition(
             field=Field(
-                table=table_rt_id,
+                table=table_name,
                 raw_name=SYSTEM_ID.field_name,
                 display_name=SYSTEM_ID.alias_name,
                 field_type=SYSTEM_ID.field_type,
@@ -146,19 +147,20 @@ class RuleAuditSQLGenerator:
         )
         return WhereCondition(connector=FilterConnector.AND, condition=system_condition)
 
-    def build_single_table_config(self, data_source: dict) -> (str, list, dict):
+    def build_single_table_config(self, data_source: dict) -> (Table, list, dict):
         """
         处理单表场景，返回:
-         - from_table: str
+         - from_table: 主表
          - join_tables: 空列表 (单表无 join)
-         - tables_with_system_ids: {rt_id: [system_ids]}
+         - tables_with_system_ids: {display_name: [system_ids]}
         """
         from_table = data_source["rt_id"]
+        display_name = data_source.get("display_name", from_table)
         system_ids = data_source.get("system_ids", [])
-        tables_with_system_ids = {from_table: system_ids}
-        return from_table, [], tables_with_system_ids
+        tables_with_system_ids = {display_name: system_ids}
+        return Table(table_name=from_table, alias=display_name), [], tables_with_system_ids
 
-    def build_link_table_config(self, data_source: dict) -> (str, list, dict):
+    def build_link_table_config(self, data_source: dict) -> (Table, list, dict):
         """
         处理联表场景，从 link_table 配置中构建:
          - from_table: 主表
@@ -177,19 +179,28 @@ class RuleAuditSQLGenerator:
 
         # 确定主表 (from_table)
         first_link = links[0]
-        from_table = first_link["left_table"]["rt_id"]
+        from_table = first_link["left_table"]
+        _from_table = Table(table_name=from_table["rt_id"], alias=from_table.get("display_name", from_table["rt_id"]))
         join_tables = []
         tables_with_system_ids = {}
 
         for lk in links:
             left_table = lk["left_table"]
+            _left_table = Table(
+                table_name=left_table["rt_id"],
+                alias=left_table.get("display_name", left_table["rt_id"]),
+            )
             right_table = lk["right_table"]
+            _right_table = Table(
+                table_name=right_table["rt_id"],
+                alias=right_table.get("display_name", right_table["rt_id"]),
+            )
 
             # 如果 left_table 或 right_table 是 EVENT_LOG，则将它们的 system_ids 收集起来
             if left_table["table_type"] == LinkTableTableType.EVENT_LOG:
-                tables_with_system_ids[left_table["rt_id"]] = left_table.get("system_ids", [])
+                tables_with_system_ids[_left_table.alias] = left_table.get("system_ids", [])
             if right_table["table_type"] == LinkTableTableType.EVENT_LOG:
-                tables_with_system_ids[right_table["rt_id"]] = right_table.get("system_ids", [])
+                tables_with_system_ids[_right_table.alias] = right_table.get("system_ids", [])
 
             # link_fields
             link_fields_list = [
@@ -201,12 +212,12 @@ class RuleAuditSQLGenerator:
                 JoinTable(
                     join_type=lk["join_type"],
                     link_fields=link_fields_list,
-                    left_table=left_table["rt_id"],
-                    right_table=right_table["rt_id"],
+                    left_table=_left_table,
+                    right_table=_right_table,
                 )
             )
 
-        return from_table, join_tables, tables_with_system_ids
+        return _from_table, join_tables, tables_with_system_ids
 
     def format(self, config_json: dict) -> SqlConfig:
         """
@@ -233,10 +244,10 @@ class RuleAuditSQLGenerator:
             conditions_to_merge.append(front_where)
 
         # Step D. 为每个包含 system_ids 的表构建条件
-        for rt_id, system_ids in tables_with_system_ids.items():
+        for table_name, system_ids in tables_with_system_ids.items():
             if not system_ids:  # 若没有 system_ids，可根据需要决定是否忽略或抛异常
                 continue
-            system_ids_where = self.build_system_ids_condition(rt_id, system_ids)
+            system_ids_where = self.build_system_ids_condition(table_name, system_ids)
             conditions_to_merge.append(system_ids_where)
 
         # Step E. 合并所有条件

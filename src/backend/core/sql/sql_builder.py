@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 from pypika import Field as PypikaField
 from pypika import Table
@@ -30,7 +30,9 @@ from core.sql.exceptions import (
     UnsupportedJoinTypeError,
     UnsupportedOperatorError,
 )
-from core.sql.model import Condition, Field, SqlConfig, WhereCondition
+from core.sql.model import Condition, Field, SqlConfig
+from core.sql.model import Table as SqlTable
+from core.sql.model import WhereCondition
 
 
 class SQLGenerator:
@@ -48,22 +50,29 @@ class SQLGenerator:
 
     def _register_tables(self):
         """注册所有有效的表名"""
-        valid_tables = set()
-        if self.config.from_table:
-            valid_tables.add(self.config.from_table)
-        if self.config.join_tables:
-            for join_table in self.config.join_tables:
-                valid_tables.add(join_table.left_table)
-                valid_tables.add(join_table.right_table)
-        # 记录所有表名对应的 Table 对象
-        for table_name in valid_tables:
-            self.table_map[table_name] = Table(table_name).as_(table_name)
+        register_tables = {}
 
-    def _get_table(self, table_name: str) -> Table:
+        # 添加主表到注册表
+        if self.config.from_table:
+            alias = self.config.from_table.alias or self.config.from_table.table_name
+            register_tables[alias] = self.config.from_table
+
+        # 添加连接表到注册表
+        for join_table in self.config.join_tables or []:
+            for table in [join_table.left_table, join_table.right_table]:
+                alias = table.alias or table.table_name
+                register_tables[alias] = table
+
+        # 更新 table_map 映射
+        self.table_map.update({alias: Table(table.table_name).as_(alias) for alias, table in register_tables.items()})
+
+    def _get_table(self, table: Union[str, SqlTable]) -> Table:
         """根据表名获取 Table 对象"""
-        if table_name not in self.table_map:
-            raise TableNotRegisteredError(table_name)
-        return self.table_map[table_name]
+        if isinstance(table, SqlTable):
+            table = table.alias or table.table_name
+        if table not in self.table_map:
+            raise TableNotRegisteredError(table)
+        return self.table_map[table]
 
     def _get_pypika_field(self, field: Field) -> PypikaField:
         """根据 Field 获取 PyPika 字段"""
@@ -85,8 +94,8 @@ class SQLGenerator:
         """添加 FROM 子句"""
         if not (self.config.from_table or self.config.join_tables):
             raise MissingFromOrJoinError()
-        if self.config.from_table:
-            query = query.from_(self._get_table(self.config.from_table))
+        from_table = self.config.join_tables[0].left_table if self.config.join_tables else self.config.from_table
+        query = query.from_(self._get_table(from_table))
         if self.config.join_tables:
             query = self._build_join(self.config.from_table, query)
         return query
