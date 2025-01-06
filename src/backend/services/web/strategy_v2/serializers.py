@@ -875,7 +875,7 @@ class RuleAuditFieldSerializer(serializers.Serializer):
     Rule Audit Field
     """
 
-    rt_id = serializers.CharField(label=gettext_lazy("RT ID"))
+    table = serializers.CharField(label=gettext_lazy("Table"))
     raw_name = serializers.CharField(label=gettext_lazy("Raw Name"))
     display_name = serializers.CharField(label=gettext_lazy("Display Name"))
     field_type = serializers.ChoiceField(label=gettext_lazy("Field Type"), choices=RuleAuditFieldType.choices)
