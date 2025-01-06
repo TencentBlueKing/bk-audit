@@ -716,6 +716,7 @@ class LinkTableConfigTableSerializer(serializers.Serializer):
 
     rt_id = serializers.CharField(label=gettext_lazy("Result Table ID"))
     table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=LinkTableTableType.choices)
+    display_name = serializers.CharField(label=gettext_lazy("Display Name"), required=False)
     system_ids = serializers.ListField(
         label=gettext_lazy("System IDs"), child=serializers.CharField(max_length=64), required=False
     )
@@ -724,6 +725,9 @@ class LinkTableConfigTableSerializer(serializers.Serializer):
         attrs = super().validate(attrs)
         if attrs["table_type"] == LinkTableTableType.EVENT_LOG and not attrs.get("system_ids"):
             raise serializers.ValidationError(gettext("System IDs is required"))
+        # display_name 默认值为 rt_id
+        if not attrs.get("display_name"):
+            attrs["display_name"] = attrs["rt_id"]
         return attrs
 
 
@@ -901,6 +905,14 @@ class RuleAuditDataSourceSerializer(serializers.Serializer):
         label=gettext_lazy("System ID"), child=serializers.CharField(), required=False, allow_empty=True
     )
     link_table = RuleAuditLinkTableSerializer(label=gettext_lazy("Link Table"), required=False)
+    display_name = serializers.CharField(label=gettext_lazy("Display Name"), required=False)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # display_name 默认值为 rt_id
+        if attrs.get("rt_id") and not attrs.get("display_name"):
+            attrs['display_name'] = attrs['rt_id']
+        return attrs
 
 
 class RuleAuditConditionSerializer(serializers.Serializer):

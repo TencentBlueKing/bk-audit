@@ -30,6 +30,15 @@ from core.sql.constants import (
 )
 
 
+class Table(BaseModel):
+    """
+    表
+    """
+
+    table_name: str  # 表名
+    alias: Optional[str] = None  # 别名
+
+
 class Field(BaseModel):
     """
     字段
@@ -58,8 +67,8 @@ class JoinTable(BaseModel):
 
     join_type: JoinType  # 连接类型
     link_fields: List[LinkField]  # 连接字段
-    left_table: str  # 左表
-    right_table: str  # 右表
+    left_table: Table  # 左表
+    right_table: Table  # 右表
 
 
 class Condition(BaseModel):
@@ -107,7 +116,7 @@ class SqlConfig(BaseModel):
     """
 
     select_fields: List[Field]  # 作为 sql 的列
-    from_table: str = ""  # 主表
+    from_table: Optional[Table] = None  # 主表
     join_tables: Optional[List[JoinTable]] = None  # 联表
     where: Optional[WhereCondition] = None  # 筛选条件
     group_by: List[Field] = PydanticField(default_factory=list)  # 分组条件；如果未指定但有聚合函数，则会自动添加 group by 条件
