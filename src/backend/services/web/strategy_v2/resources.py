@@ -450,6 +450,14 @@ class LinkTableVersionJudge(StrategyJudge):
         }
 
     def judge(self, strategy) -> bool:
+        if any(
+            [
+                strategy.strategy_type != StrategyType.RULE.value,
+                not strategy.link_table_uid,
+                not strategy.link_table_version,
+            ]
+        ):
+            return False
         return self.link_tables.get(strategy.link_table_uid, 0) > strategy.link_table_version
 
 
