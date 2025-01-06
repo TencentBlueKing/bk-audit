@@ -9,6 +9,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     AnalysisList: typeof import('./src/components/skeleton-loading/components/analysis-list.vue')['default']
     ApplicationParameter: typeof import('./src/components/application-parameter/index.vue')['default']
+    AuditCollapsePanel: typeof import('./src/components/audit-collapse-panel/index.vue')['default']
     AuditForm: typeof import('./src/components/audit-form/index.vue')['default']
     AuditMenu: typeof import('./src/components/audit-menu/index.vue')['default']
     AuditNavigation: typeof import('./src/components/audit-navigation/index.vue')['default']

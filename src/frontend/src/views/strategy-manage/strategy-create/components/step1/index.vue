@@ -17,7 +17,7 @@
 <template>
   <skeleton-loading
     fullscreen
-    :loading="controlLoading || tagLoading"
+    :loading="tagLoading"
     name="createStrategy">
     <smart-action
       class="create-strategy-page"
@@ -73,7 +73,7 @@
                 </bk-form-item>
               </div>
               <bk-form-item
-                class="is-required"
+                class="is-required risk-level-group"
                 :label="t('风险等级')"
                 label-width="160"
                 property="risk_level">
@@ -135,61 +135,46 @@
               </bk-form-item>
             </template>
           </card-part-vue>
-          <card-part-vue
-            :show-content="!!formData.control_id"
-            :show-icon="!!formData.control_id">
-            <template #title>
-              <div
-                class="flex-center"
-                style="position: relative; width: 100%;">
-                <span>
-                  {{ t('方案') }}：
-                </span>
-                <plan-select
-                  ref="planSelectRef"
-                  :control-list="controlList"
-                  :cur-version="(formData.control_version as number)"
-                  :default-value="formData.control_id"
-                  :disabled="isEditMode || isCloneMode"
-                  style="width: 46%;"
-                  @change="onControlIdChange">
-                  <p
-                    v-if="controlTypeId === 'BKM'"
-                    class="inset-tip">
-                    {{ t('内置') }}
-                  </p>
-                </plan-select>
-
-                <p
-                  v-if="isShowUpgradeTip"
-                  class="upgrade-tip">
-                  <span class="block" />
-                  <span class="content">
-                    {{ `${t('该方案存在新版本')} V${maxVersionMap[formData.control_id]}.0，${t('升级版本可能要重新配置')}` }}
-                  </span>
-                  <span
-                    class="btn"
-                    @click="handleShowUpgradeDetail">，{{ t('查看升级详情') }}</span>
-                </p>
-              </div>
-            </template>
+          <card-part-vue :title="t('方案')">
             <template #content>
+              <bk-form-item
+                class="is-required"
+                :label="t('配置方式')"
+                label-width="160"
+                property="strategy_way">
+                <bk-button-group>
+                  <bk-button
+                    v-for="item in strategyWayList"
+                    :key="item.value"
+                    :disabled="isStockData"
+                    :loading="commonLoading"
+                    :selected="formData.strategy_way === item.value"
+                    @click="handleStrategyWay(item.value)">
+                    <span
+                      v-bk-tooltips="{
+                        content: item.config.tips,
+                        extCls: 'strategy-way-tips',
+                      }"
+                      class="tips">
+                      {{ item.label }}
+                    </span>
+                  </bk-button>
+                </bk-button-group>
+              </bk-form-item>
+              <!-- 自定义规则审计、引入模型审计 -->
               <component
-                :is="comMap[controlTypeId]"
+                :is="strategyWayComMap[formData.strategy_way]"
                 ref="comRef"
-                :control-detail="controlDetail"
-                :data="formData"
-                @update-aiops-config="handleUpdateAiopsConfig"
-                @update-config-type="handleUpdateConfigType"
-                @update-configs="handleUpdateConfigs"
-                @update-data-source="handleUpdateDataSource" />
+                :edit-data="editData"
+                @update-control-detail="updateControlDetail"
+                @update-form-data="updateFormData" />
             </template>
           </card-part-vue>
         </audit-form>
 
         <!-- 算法说明 -->
         <control-description-vue
-          v-if="formData.control_id"
+          v-if="controlDetail !== null"
           :data="controlDetail" />
       </div>
       <template #action>
@@ -208,26 +193,11 @@
     </smart-action>
   </skeleton-loading>
 </template>
-<script lang="ts">
-  export interface ControlType {
-    control_type_id: string;
-    control_id: string;
-    control_name: string;
-    versions: Array<{
-      control_id: string;
-      control_version: number
-    }>
-  }
-</script>
 <script setup lang="ts">
-  import _ from 'lodash';
   import {
-    computed,
-    nextTick,
     onBeforeUnmount,
     onMounted,
     ref,
-    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -236,9 +206,9 @@
     useRouter,
   } from 'vue-router';
 
-  import ControlManageService from '@service/control-manage';
   import StrategyManageService from '@service/strategy-manage';
 
+  import type ControlModel from '@model/control/control';
   import CommonDataModel from '@model/strategy/common-data';
   import StrategyModel from '@model/strategy/strategy';
 
@@ -246,19 +216,35 @@
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
 
-  import AiopsCondition from './components/aiops/index.vue';
   import CardPartVue from './components/card-part.vue';
   import ControlDescriptionVue from './components/control-description.vue';
-  import NormalCondition from './components/normal/index.vue';
-  import PlanSelect from './components/plan-select.vue';
+  import Customize from './components/customize/index.vue';
+  import ReferenceModel from './components/reference-model/index.vue';
+
+  type ItemType = {
+    label: string,
+    value: string
+    config?: any;
+  }
+
+  interface IFormData {
+    strategy_id?: number,
+    strategy_name: string,
+    tags: Array<string>,
+    description: string,
+    configs: Record<string, any>,
+    status: string,
+    risk_level: string,
+    risk_hazard: string,
+    risk_guidance: string,
+    strategy_way: string,
+  }
 
   interface Emits {
     (e: 'nextStep', step: number, params: IFormData): void;
-    (e: 'fetchEditData'): void;
   }
-
   interface Props {
-    data: StrategyModel
+    editData: StrategyModel
   }
 
   const props = defineProps<Props>();
@@ -275,46 +261,31 @@
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
 
-  const comMap: Record<string, any> = {
-    BKM: NormalCondition,
-    AIOps: AiopsCondition,
+  const strategyWayComMap: Record<string, any> = {
+    customize: Customize,
+    referenceModel: ReferenceModel,
   };
-  interface IFormData {
-    strategy_id?: number,
-    strategy_name: string,
-    tags: Array<string>,
-    description: string,
-    control_id: string,
-    control_version?: number,
-    configs: Record<string, any>,
-    status: string,
-    risk_level: string,
-    risk_hazard: string,
-    risk_guidance: string,
-  }
+
   const comRef = ref();
   const formRef = ref();
-  const planSelectRef = ref();
-  const maxVersionMap = ref<Record<string, number>>({});
-  const timeType = ref('minute');
   const tagData = ref<Array<{
     id: string;
     name: string
   }>>([]);
-  const controlTypeId = ref('');// 方案类型id
   const canEditRiskLevel = ref(false);
   const formData = ref<IFormData>({
     strategy_name: '',
     tags: [],
     description: '',
-    control_id: '',
     configs: {
     },
     status: '',
     risk_level: '',
     risk_hazard: '',
     risk_guidance: '',
+    strategy_way: '',
   });
+  const isStockData = ref(false); // 是否是存量数据
   const rules = {
     strategy_name: [
       {
@@ -363,6 +334,19 @@
         trigger: 'change',
       },
     ],
+    strategy_way: [
+      {
+        validator: (value: string) => !!value,
+        message: t('配置方式不能为空'),
+        trigger: 'change',
+      },
+    ],
+    'configs.config_type': [
+      {
+        validator: (value: Array<string>) => !!value,
+        message: t('数据源不能为空'),
+        trigger: 'change',
+      }],
     'configs.data_source.system_id': [
       {
         validator: (value: Array<string>) => !!value && value.length > 0,
@@ -372,7 +356,19 @@
     'configs.data_source.result_table_id': [
       {
         validator: (value: Array<string>) => !!value && value.length > 0,
-        message: t('不能为空'),
+        message: t('资产不能为空'),
+        trigger: 'change',
+      }],
+    'configs.data_source.data_sheet_id': [
+      {
+        validator: (value: Array<string>) => !!value,
+        message: t('其他数据不能为空'),
+        trigger: 'change',
+      }],
+    'configs.data_source.link_data_sheet_id': [
+      {
+        validator: (value: Array<string>) => !!value,
+        message: t('联表数据不能为空'),
         trigger: 'change',
       }],
     'configs.data_source.bk_biz_id': [
@@ -442,27 +438,31 @@
     ],
   };
 
-  const controlMap = ref<Record<string, ControlType>>({});
   const strategyTagMap = ref<Record<string, string>>({});
+  const strategyWayList = ref<Array<ItemType>>([]); // 配置方式列表
+  const riskLevelList = ref<Array<ItemType>>([]); // 风险等级列表
+  const controlDetail = ref<ControlModel | null>(null);
 
-  const aggInterval = computed(() => {
-    switch (timeType.value) {
-    case 'minute':
-      return Number(formData.value.configs.agg_interval) * 60;
-    case 'hour':
-      return Number(formData.value.configs.agg_interval) * 60 * 60;
-    case 'day':
-      return Number(formData.value.configs.agg_interval) * 60 * 60 * 24;
+  // 编辑
+  const setFormData = (editData: StrategyModel) => {
+    formData.value.status = editData.status;
+    formData.value.strategy_id = editData.strategy_id;
+    formData.value.strategy_name = isCloneMode ? `${editData.strategy_name}_copy` : editData.strategy_name;
+    formData.value.tags = editData.tags ? editData.tags.map(item => item.toString()) : [];
+    formData.value.description = editData.description;
+    formData.value.risk_hazard = editData.risk_hazard;
+    formData.value.risk_guidance = editData.risk_guidance;
+    formData.value.risk_level = editData.risk_level;
+    // 存量数据
+    if (!editData.strategy_way) {
+      isStockData.value = true;
     }
-    return formData.value.configs.agg_interval;
-  });
-  const isShowUpgradeTip = computed(() => isEditMode
-    && maxVersionMap.value[formData.value.control_id] > (formData.value.control_version as number));
+    formData.value.strategy_way = editData.strategy_way || 'referenceModel';
 
-  const riskLevelList = ref<Array<{
-    label: string,
-    value: string
-  }>>([]);
+    // 是否允许编辑风险等级
+    canEditRiskLevel.value = !!editData.risk_level;
+  };
+
   const {
     loading: commonLoading,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
@@ -470,27 +470,19 @@
     manual: true,
     onSuccess: (data) => {
       riskLevelList.value = data.risk_level;
-    },
-  });
-
-  // 设置风险等级
-  const handleLevel = (level: string) => {
-    formData.value.risk_level = level;
-    formRef.value.validate('risk_level');
-  };
-
-  // 获取版本信息
-  useRequest(ControlManageService.fetchControlTypes, {
-    defaultValue: [],
-    defaultParams: {
-      control_type_id: 'AIOps',
-    },
-    manual: true,
-    onSuccess(data) {
-      maxVersionMap.value = data.reduce((res, item) => {
-        res[item.control_id] = item.versions[0].control_version;
-        return res;
-      }, {} as Record<string, number>);
+      strategyWayList.value = data.strategy_way || [{
+        label: '自定义规则审计',
+        value: 'customize',
+        config: {
+          tips: '指根据目前审计中可用的日志、资产数据，直接配置规则，得到审计结果的方式。适用于大部分复杂程度不高的场景策略。',
+        },
+      }, {
+        label: '引入模型审计',
+        value: 'referenceModel',
+        config: {
+          tips: '指先通过蓝鲸 bkbase 的 AIops 内开发场景模型后，在审计中心内配置字段映射生成策略的方式。适用于对 aiops 有数据开发能力，且需要实现的审计方案较复杂的情况。',
+        },
+      }];
     },
   });
 
@@ -516,189 +508,57 @@
       data.forEach((item) => {
         strategyTagMap.value[item.tag_id] = item.tag_name;
       });
-    },
-  });
-
-  // 获取方案列表
-  const {
-    data: controlList,
-    loading: controlLoading,
-  } = useRequest(StrategyManageService.fetchControlList, {
-    defaultValue: [],
-    manual: true,
-    onSuccess() {
-      controlList.value.forEach((item) => {
-        controlMap.value[item.control_id] = item;
-      });
       if (isEditMode || isCloneMode) {
-        emits('fetchEditData');
+        setFormData(props.editData);
       }
     },
   });
 
-  // 获取方案详情
-  const {
-    run: fetchControlDetail,
-    data: controlDetail,
-  } = useRequest(ControlManageService.fetchControlDetail, {
-    defaultValue: null,
-  });
-
-  // 编辑反显
-  const setEditData = (editData: StrategyModel) => {
-    formData.value.status = editData.status;
-    formData.value.strategy_id = editData.strategy_id;
-    formData.value.strategy_name = isCloneMode ? `${editData.strategy_name}_copy` : editData.strategy_name;
-    formData.value.tags = editData.tags ? editData.tags.map(item => item.toString()) : [];
-    formData.value.control_id = editData.control_id;
-    formData.value.control_version = editData.control_version;
-    formData.value.description = editData.description;
-    formData.value.risk_hazard = editData.risk_hazard;
-    formData.value.risk_guidance = editData.risk_guidance;
-    formData.value.risk_level = editData.risk_level;
-
-    // 是否允许编辑风险等级
-    canEditRiskLevel.value = !!editData.risk_level;
-
-    const controlItem = controlMap.value[editData.control_id];
-    if (controlItem) {
-      controlTypeId.value = controlItem.control_type_id;
-
-      fetchControlDetail({
-        control_id: controlItem.control_id,
-        control_version: formData.value.control_version,
-      });
-      // 基础策略
-      if (controlTypeId.value === 'BKM') {
-        formData.value.configs = {
-          ...editData.configs,
-        };
-        [formData.value.configs.algorithms] = editData.configs.algorithms;
-      } else {
-        // AI策略
-        formData.value.configs.config_type = editData.configs.config_type;
-        formData.value.configs.data_source = {
-          ...editData.configs.data_source,
-        };
-        // 操作记录部分
-        if (formData.value.configs.config_type === 'EventLog') {
-          formData.value.configs.data_source.system_id = Object.keys(formData.value.configs.data_source.fields);
-        }
-        if (editData.configs.aiops_config) {
-          formData.value.configs.aiops_config = {
-            ...editData.configs.aiops_config,
-          };
-        }
-        // 方案配置参数部分
-        formData.value.configs.variable_config = editData.configs.variable_config || [];
-      }
-    }
-    nextTick(() => {
-      comRef.value?.setConfigs(formData.value.configs);
-      if (controlTypeId.value === 'BKM') {
-        comRef.value?.handleValueDicts(formData.value.configs.agg_condition);
-      }
-    });
+  const handleStrategyWay = (way: string) => {
+    formData.value.strategy_way = way;
+    formRef.value.validate('strategy_way');
   };
 
-  const onControlIdChange = (id: string) => {
-    formData.value.control_id = id;
-    if (id) {
-      const controlItem = controlMap.value[id];
-      formData.value.control_version = controlItem.versions[0].control_version;
-      controlTypeId.value = controlItem.control_type_id;
-      fetchControlDetail({
-        control_id: id,
-      });
-      // 清除系统选择
-      nextTick(() => {
-        comRef.value.clearData && comRef.value.clearData();
-      });
-    } else {
-      controlTypeId.value = '';
-      controlDetail.value = null;
-    }
-    // 重置数据
-    formData.value.configs = {};
+  // 设置风险等级
+  const handleLevel = (level: string) => {
+    formData.value.risk_level = level;
+    formRef.value.validate('risk_level');
   };
-  const handleUpdateConfigType = (configType: string) => {
-    formData.value.configs.config_type = configType;
+
+  // 更新方案详情
+  const updateControlDetail = (detail: ControlModel) => {
+    controlDetail.value = detail;
   };
-  const handleUpdateConfigs = (configs: Record<string, any>) => {
-    formData.value.configs = {
-      ...formData.value.configs,
-      ...configs,
+
+  const updateFormData = (data: Record<string, any>) => {
+    formData.value = {
+      ...formData.value,
+      ...data,
     };
   };
-  const handleUpdateDataSource = (dataSource: Record<string, any>) => {
-    if (dataSource.result_table_id && dataSource.result_table_id.length) {
-      formRef.value.clearValidate('configs.data_source.result_table_id');
-    }
-    formData.value.configs.data_source = {
-      ...formData.value.configs.data_source,
-      ...dataSource,
-    };
-  };
-  const handleUpdateAiopsConfig = (aiopsConfig: Record<string, any>) => {
-    if (aiopsConfig) {
-      formData.value.configs.aiops_config = {
-        ...formData.value.configs.aiops_config,
-        ...aiopsConfig,
-      };
-    } else {
-      delete formData.value.configs.aiops_config;
-    }
-  };
 
-  // 查看升级详情
-  const handleShowUpgradeDetail = () => {
-    router.push({
-      name: 'strategyUpgrade',
-      params: {
-        controlId: formData.value.control_id,
-        strategyId: formData.value.strategy_id as number,
-      },
-      query: {
-        version: formData.value.control_version as number,
-      },
-    });
-  };
-  // 提交
+  // 下一步
   const handleNext = () => {
-    const tastQueue = [formRef.value.validate(), planSelectRef.value.getValue()];
-    if (controlTypeId.value && controlTypeId.value !== 'BKM') {
-      tastQueue.push(comRef.value.getValue());
+    const tastQueue = [formRef.value.validate()];
+    // 有配置组件
+    if (formData.value.strategy_way) {
+      tastQueue.push(comRef.value.getValue?.());
     }
     Promise.all(tastQueue).then(() => {
       if (!isEditMode) {
         delete formData.value.strategy_id;
       }
-      const params = { ...formData.value };
-      params.configs = Object.assign({}, formData.value.configs);
-      if (params.tags) {
-        params.tags = params.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+      const baseParams = { ...formData.value };
+      if (baseParams.tags) {
+        baseParams.tags = baseParams.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
       }
-      if (controlTypeId.value !== 'BKM') {
-        const fields = comRef.value.getFields();
-        const tableIdList = params.configs.data_source.result_table_id;
-        if (params.configs.config_type !== 'EventLog') {
-          params.configs.data_source = {
-            ...params.configs.data_source,
-            fields,
-            result_table_id: _.isArray(tableIdList) ?  _.last(tableIdList)  : tableIdList,
-          };
-        } else {
-          params.configs.data_source = {
-            ...params.configs.data_source,
-            fields,
-          };
-        }
-        // 添加方案配置参数
-        params.configs.variable_config = comRef.value.getParamenterFields();
-      } else {
-        params.configs.algorithms = [formData.value.configs.algorithms];
-        params.configs.agg_interval = aggInterval.value;
-      }
+      // 获取审计参数（自定义规则审计、引入模型审计）
+      const fields = comRef.value.getFields();
+      // 合并参数
+      const params = {
+        ...baseParams,
+        ...fields,
+      };
       emits('nextStep', 2, params);
     });
   };
@@ -730,10 +590,6 @@
     if (to.name !== 'strategyList' && to.name !== 'strategyUpgrade') {
       removePageParams();
     }
-  });
-  // 编辑
-  watch(() => props.data, (data) => {
-    setEditData(data);
   });
 </script>
 <style lang="postcss" scoped>
@@ -789,38 +645,44 @@
         .bk-button {
           padding: 0 35px;
           font-size: 12px;
+        }
+      }
 
-          &:first-child:hover:not(.is-disabled, .is-selected) {
-            color: #ea3636;
-            border-color: #ea3636;
-          }
+      .risk-level-group {
+        :deep(.bk-button-group) {
+          .bk-button {
+            &:first-child:hover:not(.is-disabled, .is-selected) {
+              color: #ea3636;
+              border-color: #ea3636;
+            }
 
-          &:first-child.is-selected {
-            color: #fff;
-            background-color: #ea3636;
-            border-color: #ea3636;
-          }
+            &:first-child.is-selected {
+              color: #fff;
+              background-color: #ea3636;
+              border-color: #ea3636;
+            }
 
-          &:nth-child(2):hover:not(.is-disabled, .is-selected) {
-            color: #ff9c01;
-            border-color: #ff9c01;
-          }
+            &:nth-child(2):hover:not(.is-disabled, .is-selected) {
+              color: #ff9c01;
+              border-color: #ff9c01;
+            }
 
-          &:nth-child(2).is-selected {
-            color: #fff;
-            background-color: #ff9c01;
-            border-color: #ff9c01;
-          }
+            &:nth-child(2).is-selected {
+              color: #fff;
+              background-color: #ff9c01;
+              border-color: #ff9c01;
+            }
 
-          &:hover:not(.is-disabled, .is-selected) {
-            color: #979ba5;
-            border-color: #979ba5;
-          }
+            &:hover:not(.is-disabled, .is-selected) {
+              color: #979ba5;
+              border-color: #979ba5;
+            }
 
-          &.is-selected {
-            color: #fff;
-            background-color: #979ba5;
-            border-color: #979ba5;
+            &.is-selected {
+              color: #fff;
+              background-color: #979ba5;
+              border-color: #979ba5;
+            }
           }
         }
       }
@@ -861,17 +723,10 @@
 .is-disabled {
   cursor: not-allowed;
 }
-
-.inset-tip {
-  position: absolute;
-  top: 50%;
-  right: 30px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: normal;
-  color: #3a84ff;
-  background: #edf4ff;
-  border-radius: 2px;
-  transform: translateY(-50%);
+</style>
+<style>
+.strategy-way-tips {
+  width: 400px;
+  word-break: break-all;
 }
 </style>

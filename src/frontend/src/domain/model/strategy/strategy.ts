@@ -65,10 +65,13 @@ export default class Strategy {
   risk_hazard: string;
   risk_guidance: string;
   risk_title: string;
+  strategy_way: string;
   event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
   event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
   processor_groups: Array<number>;
+  link_table_uid: string;
+  link_table_version: number;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -91,10 +94,13 @@ export default class Strategy {
     this.risk_hazard = payload.risk_hazard;
     this.risk_guidance = payload.risk_guidance;
     this.risk_title = payload.risk_title;
+    this.strategy_way = payload.strategy_way;
     this.event_evidence_field_configs = payload.event_evidence_field_configs;
     this.event_data_field_configs = payload.event_data_field_configs;
     this.event_basic_field_configs = payload.event_basic_field_configs;
     this.processor_groups = payload.processor_groups;
+    this.link_table_uid = payload.link_table_uid;
+    this.link_table_version = payload.link_table_version;
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {

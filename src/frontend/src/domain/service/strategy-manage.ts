@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 import SearchModel from '@model/es-query/search';
+import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 import StrategyModel from '@model/strategy/strategy';
 import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
@@ -142,6 +143,24 @@ export default {
     table_type: string;
   }) {
     return StrategySource.getTable(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取表字段
+   */
+  fetDatabaseTableFields(params: {
+    table_id: string;
+  }) {
+    return StrategySource.getDatabaseTableFields(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取表字段对应的规则和枚举值列表
+   */
+  fetchFiledRules(params: {
+    field: DatabaseTableFieldModel;
+  }) {
+    return StrategySource.gethFiledRules(params)
       .then(({ data }) => data);
   },
   /**

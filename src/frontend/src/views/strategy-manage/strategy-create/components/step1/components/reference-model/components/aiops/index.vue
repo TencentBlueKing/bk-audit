@@ -28,7 +28,7 @@
           <bk-form-item
             :label="t('数据源类型')"
             label-width="160"
-            property="configs.data_source.source_type"
+            property="configs.config_type"
             required>
             <bk-radio-group
               v-model="formData.configs.config_type"

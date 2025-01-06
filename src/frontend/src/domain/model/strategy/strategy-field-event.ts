@@ -19,6 +19,7 @@ type EventItem = {
   description: string
   display_name: string;
   is_priority: boolean;
+  field_mapping: string;
   prefix: string;
   example?: string
 }
@@ -39,6 +40,7 @@ export default class StrategyFieldEvent {
       field_name: item.field_name,
       display_name: item.display_name,
       is_priority: item.is_priority || false,
+      field_mapping: item.field_mapping,
       description: item.description,
       example: item.example,
       prefix,
