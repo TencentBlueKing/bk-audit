@@ -54,7 +54,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             },
             "select": [
                 {
-                    "rt_id": "simple_rt",
+                    "table": "simple_rt",
                     "raw_name": "fieldA",
                     "display_name": "字段A",
                     "field_type": "string",
@@ -85,7 +85,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "data_source": {"rt_id": "test_rt_id", "system_ids": ["sys_1", "sys_2"]},
             "select": [
                 {
-                    "rt_id": "test_rt_id",
+                    "table": "test_rt_id",
                     "raw_name": "event_id",
                     "display_name": "事件ID",
                     "field_type": "string",
@@ -96,7 +96,7 @@ class TestRuleAuditSQLFormatter(TestCase):
                 "connector": "and",
                 "condition": {
                     "field": {
-                        "rt_id": "test_rt_id",
+                        "table": "test_rt_id",
                         "raw_name": "username",
                         "display_name": "操作人",
                         "field_type": "string",
@@ -130,14 +130,14 @@ class TestRuleAuditSQLFormatter(TestCase):
             "data_source": {"rt_id": "my_rt"},
             "select": [
                 {
-                    "rt_id": "my_rt",
+                    "table": "my_rt",
                     "raw_name": "colA",
                     "display_name": "列A",
                     "field_type": "string",
                     "aggregate": None,
                 },
                 {
-                    "rt_id": "my_rt",
+                    "table": "my_rt",
                     "raw_name": "colB",
                     "display_name": "列B",
                     "field_type": "string",
@@ -186,7 +186,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "data_source": {"link_table": {"uid": "demo_uid", "version": 1}},
             "select": [
                 {
-                    "rt_id": "log_rt_1",
+                    "table": "log_rt_1",
                     "raw_name": "event_id",
                     "display_name": "事件ID",
                     "field_type": "string",
@@ -245,14 +245,14 @@ class TestRuleAuditSQLFormatter(TestCase):
             "data_source": {"rt_id": "mixed_rt"},
             "select": [
                 {
-                    "rt_id": "mixed_rt",
+                    "table": "mixed_rt",
                     "raw_name": "colA",
                     "display_name": "列A",
                     "field_type": "string",
                     "aggregate": None,
                 },
                 {
-                    "rt_id": "mixed_rt",
+                    "table": "mixed_rt",
                     "raw_name": "colB",
                     "display_name": "列B",
                     "field_type": "string",
@@ -286,7 +286,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "data_source": {"rt_id": "special_char_rt"},
             "select": [
                 {
-                    "rt_id": "special_char_rt",
+                    "table": "special_char_rt",
                     "raw_name": "colA",
                     "display_name": "列A",
                     "field_type": "string",
@@ -317,7 +317,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "data_source": {"rt_id": "nested_rt"},
             "select": [
                 {
-                    "rt_id": "nested_rt",
+                    "table": "nested_rt",
                     "raw_name": "colA",
                     "display_name": "列A",
                     "field_type": "string",

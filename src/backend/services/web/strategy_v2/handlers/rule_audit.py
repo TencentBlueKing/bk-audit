@@ -85,52 +85,6 @@ class RuleAuditSQLGenerator:
         self.strategy = strategy
         self.query_builder = BKBaseQueryBuilder()
 
-    def parse_where_condition(self, where_json: dict) -> WhereCondition:
-        """
-        解析前端的 where JSON，转换为内部 WhereCondition（可能是一个条件组或单个条件）。
-        """
-        connector = where_json.get("connector", FilterConnector.AND)
-
-        # 如果是单个 condition
-        if condition := where_json.get("condition"):
-            return WhereCondition(
-                connector=connector,
-                condition=self.parse_single_condition(condition),
-            )
-
-        # 否则是条件组
-        sub_conditions = []
-        for sub_json in where_json.get("conditions", []):
-            sub_conditions.append(self.parse_where_condition(sub_json))
-
-        return WhereCondition(
-            connector=connector,
-            conditions=sub_conditions,
-        )
-
-    def parse_single_condition(self, cond_json: dict) -> Condition:
-        """
-        解析前端单条 condition，转换为内部 Condition 对象。
-        """
-        return Condition(
-            field=self.trans_field(cond_json["field"]),
-            operator=cond_json["operator"],
-            filters=cond_json.get("filters", []),
-            filter=cond_json.get("filter", ""),
-        )
-
-    def trans_field(self, field_json: dict) -> Field:
-        """
-        将前端传来的字段描述转换为 SQLGenerator 的 Field 对象。
-        """
-        return Field(
-            table=field_json["rt_id"],  # 这里直接把 rt_id 当做 table 名
-            raw_name=field_json["raw_name"],
-            display_name=field_json["display_name"],
-            field_type=field_json["field_type"],
-            aggregate=field_json.get("aggregate"),
-        )
-
     def build_system_ids_condition(self, table_name: str, system_ids: list) -> WhereCondition:
         """
         根据给定的表 rt_id 及 system_ids 列表，构建一个 AND 条件，用于拼接到最终的 WHERE 中。
@@ -227,8 +181,7 @@ class RuleAuditSQLGenerator:
         data_source = config_json["data_source"]
 
         # Step A. 解析 select_fields
-        select_fields_json = config_json.get("select", [])
-        select_fields = [self.trans_field(f_json) for f_json in select_fields_json]
+        select_fields = config_json.get("select", [])
 
         # Step B. 根据 config_type 构建 from_table, join_tables, tables_with_system_ids
         if config_type == RuleAuditConfigType.LINK_TABLE:
@@ -240,8 +193,7 @@ class RuleAuditSQLGenerator:
         where_json = config_json.get("where")
         conditions_to_merge = []
         if where_json:
-            front_where = self.parse_where_condition(where_json)
-            conditions_to_merge.append(front_where)
+            conditions_to_merge.append(where_json)
 
         # Step D. 为每个包含 system_ids 的表构建条件
         for table_name, system_ids in tables_with_system_ids.items():
