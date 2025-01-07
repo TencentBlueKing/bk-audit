@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="customize-resource-data-wrap">
+  <div
+    v-if="Array.isArray(modelValue.rt_id)"
+    class="customize-resource-data-wrap">
     <bk-form-item
       class="no-label"
       label-width="0"
@@ -85,14 +87,17 @@
   } = useRequest(StrategyManageService.fetchTable, {
     defaultValue: [],
     onSuccess: (data) => {
-      if (data && !isEditMode.value) {
+      if (!modelValue.value.rt_id) {
         modelValue.value.rt_id = [];
+      }
+      if (data) {
         data.sort((a, b) => {
           if (a.children && a.children.length) return -1;
           if (b.children && b.children.length) return 1;
           return 0;
         });
-      } else {
+      }
+      if (isEditMode.value) {
         // 对tableid转换
         data.forEach((item) => {
           if (item.children && item.children.length) {

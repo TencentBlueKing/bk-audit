@@ -290,7 +290,7 @@
         // eslint-disable-next-line no-param-reassign
         delete validator.uid;
       }
-      const params = { ...validator };
+      const params = _.cloneDeep(validator);
       // 处理rt_id，如果是数组，取最后一个
       params.config.links = params.config.links.map((link) => {
         const leftTableRtId = link.left_table.rt_id;
@@ -324,13 +324,9 @@
           ...params,
         };
         delete noConfigParams.config;
-        saveLinkData({
-          ...noConfigParams,
-        });
+        saveLinkData(noConfigParams);
       } else {
-        saveLinkData({
-          ...params,
-        });
+        saveLinkData(params);
       }
     });
   };

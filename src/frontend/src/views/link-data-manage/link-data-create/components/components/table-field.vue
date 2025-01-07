@@ -23,17 +23,25 @@
       <bk-form-item
         class="no-label"
         label-width="0"
-        property="left_field"
         style="margin-bottom: 8px;">
-        <field-select
-          ref="fieldItemRef"
-          v-model="field.left_field"
-          :rt-fields="leftFieldsList"
+        <select-verify
+          ref="selectVerifyRef"
+          :default-value="field.left_field"
           theme="background">
-          <template #prefix>
-            <span style="padding: 0 14px; color: #63656e; border-right: 1px solid #c4c6cc;">{{ t('字段') }}</span>
-          </template>
-        </field-select>
+          <bk-select
+            v-model="field.left_field"
+            filterable
+            :placeholder="t('请选择匹配字段')">
+            <template #prefix>
+              <span style="padding: 0 14px; color: #63656e; border-right: 1px solid #c4c6cc;">{{ t('字段') }}</span>
+            </template>
+            <bk-option
+              v-for="item in leftFieldsList"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value" />
+          </bk-select>
+        </select-verify>
       </bk-form-item>
     </div>
     <div style="width: 46px; margin-bottom: 8px; text-align: center;">
@@ -43,17 +51,25 @@
       <bk-form-item
         class="no-label"
         label-width="0"
-        property="right_field"
         style="margin-bottom: 8px;">
-        <field-select
-          ref="fieldItemRef"
-          v-model="field.right_field"
-          :rt-fields="rightFieldsList"
+        <select-verify
+          ref="selectVerifyRef"
+          :default-value="field.right_field"
           theme="background">
-          <template #prefix>
-            <span style="padding: 0 14px; color: #63656e; border-right: 1px solid #c4c6cc;">{{ t('字段') }}</span>
-          </template>
-        </field-select>
+          <bk-select
+            v-model="field.right_field"
+            filterable
+            :placeholder="t('请选择匹配字段')">
+            <template #prefix>
+              <span style="padding: 0 14px; color: #63656e; border-right: 1px solid #c4c6cc;">{{ t('字段') }}</span>
+            </template>
+            <bk-option
+              v-for="item in rightFieldsList"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value" />
+          </bk-select>
+        </select-verify>
       </bk-form-item>
     </div>
     <div class="icon-group">
@@ -74,7 +90,7 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import FieldSelect from './field-select.vue';
+  import SelectVerify from './select-verify.vue';
 
   interface FieldItem {
     field_type: string;
@@ -95,7 +111,7 @@
   const props = defineProps<Props>();
 
   const { t } = useI18n();
-  const fieldItemRef = ref();
+  const selectVerifyRef = ref();
 
   const linkFields = defineModel<Array<{
     left_field: string;
@@ -135,10 +151,12 @@
   // 获取左边表字段
   watch(() => props.leftTableRtId, (data) => {
     // 切换rt_id，清空字段输入
-    linkFields.value = linkFields.value?.map(field => ({
-      ...field,
-      left_field: '',
-    }));
+    if (leftFieldsList.value.length) {
+      linkFields.value = linkFields.value?.map(field => ({
+        ...field,
+        left_field: '',
+      }));
+    }
     // 获取表字段
     if (data && data.length) {
       const id = Array.isArray(data) ? data[data.length - 1] : data;
@@ -151,10 +169,12 @@
   // 获取右边表字段
   watch(() => props.rightTableRtId, (data) => {
     // 切换rt_id，清空字段输入
-    linkFields.value =  linkFields.value?.map(field => ({
-      ...field,
-      right_field: '',
-    }));
+    if (rightFieldsList.value.length) {
+      linkFields.value =  linkFields.value?.map(field => ({
+        ...field,
+        right_field: '',
+      }));
+    }
     // 获取表字段
     if (data && data.length) {
       const id = Array.isArray(data) ? data[data.length - 1] : data;
@@ -166,11 +186,11 @@
 
   defineExpose<Exposes>({
     clearFields() {
-      if (!fieldItemRef.value) return;
-      (fieldItemRef.value as { clearFields: () => void }[]).map(item => item.clearFields());
+      if (!selectVerifyRef.value) return;
+      (selectVerifyRef.value as { clearFields: () => void }[]).map(item => item.clearFields());
     },
     getValue() {
-      return Promise.all((fieldItemRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
+      return Promise.all((selectVerifyRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
     },
   });
 </script>
