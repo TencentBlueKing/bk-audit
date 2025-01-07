@@ -53,9 +53,7 @@
 
 <script setup lang='ts'>
   import {
-    inject,
     onMounted,
-    type Ref,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -75,7 +73,6 @@
   });
   const { t } = useI18n();
   const statusSystems = ref<Array<Record<string, any>>>([]);
-  const isEditMode = inject<Ref<boolean>>('isEditMode', ref(false));
 
   // 获取rt_id
   const {
@@ -84,7 +81,7 @@
   } = useRequest(StrategyManageService.fetchTable, {
     defaultValue: [],
     onSuccess: () => {
-      if (tableData.value.length && !isEditMode.value) {
+      if (tableData.value.length && !modelValue.value.rt_id) {
         // EventLog 默认使用第一个rt_id（只有一个）
         // 额外传递system_ids参数，只有EventLog才需要
         modelValue.value.rt_id = tableData.value[0]?.value;

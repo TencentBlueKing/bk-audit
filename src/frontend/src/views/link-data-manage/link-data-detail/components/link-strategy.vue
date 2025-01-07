@@ -88,7 +88,7 @@
       field: () => 'tags',
       minWidth: 230,
       render: ({ data }: { data: StrategyModel }) => {
-        const tags = data.tags.map(item => props.strategyTagMap.value[item] || item);
+        const tags = data.tags.map(item => props.strategyTagMap[item] || item);
         return <EditTag data={tags} key={data.strategy_id} />;
       },
     },

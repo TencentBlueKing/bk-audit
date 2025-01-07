@@ -151,10 +151,12 @@
   // 获取左边表字段
   watch(() => props.leftTableRtId, (data) => {
     // 切换rt_id，清空字段输入
-    linkFields.value = linkFields.value?.map(field => ({
-      ...field,
-      left_field: '',
-    }));
+    if (leftFieldsList.value.length) {
+      linkFields.value = linkFields.value?.map(field => ({
+        ...field,
+        left_field: '',
+      }));
+    }
     // 获取表字段
     if (data && data.length) {
       const id = Array.isArray(data) ? data[data.length - 1] : data;
@@ -167,10 +169,12 @@
   // 获取右边表字段
   watch(() => props.rightTableRtId, (data) => {
     // 切换rt_id，清空字段输入
-    linkFields.value =  linkFields.value?.map(field => ({
-      ...field,
-      right_field: '',
-    }));
+    if (rightFieldsList.value.length) {
+      linkFields.value =  linkFields.value?.map(field => ({
+        ...field,
+        right_field: '',
+      }));
+    }
     // 获取表字段
     if (data && data.length) {
       const id = Array.isArray(data) ? data[data.length - 1] : data;

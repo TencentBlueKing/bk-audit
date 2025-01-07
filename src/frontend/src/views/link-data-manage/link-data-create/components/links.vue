@@ -54,10 +54,12 @@
           </bk-form-item>
           <!-- 三种数据源，对应的输入类型 -->
           <select-verify
+            v-if="link.left_table.table_type"
             ref="selectVerifyRef"
             :default-value="link.left_table.table_type === 'EventLog' ?
               link.left_table.system_ids :
               link.left_table.rt_id"
+            style="flex: 1;"
             theme="background">
             <component
               :is="configTypeMap[link.left_table.table_type]"
@@ -103,10 +105,12 @@
           </bk-form-item>
           <!-- 三种数据源，对应的输入类型 -->
           <select-verify
+            v-if="link.right_table.table_type"
             ref="selectVerifyRef"
             :default-value="link.right_table.table_type === 'EventLog' ?
               link.right_table.system_ids :
               link.right_table.rt_id"
+            style="flex: 1;"
             theme="background">
             <component
               :is="configTypeMap[link.right_table.table_type]"
