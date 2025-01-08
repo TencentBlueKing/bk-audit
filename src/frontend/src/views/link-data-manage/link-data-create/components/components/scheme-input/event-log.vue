@@ -81,11 +81,9 @@
   } = useRequest(StrategyManageService.fetchTable, {
     defaultValue: [],
     onSuccess: () => {
-      if (tableData.value.length && !modelValue.value.rt_id) {
-        // EventLog 默认使用第一个rt_id（只有一个）
-        // 额外传递system_ids参数，只有EventLog才需要
-        modelValue.value.rt_id = tableData.value[0]?.value;
-      }
+      // EventLog 默认使用第一个rt_id（只有一个）
+      // 额外传递system_ids参数，只有EventLog才需要
+      modelValue.value.rt_id = tableData.value[0]?.value;
     },
   });
 

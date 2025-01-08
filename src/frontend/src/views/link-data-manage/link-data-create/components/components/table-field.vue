@@ -126,13 +126,25 @@
   const getLeftTableFields = (id: string) => {
     StrategyManageService.fetchTableRtFields({
       table_id: id,
-    }).then(data => leftFieldsList.value = data);
+    }).then((data) => {
+      leftFieldsList.value = data;
+      linkFields.value = linkFields.value.map(item => ({
+        right_field: item.right_field,
+        left_field: leftFieldsList.value.find(fieldItem => fieldItem.value === item.left_field) ? item.left_field : '',
+      }));
+    });
   };
 
   const getRightTableFields = (id: string) => {
     StrategyManageService.fetchTableRtFields({
       table_id: id,
-    }).then(data => rightFieldsList.value = data);
+    }).then((data) => {
+      rightFieldsList.value = data;
+      linkFields.value = linkFields.value.map(item => ({
+        left_field: item.left_field,
+        right_field: rightFieldsList.value.find(fieldItem => fieldItem.value === item.right_field) ? item.right_field : '',
+      }));
+    });
   };
 
   // 新增
@@ -150,13 +162,6 @@
 
   // 获取左边表字段
   watch(() => props.leftTableRtId, (data) => {
-    // 切换rt_id，清空字段输入
-    if (leftFieldsList.value.length) {
-      linkFields.value = linkFields.value?.map(field => ({
-        ...field,
-        left_field: '',
-      }));
-    }
     // 获取表字段
     if (data && data.length) {
       const id = Array.isArray(data) ? data[data.length - 1] : data;
@@ -164,17 +169,12 @@
     } else {
       leftFieldsList.value = [];
     }
+  }, {
+    immediate: true,
   });
 
   // 获取右边表字段
   watch(() => props.rightTableRtId, (data) => {
-    // 切换rt_id，清空字段输入
-    if (rightFieldsList.value.length) {
-      linkFields.value =  linkFields.value?.map(field => ({
-        ...field,
-        right_field: '',
-      }));
-    }
     // 获取表字段
     if (data && data.length) {
       const id = Array.isArray(data) ? data[data.length - 1] : data;
@@ -182,6 +182,8 @@
     } else {
       rightFieldsList.value = [];
     }
+  }, {
+    immediate: true,
   });
 
   defineExpose<Exposes>({

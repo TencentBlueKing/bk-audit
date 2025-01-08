@@ -61,6 +61,8 @@
     if (val && val.length) {
       isError.value = false;
     }
+  }, {
+    immediate: true,
   });
 
   defineExpose<Expose>({
