@@ -365,6 +365,8 @@ class RuleAuditController(BaseControl):
             node_config = storage_node(namespace=self.strategy.namespace).build_node_config(
                 bk_biz_id=bk_biz_id, raw_table_name=raw_table_name, sql_node_table_name=self.sql_node_table_name
             )
+            if not node_config:
+                continue
             storage_node_config = {
                 "flow_id": flow_id,
                 "frontend_info": {"x": self.x, "y": self.y},

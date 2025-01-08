@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-03 17:30+0800\n"
+"POT-Creation-Date: 2025-01-08 21:34+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2009,8 +2009,8 @@ msgstr "OR"
 msgid "字符串"
 msgstr "String"
 
-msgid "浮点数"
-msgstr "Float"
+msgid "双精度浮点数"
+msgstr "Double"
 
 msgid "整数"
 msgstr "Integer"
@@ -2020,6 +2020,12 @@ msgstr "Long Integer"
 
 msgid "文本"
 msgstr "Text"
+
+msgid "时间戳"
+msgstr "Timestamp"
+
+msgid "浮点数"
+msgstr "Float"
 
 msgid "计数"
 msgstr "Count"
@@ -2068,6 +2074,24 @@ msgstr "Include"
 
 msgid "Exclude"
 msgstr "Exclude"
+
+msgid "LessThanOrEqual"
+msgstr "LessThanOrEqual"
+
+msgid "LessThan"
+msgstr "LessThan"
+
+msgid "GreaterThanOrEqual"
+msgstr "GreaterThanOrEqual"
+
+msgid "GreaterThan"
+msgstr "GreaterThan"
+
+msgid "IsNull"
+msgstr "IsNull"
+
+msgid "NotNull"
+msgstr "NotNull"
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
@@ -3636,6 +3660,21 @@ msgstr "Query Join Table Details"
 msgid "查询联表标签列表"
 msgstr "Query Join Table Tags List"
 
+msgid "Source Field"
+msgstr "Source Field"
+
+msgid "来源字段的display_name，在查询中唯一"
+msgstr "The display_name of the source field, which is unique in the query"
+
+msgid "Target Value"
+msgstr "Target Value"
+
+msgid "固定值"
+msgstr "Target Value"
+
+msgid "Source Field or Target Value must be set at least one"
+msgstr "Source Field or Target Value must be set at least one"
+
 msgid "Field Name"
 msgstr "Field Name"
 
@@ -3651,14 +3690,15 @@ msgstr "Field Description"
 msgid "Map Field"
 msgstr "Map Field"
 
-msgid "Field Value"
-msgstr "Field Value"
-
 msgid "control_id and control_version are required when strategy_type is model"
 msgstr "control_id and control_version are required when strategy_type is model"
 
-msgid "link_table_uid and link_table_version are required when strategy_type is rule"
-msgstr "link_table_uid and link_table_version are required when strategy_type is rule"
+msgid "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
+msgstr "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
+
+#, python-format
+msgid "%s Need to configure mapping"
+msgstr "%s Need to configure mapping"
 
 msgid "Processor Groups"
 msgstr "Processor Groups"
@@ -3765,9 +3805,6 @@ msgstr "Rule Audit Where Connector"
 msgid "Connector"
 msgstr "Connector"
 
-msgid "Source Field"
-msgstr "Source Field"
-
 msgid "Source Type"
 msgstr "Source Type"
 
@@ -3871,8 +3908,8 @@ msgstr "Comma-separated tag ID list"
 msgid "Link Table Count"
 msgstr "Link Table Count"
 
-msgid "RT ID"
-msgstr "RT ID"
+msgid "Table"
+msgstr "Table"
 
 msgid "Raw Name"
 msgstr "Raw Name"
@@ -3889,11 +3926,11 @@ msgstr "UID"
 msgid "Field"
 msgstr "Field"
 
-msgid "Filter"
-msgstr "Filter"
+msgid "单个筛选值，可以是字符串、整数或浮点数"
+msgstr "A single filter value, which can be a string, integer, or float"
 
-msgid "Filters"
-msgstr "Filters"
+msgid "多个筛选值，每个值可以是字符串、整数或浮点数"
+msgstr "Multiple filter values, each of which can be a string, integer, or float"
 
 msgid "Conditions"
 msgstr "Conditions"

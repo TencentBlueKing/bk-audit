@@ -55,6 +55,8 @@ class BaseStorageNode(ABC):
         return f"{bk_biz_id}_{table_name}"
 
     def build_node_config(self, bk_biz_id: int, raw_table_name: str, sql_node_table_name: str) -> dict:
+        if not self.cluster:
+            return {}
         result_table_id = self.build_rt_id(bk_biz_id, raw_table_name)
         return {
             "node_type": self.node_type,
@@ -116,6 +118,7 @@ class QueueStorageNode(BaseStorageNode):
             DEFAULT_QUEUE_STORAGE_CLUSTER_KEY,
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=self.namespace,
+            default="",
         )
 
 
@@ -129,4 +132,5 @@ class HDFSStorageNode(BaseStorageNode):
             DEFAULT_HDFS_STORAGE_CLUSTER_KEY,
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=self.namespace,
+            default="",
         )
