@@ -15,7 +15,9 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+
 from pypika.functions import Count
+from pypika.terms import Function
 
 
 class DisCount(Count):
@@ -26,3 +28,12 @@ class DisCount(Count):
     def __init__(self, param, alias=None):
         super().__init__(param, alias=alias)
         self.distinct()
+
+
+class ConcatWs(Function):
+    """
+    CONCAT_WS函数
+    """
+
+    def __init__(self, separator, *args):
+        super(ConcatWs, self).__init__("CONCAT_WS", separator, *args)

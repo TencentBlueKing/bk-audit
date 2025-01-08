@@ -68,7 +68,7 @@ class TestRuleAuditSQLFormatter(TestCase):
 
         expected_sql = (
             "SELECT "
-            "CONCAT('{','\"字段A\":\"',`sub_table`.`字段A`,'\"','}') "
+            "udf_build_origin_data('字段A',CONCAT_WS('',CAST(`sub_table`.`字段A` AS STRING))) "
             "`event_data`,200 `strategy_id` "
             "FROM ("
             "SELECT `simple_rt`.`fieldA` `字段A` "
@@ -112,7 +112,7 @@ class TestRuleAuditSQLFormatter(TestCase):
         strategy = Strategy(strategy_id=101, configs=config_json, event_basic_field_configs=event_basic_field_configs)
         expected_sql = (
             "SELECT "
-            "CONCAT('{','\"事件ID\":\"',`sub_table`.`事件ID`,'\"','}') "
+            "udf_build_origin_data('事件ID',CONCAT_WS('',CAST(`sub_table`.`事件ID` AS STRING))) "
             "`event_data`,101 `strategy_id` "
             "FROM ("
             "SELECT `test_rt_id`.`event_id` `事件ID` "
@@ -154,7 +154,8 @@ class TestRuleAuditSQLFormatter(TestCase):
 
         expected_sql = (
             "SELECT "
-            "CONCAT('{','\"列A\":\"',`sub_table`.`列A`,'\"',',','\"列B\":\"',`sub_table`.`列B`,'\"','}') "
+            "udf_build_origin_data('列A|!@#$%^&*|列B',"
+            "CONCAT_WS('',CAST(`sub_table`.`列A` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`列B` AS STRING))) "
             "`event_data`,300 `strategy_id`,'abcdef' `fixed_col`,`sub_table`.`列B` `mapped_col` "
             "FROM (SELECT `my_rt`.`colA` `列A`,`my_rt`.`colB` `列B` FROM `my_rt` `my_rt`) `sub_table`"
         )
@@ -203,7 +204,7 @@ class TestRuleAuditSQLFormatter(TestCase):
 
         expected_sql = (
             "SELECT "
-            "CONCAT('{','\"事件ID\":\"',`sub_table`.`事件ID`,'\"','}') "
+            "udf_build_origin_data('事件ID',CONCAT_WS('',CAST(`sub_table`.`事件ID` AS STRING))) "
             "`event_data`,999 `strategy_id`,`sub_table`.`username` `operator_name`,'123' `bk_biz_id` "
             "FROM ("
             "SELECT `log_rt_1`.`event_id` `事件ID` "
@@ -269,11 +270,11 @@ class TestRuleAuditSQLFormatter(TestCase):
 
         expected_sql = (
             "SELECT "
-            "CONCAT('{','\"列A\":\"',`sub_table`.`列A`,'\"',',','\"列B\":\"',`sub_table`.`列B`,'\"','}') "
+            "udf_build_origin_data("
+            "'列A|!@#$%^&*|列B',"
+            "CONCAT_WS('',CAST(`sub_table`.`列A` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`列B` AS STRING))) "
             "`event_data`,400 `strategy_id`,'固定值' `fixed_value`,`sub_table`.`列A` `mapped_col` "
-            "FROM ("
-            "SELECT `mixed_rt`.`colA` `列A`,`mixed_rt`.`colB` `列B` "
-            "FROM `mixed_rt` `mixed_rt`) `sub_table`"
+            "FROM (SELECT `mixed_rt`.`colA` `列A`,`mixed_rt`.`colB` `列B` FROM `mixed_rt` `mixed_rt`) `sub_table`"
         )
         self._build_and_assert_sql(strategy, expected_sql)
 
@@ -302,7 +303,7 @@ class TestRuleAuditSQLFormatter(TestCase):
 
         expected_sql = (
             "SELECT "
-            "CONCAT('{','\"列A\":\"',`sub_table`.`列A`,'\"','}') "
+            "udf_build_origin_data('列A',CONCAT_WS('',CAST(`sub_table`.`列A` AS STRING))) "
             "`event_data`,500 `strategy_id`,'值含\"特殊字符\\\"和反斜杠' `fixed_col` "
             "FROM (SELECT `special_char_rt`.`colA` `列A` FROM `special_char_rt` `special_char_rt`) `sub_table`"
         )
@@ -339,7 +340,8 @@ class TestRuleAuditSQLFormatter(TestCase):
 
         expected_sql = (
             "SELECT "
-            "CONCAT('{','\"列A\":\"',`sub_table`.`列A`,'\"','}') `event_data`,600 `strategy_id` "
+            "udf_build_origin_data('列A',CONCAT_WS('',CAST(`sub_table`.`列A` AS STRING))) "
+            "`event_data`,600 `strategy_id` "
             "FROM (SELECT `nested_rt`.`colA` `列A` FROM `nested_rt` `nested_rt`) `sub_table`"
         )
         self._build_and_assert_sql(strategy, expected_sql)

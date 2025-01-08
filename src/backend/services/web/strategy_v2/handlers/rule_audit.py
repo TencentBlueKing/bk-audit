@@ -17,14 +17,16 @@ to the current version of the project delivered to anyone in the future.
 """
 from typing import Dict, List, Optional
 
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from pydantic import BaseModel
 from pypika import functions as fn
-from pypika.terms import Term, ValueWrapper
+from pypika.terms import Function, Term, ValueWrapper
 
 from apps.meta.utils.fields import SYSTEM_ID
 from core.sql.builder import BKBaseQueryBuilder
 from core.sql.constants import FilterConnector, Operator
+from core.sql.functions import ConcatWs
 from core.sql.model import (
     Condition,
     Field,
@@ -41,30 +43,39 @@ from services.web.strategy_v2.exceptions import LinkTableConfigError
 from services.web.strategy_v2.models import LinkTable, Strategy
 
 
-def make_json_string_expr(pairs: Dict[str, Term | ValueWrapper]):
+class UdfBuildOriginData(Function):
+    """ """
+
+    udf_func = settings.BKBASE_UDF_BUILD_ORIGIN_DATA_FUNC
+
+    def __init__(self, keys: Term, vals: Term):
+        super().__init__(self.udf_func, keys, vals)
+
+
+def make_json_expr(fields: Dict[str, Term]) -> Term:
     """
-    使用 fn.Concat 构造一个形如: {"key1":"val1","key2":"val2"} 的字符串。
-    返回: fn.Concat(...) 代表一个 PyPika 表达式
+    使用 UDF 函数和分隔符构造 JSON 字段。
+
+    Returns:
+        Term: 表示最终的 JSON 表达式，作为 PyPika 的 Term 对象。
     """
 
-    segments = [ValueWrapper('{')]
+    separator = settings.BKBASE_BUILD_ORIGIN_DATA_SEPERATOR
 
-    for i, (json_key, expr) in enumerate(pairs.items()):
-        if i > 0:
-            # 不是第一个就先加逗号
-            segments.append(ValueWrapper(','))
+    field_keys = fields.keys()
+    field_values = []
 
-        # 拼接 "key":"value" => "json_key":" + expr + "
-        # key 部分
-        segments.append(ValueWrapper(f'"{json_key}":"'))
+    for field in fields.values():
+        field_values.extend([fn.Cast(field, "string"), separator])
 
-        # 值部分
-        # 假设都当成字符串处理 => expr 后面补一个双引号
-        segments.append(expr)  # 这里是子查询列 or ValueWrapper(...)
-        segments.append(ValueWrapper('"'))
+    # 1. 拼接 key 部分
+    keys_str = separator.join(field_keys)
 
-    segments.append(ValueWrapper('}'))  # 结尾大括号
-    return fn.Concat(*segments)
+    # 2. 拼接 value 部分
+    value_str = ConcatWs("", *field_values[: len(field_values) - 1])
+
+    # 3. 返回 UDF 调用表达式
+    return UdfBuildOriginData(keys_str, value_str)
 
 
 class FieldMap(BaseModel):
@@ -238,7 +249,7 @@ class RuleAuditSQLGenerator:
         #    3.2 strategy_id => strategy_id
         #    3.3 其他字段 => 来自 field_mapping
         select_fields = [
-            make_json_string_expr(json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name),
+            make_json_expr(json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name),
             ValueWrapper(self.strategy.strategy_id, EventMappingFields.STRATEGY_ID.field_name),
         ]
         for field_name, map_config in field_mapping.items():

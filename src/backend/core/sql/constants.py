@@ -37,10 +37,12 @@ class FieldType(TextChoices):
     """
 
     STRING = "string", gettext_lazy("字符串")
-    DOUBLE = "double", gettext_lazy("浮点数")
+    DOUBLE = "double", gettext_lazy("双精度浮点数")
     INT = "int", gettext_lazy("整数")
     LONG = "long", gettext_lazy("长整数")
     TEXT = "text", gettext_lazy("文本")
+    TIMESTAMP = "timestamp", gettext_lazy("时间戳")
+    FLOAT = "float", gettext_lazy("浮点数")
 
 
 class AggregateType(TextChoices):
@@ -94,6 +96,12 @@ class Operator(TextChoices):
     NREG = "nreg", gettext_lazy("NotRegex")
     INCLUDE = "include", gettext_lazy("Include")
     EXCLUDE = "exclude", gettext_lazy("Exclude")
+    LTE = "lte", gettext_lazy("LessThanOrEqual")
+    LT = "lt", gettext_lazy("LessThan")
+    GTE = "gte", gettext_lazy("GreaterThanOrEqual")
+    GT = "gt", gettext_lazy("GreaterThan")
+    ISNULL = "isnull", gettext_lazy("IsNull")
+    NOTNULL = "notnull", gettext_lazy("NotNull")
 
     @classmethod
     def match_handler(cls, operator: str):
@@ -104,4 +112,10 @@ class Operator(TextChoices):
             cls.EXCLUDE: lambda field, value: ~field.isin(value),
             cls.REG: lambda field, value: field.regex(value),
             cls.NREG: lambda field, value: ~field.regex(value),
+            cls.LTE: lambda field, value: field.lte(value),
+            cls.LT: lambda field, value: field.lt(value),
+            cls.GTE: lambda field, value: field.gte(value),
+            cls.GT: lambda field, value: field.gt(value),
+            cls.ISNULL: lambda field, value: field.isnull(),
+            cls.NOTNULL: lambda field, value: field.notnull(),
         }.get(operator)

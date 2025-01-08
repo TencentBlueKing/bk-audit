@@ -103,9 +103,14 @@ class StrategySerializer(serializers.Serializer):
                     gettext("control_id and control_version are required when strategy_type is model"),
                 )
         elif strategy_type == StrategyType.RULE.value:
+            if validated_request_data.get("configs", {}).get("config_type") != RuleAuditConfigType.LINK_TABLE:
+                return
             if not (validated_request_data.get("link_table_uid") and validated_request_data.get("link_table_version")):
                 raise serializers.ValidationError(
-                    gettext("link_table_uid and link_table_version are required when strategy_type is rule"),
+                    gettext(
+                        "link_table_uid and link_table_version are required when strategy_type is rule "
+                        "and config_type is link table"
+                    ),
                 )
 
     def _validate_configs(self, validated_request_data: dict):
@@ -922,9 +927,17 @@ class RuleAuditConditionSerializer(serializers.Serializer):
 
     field = RuleAuditFieldSerializer(label=gettext_lazy("Field"))
     operator = serializers.ChoiceField(label=gettext_lazy("Operator"), choices=RuleAuditConditionOperator.choices)
-    filter = serializers.CharField(label=gettext_lazy("Filter"), default="", allow_blank=True)
+    filter = serializers.JSONField(
+        label="Filter",
+        default="",
+        help_text=gettext_lazy("单个筛选值，可以是字符串、整数或浮点数"),
+    )
     filters = serializers.ListField(
-        label=gettext_lazy("Filters"), child=serializers.CharField(), default=[], allow_empty=True
+        label="Filters",
+        child=serializers.JSONField(),
+        default=list,
+        help_text=gettext_lazy("多个筛选值，每个值可以是字符串、整数或浮点数"),
+        allow_empty=True,
     )
 
 

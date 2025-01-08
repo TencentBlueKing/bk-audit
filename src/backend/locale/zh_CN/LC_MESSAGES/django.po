@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-03 17:30+0800\n"
+"POT-Creation-Date: 2025-01-08 21:34+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2009,8 +2009,8 @@ msgstr "OR"
 msgid "字符串"
 msgstr "字符串"
 
-msgid "浮点数"
-msgstr "浮点数"
+msgid "双精度浮点数"
+msgstr "双精度浮点数"
 
 msgid "整数"
 msgstr "整数"
@@ -2020,6 +2020,12 @@ msgstr "长整数"
 
 msgid "文本"
 msgstr "文本"
+
+msgid "时间戳"
+msgstr "时间戳"
+
+msgid "浮点数"
+msgstr "浮点数"
 
 msgid "计数"
 msgstr "计数"
@@ -2068,6 +2074,24 @@ msgstr "包含"
 
 msgid "Exclude"
 msgstr "不包含"
+
+msgid "LessThanOrEqual"
+msgstr "小于或等于"
+
+msgid "LessThan"
+msgstr "小于"
+
+msgid "GreaterThanOrEqual"
+msgstr "大于或等于"
+
+msgid "GreaterThan"
+msgstr "大于"
+
+msgid "IsNull"
+msgstr "为空"
+
+msgid "NotNull"
+msgstr "不为空"
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
@@ -3636,6 +3660,21 @@ msgstr "查询联表详情"
 msgid "查询联表标签列表"
 msgstr "查询联表标签列表"
 
+msgid "Source Field"
+msgstr "来源字段"
+
+msgid "来源字段的display_name，在查询中唯一"
+msgstr "来源字段的display_name，在查询中唯一"
+
+msgid "Target Value"
+msgstr "固定值"
+
+msgid "固定值"
+msgstr "固定值"
+
+msgid "Source Field or Target Value must be set at least one"
+msgstr "源字段或固定值必须至少设置一个"
+
 msgid "Field Name"
 msgstr "字段名称"
 
@@ -3651,14 +3690,15 @@ msgstr "字段描述"
 msgid "Map Field"
 msgstr "映射字段"
 
-msgid "Field Value"
-msgstr "字段值"
-
 msgid "control_id and control_version are required when strategy_type is model"
-msgstr "当 strategy_type 为 model 时，必须提供 control_id 和 control_version"
+msgstr "当策略类型为模型审计时，必须提供 control_id 和 control_version"
 
-msgid "link_table_uid and link_table_version are required when strategy_type is rule"
-msgstr "当 strategy_type 为 rule 时，必须提供 link_table_uid 和 link_table_version"
+msgid "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
+msgstr "当策略类型为规则审计并且配置类型为联表时，必须提供 link_table_uid 和 link_table_version"
+
+#, python-format
+msgid "%s Need to configure mapping"
+msgstr "%s 必须配置映射"
 
 msgid "Processor Groups"
 msgstr "处理组"
@@ -3765,9 +3805,6 @@ msgstr "规则审计的 Where 连接符"
 msgid "Connector"
 msgstr "连接器"
 
-msgid "Source Field"
-msgstr "原始字段"
-
 msgid "Source Type"
 msgstr "数据源类型"
 
@@ -3855,8 +3892,8 @@ msgstr "逗号分隔的标签ID列表"
 msgid "Link Table Count"
 msgstr "联表数"
 
-msgid "RT ID"
-msgstr "RT ID"
+msgid "Table"
+msgstr "表"
 
 msgid "Raw Name"
 msgstr "原始名称"
@@ -3873,11 +3910,11 @@ msgstr "UID"
 msgid "Field"
 msgstr "字段"
 
-msgid "Filter"
-msgstr "筛选"
+msgid "单个筛选值，可以是字符串、整数或浮点数"
+msgstr "单个筛选值，可以是字符串、整数或浮点数"
 
-msgid "Filters"
-msgstr "筛选"
+msgid "多个筛选值，每个值可以是字符串、整数或浮点数"
+msgstr "多个筛选值，每个值可以是字符串、整数或浮点数"
 
 msgid "Conditions"
 msgstr "条件"
