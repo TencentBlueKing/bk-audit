@@ -146,15 +146,6 @@ export default {
       .then(({ data }) => data);
   },
   /**
-   * @desc 获取表字段
-   */
-  fetDatabaseTableFields(params: {
-    table_id: string;
-  }) {
-    return StrategySource.getDatabaseTableFields(params)
-      .then(({ data }) => data);
-  },
-  /**
    * @desc 获取表字段对应的规则和枚举值列表
    */
   fetchFiledRules(params: {

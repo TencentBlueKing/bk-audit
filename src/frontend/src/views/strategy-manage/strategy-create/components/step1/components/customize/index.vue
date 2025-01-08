@@ -42,7 +42,7 @@
                 :placeholder="t('请选择数据源类型')"
                 @change="handleDataSourceType">
                 <bk-option
-                  v-for="item in customizeTableTypeList"
+                  v-for="item in ruleAuditConfigType"
                   :key="item.value"
                   :label="item.label"
                   :value="item.value" />
@@ -60,8 +60,8 @@
           <!-- 联表详情 -->
           <link-data-detail-component
             :link-data-detail="linkDataDetail"
-            :link-data-sheet-id="formData.configs.data_source.link_data_sheet_id"
-            @handle-refresh-link-data="handleRefreshLinkData" />
+            :link-data-sheet-id="formData.configs.data_source.link_table.uid"
+            @refresh-link-data="handleRefreshLinkData" />
         </bk-form-item>
         <bk-form-item
           :label="t('预期结果')"
@@ -152,7 +152,6 @@
 </template>
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
-  import _ from 'lodash';
   import { h, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -192,9 +191,11 @@
       data_source: {
         system_id: string[],
         source_type: string,
-        result_table_id: string[]
-        data_sheet_id: string,
-        link_data_sheet_id: string,
+        rt_id: string | string[]
+        link_table: {
+          uid: number,
+          version: string,
+        },
       },
       config_type: string,
       select: Array<DatabaseTableFieldModel>,
@@ -226,16 +227,18 @@
   const configTypeMap: Record<string, any> = {
     EventLog: EventLogComponent,
     BuildIn: ResourceDataComponent,
-    OtherData: OtherDataComponent,
-    LinkData: LinkDataComponent,
+    BizRt: OtherDataComponent,
+    LinkTable: LinkDataComponent,
   };
 
   const initDataSource = ref<IFormData['configs']['data_source']>({
     system_id: [],
     source_type: 'batch_join_source',
-    result_table_id: [],
-    data_sheet_id: '',
-    link_data_sheet_id: '',
+    rt_id: [],
+    link_table: {
+      uid: 0,
+      version: '',
+    },
   });
 
   const formData = ref<IFormData>({
@@ -243,9 +246,11 @@
       data_source: {
         system_id: [],
         source_type: 'batch_join_source',
-        result_table_id: [],
-        data_sheet_id: '',
-        link_data_sheet_id: '',
+        rt_id: [],
+        link_table: {
+          uid: 0,
+          version: '',
+        },
       },
       config_type: '',
       select: [],
@@ -259,9 +264,10 @@
       },
     },
   });
-  const customizeTableTypeList = ref<Array<Record<string, any>>>([]);
+  const ruleAuditConfigType = ref<Array<Record<string, any>>>([]);
   const aggregateList = ref<Array<Record<string, any>>>([]);
   const configType = ref('');
+  const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
 
   const {
     data: commonData,
@@ -269,62 +275,11 @@
     defaultValue: new CommonDataModel(),
     manual: true,
     onSuccess() {
-      customizeTableTypeList.value = commonData.value.customize_table_type || [
-        {
-          label: '操作记录',
-          value: 'EventLog',
-          config: {
-            table_type: 'EventLog',
-            source_type: 'stream_source',
-          },
-        },
-        {
-          label: '资源数据',
-          value: 'BuildIn',
-          config: {
-            table_type: 'BuildIn',
-            source_type: 'batch_join_source',
-          },
-        },
-        {
-          label: '其他数据',
-          value: 'OtherData',
-          config: {
-            table_type: 'OtherData',
-            source_type: 'batch_join_source',
-          },
-        },
-        {
-          label: '联表数据',
-          value: 'LinkData',
-          config: {
-            table_type: 'LinkData',
-            source_type: 'batch_join_source',
-          },
-        },
-      ];
-      aggregateList.value = commonData.value.aggregate || [{
-        label: '求和',
-        value: 'SUM',
-      }, {
-        label: '最小值',
-        value: 'MIN',
-      }, {
-        label: '最大值',
-        value: 'MAX',
-      }, {
-        label: '计数',
-        value: 'COUNT',
-      }, {
-        label: '去重计数',
-        value: 'DISCOUNT',
-      }, {
-        label: '平均值',
-        value: 'AVG',
-      }, {
+      ruleAuditConfigType.value = commonData.value.rule_audit_config_type;
+      aggregateList.value = commonData.value.rule_audit_aggregate_type.concat([{
         label: '不聚和',
         value: 'null',
-      }];
+      }]);
     },
   });
 
@@ -338,63 +293,71 @@
 
   // 获取表字段
   const {
-    data: tableFields,
     run: fetDatabaseTableFields,
-  } = useRequest(StrategyManageService.fetDatabaseTableFields, {
+  } = useRequest(StrategyManageService.fetchTableRtFields, {
     defaultValue: [],
+    onSuccess: (data) => {
+      const rtId = formData.value.configs.data_source.rt_id;
+      tableFields.value = data.map(item => ({
+        table: Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId,
+        raw_name: item.value,
+        display_name: item.label,
+        type: item.field_type,
+        aggregate: '',
+        remark: '',
+      }));
+    },
   });
 
   // 切换数据源类型： 默认使用离线模式batch_join_source，不切换类型
   const handleDataSourceType = (item: string) => {
     if (formData.value.configs.config_type === '') {
       formData.value.configs.config_type = item;
-    } else {
-      InfoBox({
-        title: () =>  h('div', [
-          h(AuditIcon, {
-            type: 'alert',
-            style: {
-              fontSize: '42px',
-              color: '#FFF8C3',
-            },
-          }),
-          h('div', t('切换数据源请注意')),
-        ]),
-        subTitle: t('切换后，已配置的数据将被清空。是否继续？'),
-        confirmText: t('继续切换'),
-        cancelText: t('取消'),
-        headerAlign: 'center',
-        contentAlign: 'center',
-        footerAlign: 'center',
-        onConfirm() {
-          formData.value.configs.config_type = item;
-          // 重置数据
-          formData.value.configs.data_source = {
-            ...formData.value.configs.data_source,
-            ...initDataSource.value,
-          };
-          configRef.value?.resetFormData();
-          if (item !== '') {
-            fetchTable({
-              table_type: item,
-            });
-          }
-        },
-        onClose() {
-          configType.value = formData.value.configs.config_type;
-        },
-      });
+      if (item !== '' && item !== 'LinkTable') {
+        fetchTable({
+          table_type: item,
+        });
+      }
+      return;
     }
+    InfoBox({
+      title: () =>  h('div', [
+        h(AuditIcon, {
+          type: 'alert',
+          style: {
+            fontSize: '42px',
+            color: '#FFF8C3',
+          },
+        }),
+        h('div', t('切换数据源请注意')),
+      ]),
+      subTitle: t('切换后，已配置的数据将被清空。是否继续？'),
+      confirmText: t('继续切换'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      onConfirm() {
+        formData.value.configs.config_type = item;
+        // 重置数据
+        formData.value.configs.data_source = {
+          ...formData.value.configs.data_source,
+          ...initDataSource.value,
+        };
+        if (item !== '' && item !== 'LinkTable') {
+          fetchTable({
+            table_type: item,
+          });
+        }
+      },
+      onClose() {
+        configType.value = formData.value.configs.config_type;
+      },
+    });
   };
 
   // 更新数据源后，获取对应表字段
   const handleUpdateDataSource = (dataSource: Record<string, any>) => {
-    const keys = Object.keys(dataSource);
-    if (!_.isEmpty(dataSource[keys[0]])) {
-      fetDatabaseTableFields({
-        table_id: dataSource,
-      });
-    }
     formData.value.configs.data_source = {
       ...formData.value.configs.data_source,
       ...dataSource,
@@ -438,6 +401,14 @@
     emits('updateFormData', data);
   }, {
     deep: true,
+  });
+
+  watch(() => formData.value.configs.data_source.rt_id, (rtId) => {
+    if (rtId) {
+      fetDatabaseTableFields({
+        table_id: Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId,
+      });
+    }
   });
 
   defineExpose<Expose>({

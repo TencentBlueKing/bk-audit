@@ -19,20 +19,20 @@
     <bk-form-item
       class="no-label"
       label-width="0"
-      property="configs.data_source.link_data_sheet_id">
+      property="configs.data_source.link_table.uid">
       <span>
         <bk-select
-          v-model="formData.configs.data_source.link_data_sheet_id"
+          v-model="formData.configs.data_source.link_table.uid"
           filterable
-          :loading="isLinkDataSheetLoading"
+          :loading="loading"
           :no-match-text="t('无匹配数据')"
           :placeholder="t('请选择')"
           @change="handleChangeLinkDataSheet">
           <bk-option
-            v-for="(dataSheet, dataSheetIndex) in dataSheetList"
+            v-for="(dataSheet, dataSheetIndex) in data"
             :key="dataSheetIndex"
             :label="dataSheet.name"
-            :value="dataSheet.id" />
+            :value="dataSheet.uid" />
         </bk-select>
       </span>
     </bk-form-item>
@@ -46,7 +46,6 @@
   import { useI18n } from 'vue-i18n';
 
   import linkDataManageService from '@service/link-data-manage';
-  import MetaManageService from '@service/meta-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -63,28 +62,24 @@
   interface IFormData {
     configs: {
       data_source: {
-        link_data_sheet_id: string,
+        link_table: {
+          uid: string,
+          version: number,
+        },
       },
     },
   }
   const emits = defineEmits<Emits>();
-
   const { t } = useI18n();
   const formData = ref<IFormData>({
     configs: {
       data_source: {
-        link_data_sheet_id: '',
+        link_table: {
+          uid: '',
+          version: 0,
+        },
       },
     },
-  });
-
-  // 获取关联数据表
-  const {
-    loading: isLinkDataSheetLoading,
-    data: dataSheetList,
-  } = useRequest(MetaManageService.fetchLinkDataSheet, {
-    defaultValue: [],
-    manual: true,
   });
 
   // 获取关联表详情
@@ -102,18 +97,39 @@
   const handleChangeLinkDataSheet = (id: string) => {
     if (id !== '') {
       fetchLinkDataSheetDetail({
-        id,
+        uid: id,
       });
     }
+    const selectItem = data.value.find(data => data.uid === id);
+    formData.value.configs.data_source.link_table.version = selectItem ? selectItem.version : 0;
     emits('updateDataSource', formData.value.configs.data_source);
   };
 
+  // 获取全部联表
+  const {
+    loading,
+    data,
+  } = useRequest(linkDataManageService.fetchLinkTableAll, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: () => {
+      formData.value.configs.data_source.link_table = {
+        uid: '',
+        version: 0,
+      };
+      emits('updateDataSource', formData.value.configs.data_source);
+    },
+  });
+
   defineExpose<Expose>({
     refreshLinkData: () => {
-      fetchLinkDataSheetDetail({ id: formData.value.configs.data_source.link_data_sheet_id });
+      fetchLinkDataSheetDetail({ id: formData.value.configs.data_source.link_table });
     },
     resetFormData: () => {
-      formData.value.configs.data_source.link_data_sheet_id = '';
+      formData.value.configs.data_source.link_table = {
+        uid: '',
+        version: 0,
+      };
     },
   });
 </script>

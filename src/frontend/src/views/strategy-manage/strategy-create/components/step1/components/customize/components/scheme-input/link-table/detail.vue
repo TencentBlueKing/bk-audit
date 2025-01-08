@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    v-if="linkDataDetail.config.links && linkDataDetail.config.links.length"
+    v-if="linkDataDetail.config?.links && linkDataDetail.config.links.length"
     class="link-data-detail">
     <bk-alert
       v-if="linkDataDetail.has_refresh"
@@ -44,21 +44,26 @@
     </bk-alert>
     <div class="detail-wrapper">
       <div style="display: flex; justify-content: space-between;">
-        <span>{{ t('连表预览') }}</span>
+        <div>
+          <span>{{ t('连表预览') }}</span>
+          <audit-icon
+            v-bk-tooltips="t('联表中，将自动生成各个原始表的字母别名，用于后续选择字段的简略标识')"
+            style=" margin-left: 9px; font-size: 14px;color: #c4c6cc; cursor: pointer;"
+            type="help-fill" />
+        </div>
         <div class="operation">
           <span>{{ t('找不到合适的数据？') }}</span>
-          <router-link
+          <bk-button
             style="margin: 0 16px;"
-            target="_blank"
-            :to="{
-              name: '',
-            }">
+            text
+            theme="primary"
+            @click="create">
             {{ t('立即新建联表') }}
-          </router-link>
+          </bk-button>
           <router-link
             target="_blank"
             :to="{
-              name: '',
+              name: 'linkDataManage',
             }">
             {{ t('前往联表管理') }}
           </router-link>
@@ -71,13 +76,13 @@
         <div class="detail-table">
           <div class="detail-table-head">
             <div class="left-name">
-              {{ item.left_table.name }}
+              {{ item.left_table.rt_id }}
             </div>
             <div class="join-type">
               <relation-ship :join-type="item.join_type" />
             </div>
             <div class="right-name">
-              {{ item.right_table.name }}
+              {{ item.right_table.rt_id }}
             </div>
           </div>
           <template
@@ -98,27 +103,37 @@
         </div>
       </div>
     </div>
+    <create-link-data
+      ref="createRef" />
   </div>
 </template>
 <script setup lang="ts">
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
+  import CreateLinkData from '@views/link-data-manage/link-data-create/index.vue';
+
   interface Emits {
-    (e: 'handleRefreshLinkData'): void;
+    (e: 'refreshLinkData'): void;
   }
   interface Props {
     linkDataDetail: LinkDataDetailModel
-    linkDataSheetId: string
+    linkDataSheetId: number
   }
 
   defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const createRef = ref();
+
+  const create = () => {
+    createRef.value.show();
+  };
 
   const handleRefreshLinkData = () => {
-    emit('handleRefreshLinkData');
+    emit('refreshLinkData');
   };
 </script>
 <style scoped lang="postcss">
