@@ -88,11 +88,19 @@
         width: 120px;
       }
 
+      &:nth-child(4) {
+        width: 192px;
+      }
+
       &:last-child {
         flex: 1;
       }
 
       :deep(.bk-textarea) {
+        border: none;
+      }
+
+      :deep(.bk-input) {
         border: none;
       }
     }

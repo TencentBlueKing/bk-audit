@@ -38,10 +38,8 @@
                   :class="[selectIndex === index ? 'select-item-active' : '']"
                   @click="() => handleSelectField(index, item)">
                   <div>
-                    <audit-icon
-                      style=" margin-right: 4px; font-size: 16px;color: #1ba3fd"
-                      type="user" />
-                    <span>{{ item.display_name }}</span>
+                    <span style=" margin-right: 4px;font-size: 14px; color: #29bc9e;">#</span>
+                    <span>{{ item.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
                   </div>
                   <div>{{ item.raw_name }}</div>
                 </div>
@@ -120,7 +118,7 @@
     selectIndex.value = index;
     // 同一字段不能重复添加同一聚合算法
     // eslint-disable-next-line max-len
-    const hasAggregate = props.expectedResultList.filter(item => (item.rt_id + item.raw_name) === (field.rt_id +  item.raw_name));
+    const hasAggregate = props.expectedResultList.filter(item => (item.table + item.raw_name) === (field.table +  item.raw_name));
     if (hasAggregate.length) {
       localAggregateList.value = localAggregateList.value.map((item) => {
         if (hasAggregate.some(element => element.aggregate === item.value)) {

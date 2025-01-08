@@ -141,14 +141,14 @@
                 class="is-required"
                 :label="t('配置方式')"
                 label-width="160"
-                property="strategy_way">
+                property="strategy_type">
                 <bk-button-group>
                   <bk-button
                     v-for="item in strategyWayList"
                     :key="item.value"
                     :disabled="isStockData"
                     :loading="commonLoading"
-                    :selected="formData.strategy_way === item.value"
+                    :selected="formData.strategy_type === item.value"
                     @click="handleStrategyWay(item.value)">
                     <span
                       v-bk-tooltips="{
@@ -163,7 +163,7 @@
               </bk-form-item>
               <!-- 自定义规则审计、引入模型审计 -->
               <component
-                :is="strategyWayComMap[formData.strategy_way]"
+                :is="strategyWayComMap[formData.strategy_type]"
                 ref="comRef"
                 :edit-data="editData"
                 @update-control-detail="updateControlDetail"
@@ -237,7 +237,7 @@
     risk_level: string,
     risk_hazard: string,
     risk_guidance: string,
-    strategy_way: string,
+    strategy_type: string,
   }
 
   interface Emits {
@@ -262,8 +262,8 @@
   const isCloneMode = route.name === 'strategyClone';
 
   const strategyWayComMap: Record<string, any> = {
-    customize: Customize,
-    referenceModel: ReferenceModel,
+    rule: Customize,
+    model: ReferenceModel,
   };
 
   const comRef = ref();
@@ -283,7 +283,7 @@
     risk_level: '',
     risk_hazard: '',
     risk_guidance: '',
-    strategy_way: '',
+    strategy_type: '',
   });
   const isStockData = ref(false); // 是否是存量数据
   const rules = {
@@ -334,7 +334,7 @@
         trigger: 'change',
       },
     ],
-    strategy_way: [
+    strategy_type: [
       {
         validator: (value: string) => !!value,
         message: t('配置方式不能为空'),
@@ -454,10 +454,10 @@
     formData.value.risk_guidance = editData.risk_guidance;
     formData.value.risk_level = editData.risk_level;
     // 存量数据
-    if (!editData.strategy_way) {
+    if (!editData.strategy_type) {
       isStockData.value = true;
     }
-    formData.value.strategy_way = editData.strategy_way || 'referenceModel';
+    formData.value.strategy_type = editData.strategy_type || 'referenceModel';
 
     // 是否允许编辑风险等级
     canEditRiskLevel.value = !!editData.risk_level;
@@ -470,17 +470,17 @@
     manual: true,
     onSuccess: (data) => {
       riskLevelList.value = data.risk_level;
-      strategyWayList.value = data.strategy_way || [{
+      strategyWayList.value = [{
         label: '自定义规则审计',
-        value: 'customize',
+        value: 'rule',
         config: {
-          tips: '指根据目前审计中可用的日志、资产数据，直接配置规则，得到审计结果的方式。适用于大部分复杂程度不高的场景策略。',
+          tips: t('指根据目前审计中可用的日志、资产数据，直接配置规则，得到审计结果的方式。适用于大部分复杂程度不高的场景策略。'),
         },
       }, {
         label: '引入模型审计',
-        value: 'referenceModel',
+        value: 'model',
         config: {
-          tips: '指先通过蓝鲸 bkbase 的 AIops 内开发场景模型后，在审计中心内配置字段映射生成策略的方式。适用于对 aiops 有数据开发能力，且需要实现的审计方案较复杂的情况。',
+          tips: t('指先通过蓝鲸 bkbase 的 AIops 内开发场景模型后，在审计中心内配置字段映射生成策略的方式。适用于对 aiops 有数据开发能力，且需要实现的审计方案较复杂的情况。'),
         },
       }];
     },
@@ -515,8 +515,8 @@
   });
 
   const handleStrategyWay = (way: string) => {
-    formData.value.strategy_way = way;
-    formRef.value.validate('strategy_way');
+    formData.value.strategy_type = way;
+    formRef.value.validate('strategy_type');
   };
 
   // 设置风险等级
@@ -541,7 +541,7 @@
   const handleNext = () => {
     const tastQueue = [formRef.value.validate()];
     // 有配置组件
-    if (formData.value.strategy_way) {
+    if (formData.value.strategy_type) {
       tastQueue.push(comRef.value.getValue?.());
     }
     Promise.all(tastQueue).then(() => {

@@ -19,20 +19,19 @@
     <bk-form-item
       class="no-label"
       label-width="0"
-      property="configs.data_source.data_sheet_id">
+      property="configs.data_source.rt_id">
       <span>
         <bk-select
-          v-model="formData.configs.data_source.data_sheet_id"
+          v-model="formData.configs.data_source.rt_id"
           filterable
-          :loading="isDataSheetLoading"
           :no-match-text="t('无匹配数据')"
           :placeholder="t('请选择')"
           @change="handleChangeDataSheet">
           <bk-option
-            v-for="(dataSheet, dataSheetIndex) in dataSheetList"
+            v-for="(dataSheet, dataSheetIndex) in props.tableData"
             :key="dataSheetIndex"
-            :label="dataSheet.name"
-            :value="dataSheet.id" />
+            :label="dataSheet.label"
+            :value="dataSheet.value" />
         </bk-select>
       </span>
     </bk-form-item>
@@ -42,12 +41,9 @@
 <script setup lang='ts'>
   import {
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
-
-  import MetaManageService from '@service/meta-manage';
-
-  import useRequest from '@hooks/use-request';
 
   interface Expose {
     resetFormData: () => void,
@@ -57,31 +53,42 @@
     (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
   }
 
+  interface Props {
+    tableData: Array<{
+      label: string;
+      value: string;
+      children: Array<{
+        label: string;
+        value: string;
+      }>
+    }>;
+  }
+
   interface IFormData {
     configs: {
       data_source: {
-        data_sheet_id: string,
+        rt_id: string,
       },
     },
   }
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-
   const { t } = useI18n();
   const formData = ref<IFormData>({
     configs: {
       data_source: {
-        data_sheet_id: '',
+        rt_id: '',
       },
     },
   });
 
-  // 获取数据表
-  const {
-    loading: isDataSheetLoading,
-    data: dataSheetList,
-  } = useRequest(MetaManageService.fetchDataSheet, {
-    defaultValue: [],
-    manual: true,
+  watch(() => props.tableData, (data) => {
+    if (data) {
+      formData.value.configs.data_source.rt_id = '';
+      emits('updateDataSource', formData.value.configs.data_source);
+    }
+  }, {
+    immediate: true,
   });
 
   // 选择数据表
@@ -91,7 +98,7 @@
 
   defineExpose<Expose>({
     resetFormData: () => {
-      formData.value.configs.data_source.data_sheet_id = '';
+      formData.value.configs.data_source.rt_id = '';
     },
   });
 </script>

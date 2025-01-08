@@ -54,6 +54,7 @@
 <script setup lang='ts'>
   import {
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -70,20 +71,33 @@
     (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
   }
 
+  interface Props {
+    tableData: Array<{
+      label: string;
+      value: string;
+      children: Array<{
+        label: string;
+        value: string;
+      }>
+    }>;
+  }
+
   interface IFormData {
     configs: {
       data_source: {
         system_id: string[],
+        rt_id: string,
       },
     },
   }
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-
   const { t } = useI18n();
   const formData = ref<IFormData>({
     configs: {
       data_source: {
         system_id: [],
+        rt_id: '',
       },
     },
   });
@@ -130,6 +144,16 @@
   const handleChangeSystem = () => {
     emits('updateDataSource', formData.value.configs.data_source);
   };
+
+  watch(() => props.tableData, (data) => {
+    if (data) {
+      formData.value.configs.data_source.rt_id = data[0]?.value;
+      emits('updateDataSource', formData.value.configs.data_source);
+    }
+  }, {
+    immediate: true,
+  });
+
 
   defineExpose<Expose>({
     resetFormData: () => {

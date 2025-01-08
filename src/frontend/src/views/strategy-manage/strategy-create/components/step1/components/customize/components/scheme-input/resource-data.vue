@@ -19,10 +19,10 @@
     <bk-form-item
       class="no-label"
       label-width="0"
-      property="configs.data_source.result_table_id">
+      property="configs.data_source.rt_id">
       <bk-cascader
         v-slot="{node,data}"
-        v-model="formData.configs.data_source.result_table_id"
+        v-model="formData.configs.data_source.rt_id"
         :disabled="isEditMode || isCloneMode || isUpgradeMode"
         filterable
         id-key="value"
@@ -88,7 +88,7 @@
   const formData = ref({
     configs: {
       data_source: {
-        result_table_id: [] as Array<string>,
+        rt_id: [] as Array<string>,
       },
     },
   });
@@ -108,7 +108,7 @@
 
   watch(() => props.tableData, (data) => {
     if (data) {
-      formData.value.configs.data_source.result_table_id = [];
+      formData.value.configs.data_source.rt_id = [];
       handleUpdateDataSource();
       data.sort((a, b) => {
         if (a.children && a.children.length) return -1;
@@ -122,7 +122,7 @@
 
   defineExpose<Expose>({
     resetFormData: () => {
-      formData.value.configs.data_source.result_table_id = [];
+      formData.value.configs.data_source.rt_id = [];
     },
   });
 </script>
