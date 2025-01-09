@@ -433,6 +433,14 @@ class ControlVersionJudge(StrategyJudge):
         return controls
 
     def judge(self, strategy) -> bool:
+        if any(
+            [
+                strategy.strategy_type != StrategyType.MODEL.value,
+                not strategy.control_id,
+                not strategy.control_version,
+            ]
+        ):
+            return False
         return self.controls.get(strategy.control_id, strategy.control_version) > strategy.control_version
 
 
