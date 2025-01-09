@@ -81,7 +81,7 @@ class RuleAuditController(BaseControl):
         super().__init__(strategy_id)
         self.rt_node_map = {}  # {rt_id: node_id}
         self.x_interval = 300
-        self.y_interval = 30
+        self.y_interval = 100
         self.x = 0
         self.y = 0
 
