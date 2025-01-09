@@ -70,7 +70,7 @@ class BaseStorageNode(ABC):
 
 
 class ESStorageNode(BaseStorageNode):
-    node_type = "es_storage"
+    node_type = "elastic_storage"
     expires = DEFAULT_RETENTION
 
     @property
