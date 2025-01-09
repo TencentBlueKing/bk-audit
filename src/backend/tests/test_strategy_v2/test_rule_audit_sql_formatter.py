@@ -31,6 +31,15 @@ class TestRuleAuditSQLFormatter(TestCase):
     测试 RuleAuditSQLFormatter 的 build_sql 方法, 只关注最终产出的 SQL
     """
 
+    def setUp(self):
+        self.patcher = patch(
+            "services.web.strategy_v2.handlers.rule_audit.RuleAuditSQLBuilder.format_alias", side_effect=lambda x: x
+        )
+        self.mock_method = self.patcher.start()
+
+    def tearDown(self):
+        self.patcher.stop()
+
     def _build_and_assert_sql(self, strategy: Strategy, expected_sql: str, mock_link_table_obj=None):
         formatter = RuleAuditSQLBuilder(strategy)
         if mock_link_table_obj:
@@ -197,7 +206,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "where": None,
         }
         event_basic_field_configs = [
-            {"field_name": "operator_name", "map_config": {"source_field": "username", "target_value": None}},
+            {"field_name": "operator_name", "map_config": {"source_field": "事件ID", "target_value": None}},
             {"field_name": "bk_biz_id", "map_config": {"target_value": "123"}},
         ]
         strategy = Strategy(strategy_id=999, configs=config_json, event_basic_field_configs=event_basic_field_configs)
@@ -205,7 +214,7 @@ class TestRuleAuditSQLFormatter(TestCase):
         expected_sql = (
             "SELECT "
             "udf_build_origin_data('事件ID',CONCAT_WS('',CAST(`sub_table`.`事件ID` AS STRING))) "
-            "`event_data`,999 `strategy_id`,`sub_table`.`username` `operator_name`,'123' `bk_biz_id` "
+            "`event_data`,999 `strategy_id`,`sub_table`.`事件ID` `operator_name`,'123' `bk_biz_id` "
             "FROM ("
             "SELECT `log_rt_1`.`event_id` `事件ID` "
             "FROM log_rt_1 `log_rt_1` "

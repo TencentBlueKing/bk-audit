@@ -15,8 +15,10 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from gettext import gettext
 from typing import Any, Dict, List, Optional
 
+from bk_resource.utils.common_utils import get_md5
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from pydantic import BaseModel
@@ -40,7 +42,10 @@ from core.sql.model import (
 from core.sql.sql_builder import SQLGenerator
 from services.web.risk.constants import EventMappingFields
 from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType
-from services.web.strategy_v2.exceptions import LinkTableConfigError
+from services.web.strategy_v2.exceptions import (
+    LinkTableConfigError,
+    RuleAuditSqlGeneratorError,
+)
 from services.web.strategy_v2.models import LinkTable, Strategy
 
 
@@ -107,6 +112,7 @@ class RuleAuditSQLBuilder:
     def __init__(self, strategy: Strategy):
         self.strategy = strategy
         self.query_builder = BKBaseQueryBuilder()
+        self.display2tmp_name_map = {}
 
     def build_system_ids_condition(self, table_name: str, system_ids: list) -> WhereCondition:
         """
@@ -238,6 +244,13 @@ class RuleAuditSQLBuilder:
             where=final_where,
         )
 
+    def format_alias(self, alias: str) -> str:
+        r"""
+        格式化别名为符合 bkbase 要求的字符串 [[A-Za-z_]\w*]
+        """
+
+        return f"u_{get_md5(alias)}"
+
     def build_sql(self) -> str:
         """
         将规则审计策略生成 sql
@@ -253,11 +266,18 @@ class RuleAuditSQLBuilder:
         }
         # 1. 生成子查询 (sub_table)
         sql_config = self.format(config_json)
+        for field in sql_config.select_fields:
+            self.display2tmp_name_map[field.display_name] = self.format_alias(field.display_name)
+        # 格式化别名
+        for field in sql_config.select_fields:
+            field.display_name = self.display2tmp_name_map[field.display_name]
         sub_table = (
             RuleAuditSqlGenerator(query_builder=self.query_builder, config=sql_config).generate().as_("sub_table")
         )
         # 2. 构造 JSON_OBJECT(...) 参数
-        json_obj_args = {field.display_name: sub_table.field(field.display_name) for field in sql_config.select_fields}
+        display_names = self.display2tmp_name_map.keys()
+        fields = [sub_table.field(field.display_name) for field in sql_config.select_fields]
+        json_obj_args = dict(zip(display_names, fields))
         # 3. 最外层 select 列表
         #    3.1 JSON_OBJECT(...) => event_data
         #    3.2 strategy_id => strategy_id
@@ -266,10 +286,14 @@ class RuleAuditSQLBuilder:
             make_json_expr(json_obj_args).as_(EventMappingFields.EVENT_DATA.field_name),
             ValueWrapper(self.strategy.strategy_id, EventMappingFields.STRATEGY_ID.field_name),
         ]
-        for field_name, map_config in field_mapping.items():
+        for display_name, map_config in field_mapping.items():
             if map_config.target_value:
-                select_fields.append(ValueWrapper(map_config.target_value, field_name))
+                select_fields.append(ValueWrapper(map_config.target_value, display_name))
             elif map_config.source_field:
-                select_fields.append(sub_table.field(map_config.source_field).as_(field_name))
+                if map_config.source_field not in self.display2tmp_name_map:
+                    raise RuleAuditSqlGeneratorError(gettext("source_field %s not found" % map_config.source_field))
+                select_fields.append(
+                    sub_table.field(self.display2tmp_name_map[map_config.source_field]).as_(display_name)
+                )
         # 4. 构建最终查询: from sub_table select ...
         return str(self.query_builder.from_(sub_table).select(*select_fields))
