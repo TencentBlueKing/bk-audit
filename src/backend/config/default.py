@@ -368,7 +368,7 @@ DEFAULT_QUEUE_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_QUEUE_STORAGE_EXPIR
 # HDFS存储时长(天) -1 表示不限制
 DEFAULT_HDFS_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_HDFS_STORAGE_EXPIRES", -1))
 # 审计 kafka 配置
-KAFKA_CONFIG = json.loads(os.getenv("BKAPP_KAFKA_CONFIG", "{}"))
+KAFKA_CONFIG = json.loads(os.getenv("BKAPP_INIT_KAFKA_CONFIG", "{}"))
 # 事件 kafka 拉取超时时长
 EVENT_KAFKA_TIMEOUT_MS = int(os.getenv("BKAPP_EVENT_KAFKA_TIMEOUT_MS", 1000))
 # 事件 kafka 最大拉取记录数
