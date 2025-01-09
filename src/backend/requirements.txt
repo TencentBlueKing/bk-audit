@@ -31,6 +31,7 @@ elasticsearch==7.17.9
 gunicorn==22.0.0
 ipython==8.10.0
 JSON-log-formatter==0.4.0
+kafka-python==2.0.2
 mistune==2.0.3
 numpy==1.24.2
 openpyxl==3.1.2

@@ -23,6 +23,10 @@ modules:
         command: python manage.py celery beat -l info
         plan: 4C1G5R
         replicas: 1
+      gen-risk:
+        command: python manage.py gen_risk
+        plan: 4C1G5R
+        replicas: 2
     scripts:
       pre_release_hook: sh -c "python manage.py migrate --no-input && python manage.py createcachetable && python manage.py init_system && python manage.py init_fields && python manage.py sync_apigw"
     svc_discovery:
