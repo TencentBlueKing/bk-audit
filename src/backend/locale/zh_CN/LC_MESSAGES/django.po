@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-08 21:34+0800\n"
+"POT-Creation-Date: 2025-01-09 20:42+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3533,6 +3533,14 @@ msgstr "策略类型不可修改"
 msgid "联表配置错误"
 msgstr "联表配置错误"
 
+#, python-brace-format
+msgid "规则审计SQL生成错误: {err}"
+msgstr "规则审计SQL生成错误: {err}"
+
+#, python-format
+msgid "source_field %s not found"
+msgstr "来源字段 %s 不存在"
+
 msgid "Strategy Name"
 msgstr "策略名称"
 
@@ -3693,6 +3701,9 @@ msgstr "映射字段"
 msgid "control_id and control_version are required when strategy_type is model"
 msgstr "当策略类型为模型审计时，必须提供 control_id 和 control_version"
 
+msgid "Control Version not Exists"
+msgstr "控件版本不存在"
+
 msgid "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
 msgstr "当策略类型为规则审计并且配置类型为联表时，必须提供 link_table_uid 和 link_table_version"
 
@@ -3705,9 +3716,6 @@ msgstr "处理组"
 
 msgid "Processor Group"
 msgstr "处理组"
-
-msgid "Control Version not Exists"
-msgstr "控件版本不存在"
 
 msgid "Strategy Name Duplicate"
 msgstr "策略名称重复"

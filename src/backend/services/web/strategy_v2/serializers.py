@@ -83,7 +83,7 @@ class EventFieldSerializer(serializers.Serializer):
 
 
 class EventBasicFieldSerializer(EventFieldSerializer):
-    map_config = MapFieldSerializer(label=gettext_lazy("Map Field"), required=False)
+    map_config = MapFieldSerializer(label=gettext_lazy("Map Field"), required=False, allow_null=True)
 
 
 class StrategySerializer(serializers.Serializer):

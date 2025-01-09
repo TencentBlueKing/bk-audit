@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-08 21:34+0800\n"
+"POT-Creation-Date: 2025-01-09 20:42+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3533,6 +3533,14 @@ msgstr "Policy type cannot be modified"
 msgid "联表配置错误"
 msgstr "Link table configuration error"
 
+#, python-brace-format
+msgid "规则审计SQL生成错误: {err}"
+msgstr "Rule audit SQL generates errors: {err}"
+
+#, python-format
+msgid "source_field %s not found"
+msgstr "source_field %s not found"
+
 msgid "Strategy Name"
 msgstr "Strategy Name"
 
@@ -3693,6 +3701,9 @@ msgstr "Map Field"
 msgid "control_id and control_version are required when strategy_type is model"
 msgstr "control_id and control_version are required when strategy_type is model"
 
+msgid "Control Version not Exists"
+msgstr "Control Version not Exists"
+
 msgid "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
 msgstr "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
 
@@ -3705,9 +3716,6 @@ msgstr "Processor Groups"
 
 msgid "Processor Group"
 msgstr "Processor Group"
-
-msgid "Control Version not Exists"
-msgstr "Control Version not Exists"
 
 msgid "Strategy Name Duplicate"
 msgstr "Strategy Name Duplicate"
