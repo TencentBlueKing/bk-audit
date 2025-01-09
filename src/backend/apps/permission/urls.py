@@ -39,6 +39,7 @@ try:
     )
 except (RuntimeError, ImportError):
     StrategyResourceProvider = None
+    LinkTableProvider = None
 
 try:
     from services.web.risk.provider import RiskResourceProvider
