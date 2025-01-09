@@ -905,7 +905,7 @@ class RuleAuditDataSourceSerializer(serializers.Serializer):
     system_ids = serializers.ListField(
         label=gettext_lazy("System ID"), child=serializers.CharField(), required=False, allow_empty=True
     )
-    link_table = RuleAuditLinkTableSerializer(label=gettext_lazy("Link Table"), required=False)
+    link_table = RuleAuditLinkTableSerializer(label=gettext_lazy("Link Table"), required=False, allow_null=True)
     display_name = serializers.CharField(label=gettext_lazy("Display Name"), required=False)
 
     def validate(self, attrs):

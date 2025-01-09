@@ -38,6 +38,8 @@ from core.sql.model import WhereCondition
 class SQLGenerator:
     """SQL 生成器"""
 
+    table_cls = Table
+
     def __init__(self, query_builder: QueryBuilder, config: SqlConfig):
         """
         初始化生成器
@@ -64,7 +66,9 @@ class SQLGenerator:
                 register_tables[alias] = table
 
         # 更新 table_map 映射
-        self.table_map.update({alias: Table(table.table_name).as_(alias) for alias, table in register_tables.items()})
+        self.table_map.update(
+            {alias: self.table_cls(table.table_name).as_(alias) for alias, table in register_tables.items()}
+        )
 
     def _get_table(self, table: Union[str, SqlTable]) -> Table:
         """根据表名获取 Table 对象"""

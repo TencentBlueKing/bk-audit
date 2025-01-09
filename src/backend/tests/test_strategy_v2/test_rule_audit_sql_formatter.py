@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType
 from services.web.strategy_v2.exceptions import LinkTableConfigError
-from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLGenerator
+from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLBuilder
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -32,7 +32,7 @@ class TestRuleAuditSQLFormatter(TestCase):
     """
 
     def _build_and_assert_sql(self, strategy: Strategy, expected_sql: str, mock_link_table_obj=None):
-        formatter = RuleAuditSQLGenerator(strategy)
+        formatter = RuleAuditSQLBuilder(strategy)
         if mock_link_table_obj:
             with patch(
                 "services.web.strategy_v2.handlers.rule_audit.get_object_or_404", return_value=mock_link_table_obj
@@ -72,7 +72,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "`event_data`,200 `strategy_id` "
             "FROM ("
             "SELECT `simple_rt`.`fieldA` `字段A` "
-            "FROM `simple_rt` `simple_rt`) `sub_table`"
+            "FROM simple_rt `simple_rt`) `sub_table`"
         )
         self._build_and_assert_sql(strategy, expected_sql)
 
@@ -116,7 +116,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "`event_data`,101 `strategy_id` "
             "FROM ("
             "SELECT `test_rt_id`.`event_id` `事件ID` "
-            "FROM `test_rt_id` `test_rt_id` "
+            "FROM test_rt_id `test_rt_id` "
             "WHERE `test_rt_id`.`username`='admin' AND `test_rt_id`.`system_id` IN ('sys_1','sys_2')) `sub_table`"
         )
         self._build_and_assert_sql(strategy, expected_sql)
@@ -157,7 +157,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "udf_build_origin_data('列A|!@#$%^&*|列B',"
             "CONCAT_WS('',CAST(`sub_table`.`列A` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`列B` AS STRING))) "
             "`event_data`,300 `strategy_id`,'abcdef' `fixed_col`,`sub_table`.`列B` `mapped_col` "
-            "FROM (SELECT `my_rt`.`colA` `列A`,`my_rt`.`colB` `列B` FROM `my_rt` `my_rt`) `sub_table`"
+            "FROM (SELECT `my_rt`.`colA` `列A`,`my_rt`.`colB` `列B` FROM my_rt `my_rt`) `sub_table`"
         )
         self._build_and_assert_sql(strategy, expected_sql)
 
@@ -208,8 +208,8 @@ class TestRuleAuditSQLFormatter(TestCase):
             "`event_data`,999 `strategy_id`,`sub_table`.`username` `operator_name`,'123' `bk_biz_id` "
             "FROM ("
             "SELECT `log_rt_1`.`event_id` `事件ID` "
-            "FROM `log_rt_1` `log_rt_1` "
-            "LEFT JOIN `asset_rt_2` `asset_rt_2` "
+            "FROM log_rt_1 `log_rt_1` "
+            "LEFT JOIN asset_rt_2 `asset_rt_2` "
             "ON `log_rt_1`.`event_id`=`asset_rt_2`.`resource_id` "
             "WHERE `log_rt_1`.`system_id` "
             "IN ('sys_111')) `sub_table`"
@@ -235,7 +235,7 @@ class TestRuleAuditSQLFormatter(TestCase):
 
         with patch("services.web.strategy_v2.handlers.rule_audit.get_object_or_404", return_value=mock_link_table_obj):
             with self.assertRaises(LinkTableConfigError):
-                RuleAuditSQLGenerator(strategy).build_sql()
+                RuleAuditSQLBuilder(strategy).build_sql()
 
     def test_json_with_mixed_columns_and_values(self):
         """
@@ -274,7 +274,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "'列A|!@#$%^&*|列B',"
             "CONCAT_WS('',CAST(`sub_table`.`列A` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`列B` AS STRING))) "
             "`event_data`,400 `strategy_id`,'固定值' `fixed_value`,`sub_table`.`列A` `mapped_col` "
-            "FROM (SELECT `mixed_rt`.`colA` `列A`,`mixed_rt`.`colB` `列B` FROM `mixed_rt` `mixed_rt`) `sub_table`"
+            "FROM (SELECT `mixed_rt`.`colA` `列A`,`mixed_rt`.`colB` `列B` FROM mixed_rt `mixed_rt`) `sub_table`"
         )
         self._build_and_assert_sql(strategy, expected_sql)
 
@@ -305,7 +305,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "SELECT "
             "udf_build_origin_data('列A',CONCAT_WS('',CAST(`sub_table`.`列A` AS STRING))) "
             "`event_data`,500 `strategy_id`,'值含\"特殊字符\\\"和反斜杠' `fixed_col` "
-            "FROM (SELECT `special_char_rt`.`colA` `列A` FROM `special_char_rt` `special_char_rt`) `sub_table`"
+            "FROM (SELECT `special_char_rt`.`colA` `列A` FROM special_char_rt `special_char_rt`) `sub_table`"
         )
         self._build_and_assert_sql(strategy, expected_sql)
 
@@ -342,7 +342,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "SELECT "
             "udf_build_origin_data('列A',CONCAT_WS('',CAST(`sub_table`.`列A` AS STRING))) "
             "`event_data`,600 `strategy_id` "
-            "FROM (SELECT `nested_rt`.`colA` `列A` FROM `nested_rt` `nested_rt`) `sub_table`"
+            "FROM (SELECT `nested_rt`.`colA` `列A` FROM nested_rt `nested_rt`) `sub_table`"
         )
         self._build_and_assert_sql(strategy, expected_sql)
 

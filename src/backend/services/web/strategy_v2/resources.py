@@ -93,7 +93,7 @@ from services.web.strategy_v2.exceptions import (
     StrategyPendingError,
     StrategyTypeCanNotChange,
 )
-from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLGenerator
+from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLBuilder
 from services.web.strategy_v2.models import (
     LinkTable,
     LinkTableTag,
@@ -166,7 +166,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         构建规则审计SQL
         """
 
-        return RuleAuditSQLGenerator(strategy).build_sql()
+        return RuleAuditSQLBuilder(strategy).build_sql()
 
 
 class CreateStrategy(StrategyV2Base):
