@@ -102,6 +102,12 @@ class StrategySerializer(serializers.Serializer):
                 raise serializers.ValidationError(
                     gettext("control_id and control_version are required when strategy_type is model"),
                 )
+            # check control
+            if not ControlVersion.objects.filter(
+                control_id=validated_request_data["control_id"],
+                control_version=validated_request_data["control_version"],
+            ).exists():
+                raise serializers.ValidationError(gettext("Control Version not Exists"))
         elif strategy_type == StrategyType.RULE.value:
             if validated_request_data.get("configs", {}).get("config_type") != RuleAuditConfigType.LINK_TABLE:
                 return
@@ -211,11 +217,6 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         data = super().validate(attrs)
         # check type
         self._validate_strategy_type(data)
-        # check control
-        if not ControlVersion.objects.filter(
-            control_id=data["control_id"], control_version=data["control_version"]
-        ).exists():
-            raise serializers.ValidationError(gettext("Control Version not Exists"))
         # check name
         if Strategy.objects.filter(strategy_name=attrs["strategy_name"]).exists():
             raise serializers.ValidationError(gettext("Strategy Name Duplicate"))
@@ -294,11 +295,6 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         data = super().validate(attrs)
         # check type
         self._validate_strategy_type(data)
-        # check control
-        if not ControlVersion.objects.filter(
-            control_id=data["control_id"], control_version=data["control_version"]
-        ).exists():
-            raise serializers.ValidationError(gettext("Control Version not Exists"))
         # check name
         if (
             Strategy.objects.filter(strategy_name=attrs["strategy_name"])
