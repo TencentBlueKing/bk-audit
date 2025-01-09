@@ -33,6 +33,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.notice.handlers import ErrorMsgHandler
 from core.lock import lock
 from services.web.analyze.constants import (
+    AUDIT_EVENT_TABLE_FORMAT,
     BKBASE_DEFAULT_BASELINE_LOCATION,
     BKBASE_DEFAULT_COUNT_FREQ,
     BKBASE_DEFAULT_OFFSET,
@@ -79,7 +80,6 @@ class RuleAuditController(BaseControl):
     def __init__(self, strategy_id: int):
         super().__init__(strategy_id)
         self.rt_node_map = {}  # {rt_id: node_id}
-        self.sql_node_table_name = ""
         self.x_interval = 300
         self.y_interval = 30
         self.x = 0
@@ -113,6 +113,17 @@ class RuleAuditController(BaseControl):
     @cached_property
     def flow_name(self) -> str:
         return f"{self.strategy.strategy_id}-{str(time.time_ns())}"
+
+    @cached_property
+    def raw_table_name(self) -> str:
+        """
+        原始表名
+        """
+
+        return self.strategy.backend_data.get("raw_table_name") or AUDIT_EVENT_TABLE_FORMAT % (
+            self.strategy.namespace,
+            str(time.time_ns()),
+        )
 
     def _create_flow(self) -> None:
         resp = api.bk_base.create_flow(project_id=settings.BKBASE_PROJECT_ID, flow_name=self.flow_name)
@@ -185,7 +196,7 @@ class RuleAuditController(BaseControl):
             "name": rt_id,
         }
 
-    def _build_sql_node_config(self, bk_biz_id: int, raw_table_name: str) -> dict:
+    def _build_sql_node_config(self, bk_biz_id: int) -> dict:
         """
         build sql node
         """
@@ -199,14 +210,13 @@ class RuleAuditController(BaseControl):
 
         # init sql node
         sql_node_type = FlowSQLNodeType.get_sql_node_type(data_source["source_type"])
-        self.sql_node_table_name = f"{sql_node_type}_{raw_table_name}"
         sql_node_params = {
             "node_type": sql_node_type,
             "bk_biz_id": bk_biz_id,
             "from_result_table_ids": self.rt_ids,
-            "name": self.sql_node_table_name,
-            "table_name": self.sql_node_table_name,
-            "output_name": self.sql_node_table_name,
+            "name": f"{sql_node_type}_{self.raw_table_name}",
+            "table_name": self.raw_table_name,
+            "output_name": self.raw_table_name,
         }
         # add realtime node
         if sql_node_type == FlowSQLNodeType.REALTIME:
@@ -316,15 +326,13 @@ class RuleAuditController(BaseControl):
         )
         return data_source_node_ids
 
-    def create_or_update_sql_node(
-        self, need_create: bool, flow_id: int, data_source_node_ids: List[int], raw_table_name: str
-    ) -> int:
+    def create_or_update_sql_node(self, need_create: bool, flow_id: int, data_source_node_ids: List[int]) -> int:
         """
         创建/更新sql节点
         """
 
         bk_biz_id = int(self.rt_ids[0].split("_", 1)[0])
-        sql_node_config = self._build_sql_node_config(bk_biz_id, raw_table_name)
+        sql_node_config = self._build_sql_node_config(bk_biz_id)
         self.x += self.x_interval
         self.y = self.y_interval
         sql_node = {
@@ -349,9 +357,7 @@ class RuleAuditController(BaseControl):
         )
         return sql_node_id
 
-    def create_or_update_storage_nodes(
-        self, need_create: bool, flow_id: int, sql_node_id: int, raw_table_name: str
-    ) -> List[int]:
+    def create_or_update_storage_nodes(self, need_create: bool, flow_id: int, sql_node_id: int) -> List[int]:
         """
         创建/更新存储节点
         """
@@ -363,7 +369,7 @@ class RuleAuditController(BaseControl):
         storage_nodes = [ESStorageNode, QueueStorageNode, HDFSStorageNode]
         for idx, storage_node in enumerate(storage_nodes):
             node_config = storage_node(namespace=self.strategy.namespace).build_node_config(
-                bk_biz_id=bk_biz_id, raw_table_name=raw_table_name, sql_node_table_name=self.sql_node_table_name
+                bk_biz_id=bk_biz_id, raw_table_name=self.raw_table_name
             )
             if not node_config:
                 continue
@@ -392,17 +398,16 @@ class RuleAuditController(BaseControl):
     @transaction.atomic()
     def _update_or_create_bkbase_flow(self) -> bool:
         # check create flow
-        raw_table_name = self.strategy.backend_data.get("raw_table_name") or str(time.time_ns())
-        self.strategy.backend_data["raw_table_name"] = raw_table_name
         need_create = not self.strategy.backend_data.get("flow_id")
         if need_create:
             self._create_flow()
         flow_id = self.strategy.backend_data["flow_id"]
         data_source_node_ids = self.create_or_update_data_source_nodes(need_create, flow_id)
         # 构建 sql 节点
-        sql_node_id = self.create_or_update_sql_node(need_create, flow_id, data_source_node_ids, raw_table_name)
+        sql_node_id = self.create_or_update_sql_node(need_create, flow_id, data_source_node_ids)
         # 构建存储节点
-        self.create_or_update_storage_nodes(need_create, flow_id, sql_node_id, raw_table_name)
+        self.create_or_update_storage_nodes(need_create, flow_id, sql_node_id)
+        self.strategy.backend_data["raw_table_name"] = self.raw_table_name
         self.strategy.save(update_fields=["backend_data"])
         return need_create
 

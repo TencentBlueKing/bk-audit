@@ -82,6 +82,7 @@ dependencies = [
     "bk-notice-sdk==1.1.1",
     "pypika==0.48.9",
     "pydantic==2.10.4",
+    "kafka-python==2.0.2",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"

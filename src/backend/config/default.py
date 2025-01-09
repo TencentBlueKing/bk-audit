@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+import json
 import sys
 
 from bk_audit.constants.utils import LOGGER_NAME
@@ -367,6 +367,14 @@ CORS_ALLOW_HEADERS = [
 DEFAULT_QUEUE_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_QUEUE_STORAGE_EXPIRES", 1))
 # HDFS存储时长(天) -1 表示不限制
 DEFAULT_HDFS_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_HDFS_STORAGE_EXPIRES", -1))
+# 审计 kafka 配置
+KAFKA_CONFIG = json.loads(os.getenv("BKAPP_KAFKA_CONFIG", "{}"))
+# 事件 kafka 拉取超时时长
+EVENT_KAFKA_TIMEOUT_MS = int(os.getenv("BKAPP_EVENT_KAFKA_TIMEOUT_MS", 1000))
+# 事件 kafka 最大拉取记录数
+EVENT_KAFKA_MAX_RECORDS = int(os.getenv("BKAPP_EVENT_KAFKA_MAX_RECORDS", 10))
+# 事件 kafka 拉取间隔时间
+EVENT_KAFKA_SLEEP_TIME = float(os.getenv("BKAPP_EVENT_KAFKA_SLEEP_TIME", 0.5))
 
 """
 以下为框架代码 请勿修改

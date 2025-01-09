@@ -56,6 +56,26 @@ class RiskHandler:
     Deal with Risk
     """
 
+    def generate_risk(self, event: dict):
+        try:
+            is_create, risk = self.create_risk(event)
+            if is_create:
+                self.send_risk_notice(risk)
+
+                from services.web.risk.tasks import process_risk_ticket
+
+                process_risk_ticket(risk_id=risk.risk_id)
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            logger.exception("[CreateRiskFailed] Event: %s; Error: %s", json.dumps(event), err)
+            ErrorMsgHandler(
+                title=gettext("Create Risk Failed"),
+                content=gettext("Strategy ID: %s; Raw Event ID:\t%s")
+                % (
+                    event.get("strategy_id"),
+                    event.get("raw_event_id"),
+                ),
+            ).send()
+
     def generate_risk_from_event(self, start_time: datetime.datetime, end_time: datetime.datetime) -> None:
         """
         从事件生成风险
@@ -63,24 +83,7 @@ class RiskHandler:
 
         events = self.load_events(start_time, end_time)
         for event in events:
-            try:
-                is_create, risk = self.create_risk(event)
-                if is_create:
-                    self.send_risk_notice(risk)
-
-                    from services.web.risk.tasks import process_risk_ticket
-
-                    process_risk_ticket(risk_id=risk.risk_id)
-            except Exception as err:  # NOCC:broad-except(需要处理所有错误)
-                logger.exception("[CreateRiskFailed] Event: %s; Error: %s", json.dumps(event), err)
-                ErrorMsgHandler(
-                    title=gettext("Create Risk Failed"),
-                    content=gettext("Strategy ID: %s; Raw Event ID:\t%s")
-                    % (
-                        event.get("strategy_id"),
-                        event.get("raw_event_id"),
-                    ),
-                ).send()
+            self.generate_risk(event)
 
     def load_events(self, start_time: datetime.datetime, end_time: datetime.datetime) -> List[dict]:
         """
