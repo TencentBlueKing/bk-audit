@@ -81,7 +81,7 @@ class RuleAuditController(BaseControl):
         super().__init__(strategy_id)
         self.rt_node_map = {}  # {rt_id: node_id}
         self.x_interval = 300
-        self.y_interval = 30
+        self.y_interval = 100
         self.x = 0
         self.y = 0
 
@@ -292,12 +292,13 @@ class RuleAuditController(BaseControl):
         创建/更新数据源节点
         """
 
-        data_source_node_ids = []
         if not need_create:
             # 删除已有的数据源节点
             data_source_node_ids = self.strategy.backend_data.get("data_source_node_ids", [])
             bulk_delete_params = [{"flow_id": flow_id, "node_id": node_id} for node_id in data_source_node_ids]
             api.bk_base.delete_flow_node.bulk_request(bulk_delete_params, ignore_exceptions=True)
+            logger.info("[DeleteDataSourceNodes] FlowID => %s; NodeIDS => %s", flow_id, data_source_node_ids)
+        data_source_node_ids = []
         # 构建新的数据源节点
         self.y = self.y_interval
         self.x += self.x_interval
