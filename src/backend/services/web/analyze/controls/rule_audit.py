@@ -205,9 +205,6 @@ class RuleAuditController(BaseControl):
         data_source = self.strategy.configs["data_source"]
         schedule_config = self.strategy.configs.get("schedule_config", {})
 
-        # check source type
-        source_type = self.check_source_type(result_table_id=data_source["result_table_id"])
-
         # init sql node
         sql_node_type = FlowSQLNodeType.get_sql_node_type(data_source["source_type"])
         sql_node_params = {
@@ -271,7 +268,7 @@ class RuleAuditController(BaseControl):
                             "accumulate_start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
                             "result_table_id": rt_id,
                             "window_type": WindowType.WHOLE
-                            if source_type == FlowDataSourceNodeType.BATCH
+                            if self.check_source_type(rt_id) == FlowDataSourceNodeType.BATCH
                             else WindowType.SCROLL,
                             "color": BKBASE_DEFAULT_WINDOW_COLOR,
                         }
