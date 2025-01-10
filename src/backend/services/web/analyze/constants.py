@@ -42,7 +42,9 @@ DEFAULT_QUEUE_STORAGE_CLUSTER_KEY = "default_queue_storage_cluster"
 DEFAULT_HDFS_STORAGE_CLUSTER_KEY = "default_hdfs_storage_cluster"
 AUDIT_EVENT_TABLE_PREFIX = "audit_event"
 AUDIT_EVENT_TABLE_FORMAT = f"{AUDIT_EVENT_TABLE_PREFIX}_%s_%s"
-AUDIT_EVENT_QUEUE_TOPIC_PATTERN = f"^queue_(?'bk_biz_id'.*)_{AUDIT_EVENT_TABLE_PREFIX}_(?'namespace'.*)_(?'time_ns'.*)$"
+AUDIT_EVENT_QUEUE_TOPIC_PATTERN = (
+    f"^queue_(?P<bk_biz_id>.*)_{AUDIT_EVENT_TABLE_PREFIX}_(?P<namespace>.*)_(?P<time_ns>.*)$"
+)
 
 
 class ControlTypeChoices(TextChoices):
