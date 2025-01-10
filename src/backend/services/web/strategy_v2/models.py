@@ -73,7 +73,9 @@ class Strategy(SoftDeleteModel):
         gettext_lazy("Event Field Configs"), default=list, null=True, blank=True
     )
     event_data_field_configs = models.JSONField(gettext_lazy("Event Data Configs"), default=list, null=True, blank=True)
-    event_evidence_field_configs = models.JSONField(gettext_lazy("Event Evidence Configs"), default=list, null=True)
+    event_evidence_field_configs = models.JSONField(
+        gettext_lazy("Event Evidence Configs"), default=list, null=True, blank=True
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Strategy")

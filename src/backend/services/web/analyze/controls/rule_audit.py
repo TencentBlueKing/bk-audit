@@ -295,7 +295,9 @@ class RuleAuditController(BaseControl):
         if not need_create:
             # 删除已有的数据源节点
             data_source_node_ids = self.strategy.backend_data.get("data_source_node_ids", [])
-            bulk_delete_params = [{"flow_id": flow_id, "node_id": node_id} for node_id in data_source_node_ids]
+            bulk_delete_params = [
+                {"flow_id": flow_id, "node_id": node_id, "confirm": "true"} for node_id in data_source_node_ids
+            ]
             api.bk_base.delete_flow_node.bulk_request(bulk_delete_params, ignore_exceptions=True)
             logger.info("[DeleteDataSourceNodes] FlowID => %s; NodeIDS => %s", flow_id, data_source_node_ids)
         data_source_node_ids = []
@@ -363,7 +365,7 @@ class RuleAuditController(BaseControl):
         self.x += self.x_interval
         self.y = self.y_interval
         bk_biz_id = int(self.rt_ids[0].split("_", 1)[0])
-        storage_node_ids = []
+        storage_node_ids = [] if need_create else self.strategy.backend_data.get("storage_node_ids", [])
         storage_nodes = [ESStorageNode, QueueStorageNode, HDFSStorageNode]
         for idx, storage_node in enumerate(storage_nodes):
             node_config = storage_node(namespace=self.strategy.namespace).build_node_config(
@@ -382,7 +384,7 @@ class RuleAuditController(BaseControl):
                 resp = api.bk_base.create_flow_node(**storage_node_config)
                 storage_node_ids.append(resp["node_id"])
             else:
-                storage_node_config["node_id"] = self.strategy.backend_data["storage_node_ids"][idx]
+                storage_node_config["node_id"] = storage_node_ids[idx]
                 api.bk_base.update_flow_node(**storage_node_config)
             self.y += self.y_interval
         self.strategy.backend_data["storage_node_ids"] = storage_node_ids
