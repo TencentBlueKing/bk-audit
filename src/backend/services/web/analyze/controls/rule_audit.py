@@ -234,7 +234,7 @@ class RuleAuditController(BaseControl):
                         }
                     ],
                     "inputs": [
-                        {"id": self.rt_node_map[rt_id], "from_result_table_ids": rt_id} for rt_id in self.rt_ids
+                        {"id": self.rt_node_map[rt_id], "from_result_table_ids": [rt_id]} for rt_id in self.rt_ids
                     ],
                     "dedicated_config": {
                         "sql": self.strategy.sql,
