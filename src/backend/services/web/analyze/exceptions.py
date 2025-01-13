@@ -42,4 +42,8 @@ class ControlNotExist(AnalyzeException):
 class NotSupportDataSource(AnalyzeException):
     STATUS_CODE = 400
     ERROR_CODE = "003"
-    MESSAGE = gettext_lazy("Not Support DataSource")
+    MESSAGE = gettext_lazy("Not Support DataSource; source_type: %s; result_table: %s")
+
+    def __init__(self, source_type, result_table, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE % (source_type, result_table)
+        super().__init__(*args, **kwargs)

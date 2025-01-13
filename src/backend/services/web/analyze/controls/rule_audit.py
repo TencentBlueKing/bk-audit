@@ -165,7 +165,7 @@ class RuleAuditController(BaseControl):
             return FlowDataSourceNodeType.BATCH_REAL
         # 4. 未支持：异常
         else:
-            raise NotSupportDataSource()
+            raise NotSupportDataSource(source_type, result_table_id)
 
     @cached_property
     def rt_ids(self) -> List[str]:
