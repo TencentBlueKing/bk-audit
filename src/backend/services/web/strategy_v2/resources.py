@@ -926,7 +926,7 @@ class ListLinkTable(LinkTableBase):
         # 获取最新版本的联表
         link_tables = LinkTable.list_max_version_link_table().filter(**validated_request_data)
         # 过滤标签
-        if no_tag:
+        if no_tag or int(NO_TAG_ID) in tags:
             link_table_uids = LinkTableTag.objects.values_list("link_table_uid").distinct()
             link_tables = link_tables.exclude(uid__in=link_table_uids)
         elif tags:
