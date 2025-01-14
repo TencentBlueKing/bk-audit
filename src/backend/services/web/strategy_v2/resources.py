@@ -329,6 +329,9 @@ class ListStrategy(StrategyV2Base):
             queryset = queryset.filter(
                 strategy_id__in=[s.strategy_id for s in resource.strategy_v2.list_has_update_strategy()]
             )
+        if NO_TAG_ID in validated_request_data.get("tag", []):
+            validated_request_data["tag"] = [t for t in validated_request_data["tag"] if t != NO_TAG_ID]
+            queryset = queryset.exclude(strategy_id__in=StrategyTag.objects.values_list("strategy_id").distinct())
         # tag filter
         if validated_request_data.get("tag"):
             # tag 筛选
@@ -1007,9 +1010,9 @@ class ListLinkTableTags(LinkTableBase):
             {
                 "tag_name": str(NO_TAG_NAME),
                 "tag_id": NO_TAG_ID,
-                "link_table_count": LinkTable.objects.exclude(
-                    uid__in=LinkTableTag.objects.values_list("link_table_uid").distinct()
-                ).count(),
+                "link_table_count": LinkTable.list_max_version_link_table()
+                .exclude(uid__in=LinkTableTag.objects.values_list("link_table_uid").distinct())
+                .count(),
             }
         ] + tag_count
         # response
