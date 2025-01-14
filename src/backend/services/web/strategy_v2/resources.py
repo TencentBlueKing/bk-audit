@@ -908,11 +908,13 @@ class UpdateLinkTable(LinkTableBase):
 class DeleteLinkTable(LinkTableBase):
     name = gettext_lazy("删除联表")
 
+    @transaction.atomic()
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
         # 如果有策略使用了该联表则不能删除
         if Strategy.objects.filter(strategy_type=StrategyType.RULE, link_table_uid=uid).exists():
             raise LinkTableHasStrategy()
+        LinkTableTag.objects.filter(link_table_uid=uid).delete()
         LinkTable.objects.filter(uid=uid).delete()
 
 
