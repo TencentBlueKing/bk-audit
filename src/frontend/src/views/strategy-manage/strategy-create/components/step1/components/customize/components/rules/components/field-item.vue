@@ -28,44 +28,90 @@
     <div
       v-if="index < conditions.conditions.length - 1"
       class="column-line" />
-    <bk-select
-      v-model="condition.field"
-      filterable
-      :placeholder="t('请选择字段')"
-      style="flex: 1;"
-      @change="handleSelectField">
-      <bk-option
-        v-for="item in tableFields"
-        :key="item.raw_name"
-        :label="item.display_name"
-        :value="item" />
-    </bk-select>
-    <bk-select
-      v-model="condition.operation"
-      filterable
-      :placeholder="t('请选择规则')">
-      <bk-option
-        v-for="item in ruleData.rulesList"
-        :key="item.value"
-        :label="item.name"
-        :value="item.value" />
-    </bk-select>
-    <bk-select
-      v-if="ruleData.enumList.length"
-      v-model="condition.filters"
-      filterable
-      :placeholder="t('请选择枚举值')">
-      <bk-option
-        v-for="item in ruleData.enumList"
-        :key="item.value"
-        :label="item.name"
-        :value="item.value" />
-    </bk-select>
-    <bk-input
-      v-else
-      v-model="condition.filter"
-      :placeholder="t('请输入数值')"
-      show-word-limit />
+    <!-- 字段 -->
+    <bk-form-item
+      label=""
+      label-width="0"
+      :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].field.display_name`"
+      required>
+      <bk-select
+        v-model="condition.field.display_name"
+        filterable
+        :placeholder="t('请选择字段')"
+        style="flex: 1;"
+        @change="(value: DatabaseTableFieldModel) => handleSelectField(value ,index)">
+        <bk-option
+          v-for="item in tableFields"
+          :key="item.raw_name"
+          :label="item.display_name"
+          :value="item" />
+      </bk-select>
+    </bk-form-item>
+    <!-- 连接条件 -->
+    <bk-form-item
+      label=""
+      label-width="0"
+      :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].field.aggregate`"
+      required>
+      <!-- 操作人账号特殊处理 -->
+      <bk-input
+        v-if="condition.field.raw_name ==='user_identify_src_username'"
+        v-model="condition.field.aggregate"
+        class="condition-equation"
+        :placeholder="t('请输入')" />
+      <bk-select
+        v-else
+        v-model="condition.field.aggregate"
+        filterable
+        :placeholder="t('请选择')">
+        <bk-option
+          v-for="item in conditionList"
+          :key="item.value"
+          :label="item.label"
+          :value="item.value" />
+      </bk-select>
+    </bk-form-item>
+    <!-- 值 -->
+    <bk-form-item
+      label=""
+      label-width="0"
+      :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].filters`"
+      required
+      :rules="[
+        { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
+      ]">
+      <bk-cascader
+        v-if="dicts[condition.field.raw_name] &&
+          dicts[condition.field.raw_name].length"
+        v-model="condition.filters"
+        class="consition-value"
+        collapse-tags
+        filterable
+        float-mode
+        id-key="value"
+        :list="dicts[condition.field.raw_name]"
+        multiple
+        name-key="label"
+        trigger="hover" />
+      <audit-user-selector
+        v-else-if="condition.field.raw_name.includes('username')"
+        v-model="condition.filters"
+        allow-create
+        class="consition-value" />
+      <bk-tag-input
+        v-else
+        v-model="condition.filters"
+        allow-create
+        class="consition-value"
+        collapse-tags
+        :content-width="350"
+        has-delete-icon
+        :input-search="false"
+        :list="dicts[condition.field && condition.field.raw_name]"
+        :loading="fieldLoading"
+        :placeholder="t('请输入并Enter结束')"
+        trigger="focus" />
+    </bk-form-item>
     <div class="icon-group">
       <audit-icon
         style="margin-right: 10px;"
@@ -78,31 +124,33 @@
   </div>
   <div
     v-if="needCondition"
-    class="condition">
+    class="condition"
+    @click="handleChangeOperator">
     {{ conditions.operator }}
   </div>
 </template>
 <script setup lang="ts">
-  // import { ref, watch } from 'vue';
-  import { computed } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import useRequest from '@/hooks/use-request';
 
   interface Emits {
     (e: 'updateFieldItemList', value: string, conditionsIndex: number): void;
+    (e: 'updateFieldItem', value: DatabaseTableFieldModel, conditionsIndex: number, childConditionsIndex: number): void;
+    (e: 'updateOperator', value: 'and' | 'or', conditionsIndex: number): void;
   }
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>
     conditions: {
       operator: 'and' | 'or';
       conditions: Array<{
-        field: DatabaseTableFieldModel | '';
-        operation: string;
+        field: DatabaseTableFieldModel;
         filter: string;
         filters: string[];
       }>
@@ -113,19 +161,31 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const conditionList = ref<Array<{
+    label: string,
+    value: string
+  }>>([]);
+  const dicts = ref<Record<string, Array<any>>>({});
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
 
-  // 获取对应规则和枚举值列表
-  const {
-    data: ruleData,
-    run: fetchFiledRules,
-  } = useRequest(StrategyManageService.fetchFiledRules, {
-    defaultValue: {
-      rulesList: [],
-      enumList: [],
+  useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
+    onSuccess(data) {
+      conditionList.value = data.rule_audit_condition_operator;
     },
   });
+
+  // 筛选条件值
+  const {
+    run: fetchStrategyFieldValue,
+    loading: fieldLoading,
+  } = useRequest(StrategyManageService.fetchStrategyFieldValue, {
+    defaultValue: [],
+  });
+
+  const handleValidate = (value: any) => value.length > 0;
 
   const handleAdd = () => {
     emits('updateFieldItemList', 'add', props.conditionsIndex);
@@ -138,10 +198,19 @@
     emits('updateFieldItemList', 'delete', props.conditionsIndex);
   };
 
-  const handleSelectField = (value: DatabaseTableFieldModel) => {
-    fetchFiledRules({
-      data: value,
-    });
+  const handleSelectField = (value: DatabaseTableFieldModel, index: number) => {
+    if (value) {
+      fetchStrategyFieldValue({
+        field_name: value.raw_name,
+      }).then((data) => {
+        dicts.value[value.raw_name] = data.filter((item: Record<string, any>) => item.id !== '');
+      });
+    }
+    emits('updateFieldItem', value, props.conditionsIndex, index);
+  };
+
+  const handleChangeOperator = () => {
+    emits('updateOperator', props.conditions.operator === 'and' ? 'or' : 'and', props.conditionsIndex);
   };
 </script>
 <style scoped lang="postcss">
@@ -150,6 +219,18 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr minmax(35px, auto);
   gap: 8px;
+
+  :deep(.bk-form-error) {
+    display: none;
+  }
+
+  :deep(.bk-form-item) {
+    margin-bottom: 0;
+  }
+
+  :deep(.bk-form-item.is-error .bk-tag-input-trigger) {
+    border-color: #ea3636;
+  }
 
   .row-line {
     position: absolute;
@@ -183,6 +264,7 @@
   line-height: 28px;
   color: #f5b401;
   text-align: center;
+  cursor: pointer;
   background: #fff;
   border: 1px solid #f5b401;
   border-radius: 2px;

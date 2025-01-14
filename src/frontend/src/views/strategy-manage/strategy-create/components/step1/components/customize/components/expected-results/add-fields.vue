@@ -105,6 +105,14 @@
   const localAggregateList = ref<Array<Record<string, any>>>([]);
   const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
 
+  const fieldAggregateMap = {
+    string: ['COUNT', 'DISCOUNT'],
+    double: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
+    int: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
+    long: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
+    timestamp: ['COUNT', 'MIX', 'MAX'],
+  };
+
   const handleShowPop = () => {
     isShow.value = true;
     // 重置可选
@@ -116,9 +124,12 @@
 
   const handleSelectField = (index: number, field: DatabaseTableFieldModel) => {
     selectIndex.value = index;
+    // 每种类型字段拥有不同的聚合算法
+    // eslint-disable-next-line max-len
+    localAggregateList.value =  props.aggregateList.filter(item => fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚和');
     // 同一字段不能重复添加同一聚合算法
     // eslint-disable-next-line max-len
-    const hasAggregate = props.expectedResultList.filter(item => (item.table + item.raw_name) === (field.table +  item.raw_name));
+    const hasAggregate = props.expectedResultList.filter(item => (item.table + item.raw_name) === (field.table +  field.raw_name));
     if (hasAggregate.length) {
       localAggregateList.value = localAggregateList.value.map((item) => {
         if (hasAggregate.some(element => element.aggregate === item.value)) {

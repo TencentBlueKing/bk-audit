@@ -120,7 +120,7 @@
   }
   interface Props {
     linkDataDetail: LinkDataDetailModel
-    linkDataSheetId: number
+    linkDataSheetId: string
   }
 
   defineProps<Props>();

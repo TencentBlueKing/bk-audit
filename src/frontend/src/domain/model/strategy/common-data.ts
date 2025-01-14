@@ -36,6 +36,7 @@ export default class CommonData {
   link_table_join_type: Array<ItemType>;
   link_table_table_type: Array<ItemType>;
   rule_audit_aggregate_type: Array<ItemType>;
+  rule_audit_condition_operator: Array<ItemType>;
 
   constructor(payload = {} as CommonData) {
     this.offset_unit = payload.offset_unit || [];
@@ -52,6 +53,7 @@ export default class CommonData {
     this.link_table_join_type = payload.link_table_join_type || [];
     this.link_table_table_type = payload.link_table_table_type || [];
     this.rule_audit_aggregate_type = payload.rule_audit_aggregate_type || [];
+    this.rule_audit_condition_operator = payload.rule_audit_condition_operator || [];
   }
 }
 

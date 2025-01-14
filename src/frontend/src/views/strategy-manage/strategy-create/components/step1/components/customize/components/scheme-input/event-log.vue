@@ -19,10 +19,10 @@
     <bk-form-item
       class="no-label"
       label-width="0"
-      property="configs.data_source.system_id">
+      property="configs.data_source.system_ids">
       <span>
         <bk-select
-          v-model="formData.configs.data_source.system_id"
+          v-model="formData.configs.data_source.system_ids"
           filterable
           :loading="isSystemListLoading"
           multiple
@@ -85,7 +85,7 @@
   interface IFormData {
     configs: {
       data_source: {
-        system_id: string[],
+        system_ids: string[],
         rt_id: string,
       },
     },
@@ -96,7 +96,7 @@
   const formData = ref<IFormData>({
     configs: {
       data_source: {
-        system_id: [],
+        system_ids: [],
         rt_id: '',
       },
     },
@@ -157,7 +157,7 @@
 
   defineExpose<Expose>({
     resetFormData: () => {
-      formData.value.configs.data_source.system_id = [];
+      formData.value.configs.data_source.system_ids = [];
     },
   });
 </script>

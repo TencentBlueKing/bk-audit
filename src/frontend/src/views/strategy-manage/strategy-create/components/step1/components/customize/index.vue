@@ -65,9 +65,9 @@
         </bk-form-item>
         <bk-form-item
           :label="t('预期结果')"
-          label-width="160"
-          property="control_id">
+          label-width="160">
           <expected-results
+            ref="expectedResultsRef"
             :aggregate-list="aggregateList"
             :table-fields="tableFields"
             @update-expected-result="handleUpdateExpectedResult" />
@@ -75,9 +75,9 @@
         <bk-form-item
           :label="t('风险发现规则')"
           label-width="160"
-          property="configs.where"
           required>
           <rules-component
+            ref="rulesComponentRef"
             :table-fields="tableFields"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
@@ -152,6 +152,7 @@
 </template>
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
+  import _ from 'lodash';
   import { h, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -180,7 +181,6 @@
       operator: 'and' | 'or';
       conditions: Array<{
         field: DatabaseTableFieldModel | '';
-        operation: string;
         filter: string;
         filters: string[];
       }>
@@ -189,12 +189,12 @@
   interface IFormData {
     configs: {
       data_source: {
-        system_id: string[],
+        system_ids: string[],
         source_type: string,
         rt_id: string | string[]
         link_table: {
-          uid: number,
-          version: string,
+          uid: string,
+          version: number,
         },
       },
       config_type: string,
@@ -218,6 +218,8 @@
   const { t } = useI18n();
   const route = useRoute();
   const configRef = ref();
+  const rulesComponentRef = ref();
+  const expectedResultsRef = ref();
   const linkDataDetail = ref<LinkDataDetailModel>(new LinkDataDetailModel());
 
   const isEditMode = route.name === 'strategyEdit';
@@ -232,24 +234,24 @@
   };
 
   const initDataSource = ref<IFormData['configs']['data_source']>({
-    system_id: [],
+    system_ids: [],
     source_type: 'batch_join_source',
     rt_id: [],
     link_table: {
-      uid: 0,
-      version: '',
+      uid: '',
+      version: 0,
     },
   });
 
   const formData = ref<IFormData>({
     configs: {
       data_source: {
-        system_id: [],
+        system_ids: [],
         source_type: 'batch_join_source',
         rt_id: [],
         link_table: {
-          uid: 0,
-          version: '',
+          uid: '',
+          version: 0,
         },
       },
       config_type: '',
@@ -276,9 +278,10 @@
     manual: true,
     onSuccess() {
       ruleAuditConfigType.value = commonData.value.rule_audit_config_type;
-      aggregateList.value = commonData.value.rule_audit_aggregate_type.concat([{
+      aggregateList.value = commonData.value.rule_audit_aggregate_type;
+      aggregateList.value = aggregateList.value.concat([{
         label: '不聚和',
-        value: 'null',
+        value: null,
       }]);
     },
   });
@@ -291,23 +294,44 @@
     defaultValue: [],
   });
 
+  const setTableFields = (data: Array<{
+    field_type: string,
+    label: string,
+    value: string,
+  }>, rtId: string) => data.map(item => ({
+    table: rtId,
+    raw_name: item.value,
+    display_name: item.label,
+    field_type: item.field_type,
+    aggregate: '',
+    remark: '',
+  }));
+
   // 获取表字段
-  const {
-    run: fetDatabaseTableFields,
-  } = useRequest(StrategyManageService.fetchTableRtFields, {
-    defaultValue: [],
-    onSuccess: (data) => {
-      const rtId = formData.value.configs.data_source.rt_id;
-      tableFields.value = data.map(item => ({
-        table: Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId,
-        raw_name: item.value,
-        display_name: item.label,
-        type: item.field_type,
-        aggregate: '',
-        remark: '',
-      }));
-    },
-  });
+  const fetDatabaseTableFields = (rtId: string) => {
+    StrategyManageService.fetchTableRtFields({
+      table_id: rtId,
+    }).then((data) => {
+      tableFields.value = setTableFields(data, rtId);
+    });
+  };
+
+  // 获取联表表字段
+  const fetchLinkTableFields = async (rtIdArr: string[][]) => {
+    const idArr = rtIdArr.reduce((acc, curr) => acc.concat(curr), []);
+    const fetchPromises = idArr.map(async (rtId) => {
+      const data = await  StrategyManageService.fetchTableRtFields({
+        table_id: rtId,
+      });
+      return data;
+    });
+    // 使用 Promise.all 等待所有请求完成
+    Promise.all(fetchPromises).then((data) => {
+      data.forEach((item, index) => {
+        tableFields.value.push(...setTableFields(item, idArr[index]));
+      });
+    });
+  };
 
   // 切换数据源类型： 默认使用离线模式batch_join_source，不切换类型
   const handleDataSourceType = (item: string) => {
@@ -344,6 +368,14 @@
           ...formData.value.configs.data_source,
           ...initDataSource.value,
         };
+        formData.value.configs.select = [];
+        formData.value.configs.where = {
+          operator: 'and',
+          conditions: [],
+        };
+        configRef.value.resetFormData();
+        rulesComponentRef.value.resetFormData();
+        expectedResultsRef.value.resetFormData();
         if (item !== '' && item !== 'LinkTable') {
           fetchTable({
             table_type: item,
@@ -377,6 +409,12 @@
   // 获取联表详情
   const handleUpdateLinkDataDetail = (detail: LinkDataDetailModel) => {
     linkDataDetail.value = detail;
+    // eslint-disable-next-line max-len
+    const rtIdArr = linkDataDetail.value.config.links.map(item => [item.left_table.rt_id, item.right_table.rt_id]) as string[][];
+    if (rtIdArr.length) {
+      // 联表获取表字段
+      fetchLinkTableFields(rtIdArr);
+    }
   };
 
   // 刷新联表详情
@@ -403,18 +441,26 @@
     deep: true,
   });
 
+  // 日志、资源数据、其他数据获取表字段
   watch(() => formData.value.configs.data_source.rt_id, (rtId) => {
-    if (rtId) {
-      fetDatabaseTableFields({
-        table_id: Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId,
-      });
+    if (rtId && rtId.length) {
+      const rtId = formData.value.configs.data_source.rt_id;
+      fetDatabaseTableFields(Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId);
     }
   });
 
   defineExpose<Expose>({
     // 获取提交参数
     getFields() {
-      return formData.value;
+      const params = _.cloneDeep(formData.value);
+      const tableIdList = params.configs.data_source.rt_id;
+      if (params.configs.config_type !== 'EventLog') {
+        params.configs.data_source = {
+          ...params.configs.data_source,
+          rt_id: (_.isArray(tableIdList) ?  _.last(tableIdList)  : tableIdList) as string,
+        };
+      }
+      return params;
     },
   });
 </script>
