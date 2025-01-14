@@ -954,6 +954,7 @@ class ListLinkTable(LinkTableBase):
             for strategy in Strategy.objects.filter(strategy_type=StrategyType.RULE, link_table_uid__in=link_table_uids)
             .values("link_table_uid")
             .annotate(count=Count("link_table_uid"))
+            .order_by()
         }
         for link_table in link_tables:
             # 填充关联的策略数

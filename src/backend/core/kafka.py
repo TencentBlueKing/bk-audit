@@ -39,6 +39,7 @@ class KafkaRecordConsumer:
         while True:
             data = self.consumer.poll(timeout_ms=self.timeout_ms, max_records=self.max_records)
             if not data:
+                logger.info(f"[{self.__class__.__name__}] no message received, wait {self.sleep_time}s ...")
                 if not self.sleep_wait:
                     return
                 time.sleep(self.sleep_time)
