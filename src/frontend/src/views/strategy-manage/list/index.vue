@@ -419,6 +419,10 @@
       value: 'running',
     },
   ];
+  const strategyTypeTextMap = {
+    rule: t('自定义规则审计'),
+    model: t('引入模型审计'),
+  } as Record<string, string>;
   const initEnableFilterList = [
     {
       text: t('运行中'),
@@ -458,6 +462,22 @@
           </a>
         ;
       },
+    },
+    {
+      label: () => t('配置方式'),
+      sort: 'custom',
+      field: () => 'strategy_type',
+      minWidth: 180,
+      render: ({ data }:{data: StrategyModel}) => (
+        <span style={{
+          padding: '4px 6px',
+          color: data.strategy_type === 'rule' ? '#299E56' : '#E38B02',
+          background: data.strategy_type === 'rule' ? '#DAF6E5' : '#FDEED8',
+          borderRadius: '2px',
+        }}>
+          { strategyTypeTextMap[data.strategy_type] }
+        </span>
+      ),
     },
     {
       label: () => t('标签'),
@@ -712,7 +732,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['strategy_id', 'strategy_name', 'tags', 'status', 'updated_by', 'updated_at'],
+    checked: ['strategy_id', 'strategy_name', 'strategy_type', 'tags', 'status', 'updated_by', 'updated_at'],
     showLineHeight: false,
   });
   const settings = computed(() => {

@@ -19,7 +19,7 @@ export default class DatabaseTableField {
   raw_name: string; // bkbase 字段名
   display_name: string; // 展示名称 -- 用于 AS 别名，查询中唯一
   field_type: string; // 字段类型 -- 来自 bkbase
-  aggregate: string | null; // 聚合函数 -- 聚合算法
+  aggregate: any; // 聚合函数 -- 聚合算法
   remark: string; // 备注
 
   constructor(payload = {} as DatabaseTableField) {
