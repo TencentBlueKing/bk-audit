@@ -65,6 +65,7 @@ from services.web.analyze.tasks import (
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.strategy_v2.constants import (
+    BkBaseStorageType,
     RuleAuditConfigType,
     StrategyStatusChoices,
 )
@@ -150,15 +151,20 @@ class RuleAuditController(BaseControl):
 
         data_source = self.strategy.configs["data_source"]
         source_type = data_source["source_type"]
-        result_table = api.bk_base.get_result_table(result_table_id=result_table_id)
+        result_table = api.bk_base.get_result_table(result_table_id=result_table_id, related=["storages"])
         # 1. 实时计算&日志：实时流水表
         if source_type == FlowDataSourceNodeType.REALTIME and self.event_log_rt_id == result_table_id:
             return FlowDataSourceNodeType.REALTIME
-        # 2. 资产表：离线维表
+        # 2. 资产表：离线维表/实时维表
         elif (
             result_table["processing_type"] == ResultTableType.CDC
             or result_table["result_table_type"] == ResultTableType.STATIC
         ):
+            if (
+                source_type == FlowDataSourceNodeType.REALTIME
+                and BkBaseStorageType.REDIS in result_table["storage_types"]
+            ):
+                return FlowDataSourceNodeType.REDIS_KV_SOURCE
             return FlowDataSourceNodeType.BATCH
         # 3. 离线计算：离线流水表
         elif source_type == FlowDataSourceNodeType.BATCH:

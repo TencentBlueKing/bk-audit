@@ -68,6 +68,7 @@ class FlowDataSourceNodeType(TextChoices):
     REALTIME = "stream_source", gettext_lazy("RealTime")
     BATCH = "batch_join_source", gettext_lazy("Batch Join")
     BATCH_REAL = "batch_source", gettext_lazy("Batch")
+    REDIS_KV_SOURCE = "redis_kv_source", gettext_lazy("Redis KV")
 
 
 class ResultTableType(TextChoices):
