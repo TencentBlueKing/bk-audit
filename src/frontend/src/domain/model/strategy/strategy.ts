@@ -64,9 +64,9 @@ export default class Strategy {
     };
     select: Array<DatabaseTableFieldModel>,
     where: {
-      operator: 'and' | 'or' ;
+      connector: 'and' | 'or' ;
       conditions: Array<{
-        operator: 'and' | 'or';
+        connector: 'and' | 'or';
         conditions: Array<{
           field: DatabaseTableFieldModel | '';
           filter: string;

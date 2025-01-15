@@ -75,14 +75,105 @@
       :label="t('方案')"
       style="margin-top: 24px;">
       <render-info-block class="mt16">
+        <render-info-item :label="t('配置方式')">
+          <span
+            :style="{
+              padding: '4px 6px',
+              color: data.strategy_type === 'rule' ? '#299E56' : '#E38B02',
+              background: data.strategy_type === 'rule' ? '#DAF6E5' : '#FDEED8',
+              borderRadius: '2px',
+            }">
+            {{ strategyTypeTextMap[data.strategy_type] }}
+          </span>
+        </render-info-item>
+      </render-info-block>
+      <render-info-block class="mt16">
         <render-info-item :label="t('方案名称')">
           {{ currentControl?.control_name || '--' }} - V{{ data.control_version }}
         </render-info-item>
       </render-info-block>
+      <!-- 自定义规则审计 -->
+      <template v-if="data.strategy_type === 'rule'">
+        <render-info-block class="mt16">
+          <render-info-item :label="t('数据源')">
+            {{ data.configs.data_source?.rt_id }}
+            <template v-if="data.configs.data_source?.system_ids.length">
+              <div
+                v-for="item in data.configs.data_source.system_ids"
+                :key="item"
+                style="line-height: 32px;">
+                {{ item }}
+              </div>
+            </template>
+          </render-info-item>
+        </render-info-block>
+        <render-info-block class="mt16">
+          <render-info-item :label="t('预期结果')">
+            <template v-if="data.configs.select.length">
+              <div class="panel-edit flex">
+                <div
+                  v-for="element in data.configs.select"
+                  :key="element.raw_name + element.aggregate + element.display_name"
+                  class="query-field flex-center-wrap">
+                  {{ getMetricName(element) }}
+                </div>
+              </div>
+            </template>
+            <div v-else>
+              --
+            </div>
+          </render-info-item>
+        </render-info-block>
+        <render-info-block>
+          <render-info-item :label="t('风险发现规则')">
+            <div class="condition-render-item">
+              <div class="condition-equation-wrap">
+                <span
+                  v-if="data.configs.where.conditions.length > 1"
+                  class="condition-equation first-equation">
+                  {{ data.configs.where.connector }}
+                </span>
+              </div>
+              <div>
+                <template
+                  v-for="(item, index) in data.configs.where.conditions"
+                  :key="index">
+                  <div
+                    v-for="(childItem, childIndex) in item.conditions"
+                    :key="childIndex"
+                    class="condition-item"
+                    :style="{ marginTop: index ? '30px' : '0px' }">
+                    <div
+                      v-if="childIndex"
+                      class="condition-equation mr4 mb4">
+                      {{ item.connector }}
+                    </div>
+                    <template v-if="childItem.field">
+                      <div class="condition-key mr4 mb4">
+                        {{ childItem.field.display_name }}
+                      </div>
+                      <div class="condition-method mr4 mb4">
+                        {{ commonData.rule_audit_condition_operator.
+                          find(item => item.value === (childItem.field as DatabaseTableField).aggregate)?.label }}
+                      </div>
+                    </template>
+                    <div
+                      v-for="(value, valIndex) in childItem.filters"
+                      :key="valIndex"
+                      class="condition-value mr4 mb4">
+                      {{ value }}
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </render-info-item>
+        </render-info-block>
+      </template>
 
       <bk-loading :loading="controlLoading">
         <component
-          :is="comMap[currentControl?.control_id || '--']"
+          :is="comMap[currentControl?.control_type_id || '--']"
           ref="comRef"
           :data="data" />
       </bk-loading>
@@ -97,6 +188,9 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import CommonDataModel from '@model/strategy/common-data';
+  import type DatabaseTableField from '@model/strategy/database-table-field';
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
@@ -139,6 +233,23 @@
     },
   };
 
+  const strategyTypeTextMap = {
+    rule: t('自定义规则审计'),
+    model: t('引入模型审计'),
+  } as Record<string, string>;
+
+  const {
+    data: commonData,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
+  });
+
+  const getMetricName = (element: DatabaseTableFieldModel) => {
+    const item = commonData.value.rule_audit_aggregate_type.find(item => item.value === element.aggregate);
+    return t(`[${item?.label}] ${element.display_name}`);
+  };
+
   // 获取方案列表
   const {
     data: controlList,
@@ -149,3 +260,99 @@
   });
 
 </script>
+<style scoped lang="postcss">
+.risk-detection {
+  .panel-edit {
+    position: relative;
+    min-height: 32px;
+    padding: 0 3px;
+    background: #f5f7fa;
+    border-radius: 2px;
+    flex-wrap: wrap;
+
+    .query-field {
+      position: relative;
+      height: 26px;
+      margin: 3px 4px 3px 0;
+      line-height: 26px;
+      color: #fff;
+      white-space: nowrap;
+      background: #1eab8b;
+      border-radius: 2px;
+
+      &:hover {
+        .query-field-remove {
+          visibility: visible;
+        }
+      }
+
+      .dragging-handle {
+        padding: 0 4px;
+        cursor: move;
+      }
+
+      .query-field-remove {
+        padding: 0 4px;
+        text-align: center;
+        visibility: hidden;
+      }
+    }
+
+    .flex-center-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+  }
+
+  .condition-render-item {
+    display: flex;
+
+    .condition-equation-wrap {
+      position: relative;
+      width: 50px;
+    }
+
+    .condition-equation {
+      padding: 2px 8px;
+      color: #3a84ff;
+      text-align: center;
+      background: #edf4ff;
+      border-radius: 2px;
+    }
+
+    .first-equation {
+      position: absolute;
+      top: calc(50% - 10px);
+    }
+
+    .condition-item {
+      display: flex;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+
+      .condition-key {
+        padding: 2px 8px;
+        color: #788779;
+        background: #dde9de;
+        border-radius: 2px;
+      }
+
+      .condition-method {
+        padding: 2px 8px;
+        color: #fe9c00;
+        background: #fff1db;
+        border-radius: 2px;
+      }
+
+      .condition-value {
+        padding: 2px 8px;
+        color: #63656e;
+        background: #f0f1f5;
+        border-radius: 2px;
+      }
+    }
+  }
+}
+</style>
