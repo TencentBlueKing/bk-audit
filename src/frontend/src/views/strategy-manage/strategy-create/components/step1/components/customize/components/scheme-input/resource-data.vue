@@ -60,6 +60,7 @@
 
   interface Expose {
     resetFormData: () => void,
+    setConfigs: (config: FormData) => void;
   }
   interface Props {
     tableData: Array<{
@@ -123,6 +124,20 @@
   defineExpose<Expose>({
     resetFormData: () => {
       formData.value.configs.data_source.rt_id = [];
+    },
+    setConfigs(config: Record<string, any>) {
+      // 对tableid转换
+      props.tableData.forEach((item) => {
+        if (item.children && item.children.length) {
+          item.children.forEach((cItem) => {
+            if (cItem.value === config.data_source.rt_id) {
+              formData.value.configs.data_source.rt_id = [item.value, config.data_source.rt_id];
+            }
+          });
+        }
+      });
+      formData.value.configs.data_source.rt_id = config.data_source.rt_id;
+      handleUpdateDataSource();
     },
   });
 </script>

@@ -47,6 +47,7 @@
 
   interface Expose {
     resetFormData: () => void,
+    setConfigs: (config: IFormData['configs']) => void;
   }
 
   interface Emits {
@@ -99,6 +100,10 @@
   defineExpose<Expose>({
     resetFormData: () => {
       formData.value.configs.data_source.rt_id = '';
+    },
+    setConfigs(configs: IFormData['configs']) {
+      formData.value.configs.data_source.rt_id = configs.data_source.rt_id;
+      emits('updateDataSource', formData.value.configs.data_source);
     },
   });
 </script>

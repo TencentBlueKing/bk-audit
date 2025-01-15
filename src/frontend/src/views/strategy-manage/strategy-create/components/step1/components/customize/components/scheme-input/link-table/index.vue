@@ -54,6 +54,7 @@
   interface Expose {
     refreshLinkData: () => void,
     resetFormData: () => void,
+    setConfigs: (config: IFormData['configs']) => void;
   }
   interface Emits {
     (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
@@ -130,6 +131,12 @@
         uid: '',
         version: 0,
       };
+    },
+    setConfigs(configs: IFormData['configs']) {
+      if (!configs.data_source.link_table) {
+        return;
+      }
+      formData.value.configs.data_source.link_table = configs.data_source.link_table;
     },
   });
 </script>

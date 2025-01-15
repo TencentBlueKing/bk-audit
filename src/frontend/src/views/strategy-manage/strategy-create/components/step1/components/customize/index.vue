@@ -37,7 +37,6 @@
               property="configs.config_type">
               <bk-select
                 v-model="configType"
-                :disabled="isEditMode || isCloneMode || isUpgradeMode"
                 filterable
                 :placeholder="t('请选择数据源类型')"
                 @change="handleDataSourceType">
@@ -59,6 +58,7 @@
           </div>
           <!-- 联表详情 -->
           <link-data-detail-component
+            v-if="formData.configs.data_source.link_table && formData.configs.data_source.link_table.uid"
             :link-data-detail="linkDataDetail"
             :link-data-sheet-id="formData.configs.data_source.link_table.uid"
             @refresh-link-data="handleRefreshLinkData" />
@@ -117,10 +117,10 @@
             <bk-form-item
               class="is-required no-label"
               label-width="0"
-              property="configs.aiops_config.count_freq"
+              property="configs.schedule_config.count_freq"
               style="margin-bottom: 12px;">
               <bk-input
-                v-model="formData.configs.aiops_config.count_freq"
+                v-model="formData.configs.schedule_config.count_freq"
                 class="schedule-input"
                 :min="1"
                 onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
@@ -130,10 +130,10 @@
             <bk-form-item
               class="is-required no-label"
               label-width="0"
-              property="configs.aiops_config.schedule_period"
+              property="configs.schedule_config.schedule_period"
               style="margin-bottom: 12px;">
               <bk-select
-                v-model="formData.configs.aiops_config.schedule_period"
+                v-model="formData.configs.schedule_config.schedule_period"
                 class="schedule-select"
                 :clearable="false"
                 style="width: 68px;">
@@ -153,7 +153,7 @@
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
   import _ from 'lodash';
-  import { h, ref, watch } from 'vue';
+  import { h, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -162,6 +162,7 @@
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+  import StrategyModel from '@model/strategy/strategy';
 
   import AuditIcon from '@components/audit-icon';
 
@@ -176,9 +177,9 @@
   import useRequest from '@/hooks/use-request';
 
   interface Where {
-    operator: 'and' | 'or' ;
+    connector: 'and' | 'or' ;
     conditions: Array<{
-      operator: 'and' | 'or';
+      connector: 'and' | 'or';
       conditions: Array<{
         field: DatabaseTableFieldModel | '';
         filter: string;
@@ -200,7 +201,7 @@
       config_type: string,
       select: Array<DatabaseTableFieldModel>,
       where: Where,
-      aiops_config: {
+      schedule_config: {
         count_freq: string,
         schedule_period: string,
       },
@@ -212,7 +213,11 @@
   interface Expose {
     getFields: () => IFormData
   }
+  interface Props {
+    editData: StrategyModel
+  }
 
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
@@ -224,7 +229,6 @@
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
 
   const configTypeMap: Record<string, any> = {
     EventLog: EventLogComponent,
@@ -257,10 +261,10 @@
       config_type: '',
       select: [],
       where: {
-        operator: 'and',
+        connector: 'and',
         conditions: [],
       },
-      aiops_config: {
+      schedule_config: {
         count_freq: '',
         schedule_period: 'hour',
       },
@@ -370,7 +374,7 @@
         };
         formData.value.configs.select = [];
         formData.value.configs.where = {
-          operator: 'and',
+          connector: 'and',
           conditions: [],
         };
         configRef.value.resetFormData();
@@ -424,15 +428,30 @@
 
   const handleSourceTypeChange = (type: string) => {
     if (type === 'stream_source') {
-      formData.value.configs.aiops_config = {
+      formData.value.configs.schedule_config = {
         count_freq: '',
         schedule_period: 'hour',
       };
     }
-    // 非周期不需要aiops_config
+    // 非周期不需要schedule_config
     formData.value.configs.data_source.source_type !== 'stream_source'
-      ? formData.value.configs.aiops_config
+      ? formData.value.configs.schedule_config
       : undefined;
+  };
+
+  // 编辑
+  const  setFormdata = (editData: StrategyModel) => {
+    configType.value = editData.configs.config_type || '';
+    formData.value.configs.config_type = editData.configs.config_type || '';
+    formData.value.configs.schedule_config = editData.configs.schedule_config;
+    formData.value.configs.select = editData.configs.select;
+    expectedResultsRef.value.setConfigs(editData.configs.select);
+    rulesComponentRef.value.setConfigs(editData.configs.where);
+    fetchTable({
+      table_type: formData.value.configs.config_type,
+    }).then(() => {
+      configRef.value.setConfigs(editData.configs);
+    });
   };
 
   watch(() => formData.value, (data) => {
@@ -446,6 +465,12 @@
     if (rtId && rtId.length) {
       const rtId = formData.value.configs.data_source.rt_id;
       fetDatabaseTableFields(Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId);
+    }
+  });
+
+  onMounted(() => {
+    if (isEditMode || isCloneMode) {
+      setFormdata(props.editData);
     }
   });
 

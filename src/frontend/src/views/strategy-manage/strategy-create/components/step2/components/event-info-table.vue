@@ -105,7 +105,7 @@
             field_name: item.field_name,
             display_name: item.display_name,
             is_priority: editItem.is_priority,
-            map_config: item.map_config,
+            map_config: editItem.map_config,
             description: editItem.description,
             example: item.example,
             prefix: '',

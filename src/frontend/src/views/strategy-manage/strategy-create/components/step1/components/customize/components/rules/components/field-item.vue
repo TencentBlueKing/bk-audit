@@ -125,8 +125,8 @@
   <div
     v-if="needCondition"
     class="condition"
-    @click="handleChangeOperator">
-    {{ conditions.operator }}
+    @click="handleChangeConnector">
+    {{ conditions.connector }}
   </div>
 </template>
 <script setup lang="ts">
@@ -143,12 +143,12 @@
   interface Emits {
     (e: 'updateFieldItemList', value: string, conditionsIndex: number): void;
     (e: 'updateFieldItem', value: DatabaseTableFieldModel, conditionsIndex: number, childConditionsIndex: number): void;
-    (e: 'updateOperator', value: 'and' | 'or', conditionsIndex: number): void;
+    (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
   }
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>
     conditions: {
-      operator: 'and' | 'or';
+      connector: 'and' | 'or';
       conditions: Array<{
         field: DatabaseTableFieldModel;
         filter: string;
@@ -209,8 +209,8 @@
     emits('updateFieldItem', value, props.conditionsIndex, index);
   };
 
-  const handleChangeOperator = () => {
-    emits('updateOperator', props.conditions.operator === 'and' ? 'or' : 'and', props.conditionsIndex);
+  const handleChangeConnector = () => {
+    emits('updateConnector', props.conditions.connector === 'and' ? 'or' : 'and', props.conditionsIndex);
   };
 </script>
 <style scoped lang="postcss">

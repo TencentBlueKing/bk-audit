@@ -69,6 +69,7 @@
 
   interface Expose {
     resetFormData: () => void,
+    setConfigs: (config: Array<DatabaseTableFieldModel>) => void;
   }
   interface Emits {
     (e: 'updateExpectedResult', value: Array<DatabaseTableFieldModel>): void;
@@ -111,6 +112,9 @@
   defineExpose<Expose>({
     resetFormData: () => {
       expectedResultList.value = [];
+    },
+    setConfigs(configs: Array<DatabaseTableFieldModel>) {
+      expectedResultList.value = configs;
     },
   });
 </script>

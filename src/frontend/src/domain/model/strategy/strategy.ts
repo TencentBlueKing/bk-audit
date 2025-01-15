@@ -15,6 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
 import StrategyFieldEvent from '../strategy/strategy-field-event';
 
 export default class Strategy {
@@ -34,6 +36,12 @@ export default class Strategy {
     data_source?: {
       source_type: string;
       result_table_id?: string;
+      rt_id: string;
+      link_table: {
+        uid: string,
+        version: number,
+      },
+      system_ids: Array<string>,
       filter_config: Array<{
         connector: string;
         key: string;
@@ -54,6 +62,22 @@ export default class Strategy {
         }>
       }
     };
+    select: Array<DatabaseTableFieldModel>,
+    where: {
+      operator: 'and' | 'or' ;
+      conditions: Array<{
+        operator: 'and' | 'or';
+        conditions: Array<{
+          field: DatabaseTableFieldModel | '';
+          filter: string;
+          filters: string[];
+        }>
+      }>;
+    },
+    schedule_config: {
+      count_freq: string,
+      schedule_period: string,
+    },
     [key: string]: any
   };
   status: string;

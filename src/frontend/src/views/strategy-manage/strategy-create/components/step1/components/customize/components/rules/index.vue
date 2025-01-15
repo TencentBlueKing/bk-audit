@@ -41,9 +41,9 @@
           :conditions="conditions"
           :conditions-index="index"
           :table-fields="tableFields"
+          @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
-          @update-field-item-list="handleUpdateFieldItemList"
-          @update-operator="handleUpdateOperator" />
+          @update-field-item-list="handleUpdateFieldItemList" />
         <audit-icon
           v-if="index !== 0"
           class="delete-conditions"
@@ -54,8 +54,8 @@
       <div
         v-if="needCondition"
         class="condition"
-        @click="() => where.operator = where.operator === 'and' ? 'or' : 'and'">
-        {{ where.operator }}
+        @click="() => where.connector = where.connector === 'and' ? 'or' : 'and'">
+        {{ where.connector }}
       </div>
     </div>
     <div
@@ -78,11 +78,12 @@
 
   interface Expose {
     resetFormData: () => void,
+    setConfigs: (config: Where) => void;
   }
   interface Where {
-    operator: 'and' | 'or';
+    connector: 'and' | 'or';
     conditions: Array<{
-      operator: 'and' | 'or';
+      connector: 'and' | 'or';
       conditions: Array<{
         field: DatabaseTableFieldModel;
         filter: string;
@@ -102,9 +103,9 @@
   const { t } = useI18n();
 
   const where = ref<Where>({
-    operator: 'and',
+    connector: 'and',
     conditions: [{
-      operator: 'and',
+      connector: 'and',
       conditions: [{
         field: new DatabaseTableFieldModel(),
         filter: '',
@@ -120,7 +121,7 @@
 
   const handleAddRuleItem = () => {
     where.value.conditions.push({
-      operator: 'and',
+      connector: 'and',
       conditions: [{
         field: new DatabaseTableFieldModel(),
         filter: '',
@@ -146,8 +147,8 @@
     where.value.conditions[conditionsIndex].conditions[childConditionsIndex].field = value;
   };
 
-  const handleUpdateOperator = (value: 'and' | 'or', conditionsIndex: number) => {
-    where.value.conditions[conditionsIndex].operator = value;
+  const handleUpdateConnector = (value: 'and' | 'or', conditionsIndex: number) => {
+    where.value.conditions[conditionsIndex].connector = value;
   };
 
   watch(() => where.value, (data) => {
@@ -159,9 +160,9 @@
   defineExpose<Expose>({
     resetFormData: () => {
       where.value = {
-        operator: 'and',
+        connector: 'and',
         conditions: [{
-          operator: 'and',
+          connector: 'and',
           conditions: [{
             field: new DatabaseTableFieldModel(),
             filter: '',
@@ -169,6 +170,9 @@
           }],
         }],
       };
+    },
+    setConfigs(configs: Where) {
+      where.value = configs;
     },
   });
 </script>
