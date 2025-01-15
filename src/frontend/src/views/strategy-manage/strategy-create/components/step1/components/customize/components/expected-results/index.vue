@@ -67,6 +67,10 @@
 
   import AddFields from './add-fields.vue';
 
+  interface Expose {
+    resetFormData: () => void,
+    setConfigs: (config: Array<DatabaseTableFieldModel>) => void;
+  }
   interface Emits {
     (e: 'updateExpectedResult', value: Array<DatabaseTableFieldModel>): void;
   }
@@ -104,6 +108,15 @@
     expectedResultList.value = [];
     updateExpectedResult();
   };
+
+  defineExpose<Expose>({
+    resetFormData: () => {
+      expectedResultList.value = [];
+    },
+    setConfigs(configs: Array<DatabaseTableFieldModel>) {
+      expectedResultList.value = configs;
+    },
+  });
 </script>
 <style scoped lang="postcss">
 .panel-edit {

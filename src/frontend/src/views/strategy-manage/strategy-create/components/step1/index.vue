@@ -353,22 +353,22 @@
         message: t('系统不能为空'),
         trigger: 'change',
       }],
-    'configs.data_source.result_table_id': [
+    'configs.data_source.system_ids': [
       {
         validator: (value: Array<string>) => !!value && value.length > 0,
-        message: t('资产不能为空'),
+        message: t('系统不能为空'),
         trigger: 'change',
       }],
-    'configs.data_source.data_sheet_id': [
+    'configs.data_source.rt_id': [
       {
-        validator: (value: Array<string>) => !!value,
-        message: t('其他数据不能为空'),
+        validator: (value: Array<string>) => !!value && value.length > 0,
+        message: t('不能为空'),
         trigger: 'change',
       }],
-    'configs.data_source.link_data_sheet_id': [
+    'configs.data_source.link_table.uid': [
       {
         validator: (value: Array<string>) => !!value,
-        message: t('联表数据不能为空'),
+        message: t('联表不能为空'),
         trigger: 'change',
       }],
     'configs.data_source.bk_biz_id': [
@@ -554,6 +554,10 @@
       }
       // 获取审计参数（自定义规则审计、引入模型审计）
       const fields = comRef.value.getFields();
+      // 非联表不需要link_table参数
+      if (fields.configs.config_type !== 'LinkTable') {
+        fields.configs.data_source.link_table = null;
+      }
       // 合并参数
       const params = {
         ...baseParams,

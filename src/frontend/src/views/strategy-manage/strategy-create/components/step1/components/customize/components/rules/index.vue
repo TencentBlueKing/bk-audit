@@ -41,13 +41,21 @@
           :conditions="conditions"
           :conditions-index="index"
           :table-fields="tableFields"
+          @update-connector="handleUpdateConnector"
+          @update-field-item="handleUpdateFieldItem"
           @update-field-item-list="handleUpdateFieldItemList" />
+        <audit-icon
+          v-if="index !== 0"
+          class="delete-conditions"
+          type="delete"
+          @click="() => handleDelete(index)" />
       </div>
       <!-- 二级条件关系 -->
       <div
         v-if="needCondition"
-        class="condition">
-        {{ where.operator }}
+        class="condition"
+        @click="() => where.connector = where.connector === 'and' ? 'or' : 'and'">
+        {{ where.connector }}
       </div>
     </div>
     <div
@@ -68,13 +76,16 @@
 
   import FieldItem from './components/field-item.vue';
 
+  interface Expose {
+    resetFormData: () => void,
+    setConfigs: (config: Where) => void;
+  }
   interface Where {
-    operator: 'and' | 'or';
+    connector: 'and' | 'or';
     conditions: Array<{
-      operator: 'and' | 'or';
+      connector: 'and' | 'or';
       conditions: Array<{
-        field: DatabaseTableFieldModel | '';
-        operation: string;
+        field: DatabaseTableFieldModel;
         filter: string;
         filters: string[];
       }>
@@ -92,12 +103,11 @@
   const { t } = useI18n();
 
   const where = ref<Where>({
-    operator: 'and',
+    connector: 'and',
     conditions: [{
-      operator: 'and',
+      connector: 'and',
       conditions: [{
-        field: '',
-        operation: '',
+        field: new DatabaseTableFieldModel(),
         filter: '',
         filters: [],
       }],
@@ -105,12 +115,15 @@
   });
   const needCondition = computed(() => where.value.conditions.length > 1);
 
+  const handleDelete = (index: number) => {
+    where.value.conditions.splice(index, 1);
+  };
+
   const handleAddRuleItem = () => {
     where.value.conditions.push({
-      operator: 'and',
+      connector: 'and',
       conditions: [{
-        field: '',
-        operation: '',
+        field: new DatabaseTableFieldModel(),
         filter: '',
         filters: [],
       }],
@@ -120,8 +133,7 @@
   const handleUpdateFieldItemList = (value: string, conditionsIndex: number) => {
     if (value === 'add') {
       where.value.conditions[conditionsIndex].conditions.push({
-        field: '',
-        operation: '',
+        field: new DatabaseTableFieldModel(),
         filter: '',
         filters: [],
       });
@@ -130,10 +142,38 @@
     }
   };
 
+  // eslint-disable-next-line max-len
+  const handleUpdateFieldItem = (value: DatabaseTableFieldModel, conditionsIndex: number, childConditionsIndex: number) => {
+    where.value.conditions[conditionsIndex].conditions[childConditionsIndex].field = value;
+  };
+
+  const handleUpdateConnector = (value: 'and' | 'or', conditionsIndex: number) => {
+    where.value.conditions[conditionsIndex].connector = value;
+  };
+
   watch(() => where.value, (data) => {
     emits('updateWhere', data);
   }, {
     deep: true,
+  });
+
+  defineExpose<Expose>({
+    resetFormData: () => {
+      where.value = {
+        connector: 'and',
+        conditions: [{
+          connector: 'and',
+          conditions: [{
+            field: new DatabaseTableFieldModel(),
+            filter: '',
+            filters: [],
+          }],
+        }],
+      };
+    },
+    setConfigs(configs: Where) {
+      where.value = configs;
+    },
   });
 </script>
 <style scoped lang="postcss">
@@ -150,6 +190,7 @@
       line-height: 28px;
       color: #f5b401;
       text-align: center;
+      cursor: pointer;
       background: #fff;
       border: 1px solid #f5b401;
       border-radius: 2px;
@@ -158,6 +199,7 @@
     .rule-item {
       position: relative;
       padding: 16px;
+      padding-right: 25px;
       margin-bottom: 16px;
       background: #f5f7fa;
       flex: 1;
@@ -186,6 +228,14 @@
 
       .column-line-bottom {
         top: 50%;
+      }
+
+      .delete-conditions {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        color: #979ba5;;
+        cursor: pointer;
       }
     }
   }

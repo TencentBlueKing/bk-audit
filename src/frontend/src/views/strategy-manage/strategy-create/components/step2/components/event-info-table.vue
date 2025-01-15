@@ -43,6 +43,7 @@
         </div>
         <div class="value-row">
           <value-item
+            ref="valueItemRef"
             :item="item"
             :select="select" />
         </div>
@@ -51,6 +52,7 @@
   </div>
 </template>
 <script setup lang='tsx'>
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -65,6 +67,7 @@
 
   interface Exposes{
     getData: () => StrategyFieldEvent,
+    getValue: () => Promise<any>;
   }
 
   interface Props {
@@ -76,6 +79,7 @@
   const props = defineProps<Props>();
 
   const { t, locale } = useI18n();
+  const valueItemRef = ref();
 
   const column = [
     { label: t('事件分组') },
@@ -101,7 +105,7 @@
             field_name: item.field_name,
             display_name: item.display_name,
             is_priority: editItem.is_priority,
-            field_mapping: item.field_mapping,
+            map_config: editItem.map_config,
             description: editItem.description,
             example: item.example,
             prefix: '',
@@ -122,7 +126,6 @@
       strategy_id: props.strategyId,
     },
     onSuccess: () => {
-      console.log(tableData.value);
       // 编辑填充内容（是否重点展示、字段说明）
       setEditData('event_basic_field_configs');
       setEditData('event_data_field_configs');
@@ -134,6 +137,9 @@
   defineExpose<Exposes>({
     getData() {
       return tableData.value;
+    },
+    getValue() {
+      return Promise.all((valueItemRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
     },
   });
 </script>
@@ -164,7 +170,10 @@
 
       background-color: #f5f7fa;
 
-      &:nth-child(2),
+      &:nth-child(2) {
+        width: 190px;
+      }
+
       &:nth-child(3) {
         width: 240px;
       }
@@ -174,7 +183,7 @@
       }
 
       &:nth-child(5) {
-        width: 192px;
+        width: 240px;
       }
 
       &:last-child {

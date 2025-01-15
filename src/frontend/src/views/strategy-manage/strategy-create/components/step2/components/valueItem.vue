@@ -10,28 +10,55 @@
         <div
           v-if="!['example', 'prefix'].includes(valueKey)"
           class="item">
-          <template v-if="valueKey === 'is_priority'">
-            <bk-switcher
-              v-model="config.is_priority"
-              theme="primary" />
-          </template>
-          <template v-else-if="valueKey === 'field_mapping'">
-            <bk-select v-model="config.field_mapping">
+          <!-- 是否重点展示 -->
+          <bk-switcher
+            v-if="valueKey === 'is_priority'"
+            v-model="config.is_priority"
+            theme="primary" />
+
+          <!-- 字段映射 -->
+          <template v-else-if="valueKey === 'map_config' && config.map_config">
+            <!-- 必填 -->
+            <select-verify
+              v-if="requiredField.includes(config.field_name)"
+              ref="selectVerifyRef"
+              :default-value="config.map_config.source_field"
+              style="width: 100%;"
+              theme="background">
+              <bk-select v-model="config.map_config.source_field">
+                <bk-option
+                  v-for="(selectItem, index) in select"
+                  :key="index"
+                  :label="selectItem.display_name"
+                  :value="selectItem.display_name" />
+              </bk-select>
+            </select-verify>
+            <!-- 选填 -->
+            <bk-select
+              v-else-if="optionalField.includes(config.field_name)"
+              v-model="config.map_config.source_field"
+              style="width: 100%;">
               <bk-option
                 v-for="(selectItem, index) in select"
                 :key="index"
                 :label="selectItem.display_name"
                 :value="selectItem.raw_name" />
             </bk-select>
+            <!-- 无需配置 -->
+            <template v-else>
+              {{ t('无需配置') }}
+            </template>
           </template>
-          <template v-else-if="valueKey === 'description'">
-            <bk-input
-              v-model="config.description"
-              autosize
-              behavior="simplicity"
-              :maxlength="100"
-              type="textarea" />
-          </template>
+
+          <!-- 描述 -->
+          <bk-input
+            v-else-if="valueKey === 'description'"
+            v-model="config.description"
+            autosize
+            behavior="simplicity"
+            :maxlength="100"
+            type="textarea" />
+
           <template v-else>
             {{ value }}
           </template>
@@ -52,11 +79,17 @@
 </template>
 
 <script setup lang='ts'>
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
+  import SelectVerify from '@views/link-data-manage/link-data-create/components/components/select-verify.vue';
+
+  interface Exposes {
+    getValue: () => Promise<any>;
+  }
   interface Props {
     item: StrategyFieldEvent['event_basic_field_configs'],
     select: Array<DatabaseTableFieldModel>
@@ -65,7 +98,19 @@
   defineProps<Props>();
 
   const { t } = useI18n();
+  const selectVerifyRef = ref();
 
+  const requiredField = ['raw_event_id', 'event_time', 'event_source', 'operator'];
+  const optionalField = ['event_content', 'event_type'];
+
+  defineExpose<Exposes>({
+    getValue() {
+      if (!selectVerifyRef.value) {
+        return Promise.resolve();
+      }
+      return Promise.all((selectVerifyRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
+    },
+  });
 </script>
 <style lang="postcss" scoped>
   .value-item {
@@ -73,12 +118,16 @@
 
     .item {
       display: flex;
+      height: 58px;
       padding: 12px;
       border-right: 1px solid #dcdee5;
       border-bottom: 1px solid #dcdee5;
       align-items: center;
 
-      &:nth-child(1),
+      &:nth-child(1) {
+        width: 190px;
+      }
+
       &:nth-child(2) {
         width: 240px;
         background-color: #f5f7fa;
@@ -89,7 +138,7 @@
       }
 
       &:nth-child(4) {
-        width: 192px;
+        width: 240px;
       }
 
       &:last-child {
