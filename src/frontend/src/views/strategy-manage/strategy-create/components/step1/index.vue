@@ -555,7 +555,7 @@
       // 获取审计参数（自定义规则审计、引入模型审计）
       const fields = comRef.value.getFields();
       // 非联表不需要link_table参数
-      if (fields.configs.config_type !== 'LinkTable') {
+      if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
         fields.configs.data_source.link_table = null;
       }
       // 合并参数

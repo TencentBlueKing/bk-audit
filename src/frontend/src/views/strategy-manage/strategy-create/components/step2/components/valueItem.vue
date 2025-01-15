@@ -8,7 +8,7 @@
         v-for="(value, valueKey) in config"
         :key="valueKey">
         <div
-          v-if="!['example', 'prefix'].includes(valueKey)"
+          v-if="!excludeKey.includes(valueKey)"
           class="item">
           <!-- 是否重点展示 -->
           <bk-switcher
@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang='ts'>
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
@@ -92,16 +92,25 @@
   }
   interface Props {
     item: StrategyFieldEvent['event_basic_field_configs'],
-    select: Array<DatabaseTableFieldModel>
+    select: Array<DatabaseTableFieldModel>,
+    strategyType: string
   }
 
-  defineProps<Props>();
+  const props = defineProps<Props>();
 
   const { t } = useI18n();
   const selectVerifyRef = ref();
 
   const requiredField = ['raw_event_id', 'event_time', 'event_source', 'operator'];
   const optionalField = ['event_content', 'event_type'];
+
+  const excludeKey = computed<Array<string>>(() => {
+    const initKey = ['example', 'prefix'];
+    if (props.strategyType === 'model') {
+      initKey.push('map_config');
+    }
+    return initKey;
+  });
 
   defineExpose<Exposes>({
     getValue() {

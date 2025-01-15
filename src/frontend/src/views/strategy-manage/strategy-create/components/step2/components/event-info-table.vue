@@ -45,14 +45,15 @@
           <value-item
             ref="valueItemRef"
             :item="item"
-            :select="select" />
+            :select="select"
+            :strategy-type="strategyType" />
         </div>
       </div>
     </template>
   </div>
 </template>
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -73,7 +74,8 @@
   interface Props {
     strategyId: number,
     data: StrategyModel,
-    select: Array<DatabaseTableFieldModel>
+    select: Array<DatabaseTableFieldModel>,
+    strategyType: string
   }
 
   const props = defineProps<Props>();
@@ -81,14 +83,18 @@
   const { t, locale } = useI18n();
   const valueItemRef = ref();
 
-  const column = [
-    { label: t('事件分组') },
-    { label: t('字段名称') },
-    { label: t('字段显示名') },
-    { label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
-    { label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
-    { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
-  ];
+  const column = computed(() => {
+    const initColumn = [
+      { label: t('事件分组') },
+      { label: t('字段名称') },
+      { label: t('字段显示名') },
+      { label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
+      { label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
+      { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
+    ];
+    props.strategyType === 'rule' ? initColumn : initColumn.splice(4, 1);
+    return initColumn;
+  });
 
   const groupMap = {
     event_basic_field_configs: t('基本信息'),
