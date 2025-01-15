@@ -90,7 +90,8 @@
               ref="eventRef"
               :data="editData"
               :select="select"
-              :strategy-id="editData.strategy_id" />
+              :strategy-id="editData.strategy_id"
+              :strategy-type="strategyType" />
           </template>
         </card-part-vue>
       </audit-form>
@@ -147,7 +148,8 @@
   }
   interface Props {
     editData: StrategyModel,
-    select: Array<DatabaseTableFieldModel>
+    select: Array<DatabaseTableFieldModel>,
+    strategyType: string
   }
 
   const props = defineProps<Props>();

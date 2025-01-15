@@ -30,6 +30,7 @@
       :edit-data="editData"
       :is-edit-data-loading="isEditDataLoading"
       :select="formData.configs.select"
+      :strategy-type="formData.strategy_type"
       style="margin-bottom: 24px;"
       @cancel="handleCancel"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
