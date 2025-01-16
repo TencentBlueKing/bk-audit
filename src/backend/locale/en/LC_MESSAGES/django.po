@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-13 13:47+0800\n"
+"POT-Creation-Date: 2025-01-16 16:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -134,6 +134,9 @@ msgstr "Get Result Tables"
 
 msgid "获取结果表"
 msgstr "Get Result Table"
+
+msgid "获取结果表的存储信息"
+msgstr "Get Rt Storages"
 
 msgid "列举项目相关数据"
 msgstr "Get Project Data"
@@ -2148,6 +2151,9 @@ msgstr "Batch Join"
 msgid "Batch"
 msgstr "Batch"
 
+msgid "Redis KV"
+msgstr "Redis KV"
+
 msgid "CDC"
 msgstr "CDC"
 
@@ -3704,9 +3710,6 @@ msgstr "control_id and control_version are required when strategy_type is model"
 
 msgid "Control Version not Exists"
 msgstr "Control Version not Exists"
-
-msgid "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
-msgstr "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
 
 #, python-format
 msgid "%s Need to configure mapping"
