@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-13 13:47+0800\n"
+"POT-Creation-Date: 2025-01-16 16:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -134,6 +134,9 @@ msgstr "获取结果表列表"
 
 msgid "获取结果表"
 msgstr "获取结果表"
+
+msgid "获取结果表的存储信息"
+msgstr "获取结果表的存储信息"
 
 msgid "列举项目相关数据"
 msgstr "列举项目相关数据"
@@ -2148,6 +2151,9 @@ msgstr "离线维表计算"
 msgid "Batch"
 msgstr "离线实时计算"
 
+msgid "Redis KV"
+msgstr "Redis KV"
+
 msgid "CDC"
 msgstr "CDC"
 
@@ -3704,9 +3710,6 @@ msgstr "当策略类型为模型审计时，必须提供 control_id 和 control_
 
 msgid "Control Version not Exists"
 msgstr "控件版本不存在"
-
-msgid "link_table_uid and link_table_version are required when strategy_type is rule and config_type is link table"
-msgstr "当策略类型为规则审计并且配置类型为联表时，必须提供 link_table_uid 和 link_table_version"
 
 #, python-format
 msgid "%s Need to configure mapping"

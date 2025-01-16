@@ -111,13 +111,10 @@ class StrategySerializer(serializers.Serializer):
         elif strategy_type == StrategyType.RULE.value:
             if validated_request_data.get("configs", {}).get("config_type") != RuleAuditConfigType.LINK_TABLE:
                 return
-            if not (validated_request_data.get("link_table_uid") and validated_request_data.get("link_table_version")):
-                raise serializers.ValidationError(
-                    gettext(
-                        "link_table_uid and link_table_version are required when strategy_type is rule "
-                        "and config_type is link table"
-                    ),
-                )
+            link_table = validated_request_data.get("configs", {}).get("data_source", {}).get("link_table", {})
+            # 提取策略内的联表信息
+            validated_request_data["link_table_uid"] = link_table.get("uid")
+            validated_request_data["link_table_version"] = link_table.get("version")
 
     def _validate_configs(self, validated_request_data: dict):
         """
@@ -196,8 +193,6 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "strategy_name",
             "control_id",
             "control_version",
-            "link_table_uid",
-            "link_table_version",
             "strategy_type",
             "configs",
             "tags",
@@ -274,8 +269,6 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "strategy_name",
             "control_id",
             "control_version",
-            "link_table_uid",
-            "link_table_version",
             "strategy_type",
             "configs",
             "tags",

@@ -17,7 +17,9 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
+from time import sleep
 
+from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from kafka import KafkaConsumer
@@ -37,8 +39,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **kwargs) -> None:
         config: dict = settings.KAFKA_CONFIG
-        if not config:
-            return
+        while True:
+            logger.info("Waiting for kafka config...")
+            if config:
+                break
+            sleep(5)
         consumer = KafkaConsumer(
             **config,
             value_deserializer=lambda v: json.loads(v.decode("utf-8")),
