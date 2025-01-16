@@ -305,6 +305,13 @@ class GetResultTable(BkBaseResource):
     url_keys = ["result_table_id"]
 
 
+class GetRtStorages(BkBaseResource):
+    name = gettext_lazy("获取结果表的存储信息")
+    action = "/v3/meta/result_tables/{result_table_id}/storages/"
+    url_keys = ["result_table_id"]
+    method = "GET"
+
+
 class GetProjectData(BkBaseResource):
     name = gettext_lazy("列举项目相关数据")
     action = "/v3/auth/projects/{project_id}/data/"

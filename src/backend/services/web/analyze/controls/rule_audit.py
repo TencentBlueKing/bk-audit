@@ -53,6 +53,7 @@ from services.web.analyze.constants import (
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.exceptions import NotSupportDataSource
 from services.web.analyze.storage_node import (
+    BaseStorageNode,
     ESStorageNode,
     HDFSStorageNode,
     QueueStorageNode,
@@ -160,9 +161,8 @@ class RuleAuditController(BaseControl):
             result_table["processing_type"] == ResultTableType.CDC
             or result_table["result_table_type"] == ResultTableType.STATIC
         ):
-            if (
-                source_type == FlowDataSourceNodeType.REALTIME
-                and BkBaseStorageType.REDIS in result_table["storage_types"]
+            if source_type == FlowDataSourceNodeType.REALTIME and BkBaseStorageType.REDIS in result_table.get(
+                "storages", {}
             ):
                 return FlowDataSourceNodeType.REDIS_KV_SOURCE
             return FlowDataSourceNodeType.BATCH
@@ -371,11 +371,12 @@ class RuleAuditController(BaseControl):
         self.x += self.x_interval
         self.y = self.y_interval
         bk_biz_id = int(self.rt_ids[0].split("_", 1)[0])
+        from_result_table_ids = [BaseStorageNode.build_rt_id(bk_biz_id, self.raw_table_name)]
         storage_node_ids = [] if need_create else self.strategy.backend_data.get("storage_node_ids", [])
         storage_nodes = [ESStorageNode, QueueStorageNode, HDFSStorageNode]
         for idx, storage_node in enumerate(storage_nodes):
             node_config = storage_node(namespace=self.strategy.namespace).build_node_config(
-                bk_biz_id=bk_biz_id, raw_table_name=self.raw_table_name
+                bk_biz_id=bk_biz_id, raw_table_name=self.raw_table_name, from_result_table_ids=from_result_table_ids
             )
             if not node_config:
                 continue
