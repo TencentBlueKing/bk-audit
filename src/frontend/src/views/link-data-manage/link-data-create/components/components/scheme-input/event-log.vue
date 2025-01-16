@@ -24,6 +24,8 @@
       <span>
         <bk-select
           v-model="modelValue.system_ids"
+          collapse-tags
+          :disabled="isDisabled"
           filterable
           :loading="isSystemListLoading"
           multiple
@@ -53,6 +55,7 @@
 
 <script setup lang='ts'>
   import {
+    computed,
     onMounted,
     ref,
   } from 'vue';
@@ -68,11 +71,32 @@
 
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
+  interface Props {
+    links: LinkDataDetailModel['config']['links']
+  }
+
+  const props = defineProps<Props>();
   const modelValue = defineModel<ModelValue>({
     required: true,
   });
   const { t } = useI18n();
   const statusSystems = ref<Array<Record<string, any>>>([]);
+
+  const firstSystemIds = computed(() => {
+    if (props.links.length > 1) {
+      const leftSystemIds = props.links[0].left_table.system_ids;
+      const rightSystemIds = props.links[0].right_table.system_ids;
+      if (leftSystemIds && leftSystemIds.length) {
+        return leftSystemIds;
+      } if (rightSystemIds && rightSystemIds.length) {
+        return rightSystemIds;
+      }
+      return [];
+    }
+    return [];
+  });
+
+  const isDisabled = computed(() => firstSystemIds.value.length > 0);
 
   // 获取rt_id
   const {
@@ -116,6 +140,9 @@
         name: item.name,
         status: result[item.id].status,
       }));
+      if (isDisabled.value) {
+        modelValue.value.system_ids = firstSystemIds.value;
+      }
       statusSystems.value.sort((a, b) => {
         if (a.status !== 'unset') return -1;
         if (b.status !== 'unset') return 1;

@@ -65,6 +65,7 @@
               :is="configTypeMap[link.left_table.table_type]"
               ref="tableTypeRef"
               v-model="link.left_table"
+              :links="links"
               style="flex: 1;" />
           </select-verify>
         </div>
@@ -116,6 +117,7 @@
               :is="configTypeMap[link.right_table.table_type]"
               ref="tableTypeRef"
               v-model="link.right_table"
+              :links="links"
               style="flex: 1;" />
           </select-verify>
         </div>
@@ -174,14 +176,6 @@
   });
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
 
-  // 第二个关联开始，左表只能使用第一个关联选中的表
-  const leftTableTypeList = computed(() => linkTableTableTypeList.value.filter((item) => {
-    const firstLink = links.value[0];
-    if (item.value === firstLink.left_table.table_type || item.value === firstLink.right_table.table_type) {
-      return item;
-    }
-  }));
-
   // 第一个关联右表，如果左表选了EventLog，右表不能再选
   const firstRightTableTypeList = computed(() => {
     const firsLeftTableType = links.value[0].left_table.table_type;
@@ -190,6 +184,14 @@
     }
     return linkTableTableTypeList.value;
   });
+
+  // 第二个关联开始，左表只能使用第一个关联选中的表
+  const leftTableTypeList = computed(() => linkTableTableTypeList.value.filter((item) => {
+    const firstLink = links.value[0];
+    if (item.value === firstLink.left_table.table_type || item.value === firstLink.right_table.table_type) {
+      return item;
+    }
+  }));
 
   const handleSelectLeftTableType = (index: number) => {
     // 如果重选了主表，全部重置
