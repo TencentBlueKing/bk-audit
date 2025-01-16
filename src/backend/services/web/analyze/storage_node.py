@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import List, Union
 
 from bk_resource import resource
 from django.conf import settings
@@ -51,10 +51,11 @@ class BaseStorageNode(ABC):
     def cluster(self) -> Union[str, int]:
         raise NotImplementedError()
 
-    def build_rt_id(self, bk_biz_id: int, table_name: str) -> str:
+    @classmethod
+    def build_rt_id(cls, bk_biz_id: int, table_name: str) -> str:
         return f"{bk_biz_id}_{table_name}"
 
-    def build_node_config(self, bk_biz_id: int, raw_table_name: str) -> dict:
+    def build_node_config(self, bk_biz_id: int, raw_table_name: str, from_result_table_ids: List[str]) -> dict:
         if not self.cluster:
             return {}
         result_table_id = self.build_rt_id(bk_biz_id, raw_table_name)
@@ -93,10 +94,10 @@ class ESStorageNode(BaseStorageNode):
         bkbase_cluster_id = cluster_info["cluster_config"].get("custom_option", {}).get("bkbase_cluster_id")
         return bkbase_cluster_id
 
-    def build_node_config(self, bk_biz_id: int, raw_table_name: str) -> dict:
+    def build_node_config(self, bk_biz_id: int, raw_table_name: str, from_result_table_ids: List[str]) -> dict:
         table_id = EventHandler.get_table_id().replace(".", "_")
         return {
-            **super().build_node_config(bk_biz_id, raw_table_name),
+            **super().build_node_config(bk_biz_id, raw_table_name, from_result_table_ids),
             "indexed_fields": [],
             "has_replica": False,
             "has_unique_key": False,
