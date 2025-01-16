@@ -67,17 +67,48 @@
 
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
+  interface Props {
+    links: LinkDataDetailModel['config']['links']
+  }
+
+  const props = defineProps<Props>();
+
   const modelValue = defineModel<ModelValue>({
     required: true,
   });
   const { t } = useI18n();
   const isEditMode = inject<Ref<boolean>>('isEditMode', ref(false));
 
-  const filterTableData = computed(() => tableData.value.map(item => ({
-    ...item,
-    leaf: true,
-    disabled: !(item.children && item.children.length),
-  })));
+  // 不能选择已选的资源数据
+  const filterTableData = computed(() => {
+    const disabledValues = new Set();
+
+    // 遍历 link 数据，找出需要禁用的 children.value
+    props.links.forEach((link) => {
+      const leftTable = link.left_table;
+      const rightTable = link.right_table;
+
+      if (Array.isArray(leftTable.rt_id)) {
+        const lastRtId = leftTable.rt_id[leftTable.rt_id.length - 1];
+        disabledValues.add(lastRtId);
+      }
+
+      if (Array.isArray(rightTable.rt_id)) {
+        const lastRtId = rightTable.rt_id[rightTable.rt_id.length - 1];
+        disabledValues.add(lastRtId);
+      }
+    });
+
+    return tableData.value.map(item => ({
+      ...item,
+      leaf: true,
+      disabled: !(item.children && item.children.length),
+      children: item.children.map(child => ({
+        ...child,
+        disabled: disabledValues.has(child.value),
+      })),
+    }));
+  });
 
   // 获取rt_id
   const {

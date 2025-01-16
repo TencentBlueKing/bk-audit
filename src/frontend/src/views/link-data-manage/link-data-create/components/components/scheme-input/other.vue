@@ -15,33 +15,33 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="strategy-customize-eventlog-wrap">
+  <div
+    v-if="Array.isArray(modelValue.rt_id)"
+    class="strategy-customize-eventlog-wrap">
     <bk-form-item
       class="no-label"
       label-width="0"
       property="configs.data_source.data_sheet_id"
       style="margin-bottom: 8px;">
-      <span>
-        <bk-select
-          v-model="modelValue.rt_id"
-          filterable
-          :loading="loading"
-          :no-match-text="t('无匹配数据')"
-          :placeholder="t('请选择')">
-          <bk-option
-            v-for="(dataSheet, dataSheetIndex) in tableData"
-            :key="dataSheetIndex"
-            :label="dataSheet.label"
-            :value="dataSheet.value" />
-        </bk-select>
-      </span>
+      <bk-cascader
+        v-slot="{node}"
+        v-model="modelValue.rt_id"
+        filterable
+        id-key="value"
+        :list="filterTableData"
+        :loading="loading"
+        name-key="label"
+        trigger="hover">
+        <p>
+          {{ node.name }}
+        </p>
+      </bk-cascader>
     </bk-form-item>
   </div>
 </template>
 
 <script setup lang='ts'>
-  import { onMounted } from 'vue';
-  import { useI18n } from 'vue-i18n';
+  import { computed, inject, onMounted, type Ref, ref } from 'vue';
 
   import StrategyManageService from '@service/strategy-manage';
 
@@ -51,10 +51,45 @@
 
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
+  interface Props {
+    links: LinkDataDetailModel['config']['links']
+  }
+
+  const props = defineProps<Props>();
   const modelValue = defineModel<ModelValue>({
     required: true,
   });
-  const { t } = useI18n();
+  const isEditMode = inject<Ref<boolean>>('isEditMode', ref(false));
+
+  // 不能选择已选的资源数据
+  const filterTableData = computed(() => {
+    const disabledValues = new Set();
+
+    // 遍历 link 数据，找出需要禁用的 children.value
+    props.links.forEach((link) => {
+      const leftTable = link.left_table;
+      const rightTable = link.right_table;
+
+      if (Array.isArray(leftTable.rt_id)) {
+        const lastRtId = leftTable.rt_id[leftTable.rt_id.length - 1];
+        disabledValues.add(lastRtId);
+      }
+
+      if (Array.isArray(rightTable.rt_id)) {
+        const lastRtId = rightTable.rt_id[rightTable.rt_id.length - 1];
+        disabledValues.add(lastRtId);
+      }
+    });
+
+    return tableData.value.map(item => ({
+      ...item,
+      disabled: !(item.children && item.children.length),
+      children: item.children.map(child => ({
+        ...child,
+        disabled: disabledValues.has(child.value),
+      })),
+    }));
+  });
 
   // 获取rt_id
   const {
@@ -63,6 +98,30 @@
     loading,
   } = useRequest(StrategyManageService.fetchTable, {
     defaultValue: [],
+    onSuccess: (data) => {
+      if (!modelValue.value.rt_id) {
+        modelValue.value.rt_id = [];
+      }
+      if (data) {
+        data.sort((a, b) => {
+          if (a.children && a.children.length) return -1;
+          if (b.children && b.children.length) return 1;
+          return 0;
+        });
+      }
+      if (isEditMode.value) {
+        // 对tableid转换
+        data.forEach((item) => {
+          if (item.children && item.children.length) {
+            item.children.forEach((cItem) => {
+              if (cItem.value === modelValue.value.rt_id) {
+                modelValue.value.rt_id = [item.value, modelValue.value.rt_id];
+              }
+            });
+          }
+        });
+      }
+    },
   });
 
   onMounted(() => {
