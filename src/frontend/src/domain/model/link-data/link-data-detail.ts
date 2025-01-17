@@ -30,13 +30,15 @@ export default class LinkDataDetail {
         name?: string,
         rt_id: string | Array<string>,
         table_type: string,
-        system_ids?: Array<string>
+        system_ids?: Array<string>,
+        display_name: string,
       }
       right_table: {
         name?: string,
         rt_id: string | Array<string>,
         table_type: string,
-        system_ids?: Array<string>
+        system_ids?: Array<string>,
+        display_name: string,
       }
       join_type: string,
       link_fields: Array<{

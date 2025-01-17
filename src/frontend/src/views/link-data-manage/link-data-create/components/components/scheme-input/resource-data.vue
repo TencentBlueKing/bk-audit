@@ -68,7 +68,9 @@
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
   interface Props {
-    links: LinkDataDetailModel['config']['links']
+    links: LinkDataDetailModel['config']['links'],
+    type: 'left' | 'right',
+    linkIndex: number
   }
 
   const props = defineProps<Props>();
@@ -79,20 +81,51 @@
   const { t } = useI18n();
   const isEditMode = inject<Ref<boolean>>('isEditMode', ref(false));
 
-  // 不能选择已选的资源数据
-  const filterTableData = computed(() => {
-    const disabledValues = new Set();
+  // 第一个关联中选中的BuildIn
+  const firstReSourceDataRtIds = computed(() => {
+    const ids: Array<string> = [];
+    if (props.linkIndex === 0 || props.type === 'right')  return ids;
+    const leftTable = props.links[0].left_table;
+    const rightTable = props.links[0].right_table;
+    if (leftTable.table_type === 'BuildIn') {
+      ids.push(leftTable.rt_id[leftTable.rt_id.length - 1]);
+    }
+    if (rightTable.table_type === 'BuildIn') {
+      ids.push(rightTable.rt_id[rightTable.rt_id.length - 1]);
+    }
+    return ids;
+  });
 
+  const changeData = (data: Array<{
+    label: string;
+    value: string;
+    children: Array<{
+      label: string;
+      value: string;
+    }>
+  }>) => {
+    data.forEach((item) => {
+      if (item.children && item.children.length) {
+        item.children.forEach((cItem) => {
+          if (cItem.value === modelValue.value.rt_id) {
+            modelValue.value.rt_id = [item.value, modelValue.value.rt_id];
+          }
+        });
+      }
+    });
+  };
+
+  // 不能选择已选的表
+  const getRightTableData = () => {
+    const disabledValues = new Set();
     // 遍历 link 数据，找出需要禁用的 children.value
     props.links.forEach((link) => {
       const leftTable = link.left_table;
       const rightTable = link.right_table;
-
       if (Array.isArray(leftTable.rt_id)) {
         const lastRtId = leftTable.rt_id[leftTable.rt_id.length - 1];
         disabledValues.add(lastRtId);
       }
-
       if (Array.isArray(rightTable.rt_id)) {
         const lastRtId = rightTable.rt_id[rightTable.rt_id.length - 1];
         disabledValues.add(lastRtId);
@@ -108,6 +141,32 @@
         disabled: disabledValues.has(child.value),
       })),
     }));
+  };
+
+  // 只能选择第一个关联已有的表
+  const getLeftTableData = () => tableData.value.map((item) => {
+    // 默认选中第一个
+    if (firstReSourceDataRtIds.value.length) {
+      // eslint-disable-next-line prefer-destructuring
+      modelValue.value.rt_id = firstReSourceDataRtIds.value[0];
+      changeData(tableData.value);
+    }
+    return {
+      ...item,
+      leaf: true,
+      disabled: !(item.children && item.children.length),
+      children: item.children.map(child => ({
+        ...child,
+        disabled: firstReSourceDataRtIds.value.length ? !firstReSourceDataRtIds.value.includes(child.value) : false,
+      })),
+    };
+  });
+
+  const filterTableData = computed(() => {
+    if (props.type === 'right') {
+      return getRightTableData();
+    }
+    return getLeftTableData();
   });
 
   // 获取rt_id
@@ -130,15 +189,7 @@
       }
       if (isEditMode.value) {
         // 对tableid转换
-        data.forEach((item) => {
-          if (item.children && item.children.length) {
-            item.children.forEach((cItem) => {
-              if (cItem.value === modelValue.value.rt_id) {
-                modelValue.value.rt_id = [item.value, modelValue.value.rt_id];
-              }
-            });
-          }
-        });
+        changeData(data);
       }
     },
   });
