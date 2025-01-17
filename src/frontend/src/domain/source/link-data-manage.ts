@@ -58,8 +58,10 @@ class LinkDataManage extends ModuleBase {
     return Request.delete(`${this.path}/link_table/${params.uid}/`, {});
   }
   // 获取联表信息
-  getLinkDataDetail(params: { uid: string}) {
-    return Request.get<LinkDataDetailModel>(`${this.path}/link_table/${params.uid}/`, {});
+  getLinkDataDetail(params: { uid: string, version: number}) {
+    return Request.get<LinkDataDetailModel>(`${this.path}/link_table/${params.uid}/`, {
+      params,
+    });
   }
   // 新建联表
   addLinkData(params: {

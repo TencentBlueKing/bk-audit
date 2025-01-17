@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 export default class LinkDataDetail {
-  uid: number;
+  uid: string;
   name: string;
   tags: Array<string>;
   status: string;
@@ -23,7 +23,7 @@ export default class LinkDataDetail {
   created_at: string;
   updated_by: string;
   updated_at: string;
-  has_refresh: boolean;
+  version: number;
   config: {
     links: Array<{
       left_table: {
@@ -57,7 +57,7 @@ export default class LinkDataDetail {
     this.created_at = payload.created_at;
     this.updated_by = payload.updated_by;
     this.updated_at = payload.updated_at;
-    this.has_refresh = payload.has_refresh;
+    this.version = payload.version;
     this.config = payload.config;
   }
 }

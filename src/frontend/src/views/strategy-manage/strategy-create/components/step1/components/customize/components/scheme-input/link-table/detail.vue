@@ -19,7 +19,7 @@
     v-if="linkDataDetail.config?.links && linkDataDetail.config.links.length"
     class="link-data-detail">
     <bk-alert
-      v-if="linkDataDetail.has_refresh"
+      v-if="!(linkDataDetail.version >= (linkTableMaxVersionMap[linkDataDetail.uid] || 1))"
       theme="warning">
       <template #title>
         {{ t('该联表数据有更新，请确认是否刷新同步') }}
@@ -33,9 +33,9 @@
         <router-link
           target="_blank"
           :to="{
-            name: '',
+            name: 'linkDataManage',
             query: {
-              id: linkDataSheetId,
+              name: linkDataDetail.name,
             },
           }">
           {{ t('前往查看详情查看') }}
@@ -76,12 +76,26 @@
         <div class="detail-table">
           <div class="detail-table-head">
             <div class="left-name">
+              <span
+                style="
+                  color: #3a84ff;
+                  background: #f0f1f5;
+                  border-radius: 2px;">
+                {{ item.left_table.display_name }}
+              </span>
               {{ item.left_table.rt_id }}
             </div>
             <div class="join-type">
               <relation-ship :join-type="item.join_type" />
             </div>
             <div class="right-name">
+              <span
+                style="
+                  color: #3a84ff;
+                  background: #f0f1f5;
+                  border-radius: 2px;">
+                {{ item.right_table.display_name }}
+              </span>
               {{ item.right_table.rt_id }}
             </div>
           </div>
@@ -111,22 +125,38 @@
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import LinkDataManageService from '@service/link-data-manage';
+
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
   import CreateLinkData from '@views/link-data-manage/link-data-create/index.vue';
+
+  import useRequest from '@/hooks/use-request';
 
   interface Emits {
     (e: 'refreshLinkData'): void;
   }
   interface Props {
     linkDataDetail: LinkDataDetailModel
-    linkDataSheetId: string
   }
 
   defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
   const createRef = ref();
+  const linkTableMaxVersionMap = ref<Record<string, number>>({});
+
+  // 获取全部联表版本信息
+  useRequest(LinkDataManageService.fetchLinkTableAll, {
+    defaultValue: [],
+    manual: true,
+    onSuccess(data) {
+      linkTableMaxVersionMap.value = data.reduce((res, item) => {
+        res[item.uid] = item.version;
+        return res;
+      }, {} as Record<string, number>);
+    },
+  });
 
   const create = () => {
     createRef.value.show();

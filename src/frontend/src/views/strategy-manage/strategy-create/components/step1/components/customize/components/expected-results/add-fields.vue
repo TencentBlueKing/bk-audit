@@ -39,6 +39,9 @@
                   @click="() => handleSelectField(index, item)">
                   <div>
                     <span style=" margin-right: 4px;font-size: 14px; color: #29bc9e;">#</span>
+                    <span
+                      v-if="configType === 'LinkTable'"
+                      style=" color: #3a84ff;">{{ item.table }}.</span>
                     <span>{{ item.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
                   </div>
                   <div>{{ item.raw_name }}</div>
@@ -66,6 +69,7 @@
         <div class="field-pop-bth">
           <bk-button
             class="mr8"
+            :disabled="!formData.raw_name"
             size="small"
             theme="primary"
             @click="handleAddField">
@@ -94,6 +98,7 @@
     aggregateList: Array<Record<string, any>>
     expectedResultList: Array<DatabaseTableFieldModel>
     tableFields: Array<DatabaseTableFieldModel>
+    configType: string,
   }
 
   const props = defineProps<Props>();
@@ -145,6 +150,7 @@
       ...field,
       aggregate: localAggregateList.value.find(item => !item.disabled)?.value, // 选择第一个可选项
     };
+    formData.value.display_name =  `${field.display_name}_${formData.value.aggregate}`;
   };
 
   const handleCancel = () => {
@@ -155,6 +161,7 @@
   const handleAddField = () => {
     handleCancel();
     emits('addExpectedResult', formData.value);
+    formData.value = new DatabaseTableFieldModel();
   };
 
   watch(() => props.aggregateList, (data) => {

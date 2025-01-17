@@ -60,7 +60,6 @@
           <link-data-detail-component
             v-if="formData.configs.data_source.link_table && formData.configs.data_source.link_table.uid"
             :link-data-detail="linkDataDetail"
-            :link-data-sheet-id="formData.configs.data_source.link_table.uid"
             @refresh-link-data="handleRefreshLinkData" />
         </bk-form-item>
         <bk-form-item
@@ -69,6 +68,7 @@
           <expected-results
             ref="expectedResultsRef"
             :aggregate-list="aggregateList"
+            :config-type="formData.configs.config_type"
             :table-fields="tableFields"
             @update-expected-result="handleUpdateExpectedResult" />
         </bk-form-item>
@@ -78,6 +78,7 @@
           required>
           <rules-component
             ref="rulesComponentRef"
+            :config-type="formData.configs.config_type"
             :table-fields="tableFields"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
@@ -153,7 +154,7 @@
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
   import _ from 'lodash';
-  import { h, onMounted, ref, watch } from 'vue';
+  import { h, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -302,8 +303,8 @@
     field_type: string,
     label: string,
     value: string,
-  }>, rtId: string) => data.map(item => ({
-    table: rtId,
+  }>, displayOrRtId: string) => data.map(item => ({
+    table: displayOrRtId, // 别名，单表时为rt_id
     raw_name: item.value,
     display_name: item.label,
     field_type: item.field_type,
@@ -321,8 +322,11 @@
   };
 
   // 获取联表表字段
-  const fetchLinkTableFields = async (rtIdArr: string[][]) => {
+  const fetchLinkTableFields = async (rtIdArr: string[][], rtIdArrDisplay: string[][]) => {
+    // rt_id
     const idArr = rtIdArr.reduce((acc, curr) => acc.concat(curr), []);
+    // 别名
+    const displayArr = rtIdArrDisplay.reduce((acc, curr) => acc.concat(curr), []);
     const fetchPromises = idArr.map(async (rtId) => {
       const data = await  StrategyManageService.fetchTableRtFields({
         table_id: rtId,
@@ -331,8 +335,9 @@
     });
     // 使用 Promise.all 等待所有请求完成
     Promise.all(fetchPromises).then((data) => {
+      tableFields.value = [];
       data.forEach((item, index) => {
-        tableFields.value.push(...setTableFields(item, idArr[index]));
+        tableFields.value.push(...setTableFields(item, displayArr[index]));
       });
     });
   };
@@ -413,11 +418,15 @@
   // 获取联表详情
   const handleUpdateLinkDataDetail = (detail: LinkDataDetailModel) => {
     linkDataDetail.value = detail;
+    // 表id
     // eslint-disable-next-line max-len
     const rtIdArr = linkDataDetail.value.config.links.map(item => [item.left_table.rt_id, item.right_table.rt_id]) as string[][];
+    // 表别名
+    // eslint-disable-next-line max-len
+    const rtIdArrDisplay =  linkDataDetail.value.config.links.map(item => [item.left_table.display_name, item.right_table.display_name]) as string[][];
     if (rtIdArr.length) {
       // 联表获取表字段
-      fetchLinkTableFields(rtIdArr);
+      fetchLinkTableFields(rtIdArr, rtIdArrDisplay);
     }
   };
 
@@ -447,11 +456,17 @@
     formData.value.configs.select = editData.configs.select;
     expectedResultsRef.value.setConfigs(editData.configs.select);
     rulesComponentRef.value.setConfigs(editData.configs.where);
-    fetchTable({
-      table_type: formData.value.configs.config_type,
-    }).then(() => {
-      configRef.value.setConfigs(editData.configs);
-    });
+    if (formData.value.configs.config_type !== 'LinkTable') {
+      fetchTable({
+        table_type: formData.value.configs.config_type,
+      }).then(() => {
+        configRef.value.setConfigs(editData.configs);
+      });
+    } else {
+      nextTick(() => {
+        configRef.value.setConfigs(editData.configs);
+      });
+    }
   };
 
   watch(() => formData.value, (data) => {

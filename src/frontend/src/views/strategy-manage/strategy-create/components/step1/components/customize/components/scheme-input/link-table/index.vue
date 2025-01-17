@@ -44,8 +44,9 @@
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
-  import linkDataManageService from '@service/link-data-manage';
+  import LinkDataManageService from '@service/link-data-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -71,7 +72,17 @@
     },
   }
   const emits = defineEmits<Emits>();
+  const route = useRoute();
   const { t } = useI18n();
+
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
+  const isUpgradeMode = route.name === 'strategyUpgrade';
+  let isInit = false;
+  if (!isEditMode && !isCloneMode && !isUpgradeMode) {
+    isInit = true;
+  }
+
   const formData = ref<IFormData>({
     configs: {
       data_source: {
@@ -87,7 +98,7 @@
   const {
     data: LinkDataDetail,
     run: fetchLinkDataSheetDetail,
-  } = useRequest(linkDataManageService.fetchLinkDataDetail, {
+  } = useRequest(LinkDataManageService.fetchLinkDataDetail, {
     defaultValue: new LinkDataDetailModel(),
     onSuccess: () => {
       emits('updateLinkDataDetail', LinkDataDetail.value);
@@ -110,10 +121,15 @@
   const {
     loading,
     data,
-  } = useRequest(linkDataManageService.fetchLinkTableAll, {
+  } = useRequest(LinkDataManageService.fetchLinkTableAll, {
     defaultValue: [],
     manual: true,
     onSuccess: () => {
+      // 编辑首次进入不置空
+      if (!isInit) {
+        isInit = true;
+        return;
+      }
       formData.value.configs.data_source.link_table = {
         uid: '',
         version: 0,
@@ -124,7 +140,13 @@
 
   defineExpose<Expose>({
     refreshLinkData: () => {
-      fetchLinkDataSheetDetail({ id: formData.value.configs.data_source.link_table });
+      fetchLinkDataSheetDetail({
+        uid: formData.value.configs.data_source.link_table.uid,
+      }).then(() => {
+        // 更新version
+        formData.value.configs.data_source.link_table.version = LinkDataDetail.value.version;
+        emits('updateDataSource', formData.value.configs.data_source);
+      });
     },
     resetFormData: () => {
       formData.value.configs.data_source.link_table = {
@@ -133,10 +155,18 @@
       };
     },
     setConfigs(configs: IFormData['configs']) {
-      if (!configs.data_source.link_table) {
+      if (!configs.data_source.link_table.uid) {
         return;
       }
       formData.value.configs.data_source.link_table = configs.data_source.link_table;
+      // 编辑是传入当前联表版本，用于判断是否需要提示更新
+      fetchLinkDataSheetDetail({
+        uid: formData.value.configs.data_source.link_table.uid,
+        version: formData.value.configs.data_source.link_table.version,
+      });
+      emits('updateDataSource', formData.value.configs.data_source);
+      // 设置为初始化
+      isInit = false;
     },
   });
 </script>

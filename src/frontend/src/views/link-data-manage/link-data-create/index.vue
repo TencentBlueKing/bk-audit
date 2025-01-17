@@ -113,7 +113,7 @@
   import useRequest from '@/hooks/use-request';
 
   interface IFormData {
-    uid?: number,
+    uid?: string,
     name: string,
     tags: Array<string>,
     config: {
@@ -340,7 +340,7 @@
       // 没有更改config，不传值
       if (!isNewVersion) {
         const noConfigParams: {
-          uid?: number,
+          uid?: string,
           name: string,
           tags: Array<string>,
           config?: {

@@ -216,6 +216,7 @@
 
   import ControlManageService from '@service/control-manage';
   import IamManageService from '@service/iam-manage';
+  import LinkDataManageService from '@service/link-data-manage';
   import NoticeGroupManageService from '@service/notice-group';
   import StrategyManageService from '@service/strategy-manage';
 
@@ -323,6 +324,7 @@
   const pendingStatusIdList = ref<Array<number>>([]);
   // control最大版本对应的map
   const maxVersionMap = ref<Record<string, number>>({});
+  const linkTableMaxVersionMap = ref<Record<string, number>>({});
   // const retryIdMap = ref<Record<number, number>>({});
 
   const userGroupList = computed(() => groupList.value.results
@@ -648,7 +650,10 @@
             class='edit-badge'
             position="top-right"
             theme="danger"
-            visible={data.control_version >= (maxVersionMap.value[data.control_id] || 1)}
+            visible={ data.strategy_type === 'rule'
+              ? (data.link_table_version || 999) >= (linkTableMaxVersionMap.value[data.link_table_uid] || 1)
+              : data.control_version >= (maxVersionMap.value[data.control_id] || 1)
+            }
             dot
           >
             <auth-button
@@ -656,14 +661,15 @@
               permission={data.permission.edit_strategy}
               resource={data.strategy_id}
               v-bk-tooltips={{
-                content: t('策略使用的方案，有新版本待升级'),
-                disabled: data.control_version >= (maxVersionMap.value[data.control_id] || 1),
-              }
-              }
+                content: data.strategy_type === 'rule' ? t('策略使用的联表，有新版本待升级') : t('策略使用的方案，有新版本待升级'),
+                disabled: data.strategy_type === 'rule'
+                  ? (data.link_table_version || 999) >= (linkTableMaxVersionMap.value[data.link_table_uid] || 1)
+                  : data.control_version >= (maxVersionMap.value[data.control_id] || 1),
+              }}
               theme="primary"
               text
               onClick={() => handleEdit(data)}>
-              {t('编辑')}
+              {t('编辑')} {data.link_table_version >= (linkTableMaxVersionMap.value[data.link_table_uid] || 1)}
             </auth-button>
           </bk-badge>
       }
@@ -810,6 +816,17 @@
       }, {} as Record<string, number>);
     },
   });
+  // 获取全部联表版本信息
+  useRequest(LinkDataManageService.fetchLinkTableAll, {
+    defaultValue: [],
+    manual: true,
+    onSuccess(data) {
+      linkTableMaxVersionMap.value = data.reduce((res, item) => {
+        res[item.uid] = item.version;
+        return res;
+      }, {} as Record<string, number>);
+    },
+  });
   const {
     run: fetchStrategyCommon,
     data: commonData,
@@ -905,8 +922,8 @@
       }
     });
     // 对列表的filter重新赋值
-    tableColumn.value[3].filter.checked.length =  0;
-    tableColumn.value[8].filter.checked.length = 0;
+    tableColumn.value[4].filter.checked.length =  0;
+    tableColumn.value[9].filter.checked.length = 0;
 
     if (search.tag) {
       renderLabelRef.value.setLabel(search.tag);
