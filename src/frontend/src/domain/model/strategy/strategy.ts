@@ -68,9 +68,11 @@ export default class Strategy {
       conditions: Array<{
         connector: 'and' | 'or';
         conditions: Array<{
-          field: DatabaseTableFieldModel | '';
-          filter: string;
-          filters: string[];
+          condition: {
+            field: DatabaseTableFieldModel | '';
+            filter: string;
+            filters: string[];
+          }
         }>
       }>;
     },

@@ -86,9 +86,11 @@
     conditions: Array<{
       connector: 'and' | 'or';
       conditions: Array<{
-        field: DatabaseTableFieldModel;
-        filter: string;
-        filters: string[];
+        condition: {
+          field: DatabaseTableFieldModel;
+          filter: string;
+          filters: string[];
+        }
       }>
     }>;
   }
@@ -109,9 +111,11 @@
     conditions: [{
       connector: 'and',
       conditions: [{
-        field: new DatabaseTableFieldModel(),
-        filter: '',
-        filters: [],
+        condition: {
+          field: new DatabaseTableFieldModel(),
+          filter: '',
+          filters: [],
+        },
       }],
     }],
   });
@@ -125,9 +129,11 @@
     where.value.conditions.push({
       connector: 'and',
       conditions: [{
-        field: new DatabaseTableFieldModel(),
-        filter: '',
-        filters: [],
+        condition: {
+          field: new DatabaseTableFieldModel(),
+          filter: '',
+          filters: [],
+        },
       }],
     });
   };
@@ -135,9 +141,11 @@
   const handleUpdateFieldItemList = (value: string, conditionsIndex: number) => {
     if (value === 'add') {
       where.value.conditions[conditionsIndex].conditions.push({
-        field: new DatabaseTableFieldModel(),
-        filter: '',
-        filters: [],
+        condition: {
+          field: new DatabaseTableFieldModel(),
+          filter: '',
+          filters: [],
+        },
       });
     } else {
       where.value.conditions[conditionsIndex].conditions.pop();
@@ -146,7 +154,7 @@
 
   // eslint-disable-next-line max-len
   const handleUpdateFieldItem = (value: DatabaseTableFieldModel, conditionsIndex: number, childConditionsIndex: number) => {
-    where.value.conditions[conditionsIndex].conditions[childConditionsIndex].field = value;
+    where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.field = value;
   };
 
   const handleUpdateConnector = (value: 'and' | 'or', conditionsIndex: number) => {
@@ -166,9 +174,11 @@
         conditions: [{
           connector: 'and',
           conditions: [{
-            field: new DatabaseTableFieldModel(),
-            filter: '',
-            filters: [],
+            condition: {
+              field: new DatabaseTableFieldModel(),
+              filter: '',
+              filters: [],
+            },
           }],
         }],
       };
