@@ -17,10 +17,13 @@
 <template>
   <bk-popover
     ext-cls="link-data-join-type"
+    :is-show="isShow"
     placement="bottom"
     theme="light"
-    trigger="click">
-    <relation-ship :join-type="joinType" />
+    trigger="manual">
+    <relation-ship
+      :join-type="joinType"
+      @click="handleOpen" />
     <template #content>
       <div
         v-for="type in joinTypeList"
@@ -39,14 +42,23 @@
   </bk-popover>
 </template>
 <script setup lang="ts">
+  import { ref } from 'vue';
+
   const joinType = defineModel<string>('joinType', {
     default: 'left_join',
   });
 
+  const isShow = ref(false);
+
   const joinTypeList = ['left_join', 'right_join', 'inner_join', 'full_outer_join'];
+
+  const handleOpen = () => {
+    isShow.value = true;
+  };
 
   const handleSelectJoinType = (type: string) => {
     joinType.value = type;
+    isShow.value = false;
   };
 </script>
 <style scoped lang="postcss">
