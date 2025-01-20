@@ -112,7 +112,7 @@ class ActionPermission(IAMPermission):
         if not self.actions:
             return True
 
-        client = Permission()
+        client = Permission(request=request)
         return any([client.is_allowed(action=action) for action in self.actions])
 
 

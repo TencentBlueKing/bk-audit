@@ -604,6 +604,21 @@ class GetRTFieldsRequestSerializer(serializers.Serializer):
     table_id = serializers.CharField(label=gettext_lazy("Table ID"))
 
 
+class BulkGetRTFieldsRequestSerializer(serializers.Serializer):
+    """
+    Bulk Get RT Fields
+    """
+
+    table_ids = serializers.CharField(
+        label=gettext_lazy("Table IDS"), help_text=gettext_lazy("Multiple separated by commas")
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        attrs['table_ids'] = list(set(attrs['table_ids'].split(',')))
+        return attrs
+
+
 class GetRTFieldsResponseSerializer(serializers.Serializer):
     """
     Get RT Fields
@@ -612,6 +627,15 @@ class GetRTFieldsResponseSerializer(serializers.Serializer):
     label = serializers.CharField(label=gettext_lazy("Label"))
     value = serializers.CharField(label=gettext_lazy("value"))
     field_type = serializers.CharField(label=gettext_lazy("Field Type"))
+
+
+class BulkGetRTFieldsResponseSerializer(serializers.Serializer):
+    """
+    Bulk Get RT Fields
+    """
+
+    table_id = serializers.CharField(label=gettext_lazy("Table ID"))
+    fields = serializers.ListField(child=GetRTFieldsResponseSerializer())
 
 
 class GetStrategyStatusRequestSerializer(serializers.Serializer):
@@ -833,6 +857,7 @@ class ListLinkTableResponseSerializer(serializers.ModelSerializer):
         label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID"))
     )
     strategy_count = serializers.IntegerField(label=gettext_lazy("Strategy Count"))
+    need_update_strategy = serializers.BooleanField(label=gettext_lazy("Need Update Strategy"))
 
     class Meta:
         model = LinkTable
