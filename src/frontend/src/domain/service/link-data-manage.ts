@@ -68,7 +68,7 @@ export default {
   * @desc 获取联表详情
   * @param { String } id
   */
-  fetchLinkDataDetail(params: { uid: string }) {
+  fetchLinkDataDetail(params: { uid: string, version: number }) {
     return LinkDataSource.getLinkDataDetail(params)
       .then(({ data }) => new LinkDataDetailModel(data));
   },

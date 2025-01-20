@@ -31,6 +31,16 @@
                   :key="index"
                   :label="selectItem.display_name"
                   :value="selectItem.display_name" />
+                <template #extension>
+                  <div
+                    style=" color: #63656e;text-align: center;flex: 1; cursor: pointer;"
+                    @click="() => showAddCount = true">
+                    <audit-icon
+                      style=" margin-right: 5px;font-size: 14px;color: #979ba5;"
+                      type="plus-circle" />
+                    <span>{{ t('自定义常量') }}</span>
+                  </div>
+                </template>
               </bk-select>
             </select-verify>
             <!-- 选填 -->
@@ -42,7 +52,17 @@
                 v-for="(selectItem, index) in select"
                 :key="index"
                 :label="selectItem.display_name"
-                :value="selectItem.raw_name" />
+                :value="selectItem.display_name" />
+              <template #extension>
+                <div
+                  style=" color: #63656e;text-align: center;flex: 1; cursor: pointer;"
+                  @click="() => showAddCount = true">
+                  <audit-icon
+                    style=" margin-right: 5px;font-size: 14px;color: #979ba5;"
+                    type="plus-circle" />
+                  <span>{{ t('自定义常量') }}</span>
+                </div>
+              </template>
             </bk-select>
             <!-- 无需配置 -->
             <template v-else>
@@ -100,6 +120,7 @@
 
   const { t } = useI18n();
   const selectVerifyRef = ref();
+  const showAddCount = ref(false);
 
   const requiredField = ['raw_event_id', 'event_time', 'event_source', 'operator'];
   const optionalField = ['event_content', 'event_type'];

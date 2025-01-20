@@ -17,6 +17,7 @@
 <template>
   <div class="link-data-strategy">
     <bk-alert
+      v-if="hasChange"
       theme="warning"
       :title="t('联表已更新，请前往关联的策略进行刷新升级。')" />
     <render-list
@@ -24,11 +25,12 @@
       class="audit-highlight-table"
       :columns="tableColumn"
       :data-source="dataSource"
-      style="margin-top: 16px" />
+      style="margin-top: 16px"
+      @request-success="handleRequestSuccess" />
   </div>
 </template>
 <script setup lang="tsx">
-  import { onMounted, ref } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -42,6 +44,12 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
+  interface Strategy {
+    page: number;
+    num_pages: number;
+    total: number;
+    results: Array<StrategyModel>
+  }
   interface Props {
     data: LinkDataDetailModel,
     strategyTagMap: Record<string, string>,
@@ -54,6 +62,7 @@
   const listRef = ref();
   const dataSource = StrategyManageService.fetchStrategyList;
   const statusMap = ref<Record<string, string>>({});
+  const tableData = ref<Array<StrategyModel>>([]);
 
   const tableColumn = ref([
     {
@@ -144,6 +153,13 @@
     },
   ]);
 
+  // eslint-disable-next-line max-len
+  const hasChange = computed(() => tableData.value.some(data => !(data.link_table_version >= (props.maxVersionMap[data.link_table_uid] || 1))));
+
+  const handleRequestSuccess = (data: Strategy) => {
+    tableData.value = data.results;
+  };
+
   useRequest(StrategyManageService.fetchStrategyCommon, {
     manual: true,
     defaultValue: new CommonDataModel(),
@@ -174,8 +190,14 @@
     });
   });
 </script>
-<style scoped lang="postcss">
+<style lang="postcss">
 .link-data-strategy {
   padding: 0 25px;
+
+  .edit-badge {
+    .bk-badge.pinned.top-right {
+      top: 13px;
+    }
+  }
 }
 </style>

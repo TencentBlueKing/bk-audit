@@ -113,7 +113,7 @@
   import useRequest from '@/hooks/use-request';
 
   interface IFormData {
-    uid?: number,
+    uid?: string,
     name: string,
     tags: Array<string>,
     config: {
@@ -138,11 +138,13 @@
           rt_id: '',
           table_type: '',
           system_ids: [],
+          display_name: '',
         },
         right_table: {
           rt_id: '',
           table_type: '',
           system_ids: [],
+          display_name: '',
         },
         join_type: 'left_join',
         link_fields: [{
@@ -167,6 +169,11 @@
   const strategyTagMap = ref<Record<string, string>>({});
   const formData = ref<IFormData>(_.cloneDeep(initFormData));
   const initLinks = ref<IFormData['config']['links']>([]);
+  // 生成字母表数组
+  const letters = Array.from({ length: 26 }, (_, i) => String.fromCharCode(97 + i));
+  let letterIndex = -1;
+  // 用于存储已分配的 display_name
+  const displayNameMap: Record<string, string> = {};
 
   provide('isEditMode', isEditMode);
 
@@ -254,7 +261,7 @@
 
   // 保存联表
   const {
-    run: addGroup,
+    run: addLinkTable,
     loading: isSubmiting,
   } = useRequest(linkDataManageService.addLinkData, {
     defaultValue: {},
@@ -266,7 +273,7 @@
     },
   });
   const {
-    run: updateGroup,
+    run: updateLinkTable,
     loading: isEditSubmiting,
   } = useRequest(linkDataManageService.updateLinkData, {
     defaultValue: {},
@@ -277,6 +284,21 @@
       emits('update');
     },
   });
+
+  const setDisplayName = (table: {
+    name?: string;
+    rt_id: string | Array<string>;
+    table_type: string;
+    system_ids?: Array<string>;
+    display_name: string;
+  }) => {
+    const key = `${table.table_type}_${table.rt_id}`;
+    if (!displayNameMap[key]) {
+      // 分配一个新的字母
+      displayNameMap[key] = letters[letterIndex += 1];
+    }
+    return displayNameMap[key];
+  };
 
   // 提交
   const handleSubmit = () => {
@@ -291,11 +313,11 @@
         delete validator.uid;
       }
       const params = _.cloneDeep(validator);
-      // 处理rt_id，如果是数组，取最后一个
       params.config.links = params.config.links.map((link) => {
+        // 处理rt_id，如果是数组，取最后一个
         const leftTableRtId = link.left_table.rt_id;
         const rightTableRtId = link.right_table.rt_id;
-        return {
+        const item =  {
           ...link,
           left_table: {
             ...link.left_table,
@@ -306,15 +328,19 @@
             rt_id: (Array.isArray(rightTableRtId) ?  _.last(rightTableRtId)  : rightTableRtId) as string,
           },
         };
+        // 处理别名，如果相同的表，用一样的别名
+        item.left_table.display_name =  setDisplayName(item.left_table);
+        item.right_table.display_name =  setDisplayName(item.right_table);
+        return item;
       });
       // 处理tag
       params.tags = params.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
-      const saveLinkData = isEditMode.value ? updateGroup : addGroup;
+      const saveLinkData = isEditMode.value ? updateLinkTable : addLinkTable;
       const isNewVersion = !_.isEqual(initLinks.value, params.config.links);
       // 没有更改config，不传值
       if (!isNewVersion) {
         const noConfigParams: {
-          uid?: number,
+          uid?: string,
           name: string,
           tags: Array<string>,
           config?: {

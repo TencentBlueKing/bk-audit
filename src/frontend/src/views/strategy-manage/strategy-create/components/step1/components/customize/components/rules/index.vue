@@ -40,6 +40,7 @@
         <field-item
           :conditions="conditions"
           :conditions-index="index"
+          :config-type="configType"
           :table-fields="tableFields"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
@@ -92,7 +93,8 @@
     }>;
   }
   interface Props {
-    tableFields: Array<DatabaseTableFieldModel>
+    tableFields: Array<DatabaseTableFieldModel>,
+    configType: string,
   }
   interface Emits {
     (e: 'updateWhere', value: Where): void;

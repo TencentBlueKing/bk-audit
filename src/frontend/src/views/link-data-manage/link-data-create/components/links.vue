@@ -65,8 +65,10 @@
               :is="configTypeMap[link.left_table.table_type]"
               ref="tableTypeRef"
               v-model="link.left_table"
+              :link-index="index"
               :links="links"
-              style="flex: 1;" />
+              style="flex: 1;"
+              type="left" />
           </select-verify>
         </div>
         <!-- 关联关系 -->
@@ -95,10 +97,10 @@
                 :placeholder="t('数据源类型')"
                 :prefix="t('数据源')"
                 @change="() => handleSelectRightTableType(index)">
+                <!-- rightTableTypeList，左表选中eventlog，右不显示 -->
                 <bk-option
-                  v-for="item in (index === 0 ? firstRightTableTypeList : linkTableTableTypeList)"
+                  v-for="item in rightTableTypeList"
                   :key="item.value"
-                  :disabled="item.value === link.left_table.table_type"
                   :label="item.label"
                   :value="item.value" />
               </bk-select>
@@ -117,8 +119,10 @@
               :is="configTypeMap[link.right_table.table_type]"
               ref="tableTypeRef"
               v-model="link.right_table"
+              :link-index="index"
               :links="links"
-              style="flex: 1;" />
+              style="flex: 1;"
+              type="right" />
           </select-verify>
         </div>
       </div>
@@ -176,16 +180,15 @@
   });
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
 
-  // 第一个关联右表，如果左表选了EventLog，右表不能再选
-  const firstRightTableTypeList = computed(() => {
-    const firsLeftTableType = links.value[0].left_table.table_type;
-    if (firsLeftTableType === 'EventLog') {
+  // 如果左表选了EventLog，右表不能再选，直接隐藏不显示
+  const rightTableTypeList = computed(() => {
+    if (links.value.some(link => link.left_table.table_type === 'EventLog')) {
       return linkTableTableTypeList.value.filter(item => item.value !== 'EventLog');
     }
     return linkTableTableTypeList.value;
   });
 
-  // 第二个关联开始，左表只能使用第一个关联选中的表
+  // 左表只能使用第一个关联选中的数据源
   const leftTableTypeList = computed(() => linkTableTableTypeList.value.filter((item) => {
     const firstLink = links.value[0];
     if (item.value === firstLink.left_table.table_type || item.value === firstLink.right_table.table_type) {
@@ -265,11 +268,13 @@
         rt_id: '',
         table_type: '',
         system_ids: [],
+        display_name: '',
       },
       right_table: {
         rt_id: '',
         table_type: '',
         system_ids: [],
+        display_name: '',
       },
       join_type: 'left_join',
       link_fields: [{

@@ -36,6 +36,7 @@
       <!-- 新增 -->
       <add-fields
         :aggregate-list="aggregateList"
+        :config-type="configType"
         :expected-result-list="expectedResultList"
         :table-fields="tableFields"
         @add-expected-result="handleAdd" />
@@ -77,6 +78,7 @@
   interface Props {
     aggregateList: Array<Record<string, any>>
     tableFields: Array<DatabaseTableFieldModel>
+    configType: string,
   }
 
   const props = defineProps<Props>();
@@ -91,7 +93,7 @@
 
   const getMetricName = (element: DatabaseTableFieldModel) => {
     const item = props.aggregateList.find(item => item.value === element.aggregate);
-    return t(`[${item?.label}] ${element.display_name}`);
+    return t(`[${item?.label}] ${element.display_name.replace(/_.*/, '')}`);
   };
 
   const handleAdd = (item: DatabaseTableFieldModel) => {

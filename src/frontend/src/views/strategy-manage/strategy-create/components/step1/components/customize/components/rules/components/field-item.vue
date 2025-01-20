@@ -40,11 +40,31 @@
         :placeholder="t('请选择字段')"
         style="flex: 1;"
         @change="(value: DatabaseTableFieldModel) => handleSelectField(value ,index)">
+        <template
+          v-if="configType === 'LinkTable' && condition.field.table"
+          #prefix>
+          <span
+            style="
+              padding: 0 12px;
+              line-height: 32px;
+              color: #3a84ff;
+              background: #f0f1f5">
+            {{ condition.field.table }}
+          </span>
+        </template>
         <bk-option
           v-for="item in tableFields"
           :key="item.raw_name"
-          :label="item.display_name"
-          :value="item" />
+          :value="item">
+          <div v-if="configType === 'LinkTable'">
+            <span
+              v-if="configType === 'LinkTable'"
+              style=" color: #3a84ff;">{{ item.table }}.</span>{{ item.display_name }}
+          </div>
+          <div v-else>
+            {{ item.display_name }}
+          </div>
+        </bk-option>
       </bk-select>
     </bk-form-item>
     <!-- 连接条件 -->
@@ -54,13 +74,12 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].field.aggregate`"
       required>
       <!-- 操作人账号特殊处理 -->
-      <bk-input
+      <!-- <bk-input
         v-if="condition.field.raw_name ==='user_identify_src_username'"
         v-model="condition.field.aggregate"
         class="condition-equation"
-        :placeholder="t('请输入')" />
+        :placeholder="t('请输入')" /> -->
       <bk-select
-        v-else
         v-model="condition.field.aggregate"
         filterable
         :placeholder="t('请选择')">
@@ -73,9 +92,12 @@
     </bk-form-item>
     <!-- 值 -->
     <bk-form-item
+      v-if="condition.field.aggregate"
       label=""
       label-width="0"
-      :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].filters`"
+      :property="input.includes(condition.field.aggregate) ?
+        `configs.where.conditions[${conditionsIndex}].conditions[${index}].filter` :
+        `configs.where.conditions[${conditionsIndex}].conditions[${index}].filters`"
       required
       :rules="[
         { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
@@ -99,7 +121,7 @@
         allow-create
         class="consition-value" />
       <bk-tag-input
-        v-else
+        v-else-if="tagInput.includes(condition.field.aggregate)"
         v-model="condition.filters"
         allow-create
         class="consition-value"
@@ -111,6 +133,11 @@
         :loading="fieldLoading"
         :placeholder="t('请输入并Enter结束')"
         trigger="focus" />
+      <bk-input
+        v-else-if="input.includes(condition.field.aggregate)"
+        v-model="condition.filter"
+        class="consition-value"
+        :placeholder="t('请输入')" />
     </bk-form-item>
     <div class="icon-group">
       <audit-icon
@@ -130,6 +157,7 @@
   </div>
 </template>
 <script setup lang="ts">
+  import _ from 'lodash';
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -155,7 +183,8 @@
         filters: string[];
       }>
     },
-    conditionsIndex: number
+    conditionsIndex: number,
+    configType: string,
   }
 
   const props = defineProps<Props>();
@@ -166,6 +195,8 @@
     value: string
   }>>([]);
   const dicts = ref<Record<string, Array<any>>>({});
+  const input = ['eq', 'neq', 'reg', 'nreg', 'lte', 'lt', 'gte', 'gt'];
+  const tagInput = ['include', 'exclude'];
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
 
@@ -200,13 +231,14 @@
 
   const handleSelectField = (value: DatabaseTableFieldModel, index: number) => {
     if (value) {
+      // 获取值的下拉选项
       fetchStrategyFieldValue({
         field_name: value.raw_name,
       }).then((data) => {
         dicts.value[value.raw_name] = data.filter((item: Record<string, any>) => item.id !== '');
       });
     }
-    emits('updateFieldItem', value, props.conditionsIndex, index);
+    emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index);
   };
 
   const handleChangeConnector = () => {

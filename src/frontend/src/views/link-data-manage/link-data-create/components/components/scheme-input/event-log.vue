@@ -58,6 +58,7 @@
     computed,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -72,7 +73,9 @@
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
   interface Props {
-    links: LinkDataDetailModel['config']['links']
+    links: LinkDataDetailModel['config']['links'],
+    linkIndex: number, // 第几个关联关系
+    type: 'left' | 'right', // 左表还是右表
   }
 
   const props = defineProps<Props>();
@@ -82,16 +85,15 @@
   const { t } = useI18n();
   const statusSystems = ref<Array<Record<string, any>>>([]);
 
+  // 第一个关联中选中的Eventlog
   const firstSystemIds = computed(() => {
-    if (props.links.length > 1) {
-      const leftSystemIds = props.links[0].left_table.system_ids;
-      const rightSystemIds = props.links[0].right_table.system_ids;
-      if (leftSystemIds && leftSystemIds.length) {
-        return leftSystemIds;
-      } if (rightSystemIds && rightSystemIds.length) {
-        return rightSystemIds;
-      }
-      return [];
+    if (props.linkIndex === 0 || props.type === 'right')  return [];
+    const leftSystemIds = props.links[0].left_table.system_ids;
+    const rightSystemIds = props.links[0].right_table.system_ids;
+    if (leftSystemIds && leftSystemIds.length) {
+      return leftSystemIds;
+    } if (rightSystemIds && rightSystemIds.length) {
+      return rightSystemIds;
     }
     return [];
   });
@@ -140,15 +142,21 @@
         name: item.name,
         status: result[item.id].status,
       }));
-      if (isDisabled.value) {
-        modelValue.value.system_ids = firstSystemIds.value;
-      }
       statusSystems.value.sort((a, b) => {
         if (a.status !== 'unset') return -1;
         if (b.status !== 'unset') return 1;
         return 0;
       });
     },
+  });
+
+  // 第二个关联开始，左表才有限制，必须选第一个关联中的表
+  watch(() => firstSystemIds.value, (data) => {
+    if (data.length) {
+      modelValue.value.system_ids = data;
+    }
+  }, {
+    immediate: true,
   });
 
   onMounted(() => {
