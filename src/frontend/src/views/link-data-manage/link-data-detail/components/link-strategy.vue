@@ -26,7 +26,24 @@
       :columns="tableColumn"
       :data-source="dataSource"
       style="margin-top: 16px"
-      @request-success="handleRequestSuccess" />
+      @request-success="handleRequestSuccess">
+      <template #empty>
+        <bk-exception
+          scene="part"
+          style="height: 280px;padding-top: 40px;color: #63656e;"
+          type="search-empty">
+          {{ t('当前联表无关联策略可前往') }}
+          <auth-button
+            action-id="create_strategy"
+            :permission="permissionCheckData"
+            text
+            theme="primary"
+            @click="handleCreate">
+            {{ t('新建策略') }}
+          </auth-button>
+        </bk-exception>
+      </template>
+    </render-list>
   </div>
 </template>
 <script setup lang="tsx">
@@ -34,6 +51,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
+  import IamManageService from '@service/iam-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
@@ -63,6 +81,7 @@
   const dataSource = StrategyManageService.fetchStrategyList;
   const statusMap = ref<Record<string, string>>({});
   const tableData = ref<Array<StrategyModel>>([]);
+  const permissionCheckData = ref();
 
   const tableColumn = ref([
     {
@@ -160,6 +179,18 @@
     tableData.value = data.results;
   };
 
+  // 获取策略新建权限
+  useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'create_strategy',
+    },
+    defaultValue: {},
+    manual: true,
+    onSuccess: (data) => {
+      permissionCheckData.value = data.create_strategy;
+    },
+  });
+
   useRequest(StrategyManageService.fetchStrategyCommon, {
     manual: true,
     defaultValue: new CommonDataModel(),
@@ -173,6 +204,13 @@
       }, {});
     },
   });
+
+  // 新建
+  const handleCreate = () => {
+    router.push({
+      name: 'strategyCreate',
+    });
+  };
 
   const handleDetail = (data: StrategyModel) => {
     const to = router.resolve({
