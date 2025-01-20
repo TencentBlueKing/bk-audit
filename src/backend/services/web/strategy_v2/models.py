@@ -206,3 +206,35 @@ class LinkTableTag(OperateRecordModel):
         verbose_name = gettext_lazy("Link Table Tag")
         verbose_name_plural = verbose_name
         ordering = ["-id"]
+
+
+class LinkTableAuditInstance(AuditInstance):
+    """
+    Link Table Audit Instance
+    """
+
+    @property
+    def instance_id(self):
+        """
+        实例ID
+        @rtype: str
+        """
+        return getattr(self.instance, "uid", DEFAULT_EMPTY_VALUE)
+
+    @property
+    def instance_name(self):
+        """
+        实例名
+        @rtype: str
+        """
+        return getattr(self.instance, "name", DEFAULT_EMPTY_VALUE)
+
+    @property
+    def instance_data(self):
+        """
+        实例信息 JSON
+        @rtype: dict
+        """
+        from services.web.strategy_v2.serializers import LinkTableInfoSerializer
+
+        return LinkTableInfoSerializer(self.instance).data

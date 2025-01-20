@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-16 16:23+0800\n"
+"POT-Creation-Date: 2025-01-20 20:33+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3647,6 +3647,9 @@ msgstr "获取结果表列表"
 msgid "Get RT Fields"
 msgstr "获取RT字段"
 
+msgid "Bulk Get RT Fields"
+msgstr "批量获取RT字段"
+
 msgid "Get Strategy Status"
 msgstr "获取策略状态"
 
@@ -3853,6 +3856,12 @@ msgstr "方案参数"
 msgid "Table ID"
 msgstr "结果表ID"
 
+msgid "Table IDS"
+msgstr "结果表IDS"
+
+msgid "Multiple separated by commas"
+msgstr "多个以逗号分隔"
+
 msgid "value"
 msgstr "值"
 
@@ -3900,6 +3909,9 @@ msgstr "联表配置"
 
 msgid "逗号分隔的标签ID列表"
 msgstr "逗号分隔的标签ID列表"
+
+msgid "Need Update Strategy"
+msgstr "是否存在需要更新的策略"
 
 msgid "Link Table Count"
 msgstr "联表数"

@@ -23,13 +23,15 @@ from collections import defaultdict
 from functools import cached_property
 from typing import List, Optional
 
-from bk_resource import api, resource
+from bk_resource import CacheResource, api, resource
 from bk_resource.base import Empty
 from bk_resource.exceptions import APIRequestError
+from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q, QuerySet
+from django.db.models.aggregates import Min
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
@@ -61,7 +63,7 @@ from services.web.analyze.constants import (
 )
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
-from services.web.risk.constants import EVENT_BASIC_EXCLUDE_FIELDS, EventMappingFields
+from services.web.risk.constants import EventMappingFields
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.constants import (
@@ -96,12 +98,15 @@ from services.web.strategy_v2.exceptions import (
 from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLBuilder
 from services.web.strategy_v2.models import (
     LinkTable,
+    LinkTableAuditInstance,
     LinkTableTag,
     Strategy,
     StrategyAuditInstance,
     StrategyTag,
 )
 from services.web.strategy_v2.serializers import (
+    BulkGetRTFieldsRequestSerializer,
+    BulkGetRTFieldsResponseSerializer,
     CreateLinkTableRequestSerializer,
     CreateLinkTableResponseSerializer,
     CreateStrategyRequestSerializer,
@@ -117,6 +122,7 @@ from services.web.strategy_v2.serializers import (
     GetStrategyFieldValueRequestSerializer,
     GetStrategyFieldValueResponseSerializer,
     GetStrategyStatusRequestSerializer,
+    LinkTableInfoSerializer,
     ListLinkTableAllResponseSerializer,
     ListLinkTableRequestSerializer,
     ListLinkTableResponseSerializer,
@@ -679,21 +685,12 @@ class GetStrategyCommon(StrategyV2Base):
         }
 
 
-class ListTables(StrategyV2Base):
+class ListTables(StrategyV2Base, CacheResource):
     name = gettext_lazy("List Tables")
     RequestSerializer = ListTablesRequestSerializer
+    cache_type = CacheTypeItem(key="ListTables", timeout=60, user_related=False)
 
     def perform_request(self, validated_request_data):
-        # check permission
-        if not ActionPermission(
-            actions=[
-                ActionEnum.CREATE_STRATEGY,
-                ActionEnum.LIST_STRATEGY,
-                ActionEnum.EDIT_STRATEGY,
-                ActionEnum.DELETE_STRATEGY,
-            ]
-        ).has_permission(request=get_local_request(), view=self):
-            return []
         return TableHandler(**validated_request_data).list_tables()
 
 
@@ -704,16 +701,6 @@ class GetRTFields(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        # check permission
-        if not ActionPermission(
-            actions=[
-                ActionEnum.CREATE_STRATEGY,
-                ActionEnum.LIST_STRATEGY,
-                ActionEnum.EDIT_STRATEGY,
-                ActionEnum.DELETE_STRATEGY,
-            ]
-        ).has_permission(request=get_local_request(), view=self):
-            return []
         fields = api.bk_base.get_rt_fields(result_table_id=validated_request_data["table_id"])
         return [
             {
@@ -722,6 +709,25 @@ class GetRTFields(StrategyV2Base):
                 "field_type": field["field_type"],
             }
             for field in fields
+        ]
+
+
+class BulkGetRTFields(StrategyV2Base):
+    name = gettext_lazy("Bulk Get RT Fields")
+    RequestSerializer = BulkGetRTFieldsRequestSerializer
+    ResponseSerializer = BulkGetRTFieldsResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        table_ids = validated_request_data["table_ids"]
+        bulk_request_params = [{"table_id": table_id} for table_id in table_ids]
+        bulk_resp = resource.strategy_v2.get_rt_fields.bulk_request(bulk_request_params)
+        return [
+            {
+                "table_id": params["table_id"],
+                "fields": resp,
+            }
+            for params, resp in zip(bulk_request_params, bulk_resp)
         ]
 
 
@@ -754,8 +760,15 @@ class GetEventFieldsConfig(StrategyV2Base):
                 description="",
                 example=getattr(risk, field.field_name, "") if risk and has_permission else "",
             )
-            for field in EventMappingFields().fields
-            if field not in EVENT_BASIC_EXCLUDE_FIELDS
+            for field in [
+                EventMappingFields.RAW_EVENT_ID,
+                EventMappingFields.OPERATOR,
+                EventMappingFields.EVENT_TIME,
+                EventMappingFields.EVENT_SOURCE,
+                EventMappingFields.STRATEGY_ID,
+                EventMappingFields.EVENT_CONTENT,
+                EventMappingFields.EVENT_TYPE,
+            ]
         ]
 
     def get_event_data_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
@@ -825,6 +838,11 @@ class GetStrategyDisplayInfo(StrategyV2Base):
 class LinkTableBase(AuditMixinResource, abc.ABC):
     tags = ["LinkTable"]
 
+    def add_audit_instance_to_context(self, link_table: LinkTable, old_link_table: Optional[dict] = None):
+        if old_link_table:
+            setattr(link_table, "instance_origin_data", old_link_table)
+        super().add_audit_instance_to_context(instance=LinkTableAuditInstance(link_table))
+
     def _save_tags(self, link_table_uid: str, tag_names: list) -> None:
         LinkTableTag.objects.filter(link_table_uid=link_table_uid).delete()
         if not tag_names:
@@ -852,6 +870,8 @@ class CreateLinkTable(LinkTableBase):
 
     def perform_request(self, validated_request_data):
         link_table = self.create_link_table(validated_request_data)
+        # audit
+        self.add_audit_instance_to_context(link_table)
         # auth
         username = get_request_username()
         if username:
@@ -877,6 +897,8 @@ class UpdateLinkTable(LinkTableBase):
         link_table = LinkTable.last_version_link_table(uid=uid)
         if not link_table:
             raise Http404(gettext("LinkTable not found: %s") % uid)
+        # old link_table
+        old_link_table = LinkTableInfoSerializer(link_table).data
         # 更新或创建新版本联表
         need_update_config = "config" in validated_request_data.keys()
         if not need_update_config:
@@ -899,6 +921,8 @@ class UpdateLinkTable(LinkTableBase):
         # save tag
         if not isinstance(tags, Empty):
             self._save_tags(link_table_uid=link_table.uid, tag_names=tags)
+        # audit
+        self.add_audit_instance_to_context(link_table, old_link_table)
         return link_table
 
     def perform_request(self, validated_request_data):
@@ -914,6 +938,12 @@ class DeleteLinkTable(LinkTableBase):
         # 如果有策略使用了该联表则不能删除
         if Strategy.objects.filter(strategy_type=StrategyType.RULE, link_table_uid=uid).exists():
             raise LinkTableHasStrategy()
+        link_table = LinkTable.last_version_link_table(uid=uid)
+        if not link_table:
+            raise Http404(gettext("LinkTable not found: %s") % uid)
+        # audit
+        self.add_audit_instance_to_context(link_table)
+        # 删除联表
         LinkTableTag.objects.filter(link_table_uid=uid).delete()
         LinkTable.objects.filter(uid=uid).delete()
 
@@ -921,6 +951,8 @@ class DeleteLinkTable(LinkTableBase):
 class ListLinkTable(LinkTableBase):
     name = gettext_lazy("查询联表列表")
     RequestSerializer = ListLinkTableRequestSerializer
+    ResponseSerializer = ListLinkTableResponseSerializer
+    many_response_data = True
     bind_request = True
 
     def perform_request(self, validated_request_data):
@@ -949,20 +981,29 @@ class ListLinkTable(LinkTableBase):
         for t in all_tags:
             tag_map[t.link_table_uid].append(t.tag_id)
         # 填充关联的策略数
-        strategies = {
+        strategies = Strategy.objects.filter(strategy_type=StrategyType.RULE, link_table_uid__in=link_table_uids)
+        strategy_cnt_map = {
             strategy["link_table_uid"]: strategy["count"]
-            for strategy in Strategy.objects.filter(strategy_type=StrategyType.RULE, link_table_uid__in=link_table_uids)
-            .values("link_table_uid")
-            .annotate(count=Count("link_table_uid"))
-            .order_by()
+            for strategy in strategies.values("link_table_uid").annotate(count=Count("link_table_uid")).order_by()
+        }
+        # 填充关联的最小联表版本
+        strategy_version_map = {
+            strategy["link_table_uid"]: strategy["version"]
+            for strategy in strategies.values("link_table_uid").annotate(version=Min("link_table_version")).order_by()
         }
         for link_table in link_tables:
             # 填充关联的策略数
-            setattr(link_table, "strategy_count", strategies.get(link_table.uid, 0))
+            setattr(link_table, "strategy_count", strategy_cnt_map.get(link_table.uid, 0))
             # 填充标签
             setattr(link_table, "tags", tag_map.get(link_table.uid, []))
+            # 填充是否存在需要更新的策略
+            setattr(
+                link_table,
+                "need_update_strategy",
+                strategy_version_map.get(link_table.uid, link_table.version) < link_table.version,
+            )
         # 响应
-        return page.get_paginated_response(data=ListLinkTableResponseSerializer(instance=link_tables, many=True).data)
+        return link_tables
 
 
 class ListLinkTableAll(LinkTableBase):
