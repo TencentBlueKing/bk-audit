@@ -355,6 +355,274 @@ class TestRuleAuditSQLFormatter(TestCase):
         )
         self._build_and_assert_sql(strategy, expected_sql)
 
+    @patch("services.web.strategy_v2.handlers.rule_audit.get_object_or_404")
+    def test_complex_link_table_with_conditions(self, mock_get_obj):
+        """
+        测试复杂联表场景，包含多个表、多种联接类型和复杂查询条件。
+        """
+        # Mock LinkTable
+        mock_link_table_obj = MagicMock()
+        mock_link_table_obj.config = {
+            "links": [
+                {
+                    "join_type": "left_join",
+                    "link_fields": [{"left_field": "event_id", "right_field": "resource_id"}],
+                    "left_table": {
+                        "rt_id": "log_rt_1",
+                        "table_type": LinkTableTableType.EVENT_LOG,
+                        "system_ids": ["sys_111"],
+                        "display_name": "a",
+                    },
+                    "right_table": {
+                        "rt_id": "asset_rt_2",
+                        "table_type": LinkTableTableType.BUILD_ID_ASSET,
+                        "display_name": "b",
+                    },
+                },
+                {
+                    "join_type": "inner_join",
+                    "link_fields": [{"left_field": "resource_id", "right_field": "host_id"}],
+                    "left_table": {
+                        "rt_id": "asset_rt_2",
+                        "table_type": LinkTableTableType.BUILD_ID_ASSET,
+                        "display_name": "b",
+                    },
+                    "right_table": {"rt_id": "host_rt_3", "table_type": LinkTableTableType.BIZ_RT, "display_name": "c"},
+                },
+                {
+                    "join_type": "left_join",
+                    "link_fields": [{"left_field": "host_id", "right_field": "network_id"}],
+                    "left_table": {"rt_id": "host_rt_3", "table_type": LinkTableTableType.BIZ_RT, "display_name": "c"},
+                    "right_table": {
+                        "rt_id": "network_rt_4",
+                        "table_type": LinkTableTableType.BUILD_ID_ASSET,
+                        "display_name": "d",
+                    },
+                },
+            ]
+        }
+
+        # Mocking get_object_or_404
+        mock_get_obj.return_value = mock_link_table_obj
+
+        # Strategy configuration
+        config_json = {
+            "config_type": "LinkTable",
+            "data_source": {"link_table": {"uid": "complex_uid", "version": 1}},
+            "select": [
+                {
+                    "table": "a",
+                    "raw_name": "event_id",
+                    "display_name": "事件ID",
+                    "field_type": "string",
+                    "aggregate": None,
+                },
+                {
+                    "table": "b",
+                    "raw_name": "resource_id",
+                    "display_name": "资源ID",
+                    "field_type": "string",
+                    "aggregate": "COUNT",
+                },
+                {
+                    "table": "c",
+                    "raw_name": "host_id",
+                    "display_name": "主机ID",
+                    "field_type": "string",
+                    "aggregate": None,
+                },
+                {
+                    "table": "d",
+                    "raw_name": "network_name",
+                    "display_name": "网络名称",
+                    "field_type": "string",
+                    "aggregate": "MAX",
+                },
+            ],
+            "where": {
+                "connector": "and",
+                "conditions": [
+                    {
+                        "connector": "or",
+                        "conditions": [],
+                        "condition": {
+                            "field": {
+                                "table": "a",
+                                "raw_name": "event_type",
+                                "display_name": "事件类型",
+                                "field_type": "string",
+                            },
+                            "operator": "eq",
+                            "filter": "critical",
+                            "filters": [],
+                        },
+                    },
+                    {
+                        "connector": "and",
+                        "conditions": [],
+                        "condition": {
+                            "field": {
+                                "table": "b",
+                                "raw_name": "resource_status",
+                                "display_name": "资源状态",
+                                "field_type": "string",
+                            },
+                            "operator": "neq",
+                            "filter": "inactive",
+                            "filters": [],
+                        },
+                    },
+                ],
+            },
+        }
+
+        # Field mapping for additional fields
+        event_basic_field_configs = [
+            {"field_name": "operator_name", "map_config": {"source_field": "主机ID", "target_value": None}},
+            {"field_name": "bk_biz_id", "map_config": {"target_value": "456"}},
+        ]
+
+        strategy = Strategy(strategy_id=888, configs=config_json, event_basic_field_configs=event_basic_field_configs)
+
+        # Expected SQL
+        expected_sql = (
+            "SELECT "
+            "udf_build_origin_data('事件ID|!@#$%^&*|资源ID|!@#$%^&*|主机ID|!@#$%^&*|网络名称',"
+            "CONCAT_WS('',CAST(`sub_table`.`事件ID` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`资源ID` AS STRING),"
+            "'|!@#$%^&*|',CAST(`sub_table`.`主机ID` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`网络名称` AS STRING))) "
+            "`event_data`,"
+            "888 `strategy_id`,`sub_table`.`主机ID` `operator_name`,'456' `bk_biz_id` "
+            "FROM ("
+            "SELECT `a`.`event_id` `事件ID`,COUNT(`b`.`resource_id`) `资源ID`,`c`.`host_id` `主机ID`,"
+            "MAX(`d`.`network_name`) `网络名称` "
+            "FROM log_rt_1 `a` LEFT JOIN asset_rt_2 `b` ON `a`.`event_id`=`b`.`resource_id` "
+            "JOIN host_rt_3 `c` ON `b`.`resource_id`=`c`.`host_id` "
+            "LEFT JOIN network_rt_4 `d` ON `c`.`host_id`=`d`.`network_id` "
+            "WHERE `a`.`event_type`='critical' AND `b`.`resource_status`<>'inactive' "
+            "AND `a`.`system_id` IN ('sys_111') "
+            "GROUP BY `a`.`event_id`,`c`.`host_id`) `sub_table`"
+        )
+
+        # Run the test
+        self._build_and_assert_sql(strategy, expected_sql, mock_link_table_obj=mock_link_table_obj)
+
+        # Mock 返回值
+        mock_get_obj.return_value = mock_link_table_obj
+
+        # Strategy 配置
+        config_json = {
+            "config_type": "LinkTable",
+            "data_source": {"link_table": {"uid": "complex_uid", "version": 1}},
+            "select": [
+                {
+                    "table": "a",
+                    "raw_name": "event_id",
+                    "display_name": "事件ID",
+                    "field_type": "string",
+                    "aggregate": None,
+                },
+                {
+                    "table": "b",
+                    "raw_name": "resource_name",
+                    "display_name": "资源名称",
+                    "field_type": "string",
+                    "aggregate": None,
+                },
+                {
+                    "table": "a",
+                    "raw_name": "username",
+                    "display_name": "操作人",
+                    "field_type": "string",
+                    "aggregate": None,
+                },
+                {
+                    "table": "b",
+                    "raw_name": "status",
+                    "display_name": "资源状态",
+                    "field_type": "string",
+                    "aggregate": None,
+                },
+            ],
+            "where": {
+                "connector": "and",
+                "conditions": [
+                    {
+                        "connector": "or",
+                        "conditions": [
+                            {
+                                "condition": {
+                                    "field": {
+                                        "table": "a",
+                                        "raw_name": "username",
+                                        "display_name": "操作人",
+                                        "field_type": "string",
+                                        "aggregate": None,
+                                    },
+                                    "operator": "eq",
+                                    "filter": "admin",
+                                },
+                            },
+                            {
+                                "condition": {
+                                    "field": {
+                                        "table": "b",
+                                        "raw_name": "status",
+                                        "display_name": "资源状态",
+                                        "field_type": "string",
+                                        "aggregate": None,
+                                    },
+                                    "operator": "neq",
+                                    "filter": "inactive",
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        "condition": {
+                            "field": {
+                                "table": "c",
+                                "raw_name": "region",
+                                "display_name": "地区",
+                                "field_type": "string",
+                                "aggregate": None,
+                            },
+                            "operator": "eq",
+                            "filter": "US",
+                        },
+                    },
+                ],
+            },
+        }
+
+        # 字段映射
+        event_basic_field_configs = [
+            {"field_name": "operator_name", "map_config": {"source_field": "操作人"}},
+            {"field_name": "resource_status", "map_config": {"source_field": "资源状态"}},
+        ]
+
+        # Strategy
+        strategy = Strategy(strategy_id=123, configs=config_json, event_basic_field_configs=event_basic_field_configs)
+
+        # 期望 SQL
+        expected_sql = (
+            "SELECT "
+            "udf_build_origin_data('事件ID|!@#$%^&*|资源名称|!@#$%^&*|操作人|!@#$%^&*|资源状态',"
+            "CONCAT_WS('',CAST(`sub_table`.`事件ID` AS STRING),'|!@#$%^&*|',"
+            "CAST(`sub_table`.`资源名称` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`操作人` AS STRING),'|!@#$%^&*|',"
+            "CAST(`sub_table`.`资源状态` AS STRING))) `event_data`,"
+            "123 `strategy_id`,`sub_table`.`操作人` `operator_name`,`sub_table`.`资源状态` `resource_status` "
+            "FROM ("
+            "SELECT `a`.`event_id` `事件ID`,`b`.`resource_name` `资源名称`,`a`.`username` `操作人`,`b`.`status` `资源状态` "
+            "FROM log_rt_1 `a` LEFT JOIN asset_rt_2 `b` ON `a`.`event_id`=`b`.`resource_id` "
+            "JOIN host_rt_3 `c` ON `b`.`resource_id`=`c`.`host_id` "
+            "LEFT JOIN network_rt_4 `d` ON `c`.`host_id`=`d`.`network_id` "
+            "WHERE (`a`.`username`='admin' OR `b`.`status`<>'inactive') AND `c`.`region`='US' "
+            "AND `a`.`system_id` IN ('sys_111')) `sub_table`"
+        )
+
+        # 断言
+        self._build_and_assert_sql(strategy, expected_sql, mock_link_table_obj=mock_link_table_obj)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -145,7 +145,7 @@ class LinkTable(OperateRecordModel):
     namespace = models.CharField(gettext_lazy("Namespace"), max_length=32, db_index=True)
     uid = UUIDField(gettext_lazy("Link Table UID"), db_index=True)
     version = models.IntegerField(gettext_lazy("Link Table Version"), db_index=True)
-    name = models.CharField(gettext_lazy("Link Table Name"), max_length=50, db_index=True)
+    name = models.CharField(gettext_lazy("Link Table Name"), max_length=200, db_index=True)
     config = models.JSONField(gettext_lazy("Config"))
     description = models.CharField(gettext_lazy("Description"), max_length=200, default="", blank=True, null=True)
 
