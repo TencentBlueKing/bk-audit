@@ -188,13 +188,20 @@
     return linkTableTableTypeList.value;
   });
 
-  // 左表只能使用第一个关联选中的数据源
-  const leftTableTypeList = computed(() => linkTableTableTypeList.value.filter((item) => {
-    const firstLink = links.value[0];
-    if (item.value === firstLink.left_table.table_type || item.value === firstLink.right_table.table_type) {
-      return item;
-    }
-  }));
+  // 左表只能使用前面已经选中的数据源
+  const leftTableTypeList = computed(() => {
+    // 使用一个 Set 来存储所有关联中选中的数据源类型，以避免重复
+    const selectedTableTypes = new Set();
+
+    // 遍历所有的关联，收集所有的 left_table 和 right_table 的 table_type
+    links.value.forEach((link) => {
+      selectedTableTypes.add(link.left_table.table_type);
+      selectedTableTypes.add(link.right_table.table_type);
+    });
+
+    // 从 linkTableTableTypeList 中筛选出与收集到的类型匹配的项
+    return linkTableTableTypeList.value.filter(item => selectedTableTypes.has(item.value));
+  });
 
   const handleSelectLeftTableType = (index: number) => {
     // 如果重选了主表，全部重置

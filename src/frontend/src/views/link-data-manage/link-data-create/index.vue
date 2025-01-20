@@ -40,7 +40,7 @@
               class="form-item-common"
               :maxlength="100"
               :over-max-length-limit="false"
-              :placeholder="t('请输入通知组名称')"
+              :placeholder="t('请输入联表数据名称')"
               show-word-limit />
           </bk-form-item>
           <bk-form-item
