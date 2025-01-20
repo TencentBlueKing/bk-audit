@@ -64,10 +64,9 @@
   const isEditMode = inject<Ref<boolean>>('isEditMode', ref(false));
   const AllOtherRtIds = ref<Array<string>>([]);
 
-  // 所有关联中选中的BizRt
+
   watch(() => props.links, (data) => {
     AllOtherRtIds.value = [];
-    if (props.linkIndex === 0) return;
 
     // 遍历所有的关联
     data.forEach((link) => {
@@ -95,8 +94,8 @@
       }
     });
   }, {
-    deep: true,
     immediate: true,
+    deep: true,
   });
 
   const changeData = (data: Array<{
@@ -118,43 +117,31 @@
     });
   };
 
-  // 不能选择已选的表
-  const getRightTableData = () => tableData.value.map(item => ({
+  const getDisabled = (child: {
+    label: string,
+    value: string
+  }) => {
+    if (props.linkIndex === 0 && props.type === 'left') return false;
+    // 不能选择已选的表
+    if (props.type === 'right') {
+      return AllOtherRtIds.value.length ? AllOtherRtIds.value.includes(child.value) : false;
+    }
+    // 只能选择前面关联已有的表
+    return AllOtherRtIds.value.length ? !AllOtherRtIds.value.includes(child.value) : false;
+  };
+
+  const getTableData = () => tableData.value.map(item => ({
     ...item,
     leaf: true,
     disabled: !(item.children && item.children.length),
     children: item.children.map(child => ({
       ...child,
-      disabled: AllOtherRtIds.value.length ? AllOtherRtIds.value.includes(child.value) : false,
+      disabled: getDisabled(child),
     })),
   }));
 
-  // 只能选择前面关联已有的表
-  const getLeftTableData = () => tableData.value.map((item) => {
-    // 默认选中第一个
-    if (AllOtherRtIds.value.length) {
-      // eslint-disable-next-line prefer-destructuring
-      modelValue.value.rt_id = AllOtherRtIds.value[0];
-      changeData(tableData.value);
-    }
-    return {
-      ...item,
-      leaf: true,
-      disabled: !(item.children && item.children.length),
-      children: item.children.map(child => ({
-        ...child,
-        disabled: AllOtherRtIds.value.length ? !AllOtherRtIds.value.includes(child.value) : false,
-      })),
-    };
-  });
 
-
-  const filterTableData = computed(() => {
-    if (props.type === 'right') {
-      return getRightTableData();
-    }
-    return getLeftTableData();
-  });
+  const filterTableData = computed(() => getTableData());
 
   // 获取rt_id
   const {
@@ -176,15 +163,7 @@
       }
       if (isEditMode.value) {
         // 对tableid转换
-        data.forEach((item) => {
-          if (item.children && item.children.length) {
-            item.children.forEach((cItem) => {
-              if (cItem.value === modelValue.value.rt_id) {
-                modelValue.value.rt_id = [item.value, modelValue.value.rt_id];
-              }
-            });
-          }
-        });
+        changeData(data);
       }
     },
   });
