@@ -361,7 +361,7 @@
   };
 
   const handleCreateUpdate = () => {
-    listRef.value.fetchData({ keyword: searchKey.value });
+    handleClearSearch();
   };
 
   const handleLeftWidth = (showLabel: boolean) => {
