@@ -120,9 +120,15 @@
   const createRef = ref();
   const detailRef = ref();
   const renderLabelRef = ref();
+  const isNeedShowDetail = ref(false);
 
   const dataSource = LinkDataManageService.fetchStrategyList;
   const defaultSearchData = [
+    {
+      name: t('联表id'),
+      id: 'uid',
+      placeholder: t('请输入联表id'),
+    },
     {
       name: t('联表数据名称'),
       id: 'name_contains',
@@ -338,7 +344,7 @@
   // 搜索
   const handleSearch = (keyword: Array<any>) => {
     const search = {
-      uid: undefined,
+      uid: '',
       name_contains: '',
       tags: '',
       updated_by: '',
@@ -388,7 +394,7 @@
   // 清空搜索
   const handleClearSearch = () => {
     const search = {
-      uid: undefined,
+      uid: '',
       name_contains: '',
       tags: '',
       updated_by: '',
@@ -422,6 +428,9 @@
         }],
       });
       switch (id) {
+      case 'uid':
+        isNeedShowDetail.value = true;
+        break;
       case 'tags':
         renderLabelRef.value.setLabel(content);
         leftLabelFilterCondition.value = content;
@@ -451,6 +460,11 @@
       setSearchKey();
     });
     total.value = data.total > total.value ? data.total : total.value;
+    const { uid } = getSearchParams();
+    if (uid && isNeedShowDetail.value) {
+      detailRef.value.show(uid);
+      isNeedShowDetail.value = false;
+    }
   };
 
   const handleSettingChange = (setting: ISettings) => {
