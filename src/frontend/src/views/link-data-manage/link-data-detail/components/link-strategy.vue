@@ -103,7 +103,7 @@
       >
         <a
             v-bk-tooltips={{
-              content: t('策略使用的方案，有新版本待升级'),
+              content: t('策略使用的联表，有新版本待升级'),
               disabled: data.link_table_version >= (props.maxVersionMap[data.link_table_uid] || 1),
             }}
             onClick={() => handleDetail(data)}>
