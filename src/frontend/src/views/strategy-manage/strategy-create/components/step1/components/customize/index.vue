@@ -186,6 +186,7 @@
           field: DatabaseTableFieldModel | '';
           filter: string;
           filters: string[];
+          operator: '',
         }
       }>
     }>;
@@ -310,7 +311,7 @@
     raw_name: item.value,
     display_name: item.label,
     field_type: item.field_type,
-    aggregate: '',
+    aggregate: null,
     remark: '',
   }));
 

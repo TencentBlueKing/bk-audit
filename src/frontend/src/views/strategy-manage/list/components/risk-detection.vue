@@ -127,10 +127,10 @@
         <render-info-block>
           <render-info-item :label="t('风险发现规则')">
             <div class="condition-render-item">
-              <div class="condition-equation-wrap">
-                <span
-                  v-if="data.configs.where.conditions.length > 1"
-                  class="condition-equation first-equation">
+              <div
+                v-if="data.configs.where.conditions.length > 1"
+                class="condition-equation-wrap">
+                <span class="condition-equation first-equation">
                   {{ data.configs.where.connector }}
                 </span>
               </div>
@@ -155,7 +155,7 @@
                       <div class="condition-method mr4 mb4">
                         {{ commonData.rule_audit_condition_operator.
                           // eslint-disable-next-line max-len
-                          find(item => item.value === (childItem.condition.field as DatabaseTableField).aggregate)?.label }}
+                          find(item => item.value === childItem.condition.operator)?.label }}
                       </div>
                     </template>
                     <div
@@ -190,7 +190,6 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import CommonDataModel from '@model/strategy/common-data';
-  import type DatabaseTableField from '@model/strategy/database-table-field';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import type StrategyModel from '@model/strategy/strategy';
 

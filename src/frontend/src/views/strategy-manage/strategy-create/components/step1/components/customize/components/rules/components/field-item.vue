@@ -32,7 +32,7 @@
     <bk-form-item
       label=""
       label-width="0"
-      :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].field.display_name`"
+      :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
       required>
       <bk-select
         v-model="condition.condition.field.display_name"
@@ -71,7 +71,7 @@
     <bk-form-item
       label=""
       label-width="0"
-      :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].field.aggregate`"
+      :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.operator`"
       required>
       <!-- 操作人账号特殊处理 -->
       <!-- <bk-input
@@ -80,7 +80,7 @@
         class="condition-equation"
         :placeholder="t('请输入')" /> -->
       <bk-select
-        v-model="condition.condition.field.aggregate"
+        v-model="condition.condition.operator"
         filterable
         :placeholder="t('请选择')">
         <bk-option
@@ -92,12 +92,12 @@
     </bk-form-item>
     <!-- 值 -->
     <bk-form-item
-      v-if="condition.condition.field.aggregate"
+      v-if="condition.condition.operator"
       label=""
       label-width="0"
-      :property="input.includes(condition.condition.field.aggregate) ?
-        `configs.where.conditions[${conditionsIndex}].conditions[${index}].filter` :
-        `configs.where.conditions[${conditionsIndex}].conditions[${index}].filters`"
+      :property="input.includes(condition.condition.operator) ?
+        `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filter` :
+        `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
       required
       :rules="[
         { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
@@ -121,7 +121,7 @@
         allow-create
         class="consition-value" />
       <bk-tag-input
-        v-else-if="tagInput.includes(condition.condition.field.aggregate)"
+        v-else-if="tagInput.includes(condition.condition.operator)"
         v-model="condition.condition.filters"
         allow-create
         class="consition-value"
@@ -134,7 +134,7 @@
         :placeholder="t('请输入并Enter结束')"
         trigger="focus" />
       <bk-input
-        v-else-if="input.includes(condition.condition.field.aggregate)"
+        v-else-if="input.includes(condition.condition.operator)"
         v-model="condition.condition.filter"
         class="consition-value"
         :placeholder="t('请输入')" />
@@ -182,6 +182,7 @@
           field: DatabaseTableFieldModel;
           filter: string;
           filters: string[];
+          operator: '',
         }
       }>
     },
