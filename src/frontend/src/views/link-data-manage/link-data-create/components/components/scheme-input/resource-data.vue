@@ -54,6 +54,7 @@
     onMounted,
     type Ref,
     ref,
+    watch,
   } from 'vue';
   import {
     useI18n,
@@ -80,20 +81,39 @@
   });
   const { t } = useI18n();
   const isEditMode = inject<Ref<boolean>>('isEditMode', ref(false));
+  const AllReSourceDataRtIds = ref<Array<string>>([]);
 
-  // 第一个关联中选中的BuildIn
-  const firstReSourceDataRtIds = computed(() => {
-    const ids: Array<string> = [];
-    if (props.linkIndex === 0 || props.type === 'right')  return ids;
-    const leftTable = props.links[0].left_table;
-    const rightTable = props.links[0].right_table;
-    if (leftTable.table_type === 'BuildIn') {
-      ids.push(leftTable.rt_id[leftTable.rt_id.length - 1]);
-    }
-    if (rightTable.table_type === 'BuildIn') {
-      ids.push(rightTable.rt_id[rightTable.rt_id.length - 1]);
-    }
-    return ids;
+  watch(() => props.links, (data) => {
+    AllReSourceDataRtIds.value = [];
+
+    // 遍历所有的关联
+    data.forEach((link) => {
+      const leftTable = link.left_table;
+      const rightTable = link.right_table;
+
+      // 检查 left_table 是否为 BuildIn 类型
+      if (leftTable.table_type === 'BuildIn') {
+        // 如果 rt_id 是数组，获取最后一个元素；如果是字符串，直接添加
+        if (Array.isArray(leftTable.rt_id)) {
+          AllReSourceDataRtIds.value.push(leftTable.rt_id[leftTable.rt_id.length - 1]);
+        } else {
+          AllReSourceDataRtIds.value.push(leftTable.rt_id);
+        }
+      }
+
+      // 检查 right_table 是否为 BuildIn 类型
+      if (rightTable.table_type === 'BuildIn') {
+        // 如果 rt_id 是数组，获取最后一个元素；如果是字符串，直接添加
+        if (Array.isArray(rightTable.rt_id)) {
+          AllReSourceDataRtIds.value.push(rightTable.rt_id[rightTable.rt_id.length - 1]);
+        } else {
+          AllReSourceDataRtIds.value.push(rightTable.rt_id);
+        }
+      }
+    });
+  }, {
+    immediate: true,
+    deep: true,
   });
 
   const changeData = (data: Array<{
@@ -115,59 +135,31 @@
     });
   };
 
-  // 不能选择已选的表
-  const getRightTableData = () => {
-    const disabledValues = new Set();
-    // 遍历 link 数据，找出需要禁用的 children.value
-    props.links.forEach((link) => {
-      const leftTable = link.left_table;
-      const rightTable = link.right_table;
-      if (Array.isArray(leftTable.rt_id)) {
-        const lastRtId = leftTable.rt_id[leftTable.rt_id.length - 1];
-        disabledValues.add(lastRtId);
-      }
-      if (Array.isArray(rightTable.rt_id)) {
-        const lastRtId = rightTable.rt_id[rightTable.rt_id.length - 1];
-        disabledValues.add(lastRtId);
-      }
-    });
-
-    return tableData.value.map(item => ({
-      ...item,
-      leaf: true,
-      disabled: !(item.children && item.children.length),
-      children: item.children.map(child => ({
-        ...child,
-        disabled: disabledValues.has(child.value),
-      })),
-    }));
+  const getDisabled = (child: {
+    label: string,
+    value: string
+  }) => {
+    if (props.linkIndex === 0 && props.type === 'left') return false;
+    // 不能选择已选的表
+    if (props.type === 'right') {
+      return AllReSourceDataRtIds.value.length ? AllReSourceDataRtIds.value.includes(child.value) : false;
+    }
+    // 只能选择前面关联已有的表
+    return AllReSourceDataRtIds.value.length ? !AllReSourceDataRtIds.value.includes(child.value) : false;
   };
 
-  // 只能选择第一个关联已有的表
-  const getLeftTableData = () => tableData.value.map((item) => {
-    // 默认选中第一个
-    if (firstReSourceDataRtIds.value.length) {
-      // eslint-disable-next-line prefer-destructuring
-      modelValue.value.rt_id = firstReSourceDataRtIds.value[0];
-      changeData(tableData.value);
-    }
-    return {
-      ...item,
-      leaf: true,
-      disabled: !(item.children && item.children.length),
-      children: item.children.map(child => ({
-        ...child,
-        disabled: firstReSourceDataRtIds.value.length ? !firstReSourceDataRtIds.value.includes(child.value) : false,
-      })),
-    };
-  });
+  const getTableData = () => tableData.value.map(item => ({
+    ...item,
+    leaf: true,
+    disabled: !(item.children && item.children.length),
+    children: item.children.map(child => ({
+      ...child,
+      disabled: getDisabled(child),
+    })),
+  }));
 
-  const filterTableData = computed(() => {
-    if (props.type === 'right') {
-      return getRightTableData();
-    }
-    return getLeftTableData();
-  });
+
+  const filterTableData = computed(() => getTableData());
 
   // 获取rt_id
   const {

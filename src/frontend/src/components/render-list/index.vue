@@ -39,8 +39,11 @@
             :row="row" />
         </template>
         <template #empty>
+          <slot
+            v-if="slot.empty"
+            name="empty" />
           <bk-exception
-            v-if="isSearching && needEmptySearchTip"
+            v-else-if="isSearching && needEmptySearchTip"
             scene="part"
             style="height: 280px;padding-top: 40px;"
             type="search-empty">
@@ -94,6 +97,7 @@
     reactive,
     type Ref,
     ref,
+    useSlots,
     watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -145,6 +149,8 @@
   const emits = defineEmits<Emits>();
   const { getRecordPageParams, removePageParams } = useRecordPage;
   const { on, off } = useEventBus();
+  const slot = useSlots();
+  console.log(slot);
 
   const rootRef = ref();
   const { t } = useI18n();

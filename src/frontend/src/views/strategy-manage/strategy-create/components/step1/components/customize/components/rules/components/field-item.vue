@@ -35,13 +35,13 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].field.display_name`"
       required>
       <bk-select
-        v-model="condition.field.display_name"
+        v-model="condition.condition.field.display_name"
         filterable
         :placeholder="t('请选择字段')"
         style="flex: 1;"
         @change="(value: DatabaseTableFieldModel) => handleSelectField(value ,index)">
         <template
-          v-if="configType === 'LinkTable' && condition.field.table"
+          v-if="configType === 'LinkTable' && condition.condition.field.table"
           #prefix>
           <span
             style="
@@ -49,7 +49,7 @@
               line-height: 32px;
               color: #3a84ff;
               background: #f0f1f5">
-            {{ condition.field.table }}
+            {{ condition.condition.field.table }}
           </span>
         </template>
         <bk-option
@@ -80,7 +80,7 @@
         class="condition-equation"
         :placeholder="t('请输入')" /> -->
       <bk-select
-        v-model="condition.field.aggregate"
+        v-model="condition.condition.field.aggregate"
         filterable
         :placeholder="t('请选择')">
         <bk-option
@@ -92,10 +92,10 @@
     </bk-form-item>
     <!-- 值 -->
     <bk-form-item
-      v-if="condition.field.aggregate"
+      v-if="condition.condition.field.aggregate"
       label=""
       label-width="0"
-      :property="input.includes(condition.field.aggregate) ?
+      :property="input.includes(condition.condition.field.aggregate) ?
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].filter` :
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].filters`"
       required
@@ -103,39 +103,39 @@
         { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
       ]">
       <bk-cascader
-        v-if="dicts[condition.field.raw_name] &&
-          dicts[condition.field.raw_name].length"
-        v-model="condition.filters"
+        v-if="dicts[condition.condition.field.raw_name] &&
+          dicts[condition.condition.field.raw_name].length"
+        v-model="condition.condition.filters"
         class="consition-value"
         collapse-tags
         filterable
         float-mode
         id-key="value"
-        :list="dicts[condition.field.raw_name]"
+        :list="dicts[condition.condition.field.raw_name]"
         multiple
         name-key="label"
         trigger="hover" />
       <audit-user-selector
-        v-else-if="condition.field.raw_name.includes('username')"
-        v-model="condition.filters"
+        v-else-if="condition.condition.field.raw_name.includes('username')"
+        v-model="condition.condition.filters"
         allow-create
         class="consition-value" />
       <bk-tag-input
-        v-else-if="tagInput.includes(condition.field.aggregate)"
-        v-model="condition.filters"
+        v-else-if="tagInput.includes(condition.condition.field.aggregate)"
+        v-model="condition.condition.filters"
         allow-create
         class="consition-value"
         collapse-tags
         :content-width="350"
         has-delete-icon
         :input-search="false"
-        :list="dicts[condition.field && condition.field.raw_name]"
+        :list="dicts[condition.condition.field && condition.condition.field.raw_name]"
         :loading="fieldLoading"
         :placeholder="t('请输入并Enter结束')"
         trigger="focus" />
       <bk-input
-        v-else-if="input.includes(condition.field.aggregate)"
-        v-model="condition.filter"
+        v-else-if="input.includes(condition.condition.field.aggregate)"
+        v-model="condition.condition.filter"
         class="consition-value"
         :placeholder="t('请输入')" />
     </bk-form-item>
@@ -178,9 +178,11 @@
     conditions: {
       connector: 'and' | 'or';
       conditions: Array<{
-        field: DatabaseTableFieldModel;
-        filter: string;
-        filters: string[];
+        condition: {
+          field: DatabaseTableFieldModel;
+          filter: string;
+          filters: string[];
+        }
       }>
     },
     conditionsIndex: number,

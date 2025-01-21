@@ -15,131 +15,135 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div
-    v-for="(link, index) in links"
-    :key="index"
-    style="margin-bottom: 10px;">
-    <div class="link-data-table">
-      <div class="table-head">
-        <!-- 左表 -->
-        <div class="left-name">
-          <bk-form-item
-            class="no-label"
-            label-width="0"
-            :style="configTypeMap[link.left_table.table_type] ? {
-              width: '150px',
-              marginBottom: '8px'
-            } : {
-              flex: 1,
-              marginBottom: '8px'
-            }">
+  <scroll-faker
+    :style="{
+      height: links.length * 120 > 430 ? '430px' : `${links.length * 120}px`,
+    }">
+    <template
+      v-for="(link, index) in links"
+      :key="index">
+      <div class="link-data-table">
+        <div class="table-head">
+          <!-- 左表 -->
+          <div class="left-name">
+            <bk-form-item
+              class="no-label"
+              label-width="0"
+              :style="configTypeMap[link.left_table.table_type] ? {
+                width: '150px',
+                marginBottom: '8px'
+              } : {
+                flex: 1,
+                marginBottom: '8px'
+              }">
+              <select-verify
+                ref="selectVerifyRef"
+                :default-value="link.left_table.table_type"
+                theme="background">
+                <bk-select
+                  v-model="link.left_table.table_type"
+                  filterable
+                  :placeholder="t('数据源类型')"
+                  :prefix="t('数据源')"
+                  @change="() => handleSelectLeftTableType(index)">
+                  <!-- 第一个关联，第一张表有所有选项 -->
+                  <bk-option
+                    v-for="item in ( index === 0 ? linkTableTableTypeList : leftTableTypeList)"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value" />
+                </bk-select>
+              </select-verify>
+            </bk-form-item>
+            <!-- 三种数据源，对应的输入类型 -->
             <select-verify
+              v-if="link.left_table.table_type"
               ref="selectVerifyRef"
-              :default-value="link.left_table.table_type"
-              theme="background">
-              <bk-select
-                v-model="link.left_table.table_type"
-                filterable
-                :placeholder="t('数据源类型')"
-                :prefix="t('数据源')"
-                @change="() => handleSelectLeftTableType(index)">
-                <!-- 第一个关联，第一张表有所有选项 -->
-                <bk-option
-                  v-for="item in ( index === 0 ? linkTableTableTypeList : leftTableTypeList)"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value" />
-              </bk-select>
-            </select-verify>
-          </bk-form-item>
-          <!-- 三种数据源，对应的输入类型 -->
-          <select-verify
-            v-if="link.left_table.table_type"
-            ref="selectVerifyRef"
-            :default-value="link.left_table.table_type === 'EventLog' ?
-              link.left_table.system_ids :
-              link.left_table.rt_id"
-            style="flex: 1;"
-            theme="background">
-            <component
-              :is="configTypeMap[link.left_table.table_type]"
-              ref="tableTypeRef"
-              v-model="link.left_table"
-              :link-index="index"
-              :links="links"
+              :default-value="link.left_table.table_type === 'EventLog' ?
+                link.left_table.system_ids :
+                link.left_table.rt_id"
               style="flex: 1;"
-              type="left" />
-          </select-verify>
-        </div>
-        <!-- 关联关系 -->
-        <div class="join-type">
-          <join-type v-model:joinType="link.join_type" />
-        </div>
-        <!-- 右表 -->
-        <div class="right-name">
-          <bk-form-item
-            class="no-label"
-            label-width="0"
-            :style="configTypeMap[link.right_table.table_type] ? {
-              width: '150px',
-              marginBottom: '8px'
-            } : {
-              flex: 1,
-              marginBottom: '8px'
-            }">
+              theme="background">
+              <component
+                :is="configTypeMap[link.left_table.table_type]"
+                ref="tableTypeRef"
+                v-model="link.left_table"
+                :link-index="index"
+                :links="links"
+                style="flex: 1;"
+                type="left" />
+            </select-verify>
+          </div>
+          <!-- 关联关系 -->
+          <div class="join-type">
+            <join-type v-model:joinType="link.join_type" />
+          </div>
+          <!-- 右表 -->
+          <div class="right-name">
+            <bk-form-item
+              class="no-label"
+              label-width="0"
+              :style="configTypeMap[link.right_table.table_type] ? {
+                width: '150px',
+                marginBottom: '8px'
+              } : {
+                flex: 1,
+                marginBottom: '8px'
+              }">
+              <select-verify
+                ref="selectVerifyRef"
+                :default-value="link.left_table.table_type"
+                theme="background">
+                <bk-select
+                  v-model="link.right_table.table_type"
+                  filterable
+                  :placeholder="t('数据源类型')"
+                  :prefix="t('数据源')"
+                  @change="() => handleSelectRightTableType(index)">
+                  <!-- rightTableTypeList，左表选中eventlog，右不显示 -->
+                  <bk-option
+                    v-for="item in rightTableTypeList"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value" />
+                </bk-select>
+              </select-verify>
+            </bk-form-item>
+            <!-- 三种数据源，对应的输入类型 -->
             <select-verify
+              v-if="link.right_table.table_type"
               ref="selectVerifyRef"
-              :default-value="link.left_table.table_type"
-              theme="background">
-              <bk-select
-                v-model="link.right_table.table_type"
-                filterable
-                :placeholder="t('数据源类型')"
-                :prefix="t('数据源')"
-                @change="() => handleSelectRightTableType(index)">
-                <!-- rightTableTypeList，左表选中eventlog，右不显示 -->
-                <bk-option
-                  v-for="item in rightTableTypeList"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value" />
-              </bk-select>
-            </select-verify>
-          </bk-form-item>
-          <!-- 三种数据源，对应的输入类型 -->
-          <select-verify
-            v-if="link.right_table.table_type"
-            ref="selectVerifyRef"
-            :default-value="link.right_table.table_type === 'EventLog' ?
-              link.right_table.system_ids :
-              link.right_table.rt_id"
-            style="flex: 1;"
-            theme="background">
-            <component
-              :is="configTypeMap[link.right_table.table_type]"
-              ref="tableTypeRef"
-              v-model="link.right_table"
-              :link-index="index"
-              :links="links"
+              :default-value="link.right_table.table_type === 'EventLog' ?
+                link.right_table.system_ids :
+                link.right_table.rt_id"
               style="flex: 1;"
-              type="right" />
-          </select-verify>
+              theme="background">
+              <component
+                :is="configTypeMap[link.right_table.table_type]"
+                ref="tableTypeRef"
+                v-model="link.right_table"
+                :link-index="index"
+                :links="links"
+                style="flex: 1;"
+                type="right" />
+            </select-verify>
+          </div>
         </div>
+        <!-- 对应字段 -->
+        <table-field
+          ref="tableFieldRef"
+          v-model:linkFields="link.link_fields"
+          :left-table-rt-id="link.left_table.rt_id"
+          :right-table-rt-id="link.right_table.rt_id" />
+        <!-- 删除关联关系 -->
+        <audit-icon
+          v-if="index !== 0"
+          class="delete-link"
+          type="delete"
+          @click="() => handleDelete(index)" />
       </div>
-      <!-- 对应字段 -->
-      <table-field
-        ref="tableFieldRef"
-        v-model:linkFields="link.link_fields"
-        :left-table-rt-id="link.left_table.rt_id"
-        :right-table-rt-id="link.right_table.rt_id" />
-      <!-- 删除关联关系 -->
-      <audit-icon
-        v-if="index !== 0"
-        class="delete-link"
-        type="delete"
-        @click="() => handleDelete(index)" />
-    </div>
-  </div>
+    </template>
+  </scroll-faker>
   <span
     class="add-link"
     @click="handleAdd">
@@ -188,13 +192,20 @@
     return linkTableTableTypeList.value;
   });
 
-  // 左表只能使用第一个关联选中的数据源
-  const leftTableTypeList = computed(() => linkTableTableTypeList.value.filter((item) => {
-    const firstLink = links.value[0];
-    if (item.value === firstLink.left_table.table_type || item.value === firstLink.right_table.table_type) {
-      return item;
-    }
-  }));
+  // 左表只能使用前面已经选中的数据源
+  const leftTableTypeList = computed(() => {
+    // 使用一个 Set 来存储所有关联中选中的数据源类型，以避免重复
+    const selectedTableTypes = new Set();
+
+    // 遍历所有的关联，收集所有的 left_table 和 right_table 的 table_type
+    links.value.forEach((link) => {
+      selectedTableTypes.add(link.left_table.table_type);
+      selectedTableTypes.add(link.right_table.table_type);
+    });
+
+    // 从 linkTableTableTypeList 中筛选出与收集到的类型匹配的项
+    return linkTableTableTypeList.value.filter(item => selectedTableTypes.has(item.value));
+  });
 
   const handleSelectLeftTableType = (index: number) => {
     // 如果重选了主表，全部重置

@@ -31,7 +31,7 @@
             :condition="[]"
             :data="searchData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :placeholder="t('联表数据名称、标签、最近更新人、最近更新时间')"
+            :placeholder="t('联表数据名称、标签、最近更新人')"
             unique-select
             value-split-code=","
             @update:model-value="handleSearch" />
@@ -125,7 +125,7 @@
   const defaultSearchData = [
     {
       name: t('联表数据名称'),
-      id: 'name',
+      id: 'name_contains',
       placeholder: t('请选择状态'),
       onlyRecommendChildren: true,
     },
@@ -133,12 +133,6 @@
       name: t('最近更新人'),
       id: 'updated_by',
       placeholder: t('请输入最近更新人'),
-      onlyRecommendChildren: true,
-    },
-    {
-      name: t('最近更新时间'),
-      id: 'updated_at',
-      placeholder: t('请输入更新时间'),
       onlyRecommendChildren: true,
     },
   ];
@@ -345,10 +339,9 @@
   const handleSearch = (keyword: Array<any>) => {
     const search = {
       uid: undefined,
-      name: '',
+      name_contains: '',
       tags: '',
       updated_by: '',
-      updated_at: '',
     } as Record<string, any>;
 
     keyword.forEach((item: SearchKey) => {
@@ -368,7 +361,7 @@
   };
 
   const handleCreateUpdate = () => {
-    listRef.value.fetchData({ keyword: searchKey.value });
+    handleClearSearch();
   };
 
   const handleLeftWidth = (showLabel: boolean) => {
@@ -396,10 +389,9 @@
   const handleClearSearch = () => {
     const search = {
       uid: undefined,
-      name: '',
+      name_contains: '',
       tags: '',
       updated_by: '',
-      updated_at: '',
     } as Record<string, any>;
     searchKey.value = [];
     renderLabelRef.value.resetAllLabel();

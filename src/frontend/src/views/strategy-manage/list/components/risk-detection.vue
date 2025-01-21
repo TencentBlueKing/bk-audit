@@ -148,17 +148,18 @@
                       class="condition-equation mr4 mb4">
                       {{ item.connector }}
                     </div>
-                    <template v-if="childItem.field">
+                    <template v-if="childItem.condition.field">
                       <div class="condition-key mr4 mb4">
-                        {{ childItem.field.display_name }}
+                        {{ childItem.condition.field.display_name }}
                       </div>
                       <div class="condition-method mr4 mb4">
                         {{ commonData.rule_audit_condition_operator.
-                          find(item => item.value === (childItem.field as DatabaseTableField).aggregate)?.label }}
+                          // eslint-disable-next-line max-len
+                          find(item => item.value === (childItem.condition.field as DatabaseTableField).aggregate)?.label }}
                       </div>
                     </template>
                     <div
-                      v-for="(value, valIndex) in childItem.filters"
+                      v-for="(value, valIndex) in childItem.condition.filters"
                       :key="valIndex"
                       class="condition-value mr4 mb4">
                       {{ value }}
