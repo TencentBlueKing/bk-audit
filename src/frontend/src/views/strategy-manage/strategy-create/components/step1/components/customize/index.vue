@@ -95,6 +95,7 @@
           style="margin-bottom: 12px;">
           <bk-radio-group
             v-model="formData.configs.data_source.source_type"
+            :disabled="isEditMode"
             @change="handleSourceTypeChange">
             <bk-radio label="batch_join_source">
               {{ t('固定周期调度') }}
