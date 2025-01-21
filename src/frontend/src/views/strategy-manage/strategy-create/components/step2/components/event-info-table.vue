@@ -53,7 +53,7 @@
   </div>
 </template>
 <script setup lang='tsx'>
-  import { computed, ref } from 'vue';
+  import { computed, onActivated, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -113,6 +113,19 @@
     event_evidence_field_configs: t('事件证据'),
   };
 
+  const createField = (item: DatabaseTableFieldModel) => ({
+    field_name: item.raw_name,
+    display_name: item.display_name,
+    is_priority: false,
+    map_config: {
+      target_value: '',
+      source_field: '',
+    },
+    description: '',
+    example: '',
+    prefix: 'event_data',
+  });
+
   const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
     if (isEditMode || isCloneMode) {
       if (!props.data[key].length || !tableData.value[key].length) return;
@@ -134,9 +147,11 @@
           ...item,
         };
       });
-    } else {
-      // 新增填充event_basic_field_configs参数
-      if (key !== 'event_basic_field_configs' || !tableData.value[key].length || !props.select.length) return;
+    }
+    switch (key) {
+    case 'event_basic_field_configs':
+      // 根据select填充event_basic_field_configs参数
+      if (!tableData.value[key].length || !props.select.length) return;
       props.select.forEach((item) => {
         if (fieldMap[item.raw_name]) {
           const field = tableData.value[key].find(fieldItem => fieldItem.field_name === fieldMap[item.raw_name]);
@@ -145,7 +160,29 @@
           }
         }
       });
+      break;
+    case 'event_data_field_configs':
+      if (!props.select.length) return;
+      // 根据select更新event_data_field_configs
+      // 如果没有event_data_field_configs，根据select生成
+      if (!tableData.value[key].length) {
+        tableData.value.event_data_field_configs = props.select.map(item => createField(item));
+      } else {
+        // eslint-disable-next-line max-len
+        const newSelect = props.select.filter(item => !tableData.value.event_data_field_configs.some(field => field.field_name === item.raw_name));
+        // 第一步添加新的select
+        newSelect.forEach((item) => {
+          tableData.value.event_data_field_configs.push(createField(item));
+        });
+      }
     }
+  };
+
+  const process = () => {
+    // 填充内容（是否重点展示、字段说明、字段自动填充）
+    setTableData('event_basic_field_configs');
+    setTableData('event_data_field_configs');
+    setTableData('event_evidence_field_configs');
   };
 
   const {
@@ -156,12 +193,13 @@
       strategy_id: props.strategyId,
     },
     onSuccess: () => {
-      // 填充内容（是否重点展示、字段说明、字段自动填充）
-      setTableData('event_basic_field_configs');
-      setTableData('event_data_field_configs');
-      setTableData('event_evidence_field_configs');
+      process();
     },
     manual: true,
+  });
+
+  onActivated(() => {
+    process();
   });
 
   defineExpose<Exposes>({
