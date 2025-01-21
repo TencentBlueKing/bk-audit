@@ -38,7 +38,7 @@
               name: linkDataDetail.name,
             },
           }">
-          {{ t('前往查看详情查看') }}
+          {{ t('前往查看详情') }}
         </router-link>
       </template>
     </bk-alert>
