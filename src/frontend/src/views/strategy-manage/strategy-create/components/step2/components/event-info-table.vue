@@ -55,6 +55,7 @@
 <script setup lang='tsx'>
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import StrategyManageService from '@service/strategy-manage';
 
@@ -79,9 +80,19 @@
   }
 
   const props = defineProps<Props>();
+  const route = useRoute();
 
   const { t, locale } = useI18n();
   const valueItemRef = ref();
+
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
+  const fieldMap: Record<string, string> = {
+    event_id: 'raw_event_id',
+    username: 'operator',
+    start_time: 'event_time',
+    start_timeaccess_source_ip: 'event_source',
+  };
 
   const column = computed(() => {
     const initColumn = [
@@ -102,8 +113,10 @@
     event_evidence_field_configs: t('事件证据'),
   };
 
-  const setEditData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
-    if (props.data[key].length && tableData.value[key].length) {
+  const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
+    if (isEditMode || isCloneMode) {
+      if (!props.data[key].length || !tableData.value[key].length) return;
+      // 编辑填充参数
       tableData.value[key] = tableData.value[key].map((item) => {
         const editItem = props.data[key].find(edItem => edItem.field_name === item.field_name);
         if (editItem) {
@@ -121,6 +134,17 @@
           ...item,
         };
       });
+    } else {
+      // 新增填充event_basic_field_configs参数
+      if (key !== 'event_basic_field_configs' || !tableData.value[key].length || !props.select.length) return;
+      props.select.forEach((item) => {
+        if (fieldMap[item.raw_name]) {
+          const field = tableData.value[key].find(fieldItem => fieldItem.field_name === fieldMap[item.raw_name]);
+          if (field && field.map_config) {
+            field.map_config.source_field = item.display_name;
+          }
+        }
+      });
     }
   };
 
@@ -132,10 +156,10 @@
       strategy_id: props.strategyId,
     },
     onSuccess: () => {
-      // 编辑填充内容（是否重点展示、字段说明）
-      setEditData('event_basic_field_configs');
-      setEditData('event_data_field_configs');
-      setEditData('event_evidence_field_configs');
+      // 填充内容（是否重点展示、字段说明、字段自动填充）
+      setTableData('event_basic_field_configs');
+      setTableData('event_data_field_configs');
+      setTableData('event_evidence_field_configs');
     },
     manual: true,
   });
