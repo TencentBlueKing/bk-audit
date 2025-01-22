@@ -358,7 +358,7 @@
       return;
     }
     InfoBox({
-      title: () =>  h('div', [
+      title: () => h('div', [
         h(AuditIcon, {
           type: 'alert',
           style: {
@@ -368,7 +368,16 @@
         }),
         h('div', t('切换数据源请注意')),
       ]),
-      subTitle: t('切换后，已配置的数据将被清空。是否继续？'),
+      subTitle: () => h('div', {
+        style: {
+          color: '#4D4F56',
+          backgroundColor: '#f5f6fa',
+          height: '46px',
+          lineHeight: '46px',
+          borderRadius: '2px',
+          fontSize: '14px',
+        },
+      }, t('切换后，已配置的数据将被清空。是否继续？')),
       confirmText: t('继续切换'),
       cancelText: t('取消'),
       headerAlign: 'center',

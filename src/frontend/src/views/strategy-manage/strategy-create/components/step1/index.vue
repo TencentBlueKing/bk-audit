@@ -194,7 +194,9 @@
   </skeleton-loading>
 </template>
 <script setup lang="ts">
+  import { InfoBox } from 'bkui-vue';
   import {
+    h,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -216,6 +218,8 @@
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
 
+  import AuditIcon from '@components/audit-icon';
+
   import CardPartVue from './components/card-part.vue';
   import ControlDescriptionVue from './components/control-description.vue';
   import Customize from './components/customize/index.vue';
@@ -233,6 +237,7 @@
     tags: Array<string>,
     description: string,
     configs: Record<string, any>,
+    control_id: string,
     status: string,
     risk_level: string,
     risk_hazard: string,
@@ -279,6 +284,7 @@
     description: '',
     configs: {
     },
+    control_id: '',
     status: '',
     risk_level: '',
     risk_hazard: '',
@@ -515,8 +521,44 @@
   });
 
   const handleStrategyWay = (way: string) => {
-    formData.value.strategy_type = way;
-    formRef.value.validate('strategy_type');
+    if (!formData.value.strategy_type
+      || (!formData.value.configs.config_type && formData.value.strategy_type === 'rule')
+      || (!formData.value.control_id && formData.value.strategy_type === 'model')) {
+      formData.value.strategy_type = way;
+      formRef.value.validate('strategy_type');
+      return;
+    }
+    InfoBox({
+      title: () => h('div', [
+        h(AuditIcon, {
+          type: 'alert',
+          style: {
+            fontSize: '42px',
+            color: '#FFF8C3',
+          },
+        }),
+        h('div', t('切换配置方式请注意')),
+      ]),
+      subTitle: () => h('div', {
+        style: {
+          color: '#4D4F56',
+          backgroundColor: '#f5f6fa',
+          height: '46px',
+          lineHeight: '46px',
+          borderRadius: '2px',
+          fontSize: '14px',
+        },
+      }, t('切换后，已配置的数据将被清空。是否继续？')),
+      confirmText: t('继续切换'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      onConfirm() {
+        formData.value.strategy_type = way;
+        formRef.value.validate('strategy_type');
+      },
+    });
   };
 
   // 设置风险等级
