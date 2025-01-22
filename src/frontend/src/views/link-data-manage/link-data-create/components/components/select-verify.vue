@@ -17,7 +17,7 @@
 <template>
   <div
     ref="rootRef"
-    class="select-field-value"
+    class="select-field-value-verify"
     :class="{
       'is-errored': isError,
       'is-background-errored-tip': theme === 'background'
@@ -81,7 +81,7 @@
   });
 </script>
 <style lang="postcss">
-.select-field-value {
+.select-field-value-verify {
   position: relative;
 
   .err-tip {
