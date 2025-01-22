@@ -207,13 +207,6 @@
   const handleNext = () => {
     Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
       const params: IFormData = Object.assign({}, formData.value, eventRef.value.getData());
-      params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
-        if (item.map_config && !item.map_config.source_field && !item.map_config.target_value) {
-          // eslint-disable-next-line no-param-reassign
-          delete item.map_config;
-        }
-        return item;
-      });
       emits('nextStep', 3, params);
     });
   };

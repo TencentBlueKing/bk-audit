@@ -53,6 +53,7 @@
 
 <script setup lang='ts'>
   import { InfoBox } from 'bkui-vue';
+  import _ from 'lodash';
   import {
     computed,
     onMounted,
@@ -231,7 +232,20 @@
 
   // 提交
   const handleSubmit = () => {
-    const params = { ...formData.value };
+    const params = _.cloneDeep(formData.value);
+    // 处理event_basic_field_configs
+    params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
+      if (item.map_config) {
+        if (!item.map_config.source_field && !item.map_config.target_value) {
+          // eslint-disable-next-line no-param-reassign
+          delete item.map_config;
+        } else if (item.map_config.source_field && item.map_config.target_value) {
+          // eslint-disable-next-line no-param-reassign
+          item.map_config.source_field = undefined;
+        }
+      }
+      return item;
+    });
     // ai策略
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
