@@ -50,6 +50,7 @@
   </skeleton-loading>
   <create-link-data
     ref="createRef"
+    @show-link-strategy="handleShowLinkStrategy"
     @update="handleCreateUpdate" />
   <link-data-detail
     ref="detailRef"
@@ -120,9 +121,15 @@
   const createRef = ref();
   const detailRef = ref();
   const renderLabelRef = ref();
+  const isNeedShowDetail = ref(false);
 
   const dataSource = LinkDataManageService.fetchStrategyList;
   const defaultSearchData = [
+    {
+      name: t('联表id'),
+      id: 'uid',
+      placeholder: t('请输入联表id'),
+    },
     {
       name: t('联表数据名称'),
       id: 'name_contains',
@@ -324,7 +331,9 @@
   });
 
   // 获取全部联表
-  useRequest(LinkDataManageService.fetchLinkTableAll, {
+  const {
+    run: fetchLinkTableAll,
+  } = useRequest(LinkDataManageService.fetchLinkTableAll, {
     defaultValue: [],
     manual: true,
     onSuccess(data) {
@@ -338,7 +347,7 @@
   // 搜索
   const handleSearch = (keyword: Array<any>) => {
     const search = {
-      uid: undefined,
+      uid: '',
       name_contains: '',
       tags: '',
       updated_by: '',
@@ -358,10 +367,6 @@
       leftLabelFilterCondition.value = '';
     }
     listRef.value.fetchData(search);
-  };
-
-  const handleCreateUpdate = () => {
-    handleClearSearch();
   };
 
   const handleLeftWidth = (showLabel: boolean) => {
@@ -388,7 +393,7 @@
   // 清空搜索
   const handleClearSearch = () => {
     const search = {
-      uid: undefined,
+      uid: '',
       name_contains: '',
       tags: '',
       updated_by: '',
@@ -422,6 +427,9 @@
         }],
       });
       switch (id) {
+      case 'uid':
+        isNeedShowDetail.value = true;
+        break;
       case 'tags':
         renderLabelRef.value.setLabel(content);
         leftLabelFilterCondition.value = content;
@@ -451,18 +459,35 @@
       setSearchKey();
     });
     total.value = data.total > total.value ? data.total : total.value;
+    const { uid } = getSearchParams();
+    if (uid && isNeedShowDetail.value) {
+      detailRef.value.show(uid);
+      isNeedShowDetail.value = false;
+    }
   };
 
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-link-data-manage-list-setting', JSON.stringify(setting));
   };
 
+  const handleCreateUpdate = () => {
+    // 编辑或者新增后重新获取version
+    fetchLinkTableAll();
+    handleClearSearch();
+  };
+
+  const handleShowLinkStrategy = (value: string) => {
+    detailRef.value.show(value, true);
+  };
+
+  // 新增
   const handleCreate = () => {
     createRef.value.show();
   };
 
+  // 编辑
   const handleEdit = (data: LinkDataModel) => {
-    createRef.value.show(data.uid);
+    createRef.value.show(data.uid, data.strategy_count > 0);
   };
 
   // 详情
@@ -470,15 +495,16 @@
     detailRef.value.show(data.uid);
   };
 
-  // 查看关联策略
-  const handleLinkStrategy = (data: LinkDataModel) => {
-    detailRef.value.show(data.uid, true);
-  };
-
+  // 删除
   const handleDelete = (data: LinkDataModel) => {
     deleteLinkData({
       uid: data.uid,
     });
+  };
+
+  // 查看关联策略
+  const handleLinkStrategy = (data: LinkDataModel) => {
+    detailRef.value.show(data.uid, true);
   };
 
   const fetchData = () => {

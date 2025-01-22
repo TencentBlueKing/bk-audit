@@ -90,6 +90,7 @@
           field: DatabaseTableFieldModel;
           filter: string;
           filters: string[];
+          operator: ''
         }
       }>
     }>;
@@ -115,6 +116,7 @@
           field: new DatabaseTableFieldModel(),
           filter: '',
           filters: [],
+          operator: '',
         },
       }],
     }],
@@ -133,6 +135,7 @@
           field: new DatabaseTableFieldModel(),
           filter: '',
           filters: [],
+          operator: '',
         },
       }],
     });
@@ -145,6 +148,7 @@
           field: new DatabaseTableFieldModel(),
           filter: '',
           filters: [],
+          operator: '',
         },
       });
     } else {
@@ -178,6 +182,7 @@
               field: new DatabaseTableFieldModel(),
               filter: '',
               filters: [],
+              operator: '',
             },
           }],
         }],

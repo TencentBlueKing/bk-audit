@@ -146,7 +146,7 @@
                   <bk-button
                     v-for="item in strategyWayList"
                     :key="item.value"
-                    :disabled="isStockData"
+                    :disabled="isStockData || isEditMode"
                     :loading="commonLoading"
                     :selected="formData.strategy_type === item.value"
                     @click="handleStrategyWay(item.value)">

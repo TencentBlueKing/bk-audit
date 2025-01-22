@@ -35,10 +35,10 @@
           :to="{
             name: 'linkDataManage',
             query: {
-              name: linkDataDetail.name,
+              uid: linkDataDetail.uid,
             },
           }">
-          {{ t('前往查看详情查看') }}
+          {{ t('前往查看详情') }}
         </router-link>
       </template>
     </bk-alert>

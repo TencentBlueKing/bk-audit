@@ -95,6 +95,7 @@
           style="margin-bottom: 12px;">
           <bk-radio-group
             v-model="formData.configs.data_source.source_type"
+            :disabled="isEditMode"
             @change="handleSourceTypeChange">
             <bk-radio label="batch_join_source">
               {{ t('固定周期调度') }}
@@ -186,6 +187,7 @@
           field: DatabaseTableFieldModel | '';
           filter: string;
           filters: string[];
+          operator: '',
         }
       }>
     }>;
@@ -310,7 +312,7 @@
     raw_name: item.value,
     display_name: item.label,
     field_type: item.field_type,
-    aggregate: '',
+    aggregate: null,
     remark: '',
   }));
 

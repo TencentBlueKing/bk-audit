@@ -72,6 +72,7 @@ export default class Strategy {
             field: DatabaseTableFieldModel | '';
             filter: string;
             filters: string[];
+            operator: '',
           }
         }>
       }>;

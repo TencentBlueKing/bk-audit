@@ -98,8 +98,9 @@
   </audit-sideslider>
 </template>
 <script setup lang="ts">
+  import { Message } from 'bkui-vue';
   import _ from 'lodash';
-  import { provide, ref  } from 'vue';
+  import { h, provide, ref  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import linkDataManageService from '@service/link-data-manage';
@@ -122,6 +123,7 @@
   }
   interface Emits {
     (e:'update'):void
+    (e:'showLinkStrategy', value: string):void
   }
   interface Exposes {
     show(uid?:string):void
@@ -174,6 +176,9 @@
   let letterIndex = -1;
   // 用于存储已分配的 display_name
   const displayNameMap: Record<string, string> = {};
+  const isHasStrategy = ref<boolean | undefined>(false);
+  const needUpdate = ref<boolean>(false);
+  const editUid = ref<string | undefined>('');
 
   provide('isEditMode', isEditMode);
 
@@ -279,7 +284,21 @@
     defaultValue: {},
     onSuccess: () => {
       window.changeConfirm = false;
-      messageSuccess(t('编辑成功'));
+      if (needUpdate.value) {
+        Message({
+          theme: 'success',
+          message: h('div', [
+            h('span', t('联表保存成功！请前往关联策略进行刷新升级。')),
+            h('a', {
+              onClick() {
+                emits('showLinkStrategy', editUid.value as string);
+              },
+            }, '查看关联策略'),
+          ]),
+        });
+      } else {
+        messageSuccess(t('编辑成功'));
+      }
       showCreate.value = false;
       emits('update');
     },
@@ -352,13 +371,19 @@
         delete noConfigParams.config;
         saveLinkData(noConfigParams);
       } else {
+        // 如果有关联策略，并且联表更新了
+        if (isHasStrategy.value) {
+          needUpdate.value = true;
+        }
         saveLinkData(params);
       }
     });
   };
 
   defineExpose<Exposes>({
-    show(uid?: string) {
+    show(uid?: string | undefined, hasStrategy?: boolean | undefined) {
+      isHasStrategy.value = hasStrategy;
+      editUid.value = uid;
       formData.value = _.cloneDeep(initFormData);
       showCreate.value = true;
       isEditMode.value = !!uid;

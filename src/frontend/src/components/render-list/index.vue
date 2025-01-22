@@ -150,7 +150,6 @@
   const { getRecordPageParams, removePageParams } = useRecordPage;
   const { on, off } = useEventBus();
   const slot = useSlots();
-  console.log(slot);
 
   const rootRef = ref();
   const { t } = useI18n();
