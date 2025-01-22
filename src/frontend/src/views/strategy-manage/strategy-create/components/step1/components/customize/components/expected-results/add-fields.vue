@@ -58,6 +58,10 @@
                 <bk-radio
                   v-for="item in localAggregateList"
                   :key="item.value"
+                  v-bk-tooltips="{
+                    disabled: !item.disabled,
+                    content: t('已添加')
+                  }"
                   :disabled="item.disabled"
                   :label="item.value">
                   {{ item.label }}
