@@ -33,6 +33,15 @@
             :key="dataSheetIndex"
             :label="dataSheet.name"
             :value="dataSheet.uid" />
+          <template #extension>
+            <div
+              class="refresh"
+              @click="fetchLinkTableAll">
+              <audit-icon
+                type="refresh" />
+              {{ t('刷新联表') }}
+            </div>
+          </template>
         </bk-select>
       </span>
     </bk-form-item>
@@ -121,6 +130,7 @@
   const {
     loading,
     data,
+    run: fetchLinkTableAll,
   } = useRequest(LinkDataManageService.fetchLinkTableAll, {
     defaultValue: [],
     manual: true,
@@ -170,3 +180,11 @@
     },
   });
 </script>
+<style lang="postcss" scoped>
+.refresh {
+  padding: 0 12px;
+  margin: auto;
+  color: #979ba5;
+  cursor: pointer;
+}
+</style>
