@@ -171,7 +171,6 @@
       ...field,
       aggregate: localAggregateList.value.find(item => !item.disabled)?.value, // 选择第一个可选项
     };
-    formData.value.display_name =  `${field.display_name}_${formData.value.aggregate}`;
   };
 
   const handleAfterHidden = (value: { isShow: boolean}) => {
@@ -185,6 +184,7 @@
 
   const handleAddField = () => {
     handleCancel();
+    formData.value.display_name =  `${formData.value.display_name}_${formData.value.aggregate}`;
     emits('addExpectedResult', formData.value);
     formData.value = new DatabaseTableFieldModel();
   };
