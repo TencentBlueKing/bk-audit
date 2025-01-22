@@ -446,6 +446,14 @@
   // 刷新联表详情
   const handleRefreshLinkData = () => {
     configRef.value?.refreshLinkData();
+    // 重置数据
+    formData.value.configs.select = [];
+    formData.value.configs.where = {
+      connector: 'and',
+      conditions: [],
+    };
+    rulesComponentRef.value.resetFormData();
+    expectedResultsRef.value.resetFormData();
   };
 
   const handleSourceTypeChange = (type: string) => {
