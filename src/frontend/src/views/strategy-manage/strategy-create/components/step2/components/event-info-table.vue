@@ -127,8 +127,7 @@
   });
 
   const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
-    if (isEditMode || isCloneMode) {
-      if (!props.data[key].length || !tableData.value[key].length) return;
+    if ((isEditMode || isCloneMode) && props.data[key].length && tableData.value[key].length) {
       // 编辑填充参数
       tableData.value[key] = tableData.value[key].map((item) => {
         const editItem = props.data[key].find(edItem => edItem.field_name === item.field_name);
@@ -137,7 +136,10 @@
             field_name: item.field_name,
             display_name: item.display_name,
             is_priority: editItem.is_priority,
-            map_config: editItem.map_config,
+            map_config: {
+              target_value: editItem.map_config?.target_value,
+              source_field: editItem.map_config?.source_field || editItem.map_config?.target_value, // 固定值赋值，用于反显
+            },
             description: editItem.description,
             example: item.example,
             prefix: '',
@@ -151,15 +153,16 @@
     switch (key) {
     case 'event_basic_field_configs':
       // 根据select填充event_basic_field_configs参数
-      if (!tableData.value[key].length || !props.select.length) return;
-      props.select.forEach((item) => {
-        if (fieldMap[item.raw_name]) {
-          const field = tableData.value[key].find(fieldItem => fieldItem.field_name === fieldMap[item.raw_name]);
-          if (field && field.map_config) {
-            field.map_config.source_field = item.display_name;
+      if (tableData.value[key].length && props.select.length) {
+        props.select.forEach((item) => {
+          if (fieldMap[item.raw_name]) {
+            const field = tableData.value[key].find(fieldItem => fieldItem.field_name === fieldMap[item.raw_name]);
+            if (field && field.map_config) {
+              field.map_config.source_field = item.display_name;
+            }
           }
-        }
-      });
+        });
+      }
       break;
     case 'event_data_field_configs':
       if (!props.select.length) return;

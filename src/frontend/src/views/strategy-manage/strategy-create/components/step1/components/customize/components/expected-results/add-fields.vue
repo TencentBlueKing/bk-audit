@@ -20,6 +20,7 @@
             <!-- 搜索框 -->
             <div class="field-pop-select-search">
               <bk-input
+                v-model="searchKey"
                 behavior="simplicity"
                 class="mb8">
                 <template #prefix>
@@ -32,7 +33,7 @@
             <div class="field-pop-select-list">
               <scroll-faker>
                 <div
-                  v-for="(item, index) in tableFields"
+                  v-for="(item, index) in renderFieldList"
                   :key="item.raw_name"
                   class="field-pop-select-item"
                   :class="[selectIndex === index ? 'select-item-active' : '']"
@@ -58,6 +59,10 @@
                 <bk-radio
                   v-for="item in localAggregateList"
                   :key="item.value"
+                  v-bk-tooltips="{
+                    disabled: !item.disabled,
+                    content: t('已添加')
+                  }"
                   :disabled="item.disabled"
                   :label="item.value">
                   {{ item.label }}
@@ -86,10 +91,15 @@
   </bk-popover>
 </template>
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
+  import useDebouncedRef from '@hooks/use-debounced-ref';
+
+  import { encodeRegexp } from '@utils/assist';
+
 
   interface Emits {
     (e: 'addExpectedResult', item: DatabaseTableFieldModel): void;
@@ -109,6 +119,16 @@
   const selectIndex = ref(-1);
   const localAggregateList = ref<Array<Record<string, any>>>([]);
   const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
+
+  const searchKey = useDebouncedRef('');
+
+  const renderFieldList = computed(() => props.tableFields.reduce((result, item) => {
+    const reg = new RegExp(encodeRegexp(searchKey.value), 'i');
+    if (reg.test(item.raw_name) || reg.test(item.display_name)) {
+      result.push(item);
+    }
+    return result;
+  }, [] as Array<DatabaseTableFieldModel>));
 
   const fieldAggregateMap = {
     string: ['COUNT', 'DISCOUNT'],

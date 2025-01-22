@@ -25,20 +25,43 @@
               :default-value="config.map_config.source_field"
               style="width: 100%;"
               theme="background">
-              <bk-select v-model="config.map_config.source_field">
+              <bk-select
+                v-model="config.map_config.source_field"
+                @select="(value: string) => handlerSelect(value, config)">
                 <bk-option
-                  v-for="(selectItem, index) in select"
+                  v-for="(selectItem, index) in localSelect"
                   :key="index"
                   :label="selectItem.display_name"
                   :value="selectItem.display_name" />
                 <template #extension>
                   <div
+                    v-if="!showAddCount"
                     style=" color: #63656e;text-align: center;flex: 1; cursor: pointer;"
                     @click="() => showAddCount = true">
                     <audit-icon
                       style=" margin-right: 5px;font-size: 14px;color: #979ba5;"
                       type="plus-circle" />
                     <span>{{ t('自定义常量') }}</span>
+                  </div>
+                  <div
+                    v-else
+                    style="
+                      display: flex;
+                      width: 100%;
+                      padding: 0 5px;
+                      align-items: center;
+                    ">
+                    <bk-input
+                      v-model="countValue"
+                      :placeholder="t('请输入')" />
+                    <audit-icon
+                      style=" padding: 0 5px;font-size: 15px; color: #2caf5e;cursor: pointer;"
+                      type="check-line"
+                      @click="confirmAddCount" />
+                    <audit-icon
+                      style="font-size: 15px; color: #c4c6cc; cursor: pointer;"
+                      type="close"
+                      @click="() => showAddCount = false" />
                   </div>
                 </template>
               </bk-select>
@@ -49,18 +72,39 @@
               v-model="config.map_config.source_field"
               style="width: 100%;">
               <bk-option
-                v-for="(selectItem, index) in select"
+                v-for="(selectItem, index) in localSelect"
                 :key="index"
                 :label="selectItem.display_name"
                 :value="selectItem.display_name" />
               <template #extension>
                 <div
+                  v-if="!showAddCount"
                   style=" color: #63656e;text-align: center;flex: 1; cursor: pointer;"
                   @click="() => showAddCount = true">
                   <audit-icon
                     style=" margin-right: 5px;font-size: 14px;color: #979ba5;"
                     type="plus-circle" />
                   <span>{{ t('自定义常量') }}</span>
+                </div>
+                <div
+                  v-else
+                  style="
+                      display: flex;
+                      width: 100%;
+                      padding: 0 5px;
+                      align-items: center;
+                    ">
+                  <bk-input
+                    v-model="countValue"
+                    :placeholder="t('请输入')" />
+                  <audit-icon
+                    style=" padding: 0 5px;font-size: 15px; color: #2caf5e;cursor: pointer;"
+                    type="check-line"
+                    @click="confirmAddCount" />
+                  <audit-icon
+                    style="font-size: 15px; color: #c4c6cc; cursor: pointer;"
+                    type="close"
+                    @click="() => showAddCount = false" />
                 </div>
               </template>
             </bk-select>
@@ -99,7 +143,8 @@
 </template>
 
 <script setup lang='ts'>
-  import { computed, ref } from 'vue';
+  import _ from 'lodash';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
@@ -121,6 +166,8 @@
   const { t } = useI18n();
   const selectVerifyRef = ref();
   const showAddCount = ref(false);
+  const countValue = ref('');
+  const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 
   const requiredField = ['raw_event_id', 'event_time', 'event_source', 'operator'];
   const optionalField = ['event_content', 'event_type'];
@@ -131,6 +178,35 @@
       initKey.push('map_config');
     }
     return initKey;
+  });
+
+  const handlerSelect = (value: string, config: StrategyFieldEvent['event_basic_field_configs'][0]) => {
+    // 如果是固定值 给target_value赋值
+    const selectItem = localSelect.value.find(item => item.raw_name === value);
+    if (selectItem && !selectItem.table && config.map_config) {
+      // eslint-disable-next-line no-param-reassign
+      config.map_config.target_value = value;
+    }
+  };
+
+  const confirmAddCount = () => {
+    if (_.trim(countValue.value)) {
+      localSelect.value.push({
+        table: '',
+        raw_name: countValue.value,
+        display_name: countValue.value,
+        field_type: '',
+        aggregate: null,
+        remark: '', // 备注s
+      });
+    }
+    showAddCount.value = false;
+  };
+
+  watch(() => props.select, (data) => {
+    localSelect.value = _.cloneDeep(data);
+  }, {
+    immediate: true,
   });
 
   defineExpose<Exposes>({

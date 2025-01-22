@@ -45,7 +45,7 @@
     <div class="detail-wrapper">
       <div style="display: flex; justify-content: space-between;">
         <div>
-          <span>{{ t('连表预览') }}</span>
+          <span>{{ t('联表预览') }}</span>
           <audit-icon
             v-bk-tooltips="t('联表中，将自动生成各个原始表的字母别名，用于后续选择字段的简略标识')"
             style=" margin-left: 9px; font-size: 14px;color: #c4c6cc; cursor: pointer;"
