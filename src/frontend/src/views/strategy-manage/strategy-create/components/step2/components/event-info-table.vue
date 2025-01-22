@@ -154,6 +154,20 @@
     case 'event_basic_field_configs':
       // 根据select填充event_basic_field_configs参数
       if (tableData.value[key].length && props.select.length) {
+        // 把不匹配的项清空
+        tableData.value.event_basic_field_configs = tableData.value.event_basic_field_configs.map((item) => {
+          if (item.map_config) {
+            const value = item.map_config.source_field || item.map_config.target_value;
+            if (!props.select.some(selectItem => selectItem.display_name === value)) {
+              // eslint-disable-next-line no-param-reassign
+              item.map_config = {
+                source_field: undefined,
+                target_value: undefined,
+              };
+            }
+          }
+          return item;
+        });
         props.select.forEach((item) => {
           if (fieldMap[item.raw_name]) {
             const field = tableData.value[key].find(fieldItem => fieldItem.field_name === fieldMap[item.raw_name]);
@@ -167,17 +181,7 @@
     case 'event_data_field_configs':
       if (!props.select.length) return;
       // 根据select更新event_data_field_configs
-      // 如果没有event_data_field_configs，根据select生成
-      if (!tableData.value[key].length) {
-        tableData.value.event_data_field_configs = props.select.map(item => createField(item));
-      } else {
-        // eslint-disable-next-line max-len
-        const newSelect = props.select.filter(item => !tableData.value.event_data_field_configs.some(field => field.field_name === item.raw_name));
-        // 第一步添加新的select
-        newSelect.forEach((item) => {
-          tableData.value.event_data_field_configs.push(createField(item));
-        });
-      }
+      tableData.value.event_data_field_configs = props.select.map(item => createField(item));
     }
   };
 

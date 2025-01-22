@@ -217,6 +217,7 @@
   }
   interface Expose {
     getFields: () => IFormData
+    getTableFields: () => Array<DatabaseTableFieldModel>
   }
   interface Props {
     editData: StrategyModel
@@ -522,6 +523,9 @@
         };
       }
       return params;
+    },
+    getTableFields() {
+      return tableFields.value;
     },
   });
 </script>
