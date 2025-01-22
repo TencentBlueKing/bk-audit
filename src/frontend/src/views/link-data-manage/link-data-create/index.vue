@@ -104,7 +104,6 @@
   import { useI18n } from 'vue-i18n';
 
   import linkDataManageService from '@service/link-data-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -242,12 +241,12 @@
   // 获取标签列表
   const {
     loading: tagLoading,
-  } = useRequest(StrategyManageService.fetchStrategyTags, {
+  } = useRequest(linkDataManageService.fetchLinkTableTags, {
     defaultValue: [],
     manual: true,
     onSuccess(data) {
       tagData.value = data.reduce((res, item) => {
-        if (item.tag_id !== '-1') {
+        if (item.tag_id !== '-2') {
           res.push({
             id: item.tag_id,
             name: item.tag_name,
