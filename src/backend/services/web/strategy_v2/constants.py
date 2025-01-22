@@ -228,7 +228,7 @@ class RuleAuditConfigType(TextChoices):
     EVENT_LOG = TableType.EVENT_LOG.value, TableType.EVENT_LOG.label
     BUILD_ID_ASSET = TableType.BUILD_ID_ASSET.value, TableType.BUILD_ID_ASSET.label
     BIZ_RT = TableType.BIZ_RT.value, TableType.BIZ_RT.label
-    LINK_TABLE = "LinkTable", gettext_lazy("Link Table")
+    LINK_TABLE = "LinkTable", gettext_lazy("Link Table Data")
 
 
 class RuleAuditSourceType(TextChoices):
