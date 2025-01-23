@@ -94,9 +94,7 @@
   }
 }
 
-.is-errored.is-background-errored-tip .bk-input {
-  input {
-    background-color: #fee !important;
-  }
+.is-errored.is-background-errored-tip .bk-select .bk-input {
+  border: 1px solid #ea3636 !important;
 }
 </style>
