@@ -1030,4 +1030,8 @@ class RuleAuditSerializer(serializers.Serializer):
             case RuleAuditConfigType.LINK_TABLE.value:
                 if not data_source.get("link_table"):
                     raise serializers.ValidationError(gettext("Config type: %s need link_table") % config_type)
+        # 校验 schedule_config 和 data_source
+        source_type = data_source["source_type"]
+        if source_type == RuleAuditSourceType.BATCH and not attrs.get("schedule_config"):
+            raise serializers.ValidationError(gettext("Batch rule audit need schedule_config"))
         return attrs
