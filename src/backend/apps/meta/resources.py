@@ -75,6 +75,7 @@ from apps.meta.serializers import (
     GlobalMetaConfigInfoSerializer,
     GlobalMetaConfigListSerializer,
     GlobalMetaConfigPostSerializer,
+    ListAllTagsRespSerializer,
     ListUsersRequestSerializer,
     ListUsersResponseSerializer,
     NamespaceSerializer,
@@ -635,3 +636,12 @@ class GetAssetPullInfo(Meta, Resource):
                 settings.FETCH_INSTANCE_USERNAME, system.provider_config["token"]
             ),
         }
+
+
+class ListAllTags(Meta, Resource):
+    name = gettext_lazy("获取所有标签")
+    ResponseSerializer = ListAllTagsRespSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        return Tag.objects.all()
