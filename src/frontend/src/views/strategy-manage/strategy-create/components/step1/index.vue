@@ -610,6 +610,10 @@
       if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
         fields.configs.data_source.link_table = null;
       }
+      // 非周期不需要schedule_config
+      if (fields.configs.data_source.source_type === 'stream_source') {
+        fields.configs.schedule_config = undefined;
+      }
       // 合并参数
       const params = {
         ...baseParams,
