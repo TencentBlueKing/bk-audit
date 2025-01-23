@@ -409,7 +409,7 @@ class RuleAuditController(BaseControl):
         if need_create:
             self._create_flow()
         else:
-            self.disabled()
+            self.disabled(force=True)
         flow_id = self.strategy.backend_data["flow_id"]
         data_source_node_ids = self.create_or_update_data_source_nodes(need_create, flow_id)
         # 构建 sql 节点
@@ -533,7 +533,7 @@ class RuleAuditController(BaseControl):
         else:
             self._toggle_strategy(FlowStatusToggleChoices.RESTART.value, force=force)
 
-    def disabled(self) -> None:
+    def disabled(self, force: bool = False) -> None:
         flow_status = self._describe_flow_status()
         if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
-            self._toggle_strategy(FlowStatusToggleChoices.STOP.value)
+            self._toggle_strategy(FlowStatusToggleChoices.STOP.value, force=force)
