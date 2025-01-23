@@ -90,7 +90,7 @@
           field: DatabaseTableFieldModel;
           filter: string;
           filters: string[];
-          operator: ''
+          operator: string
         }
       }>
     }>;
