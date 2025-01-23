@@ -603,7 +603,7 @@
         fields.configs.select = tableFields.map(item => ({
           ...item,
           aggregate: null,
-          display_name: `${item.display_name}_${item.aggregate}`,
+          display_name: `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`,
         }));
       }
       // 非联表不需要link_table参数
