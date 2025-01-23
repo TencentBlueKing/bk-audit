@@ -68,13 +68,28 @@
 
   type ModelValue = LinkDataDetailModel['config']['links'][0]['left_table'] | LinkDataDetailModel['config']['links'][0]['right_table']
 
+  type TableData = Array<{
+    label: string;
+    value: string;
+    children: Array<{
+      label: string;
+      value: string;
+    }>
+  }>
+
   interface Props {
     links: LinkDataDetailModel['config']['links'],
     type: 'left' | 'right',
-    linkIndex: number
+    linkIndex: number,
+    tableTableMap: Record<'BuildIn' | 'BizRt' | 'EventLog', TableData>
+  }
+
+  interface Emits {
+    (e: 'updateTableData', value: typeof tableData.value, type: 'BuildIn'): void,
   }
 
   const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
 
   const modelValue = defineModel<ModelValue>({
     required: true,
@@ -116,14 +131,7 @@
     deep: true,
   });
 
-  const changeData = (data: Array<{
-    label: string;
-    value: string;
-    children: Array<{
-      label: string;
-      value: string;
-    }>
-  }>) => {
+  const changeData = (data: TableData) => {
     data.forEach((item) => {
       if (item.children && item.children.length) {
         item.children.forEach((cItem) => {
@@ -158,8 +166,24 @@
     })),
   }));
 
-
   const filterTableData = computed(() => getTableData());
+
+  const processData = (data: TableData) => {
+    if (!modelValue.value.rt_id) {
+      modelValue.value.rt_id = [];
+    }
+    if (data) {
+      data.sort((a, b) => {
+        if (a.children && a.children.length) return -1;
+        if (b.children && b.children.length) return 1;
+        return 0;
+      });
+    }
+    if (isEditMode.value) {
+      // 对tableid转换
+      changeData(data);
+    }
+  };
 
   // 获取rt_id
   const {
@@ -169,24 +193,18 @@
   } = useRequest(StrategyManageService.fetchTable, {
     defaultValue: [],
     onSuccess: (data) => {
-      if (!modelValue.value.rt_id) {
-        modelValue.value.rt_id = [];
-      }
-      if (data) {
-        data.sort((a, b) => {
-          if (a.children && a.children.length) return -1;
-          if (b.children && b.children.length) return 1;
-          return 0;
-        });
-      }
-      if (isEditMode.value) {
-        // 对tableid转换
-        changeData(data);
-      }
+      emits('updateTableData', data, 'BuildIn');
+      processData(data);
     },
   });
 
   onMounted(() => {
+    if (props.tableTableMap.BuildIn.length) {
+      const data = props.tableTableMap.BuildIn;
+      tableData.value = data;
+      processData(data);
+      return;
+    }
     fetchTable({
       table_type: 'BuildIn',
     });
