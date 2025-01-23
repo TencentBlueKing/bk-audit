@@ -17,7 +17,7 @@
 <template>
   <scroll-faker
     :style="{
-      height: links.length * 120 > 430 ? '430px' : `${links.length * 120}px`,
+      height: linksHeight > 430 ? '430px' : `${linksHeight}px`,
     }">
     <template
       v-for="(link, index) in links"
@@ -183,6 +183,15 @@
     required: true,
   });
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
+
+  const linksHeight = computed(() => {
+    const totalLength = links.value.reduce((accumulator, item) => {
+      const linkFieldsLength = item.link_fields.length + 2;
+      return accumulator + linkFieldsLength;
+    }, 0);
+
+    return totalLength * 40;
+  });
 
   // 如果左表选了EventLog，右表不能再选，直接隐藏不显示
   const rightTableTypeList = computed(() => {

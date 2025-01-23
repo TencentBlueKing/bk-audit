@@ -122,12 +122,15 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { h, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import LinkDataManageService from '@service/link-data-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
+
+  import AuditIcon from '@components/audit-icon';
 
   import CreateLinkData from '@views/link-data-manage/link-data-create/index.vue';
 
@@ -163,7 +166,36 @@
   };
 
   const handleRefreshLinkData = () => {
-    emit('refreshLinkData');
+    InfoBox({
+      title: () => h('div', [
+        h(AuditIcon, {
+          type: 'alert',
+          style: {
+            fontSize: '42px',
+            color: '#FFF8C3',
+          },
+        }),
+        h('div', t('刷新数据源请注意')),
+      ]),
+      subTitle: () => h('div', {
+        style: {
+          color: '#4D4F56',
+          backgroundColor: '#f5f6fa',
+          height: '46px',
+          lineHeight: '46px',
+          borderRadius: '2px',
+          fontSize: '14px',
+        },
+      }, t('刷新后，已配置的数据将被清空。是否继续？')),
+      confirmText: t('继续切换'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      onConfirm() {
+        emit('refreshLinkData');
+      },
+    });
   };
 </script>
 <style scoped lang="postcss">

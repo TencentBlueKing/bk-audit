@@ -194,7 +194,9 @@
   </skeleton-loading>
 </template>
 <script setup lang="ts">
+  import { InfoBox } from 'bkui-vue';
   import {
+    h,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -210,11 +212,14 @@
 
   import type ControlModel from '@model/control/control';
   import CommonDataModel from '@model/strategy/common-data';
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
 
   import useRecordPage from '@hooks/use-record-page';
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
+
+  import AuditIcon from '@components/audit-icon';
 
   import CardPartVue from './components/card-part.vue';
   import ControlDescriptionVue from './components/control-description.vue';
@@ -233,6 +238,7 @@
     tags: Array<string>,
     description: string,
     configs: Record<string, any>,
+    control_id: string,
     status: string,
     risk_level: string,
     risk_hazard: string,
@@ -279,6 +285,7 @@
     description: '',
     configs: {
     },
+    control_id: '',
     status: '',
     risk_level: '',
     risk_hazard: '',
@@ -515,8 +522,44 @@
   });
 
   const handleStrategyWay = (way: string) => {
-    formData.value.strategy_type = way;
-    formRef.value.validate('strategy_type');
+    if (!formData.value.strategy_type
+      || (!formData.value.configs.config_type && formData.value.strategy_type === 'rule')
+      || (!formData.value.control_id && formData.value.strategy_type === 'model')) {
+      formData.value.strategy_type = way;
+      formRef.value.validate('strategy_type');
+      return;
+    }
+    InfoBox({
+      title: () => h('div', [
+        h(AuditIcon, {
+          type: 'alert',
+          style: {
+            fontSize: '42px',
+            color: '#FFF8C3',
+          },
+        }),
+        h('div', t('切换配置方式请注意')),
+      ]),
+      subTitle: () => h('div', {
+        style: {
+          color: '#4D4F56',
+          backgroundColor: '#f5f6fa',
+          height: '46px',
+          lineHeight: '46px',
+          borderRadius: '2px',
+          fontSize: '14px',
+        },
+      }, t('切换后，已配置的数据将被清空。是否继续？')),
+      confirmText: t('继续切换'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      onConfirm() {
+        formData.value.strategy_type = way;
+        formRef.value.validate('strategy_type');
+      },
+    });
   };
 
   // 设置风险等级
@@ -554,6 +597,15 @@
       }
       // 获取审计参数（自定义规则审计、引入模型审计）
       const fields = comRef.value.getFields();
+      // 如果select为空数组，传全部
+      if (fields.configs.select.length === 0) {
+        const tableFields: Array<DatabaseTableFieldModel> = comRef.value.getTableFields();
+        fields.configs.select = tableFields.map(item => ({
+          ...item,
+          aggregate: null,
+          display_name: `${item.display_name}_${item.aggregate}`,
+        }));
+      }
       // 非联表不需要link_table参数
       if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
         fields.configs.data_source.link_table = null;

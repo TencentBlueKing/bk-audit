@@ -1,16 +1,17 @@
 <template>
+  <div class="add-field-btn">
+    <audit-icon
+      type="add"
+      @click="handleShowPop" />
+  </div>
   <bk-popover
     ext-cls="field-custom-popover"
     height="300"
     :is-show="isShow"
     theme="light"
-    trigger="manual"
-    width="446">
-    <div class="add-field-btn">
-      <audit-icon
-        type="add"
-        @click="handleShowPop" />
-    </div>
+    trigger="click"
+    width="446"
+    @after-hidden="handleAfterHidden">
     <template #content>
       <div class="add-field-pop-content">
         <div
@@ -170,7 +171,10 @@
       ...field,
       aggregate: localAggregateList.value.find(item => !item.disabled)?.value, // 选择第一个可选项
     };
-    formData.value.display_name =  `${field.display_name}_${formData.value.aggregate}`;
+  };
+
+  const handleAfterHidden = (value: { isShow: boolean}) => {
+    isShow.value = value.isShow;
   };
 
   const handleCancel = () => {
@@ -180,6 +184,7 @@
 
   const handleAddField = () => {
     handleCancel();
+    formData.value.display_name =  `${formData.value.display_name}_${formData.value.aggregate}`;
     emits('addExpectedResult', formData.value);
     formData.value = new DatabaseTableFieldModel();
   };

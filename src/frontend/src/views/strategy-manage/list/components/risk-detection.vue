@@ -96,7 +96,7 @@
       <template v-if="data.strategy_type === 'rule'">
         <render-info-block class="mt16">
           <render-info-item :label="t('数据源')">
-            {{ data.configs.data_source?.rt_id }}
+            {{ data.configs.data_source?.rt_id || data.configs.data_source?.link_table.uid }}
             <template v-if="data.configs.data_source?.system_ids.length">
               <div
                 v-for="item in data.configs.data_source.system_ids"
