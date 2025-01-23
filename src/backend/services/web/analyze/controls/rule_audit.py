@@ -408,6 +408,8 @@ class RuleAuditController(BaseControl):
         need_create = not self.strategy.backend_data.get("flow_id")
         if need_create:
             self._create_flow()
+        else:
+            self.disabled()
         flow_id = self.strategy.backend_data["flow_id"]
         data_source_node_ids = self.create_or_update_data_source_nodes(need_create, flow_id)
         # 构建 sql 节点
