@@ -39,38 +39,31 @@
             </transition>
           </scroll-faker>
         </div>
-        <div class="list-item-detail">
+        <div
+          v-if="importantInformation.length"
+          class="list-item-detail">
           <div class="important-information">
             <div class="title">
               {{ t('重点信息') }}
             </div>
-            <template v-if="importantInformation.length">
-              <render-info-block
-                v-for="(item, index) in importantInformation"
-                :key="index"
-                class="flex mt16"
-                style="margin-bottom: 12px;">
-                <render-info-item
-                  v-for="(subItem, subIndex) in item"
-                  :key="subIndex"
-                  :description="subItem.description"
-                  :label="subItem.display_name"
-                  :label-width="labelWidth">
-                  {{
-                    eventItem[subItem.field_name as keyof typeof eventItem] ||
-                      eventItem.event_data[subItem.field_name] ||
-                      (eventItemEvidence && eventItemEvidence.map(item => item[subItem.field_name]).join(';'))
-                  }}
-                </render-info-item>
-              </render-info-block>
-            </template>
-            <bk-exception
-              v-else
-              class="exception-part"
-              scene="part"
-              type="empty">
-              {{ t('暂无数据') }}
-            </bk-exception>
+            <render-info-block
+              v-for="(item, index) in importantInformation"
+              :key="index"
+              class="flex mt16"
+              style="margin-bottom: 12px;">
+              <render-info-item
+                v-for="(subItem, subIndex) in item"
+                :key="subIndex"
+                :description="subItem.description"
+                :label="subItem.display_name"
+                :label-width="labelWidth">
+                {{
+                  eventItem[subItem.field_name as keyof typeof eventItem] ||
+                    eventItem.event_data[subItem.field_name] ||
+                    (eventItemEvidence && eventItemEvidence.map(item => item[subItem.field_name]).join(';'))
+                }}
+              </render-info-item>
+            </render-info-block>
           </div>
           <div style="padding-left: 12px">
             <div class="title mt16">
@@ -208,6 +201,13 @@
             </bk-exception>
           </div>
         </div>
+        <bk-exception
+          v-else
+          class="exception-part"
+          scene="part"
+          type="empty">
+          {{ t('暂无数据') }}
+        </bk-exception>s
       </template>
       <bk-exception
         v-else

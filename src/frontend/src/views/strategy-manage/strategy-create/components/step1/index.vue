@@ -200,6 +200,7 @@
     onBeforeUnmount,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -208,6 +209,7 @@
     useRouter,
   } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import type ControlModel from '@model/control/control';
@@ -496,7 +498,7 @@
   // 获取标签列表
   const {
     loading: tagLoading,
-  } = useRequest(StrategyManageService.fetchStrategyTags, {
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
     manual: true,
     onSuccess(data) {
@@ -515,9 +517,6 @@
       data.forEach((item) => {
         strategyTagMap.value[item.tag_id] = item.tag_name;
       });
-      if (isEditMode || isCloneMode) {
-        setFormData(props.editData);
-      }
     },
   });
 
@@ -622,6 +621,12 @@
       emits('nextStep', 2, params);
     });
   };
+
+  watch(() => props.editData, (data) => {
+    if (isEditMode || isCloneMode) {
+      setFormData(data);
+    }
+  });
 
   const handleCancel = () => {
     router.push({

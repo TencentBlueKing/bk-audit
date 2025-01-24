@@ -93,6 +93,7 @@
     start_time: 'event_time',
     start_timeaccess_source_ip: 'event_source',
   };
+  let isInit = false;
 
   const column = computed(() => {
     const initColumn = [
@@ -127,7 +128,7 @@
   });
 
   const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
-    if ((isEditMode || isCloneMode) && props.data[key].length && tableData.value[key].length) {
+    if ((isEditMode || isCloneMode) && props.data[key].length && tableData.value[key].length && !isInit) {
       // 编辑填充参数
       tableData.value[key] = tableData.value[key].map((item) => {
         const editItem = props.data[key].find(edItem => edItem.field_name === item.field_name);
@@ -149,14 +150,14 @@
           ...item,
         };
       });
+      isInit = true;
     }
     switch (key) {
     case 'event_basic_field_configs':
-      // 根据select填充event_basic_field_configs参数
       if (tableData.value[key].length && props.select.length) {
-        // 把不匹配的项清空
+        // 把不匹配的项清空(非固定值)
         tableData.value.event_basic_field_configs = tableData.value.event_basic_field_configs.map((item) => {
-          if (item.map_config) {
+          if (item.map_config && !item.map_config.target_value) {
             const value = item.map_config.source_field || item.map_config.target_value;
             if (!props.select.some(selectItem => selectItem.display_name === value)) {
               // eslint-disable-next-line no-param-reassign
@@ -168,6 +169,7 @@
           }
           return item;
         });
+        // 根据select填充event_basic_field_configs参数
         props.select.forEach((item) => {
           if (fieldMap[item.raw_name]) {
             const field = tableData.value[key].find(fieldItem => fieldItem.field_name === fieldMap[item.raw_name]);
