@@ -71,7 +71,9 @@
                 :link-index="index"
                 :links="links"
                 style="flex: 1;"
-                type="left" />
+                :table-table-map="tableTableMap"
+                type="left"
+                @update-table-data="handleUpdateTableData" />
             </select-verify>
           </div>
           <!-- 关联关系 -->
@@ -125,7 +127,9 @@
                 :link-index="index"
                 :links="links"
                 style="flex: 1;"
-                type="right" />
+                :table-table-map="tableTableMap"
+                type="right"
+                @update-table-data="handleUpdateTableData" />
             </select-verify>
           </div>
         </div>
@@ -171,6 +175,15 @@
 
   import useRequest from '@/hooks/use-request';
 
+  type TableData = Array<{
+    label: string;
+    value: string;
+    children: Array<{
+      label: string;
+      value: string;
+    }>
+  }>
+
   interface Exposes{
     getValue: () => Promise<any>;
   }
@@ -178,6 +191,10 @@
   const { t } = useI18n();
   const tableFieldRef = ref();
   const selectVerifyRef = ref();
+  const tableTableMap = ref<Record<'BuildIn' | 'BizRt', TableData>>({
+    BuildIn: [],
+    BizRt: [],
+  });
 
   const links = defineModel<LinkDataDetailModel['config']['links']>('links', {
     required: true,
@@ -215,6 +232,10 @@
     // 从 linkTableTableTypeList 中筛选出与收集到的类型匹配的项
     return linkTableTableTypeList.value.filter(item => selectedTableTypes.has(item.value));
   });
+
+  const handleUpdateTableData = (data: TableData, type: 'BuildIn' | 'BizRt') => {
+    tableTableMap.value[type] = data;
+  };
 
   const handleSelectLeftTableType = (index: number) => {
     // 如果重选了主表，全部重置

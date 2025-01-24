@@ -184,7 +184,7 @@
 
   const handleAddField = () => {
     handleCancel();
-    formData.value.display_name =  `${formData.value.display_name}_${formData.value.aggregate}`;
+    formData.value.display_name = `${formData.value.display_name}${formData.value.aggregate ? `_${formData.value.aggregate}` : ''}`;
     emits('addExpectedResult', formData.value);
     formData.value = new DatabaseTableFieldModel();
   };

@@ -187,7 +187,7 @@
           field: DatabaseTableFieldModel | '';
           filter: string;
           filters: string[];
-          operator: '',
+          operator: string,
         }
       }>
     }>;
@@ -464,10 +464,6 @@
         schedule_period: 'hour',
       };
     }
-    // 非周期不需要schedule_config
-    formData.value.configs.data_source.source_type !== 'stream_source'
-      ? formData.value.configs.schedule_config
-      : undefined;
   };
 
   // 编辑
@@ -478,6 +474,9 @@
     formData.value.configs.select = editData.configs.select;
     expectedResultsRef.value.setConfigs(editData.configs.select);
     rulesComponentRef.value.setConfigs(editData.configs.where);
+    if (editData.configs.data_source) {
+      formData.value.configs.data_source = editData.configs.data_source;
+    }
     if (formData.value.configs.config_type !== 'LinkTable') {
       fetchTable({
         table_type: formData.value.configs.config_type,

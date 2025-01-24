@@ -121,6 +121,7 @@
   </smart-action>
 </template>
 <script setup lang="ts">
+  import _ from 'lodash';
   import { computed, nextTick, onActivated, onDeactivated, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
@@ -206,7 +207,20 @@
 
   const handleNext = () => {
     Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
-      const params: IFormData = Object.assign({}, formData.value, eventRef.value.getData());
+      const params: IFormData = _.cloneDeep(Object.assign({}, formData.value, eventRef.value.getData()));
+      // 处理event_basic_field_configs
+      params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
+        if (item.map_config) {
+          if (!item.map_config.source_field && !item.map_config.target_value) {
+            // eslint-disable-next-line no-param-reassign
+            delete item.map_config;
+          } else if (item.map_config.source_field && item.map_config.target_value) {
+            // eslint-disable-next-line no-param-reassign
+            item.map_config.source_field = undefined;
+          }
+        }
+        return item;
+      });
       emits('nextStep', 3, params);
     });
   };

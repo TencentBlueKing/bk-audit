@@ -92,7 +92,7 @@
     </bk-form-item>
     <!-- 值 -->
     <bk-form-item
-      v-if="condition.condition.operator"
+      v-if="condition.condition.operator !== 'isnull' && condition.condition.operator !== 'notnull'"
       label=""
       label-width="0"
       :property="input.includes(condition.condition.operator) ?
@@ -141,10 +141,11 @@
     </bk-form-item>
     <div class="icon-group">
       <audit-icon
-        style="margin-right: 10px;"
+        style="margin-right: 10px; cursor: pointer;"
         type="add-fill"
         @click="handleAdd" />
       <audit-icon
+        style="cursor: pointer;"
         type="reduce-fill"
         @click="handleDelete" />
     </div>
@@ -182,7 +183,7 @@
           field: DatabaseTableFieldModel;
           filter: string;
           filters: string[];
-          operator: '',
+          operator: string,
         }
       }>
     },
