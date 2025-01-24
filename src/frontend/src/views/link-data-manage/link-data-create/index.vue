@@ -103,7 +103,8 @@
   import { h, provide, ref  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import linkDataManageService from '@service/link-data-manage';
+  import LinkDataManageService from '@service/link-data-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -227,7 +228,7 @@
   const {
     run: fetchLinkDataDetail,
     loading: isEditDataLoading,
-  } = useRequest(linkDataManageService.fetchLinkDataDetail, {
+  } = useRequest(LinkDataManageService.fetchLinkDataDetail, {
     defaultValue: new LinkDataDetailModel(),
     onSuccess: (data) => {
       initLinks.value = _.cloneDeep(data.config.links);
@@ -241,7 +242,7 @@
   // 获取标签列表
   const {
     loading: tagLoading,
-  } = useRequest(linkDataManageService.fetchLinkTableTags, {
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
     manual: true,
     onSuccess(data) {
@@ -267,7 +268,7 @@
   const {
     run: addLinkTable,
     loading: isSubmiting,
-  } = useRequest(linkDataManageService.addLinkData, {
+  } = useRequest(LinkDataManageService.addLinkData, {
     defaultValue: {},
     onSuccess: () => {
       window.changeConfirm = false;
@@ -279,7 +280,7 @@
   const {
     run: updateLinkTable,
     loading: isEditSubmiting,
-  } = useRequest(linkDataManageService.updateLinkData, {
+  } = useRequest(LinkDataManageService.updateLinkData, {
     defaultValue: {},
     onSuccess: () => {
       window.changeConfirm = false;

@@ -208,6 +208,7 @@
     useRouter,
   } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import type ControlModel from '@model/control/control';
@@ -496,7 +497,7 @@
   // 获取标签列表
   const {
     loading: tagLoading,
-  } = useRequest(StrategyManageService.fetchStrategyTags, {
+  } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
     manual: true,
     onSuccess(data) {
