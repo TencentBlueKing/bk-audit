@@ -200,6 +200,7 @@
     onBeforeUnmount,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -516,9 +517,6 @@
       data.forEach((item) => {
         strategyTagMap.value[item.tag_id] = item.tag_name;
       });
-      if (isEditMode || isCloneMode) {
-        setFormData(props.editData);
-      }
     },
   });
 
@@ -623,6 +621,12 @@
       emits('nextStep', 2, params);
     });
   };
+
+  watch(() => props.editData, (data) => {
+    if (isEditMode || isCloneMode) {
+      setFormData(data);
+    }
+  });
 
   const handleCancel = () => {
     router.push({
