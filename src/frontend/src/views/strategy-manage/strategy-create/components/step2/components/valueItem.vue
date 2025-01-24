@@ -201,12 +201,25 @@
       });
     }
     showAddCount.value = false;
+    countValue.value = '';
   };
 
   watch(() => props.select, (data) => {
     localSelect.value = _.cloneDeep(data);
   }, {
     immediate: true,
+  });
+
+  watch(() => props.item, (item) => {
+    // 如果有固定值没有对应select，补上
+    item.forEach((config) => {
+      if (config.map_config
+        && config.map_config.target_value
+        && !localSelect.value.some(select => select.display_name === config.map_config?.target_value)) {
+        countValue.value = config.map_config.target_value;
+        confirmAddCount();
+      }
+    });
   });
 
   defineExpose<Exposes>({
