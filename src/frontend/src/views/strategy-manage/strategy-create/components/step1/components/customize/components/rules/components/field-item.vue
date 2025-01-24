@@ -95,7 +95,10 @@
       v-if="condition.condition.operator !== 'isnull' && condition.condition.operator !== 'notnull'"
       label=""
       label-width="0"
-      :property="input.includes(condition.condition.operator) ?
+      :property="(input.includes(condition.condition.operator) &&
+        !(dicts[condition.condition.field.raw_name] &&
+          dicts[condition.condition.field.raw_name].length) &&
+        !condition.condition.field.raw_name.includes('username')) ?
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filter` :
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
       required
