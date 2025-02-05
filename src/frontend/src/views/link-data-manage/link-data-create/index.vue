@@ -311,7 +311,7 @@
     system_ids?: Array<string>;
     display_name: string;
   }) => {
-    const key = `${table.table_type}_${table.rt_id}`;
+    const key = `${table.rt_id}`;
     if (!displayNameMap[key]) {
       // 分配一个新的字母
       displayNameMap[key] = letters[letterIndex += 1];

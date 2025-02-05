@@ -329,23 +329,47 @@
   // 获取联表表字段
   const fetchLinkTableFields = async (rtIdArr: string[][], rtIdArrDisplay: string[][]) => {
     // rt_id
-    const idArr = rtIdArr.reduce((acc, curr) => acc.concat(curr), []);
+    const idArr = Array.from(new Set(rtIdArr.reduce((acc, curr) => acc.concat(curr), [])));
     // 别名
-    const displayArr = rtIdArrDisplay.reduce((acc, curr) => acc.concat(curr), []);
-    const fetchPromises = idArr.map(async (rtId) => {
-      const data = await  StrategyManageService.fetchTableRtFields({
-        table_id: rtId,
-      });
-      return data;
-    });
-    // 使用 Promise.all 等待所有请求完成
-    Promise.all(fetchPromises).then((data) => {
+    const displayArr = Array.from(new Set(rtIdArrDisplay.reduce((acc, curr) => acc.concat(curr), [])));
+    StrategyManageService.fetchBatchTableRtFields({
+      table_ids: idArr.join(','),
+    }).then((data) => {
       tableFields.value = [];
       data.forEach((item, index) => {
-        tableFields.value.push(...setTableFields(item, displayArr[index]));
+        tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
     });
   };
+
+  const createInfoBoxConfig = (overrides: {onConfirm: () => void, onClose: () => void}): any => ({
+    title: () => h('div', [
+      h(AuditIcon, {
+        type: 'alert',
+        style: {
+          fontSize: '42px',
+          color: '#FFF8C3',
+        },
+      }),
+      h('div', t('切换数据源请注意')),
+    ]),
+    subTitle: () => h('div', {
+      style: {
+        color: '#4D4F56',
+        backgroundColor: '#f5f6fa',
+        height: '46px',
+        lineHeight: '46px',
+        borderRadius: '2px',
+        fontSize: '14px',
+      },
+    }, t('切换后，已配置的数据将被清空。是否继续？')),
+    confirmText: t('继续切换'),
+    cancelText: t('取消'),
+    headerAlign: 'center',
+    contentAlign: 'center',
+    footerAlign: 'center',
+    ...overrides,
+  });
 
   // 切换数据源类型： 默认使用离线模式batch_join_source，不切换类型
   const handleDataSourceType = (item: string) => {
@@ -358,32 +382,7 @@
       }
       return;
     }
-    InfoBox({
-      title: () => h('div', [
-        h(AuditIcon, {
-          type: 'alert',
-          style: {
-            fontSize: '42px',
-            color: '#FFF8C3',
-          },
-        }),
-        h('div', t('切换数据源请注意')),
-      ]),
-      subTitle: () => h('div', {
-        style: {
-          color: '#4D4F56',
-          backgroundColor: '#f5f6fa',
-          height: '46px',
-          lineHeight: '46px',
-          borderRadius: '2px',
-          fontSize: '14px',
-        },
-      }, t('切换后，已配置的数据将被清空。是否继续？')),
-      confirmText: t('继续切换'),
-      cancelText: t('取消'),
-      headerAlign: 'center',
-      contentAlign: 'center',
-      footerAlign: 'center',
+    InfoBox(createInfoBoxConfig({
       onConfirm() {
         formData.value.configs.config_type = item;
         // 重置数据
@@ -396,6 +395,7 @@
           connector: 'and',
           conditions: [],
         };
+        tableFields.value = [];
         configRef.value.resetFormData();
         rulesComponentRef.value.resetFormData();
         expectedResultsRef.value.resetFormData();
@@ -408,15 +408,46 @@
       onClose() {
         configType.value = formData.value.configs.config_type;
       },
-    });
+    }));
   };
 
   // 更新数据源后，获取对应表字段
   const handleUpdateDataSource = (dataSource: Record<string, any>) => {
-    formData.value.configs.data_source = {
-      ...formData.value.configs.data_source,
-      ...dataSource,
-    };
+    if (!dataSource.rt_id || !dataSource.rt_id.length || (dataSource.link_table && !dataSource.link_table.uid)) {
+      tableFields.value = [];
+    }
+    if (!formData.value.configs.data_source.rt_id
+      || !formData.value.configs.data_source.rt_id.length
+      || (formData.value.configs.config_type === 'LinkTable' && formData.value.configs.data_source.link_table && !formData.value.configs.data_source.link_table.uid)) {
+      formData.value.configs.data_source = {
+        ...formData.value.configs.data_source,
+        ...dataSource,
+      };
+    } else if (formData.value.configs.data_source.rt_id !== dataSource.rt_id) {
+      InfoBox(createInfoBoxConfig({
+        onConfirm() {
+          formData.value.configs.select = [];
+          formData.value.configs.where = {
+            connector: 'and',
+            conditions: [],
+          };
+          rulesComponentRef.value.resetFormData();
+          expectedResultsRef.value.resetFormData();
+          formData.value.configs.data_source = {
+            ...formData.value.configs.data_source,
+            ...dataSource,
+          };
+        },
+        onClose() {
+          configRef.value.setConfigs(formData.value.configs);
+        },
+      }));
+    } else {
+      formData.value.configs.data_source = {
+        ...formData.value.configs.data_source,
+        ...dataSource,
+      };
+    }
   };
 
   // 更新预期数据

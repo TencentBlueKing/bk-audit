@@ -157,6 +157,21 @@ class Strategy extends ModuleBase {
       params,
     });
   }
+  // 批量获取表格的字段列表
+  getBatchTableRtFields(params: {
+    table_ids: string
+  }) {
+    return Request.get<Array<{
+      fields: Array<{
+        field_type: string;
+        label: string;
+        value: string;
+      }>,
+      table_id: string,
+    }>>(`${this.path}/strategy_table/bulk_rt_fields/`, {
+      params,
+    });
+  }
   // 获取表格的字段列表
   getTableRtFields(params: {
     table_id: string
