@@ -480,13 +480,13 @@
     onSuccess: (data) => {
       riskLevelList.value = data.risk_level;
       strategyWayList.value = [{
-        label: '自定义规则审计',
+        label: t('自定义规则审计'),
         value: 'rule',
         config: {
           tips: t('指根据目前审计中可用的日志、资产数据，直接配置规则，得到审计结果的方式。适用于大部分复杂程度不高的场景策略。'),
         },
       }, {
-        label: '引入模型审计',
+        label: t('引入模型审计'),
         value: 'model',
         config: {
           tips: t('指先通过蓝鲸 bkbase 的 AIops 内开发场景模型后，在审计中心内配置字段映射生成策略的方式。适用于对 aiops 有数据开发能力，且需要实现的审计方案较复杂的情况。'),

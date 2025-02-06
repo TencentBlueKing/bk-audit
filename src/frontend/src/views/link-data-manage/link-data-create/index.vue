@@ -59,7 +59,7 @@
                 :input-search="false"
                 multiple
                 multiple-mode="tag"
-                :placeholder="t('请选择或输入标签')"
+                :placeholder="t('请选择')"
                 :search-placeholder="t('请输入关键字')">
                 <bk-option
                   v-for="(item, index) in tagData"

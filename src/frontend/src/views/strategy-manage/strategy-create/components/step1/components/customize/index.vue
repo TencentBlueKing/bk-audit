@@ -290,7 +290,7 @@
       ruleAuditConfigType.value = commonData.value.rule_audit_config_type;
       aggregateList.value = commonData.value.rule_audit_aggregate_type;
       aggregateList.value = aggregateList.value.concat([{
-        label: '不聚和',
+        label: t('不聚和'),
         value: null,
       }]);
     },

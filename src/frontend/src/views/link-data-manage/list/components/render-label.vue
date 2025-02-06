@@ -84,6 +84,10 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  const props = defineProps<Props>();
+
+  const emits = defineEmits<Emits>();
+
   interface Emits {
     (e: 'change', showLabel: boolean):void;
     (e: 'checked', name: string): void
@@ -100,15 +104,13 @@
     }>,
     total: number,
   }
-  const props = defineProps<Props>();
-  const emits = defineEmits<Emits>();
+  const { t, te } = useI18n();
   const showTipObjects = ref({} as Record<string, boolean>);
   const all = ref([
-    { tag_id: 'all', tag_name: '全部联表', link_table_count: 0 },
+    { tag_id: 'all', tag_name: t('全部联表'), link_table_count: 0 },
   ]);
   const active = ref<string|number>('all');
   const showLabel = ref(true);
-  const { t, te } = useI18n();
   // eslint-disable-next-line vue/no-mutating-props, vue/no-side-effects-in-computed-properties
   const labelList = computed(() => [...all.value, ...props.labels.sort((x, y) => {
     const reg = /[a-zA-Z0-9]/;
