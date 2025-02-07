@@ -27,15 +27,7 @@
       </render-info-block>
       <render-info-block>
         <render-info-item :label="t('策略标签')">
-          <span v-if="data.tags.length">
-            <span
-              v-for="tagItem in data.tags"
-              :key="tagItem"
-              class="label-item"> {{ strategyMap[tagItem] }}</span>
-          </span>
-          <span v-else>
-            --
-          </span>
+          <edit-tag :data="data.tags?.map(item=> strategyMap[item] || item) || ''" />
         </render-info-item>
       </render-info-block>
       <render-info-block>
@@ -87,7 +79,9 @@
           </span>
         </render-info-item>
       </render-info-block>
-      <render-info-block class="mt16">
+      <render-info-block
+        v-if="data.strategy_type === 'model'"
+        class="mt16">
         <render-info-item :label="t('方案名称')">
           {{ currentControl?.control_name || '--' }} - V{{ data.control_version }}
         </render-info-item>
@@ -96,14 +90,13 @@
       <template v-if="data.strategy_type === 'rule'">
         <render-info-block class="mt16">
           <render-info-item :label="t('数据源')">
-            {{ data.configs.data_source?.rt_id || data.configs.data_source?.link_table.uid }}
-            <template v-if="data.configs.data_source?.system_ids.length">
-              <div
-                v-for="item in data.configs.data_source.system_ids"
-                :key="item"
-                style="line-height: 32px;">
-                {{ item }}
-              </div>
+            <span>{{ commonData.rule_audit_config_type.
+              find(item => item.value === data.configs.config_type)?.label }}/</span>
+            <template v-if="data.configs.config_type === 'LinkTable'">
+              {{ data.configs.data_source?.link_table.uid }}
+            </template>
+            <template v-else>
+              {{ getDataSourceText(data.configs) }}
             </template>
           </render-info-item>
         </render-info-block>
@@ -154,16 +147,22 @@
                       </div>
                       <div class="condition-method mr4 mb4">
                         {{ commonData.rule_audit_condition_operator.
-                          // eslint-disable-next-line max-len
                           find(item => item.value === childItem.condition.operator)?.label }}
                       </div>
                     </template>
-                    <div
-                      v-for="(value, valIndex) in childItem.condition.filters"
-                      :key="valIndex"
-                      class="condition-value mr4 mb4">
-                      {{ value }}
-                    </div>
+                    <template v-if="childItem.condition.filters.length">
+                      <div
+                        v-for="(value, valIndex) in childItem.condition.filters"
+                        :key="valIndex"
+                        class="condition-value mr4 mb4">
+                        {{ value }}
+                      </div>
+                    </template>
+                    <template v-else>
+                      <div class="condition-value mr4 mb4">
+                        {{ childItem.condition.filter }}
+                      </div>
+                    </template>
                   </div>
                 </template>
               </div>
@@ -184,9 +183,11 @@
 <script setup lang="ts">
   import {
     computed,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import CommonDataModel from '@model/strategy/common-data';
@@ -194,6 +195,8 @@
   import type StrategyModel from '@model/strategy/strategy';
 
   import useRequest from '@hooks/use-request';
+
+  import EditTag from '@components/edit-box/tag.vue';
 
   import RenderAiops from './aiops/index.vue';
   import collapsePanel from './collapse-panel.vue';
@@ -250,6 +253,43 @@
     return t(`[${item?.label}] ${element.display_name}`);
   };
 
+  const findLabelByValue = (data: Array<{
+    label: string,
+    value: string,
+    children?: Array<{
+      label: string,
+      value: string,
+    }>
+  }>, searchValue = '', parentLabel = '') => {
+    for (const item of data) {
+      // 如果当前项的值匹配，返回当前项的标签
+      if (item.value === searchValue) {
+        return parentLabel ? `${parentLabel}/${item.label}` : item.label;
+      }
+
+      // 如果有子项，递归搜索
+      if (item.children && item.children.length) {
+        const result: string = findLabelByValue(item.children, searchValue, item.label);
+        if (result) {
+          return result;
+        }
+      }
+    }
+    return '';
+  };
+
+  const getDataSourceText = (config: StrategyModel['configs']) => {
+    if (!tableData.value.length) return;
+    if (config.config_type === 'BuildIn' || config.config_type === 'BizRt') {
+      return findLabelByValue(tableData.value, config.data_source?.rt_id);
+    }
+    const names = systemList.value
+      .filter(item => config.data_source?.system_ids.includes(item.id))
+      .map(item => item.name);
+    // 使用 ' + ' 连接名称
+    return names.join(' + ');
+  };
+
   // 获取方案列表
   const {
     data: controlList,
@@ -257,6 +297,34 @@
   } = useRequest(StrategyManageService.fetchControlList, {
     defaultValue: [],
     manual: true,
+  });
+
+  // 获取tableid
+  const {
+    data: tableData,
+    run: fetchTable,
+  } = useRequest(StrategyManageService.fetchTable, {
+    defaultValue: [],
+  });
+
+  // 获取系统
+  const {
+    data: systemList,
+    run: fetchSystemWithAction,
+  } = useRequest(MetaManageService.fetchSystemWithAction, {
+    defaultValue: [],
+  });
+
+  watch(() => props.data, (data) => {
+    if (data.strategy_type !== 'rule') return;
+    fetchTable({
+      table_type: data.configs.config_type,
+    });
+    if (data.configs.config_type === 'EventLog') {
+      fetchSystemWithAction();
+    }
+  }, {
+    immediate: true,
   });
 
 </script>
