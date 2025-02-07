@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-23 16:52+0800\n"
+"POT-Creation-Date: 2025-02-07 12:08+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1539,6 +1539,9 @@ msgstr "通知组名称重复"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
+msgid "【蓝鲸审计中心%s】"
+msgstr "【蓝鲸审计中心%s】"
+
 msgid "异常信息"
 msgstr "异常信息"
 
@@ -2120,6 +2123,12 @@ msgstr "配置中必须指定 `from_table` 或 `join_tables`。"
 
 msgid "数据拉取"
 msgstr "数据拉取"
+
+msgid "未实现方法"
+msgstr "未实现方法"
+
+msgid "未实现类型"
+msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"

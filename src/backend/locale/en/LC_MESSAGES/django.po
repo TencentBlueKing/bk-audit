@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-23 16:52+0800\n"
+"POT-Creation-Date: 2025-02-07 12:08+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1539,6 +1539,9 @@ msgstr "Notice Group Name Duplicate"
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
 
+msgid "【蓝鲸审计中心%s】"
+msgstr "【BK Audit%s】"
+
 msgid "异常信息"
 msgstr "Error Msg"
 
@@ -2120,6 +2123,12 @@ msgstr "`from_table` or `join_tables` must be specified in the configuration."
 
 msgid "数据拉取"
 msgstr "Data Pull"
+
+msgid "未实现方法"
+msgstr "Unimplemented Method"
+
+msgid "未实现类型"
+msgstr "Unimplemented Type"
 
 msgid "Control Name"
 msgstr "Control Name"
