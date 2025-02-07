@@ -423,7 +423,9 @@
         ...formData.value.configs.data_source,
         ...dataSource,
       };
-    } else if (formData.value.configs.data_source.rt_id !== dataSource.rt_id) {
+    } else if (Array.isArray(dataSource.rt_id)
+      ? formData.value.configs.data_source.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1]
+      : formData.value.configs.data_source.rt_id !== dataSource.rt_id) {
       InfoBox(createInfoBoxConfig({
         onConfirm() {
           formData.value.configs.select = [];
