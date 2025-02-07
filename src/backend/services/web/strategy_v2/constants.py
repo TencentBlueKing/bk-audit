@@ -126,6 +126,13 @@ class TableType(TextChoices):
 
     EVENT_LOG = "EventLog", gettext_lazy("Event Log")
     BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
+
+
+class ListTableType(TextChoices):
+    """可获取结果表类型"""
+
+    EVENT_LOG = "EventLog", gettext_lazy("Event Log")
+    BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
     BIZ_RT = "BizRt", gettext_lazy("Other Data")
 
 
@@ -189,9 +196,9 @@ class LinkTableTableType(TextChoices):
     联表表类型
     """
 
-    EVENT_LOG = TableType.EVENT_LOG.value, TableType.EVENT_LOG.label
-    BUILD_ID_ASSET = TableType.BUILD_ID_ASSET.value, TableType.BUILD_ID_ASSET.label
-    BIZ_RT = TableType.BIZ_RT.value, TableType.BIZ_RT.label
+    EVENT_LOG = "EventLog", gettext_lazy("Event Log")
+    BUILD_ID_ASSET = "BuildIn", gettext_lazy("Asset Data")
+    BIZ_RT = "BizRt", gettext_lazy("Other Data")
 
 
 class ListLinkTableSortField(TextChoices):
@@ -227,7 +234,7 @@ class RuleAuditConfigType(TextChoices):
 
     EVENT_LOG = TableType.EVENT_LOG.value, TableType.EVENT_LOG.label
     BUILD_ID_ASSET = TableType.BUILD_ID_ASSET.value, TableType.BUILD_ID_ASSET.label
-    BIZ_RT = TableType.BIZ_RT.value, TableType.BIZ_RT.label
+    BIZ_RT = "BizRt", gettext_lazy("Other Data")
     LINK_TABLE = "LinkTable", gettext_lazy("Link Table Data")
 
 

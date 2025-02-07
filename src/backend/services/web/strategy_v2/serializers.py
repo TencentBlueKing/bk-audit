@@ -40,6 +40,7 @@ from services.web.strategy_v2.constants import (
     LinkTableJoinType,
     LinkTableTableType,
     ListLinkTableSortField,
+    ListTableType,
     RiskLevel,
     RuleAuditAggregateType,
     RuleAuditConditionOperator,
@@ -592,7 +593,7 @@ class ListTablesRequestSerializer(serializers.Serializer):
     List Tables
     """
 
-    table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=TableType.choices)
+    table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=ListTableType.choices)
     namespace = serializers.CharField(label=gettext_lazy("Namespace"), required=False)
 
 
