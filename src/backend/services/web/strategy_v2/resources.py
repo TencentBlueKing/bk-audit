@@ -67,6 +67,7 @@ from services.web.risk.constants import EventMappingFields
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.constants import (
+    BKBASE_INTERNAL_FIELD,
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     LOCAL_UPDATE_FIELDS,
@@ -709,6 +710,7 @@ class GetRTFields(StrategyV2Base):
                 "field_type": field["field_type"],
             }
             for field in fields
+            if field["field_name"] not in BKBASE_INTERNAL_FIELD
         ]
 
 
