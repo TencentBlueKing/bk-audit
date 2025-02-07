@@ -435,6 +435,16 @@
       value: 'disabled',
     },
   ];
+  const initTypeFilterList = [
+    {
+      text: t('自定义规则审计'),
+      value: 'rule',
+    },
+    {
+      text: t('引入模型审计'),
+      value: 'model',
+    },
+  ];
   const tableColumn = ref([
     {
       label: () => t('策略ID'),
@@ -467,7 +477,13 @@
     },
     {
       label: () => t('配置方式'),
-      sort: 'custom',
+      filter: {
+        list: initTypeFilterList,
+        filterScope: SortScope.ALL,
+        checked: [],
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+      },
       field: () => 'strategy_type',
       minWidth: 180,
       render: ({ data }:{data: StrategyModel}) => (

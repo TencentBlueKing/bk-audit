@@ -59,7 +59,7 @@
                 :input-search="false"
                 multiple
                 multiple-mode="tag"
-                :placeholder="t('请选择或输入标签')"
+                :placeholder="t('请选择')"
                 :search-placeholder="t('请输入关键字')">
                 <bk-option
                   v-for="(item, index) in tagData"
@@ -311,7 +311,7 @@
     system_ids?: Array<string>;
     display_name: string;
   }) => {
-    const key = `${table.table_type}_${table.rt_id}`;
+    const key = `${table.rt_id}`;
     if (!displayNameMap[key]) {
       // 分配一个新的字母
       displayNameMap[key] = letters[letterIndex += 1];

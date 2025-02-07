@@ -31,7 +31,7 @@
             :condition="[]"
             :data="searchData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :placeholder="t('联表数据名称、标签、最近更新人')"
+            :placeholder="t('联表id、联表数据名称、最近更新人、标签')"
             unique-select
             value-split-code=","
             @update:model-value="handleSearch" />

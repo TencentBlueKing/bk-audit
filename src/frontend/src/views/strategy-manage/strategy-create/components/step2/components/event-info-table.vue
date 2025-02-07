@@ -111,7 +111,6 @@
   const groupMap = {
     event_basic_field_configs: t('基本信息'),
     event_data_field_configs: t('事件结果'),
-    event_evidence_field_configs: t('事件证据'),
   };
 
   const createField = (item: DatabaseTableFieldModel) => ({
@@ -127,7 +126,7 @@
     prefix: 'event_data',
   });
 
-  const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
+  const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs') => {
     if ((isEditMode || isCloneMode) && props.data[key].length && tableData.value[key].length && !isInit) {
       // 编辑填充参数
       tableData.value[key] = tableData.value[key].map((item) => {
@@ -191,7 +190,6 @@
     // 填充内容（是否重点展示、字段说明、字段自动填充）
     setTableData('event_basic_field_configs');
     setTableData('event_data_field_configs');
-    setTableData('event_evidence_field_configs');
   };
 
   const {

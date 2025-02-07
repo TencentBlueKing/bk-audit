@@ -20,30 +20,30 @@
       class="no-label"
       label-width="0"
       property="configs.data_source.rt_id">
-      <span>
-        <bk-select
-          v-model="formData.configs.data_source.rt_id"
-          filterable
-          :no-match-text="t('无匹配数据')"
-          :placeholder="t('请选择')"
-          @change="handleChangeDataSheet">
-          <bk-option
-            v-for="(dataSheet, dataSheetIndex) in props.tableData"
-            :key="dataSheetIndex"
-            :label="dataSheet.label"
-            :value="dataSheet.value" />
-        </bk-select>
-      </span>
+      <bk-cascader
+        v-slot="{node}"
+        v-model="formData.configs.data_source.rt_id"
+        filterable
+        id-key="value"
+        :list="filterTableData"
+        name-key="label"
+        trigger="hover"
+        @change="handleChangeDataSheet">
+        <p>
+          {{ node.name }}
+        </p>
+      </bk-cascader>
     </bk-form-item>
   </div>
 </template>
 
 <script setup lang='ts'>
   import {
+    computed,
     ref,
     watch,
   } from 'vue';
-  import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   interface Expose {
     resetFormData: () => void,
@@ -68,42 +68,74 @@
   interface IFormData {
     configs: {
       data_source: {
-        rt_id: string,
+        rt_id: Array<string>,
       },
     },
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  const { t } = useI18n();
+  const route = useRoute();
+  let isInit = false;
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
+  const isUpgradeMode = route.name === 'strategyUpgrade';
   const formData = ref<IFormData>({
     configs: {
       data_source: {
-        rt_id: '',
+        rt_id: [],
       },
     },
   });
+  if (!isEditMode && !isCloneMode && !isUpgradeMode)   {
+    isInit = true;
+  }
+
+  const filterTableData = computed(() => props.tableData.map(item => ({
+    ...item,
+    leaf: true,
+    disabled: !(item.children && item.children.length),
+  })));
+
+  const handleUpdateDataSource = () => {
+    if (!isInit) return;
+    emits('updateDataSource', formData.value.configs.data_source);
+  };
+
+  // 选择数据表
+  const handleChangeDataSheet = () => {
+    handleUpdateDataSource();
+  };
 
   watch(() => props.tableData, (data) => {
     if (data) {
-      formData.value.configs.data_source.rt_id = '';
-      emits('updateDataSource', formData.value.configs.data_source);
+      formData.value.configs.data_source.rt_id = [];
+      handleUpdateDataSource();
+      data.sort((a, b) => {
+        if (a.children && a.children.length) return -1;
+        if (b.children && b.children.length) return 1;
+        return 0;
+      });
     }
   }, {
     immediate: true,
   });
 
-  // 选择数据表
-  const handleChangeDataSheet = () => {
-    emits('updateDataSource', formData.value.configs.data_source);
-  };
-
   defineExpose<Expose>({
     resetFormData: () => {
-      formData.value.configs.data_source.rt_id = '';
+      formData.value.configs.data_source.rt_id = [];
     },
-    setConfigs(configs: IFormData['configs']) {
-      formData.value.configs.data_source.rt_id = configs.data_source.rt_id;
-      emits('updateDataSource', formData.value.configs.data_source);
+    setConfigs(config: Record<string, any>) {
+      // 对tableid转换
+      props.tableData.forEach((item) => {
+        if (item.children && item.children.length) {
+          item.children.forEach((cItem) => {
+            if (cItem.value === config.data_source.rt_id) {
+              formData.value.configs.data_source.rt_id = [item.value, config.data_source.rt_id];
+            }
+          });
+        }
+      });
+      isInit = true;
     },
   });
 </script>

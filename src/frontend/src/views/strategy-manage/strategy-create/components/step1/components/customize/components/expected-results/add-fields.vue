@@ -6,7 +6,7 @@
   </div>
   <bk-popover
     ext-cls="field-custom-popover"
-    height="300"
+    height="310"
     :is-show="isShow"
     theme="light"
     trigger="click"
@@ -268,12 +268,14 @@
     }
 
     .field-pop-radio {
-      width: 126px;
+      width: 136px;
       padding: 8px 16px;
       background: #f5f7fa;
 
       .aggregate-list {
         flex: 1;
+        display: flex;
+        flex-direction: column;
 
         :deep(.bk-radio) {
           padding-bottom: 12px;

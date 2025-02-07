@@ -145,8 +145,14 @@ export default {
       .then(({ data }) => data);
   },
   /**
-   * @desc 获取表字段对应的规则和枚举值列表
+   * @desc 批量获取表格下的rt字段
    */
+  fetchBatchTableRtFields(params: {
+    table_ids: string
+  }) {
+    return StrategySource.getBatchTableRtFields(params)
+      .then(({ data }) => data);
+  },
   /**
    * @desc 获取表格下的rt字段
    */

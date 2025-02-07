@@ -23,7 +23,6 @@
       <bk-cascader
         v-slot="{node,data}"
         v-model="formData.configs.data_source.rt_id"
-        :disabled="isEditMode || isCloneMode || isUpgradeMode"
         filterable
         id-key="value"
         :list="filterTableData"
@@ -83,6 +82,7 @@
 
   const { t } = useI18n();
   const route = useRoute();
+  let isInit = false;
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
   const isUpgradeMode = route.name === 'strategyUpgrade';
@@ -99,10 +99,15 @@
     disabled: !(item.children && item.children.length),
   })));
   type FormData = typeof formData.value['configs'];
+  if (!isEditMode && !isCloneMode && !isUpgradeMode)   {
+    isInit = true;
+  }
 
   const handleUpdateDataSource = () => {
+    if (!isInit) return;
     emits('updateDataSource', formData.value.configs.data_source);
   };
+
   const handleTableIdChange = () => {
     handleUpdateDataSource();
   };
@@ -136,8 +141,7 @@
           });
         }
       });
-      formData.value.configs.data_source.rt_id = config.data_source.rt_id;
-      handleUpdateDataSource();
+      isInit = true;
     },
   });
 </script>
