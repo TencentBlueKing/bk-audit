@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 import time
+from functools import cached_property
 from typing import Dict, List, Union
 
 from bk_resource import api, resource
@@ -245,8 +246,12 @@ class AIOpsController(Controller):
             return data["flow_status"]
         return FlowNodeStatusChoices.NO_START
 
+    @cached_property
+    def flow_name(self) -> str:
+        return f"MODEL_AUDIT-{self.strategy.strategy_id}-{str(time.time_ns())}"
+
     def _create_flow(self) -> None:
-        resp = api.bk_base.create_flow(project_id=settings.BKBASE_PROJECT_ID, flow_name=str(time.time_ns()))
+        resp = api.bk_base.create_flow(project_id=settings.BKBASE_PROJECT_ID, flow_name=self.flow_name)
         self.strategy.backend_data["flow_id"] = resp["flow_id"]
         self.strategy.save(update_fields=["backend_data"])
 
