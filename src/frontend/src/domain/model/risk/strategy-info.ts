@@ -22,7 +22,6 @@ export default class StrategyInfo {
   risk_level: string;
   risk_guidance: string;
   risk_hazard: string;
-  event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
   event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
 
@@ -31,7 +30,6 @@ export default class StrategyInfo {
     this.risk_level = payload.risk_level;
     this.risk_guidance = payload.risk_guidance;
     this.risk_hazard = payload.risk_hazard;
-    this.event_evidence_field_configs = payload.event_evidence_field_configs;
     this.event_data_field_configs = payload.event_data_field_configs;
     this.event_basic_field_configs = payload.event_basic_field_configs;
   }
