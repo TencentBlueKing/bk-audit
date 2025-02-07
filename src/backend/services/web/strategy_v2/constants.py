@@ -247,6 +247,9 @@ class RuleAuditSourceType(TextChoices):
     BATCH = FlowDataSourceNodeType.BATCH.value, FlowDataSourceNodeType.BATCH.label
 
 
+# BKBASE 内置字段
+BKBASE_INTERNAL_FIELD = ["timestamp", "dtEventTime", "localTime", "_startTime_", "_endTime_"]
+
 # 联表连接类型
 LinkTableJoinType = JoinType
 # 规则审计聚合类型
