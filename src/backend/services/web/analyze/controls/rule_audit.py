@@ -114,7 +114,7 @@ class RuleAuditController(BaseControl):
 
     @cached_property
     def flow_name(self) -> str:
-        return f"{self.strategy.strategy_id}-{str(time.time_ns())}"
+        return f"RULE_AUDIT-{self.strategy.strategy_id}-{str(time.time_ns())}"
 
     @cached_property
     def raw_table_name(self) -> str:
