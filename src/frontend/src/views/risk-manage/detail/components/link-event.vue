@@ -59,8 +59,7 @@
                 :label-width="labelWidth">
                 {{
                   eventItem[subItem.field_name as keyof typeof eventItem] ||
-                    eventItem.event_data[subItem.field_name] ||
-                    (eventItemEvidence && eventItemEvidence.map(item => item[subItem.field_name]).join(';'))
+                    eventItem.event_data[subItem.field_name]
                 }}
               </render-info-item>
             </render-info-block>
@@ -153,52 +152,6 @@
               type="empty">
               {{ t('暂无数据') }}
             </bk-exception>
-            <div class="title">
-              {{ t('事件证据') }}
-            </div>
-            <div
-              v-if="eventItemEvidence.length"
-              class="evidence-info mt16">
-              <div class="evidence-info-key">
-                <div
-                  v-for="(key, keyIndex) in Object.keys(eventItemEvidence[0])"
-                  :key="keyIndex">
-                  <div class="evidence-info-item-text">
-                    {{ key }}
-                  </div>
-                </div>
-              </div>
-              <scroll-faker style="width: calc(100% - 160px)">
-                <div class="evidence-info-value-wrap">
-                  <div
-                    v-for="(item, index) in eventItemEvidence"
-                    :key="index"
-                    class="evidence-info-value">
-                    <div
-                      v-for="(value, valueIndex) in Object.values(item)"
-                      :key="valueIndex">
-                      <div
-                        v-bk-tooltips="{
-                          content: String(value),
-                          disabled: !showTooltips,
-                          extCls:'evidence-info-value-tooltips',
-                        }"
-                        class="evidence-info-item-text"
-                        @mouseenter="handlerEnter($event)">
-                        <span> {{ value }} </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </scroll-faker>
-            </div>
-            <bk-exception
-              v-else
-              class="exception-part"
-              scene="part"
-              type="empty">
-              {{ t('暂无数据') }}
-            </bk-exception>
           </div>
         </div>
         <bk-exception
@@ -262,7 +215,6 @@
   const active = ref<number>(0);
   const eventItem = ref(new EventModel()); // 当前选中事件
   const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
-  const eventItemEvidence = ref<Array<Record<string, any>>>([]); // 当前选中事件-事件证据
   const showTooltips = ref(false); // 是否显示tooltips
 
   const handleScroll = (event: Event) => {
@@ -323,8 +275,6 @@
     // 事件数据
     const eventDataKey = getEventDataKey(eventItem.value.event_data);
     eventItemDataKeyArr.value = group(eventDataKey);
-    // 事件证据
-    eventItemEvidence.value = JSON.parse(eventItem.value.event_evidence);
   };
 
 
@@ -359,8 +309,6 @@
         // 事件数据
         const eventDataKey = getEventDataKey(eventItem.value.event_data);
         eventItemDataKeyArr.value = group(eventDataKey);
-        // 事件证据
-        eventItemEvidence.value = JSON.parse(eventItem.value.event_evidence);
       }
     },
   });
@@ -383,7 +331,6 @@
   const importantInformation = computed(() => group([
     ...props.data.event_basic_field_configs.filter(item => item.is_priority),
     ...props.data.event_data_field_configs.filter(item => item.is_priority),
-    ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
   ]));
 
   onMounted(() => {

@@ -94,15 +94,13 @@
 
   const groupMap = {
     event_basic_field_configs: t('基本信息'),
-    event_data_field_configs: t('事件数据'),
-    event_evidence_field_configs: t('事件证据'),
+    event_data_field_configs: t('事件结果'),
   };
 
   const tableData = computed(() => {
     const data = {
       event_basic_field_configs: props.data.event_basic_field_configs,
       event_data_field_configs: props.data.event_data_field_configs,
-      event_evidence_field_configs: props.data.event_evidence_field_configs,
     };
     return new StrategyFieldEvent(data);
   });

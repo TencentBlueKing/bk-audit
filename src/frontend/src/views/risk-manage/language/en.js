@@ -17,7 +17,6 @@
 export default {
   riskManage: {
     '事件ID：': 'Event ID: ',
-    事件证据: 'Event evidence',
     所有风险: 'All',
     '解除误报后，风险单会重新打开至“待处理”请谨慎确认是否解除误报？': 'After the false positive is released, the risk ticket will be reopened to "Open" status. Please confirm carefully whether to release the false positive.',
     '策略方案可能采集误报数据作为优化依据，请谨慎确认是否为误报？': 'The strategy may collect false positive data as optimization basis. Please confirm carefully whether it is a false positive.',

@@ -84,7 +84,6 @@
       variableData.value = [
         ...data.event_basic_field_configs,
         ...data.event_data_field_configs,
-        ...data.event_evidence_field_configs,
       ];
     },
     manual: true,

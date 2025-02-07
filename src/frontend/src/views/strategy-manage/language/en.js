@@ -235,5 +235,10 @@ export default {
     事件结果: 'Event Results',
     配置方式不能为空: 'Configuration is required',
     联表不能为空: 'Link table is required',
+    自定义常量: 'Custom Constants',
+    已添加: 'Added',
+    清空选项: 'Clear Options',
+    '系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改': 'System fields need to be associated with policies. By default, they are automatically filled from the result fields according to the rules. They can be modified.',
+    模型方案: 'Model Solution',
   },
 };

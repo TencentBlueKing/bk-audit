@@ -110,7 +110,7 @@
             </render-info-block>
           </div>
           <div class="title">
-            {{ t('事件数据') }}
+            {{ t('事件结果') }}
           </div>
           <div
             class="data-info">
@@ -151,61 +151,6 @@
               </div>
             </template>
           </div>
-          <div class="title mb16">
-            {{ t('事件证据') }}
-          </div>
-          <template v-if="evidenceData.length">
-            <div
-              v-for="(item, index) in evidenceData"
-              :key="index"
-              class="evidence-info"
-              :style="{borderTop: index == 0 ? '1px solid #ecedf1' : '0px'} ">
-              <div class="evidence-info-key">
-                <div>
-                  <div class="evidence-info-item-text">
-                    {{ item.field_name }}
-                  </div>
-                </div>
-              </div>
-              <div
-                v-for="(subItem) in 3"
-                :key="subItem"
-                class="evidence-info-value-wrap">
-                <div
-                  class="evidence-info-value">
-                  <div>
-                    <span> {{ t('以实际内容为准') }} </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-          <template v-else>
-            <div
-              v-for="(item, index) in 4"
-              :key="index"
-              class="evidence-info"
-              :style="{borderTop: index == 0 ? '1px solid #ecedf1' : '0px'} ">
-              <div class="evidence-info-key">
-                <div>
-                  <div class="evidence-info-item-text">
-                    {{ t('以实际内容为准') }}{{ index }}
-                  </div>
-                </div>
-              </div>
-              <div
-                v-for="(subItem) in 3"
-                :key="subItem"
-                class="evidence-info-value-wrap">
-                <div
-                  class="evidence-info-value">
-                  <div>
-                    <span> {{ t('以实际内容为准') }} </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
         </div>
       </div>
     </div>
@@ -240,7 +185,6 @@
     risk_hazard: string,
     risk_guidance: string,
     risk_title: string,
-    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     processor_groups: [],
@@ -269,14 +213,11 @@
   const importantInformation = computed(() => group([
     ...props.data.event_basic_field_configs.filter(item => item.is_priority),
     ...props.data.event_data_field_configs.filter(item => item.is_priority),
-    ...props.data.event_evidence_field_configs.filter(item => item.is_priority),
   ]));
 
   // 事件数据
   const eventData = computed(() => group(props.data.event_data_field_configs));
 
-  // 事件证据
-  const evidenceData = computed(() => props.data.event_evidence_field_configs);
 </script>
 <style  lang="postcss">
 .risk-manage-detail-linkevent-part {

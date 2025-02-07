@@ -240,7 +240,8 @@
     tags: Array<string>,
     description: string,
     configs: Record<string, any>,
-    control_id: string,
+    control_id?: string,
+    control_version?: number,
     status: string,
     risk_level: string,
     risk_hazard: string,
@@ -555,6 +556,12 @@
       contentAlign: 'center',
       footerAlign: 'center',
       onConfirm() {
+        if (way === 'rule') {
+          controlDetail.value = null;
+          delete formData.value.control_id;
+          delete formData.value.control_version;
+        }
+        formData.value.configs = {};
         formData.value.strategy_type = way;
         formRef.value.validate('strategy_type');
       },
