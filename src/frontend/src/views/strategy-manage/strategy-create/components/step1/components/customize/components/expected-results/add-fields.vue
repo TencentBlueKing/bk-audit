@@ -184,7 +184,15 @@
 
   const handleAddField = () => {
     handleCancel();
+    // 添加聚合算法后缀
     formData.value.display_name = `${formData.value.display_name}${formData.value.aggregate ? `_${formData.value.aggregate}` : ''}`;
+    // 统计每个 display_name 的出现次数
+    const displayNameCount = props.expectedResultList.reduce<Record<string, number>>((acc, item) => {
+      acc[item.display_name] = (acc[item.display_name] || 0) + 1;
+      return acc;
+    }, {});
+    // 重复字段添加table前缀
+    formData.value.display_name = displayNameCount[formData.value.display_name] >= 1 ?  `${formData.value.table}.${formData.value.display_name}` :  formData.value.display_name,
     emits('addExpectedResult', formData.value);
     formData.value = new DatabaseTableFieldModel();
   };
