@@ -258,6 +258,10 @@
           <auth-button
             permission={data.permission.delete_link_table}
             actionId="delete_link_table"
+            v-bk-tooltips={{
+              content: t('已有策略在使用，不可删除'),
+              disabled: data.strategy_count <= 0,
+            }}
             text
             disabled={data.strategy_count > 0}
             theme="primary">

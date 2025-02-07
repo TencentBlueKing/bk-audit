@@ -33,5 +33,6 @@ export default {
     联表数据名称不能为空: 'Link table name is required',
     关联关系不能为空: 'Relationship is required',
     基础信息: 'Basic Information',
+    '已有策略在使用，不可删除': 'Already have a policy in use and cannot be deleted',
   },
 };
