@@ -67,7 +67,7 @@
 
   defineExpose<Expose>({
     getValue() {
-      if (!localValue.value) {
+      if (Array.isArray(localValue.value) ? !localValue.value.length : !localValue.value) {
         isError.value = true;
         return Promise.reject(new Error('必填'));
       }
@@ -96,5 +96,10 @@
 
 .is-errored.is-background-errored-tip .bk-select .bk-input {
   border: 1px solid #ea3636 !important;
+}
+
+.is-errored.is-background-errored-tip .bk-cascader,
+.is-errored.is-background-errored-tip .bk-select-tag {
+  border-color: #ea3636 !important;
 }
 </style>
