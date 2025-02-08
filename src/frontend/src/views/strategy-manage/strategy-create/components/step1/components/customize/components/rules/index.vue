@@ -157,8 +157,18 @@
   };
 
   // eslint-disable-next-line max-len
-  const handleUpdateFieldItem = (value: DatabaseTableFieldModel, conditionsIndex: number, childConditionsIndex: number) => {
-    where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.field = value;
+  const handleUpdateFieldItem = (value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter') => {
+    if (type === 'field') {
+      // eslint-disable-next-line max-len
+      where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.field = value as DatabaseTableFieldModel;
+    } else if (type === 'filter') {
+      Array.isArray(value)
+        // eslint-disable-next-line max-len
+        ? where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.filters = value as Array<string>
+        : where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.filter = value as string;
+    } else {
+      where.value.conditions[conditionsIndex].conditions[childConditionsIndex].condition.operator = value as string;
+    }
   };
 
   const handleUpdateConnector = (value: 'and' | 'or', conditionsIndex: number) => {

@@ -16,7 +16,7 @@
 -->
 <template>
   <div
-    v-for="(condition, index) in conditions.conditions"
+    v-for="(condition, index) in localConditions.conditions"
     :key="index"
     class="rule-item-field"
     :style="{ marginBottom: index === conditions.conditions.length -1 ? '0px' : '8px' }">
@@ -81,7 +81,8 @@
       <bk-select
         v-model="condition.condition.operator"
         filterable
-        :placeholder="t('请选择')">
+        :placeholder="t('请选择')"
+        @change="(value: string) => handleSelectOperator(value, index)">
         <bk-option
           v-for="item in conditionList"
           :key="item.value"
@@ -116,12 +117,14 @@
         :list="dicts[condition.condition.field.raw_name]"
         multiple
         name-key="label"
-        trigger="hover" />
+        trigger="hover"
+        @change="(value: Array<Array<string>>) => handleFilter(value, index)" />
       <audit-user-selector
         v-else-if="condition.condition.field.raw_name.includes('username')"
         v-model="condition.condition.filters"
         allow-create
-        class="consition-value" />
+        class="consition-value"
+        @change="(value: Array<string>) => handleFilter(value, index)" />
       <bk-tag-input
         v-else-if="tagInput.includes(condition.condition.operator)"
         v-model="condition.condition.filters"
@@ -134,12 +137,14 @@
         :list="dicts[condition.condition.field && condition.condition.field.raw_name]"
         :loading="fieldLoading"
         :placeholder="t('请输入并Enter结束')"
-        trigger="focus" />
+        trigger="focus"
+        @change="(value: Array<string>) => handleFilter(value, index)" />
       <bk-input
         v-else-if="input.includes(condition.condition.operator)"
         v-model="condition.condition.filter"
         class="consition-value"
-        :placeholder="t('请输入')" />
+        :placeholder="t('请输入')"
+        @input="(value: string) => handleFilter(value, index)" />
     </bk-form-item>
     <div class="icon-group">
       <audit-icon
@@ -161,7 +166,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -173,7 +178,7 @@
 
   interface Emits {
     (e: 'updateFieldItemList', value: string, conditionsIndex: number): void;
-    (e: 'updateFieldItem', value: DatabaseTableFieldModel, conditionsIndex: number, childConditionsIndex: number): void;
+    (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
   }
   interface Props {
@@ -192,6 +197,11 @@
     conditionsIndex: number,
     configType: string,
   }
+  interface DataType{
+    label: string;
+    value: string;
+    children?: Array<DataType>;
+  }
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -203,6 +213,17 @@
   const dicts = ref<Record<string, Array<any>>>({});
   const input = ['eq', 'neq', 'reg', 'nreg', 'lte', 'lt', 'gte', 'gt'];
   const tagInput = ['include', 'exclude'];
+  const localConditions = ref<Props['conditions']>({
+    connector: 'and',
+    conditions: [{
+      condition: {
+        field: new DatabaseTableFieldModel(),
+        filter: '',
+        filters: [],
+        operator: '',
+      },
+    }],
+  });
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
 
@@ -244,12 +265,83 @@
         dicts.value[value.raw_name] = data.filter((item: Record<string, any>) => item.id !== '');
       });
     }
-    emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index);
+    emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index, 'field');
+    localConditions.value.conditions[index].condition.field = { ...value };
+  };
+
+  const handleSelectOperator = (value: string, index: number) => {
+    emits('updateFieldItem', value, props.conditionsIndex, index, 'operator');
+  };
+
+  const handleFilter = (value: Array<Array<string>> | Array<string> | string, index: number) => {
+    // 判断是否是级联
+    const resultValue = Array.isArray(value) ? value.map(((valItem) => {
+      if (Array.isArray(valItem)) {
+        return _.last(valItem) || '';
+      }
+      return valItem;
+    })) : value;
+    emits('updateFieldItem', resultValue, props.conditionsIndex, index, 'filter');
   };
 
   const handleChangeConnector = () => {
     emits('updateConnector', props.conditions.connector === 'and' ? 'or' : 'and', props.conditionsIndex);
   };
+
+  // 回显级联数据
+  const handleCascader = (key: string, dataList: Array<DataType>) => {
+    console.log(key, dataList);
+    const conditionItemList = localConditions.value.conditions.filter(item => item.condition.field.raw_name === key);
+    if (!conditionItemList) return;
+    console.log(conditionItemList);
+    conditionItemList.forEach((conditionItem) => {
+      const valueMap = conditionItem.condition.filters.reduce((res, v: string, index: number) => {
+        res[v] = index;
+        return res;
+      }, {} as Record<string, number>);
+      console.log(valueMap);
+      const newVal: Array<Array<string>> = [];
+      dataList.forEach((data) => {
+        if (valueMap[data.value] !== undefined) {
+          newVal[valueMap[data.value]] = [data.value];
+        } else {
+          data.children?.forEach((childData: DataType) => {
+            if (valueMap[childData.value] !== undefined) {
+              newVal[valueMap[childData.value]] = [data.value, childData.value];
+            }
+          });
+        }
+      });
+      // eslint-disable-next-line no-param-reassign
+      conditionItem.condition.filters = newVal as any;
+    });
+  };
+
+  // 回显下拉值
+  const  handleValueDicts = () => {
+    localConditions.value.conditions.forEach((item) => {
+      dicts.value[item.condition.field.raw_name] = [];
+    });
+    Object.keys(dicts.value).forEach((key) => {
+      if (key) {
+        fetchStrategyFieldValue({
+          field_name: key,
+        }).then((data) => {
+          dicts.value[key] = data;
+          if (data && data.length) {
+            handleCascader(key, data);
+          }
+        });
+      }
+    });
+  };
+
+  watch(() => props.conditions, (data) => {
+    localConditions.value = _.cloneDeep(data);
+    handleValueDicts();
+  }, {
+    immediate: true,
+  });
 </script>
 <style scoped lang="postcss">
 .rule-item-field {
