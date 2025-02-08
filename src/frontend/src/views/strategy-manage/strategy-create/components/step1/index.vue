@@ -594,7 +594,7 @@
       // 获取审计参数（自定义规则审计、引入模型审计）
       const fields = comRef.value.getFields();
       // 如果select为空数组，传全部
-      if (fields.configs.select.length === 0) {
+      if (fields.configs.select && fields.configs.select.length === 0) {
         const tableFields: Array<DatabaseTableFieldModel> = comRef.value.getTableFields();
         fields.configs.select = tableFields.map(item => ({
           ...item,
@@ -607,7 +607,7 @@
         fields.configs.data_source.link_table = null;
       }
       // 非周期不需要schedule_config
-      if (fields.configs.data_source.source_type === 'stream_source') {
+      if (fields.configs.data_source && fields.configs.data_source.source_type === 'stream_source') {
         fields.configs.schedule_config = undefined;
       }
       // 合并参数

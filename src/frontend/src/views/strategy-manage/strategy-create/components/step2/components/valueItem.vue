@@ -20,7 +20,7 @@
           <template v-else-if="valueKey === 'map_config' && config.map_config">
             <!-- 必填 -->
             <select-verify
-              v-if="requiredField.includes(config.field_name)"
+              v-if="requiredField.includes(config.field_name) && !config.prefix"
               ref="selectVerifyRef"
               :default-value="config.map_config.source_field"
               style="width: 100%;"
@@ -68,7 +68,7 @@
             </select-verify>
             <!-- 选填 -->
             <bk-select
-              v-else-if="optionalField.includes(config.field_name)"
+              v-else-if="optionalField.includes(config.field_name) && !config.prefix"
               v-model="config.map_config.source_field"
               style="width: 100%;">
               <bk-option

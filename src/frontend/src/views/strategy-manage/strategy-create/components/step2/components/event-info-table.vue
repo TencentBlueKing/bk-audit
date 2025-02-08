@@ -153,7 +153,7 @@
     }
     switch (key) {
     case 'event_basic_field_configs':
-      if (tableData.value[key].length && props.select.length) {
+      if (tableData.value[key].length && props.select && props.select.length) {
         // 把不匹配的项清空(非固定值)
         tableData.value.event_basic_field_configs = tableData.value.event_basic_field_configs.map((item) => {
           if (item.map_config && !item.map_config.target_value) {
@@ -180,9 +180,10 @@
       }
       break;
     case 'event_data_field_configs':
-      if (!props.select.length) return;
-      // 根据select更新event_data_field_configs
-      tableData.value.event_data_field_configs = props.select.map(item => createField(item));
+      if (props.select && props.select.length) {
+        // 根据select更新event_data_field_configs
+        tableData.value.event_data_field_configs = props.select.map(item => createField(item));
+      }
     }
   };
 
