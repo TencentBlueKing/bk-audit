@@ -241,5 +241,9 @@ export default {
     '系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改': 'System fields need to be associated with policies. By default, they are automatically filled from the result fields according to the rules. They can be modified.',
     模型方案: 'Model Solution',
     '策略使用的联表，有新版本待升级': 'Link table used by the strategy, with a new version to be upgraded',
+    切换数据源请注意: 'Pay attention to switching data sources',
+    '切换后，已配置的数据将被清空。是否继续？': 'After switching, the configured data will be cleared. Does it continue?',
+    继续切换: 'Switching',
+    '刷新后，已配置的数据将被清空。是否继续？': 'After refreshing, the configured data will be cleared. Does it continue?',
   },
 };

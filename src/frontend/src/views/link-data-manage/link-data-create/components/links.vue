@@ -94,7 +94,7 @@
               }">
               <select-verify
                 ref="selectVerifyRef"
-                :default-value="link.left_table.table_type"
+                :default-value="link.right_table.table_type"
                 theme="background">
                 <bk-select
                   v-model="link.right_table.table_type"

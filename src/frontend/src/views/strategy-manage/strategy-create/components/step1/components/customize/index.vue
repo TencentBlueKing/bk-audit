@@ -166,8 +166,6 @@
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
 
-  import AuditIcon from '@components/audit-icon';
-
   import ExpectedResults from './components/expected-results/index.vue';
   import RulesComponent from './components/rules/index.vue';
   import EventLogComponent from './components/scheme-input/event-log.vue';
@@ -343,24 +341,16 @@
   };
 
   const createInfoBoxConfig = (overrides: {onConfirm: () => void, onClose: () => void}): any => ({
-    title: () => h('div', [
-      h(AuditIcon, {
-        type: 'alert',
-        style: {
-          fontSize: '42px',
-          color: '#FFF8C3',
-        },
-      }),
-      h('div', t('切换数据源请注意')),
-    ]),
+    type: 'warning',
+    title: t('切换数据源请注意'),
     subTitle: () => h('div', {
       style: {
         color: '#4D4F56',
         backgroundColor: '#f5f6fa',
-        height: '46px',
-        lineHeight: '46px',
+        padding: '12px 16px',
         borderRadius: '2px',
         fontSize: '14px',
+        textAlign: 'left',
       },
     }, t('切换后，已配置的数据将被清空。是否继续？')),
     confirmText: t('继续切换'),

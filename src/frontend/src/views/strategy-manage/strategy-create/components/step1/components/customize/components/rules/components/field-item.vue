@@ -55,11 +55,10 @@
         <bk-option
           v-for="item in tableFields"
           :key="item.raw_name"
+          :label="configType === 'LinkTable' ? `${item.table}.${item.display_name}` : item.display_name"
           :value="item">
           <div v-if="configType === 'LinkTable'">
-            <span
-              v-if="configType === 'LinkTable'"
-              style=" color: #3a84ff;">{{ item.table }}.</span>{{ item.display_name }}
+            <span style=" color: #3a84ff;">{{ item.table }}.</span>{{ item.display_name }}
           </div>
           <div v-else>
             {{ item.display_name }}
