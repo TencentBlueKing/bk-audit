@@ -317,9 +317,11 @@
 
   watch(() => props.data, (data) => {
     if (data.strategy_type !== 'rule') return;
-    fetchTable({
-      table_type: data.configs.config_type,
-    });
+    if (data.configs.config_type !== 'LinkTable') {
+      fetchTable({
+        table_type: data.configs.config_type,
+      });
+    }
     if (data.configs.config_type === 'EventLog') {
       fetchSystemWithAction();
     }

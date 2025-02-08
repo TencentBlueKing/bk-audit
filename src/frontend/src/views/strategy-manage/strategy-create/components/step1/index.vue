@@ -291,7 +291,7 @@
     risk_level: '',
     risk_hazard: '',
     risk_guidance: '',
-    strategy_type: '',
+    strategy_type: 'rule',
   });
   const isStockData = ref(false); // 是否是存量数据
   const rules = {
