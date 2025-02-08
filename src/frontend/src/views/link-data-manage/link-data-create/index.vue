@@ -62,8 +62,8 @@
                 :placeholder="t('请选择')"
                 :search-placeholder="t('请输入关键字')">
                 <bk-option
-                  v-for="(item, index) in tagData"
-                  :key="index"
+                  v-for="(item) in tagData"
+                  :key="item.id"
                   :label="item.name"
                   :value="item.id" />
               </bk-select>
@@ -241,10 +241,10 @@
 
   // 获取标签列表
   const {
+    run: fetchTags,
     loading: tagLoading,
   } = useRequest(MetaManageService.fetchTags, {
     defaultValue: [],
-    manual: true,
     onSuccess(data) {
       tagData.value = data.reduce((res, item) => {
         if (item.tag_id !== '-2') {
@@ -261,6 +261,11 @@
       data.forEach((item) => {
         strategyTagMap.value[item.tag_id] = item.tag_name;
       });
+      if (isEditMode.value) {
+        fetchLinkDataDetail({
+          uid: editUid.value,
+        });
+      }
     },
   });
 
@@ -387,11 +392,7 @@
       formData.value = _.cloneDeep(initFormData);
       showCreate.value = true;
       isEditMode.value = !!uid;
-      if (isEditMode.value) {
-        fetchLinkDataDetail({
-          uid,
-        });
-      }
+      fetchTags();
     },
   });
 </script>
