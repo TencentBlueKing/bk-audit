@@ -155,7 +155,7 @@
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
   import _ from 'lodash';
-  import { h, nextTick, onMounted, ref, watch } from 'vue';
+  import { h, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -490,7 +490,7 @@
   };
 
   // 编辑
-  const  setFormdata = (editData: StrategyModel) => {
+  const  setFormData = (editData: StrategyModel) => {
     configType.value = editData.configs.config_type || '';
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
@@ -527,9 +527,9 @@
     }
   });
 
-  onMounted(() => {
+  watch(() => props.editData, (data) => {
     if (isEditMode || isCloneMode) {
-      setFormdata(props.editData);
+      setFormData(data);
     }
   });
 
