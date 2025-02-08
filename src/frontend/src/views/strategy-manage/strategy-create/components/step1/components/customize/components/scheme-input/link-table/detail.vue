@@ -167,16 +167,8 @@
 
   const handleRefreshLinkData = () => {
     InfoBox({
-      title: () => h('div', [
-        h(AuditIcon, {
-          type: 'alert',
-          style: {
-            fontSize: '42px',
-            color: '#FFF8C3',
-          },
-        }),
-        h('div', t('刷新数据源请注意')),
-      ]),
+      type: 'warning',
+      title: t('刷新数据源请注意'),
       subTitle: () => h('div', {
         style: {
           color: '#4D4F56',

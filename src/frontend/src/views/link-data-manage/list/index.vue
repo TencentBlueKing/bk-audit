@@ -58,7 +58,8 @@
     :strategy-tag-map="strategyTagMap" />
 </template>
 <script setup lang="tsx">
-  import { computed, onMounted, ref, shallowRef } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { computed, h, onMounted, ref, shallowRef } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import LinkDataManageService from '@service/link-data-manage';
@@ -238,36 +239,19 @@
           onClick={() => handleEdit(data)}>
           { t('编辑') }
         </auth-button>
-        <audit-popconfirm
-          title={t('确认删除该联表数据？')}
-          class="ml8"
-          confirmHandler={() => handleDelete(data)}
-          v-slots={{
-            content: () => (
-              <>
-                <div>{ t('联表数据名称') }：{ data.name }</div>
-                <div style={{
-                  marginTop: '16px',
-                  padding: '12px 16px',
-                  background: '#F5F6FA',
-                  borderRadius: '2px',
-                }}>{ t('删除操作无法撤回，请谨慎操作！') }</div>
-              </>
-            ),
-          }}>
-          <auth-button
-            permission={data.permission.delete_link_table}
-            actionId="delete_link_table"
-            v-bk-tooltips={{
-              content: t('已有策略在使用，不可删除'),
-              disabled: data.strategy_count <= 0,
-            }}
-            text
-            disabled={data.strategy_count > 0}
-            theme="primary">
-            { t('删除') }
-          </auth-button>
-        </audit-popconfirm>
+        <auth-button
+          permission={data.permission.delete_link_table}
+          actionId="delete_link_table"
+          v-bk-tooltips={{
+            content: t('已有策略在使用，不可删除'),
+            disabled: data.strategy_count <= 0,
+          }}
+          text
+          disabled={data.strategy_count > 0}
+          theme="primary"
+          onClick={() => handleDelete(data)}>
+          { t('删除') }
+        </auth-button>
       </>
       ),
     }]);
@@ -501,8 +485,38 @@
 
   // 删除
   const handleDelete = (data: LinkDataModel) => {
-    deleteLinkData({
-      uid: data.uid,
+    InfoBox({
+      title: () => h('div', [
+        h('div', t('确认删除该联表数据？')),
+      ]),
+      subTitle: () => h('div', {
+        style: {
+          fontSize: '14px',
+          textAlign: 'left',
+        },
+      }, [
+        h('div', `${t('联表数据名称')}: ${data.name}`),
+        h('div', {
+          style: {
+            color: '#4D4F56',
+            backgroundColor: '#f5f6fa',
+            padding: '12px 16px',
+            borderRadius: '2px',
+            marginTop: '10px',
+          },
+        }, t('删除操作无法撤回，请谨慎操作！')),
+      ]),
+      confirmText: t('删除'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      class: 'link-data-delete',
+      onConfirm() {
+        deleteLinkData({
+          uid: data.uid,
+        });
+      },
     });
   };
 
@@ -555,3 +569,12 @@
   }
 }
 </style>
+<style>
+.link-data-delete {
+  .bk-button-primary {
+    background-color: red;
+    border-color: red;
+  }
+}
+</style>
+
