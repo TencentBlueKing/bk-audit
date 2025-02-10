@@ -750,13 +750,31 @@ class LinkTableConfigTableSerializer(serializers.Serializer):
         return attrs
 
 
+class LinkTableLinkFieldInfoSerializer(serializers.Serializer):
+    """
+    联表连接字段信息
+    """
+
+    field_name = serializers.CharField(label=gettext_lazy("Field Name"))
+    display_name = serializers.CharField(
+        label=gettext_lazy("Display Name"), default=None, allow_blank=True, allow_null=True
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # display_name 默认值为 field_name
+        if not attrs.get("display_name"):
+            attrs["display_name"] = attrs["field_name"]
+        return attrs
+
+
 class LinkTableLinkFieldSerializer(serializers.Serializer):
     """
     联表连接字段
     """
 
-    left_field = serializers.CharField(label=gettext_lazy("Left Table Field"))
-    right_field = serializers.CharField(label=gettext_lazy("Right Table Field"))
+    left_field = LinkTableLinkFieldInfoSerializer(label=gettext_lazy("Left Table Field"))
+    right_field = LinkTableLinkFieldInfoSerializer(label=gettext_lazy("Right Table Field"))
 
 
 class LinkTableLinkSerializer(serializers.Serializer):

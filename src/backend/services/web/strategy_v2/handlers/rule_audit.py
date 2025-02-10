@@ -187,7 +187,8 @@ class RuleAuditSQLBuilder:
 
             # link_fields
             link_fields_list = [
-                LinkField(left_field=lf["left_field"], right_field=lf["right_field"]) for lf in lk["link_fields"]
+                LinkField(left_field=lf["left_field"]["field_name"], right_field=lf["right_field"]["field_name"])
+                for lf in lk["link_fields"]
             ]
 
             # 构建 JoinTable

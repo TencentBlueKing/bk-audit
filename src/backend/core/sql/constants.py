@@ -103,6 +103,8 @@ class Operator(TextChoices):
     ISNULL = "isnull", gettext_lazy("IsNull")
     NOTNULL = "notnull", gettext_lazy("NotNull")
 
+    range_operators = {INCLUDE, EXCLUDE}
+
     @classmethod
     def match_handler(cls, operator: str):
         return {
