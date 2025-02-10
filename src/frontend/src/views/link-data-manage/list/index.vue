@@ -191,13 +191,13 @@
           class='edit-badge'
           position="top-right"
           theme="danger"
-          visible={data.version >= (maxVersionMap.value[data.uid] || 1)}
+          visible={!data.need_update_strategy}
           dot
       >
         <a
           v-bk-tooltips={{
             content: t('策略使用的方案，有新版本待升级'),
-            disabled: data.version >= (maxVersionMap.value[data.uid] || 1),
+            disabled: !data.need_update_strategy,
           }}
           onClick={() => handleLinkStrategy(data)}>
           {data.strategy_count}
