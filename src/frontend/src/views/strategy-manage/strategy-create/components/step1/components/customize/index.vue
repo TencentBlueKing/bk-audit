@@ -215,7 +215,6 @@
   }
   interface Expose {
     getFields: () => IFormData
-    getTableFields: () => Array<DatabaseTableFieldModel>
   }
   interface Props {
     editData: StrategyModel
@@ -495,8 +494,8 @@
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
-    expectedResultsRef.value.setConfigs(editData.configs.select);
-    rulesComponentRef.value.setConfigs(editData.configs.where);
+    expectedResultsRef.value.setSelect(editData.configs.select);
+    rulesComponentRef.value.setWhere(editData.configs.where);
     if (editData.configs.data_source) {
       formData.value.configs.data_source = editData.configs.data_source;
     }
@@ -544,10 +543,16 @@
           rt_id: (_.isArray(tableIdList) ?  _.last(tableIdList)  : tableIdList) as string,
         };
       }
+      // 如果select为空数组，传全部
+      if (params.configs.select && params.configs.select.length === 0) {
+        params.configs.select = tableFields.value.map(item => ({
+          ...item,
+          aggregate: null,
+          display_name: `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`,
+        }));
+        expectedResultsRef.value.setSelect(params.configs.select);
+      }
       return params;
-    },
-    getTableFields() {
-      return tableFields.value;
     },
   });
 </script>
