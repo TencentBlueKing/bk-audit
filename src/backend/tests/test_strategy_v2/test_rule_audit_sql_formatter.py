@@ -181,7 +181,9 @@ class TestRuleAuditSQLFormatter(TestCase):
             "links": [
                 {
                     "join_type": "left_join",
-                    "link_fields": [{"left_field": "event_id", "right_field": "resource_id"}],
+                    "link_fields": [
+                        {"left_field": {"field_name": "event_id"}, "right_field": {"field_name": "resource_id"}}
+                    ],
                     "left_table": {
                         "rt_id": "log_rt_1",
                         "table_type": LinkTableTableType.EVENT_LOG,
@@ -366,7 +368,12 @@ class TestRuleAuditSQLFormatter(TestCase):
             "links": [
                 {
                     "join_type": "left_join",
-                    "link_fields": [{"left_field": "event_id", "right_field": "resource_id"}],
+                    "link_fields": [
+                        {
+                            "left_field": {"field_name": "event_id", "display_name": "event_id"},
+                            "right_field": {"field_name": "resource_id", "display_name": "resource_id"},
+                        }
+                    ],
                     "left_table": {
                         "rt_id": "log_rt_1",
                         "table_type": LinkTableTableType.EVENT_LOG,
@@ -381,7 +388,12 @@ class TestRuleAuditSQLFormatter(TestCase):
                 },
                 {
                     "join_type": "inner_join",
-                    "link_fields": [{"left_field": "resource_id", "right_field": "host_id"}],
+                    "link_fields": [
+                        {
+                            "left_field": {"field_name": "resource_id", "display_name": "resource_id"},
+                            "right_field": {"field_name": "host_id", "display_name": "host_id"},
+                        }
+                    ],
                     "left_table": {
                         "rt_id": "asset_rt_2",
                         "table_type": LinkTableTableType.BUILD_ID_ASSET,
@@ -391,7 +403,12 @@ class TestRuleAuditSQLFormatter(TestCase):
                 },
                 {
                     "join_type": "left_join",
-                    "link_fields": [{"left_field": "host_id", "right_field": "network_id"}],
+                    "link_fields": [
+                        {
+                            "left_field": {"field_name": "host_id", "display_name": "host_id"},
+                            "right_field": {"field_name": "network_id", "display_name": "network_id"},
+                        }
+                    ],
                     "left_table": {"rt_id": "host_rt_3", "table_type": LinkTableTableType.BIZ_RT, "display_name": "c"},
                     "right_table": {
                         "rt_id": "network_rt_4",

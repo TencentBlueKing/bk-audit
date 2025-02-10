@@ -158,9 +158,13 @@ class SQLGenerator:
             raise UnsupportedOperatorError(operator)
 
         # 根据操作符类型调用对应的处理函数
-        if operator in {Operator.INCLUDE, Operator.EXCLUDE}:
-            return handler(field, condition.filters)
-        return handler(field, condition.filter)
+        if operator in Operator.range_operators:
+            condition_value = condition.filters
+        elif not condition.filter and condition.filters:
+            condition_value = condition.filters[0]
+        else:
+            condition_value = condition.filter
+        return handler(field, condition_value)
 
     def _apply_where_conditions(self, where_condition: WhereCondition) -> BasicCriterion:
         """递归构建 WHERE 子句"""
