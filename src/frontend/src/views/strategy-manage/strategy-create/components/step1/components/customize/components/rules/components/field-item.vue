@@ -154,7 +154,7 @@
       <audit-icon
         style="cursor: pointer;"
         type="reduce-fill"
-        @click="handleDelete" />
+        @click="() => handleDelete(index)" />
     </div>
   </div>
   <div
@@ -176,11 +176,6 @@
 
   import useRequest from '@/hooks/use-request';
 
-  interface Emits {
-    (e: 'updateFieldItemList', value: string, conditionsIndex: number): void;
-    (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
-    (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
-  }
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>
     conditions: {
@@ -196,6 +191,11 @@
     },
     conditionsIndex: number,
     configType: string,
+  }
+  interface Emits {
+    (e: 'updateFieldItemList', conditionsIndex: number, value: Props['conditions']): void;
+    (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
+    (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
   }
   interface DataType{
     label: string;
@@ -246,14 +246,23 @@
   const handleValidate = (value: any) => value.length > 0;
 
   const handleAdd = () => {
-    emits('updateFieldItemList', 'add', props.conditionsIndex);
+    localConditions.value.conditions.push({
+      condition: {
+        field: new DatabaseTableFieldModel(),
+        filter: '',
+        filters: [],
+        operator: '',
+      },
+    });
+    emits('updateFieldItemList', props.conditionsIndex, localConditions.value);
   };
 
-  const handleDelete = () => {
+  const handleDelete = (index: number) => {
     if (props.conditions.conditions.length === 1) {
       return;
     }
-    emits('updateFieldItemList', 'delete', props.conditionsIndex);
+    localConditions.value.conditions.splice(index, 1);
+    emits('updateFieldItemList', props.conditionsIndex, localConditions.value);
   };
 
   const handleSelectField = (value: DatabaseTableFieldModel, index: number) => {

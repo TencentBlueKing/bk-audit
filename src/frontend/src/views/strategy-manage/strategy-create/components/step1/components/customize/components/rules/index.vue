@@ -141,19 +141,8 @@
     });
   };
 
-  const handleUpdateFieldItemList = (value: string, conditionsIndex: number) => {
-    if (value === 'add') {
-      where.value.conditions[conditionsIndex].conditions.push({
-        condition: {
-          field: new DatabaseTableFieldModel(),
-          filter: '',
-          filters: [],
-          operator: '',
-        },
-      });
-    } else {
-      where.value.conditions[conditionsIndex].conditions.pop();
-    }
+  const handleUpdateFieldItemList = (conditionsIndex: number, value: Where['conditions'][0]) => {
+    where.value.conditions[conditionsIndex] = value;
   };
 
   // eslint-disable-next-line max-len
