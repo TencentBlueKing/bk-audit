@@ -30,6 +30,7 @@ export default class LinkData {
     view_link_table: boolean
   };
   version: number;
+  need_update_strategy: boolean;
 
   constructor(payload = {} as LinkData) {
     this.id = payload.id;
@@ -43,5 +44,6 @@ export default class LinkData {
     this.created_at = payload.created_at;
     this.permission = payload.permission;
     this.version = payload.version;
+    this.need_update_strategy = payload.need_update_strategy;
   }
 }

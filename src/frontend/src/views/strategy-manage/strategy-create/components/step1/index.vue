@@ -214,7 +214,6 @@
 
   import type ControlModel from '@model/control/control';
   import CommonDataModel from '@model/strategy/common-data';
-  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
 
   import useRecordPage from '@hooks/use-record-page';
@@ -593,15 +592,6 @@
       }
       // 获取审计参数（自定义规则审计、引入模型审计）
       const fields = comRef.value.getFields();
-      // 如果select为空数组，传全部
-      if (fields.configs.select && fields.configs.select.length === 0) {
-        const tableFields: Array<DatabaseTableFieldModel> = comRef.value.getTableFields();
-        fields.configs.select = tableFields.map(item => ({
-          ...item,
-          aggregate: null,
-          display_name: `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`,
-        }));
-      }
       // 非联表不需要link_table参数
       if (fields.configs.config_type !== 'LinkTable' && fields.configs.data_source) {
         fields.configs.data_source.link_table = null;

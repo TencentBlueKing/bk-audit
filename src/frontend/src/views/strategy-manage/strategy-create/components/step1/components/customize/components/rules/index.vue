@@ -79,7 +79,7 @@
 
   interface Expose {
     resetFormData: () => void,
-    setConfigs: (config: Where) => void;
+    setWhere: (whereData: Where) => void;
   }
   interface Where {
     connector: 'and' | 'or';
@@ -198,8 +198,8 @@
         }],
       };
     },
-    setConfigs(configs: Where) {
-      where.value = configs;
+    setWhere(whereData: Where) {
+      where.value = whereData;
     },
   });
 </script>
