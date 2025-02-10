@@ -202,12 +202,17 @@
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
 
   const linksHeight = computed(() => {
-    const totalLength = links.value.reduce((accumulator, item) => {
-      const linkFieldsLength = item.link_fields.length + 2;
-      return accumulator + linkFieldsLength;
-    }, 0);
-
-    return totalLength * 40;
+    const result = links.value.reduce(
+      (accumulator, item) => {
+        const linkFieldsLength = item.link_fields.length;
+        return {
+          totalFieldsLength: accumulator.totalFieldsLength + linkFieldsLength,
+          linksLength: accumulator.linksLength + 2,
+        };
+      },
+      { totalFieldsLength: 0, linksLength: 0 },
+    );
+    return (result.totalFieldsLength + result.linksLength) * 41;
   });
 
   // 如果左表选了EventLog，右表不能再选，直接隐藏不显示
@@ -342,6 +347,7 @@
 .link-data-table {
   position: relative;
   padding: 16px;
+  margin-bottom: 8px;
   background: #f5f7fa;
   border-radius: 2px;
 
