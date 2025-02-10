@@ -136,7 +136,9 @@
 
   const fieldAggregateMap = {
     string: ['COUNT', 'DISCOUNT'],
+    text: ['COUNT', 'DISCOUNT'],
     double: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
+    float: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
     int: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
     long: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
     timestamp: ['COUNT', 'MIX', 'MAX'],
