@@ -39,8 +39,11 @@
                   class="field-pop-select-item"
                   :class="[selectIndex === index ? 'select-item-active' : '']"
                   @click="() => handleSelectField(index, item)">
-                  <div>
-                    <span style=" margin-right: 4px;font-size: 14px; color: #29bc9e;">#</span>
+                  <div style="display: flex; align-items: center;">
+                    <audit-icon
+                      style="margin-right: 4px;font-size: 14px;"
+                      svg
+                      :type="item.field_type" />
                     <span
                       v-if="configType === 'LinkTable'"
                       style=" color: #3a84ff;">{{ item.table }}.</span>

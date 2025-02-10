@@ -47,6 +47,9 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .audit-icon-lang-zh:before {
 	content: "\e16b";
 }
+.audit-icon-shujuku:before {
+	content: "\e182";
+}
 .audit-icon-analysis:before {
 	content: "\e101";
 }
@@ -337,4 +340,31 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 }
 .audit-icon-baobiao:before {
 	content: "\e181";
+}
+.audit-icon-lianbiao:before {
+	content: "\e183";
+}
+.audit-icon-buer:before {
+	content: "\e190";
+}
+.audit-icon-double:before {
+	content: "\e18e";
+}
+.audit-icon-long:before {
+	content: "\e193";
+}
+.audit-icon-int:before {
+	content: "\e18c";
+}
+.audit-icon-string:before {
+	content: "\e18d";
+}
+.audit-icon-text:before {
+	content: "\e18f";
+}
+.audit-icon-timestamp:before {
+	content: "\e191";
+}
+.audit-icon-float:before {
+	content: "\e194";
 }
