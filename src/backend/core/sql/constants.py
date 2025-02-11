@@ -103,8 +103,6 @@ class Operator(TextChoices):
     ISNULL = "isnull", gettext_lazy("IsNull")
     NOTNULL = "notnull", gettext_lazy("NotNull")
 
-    range_operators = {INCLUDE, EXCLUDE}
-
     @classmethod
     def match_handler(cls, operator: str):
         return {
@@ -121,3 +119,7 @@ class Operator(TextChoices):
             cls.ISNULL: lambda field, value: field.isnull(),
             cls.NOTNULL: lambda field, value: field.notnull(),
         }.get(operator)
+
+    @classmethod
+    def range_operators(cls):
+        return {cls.INCLUDE, cls.EXCLUDE}
