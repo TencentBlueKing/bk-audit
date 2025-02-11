@@ -150,8 +150,14 @@
         },
         join_type: 'left_join',
         link_fields: [{
-          left_field: '',
-          right_field: '',
+          left_field: {
+            field_name: '',
+            display_name: '',
+          },
+          right_field: {
+            field_name: '',
+            display_name: '',
+          },
         }],
       }],
     },

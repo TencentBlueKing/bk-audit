@@ -260,8 +260,14 @@
           table_type: '',
         },
         link_fields: item.link_fields.map(() => ({
-          left_field: '',
-          right_field: '',
+          left_field: {
+            field_name: '',
+            display_name: '',
+          },
+          right_field: {
+            field_name: '',
+            display_name: '',
+          },
         })),
       }));
       return;
@@ -273,7 +279,10 @@
       system_ids: [],
     };
     links.value[index].link_fields =  links.value[index].link_fields.map(fieldItem => ({
-      left_field: '',
+      left_field: {
+        field_name: '',
+        display_name: '',
+      },
       right_field: fieldItem.right_field,
     }));
   };
@@ -287,7 +296,10 @@
     };
     links.value[index].link_fields =  links.value[index].link_fields.map(fieldItem => ({
       left_field: fieldItem.left_field,
-      right_field: '',
+      right_field: {
+        field_name: '',
+        display_name: '',
+      },
     }));
   };
 
@@ -324,8 +336,14 @@
       },
       join_type: 'left_join',
       link_fields: [{
-        left_field: '',
-        right_field: '',
+        left_field: {
+          field_name: '',
+          display_name: '',
+        },
+        right_field: {
+          field_name: '',
+          display_name: '',
+        },
       }],
     });
   };
