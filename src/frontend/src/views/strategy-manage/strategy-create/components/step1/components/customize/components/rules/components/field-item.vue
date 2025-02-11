@@ -317,8 +317,8 @@
           return _.last(valItem) || '';
         }
         return valItem;
-      })) : [_.last(value) || ''];
-    emits('updateFieldItem', resultValue, props.conditionsIndex, index, 'filter');
+      })) : value.slice(-1);
+    emits('updateFieldItem', resultValue as Array<string>, props.conditionsIndex, index, 'filter');
   };
 
   // tag-input、user、input输入
