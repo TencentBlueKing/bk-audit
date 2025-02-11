@@ -158,7 +158,7 @@ class SQLGenerator:
             raise UnsupportedOperatorError(operator)
 
         # 根据操作符类型调用对应的处理函数
-        if operator in Operator.range_operators:
+        if operator in Operator.range_operators():
             condition_value = condition.filters
         elif not condition.filter and condition.filters:
             condition_value = condition.filters[0]
