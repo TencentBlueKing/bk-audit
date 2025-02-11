@@ -976,6 +976,8 @@ class ListLinkTable(LinkTableBase):
             link_tables = link_tables.order_by(*sort)
         # 分页
         link_tables, page = paginate_queryset(queryset=link_tables, request=request)
+        if sort:
+            link_tables = link_tables.order_by(*sort)
         link_table_uids = link_tables.values("uid")
         # 填充标签
         all_tags = LinkTableTag.objects.filter(link_table_uid__in=link_table_uids)
