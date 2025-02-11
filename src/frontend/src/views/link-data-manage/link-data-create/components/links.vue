@@ -202,12 +202,17 @@
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
 
   const linksHeight = computed(() => {
-    const totalLength = links.value.reduce((accumulator, item) => {
-      const linkFieldsLength = item.link_fields.length + 2;
-      return accumulator + linkFieldsLength;
-    }, 0);
-
-    return totalLength * 40;
+    const result = links.value.reduce(
+      (accumulator, item) => {
+        const linkFieldsLength = item.link_fields.length;
+        return {
+          totalFieldsLength: accumulator.totalFieldsLength + linkFieldsLength,
+          linksLength: accumulator.linksLength + 2,
+        };
+      },
+      { totalFieldsLength: 0, linksLength: 0 },
+    );
+    return (result.totalFieldsLength + result.linksLength) * 41;
   });
 
   // 如果左表选了EventLog，右表不能再选，直接隐藏不显示
@@ -255,8 +260,14 @@
           table_type: '',
         },
         link_fields: item.link_fields.map(() => ({
-          left_field: '',
-          right_field: '',
+          left_field: {
+            field_name: '',
+            display_name: '',
+          },
+          right_field: {
+            field_name: '',
+            display_name: '',
+          },
         })),
       }));
       return;
@@ -268,7 +279,10 @@
       system_ids: [],
     };
     links.value[index].link_fields =  links.value[index].link_fields.map(fieldItem => ({
-      left_field: '',
+      left_field: {
+        field_name: '',
+        display_name: '',
+      },
       right_field: fieldItem.right_field,
     }));
   };
@@ -282,7 +296,10 @@
     };
     links.value[index].link_fields =  links.value[index].link_fields.map(fieldItem => ({
       left_field: fieldItem.left_field,
-      right_field: '',
+      right_field: {
+        field_name: '',
+        display_name: '',
+      },
     }));
   };
 
@@ -319,8 +336,14 @@
       },
       join_type: 'left_join',
       link_fields: [{
-        left_field: '',
-        right_field: '',
+        left_field: {
+          field_name: '',
+          display_name: '',
+        },
+        right_field: {
+          field_name: '',
+          display_name: '',
+        },
       }],
     });
   };
@@ -342,6 +365,7 @@
 .link-data-table {
   position: relative;
   padding: 16px;
+  margin-bottom: 8px;
   background: #f5f7fa;
   border-radius: 2px;
 

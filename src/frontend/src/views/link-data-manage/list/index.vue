@@ -134,7 +134,7 @@
     {
       name: t('联表数据名称'),
       id: 'name_contains',
-      placeholder: t('请选择状态'),
+      placeholder: t('请输入联表数据名称'),
       onlyRecommendChildren: true,
     },
     {
@@ -448,7 +448,7 @@
     });
     total.value = data.total > total.value ? data.total : total.value;
     const { uid } = getSearchParams();
-    if (uid && isNeedShowDetail.value) {
+    if (uid && isNeedShowDetail.value && data.results.length) {
       detailRef.value.show(uid);
       isNeedShowDetail.value = false;
     }

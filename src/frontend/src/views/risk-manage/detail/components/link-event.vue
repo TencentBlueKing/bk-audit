@@ -39,10 +39,10 @@
             </transition>
           </scroll-faker>
         </div>
-        <div
-          v-if="importantInformation.length"
-          class="list-item-detail">
-          <div class="important-information">
+        <div class="list-item-detail">
+          <div
+            v-if="importantInformation.length"
+            class="important-information">
             <div class="title">
               {{ t('重点信息') }}
             </div>
@@ -154,13 +154,6 @@
             </bk-exception>
           </div>
         </div>
-        <bk-exception
-          v-else
-          class="exception-part"
-          scene="part"
-          type="empty">
-          {{ t('暂无数据') }}
-        </bk-exception>s
       </template>
       <bk-exception
         v-else

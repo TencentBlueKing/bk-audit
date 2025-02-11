@@ -584,29 +584,6 @@
       },
     },
     {
-      label: () => t('最近更新人'),
-      field: () => 'updated_by',
-      width: 140,
-      sort: 'custom',
-    },
-    {
-      label: () => t('最近更新时间'),
-      field: () => 'updated_at',
-      sort: 'custom',
-      width: 170,
-    },
-    {
-      label: () => t('创建人'),
-      field: () => 'created_by',
-      width: 140,
-    },
-    {
-      label: () => t('创建时间'),
-      field: () => 'created_at',
-      width: 170,
-    },
-    {
-      fixed: 'right',
       label: () => t('启停'),
       field: () => 'status',
       width: 110,
@@ -648,6 +625,28 @@
         />
       </audit-popconfirm>;
       },
+    },
+    {
+      label: () => t('最近更新人'),
+      field: () => 'updated_by',
+      width: 140,
+      sort: 'custom',
+    },
+    {
+      label: () => t('最近更新时间'),
+      field: () => 'updated_at',
+      sort: 'custom',
+      width: 170,
+    },
+    {
+      label: () => t('创建人'),
+      field: () => 'created_by',
+      width: 140,
+    },
+    {
+      label: () => t('创建时间'),
+      field: () => 'created_at',
+      width: 170,
     },
     {
       fixed: 'right',
@@ -938,8 +937,12 @@
       }
     });
     // 对列表的filter重新赋值
-    tableColumn.value[4].filter.checked.length =  0;
-    tableColumn.value[9].filter.checked.length = 0;
+    tableColumn.value.forEach((column) => {
+      if (column.filter && Array.isArray(column.filter.checked)) {
+        // eslint-disable-next-line no-param-reassign
+        column.filter.checked.length = 0;
+      }
+    });
 
     if (search.tag) {
       renderLabelRef.value.setLabel(search.tag);
@@ -954,9 +957,12 @@
       const statusList = search.status.split(',');
       statusList.forEach((statusKey: string) => {
         if (['running', 'disabled'].includes(statusKey)) {
-          tableColumn.value[8].filter.checked.push(statusKey);
+          const targetColumn = tableColumn.value.find(column => column.field() === 'status');
+          if (targetColumn && targetColumn.filter && Array.isArray(targetColumn.filter.checked)) {
+            targetColumn.filter.checked.length = 0;
+          }
+          targetColumn.filter.checked.push(statusKey);
         }
-        tableColumn.value[3].filter.checked.push(statusKey);
       });
     }
   };
@@ -1035,19 +1041,20 @@
   // 筛选过滤
   const handleColumnFilter = (checkedObj: Record<string, any>) => {
     const checkField = checkedObj.column.field();
-    const { index } = checkedObj;
+    // const { index } = checkedObj;
     const value = checkedObj.checked.join(',');
-    if (index === 3) {
-      tableColumn.value[8].filter.checked.length = 0;
-    } else {
-      tableColumn.value[3].filter.checked.length = 0;
-    }
+    // tableColumn.value.forEach((column, colIndex) => {
+    //   if (column.filter && Array.isArray(column.filter.checked) && index !== colIndex) {
+    //     // eslint-disable-next-line no-param-reassign
+    //     column.filter.checked.length = 0;
+    //   }
+    // });
     listRef.value.fetchData({
       [checkField]: value,
     });
     const findObj = searchKey.value.find(item => item.id === checkField);
     const nameList = value.split(',') as string[];
-    if (value) {
+    if (value && checkField === 'status') {
       if (findObj) {
         findObj.values = [{
           id: value,
@@ -1081,8 +1088,12 @@
     renderLabelRef.value.resetAllLabel();
     leftLabelFilterCondition.value = '';
 
-    tableColumn.value[3].filter.checked.length = 0;
-    tableColumn.value[8].filter.checked.length = 0;
+    tableColumn.value.forEach((column) => {
+      if (column.filter && Array.isArray(column.filter.checked)) {
+        // eslint-disable-next-line no-param-reassign
+        column.filter.checked.length = 0;
+      }
+    });
 
     listRef.value.fetchData({
       ...search,

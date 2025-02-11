@@ -104,13 +104,13 @@
             :key="fieldIndex">
             <div class="detail-table-body">
               <div class="left-field">
-                {{ field.left_field }}
+                {{ field.left_field.display_name }}
               </div>
               <div style="width: 40px; text-align: center;">
                 =
               </div>
               <div class="right-field">
-                {{ field.right_field }}
+                {{ field.right_field.display_name }}
               </div>
             </div>
           </template>

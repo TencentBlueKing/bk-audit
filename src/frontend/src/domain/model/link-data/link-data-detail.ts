@@ -42,8 +42,14 @@ export default class LinkDataDetail {
       }
       join_type: string,
       link_fields: Array<{
-        left_field: string,
-        right_field: string
+        left_field: {
+          field_name: string,
+          display_name: string,
+        },
+        right_field: {
+          field_name: string,
+          display_name: string,
+        }
       }>
     }>;
   };

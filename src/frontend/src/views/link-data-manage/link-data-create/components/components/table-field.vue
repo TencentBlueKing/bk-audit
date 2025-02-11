@@ -26,12 +26,13 @@
         style="margin-bottom: 8px;">
         <select-verify
           ref="selectVerifyRef"
-          :default-value="field.left_field"
+          :default-value="field.left_field.field_name"
           theme="background">
           <bk-select
-            v-model="field.left_field"
+            v-model="field.left_field.field_name"
             filterable
-            :placeholder="t('请选择匹配字段')">
+            :placeholder="t('请选择匹配字段')"
+            @change="(value: string) => selectField(value, field.left_field, 'left')">
             <template #prefix>
               <span style="padding: 0 14px; color: #63656e; border-right: 1px solid #c4c6cc;">{{ t('字段') }}</span>
             </template>
@@ -54,12 +55,13 @@
         style="margin-bottom: 8px;">
         <select-verify
           ref="selectVerifyRef"
-          :default-value="field.right_field"
+          :default-value="field.right_field.field_name"
           theme="background">
           <bk-select
-            v-model="field.right_field"
+            v-model="field.right_field.field_name"
             filterable
-            :placeholder="t('请选择匹配字段')">
+            :placeholder="t('请选择匹配字段')"
+            @change="(value: string) => selectField(value, field.right_field, 'right')">
             <template #prefix>
               <span style="padding: 0 14px; color: #63656e; border-right: 1px solid #c4c6cc;">{{ t('字段') }}</span>
             </template>
@@ -114,14 +116,35 @@
   const selectVerifyRef = ref();
 
   const linkFields = defineModel<Array<{
-    left_field: string;
-    right_field: string;
+    left_field: {
+      field_name: string,
+      display_name: string,
+    };
+    right_field: {
+      field_name: string,
+      display_name: string,
+    };
   }>>('linkFields', {
     required: true,
   });
 
   const leftFieldsList = ref<Array<FieldItem>>([]);
   const rightFieldsList = ref<Array<FieldItem>>([]);
+
+  const selectField = (value: string, field: {
+    field_name: string,
+    display_name: string,
+  }, type: 'left' | 'right') => {
+    if (type === 'left') {
+      const resultItem = leftFieldsList.value.find(item => item.value === value);
+      // eslint-disable-next-line no-param-reassign
+      field.display_name = resultItem ? resultItem.label : '';
+    } else {
+      const resultItem = rightFieldsList.value.find(item => item.value === value);
+      // eslint-disable-next-line no-param-reassign
+      field.display_name = resultItem ? resultItem.label : '';
+    }
+  };
 
   const getLeftTableFields = (id: string) => {
     StrategyManageService.fetchTableRtFields({
@@ -130,7 +153,12 @@
       leftFieldsList.value = data;
       linkFields.value = linkFields.value.map(item => ({
         right_field: item.right_field,
-        left_field: leftFieldsList.value.find(fieldItem => fieldItem.value === item.left_field) ? item.left_field : '',
+        left_field: leftFieldsList.value.find(fieldItem => fieldItem.value === item.left_field.field_name)
+          ? item.left_field
+          : {
+            field_name: '',
+            display_name: '',
+          },
       }));
     });
   };
@@ -142,7 +170,12 @@
       rightFieldsList.value = data;
       linkFields.value = linkFields.value.map(item => ({
         left_field: item.left_field,
-        right_field: rightFieldsList.value.find(fieldItem => fieldItem.value === item.right_field) ? item.right_field : '',
+        right_field: rightFieldsList.value.find(fieldItem => fieldItem.value === item.right_field.field_name)
+          ? item.right_field
+          : {
+            field_name: '',
+            display_name: '',
+          },
       }));
     });
   };
@@ -150,8 +183,14 @@
   // 新增
   const handleAdd = () => {
     linkFields.value?.push({
-      left_field: '',
-      right_field: '',
+      left_field: {
+        field_name: '',
+        display_name: '',
+      },
+      right_field: {
+        field_name: '',
+        display_name: '',
+      },
     });
   };
 

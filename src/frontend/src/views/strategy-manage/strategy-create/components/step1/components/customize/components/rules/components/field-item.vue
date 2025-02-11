@@ -92,7 +92,7 @@
     </bk-form-item>
     <!-- 值 -->
     <bk-form-item
-      v-if="condition.condition.operator !== 'isnull' && condition.condition.operator !== 'notnull'"
+      v-if="!['', 'notnull', 'isnull'].includes(condition.condition.operator)"
       label=""
       label-width="0"
       :property="(input.includes(condition.condition.operator) &&
@@ -115,16 +115,17 @@
         float-mode
         id-key="value"
         :list="dicts[condition.condition.field.raw_name]"
-        multiple
+        :multiple="!input.includes(condition.condition.operator)"
         name-key="label"
         trigger="hover"
-        @change="(value: Array<Array<string>>) => handleFilter(value, index)" />
+        @change="(value: Array<Array<string>>) => handleCascaderFilter(value, index)" />
       <audit-user-selector
         v-else-if="condition.condition.field.raw_name.includes('username')"
         v-model="condition.condition.filters"
         allow-create
         class="consition-value"
-        @change="(value: Array<string>) => handleFilter(value, index)" />
+        :multiple="!input.includes(condition.condition.operator)"
+        @change="(value: Array<string>) => handleFilter(Array.isArray(value) ? value : [value], index)" />
       <bk-tag-input
         v-else-if="tagInput.includes(condition.condition.operator)"
         v-model="condition.condition.filters"
@@ -154,7 +155,7 @@
       <audit-icon
         style="cursor: pointer;"
         type="reduce-fill"
-        @click="handleDelete" />
+        @click="() => handleDelete(index)" />
     </div>
   </div>
   <div
@@ -176,11 +177,6 @@
 
   import useRequest from '@/hooks/use-request';
 
-  interface Emits {
-    (e: 'updateFieldItemList', value: string, conditionsIndex: number): void;
-    (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
-    (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
-  }
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>
     conditions: {
@@ -197,6 +193,11 @@
     conditionsIndex: number,
     configType: string,
   }
+  interface Emits {
+    (e: 'updateFieldItemList', conditionsIndex: number, value: Props['conditions']): void;
+    (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
+    (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
+  }
   interface DataType{
     label: string;
     value: string;
@@ -211,8 +212,10 @@
     value: string
   }>>([]);
   const dicts = ref<Record<string, Array<any>>>({});
+
   const input = ['eq', 'neq', 'reg', 'nreg', 'lte', 'lt', 'gte', 'gt'];
   const tagInput = ['include', 'exclude'];
+
   const localConditions = ref<Props['conditions']>({
     connector: 'and',
     conditions: [{
@@ -246,14 +249,41 @@
   const handleValidate = (value: any) => value.length > 0;
 
   const handleAdd = () => {
-    emits('updateFieldItemList', 'add', props.conditionsIndex);
+    localConditions.value.conditions.push({
+      condition: {
+        field: new DatabaseTableFieldModel(),
+        filter: '',
+        filters: [],
+        operator: '',
+      },
+    });
+    emits('updateFieldItemList', props.conditionsIndex, localConditions.value);
   };
 
-  const handleDelete = () => {
+  const handleDelete = (index: number) => {
     if (props.conditions.conditions.length === 1) {
       return;
     }
-    emits('updateFieldItemList', 'delete', props.conditionsIndex);
+    localConditions.value.conditions.splice(index, 1);
+    emits('updateFieldItemList', props.conditionsIndex, localConditions.value);
+  };
+
+  const reSetOperator = (index: number) => {
+    if (localConditions.value.conditions[index].condition.operator !== '') {
+      localConditions.value.conditions[index].condition.operator = '';
+      handleSelectOperator('', index);
+    }
+  };
+
+  const reSetFilter = (index: number) => {
+    if (localConditions.value.conditions[index].condition.filter !== '') {
+      localConditions.value.conditions[index].condition.filter = '';
+      handleFilter('', index);
+    }
+    if (localConditions.value.conditions[index].condition.filters.length) {
+      localConditions.value.conditions[index].condition.filters = [];
+      handleFilter([], index);
+    }
   };
 
   const handleSelectField = (value: DatabaseTableFieldModel, index: number) => {
@@ -267,21 +297,33 @@
     }
     emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index, 'field');
     localConditions.value.conditions[index].condition.field = { ...value };
+    // 重置数据
+    reSetOperator(index);
+    reSetFilter(index);
   };
 
   const handleSelectOperator = (value: string, index: number) => {
     emits('updateFieldItem', value, props.conditionsIndex, index, 'operator');
+    // 重置数据
+    reSetFilter(index);
   };
 
-  const handleFilter = (value: Array<Array<string>> | Array<string> | string, index: number) => {
-    // 判断是否是级联
-    const resultValue = Array.isArray(value) ? value.map(((valItem) => {
-      if (Array.isArray(valItem)) {
-        return _.last(valItem) || '';
-      }
-      return valItem;
-    })) : value;
+  // 级联选择器
+  const handleCascaderFilter = (value: Array<Array<string>> | Array<string>, index: number) => {
+    // 判断是否是级联(多选是二维数组，取每个元素最后一个；单选一维，取最后一个元素)
+    const resultValue = (Array.isArray(value) && value.every(element => Array.isArray(element)))
+      ? value.map(((valItem) => {
+        if (Array.isArray(valItem)) {
+          return _.last(valItem) || '';
+        }
+        return valItem;
+      })) : [_.last(value) || ''];
     emits('updateFieldItem', resultValue, props.conditionsIndex, index, 'filter');
+  };
+
+  // tag-input、user、input输入
+  const handleFilter = (value: Array<string> | string, index: number) => {
+    emits('updateFieldItem', value, props.conditionsIndex, index, 'filter');
   };
 
   const handleChangeConnector = () => {
@@ -290,16 +332,13 @@
 
   // 回显级联数据
   const handleCascader = (key: string, dataList: Array<DataType>) => {
-    console.log(key, dataList);
     const conditionItemList = localConditions.value.conditions.filter(item => item.condition.field.raw_name === key);
     if (!conditionItemList) return;
-    console.log(conditionItemList);
     conditionItemList.forEach((conditionItem) => {
       const valueMap = conditionItem.condition.filters.reduce((res, v: string, index: number) => {
         res[v] = index;
         return res;
       }, {} as Record<string, number>);
-      console.log(valueMap);
       const newVal: Array<Array<string>> = [];
       dataList.forEach((data) => {
         if (valueMap[data.value] !== undefined) {
@@ -313,7 +352,8 @@
         }
       });
       // eslint-disable-next-line no-param-reassign
-      conditionItem.condition.filters = newVal as any;
+      conditionItem.condition.filters = input.includes(conditionItem.condition.operator)
+        ? newVal.reduce((accumulator, currentValue) => accumulator.concat(currentValue), []) : newVal as any;
     });
   };
 
