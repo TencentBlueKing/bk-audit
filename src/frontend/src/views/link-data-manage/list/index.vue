@@ -448,7 +448,7 @@
     });
     total.value = data.total > total.value ? data.total : total.value;
     const { uid } = getSearchParams();
-    if (uid && isNeedShowDetail.value) {
+    if (uid && isNeedShowDetail.value && data.results.length) {
       detailRef.value.show(uid);
       isNeedShowDetail.value = false;
     }
