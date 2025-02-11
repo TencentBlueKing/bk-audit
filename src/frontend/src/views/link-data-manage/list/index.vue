@@ -133,7 +133,7 @@
     },
     {
       name: t('联表数据名称'),
-      id: 'name_contains',
+      id: 'name__contains',
       placeholder: t('请输入联表数据名称'),
       onlyRecommendChildren: true,
     },
@@ -336,7 +336,7 @@
   const handleSearch = (keyword: Array<any>) => {
     const search = {
       uid: '',
-      name_contains: '',
+      name__contains: '',
       tags: '',
       updated_by: '',
     } as Record<string, any>;
@@ -382,7 +382,7 @@
   const handleClearSearch = () => {
     const search = {
       uid: '',
-      name_contains: '',
+      name__contains: '',
       tags: '',
       updated_by: '',
     } as Record<string, any>;
