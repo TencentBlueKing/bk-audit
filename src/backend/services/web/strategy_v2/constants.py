@@ -209,6 +209,8 @@ class ListLinkTableSortField(TextChoices):
     NAME = "name", gettext_lazy("Link Table Name")
     UPDATED_AT = "updated_at", gettext_lazy("Updated At")
     UPDATED_BY = "updated_by", gettext_lazy("Updated By")
+    CREATED_AT = "created_at", gettext_lazy("Created At")
+    CREATED_BY = "created_by", gettext_lazy("Created By")
 
 
 class BkBaseStorageType(TextChoices):
