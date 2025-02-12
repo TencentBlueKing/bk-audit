@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-07 12:08+0800\n"
+"POT-Creation-Date: 2025-02-12 12:25+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1539,6 +1539,7 @@ msgstr "Notice Group Name Duplicate"
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
 
+#, python-format
 msgid "【蓝鲸审计中心%s】"
 msgstr "【BK Audit%s】"
 
@@ -3517,6 +3518,14 @@ msgstr "Update At"
 
 msgid "Updated By"
 msgstr "Update User"
+
+#, fuzzy
+msgid "Created At"
+msgstr "Created At"
+
+#, fuzzy
+msgid "Created By"
+msgstr "Created By"
 
 msgid "Kafka"
 msgstr "Kafka"

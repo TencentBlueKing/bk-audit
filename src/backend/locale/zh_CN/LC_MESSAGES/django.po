@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-07 12:08+0800\n"
+"POT-Creation-Date: 2025-02-12 12:25+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1539,6 +1539,7 @@ msgstr "通知组名称重复"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
+#, python-format
 msgid "【蓝鲸审计中心%s】"
 msgstr "【蓝鲸审计中心%s】"
 
@@ -3480,7 +3481,7 @@ msgid "Event Log"
 msgstr "操作记录"
 
 msgid "Asset Data"
-msgstr "资源数据"
+msgstr "资产数据"
 
 msgid "Other Data"
 msgstr "其他数据"
@@ -3517,6 +3518,14 @@ msgstr "更新时间"
 
 msgid "Updated By"
 msgstr "更新人"
+
+#, fuzzy
+msgid "Created At"
+msgstr "创建时间"
+
+#, fuzzy
+msgid "Created By"
+msgstr "创建人"
 
 msgid "Kafka"
 msgstr "Kafka"
