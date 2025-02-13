@@ -47,7 +47,10 @@
         <div>
           <span>{{ t('联表预览') }}</span>
           <audit-icon
-            v-bk-tooltips="t('联表中，将自动生成各个原始表的字母别名，用于后续选择字段的简略标识')"
+            v-bk-tooltips="{
+              content: t('联表中，将自动生成各个原始表的字母别名，用于后续选择字段的简略标识'),
+              extCls:'link-data-detail-tooltips'
+            }"
             style=" margin-left: 9px; font-size: 14px;color: #c4c6cc; cursor: pointer;"
             type="help-fill" />
         </div>
@@ -58,14 +61,20 @@
             text
             theme="primary"
             @click="create">
-            {{ t('立即新建联表') }}
+            <audit-icon
+              style="margin-right: 5px; color: #3a84ff;"
+              type="add-fill" />
+            <span> {{ t('立即新建联表') }}</span>
           </bk-button>
           <router-link
             target="_blank"
             :to="{
               name: 'linkDataManage',
             }">
-            {{ t('前往联表管理') }}
+            <audit-icon
+              style="margin-right: 5px; color: #3a84ff;"
+              type="jump-link" />
+            <span> {{ t('前往联表管理') }}</span>
           </router-link>
         </div>
       </div>
@@ -85,7 +94,9 @@
               </span>
               {{ item.left_table.rt_id }}
             </div>
-            <div class="join-type">
+            <div
+              v-bk-tooltips="item.join_type"
+              class="join-type">
               <relation-ship :join-type="item.join_type" />
             </div>
             <div class="right-name">
@@ -235,5 +246,11 @@
       }
     }
   }
+}
+</style>
+<style>
+.link-data-detail-tooltips {
+  width: 286px;
+  word-wrap: break-word;
 }
 </style>

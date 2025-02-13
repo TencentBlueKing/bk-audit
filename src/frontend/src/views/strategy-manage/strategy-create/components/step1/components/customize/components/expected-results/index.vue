@@ -131,6 +131,7 @@
 
   .query-field {
     position: relative;
+    width: 150px;
     height: 26px;
     margin: 3px 4px 3px 0;
     line-height: 26px;

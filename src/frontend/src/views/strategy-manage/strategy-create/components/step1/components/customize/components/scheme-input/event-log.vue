@@ -31,7 +31,7 @@
           :placeholder="t('请选择')"
           @change="handleChangeSystem">
           <bk-option
-            v-for="(system, systemIndex) in statusSystems"
+            v-for="(system, systemIndex) in (props.tableData && !props.tableData.length) ? [] : statusSystems"
             :key="systemIndex"
             :disabled="system.status == 'unset'"
             :label="system.name"
@@ -149,7 +149,7 @@
 
   watch(() => props.tableData, (data) => {
     if (data) {
-      formData.value.configs.data_source.rt_id = data[0]?.value;
+      formData.value.configs.data_source.rt_id = data[0]?.value || '';
       emits('updateDataSource', formData.value.configs.data_source);
     }
   }, {
@@ -162,7 +162,6 @@
     },
     setConfigs(configs: IFormData['configs']) {
       formData.value.configs.data_source.system_ids = configs.data_source.system_ids;
-      emits('updateDataSource', formData.value.configs.data_source);
     },
   });
 </script>

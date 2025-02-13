@@ -613,3 +613,9 @@
   }
 }
 </style>
+<style>
+.strategy-config-type-tooltips {
+  width: 380px;
+  word-wrap: break-word;
+}
+</style>
