@@ -648,10 +648,18 @@ class AIOpsController(Controller):
         # filter
         filter_string = "where "
         for index, _filter in enumerate(filter_config):
-            _filter_conditions = [
-                "{}{}'{}'".format(_filter["key"], _filter["method"], _value.replace("'", "''"))
-                for _value in _filter["value"]
-            ]
+            _filter_conditions = []
+            # 针对包含/不包含特殊处理
+            if _filter["method"] in (FilterOperator.IN, FilterOperator.NOT_IN):
+                values_str = ",".join(f'''"{v.replace("'", "''")}"''' for v in _filter["value"])
+                condition = f"{_filter['key']} {_filter['method']} ({values_str})"
+                _filter_conditions = [condition]
+            else:
+                _filter_conditions = [
+                    "{}{}'{}'".format(_filter["key"], _filter["method"], _value.replace("'", "''"))
+                    for _value in _filter["value"]
+                ]
+
             filter_string = (
                 filter_string
                 + (_filter["connector"] if index else "")

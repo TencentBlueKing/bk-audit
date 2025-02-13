@@ -128,6 +128,8 @@ class FilterOperator(TextChoices):
     LESS_THAN = "<", gettext_lazy("<")
     GRATER_THAN_EQUAL = ">=", gettext_lazy(">=")
     LESS_THAN_EQUAL = "<=", gettext_lazy("<=")
+    IN = "IN", gettext_lazy("IN")
+    NOT_IN = "NOT IN", gettext_lazy("NOT IN")
 
 
 class FilterConnector(TextChoices):
