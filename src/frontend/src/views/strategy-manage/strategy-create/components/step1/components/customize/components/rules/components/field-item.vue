@@ -49,7 +49,7 @@
               line-height: 32px;
               color: #3a84ff;
               background: #f0f1f5">
-            {{ condition.condition.field.table }}
+            {{ condition.condition.field.table }}.
           </span>
         </template>
         <bk-option
