@@ -275,7 +275,7 @@
 </script>
 <style scoped>
 .strategy-upgrade-step {
-  width: 402px;
+  width: 450px;
   margin: 0 auto;
   transform: translateX(-86px);
 
