@@ -27,7 +27,6 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Max, Q, QuerySet
 from django.utils.translation import gettext
-from rest_framework.settings import api_settings
 
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import ConfigLevelChoices
@@ -69,6 +68,7 @@ from services.web.analyze.tasks import (
     check_flow_status,
     toggle_monitor,
 )
+from services.web.analyze.utils import calculate_offline_flow_start_time
 from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.handlers import EventHandler
@@ -369,6 +369,11 @@ class AIOpsController(Controller):
             )
             return sql_node_params
         elif sql_node_type == FlowSQLNodeType.BATCH_V2:
+            # 获取调度频率和周期
+            count_freq = plan_config.get("count_freq") or aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ)
+            schedule_period = plan_config.get("schedule_period") or aiops_config.get("schedule_period", OffsetUnit.HOUR)
+            start_time_str = calculate_offline_flow_start_time(schedule_period)
+
             sql_node_params.update(
                 {
                     "outputs": [
@@ -386,11 +391,9 @@ class AIOpsController(Controller):
                             "self_dependency": False,
                         },
                         "schedule_config": {
-                            "count_freq": plan_config.get("count_freq")
-                            or aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ),
-                            "schedule_period": plan_config.get("schedule_period")
-                            or aiops_config.get("schedule_period", OffsetUnit.HOUR),
-                            "start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                            "count_freq": count_freq,
+                            "schedule_period": schedule_period,
+                            "start_time": start_time_str,
                         },
                         "output_config": {
                             "enable_customize_output": False,
@@ -412,7 +415,7 @@ class AIOpsController(Controller):
                             or plan_config.get("schedule_period")
                             or aiops_config.get("schedule_period", OffsetUnit.HOUR),
                             "dependency_rule": plan_config.get("window_offset_unit", WindowDependencyRule.NO_FAILED),
-                            "accumulate_start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                            "accumulate_start_time": start_time_str,
                             "result_table_id": sql_node_params["from_result_table_ids"][0],
                             "window_type": WindowType.WHOLE
                             if source_type == FlowDataSourceNodeType.BATCH
@@ -457,6 +460,11 @@ class AIOpsController(Controller):
         sql_node_type = FlowSQLNodeType.get_sql_node_type(data_source["source_type"])
         variable_config = self.strategy.configs.get("variable_config") or []
 
+        # 获取调度频率和周期
+        count_freq = aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ)
+        schedule_period = aiops_config.get("schedule_period", OffsetUnit.HOUR)
+        start_time_str = calculate_offline_flow_start_time(schedule_period)
+
         return {
             "node_type": "scenario_app",
             "outputs": [{}],
@@ -484,9 +492,9 @@ class AIOpsController(Controller):
                 },
                 "variable_config": variable_config,
                 "schedule_config": {
-                    "count_freq": aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ),
-                    "schedule_period": aiops_config.get("schedule_period", OffsetUnit.HOUR),
-                    "start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                    "count_freq": count_freq,
+                    "schedule_period": schedule_period,
+                    "start_time": start_time_str,
                 }
                 if sql_node_type == FlowSQLNodeType.BATCH_V2
                 else {},
@@ -498,7 +506,7 @@ class AIOpsController(Controller):
                     "window_size_unit": aiops_config.get("window_size_unit")
                     or aiops_config.get("schedule_period", OffsetUnit.HOUR),
                     "dependency_rule": aiops_config.get("window_offset_unit", WindowDependencyRule.NO_FAILED),
-                    "accumulate_start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                    "accumulate_start_time": start_time_str,
                     "result_table_id": data_source["result_table_id"],
                     "window_type": WindowType.SCROLL,
                     "color": BKBASE_DEFAULT_WINDOW_COLOR,

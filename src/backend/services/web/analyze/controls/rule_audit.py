@@ -26,7 +26,6 @@ from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext
-from rest_framework.settings import api_settings
 
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
@@ -63,6 +62,7 @@ from services.web.analyze.tasks import (
     check_flow_status,
     toggle_monitor,
 )
+from services.web.analyze.utils import calculate_offline_flow_start_time
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.strategy_v2.constants import (
@@ -230,6 +230,10 @@ class RuleAuditController(BaseControl):
             )
             return sql_node_params
         if sql_node_type == FlowSQLNodeType.BATCH_V2:
+            # 获取调度频率和周期
+            count_freq = schedule_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ)
+            schedule_period = schedule_config.get("schedule_period", OffsetUnit.HOUR)
+            start_time_str = calculate_offline_flow_start_time(schedule_period)
             sql_node_params.update(
                 {
                     "outputs": [
@@ -249,9 +253,9 @@ class RuleAuditController(BaseControl):
                             "self_dependency": False,
                         },
                         "schedule_config": {
-                            "count_freq": schedule_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ),
-                            "schedule_period": schedule_config.get("schedule_period", OffsetUnit.HOUR),
-                            "start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                            "count_freq": count_freq,
+                            "schedule_period": schedule_period,
+                            "start_time": start_time_str,
                         },
                         "output_config": {
                             "enable_customize_output": False,
@@ -265,13 +269,13 @@ class RuleAuditController(BaseControl):
                     "window_info": [
                         {
                             "window_offset": BKBASE_DEFAULT_OFFSET,
-                            "window_offset_unit": OffsetUnit.HOUR,
-                            "window_size": schedule_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ),
-                            "window_size_unit": schedule_config.get("schedule_period", OffsetUnit.HOUR),
-                            "dependency_rule": schedule_config.get(
+                            "window_offset_unit": schedule_period.get("window_offset_unit", OffsetUnit.HOUR),
+                            "window_size": count_freq,
+                            "window_size_unit": schedule_period,
+                            "dependency_rule": schedule_period.get(
                                 "window_offset_unit", WindowDependencyRule.NO_FAILED
                             ),
-                            "accumulate_start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                            "accumulate_start_time": start_time_str,
                             "result_table_id": rt_id,
                             "window_type": WindowType.WHOLE
                             if self.check_source_type(rt_id) == FlowDataSourceNodeType.BATCH
