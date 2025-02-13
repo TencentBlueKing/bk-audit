@@ -240,7 +240,7 @@
     LinkTable: LinkDataComponent,
   };
 
-  const initDataSource = ref<IFormData['configs']['data_source']>({
+  const initDataSource: IFormData['configs']['data_source'] = {
     system_ids: [],
     source_type: 'batch_join_source',
     rt_id: [],
@@ -248,7 +248,7 @@
       uid: '',
       version: 0,
     },
-  });
+  };
 
   const formData = ref<IFormData>({
     configs: {
@@ -373,21 +373,19 @@
     }
     InfoBox(createInfoBoxConfig({
       onConfirm() {
-        formData.value.configs.config_type = item;
         // 重置数据
-        formData.value.configs.data_source = {
-          ...formData.value.configs.data_source,
-          ...initDataSource.value,
-        };
+        formData.value.configs.data_source = _.cloneDeep(initDataSource);
         formData.value.configs.select = [];
         formData.value.configs.where = {
           connector: 'and',
           conditions: [],
         };
+        tableData.value = [];
         tableFields.value = [];
         configRef.value.resetFormData();
         rulesComponentRef.value.resetFormData();
         expectedResultsRef.value.resetFormData();
+        formData.value.configs.config_type = item;
         if (item !== '' && item !== 'LinkTable') {
           fetchTable({
             table_type: item,
@@ -405,6 +403,7 @@
     if (!dataSource.rt_id || !dataSource.rt_id.length || (dataSource.link_table && !dataSource.link_table.uid)) {
       tableFields.value = [];
     }
+    // 如果是初始状态赋值
     if (!formData.value.configs.data_source.rt_id
       || !formData.value.configs.data_source.rt_id.length
       || (formData.value.configs.config_type === 'LinkTable' && formData.value.configs.data_source.link_table && !formData.value.configs.data_source.link_table.uid)) {
