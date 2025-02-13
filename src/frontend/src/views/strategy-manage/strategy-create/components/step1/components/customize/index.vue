@@ -26,8 +26,12 @@
           label-width="0"
           required>
           <span
+            v-bk-tooltips="{
+              content: t('第1步，此处配置的审计风险数据的数据源，用以后续步骤的处理。一般由“操作记录”与“资产数据”组合合成，但也可以自由组合而成。'),
+              extCls:'strategy-config-type-tooltips'
+            }"
             class="label-is-required"
-            style="color: #63656e;">
+            style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
             {{ t('数据源') }}
           </span>
           <div class="select-group">
@@ -63,8 +67,18 @@
             @refresh-link-data="handleRefreshLinkData" />
         </bk-form-item>
         <bk-form-item
-          :label="t('预期结果')"
+          label=""
           label-width="160">
+          <template #label>
+            <span
+              v-bk-tooltips="{
+                content: t('第2步，可配置聚合规则。若无规则，则结果默认返回所有字段并不做聚合；若有规则，则返回配置字段。'),
+                extCls:'strategy-config-type-tooltips'
+              }"
+              style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+              {{ t('预期结果') }}
+            </span>
+          </template>
           <expected-results
             ref="expectedResultsRef"
             :aggregate-list="aggregateList"
@@ -73,9 +87,19 @@
             @update-expected-result="handleUpdateExpectedResult" />
         </bk-form-item>
         <bk-form-item
-          :label="t('风险发现规则')"
+          label=""
           label-width="160"
           required>
+          <template #label>
+            <span
+              v-bk-tooltips="{
+                content: t('第3步，完成数据处理后，配置对应的字段规则，筛选出我们期望的数据，可能是风险数据。'),
+                extCls:'strategy-config-type-tooltips'
+              }"
+              style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+              {{ t('风险发现规则') }}
+            </span>
+          </template>
           <rules-component
             ref="rulesComponentRef"
             :config-type="formData.configs.config_type"
@@ -240,7 +264,7 @@
     LinkTable: LinkDataComponent,
   };
 
-  const initDataSource = ref<IFormData['configs']['data_source']>({
+  const initDataSource: IFormData['configs']['data_source'] = {
     system_ids: [],
     source_type: 'batch_join_source',
     rt_id: [],
@@ -248,7 +272,7 @@
       uid: '',
       version: 0,
     },
-  });
+  };
 
   const formData = ref<IFormData>({
     configs: {
@@ -373,21 +397,19 @@
     }
     InfoBox(createInfoBoxConfig({
       onConfirm() {
-        formData.value.configs.config_type = item;
         // 重置数据
-        formData.value.configs.data_source = {
-          ...formData.value.configs.data_source,
-          ...initDataSource.value,
-        };
+        formData.value.configs.data_source = _.cloneDeep(initDataSource);
         formData.value.configs.select = [];
         formData.value.configs.where = {
           connector: 'and',
           conditions: [],
         };
+        tableData.value = [];
         tableFields.value = [];
         configRef.value.resetFormData();
         rulesComponentRef.value.resetFormData();
         expectedResultsRef.value.resetFormData();
+        formData.value.configs.config_type = item;
         if (item !== '' && item !== 'LinkTable') {
           fetchTable({
             table_type: item,
@@ -405,6 +427,7 @@
     if (!dataSource.rt_id || !dataSource.rt_id.length || (dataSource.link_table && !dataSource.link_table.uid)) {
       tableFields.value = [];
     }
+    // 如果是初始状态赋值
     if (!formData.value.configs.data_source.rt_id
       || !formData.value.configs.data_source.rt_id.length
       || (formData.value.configs.config_type === 'LinkTable' && formData.value.configs.data_source.link_table && !formData.value.configs.data_source.link_table.uid)) {
@@ -608,5 +631,11 @@
       border-bottom: 1px dashed #979ba5;
     }
   }
+}
+</style>
+<style>
+.strategy-config-type-tooltips {
+  width: 380px;
+  word-wrap: break-word;
 }
 </style>

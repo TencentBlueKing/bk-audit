@@ -32,7 +32,7 @@
               </bk-input>
             </div>
             <div class="field-pop-select-list">
-              <scroll-faker>
+              <scroll-faker v-if="renderFieldList.length">
                 <div
                   v-for="(item, index) in renderFieldList"
                   :key="item.raw_name"
@@ -52,6 +52,33 @@
                   <div>{{ item.raw_name }}</div>
                 </div>
               </scroll-faker>
+              <bk-exception
+                v-else-if="isSearching"
+                scene="part"
+                style="height: 200px;padding-top: 40px;"
+                type="search-empty">
+                <div>
+                  <div style="color: #63656e;">
+                    {{ t('搜索结果为空') }}
+                  </div>
+                  <div style="margin-top: 8px; color: #979ba5;">
+                    {{ t('可以尝试调整关键词') }} {{ t('或') }}
+                    <bk-button
+                      text
+                      theme="primary"
+                      @click="handleClearSearch">
+                      {{ t('清空搜索条件') }}
+                    </bk-button>
+                  </div>
+                </div>
+              </bk-exception>
+              <bk-exception
+                v-else
+                class="exception-part"
+                scene="part"
+                type="empty">
+                {{ t('暂无数据') }}
+              </bk-exception>
             </div>
           </div>
           <div class="field-pop-radio">
@@ -123,6 +150,7 @@
   const selectIndex = ref(-1);
   const localAggregateList = ref<Array<Record<string, any>>>([]);
   const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
+  const isSearching = ref(false);
 
   const searchKey = useDebouncedRef('');
 
@@ -131,6 +159,7 @@
     if (reg.test(item.raw_name) || reg.test(item.display_name)) {
       result.push(item);
     }
+    isSearching.value = true;
     return result;
   }, [] as Array<DatabaseTableFieldModel>));
 
@@ -142,6 +171,11 @@
     int: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
     long: ['SUM', 'AVG', 'MIN', 'MAX', 'COUNT'],
     timestamp: ['COUNT', 'MIX', 'MAX'],
+  };
+
+  const handleClearSearch = () => {
+    searchKey.value = '';
+    isSearching.value = false;
   };
 
   const handleShowPop = () => {

@@ -49,7 +49,7 @@
             :condition="[]"
             :data="searchData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :placeholder="t('策略ID、策略名称、标签、状态')"
+            :placeholder="t('策略ID、策略名称、配置方式、标签、状态')"
             unique-select
             :validate-values="validateValues"
             value-split-code=","
@@ -358,6 +358,21 @@
       name: t('策略名称'),
       id: 'strategy_name',
       placeholder: t('请输入策略名称'),
+    },
+    {
+      name: t('配置方式'),
+      id: 'strategy_type',
+      children: [{
+        name: t('自定义规则审计'),
+        id: 'rule',
+        placeholder: t('请选择配置方式'),
+      }, {
+        name: t('引入模型审计'),
+        id: 'model',
+        placeholder: t('请选择配置方式'),
+      }],
+      placeholder: t('请选择配置方式'),
+      onlyRecommendChildren: true,
     },
   ];
   let searchData: SearchData[] = [
@@ -919,6 +934,7 @@
     const search = {
       strategy_id: undefined,
       strategy_name: '',
+      strategy_type: '',
       tag: '',
       status: '',
     } as Record<string, any>;
@@ -952,19 +968,6 @@
       leftLabelFilterCondition.value = '';
     }
     listRef.value.fetchData(search);
-
-    if (search.status) {
-      const statusList = search.status.split(',');
-      statusList.forEach((statusKey: string) => {
-        if (['running', 'disabled'].includes(statusKey)) {
-          const targetColumn = tableColumn.value.find(column => column.field() === 'status');
-          if (targetColumn && targetColumn.filter && Array.isArray(targetColumn.filter.checked)) {
-            targetColumn.filter.checked.length = 0;
-          }
-          targetColumn.filter.checked.push(statusKey);
-        }
-      });
-    }
   };
 
   const handleSettingChange = (setting: ISettings) => {
@@ -1081,6 +1084,7 @@
     const search = {
       strategy_id: undefined,
       strategy_name: '',
+      strategy_type: '',
       tag: '',
       status: '',
     } as Record<string, any>;

@@ -100,7 +100,7 @@
 <script setup lang="ts">
   import { Message } from 'bkui-vue';
   import _ from 'lodash';
-  import { h, provide, ref  } from 'vue';
+  import { h, provide, ref, watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import LinkDataManageService from '@service/link-data-manage';
@@ -185,6 +185,7 @@
   const isHasStrategy = ref<boolean | undefined>(false);
   const needUpdate = ref<boolean>(false);
   const editUid = ref<string | undefined>('');
+  const styleElement = ref<null | HTMLStyleElement>(null);
 
   provide('isEditMode', isEditMode);
 
@@ -390,6 +391,31 @@
       }
     });
   };
+
+  const addInlineStyle = (css: string) => {
+    const style = document.createElement('style');
+    style.type = 'text/css';
+    style.appendChild(document.createTextNode(css));
+    document.head.appendChild(style);
+    return style; // 返回对 style 元素的引用
+  };
+
+  const removeInlineStyle = (styleElement: HTMLStyleElement) => {
+    if (styleElement && styleElement.parentNode) {
+      styleElement.parentNode.removeChild(styleElement);
+    }
+  };
+
+  watch(() => showCreate.value, (data: boolean) => {
+    if (data && !styleElement.value) {
+      styleElement.value  = addInlineStyle('.bk-popover.bk-pop2-content.visible:not(.bk-select-popover):not(.link-data-join-type):not(.bk-cascader-popover) {display: none !important;}');
+      return;
+    }
+    if (styleElement.value) {
+      removeInlineStyle(styleElement.value);
+      styleElement.value = null;
+    }
+  });
 
   defineExpose<Exposes>({
     show(uid?: string | undefined, hasStrategy?: boolean | undefined) {

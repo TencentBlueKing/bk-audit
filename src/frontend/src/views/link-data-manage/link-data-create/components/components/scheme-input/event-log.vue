@@ -41,7 +41,8 @@
             <span
               v-bk-tooltips="{
                 disabled: system.status != 'unset',
-                content: t('该系统暂未接入审计中心')
+                content: t('该系统暂未接入审计中心'),
+                extCls:'event-log-unset-tooltips',
               }"
               style=" display: inline-block;width: 100%;">
               {{ system.name }}
@@ -165,5 +166,10 @@
     });
   });
 </script>
+<style>
+.event-log-unset-tooltips {
+  z-index: 9999 !important;
+}
+</style>
 
 

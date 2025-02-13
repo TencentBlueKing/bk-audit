@@ -17,7 +17,7 @@
 <template>
   <scroll-faker
     :style="{
-      height: linksHeight > 430 ? '430px' : `${linksHeight}px`,
+      height: `${linksHeight}px`,
     }">
     <template
       v-for="(link, index) in links"
@@ -202,6 +202,7 @@
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
 
   const linksHeight = computed(() => {
+    const windowHeight = window.innerHeight;
     const result = links.value.reduce(
       (accumulator, item) => {
         const linkFieldsLength = item.link_fields.length;
@@ -212,7 +213,8 @@
       },
       { totalFieldsLength: 0, linksLength: 0 },
     );
-    return (result.totalFieldsLength + result.linksLength) * 41;
+    const resultHeight = (result.totalFieldsLength + result.linksLength) * 41;
+    return resultHeight > (windowHeight - 450) ? windowHeight - 450 : resultHeight;
   });
 
   // 如果左表选了EventLog，右表不能再选，直接隐藏不显示
@@ -355,8 +357,8 @@
   defineExpose<Exposes>({
     getValue() {
       return Promise.all([
-        (tableFieldRef.value as { getValue: () => any }[])?.map(item => item.getValue()),
-        (selectVerifyRef.value as { getValue: () => any }[])?.map(item => item.getValue()),
+        ...tableFieldRef.value.map((item: { getValue: () => any }) => item.getValue()),
+        ...selectVerifyRef.value.map((item: { getValue: () => any }) => item.getValue()),
       ]);
     },
   });
