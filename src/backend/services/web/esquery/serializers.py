@@ -26,7 +26,6 @@ from rest_framework import serializers
 from rest_framework.settings import api_settings
 
 from api.bk_log.serializers import EsQueryFilterSerializer
-from apps.exceptions import EsQueryMaxLimit
 from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE
 from core.utils.tools import format_date_string
 from services.web.databus.constants import PluginSceneChoices
@@ -95,8 +94,6 @@ class EsQuerySearchAttrSerializer(serializers.Serializer):
             ),
             0,
         )
-        if attrs["start"] > ES_MAX_LIMIT:
-            raise EsQueryMaxLimit(message=EsQueryMaxLimit.MESSAGE % {"count": ES_MAX_LIMIT})
         # 时间
         start_time = arrow.get(format_date_string(attrs["start_time"]))
         end_time = arrow.get(format_date_string(attrs["end_time"]))
