@@ -247,5 +247,7 @@ export default {
     '刷新后，已配置的数据将被清空。是否继续？': 'After refreshing, the configured data will be cleared. Does it continue?',
     请选择配置方式: 'Please select the Strategy_type',
     '第1步，此处配置的审计风险数据的数据源，用以后续步骤的处理。一般由“操作记录”与“资产数据”组合合成，但也可以自由组合而成。': 'In step 1, the data source for the audit risk data configured here is used for the subsequent steps. It is usually a combination of “operation records” and “asset data”, but can be freely combined.',
+    '第2步，可配置聚合规则。若无规则，则结果默认返回所有字段并不做聚合；若有规则，则返回配置字段。': 'In step 2, you can configure the aggregation rules. If there is no rule, the result will return all fields by default without aggregation; if there is a rule, it will return the configured fields.',
+    '第3步，完成数据处理后，配置对应的字段规则，筛选出我们期望的数据，可能是风险数据。': 'In step 3, after completing the data processing, the corresponding field rules are configured to filter out the data we expect, possibly the risk data.',
   },
 };

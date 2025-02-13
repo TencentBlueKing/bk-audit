@@ -67,8 +67,18 @@
             @refresh-link-data="handleRefreshLinkData" />
         </bk-form-item>
         <bk-form-item
-          :label="t('预期结果')"
+          label=""
           label-width="160">
+          <template #label>
+            <span
+              v-bk-tooltips="{
+                content: t('第2步，可配置聚合规则。若无规则，则结果默认返回所有字段并不做聚合；若有规则，则返回配置字段。'),
+                extCls:'strategy-config-type-tooltips'
+              }"
+              style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+              {{ t('预期结果') }}
+            </span>
+          </template>
           <expected-results
             ref="expectedResultsRef"
             :aggregate-list="aggregateList"
@@ -77,9 +87,19 @@
             @update-expected-result="handleUpdateExpectedResult" />
         </bk-form-item>
         <bk-form-item
-          :label="t('风险发现规则')"
+          label=""
           label-width="160"
           required>
+          <template #label>
+            <span
+              v-bk-tooltips="{
+                content: t('第3步，完成数据处理后，配置对应的字段规则，筛选出我们期望的数据，可能是风险数据。'),
+                extCls:'strategy-config-type-tooltips'
+              }"
+              style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+              {{ t('风险发现规则') }}
+            </span>
+          </template>
           <rules-component
             ref="rulesComponentRef"
             :config-type="formData.configs.config_type"
