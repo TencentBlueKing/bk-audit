@@ -968,19 +968,6 @@
       leftLabelFilterCondition.value = '';
     }
     listRef.value.fetchData(search);
-
-    if (search.status) {
-      const statusList = search.status.split(',');
-      statusList.forEach((statusKey: string) => {
-        if (['running', 'disabled'].includes(statusKey)) {
-          const targetColumn = tableColumn.value.find(column => column.field() === 'status');
-          if (targetColumn && targetColumn.filter && Array.isArray(targetColumn.filter.checked)) {
-            targetColumn.filter.checked.length = 0;
-          }
-          targetColumn.filter.checked.push(statusKey);
-        }
-      });
-    }
   };
 
   const handleSettingChange = (setting: ISettings) => {
