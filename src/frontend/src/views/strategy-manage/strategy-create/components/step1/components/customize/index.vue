@@ -568,11 +568,22 @@
       }
       // 如果select为空数组，传全部
       if (params.configs.select && params.configs.select.length === 0) {
-        params.configs.select = tableFields.value.map(item => ({
-          ...item,
-          aggregate: null,
-          display_name: `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`,
-        }));
+        // 通过一次遍历完成 display_name 的设置和统计
+        const displayNameCount = tableFields.value.reduce<Record<string, number>>((acc, item) => {
+          const displayName = `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`;
+          acc[displayName] = (acc[displayName] || 0) + 1;
+          return acc;
+        }, {});
+
+        // 更新 params.configs.select，使用统计结果调整 display_name
+        params.configs.select = tableFields.value.map((item) => {
+          const displayName = `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`;
+          return {
+            ...item,
+            aggregate: null,
+            display_name: displayNameCount[displayName] > 1 ? `${item.table}.${item.display_name}` : displayName,
+          };
+        });
         expectedResultsRef.value.setSelect(params.configs.select);
       }
       return params;
