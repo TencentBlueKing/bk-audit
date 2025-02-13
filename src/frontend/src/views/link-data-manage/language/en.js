@@ -34,5 +34,9 @@ export default {
     关联关系不能为空: 'Relationship is required',
     基础信息: 'Basic Information',
     '已有策略在使用，不可删除': 'Already have a policy in use and cannot be deleted',
+    '联表保存成功！请前往关联策略进行刷新升级。': 'The link table was saved successfully! Please go to the association strategy to refresh and upgrade.',
+    编辑联表: 'Edit',
+    当前联表无关联策略可前往: 'The current no-association strategy for link tables can go to',
+    '联表已更新，请前往关联的策略进行刷新升级。': 'The link table has been updated, please go to the associated strategy to refresh and upgrade.',
   },
 };
