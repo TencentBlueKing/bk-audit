@@ -93,7 +93,7 @@
             <span>{{ commonData.rule_audit_config_type.
               find(item => item.value === data.configs.config_type)?.label }}/</span>
             <template v-if="data.configs.config_type === 'LinkTable'">
-              {{ data.configs.data_source?.link_table.uid }}
+              {{ LinkDataDetail.name }}
             </template>
             <template v-else>
               {{ getDataSourceText(data.configs) }}
@@ -187,9 +187,11 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import LinkDataManageService from '@service/link-data-manage';
   import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
+  import LinkDataDetailModel from '@model/link-data/link-data-detail';
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import type StrategyModel from '@model/strategy/strategy';
@@ -315,11 +317,23 @@
     defaultValue: [],
   });
 
+  // 获取关联表详情
+  const {
+    data: LinkDataDetail,
+    run: fetchLinkDataSheetDetail,
+  } = useRequest(LinkDataManageService.fetchLinkDataDetail, {
+    defaultValue: new LinkDataDetailModel(),
+  });
+
   watch(() => props.data, (data) => {
     if (data.strategy_type !== 'rule') return;
     if (data.configs.config_type !== 'LinkTable') {
       fetchTable({
         table_type: data.configs.config_type,
+      });
+    } else {
+      fetchLinkDataSheetDetail({
+        uid: data.link_table_uid,
       });
     }
     if (data.configs.config_type === 'EventLog') {
