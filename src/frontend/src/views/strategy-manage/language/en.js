@@ -100,7 +100,7 @@ export default {
     '为一个统计周期,': 'generate risk ticket i',
     秒: 'Second',
     统计周期最小为5分钟: 'The minimum statistical period is 5 minutes',
-    '策略ID、策略名称、标签、状态': 'Strategy ID、Name、Tag、Status',
+    '策略ID、策略名称、配置方式、标签、状态': 'Strategy ID、Name、Type、Tag、Status',
     请选择状态: 'Please choose status',
     操作日志: 'Event log',
     状态: 'Status',
@@ -245,5 +245,7 @@ export default {
     '切换后，已配置的数据将被清空。是否继续？': 'After switching, the configured data will be cleared. Does it continue?',
     继续切换: 'Switching',
     '刷新后，已配置的数据将被清空。是否继续？': 'After refreshing, the configured data will be cleared. Does it continue?',
+    请选择配置方式: 'Please select the Strategy_type',
+    '第1步，此处配置的审计风险数据的数据源，用以后续步骤的处理。一般由“操作记录”与“资产数据”组合合成，但也可以自由组合而成。': 'In step 1, the data source for the audit risk data configured here is used for the subsequent steps. It is usually a combination of “operation records” and “asset data”, but can be freely combined.',
   },
 };

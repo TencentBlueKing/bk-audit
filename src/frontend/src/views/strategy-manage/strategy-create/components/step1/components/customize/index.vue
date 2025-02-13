@@ -26,8 +26,12 @@
           label-width="0"
           required>
           <span
+            v-bk-tooltips="{
+              content: t('第1步，此处配置的审计风险数据的数据源，用以后续步骤的处理。一般由“操作记录”与“资产数据”组合合成，但也可以自由组合而成。'),
+              extCls:'strategy-config-type-tooltips'
+            }"
             class="label-is-required"
-            style="color: #63656e;">
+            style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
             {{ t('数据源') }}
           </span>
           <div class="select-group">
