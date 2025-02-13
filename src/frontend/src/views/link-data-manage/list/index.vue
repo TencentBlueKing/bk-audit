@@ -135,7 +135,6 @@
       name: t('联表数据名称'),
       id: 'name__contains',
       placeholder: t('请输入联表数据名称'),
-      onlyRecommendChildren: true,
     },
     {
       name: t('最近更新人'),
@@ -341,10 +340,16 @@
       updated_by: '',
     } as Record<string, any>;
 
-    keyword.forEach((item: SearchKey) => {
+    keyword.forEach((item: SearchKey, index) => {
       if (item.values) {
         const value = item.values.map(item => item.id).join(',');
         search[item.id] = value;
+      } else {
+        const list = search.name__contains.split(',').filter((item: string) => !!item);
+        list.push(item.id);
+        _.uniq(list);
+        search.name__contains = list.join(',');
+        searchKey.value[index] = ({ id: 'name__contains', name: t('联表数据名称'), values: [{ id: item.id, name: item.id }] });
       }
     });
     if (search.tags) {
