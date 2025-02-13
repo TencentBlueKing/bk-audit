@@ -118,9 +118,9 @@
           <bk-input
             v-else-if="valueKey === 'description'"
             v-model="config.description"
-            autosize
             behavior="simplicity"
             :maxlength="100"
+            style="height: 45px;"
             type="textarea" />
 
           <template v-else>
