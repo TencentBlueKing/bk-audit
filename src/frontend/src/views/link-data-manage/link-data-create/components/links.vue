@@ -355,8 +355,8 @@
   defineExpose<Exposes>({
     getValue() {
       return Promise.all([
-        (tableFieldRef.value as { getValue: () => any }[])?.map(item => item.getValue()),
-        (selectVerifyRef.value as { getValue: () => any }[])?.map(item => item.getValue()),
+        ...tableFieldRef.value.map((item: { getValue: () => any }) => item.getValue()),
+        ...selectVerifyRef.value.map((item: { getValue: () => any }) => item.getValue()),
       ]);
     },
   });
