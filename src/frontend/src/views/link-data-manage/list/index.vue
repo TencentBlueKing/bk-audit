@@ -59,6 +59,7 @@
 </template>
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';
+  import _ from 'lodash';
   import { computed, h, onMounted, ref, shallowRef } from 'vue';
   import { useI18n } from 'vue-i18n';
 
