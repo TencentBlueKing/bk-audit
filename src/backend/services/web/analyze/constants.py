@@ -195,3 +195,7 @@ class BaseControlTypeChoices(TextChoices):
 
     RULE_AUDIT = "rule_audit", gettext_lazy("规则审计")
     CONTROL = "control", gettext_lazy("控件")
+
+
+# 规则审计策略停止睡眠等待时间(s)
+RULE_AUDIT_STRATEGY_STOP_SLEEP_TIME = 5
