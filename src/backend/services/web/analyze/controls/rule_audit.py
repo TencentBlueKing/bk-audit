@@ -269,10 +269,10 @@ class RuleAuditController(BaseControl):
                     "window_info": [
                         {
                             "window_offset": BKBASE_DEFAULT_OFFSET,
-                            "window_offset_unit": schedule_period.get("window_offset_unit", OffsetUnit.HOUR),
+                            "window_offset_unit": schedule_config.get("window_offset_unit", OffsetUnit.HOUR),
                             "window_size": count_freq,
                             "window_size_unit": schedule_period,
-                            "dependency_rule": schedule_period.get(
+                            "dependency_rule": schedule_config.get(
                                 "window_offset_unit", WindowDependencyRule.NO_FAILED
                             ),
                             "accumulate_start_time": start_time_str,
