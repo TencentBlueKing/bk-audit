@@ -423,7 +423,7 @@
   };
 
   // 更新数据源后，获取对应表字段
-  const handleUpdateDataSource = (dataSource: Record<string, any>) => {
+  const handleUpdateDataSource = (dataSource: IFormData['configs']['data_source']) => {
     if (!dataSource.rt_id || !dataSource.rt_id.length || (dataSource.link_table && !dataSource.link_table.uid)) {
       tableFields.value = [];
     }
@@ -431,10 +431,7 @@
     if (!formData.value.configs.data_source.rt_id
       || !formData.value.configs.data_source.rt_id.length
       || (formData.value.configs.config_type === 'LinkTable' && formData.value.configs.data_source.link_table && !formData.value.configs.data_source.link_table.uid)) {
-      formData.value.configs.data_source = {
-        ...formData.value.configs.data_source,
-        ...dataSource,
-      };
+      formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
     } else if (Array.isArray(dataSource.rt_id)
       ? formData.value.configs.data_source.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1]
       : formData.value.configs.data_source.rt_id !== dataSource.rt_id) {
@@ -447,20 +444,14 @@
           };
           rulesComponentRef.value.resetFormData();
           expectedResultsRef.value.resetFormData();
-          formData.value.configs.data_source = {
-            ...formData.value.configs.data_source,
-            ...dataSource,
-          };
+          formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
         },
         onClose() {
           configRef.value.setConfigs(formData.value.configs);
         },
       }));
     } else {
-      formData.value.configs.data_source = {
-        ...formData.value.configs.data_source,
-        ...dataSource,
-      };
+      formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
     }
   };
 
