@@ -88,3 +88,9 @@ class RuleAuditSqlGeneratorError(StrategyV2Exception):
     def __init__(self, err, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(err=err)
         super().__init__(*args, **kwargs)
+
+
+class LinkTableNameExist(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "011"
+    MESSAGE = gettext_lazy("联表名称已存在")

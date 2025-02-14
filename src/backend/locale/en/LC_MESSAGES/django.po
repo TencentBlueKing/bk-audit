@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-13 14:08+0800\n"
+"POT-Creation-Date: 2025-02-14 16:14+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3570,6 +3570,10 @@ msgstr "Link table configuration error"
 #, python-brace-format
 msgid "规则审计SQL生成错误: {err}"
 msgstr "Rule audit SQL generates errors: {err}"
+
+#, fuzzy
+msgid "联表名称已存在"
+msgstr "Link Table Name Exists"
 
 #, python-format
 msgid "source_field %s not found"
