@@ -158,7 +158,7 @@
                         {{ value }}
                       </div>
                     </template>
-                    <template v-else>
+                    <template v-else-if="childItem.condition.filter">
                       <div class="condition-value mr4 mb4">
                         {{ childItem.condition.filter }}
                       </div>
