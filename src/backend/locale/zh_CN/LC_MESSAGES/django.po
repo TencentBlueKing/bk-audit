@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-13 14:08+0800\n"
+"POT-Creation-Date: 2025-02-14 16:14+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3570,6 +3570,10 @@ msgstr "联表配置错误"
 #, python-brace-format
 msgid "规则审计SQL生成错误: {err}"
 msgstr "规则审计SQL生成错误: {err}"
+
+#, fuzzy
+msgid "联表名称已存在"
+msgstr "联表名称已存在"
 
 #, python-format
 msgid "source_field %s not found"

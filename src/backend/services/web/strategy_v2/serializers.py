@@ -54,6 +54,7 @@ from services.web.strategy_v2.constants import (
     TableType,
 )
 from services.web.strategy_v2.exceptions import (
+    LinkTableNameExist,
     SchedulePeriodInvalid,
     StrategyTypeNotSupport,
 )
@@ -808,6 +809,17 @@ class CreateLinkTableRequestSerializer(serializers.ModelSerializer):
         model = LinkTable
         fields = ["namespace", "name", "config", "description", "tags"]
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        namespace = attrs.get('namespace')
+        name = attrs.get('name')
+
+        # 联合唯一校验
+        if LinkTable.objects.filter(namespace=namespace, name=name).exists():
+            raise LinkTableNameExist()
+
+        return attrs
+
 
 class CreateLinkTableResponseSerializer(serializers.ModelSerializer):
     class Meta:
@@ -826,11 +838,24 @@ class UpdateLinkTableRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LinkTable
-        fields = ["uid", "name", "tags", "config", "description"]
+        fields = ["namespace", "uid", "name", "tags", "config", "description"]
         extra_kwargs = {
             "name": {"required": False},
             "description": {"required": False},
         }
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # 获取关键字段
+        namespace = attrs.get('namespace')
+        name = attrs.get('name')
+        uid = attrs.get('uid')
+
+        # 联合唯一校验
+        if LinkTable.objects.filter(namespace=namespace, name=name).exclude(uid=uid).exists():
+            raise LinkTableNameExist()
+
+        return attrs
 
 
 class UpdateLinkTableResponseSerializer(serializers.ModelSerializer):
