@@ -93,7 +93,7 @@
             <span>{{ commonData.rule_audit_config_type.
               find(item => item.value === data.configs.config_type)?.label }}/</span>
             <template v-if="data.configs.config_type === 'LinkTable'">
-              {{ data.configs.data_source?.link_table.uid }}
+              {{ LinkDataDetail.name }}
             </template>
             <template v-else>
               {{ getDataSourceText(data.configs) }}
@@ -127,7 +127,7 @@
                   {{ data.configs.where.connector }}
                 </span>
               </div>
-              <div>
+              <div style="flex: 1; margin-bottom: 20px;">
                 <template
                   v-for="(item, index) in data.configs.where.conditions"
                   :key="index">
@@ -135,7 +135,7 @@
                     v-for="(childItem, childIndex) in item.conditions"
                     :key="childIndex"
                     class="condition-item"
-                    :style="{ marginTop: index ? '30px' : '0px' }">
+                    :style="{ marginTop: index ? '12px' : '0px' }">
                     <div
                       v-if="childIndex"
                       class="condition-equation mr4 mb4">
@@ -158,7 +158,7 @@
                         {{ value }}
                       </div>
                     </template>
-                    <template v-else>
+                    <template v-else-if="childItem.condition.filter">
                       <div class="condition-value mr4 mb4">
                         {{ childItem.condition.filter }}
                       </div>
@@ -187,9 +187,11 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import LinkDataManageService from '@service/link-data-manage';
   import MetaManageService from '@service/meta-manage';
   import StrategyManageService from '@service/strategy-manage';
 
+  import LinkDataDetailModel from '@model/link-data/link-data-detail';
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import type StrategyModel from '@model/strategy/strategy';
@@ -315,11 +317,23 @@
     defaultValue: [],
   });
 
+  // 获取关联表详情
+  const {
+    data: LinkDataDetail,
+    run: fetchLinkDataSheetDetail,
+  } = useRequest(LinkDataManageService.fetchLinkDataDetail, {
+    defaultValue: new LinkDataDetailModel(),
+  });
+
   watch(() => props.data, (data) => {
     if (data.strategy_type !== 'rule') return;
     if (data.configs.config_type !== 'LinkTable') {
       fetchTable({
         table_type: data.configs.config_type,
+      });
+    } else {
+      fetchLinkDataSheetDetail({
+        uid: data.link_table_uid,
       });
     }
     if (data.configs.config_type === 'EventLog') {
@@ -379,6 +393,10 @@
   .condition-render-item {
     display: flex;
 
+    .mb4 {
+      margin-bottom: 4px;
+    }
+
     .condition-equation-wrap {
       position: relative;
       width: 50px;
@@ -399,7 +417,6 @@
 
     .condition-item {
       display: flex;
-      margin-bottom: 8px;
       flex-wrap: wrap;
 
       .condition-key {

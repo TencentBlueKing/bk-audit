@@ -219,6 +219,8 @@
   const handleCancel = () => {
     isShow.value = false;
     selectIndex.value = -1;
+    searchKey.value = '';
+    isSearching.value = false;
   };
 
   const handleAddField = () => {

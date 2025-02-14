@@ -436,6 +436,13 @@
         trigger: ['change', 'blur'],
       },
     ],
+    'configs.schedule_config.count_freq': [
+      {
+        validator: (value: number) => !!value,
+        message: t('调度周期不能为空'),
+        trigger: ['change', 'blur'],
+      },
+    ],
     'configs.aiops_config.schedule_period': [
       {
         validator: (value: string) => !!value,
