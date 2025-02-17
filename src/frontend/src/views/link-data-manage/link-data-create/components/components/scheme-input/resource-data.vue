@@ -34,10 +34,14 @@
         trigger="hover">
         <p
           v-bk-tooltips="{
-            disabled: (node.children && node.children.length) || !data.leaf,
-            content: modelValue.table_type === 'BuildIn'
-              ? t('该系统暂未上报资源数据')
-              : t('审计中心暂未获得该业务数据的使用授权，请联系系统管理员到BKBASE上申请权限'),
+            disabled: !data.disabled,
+            content: data.leaf
+              ? modelValue.table_type === 'BuildIn'
+                ? t('该系统暂未上报资源数据')
+                : t('审计中心暂未获得该业务数据的使用授权，请联系系统管理员到BKBASE上申请权限')
+              : t(`${props.type === 'left'
+                ? '只能选择前面已选数据'
+                : '只能选择前面未选数据'}`),
             delay: 400,
           }">
           {{ node.name }}

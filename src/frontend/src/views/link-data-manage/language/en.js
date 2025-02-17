@@ -39,5 +39,7 @@ export default {
     当前联表无关联策略可前往: 'The current no-association strategy for link tables can go to',
     '联表已更新，请前往关联的策略进行刷新升级。': 'The link table has been updated, please go to the associated strategy to refresh and upgrade.',
     '操作记录数据源需保持一致，请修改第一个操作记录数据源': 'The operation record data source needs to be consistent. Please modify the first operation record data source.',
+    只能选择前面已选数据: 'Only previously selected data can be selected',
+    只能选择前面未选数据: 'Only previously unselected data can be selected',
   },
 };

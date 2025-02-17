@@ -24,7 +24,7 @@
       property="configs.data_source.data_sheet_id"
       style="margin-bottom: 8px;">
       <bk-cascader
-        v-slot="{node}"
+        v-slot="{data,node}"
         v-model="modelValue.rt_id"
         filterable
         id-key="value"
@@ -32,7 +32,14 @@
         :loading="loading"
         name-key="label"
         trigger="hover">
-        <p>
+        <p
+          v-bk-tooltips="{
+            disabled: !data.disabled,
+            content: t(`${props.type === 'left'
+              ? '只能选择前面已选数据'
+              : '只能选择前面未选数据'}`),
+            delay: 400,
+          }">
           {{ node.name }}
         </p>
       </bk-cascader>
@@ -42,6 +49,9 @@
 
 <script setup lang='ts'>
   import { computed, inject, onMounted, type Ref, ref, watch } from 'vue';
+  import {
+    useI18n,
+  } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
 
@@ -70,9 +80,11 @@
   interface Emits {
     (e: 'updateTableData', value: typeof tableData.value, type: 'BizRt'): void,
   }
-
   const props = defineProps<Props>();
+
   const emits = defineEmits<Emits>();
+
+  const { t } = useI18n();
 
   const modelValue = defineModel<ModelValue>({
     required: true,
