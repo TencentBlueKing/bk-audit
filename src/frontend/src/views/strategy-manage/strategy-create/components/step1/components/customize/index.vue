@@ -433,16 +433,19 @@
     }
     // 如果是初始状态赋值
     if (!hasData.value
-      || !formData.value.configs.data_source.rt_id
-      || !formData.value.configs.data_source.rt_id.length
+      || (formData.value.configs.config_type !== 'LinkTable'
+        && (!formData.value.configs.data_source.rt_id
+          || !formData.value.configs.data_source.rt_id.length))
       || (formData.value.configs.config_type === 'LinkTable'
         && formData.value.configs.data_source.link_table
         && !formData.value.configs.data_source.link_table.uid)
     ) {
       formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
-    } else if (Array.isArray(dataSource.rt_id)
+    } else if ((Array.isArray(dataSource.rt_id)
       ? formData.value.configs.data_source.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1]
-      : formData.value.configs.data_source.rt_id !== dataSource.rt_id
+      : formData.value.configs.data_source.rt_id !== dataSource.rt_id)
+      || (formData.value.configs.config_type === 'LinkTable'
+        && formData.value.configs.data_source.link_table.uid !== dataSource.link_table.uid)
     ) {
       InfoBox(createInfoBoxConfig({
         onConfirm() {
