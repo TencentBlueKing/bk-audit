@@ -20,10 +20,17 @@
     :is-show="isShow"
     placement="bottom"
     theme="light"
-    trigger="manual">
-    <relation-ship
-      :join-type="joinType"
-      @click="handleOpen" />
+    trigger="click"
+    @after-hidden="handleAfterShow"
+    @after-show="handleAfterShow">
+    <div
+      class="join-type"
+      :class="[isShow ? 'is-show' : '']">
+      <relation-ship
+        active
+        :join-type="joinType"
+        type="gray" />
+    </div>
     <template #content>
       <div
         v-for="type in joinTypeList"
@@ -32,9 +39,11 @@
         :class="[type === joinType ? 'active' : '']"
         @click="() => handleSelectJoinType(type)">
         <relation-ship
+          :active="type === joinType"
           :height="10"
           :join-type="type"
           style="margin-right: 5px;"
+          type="gray"
           :width="10" />
         <span>{{ type }}</span>
       </div>
@@ -52,31 +61,47 @@
 
   const joinTypeList = ['left_join', 'right_join', 'inner_join', 'full_outer_join'];
 
-  const handleOpen = () => {
-    isShow.value = true;
-  };
-
   const handleSelectJoinType = (type: string) => {
     joinType.value = type;
     isShow.value = false;
   };
+
+  const handleAfterShow = (value: { isShow: boolean}) => {
+    isShow.value = value.isShow;
+  };
 </script>
 <style scoped lang="postcss">
-.join-type-list {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  cursor: pointer;
-
-  &:hover {
-    background-color: #f5f7fa;
+  .join-type {
+    display: flex;
+    width: 46px;
+    height: 32px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    background: #e1ecff;
+    border-radius: 4px;
+    align-items: center;
+    justify-content: center;
   }
-}
 
-.active {
-  color: #3a84ff;
-  background-color: #e1ecff;
-}
+  .join-type-list {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background-color: #f5f7fa;
+    }
+  }
+
+  .active {
+    color: #3a84ff;
+    background-color: #e1ecff;
+  }
+
+  .is-show {
+    border: 1px solid #9bc0ff;
+  }
 </style>
 <style>
 .link-data-join-type {

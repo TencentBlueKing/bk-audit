@@ -97,7 +97,9 @@
             <div
               v-bk-tooltips="item.join_type"
               class="join-type">
-              <relation-ship :join-type="item.join_type" />
+              <relation-ship
+                :join-type="item.join_type"
+                type="gray" />
             </div>
             <div class="right-name">
               <span
