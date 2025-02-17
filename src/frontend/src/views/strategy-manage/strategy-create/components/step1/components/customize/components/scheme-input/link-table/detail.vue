@@ -97,7 +97,9 @@
             <div
               v-bk-tooltips="item.join_type"
               class="join-type">
-              <relation-ship :join-type="item.join_type" />
+              <relation-ship
+                :join-type="item.join_type"
+                type="gray" />
             </div>
             <div class="right-name">
               <span
@@ -190,7 +192,7 @@
           fontSize: '14px',
         },
       }, t('刷新后，已配置的数据将被清空。是否继续？')),
-      confirmText: t('继续切换'),
+      confirmText: t('继续刷新'),
       cancelText: t('取消'),
       headerAlign: 'center',
       contentAlign: 'center',

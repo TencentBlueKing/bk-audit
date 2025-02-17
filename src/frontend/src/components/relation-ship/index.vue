@@ -12,10 +12,12 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { reactive, watch } from 'vue';
+  import { computed, reactive, watch } from 'vue';
 
   interface Props {
     joinType: string
+    active?: boolean,
+    type?: 'gray' | 'normal',
     width?: number,
     height?: number,
   }
@@ -23,7 +25,12 @@
   const props = withDefaults(defineProps<Props>(), {
     width: 20,
     height: 20,
+    type: 'normal',
+    active: false,
   });
+
+  const grayColor = computed(() => (props.active ? 'rgb(163, 197, 254)' : 'rgb(220, 222, 229)'));
+  const grayBorderColor = computed(() => (props.active ? 'rgb(23, 104, 239)' : 'rgb(151, 155, 165)'));
 
   const circleLeft = reactive({
     width: `${props.width}px`,
@@ -51,43 +58,43 @@
   watch(() => props.joinType, (joinType: string) => {
     switch (joinType) {
     case 'inner_join':
-      circleLeft.borderColor = 'rgb(58, 132, 255)';
+      circleLeft.borderColor = props.type === 'gray' ? grayBorderColor.value : 'rgb(58, 132, 255)';
       circleLeft.background = '';
 
-      circleRight.borderColor = 'rgb(150, 201, 137)';
+      circleRight.borderColor = props.type === 'gray' ? grayBorderColor.value : 'rgb(150, 201, 137)';
       circleRight.background = '';
 
-      InnerJoin.background = 'rgb(58, 132, 255,.8)';
+      InnerJoin.background = props.type === 'gray' ? grayColor.value : 'rgb(58, 132, 255,.8)';
       break;
     case 'left_join':
-      circleLeft.borderColor = 'rgb(58, 132, 255)';
-      circleLeft.background = 'rgb(58, 132, 255,.8)';
+      circleLeft.borderColor = props.type === 'gray' ? grayBorderColor.value : 'rgb(58, 132, 255)';
+      circleLeft.background = props.type === 'gray' ? grayColor.value : 'rgb(58, 132, 255,.8)';
       circleLeft.zIndex = 999;
 
-      circleRight.borderColor = 'rgb(150, 201, 137)';
+      circleRight.borderColor = props.type === 'gray' ? grayBorderColor.value : 'rgb(150, 201, 137)';
       circleRight.background = '';
       circleRight.zIndex = 0;
 
       InnerJoin.background = '';
       break;
     case 'right_join':
-      circleLeft.borderColor = 'rgb(58, 132, 255)';
+      circleLeft.borderColor = props.type === 'gray' ? grayBorderColor.value : 'rgb(58, 132, 255)';
       circleLeft.background = '';
       circleLeft.zIndex = 0;
 
-      circleRight.borderColor = 'rgb(150, 201, 137)';
-      circleRight.background = 'rgb(150, 201, 137,.8)';
+      circleRight.borderColor = props.type === 'gray' ? grayBorderColor.value : 'rgb(150, 201, 137)';
+      circleRight.background = props.type === 'gray' ? grayColor.value : 'rgb(150, 201, 137,.8)';
       circleRight.zIndex = 999;
 
       InnerJoin.background = '';
       break;
     case 'full_outer_join':
-      circleLeft.borderColor = 'rgb(58, 132, 255)';
-      circleLeft.background = 'rgb(58, 132, 255,.8)';
+      circleLeft.borderColor = props.type === 'gray' ? grayBorderColor.value : 'rgb(58, 132, 255)';
+      circleLeft.background = props.type === 'gray' ? grayColor.value : 'rgb(58, 132, 255,.8)';
       circleLeft.zIndex = 999;
 
-      circleRight.borderColor = 'rgb(150, 201, 137)';
-      circleRight.background = 'rgb(150, 201, 137,.8)';
+      circleRight.borderColor = props.type === 'gray' ? grayBorderColor.value : 'rgb(150, 201, 137)';
+      circleRight.background = props.type === 'gray' ? grayColor.value : 'rgb(150, 201, 137,.8)';
       circleRight.zIndex = 0;
 
       InnerJoin.background = '';

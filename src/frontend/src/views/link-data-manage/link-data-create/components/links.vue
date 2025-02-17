@@ -77,9 +77,7 @@
             </select-verify>
           </div>
           <!-- 关联关系 -->
-          <div class="join-type">
-            <join-type v-model:joinType="link.join_type" />
-          </div>
+          <join-type v-model:joinType="link.join_type" />
           <!-- 右表 -->
           <div class="right-name">
             <bk-form-item
@@ -381,18 +379,6 @@
     .left-name,
     .right-name {
       display: flex;
-    }
-
-    .join-type {
-      display: flex;
-      width: 46px;
-      height: 32px;
-      margin-bottom: 8px;
-      cursor: pointer;
-      background: #e1ecff;
-      border-radius: 4px;
-      align-items: center;
-      justify-content: center;
     }
   }
 

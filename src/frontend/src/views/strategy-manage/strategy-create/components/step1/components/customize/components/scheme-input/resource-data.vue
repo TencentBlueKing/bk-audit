@@ -131,6 +131,9 @@
       formData.value.configs.data_source.rt_id = [];
     },
     setConfigs(config: Record<string, any>) {
+      if (Array.isArray(config.data_source.rt_id)) {
+        formData.value.configs.data_source.rt_id = config.data_source.rt_id;
+      }
       // 对tableid转换
       props.tableData.forEach((item) => {
         if (item.children && item.children.length) {
