@@ -261,5 +261,6 @@ export default {
     '该联表数据有更新，请确认是否刷新同步': 'The data in this table has been updated, please check if it is refreshed and synchronized.',
     前往查看详情: 'Go to details',
     刷新数据源请注意: 'Pay attention to refresh data sources',
+    继续刷新: 'Refresh',
   },
 };
