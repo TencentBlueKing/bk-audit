@@ -294,7 +294,8 @@
     onSuccess() {
       if (linkEventData.value.results.length) {
         // 触底加载，拼接
-        linkEventList.value = [...linkEventList.value, ...linkEventData.value.results];
+        linkEventList.value = [...linkEventList.value, ...linkEventData.value.results].
+          filter((item, index, self) => index === self.findIndex(t => t.event_id === item.event_id));
 
         // 默认获取第一个
         // eslint-disable-next-line prefer-destructuring
