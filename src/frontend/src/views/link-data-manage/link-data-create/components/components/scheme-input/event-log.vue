@@ -24,6 +24,10 @@
       <span>
         <bk-select
           v-model="modelValue.system_ids"
+          v-bk-tooltips="{
+            disabled: !isDisabled,
+            content: t('操作记录数据源需保持一致，请修改第一个操作记录数据源'),
+          }"
           collapse-tags
           :disabled="isDisabled"
           filterable
