@@ -41,6 +41,7 @@
               property="configs.config_type">
               <bk-select
                 v-model="configType"
+                :clearable="Boolean(configType)"
                 filterable
                 :placeholder="t('请选择数据源类型')"
                 @change="handleDataSourceType">
@@ -179,7 +180,7 @@
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
   import _ from 'lodash';
-  import { h, nextTick, ref, watch } from 'vue';
+  import { computed, h, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -302,6 +303,9 @@
   const configType = ref('');
   const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
 
+  // eslint-disable-next-line max-len
+  const hasData = computed(() => formData.value.configs.select.length || formData.value.configs.where.conditions.length);
+
   const {
     data: commonData,
   } = useRequest(StrategyManageService.fetchStrategyCommon, {
@@ -386,7 +390,7 @@
 
   // 切换数据源类型： 默认使用离线模式batch_join_source，不切换类型
   const handleDataSourceType = (item: string) => {
-    if (formData.value.configs.config_type === '') {
+    if (formData.value.configs.config_type === '' || !hasData.value) {
       formData.value.configs.config_type = item;
       if (item !== '' && item !== 'LinkTable') {
         fetchTable({
@@ -428,13 +432,18 @@
       tableFields.value = [];
     }
     // 如果是初始状态赋值
-    if (!formData.value.configs.data_source.rt_id
+    if (!hasData.value
+      || !formData.value.configs.data_source.rt_id
       || !formData.value.configs.data_source.rt_id.length
-      || (formData.value.configs.config_type === 'LinkTable' && formData.value.configs.data_source.link_table && !formData.value.configs.data_source.link_table.uid)) {
+      || (formData.value.configs.config_type === 'LinkTable'
+        && formData.value.configs.data_source.link_table
+        && !formData.value.configs.data_source.link_table.uid)
+    ) {
       formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
     } else if (Array.isArray(dataSource.rt_id)
       ? formData.value.configs.data_source.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1]
-      : formData.value.configs.data_source.rt_id !== dataSource.rt_id) {
+      : formData.value.configs.data_source.rt_id !== dataSource.rt_id
+    ) {
       InfoBox(createInfoBoxConfig({
         onConfirm() {
           formData.value.configs.select = [];
