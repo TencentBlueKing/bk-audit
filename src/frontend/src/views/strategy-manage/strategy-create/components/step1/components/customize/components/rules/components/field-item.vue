@@ -30,6 +30,7 @@
       class="column-line" />
     <!-- 字段 -->
     <bk-form-item
+      error-display-type="tooltips"
       label=""
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
@@ -68,6 +69,7 @@
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
+      error-display-type="tooltips"
       label=""
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.operator`"
@@ -93,6 +95,7 @@
     <!-- 值 -->
     <bk-form-item
       v-if="!['', 'notnull', 'isnull'].includes(condition.condition.operator)"
+      error-display-type="tooltips"
       label=""
       label-width="0"
       :property="(input.includes(condition.condition.operator) &&
