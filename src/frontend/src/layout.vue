@@ -103,7 +103,7 @@
             <audit-menu-item index="linkDataManage">
               <audit-icon
                 class="menu-item-icon"
-                type="data-storage" />
+                type="lianbiao" />
               {{ t('联表管理') }}
             </audit-menu-item>
             <audit-menu-item index="noticeGroup">
