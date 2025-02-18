@@ -123,3 +123,9 @@
     }
   }
 }
+
+.change-confirm-info-box {
+  .bk-modal-wrapper {
+    z-index: 9999 !important;
+  }
+}
