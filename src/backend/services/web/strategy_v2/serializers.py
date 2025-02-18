@@ -617,7 +617,7 @@ class BulkGetRTFieldsRequestSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        attrs['table_ids'] = list(set(attrs['table_ids'].split(',')))
+        attrs['table_ids'] = list(dict.fromkeys(attrs['table_ids'].split(',')))
         return attrs
 
 
