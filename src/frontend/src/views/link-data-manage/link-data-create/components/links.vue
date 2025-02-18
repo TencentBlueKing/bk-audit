@@ -45,7 +45,7 @@
                   filterable
                   :placeholder="t('数据源类型')"
                   :prefix="t('数据源')"
-                  @change="() => handleSelectLeftTableType(index)">
+                  @change="(value: string) => handleSelectLeftTableType(value ,index)">
                   <!-- 第一个关联，第一张表有所有选项 -->
                   <bk-option
                     v-for="item in ( index === 0 ? linkTableTableTypeList : leftTableTypeList)"
@@ -156,7 +156,8 @@
   </span>
 </template>
 <script setup lang="ts">
-  import { computed, ref } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { computed, h, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -198,6 +199,7 @@
     required: true,
   });
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
+  const oldFirstLefType = ref('');
 
   const linksHeight = computed(() => {
     const windowHeight = window.innerHeight;
@@ -242,33 +244,61 @@
     tableTableMap.value[type] = data;
   };
 
-  const handleSelectLeftTableType = (index: number) => {
+  const createInfoBoxConfig = (overrides: {onConfirm: () => void, onClose: () => void}): any => ({
+    type: 'warning',
+    title: t('切换数据源请注意'),
+    subTitle: () => h('div', {
+      style: {
+        color: '#4D4F56',
+        backgroundColor: '#f5f6fa',
+        padding: '12px 16px',
+        borderRadius: '2px',
+        fontSize: '14px',
+        textAlign: 'left',
+      },
+    }, t('切换后，已配置的数据将被清空。是否继续？')),
+    confirmText: t('继续切换'),
+    cancelText: t('取消'),
+    headerAlign: 'center',
+    contentAlign: 'center',
+    footerAlign: 'center',
+    ...overrides,
+  });
+
+  const handleSelectLeftTableType = (value: string, index: number) => {
     // 如果重选了主表，全部重置
-    if (index === 0) {
-      links.value = links.value.map((item, linkIndex) => ({
-        ...item,
-        left_table: {
-          ...item.left_table,
-          rt_id: '',
-          system_ids: [],
-          table_type: linkIndex === 0 ? item.left_table.table_type : '',
+    if (index === 0 && links.value.length > 1) {
+      InfoBox(createInfoBoxConfig({
+        onConfirm() {
+          links.value = links.value.map((item, linkIndex) => ({
+            ...item,
+            left_table: {
+              ...item.left_table,
+              rt_id: [],
+              system_ids: [],
+              table_type: linkIndex === 0 ? value : '',
+            },
+            right_table: {
+              ...item.right_table,
+              rt_id: [],
+              system_ids: [],
+              table_type: '',
+            },
+            link_fields: item.link_fields.map(() => ({
+              left_field: {
+                field_name: '',
+                display_name: '',
+              },
+              right_field: {
+                field_name: '',
+                display_name: '',
+              },
+            })),
+          }));
         },
-        right_table: {
-          ...item.right_table,
-          rt_id: '',
-          system_ids: [],
-          table_type: '',
+        onClose() {
+          links.value[0].left_table.table_type = oldFirstLefType.value;
         },
-        link_fields: item.link_fields.map(() => ({
-          left_field: {
-            field_name: '',
-            display_name: '',
-          },
-          right_field: {
-            field_name: '',
-            display_name: '',
-          },
-        })),
       }));
       return;
     }
@@ -303,11 +333,11 @@
     }));
   };
 
-  const configTypeMap: Record<string, any> = {
+  const configTypeMap: Record<string, any> = ref({
     EventLog: EventLogComponent,
     BuildIn: ResourceDataComponent,
     BizRt: OtherDataComponent,
-  };
+  });
 
   // 获取数据源
   const {
@@ -351,6 +381,10 @@
   const handleDelete = (index: number) => {
     links.value?.splice(index, 1);
   };
+
+  watch(() => links.value[0].left_table.table_type, (_, old) => {
+    oldFirstLefType.value = old;
+  });
 
   defineExpose<Exposes>({
     getValue() {
