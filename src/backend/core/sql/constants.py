@@ -15,8 +15,10 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import List
 
 from django.utils.translation import gettext_lazy
+from pypika import Field
 from pypika import functions as fn
 
 from core.choices import TextChoices
@@ -90,36 +92,54 @@ class JoinType(TextChoices):
 class Operator(TextChoices):
     """匹配符"""
 
-    EQ = "eq", gettext_lazy("Equal")
-    NEQ = "neq", gettext_lazy("NotEqual")
-    REG = "reg", gettext_lazy("Regex")
-    NREG = "nreg", gettext_lazy("NotRegex")
-    INCLUDE = "include", gettext_lazy("Include")
-    EXCLUDE = "exclude", gettext_lazy("Exclude")
-    LTE = "lte", gettext_lazy("LessThanOrEqual")
-    LT = "lt", gettext_lazy("LessThan")
-    GTE = "gte", gettext_lazy("GreaterThanOrEqual")
-    GT = "gt", gettext_lazy("GreaterThan")
-    ISNULL = "isnull", gettext_lazy("IsNull")
-    NOTNULL = "notnull", gettext_lazy("NotNull")
+    EQ = "eq", gettext_lazy("=")
+    NEQ = "neq", gettext_lazy("!=")
+    GT = "gt", gettext_lazy(">")
+    LT = "lt", gettext_lazy("<")
+    GTE = "gte", gettext_lazy(">=")
+    LTE = "lte", gettext_lazy("<=")
+    INCLUDE = "include", gettext_lazy("in")
+    EXCLUDE = "exclude", gettext_lazy("not in")
+    LIKE = "like", gettext_lazy("like")
+    NOT_LIKE = "not_like", gettext_lazy("not like")
+    ISNULL = "isnull", gettext_lazy("is null")
+    NOTNULL = "notnull", gettext_lazy("is not null")
+    REG = "reg", gettext_lazy("regex")
+    NREG = "nreg", gettext_lazy("not regex")
 
     @classmethod
-    def match_handler(cls, operator: str):
-        return {
-            cls.EQ: lambda field, value: field == value,
-            cls.NEQ: lambda field, value: field != value,
-            cls.INCLUDE: lambda field, value: field.isin(value),
-            cls.EXCLUDE: lambda field, value: ~field.isin(value),
-            cls.REG: lambda field, value: field.regex(value),
-            cls.NREG: lambda field, value: ~field.regex(value),
-            cls.LTE: lambda field, value: field.lte(value),
-            cls.LT: lambda field, value: field.lt(value),
-            cls.GTE: lambda field, value: field.gte(value),
-            cls.GT: lambda field, value: field.gt(value),
-            cls.ISNULL: lambda field, value: field.isnull(),
-            cls.NOTNULL: lambda field, value: field.notnull(),
-        }.get(operator)
-
-    @classmethod
-    def range_operators(cls):
-        return {cls.INCLUDE, cls.EXCLUDE}
+    def handler(cls, operator: str, field: Field, value: str | int | float, values: List[str | int | float]):
+        # 根据操作符类型调用对应的处理函数
+        if not value and values:
+            value = values[0]
+        match operator:
+            case cls.EQ:
+                return field == value
+            case cls.NEQ:
+                return field != value
+            case cls.INCLUDE:
+                return field.isin(values)
+            case cls.EXCLUDE:
+                return ~field.isin(values)
+            case cls.LIKE:
+                return field.like(str(value))
+            case cls.NOT_LIKE:
+                return ~field.like(str(value))
+            case cls.REG:
+                return field.regex(str(value))
+            case cls.NREG:
+                return ~field.regex(str(value))
+            case cls.LTE:
+                return field.lte(value)
+            case cls.LT:
+                return field.lt(value)
+            case cls.GTE:
+                return field.gte(value)
+            case cls.GT:
+                return field.gt(value)
+            case cls.ISNULL:
+                return field.isnull()
+            case cls.NOTNULL:
+                return field.notnull()
+            case _:
+                return None

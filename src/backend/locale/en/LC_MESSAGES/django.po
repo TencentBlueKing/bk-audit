@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-14 16:14+0800\n"
+"POT-Creation-Date: 2025-02-17 21:20+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2067,41 +2067,47 @@ msgstr "right_join"
 msgid "全连接"
 msgstr "full_outer_join"
 
-msgid "Equal"
-msgstr "Equal"
+msgid "="
+msgstr "="
 
-msgid "NotEqual"
-msgstr "NotEqual"
+msgid "!="
+msgstr "!="
 
-msgid "Regex"
-msgstr "Regex"
+msgid ">"
+msgstr ">"
 
-msgid "NotRegex"
-msgstr "NotRegex"
+msgid "<"
+msgstr "<"
 
-msgid "Include"
-msgstr "Include"
+msgid ">="
+msgstr ">="
 
-msgid "Exclude"
-msgstr "Exclude"
+msgid "<="
+msgstr "<="
 
-msgid "LessThanOrEqual"
-msgstr "LessThanOrEqual"
+msgid "in"
+msgstr "In"
 
-msgid "LessThan"
-msgstr "LessThan"
+msgid "not in"
+msgstr "NotIn"
 
-msgid "GreaterThanOrEqual"
-msgstr "GreaterThanOrEqual"
+msgid "like"
+msgstr "Like"
 
-msgid "GreaterThan"
-msgstr "GreaterThan"
+msgid "not like"
+msgstr "NotLike"
 
-msgid "IsNull"
+msgid "is null"
 msgstr "IsNull"
 
-msgid "NotNull"
-msgstr "NotNull"
+msgid "is not null"
+msgstr "IsNotNull"
+
+msgid "regex"
+msgstr "Regex"
+
+msgid "not regex"
+msgstr "NotRegex"
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
@@ -2193,30 +2199,6 @@ msgstr "Not Start"
 
 msgid "Failed"
 msgstr "Failed"
-
-msgid "="
-msgstr "="
-
-msgid "!="
-msgstr "!="
-
-msgid ">"
-msgstr ">"
-
-msgid "<"
-msgstr "<"
-
-msgid ">="
-msgstr ">="
-
-msgid "<="
-msgstr "<="
-
-msgid "IN"
-msgstr "IN"
-
-msgid "NOT IN"
-msgstr "NOT IN"
 
 msgid "No Failed"
 msgstr "No Failed"
@@ -3473,6 +3455,24 @@ msgstr "Updating"
 
 msgid "Stopping"
 msgstr "Stopping"
+
+msgid "Equal"
+msgstr "Equal"
+
+msgid "NotEqual"
+msgstr "NotEqual"
+
+msgid "Regex"
+msgstr "Regex"
+
+msgid "NotRegex"
+msgstr "NotRegex"
+
+msgid "Include"
+msgstr "Include"
+
+msgid "Exclude"
+msgstr "Exclude"
 
 msgid "致命"
 msgstr "Fatal"

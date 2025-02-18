@@ -644,7 +644,8 @@ class AIOpsController(Controller):
             return sql
         return ""
 
-    def _build_sql_filter(self, filter_config: List[dict]) -> str:
+    @classmethod
+    def _build_sql_filter(cls, filter_config: List[dict]) -> str:
         """
         build sql where
         """
@@ -662,9 +663,12 @@ class AIOpsController(Controller):
                 values_str = ",".join(f'''"{v.replace("'", "''")}"''' for v in _filter["value"])
                 condition = f"{_filter['key']} {_filter['method']} ({values_str})"
                 _filter_conditions = [condition]
+            elif _filter["method"] in (FilterOperator.IS_NULL, FilterOperator.NOT_NULL):
+                condition = f"{_filter['key']} {_filter['method']}"
+                _filter_conditions = [condition]
             else:
                 _filter_conditions = [
-                    "{}{}'{}'".format(_filter["key"], _filter["method"], _value.replace("'", "''"))
+                    "{} {} '{}'".format(_filter["key"], _filter["method"], _value.replace("'", "''"))
                     for _value in _filter["value"]
                 ]
 

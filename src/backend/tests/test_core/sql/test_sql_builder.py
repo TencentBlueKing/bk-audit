@@ -118,14 +118,34 @@ class TestSQLGenerator(TestCase):
                             filter="Ireland",
                         )
                     ),
+                    WhereCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="users", raw_name="name", display_name="user_name", field_type=FieldType.STRING
+                            ),
+                            operator=Operator.LIKE,
+                            filter="%Jack%",
+                        )
+                    ),
+                    WhereCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="users", raw_name="name", display_name="user_name", field_type=FieldType.STRING
+                            ),
+                            operator=Operator.NOT_LIKE,
+                            filter="%Mark%",
+                        )
+                    ),
                 ],
             ),
         )
         generator = SQLGenerator(self.query_builder, config)
         query = generator.generate()
         expected_query = (
-            'SELECT "users"."id" "user_id" FROM "users" "users" WHERE "users"."age"=18 '
-            'AND "users"."country"=\'Ireland\''
+            'SELECT "users"."id" "user_id" '
+            'FROM "users" "users" '
+            'WHERE "users"."age"=18 AND "users"."country"=\'Ireland\' '
+            'AND "users"."name" LIKE \'%Jack%\' AND NOT "users"."name" LIKE \'%Mark%\''
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 

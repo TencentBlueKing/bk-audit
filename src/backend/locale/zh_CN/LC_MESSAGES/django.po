@@ -8,6 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-02-17 21:20+0800\n"
 "POT-Creation-Date: 2025-02-14 16:14+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
@@ -2067,41 +2068,47 @@ msgstr "右连接"
 msgid "全连接"
 msgstr "全连接"
 
-msgid "Equal"
-msgstr "="
+msgid "="
+msgstr "等于"
 
-msgid "NotEqual"
-msgstr "!="
+msgid "!="
+msgstr "不等于"
 
-msgid "Regex"
-msgstr "正则"
-
-msgid "NotRegex"
-msgstr "正则(非)"
-
-msgid "Include"
-msgstr "包含"
-
-msgid "Exclude"
-msgstr "不包含"
-
-msgid "LessThanOrEqual"
-msgstr "小于或等于"
-
-msgid "LessThan"
-msgstr "小于"
-
-msgid "GreaterThanOrEqual"
-msgstr "大于或等于"
-
-msgid "GreaterThan"
+msgid ">"
 msgstr "大于"
 
-msgid "IsNull"
+msgid "<"
+msgstr "小于"
+
+msgid ">="
+msgstr "大于等于"
+
+msgid "<="
+msgstr "小于等于"
+
+msgid "in"
+msgstr "属于"
+
+msgid "not in"
+msgstr "不属于"
+
+msgid "like"
+msgstr "包含(模糊匹配)"
+
+msgid "not like"
+msgstr "不包含(模糊匹配)"
+
+msgid "is null"
 msgstr "为空"
 
-msgid "NotNull"
+msgid "is not null"
 msgstr "不为空"
+
+msgid "regex"
+msgstr "正则"
+
+msgid "not regex"
+msgstr "正则(不匹配)"
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
@@ -2193,30 +2200,6 @@ msgstr "未启动"
 
 msgid "Failed"
 msgstr "失败"
-
-msgid "="
-msgstr "="
-
-msgid "!="
-msgstr "!="
-
-msgid ">"
-msgstr ">"
-
-msgid "<"
-msgstr "<"
-
-msgid ">="
-msgstr ">="
-
-msgid "<="
-msgstr "<="
-
-msgid "IN"
-msgstr "包含"
-
-msgid "NOT IN"
-msgstr "不包含"
 
 msgid "No Failed"
 msgstr "无失败"
@@ -3473,6 +3456,24 @@ msgstr "更新中"
 
 msgid "Stopping"
 msgstr "停用中"
+
+msgid "Equal"
+msgstr "等于"
+
+msgid "NotEqual"
+msgstr "不等于"
+
+msgid "Regex"
+msgstr "正则"
+
+msgid "NotRegex"
+msgstr "正则(不匹配)"
+
+msgid "Include"
+msgstr "属于"
+
+msgid "Exclude"
+msgstr "不属于"
 
 msgid "致命"
 msgstr "致命"
