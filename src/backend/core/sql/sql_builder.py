@@ -153,18 +153,10 @@ class SQLGenerator:
         """处理条件"""
         field = self._get_pypika_field(condition.field)
         operator = condition.operator
-        handler = Operator.match_handler(operator)
-        if not handler:
+        data = Operator.handler(operator, field, condition.filter, condition.filters)
+        if not data:
             raise UnsupportedOperatorError(operator)
-
-        # 根据操作符类型调用对应的处理函数
-        if operator in Operator.range_operators():
-            condition_value = condition.filters
-        elif not condition.filter and condition.filters:
-            condition_value = condition.filters[0]
-        else:
-            condition_value = condition.filter
-        return handler(field, condition_value)
+        return data
 
     def _apply_where_conditions(self, where_condition: WhereCondition) -> BasicCriterion:
         """递归构建 WHERE 子句"""

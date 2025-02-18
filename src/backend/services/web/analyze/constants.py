@@ -128,8 +128,14 @@ class FilterOperator(TextChoices):
     LESS_THAN = "<", gettext_lazy("<")
     GRATER_THAN_EQUAL = ">=", gettext_lazy(">=")
     LESS_THAN_EQUAL = "<=", gettext_lazy("<=")
-    IN = "IN", gettext_lazy("IN")
-    NOT_IN = "NOT IN", gettext_lazy("NOT IN")
+    IN = "IN", gettext_lazy("in")
+    NOT_IN = "NOT IN", gettext_lazy("not in")
+    LIKE = "LIKE", gettext_lazy("like")
+    NOT_LIKE = "NOT LIKE", gettext_lazy("not like")
+    IS_NULL = "IS NULL", gettext_lazy("is null")
+    NOT_NULL = "IS NOT NULL", gettext_lazy("is not null")
+    REG = "REGEXP", gettext_lazy("regex")
+    NREG = "NOT REGEXP", gettext_lazy("not regex")
 
 
 class FilterConnector(TextChoices):
