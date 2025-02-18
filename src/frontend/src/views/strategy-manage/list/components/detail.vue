@@ -79,7 +79,7 @@
   background-color: #f5f7fa;
 
   :deep(.bk-tab) {
-    height: calc(100vh - 100px);
+    height: calc(100vh - 115px);
 
     .bk-tab-header {
       margin-left: 24px;
