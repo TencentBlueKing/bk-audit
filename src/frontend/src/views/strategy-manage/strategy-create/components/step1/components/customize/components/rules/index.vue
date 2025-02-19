@@ -46,8 +46,9 @@
           @update-field-item="handleUpdateFieldItem"
           @update-field-item-list="handleUpdateFieldItemList" />
         <audit-icon
-          v-if="index !== 0"
+          v-if="where.conditions.length > 1"
           class="delete-conditions"
+          style="font-size: 14px;"
           type="delete"
           @click="() => handleDelete(index)" />
       </div>

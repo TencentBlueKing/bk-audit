@@ -47,6 +47,7 @@
   const props = defineProps<Props>();
   const labelStyle = computed(() => ({
     'min-width': `${props.labelWidth || 80}px`,
+    'max-width': `${props.labelWidth || 80}px`,
     flex: '0 0 auto',
   }));
 </script>
@@ -61,6 +62,8 @@
     color: #63656e;
     text-align: right;
     flex: 0 0 60px;
+    word-break: break-all;
+    word-wrap: break-word;
   }
 
   .info-value {

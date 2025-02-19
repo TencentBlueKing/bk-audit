@@ -69,7 +69,7 @@
                           }
                         }">
                         <audit-icon
-                          style="font-size: 14px;color: #979ba5;"
+                          style="font-size: 14px;color: #3a84ff;"
                           type="plus-circle" />
                         {{ t('新增通知组') }}
                       </auth-router-link>
@@ -131,7 +131,7 @@
                           }
                         }">
                         <audit-icon
-                          style="font-size: 14px;color: #979ba5;"
+                          style="font-size: 14px;color: #3a84ff;"
                           type="plus-circle" />
                         {{ t('新增通知组') }}
                       </auth-router-link>

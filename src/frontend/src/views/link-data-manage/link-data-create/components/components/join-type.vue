@@ -23,9 +23,7 @@
     trigger="click"
     @after-hidden="handleAfterShow"
     @after-show="handleAfterShow">
-    <div
-      class="join-type"
-      :class="[isShow ? 'is-show' : '']">
+    <div class="join-type">
       <relation-ship
         active
         :join-type="joinType"
@@ -78,6 +76,7 @@
     margin-bottom: 8px;
     cursor: pointer;
     background: #e1ecff;
+    border: 1px solid #9bc0ff;
     border-radius: 4px;
     align-items: center;
     justify-content: center;
@@ -97,10 +96,6 @@
   .active {
     color: #3a84ff;
     background-color: #e1ecff;
-  }
-
-  .is-show {
-    border: 1px solid #9bc0ff;
   }
 </style>
 <style>

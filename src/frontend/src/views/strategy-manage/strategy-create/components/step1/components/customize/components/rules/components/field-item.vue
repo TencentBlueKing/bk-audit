@@ -156,6 +156,7 @@
         type="add-fill"
         @click="handleAdd" />
       <audit-icon
+        v-if="localConditions.conditions.length > 1"
         style="cursor: pointer;"
         type="reduce-fill"
         @click="() => handleDelete(index)" />
@@ -423,7 +424,8 @@
   }
 
   .icon-group {
-    color: #c4c6cc;;
+    font-size: 14px;
+    color: #c4c6cc;
   }
 }
 

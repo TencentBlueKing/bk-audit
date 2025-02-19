@@ -698,7 +698,8 @@
 
     .strategt-form {
       flex: 1;
-      max-width: 1280px;
+
+      /* max-width: 1280px; */
 
       :deep(.bk-button-group) {
         .bk-button {
