@@ -523,13 +523,11 @@
     expectedResultsRef.value.resetFormData();
   };
 
-  const handleSourceTypeChange = (type: string) => {
-    if (type === 'stream_source') {
-      formData.value.configs.schedule_config = {
-        count_freq: '',
-        schedule_period: 'hour',
-      };
-    }
+  const handleSourceTypeChange = () => {
+    formData.value.configs.schedule_config = {
+      count_freq: '',
+      schedule_period: 'hour',
+    };
   };
 
   // 编辑
