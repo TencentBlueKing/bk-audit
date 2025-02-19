@@ -113,7 +113,9 @@
             </bk-select>
             <!-- 无需配置 -->
             <template v-else>
-              {{ t('无需配置') }}
+              <span style="padding-left: 8px;">
+                {{ t('无需配置') }}
+              </span>
             </template>
           </template>
 
