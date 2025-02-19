@@ -21,11 +21,13 @@ import os
 
 from bk_resource import resource
 from django.conf import settings
+from django.utils.translation import gettext_lazy
 
-from apps.exceptions import InitSystemDisabled
+from apps.exceptions import InitSystemDisabled, ParamsNotValid
 from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.utils.fields import STANDARD_FIELDS
 from core.utils.distutils import strtobool
+from services.web.databus.constants import ClusterMode
 from services.web.databus.iam_data.base import create_iam_data_link
 from services.web.databus.storage.serializers import (
     CreateRedisRequestSerializer,
@@ -36,9 +38,9 @@ from services.web.entry.constants import (
     INIT_ES_FISHED_KEY,
     INIT_FIELDS_FINISHED_KEY,
     INIT_REDIS_FISHED_KEY,
-    INIT_SNAPSHOT_FINISHED_KEY,
+    INIT_SNAPSHOT_FINISHED_KEY, INIT_DORIS_FISHED_KEY,
 )
-from services.web.risk.constants import EVENT_ES_CLUSTER_ID_KEY
+from services.web.risk.constants import EVENT_ES_CLUSTER_ID_KEY, EVENT_DORIS_CLUSTER_ID_KEY
 from services.web.risk.handlers import EventHandler
 
 
@@ -78,10 +80,11 @@ class SystemInitHandler:
         self.pre_init()
         self.init_standard_fields()
         self.init_es()
+        self.init_doris()
         self.init_redis()
         self.init_snapshot()
         self.init_event()
-        self.create_or_update_plugin_etl()
+        self.init_log()
         print("[Main] Init Finished")
 
     def pre_init(self):
@@ -116,6 +119,26 @@ class SystemInitHandler:
         for es_config in es_configs:
             self._init_es(es_config)
         self.post_init(INIT_ES_FISHED_KEY)
+
+    def init_doris(self):
+        if self.pre_check(INIT_DORIS_FISHED_KEY):
+            return
+        doris_configs = json.loads(os.getenv("BKAPP_INIT_DORIS_CONFIG"))
+        for doris_config in doris_configs:
+            self._init_doris(doris_config)
+        self.post_init(INIT_DORIS_FISHED_KEY)
+
+    def _init_doris(self, doris_config: dict):
+        print(f"[InitDoris] Params => {doris_config}")
+        if not doris_config.get('pre_defined', False):
+            raise ParamsNotValid(message=gettext_lazy("Doris必须是预定义的"))
+        cluster_id = resource.databus.storage.create_storage(doris_config)
+        print(f"[InitDoris] Resp => {cluster_id}")
+        GlobalMetaConfig.set(EVENT_DORIS_CLUSTER_ID_KEY, cluster_id)
+        print("InitDoris GlobalMetaConfig Set Success")
+        resource.databus.storage.storage_activate(namespace=settings.DEFAULT_NAMESPACE, cluster_id=cluster_id,
+                                                  cluster_mode=ClusterMode.REPLICA)
+        print(f"[InitDoris] Default => {cluster_id}")
 
     def _init_redis(self, redis_config: dict):
         print(f"[InitRedis] Params => {redis_config}")
@@ -161,7 +184,7 @@ class SystemInitHandler:
         EventHandler().update_or_create_rt()
         print("[InitEvent] Stop")
 
-    def create_or_update_plugin_etl(self):
+    def init_log(self):
         """创建或更新采集入库"""
         print("[CreateOrUpdatePluginEtl] Start")
         create_or_update_plugin_etl()

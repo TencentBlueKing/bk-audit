@@ -29,6 +29,7 @@ class WebLinkEnum(TextChoices):
 
 
 INIT_ES_FISHED_KEY = "init_es_finished_check"
+INIT_DORIS_FISHED_KEY = "init_doris_finished_check"
 INIT_REDIS_FISHED_KEY = "init_redis_finished_check"
 INIT_PLUGIN_FISHED_KEY = "init_plugin_finished_check"
 INIT_SNAPSHOT_FINISHED_KEY = "init_snapshot_finished_check"

@@ -53,12 +53,12 @@ class GlobalMetaConfig(OperateRecordModel):
 
     @classmethod
     def get(
-        cls,
-        config_key: str,
-        config_level: str = ConfigLevelChoices.GLOBAL.value,
-        instance_key: str = GLOBAL_CONFIG_LEVEL_INSTANCE,
-        *,
-        default=Unset,
+            cls,
+            config_key: str,
+            config_level: str = ConfigLevelChoices.GLOBAL.value,
+            instance_key: str = GLOBAL_CONFIG_LEVEL_INSTANCE,
+            *,
+            default=Unset,
     ):
         try:
             return cls.objects.get(
@@ -75,11 +75,11 @@ class GlobalMetaConfig(OperateRecordModel):
 
     @classmethod
     def set(
-        cls,
-        config_key: str,
-        config_value: any,
-        config_level: str = ConfigLevelChoices.GLOBAL.value,
-        instance_key: str = GLOBAL_CONFIG_LEVEL_INSTANCE,
+            cls,
+            config_key: str,
+            config_value: any,
+            config_level: str = ConfigLevelChoices.GLOBAL.value,
+            instance_key: str = GLOBAL_CONFIG_LEVEL_INSTANCE,
     ):
         config, _ = cls.objects.get_or_create(
             config_level=config_level, config_key=config_key, instance_key=instance_key
@@ -219,6 +219,8 @@ class Field(OperateRecordModel):
     is_time = models.BooleanField(gettext_lazy("是否时间字段"), default=False)
     is_json = models.BooleanField(gettext_lazy("是否为Json格式"), default=False)
     is_analyzed = models.BooleanField(gettext_lazy("是否分词"), default=False)
+    is_zh_analyzed = models.BooleanField(gettext_lazy("是否中文分词"), default=False)  # doris选项
+    is_index = models.BooleanField(gettext_lazy("是否索引"), default=True)  # doris选项
     is_dimension = models.BooleanField(gettext_lazy("是否纬度"), default=True)
     is_delete = models.BooleanField(gettext_lazy("是否删除"), default=False)
     is_required = models.BooleanField(gettext_lazy("是否必须"), default=True)
@@ -348,7 +350,8 @@ class DataMap(OperateRecordModel):
 
     @classmethod
     def trans_data(
-        cls, data: Union[list, dict], data_fields: list, build_data_fields: callable = lambda x: x, many: bool = False
+            cls, data: Union[list, dict], data_fields: list, build_data_fields: callable = lambda x: x,
+            many: bool = False
     ) -> Union[list, dict]:
         """
         转换数据 (仅支持第一层)

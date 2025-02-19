@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import json
-from typing import List
+from typing import List, Optional, Tuple
 
 from bk_resource import api, resource
 from bk_resource.settings import bk_resource_settings
@@ -54,6 +54,32 @@ class PluginEtlHandler:
         self.bkbase_labels = []
 
     def create_or_update(self) -> None:
+        self.create_or_update_clean()
+        self.create_or_update_storage()
+
+    def create_or_update_storage(self) -> None:
+        main_storage_params, replica_storage_params = self.build_storage_config()
+        # 创建合流入库物理表名
+        table_id = f"{settings.DEFAULT_BK_BIZ_ID}_{self.get_table_id()}"
+        main_storage_params["physical_table_name"] = f"write_{{yyyyMMdd}}_{table_id}"
+        if replica_storage_params:
+            replica_storage_params["physical_table_name"] = f"write_{{yyyyMMdd}}_{table_id}"
+
+        # 创建入库
+        if not self.plugin.has_storage:
+            api.bk_base.databus_storages_post(main_storage_params)
+            if replica_storage_params:
+                api.bk_base.databus_storages_post(replica_storage_params)
+            self.plugin.has_storage = True
+            self.plugin.save(update_fields=["has_storage"])
+        # 更新入库
+        else:
+            main_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
+            api.bk_base.databus_storages_put(main_storage_params)
+            if replica_storage_params:
+                api.bk_base.databus_storages_post(replica_storage_params)
+
+    def create_or_update_clean(self) -> None:
         bkbase_params = self.build_clean_config()
         # 更新
         if self.plugin.bkbase_table_id:
@@ -67,53 +93,6 @@ class PluginEtlHandler:
             self.plugin.bkbase_processing_id = result["processing_id"]
             self.plugin.bkbase_table_id = result["result_table_id"]
             self.plugin.save(update_fields=["bkbase_processing_id", "bkbase_table_id"])
-        # 入库参数
-        default_cluster_id = int(
-            GlobalMetaConfig.get(
-                DEFAULT_STORAGE_CONFIG_KEY,
-                config_level=ConfigLevelChoices.NAMESPACE.value,
-                instance_key=self.plugin.namespace,
-            )
-        )
-        clusters = resource.databus.storage.storage_list(namespace=self.plugin.namespace)
-        for item in clusters:
-            if item["cluster_config"]["cluster_id"] == default_cluster_id:
-                cluster_info = item
-        bkbase_cluster_id = cluster_info["cluster_config"].get("custom_option", {})["bkbase_cluster_id"]
-        # 更新入库字段
-        for field in bkbase_params["fields"]:
-            field["physical_field"] = field["field_name"]
-            # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
-            field["is_doc_values"] = field.get("is_dimension", False)
-        # 获取入库参数
-        storage_params = {
-            "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
-            "raw_data_id": bkbase_params["raw_data_id"],
-            "data_type": "clean",
-            "result_table_name": self.get_table_id(),
-            "result_table_name_alias": self.get_table_id(),
-            "storage_type": "es",
-            "storage_cluster": bkbase_cluster_id,
-            "expires": "7d",  # 无效，实际由metadata控制
-            "fields": bkbase_params["fields"],
-            "config": {"has_unique_key": True},
-            "from_raw_data": False,
-        }
-
-        # 合流入库
-        table_id = f"{settings.DEFAULT_BK_BIZ_ID}_{self.get_table_id()}"
-        storage_params["physical_table_name"] = f"write_{{yyyyMMdd}}_{table_id}"
-
-        # 创建入库
-        if not self.plugin.has_storage:
-            api.bk_base.databus_storages_post(storage_params)
-            self.plugin.has_storage = True
-            self.plugin.save(update_fields=["has_storage"])
-
-        # 更新入库
-        else:
-            storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
-            api.bk_base.databus_storages_put(storage_params)
 
     def get_config_name(self) -> str:
         return self.plugin.collector_plugin_name_en.lower()
@@ -134,6 +113,77 @@ class PluginEtlHandler:
             "result_table_name_alias": self.get_table_id(),
         }
         return config
+
+    def build_storage_config(self) -> Tuple[dict, Optional[dict]]:
+        # 主存储入库参数
+        main_default_cluster_id = int(
+            GlobalMetaConfig.get(
+                DEFAULT_STORAGE_CONFIG_KEY,
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=self.plugin.namespace,
+            )
+        )
+        clusters = resource.databus.storage.storage_list(namespace=self.plugin.namespace)
+        for item in clusters:
+            if item["cluster_config"]["cluster_id"] == main_default_cluster_id:
+                cluster_info = item
+        bkbase_cluster_id = cluster_info["cluster_config"].get("custom_option", {})["bkbase_cluster_id"]
+        # 更新入库字段
+        replica_fields = self.get_fields()
+        for field in replica_fields:
+            field["physical_field"] = field["field_name"]
+            # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
+            field["is_doc_values"] = field.get("is_dimension", False)
+
+        # 获取主存储入库参数（目前为ES）
+        main_storage_params = {
+            "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
+            "raw_data_id": self.get_bk_data_id(),
+            "data_type": "clean",
+            "result_table_name": self.get_table_id(),
+            "result_table_name_alias": self.get_table_id(),
+            "storage_type": "es",
+            "storage_cluster": bkbase_cluster_id,
+            "expires": "7d",  # 无效，实际由metadata控制
+            "fields": replica_fields,
+            "config": {"has_unique_key": True},
+            "from_raw_data": False,
+        }
+
+        # 双写存储入库参数
+        replica_default_cluster_id = int(
+            GlobalMetaConfig.get(
+                DEFAULT_STORAGE_CONFIG_KEY,
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=self.plugin.namespace,
+                default=None
+            )
+        )
+        # 更新入库字段
+        replica_fields = self.get_doris_fields()
+        for field in replica_fields:
+            field["physical_field"] = field["field_name"]
+            # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
+            field["is_doc_values"] = field.get("is_dimension", False)
+        # 获取双写存储入库参数（目前为Doris
+
+        if not replica_default_cluster_id:
+            replica_storage_params = {}
+        else:
+            replica_storage_params = {
+                "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
+                "raw_data_id": self.get_bk_data_id(),
+                "data_type": "clean",
+                "result_table_name": self.get_table_id(),
+                "result_table_name_alias": self.get_table_id(),
+                "storage_type": "es",
+                "storage_cluster": bkbase_cluster_id,
+                "expires": "7d",  # 无效，实际由metadata控制
+                "fields": replica_fields,
+                "config": {"has_unique_key": True},
+                "from_raw_data": False,
+            }
+        return main_storage_params, replica_storage_params
 
     @classmethod
     def get_fields(cls) -> List[dict]:
@@ -174,6 +224,21 @@ class PluginEtlHandler:
         )
         # 需要使用确定的FieldIndex避免合流失败
         return [{**field, "field_index": index} for index, field in enumerate(fields, 1)]
+
+    @classmethod
+    def get_doris_fields(cls) -> List[dict]:
+        fields = cls.get_fields()
+        extra_info = {}
+        for field in [*STANDARD_FIELDS, EXT_FIELD_CONFIG]:
+            extra_info[field.field_name] = {'is_index': field.is_index, 'is_zh_analyzed': field.is_zh_analyzed}
+        for field in fields:
+            if field["field_name"] in extra_info:
+                field.update(extra_info[field["field_name"]])
+            if field["field_name"] in ('log',):
+                field["is_zh_analyzed"] = True
+            if field.get('is_zh_analyzed'):
+                field.pop("is_analyzed", None)
+        return fields
 
     @classmethod
     def get_build_in_fields(cls) -> List[dict]:

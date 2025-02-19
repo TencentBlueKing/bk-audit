@@ -35,7 +35,7 @@ from services.web.databus.constants import (
     COLLECTOR_PLUGIN_ID,
     DEFAULT_STORAGE_CONFIG_KEY,
     EMPTY_CLUSTER_ID,
-    PluginSceneChoices,
+    PluginSceneChoices, ClusterMode, DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
 )
 from services.web.databus.models import CollectorPlugin, StorageOperateLog
 from services.web.databus.storage.handler.es import StorageConfig
@@ -47,7 +47,7 @@ from services.web.databus.storage.serializers import (
     StorageDeleteRequestSerializer,
     StorageListRequestSerializer,
     StorageListResponseSerializer,
-    StorageUpdateRequestSerializer,
+    StorageUpdateRequestSerializer, StorageActivateRequestSerializer,
 )
 
 
@@ -80,9 +80,12 @@ class UpdateStorageResource(StorageMeta):
         password = validated_request_data["auth_info"]["password"]
         if password:
             validated_request_data["auth_info"]["password"] = asymmetric_cipher.decrypt(password)
-        data = api.bk_log.update_storage(validated_request_data)
+        data = None
+        if not validated_request_data["pre_defined"]:
+            data = api.bk_log.update_storage(validated_request_data)
         StorageOperateLog.create(validated_request_data["cluster_id"])
-        self.record_config(data["cluster_config"]["cluster_id"], validated_request_data)
+        self.record_config(data["cluster_config"]["cluster_id"] if data else validated_request_data["cluster_id"],
+                           validated_request_data)
         # 更新采集插件
         namespace = validated_request_data["namespace"]
         CollectorPlugin.objects.filter(
@@ -93,6 +96,7 @@ class UpdateStorageResource(StorageMeta):
 
 class StorageActivateResource(StorageMeta):
     name = gettext_lazy("设置默认集群")
+    RequestSerializer = StorageActivateRequestSerializer
     serializer_class = serializers.IntegerField
 
     @transaction.atomic
@@ -101,12 +105,20 @@ class StorageActivateResource(StorageMeta):
             raise StorageChanging()
         # 设置默认集群
         namespace = validated_request_data["namespace"]
-        default_cluster_config = GlobalMetaConfig.set(
-            DEFAULT_STORAGE_CONFIG_KEY,
-            validated_request_data["cluster_id"],
-            config_level=ConfigLevelChoices.NAMESPACE.value,
-            instance_key=namespace,
-        )
+        if validated_request_data["cluster_mode"] == ClusterMode.MAIN:
+            default_cluster_config = GlobalMetaConfig.set(
+                DEFAULT_STORAGE_CONFIG_KEY,
+                validated_request_data["cluster_id"],
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=namespace,
+            )
+        else:
+            default_cluster_config = GlobalMetaConfig.get(
+                DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
+                validated_request_data["cluster_id"],
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=namespace,
+            )
         # 设置采集插件
         CollectorPlugin.objects.filter(
             namespace=namespace, plugin_scene__in=[PluginSceneChoices.COLLECTOR.value]
@@ -170,6 +182,7 @@ class StorageListResource(StorageMeta):
         return cluster
 
     def perform_request(self, validated_request_data):
+        # todo: 待bklog支持后，支持pre_defined/bk_base侧的集群直接展示
         namespace = validated_request_data["namespace"]
         bk_log_clusters = api.bk_log.get_storages(**validated_request_data)
         try:
@@ -201,7 +214,11 @@ class CreateStorageResource(StorageMeta):
         password = validated_request_data["auth_info"]["password"]
         if password:
             validated_request_data["auth_info"]["password"] = asymmetric_cipher.decrypt(password)
-        data = api.bk_log.create_storage(validated_request_data)
+        pre_defined = validated_request_data.pop("pre_defined", False)
+        if pre_defined:
+            data = validated_request_data["pre_defined_cluster_id"]
+        else:
+            data = api.bk_log.create_storage(validated_request_data)
         StorageOperateLog.create(data)
         self.record_config(data, validated_request_data)
         try:
@@ -216,13 +233,13 @@ class CreateStorageResource(StorageMeta):
                     namespace=validated_request_data["namespace"], cluster_id=data
                 )
         if (
-            GlobalMetaConfig.get(
-                COLLECTOR_PLUGIN_ID,
-                config_level=ConfigLevelChoices.NAMESPACE.value,
-                instance_key=validated_request_data["namespace"],
-                default=None,
-            )
-            is None
+                GlobalMetaConfig.get(
+                    COLLECTOR_PLUGIN_ID,
+                    config_level=ConfigLevelChoices.NAMESPACE.value,
+                    instance_key=validated_request_data["namespace"],
+                    default=None,
+                )
+                is None
         ):
             resource.databus.collector_plugin.create_plugin(
                 namespace=validated_request_data["namespace"], is_default=True
