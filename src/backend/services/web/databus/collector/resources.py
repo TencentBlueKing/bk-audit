@@ -30,6 +30,7 @@ from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.common_utils import uniqid
 from blueapps.utils.logger import logger
 from django.conf import settings
+from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
@@ -50,9 +51,7 @@ from apps.meta.utils.saas import get_saas_url
 from core.cache import CacheType
 from core.utils.tools import format_date_string, replenish_params
 from services.web.databus.collector.bcs.yaml import YamlTemplate
-from services.web.databus.collector.etl.base import EtlStorage
-from services.web.databus.collector.join.base import AssetHandler, JoinDataHandler
-from services.web.databus.collector.join.http_pull import HttpPullHandler
+from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.serializers import (
     ApplyDataIdSourceRequestSerializer,
     BulkSystemCollectorsStatusRequestSerializer,
@@ -88,6 +87,11 @@ from services.web.databus.collector.serializers import (
     UpdateBcsCollectorRequestSerializer,
     UpdateCollectorRequestSerializer,
 )
+from services.web.databus.collector.snapshot.join.base import (
+    AssetHandler,
+    BasicJoinHandler,
+)
+from services.web.databus.collector.snapshot.join.http_pull import HttpPullHandler
 from services.web.databus.collector_plugin.handlers import PluginEtlHandler
 from services.web.databus.constants import (
     API_PUSH_COLLECTOR_NAME_FORMAT,
@@ -103,12 +107,12 @@ from services.web.databus.constants import (
     EtlConfigEnum,
     EtlProcessorChoice,
     JoinDataPullType,
+    JoinDataType,
     LogReportStatus,
     SnapshotRunningStatus,
-    SnapShotStorageChoices,
     SourcePlatformChoices,
 )
-from services.web.databus.models import CollectorConfig, Snapshot
+from services.web.databus.models import CollectorConfig, Snapshot, SnapshotStorage
 from services.web.databus.tasks import create_api_push_etl
 
 
@@ -139,7 +143,6 @@ class SnapshotStatusResource(CollectorMeta):
                 result.update(
                     {
                         "status": SnapshotRunningStatus.CLOSED.value,
-                        "hdfs_status": SnapshotRunningStatus.CLOSED.value,
                         "bkbase_url": None,
                         "pull_type": JoinDataPullType.PARTIAL,
                         "status_msg": "",
@@ -149,18 +152,13 @@ class SnapshotStatusResource(CollectorMeta):
             result.update(
                 {
                     "status": item.status,
-                    "hdfs_status": item.hdfs_status,
                     "bkbase_url": (
                         get_saas_url(settings.BKBASE_APP_CODE)
                         + str(settings.BK_BASE_ACCESS_URL).rstrip("/")
                         + "/"
                         + str(item.bkbase_data_id)
                     )
-                    if item.bkbase_data_id
-                    and (
-                        item.hdfs_status == SnapshotRunningStatus.RUNNING
-                        or item.status == SnapshotRunningStatus.RUNNING
-                    )
+                    if item.bkbase_data_id and (item.status == SnapshotRunningStatus.RUNNING)
                     else None,
                     "pull_type": item.pull_type,
                     "status_msg": item.status_msg,
@@ -429,7 +427,7 @@ class CollectorEtlResource(CollectorMeta, ModelResource):
     def perform_request(self, validated_request_data):
         # 创建更新清洗规则
         collector_config_id = validated_request_data["collector_config_id"]
-        etl_storage: EtlStorage = EtlStorage.get_instance(validated_request_data["etl_config"])
+        etl_storage: EtlClean = EtlClean.get_instance(validated_request_data["etl_config"])
         etl_storage.update_or_create(
             collector_config_id=collector_config_id,
             etl_params=validated_request_data["etl_params"],
@@ -443,7 +441,7 @@ class EtlPreviewResource(CollectorMeta):
     RequestSerializer = EtlPreviewRequestSerializer
 
     def perform_request(self, validated_request_data):
-        etl_storage: EtlStorage = EtlStorage.get_instance(validated_request_data["etl_config"])
+        etl_storage: EtlClean = EtlClean.get_instance(validated_request_data["etl_config"])
         return etl_storage.etl_preview(validated_request_data["data"], validated_request_data.get("etl_params"))
 
 
@@ -452,7 +450,7 @@ class ToggleJoinDataResource(CollectorMeta):
     RequestSerializer = ToggleJoinDataRequestSerializer
     ResponseSerializer = ToggleJoinDataResponseSerializer
 
-    def pre_check(self, system_id, resource_type_id):
+    def pre_check(self, system_id, resource_type_id, join_data_type):
         body = {
             "type": resource_type_id,
             "method": "fetch_instance_list",
@@ -461,7 +459,7 @@ class ToggleJoinDataResource(CollectorMeta):
         }
         system = System.objects.get(system_id=system_id)
         resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
-        pull_handler = HttpPullHandler(system, resource_type, Snapshot(), SnapShotStorageChoices.REDIS.value)
+        pull_handler = HttpPullHandler(system, resource_type, Snapshot(), join_data_type)
         web = requests.session()
         try:
             resp = web.post(
@@ -486,31 +484,43 @@ class ToggleJoinDataResource(CollectorMeta):
         )
         raise JoinDataPreCheckFailed()
 
+    @atomic
     def perform_request(self, validated_request_data):
         if validated_request_data["is_enabled"]:
-            self.pre_check(validated_request_data["system_id"], validated_request_data["resource_type_id"])
+            self.pre_check(
+                validated_request_data["system_id"],
+                validated_request_data["resource_type_id"],
+                join_data_type=validated_request_data["join_data_type"],
+            )
         snapshot = Snapshot.objects.get_or_create(
-            system_id=validated_request_data["system_id"], resource_type_id=validated_request_data["resource_type_id"]
+            system_id=validated_request_data["system_id"],
+            resource_type_id=validated_request_data["resource_type_id"],
         )[0]
-        if (
-            snapshot.status == SnapshotRunningStatus.PREPARING
-            or snapshot.hdfs_status == SnapshotRunningStatus.PREPARING
-        ):
+        if snapshot.status == SnapshotRunningStatus.PREPARING:
             raise SnapshotPreparingException()
         is_enabled = validated_request_data["is_enabled"]
         if is_enabled:
-            if validated_request_data["storage_type"] == SnapShotStorageChoices.HDFS.value:
-                snapshot.hdfs_status = SnapshotRunningStatus.get_status(is_enabled)
-            else:
-                snapshot.status = SnapshotRunningStatus.get_status(is_enabled)
-            snapshot.storage_type = validated_request_data["storage_type"]
+            snapshot.status = SnapshotRunningStatus.get_status(is_enabled)
             snapshot.pull_type = validated_request_data["pull_type"]
-            snapshot.save(update_fields=["status", "hdfs_status", "storage_type", "pull_type"])
+            snapshot.save(update_fields=["status", "pull_type", "join_data_type"])
+            snapshot.storages.all().delete()
+            for st in validated_request_data["storage_type"]:
+                SnapshotStorage.objects.create(snapshot=snapshot, storage_type=st)
         else:
-            if snapshot.storage_type == SnapShotStorageChoices.REDIS:
-                JoinDataHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
-            if snapshot.storage_type == SnapShotStorageChoices.HDFS:
-                AssetHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
+            # Iterate over each storage associated with the snapshot
+            for storage in snapshot.storages.all():
+                if snapshot.join_data_type == JoinDataType.BASIC:
+                    BasicJoinHandler(
+                        system_id=snapshot.system_id,
+                        resource_type_id=snapshot.resource_type_id,
+                        storage_type=storage.storage_type,
+                    ).stop()
+                elif snapshot.join_data_type == JoinDataType.ASSET:
+                    AssetHandler(
+                        system_id=snapshot.system_id,
+                        resource_type_id=snapshot.resource_type_id,
+                        storage_type=storage.storage_type,
+                    ).stop()
         snapshot.refresh_from_db()
         return snapshot
 
@@ -791,7 +801,7 @@ class DataIdEtlPreview(DataIdResource):
     RequestSerializer = DataIdEtlPreviewRequestSerializer
 
     def perform_request(self, validated_request_data):
-        instance = EtlStorage.get_instance(EtlConfigEnum.BK_BASE_JSON.value)
+        instance = EtlClean.get_instance(EtlConfigEnum.BK_BASE_JSON.value)
         return instance.etl_preview(**validated_request_data, etl_params={})
 
 
@@ -801,7 +811,7 @@ class DataIdEtlStorage(DataIdResource):
 
     def perform_request(self, validated_request_data):
         # 创建更新清洗规则
-        etl_storage: EtlStorage = EtlStorage.get_instance(EtlConfigEnum.BK_BASE_JSON.value)
+        etl_storage: EtlClean = EtlClean.get_instance(EtlConfigEnum.BK_BASE_JSON.value)
         etl_storage.update_or_create(
             collector_config_id=-validated_request_data["bk_data_id"],
             etl_params=validated_request_data["etl_params"],

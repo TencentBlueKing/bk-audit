@@ -40,7 +40,7 @@ from apps.meta.utils.fields import (
 )
 from core.constants import DEFAULT_JSON_EXPAND_SEPARATOR
 from core.models import get_request_username
-from services.web.databus.collector.join.base import JoinConfig
+from services.web.databus.collector.snapshot.join.base import JoinConfig
 from services.web.databus.collector_plugin.handlers import PluginEtlHandler
 from services.web.databus.constants import (
     ACTION_DATA_RT_KEY,

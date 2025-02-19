@@ -26,7 +26,7 @@ from bk_resource.exceptions import APIRequestError
 
 from apps.exceptions import RegexpExpressionError
 from core.constants import DEFAULT_JSON_EXPAND_SEPARATOR
-from services.web.databus.collector.etl.base import EtlStorage
+from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.etl.etl_config_handler.bk_log_regexp import (
     RegexpConfig,
 )
@@ -34,7 +34,7 @@ from services.web.databus.constants import EtlConfigEnum
 from services.web.databus.models import CollectorConfig
 
 
-class BkLogRegexpEtlStorage(EtlStorage):
+class BkLogRegexpEtlClean(EtlClean):
     etl_config = EtlConfigEnum.BK_LOG_REGEXP.value
 
     def extract_keys(self, regexp: str) -> list:

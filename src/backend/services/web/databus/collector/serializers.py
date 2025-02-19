@@ -36,6 +36,7 @@ from services.web.databus.constants import (
     ContainerCollectorType,
     EtlConfigEnum,
     JoinDataPullType,
+    JoinDataType,
     LogReportStatus,
     SnapShotStorageChoices,
     TargetNodeTypeChoices,
@@ -225,17 +226,27 @@ class ToggleJoinDataRequestSerializer(serializers.Serializer):
         choices=JoinDataPullType.choices,
         default=JoinDataPullType.PARTIAL,
     )
-    storage_type = serializers.ChoiceField(
-        label=gettext_lazy("Storage Type"),
+    storage_type = serializers.MultipleChoiceField(
         choices=SnapShotStorageChoices.choices,
-        default=SnapShotStorageChoices.HDFS.value,
+        label=gettext_lazy("存储类型"),
+        default=[SnapShotStorageChoices.HDFS.value, SnapShotStorageChoices.DORIS.value],
+    )
+    join_data_type = serializers.ChoiceField(
+        label=gettext_lazy("关联数据类型"), choices=JoinDataType.choices, default=JoinDataType.ASSET.value
     )
 
 
 class ToggleJoinDataResponseSerializer(serializers.ModelSerializer):
+    storage_type = serializers.SerializerMethodField()
+
     class Meta:
         model = Snapshot
-        fields = ["system_id", "resource_type_id", "status", "hdfs_status"]
+        fields = ["system_id", "resource_type_id", "status", "storage_type", "join_data_type"]
+
+    def get_storage_type(self, obj):
+        # 获取与 Snapshot 关联的 storage_type（注意使用反向关系 storages）
+        storage_types = obj.storages.all()
+        return [storage.storage_type for storage in storage_types]
 
 
 class GetBcsYamlTemplateRequestSerializer(serializers.Serializer):

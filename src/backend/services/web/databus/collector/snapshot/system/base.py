@@ -19,6 +19,9 @@ to the current version of the project delivered to anyone in the future.
 from django.conf import settings
 
 from apps.meta.models import GlobalMetaConfig
+from services.web.databus.collector.snapshot.system.clean import PullCleanHandler
+from services.web.databus.collector.snapshot.system.pull import HttpPullHandler
+from services.web.databus.collector.snapshot.system.storage import PullStorageHandler
 from services.web.databus.constants import (
     ACTION_DATA_CONFIG_KEY,
     ACTION_DATA_RT_KEY,
@@ -27,9 +30,6 @@ from services.web.databus.constants import (
     USER_INFO_DATA_CONFIG_KEY,
     USER_INFO_DATA_RT_KEY,
 )
-from services.web.databus.iam_data.clean import PullCleanHandler
-from services.web.databus.iam_data.pull import HttpPullHandler
-from services.web.databus.iam_data.storage import PullStorageHandler
 
 
 def create_iam_data_link(resource_type):

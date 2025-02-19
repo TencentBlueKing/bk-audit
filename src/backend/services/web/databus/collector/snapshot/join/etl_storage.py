@@ -25,7 +25,7 @@ from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
 from apps.meta.models import ResourceType, System
-from services.web.databus.collector.etl.base import EtlStorage
+from core.models import get_request_username
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     JOIN_DATA_PHYSICAL_RT_FORMAT,
@@ -34,6 +34,7 @@ from services.web.databus.constants import (
 )
 from services.web.databus.exceptions import SchemaEmptyError
 from services.web.databus.storage.handler.redis import RedisHandler
+from services.web.databus.utils import start_bkbase_clean
 
 
 class JoinDataEtlStorageHandler:
@@ -48,7 +49,7 @@ class JoinDataEtlStorageHandler:
     def create(self):
         # 创建清洗
         result = api.bk_base.databus_cleans_post(self.clean_config)
-        EtlStorage.start_bkbase_clean(result["result_table_id"], result["processing_id"])
+        start_bkbase_clean(result["result_table_id"], result["processing_id"], get_request_username())
         processing_id = result["processing_id"]
         bkbase_table_id = result["result_table_id"]
 

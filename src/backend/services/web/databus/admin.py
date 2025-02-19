@@ -103,12 +103,13 @@ class SnapshotAdmin(admin.ModelAdmin):
         "system_id",
         "resource_type_id",
         "bkbase_data_id",
-        "storage_type",
         "pull_type",
         "status",
         "bkbase_processing_id",
-        "hdfs_status",
-        "bkbase_hdfs_processing_id",
     ]
     search_fields = ["system_id", "resource_type_id"]
     ordering = ["system_id", "resource_type_id"]
+
+    @admin.display
+    def storage_type_display(self, instance) -> str:
+        return ", ".join([str(s.storage_type) for s in instance.storages.all()])
