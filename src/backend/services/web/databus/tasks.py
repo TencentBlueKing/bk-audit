@@ -37,9 +37,12 @@ from apps.meta.models import GlobalMetaConfig, System
 from apps.notice.handlers import ErrorMsgHandler
 from core.lock import lock
 from services.web.databus.collector.check.handlers import ReportCheckHandler
-from services.web.databus.collector.etl.base import EtlStorage
+from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.handlers import TailLogHandler
-from services.web.databus.collector.join.base import AssetHandler, JoinDataHandler
+from services.web.databus.collector.snapshot.join.base import (
+    AssetHandler,
+    BasicJoinHandler,
+)
 from services.web.databus.collector_plugin.handlers import PluginEtlHandler
 from services.web.databus.constants import (
     API_PUSH_ETL_RETRY_TIMES,
@@ -48,7 +51,6 @@ from services.web.databus.constants import (
     EtlConfigEnum,
     PluginSceneChoices,
     SnapshotRunningStatus,
-    SnapShotStorageChoices,
 )
 from services.web.databus.models import CollectorConfig, CollectorPlugin, Snapshot
 
@@ -59,21 +61,23 @@ def start_snapshot():
     # 获取所有的启动中快照并逐个运行 (Redis)
     snapshots = Snapshot.objects.filter(
         status__in=(SnapshotRunningStatus.PREPARING.value,),
-        storage_type__in=(SnapShotStorageChoices.REDIS.value,),
     )
     for snapshot in snapshots:
         logger.info(
             "[start_snapshot] SystemID => %s; ResourceTypeID => %s", snapshot.system_id, snapshot.resource_type_id
         )
-        JoinDataHandler(snapshot.system_id, snapshot.resource_type_id).start()
-    # 创建HDFS快照
-    snapshots = Snapshot.objects.filter(
-        hdfs_status__in=(SnapshotRunningStatus.PREPARING.value,),
-        storage_type__in=(SnapShotStorageChoices.HDFS.value,),
-    )
-    for snapshot in snapshots:
-        logger.info("[start_asset] SystemID => %s; ResourceTypeID => %s", snapshot.system_id, snapshot.resource_type_id)
-        AssetHandler(snapshot.system_id, snapshot.resource_type_id).start()
+
+        storage_types = snapshot.storages.values_list('storage_type', flat=True)
+
+        for storage_type in storage_types:
+            logger.info(f"[start_snapshot] Handling storage_type => {storage_type}")
+
+            if snapshot.join_data_type == "basic":
+                BasicJoinHandler(snapshot.system_id, snapshot.resource_type_id, storage_type).start()
+            elif snapshot.join_data_type == "asset":
+                AssetHandler(snapshot.system_id, snapshot.resource_type_id, storage_type).start()
+            else:
+                logger.warning(f"[start_snapshot] Unknown join_data_type: {snapshot.join_data_type}")
 
 
 @periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -123,7 +127,7 @@ def change_storage_cluster():
         for collector in collectors:
             try:
                 system = System.objects.get(system_id=collector.system_id)
-                etl_storage: EtlStorage = EtlStorage.get_instance(collector.etl_config)
+                etl_storage: EtlClean = EtlClean.get_instance(collector.etl_config)
                 etl_storage.update_or_create(
                     collector.collector_config_id,
                     collector.etl_params,

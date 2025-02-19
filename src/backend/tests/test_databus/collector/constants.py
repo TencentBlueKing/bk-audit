@@ -272,6 +272,23 @@ SYSTEM_HOST = "https://bk.tencent.com"
 SYSTEM_TOKEN = "1234567890"
 RESOURCE_TYPE_ID = "system"
 TOGGLE_JOIN_DATA = {"is_enabled": True, "system_id": settings.BK_IAM_SYSTEM_ID, "resource_type_id": RESOURCE_TYPE_ID}
+RAW_DATA_ID = 121
+CREATE_DEPLOY_PLAN_RESULT = {'raw_data_id': RAW_DATA_ID}
+RESOURCE_TYPE_SCHEMA = [
+    {"id": "id", "type": "string", "description_en": "id", "description": "敏感ID"},
+    {"id": "created_at", "type": "string", "description_en": "created_at", "description": "创建时间"},
+    {"id": "created_by", "type": "string", "description_en": "created_by", "description": "创建者"},
+    {"id": "updated_at", "type": "string", "description_en": "updated_at", "description": "更新时间"},
+    {"id": "updated_by", "type": "string", "description_en": "updated_by", "description": "修改者"},
+    {"id": "is_deleted", "type": "boolean", "description_en": "is_deleted", "description": "是否删除"},
+    {"id": "name", "type": "string", "description_en": "name", "description": "名称"},
+    {"id": "system_id", "type": "string", "description_en": "system_id", "description": "系统ID"},
+    {"id": "resource_type", "type": "string", "description_en": "resource_type", "description": "资源类型"},
+    {"id": "resource_id", "type": "string", "description_en": "resource_id", "description": "资源ID"},
+    {"id": "fields", "type": "string", "description_en": "fields", "description": "关联字段"},
+    {"id": "priority_index", "type": "integer", "description_en": "priority_index", "description": "优先指数"},
+    {"id": "is_private", "type": "boolean", "description_en": "is_private", "description": "是否隐藏"},
+]
 
 
 class SessionMock(mock.MagicMock):

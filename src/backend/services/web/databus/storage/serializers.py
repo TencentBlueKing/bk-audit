@@ -28,7 +28,7 @@ from api.bk_log.serializers import (
 )
 from core.exceptions import ValidationError
 from core.utils.tools import format_date_string
-from services.web.databus.constants import DEFAULT_ALLOCATION_MIN_DAYS
+from services.web.databus.constants import DEFAULT_ALLOCATION_MIN_DAYS, ClusterMode
 from services.web.databus.models import RedisConfig
 
 
@@ -54,6 +54,8 @@ class StorageUpdateRequestSerializer(serializers.Serializer):
     source_type = serializers.CharField(label=gettext_lazy("来源"))
     admin = serializers.ListField(label=gettext_lazy("负责人"))
     description = serializers.CharField(label=gettext_lazy("集群描述"), allow_blank=False)
+    pre_defined = serializers.BooleanField(label=gettext_lazy("是否为预定义集群，如果是则跳过集群创建更新流程，仅更新项目内配置。"), default=False)
+    pre_defined_extra_config = serializers.DictField(label=gettext_lazy("预定义集群额外配置"), required=False, default=dict)
 
     def validate(self, attrs):
         if not attrs["enable_hot_warm"]:
@@ -152,6 +154,10 @@ class StorageCreateRequestSerializer(serializers.Serializer):
     setup_config = SetupSerializer(label=gettext_lazy("es设置"))
     admin = serializers.ListField(label=gettext_lazy("负责人"))
     description = serializers.CharField(label=gettext_lazy("集群描述"), allow_blank=False)
+    pre_defined = serializers.BooleanField(
+        label=gettext_lazy("是否为预定义集群，如果是则跳过集群创建更新流程。目前仅支持项目初始化时直接传递配置。"), default=False
+    )
+    pre_defined_extra_config = serializers.DictField(label=gettext_lazy("预定义集群额外配置"), required=False, default=dict)
 
     def validate(self, attrs):
         if not attrs["enable_hot_warm"]:
@@ -163,3 +169,14 @@ class StorageCreateRequestSerializer(serializers.Serializer):
         if attrs["allocation_min_days"] > attrs["setup_config"]["retention_days_default"]:
             raise ValidationError(message=gettext("数据降冷时间应小于数据过期时间"))
         return attrs
+
+
+class StorageActivateRequestSerializer(serializers.Serializer):
+    cluster_id = serializers.IntegerField(
+        label=gettext_lazy("集群ID"),
+    )
+    namespace = serializers.CharField(label=gettext_lazy("命名空间"))
+    cluster_mode = serializers.ChoiceField(
+        label=gettext_lazy("集群模式"), choices=ClusterMode.choices, default=ClusterMode.MAIN
+    )
+    config = serializers.DictField(label=gettext_lazy("配置信息"), default=dict, required=False, allow_null=True)

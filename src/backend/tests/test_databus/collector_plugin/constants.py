@@ -33,12 +33,19 @@ from tests.test_databus.storage.constants import CLUSTER_ID as _CLUSTER_ID
 from tests.test_databus.storage.constants import (
     GET_STORAGES_API_RESP as _GET_STORAGES_API_RESP,
 )
+from tests.test_databus.storage.constants import (
+    REPLICA_WRITE_CLUSTER_ID as _REPLICA_WRITE_CLUSTER_ID,
+)
 
 # Base
 PLUGIN_ID = 1
 PLUGIN_NAME = "test_plugin"
 INDEX_SET_ID = 2
 STORAGE_CLUSTER_ID = _CLUSTER_ID
+REPLICA_STORAGE_CLUSTER_CONFIG = {
+    "cluster_id": _REPLICA_WRITE_CLUSTER_ID,
+    "bkbase_cluster_id": _REPLICA_WRITE_CLUSTER_ID,
+}
 PLUGIN_DATA = {
     "namespace": settings.DEFAULT_NAMESPACE,
     "collector_plugin_id": PLUGIN_ID,
@@ -91,3 +98,8 @@ UPDATE_PLUGIN_DATA = CREATE_COLLECTOR_PLUGIN_API_RESP
 
 # Get Plugin List
 GET_PLUGIN_LIST_DATA = [CREATE_COLLECTOR_PLUGIN_API_RESP]
+
+# Mock raw data list
+RAW_DATA_LIST = [{'id': 121}]
+
+DATACLEAN_RESULT = {"result_table_id": "mock_result_table_id", "processing_id": "mock_processing_id"}

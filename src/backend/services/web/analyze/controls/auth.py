@@ -136,4 +136,4 @@ class AssetAuthHandler(BaseAuthHandler):
             self.asset.save(update_fields=["auth_rt"])
 
     def build_result_table_id(self) -> str:
-        return self.asset.bkbase_hdfs_table_id
+        return self.asset.bkbase_table_id
