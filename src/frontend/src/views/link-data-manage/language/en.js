@@ -41,5 +41,6 @@ export default {
     '操作记录数据源需保持一致，请修改第一个操作记录数据源': 'The operation record data source needs to be consistent. Please modify the first operation record data source.',
     只能选择前面已选数据: 'Only previously selected data can be selected',
     只能选择前面未选数据: 'Only previously unselected data can be selected',
+    查看关联策略: 'View association strategy',
   },
 };
