@@ -33,6 +33,7 @@
             :defaut-using-item="{ inputHtml: t('请选择') }"
             :placeholder="t('联表id、联表数据名称、最近更新人、标签')"
             unique-select
+            :validate-values="validateValues"
             value-split-code=","
             @update:model-value="handleSearch" />
         </div>
@@ -99,6 +100,10 @@
       }
     ]
   }
+  interface Arrays {
+    id: number | string,
+    name: string
+  }
   interface LinkData {
     page: number;
     num_pages: number;
@@ -124,6 +129,14 @@
   const detailRef = ref();
   const renderLabelRef = ref();
   const isNeedShowDetail = ref(false);
+
+  const validateValues = async (item: Record<string, any>, value: Array<Arrays>) => {
+    if (item && item.id === 'tags') {
+      const tag = value[0].id;
+      return strategyTagMap.value[tag] ? true : t('该标签不存在');
+    }
+    return true;
+  };
 
   const dataSource = LinkDataManageService.fetchStrategyList;
   const defaultSearchData = [

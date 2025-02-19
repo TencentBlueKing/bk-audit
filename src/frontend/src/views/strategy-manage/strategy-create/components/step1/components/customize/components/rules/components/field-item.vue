@@ -30,6 +30,7 @@
       class="column-line" />
     <!-- 字段 -->
     <bk-form-item
+      error-display-type="tooltips"
       label=""
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
@@ -68,6 +69,7 @@
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
+      error-display-type="tooltips"
       label=""
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.operator`"
@@ -93,9 +95,10 @@
     <!-- 值 -->
     <bk-form-item
       v-if="!['', 'notnull', 'isnull'].includes(condition.condition.operator)"
+      error-display-type="tooltips"
       label=""
       label-width="0"
-      :property="(input.includes(condition.condition.operator) &&
+      :property="(!tagInput.includes(condition.condition.operator) &&
         !(dicts[condition.condition.field.raw_name] &&
           dicts[condition.condition.field.raw_name].length) &&
         !condition.condition.field.raw_name.includes('username')) ?
@@ -115,7 +118,7 @@
         float-mode
         id-key="value"
         :list="dicts[condition.condition.field.raw_name]"
-        :multiple="!input.includes(condition.condition.operator)"
+        :multiple="tagInput.includes(condition.condition.operator)"
         name-key="label"
         trigger="hover"
         @change="(value: Array<Array<string>>) => handleCascaderFilter(value, index)" />
@@ -124,7 +127,7 @@
         v-model="condition.condition.filters"
         allow-create
         class="consition-value"
-        :multiple="!input.includes(condition.condition.operator)"
+        :multiple="tagInput.includes(condition.condition.operator)"
         @change="(value: Array<string>) => handleFilter(Array.isArray(value) ? value : [value], index)" />
       <bk-tag-input
         v-else-if="tagInput.includes(condition.condition.operator)"
@@ -141,7 +144,7 @@
         trigger="focus"
         @change="(value: Array<string>) => handleFilter(value, index)" />
       <bk-input
-        v-else-if="input.includes(condition.condition.operator)"
+        v-else
         v-model="condition.condition.filter"
         class="consition-value"
         :placeholder="t('请输入')"
@@ -213,7 +216,6 @@
   }>>([]);
   const dicts = ref<Record<string, Array<any>>>({});
 
-  const input = ['eq', 'neq', 'reg', 'nreg', 'lte', 'lt', 'gte', 'gt'];
   const tagInput = ['include', 'exclude'];
 
   const localConditions = ref<Props['conditions']>({
@@ -352,7 +354,7 @@
         }
       });
       // eslint-disable-next-line no-param-reassign
-      conditionItem.condition.filters = input.includes(conditionItem.condition.operator)
+      conditionItem.condition.filters = !tagInput.includes(conditionItem.condition.operator)
         ? newVal.reduce((accumulator, currentValue) => accumulator.concat(currentValue), []) : newVal as any;
     });
   };

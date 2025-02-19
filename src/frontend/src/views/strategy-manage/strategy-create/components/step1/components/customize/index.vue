@@ -426,27 +426,45 @@
     }));
   };
 
+  // 初始状态
+  const isInitialState = () => {
+    const isLinkTable = formData.value.configs.config_type === 'LinkTable';
+    const dataSourceConfig = formData.value.configs.data_source;
+
+    if (!hasData.value) return true;
+
+    if (!isLinkTable) {
+      return !dataSourceConfig.rt_id || !dataSourceConfig.rt_id.length;
+    }
+    return dataSourceConfig.link_table && !dataSourceConfig.link_table.uid;
+  };
+
+  // 数据源改变
+  const hasDataSourceChanged = (dataSource: IFormData['configs']['data_source']) => {
+    const isLinkTable = formData.value.configs.config_type === 'LinkTable';
+    const dataSourceConfig = formData.value.configs.data_source;
+
+    if (!isLinkTable) {
+      if (Array.isArray(dataSource.rt_id)) {
+        return dataSourceConfig.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1];
+      }
+      return dataSourceConfig.rt_id !== dataSource.rt_id;
+    }
+    return dataSourceConfig.link_table.uid !== dataSource.link_table.uid;
+  };
+
+  const mergeDataSource = (dataSource: IFormData['configs']['data_source']) => {
+    formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
+  };
+
   // 更新数据源后，获取对应表字段
   const handleUpdateDataSource = (dataSource: IFormData['configs']['data_source']) => {
     if (!dataSource.rt_id || !dataSource.rt_id.length || (dataSource.link_table && !dataSource.link_table.uid)) {
       tableFields.value = [];
     }
-    // 如果是初始状态赋值
-    if (!hasData.value
-      || (formData.value.configs.config_type !== 'LinkTable'
-        && (!formData.value.configs.data_source.rt_id
-          || !formData.value.configs.data_source.rt_id.length))
-      || (formData.value.configs.config_type === 'LinkTable'
-        && formData.value.configs.data_source.link_table
-        && !formData.value.configs.data_source.link_table.uid)
-    ) {
-      formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
-    } else if ((Array.isArray(dataSource.rt_id)
-      ? formData.value.configs.data_source.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1]
-      : formData.value.configs.data_source.rt_id !== dataSource.rt_id)
-      || (formData.value.configs.config_type === 'LinkTable'
-        && formData.value.configs.data_source.link_table.uid !== dataSource.link_table.uid)
-    ) {
+    if (isInitialState()) {
+      mergeDataSource(dataSource);
+    } else if (hasDataSourceChanged(dataSource)) {
       InfoBox(createInfoBoxConfig({
         onConfirm() {
           formData.value.configs.select = [];
@@ -456,14 +474,14 @@
           };
           rulesComponentRef.value.resetFormData();
           expectedResultsRef.value.resetFormData();
-          formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
+          mergeDataSource(dataSource);
         },
         onClose() {
           configRef.value.setConfigs(formData.value.configs);
         },
       }));
     } else {
-      formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
+      mergeDataSource(dataSource);
     }
   };
 

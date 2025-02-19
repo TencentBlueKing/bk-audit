@@ -35,7 +35,7 @@
               v-if="index"
               v-bk-tooltips="t('点击切换')"
               class="condition-equation bold"
-              style="width: 43px;margin-left: 0;border: 1px solid #c4c6cc;"
+              style="width: 43px;margin-right: 8px;border: 1px solid #c4c6cc;"
               @click="handleTriggerLogicOp(item)">
               {{ item.condition.toUpperCase() }}
             </span>
@@ -43,6 +43,7 @@
               style="position: relative;flex: 1;">
               <bk-form-item
                 class="mb0"
+                error-display-type="tooltips"
                 label=""
                 label-width="0"
                 :property="`configs.agg_condition.${index}.key`"
@@ -65,9 +66,10 @@
           </div>
 
           <!-- 等式 -->
-          <div>
+          <div style="margin-left: 8px;">
             <bk-form-item
               class="mb0"
+              error-display-type="tooltips"
               label=""
               label-width="0"
               :property="`configs.agg_condition.${index}.method`"
@@ -96,10 +98,11 @@
           <!-- 值 -->
           <div
             class="value-box"
-            style="flex: 1;"
+            style="flex: 1; margin-left: 8px;"
             :style="styles[index]">
             <bk-form-item
               class="mb0"
+              error-display-type="tooltips"
               label=""
               label-width="0"
               :property="`configs.agg_condition.${index}.value`"
@@ -625,7 +628,7 @@
 }
 
 .filter-conditon {
-  padding: 16px 0px;
+  padding: 16px 0;
 
   .flex-center {
     display: flex;
@@ -705,6 +708,9 @@
 
   .condition-item {
     display: flex;
+
+    /* grid-template-columns: repeat(4, auto);
+    gap: 8px; */
     margin-bottom: 8px;
     justify-content: space-between;
 
@@ -733,7 +739,8 @@
       display: inline-block;
       width: 120px;
       height: 32px;
-      margin: 0 8px;
+
+      /* margin: 0 8px; */
 
       /* font-weight: bold; */
       color: #3a84ff;

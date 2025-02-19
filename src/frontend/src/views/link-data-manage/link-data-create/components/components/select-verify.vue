@@ -87,7 +87,7 @@
   .err-tip {
     position: absolute;
     top: 27%;
-    right: 30px;
+    right: 8px;
     font-size: 16px;
     line-height: 1;
     color: #ea3636;
