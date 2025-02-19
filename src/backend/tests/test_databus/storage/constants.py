@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+from copy import deepcopy
 
 from django.conf import settings
 
@@ -29,6 +30,7 @@ from services.web.databus.constants import (
 
 # Base
 CLUSTER_ID = 1
+REPLICA_WRITE_CLUSTER_ID = 2
 CLUSTER_NAME = "test_storage"
 USERNAME = get_request_username()
 PORT = 9200
@@ -54,6 +56,7 @@ STORAGE_DATA = {
                 "warm_attr_name": "",
                 "warm_attr_value": "",
             },
+            "bkbase_cluster_id": "2",
             "source_type": SOURCE_TYPE,
             "setup_config": {
                 "retention_days_default": DEFAULT_RETENTION,
@@ -77,6 +80,11 @@ STORAGE_DATA = {
 # Storage Activate
 CACHE_API_RESP = {"change_storage_cluster_running_key": None}
 STORAGE_ACTIVATE_PARAMS = {"namespace": settings.DEFAULT_NAMESPACE, "cluster_id": CLUSTER_ID}
+REPLICA_STORAGE_ACTIVATE_PARAMS = {
+    "namespace": settings.DEFAULT_NAMESPACE,
+    "cluster_id": REPLICA_WRITE_CLUSTER_ID,
+    'cluster_mode': 'replica',
+}
 
 # Storage List
 GET_STORAGES_API_RESP = [STORAGE_DATA]
@@ -128,6 +136,12 @@ CREATE_STORAGE_PARAMS = {
     "admin": [USERNAME],
     "description": CLUSTER_NAME,
 }
+CREATE_REPLICA_STORAGE_PARAMS = deepcopy(CREATE_STORAGE_PARAMS)
+CREATE_REPLICA_STORAGE_PARAMS["pre_defined_extra_config"] = {
+    "cluster_id": REPLICA_WRITE_CLUSTER_ID,
+    "bkbase_cluster_id": REPLICA_WRITE_CLUSTER_ID,
+}
+
 CREATE_STORAGE_DATA = CREATE_STORAGE_API_RESP
 
 # Create Or Update Redis

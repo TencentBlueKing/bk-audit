@@ -219,6 +219,8 @@ class Field(OperateRecordModel):
     is_time = models.BooleanField(gettext_lazy("是否时间字段"), default=False)
     is_json = models.BooleanField(gettext_lazy("是否为Json格式"), default=False)
     is_analyzed = models.BooleanField(gettext_lazy("是否分词"), default=False)
+    is_zh_analyzed = models.BooleanField(gettext_lazy("是否中文分词"), default=False)  # doris选项
+    is_index = models.BooleanField(gettext_lazy("是否索引"), default=True)  # doris选项
     is_dimension = models.BooleanField(gettext_lazy("是否纬度"), default=True)
     is_delete = models.BooleanField(gettext_lazy("是否删除"), default=False)
     is_required = models.BooleanField(gettext_lazy("是否必须"), default=True)

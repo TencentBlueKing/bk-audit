@@ -95,6 +95,14 @@ class MetaTest(TestCase):
         self.snapshot = Snapshot.objects.create(**SNAPSHOT_DATA)
         Field.objects.create(**FIELDS_DATA)
         CustomField.objects.create(**CUSTOM_FIELD_DATA)
+        self.patcher_1 = mock.patch("meta.resources.default_cache.set", mock.Mock(return_value=None))
+        self.patcher_2 = mock.patch("meta.resources.default_cache.get", mock.Mock(return_value=None))
+        self.patcher_1.start()
+        self.patcher_2.start()
+
+    def tearDown(self):
+        self.patcher_1.stop()
+        self.patcher_2.stop()
 
     @mock.patch(
         "meta.resources.resource.databus.collector.bulk_system_collectors_status",
@@ -251,7 +259,6 @@ class MetaTest(TestCase):
         self.assertEqual(result, GET_APP_INFO_DATA)
 
     @mock.patch("meta.resources.api.bk_paas.uni_apps_query", mock.Mock(return_value=[]))
-    @mock.patch("meta.resources.GetAppInfoResource.get_cache", mock.Mock(return_value=None))
     @mock.patch("meta.resources.SearchLogPermission.any_search_log_permission", mock.Mock(return_value=None))
     def test_get_app_info_of_not_resp(self):
         """GetAppInfoResource"""

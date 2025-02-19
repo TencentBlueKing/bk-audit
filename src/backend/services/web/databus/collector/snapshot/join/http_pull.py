@@ -29,20 +29,20 @@ from services.web.databus.constants import (
     JOIN_DATA_RT_FORMAT,
     DefaultPullConfig,
     JoinDataPullType,
+    JoinDataType,
     SensitivityChoice,
-    SnapShotStorageChoices,
 )
 from services.web.databus.models import Snapshot
 
 
 class HttpPullHandler:
-    def __init__(self, system: System, resource_type: ResourceType, snapshot: Snapshot, storage_type: str):
+    def __init__(self, system: System, resource_type: ResourceType, snapshot: Snapshot, join_data_type: str):
         self.system = system
         self.system_id = system.system_id
         self.resource_type = resource_type
         self.resource_type_id = resource_type.resource_type_id
         self.snapshot = snapshot
-        self.storage_type = storage_type
+        self.join_data_type = join_data_type
         self.pull_config = self.snapshot.pull_config or {}
         self.pull_type = self.snapshot.pull_type
 
@@ -78,13 +78,14 @@ class HttpPullHandler:
 
     @property
     def config_name(self):
-        if self.storage_type == SnapShotStorageChoices.HDFS.value:
+        if self.join_data_type == JoinDataType.ASSET:
             return ASSET_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id).replace(
                 "-", "_"
             )
-        return JOIN_DATA_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id).replace(
-            "-", "_"
-        )
+        else:
+            return JOIN_DATA_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id).replace(
+                "-", "_"
+            )
 
     @property
     def pull_sensitivity(self) -> str:

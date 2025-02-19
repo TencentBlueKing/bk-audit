@@ -216,6 +216,8 @@ class CreatePluginResource(PluginBaseResource):
         # 创建采集插件
         resp = api.bk_log.create_collector_plugin(**validated_request_data)
 
+        # todo: IndexSet相关信息应当在创建bkbase etl的时候创建设置，而不是在创建采集插件的时候创建。需要日志平台支持。
+
         # 存入数据库
         CollectorPlugin.objects.create(
             namespace=namespace,
