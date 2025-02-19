@@ -93,7 +93,7 @@
 
   const getMetricName = (element: DatabaseTableFieldModel) => {
     const item = props.aggregateList.find(item => item.value === element.aggregate);
-    return t(`[${item?.label}] ${element.display_name.replace(/_.*/, '')}`);
+    return t(`[${item?.label}] ${element.display_name}`);
   };
 
   const handleAdd = (item: DatabaseTableFieldModel) => {
