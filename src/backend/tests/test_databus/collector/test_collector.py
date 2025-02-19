@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from unittest import mock
+from unittest.mock import Mock
 
 from apps.exceptions import JoinDataPreCheckFailed, SnapshotPreparingException
 from apps.meta.constants import ConfigLevelChoices
@@ -25,8 +26,10 @@ from services.web.databus.constants import (
     COLLECTOR_PLUGIN_ID,
     DEFAULT_STORAGE_CONFIG_KEY,
     ContainerCollectorType,
+    SnapshotRunningStatus,
 )
-from services.web.databus.models import CollectorConfig, CollectorPlugin
+from services.web.databus.models import CollectorConfig, CollectorPlugin, Snapshot
+from services.web.databus.tasks import start_snapshot
 from tests.base import TestCase
 from tests.test_databus.collector.constants import (
     API_BK_LOG_GET_COLLECTOR_DATA,
@@ -43,6 +46,7 @@ from tests.test_databus.collector.constants import (
     CREATE_COLLECTOR_ETL_API_RESP,
     CREATE_COLLECTOR_ETL_DATA,
     CREATE_COLLECTOR_RESULT,
+    CREATE_DEPLOY_PLAN_RESULT,
     ETL_FIELD_HISTORY_RESULT,
     ETL_PREVIEW_DATA,
     ETL_PREVIEW_RESULT,
@@ -52,6 +56,7 @@ from tests.test_databus.collector.constants import (
     PLUGIN_DATA,
     PLUGIN_ID,
     RESOURCE_TYPE_ID,
+    RESOURCE_TYPE_SCHEMA,
     STORAGE_CLUSTER_ID,
     STORAGE_LIST,
     SYSTEM_HOST,
@@ -225,9 +230,14 @@ class CollectorTest(TestCase):
         with self.assertRaises(SnapshotPreparingException):
             self.resource.databus.collector.toggle_join_data(**TOGGLE_JOIN_DATA)
 
-    @mock.patch("databus.collector.join.base.api.bk_base.stop_collector", mock.Mock())
+    @mock.patch("databus.collector.resources.requests.session", SessionMock())
+    @mock.patch("databus.collector.snapshot.join.base.api.bk_base.stop_collector", mock.Mock())
     def test_toggle_join_data_stop(self):
         """ToggleJoinDataResource"""
+        self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA})
+        s = Snapshot.objects.get(system_id=self.system_id, resource_type_id=RESOURCE_TYPE_ID)
+        s.status = SnapshotRunningStatus.RUNNING
+        s.save()
         self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA, "is_enabled": False})
 
     def test_toggle_join_data_check_failed(self):
@@ -245,3 +255,25 @@ class CollectorTest(TestCase):
         """EtlFieldHistory"""
         result = self.resource.databus.collector.etl_field_history(collector_config_id=COLLECTOR_ID)
         self.assertEqual(result, ETL_FIELD_HISTORY_RESULT)
+
+    @mock.patch("databus.collector.resources.requests.session", SessionMock())
+    @mock.patch(
+        "databus.collector.snapshot.join.http_pull.api.bk_base.create_deploy_plan",
+        Mock(return_value=CREATE_DEPLOY_PLAN_RESULT),
+    )
+    @mock.patch(
+        "databus.collector.etl.base.api.bk_base.databus_cleans_post",
+        mock.Mock(return_value=CREATE_COLLECTOR_ETL_API_RESP),
+    )
+    @mock.patch("databus.collector.snapshot.join.etl_storage.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("databus.collector.snapshot.join.etl_storage.api.bk_base.databus_storages_post", mock.Mock())
+    @mock.patch(
+        "databus.collector.snapshot.join.etl_storage.resource.meta.resource_type_schema",
+        mock.Mock(return_value=RESOURCE_TYPE_SCHEMA),
+    )
+    def test_start_snapshot(self):
+        """StartSnapshotResource"""
+        self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA})
+        start_snapshot.__wrapped__.__wrapped__()
+        s = Snapshot.objects.get(system_id=self.system_id, resource_type_id=RESOURCE_TYPE_ID)
+        self.assertEqual(s.status, SnapshotRunningStatus.RUNNING)

@@ -144,7 +144,7 @@ def auth_rt():
         CollectorPluginAuthHandler(plugin).auth()
 
     # auth asset
-    assets = list(Snapshot.objects.filter(auth_rt=False, bkbase_hdfs_table_id__isnull=False))
+    assets = list(Snapshot.objects.filter(auth_rt=False, bkbase_table_id__isnull=False))
     for asset in assets:
         AssetAuthHandler(asset).auth()
 

@@ -154,6 +154,8 @@ FIELDS_DATA = {
     "is_time": EVENT_ID.is_time,
     "is_json": EVENT_ID.is_json,
     "is_analyzed": EVENT_ID.is_analyzed,
+    "is_zh_analyzed": EVENT_ID.is_zh_analyzed,
+    "is_index": EVENT_ID.is_index,
     "is_dimension": EVENT_ID.is_dimension,
     "is_delete": EVENT_ID.is_delete,
     "is_required": EVENT_ID.is_required,
@@ -283,7 +285,6 @@ RESOURCE_TYPE_LIST_DATA.update(
     {
         "status": SNAPSHOT_DATA["status"],
         "bkbase_url": None,
-        "hdfs_status": "closed",
         "pull_type": "partial",
         "status_msg": None,
     }
@@ -293,7 +294,6 @@ RESOURCE_TYPE_LIST_DATA2.update(
     {
         "status": SNAPSHOT_RUNNING_STATUS_CLOSED,
         "bkbase_url": None,
-        "hdfs_status": "closed",
         "pull_type": JoinDataPullType.PARTIAL,
         "status_msg": "",
     }
