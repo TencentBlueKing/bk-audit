@@ -123,7 +123,11 @@
             :disabled="isEditMode"
             @change="handleSourceTypeChange">
             <bk-radio label="batch_join_source">
-              {{ t('固定周期调度') }}
+              <span
+                v-bk-tooltips="t('按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；')"
+                style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+                {{ t('固定周期调度') }}
+              </span>
             </bk-radio>
             <bk-radio label="stream_source">
               <span

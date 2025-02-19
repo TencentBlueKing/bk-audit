@@ -262,5 +262,6 @@ export default {
     前往查看详情: 'Go to details',
     刷新数据源请注意: 'Pay attention to refresh data sources',
     继续刷新: 'Refresh',
+    '按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；': 'By day, the next scheduling time is 0:00 on the day; by hour, the next scheduling time is the hour of the next hour; and it is used as a fixed launch time;',
   },
 };
