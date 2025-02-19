@@ -76,11 +76,12 @@
     </div>
     <div class="icon-group">
       <audit-icon
-        style="margin-right: 10px;"
+        style="margin-right: 10px; cursor: pointer;"
         type="add-fill"
         @click="handleAdd" />
       <audit-icon
-        v-if="index !== 0"
+        v-if="linkFields.length > 1"
+        style="cursor: pointer;"
         type="reduce-fill"
         @click="() => handleDelete(index)" />
     </div>
@@ -245,8 +246,8 @@
   .icon-group {
     width: 36px;
     margin-bottom: 8px;
+    font-size: 14px;
     color: #c4c6cc;
-    cursor: pointer;
   }
 }
 </style>

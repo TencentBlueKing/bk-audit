@@ -44,7 +44,7 @@
               v-for="(item, index) in importantInformation"
               :key="index"
               class="flex mt16"
-              style="margin-bottom: 12px;">
+              style=" padding: 0 24px;margin-bottom: 12px;">
               <render-info-item
                 v-for="(subItem, subIndex) in item"
                 :key="subIndex"
@@ -74,83 +74,85 @@
             </render-info-block>
           </template>
         </div>
-        <div style="padding-left: 12px">
-          <div class="title">
-            {{ t('基本信息') }}
-          </div>
-          <div
-            class="base-info">
-            <render-info-block
-              class="flex mt16"
-              style="margin-bottom: 12px;">
-              <render-info-item
-                :label="t('事件ID')"
-                :label-width="labelWidth">
-                {{ t('以实际内容为准') }}
-              </render-info-item>
-              <render-info-item
-                :label="t('责任人')"
-                :label-width="labelWidth">
-                {{ t('以实际内容为准') }}
-              </render-info-item>
-            </render-info-block>
-            <render-info-block
-              class="flex mt16"
-              style="margin-bottom: 12px;">
-              <render-info-item
-                :label="t('命中策略')"
-                :label-width="labelWidth">
-                {{ data.strategy_name }}
-              </render-info-item>
-              <render-info-item
-                :label="t('事件描述')"
-                :label-width="labelWidth">
-                {{ t('以实际内容为准') }}
-              </render-info-item>
-            </render-info-block>
-          </div>
-          <div class="title">
-            {{ t('事件结果') }}
-          </div>
-          <div
-            class="data-info">
-            <template v-if="eventData.length">
+        <div
+          class="title"
+          style="padding-left: 12px">
+          {{ t('基本信息') }}
+        </div>
+        <div
+          class="base-info">
+          <render-info-block
+            class="flex mt16"
+            style="margin-bottom: 12px;">
+            <render-info-item
+              :label="t('事件ID')"
+              :label-width="labelWidth">
+              {{ t('以实际内容为准') }}
+            </render-info-item>
+            <render-info-item
+              :label="t('责任人')"
+              :label-width="labelWidth">
+              {{ t('以实际内容为准') }}
+            </render-info-item>
+          </render-info-block>
+          <render-info-block
+            class="flex mt16"
+            style="margin-bottom: 12px;">
+            <render-info-item
+              :label="t('命中策略')"
+              :label-width="labelWidth">
+              {{ data.strategy_name }}
+            </render-info-item>
+            <render-info-item
+              :label="t('事件描述')"
+              :label-width="labelWidth">
+              {{ t('以实际内容为准') }}
+            </render-info-item>
+          </render-info-block>
+        </div>
+        <div
+          class="title"
+          style="padding-left: 12px">
+          {{ t('事件结果') }}
+        </div>
+        <div
+          class="data-info">
+          <template v-if="eventData.length">
+            <div
+              v-for="(item, index) in eventData"
+              :key="index"
+              class="flex data-info-row">
               <div
-                v-for="(item, index) in eventData"
-                :key="index"
-                class="flex data-info-row">
-                <div
-                  v-for="(subItem, subIndex) in item"
-                  :key="subIndex"
-                  class="flex data-info-item">
-                  <div class="data-info-item-key">
-                    <span>{{ subItem.display_name }}</span>
-                  </div>
-                  <div class="data-info-item-value">
-                    <span>{{ t('以实际内容为准') }}</span>
-                  </div>
+                v-for="(subItem, subIndex) in item"
+                :key="subIndex"
+                class="flex data-info-item">
+                <div class="data-info-item-key">
+                  <span>{{ subItem.display_name }}</span>
+                </div>
+                <div class="data-info-item-value">
+                  <span>{{ t('以实际内容为准') }}</span>
                 </div>
               </div>
-            </template>
-            <template v-else>
+            </div>
+          </template>
+          <template v-else>
+            <div
+              v-for="(item) in 4"
+              :key="item"
+              class="flex data-info-row">
               <div
-                v-for="(item) in 4"
-                :key="item"
-                class="flex data-info-row">
-                <div
-                  v-for="(subItem) in 2"
-                  :key="subItem"
-                  class="flex data-info-item">
-                  <div class="data-info-item-key">
-                    <span>{{ t('以实际内容为准') }}</span>
-                  </div>
-                  <div class="data-info-item-value">
-                    <span>{{ t('以实际内容为准') }}</span>
-                  </div>
+                v-for="(subItem) in 2"
+                :key="subItem"
+                class="flex data-info-item">
+                <div class="data-info-item-key">
+                  <span>{{ t('以实际内容为准') }}</span>
+                </div>
+                <div class="data-info-item-value">
+                  <span>{{ t('以实际内容为准') }}</span>
                 </div>
               </div>
-            </template>
-          </div>
+            </div>
+          </template>
         </div>
       </div>
     </div>
@@ -196,8 +198,9 @@
   }
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
-  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
   const active = ref<number>(0);
+
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
 
   // 转为二维数组
   const group = (array: Array<any>, subGroupLength: number = 2) => {
@@ -272,7 +275,7 @@
         background-color: #fafbfd;
 
         .title {
-          padding-left: 8px;
+          padding-left: 10px;
           border-left: 3px solid #3a84ff;
         }
 
@@ -287,6 +290,7 @@
       }
 
       .base-info {
+        padding: 0 24px;
         margin-bottom: 24px;
 
         .render-info-item {

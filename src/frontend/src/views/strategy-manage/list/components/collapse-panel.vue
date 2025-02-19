@@ -44,11 +44,11 @@
 .collapse-panel {
   .collapse-panel-title {
     display: flex;
-    height: 32px;
+    height: 28px;
     padding-left: 8px;
     font-size: 14px;
     font-weight: 700;
-    line-height: 32px;
+    line-height: 28px;
     color: #63656e;
     cursor: pointer;
     background: #eaebf0;

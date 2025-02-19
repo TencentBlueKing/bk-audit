@@ -17,7 +17,8 @@
 <template>
   <div class="strategy-create-card-part">
     <div
-      class="card-part-title">
+      class="card-part-title"
+      @click="handleChangeCollapse">
       <slot name="title">
         <span>
           {{ title }}
@@ -25,8 +26,7 @@
       </slot>
       <audit-icon
         v-if="showIcon"
-        :type="isCollapse ? 'angle-line-up' : 'angle-line-down'"
-        @click="handleChangeCollapse" />
+        :type="isCollapse ? 'angle-line-up' : 'angle-line-down'" />
     </div>
 
     <div

@@ -53,7 +53,9 @@
                     ">
                     <bk-input
                       v-model="countValue"
-                      :placeholder="t('请输入')" />
+                      autofocus
+                      :placeholder="t('请输入')"
+                      @enter="confirmAddCount" />
                     <audit-icon
                       style=" padding: 0 5px;font-size: 15px; color: #2caf5e;cursor: pointer;"
                       type="check-line"
@@ -96,6 +98,7 @@
                     ">
                   <bk-input
                     v-model="countValue"
+                    autofocus
                     :placeholder="t('请输入')" />
                   <audit-icon
                     style=" padding: 0 5px;font-size: 15px; color: #2caf5e;cursor: pointer;"

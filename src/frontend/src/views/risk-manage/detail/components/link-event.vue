@@ -202,7 +202,7 @@
   const props = defineProps<Props>();
   const router = useRouter();
   const { t, locale } = useI18n();
-  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
   const linkEventList = ref<Array<EventModel>>([]); // 事件列表
   const currentPage = ref(1); // 当前页数
   const active = ref<number>(0);

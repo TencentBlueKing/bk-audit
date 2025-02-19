@@ -627,9 +627,9 @@
       position: relative;
       height: 32px;
 
-      .consition-value {
+      /* .consition-value {
         width: 560px;
-      }
+      } */
     }
 
     .condition-icon {

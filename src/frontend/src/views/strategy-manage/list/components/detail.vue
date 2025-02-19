@@ -87,6 +87,7 @@
 
     .bk-tab-content {
       height: 100%;
+      padding: 24px;
     }
   }
 }

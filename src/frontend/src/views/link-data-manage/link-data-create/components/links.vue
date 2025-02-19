@@ -139,8 +139,9 @@
           :right-table-rt-id="link.right_table.rt_id" />
         <!-- 删除关联关系 -->
         <audit-icon
-          v-if="index !== 0"
+          v-if="links.length > 1"
           class="delete-link"
+          style="font-size: 14px;"
           type="delete"
           @click="() => handleDelete(index)" />
       </div>

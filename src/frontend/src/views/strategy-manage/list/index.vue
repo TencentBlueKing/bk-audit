@@ -80,8 +80,10 @@
     <template #header>
       <div
         class="flex"
-        style="width: 100%;padding-right: 40px;justify-content: space-between;">
-        <div>
+        style="width: 100%; padding-right: 40px; justify-content: space-between;">
+        <div
+          class="flex"
+          style="align-items: center;">
           {{ t('策略详情') }}
           <bk-button
             v-bk-tooltips="t('复制链接')"
@@ -89,9 +91,13 @@
             theme="primary"
             @click="handleCopyLink">
             <audit-icon
-              style="font-size: 14px;"
+              style=" margin-left: 14px;font-size: 14px;"
               type="link" />
           </bk-button>
+          <div style="height: 14px; margin: 0 10px; border-left: 1px solid #979ba5;" />
+          <div style=" font-size: 14px;color: #979ba5;">
+            {{ strategyItem.strategy_name }}
+          </div>
         </div>
         <div style="margin-left: auto;">
           <auth-button
