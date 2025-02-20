@@ -55,7 +55,9 @@
                   <span> {{ groupMap[key] }} </span>
                 </div>
                 <div class="value-row">
-                  <value-item :item="item" />
+                  <value-item
+                    :data="data"
+                    :item="item" />
                 </div>
               </div>
             </template>
@@ -84,19 +86,21 @@
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
 
-  const column = [t('事件分组'), t('字段名称'), t('字段显示名'), t('重点展示'), t('字段说明')];
+  const column = computed(() => {
+    const initColumn = [t('事件分组'), t('字段名称'), t('字段显示名'), t('重点展示'), t('字段映射'), t('字段说明')];
+    props.data.strategy_type === 'rule' ? initColumn : initColumn.splice(4, 1);
+    return initColumn;
+  });
 
   const groupMap = {
     event_basic_field_configs: t('基本信息'),
-    event_data_field_configs: t('事件数据'),
-    event_evidence_field_configs: t('事件证据'),
+    event_data_field_configs: t('事件结果'),
   };
 
   const tableData = computed(() => {
     const data = {
       event_basic_field_configs: props.data.event_basic_field_configs,
       event_data_field_configs: props.data.event_data_field_configs,
-      event_evidence_field_configs: props.data.event_evidence_field_configs,
     };
     return new StrategyFieldEvent(data);
   });
@@ -128,11 +132,15 @@
 
         &:nth-child(2),
         &:nth-child(3) {
-          width: 180px;
+          width: 150px;
         }
 
         &:nth-child(4) {
           width: 100px;
+        }
+
+        &:nth-child(5) {
+          width: 150px;
         }
 
         &:last-child {

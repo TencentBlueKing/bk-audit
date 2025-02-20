@@ -371,3 +371,15 @@ class GetAssetPullInfoRequestSerializer(serializers.Serializer):
 
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
     resource_type_id = serializers.CharField(label=gettext_lazy("资源类型ID"))
+
+
+class ListAllTagsRespSerializer(serializers.ModelSerializer):
+    """
+    List All Tags Response
+    """
+
+    tag_id = serializers.CharField(label=gettext_lazy("Tag ID"))
+
+    class Meta:
+        model = Tag
+        fields = ["tag_id", "tag_name"]

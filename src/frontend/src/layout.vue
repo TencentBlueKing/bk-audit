@@ -100,6 +100,12 @@
                 type="gaojingshijian" />
               {{ t('审计风险') }}
             </audit-menu-item> -->
+            <audit-menu-item index="linkDataManage">
+              <audit-icon
+                class="menu-item-icon"
+                type="lianbiao" />
+              {{ t('联表管理') }}
+            </audit-menu-item>
             <audit-menu-item index="noticeGroup">
               <audit-icon
                 class="menu-item-icon"

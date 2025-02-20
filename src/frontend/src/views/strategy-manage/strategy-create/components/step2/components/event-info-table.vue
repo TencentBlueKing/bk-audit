@@ -42,17 +42,24 @@
           <span> {{ groupMap[key] }} </span>
         </div>
         <div class="value-row">
-          <value-item :item="item" />
+          <value-item
+            ref="valueItemRef"
+            :item="item"
+            :select="select"
+            :strategy-type="strategyType" />
         </div>
       </div>
     </template>
   </div>
 </template>
 <script setup lang='tsx'>
+  import { computed, onActivated, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
@@ -62,33 +69,66 @@
 
   interface Exposes{
     getData: () => StrategyFieldEvent,
+    getValue: () => Promise<any>;
   }
 
   interface Props {
     strategyId: number,
-    data: StrategyModel
+    data: StrategyModel,
+    select: Array<DatabaseTableFieldModel>,
+    strategyType: string
   }
 
   const props = defineProps<Props>();
+  const route = useRoute();
 
   const { t, locale } = useI18n();
+  const valueItemRef = ref();
 
-  const column = [
-    { label: t('事件分组') },
-    { label: t('字段名称') },
-    { label: t('字段显示名') },
-    { label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
-    { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
-  ];
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
+  const fieldMap: Record<string, string> = {
+    event_id: 'raw_event_id',
+    username: 'operator',
+    start_time: 'event_time',
+    start_timeaccess_source_ip: 'event_source',
+  };
+  let isInit = false;
+
+  const column = computed(() => {
+    const initColumn = [
+      { label: t('事件分组') },
+      { label: t('字段名称') },
+      { label: t('字段显示名') },
+      { label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
+      { label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
+      { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
+    ];
+    props.strategyType === 'rule' ? initColumn : initColumn.splice(4, 1);
+    return initColumn;
+  });
 
   const groupMap = {
     event_basic_field_configs: t('基本信息'),
-    event_data_field_configs: t('事件数据'),
-    event_evidence_field_configs: t('事件证据'),
+    event_data_field_configs: t('事件结果'),
   };
 
-  const setEditData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
-    if (props.data[key].length && tableData.value[key].length) {
+  const createField = (item: DatabaseTableFieldModel) => ({
+    field_name: item.raw_name,
+    display_name: item.display_name,
+    is_priority: false,
+    map_config: {
+      target_value: '',
+      source_field: '',
+    },
+    description: '',
+    example: '',
+    prefix: 'event_data',
+  });
+
+  const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs') => {
+    if ((isEditMode || isCloneMode) && props.data[key].length && tableData.value[key].length && !isInit) {
+      // 编辑填充参数
       tableData.value[key] = tableData.value[key].map((item) => {
         const editItem = props.data[key].find(edItem => edItem.field_name === item.field_name);
         if (editItem) {
@@ -96,6 +136,10 @@
             field_name: item.field_name,
             display_name: item.display_name,
             is_priority: editItem.is_priority,
+            map_config: {
+              target_value: editItem.map_config?.target_value,
+              source_field: editItem.map_config?.source_field || editItem.map_config?.target_value, // 固定值赋值，用于反显
+            },
             description: editItem.description,
             example: item.example,
             prefix: '',
@@ -105,7 +149,48 @@
           ...item,
         };
       });
+      isInit = true;
     }
+    switch (key) {
+    case 'event_basic_field_configs':
+      if (tableData.value[key].length && props.select && props.select.length) {
+        // 把不匹配的项清空(非固定值)
+        tableData.value.event_basic_field_configs = tableData.value.event_basic_field_configs.map((item) => {
+          if (item.map_config && !item.map_config.target_value) {
+            const value = item.map_config.source_field || item.map_config.target_value;
+            if (!props.select.some(selectItem => selectItem.display_name === value)) {
+              // eslint-disable-next-line no-param-reassign
+              item.map_config = {
+                source_field: undefined,
+                target_value: undefined,
+              };
+            }
+          }
+          return item;
+        });
+        // 根据select填充event_basic_field_configs参数
+        props.select.forEach((item) => {
+          if (fieldMap[item.raw_name]) {
+            const field = tableData.value[key].find(fieldItem => fieldItem.field_name === fieldMap[item.raw_name]);
+            if (field && field.map_config) {
+              field.map_config.source_field = item.display_name;
+            }
+          }
+        });
+      }
+      break;
+    case 'event_data_field_configs':
+      if (props.select && props.select.length) {
+        // 根据select更新event_data_field_configs
+        tableData.value.event_data_field_configs = props.select.map(item => createField(item));
+      }
+    }
+  };
+
+  const process = () => {
+    // 填充内容（是否重点展示、字段说明、字段自动填充）
+    setTableData('event_basic_field_configs');
+    setTableData('event_data_field_configs');
   };
 
   const {
@@ -116,17 +201,21 @@
       strategy_id: props.strategyId,
     },
     onSuccess: () => {
-      // 编辑填充内容（是否重点展示、字段说明）
-      setEditData('event_basic_field_configs');
-      setEditData('event_data_field_configs');
-      setEditData('event_evidence_field_configs');
+      process();
     },
     manual: true,
+  });
+
+  onActivated(() => {
+    process();
   });
 
   defineExpose<Exposes>({
     getData() {
       return tableData.value;
+    },
+    getValue() {
+      return Promise.all((valueItemRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
     },
   });
 </script>
@@ -157,13 +246,20 @@
 
       background-color: #f5f7fa;
 
-      &:nth-child(2),
+      &:nth-child(2) {
+        width: 190px;
+      }
+
       &:nth-child(3) {
         width: 240px;
       }
 
       &:nth-child(4) {
         width: 120px;
+      }
+
+      &:nth-child(5) {
+        width: 240px;
       }
 
       &:last-child {

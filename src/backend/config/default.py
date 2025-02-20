@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+import json
 import sys
 
 from bk_audit.constants.utils import LOGGER_NAME
@@ -272,6 +272,7 @@ BKBASE_BATCH_RESOURCE_SET_ID = os.getenv("BKAPP_BKBASE_BATCH_RESOURCE", "default
 BKBASE_UDF_JSON_EXTRACT_FUNC = os.getenv("BKAPP_BKBASE_UDF_JSON_EXTRACT_FUNC", "udf_json_extract_one")
 BKBASE_UDF_BUILD_ORIGIN_DATA_FUNC = os.getenv("BKAPP_BKBASE_UDF_BUILD_ORIGIN_DATA_FUNC", "udf_build_origin_data")
 BKBASE_BUILD_ORIGIN_DATA_SEPERATOR = os.getenv("BKAPP_BKBASE_BUILD_ORIGIN_DATA_SEPERATOR", "|!@#$%^&*|")
+BKBASE_DATA_TOKEN = os.getenv("BKAPP_BKBASE_DATA_TOKEN", "")
 
 # Auth
 AUTHENTICATION_BACKENDS += ("apigw_manager.apigw.authentication.UserModelBackend",)
@@ -362,6 +363,19 @@ CORS_ALLOW_HEADERS = [
     "time-zone",
     *os.getenv("BKAPP_CORS_ALLOW_HEADERS", "").split(","),
 ]
+
+# 队列存储时长(天)
+DEFAULT_QUEUE_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_QUEUE_STORAGE_EXPIRES", 1))
+# HDFS存储时长(天) -1 表示不限制
+DEFAULT_HDFS_STORAGE_EXPIRES = int(os.getenv("BKAPP_DEFAULT_HDFS_STORAGE_EXPIRES", -1))
+# 审计 kafka 配置
+KAFKA_CONFIG = json.loads(os.getenv("BKAPP_INIT_KAFKA_CONFIG", "{}"))
+# 事件 kafka 拉取超时时长
+EVENT_KAFKA_TIMEOUT_MS = int(os.getenv("BKAPP_EVENT_KAFKA_TIMEOUT_MS", 1000))
+# 事件 kafka 最大拉取记录数
+EVENT_KAFKA_MAX_RECORDS = int(os.getenv("BKAPP_EVENT_KAFKA_MAX_RECORDS", 10))
+# 事件 kafka 拉取间隔时间
+EVENT_KAFKA_SLEEP_TIME = float(os.getenv("BKAPP_EVENT_KAFKA_SLEEP_TIME", 0.5))
 
 """
 以下为框架代码 请勿修改

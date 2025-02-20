@@ -197,6 +197,14 @@ class MetaManage extends ModuleBase {
       params,
     });
   }
+  // 获取标签
+  getTags() {
+    return Request.get<Array<{
+      link_table_count: number,
+      tag_id: string,
+      tag_name: string
+    }>>(`${this.path}/tag/`);
+  }
 }
 
 export default new MetaManage();

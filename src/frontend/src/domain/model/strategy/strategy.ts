@@ -15,6 +15,8 @@
   to the current version of the project delivered to anyone in the future.
 */
 
+import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
 import StrategyFieldEvent from '../strategy/strategy-field-event';
 
 export default class Strategy {
@@ -34,6 +36,12 @@ export default class Strategy {
     data_source?: {
       source_type: string;
       result_table_id?: string;
+      rt_id: string;
+      link_table: {
+        uid: string,
+        version: number,
+      },
+      system_ids: Array<string>,
       filter_config: Array<{
         connector: string;
         key: string;
@@ -54,6 +62,25 @@ export default class Strategy {
         }>
       }
     };
+    select: Array<DatabaseTableFieldModel>,
+    where: {
+      connector: 'and' | 'or' ;
+      conditions: Array<{
+        connector: 'and' | 'or';
+        conditions: Array<{
+          condition: {
+            field: DatabaseTableFieldModel | '';
+            filter: string;
+            filters: string[];
+            operator: '',
+          }
+        }>
+      }>;
+    },
+    schedule_config: {
+      count_freq: string,
+      schedule_period: string,
+    },
     [key: string]: any
   };
   status: string;
@@ -65,10 +92,12 @@ export default class Strategy {
   risk_hazard: string;
   risk_guidance: string;
   risk_title: string;
-  event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
+  strategy_type: string;
   event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
   processor_groups: Array<number>;
+  link_table_uid: string;
+  link_table_version: number;
   constructor(payload = {} as Strategy) {
     this.strategy_id = payload.strategy_id;
     this.strategy_name = payload.strategy_name;
@@ -91,10 +120,12 @@ export default class Strategy {
     this.risk_hazard = payload.risk_hazard;
     this.risk_guidance = payload.risk_guidance;
     this.risk_title = payload.risk_title;
-    this.event_evidence_field_configs = payload.event_evidence_field_configs;
+    this.strategy_type = payload.strategy_type;
     this.event_data_field_configs = payload.event_data_field_configs;
     this.event_basic_field_configs = payload.event_basic_field_configs;
     this.processor_groups = payload.processor_groups;
+    this.link_table_uid = payload.link_table_uid;
+    this.link_table_version = payload.link_table_version;
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {

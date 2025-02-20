@@ -49,7 +49,7 @@
             :condition="[]"
             :data="searchData"
             :defaut-using-item="{ inputHtml: t('请选择') }"
-            :placeholder="t('策略ID、策略名称、标签、状态')"
+            :placeholder="t('策略ID、策略名称、配置方式、标签、状态')"
             unique-select
             :validate-values="validateValues"
             value-split-code=","
@@ -80,8 +80,10 @@
     <template #header>
       <div
         class="flex"
-        style="width: 100%;padding-right: 40px;justify-content: space-between;">
-        <div>
+        style="width: 100%; padding-right: 40px; justify-content: space-between;">
+        <div
+          class="flex"
+          style="align-items: center;">
           {{ t('策略详情') }}
           <bk-button
             v-bk-tooltips="t('复制链接')"
@@ -89,9 +91,13 @@
             theme="primary"
             @click="handleCopyLink">
             <audit-icon
-              style="font-size: 14px;"
+              style=" margin-left: 14px;font-size: 14px;"
               type="link" />
           </bk-button>
+          <div style="height: 14px; margin: 0 10px; border-left: 1px solid #979ba5;" />
+          <div style=" font-size: 14px;color: #979ba5;">
+            {{ strategyItem.strategy_name }}
+          </div>
         </div>
         <div style="margin-left: auto;">
           <auth-button
@@ -216,6 +222,7 @@
 
   import ControlManageService from '@service/control-manage';
   import IamManageService from '@service/iam-manage';
+  import LinkDataManageService from '@service/link-data-manage';
   import NoticeGroupManageService from '@service/notice-group';
   import StrategyManageService from '@service/strategy-manage';
 
@@ -323,6 +330,7 @@
   const pendingStatusIdList = ref<Array<number>>([]);
   // control最大版本对应的map
   const maxVersionMap = ref<Record<string, number>>({});
+  const linkTableMaxVersionMap = ref<Record<string, number>>({});
   // const retryIdMap = ref<Record<number, number>>({});
 
   const userGroupList = computed(() => groupList.value.results
@@ -356,6 +364,21 @@
       name: t('策略名称'),
       id: 'strategy_name',
       placeholder: t('请输入策略名称'),
+    },
+    {
+      name: t('配置方式'),
+      id: 'strategy_type',
+      children: [{
+        name: t('自定义规则审计'),
+        id: 'rule',
+        placeholder: t('请选择配置方式'),
+      }, {
+        name: t('引入模型审计'),
+        id: 'model',
+        placeholder: t('请选择配置方式'),
+      }],
+      placeholder: t('请选择配置方式'),
+      onlyRecommendChildren: true,
     },
   ];
   let searchData: SearchData[] = [
@@ -419,6 +442,10 @@
       value: 'running',
     },
   ];
+  const strategyTypeTextMap = {
+    rule: t('自定义规则审计'),
+    model: t('引入模型审计'),
+  } as Record<string, string>;
   const initEnableFilterList = [
     {
       text: t('运行中'),
@@ -427,6 +454,16 @@
     {
       text: t('已停用'),
       value: 'disabled',
+    },
+  ];
+  const initTypeFilterList = [
+    {
+      text: t('自定义规则审计'),
+      value: 'rule',
+    },
+    {
+      text: t('引入模型审计'),
+      value: 'model',
     },
   ];
   const tableColumn = ref([
@@ -458,6 +495,28 @@
           </a>
         ;
       },
+    },
+    {
+      label: () => t('配置方式'),
+      filter: {
+        list: initTypeFilterList,
+        filterScope: SortScope.ALL,
+        checked: [],
+        btnSave: t('确定'),
+        btnReset: t('重置'),
+      },
+      field: () => 'strategy_type',
+      minWidth: 180,
+      render: ({ data }:{data: StrategyModel}) => (
+        <span style={{
+          padding: '4px 6px',
+          color: data.strategy_type === 'rule' ? '#299E56' : '#E38B02',
+          background: data.strategy_type === 'rule' ? '#DAF6E5' : '#FDEED8',
+          borderRadius: '2px',
+        }}>
+          { strategyTypeTextMap[data.strategy_type] }
+        </span>
+      ),
     },
     {
       label: () => t('标签'),
@@ -546,29 +605,6 @@
       },
     },
     {
-      label: () => t('最近更新人'),
-      field: () => 'updated_by',
-      width: 140,
-      sort: 'custom',
-    },
-    {
-      label: () => t('最近更新时间'),
-      field: () => 'updated_at',
-      sort: 'custom',
-      width: 170,
-    },
-    {
-      label: () => t('创建人'),
-      field: () => 'created_by',
-      width: 140,
-    },
-    {
-      label: () => t('创建时间'),
-      field: () => 'created_at',
-      width: 170,
-    },
-    {
-      fixed: 'right',
       label: () => t('启停'),
       field: () => 'status',
       width: 110,
@@ -612,6 +648,28 @@
       },
     },
     {
+      label: () => t('最近更新人'),
+      field: () => 'updated_by',
+      width: 140,
+      sort: 'custom',
+    },
+    {
+      label: () => t('最近更新时间'),
+      field: () => 'updated_at',
+      sort: 'custom',
+      width: 170,
+    },
+    {
+      label: () => t('创建人'),
+      field: () => 'created_by',
+      width: 140,
+    },
+    {
+      label: () => t('创建时间'),
+      field: () => 'created_at',
+      width: 170,
+    },
+    {
       fixed: 'right',
       label: () => t('操作'),
       width: '150px',
@@ -628,7 +686,10 @@
             class='edit-badge'
             position="top-right"
             theme="danger"
-            visible={data.control_version >= (maxVersionMap.value[data.control_id] || 1)}
+            visible={ data.strategy_type === 'rule'
+              ? (data.link_table_version || 999) >= (linkTableMaxVersionMap.value[data.link_table_uid] || 1)
+              : data.control_version >= (maxVersionMap.value[data.control_id] || 1)
+            }
             dot
           >
             <auth-button
@@ -636,14 +697,15 @@
               permission={data.permission.edit_strategy}
               resource={data.strategy_id}
               v-bk-tooltips={{
-                content: t('策略使用的方案，有新版本待升级'),
-                disabled: data.control_version >= (maxVersionMap.value[data.control_id] || 1),
-              }
-              }
+                content: data.strategy_type === 'rule' ? t('策略使用的联表，有新版本待升级') : t('策略使用的方案，有新版本待升级'),
+                disabled: data.strategy_type === 'rule'
+                  ? (data.link_table_version || 999) >= (linkTableMaxVersionMap.value[data.link_table_uid] || 1)
+                  : data.control_version >= (maxVersionMap.value[data.control_id] || 1),
+              }}
               theme="primary"
               text
               onClick={() => handleEdit(data)}>
-              {t('编辑')}
+              {t('编辑')} {data.link_table_version >= (linkTableMaxVersionMap.value[data.link_table_uid] || 1)}
             </auth-button>
           </bk-badge>
       }
@@ -712,7 +774,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['strategy_id', 'strategy_name', 'tags', 'status', 'updated_by', 'updated_at'],
+    checked: ['strategy_id', 'strategy_name', 'strategy_type', 'tags', 'status', 'updated_by', 'updated_at'],
     showLineHeight: false,
   });
   const settings = computed(() => {
@@ -786,6 +848,17 @@
     onSuccess(data) {
       maxVersionMap.value = data.reduce((res, item) => {
         res[item.control_id] = item.versions[0].control_version;
+        return res;
+      }, {} as Record<string, number>);
+    },
+  });
+  // 获取全部联表版本信息
+  useRequest(LinkDataManageService.fetchLinkTableAll, {
+    defaultValue: [],
+    manual: true,
+    onSuccess(data) {
+      linkTableMaxVersionMap.value = data.reduce((res, item) => {
+        res[item.uid] = item.version;
         return res;
       }, {} as Record<string, number>);
     },
@@ -867,6 +940,7 @@
     const search = {
       strategy_id: undefined,
       strategy_name: '',
+      strategy_type: '',
       tag: '',
       status: '',
     } as Record<string, any>;
@@ -885,8 +959,12 @@
       }
     });
     // 对列表的filter重新赋值
-    tableColumn.value[3].filter.checked.length =  0;
-    tableColumn.value[8].filter.checked.length = 0;
+    tableColumn.value.forEach((column) => {
+      if (column.filter && Array.isArray(column.filter.checked)) {
+        // eslint-disable-next-line no-param-reassign
+        column.filter.checked.length = 0;
+      }
+    });
 
     if (search.tag) {
       renderLabelRef.value.setLabel(search.tag);
@@ -896,16 +974,6 @@
       leftLabelFilterCondition.value = '';
     }
     listRef.value.fetchData(search);
-
-    if (search.status) {
-      const statusList = search.status.split(',');
-      statusList.forEach((statusKey: string) => {
-        if (['running', 'disabled'].includes(statusKey)) {
-          tableColumn.value[8].filter.checked.push(statusKey);
-        }
-        tableColumn.value[3].filter.checked.push(statusKey);
-      });
-    }
   };
 
   const handleSettingChange = (setting: ISettings) => {
@@ -982,19 +1050,20 @@
   // 筛选过滤
   const handleColumnFilter = (checkedObj: Record<string, any>) => {
     const checkField = checkedObj.column.field();
-    const { index } = checkedObj;
+    // const { index } = checkedObj;
     const value = checkedObj.checked.join(',');
-    if (index === 3) {
-      tableColumn.value[8].filter.checked.length = 0;
-    } else {
-      tableColumn.value[3].filter.checked.length = 0;
-    }
+    // tableColumn.value.forEach((column, colIndex) => {
+    //   if (column.filter && Array.isArray(column.filter.checked) && index !== colIndex) {
+    //     // eslint-disable-next-line no-param-reassign
+    //     column.filter.checked.length = 0;
+    //   }
+    // });
     listRef.value.fetchData({
       [checkField]: value,
     });
     const findObj = searchKey.value.find(item => item.id === checkField);
     const nameList = value.split(',') as string[];
-    if (value) {
+    if (value && checkField === 'status') {
       if (findObj) {
         findObj.values = [{
           id: value,
@@ -1021,6 +1090,7 @@
     const search = {
       strategy_id: undefined,
       strategy_name: '',
+      strategy_type: '',
       tag: '',
       status: '',
     } as Record<string, any>;
@@ -1028,8 +1098,12 @@
     renderLabelRef.value.resetAllLabel();
     leftLabelFilterCondition.value = '';
 
-    tableColumn.value[3].filter.checked.length = 0;
-    tableColumn.value[8].filter.checked.length = 0;
+    tableColumn.value.forEach((column) => {
+      if (column.filter && Array.isArray(column.filter.checked)) {
+        // eslint-disable-next-line no-param-reassign
+        column.filter.checked.length = 0;
+      }
+    });
 
     listRef.value.fetchData({
       ...search,

@@ -145,6 +145,15 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 批量获取表格下的rt字段
+   */
+  fetchBatchTableRtFields(params: {
+    table_ids: string
+  }) {
+    return StrategySource.getBatchTableRtFields(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取表格下的rt字段
    */
   fetchTableRtFields(params: {

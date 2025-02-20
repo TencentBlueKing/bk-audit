@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 import time
+from functools import cached_property
 from typing import Dict, List, Union
 
 from bk_resource import api, resource
@@ -26,7 +27,6 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Max, Q, QuerySet
 from django.utils.translation import gettext
-from rest_framework.settings import api_settings
 
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import ConfigLevelChoices
@@ -68,6 +68,7 @@ from services.web.analyze.tasks import (
     check_flow_status,
     toggle_monitor,
 )
+from services.web.analyze.utils import calculate_offline_flow_start_time
 from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.handlers import EventHandler
@@ -169,6 +170,11 @@ class AIOpsController(Controller):
         if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
             self._toggle_strategy(FlowStatusToggleChoices.STOP.value)
 
+    def check_flow_status(self, strategy_id: int, success_status: str, failed_status: str, other_status: str):
+        if not AiopsFeature(help_text="check_flow_status").available:
+            return
+        return check_flow_status.delay(strategy_id, success_status, failed_status, other_status)
+
     def _toggle_strategy(self, status: str, force: bool = False) -> None:
         # update flow
         params = {
@@ -196,7 +202,7 @@ class AIOpsController(Controller):
                 self.strategy.status = StrategyStatusChoices.STARTING
                 self.strategy.save(update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
-                check_flow_status.delay(
+                self.check_flow_status(
                     strategy_id=self.strategy.strategy_id,
                     success_status=StrategyStatusChoices.RUNNING,
                     failed_status=StrategyStatusChoices.START_FAILED,
@@ -207,7 +213,7 @@ class AIOpsController(Controller):
                 self.strategy.status = StrategyStatusChoices.UPDATING
                 self.strategy.save(update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
-                check_flow_status.delay(
+                self.check_flow_status(
                     strategy_id=self.strategy.strategy_id,
                     success_status=StrategyStatusChoices.RUNNING,
                     failed_status=StrategyStatusChoices.UPDATE_FAILED,
@@ -218,9 +224,9 @@ class AIOpsController(Controller):
                 self.strategy.status = StrategyStatusChoices.STOPPING
                 self.strategy.save(update_fields=["status"])
                 toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=False)
-                check_flow_status.delay(
+                self.check_flow_status(
                     strategy_id=self.strategy.strategy_id,
-                    success_status=StrategyStatusChoices.DISABLED.value,
+                    success_status=StrategyStatusChoices.DISABLED,
                     failed_status=StrategyStatusChoices.STOP_FAILED,
                     other_status=StrategyStatusChoices.STOPPING,
                 )
@@ -240,8 +246,12 @@ class AIOpsController(Controller):
             return data["flow_status"]
         return FlowNodeStatusChoices.NO_START
 
+    @cached_property
+    def flow_name(self) -> str:
+        return f"MODEL_AUDIT-{self.strategy.strategy_id}-{str(time.time_ns())}"
+
     def _create_flow(self) -> None:
-        resp = api.bk_base.create_flow(project_id=settings.BKBASE_PROJECT_ID, flow_name=str(time.time_ns()))
+        resp = api.bk_base.create_flow(project_id=settings.BKBASE_PROJECT_ID, flow_name=self.flow_name)
         self.strategy.backend_data["flow_id"] = resp["flow_id"]
         self.strategy.save(update_fields=["backend_data"])
 
@@ -359,6 +369,11 @@ class AIOpsController(Controller):
             )
             return sql_node_params
         elif sql_node_type == FlowSQLNodeType.BATCH_V2:
+            # 获取调度频率和周期
+            count_freq = plan_config.get("count_freq") or aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ)
+            schedule_period = plan_config.get("schedule_period") or aiops_config.get("schedule_period", OffsetUnit.HOUR)
+            start_time_str = calculate_offline_flow_start_time(schedule_period)
+
             sql_node_params.update(
                 {
                     "outputs": [
@@ -376,11 +391,9 @@ class AIOpsController(Controller):
                             "self_dependency": False,
                         },
                         "schedule_config": {
-                            "count_freq": plan_config.get("count_freq")
-                            or aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ),
-                            "schedule_period": plan_config.get("schedule_period")
-                            or aiops_config.get("schedule_period", OffsetUnit.HOUR),
-                            "start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                            "count_freq": count_freq,
+                            "schedule_period": schedule_period,
+                            "start_time": start_time_str,
                         },
                         "output_config": {
                             "enable_customize_output": False,
@@ -402,7 +415,7 @@ class AIOpsController(Controller):
                             or plan_config.get("schedule_period")
                             or aiops_config.get("schedule_period", OffsetUnit.HOUR),
                             "dependency_rule": plan_config.get("window_offset_unit", WindowDependencyRule.NO_FAILED),
-                            "accumulate_start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                            "accumulate_start_time": start_time_str,
                             "result_table_id": sql_node_params["from_result_table_ids"][0],
                             "window_type": WindowType.WHOLE
                             if source_type == FlowDataSourceNodeType.BATCH
@@ -447,6 +460,11 @@ class AIOpsController(Controller):
         sql_node_type = FlowSQLNodeType.get_sql_node_type(data_source["source_type"])
         variable_config = self.strategy.configs.get("variable_config") or []
 
+        # 获取调度频率和周期
+        count_freq = aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ)
+        schedule_period = aiops_config.get("schedule_period", OffsetUnit.HOUR)
+        start_time_str = calculate_offline_flow_start_time(schedule_period)
+
         return {
             "node_type": "scenario_app",
             "outputs": [{}],
@@ -474,9 +492,9 @@ class AIOpsController(Controller):
                 },
                 "variable_config": variable_config,
                 "schedule_config": {
-                    "count_freq": aiops_config.get("count_freq", BKBASE_DEFAULT_COUNT_FREQ),
-                    "schedule_period": aiops_config.get("schedule_period", OffsetUnit.HOUR),
-                    "start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                    "count_freq": count_freq,
+                    "schedule_period": schedule_period,
+                    "start_time": start_time_str,
                 }
                 if sql_node_type == FlowSQLNodeType.BATCH_V2
                 else {},
@@ -488,7 +506,7 @@ class AIOpsController(Controller):
                     "window_size_unit": aiops_config.get("window_size_unit")
                     or aiops_config.get("schedule_period", OffsetUnit.HOUR),
                     "dependency_rule": aiops_config.get("window_offset_unit", WindowDependencyRule.NO_FAILED),
-                    "accumulate_start_time": datetime.datetime.now().strftime(api_settings.DATETIME_FORMAT),
+                    "accumulate_start_time": start_time_str,
                     "result_table_id": data_source["result_table_id"],
                     "window_type": WindowType.SCROLL,
                     "color": BKBASE_DEFAULT_WINDOW_COLOR,
@@ -626,7 +644,8 @@ class AIOpsController(Controller):
             return sql
         return ""
 
-    def _build_sql_filter(self, filter_config: List[dict]) -> str:
+    @classmethod
+    def _build_sql_filter(cls, filter_config: List[dict]) -> str:
         """
         build sql where
         """
@@ -638,10 +657,21 @@ class AIOpsController(Controller):
         # filter
         filter_string = "where "
         for index, _filter in enumerate(filter_config):
-            _filter_conditions = [
-                "{}{}'{}'".format(_filter["key"], _filter["method"], _value.replace("'", "''"))
-                for _value in _filter["value"]
-            ]
+            _filter_conditions = []
+            # 针对包含/不包含特殊处理
+            if _filter["method"] in (FilterOperator.IN, FilterOperator.NOT_IN):
+                values_str = ",".join(f'''"{v.replace("'", "''")}"''' for v in _filter["value"])
+                condition = f"{_filter['key']} {_filter['method']} ({values_str})"
+                _filter_conditions = [condition]
+            elif _filter["method"] in (FilterOperator.IS_NULL, FilterOperator.NOT_NULL):
+                condition = f"{_filter['key']} {_filter['method']}"
+                _filter_conditions = [condition]
+            else:
+                _filter_conditions = [
+                    "{} {} '{}'".format(_filter["key"], _filter["method"], _value.replace("'", "''"))
+                    for _value in _filter["value"]
+                ]
+
             filter_string = (
                 filter_string
                 + (_filter["connector"] if index else "")

@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="detail-base-info">
+  <div
+    class="detail-base-info"
+    :style="borderStyle">
     <div class="title">
       {{ data.title }}
     </div>
@@ -360,6 +362,9 @@
       .find(item => item.id === props.data.rule_id && item.version === props.data.rule_version);
     return item && item.name ? item.name : '';
   });
+  const borderStyle = computed(() => ({
+    'border-top': `6px solid ${riskLevelMap[props.data.risk_level]?.color}`,
+  }));
 
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
@@ -388,7 +393,6 @@
   position: relative;
   padding: 10px 16px;
   background: #fff;
-  border-top: 6px solid #ffb848;
   border-radius: 2px;
   box-shadow: 0 2px 4px 0 #1919290d;
 

@@ -236,6 +236,52 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
+    # 联表
+    LIST_LINK_TABLE = ActionMeta(
+        id="list_link_table",
+        name=gettext("联表列表访问"),
+        name_en="List Link Table",
+        type="list",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
+    VIEW_LINK_TABLE = ActionMeta(
+        id="view_link_table",
+        name=gettext("查看联表"),
+        name_en="View Link Table",
+        type="view",
+        related_resource_types=[ResourceEnum.LINK_TABLE],
+        related_actions=[],
+        version=1,
+    )
+    CREATE_LINK_TABLE = ActionMeta(
+        id="create_link_table",
+        name=gettext("创建联表"),
+        name_en="Create Link Table",
+        type="create",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
+    EDIT_LINK_TABLE = ActionMeta(
+        id="edit_link_table",
+        name=gettext("编辑联表"),
+        name_en="Edit Link Table",
+        type="edit",
+        related_resource_types=[ResourceEnum.LINK_TABLE],
+        related_actions=[],
+        version=1,
+    )
+    DELETE_LINK_TABL = ActionMeta(
+        id="delete_link_table",
+        name=gettext("删除联表"),
+        name_en="Delete Link Table",
+        type="delete",
+        related_resource_types=[ResourceEnum.LINK_TABLE],
+        related_actions=[],
+        version=1,
+    )
     LIST_RISK = ActionMeta(
         id="list_risk_v2",
         name=gettext("审计风险列表(V2)"),

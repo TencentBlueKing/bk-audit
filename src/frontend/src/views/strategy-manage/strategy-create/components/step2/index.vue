@@ -77,7 +77,7 @@
                 </div>
                 <template #content>
                   <variable-table
-                    :strategy-id="data.strategy_id"
+                    :strategy-id="editData.strategy_id"
                     @is-copy="handleCopy" />
                 </template>
               </bk-popover>
@@ -88,8 +88,10 @@
           <template #content>
             <event-info-table
               ref="eventRef"
-              :data="data"
-              :strategy-id="data.strategy_id" />
+              :data="editData"
+              :select="select"
+              :strategy-id="editData.strategy_id"
+              :strategy-type="strategyType" />
           </template>
         </card-part-vue>
       </audit-form>
@@ -119,10 +121,12 @@
   </smart-action>
 </template>
 <script setup lang="ts">
+  import _ from 'lodash';
   import { computed, nextTick, onActivated, onDeactivated, onUnmounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
@@ -133,7 +137,6 @@
 
   interface IFormData {
     risk_title: string,
-    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
   }
@@ -144,7 +147,9 @@
     (e: 'showPreview'): void;
   }
   interface Props {
-    data: StrategyModel
+    editData: StrategyModel,
+    select: Array<DatabaseTableFieldModel>,
+    strategyType: string
   }
 
   const props = defineProps<Props>();
@@ -167,7 +172,6 @@
   const variableInputActive = ref(false);
   const formData = ref<IFormData>({
     risk_title: '',
-    event_evidence_field_configs: [],
     event_data_field_configs: [],
     event_basic_field_configs: [],
   });
@@ -200,8 +204,21 @@
   };
 
   const handleNext = () => {
-    formRef.value.validate().then(() => {
-      const params: IFormData = Object.assign({}, formData.value, eventRef.value.getData());
+    Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
+      const params: IFormData = _.cloneDeep(Object.assign({}, formData.value, eventRef.value.getData()));
+      // 处理event_basic_field_configs
+      params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
+        if (item.map_config) {
+          if (!item.map_config.source_field && !item.map_config.target_value) {
+            // eslint-disable-next-line no-param-reassign
+            delete item.map_config;
+          } else if (item.map_config.source_field && item.map_config.target_value) {
+            // eslint-disable-next-line no-param-reassign
+            item.map_config.source_field = undefined;
+          }
+        }
+        return item;
+      });
       emits('nextStep', 3, params);
     });
   };
@@ -278,7 +295,7 @@
   };
 
   // 编辑
-  watch(() => props.data, (data) => {
+  watch(() => props.editData, (data) => {
     formData.value.risk_title = data.risk_title || '';
   }, {
     immediate: isEditMode || isCloneMode,
@@ -314,7 +331,8 @@
 
     .strategt-form {
       flex: 1;
-      max-width: 1280px;
+
+      /* max-width: 1280px; */
     }
   }
 

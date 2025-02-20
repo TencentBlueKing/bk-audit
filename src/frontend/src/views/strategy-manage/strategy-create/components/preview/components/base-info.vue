@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="detail-base-info">
+  <div
+    class="detail-base-info"
+    :style="borderStyle">
     <div class="title">
       {{ data.risk_title }}
     </div>
@@ -278,7 +280,6 @@
     risk_hazard: string,
     risk_guidance: string,
     risk_title: string,
-    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     processor_groups: [],
@@ -292,7 +293,7 @@
       name: string,
     }>,
   }
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const statusToMap: Record<string, {
     theme: 'info' | 'warning' | 'success' | 'danger' | undefined,
     icon: string,
@@ -344,8 +345,12 @@
   const { t, locale } = useI18n();
 
   const isShowMore = ref(false);
-  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
   const strategyTagMap = ref<Record<string, string>>({});
+
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
+  const borderStyle = computed(() => ({
+    'border-top': `6px solid ${riskLevelMap[props.data.risk_level].color}`,
+  }));
 
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
@@ -364,6 +369,12 @@
 </script>
 <style lang="postcss" scoped>
 .detail-base-info {
+  position: relative;
+  padding: 10px 16px;
+  background: #fff;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px 0 #1919290d;
+
   .title {
     margin-bottom: 10px;
     font-size: 14px;
@@ -371,13 +382,6 @@
     line-height: 22px;
     color: #313238;
   }
-
-  position: relative;
-  padding: 10px 16px;
-  background: #fff;
-  border-top: 6px solid #ffb848;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px 0 #1919290d;
 
   .render-info-item {
     min-width: 50%;

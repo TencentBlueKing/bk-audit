@@ -46,7 +46,6 @@
             label-width="135"
             property="group_member">
             <user-variable-select
-              allow-create
               class="form-item-common"
               :collapse-tags="collapseTags"
               :model-value="formData.group_member"

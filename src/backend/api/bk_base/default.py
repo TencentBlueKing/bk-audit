@@ -27,6 +27,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_base.constants import UNSUPPORTED_CODE
+from api.bk_base.serializers import QuerySyncRequestSerializer
 from api.domains import BK_BASE_API_URL
 
 
@@ -304,6 +305,13 @@ class GetResultTable(BkBaseResource):
     url_keys = ["result_table_id"]
 
 
+class GetRtStorages(BkBaseResource):
+    name = gettext_lazy("获取结果表的存储信息")
+    action = "/v3/meta/result_tables/{result_table_id}/storages/"
+    url_keys = ["result_table_id"]
+    method = "GET"
+
+
 class GetProjectData(BkBaseResource):
     name = gettext_lazy("列举项目相关数据")
     action = "/v3/auth/projects/{project_id}/data/"
@@ -323,3 +331,14 @@ class EditAlertConfigs(BkBaseResource):
     action = "/v3/datamanage/dmonitor/alert_configs/{alert_config_id}/"
     method = "PATCH"
     url_keys = ["alert_config_id"]
+
+
+class QuerySyncResource(BkBaseResource):
+    """
+    查询数据
+    """
+
+    action = "/v3/queryengine/query_sync/"
+    method = "POST"
+    TIMEOUT = 60 * 5
+    RequestSerializer = QuerySyncRequestSerializer

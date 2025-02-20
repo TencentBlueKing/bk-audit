@@ -87,7 +87,7 @@
         <template #footer>
           <div
             :class="{'footer-fixed':disabled}"
-            style="padding-left: 40px;">
+            style="padding-left: 16px;">
             <bk-button
               v-if="!disabled"
               v-bk-tooltips="t('请先完成连通性测试')"

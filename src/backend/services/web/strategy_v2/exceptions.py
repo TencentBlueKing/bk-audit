@@ -54,3 +54,43 @@ class SchedulePeriodInvalid(StrategyV2Exception):
     STATUS_CODE = 500
     ERROR_CODE = "005"
     MESSAGE = gettext_lazy("调度周期超过允许的范围(%s天)") % STRATEGY_SCHEDULE_TIME
+
+
+class LinkTableHasStrategy(StrategyV2Exception):
+    MESSAGE = gettext_lazy("联表存在关联策略")
+    ERROR_CODE = "006"
+    STATUS_CODE = 400
+
+
+class StrategyTypeNotSupport(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "007"
+    MESSAGE = gettext_lazy("策略类型不支持")
+
+
+class StrategyTypeCanNotChange(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "008"
+    MESSAGE = gettext_lazy("策略类型不可修改")
+
+
+class LinkTableConfigError(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "009"
+    MESSAGE = gettext_lazy("联表配置错误")
+
+
+class RuleAuditSqlGeneratorError(StrategyV2Exception):
+    STATUS_CODE = 400
+    ERROR_CODE = "010"
+    MESSAGE = gettext_lazy("规则审计SQL生成错误: {err}")
+
+    def __init__(self, err, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(err=err)
+        super().__init__(*args, **kwargs)
+
+
+class LinkTableNameExist(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "011"
+    MESSAGE = gettext_lazy("联表名称已存在")

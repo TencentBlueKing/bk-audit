@@ -38,6 +38,13 @@ BKBASE_DEFAULT_COUNT_FREQ = 1
 BKBASE_ERROR_LOG_LEVEL = "ERROR"
 BKBASE_ORIGIN_DATA_FIELD = "origin_data"
 BKBASE_STRATEGY_ID_FIELD = "strategy_id"
+DEFAULT_QUEUE_STORAGE_CLUSTER_KEY = "default_queue_storage_cluster"
+DEFAULT_HDFS_STORAGE_CLUSTER_KEY = "default_hdfs_storage_cluster"
+AUDIT_EVENT_TABLE_PREFIX = "audit_event"
+AUDIT_EVENT_TABLE_FORMAT = f"{AUDIT_EVENT_TABLE_PREFIX}_%s_%s"
+AUDIT_EVENT_QUEUE_TOPIC_PATTERN = (
+    f"^queue_(?P<bk_biz_id>.*)_{AUDIT_EVENT_TABLE_PREFIX}_(?P<namespace>.*)_(?P<time_ns>.*)$"
+)
 
 
 class ControlTypeChoices(TextChoices):
@@ -61,6 +68,7 @@ class FlowDataSourceNodeType(TextChoices):
     REALTIME = "stream_source", gettext_lazy("RealTime")
     BATCH = "batch_join_source", gettext_lazy("Batch Join")
     BATCH_REAL = "batch_source", gettext_lazy("Batch")
+    REDIS_KV_SOURCE = "redis_kv_source", gettext_lazy("Redis KV")
 
 
 class ResultTableType(TextChoices):
@@ -120,6 +128,14 @@ class FilterOperator(TextChoices):
     LESS_THAN = "<", gettext_lazy("<")
     GRATER_THAN_EQUAL = ">=", gettext_lazy(">=")
     LESS_THAN_EQUAL = "<=", gettext_lazy("<=")
+    IN = "IN", gettext_lazy("in")
+    NOT_IN = "NOT IN", gettext_lazy("not in")
+    LIKE = "LIKE", gettext_lazy("like")
+    NOT_LIKE = "NOT LIKE", gettext_lazy("not like")
+    IS_NULL = "IS NULL", gettext_lazy("is null")
+    NOT_NULL = "IS NOT NULL", gettext_lazy("is not null")
+    REG = "REGEXP", gettext_lazy("regex")
+    NREG = "NOT REGEXP", gettext_lazy("not regex")
 
 
 class FilterConnector(TextChoices):
@@ -176,3 +192,16 @@ class ObjectType(TextChoices):
 
     RAW_DATA = "rawdata", gettext_lazy("数据源")
     DATAFLOW = "dataflow", gettext_lazy("数据开发")
+
+
+class BaseControlTypeChoices(TextChoices):
+    """
+    基础控件类型
+    """
+
+    RULE_AUDIT = "rule_audit", gettext_lazy("规则审计")
+    CONTROL = "control", gettext_lazy("控件")
+
+
+# 规则审计策略停止睡眠等待时间(s)
+RULE_AUDIT_STRATEGY_STOP_SLEEP_TIME = 5

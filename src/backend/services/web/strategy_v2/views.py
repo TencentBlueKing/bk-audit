@@ -21,6 +21,7 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
+    ActionPermission,
     IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
@@ -90,7 +91,62 @@ class StrategyFieldsViewSet(ResourceViewSet):
 
 
 class StrategyTableViewSet(ResourceViewSet):
+    def get_permissions(self):
+        return [
+            ActionPermission(
+                actions=[
+                    ActionEnum.CREATE_STRATEGY,
+                    ActionEnum.LIST_STRATEGY,
+                    ActionEnum.EDIT_STRATEGY,
+                    ActionEnum.DELETE_STRATEGY,
+                ]
+            )
+        ]
+
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_tables),
         ResourceRoute("GET", resource.strategy_v2.get_rt_fields, endpoint="rt_fields"),
+        ResourceRoute("GET", resource.strategy_v2.bulk_get_rt_fields, endpoint="bulk_rt_fields"),
+    ]
+
+
+class LinkTableViewSet(ResourceViewSet):
+    def get_permissions(self):
+        if self.action in ["list", "tags"]:
+            return [IAMPermission(actions=[ActionEnum.LIST_LINK_TABLE])]
+        if self.action in ["create"]:
+            return [IAMPermission(actions=[ActionEnum.CREATE_LINK_TABLE])]
+        if self.action in ["update"]:
+            return [
+                InstanceActionPermission(actions=[ActionEnum.EDIT_LINK_TABLE], resource_meta=ResourceEnum.LINK_TABLE)
+            ]
+        if self.action in ["destroy"]:
+            return [
+                InstanceActionPermission(actions=[ActionEnum.DELETE_LINK_TABL], resource_meta=ResourceEnum.LINK_TABLE)
+            ]
+        if self.action in ["retrieve"]:
+            return [
+                InstanceActionPermission(actions=[ActionEnum.VIEW_LINK_TABLE], resource_meta=ResourceEnum.LINK_TABLE)
+            ]
+        return []
+
+    resource_routes = [
+        ResourceRoute(
+            "GET",
+            resource.strategy_v2.list_link_table,
+            enable_paginate=True,
+            decorators=[
+                insert_permission_field(
+                    actions=[ActionEnum.VIEW_LINK_TABLE, ActionEnum.EDIT_LINK_TABLE, ActionEnum.DELETE_LINK_TABL],
+                    id_field=lambda item: item["uid"],
+                    data_field=lambda data: data["results"],
+                )
+            ],
+        ),
+        ResourceRoute("GET", resource.strategy_v2.get_link_table, pk_field="uid"),
+        ResourceRoute("GET", resource.strategy_v2.list_link_table_all, endpoint="all"),
+        ResourceRoute("POST", resource.strategy_v2.create_link_table),
+        ResourceRoute("PUT", resource.strategy_v2.update_link_table, pk_field="uid"),
+        ResourceRoute("DELETE", resource.strategy_v2.delete_link_table, pk_field="uid"),
+        ResourceRoute("GET", resource.strategy_v2.list_link_table_tags, endpoint="tags"),
     ]

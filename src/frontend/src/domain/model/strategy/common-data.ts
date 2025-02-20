@@ -30,6 +30,13 @@ export default class CommonData {
   algorithm_operator: Array<ItemType>;
   strategy_status: Array<ItemType>;
   risk_level: Array<ItemType>;
+  strategy_type: Array<ItemType>;
+  rule_audit_config_type: Array<ItemType>;
+  aggregate: Array<ItemType>;
+  link_table_join_type: Array<ItemType>;
+  link_table_table_type: Array<ItemType>;
+  rule_audit_aggregate_type: Array<ItemType>;
+  rule_audit_condition_operator: Array<ItemType>;
 
   constructor(payload = {} as CommonData) {
     this.offset_unit = payload.offset_unit || [];
@@ -40,6 +47,13 @@ export default class CommonData {
     this.algorithm_operator = payload.algorithm_operator || [];
     this.strategy_status = payload.strategy_status || [];
     this.risk_level = payload.risk_level || [];
+    this.strategy_type = payload.strategy_type || [];
+    this.rule_audit_config_type = payload.rule_audit_config_type || [];
+    this.aggregate = payload.aggregate || [];
+    this.link_table_join_type = payload.link_table_join_type || [];
+    this.link_table_table_type = payload.link_table_table_type || [];
+    this.rule_audit_aggregate_type = payload.rule_audit_aggregate_type || [];
+    this.rule_audit_condition_operator = payload.rule_audit_condition_operator || [];
   }
 }
 

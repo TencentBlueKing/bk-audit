@@ -26,11 +26,13 @@
   <keep-alive>
     <component
       :is="renderCom"
-      :data="editData"
+      ref="comRef"
+      :edit-data="editData"
       :is-edit-data-loading="isEditDataLoading"
+      :select="formData.configs.select"
+      :strategy-type="formData.strategy_type"
       style="margin-bottom: 24px;"
       @cancel="handleCancel"
-      @fetch-edit-data="handleEdit"
       @next-step="(step: any, params: any) => handleNextStep(step, params)"
       @previous-step="(step: any) => currentStep = step"
       @show-preview="showPreview = true"
@@ -51,8 +53,10 @@
 
 <script setup lang='ts'>
   import { InfoBox } from 'bkui-vue';
+  import _ from 'lodash';
   import {
     computed,
+    onMounted,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -84,7 +88,7 @@
     risk_hazard: string,
     risk_guidance: string,
     risk_title: string,
-    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
+    strategy_type: string,
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     processor_groups: [],
@@ -107,13 +111,16 @@
     { title: t('其他配置') },
   ];
   const currentStep = ref(1);
+  const comRef = ref();
 
   const renderCom = computed(() => comMap[currentStep.value as keyof typeof comMap]);
 
   let isSwitchSuccess = false;
+  const isEditMode = route.name === 'strategyEdit';
+  const isCloneMode = route.name === 'strategyClone';
+
   const showPreview = ref(false);
   const controlTypeId = ref('');// 方案类型id
-  const isEditMode = route.name === 'strategyEdit';
   const editData = ref(new StrategyModel());
   const formData = ref<IFormData>({
     strategy_name: '',
@@ -126,7 +133,7 @@
     risk_hazard: '',
     risk_guidance: '',
     risk_title: '',
-    event_evidence_field_configs: [],
+    strategy_type: '',
     event_data_field_configs: [],
     event_basic_field_configs: [],
     processor_groups: [],
@@ -223,7 +230,7 @@
 
   // 提交
   const handleSubmit = () => {
-    const params = { ...formData.value };
+    const params = _.cloneDeep(formData.value);
     // ai策略
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
@@ -255,17 +262,20 @@
     });
   };
 
-  const handleEdit = () => {
-    fetchStrategyList({
-      page: 1,
-      page_size: 1,
-      strategy_id: route.params.id,
-    });
-  };
+  onMounted(() => {
+    if (isEditMode || isCloneMode) {
+      fetchStrategyList({
+        page: 1,
+        page_size: 1,
+        strategy_id: route.params.id,
+      });
+    }
+  });
+
 </script>
 <style scoped>
 .strategy-upgrade-step {
-  width: 402px;
+  width: 450px;
   margin: 0 auto;
   transform: translateX(-86px);
 

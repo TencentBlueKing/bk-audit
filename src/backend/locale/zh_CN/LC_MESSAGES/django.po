@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2024-09-12 13:19+0800\n"
+"POT-Creation-Date: 2025-02-20 16:18+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,6 +17,12 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "用户"
+msgstr "用户"
+
+msgid "Token"
+msgstr "Token"
 
 msgid "创建入库"
 msgstr "创建入库"
@@ -129,6 +135,9 @@ msgstr "获取结果表列表"
 msgid "获取结果表"
 msgstr "获取结果表"
 
+msgid "获取结果表的存储信息"
+msgstr "获取结果表的存储信息"
+
 msgid "列举项目相关数据"
 msgstr "列举项目相关数据"
 
@@ -137,6 +146,18 @@ msgstr "获取告警策略配置详情"
 
 msgid "修改部分告警策略配置配置"
 msgstr "修改部分告警策略配置配置"
+
+msgid "App Code"
+msgstr "App Code"
+
+msgid "SQL"
+msgstr "SQL"
+
+msgid "Storage"
+msgstr "存储类型"
+
+msgid "认证方式"
+msgstr "认证方式"
 
 msgid "获取消息类型"
 msgstr "获取消息类型"
@@ -1230,6 +1251,9 @@ msgstr "保存标签"
 msgid "获取资源拉取信息"
 msgstr "获取资源拉取信息"
 
+msgid "获取所有标签"
+msgstr "获取所有标签"
+
 msgid "搜索关键字"
 msgstr "搜索关键字"
 
@@ -1515,6 +1539,10 @@ msgstr "通知组名称重复"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
+#, python-format
+msgid "【蓝鲸审计中心%s】"
+msgstr "【蓝鲸审计中心%s】"
+
 msgid "异常信息"
 msgstr "异常信息"
 
@@ -1740,6 +1768,21 @@ msgstr "编辑策略"
 msgid "删除策略"
 msgstr "删除策略"
 
+msgid "联表列表访问"
+msgstr "规则列表访问"
+
+msgid "查看联表"
+msgstr "查看联表"
+
+msgid "创建联表"
+msgstr "创建联表"
+
+msgid "编辑联表"
+msgstr "编辑联表"
+
+msgid "删除联表"
+msgstr "删除联表"
+
 msgid "审计风险列表(V2)"
 msgstr "审计风险列表(V2)"
 
@@ -1831,6 +1874,9 @@ msgstr "敏感资源类型"
 
 msgid "审计策略"
 msgstr "审计策略"
+
+msgid "联表"
+msgstr "联表"
 
 msgid "获取IAM系统配置"
 msgstr "获取IAM系统配置"
@@ -1964,8 +2010,132 @@ msgstr "值"
 msgid "Config"
 msgstr "配置"
 
+msgid "AND"
+msgstr "AND"
+
+msgid "OR"
+msgstr "OR"
+
+msgid "字符串"
+msgstr "字符串"
+
+msgid "双精度浮点数"
+msgstr "双精度浮点数"
+
+msgid "整数"
+msgstr "整数"
+
+msgid "长整数"
+msgstr "长整数"
+
+msgid "文本"
+msgstr "文本"
+
+msgid "时间戳"
+msgstr "时间戳"
+
+msgid "浮点数"
+msgstr "浮点数"
+
+msgid "计数"
+msgstr "计数"
+
+msgid "求和"
+msgstr "求和"
+
+msgid "平均值"
+msgstr "平均值"
+
+msgid "最大值"
+msgstr "最大值"
+
+msgid "最小值"
+msgstr "最小值"
+
+msgid "去重计数"
+msgstr "去重计数"
+
+msgid "内连接"
+msgstr "内连接"
+
+msgid "左连接"
+msgstr "左连接"
+
+msgid "右连接"
+msgstr "右连接"
+
+msgid "全连接"
+msgstr "全连接"
+
+msgid "="
+msgstr "等于"
+
+msgid "!="
+msgstr "不等于"
+
+msgid ">"
+msgstr "大于"
+
+msgid "<"
+msgstr "小于"
+
+msgid ">="
+msgstr "大于等于"
+
+msgid "<="
+msgstr "小于等于"
+
+msgid "in"
+msgstr "属于"
+
+msgid "not in"
+msgstr "不属于"
+
+msgid "like"
+msgstr "包含(模糊匹配)"
+
+msgid "not like"
+msgstr "不包含(模糊匹配)"
+
+msgid "is null"
+msgstr "为空"
+
+msgid "is not null"
+msgstr "不为空"
+
+msgid "regex"
+msgstr "正则"
+
+msgid "not regex"
+msgstr "正则(不匹配)"
+
+#, python-brace-format
+msgid "表 '{table_name}' 未在配置中声明。"
+msgstr "表 '{table_name}' 未在配置中声明。"
+
+#, python-brace-format
+msgid "不支持的 JOIN 类型：'{join_type}'。"
+msgstr "不支持的 JOIN 类型：'{join_type}'。"
+
+#, python-brace-format
+msgid "不支持的操作符：'{operator}'。"
+msgstr "不支持的操作符：'{operator}'。"
+
+#, python-brace-format
+msgid "不支持的聚合类型：'{aggregate_type}'。"
+msgstr "不支持的聚合类型：'{aggregate_type}'。"
+
+msgid "配置中必须指定 `from_table` 或 `join_tables`。"
+msgstr "配置中必须指定 `from_table` 或 `join_tables`。"
+
 msgid "数据拉取"
 msgstr "数据拉取"
+
+msgid "未实现方法"
+msgstr "未实现方法"
+
+msgid "未实现类型"
+msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -2000,6 +2170,9 @@ msgstr "离线维表计算"
 msgid "Batch"
 msgstr "离线实时计算"
 
+msgid "Redis KV"
+msgstr "Redis KV"
+
 msgid "CDC"
 msgstr "CDC"
 
@@ -2026,30 +2199,6 @@ msgstr "未启动"
 
 msgid "Failed"
 msgstr "失败"
-
-msgid "="
-msgstr "="
-
-msgid "!="
-msgstr "!="
-
-msgid ">"
-msgstr ">"
-
-msgid "<"
-msgstr "<"
-
-msgid ">="
-msgstr ">="
-
-msgid "<="
-msgstr "<="
-
-msgid "AND"
-msgstr "AND"
-
-msgid "OR"
-msgstr "OR"
 
 msgid "No Failed"
 msgstr "无失败"
@@ -2087,6 +2236,12 @@ msgstr "数据源"
 msgid "数据开发"
 msgstr "数据开发"
 
+msgid "规则审计"
+msgstr "规则审计"
+
+msgid "控件"
+msgstr "控件"
+
 msgid "Create or Update Flow Failed"
 msgstr "创建或更新任务失败"
 
@@ -2099,6 +2254,10 @@ msgstr "集群不存在"
 
 msgid "Control Not Exists"
 msgstr "控件不存在"
+
+#, python-format
+msgid "Not Support DataSource; source_type: %s; result_table: %s"
+msgstr "不支持的数据源;来源类型: %s;结果表: %s"
 
 msgid "操作行为审计"
 msgstr "操作行为审计"
@@ -3270,6 +3429,9 @@ msgstr "策略 (V2)"
 msgid "Upgradable"
 msgstr "可升级"
 
+msgid "No Tag"
+msgstr "无标签"
+
 msgid "Disabled"
 msgstr "已停用"
 
@@ -3295,22 +3457,22 @@ msgid "Stopping"
 msgstr "停用中"
 
 msgid "Equal"
-msgstr "="
+msgstr "等于"
 
 msgid "NotEqual"
-msgstr "!="
+msgstr "不等于"
 
 msgid "Regex"
 msgstr "正则"
 
 msgid "NotRegex"
-msgstr "正则(非)"
+msgstr "正则(不匹配)"
 
 msgid "Include"
-msgstr "包含"
+msgstr "属于"
 
 msgid "Exclude"
-msgstr "不包含"
+msgstr "不属于"
 
 msgid "致命"
 msgstr "致命"
@@ -3322,10 +3484,13 @@ msgid "提醒"
 msgstr "提醒"
 
 msgid "Event Log"
-msgstr "操作记录"
+msgstr "操作日志"
 
 msgid "Asset Data"
-msgstr "资源数据"
+msgstr "资产数据"
+
+msgid "Other Data"
+msgstr "其他数据"
 
 msgid "Static"
 msgstr "静态"
@@ -3345,6 +3510,35 @@ msgstr "中"
 msgid "低"
 msgstr "低"
 
+msgid "规则策略"
+msgstr "规则策略"
+
+msgid "模型策略"
+msgstr "模型策略"
+
+msgid "Link Table Name"
+msgstr "联表名称"
+
+msgid "Updated At"
+msgstr "更新时间"
+
+msgid "Updated By"
+msgstr "更新人"
+
+#, fuzzy
+msgid "Created At"
+msgstr "创建时间"
+
+#, fuzzy
+msgid "Created By"
+msgstr "创建人"
+
+msgid "Kafka"
+msgstr "Kafka"
+
+msgid "Link Table Data"
+msgstr "联表数据"
+
 msgid "Control Changed"
 msgstr "控件切换"
 
@@ -3361,14 +3555,50 @@ msgstr "策略状态异常"
 msgid "调度周期超过允许的范围(%s天)"
 msgstr "调度周期超过允许的范围(%s天)"
 
+msgid "联表存在关联策略"
+msgstr "联表存在关联策略"
+
+msgid "策略类型不支持"
+msgstr "策略类型不支持"
+
+msgid "策略类型不可修改"
+msgstr "策略类型不可修改"
+
+msgid "联表配置错误"
+msgstr "联表配置错误"
+
+#, python-brace-format
+msgid "规则审计SQL生成错误: {err}"
+msgstr "规则审计SQL生成错误: {err}"
+
+#, fuzzy
+msgid "联表名称已存在"
+msgstr "联表名称已存在"
+
+#, python-format
+msgid "source_field %s not found"
+msgstr "来源字段 %s 不存在"
+
 msgid "Strategy Name"
 msgstr "策略名称"
 
 msgid "Version"
 msgstr "版本"
 
+msgid "Strategy Type"
+msgstr "策略类型"
+
 msgid "Configs"
 msgstr "配置"
+
+msgid "Rule Audit SQL"
+msgstr "规则审计 SQL"
+
+msgid "Link Table UID"
+msgstr "联表 UID"
+
+msgid "Link Table Version"
+msgstr "联表版本"
 
 msgid "Status Message"
 msgstr "状态说明"
@@ -3402,6 +3632,12 @@ msgstr "策略"
 
 msgid "Strategy Tag"
 msgstr "策略标签"
+
+msgid "Link Table"
+msgstr "联表"
+
+msgid "Link Table Tag"
+msgstr "联表标签"
 
 msgid "Create Strategy"
 msgstr "创建策略"
@@ -3445,6 +3681,9 @@ msgstr "获取结果表列表"
 msgid "Get RT Fields"
 msgstr "获取RT字段"
 
+msgid "Bulk Get RT Fields"
+msgstr "批量获取RT字段"
+
 msgid "Get Strategy Status"
 msgstr "获取策略状态"
 
@@ -3453,6 +3692,40 @@ msgstr "获取事件信息字段"
 
 msgid "获取策略展示信息"
 msgstr "获取策略展示信息"
+
+msgid "更新联表"
+msgstr "更新联表"
+
+#, python-format
+msgid "LinkTable not found: %s"
+msgstr "联表未找到：%s"
+
+msgid "查询联表列表"
+msgstr "查询联表列表"
+
+msgid "查询所有联表"
+msgstr "查询所有联表"
+
+msgid "查询联表详情"
+msgstr "查询联表详情"
+
+msgid "查询联表标签列表"
+msgstr "查询联表标签列表"
+
+msgid "Source Field"
+msgstr "来源字段"
+
+msgid "来源字段的display_name，在查询中唯一"
+msgstr "来源字段的display_name，在查询中唯一"
+
+msgid "Target Value"
+msgstr "固定值"
+
+msgid "固定值"
+msgstr "固定值"
+
+msgid "Source Field or Target Value must be set at least one"
+msgstr "源字段或固定值必须至少设置一个"
 
 msgid "Field Name"
 msgstr "字段名称"
@@ -3466,14 +3739,24 @@ msgstr "是否优先"
 msgid "Field Description"
 msgstr "字段描述"
 
+msgid "Map Field"
+msgstr "映射字段"
+
+msgid "control_id and control_version are required when strategy_type is model"
+msgstr "当策略类型为模型审计时，必须提供 control_id 和 control_version"
+
+msgid "Control Version not Exists"
+msgstr "控件版本不存在"
+
+#, python-format
+msgid "%s Need to configure mapping"
+msgstr "%s 必须配置映射"
+
 msgid "Processor Groups"
 msgstr "处理组"
 
 msgid "Processor Group"
 msgstr "处理组"
-
-msgid "Control Version not Exists"
-msgstr "控件版本不存在"
 
 msgid "Strategy Name Duplicate"
 msgstr "策略名称重复"
@@ -3544,11 +3827,32 @@ msgstr "偏移量单位"
 msgid "Mapping Type"
 msgstr "映射类型"
 
+msgid "Link Table Join Type"
+msgstr "联表连接类型"
+
+msgid "Link Table Table Type"
+msgstr "联表表类型"
+
+msgid "Rule Audit Aggregate Type"
+msgstr "规则审计聚合类型"
+
+msgid "Rule Audit Field Type"
+msgstr "规则审计字段类型"
+
+msgid "Rule Audit Config Type"
+msgstr "规则审计配置类型"
+
+msgid "Rule Audit Source Type"
+msgstr "规则审计来源类型"
+
+msgid "Rule Audit Condition Operator"
+msgstr "规则审计条件运算符"
+
+msgid "Rule Audit Where Connector"
+msgstr "规则审计的 Where 连接符"
+
 msgid "Connector"
 msgstr "连接器"
-
-msgid "Source Field"
-msgstr "原始字段"
 
 msgid "Source Type"
 msgstr "数据源类型"
@@ -3586,6 +3890,12 @@ msgstr "方案参数"
 msgid "Table ID"
 msgstr "结果表ID"
 
+msgid "Table IDS"
+msgstr "结果表IDS"
+
+msgid "Multiple separated by commas"
+msgstr "多个以逗号分隔"
+
 msgid "value"
 msgstr "值"
 
@@ -3600,6 +3910,105 @@ msgstr "字段展示名称"
 
 msgid "Example"
 msgstr "样例"
+
+msgid "System IDs"
+msgstr "系统ID"
+
+msgid "System IDs is required"
+msgstr "系统 ID 是必须的"
+
+msgid "Left Table Field"
+msgstr "左表字段"
+
+msgid "Right Table Field"
+msgstr "右表字段"
+
+msgid "Join Type"
+msgstr "连接类型"
+
+msgid "Link Fields"
+msgstr "连接字段"
+
+msgid "Left Table"
+msgstr "左表"
+
+msgid "Right Table"
+msgstr "右表"
+
+msgid "Links"
+msgstr "连接"
+
+msgid "Link Table Config"
+msgstr "联表配置"
+
+msgid "逗号分隔的标签ID列表"
+msgstr "逗号分隔的标签ID列表"
+
+msgid "Need Update Strategy"
+msgstr "是否存在需要更新的策略"
+
+msgid "Link Table Count"
+msgstr "联表数"
+
+msgid "Table"
+msgstr "表"
+
+msgid "Raw Name"
+msgstr "原始名称"
+
+msgid "Aggregate"
+msgstr "聚合"
+
+msgid "Remark"
+msgstr "备注"
+
+msgid "UID"
+msgstr "UID"
+
+msgid "Field"
+msgstr "字段"
+
+msgid "单个筛选值，可以是字符串、整数或浮点数"
+msgstr "单个筛选值，可以是字符串、整数或浮点数"
+
+msgid "多个筛选值，每个值可以是字符串、整数或浮点数"
+msgstr "多个筛选值，每个值可以是字符串、整数或浮点数"
+
+msgid "Conditions"
+msgstr "条件"
+
+msgid "Rule Audit Where must have condition or conditions"
+msgstr "规则审计的 Where 必须包含 condition 或 conditions"
+
+msgid "Rule Audit Where can not have condition and conditions at the same time"
+msgstr "规则审计的 Where 不能同时包含 condition 和 conditions"
+
+msgid "Rule Audit Data Source"
+msgstr "规则审计数据源"
+
+msgid "Rule Audit Select"
+msgstr "规则审计选择"
+
+msgid "Rule Audit Where"
+msgstr "规则审计的 Where"
+
+msgid "Rule Audit Schedule Config"
+msgstr "规则审计的调度配置"
+
+#, python-format
+msgid "Config type: %s need rt_id and system_ids"
+msgstr "配置类型：%s 需要 rt_id 和 system_ids"
+
+#, python-format
+msgid "Config type: %s need rt_id"
+msgstr "配置类型：%s 需要 rt_id"
+
+#, python-format
+msgid "Config type: %s need link_table"
+msgstr "配置类型：%s 需要 link_table"
+
+msgid "Batch rule audit need schedule_config"
+msgstr "离线规则审计的需要调度配置"
 
 msgid "版本日志"
 msgstr "版本日志"
@@ -3660,9 +4069,6 @@ msgstr "您暂时不能访问该站点的后台管理，这是以下原因造成
 
 msgid "你还没登录，请重新刷新页面！"
 msgstr "你还没登录，请重新刷新页面！"
-
-msgid "用户"
-msgstr "用户"
 
 msgid "未激活！"
 msgstr "未激活"

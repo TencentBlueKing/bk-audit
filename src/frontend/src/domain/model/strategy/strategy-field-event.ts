@@ -19,6 +19,10 @@ type EventItem = {
   description: string
   display_name: string;
   is_priority: boolean;
+  map_config?: {
+    target_value: string | undefined,
+    source_field: string | undefined,
+  };
   prefix: string;
   example?: string
 }
@@ -26,12 +30,10 @@ type EventItem = {
 export default class StrategyFieldEvent {
   event_basic_field_configs: Array<EventItem>;
   event_data_field_configs: Array<EventItem>;
-  event_evidence_field_configs: Array<EventItem>;
 
   constructor(payload = {} as StrategyFieldEvent) {
     this.event_basic_field_configs = StrategyFieldEvent.processingData(payload.event_basic_field_configs, '');
     this.event_data_field_configs = StrategyFieldEvent.processingData(payload.event_data_field_configs, 'event_data');
-    this.event_evidence_field_configs = StrategyFieldEvent.processingData(payload.event_evidence_field_configs, 'event_evidence');
   }
 
   static processingData(data: Array<EventItem>, prefix = '') {
@@ -39,6 +41,10 @@ export default class StrategyFieldEvent {
       field_name: item.field_name,
       display_name: item.display_name,
       is_priority: item.is_priority || false,
+      map_config: {
+        target_value: item.map_config?.target_value,
+        source_field: item.map_config?.source_field,
+      },
       description: item.description,
       example: item.example,
       prefix,

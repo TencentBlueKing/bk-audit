@@ -33,6 +33,7 @@ export const changeConfirm = (message = '离开将会导致未保存信息丢失
       headerAlign: 'center',
       contentAlign: 'center',
       footerAlign: 'center',
+      class: 'change-confirm-info-box',
       onConfirm() {
         window.changeConfirm = false;
         resolve(true);

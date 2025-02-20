@@ -152,6 +152,21 @@
             }
         },
         {
+            "operation": "upsert_resource_type",
+            "data": {
+                "id": "link_table",
+                "name": "联表",
+                "name_en": "Link Table",
+                "description": "",
+                "description_en": "",
+                "parents": [],
+                "provider_config": {
+                    "path": "/api/v1/iam/resources/"
+                },
+                "version": 1
+            }
+        },
+        {
             "operation": "upsert_instance_selection",
             "data": {
                 "id": "system_list",
@@ -267,6 +282,20 @@
                     {
                         "system_id": "bk-audit",
                         "id": "tag"
+                    }
+                ]
+            }
+        },
+       {
+            "operation": "upsert_instance_selection",
+            "data": {
+                "id": "link_table_list",
+                "name": "联表列表",
+                "name_en": "Link Table List",
+                "resource_type_chain": [
+                    {
+                        "system_id": "bk-audit",
+                        "id": "link_table"
                     }
                 ]
             }
@@ -618,7 +647,8 @@
                 "related_resource_types": [],
                 "related_actions": [
                     "list_strategy",
-                    "list_notice_group"
+                    "list_notice_group",
+                    "list_link_table"
                 ],
                 "description": "",
                 "description_en": ""
@@ -648,7 +678,8 @@
                 ],
                 "related_actions": [
                     "list_strategy",
-                    "list_notice_group"
+                    "list_notice_group",
+                    "list_link_table"
                 ],
                 "description": "",
                 "description_en": ""
@@ -678,6 +709,123 @@
                 ],
                 "related_actions": [
                     "list_strategy"
+                ],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
+                "id": "list_link_table",
+                "name": "联表列表访问",
+                "name_en": "List Link Table",
+                "type": "list",
+                "version": 1,
+                "related_resource_types": [],
+                "related_actions": [],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
+                "id": "view_link_table",
+                "name": "查看联表",
+                "name_en": "View Link Table",
+                "type": "view",
+                "version": 1,
+                "related_resource_types": [
+                    {
+                        "system_id": "bk-audit",
+                        "id": "link_table",
+                        "selection_mode": "instance",
+                        "related_instance_selections": [
+                            {
+                                "system_id": "bk-audit",
+                                "id": "link_table_list",
+                                "ignore_iam_path": true
+                            }
+                        ]
+                    }
+                ],
+                "related_actions": [
+                    "list_link_table"
+                ],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
+                "id": "create_link_table",
+                "name": "创建联表",
+                "name_en": "Create Link Table",
+                "type": "create",
+                "version": 1,
+                "related_resource_types": [],
+                "related_actions": [
+                    "list_link_table"
+                ],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
+                "id": "edit_link_table",
+                "name": "编辑联表",
+                "name_en": "Edit Link Table",
+                "type": "edit",
+                "version": 1,
+                "related_resource_types": [
+                    {
+                        "system_id": "bk-audit",
+                        "id": "link_table",
+                        "selection_mode": "instance",
+                        "related_instance_selections": [
+                            {
+                                "system_id": "bk-audit",
+                                "id": "link_table_list",
+                                "ignore_iam_path": true
+                            }
+                        ]
+                    }
+                ],
+                "related_actions": [
+                    "view_link_table"
+                ],
+                "description": "",
+                "description_en": ""
+            }
+        },
+        {
+            "operation": "upsert_action",
+            "data": {
+                "id": "delete_link_table",
+                "name": "删除联表",
+                "name_en": "Delete Link Table",
+                "type": "delete",
+                "version": 1,
+                "related_resource_types": [
+                    {
+                        "system_id": "bk-audit",
+                        "id": "link_table",
+                        "selection_mode": "instance",
+                        "related_instance_selections": [
+                            {
+                                "system_id": "bk-audit",
+                                "id": "link_table_list",
+                                "ignore_iam_path": true
+                            }
+                        ]
+                    }
+                ],
+                "related_actions": [
+                    "view_link_table"
                 ],
                 "description": "",
                 "description_en": ""
@@ -1083,6 +1231,27 @@
                                 },
                                 {
                                     "id": "delete_notice_group_v2"
+                                }
+                            ]
+                        },
+                        {
+                            "name": "联表管理",
+                            "name_en": "Link Table",
+                            "actions": [
+                                {
+                                    "id": "list_link_table"
+                                },
+                                {
+                                    "id": "create_link_table"
+                                },
+                                {
+                                    "id": "edit_link_table"
+                                },
+                                {
+                                    "id": "delete_link_table"
+                                },
+                                {
+                                    "id": "view_link_table"
                                 }
                             ]
                         }

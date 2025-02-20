@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-from typing import List
+from typing import List, Set
 
 from bk_resource import api, resource
 from django.conf import settings
@@ -28,7 +28,11 @@ from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
-from services.web.strategy_v2.constants import BKBaseProcessingType, ResultTableType
+from services.web.strategy_v2.constants import (
+    BIZ_RT_TABLE_ALLOW_STORAGES,
+    BKBaseProcessingType,
+    ResultTableType,
+)
 
 
 class TableHandler:
@@ -48,6 +52,27 @@ class TableHandler:
     @abc.abstractmethod
     def list_tables(self) -> List[dict]:
         raise NotImplementedError()
+
+    def format_result_tables(self, result_tables: List[dict]) -> List[dict]:
+        """
+        格式化RT,配置映射关系
+        """
+
+        # 获取所有的空间
+        spaces = {
+            s["id"]: {"label": "{}({})".format(s["name"], s["id"]), "value": s["id"], "children": []}
+            for s in resource.meta.get_spaces_mine()
+            if s["space_type_id"] == SpaceType.BIZ.value
+        }
+        for rt in result_tables:
+            bk_biz_id = str(rt["bk_biz_id"])
+            if bk_biz_id not in spaces:
+                spaces[bk_biz_id] = {"label": bk_biz_id, "value": bk_biz_id, "children": []}
+            spaces[bk_biz_id]["children"].append({"label": rt["result_table_name"], "value": rt["result_table_id"]})
+        # 响应
+        data = list(spaces.values())
+        data.sort(key=lambda biz: (not bool(biz["children"]), int(biz["value"])))
+        return data
 
 
 class EventLogTableHandler(TableHandler):
@@ -112,12 +137,6 @@ class BuildInTableHandler(TableHandler):
 
 class BizAssetTableHandler(TableHandler):
     def list_tables(self) -> List[dict]:
-        # 获取所有的空间
-        spaces = {
-            s["id"]: {"label": "{}({})".format(s["name"], s["id"]), "value": s["id"], "children": []}
-            for s in resource.meta.get_spaces_mine()
-            if s["space_type_id"] == SpaceType.BIZ.value
-        }
         # 获取所有的RT
         result_table_ids = [
             r["result_table_id"]
@@ -140,13 +159,62 @@ class BizAssetTableHandler(TableHandler):
                     or rt.get("result_table_type") == ResultTableType.STATIC
                 )
             )
-        # 配置映射关系
-        for rt in result_tables:
-            bk_biz_id = str(rt["bk_biz_id"])
-            if bk_biz_id not in spaces:
-                spaces[bk_biz_id] = {"label": bk_biz_id, "value": bk_biz_id, "children": []}
-            spaces[bk_biz_id]["children"].append({"label": rt["result_table_name"], "value": rt["result_table_id"]})
-        # 响应
-        data = list(spaces.values())
-        data.sort(key=lambda biz: (not bool(biz["children"]), int(biz["value"])))
-        return data
+        return self.format_result_tables(result_tables)
+
+
+class BizRtTableHandler(TableHandler):
+    """
+    获取业务下 RT 数据(排除日志和资产)
+    """
+
+    def __init__(self, table_type: str, namespace: str, *args, **kwargs):
+        super().__init__(table_type)
+        self.namespace = namespace
+
+    def get_exclude_rt_ids(self) -> Set[str]:
+        """
+        获取需要排除的 rt
+        """
+
+        # 资产 rt
+        exclude_rt_ids = set(
+            list(
+                Snapshot.objects.filter(
+                    bkbase_hdfs_table_id__isnull=False, hdfs_status=SnapshotRunningStatus.RUNNING.value
+                ).values_list("bkbase_hdfs_table_id", flat=True)
+            )
+        )
+        # 日志 rt
+        collector_plugin_id = GlobalMetaConfig.get(
+            config_key=COLLECTOR_PLUGIN_ID, config_level=ConfigLevelChoices.NAMESPACE.value, instance_key=self.namespace
+        )
+        plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
+        log_rt_id = CollectorPlugin.make_table_id(settings.DEFAULT_BK_BIZ_ID, plugin.collector_plugin_name_en).replace(
+            ".", "_"
+        )
+        exclude_rt_ids.add(log_rt_id)
+        return exclude_rt_ids
+
+    def list_tables(self) -> List[dict]:
+        exclude_rt_ids = self.get_exclude_rt_ids()
+        # 获取业务下的RT
+        result_table_ids = [
+            r["result_table_id"]
+            for r in api.bk_base.get_project_data(
+                project_id=settings.BKBASE_PROJECT_ID, extra_fields=True, related=["storages"]
+            )
+            if r["result_table_id"] not in exclude_rt_ids
+        ]
+        request_params = []
+        batch_size = 50
+        for i in range(0, len(result_table_ids), batch_size):
+            # fmt: off
+            request_params.append({"result_table_ids": result_table_ids[i: i + batch_size], "related": ["storages"]})
+
+        # 获取RT信息,过滤掉不包含指定存储的 RT
+        result_tables = []
+        for rts in api.bk_base.get_result_tables.bulk_request(request_params):
+            result_tables.extend(
+                rt for rt in rts if rt and (rt.get("storages", {}).keys() & BIZ_RT_TABLE_ALLOW_STORAGES)
+            )
+        return self.format_result_tables(result_tables)

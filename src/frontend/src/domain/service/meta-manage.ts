@@ -241,4 +241,11 @@ export default {
     return MetaManageSource.getListBcsClusters(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 获取标签（策略和联表合并标签）
+   */
+  fetchTags() {
+    return MetaManageSource.getTags()
+      .then(({ data }) => data);
+  },
 };
