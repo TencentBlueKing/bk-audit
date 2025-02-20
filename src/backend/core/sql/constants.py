@@ -83,10 +83,10 @@ class JoinType(TextChoices):
     连接类型
     """
 
-    INNER_JOIN = "inner_join", gettext_lazy("内连接")
-    LEFT_JOIN = "left_join", gettext_lazy("左连接")
-    RIGHT_JOIN = "right_join", gettext_lazy("右连接")
-    FULL_OUTER_JOIN = "full_outer_join", gettext_lazy("全连接")
+    INNER_JOIN = "inner_join", gettext_lazy("inner_join")
+    LEFT_JOIN = "left_join", gettext_lazy("left_join")
+    RIGHT_JOIN = "right_join", gettext_lazy("right_join")
+    FULL_OUTER_JOIN = "full_outer_join", gettext_lazy("full_join")
 
 
 class Operator(TextChoices):
