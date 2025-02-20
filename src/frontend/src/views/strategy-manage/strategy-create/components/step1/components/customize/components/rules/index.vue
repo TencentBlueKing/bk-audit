@@ -126,8 +126,9 @@
 
   const getPaddingLeft = (index: number, conditions: Where['conditions'][0]) => {
     const beforeArr = where.value.conditions.slice(0, index);
-    const beforeHasCondition = beforeArr.some(item => item.conditions.length > 1);
-    if (conditions.conditions.length > 1 || beforeHasCondition) {
+    const afterArr = where.value.conditions.slice(index + 1);
+    const hasCondition =  beforeArr.concat(afterArr).some(item => item.conditions.length > 1);
+    if (conditions.conditions.length > 1 || hasCondition) {
       return '55px';
     }
     return '16px';
