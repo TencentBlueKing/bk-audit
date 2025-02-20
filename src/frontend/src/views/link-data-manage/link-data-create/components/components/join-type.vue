@@ -32,18 +32,18 @@
     <template #content>
       <div
         v-for="type in joinTypeList"
-        :key="type"
+        :key="type.value"
         class="join-type-list"
-        :class="[type === joinType ? 'active' : '']"
-        @click="() => handleSelectJoinType(type)">
+        :class="[type.value === joinType ? 'active' : '']"
+        @click="() => handleSelectJoinType(type.value)">
         <relation-ship
-          :active="type === joinType"
+          :active="type.value === joinType"
           :height="10"
-          :join-type="type"
+          :join-type="type.value"
           style="margin-right: 5px;"
           type="gray"
           :width="10" />
-        <span>{{ type }}</span>
+        <span>{{ type.label }}</span>
       </div>
     </template>
   </bk-popover>
@@ -51,13 +51,17 @@
 <script setup lang="ts">
   import { ref } from 'vue';
 
+  interface Props {
+    joinTypeList: Array<Record<string, any>>
+  }
+
+  defineProps<Props>();
+
   const joinType = defineModel<string>('joinType', {
     default: 'left_join',
   });
 
   const isShow = ref(false);
-
-  const joinTypeList = ['left_join', 'right_join', 'inner_join', 'full_outer_join'];
 
   const handleSelectJoinType = (type: string) => {
     joinType.value = type;

@@ -95,7 +95,7 @@
               {{ item.left_table.rt_id }}
             </div>
             <div
-              v-bk-tooltips="item.join_type"
+              v-bk-tooltips="joinTypeList.find(type => type.value === item.join_type)?.label || item.join_type"
               class="join-type">
               <relation-ship
                 :join-type="item.join_type"
@@ -154,6 +154,7 @@
   }
   interface Props {
     linkDataDetail: LinkDataDetailModel
+    joinTypeList: Array<Record<string, any>>
   }
 
   defineProps<Props>();

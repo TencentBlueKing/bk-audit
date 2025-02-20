@@ -64,6 +64,7 @@
           <!-- 联表详情 -->
           <link-data-detail-component
             v-if="formData.configs.data_source.link_table && formData.configs.data_source.link_table.uid"
+            :join-type-list="joinTypeList"
             :link-data-detail="linkDataDetail"
             @refresh-link-data="handleRefreshLinkData" />
         </bk-form-item>
@@ -306,6 +307,7 @@
   const aggregateList = ref<Array<Record<string, any>>>([]);
   const configType = ref('');
   const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
+  const joinTypeList = ref<Array<Record<string, any>>>([]);
 
   // eslint-disable-next-line max-len
   const hasData = computed(() => formData.value.configs.select.length || formData.value.configs.where.conditions.length);
@@ -322,6 +324,7 @@
         label: t('不聚和'),
         value: null,
       }]);
+      joinTypeList.value = commonData.value.link_table_join_type;
     },
   });
 
