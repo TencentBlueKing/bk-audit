@@ -400,6 +400,8 @@
     if (formData.value.configs.config_type === '' || !hasData.value) {
       formData.value.configs.config_type = item;
       if (item !== '' && item !== 'LinkTable') {
+        tableData.value = [];
+        tableFields.value = [];
         fetchTable({
           table_type: item,
         });
