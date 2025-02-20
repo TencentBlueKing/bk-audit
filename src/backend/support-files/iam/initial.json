@@ -631,7 +631,7 @@
                 "type": "list",
                 "version": 1,
                 "related_resource_types": [],
-                "related_actions": [],
+                "related_actions": ["list_notice_group"],
                 "description": "",
                 "description_en": ""
             }
