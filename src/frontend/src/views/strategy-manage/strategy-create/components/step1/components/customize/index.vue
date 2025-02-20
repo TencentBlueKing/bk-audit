@@ -461,7 +461,10 @@
   };
 
   const mergeDataSource = (dataSource: IFormData['configs']['data_source']) => {
-    formData.value.configs.data_source = _.merge({}, formData.value.configs.data_source, dataSource);
+    formData.value.configs.data_source = {
+      ...formData.value.configs.data_source,
+      ...dataSource,
+    };
   };
 
   // 更新数据源后，获取对应表字段
@@ -474,6 +477,7 @@
     } else if (hasDataSourceChanged(dataSource)) {
       InfoBox(createInfoBoxConfig({
         onConfirm() {
+          tableFields.value = [];
           formData.value.configs.select = [];
           formData.value.configs.where = {
             connector: 'and',
