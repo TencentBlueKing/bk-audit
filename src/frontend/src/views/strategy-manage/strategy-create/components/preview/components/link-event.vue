@@ -51,7 +51,7 @@
                 :description="subItem.description"
                 :label="subItem.display_name"
                 :label-width="labelWidth">
-                {{ t('以实际内容为准') }}
+                {{ subItem.map_config?.target_value || t('以实际内容为准') }}
               </render-info-item>
             </render-info-block>
           </template>

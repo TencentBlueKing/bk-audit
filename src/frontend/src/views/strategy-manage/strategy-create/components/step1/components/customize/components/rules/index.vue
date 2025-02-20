@@ -24,7 +24,7 @@
         :key="index"
         class="rule-item"
         :style="{
-          paddingLeft: conditions.conditions.length > 1 ? '55px' : '16px',
+          paddingLeft: getPaddingLeft(index, conditions),
         }">
         <template v-if="needCondition">
           <!-- 二级横线 -->
@@ -123,6 +123,15 @@
     }],
   });
   const needCondition = computed(() => where.value.conditions.length > 1);
+
+  const getPaddingLeft = (index: number, conditions: Where['conditions'][0]) => {
+    const beforeArr = where.value.conditions.slice(0, index);
+    const beforeHasCondition = beforeArr.some(item => item.conditions.length > 1);
+    if (conditions.conditions.length > 1 || beforeHasCondition) {
+      return '55px';
+    }
+    return '16px';
+  };
 
   const handleDelete = (index: number) => {
     where.value.conditions.splice(index, 1);

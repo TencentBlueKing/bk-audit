@@ -27,7 +27,7 @@
           required>
           <span
             v-bk-tooltips="{
-              content: t('第1步，此处配置的审计风险数据的数据源，用以后续步骤的处理。一般由“操作记录”与“资产数据”组合合成，但也可以自由组合而成。'),
+              content: t('审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'),
               extCls:'strategy-config-type-tooltips'
             }"
             class="label-is-required"
@@ -64,6 +64,7 @@
           <!-- 联表详情 -->
           <link-data-detail-component
             v-if="formData.configs.data_source.link_table && formData.configs.data_source.link_table.uid"
+            :join-type-list="joinTypeList"
             :link-data-detail="linkDataDetail"
             @refresh-link-data="handleRefreshLinkData" />
         </bk-form-item>
@@ -73,7 +74,7 @@
           <template #label>
             <span
               v-bk-tooltips="{
-                content: t('第2步，可配置聚合规则。若无规则，则结果默认返回所有字段并不做聚合；若有规则，则返回配置字段。'),
+                content: t('需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'),
                 extCls:'strategy-config-type-tooltips'
               }"
               style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
@@ -94,7 +95,7 @@
           <template #label>
             <span
               v-bk-tooltips="{
-                content: t('第3步，完成数据处理后，配置对应的字段规则，筛选出我们期望的数据，可能是风险数据。'),
+                content: t('配置对应的字段与规则，筛选出我们期望的数据；可能是风险数据。'),
                 extCls:'strategy-config-type-tooltips'
               }"
               style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
@@ -123,7 +124,11 @@
             :disabled="isEditMode"
             @change="handleSourceTypeChange">
             <bk-radio label="batch_join_source">
-              {{ t('固定周期调度') }}
+              <span
+                v-bk-tooltips="t('按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；')"
+                style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+                {{ t('固定周期调度') }}
+              </span>
             </bk-radio>
             <bk-radio label="stream_source">
               <span
@@ -302,6 +307,7 @@
   const aggregateList = ref<Array<Record<string, any>>>([]);
   const configType = ref('');
   const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
+  const joinTypeList = ref<Array<Record<string, any>>>([]);
 
   // eslint-disable-next-line max-len
   const hasData = computed(() => formData.value.configs.select.length || formData.value.configs.where.conditions.length);
@@ -318,6 +324,7 @@
         label: t('不聚和'),
         value: null,
       }]);
+      joinTypeList.value = commonData.value.link_table_join_type;
     },
   });
 
@@ -523,13 +530,11 @@
     expectedResultsRef.value.resetFormData();
   };
 
-  const handleSourceTypeChange = (type: string) => {
-    if (type === 'stream_source') {
-      formData.value.configs.schedule_config = {
-        count_freq: '',
-        schedule_period: 'hour',
-      };
-    }
+  const handleSourceTypeChange = () => {
+    formData.value.configs.schedule_config = {
+      count_freq: '',
+      schedule_period: 'hour',
+    };
   };
 
   // 编辑

@@ -72,7 +72,8 @@
             <bk-select
               v-else-if="optionalField.includes(config.field_name) && !config.prefix"
               v-model="config.map_config.source_field"
-              style="width: 100%;">
+              style="width: 100%;"
+              @select="(value: string) => handlerSelect(value, config)">
               <bk-option
                 v-for="(selectItem, index) in localSelect"
                 :key="index"
@@ -99,7 +100,8 @@
                   <bk-input
                     v-model="countValue"
                     autofocus
-                    :placeholder="t('请输入')" />
+                    :placeholder="t('请输入')"
+                    @enter="confirmAddCount" />
                   <audit-icon
                     style=" padding: 0 5px;font-size: 15px; color: #2caf5e;cursor: pointer;"
                     type="check-line"
@@ -113,7 +115,9 @@
             </bk-select>
             <!-- 无需配置 -->
             <template v-else>
-              {{ t('无需配置') }}
+              <span style="padding-left: 8px;">
+                {{ t('无需配置') }}
+              </span>
             </template>
           </template>
 

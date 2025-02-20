@@ -77,7 +77,9 @@
             </select-verify>
           </div>
           <!-- 关联关系 -->
-          <join-type v-model:joinType="link.join_type" />
+          <join-type
+            v-model:joinType="link.join_type"
+            :join-type-list="joinTypeList" />
           <!-- 右表 -->
           <div class="right-name">
             <bk-form-item
@@ -201,6 +203,7 @@
   });
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
   const oldFirstLefType = ref('');
+  const joinTypeList = ref<Array<Record<string, any>>>([]);
 
   const linksHeight = computed(() => {
     const windowHeight = window.innerHeight;
@@ -348,6 +351,7 @@
     manual: true,
     onSuccess() {
       linkTableTableTypeList.value = commonData.value.link_table_table_type;
+      joinTypeList.value = commonData.value.link_table_join_type;
     },
   });
 

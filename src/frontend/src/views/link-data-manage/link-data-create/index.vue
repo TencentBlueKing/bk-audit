@@ -305,7 +305,7 @@
               onClick() {
                 emits('showLinkStrategy', editUid.value as string);
               },
-            }, '查看关联策略'),
+            }, t('查看关联策略')),
           ]),
         });
       } else {
