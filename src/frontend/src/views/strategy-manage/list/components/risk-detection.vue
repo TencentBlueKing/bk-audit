@@ -169,6 +169,23 @@
             </div>
           </render-info-item>
         </render-info-block>
+        <render-info-block>
+          <render-info-item :label="t('调度周期')">
+            <template v-if="data.configs.schedule_config">
+              <span>
+                {{ data?.configs.schedule_config.count_freq }}
+              </span>
+              <span>
+                {{ commonData.offset_unit
+                  .find((item) =>
+                    item.value === data.configs.schedule_config.schedule_period)?.label }}
+              </span>
+            </template>
+            <span v-else>
+              --
+            </span>
+          </render-info-item>
+        </render-info-block>
       </template>
 
       <bk-loading :loading="controlLoading">

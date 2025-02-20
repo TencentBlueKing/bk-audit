@@ -36,7 +36,7 @@
           <template #extension>
             <div
               class="refresh"
-              @click="fetchLinkTableAll">
+              @click="refreshLinkTable">
               <audit-icon
                 type="refresh" />
               {{ t('刷新联表') }}
@@ -124,6 +124,11 @@
     const selectItem = data.value.find(data => data.uid === id);
     formData.value.configs.data_source.link_table.version = selectItem ? selectItem.version : 0;
     emits('updateDataSource', formData.value.configs.data_source);
+  };
+
+  const refreshLinkTable = () => {
+    isInit = false;
+    fetchLinkTableAll();
   };
 
   // 获取全部联表
