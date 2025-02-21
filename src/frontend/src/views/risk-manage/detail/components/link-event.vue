@@ -128,8 +128,14 @@
                   v-for="(key, index) in keyArr"
                   :key="index"
                   class="flex data-info-item">
-                  <div class="data-info-item-key">
-                    <span>{{ key }}</span>
+                  <div
+                    class="data-info-item-key"
+                    style="display: flex; flex-direction: column; justify-content: center;">
+                    <div>{{ key.substring(0, key.indexOf('(')) }}</div>
+                    <tooltips
+                      v-if="key.substring(key.indexOf('('))"
+                      :data="key.substring(key.indexOf('('))"
+                      style="width: 100%; text-align: center;" />
                   </div>
                   <div class="data-info-item-value">
                     <div
@@ -185,6 +191,8 @@
   import EventModel from '@model/event/event';
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
+
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 

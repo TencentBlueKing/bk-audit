@@ -376,19 +376,6 @@ class TestSQLGenerator(TestCase):
                             ),
                         ],
                     ),
-                    WhereCondition(
-                        condition=Condition(
-                            field=Field(
-                                table="users",
-                                raw_name="country",
-                                display_name="user_country",
-                                field_type=FieldType.STRING,
-                            ),
-                            operator=Operator.REG,  # country ~ '^Ire'
-                            filter="^Ire",
-                            filters=[],
-                        )
-                    ),
                 ],
             ),
         )
@@ -397,7 +384,7 @@ class TestSQLGenerator(TestCase):
         expected_query = (
             'SELECT "users"."id" "user_id" '
             'FROM "users" "users" '
-            'WHERE ("users"."name"<>\'David\' OR "users"."name"=\'Jack\') AND "users"."country" REGEX \'^Ire\''
+            'WHERE "users"."name"<>\'David\' OR "users"."name"=\'Jack\''
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
 
@@ -589,19 +576,6 @@ class TestSQLGenerator(TestCase):
                                     ),
                                 ],
                             ),
-                            WhereCondition(
-                                condition=Condition(
-                                    field=Field(
-                                        table="products",
-                                        raw_name="category",
-                                        display_name="product_category",
-                                        field_type=FieldType.STRING,
-                                    ),
-                                    operator=Operator.REG,
-                                    filter="^food$",
-                                    filters=[],
-                                )
-                            ),
                         ],
                     ),
                 ],
@@ -615,8 +589,7 @@ class TestSQLGenerator(TestCase):
             'JOIN "orders" "orders" ON "users"."id"="orders"."user_id" '
             'LEFT JOIN "products" "products" ON "orders"."product_id"="products"."id" '
             'WHERE ("users"."name"<>\'David\' OR "users"."name"=\'Jack\') AND '
-            '("orders"."status"=\'pending\' OR "orders"."status"<>\'canceled\') '
-            'AND "products"."category" REGEX \'^food$\''
+            '("orders"."status"=\'pending\' OR "orders"."status"<>\'canceled\')'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
 

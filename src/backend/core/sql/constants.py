@@ -83,10 +83,10 @@ class JoinType(TextChoices):
     连接类型
     """
 
-    INNER_JOIN = "inner_join", gettext_lazy("内连接")
-    LEFT_JOIN = "left_join", gettext_lazy("左连接")
-    RIGHT_JOIN = "right_join", gettext_lazy("右连接")
-    FULL_OUTER_JOIN = "full_outer_join", gettext_lazy("全连接")
+    INNER_JOIN = "inner_join", gettext_lazy("inner_join")
+    LEFT_JOIN = "left_join", gettext_lazy("left_join")
+    RIGHT_JOIN = "right_join", gettext_lazy("right_join")
+    FULL_OUTER_JOIN = "full_outer_join", gettext_lazy("full_join")
 
 
 class Operator(TextChoices):
@@ -104,8 +104,6 @@ class Operator(TextChoices):
     NOT_LIKE = "not_like", gettext_lazy("not like")
     ISNULL = "isnull", gettext_lazy("is null")
     NOTNULL = "notnull", gettext_lazy("is not null")
-    REG = "reg", gettext_lazy("regex")
-    NREG = "nreg", gettext_lazy("not regex")
 
     @classmethod
     def handler(cls, operator: str, field: Field, value: str | int | float, values: List[str | int | float]):
@@ -125,10 +123,6 @@ class Operator(TextChoices):
                 return field.like(str(value))
             case cls.NOT_LIKE:
                 return ~field.like(str(value))
-            case cls.REG:
-                return field.regex(str(value))
-            case cls.NREG:
-                return ~field.regex(str(value))
             case cls.LTE:
                 return field.lte(value)
             case cls.LT:

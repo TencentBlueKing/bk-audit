@@ -87,12 +87,14 @@
             <render-info-item
               :label="t('事件ID')"
               :label-width="labelWidth">
-              {{ t('以实际内容为准') }}
+              {{ data.event_basic_field_configs.
+                find(field => field.field_name === 'raw_event_id')?.map_config?.target_value || ('以实际内容为准') }}
             </render-info-item>
             <render-info-item
               :label="t('责任人')"
               :label-width="labelWidth">
-              {{ t('以实际内容为准') }}
+              {{ data.event_basic_field_configs.
+                find(field => field.field_name === 'operator')?.map_config?.target_value || ('以实际内容为准') }}
             </render-info-item>
           </render-info-block>
           <render-info-block
@@ -106,7 +108,8 @@
             <render-info-item
               :label="t('事件描述')"
               :label-width="labelWidth">
-              {{ t('以实际内容为准') }}
+              {{ data.event_basic_field_configs.
+                find(field => field.field_name === 'event_content')?.map_config?.target_value || ('以实际内容为准') }}
             </render-info-item>
           </render-info-block>
         </div>
@@ -126,8 +129,14 @@
                 v-for="(subItem, subIndex) in item"
                 :key="subIndex"
                 class="flex data-info-item">
-                <div class="data-info-item-key">
-                  <span>{{ subItem.display_name }}</span>
+                <div
+                  class="data-info-item-key"
+                  style="display: flex; flex-direction: column; justify-content: center;">
+                  <div>{{ subItem.display_name.substring(0, subItem.display_name.indexOf('(')) }}</div>
+                  <tooltips
+                    v-if="subItem.display_name.substring(subItem.display_name.indexOf('('))"
+                    :data="subItem.display_name.substring(subItem.display_name.indexOf('('))"
+                    style="width: 100%; text-align: center;" />
                 </div>
                 <div class="data-info-item-value">
                   <span>{{ t('以实际内容为准') }}</span>
@@ -169,6 +178,8 @@
   } from 'vue-i18n';
 
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 

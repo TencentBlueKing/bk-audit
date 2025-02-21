@@ -129,3 +129,10 @@
     z-index: 9999 !important;
   }
 }
+
+.bk-form-item.is-error {
+  .bk-select-tag {
+    border-color: #ea3636;
+    transition: all .15s;
+  }
+}
