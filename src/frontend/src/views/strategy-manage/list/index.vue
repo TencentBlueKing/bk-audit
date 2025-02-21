@@ -789,6 +789,7 @@
 
 
   const {
+    run: fetchGroupList,
     data: groupList,
   } = useRequest(NoticeGroupManageService.fetchGroupList, {
     defaultValue: {
@@ -797,8 +798,8 @@
       results: [],
       total: 0,
     },
-    manual: true,
   });
+
   const {
     run: retryStrategy,
   } = useRequest(StrategyManageService.retryStrategy, {
@@ -1146,6 +1147,10 @@
   };
   let isRequest = false;
   const handleRequestSuccess = (data: Strategy) => {
+    // 先检验策略列表权限再获取通知组
+    if (!groupList.value.results.length) {
+      fetchGroupList();
+    }
     if (!isRequest) {
       Promise.all([fetchStrategyTags(), fetchStrategyCommon()]).then(() => {
         searchData = [
