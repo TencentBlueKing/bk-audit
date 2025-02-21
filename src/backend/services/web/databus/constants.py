@@ -88,7 +88,7 @@ DEFAULT_REDIS_TAGS = ["Bk-Audit", "inland", "enable", "usr"]
 
 RESOURCE_TYPE_DATA_RT_KEY = "bkaudit_resource_type_data"
 RESOURCE_TYPE_DATA_CONFIG_KEY = "bkaudit_resource_type_config_data"
-RESOURCE_TYPE_DATA_NAME_FORMAT = "bkaudit_resource_type_data_{}"
+RESOURCE_TYPE_DATA_NAME_FORMAT = "bkaudit_resource_type_data{}"
 ACTION_DATA_RT_KEY = "bkaudit_action_data"
 ACTION_DATA_CONFIG_KEY = "bkaudit_action_config_data"
 ACTION_DATA_NAME_FORMAT = "bkaudit_action_data_{}"
@@ -181,6 +181,7 @@ class SnapshotRunningStatus(TextChoices):
 class SnapShotStorageChoices(TextChoices):
     HDFS = "hdfs", gettext_lazy("HDFS")
     REDIS = "redis", gettext_lazy("Redis")
+    DORIS = "doris", gettext_lazy("Doris")
 
 
 class SourcePlatformChoices(TextChoices):

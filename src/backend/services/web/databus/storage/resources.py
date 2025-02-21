@@ -50,6 +50,7 @@ from services.web.databus.storage.serializers import (
     StorageUpdateRequestSerializer, StorageActivateRequestSerializer,
 )
 
+# todo: 当bklog和bkbase相关支持完成后，直接管理predefined/bkbase的存储
 
 class StorageMeta(AuditMixinResource):
     tags = ["Storage"]
@@ -182,7 +183,6 @@ class StorageListResource(StorageMeta):
         return cluster
 
     def perform_request(self, validated_request_data):
-        # todo: 待bklog支持后，支持pre_defined/bk_base侧的集群直接展示
         namespace = validated_request_data["namespace"]
         bk_log_clusters = api.bk_log.get_storages(**validated_request_data)
         try:

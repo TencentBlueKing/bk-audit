@@ -28,7 +28,7 @@ from apps.meta.models import Field, GlobalMetaConfig
 from apps.meta.utils.fields import STANDARD_FIELDS
 from core.utils.distutils import strtobool
 from services.web.databus.constants import ClusterMode
-from services.web.databus.iam_data.base import create_iam_data_link
+from services.web.databus.collector.iam_data.base import create_iam_data_link
 from services.web.databus.storage.serializers import (
     CreateRedisRequestSerializer,
     StorageCreateRequestSerializer,

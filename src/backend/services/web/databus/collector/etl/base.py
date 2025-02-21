@@ -34,7 +34,7 @@ from services.web.databus.constants import JOIN_DATA_RT_FORMAT, EtlConfigEnum
 from services.web.databus.models import CollectorConfig, Snapshot
 
 
-class EtlStorage:
+class EtlClean(metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def etl_config(self):
@@ -43,14 +43,14 @@ class EtlStorage:
     @classmethod
     def get_instance(cls, etl_config: str):
         mapping = {
-            EtlConfigEnum.BK_LOG_JSON.value: "BkLogJsonEtlStorage",
-            EtlConfigEnum.BK_LOG_DELIMITER.value: "BkLogDelimiterEtlStorage",
-            EtlConfigEnum.BK_LOG_REGEXP.value: "BkLogRegexpEtlStorage",
-            EtlConfigEnum.BK_BASE_JSON.value: "BkBaseJsonEtlStorage",
+            EtlConfigEnum.BK_LOG_JSON.value: "BkLogJsonEtlClean",
+            EtlConfigEnum.BK_LOG_DELIMITER.value: "BkLogDelimiterEtlClean",
+            EtlConfigEnum.BK_LOG_REGEXP.value: "BkLogRegexpEtlClean",
+            EtlConfigEnum.BK_BASE_JSON.value: "BkBaseJsonEtlClean",
         }
         try:
-            etl_storage = import_string("databus.collector.etl.{}.{}".format(etl_config, mapping.get(etl_config)))
-            return etl_storage()
+            etl_clean = import_string("databus.collector.etl.{}.{}".format(etl_config, mapping.get(etl_config)))
+            return etl_clean()
         except ImportError as error:
             raise NotImplementedError(f"{etl_config} not implement, error: {error}")
 
@@ -61,11 +61,11 @@ class EtlStorage:
         raise NotImplementedError
 
     def update_or_create(
-        self,
-        collector_config_id: int,
-        etl_params: dict,
-        fields: List[dict],
-        namespace: str,
+            self,
+            collector_config_id: int,
+            etl_params: dict,
+            fields: List[dict],
+            namespace: str,
     ) -> None:
         # 校验字段类型是否匹配
         self.check_field_type(fields)

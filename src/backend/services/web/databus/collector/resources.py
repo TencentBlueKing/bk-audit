@@ -50,9 +50,9 @@ from apps.meta.utils.saas import get_saas_url
 from core.cache import CacheType
 from core.utils.tools import format_date_string, replenish_params
 from services.web.databus.collector.bcs.yaml import YamlTemplate
-from services.web.databus.collector.etl.base import EtlStorage
-from services.web.databus.collector.join.base import AssetHandler, JoinDataHandler
-from services.web.databus.collector.join.http_pull import HttpPullHandler
+from services.web.databus.collector.etl.base import EtlClean
+from services.web.databus.collector.join_data.base import HDFSAssetHandler, RedisJoinDataHandler
+from services.web.databus.collector.join_data.http_pull import HttpPullHandler
 from services.web.databus.collector.serializers import (
     ApplyDataIdSourceRequestSerializer,
     BulkSystemCollectorsStatusRequestSerializer,
@@ -429,7 +429,7 @@ class CollectorEtlResource(CollectorMeta, ModelResource):
     def perform_request(self, validated_request_data):
         # 创建更新清洗规则
         collector_config_id = validated_request_data["collector_config_id"]
-        etl_storage: EtlStorage = EtlStorage.get_instance(validated_request_data["etl_config"])
+        etl_storage: EtlClean = EtlClean.get_instance(validated_request_data["etl_config"])
         etl_storage.update_or_create(
             collector_config_id=collector_config_id,
             etl_params=validated_request_data["etl_params"],
@@ -443,7 +443,7 @@ class EtlPreviewResource(CollectorMeta):
     RequestSerializer = EtlPreviewRequestSerializer
 
     def perform_request(self, validated_request_data):
-        etl_storage: EtlStorage = EtlStorage.get_instance(validated_request_data["etl_config"])
+        etl_storage: EtlClean = EtlClean.get_instance(validated_request_data["etl_config"])
         return etl_storage.etl_preview(validated_request_data["data"], validated_request_data.get("etl_params"))
 
 
@@ -461,6 +461,7 @@ class ToggleJoinDataResource(CollectorMeta):
         }
         system = System.objects.get(system_id=system_id)
         resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
+        # 此处传递的storage_type只是传了个任意默认值，后续相关逻辑实际没有用到
         pull_handler = HttpPullHandler(system, resource_type, Snapshot(), SnapShotStorageChoices.REDIS.value)
         web = requests.session()
         try:
@@ -508,9 +509,9 @@ class ToggleJoinDataResource(CollectorMeta):
             snapshot.save(update_fields=["status", "hdfs_status", "storage_type", "pull_type"])
         else:
             if snapshot.storage_type == SnapShotStorageChoices.REDIS:
-                JoinDataHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
+                RedisJoinDataHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
             if snapshot.storage_type == SnapShotStorageChoices.HDFS:
-                AssetHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
+                HDFSAssetHandler(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id).stop()
         snapshot.refresh_from_db()
         return snapshot
 
@@ -791,7 +792,7 @@ class DataIdEtlPreview(DataIdResource):
     RequestSerializer = DataIdEtlPreviewRequestSerializer
 
     def perform_request(self, validated_request_data):
-        instance = EtlStorage.get_instance(EtlConfigEnum.BK_BASE_JSON.value)
+        instance = EtlClean.get_instance(EtlConfigEnum.BK_BASE_JSON.value)
         return instance.etl_preview(**validated_request_data, etl_params={})
 
 
@@ -801,7 +802,7 @@ class DataIdEtlStorage(DataIdResource):
 
     def perform_request(self, validated_request_data):
         # 创建更新清洗规则
-        etl_storage: EtlStorage = EtlStorage.get_instance(EtlConfigEnum.BK_BASE_JSON.value)
+        etl_storage: EtlClean = EtlClean.get_instance(EtlConfigEnum.BK_BASE_JSON.value)
         etl_storage.update_or_create(
             collector_config_id=-validated_request_data["bk_data_id"],
             etl_params=validated_request_data["etl_params"],

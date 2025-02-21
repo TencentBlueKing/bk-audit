@@ -22,7 +22,7 @@ from typing import List
 
 from apps.exceptions import FindDelimiterError
 from core.constants import DEFAULT_JSON_EXPAND_SEPARATOR
-from services.web.databus.collector.etl.base import EtlStorage
+from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.etl.etl_config_handler.bk_log_delimiter import (
     DelimiterConfig,
 )
@@ -30,7 +30,7 @@ from services.web.databus.constants import EtlConfigEnum
 from services.web.databus.models import CollectorConfig
 
 
-class BkLogDelimiterEtlStorage(EtlStorage):
+class BkLogDelimiterEtlClean(EtlClean):
     etl_config = EtlConfigEnum.BK_LOG_DELIMITER.value
 
     def etl_preview(self, data: str, etl_params: dict) -> list:

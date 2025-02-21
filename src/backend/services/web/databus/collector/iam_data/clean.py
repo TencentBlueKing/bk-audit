@@ -22,7 +22,7 @@ from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
-from services.web.databus.collector.etl.base import EtlStorage
+from services.web.databus.collector.etl.base import EtlClean
 
 
 class PullCleanHandler:
@@ -276,5 +276,5 @@ class PullCleanHandler:
     def create_clean(self):
         print(f"[HttpPull] Params => {self.config}")
         resp = api.bk_base.databus_cleans_post(self.config)
-        EtlStorage.start_bkbase_clean(resp["result_table_id"], resp["processing_id"])
+        EtlClean.start_bkbase_clean(resp["result_table_id"], resp["processing_id"])
         return resp

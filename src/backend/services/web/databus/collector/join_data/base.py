@@ -15,6 +15,8 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import abc
+from abc import abstractmethod
 
 from bk_resource import api
 from blueapps.utils.logger import logger
@@ -33,12 +35,12 @@ from apps.meta.utils.fields import (
     SYSTEM_ID,
 )
 from apps.notice.handlers import ErrorMsgHandler
-from services.web.databus.collector.etl.base import EtlStorage
-from services.web.databus.collector.join.etl_storage import (
+from services.web.databus.collector.etl.base import EtlClean
+from services.web.databus.collector.join_data.etl_storage import (
     AssetEtlStorageHandler,
     JoinDataEtlStorageHandler,
 )
-from services.web.databus.collector.join.http_pull import HttpPullHandler
+from services.web.databus.collector.join_data.http_pull import HttpPullHandler
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     JOIN_DATA_RT_FORMAT,
@@ -87,8 +89,12 @@ class JoinConfig:
         ]
 
 
-class JoinDataHandler:
-    storage_type = SnapShotStorageChoices.REDIS.value
+class BaseJoinDataHandler(metaclass=abc.ABCMeta):
+
+    @property
+    @abstractmethod
+    def storage_type(self) -> str:
+        pass
 
     def __init__(self, system_id: str, resource_type_id: str):
         self.system_id = system_id
@@ -180,7 +186,7 @@ class JoinDataHandler:
         logger.info("%s Update Collector Clean Configs; SnapshotID => %s", self.__class__.__name__, self.snapshot.id)
         for collector in self.collectors:
             # 更新采集项清洗规则
-            etl_storage: EtlStorage = EtlStorage.get_instance(collector.etl_config)
+            etl_storage: EtlClean = EtlClean.get_instance(collector.etl_config)
             etl_storage.update_or_create(
                 collector.collector_config_id,
                 collector.etl_params,
@@ -193,10 +199,18 @@ class JoinDataHandler:
         return JOIN_DATA_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id)
 
 
-class AssetHandler(JoinDataHandler):
+class RedisJoinDataHandler(BaseJoinDataHandler):
+    storage_type = SnapShotStorageChoices.REDIS.value
+
+
+class HDFSJoinDataHandler(BaseJoinDataHandler):
     storage_type = SnapShotStorageChoices.HDFS.value
 
+
+class BaseAssetHandler(BaseJoinDataHandler):
+
     def load_collectors(self) -> QuerySet:
+        """Asset无需更新相关采集项，因此直接返回空"""
         return CollectorConfig.objects.none()
 
     def update_status(self, status: str) -> None:
@@ -218,3 +232,11 @@ class AssetHandler(JoinDataHandler):
     @property
     def result_table_id(self):
         return ASSET_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id)
+
+
+class HDFSAssetHandler(BaseAssetHandler):
+    storage_type = SnapShotStorageChoices.HDFS.value
+
+
+class DorisAssetHandler(BaseAssetHandler):
+    storage_type = SnapShotStorageChoices.DORIS.value

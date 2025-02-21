@@ -27,9 +27,9 @@ from services.web.databus.constants import (
     USER_INFO_DATA_CONFIG_KEY,
     USER_INFO_DATA_RT_KEY,
 )
-from services.web.databus.iam_data.clean import PullCleanHandler
-from services.web.databus.iam_data.pull import HttpPullHandler
-from services.web.databus.iam_data.storage import PullStorageHandler
+from services.web.databus.collector.iam_data.clean import PullCleanHandler
+from services.web.databus.collector.iam_data.pull import HttpPullHandler
+from services.web.databus.collector.iam_data.storage import PullStorageHandler
 
 
 def create_iam_data_link(resource_type):

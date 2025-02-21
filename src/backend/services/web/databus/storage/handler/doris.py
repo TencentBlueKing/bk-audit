@@ -16,15 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.core.management.base import BaseCommand
+# todo: 当bklog和bkbase相关支持完成后，直接管理
 
-from services.web.databus.collector.iam_data.base import create_iam_data_link
-
-
-class Command(BaseCommand):
-    def add_arguments(self, parser):
-        parser.add_argument("-t", choices=["resource_type", "action"], required=True)
-        parser.add_argument("--url", required=False)
-
-    def handle(self, *args, **kwargs):
-        create_iam_data_link(kwargs["t"])
+class DorisHandler:
+    pass
