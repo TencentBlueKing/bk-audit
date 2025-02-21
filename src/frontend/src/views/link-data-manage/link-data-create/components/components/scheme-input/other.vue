@@ -35,9 +35,10 @@
         <p
           v-bk-tooltips="{
             disabled: !data.disabled,
-            content: t(`${props.type === 'left'
-              ? '只能选择前面已选数据'
-              : '只能选择前面未选数据'}`),
+            content: (data.children && !data.children.length) ? t('审计无权限，请前往BKBase申请授权') :
+              t(`${props.type === 'left'
+                ? '只能选择前面已选数据'
+                : '只能选择前面未选数据'}`),
             delay: 400,
           }">
           {{ node.name }}

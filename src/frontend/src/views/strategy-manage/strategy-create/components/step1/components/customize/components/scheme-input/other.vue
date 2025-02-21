@@ -21,7 +21,7 @@
       label-width="0"
       property="configs.data_source.rt_id">
       <bk-cascader
-        v-slot="{node}"
+        v-slot="{data, node}"
         v-model="formData.configs.data_source.rt_id"
         filterable
         id-key="value"
@@ -29,7 +29,12 @@
         name-key="label"
         trigger="hover"
         @change="handleChangeDataSheet">
-        <p>
+        <p
+          v-bk-tooltips="{
+            disabled: !data.disabled,
+            content: t('审计无权限，请前往BKBase申请授权'),
+            delay: 400,
+          }">
           {{ node.name }}
         </p>
       </bk-cascader>
@@ -43,6 +48,7 @@
     ref,
     watch,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
   interface Expose {
@@ -72,8 +78,10 @@
       },
     },
   }
+
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const { t } = useI18n();
   const route = useRoute();
   let isInit = false;
   const isEditMode = route.name === 'strategyEdit';
