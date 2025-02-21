@@ -134,8 +134,6 @@ class FilterOperator(TextChoices):
     NOT_LIKE = "NOT LIKE", gettext_lazy("not like")
     IS_NULL = "IS NULL", gettext_lazy("is null")
     NOT_NULL = "IS NOT NULL", gettext_lazy("is not null")
-    REG = "REGEXP", gettext_lazy("regex")
-    NREG = "NOT REGEXP", gettext_lazy("not regex")
 
 
 class FilterConnector(TextChoices):
