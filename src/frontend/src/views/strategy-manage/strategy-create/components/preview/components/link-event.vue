@@ -129,8 +129,14 @@
                 v-for="(subItem, subIndex) in item"
                 :key="subIndex"
                 class="flex data-info-item">
-                <div class="data-info-item-key">
-                  <tooltips :data="subItem.display_name" />
+                <div
+                  class="data-info-item-key"
+                  style="display: flex; flex-direction: column; justify-content: center;">
+                  <div>{{ subItem.display_name.substring(0, subItem.display_name.indexOf('(')) }}</div>
+                  <tooltips
+                    v-if="subItem.display_name.substring(subItem.display_name.indexOf('('))"
+                    :data="subItem.display_name.substring(subItem.display_name.indexOf('('))"
+                    style="width: 100%; text-align: center;" />
                 </div>
                 <div class="data-info-item-value">
                   <span>{{ t('以实际内容为准') }}</span>
