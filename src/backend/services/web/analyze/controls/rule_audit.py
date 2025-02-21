@@ -38,6 +38,7 @@ from services.web.analyze.constants import (
     BKBASE_DEFAULT_OFFSET,
     BKBASE_DEFAULT_WINDOW_COLOR,
     BKBASE_FLOW_CONSUMING_MODE,
+    RULE_AUDIT_STRATEGY_STOP_MAX_SLEEP_TIMES,
     RULE_AUDIT_STRATEGY_STOP_SLEEP_TIME,
     BaseControlTypeChoices,
     FlowDataSourceNodeType,
@@ -424,7 +425,10 @@ class RuleAuditController(BaseControl):
             # 更新 flow 前需要先停止 flow
             self.stop_flow()
             # 等待停止
-            time.sleep(RULE_AUDIT_STRATEGY_STOP_SLEEP_TIME)
+            for _ in range(int(RULE_AUDIT_STRATEGY_STOP_MAX_SLEEP_TIMES)):
+                if self._describe_flow_status() == FlowNodeStatusChoices.NO_START:
+                    break
+                time.sleep(RULE_AUDIT_STRATEGY_STOP_SLEEP_TIME)
         flow_id = self.strategy.backend_data["flow_id"]
         data_source_node_ids = self.create_or_update_data_source_nodes(need_create, flow_id)
         # 构建 sql 节点

@@ -202,4 +202,6 @@ class BaseControlTypeChoices(TextChoices):
 
 
 # 规则审计策略停止睡眠等待时间(s)
-RULE_AUDIT_STRATEGY_STOP_SLEEP_TIME = 5
+RULE_AUDIT_STRATEGY_STOP_SLEEP_TIME = 10
+# 规则审计策略停止最大睡眠等待次数
+RULE_AUDIT_STRATEGY_STOP_MAX_SLEEP_TIMES = 30

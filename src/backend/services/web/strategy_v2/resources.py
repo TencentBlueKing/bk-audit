@@ -496,6 +496,7 @@ class CompositeJudge(StrategyJudge):
 
 class ListHasUpdateStrategy(StrategyV2Base):
     name = gettext_lazy("List Has Update Strategy")
+    audit_action = ActionEnum.LIST_STRATEGY
 
     def perform_request(self, validated_request_data):
         # 获取所有策略
@@ -859,6 +860,7 @@ class CreateLinkTable(LinkTableBase):
     name = gettext_lazy("创建联表")
     RequestSerializer = CreateLinkTableRequestSerializer
     ResponseSerializer = CreateLinkTableResponseSerializer
+    audit_action = ActionEnum.CREATE_LINK_TABLE
 
     @transaction.atomic()
     def create_link_table(self, validated_request_data) -> LinkTable:
@@ -886,6 +888,7 @@ class UpdateLinkTable(LinkTableBase):
     name = gettext_lazy("更新联表")
     RequestSerializer = UpdateLinkTableRequestSerializer
     ResponseSerializer = UpdateLinkTableResponseSerializer
+    audit_action = ActionEnum.EDIT_LINK_TABLE
 
     @transaction.atomic()
     def update_link_table(self, validated_request_data) -> LinkTable:
@@ -933,6 +936,7 @@ class UpdateLinkTable(LinkTableBase):
 
 class DeleteLinkTable(LinkTableBase):
     name = gettext_lazy("删除联表")
+    audit_action = ActionEnum.DELETE_LINK_TABL
 
     @transaction.atomic()
     def perform_request(self, validated_request_data):
@@ -954,6 +958,7 @@ class ListLinkTable(LinkTableBase):
     name = gettext_lazy("查询联表列表")
     RequestSerializer = ListLinkTableRequestSerializer
     ResponseSerializer = ListLinkTableResponseSerializer
+    audit_action = ActionEnum.LIST_LINK_TABLE
     many_response_data = True
     bind_request = True
 
@@ -1014,6 +1019,7 @@ class ListLinkTableAll(LinkTableBase):
     name = gettext_lazy("查询所有联表")
     ResponseSerializer = ListLinkTableAllResponseSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_LINK_TABLE
 
     def perform_request(self, validated_request_data):
         return LinkTable.list_max_version_link_table()
@@ -1023,6 +1029,7 @@ class GetLinkTable(LinkTableBase):
     name = gettext_lazy("查询联表详情")
     RequestSerializer = GetLinkTableRequestSerializer
     ResponseSerializer = GetLinkTableResponseSerializer
+    audit_action = ActionEnum.VIEW_LINK_TABLE
 
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
@@ -1042,6 +1049,7 @@ class ListLinkTableTags(LinkTableBase):
     name = gettext_lazy("查询联表标签列表")
     ResponseSerializer = ListLinkTableTagsResponseSerializer
     many_response_data = True
+    audit_action = ActionEnum.LIST_LINK_TABLE
 
     def perform_request(self, validated_request_data):
         # load all tags
