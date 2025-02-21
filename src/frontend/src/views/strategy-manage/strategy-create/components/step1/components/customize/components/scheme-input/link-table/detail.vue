@@ -92,7 +92,7 @@
                   border-radius: 2px;">
                 {{ item.left_table.display_name }}
               </span>
-              {{ item.left_table.rt_id }}
+              {{ getDataSourceText(item.left_table) }}
             </div>
             <div
               v-bk-tooltips="joinTypeList.find(type => type.value === item.join_type)?.label || item.join_type"
@@ -109,7 +109,7 @@
                   border-radius: 2px;">
                 {{ item.right_table.display_name }}
               </span>
-              {{ item.right_table.rt_id }}
+              {{ getDataSourceText(item.right_table) }}
             </div>
           </div>
           <template
@@ -136,10 +136,12 @@
 </template>
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
-  import { h, ref } from 'vue';
+  import { h, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import LinkDataManageService from '@service/link-data-manage';
+  import MetaManageService from '@service/meta-manage';
+  import StrategyManageService from '@service/strategy-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -156,12 +158,63 @@
     linkDataDetail: LinkDataDetailModel
     joinTypeList: Array<Record<string, any>>
   }
+  interface TableData {
+    label: string;
+    value: string;
+    children: Array<{
+      label: string;
+      value: string;
+    }>;
+  }
 
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
   const createRef = ref();
   const linkTableMaxVersionMap = ref<Record<string, number>>({});
+  const tableTypeData = ref<Record<'BizRt' | 'BuildIn' | 'EventLog', Array<TableData>>>({
+    BizRt: [],
+    BuildIn: [],
+    EventLog: [],
+  });
+  const uniqueTableTypes = ref<Array<'BizRt' | 'BuildIn' | 'EventLog'>>([]);
+
+  const fetchTableTypeData = () => {
+    // 获取tableData
+    for (const type of uniqueTableTypes.value) {
+      StrategyManageService.fetchTable({
+        table_type: type,
+      }).then((data) => {
+        tableTypeData.value[type] = data;
+      });
+    }
+  };
+
+  const extractUniqueTableTypes = (links: LinkDataDetailModel['config']['links']) => {
+    const tableTypes = new Set();
+    links.forEach((link) => {
+      if (link.left_table && link.left_table.table_type) {
+        tableTypes.add(link.left_table.table_type);
+      }
+      if (link.right_table && link.right_table.table_type) {
+        tableTypes.add(link.right_table.table_type);
+      }
+    });
+    return Array.from(tableTypes) as Array<'BizRt' | 'BuildIn' | 'EventLog'>;
+  };
+
+  watch(
+    () => props.linkDataDetail.config?.links,
+    (newLinks: LinkDataDetailModel['config']['links']) => {
+      if (newLinks) {
+        // 获取系统
+        fetchSystemWithAction();
+        uniqueTableTypes.value = extractUniqueTableTypes(newLinks);
+        fetchTableTypeData();
+      }
+    },
+    { immediate: true },
+  );
 
   // 获取全部联表版本信息
   useRequest(LinkDataManageService.fetchLinkTableAll, {
@@ -174,6 +227,50 @@
       }, {} as Record<string, number>);
     },
   });
+
+  // 获取系统
+  const {
+    data: systemList,
+    run: fetchSystemWithAction,
+  } = useRequest(MetaManageService.fetchSystemWithAction, {
+    defaultValue: [],
+  });
+
+  const findLabelByValue = (data: Array<{
+    label: string,
+    value: string,
+    children?: Array<{
+      label: string,
+      value: string,
+    }>
+  }>, searchValue = '', parentLabel = '') => {
+    for (const item of data) {
+      // 如果当前项的值匹配，返回当前项的标签
+      if (item.value === searchValue) {
+        return parentLabel ? `${parentLabel}/${item.label}` : item.label;
+      }
+
+      // 如果有子项，递归搜索
+      if (item.children && item.children.length) {
+        const result: string = findLabelByValue(item.children, searchValue, item.label);
+        if (result) {
+          return result;
+        }
+      }
+    }
+    return '';
+  };
+
+  const getDataSourceText = (table: LinkDataDetailModel['config']['links'][0]['left_table']) => {
+    if (table.table_type === 'BuildIn' || table.table_type === 'BizRt') {
+      return findLabelByValue(tableTypeData.value[table.table_type], table.rt_id as string);
+    }
+    const names = systemList.value
+      .filter(item => table.system_ids?.includes(item.id))
+      .map(item => item.name);
+    // 使用 ' + ' 连接名称
+    return names.join(' + ');
+  };
 
   const create = () => {
     createRef.value.show();

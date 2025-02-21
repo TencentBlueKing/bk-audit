@@ -131,7 +131,7 @@
 
   .query-field {
     position: relative;
-    width: 150px;
+    width: 180px;
     height: 26px;
     margin: 3px 4px 3px 0;
     line-height: 26px;
@@ -147,6 +147,7 @@
     }
 
     .dragging-handle {
+      width: 158px;
       padding: 0 4px;
       cursor: move;
     }
