@@ -580,7 +580,7 @@
       ...formData.value,
       ...data,
     };
-    if (formData.value.configs.data_source.rt_id.length) {
+    if (formData.value.configs.data_source.rt_id && formData.value.configs.data_source.rt_id.length) {
       formRef.value.clearValidate('configs.data_source.rt_id');
     }
   };

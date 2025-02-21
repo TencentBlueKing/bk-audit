@@ -128,8 +128,14 @@
                   v-for="(key, index) in keyArr"
                   :key="index"
                   class="flex data-info-item">
-                  <div class="data-info-item-key">
-                    <tooltips :data="key" />
+                  <div
+                    class="data-info-item-key"
+                    style="display: flex; flex-direction: column; justify-content: center;">
+                    <div>{{ key.substring(0, key.indexOf('(')) }}</div>
+                    <tooltips
+                      v-if="key.substring(key.indexOf('('))"
+                      :data="key.substring(key.indexOf('('))"
+                      style="width: 100%; text-align: center;" />
                   </div>
                   <div class="data-info-item-value">
                     <div
