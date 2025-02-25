@@ -32,49 +32,48 @@
               :label="t('风险单标题')"
               label-width="160"
               property="risk_title">
+              <div
+                class="variable-input-content"
+                :class="[variableInputActive ? 'active' : '']"
+                @click.stop="(e) => handleClick(e, 'origin')">
+                <ul class="list">
+                  <template v-if="!variableInputActive">
+                    <li
+                      v-for="(item, index) in displayRiskTitle"
+                      :key="index"
+                      @click="handleClickLi">
+                      <span
+                        :class="[item.startsWith('{{') && item.endsWith('}}') ? 'is-variable' : '']">
+                        {{ item }}
+                      </span>
+                    </li>
+                  </template>
+                  <li
+                    v-else
+                    class="list-item-input">
+                    <input
+                      ref="inputRef"
+                      v-model.trim="riskTitleValue"
+                      class="input"
+                      type="text"
+                      @keydown="handleKeyDown">
+                  </li>
+                </ul>
+                <p
+                  v-if="!variableInputActive && !formData.risk_title"
+                  class="placeholder">
+                  {{ t('请输入风险单名称') }}
+                </p>
+              </div>
               <bk-popover
-                class="variable-popover"
+                ref="variablePopRef"
                 :component-event-delay="300"
-                disable-outside-click
                 :is-show="isShow"
                 :offset="8"
                 placement="bottom-start"
                 theme="light"
                 trigger="manual"
                 width="490">
-                <div
-                  class="variable-input"
-                  :class="[variableInputActive ? 'active' : '']">
-                  <div
-                    class="variable-input-content"
-                    @click.stop="(e) => handleClick(e, 'origin')">
-                    <ul class="list">
-                      <li
-                        v-for="(item, index) in displayRiskTitle"
-                        :key="index">
-                        <span
-                          :class="[item.startsWith('{{') && item.endsWith('}}') ? 'is-variable' : '']">
-                          {{ item }}
-                        </span>
-                      </li>
-                      <li
-                        v-if="variableInputActive"
-                        class="list-item-input">
-                        <input
-                          ref="inputRef"
-                          v-model.trim="riskTitleValue"
-                          class="input"
-                          type="text"
-                          @keydown="handleKeyDown">
-                      </li>
-                    </ul>
-                    <p
-                      v-if="!variableInputActive && !formData.risk_title"
-                      class="placeholder">
-                      {{ t('请输入风险单名称') }}
-                    </p>
-                  </div>
-                </div>
                 <template #content>
                   <variable-table
                     :strategy-id="editData.strategy_id"
@@ -162,6 +161,7 @@
   const formRef = ref();
   const eventRef = ref();
   const inputRef = ref();
+  const variablePopRef = ref();
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
@@ -169,6 +169,7 @@
   const isShow = ref(false);
   const isCopy = ref(false);
   const riskTitleValue = ref('');
+  const clickText = ref('');
   const variableInputActive = ref(false);
   const formData = ref<IFormData>({
     risk_title: '',
@@ -226,19 +227,30 @@
   const handleClick = (e: Event, origin?: 'origin') => {
     // 点击输入框，如果是复制了参数，不关闭
     if (origin && !isCopy.value) {
-      isShow.value = !isShow.value;
-      // focus
+      isShow.value = true;
+      variableInputActive.value = true;
+      if (displayRiskTitle.value) {
+        riskTitleValue.value = displayRiskTitle.value.join('');
+        formData.value.risk_title = '';
+      }
       nextTick(() => {
+        if (clickText.value) {
+          const index = riskTitleValue.value.indexOf(clickText.value);
+          // 如果找到了该文字
+          if (index !== -1) {
+            // 设置光标位置为指定文字的前面
+            inputRef.value?.setSelectionRange(index, index);
+          }
+        }
         inputRef.value?.focus();
       });
-      // active
-      variableInputActive.value = !variableInputActive.value;
     }
     // 点击页面其他地方,且是打开状态，关闭pop
     if (!origin && isShow.value) {
       isShow.value = false;
       isCopy.value = false;
       variableInputActive.value = false;
+      clickText.value = '';
 
       // 如果有值
       if (riskTitleValue.value) {
@@ -249,6 +261,10 @@
       }
       formRef.value.validate('risk_title');
     }
+  };
+
+  const handleClickLi = (e: Event) => {
+    clickText.value =  (e.target as HTMLElement).innerText;
   };
 
   const getClipboardContent = async () => {
@@ -336,38 +352,35 @@
     }
   }
 
-  .variable-input {
+  .variable-input-content {
+    min-height: 32px;
+    padding-left: 5px;
     color: #63656e;
+    cursor: pointer;
     border: 1px solid #c4c6cc;
 
-    .variable-input-content {
-      min-height: 32px;
-      padding-left: 5px;
-      cursor: pointer;
+    .placeholder {
+      color: #c4c6cc;
+    }
 
-      .placeholder {
-        color: #c4c6cc;
+    .list {
+      display: flex;
+      max-width: 100%;
+      flex-wrap: wrap;
+
+      .is-variable {
+        padding: 5px;
+        margin: 0 5px;
+        background-color: #f2f3f6;
       }
 
-      .list {
-        display: flex;
-        max-width: 100%;
-        flex-wrap: wrap;
+      .list-item-input {
+        flex: 1;
 
-        .is-variable {
-          padding: 5px;
-          margin: 0 5px;
-          background-color: #f2f3f6;
-        }
-
-        .list-item-input {
-          flex: 1;
-
-          .input {
-            width: 100%;
-            border: none;
-            outline: none;
-          }
+        .input {
+          width: 100%;
+          border: none;
+          outline: none;
         }
       }
     }
