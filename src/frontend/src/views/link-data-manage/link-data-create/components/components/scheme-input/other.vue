@@ -202,7 +202,7 @@
   });
 
   onMounted(() => {
-    if (props.tableTableMap.BuildIn.length) {
+    if (props.tableTableMap.BizRt.length) {
       const data = props.tableTableMap.BizRt;
       tableData.value = data;
       processData(data);

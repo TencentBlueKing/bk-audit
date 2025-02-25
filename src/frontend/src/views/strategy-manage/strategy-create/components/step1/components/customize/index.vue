@@ -28,7 +28,8 @@
           <span
             v-bk-tooltips="{
               content: t('审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'),
-              extCls:'strategy-config-type-tooltips'
+              extCls:'strategy-config-type-tooltips',
+              placement: 'top-start'
             }"
             class="label-is-required"
             style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
@@ -75,7 +76,8 @@
             <span
               v-bk-tooltips="{
                 content: t('需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'),
-                extCls:'strategy-config-type-tooltips'
+                extCls:'strategy-config-type-tooltips',
+                placement: 'top-start'
               }"
               style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
               {{ t('预期结果') }}
@@ -96,7 +98,8 @@
             <span
               v-bk-tooltips="{
                 content: t('配置对应的字段与规则，筛选出我们期望的数据；可能是风险数据。'),
-                extCls:'strategy-config-type-tooltips'
+                extCls:'strategy-config-type-tooltips',
+                placement: 'top-start'
               }"
               style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
               {{ t('风险发现规则') }}
@@ -125,7 +128,11 @@
             @change="handleSourceTypeChange">
             <bk-radio label="batch_join_source">
               <span
-                v-bk-tooltips="t('按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；')"
+                v-bk-tooltips="{
+                  content: t('按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；'),
+                  extCls:'strategy-config-type-tooltips',
+                  placement: 'top-start'
+                }"
                 style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
                 {{ t('固定周期调度') }}
               </span>

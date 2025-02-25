@@ -354,7 +354,7 @@
   const strategyName = computed(() => {
     const { data } = props;
     const item = props.strategyList.find(item => item.value === data.strategy_id);
-    return item && item.label ? `${item.label} (${data.strategy_id})` : '';
+    return item && item.label ? item.label : '';
   });
   const riskRule = computed(() => {
     if (!props.data || !props.data.rule_id) return '';
