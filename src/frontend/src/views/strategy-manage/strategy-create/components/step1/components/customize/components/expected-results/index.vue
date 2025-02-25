@@ -115,7 +115,7 @@
     return `[${item?.label}] ${element.display_name}`;
   };
 
-  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number) => {
+  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {
     if (editIndex !== undefined) {
       expectedResultList.value.splice(editIndex, 1, item);
     } else {
