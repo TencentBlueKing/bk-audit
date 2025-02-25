@@ -133,7 +133,7 @@
 
 
   interface Emits {
-    (e: 'addExpectedResult', item: DatabaseTableFieldModel): void;
+    (e: 'addExpectedResult', item: DatabaseTableFieldModel, index?: number): void;
   }
   interface Props {
     aggregateList: Array<Record<string, any>>
@@ -141,13 +141,20 @@
     tableFields: Array<DatabaseTableFieldModel>
     configType: string,
   }
+  interface Expose {
+    handleEditShowPop: (element: DatabaseTableFieldModel, index: number) => void,
+  }
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const isEdit = defineModel<boolean>({
+    required: true,
+  });
 
   const isShow = ref(false);
   const selectIndex = ref(-1);
+  const editIndex = ref(-1);
   const localAggregateList = ref<Array<Record<string, any>>>([]);
   const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
   const isSearching = ref(false);
@@ -179,12 +186,8 @@
   };
 
   const handleShowPop = () => {
+    isEdit.value = false;
     isShow.value = true;
-    // 重置可选
-    localAggregateList.value = props.aggregateList.map(item => ({
-      ...item,
-      disabled: false,
-    }));
   };
 
   const handleSelectField = (index: number, field: DatabaseTableFieldModel) => {
@@ -212,30 +215,50 @@
     };
   };
 
+  const reset = () => {
+    searchKey.value = '';
+    isSearching.value = false;
+    isEdit.value = false;
+    selectIndex.value = -1;
+    editIndex.value = -1;
+    formData.value = new DatabaseTableFieldModel();
+    // 重置可选
+    localAggregateList.value = props.aggregateList.map(item => ({
+      ...item,
+      disabled: false,
+    }));
+  };
+
   const handleAfterHidden = (value: { isShow: boolean}) => {
     isShow.value = value.isShow;
+    reset();
   };
 
   const handleCancel = () => {
     isShow.value = false;
-    selectIndex.value = -1;
-    searchKey.value = '';
-    isSearching.value = false;
+    reset();
   };
 
   const handleAddField = () => {
+    if (!isEdit.value) {
+      // 添加聚合算法后缀
+      formData.value.display_name = `${formData.value.display_name}${formData.value.aggregate ? `_${formData.value.aggregate}` : ''}`;
+      // 统计每个 display_name 的出现次数
+      const displayNameCount = props.expectedResultList.reduce<Record<string, number>>((acc, item) => {
+        acc[item.display_name] = (acc[item.display_name] || 0) + 1;
+        return acc;
+      }, {});
+      // 重复字段添加table前缀
+      formData.value.display_name = displayNameCount[formData.value.display_name] >= 1 ?  `${formData.value.table}.${formData.value.display_name}` :  formData.value.display_name;
+      emits('addExpectedResult', formData.value);
+    } else {
+      // 替换聚合算法后缀
+      const newAggregate = `${formData.value.aggregate ? `_${formData.value.aggregate}` : ''}`;
+      formData.value.display_name = formData.value.display_name.replace(/(_\w+)$/, newAggregate);
+      emits('addExpectedResult', formData.value, editIndex.value);
+    }
+    // 重置数据
     handleCancel();
-    // 添加聚合算法后缀
-    formData.value.display_name = `${formData.value.display_name}${formData.value.aggregate ? `_${formData.value.aggregate}` : ''}`;
-    // 统计每个 display_name 的出现次数
-    const displayNameCount = props.expectedResultList.reduce<Record<string, number>>((acc, item) => {
-      acc[item.display_name] = (acc[item.display_name] || 0) + 1;
-      return acc;
-    }, {});
-    // 重复字段添加table前缀
-    formData.value.display_name = displayNameCount[formData.value.display_name] >= 1 ?  `${formData.value.table}.${formData.value.display_name}` :  formData.value.display_name,
-    emits('addExpectedResult', formData.value);
-    formData.value = new DatabaseTableFieldModel();
   };
 
   watch(() => props.aggregateList, (data) => {
@@ -245,6 +268,14 @@
     }));
   }, {
     immediate: true,
+  });
+
+  defineExpose<Expose>({
+    handleEditShowPop: (element: DatabaseTableFieldModel, index: number) => {
+      isShow.value = true;
+      editIndex.value = index;
+      handleSelectField(0, element);
+    },
   });
 </script>
 <style scoped lang="postcss">
