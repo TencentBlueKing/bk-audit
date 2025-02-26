@@ -41,10 +41,10 @@
                     <li
                       v-for="(item, index) in displayRiskTitle"
                       :key="index"
-                      @click="handleClickLi">
+                      @click="handleClickLi(index)">
                       <span
-                        :class="[item.startsWith('{{') && item.endsWith('}}') ? 'is-variable' : '']">
-                        {{ item }}
+                        :class="[item.isVariable ? 'is-variable' : '']">
+                        {{ item.value }}
                       </span>
                     </li>
                   </template>
@@ -169,7 +169,7 @@
   const isShow = ref(false);
   const isCopy = ref(false);
   const riskTitleValue = ref('');
-  const clickText = ref('');
+  const clickLiIndex = ref(-1);
   const variableInputActive = ref(false);
   const formData = ref<IFormData>({
     risk_title: '',
@@ -229,18 +229,15 @@
     if (origin && !isCopy.value) {
       isShow.value = true;
       variableInputActive.value = true;
-      if (displayRiskTitle.value) {
-        riskTitleValue.value = displayRiskTitle.value.join('');
+      if (displayRiskTitle.value.length) {
+        riskTitleValue.value = displayRiskTitle.value.map(item => item.value).join('');
         formData.value.risk_title = '';
       }
       nextTick(() => {
-        if (clickText.value) {
-          const index = riskTitleValue.value.indexOf(clickText.value);
-          // 如果找到了该文字
-          if (index !== -1) {
-            // 设置光标位置为指定文字的前面
-            inputRef.value?.setSelectionRange(index, index);
-          }
+        if (clickLiIndex.value !== -1) {
+          // 设置光标位置为指定文字的前面
+          inputRef.value?.setSelectionRange(clickLiIndex.value, clickLiIndex.value);
+          clickLiIndex.value = -1;
         }
         inputRef.value?.focus();
       });
@@ -250,7 +247,6 @@
       isShow.value = false;
       isCopy.value = false;
       variableInputActive.value = false;
-      clickText.value = '';
 
       // 如果有值
       if (riskTitleValue.value) {
@@ -263,8 +259,8 @@
     }
   };
 
-  const handleClickLi = (e: Event) => {
-    clickText.value =  (e.target as HTMLElement).innerText;
+  const handleClickLi = (index: number) => {
+    clickLiIndex.value =  index;
   };
 
   const getClipboardContent = async () => {
@@ -301,7 +297,7 @@
       // 顺序删除
       const displayRiskTitleArray = displayRiskTitle.value;
       displayRiskTitleArray.splice(displayRiskTitleArray.length - 1, 1);
-      formData.value.risk_title = displayRiskTitleArray.join('');
+      formData.value.risk_title = displayRiskTitleArray.map(item => item.value).join('');
     }
   };
 
@@ -317,7 +313,27 @@
     immediate: isEditMode || isCloneMode,
   });
 
-  const displayRiskTitle = computed(() => formData.value.risk_title.match(/\{\{[^{}]*}}|./g));
+  const displayRiskTitle = computed(() => {
+    const riskTitleArr = formData.value.risk_title.match(/\{\{[^{}]*}}|./g);
+    if (!riskTitleArr) return [];
+    const resultArray = riskTitleArr.reduce<Array<{
+      value: string,
+      isVariable: boolean,
+    }>>((acc, item) => {
+      // 判断是否包含 {{}}
+      if (item.startsWith('{{') && item.endsWith('}}')) {
+        const variableParts = [
+          ...Array.from(item).map(char => ({
+            value: char,
+            isVariable: true,
+          })),
+        ];
+        return acc.concat(variableParts);
+      }
+      return acc.concat({ value: item, isVariable: false });
+    }, []);
+    return resultArray;
+  });
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
 
@@ -369,8 +385,7 @@
       flex-wrap: wrap;
 
       .is-variable {
-        padding: 5px;
-        margin: 0 5px;
+        padding: 5px 0;
         background-color: #f2f3f6;
       }
 
