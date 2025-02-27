@@ -100,7 +100,8 @@
       label-width="0"
       :property="(!tagInput.includes(condition.condition.operator) &&
         !(dicts[condition.condition.field.raw_name] &&
-          dicts[condition.condition.field.raw_name].length) &&
+          dicts[condition.condition.field.raw_name].length &&
+          condition.condition.field.raw_name !== 'action_id') &&
         !condition.condition.field.raw_name.includes('username')) ?
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filter` :
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
@@ -110,7 +111,8 @@
       ]">
       <bk-cascader
         v-if="dicts[condition.condition.field.raw_name] &&
-          dicts[condition.condition.field.raw_name].length"
+          dicts[condition.condition.field.raw_name].length &&
+          condition.condition.field.raw_name !== 'action_id'"
         v-model="condition.condition.filters"
         class="consition-value"
         collapse-tags
@@ -138,7 +140,9 @@
         :content-width="350"
         has-delete-icon
         :input-search="false"
-        :list="dicts[condition.condition.field && condition.condition.field.raw_name]"
+        :list="condition.condition.field.raw_name !== 'action_id' ?
+          dicts[condition.condition.field && condition.condition.field.raw_name] :
+          []"
         :loading="fieldLoading"
         :placeholder="t('请输入并Enter结束')"
         trigger="focus"
