@@ -30,7 +30,7 @@
         <audit-icon
           class="query-field-remove"
           type="delete-fill"
-          @click="() => handleDelete(index)" />
+          @click.stop="() => handleDelete(index)" />
       </div>
     </template>
     <template #footer>
