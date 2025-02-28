@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-21 10:41+0800\n"
+"POT-Creation-Date: 2025-02-28 11:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2086,22 +2086,22 @@ msgid "<="
 msgstr "<="
 
 msgid "in"
-msgstr "In"
+msgstr "in"
 
 msgid "not in"
-msgstr "NotIn"
+msgstr "not in"
 
 msgid "like"
-msgstr "Like"
+msgstr "like"
 
 msgid "not like"
-msgstr "NotLike"
+msgstr "not like"
 
 msgid "is null"
-msgstr "IsNull"
+msgstr "is null"
 
 msgid "is not null"
-msgstr "IsNotNull"
+msgstr "is not null"
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"

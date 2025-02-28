@@ -154,6 +154,7 @@
                       v-bk-tooltips="{
                         content: item.config.tips,
                         extCls: 'strategy-way-tips',
+                        placement: 'top-start'
                       }"
                       class="tips">
                       {{ item.label }}

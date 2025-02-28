@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-21 10:41+0800\n"
+"POT-Creation-Date: 2025-02-28 11:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2068,40 +2068,40 @@ msgid "full_join"
 msgstr "full_join"
 
 msgid "="
-msgstr "等于"
+msgstr "=  等于"
 
 msgid "!="
-msgstr "不等于"
+msgstr "!=  不等于"
 
 msgid ">"
-msgstr "大于"
+msgstr ">  大于"
 
 msgid "<"
-msgstr "小于"
+msgstr "<  小于"
 
 msgid ">="
-msgstr "大于等于"
+msgstr ">=  大于等于"
 
 msgid "<="
-msgstr "小于等于"
+msgstr "<=  小于等于"
 
 msgid "in"
-msgstr "属于"
+msgstr "in  属于"
 
 msgid "not in"
-msgstr "不属于"
+msgstr "not in  不属于"
 
 msgid "like"
-msgstr "包含(模糊匹配)"
+msgstr "like  包含(模糊匹配)"
 
 msgid "not like"
-msgstr "不包含(模糊匹配)"
+msgstr "not like  不包含(模糊匹配)"
 
 msgid "is null"
-msgstr "为空"
+msgstr "is null  为空"
 
 msgid "is not null"
-msgstr "不为空"
+msgstr "is not null  不为空"
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"

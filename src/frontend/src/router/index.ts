@@ -78,17 +78,19 @@ export default (config: ConfigModel) => {
     routes,
   });
 
-  const routerPush = router.push;
-  const routerReplace = router.replace;
-
-  router.push = (params) => {
-    lastRouterHrefCache = router.resolve(params).href;
-    return changeConfirm().then(() => routerPush(params));
-  };
-  router.replace = (params) => {
-    lastRouterHrefCache = router.resolve(params).href;
-    return changeConfirm().then(() => routerReplace(params));
-  };
+  // 全局前置守卫（统一处理所有路由跳转）
+  router.beforeEach(async (to, from, next) => {
+    try {
+    // 显示确认弹窗
+      const confirmed = await changeConfirm();
+      if (confirmed) {
+        lastRouterHrefCache = to.fullPath;
+        next();
+      }
+    } catch (error) {
+      next(false);
+    }
+  });
 
   router.onError((error: any) => {
     if (/Failed to fetch dynamically imported module/.test(error.message)) {

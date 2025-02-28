@@ -22,23 +22,26 @@
     <template #item="{ element, index }: { element: DatabaseTableFieldModel, index: number }">
       <div
         :key="element.raw_name + element.aggregate + element.display_name"
-        class="query-field flex-center-wrap">
+        class="query-field flex-center-wrap"
+        @click="handleEdit(element, index)">
         <tooltips
           class="dragging-handle"
           :data="getMetricName(element)" />
         <audit-icon
           class="query-field-remove"
           type="delete-fill"
-          @click="() => handleDelete(index)" />
+          @click.stop="() => handleDelete(index)" />
       </div>
     </template>
     <template #footer>
       <!-- 新增 -->
       <add-fields
+        ref="addFieldsRef"
+        v-model="isEdit"
         :aggregate-list="aggregateList"
         :config-type="configType"
         :expected-result-list="expectedResultList"
-        :table-fields="tableFields"
+        :table-fields="localTableFields"
         @add-expected-result="handleAdd" />
       <div
         v-if="expectedResultList.length"
@@ -58,7 +61,7 @@
   </vuedraggable>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -84,11 +87,27 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const addFieldsRef = ref();
 
   const expectedResultList = ref<Array<DatabaseTableFieldModel>>([]);
+  const isEdit = ref(false);
+  const editItem = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
+
+  const localTableFields = computed(() => {
+    if (isEdit.value) {
+      return [editItem.value];
+    }
+    return props.tableFields;
+  });
 
   const updateExpectedResult = () => {
     emits('updateExpectedResult', expectedResultList.value);
+  };
+
+  const handleEdit = (element: DatabaseTableFieldModel, index: number) => {
+    isEdit.value = true;
+    editItem.value = element;
+    addFieldsRef.value.handleEditShowPop(element, index);
   };
 
   const getMetricName = (element: DatabaseTableFieldModel) => {
@@ -96,8 +115,12 @@
     return `[${item?.label}] ${element.display_name}`;
   };
 
-  const handleAdd = (item: DatabaseTableFieldModel) => {
-    expectedResultList.value.push(item);
+  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {
+    if (editIndex !== undefined) {
+      expectedResultList.value.splice(editIndex, 1, item);
+    } else {
+      expectedResultList.value.push(item);
+    }
     updateExpectedResult();
   };
 
