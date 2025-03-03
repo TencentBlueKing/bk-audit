@@ -121,7 +121,7 @@
         <DataUpdateTag
           data={data}
           type={snapShotStatusList.value[data.resource_type_id]?.pull_type}
-          status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status}
+          status={snapShotStatusList.value[data.resource_type_id]?.status}
           onChangeStatus={() => handleDataStatus()} />
       ),
     },
@@ -130,7 +130,7 @@
       width: '150px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <StatusTag
-          status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status}
+          status={snapShotStatusList.value[data.resource_type_id]?.status}
           statusMsg={snapShotStatusList.value[data.resource_type_id]?.status_msg} />
       ),
     },
@@ -152,7 +152,7 @@
         render: ({ data }: {data: SystemResourceTypeModel}) => <TaskSwitch
           data={data}
           bkbaseUrl={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
-          status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status}
+          status={snapShotStatusList.value[data.resource_type_id]?.status}
           onChangeStatus={() => handleDataStatus()}/>,
       },
     ];
