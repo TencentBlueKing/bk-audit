@@ -147,40 +147,6 @@
     }
   };
 
-  const getLeftTableFields = (id: string) => {
-    StrategyManageService.fetchTableRtFields({
-      table_id: id,
-    }).then((data) => {
-      leftFieldsList.value = data;
-      linkFields.value = linkFields.value.map(item => ({
-        right_field: item.right_field,
-        left_field: leftFieldsList.value.find(fieldItem => fieldItem.value === item.left_field.field_name)
-          ? item.left_field
-          : {
-            field_name: '',
-            display_name: '',
-          },
-      }));
-    });
-  };
-
-  const getRightTableFields = (id: string) => {
-    StrategyManageService.fetchTableRtFields({
-      table_id: id,
-    }).then((data) => {
-      rightFieldsList.value = data;
-      linkFields.value = linkFields.value.map(item => ({
-        left_field: item.left_field,
-        right_field: rightFieldsList.value.find(fieldItem => fieldItem.value === item.right_field.field_name)
-          ? item.right_field
-          : {
-            field_name: '',
-            display_name: '',
-          },
-      }));
-    });
-  };
-
   // 新增
   const handleAdd = () => {
     linkFields.value?.push({
@@ -200,28 +166,59 @@
     linkFields.value?.splice(index, 1);
   };
 
-  // 获取左边表字段
-  watch(() => props.leftTableRtId, (data) => {
-    // 获取表字段
-    if (data && data.length) {
-      const id = Array.isArray(data) ? data[data.length - 1] : data;
-      getLeftTableFields(id);
+  const fetchTableFields = (id: string, isLeftTable: boolean) => {
+    StrategyManageService.fetchTableRtFields({
+      table_id: id,
+    }).then((data) => {
+      if (isLeftTable) {
+        leftFieldsList.value = data;
+        linkFields.value = linkFields.value.map(item => ({
+          right_field: item.right_field,
+          left_field: leftFieldsList.value.find(fieldItem => fieldItem.value === item.left_field.field_name)
+            ? item.left_field
+            : {
+              field_name: '',
+              display_name: '',
+            },
+        }));
+      } else {
+        rightFieldsList.value = data;
+        linkFields.value = linkFields.value.map(item => ({
+          left_field: item.left_field,
+          right_field: rightFieldsList.value.find(fieldItem => fieldItem.value === item.right_field.field_name)
+            ? item.right_field
+            : {
+              field_name: '',
+              display_name: '',
+            },
+        }));
+      }
+    });
+  };
+
+  const getTableFields = (id: string | string[], isLeftTable: boolean) => {
+    if (id && id.length) {
+      const tableId = Array.isArray(id) ? id[id.length - 1] : id;
+      fetchTableFields(tableId, isLeftTable);
     } else {
-      leftFieldsList.value = [];
+      if (isLeftTable) {
+        leftFieldsList.value = [];
+      } else {
+        rightFieldsList.value = [];
+      }
     }
+  };
+
+  // 监听左边表字段
+  watch(() => props.leftTableRtId, (data) => {
+    getTableFields(data, true);
   }, {
     immediate: true,
   });
 
-  // 获取右边表字段
+  // 监听右边表字段
   watch(() => props.rightTableRtId, (data) => {
-    // 获取表字段
-    if (data && data.length) {
-      const id = Array.isArray(data) ? data[data.length - 1] : data;
-      getRightTableFields(id);
-    } else {
-      rightFieldsList.value = [];
-    }
+    getTableFields(data, false);
   }, {
     immediate: true,
   });
