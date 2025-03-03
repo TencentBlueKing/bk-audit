@@ -144,6 +144,7 @@
           dicts[condition.condition.field && condition.condition.field.raw_name] :
           []"
         :loading="fieldLoading"
+        :paste-fn="pasteFn"
         :placeholder="t('请输入并Enter结束')"
         trigger="focus"
         @change="(value: Array<string>) => handleFilter(value, index)" />
@@ -254,6 +255,8 @@
   });
 
   const handleValidate = (value: any) => value.length > 0;
+
+  const pasteFn = (value: string) => ([{ id: value, name: value }]);
 
   const handleAdd = () => {
     localConditions.value.conditions.push({
