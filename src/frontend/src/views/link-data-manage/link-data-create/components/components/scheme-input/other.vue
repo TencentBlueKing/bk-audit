@@ -127,25 +127,6 @@
     deep: true,
   });
 
-  const changeData = (data: Array<{
-    label: string;
-    value: string;
-    children: Array<{
-      label: string;
-      value: string;
-    }>
-  }>) => {
-    data.forEach((item) => {
-      if (item.children && item.children.length) {
-        item.children.forEach((cItem) => {
-          if (cItem.value === modelValue.value.rt_id) {
-            modelValue.value.rt_id = [item.value, modelValue.value.rt_id];
-          }
-        });
-      }
-    });
-  };
-
   const getDisabled = (child: {
     label: string,
     value: string
@@ -184,7 +165,15 @@
     }
     if (isEditMode.value) {
       // 对tableid转换
-      changeData(data);
+      data.forEach((item) => {
+        if (item.children && item.children.length) {
+          item.children.forEach((cItem) => {
+            if (cItem.value === modelValue.value.rt_id) {
+              modelValue.value.rt_id = [item.value, modelValue.value.rt_id];
+            }
+          });
+        }
+      });
     }
   };
 
