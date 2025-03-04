@@ -143,6 +143,7 @@
                     has-delete-icon
                     :input-search="false"
                     :list="[]"
+                    :paste-fn="pasteFn"
                     :placeholder="t('请输入并Enter结束')"
                     trigger="focus"
                     @blur="isValueFocus[index] = false"
@@ -508,6 +509,8 @@
     defaultValue: [],
     manual: true,
   });
+
+  const pasteFn = (value: string) => ([{ id: value, name: value }]);
 
   const handleValueDicts = (val: string) => {
     if (val === 'strategy_id' && !strategyList.value.length) {
