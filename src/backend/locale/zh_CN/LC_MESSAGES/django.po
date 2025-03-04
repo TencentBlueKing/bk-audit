@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-28 11:23+0800\n"
+"POT-Creation-Date: 2025-03-04 00:45+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,6 +23,12 @@ msgstr "用户"
 
 msgid "Token"
 msgstr "Token"
+
+msgid "HDFS"
+msgstr "HDFS"
+
+msgid "Doris"
+msgstr "Doris"
 
 msgid "创建入库"
 msgstr "创建入库"
@@ -939,12 +945,6 @@ msgstr "应用配置"
 msgid "命名空间"
 msgstr "命名空间"
 
-msgid "升序"
-msgstr "升序"
-
-msgid "降序"
-msgstr "降序"
-
 msgid "业务"
 msgstr "业务"
 
@@ -1254,6 +1254,9 @@ msgstr "获取资源拉取信息"
 msgid "获取所有标签"
 msgstr "获取所有标签"
 
+msgid "获取全局枚举值配置"
+msgstr "获取全局枚举值配置"
+
 msgid "搜索关键字"
 msgstr "搜索关键字"
 
@@ -1413,6 +1416,9 @@ msgstr "实例信息快照"
 
 msgid "来源系统"
 msgstr "来源系统"
+
+msgid "原始数据内容"
+msgstr "原始数据内容"
 
 msgid "数据源ID"
 msgstr "数据源ID"
@@ -1938,6 +1944,12 @@ msgstr "获取单个用户的leader信息"
 msgid "审计中心"
 msgstr "审计中心"
 
+msgid "升序"
+msgstr "升序"
+
+msgid "降序"
+msgstr "降序"
+
 msgid "参数验证失败"
 msgstr "参数验证失败"
 
@@ -2103,6 +2115,15 @@ msgstr "is null  为空"
 msgid "is not null"
 msgstr "is not null  不为空"
 
+msgid "match all"
+msgstr "匹配全部"
+
+msgid "match any"
+msgstr "匹配任意"
+
+msgid "between"
+msgstr "在之间"
+
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
 msgstr "表 '{table_name}' 未在配置中声明。"
@@ -2121,6 +2142,10 @@ msgstr "不支持的聚合类型：'{aggregate_type}'。"
 
 msgid "配置中必须指定 `from_table` 或 `join_tables`。"
 msgstr "配置中必须指定 `from_table` 或 `join_tables`。"
+
+#, python-brace-format
+msgid "操作符 {operator} 的值 {value} 不符合预期。"
+msgstr "操作符 {operator} 的值 {value} 不符合预期。"
 
 msgid "数据拉取"
 msgstr "数据拉取"
@@ -2650,9 +2675,6 @@ msgstr "运行中"
 msgid "启动中"
 msgstr "启动中"
 
-msgid "HDFS"
-msgstr "HDFS"
-
 msgid "Redis"
 msgstr "Redis"
 
@@ -2938,14 +2960,30 @@ msgstr "个人账号"
 msgid "平台账号"
 msgstr "平台账号"
 
+msgid "GSE索引"
+msgstr "GSE索引"
+
+msgid "迭代索引"
+msgstr "迭代索引"
+
 msgid "集群不存在"
 msgstr "集群不存在"
+
+#, python-brace-format
+msgid "过滤条件 Key 解析错误: {key}"
+msgstr "过滤条件 Key 解析错误: {key}"
 
 msgid "搜索(All)"
 msgstr "搜索(All)"
 
 msgid "搜索"
 msgstr "搜索"
+
+msgid "日志查询配置"
+msgstr "日志查询配置"
+
+msgid "日志查询"
+msgstr "日志查询"
 
 msgid "时间范围"
 msgstr "时间范围"
@@ -2955,6 +2993,25 @@ msgstr "多个字段使用逗号分隔"
 
 msgid "多个字段以半角逗号分隔"
 msgstr "多个字段以半角逗号分隔"
+
+msgid "嵌套字段 key"
+msgstr "嵌套字段 key"
+
+msgid "Operator"
+msgstr "操作"
+
+msgid "筛选值"
+msgstr "筛选值"
+
+msgid "多个筛选值，每个值可以是字符串、整数或浮点数"
+msgstr "多个筛选值，每个值可以是字符串、整数或浮点数"
+
+#, python-format
+msgid "字段%s不支持该操作符%s"
+msgstr "字段%s不支持该操作符%s"
+
+msgid "检索条件列表"
+msgstr "检索条件列表"
 
 msgid "Risk"
 msgstr "风险"
@@ -3167,9 +3224,6 @@ msgstr "风险处理经验内容"
 
 msgid "Risk Experience"
 msgstr "风险处理经验"
-
-msgid "Operator"
-msgstr "责任人"
 
 msgid "Action"
 msgstr "操作"
@@ -3964,9 +4018,6 @@ msgstr "字段"
 
 msgid "单个筛选值，可以是字符串、整数或浮点数"
 msgstr "单个筛选值，可以是字符串、整数或浮点数"
-
-msgid "多个筛选值，每个值可以是字符串、整数或浮点数"
-msgstr "多个筛选值，每个值可以是字符串、整数或浮点数"
 
 msgid "Conditions"
 msgstr "条件"

@@ -28,7 +28,7 @@ from services.web.databus.constants import (
     DEFAULT_CATEGORY_ID,
 )
 from services.web.databus.models import CollectorPlugin
-from services.web.esquery.exceptions import ClusterNotExist
+from services.web.query.exceptions import ClusterNotExist
 
 
 class ElasticHandler:

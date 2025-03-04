@@ -43,8 +43,8 @@ from services.web.databus.constants import (
 )
 from services.web.databus.models import CollectorPlugin
 from services.web.databus.storage.handler.es import StorageConfig
-from services.web.esquery.utils.elastic import ElasticHandler
-from services.web.esquery.utils.formatter import HitsFormatter
+from services.web.query.utils.elastic import ElasticHandler
+from services.web.query.utils.formatter import HitsFormatter
 from services.web.risk.constants import (
     BKAUDIT_EVENT_RT_INDEX_NAME_FORMAT,
     BKAUDIT_EVENT_RT_INDEX_SET_ID,
@@ -272,7 +272,7 @@ class EventHandler(ElasticHandler):
 
     @classmethod
     def search_event(cls, namespace: str, start_time: str, end_time: str, page: int, page_size: int, **kwargs):
-        return resource.esquery.search_all(
+        return resource.query.search_all(
             namespace=namespace,
             start_time=start_time,
             end_time=end_time,

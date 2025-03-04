@@ -55,6 +55,8 @@ PLUGIN_DATA = {
     "auth_rt": False,
 }
 
+PLUGIN_RESULT_TABLE = f"{settings.DEFAULT_BK_BIZ_ID}_bklog_{PLUGIN_NAME}"
+
 # Create Plugin
 INDEX_SET_REPLACE_API_RESP = {"index_set_id": INDEX_SET_ID}
 GET_STORAGES_API_RESP = copy.deepcopy(_GET_STORAGES_API_RESP)

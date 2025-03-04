@@ -22,6 +22,7 @@ from pypika import Field
 from pypika import functions as fn
 
 from core.choices import TextChoices
+from core.sql.exceptions import OperatorValueError, UnsupportedOperatorError
 
 
 class FilterConnector(TextChoices):
@@ -89,6 +90,9 @@ class JoinType(TextChoices):
     FULL_OUTER_JOIN = "full_outer_join", gettext_lazy("full_join")
 
 
+DORIS_FIELD_KEY_QUOTE = "'"
+
+
 class Operator(TextChoices):
     """匹配符"""
 
@@ -104,36 +108,48 @@ class Operator(TextChoices):
     NOT_LIKE = "not_like", gettext_lazy("not like")
     ISNULL = "isnull", gettext_lazy("is null")
     NOTNULL = "notnull", gettext_lazy("is not null")
+    MATCH_ALL = "match_all", gettext_lazy("match all")
+    MATCH_ANY = "match_any", gettext_lazy("match any")
+    BETWEEN = "between", gettext_lazy("between")
 
     @classmethod
     def handler(cls, operator: str, field: Field, value: str | int | float, values: List[str | int | float]):
+        from core.sql.terms import DorisField
+
         # 根据操作符类型调用对应的处理函数
         if not value and values:
             value = values[0]
-        match operator:
-            case cls.EQ:
-                return field == value
-            case cls.NEQ:
-                return field != value
-            case cls.INCLUDE:
-                return field.isin(values)
-            case cls.EXCLUDE:
-                return ~field.isin(values)
-            case cls.LIKE:
-                return field.like(str(value))
-            case cls.NOT_LIKE:
-                return ~field.like(str(value))
-            case cls.LTE:
-                return field.lte(value)
-            case cls.LT:
-                return field.lt(value)
-            case cls.GTE:
-                return field.gte(value)
-            case cls.GT:
-                return field.gt(value)
-            case cls.ISNULL:
-                return field.isnull()
-            case cls.NOTNULL:
-                return field.notnull()
-            case _:
-                return None
+        if operator == cls.EQ:
+            return field.eq(value)
+        elif operator == cls.NEQ:
+            return field != value
+        elif operator == cls.INCLUDE:
+            return field.isin(values)
+        elif operator == cls.EXCLUDE:
+            return ~field.isin(values)
+        elif operator == cls.LIKE:
+            return field.like(str(value))
+        elif operator == cls.NOT_LIKE:
+            return ~field.like(str(value))
+        elif operator == cls.LTE:
+            return field.lte(value)
+        elif operator == cls.LT:
+            return field.lt(value)
+        elif operator == cls.GTE:
+            return field.gte(value)
+        elif operator == cls.GT:
+            return field.gt(value)
+        elif operator == cls.ISNULL:
+            return field.isnull()
+        elif operator == cls.NOTNULL:
+            return field.notnull()
+        elif operator == cls.BETWEEN:
+            if len(values) != 2:
+                raise OperatorValueError(operator=operator, value=values)
+            return field.between(*values[:2])
+        elif operator == cls.MATCH_ALL and isinstance(field, DorisField):
+            return field.match_all(values)
+        elif operator == cls.MATCH_ANY and isinstance(field, DorisField):
+            return field.match_any(values)
+        else:
+            raise UnsupportedOperatorError(operator)

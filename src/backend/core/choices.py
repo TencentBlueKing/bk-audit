@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+from enum import Enum
 from types import DynamicClassAttribute
 from typing import Union
 
@@ -36,10 +36,39 @@ class ChoiceGetLabelMixin(Choices):
 class TextChoices(DjangoTextChoices, ChoiceGetLabelMixin):
     @DynamicClassAttribute
     def value(self) -> str:
-        return self._value_
+        return str(self._value_)
 
 
 class IntegerChoices(DjangoIntegerChoices, ChoiceGetLabelMixin):
     @DynamicClassAttribute
     def value(self) -> int:
-        return self._value_
+        return int(self._value_)
+
+
+# 存放已注册的枚举类
+_default = {}
+
+
+def register_choices(name: str = None):
+    """
+    注册choices类型的配置
+    """
+
+    def decorator(cls):
+        nonlocal name
+        # 如果装饰的为类，则取类名
+        if not name:
+            name = cls.__name__
+        # 将列表转换为Enum类型
+        if isinstance(cls, list):
+            cls = Enum(name, names=cls)
+
+        _default[name] = cls
+        return cls
+
+    return decorator
+
+
+def list_registered_choices():
+    """获得已经注册的所有choicesEnum ."""
+    return _default

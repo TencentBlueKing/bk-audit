@@ -42,7 +42,7 @@ from core.utils.tools import (
     modify_dict_by_path,
     mstimestamp_to_date_string,
 )
-from services.web.esquery.constants import (
+from services.web.query.constants import (
     AccessTypeChoices,
     ResultCodeChoices,
     UserIdentifyTypeChoices,
@@ -62,7 +62,7 @@ JSON_FORMAT = [
 
 
 class HitsFormatter:
-    """格式化Es输出"""
+    """格式化数据输出"""
 
     def __init__(self, hit: dict, sensitive_objs: List[SensitiveObject]):
         self.hit = hit
@@ -97,7 +97,7 @@ class HitsFormatter:
         return mstimestamp_to_date_string(value)
 
     def _format_access_type(self, value: str) -> str:
-        return choices_to_items(AccessTypeChoices).get(str(value), value)
+        return str(choices_to_items(AccessTypeChoices).get(str(value), value))
 
     def _format_result_code(self, value: str) -> str:
         return "{}({})".format(
@@ -113,7 +113,7 @@ class HitsFormatter:
         return val
 
     def _format_user_identify_type(self, value) -> str:
-        return choices_to_items(UserIdentifyTypeChoices).get(str(value), value)
+        return str(choices_to_items(UserIdentifyTypeChoices).get(str(value), value))
 
     def _loads_json(self, value: Union[str, dict]) -> Union[str, dict]:
         if not value:

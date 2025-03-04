@@ -29,3 +29,12 @@ class AuthType(TextChoices):
 
     USER = "user", gettext_lazy("用户")
     TOKEN = "token", gettext_lazy("Token")
+
+
+class StorageType(TextChoices):
+    """
+    存储类型
+    """
+
+    HDFS = "hdfs", gettext_lazy("HDFS")
+    DORIS = "doris", gettext_lazy("Doris")
