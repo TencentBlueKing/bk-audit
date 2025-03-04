@@ -16,13 +16,20 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource.routers import ResourceRouter
-from django.conf.urls import include
-from django.urls import re_path
+from bk_resource import api, resource
+from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
-from services.web.esquery import views
 
-router = ResourceRouter()
-router.register_module(views)
+class EsQueryViewSet(ResourceViewSet):
+    resource_routes = [
+        ResourceRoute("GET", resource.query.search, endpoint="search"),
+        ResourceRoute("GET", api.bk_log.index_set_operators, endpoint="operators"),
+        ResourceRoute("GET", resource.query.field_map, endpoint="field_map"),
+    ]
 
-urlpatterns = (re_path(r"namespaces/(?P<namespace>[\w\-]+)/", include(router.urls)),)
+
+class CollectorQueryViewSet(ResourceViewSet):
+    resource_routes = [
+        ResourceRoute("POST", resource.query.collector_search, endpoint="search"),
+        ResourceRoute("GET", resource.query.collector_search_config, endpoint="search_config"),
+    ]

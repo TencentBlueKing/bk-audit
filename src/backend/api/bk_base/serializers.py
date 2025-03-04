@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+from django.conf import settings
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
@@ -27,8 +27,16 @@ class QuerySyncRequestSerializer(serializers.Serializer):
     同步查询请求序列化
     """
 
-    bk_app_code = serializers.CharField(label=gettext_lazy("App Code"))
+    bk_app_code = serializers.CharField(label=gettext_lazy("App Code"), default=settings.APP_CODE)
     sql = serializers.CharField(label=gettext_lazy("SQL"))
-    prefer_storage = serializers.CharField(label=gettext_lazy("Storage"), allow_blank=True)
-    bkdata_authentication_method = serializers.ChoiceField(label=gettext_lazy("认证方式"), choices=AuthType.choices)
+    prefer_storage = serializers.CharField(label=gettext_lazy("Storage"), allow_blank=True, default="")
+    bkdata_authentication_method = serializers.ChoiceField(
+        label=gettext_lazy("认证方式"), choices=AuthType.choices, default=AuthType.TOKEN
+    )
     bkdata_data_token = serializers.CharField(label=gettext_lazy("Token"), required=False)
+
+    def validate(self, attrs):
+        if attrs["bkdata_authentication_method"] == AuthType.TOKEN:
+            if not attrs.get("bkdata_data_token"):
+                attrs["bkdata_data_token"] = settings.BKBASE_DATA_TOKEN
+        return attrs

@@ -258,7 +258,27 @@ LinkTableJoinType = JoinType
 RuleAuditAggregateType = AggregateType
 # 规则审计字段类型
 RuleAuditFieldType = FieldType
+
+
 # 规则审计条件操作符
-RuleAuditConditionOperator = Operator
+class RuleAuditConditionOperator(TextChoices):
+    """
+    规则审计条件操作符
+    """
+
+    EQ = Operator.EQ.value, Operator.EQ.label
+    NEQ = Operator.NEQ.value, Operator.NEQ.label
+    GT = Operator.GT.value, Operator.GT.label
+    LT = Operator.LT.value, Operator.LT.label
+    GTE = Operator.GTE.value, Operator.GTE.label
+    LTE = Operator.LTE.value, Operator.LTE.label
+    INCLUDE = Operator.INCLUDE.value, Operator.INCLUDE.label
+    EXCLUDE = Operator.EXCLUDE.value, Operator.EXCLUDE.label
+    LIKE = Operator.LIKE.value, Operator.LIKE.label
+    NOT_LIKE = Operator.NOT_LIKE.value, Operator.NOT_LIKE.label
+    ISNULL = Operator.ISNULL.value, Operator.ISNULL.label
+    NOTNULL = Operator.NOTNULL.value, Operator.NOTNULL.label
+
+
 # 规则审计条件连接符
 RuleAuditWhereConnector = FilterConnector

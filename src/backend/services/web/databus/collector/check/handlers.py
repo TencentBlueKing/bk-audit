@@ -107,7 +107,7 @@ class ReportCheckHandler:
         """
         检索ES获取聚合信息
         """
-        data = resource.esquery.es_query(**self.query_config)
+        data = resource.query.es_query(**self.query_config)
         return data.get("aggregations", {}).get("collectors", {}).get("buckets", [])
 
     @property

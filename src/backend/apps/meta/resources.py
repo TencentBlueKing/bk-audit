@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import base64
 from abc import ABC
 from collections import defaultdict
+from enum import EnumMeta
 from functools import cmp_to_key
 
 import openpyxl
@@ -32,6 +33,7 @@ from django.conf import settings
 from django.core.cache import cache as default_cache
 from django.db import transaction
 from django.db.models import Q
+from django.db.models.enums import ChoicesMeta
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
@@ -100,6 +102,7 @@ from apps.meta.utils.globals import Globals
 from apps.permission.handlers.actions import ActionEnum, get_action_by_id
 from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.choices import list_registered_choices
 from core.models import get_request_username
 from core.permissions import FetchInstancePermission, SearchLogPermission
 from core.utils.cache import CacheMixin
@@ -650,3 +653,24 @@ class ListAllTags(Meta, Resource):
 
     def perform_request(self, validated_request_data):
         return Tag.objects.all()
+
+
+class GetGlobalChoices(Meta, Resource):
+    name = gettext_lazy("获取全局枚举值配置")
+
+    @property
+    def globals(self) -> dict:
+        """获得所有注册的配置 ."""
+        # 获得注册的下拉配置
+        choices_dict = {}
+        for name, choices_enum in list_registered_choices().items():
+            if isinstance(choices_enum, ChoicesMeta):
+                choices_dict[name] = [{"id": value, "name": label} for value, label in choices_enum.choices]
+            elif isinstance(choices_enum, EnumMeta):
+                choices_dict[name] = [
+                    {"id": name, "name": member.value} for name, member in choices_enum.__members__.items()
+                ]
+        return choices_dict
+
+    def perform_request(self, validated_request_data):
+        return self.globals

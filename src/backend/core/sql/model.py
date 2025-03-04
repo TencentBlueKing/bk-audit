@@ -46,9 +46,15 @@ class Field(BaseModel):
 
     table: str  # 表名
     raw_name: str  # 原始字段名称
-    display_name: str  # 作为 sql 的列名，唯一
+    display_name: str  # 作为 sql 的列名，默认为原始字段名称
     field_type: FieldType  # 字段类型
     aggregate: Optional[AggregateType] = None  # 聚合函数
+    keys: List[str] = PydanticField(default_factory=list)  # 字段 key 仅适用于 Doris Variant 类型
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if self.display_name is None:
+            self.display_name = self.raw_name
 
 
 class LinkField(BaseModel):
