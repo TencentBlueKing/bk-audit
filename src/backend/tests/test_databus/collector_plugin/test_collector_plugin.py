@@ -22,10 +22,12 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from core.utils.tools import ordered_dict_to_json
 from services.web.databus.constants import (
+    DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     DEFAULT_STORAGE_CONFIG_KEY,
     INDEX_SET_CONFIG_KEY,
 )
 from services.web.databus.models import CollectorPlugin
+from services.web.databus.tasks import create_or_update_plugin_etl
 from services.web.entry.init.base import SystemInitHandler
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.constants import (
@@ -33,10 +35,13 @@ from tests.test_databus.collector_plugin.constants import (
     CREATE_COLLECTOR_PLUGIN_API_RESP,
     CREATE_PLUGIN_DATA,
     CREATE_PLUGIN_PARAMS,
+    DATACLEAN_RESULT,
     GET_PLUGIN_LIST_DATA,
     GET_STORAGES_API_RESP,
     INDEX_SET_REPLACE_API_RESP,
     PLUGIN_DATA,
+    RAW_DATA_LIST,
+    REPLICA_STORAGE_CLUSTER_CONFIG,
     STORAGE_CLUSTER_ID,
     UPDATE_COLLECTOR_PLUGIN_API_RESP,
     UPDATE_PLUGIN_DATA,
@@ -53,6 +58,12 @@ class CollectorPluginTest(TestCase):
         GlobalMetaConfig.set(
             DEFAULT_STORAGE_CONFIG_KEY,
             STORAGE_CLUSTER_ID,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.namespace,
+        )
+        GlobalMetaConfig.set(
+            DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
+            REPLICA_STORAGE_CLUSTER_CONFIG,
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=self.namespace,
         )
@@ -127,3 +138,18 @@ class CollectorPluginTest(TestCase):
             item.pop("updated_by", None)
             result.append(item)
         self.assertEqual(ordered_dict_to_json(result), GET_PLUGIN_LIST_DATA)
+
+    @mock.patch(
+        "services.web.databus.collector_plugin.handlers.api.bk_base.get_rawdata_list",
+        mock.Mock(return_value=RAW_DATA_LIST),
+    )
+    @mock.patch(
+        "services.web.databus.collector_plugin.handlers.api.bk_base.databus_cleans_post",
+        mock.Mock(return_value=DATACLEAN_RESULT),
+    )
+    @mock.patch("databus.collector.etl.base.api.bk_base.databus_tasks_post", mock.Mock())
+    @mock.patch("databus.collector.etl.base.api.bk_base.databus_storages_post", mock.Mock())
+    @mock.patch("databus.storage.resources.api.bk_log.get_storages", mock.Mock(return_value=GET_STORAGES_API_RESP))
+    def test_create_or_update_plugin_etl(self):
+        """CreateOrUpdatePluginEtlResource"""
+        create_or_update_plugin_etl.__wrapped__.__wrapped__()

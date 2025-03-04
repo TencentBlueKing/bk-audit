@@ -29,6 +29,7 @@ from services.web.databus.constants import (
     DEFAULT_STORAGE_SHARDS,
     CustomTypeEnum,
     JoinDataPullType,
+    JoinDataType,
     PluginSceneChoices,
     SnapshotRunningStatus,
     SnapShotStorageChoices,
@@ -179,8 +180,7 @@ class RedisConfig(SoftDeleteModel):
 class Snapshot(SoftDeleteModel):
     """
     快照配置
-    1. 每一个记录对应一个bkbase清洗任务
-    2. 范围：公共、接入系统
+    - 每一个data_id记录对应一个清洗任务，一个data_id可能有多条不同storage_type的记录
     """
 
     system_id = models.CharField(gettext_lazy("系统ID"), max_length=64)
@@ -196,22 +196,8 @@ class Snapshot(SoftDeleteModel):
         default=SnapshotRunningStatus.CLOSED.value,
         db_index=True,
     )
-    bkbase_hdfs_processing_id = models.CharField(
-        gettext_lazy("BKBase HDFS Processing ID"), max_length=255, null=True, blank=True
-    )
-    bkbase_hdfs_table_id = models.CharField(gettext_lazy("BKBase HDFS Table ID"), max_length=255, null=True, blank=True)
-    hdfs_status = models.CharField(
-        gettext_lazy("HDFS Status"),
-        max_length=32,
-        choices=SnapshotRunningStatus.choices,
-        default=SnapshotRunningStatus.CLOSED.value,
-    )
-    storage_type = models.CharField(
-        gettext_lazy("Storage Type"),
-        max_length=32,
-        choices=SnapShotStorageChoices.choices,
-        default=SnapShotStorageChoices.REDIS.value,
-        db_index=True,
+    join_data_type = models.CharField(
+        gettext_lazy('关联数据类型'), max_length=32, choices=JoinDataType.choices, default=JoinDataType.ASSET
     )
     pull_type = models.CharField(
         gettext_lazy("拉取类型"), max_length=16, choices=JoinDataPullType.choices, default=JoinDataPullType.PARTIAL
@@ -224,6 +210,23 @@ class Snapshot(SoftDeleteModel):
         verbose_name = gettext_lazy("快照配置")
         verbose_name_plural = verbose_name
         unique_together = [["system_id", "resource_type_id"]]
+
+
+class SnapshotStorage(models.Model):
+    snapshot = models.ForeignKey(
+        Snapshot, on_delete=models.CASCADE, related_name='storages', verbose_name=gettext_lazy("快照")
+    )
+    storage_type = models.CharField(
+        gettext_lazy("存储类型"),
+        max_length=32,
+        choices=SnapShotStorageChoices.choices,
+        db_index=True,
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("快照存储关联")
+        verbose_name_plural = verbose_name
+        unique_together = (("snapshot", "storage_type"),)
 
 
 class StorageOperateLog(models.Model):

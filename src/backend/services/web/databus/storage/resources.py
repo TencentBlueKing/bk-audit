@@ -33,8 +33,10 @@ from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.actions import ActionEnum
 from services.web.databus.constants import (
     COLLECTOR_PLUGIN_ID,
+    DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     DEFAULT_STORAGE_CONFIG_KEY,
     EMPTY_CLUSTER_ID,
+    ClusterMode,
     PluginSceneChoices,
 )
 from services.web.databus.models import CollectorPlugin, StorageOperateLog
@@ -43,12 +45,15 @@ from services.web.databus.storage.handler.redis import RedisHandler
 from services.web.databus.storage.serializers import (
     CreateRedisRequestSerializer,
     CreateRedisResponseSerializer,
+    StorageActivateRequestSerializer,
     StorageCreateRequestSerializer,
     StorageDeleteRequestSerializer,
     StorageListRequestSerializer,
     StorageListResponseSerializer,
     StorageUpdateRequestSerializer,
 )
+
+# todo: 当bklog和bkbase相关支持完成后，直接管理predefined/bkbase的存储
 
 
 class StorageMeta(AuditMixinResource):
@@ -80,9 +85,14 @@ class UpdateStorageResource(StorageMeta):
         password = validated_request_data["auth_info"]["password"]
         if password:
             validated_request_data["auth_info"]["password"] = asymmetric_cipher.decrypt(password)
-        data = api.bk_log.update_storage(validated_request_data)
+        data = None
+        if not validated_request_data["pre_defined"]:
+            data = api.bk_log.update_storage(validated_request_data)
         StorageOperateLog.create(validated_request_data["cluster_id"])
-        self.record_config(data["cluster_config"]["cluster_id"], validated_request_data)
+        self.record_config(
+            data["cluster_config"]["cluster_id"] if data else validated_request_data["cluster_id"],
+            validated_request_data,
+        )
         # 更新采集插件
         namespace = validated_request_data["namespace"]
         CollectorPlugin.objects.filter(
@@ -93,6 +103,7 @@ class UpdateStorageResource(StorageMeta):
 
 class StorageActivateResource(StorageMeta):
     name = gettext_lazy("设置默认集群")
+    RequestSerializer = StorageActivateRequestSerializer
     serializer_class = serializers.IntegerField
 
     @transaction.atomic
@@ -101,17 +112,27 @@ class StorageActivateResource(StorageMeta):
             raise StorageChanging()
         # 设置默认集群
         namespace = validated_request_data["namespace"]
-        default_cluster_config = GlobalMetaConfig.set(
-            DEFAULT_STORAGE_CONFIG_KEY,
-            validated_request_data["cluster_id"],
-            config_level=ConfigLevelChoices.NAMESPACE.value,
-            instance_key=namespace,
-        )
+        if validated_request_data["cluster_mode"] == ClusterMode.MAIN:
+            _ = GlobalMetaConfig.set(
+                DEFAULT_STORAGE_CONFIG_KEY,
+                validated_request_data["cluster_id"],
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=namespace,
+            )
+        else:
+            _ = GlobalMetaConfig.set(
+                DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
+                {"cluster_id": validated_request_data["cluster_id"]}
+                if not validated_request_data.get('config')
+                else validated_request_data['config'],
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=namespace,
+            )
         # 设置采集插件
         CollectorPlugin.objects.filter(
             namespace=namespace, plugin_scene__in=[PluginSceneChoices.COLLECTOR.value]
         ).update(storage_changed=True)
-        return int(default_cluster_config.config_value)
+        return validated_request_data["cluster_id"]
 
 
 class StorageListResource(StorageMeta):
@@ -201,7 +222,11 @@ class CreateStorageResource(StorageMeta):
         password = validated_request_data["auth_info"]["password"]
         if password:
             validated_request_data["auth_info"]["password"] = asymmetric_cipher.decrypt(password)
-        data = api.bk_log.create_storage(validated_request_data)
+        pre_defined = validated_request_data.pop("pre_defined", False)
+        if pre_defined:
+            data = validated_request_data['pre_defined_extra_config']["cluster_id"]
+        else:
+            data = api.bk_log.create_storage(validated_request_data)
         StorageOperateLog.create(data)
         self.record_config(data, validated_request_data)
         try:

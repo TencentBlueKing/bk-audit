@@ -29,12 +29,12 @@ from django.utils.translation import gettext
 
 from apps.meta.utils.fields import PYTHON_FIELD_TYPE_MAP
 from core.models import get_request_username
-from services.web.databus.collector_plugin.handlers import PluginEtlHandler
 from services.web.databus.constants import JOIN_DATA_RT_FORMAT, EtlConfigEnum
 from services.web.databus.models import CollectorConfig, Snapshot
+from services.web.databus.utils import restart_bkbase_clean, start_bkbase_clean
 
 
-class EtlStorage:
+class EtlClean(metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def etl_config(self):
@@ -43,14 +43,14 @@ class EtlStorage:
     @classmethod
     def get_instance(cls, etl_config: str):
         mapping = {
-            EtlConfigEnum.BK_LOG_JSON.value: "BkLogJsonEtlStorage",
-            EtlConfigEnum.BK_LOG_DELIMITER.value: "BkLogDelimiterEtlStorage",
-            EtlConfigEnum.BK_LOG_REGEXP.value: "BkLogRegexpEtlStorage",
-            EtlConfigEnum.BK_BASE_JSON.value: "BkBaseJsonEtlStorage",
+            EtlConfigEnum.BK_LOG_JSON.value: "BkLogJsonEtlClean",
+            EtlConfigEnum.BK_LOG_DELIMITER.value: "BkLogDelimiterEtlClean",
+            EtlConfigEnum.BK_LOG_REGEXP.value: "BkLogRegexpEtlClean",
+            EtlConfigEnum.BK_BASE_JSON.value: "BkBaseJsonEtlClean",
         }
         try:
-            etl_storage = import_string("databus.collector.etl.{}.{}".format(etl_config, mapping.get(etl_config)))
-            return etl_storage()
+            etl_clean = import_string("databus.collector.etl.{}.{}".format(etl_config, mapping.get(etl_config)))
+            return etl_clean()
         except ImportError as error:
             raise NotImplementedError(f"{etl_config} not implement, error: {error}")
 
@@ -92,7 +92,10 @@ class EtlStorage:
         # 创建清洗
         if not instance.bkbase_table_id:
             result = api.bk_base.databus_cleans_post(bkbase_params)
-            self.start_bkbase_clean(bkbase_params["result_table_id"], bkbase_params["processing_id"])
+            self.start_bkbase_clean(
+                bkbase_params["result_table_id"],
+                bkbase_params["processing_id"],
+            )
             instance.processing_id = result["processing_id"]
             instance.bkbase_table_id = result["result_table_id"]
             instance.save()
@@ -134,7 +137,7 @@ class EtlStorage:
         启动清洗任务
         """
 
-        PluginEtlHandler.start_bkbase_clean(bkbase_result_table_id, processing_id, get_request_username())
+        start_bkbase_clean(bkbase_result_table_id, processing_id, get_request_username())
 
     @staticmethod
     def restart_bkbase_clean(bkbase_result_table_id: str, processing_id: str) -> None:
@@ -142,4 +145,4 @@ class EtlStorage:
         重启清洗任务
         """
 
-        PluginEtlHandler.restart_bkbase_clean(bkbase_result_table_id, processing_id, get_request_username())
+        restart_bkbase_clean(bkbase_result_table_id, processing_id, get_request_username())

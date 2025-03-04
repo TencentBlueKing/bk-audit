@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from bk_resource import api
 from django.conf import settings
 
-from services.web.databus.iam_data.clean import PullCleanHandler
+from services.web.databus.collector.snapshot.system.clean import PullCleanHandler
 from services.web.databus.storage.handler.redis import RedisHandler
 
 

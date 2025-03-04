@@ -15,16 +15,13 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import importlib
 
-from django.core.management.base import BaseCommand
-
-from services.web.databus.collector.snapshot.system import create_iam_data_link
+import pytest
 
 
-class Command(BaseCommand):
-    def add_arguments(self, parser):
-        parser.add_argument("-t", choices=["resource_type", "action"], required=True)
-        parser.add_argument("--url", required=False)
+@pytest.hookimpl(trylast=True)
+def pytest_configure(config: pytest.Config) -> None:
+    from django.conf import settings
 
-    def handle(self, *args, **kwargs):
-        create_iam_data_link(kwargs["t"])
+    importlib.import_module(settings.ROOT_URLCONF)

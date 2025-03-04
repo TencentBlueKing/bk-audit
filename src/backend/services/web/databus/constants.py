@@ -47,6 +47,7 @@ DEFAULT_TARGET_OBJECT_TYPE = "HOST"
 PLUGIN_CONDITION_SEPARATOR_OPTION = "="
 
 DEFAULT_STORAGE_CONFIG_KEY = "default_cluster_id"
+DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY = "default_replica_write_cluster_id"
 EMPTY_CLUSTER_ID = -1
 EMPTY_INDEX_SET_ID = 0
 EMPTY_TABLE_ID = 0
@@ -72,6 +73,9 @@ DEFAULT_STORAGE_SHARDS = 1
 DEFAULT_STORAGE_SHARD_SIZE = 10
 
 INDEX_SET_CONFIG_KEY = "index_set_config"
+REPLICA_WRITE_INDEX_SET_CONFIG_KEY = "replica_write_index_set_config"
+REPLICA_WRITE_INDEX_SET_ID = "replica_write_index_set_id"
+
 INDEX_SET_NAME_FORMAT = "BKAudit_{namespace}"
 BKLOG_INDEX_SET_SCENARIO_ID = "log"
 
@@ -84,7 +88,7 @@ DEFAULT_REDIS_TAGS = ["Bk-Audit", "inland", "enable", "usr"]
 
 RESOURCE_TYPE_DATA_RT_KEY = "bkaudit_resource_type_data"
 RESOURCE_TYPE_DATA_CONFIG_KEY = "bkaudit_resource_type_config_data"
-RESOURCE_TYPE_DATA_NAME_FORMAT = "bkaudit_resource_type_data_{}"
+RESOURCE_TYPE_DATA_NAME_FORMAT = "bkaudit_resource_type_data{}"
 ACTION_DATA_RT_KEY = "bkaudit_action_data"
 ACTION_DATA_CONFIG_KEY = "bkaudit_action_config_data"
 ACTION_DATA_NAME_FORMAT = "bkaudit_action_data_{}"
@@ -177,6 +181,7 @@ class SnapshotRunningStatus(TextChoices):
 class SnapShotStorageChoices(TextChoices):
     HDFS = "hdfs", gettext_lazy("HDFS")
     REDIS = "redis", gettext_lazy("Redis")
+    DORIS = "doris", gettext_lazy("Doris")
 
 
 class SourcePlatformChoices(TextChoices):
@@ -213,3 +218,13 @@ class JsonSchemaFieldType(TextChoices):
 class JoinDataPullType(TextChoices):
     PARTIAL = "partial", gettext_lazy("增量")
     FULL = "full", gettext_lazy("全量")
+
+
+class JoinDataType(TextChoices):
+    BASIC = "basic", gettext_lazy("通用关联数据")
+    ASSET = "asset", gettext_lazy("资产")
+
+
+class ClusterMode(TextChoices):
+    MAIN = "main", gettext_lazy("主集群")
+    REPLICA = "replica", gettext_lazy("双写集群")

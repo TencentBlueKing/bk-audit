@@ -52,6 +52,10 @@ DEBUG = True
 
 LOGGING["formatters"]["verbose"] = get_logging_config_dict(locals())["formatters"]["verbose"]
 
+if "bk_audit.contrib.bk_audit" in INSTALLED_APPS:
+    INSTALLED_APPS = list(INSTALLED_APPS)
+    INSTALLED_APPS.remove("bk_audit.contrib.bk_audit")
+
 # 本地开发数据库设置
 # USE FOLLOWING SQL TO CREATE THE DATABASE NAMED APP_CODE
 # SQL: CREATE DATABASE `bk-cmdb-fast` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci; # noqa: E501

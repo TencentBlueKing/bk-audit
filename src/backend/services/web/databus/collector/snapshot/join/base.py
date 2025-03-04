@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import abc
 
 from bk_resource import api
 from blueapps.utils.logger import logger
@@ -33,15 +34,16 @@ from apps.meta.utils.fields import (
     SYSTEM_ID,
 )
 from apps.notice.handlers import ErrorMsgHandler
-from services.web.databus.collector.etl.base import EtlStorage
-from services.web.databus.collector.join.etl_storage import (
+from services.web.databus.collector.etl.base import EtlClean
+from services.web.databus.collector.snapshot.join.etl_storage import (
     AssetEtlStorageHandler,
     JoinDataEtlStorageHandler,
 )
-from services.web.databus.collector.join.http_pull import HttpPullHandler
+from services.web.databus.collector.snapshot.join.http_pull import HttpPullHandler
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
     JOIN_DATA_RT_FORMAT,
+    JoinDataType,
     SnapshotRunningStatus,
     SnapShotStorageChoices,
 )
@@ -87,16 +89,20 @@ class JoinConfig:
         ]
 
 
-class JoinDataHandler:
-    storage_type = SnapShotStorageChoices.REDIS.value
+class BaseJoinDataHandler(metaclass=abc.ABCMeta):
+    @property
+    @abc.abstractmethod
+    def join_data_type(self):
+        pass
 
-    def __init__(self, system_id: str, resource_type_id: str):
+    def __init__(self, system_id: str, resource_type_id: str, storage_type: str):
         self.system_id = system_id
         self.system = System.objects.get(system_id=system_id)
         self.resource_type_id = resource_type_id
         self.resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
         self.collectors = self.load_collectors()
         self.snapshot = self.get_snapshot_instance()
+        self.storage_type = storage_type
 
     def get_snapshot_instance(self):
         snapshot, _ = Snapshot.objects.get_or_create(system_id=self.system_id, resource_type_id=self.resource_type_id)
@@ -154,7 +160,7 @@ class JoinDataHandler:
     def create_dataid(self):
         # 判断是否已有
         logger.info(f"{self.__class__.__name__} Update or Create Collector; SnapshotID => {self.snapshot.id}")
-        http_pull_handler = HttpPullHandler(self.system, self.resource_type, self.snapshot, self.storage_type)
+        http_pull_handler = HttpPullHandler(self.system, self.resource_type, self.snapshot, self.join_data_type)
         self.snapshot.bkbase_data_id = http_pull_handler.update_or_create()
         self.snapshot.save()
 
@@ -172,15 +178,13 @@ class JoinDataHandler:
         self.snapshot.save()
 
     def _get_table_id(self) -> str:
-        if self.storage_type == SnapShotStorageChoices.HDFS.value:
-            return self.snapshot.bkbase_hdfs_table_id
         return self.snapshot.bkbase_table_id
 
     def update_log_clean_link(self):
         logger.info("%s Update Collector Clean Configs; SnapshotID => %s", self.__class__.__name__, self.snapshot.id)
         for collector in self.collectors:
             # 更新采集项清洗规则
-            etl_storage: EtlStorage = EtlStorage.get_instance(collector.etl_config)
+            etl_storage: EtlClean = EtlClean.get_instance(collector.etl_config)
             etl_storage.update_or_create(
                 collector.collector_config_id,
                 collector.etl_params,
@@ -193,14 +197,29 @@ class JoinDataHandler:
         return JOIN_DATA_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id)
 
 
-class AssetHandler(JoinDataHandler):
-    storage_type = SnapShotStorageChoices.HDFS.value
+class BasicJoinHandler(BaseJoinDataHandler):
+    """基础关联数据处理"""
+
+    join_data_type = JoinDataType.BASIC.value
+
+    def __init__(self, system_id: str, resource_type_id: str, storage_type: str = SnapShotStorageChoices.REDIS.value):
+        super().__init__(system_id, resource_type_id, storage_type)
+
+
+class AssetHandler(BaseJoinDataHandler):
+    """资产数据处理"""
+
+    join_data_type = JoinDataType.ASSET.value
+
+    def __init__(self, system_id: str, resource_type_id: str, storage_type: str = SnapShotStorageChoices.HDFS.value):
+        super().__init__(system_id, resource_type_id, storage_type)
 
     def load_collectors(self) -> QuerySet:
+        """Asset更新无需更新相关日志采集项，因此直接返回空"""
         return CollectorConfig.objects.none()
 
     def update_status(self, status: str) -> None:
-        self.snapshot.hdfs_status = status
+        self.snapshot.status = status
 
     def create_data_etl_storage(self):
         # 已有清洗链路不做调整
@@ -212,7 +231,7 @@ class AssetHandler(JoinDataHandler):
         etl_storage_handler = AssetEtlStorageHandler(
             self.snapshot.bkbase_data_id, self.system, self.resource_type, self.storage_type
         )
-        self.snapshot.bkbase_hdfs_processing_id, self.snapshot.bkbase_hdfs_table_id = etl_storage_handler.create()
+        self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id = etl_storage_handler.create()
         self.snapshot.save()
 
     @property

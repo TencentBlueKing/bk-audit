@@ -72,6 +72,7 @@ EVENT_ID = Field(
     description=gettext_lazy("事件ID"),
     option=dict(),
     priority_index=100,
+    is_index=True,
 )
 
 EVENT_CONTENT = Field(
@@ -80,6 +81,7 @@ EVENT_CONTENT = Field(
     field_type=FIELD_TYPE_TEXT,
     description=gettext_lazy("事件描述"),
     is_analyzed=True,
+    is_zh_analyzed=True,
     option=dict(),
     is_required=False,
     priority_index=99,
@@ -92,6 +94,7 @@ ACTION_ID = Field(
     description=gettext_lazy("操作ID"),
     option=dict(),
     priority_index=98,
+    is_index=True,
 )
 
 REQUEST_ID = Field(
@@ -111,6 +114,7 @@ USERNAME = Field(
     description=gettext_lazy("操作人"),
     option=dict(),
     priority_index=96,
+    is_index=True,
 )
 
 USER_IDENTIFY_TYPE = Field(
@@ -193,6 +197,7 @@ SCOPE_TYPE = Field(
     is_required=False,
     is_display=True,
     priority_index=88,
+    is_index=True,
 )
 
 SCOPE_ID = Field(
@@ -204,6 +209,7 @@ SCOPE_ID = Field(
     is_required=False,
     is_display=True,
     priority_index=87,
+    is_index=True,
 )
 
 ACCESS_TYPE = Field(
@@ -231,6 +237,7 @@ ACCESS_USER_AGENT = Field(
     field_type=FIELD_TYPE_TEXT,
     description=gettext_lazy("客户端类型"),
     is_analyzed=True,
+    is_zh_analyzed=True,
     option=dict(),
     is_required=False,
     priority_index=84,
@@ -263,6 +270,7 @@ INSTANCE_NAME = Field(
     field_type=FIELD_TYPE_TEXT,
     description=gettext_lazy("资源实例名"),
     is_analyzed=True,
+    is_zh_analyzed=True,
     option=dict(),
     is_required=False,
     priority_index=81,
@@ -274,10 +282,10 @@ INSTANCE_DATA = Field(
     field_type=FIELD_TYPE_OBJECT,
     description=gettext_lazy("实例当前内容"),
     is_analyzed=True,
+    is_json=True,
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=80,
-    is_json=True,
 )
 
 INSTANCE_ORIGIN_DATA = Field(
@@ -286,10 +294,10 @@ INSTANCE_ORIGIN_DATA = Field(
     field_type=FIELD_TYPE_OBJECT,
     description=gettext_lazy("实例变更前内容"),
     is_analyzed=True,
+    is_json=True,
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=79,
-    is_json=True,
 )
 
 RESULT_CODE = Field(
@@ -308,6 +316,7 @@ RESULT_CONTENT = Field(
     field_type=FIELD_TYPE_TEXT,
     description=gettext_lazy("操作结果描述"),
     is_analyzed=True,
+    is_zh_analyzed=True,
     option=dict(),
     is_required=False,
     priority_index=77,
@@ -319,10 +328,10 @@ EXTEND_DATA = Field(
     field_type=FIELD_TYPE_OBJECT,
     description=gettext_lazy("拓展数据"),
     is_analyzed=True,
+    is_json=True,
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=76,
-    is_json=True,
 )
 
 SNAPSHOT_USER_INFO = Field(
@@ -365,6 +374,7 @@ SNAPSHOT_INSTANCE_NAME = Field(
     field_type=FIELD_TYPE_TEXT,
     description=gettext_lazy("实例名称快照"),
     is_analyzed=True,
+    is_zh_analyzed=True,
     option=dict(),
     is_required=False,
     is_display=False,
@@ -376,6 +386,7 @@ SNAPSHOT_INSTANCE_DATA = Field(
     field_type=FIELD_TYPE_TEXT,
     description=gettext_lazy("实例信息快照"),
     is_analyzed=True,
+    is_zh_analyzed=True,
     option=dict(),
     is_required=False,
     is_display=False,
@@ -390,6 +401,7 @@ SYSTEM_ID = Field(
     option=dict(),
     is_required=True,
     is_display=False,
+    is_index=True,
 )
 
 LOG = Field(

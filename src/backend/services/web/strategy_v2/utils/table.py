@@ -109,9 +109,7 @@ class BuildInTableHandler(TableHandler):
             for s in System.objects.filter(namespace=self.namespace)
         }
         # 获取所有的快照
-        snapshots = Snapshot.objects.filter(
-            bkbase_hdfs_table_id__isnull=False, hdfs_status=SnapshotRunningStatus.RUNNING.value
-        )
+        snapshots = Snapshot.objects.filter(bkbase_table_id__isnull=False, status=SnapshotRunningStatus.RUNNING.value)
         # 获取所有的资源类型
         q = Q()
         for snapshot in snapshots:
@@ -126,7 +124,7 @@ class BuildInTableHandler(TableHandler):
                     "label": resource_types.get(
                         "{}.{}".format(snapshot.system_id, snapshot.resource_type_id), snapshot.resource_type_id
                     ),
-                    "value": snapshot.bkbase_hdfs_table_id,
+                    "value": snapshot.bkbase_table_id,
                 }
             )
         # 响应
@@ -180,8 +178,8 @@ class BizRtTableHandler(TableHandler):
         exclude_rt_ids = set(
             list(
                 Snapshot.objects.filter(
-                    bkbase_hdfs_table_id__isnull=False, hdfs_status=SnapshotRunningStatus.RUNNING.value
-                ).values_list("bkbase_hdfs_table_id", flat=True)
+                    bkbase_table_id__isnull=False, status=SnapshotRunningStatus.RUNNING.value
+                ).values_list("bkbase_table_id", flat=True)
             )
         )
         # 日志 rt
