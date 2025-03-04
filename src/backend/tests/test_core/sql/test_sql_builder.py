@@ -57,8 +57,7 @@ class TestSQLGenerator(TestCase):
             ],
             from_table=Table(table_name="users"),  # 新增改动：使用 Table 对象，无 alias
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        query = SQLGenerator(self.query_builder).generate(config)
         expected_query = 'SELECT "users"."id" "user_id","users"."name" "user_name" FROM "users" "users"'
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -79,8 +78,8 @@ class TestSQLGenerator(TestCase):
                 )
             ],
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id","orders"."order_id" "order_id" FROM "users" '
             '"users" JOIN "orders" "orders" ON "users"."id"="orders"."user_id"'
@@ -139,8 +138,8 @@ class TestSQLGenerator(TestCase):
                 ],
             ),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id" '
             'FROM "users" "users" '
@@ -157,9 +156,9 @@ class TestSQLGenerator(TestCase):
             ],
             from_table=Table(table_name="users"),
         )
-        generator = SQLGenerator(self.query_builder, config)
+        generator = SQLGenerator(self.query_builder)
         with self.assertRaisesRegex(TableNotRegisteredError, r"表 'invalid_table' 未在配置中声明。"):
-            generator.generate()
+            generator.generate(config)
 
     def test_order_by_with_invalid_table(self):
         """测试排序字段来源不合法时的异常捕获"""
@@ -177,9 +176,9 @@ class TestSQLGenerator(TestCase):
                 )
             ],
         )
-        generator = SQLGenerator(self.query_builder, config)
+        generator = SQLGenerator(self.query_builder)
         with self.assertRaisesRegex(TableNotRegisteredError, r"表 'orders' 未在配置中声明。"):
-            generator.generate()
+            generator.generate(config)
 
     def test_pagination_disabled(self):
         """测试无分页功能的查询"""
@@ -189,8 +188,8 @@ class TestSQLGenerator(TestCase):
             ],
             from_table=Table(table_name="users"),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = 'SELECT "users"."id" "user_id" FROM "users" "users"'
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -220,8 +219,8 @@ class TestSQLGenerator(TestCase):
                 ),
             ],
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id","orders"."order_id" "order_id","products"."product_name" "product_name" '
             'FROM "users" "users" JOIN "orders" "orders" ON "users"."id"="orders"."user_id" '
@@ -247,8 +246,8 @@ class TestSQLGenerator(TestCase):
                 ),
             ],
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id" FROM "users" "users" ORDER BY "users"."age" ASC,"users"."name" DESC'
         )
@@ -277,8 +276,8 @@ class TestSQLGenerator(TestCase):
                 )
             ),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT COUNT("users"."id") "user_id","users"."country" "user_country" '
             'FROM "users" "users" WHERE "users"."country"=\'Ireland\' GROUP BY "users"."country"'
@@ -302,8 +301,8 @@ class TestSQLGenerator(TestCase):
             ],
             from_table=Table(table_name="orders"),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         # 期望自动分组 "id"
         expected_query = (
             'SELECT "orders"."id" "order_id",SUM("orders"."amount") "amount_sum" '
@@ -330,8 +329,8 @@ class TestSQLGenerator(TestCase):
                     )
                 ),
             )
-            generator = SQLGenerator(self.query_builder, config)
-            generator.generate()
+            generator = SQLGenerator(self.query_builder)
+            generator.generate(config)
 
     def test_nested_where_conditions(self):
         """
@@ -379,8 +378,8 @@ class TestSQLGenerator(TestCase):
                 ],
             ),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id" '
             'FROM "users" "users" '
@@ -410,8 +409,8 @@ class TestSQLGenerator(TestCase):
             ],
             from_table=Table(table_name="orders"),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT COUNT("orders"."id") "order_count",MAX("orders"."amount") "amount_max","orders"."status" "status" '
             'FROM "orders" "orders" GROUP BY "orders"."status"'
@@ -433,8 +432,8 @@ class TestSQLGenerator(TestCase):
                 ],
                 from_table=Table(table_name="orders"),
             )
-            generator = SQLGenerator(self.query_builder, config)
-            generator.generate()
+            generator = SQLGenerator(self.query_builder)
+            generator.generate(config)
 
     def test_multi_join_simple_where(self):
         """
@@ -472,8 +471,8 @@ class TestSQLGenerator(TestCase):
                 )
             ),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id","orders"."order_id" "order_id","products"."name" "product_name" '
             'FROM "users" "users" '
@@ -581,8 +580,8 @@ class TestSQLGenerator(TestCase):
                 ],
             ),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id" '
             'FROM "users" "users" '
@@ -636,8 +635,8 @@ class TestSQLGenerator(TestCase):
                 Field(table="users", raw_name="country", display_name="user_country", field_type=FieldType.STRING),
             ],
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT SUM("orders"."price") "total_price","users"."country" "user_country" '
             'FROM "users" "users" '
@@ -677,8 +676,8 @@ class TestSQLGenerator(TestCase):
                 )
             ],
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT SUM("orders"."price") "total_price","orders"."status" "order_status" '
             'FROM "users" "users" '
@@ -715,8 +714,8 @@ class TestSQLGenerator(TestCase):
             ],
             pagination=Pagination(limit=10, offset=20),
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id","orders"."order_id" "order_id" '
             'FROM "users" "users" '
@@ -755,8 +754,8 @@ class TestSQLGenerator(TestCase):
                 )
             ],
         )
-        generator = SQLGenerator(self.query_builder, config)
-        query = generator.generate()
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
         expected_query = (
             'SELECT "user_alias"."id" "user_id","order_alias"."order_id" "order_id" '
             'FROM "users" "user_alias" '

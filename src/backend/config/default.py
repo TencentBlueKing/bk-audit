@@ -253,6 +253,7 @@ FEATURE_TOGGLE = {
     "bknotice": os.getenv("BKAPP_FEATURE_BKNOTICE", "deny"),
     "bkbase_data_source": os.getenv("BKAPP_FEATURE_BKBASE_DATA_SOURCE", "on"),
     "storage_edit": os.getenv("BKAPP_FEATURE_STORAGE_EDIT", "deny"),
+    "enable_doris": os.getenv("BKAPP_FEATURE_ENABLE_DORIS", "on"),
 }
 
 # BkLog

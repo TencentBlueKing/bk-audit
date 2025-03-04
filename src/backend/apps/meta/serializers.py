@@ -383,3 +383,8 @@ class ListAllTagsRespSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = ["tag_id", "tag_name"]
+
+
+class GetGlobalChoiceResponseSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField()

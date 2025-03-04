@@ -70,3 +70,13 @@ class MissingFromOrJoinError(SQLGeneratorError):
 
     def __init__(self):
         super().__init__(self.MESSAGE)
+
+
+class OperatorValueError(SQLGeneratorError):
+    """当操作符值错误时抛出。"""
+
+    MESSAGE = gettext_lazy("操作符 {operator} 的值 {value} 不符合预期。")
+
+    def __init__(self, value, operator):
+        message = self.MESSAGE.format(value=value, operator=operator)
+        super().__init__(message)

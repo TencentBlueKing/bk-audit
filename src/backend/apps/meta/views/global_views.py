@@ -33,4 +33,5 @@ class GlobalsViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.meta.get_global_meta_configs, endpoint="local_list"),
         ResourceRoute("POST", resource.meta.set_global_meta_config, endpoint="local_update"),
         ResourceRoute("GET", resource.meta.get_global_meta_config_info, endpoint="local_info"),
+        ResourceRoute("GET", resource.meta.get_global_choices, endpoint="global_choices"),
     ]

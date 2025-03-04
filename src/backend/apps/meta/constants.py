@@ -22,6 +22,7 @@ import re
 from django.utils.translation import gettext_lazy
 
 from core.choices import TextChoices
+from core.constants import OrderTypeChoices as _OrderTypeChoices
 
 IAM_MANAGER_ROLE = "members"
 IAM_SYSTEM_BATCH_SIZE = 10
@@ -93,9 +94,7 @@ class ConfigLevelChoices(TextChoices):
     NAMESPACE = "namespace", gettext_lazy("命名空间")
 
 
-class OrderTypeChoices(TextChoices):
-    ASC = "asc", gettext_lazy("升序")
-    DESC = "desc", gettext_lazy("降序")
+OrderTypeChoices = _OrderTypeChoices
 
 
 class SpaceType(TextChoices):
