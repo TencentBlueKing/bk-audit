@@ -16,14 +16,9 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import datetime
-
-from bk_resource import resource
-from rest_framework.settings import api_settings
-
 from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE, USER_IDENTIFY_TYPE
 from core.utils.tools import choices_to_select_list
-from services.web.esquery.constants import (
+from services.web.query.constants import (
     AccessTypeChoices,
     ResultCodeChoices,
     UserIdentifyTypeChoices,
@@ -43,32 +38,6 @@ class FieldMapHandler:
     @property
     def query_fields(self) -> list:
         return [field for field in self.fields if field not in self.db_field_func_map.keys()]
-
-    def get_es_fields(self) -> dict:
-        if not self.query_fields:
-            return dict()
-        query_params = self.build_aggs_query()
-        resp = resource.esquery.es_query(**query_params)
-        aggs = resp.get("aggregations", {})
-        return {
-            field: [{"id": bucket["key"], "name": bucket["key"]} for bucket in aggs.get(field, {}).get("buckets", [])]
-            for field in self.query_fields
-        }
-
-    def build_aggs_query(self) -> dict:
-        end_time = datetime.datetime.now()
-        start_time = end_time - datetime.timedelta(days=self.timedelta)
-        return {
-            "namespace": self.namespace,
-            "start_time": start_time.strftime(api_settings.DATETIME_FORMAT),
-            "end_time": end_time.strftime(api_settings.DATETIME_FORMAT),
-            "query_string": "",
-            "filter": [],
-            "sort_list": [],
-            "start": 0,
-            "size": 0,
-            "aggs": {field: {"terms": {"field": field}} for field in self.query_fields},
-        }
 
     @property
     def db_fields(self) -> list:

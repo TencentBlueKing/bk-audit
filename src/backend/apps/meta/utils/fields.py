@@ -277,6 +277,7 @@ INSTANCE_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=80,
+    is_json=True,
 )
 
 INSTANCE_ORIGIN_DATA = Field(
@@ -288,6 +289,7 @@ INSTANCE_ORIGIN_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=79,
+    is_json=True,
 )
 
 RESULT_CODE = Field(
@@ -320,6 +322,7 @@ EXTEND_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=76,
+    is_json=True,
 )
 
 SNAPSHOT_USER_INFO = Field(
@@ -376,6 +379,7 @@ SNAPSHOT_INSTANCE_DATA = Field(
     option=dict(),
     is_required=False,
     is_display=False,
+    is_json=True,
 )
 
 SYSTEM_ID = Field(
@@ -386,6 +390,17 @@ SYSTEM_ID = Field(
     option=dict(),
     is_required=True,
     is_display=False,
+)
+
+LOG = Field(
+    field_name="log",
+    alias_name="log",
+    field_type=FIELD_TYPE_TEXT,
+    description=gettext_lazy("原始数据内容"),
+    option=dict(),
+    is_required=False,
+    is_display=False,
+    is_analyzed=True,
 )
 
 COLLECTOR_CONFIG_ID = Field(

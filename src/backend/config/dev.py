@@ -74,6 +74,10 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [origin for origin in str(os.getenv("BKAPP_CORS_ALLOWED_ORIGINS", "")).split(",") if origin]
 CSRF_TRUSTED_ORIGINS = [origin for origin in str(os.getenv("BKAPP_CSRF_TRUSTED_ORIGINS", "")).split(",") if origin]
 
+if "bk_audit.contrib.bk_audit" in INSTALLED_APPS:
+    INSTALLED_APPS = list(INSTALLED_APPS)
+    INSTALLED_APPS.remove("bk_audit.contrib.bk_audit")
+
 # 多人开发时，无法共享的本地配置可以放到新建的 local_settings.py 文件中
 # 并且把 local_settings.py 加入版本管理忽略文件中
 try:

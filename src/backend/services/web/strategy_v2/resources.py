@@ -566,7 +566,7 @@ class ListStrategyFields(StrategyV2Base):
         data = []
         end_time = datetime.datetime.now()
         start_time = end_time - datetime.timedelta(days=7)
-        logs = resource.esquery.search_all(
+        logs = resource.query.search_all(
             namespace=namespace,
             start_time=start_time.strftime(api_settings.DATETIME_FORMAT),
             end_time=end_time.strftime(api_settings.DATETIME_FORMAT),

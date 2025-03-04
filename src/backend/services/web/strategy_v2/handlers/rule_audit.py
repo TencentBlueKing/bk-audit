@@ -16,13 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 from gettext import gettext
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from bk_resource.utils.common_utils import get_md5
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from pydantic import BaseModel
-from pypika import Table as PyPikaTable
 from pypika import functions as fn
 from pypika.terms import Function, Term, ValueWrapper
 
@@ -39,7 +38,7 @@ from core.sql.model import (
     Table,
     WhereCondition,
 )
-from core.sql.sql_builder import SQLGenerator
+from core.sql.sql_builder import BkBaseSqlGenerator
 from services.web.risk.constants import EventMappingFields
 from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType
 from services.web.strategy_v2.exceptions import (
@@ -47,17 +46,6 @@ from services.web.strategy_v2.exceptions import (
     RuleAuditSqlGeneratorError,
 )
 from services.web.strategy_v2.models import LinkTable, Strategy
-
-
-class RuleAuditTable(PyPikaTable):
-    def get_sql(self, **kwargs: Any) -> str:
-        kwargs["quote_char"] = None
-        kwargs["alias_quote_char"] = "`"
-        return super().get_sql(**kwargs)
-
-
-class RuleAuditSqlGenerator(SQLGenerator):
-    table_cls = RuleAuditTable
 
 
 class UdfBuildOriginData(Function):
@@ -272,9 +260,7 @@ class RuleAuditSQLBuilder:
         # 格式化别名
         for field in sql_config.select_fields:
             field.display_name = self.display2tmp_name_map[field.display_name]
-        sub_table = (
-            RuleAuditSqlGenerator(query_builder=self.query_builder, config=sql_config).generate().as_("sub_table")
-        )
+        sub_table = BkBaseSqlGenerator(query_builder=self.query_builder).generate(config=sql_config).as_("sub_table")
         # 2. 构造 JSON_OBJECT(...) 参数
         display_names = self.display2tmp_name_map.keys()
         fields = [sub_table.field(field.display_name) for field in sql_config.select_fields]
