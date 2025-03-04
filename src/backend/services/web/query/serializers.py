@@ -21,26 +21,39 @@ from typing import List, Set
 
 import arrow
 from django.db.models.enums import ChoicesMeta
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 from rest_framework.settings import api_settings
 
 from api.bk_log.serializers import EsQueryFilterSerializer
-from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE
+from apps.meta.serializers import FieldListSerializer
+from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE, SYSTEM_ID
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.permission import Permission
+from core.exceptions import PermissionException, ValidationError
+from core.permissions import SearchLogPermission
+from core.serializers import OrderSerializer
 from core.utils.tools import format_date_string
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
-from services.web.esquery.constants import (
+from services.web.query.constants import (
+    COLLECT_SEARCH_CONFIG,
+    DATE_FORMAT,
+    DATE_PARTITION_FIELD,
+    DEFAULT_COLLECTOR_SORT_LIST,
     DEFAULT_PAGE,
     DEFAULT_PAGE_SIZE,
     DEFAULT_SORT_LIST,
     DEFAULT_TIMEDELTA,
-    ES_MAX_LIMIT,
+    SEARCH_MAX_LIMIT,
     SORT_ASC,
     SORT_DESC,
+    TIMESTAMP_PARTITION_FIELD,
     AccessTypeChoices,
+    CollectorSortFieldChoices,
     ResultCodeChoices,
 )
+from services.web.query.utils.search_config import QueryConditionOperator
 
 
 class EsQueryAttrSerializer(serializers.Serializer):
@@ -88,8 +101,8 @@ class EsQuerySearchAttrSerializer(serializers.Serializer):
         attrs["start"] = (attrs["page"] - 1) * attrs["page_size"]
         attrs["size"] = max(
             (
-                ES_MAX_LIMIT - attrs["start"]
-                if attrs["start"] + attrs["page_size"] > ES_MAX_LIMIT
+                SEARCH_MAX_LIMIT - attrs["start"]
+                if attrs["start"] + attrs["page_size"] > SEARCH_MAX_LIMIT
                 else attrs["page_size"]
             ),
             0,
@@ -203,8 +216,153 @@ class EsQuerySearchAttrSerializer(serializers.Serializer):
         return filters
 
 
-class EsQuerySearchResponseSerializer(serializers.Serializer):
+class QuerySearchResponseSerializer(serializers.Serializer):
     page = serializers.IntegerField()
     num_pages = serializers.IntegerField()
     total = serializers.IntegerField()
     results = serializers.ListField(child=serializers.JSONField())
+
+
+class QuerySearchFilterSerializer(serializers.Serializer):
+    """
+    检索条件
+    """
+
+    field_name = serializers.ChoiceField(label="字段名", choices=COLLECT_SEARCH_CONFIG.allowed_query_field_choices)
+    keys = serializers.ListField(
+        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
+    )
+    operator = serializers.ChoiceField(
+        label=gettext_lazy("Operator"), choices=COLLECT_SEARCH_CONFIG.allowed_operator_choices
+    )
+    filters = serializers.ListField(
+        label=gettext_lazy("筛选值"),
+        child=serializers.JSONField(),
+        default=list,
+        help_text=gettext_lazy("多个筛选值，每个值可以是字符串、整数或浮点数"),
+        allow_empty=True,
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        # 判断操作是否允许
+        allow = COLLECT_SEARCH_CONFIG.judge_operator(attrs["field_name"], attrs["operator"])
+        if not allow:
+            raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field_name"], attrs["operator"]))
+        # 判断字段是否支持嵌套 keys
+        if not COLLECT_SEARCH_CONFIG.query_field_map[attrs["field_name"]].field.is_json:
+            attrs["keys"] = []
+        return attrs
+
+
+class CollectorOrderSerializer(OrderSerializer):
+    """
+    采集器检索排序序列化器
+    """
+
+    order_field = serializers.ChoiceField(
+        label=gettext_lazy("排序字段"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        choices=CollectorSortFieldChoices.choices,
+    )
+
+
+class CollectorSearchReqSerializer(serializers.Serializer):
+    """
+    日志查询请求序列化器
+    """
+
+    namespace = serializers.CharField()
+    start_time = serializers.CharField()
+    end_time = serializers.CharField()
+    filters = serializers.ListField(
+        label=gettext_lazy("检索条件列表"),
+        child=QuerySearchFilterSerializer(),
+        allow_empty=True,
+        default=list,
+    )
+    page = serializers.IntegerField(min_value=1)
+    page_size = serializers.IntegerField(min_value=1, max_value=SEARCH_MAX_LIMIT)
+    sort_list = serializers.ListField(
+        label=gettext_lazy("排序字段"),
+        child=CollectorOrderSerializer(),
+        default=DEFAULT_COLLECTOR_SORT_LIST,
+    )
+    bind_system_info = serializers.BooleanField(default=True)
+
+    @classmethod
+    def _build_system_conditions(cls, validated_request_data) -> List[dict]:
+        """
+        过滤有权限的系统
+        """
+
+        namespace = validated_request_data["namespace"]
+        systems, authorized_systems = SearchLogPermission.get_auth_systems(namespace)
+        if not authorized_systems:
+            apply_data, apply_url = Permission().get_apply_data([ActionEnum.SEARCH_REGULAR_EVENT])
+            raise PermissionException(
+                action_name=ActionEnum.SEARCH_REGULAR_EVENT.name,
+                apply_url=apply_url,
+                permission=apply_data,
+            )
+        if len(systems) != len(authorized_systems):
+            return [
+                {
+                    "field_name": SYSTEM_ID.field_name,
+                    "operator": QueryConditionOperator.INCLUDE.value,
+                    "filters": authorized_systems,
+                }
+            ]
+        return []
+
+    @classmethod
+    def _build_time_conditions(cls, validated_request_data: dict) -> List[dict]:
+        """
+        时间分区条件
+        """
+
+        start_time = arrow.get(format_date_string(validated_request_data["start_time"]))
+        end_time = arrow.get(format_date_string(validated_request_data["end_time"]))
+        start_ms = int(start_time.timestamp() * 1000)
+        end_ms = int(end_time.timestamp() * 1000)
+        return [
+            {
+                "field_name": DATE_PARTITION_FIELD,
+                "operator": QueryConditionOperator.BETWEEN.value,
+                "filters": [start_time.format(DATE_FORMAT), end_time.format(DATE_FORMAT)],
+            },
+            {
+                "field_name": TIMESTAMP_PARTITION_FIELD,
+                "operator": QueryConditionOperator.BETWEEN.value,
+                "filters": [start_ms, end_ms],
+            },
+        ]
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("sort_list"):
+            attrs["sort_list"] = DEFAULT_COLLECTOR_SORT_LIST
+        system_conditions = self._build_system_conditions(attrs)
+        time_conditions = self._build_time_conditions(attrs)
+        attrs["filters"].extend([*system_conditions, *time_conditions])
+        return attrs
+
+
+class CollectorSearchConfigRespSerializer(serializers.Serializer):
+    """
+    查询配置响应序列化器
+    """
+
+    field = FieldListSerializer()
+    allow_operators = serializers.ListField(child=serializers.ChoiceField(choices=QueryConditionOperator.choices))
+
+
+class CollectorSearchResponseSerializer(QuerySearchResponseSerializer):
+    """
+    日志查询响应序列化器
+    """
+
+    query_sql = serializers.CharField(required=False, allow_blank=True)
+    count_sql = serializers.CharField(required=False, allow_blank=True)

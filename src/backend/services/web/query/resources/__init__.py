@@ -16,10 +16,5 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from blueapps.core.exceptions import BlueException
-from django.utils.translation import gettext_lazy
-
-
-class ClusterNotExist(BlueException):
-    MODULE_CODE = "21"
-    MESSAGE = gettext_lazy("集群不存在")
+from .doris import *  # noqa
+from .es import *  # noqa

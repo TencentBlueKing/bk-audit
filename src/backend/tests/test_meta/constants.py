@@ -58,7 +58,7 @@ from tests.test_databus.collector.constants import (
 from tests.test_databus.collector.constants import SYSTEM_HOST as _SYSTEM_HOST
 from tests.test_databus.collector.constants import SYSTEM_TOKEN as _SYSTEM_TOKEN
 from tests.test_databus.storage.constants import USERNAME
-from tests.test_esquery.constants import (
+from tests.test_query.constants import (
     GET_AUTH_SYSTEMS_API_RESP as _GET_AUTH_SYSTEMS_API_RESP,
 )
 
@@ -489,3 +489,23 @@ RETRIEVE_USER_PARAMS = {
     "fields": RETRIEVE_USER_FIELDS,
 }
 RETRIEVE_USER_DATA = RETRIEVE_USER_API_RESP
+
+GLOBAL_CHOICES = {
+    'query_condition_operator': [
+        {'id': 'eq', 'name': '=  等于'},
+        {'id': 'neq', 'name': '!=  不等于'},
+        {'id': 'gt', 'name': '>  大于'},
+        {'id': 'lt', 'name': '<  小于'},
+        {'id': 'gte', 'name': '>=  大于等于'},
+        {'id': 'lte', 'name': '<=  小于等于'},
+        {'id': 'include', 'name': 'in  属于'},
+        {'id': 'exclude', 'name': 'not in  不属于'},
+        {'id': 'like', 'name': 'like  包含(模糊匹配)'},
+        {'id': 'not_like', 'name': 'not like  不包含(模糊匹配)'},
+        {'id': 'isnull', 'name': 'is null  为空'},
+        {'id': 'notnull', 'name': 'is not null  不为空'},
+        {'id': 'match_all', 'name': '匹配全部'},
+        {'id': 'match_any', 'name': '匹配任意'},
+        {'id': 'between', 'name': '在之间'},
+    ]
+}

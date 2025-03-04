@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-21 10:41+0800\n"
+"POT-Creation-Date: 2025-03-04 00:45+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,6 +23,12 @@ msgstr "User"
 
 msgid "Token"
 msgstr "Token"
+
+msgid "HDFS"
+msgstr "HDFS"
+
+msgid "Doris"
+msgstr "Doris"
 
 msgid "创建入库"
 msgstr "Create Storage"
@@ -939,12 +945,6 @@ msgstr "Application Config"
 msgid "命名空间"
 msgstr "Namespace"
 
-msgid "升序"
-msgstr "Asc"
-
-msgid "降序"
-msgstr "Desc"
-
 msgid "业务"
 msgstr "BKCC Biz"
 
@@ -1254,6 +1254,9 @@ msgstr "Get Asset Pull Info"
 msgid "获取所有标签"
 msgstr "List All Tags"
 
+msgid "获取全局枚举值配置"
+msgstr "Get Global Choices"
+
 msgid "搜索关键字"
 msgstr "Search Keyword"
 
@@ -1413,6 +1416,9 @@ msgstr "Instance Information Snapshot"
 
 msgid "来源系统"
 msgstr "Event Source System"
+
+msgid "原始数据内容"
+msgstr "Original Data Content"
 
 msgid "数据源ID"
 msgstr "DataID"
@@ -1938,6 +1944,12 @@ msgstr "Retrieve User Leader"
 msgid "审计中心"
 msgstr "BK Audit"
 
+msgid "升序"
+msgstr "Asc"
+
+msgid "降序"
+msgstr "Desc"
+
 msgid "参数验证失败"
 msgstr "Parameter Validation Failed"
 
@@ -2086,22 +2098,31 @@ msgid "<="
 msgstr "<="
 
 msgid "in"
-msgstr "In"
+msgstr "in"
 
 msgid "not in"
-msgstr "NotIn"
+msgstr "not in"
 
 msgid "like"
-msgstr "Like"
+msgstr "like"
 
 msgid "not like"
-msgstr "NotLike"
+msgstr "not like"
 
 msgid "is null"
-msgstr "IsNull"
+msgstr "is null"
 
 msgid "is not null"
-msgstr "IsNotNull"
+msgstr "is not null"
+
+msgid "match all"
+msgstr "match all"
+
+msgid "match any"
+msgstr "match any"
+
+msgid "between"
+msgstr "between"
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
@@ -2121,6 +2142,11 @@ msgstr "Unsupported aggregate type: '{aggregate_type}'."
 
 msgid "配置中必须指定 `from_table` 或 `join_tables`。"
 msgstr "`from_table` or `join_tables` must be specified in the configuration."
+
+#, fuzzy, python-brace-format
+#| msgid "操作符 {operator} 的值 {value} 不符合预期。"
+msgid "操作符 {operator} 的值 {value} 不符合预期。"
+msgstr "The value of operator {operator} is not as expected."
 
 msgid "数据拉取"
 msgstr "Data Pull"
@@ -2650,9 +2676,6 @@ msgstr "Running"
 msgid "启动中"
 msgstr "Preparing"
 
-msgid "HDFS"
-msgstr "HDFS"
-
 msgid "Redis"
 msgstr "Redis"
 
@@ -2938,14 +2961,30 @@ msgstr "Personal Account"
 msgid "平台账号"
 msgstr "Platform Account"
 
+msgid "GSE索引"
+msgstr "GSE Index"
+
+msgid "迭代索引"
+msgstr "Iterative Index"
+
 msgid "集群不存在"
 msgstr "集群不存在"
+
+#, python-brace-format
+msgid "过滤条件 Key 解析错误: {key}"
+msgstr "Filter Condition Key parsing error: {key}"
 
 msgid "搜索(All)"
 msgstr "Search(All)"
 
 msgid "搜索"
 msgstr "Search"
+
+msgid "日志查询配置"
+msgstr "Log Query Config"
+
+msgid "日志查询"
+msgstr "Collector Search"
 
 msgid "时间范围"
 msgstr "Time Limit"
@@ -2955,6 +2994,27 @@ msgstr "Split by commas"
 
 msgid "多个字段以半角逗号分隔"
 msgstr "Split by commas"
+
+msgid "嵌套字段 key"
+msgstr "Nested field key"
+
+msgid "Operator"
+msgstr "Operator"
+
+#, fuzzy
+#| msgid "筛选"
+msgid "筛选值"
+msgstr "Filter value"
+
+msgid "多个筛选值，每个值可以是字符串、整数或浮点数"
+msgstr "Multiple filter values, each of which can be a string, integer, or float"
+
+#, python-format
+msgid "字段%s不支持该操作符%s"
+msgstr "Field %s does not support the operator %s"
+
+msgid "检索条件列表"
+msgstr "Search Filters list"
 
 msgid "Risk"
 msgstr "Risk"
@@ -3167,9 +3227,6 @@ msgstr "Risk Experience Content"
 
 msgid "Risk Experience"
 msgstr "Risk Experience"
-
-msgid "Operator"
-msgstr "Operator"
 
 msgid "Action"
 msgstr "Action"
@@ -3980,9 +4037,6 @@ msgstr "Field"
 
 msgid "单个筛选值，可以是字符串、整数或浮点数"
 msgstr "A single filter value, which can be a string, integer, or float"
-
-msgid "多个筛选值，每个值可以是字符串、整数或浮点数"
-msgstr "Multiple filter values, each of which can be a string, integer, or float"
 
 msgid "Conditions"
 msgstr "Conditions"

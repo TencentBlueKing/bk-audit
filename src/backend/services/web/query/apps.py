@@ -16,13 +16,11 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from bk_resource import api, resource
-from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from django.apps import AppConfig
+from django.utils.translation import gettext_lazy
 
 
-class EsQueryViewSet(ResourceViewSet):
-    resource_routes = [
-        ResourceRoute("GET", resource.esquery.search, endpoint="search"),
-        ResourceRoute("GET", api.bk_log.index_set_operators, endpoint="operators"),
-        ResourceRoute("GET", resource.esquery.field_map, endpoint="field_map"),
-    ]
+class EsqueryConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "services.web.query"
+    verbose_name = gettext_lazy("ES检索")

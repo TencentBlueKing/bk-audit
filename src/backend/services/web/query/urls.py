@@ -16,34 +16,13 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext_lazy
+from bk_resource.routers import ResourceRouter
+from django.conf.urls import include
+from django.urls import re_path
 
-from core.choices import TextChoices
+from services.web.query import views
 
-DEFAULT_TIMEDELTA = 7
-DEFAULT_PAGE = 1
-DEFAULT_PAGE_SIZE = 10
+router = ResourceRouter()
+router.register_module(views)
 
-ES_MAX_LIMIT = 10000
-
-SORT_ASC = "asc"
-SORT_DESC = "desc"
-
-DEFAULT_SORT_LIST = [["dtEventTimeStamp", SORT_DESC], ["gseIndex", SORT_DESC], ["iterationIndex", SORT_DESC]]
-
-
-class AccessTypeChoices(TextChoices):
-    WEB = "0", gettext_lazy("WebUI")
-    API = "1", gettext_lazy("API")
-    CONSOLE = "2", gettext_lazy("Console")
-    OTHER = "-1", gettext_lazy("Other")
-
-
-class UserIdentifyTypeChoices(TextChoices):
-    PERSONAL = "0", gettext_lazy("个人账号")
-    PLATFORM = "1", gettext_lazy("平台账号")
-
-
-class ResultCodeChoices(TextChoices):
-    SUCCESS = "0", gettext_lazy("成功")
-    FAILED = "-1", gettext_lazy("其他")
+urlpatterns = (re_path(r"namespaces/(?P<namespace>[\w\-]+)/", include(router.urls)),)

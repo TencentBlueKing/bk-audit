@@ -15,7 +15,9 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from pypika.queries import QueryBuilder
+from typing import Any
+
+from pypika.queries import QueryBuilder, Table
 
 
 class BKBaseQueryBuilder(QueryBuilder):
@@ -24,3 +26,14 @@ class BKBaseQueryBuilder(QueryBuilder):
     """
 
     QUOTE_CHAR = "`"
+
+
+class BkBaseTable(Table):
+    """
+    数据平台表
+    """
+
+    def get_sql(self, **kwargs: Any) -> str:
+        kwargs["quote_char"] = None
+        kwargs["alias_quote_char"] = "`"
+        return super().get_sql(**kwargs)

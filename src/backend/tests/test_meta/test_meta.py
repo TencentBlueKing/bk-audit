@@ -44,6 +44,7 @@ from tests.test_meta.constants import (
     GET_SPACES_MINE_OF_V2_DATA,
     GET_STANDARD_FIELDS_DATA,
     GET_STANDARD_FIELDS_PARAMS,
+    GLOBAL_CHOICES,
     LIST_USERS_API_RESP,
     LIST_USERS_DATA,
     LIST_USERS_PARAMS,
@@ -306,3 +307,8 @@ class MetaTest(TestCase):
         self.resource.meta.retrieve_user(**RETRIEVE_USER_PARAMS)
         result = self.resource.meta.retrieve_user(**RETRIEVE_USER_PARAMS)
         self.assertEqual(result, RETRIEVE_USER_DATA)
+
+    def test_get_global_choices(self):
+        """GetGlobalChoicesResource"""
+        result = self.resource.meta.get_global_choices()
+        self.assertEqual(result, GLOBAL_CHOICES)

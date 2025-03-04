@@ -215,3 +215,11 @@ def get_app_info():
         return app
     except (IndexError, AttributeError):
         raise AppPermissionDenied()
+
+
+def is_product() -> bool:
+    """
+    判断是否为生产模式
+    """
+
+    return settings.RUN_MODE == "PRODUCT"

@@ -15,40 +15,46 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Type, Union
 
-from pypika import Field as PypikaField
 from pypika import Table
 from pypika.queries import QueryBuilder
 from pypika.terms import BasicCriterion, EmptyCriterion
 
+from core.sql.builder import BkBaseTable
 from core.sql.constants import AggregateType, FilterConnector, Operator
 from core.sql.exceptions import (
     InvalidAggregateTypeError,
     MissingFromOrJoinError,
     TableNotRegisteredError,
     UnsupportedJoinTypeError,
-    UnsupportedOperatorError,
 )
 from core.sql.model import Condition, Field, SqlConfig
 from core.sql.model import Table as SqlTable
 from core.sql.model import WhereCondition
+from core.sql.terms import PypikaField
 
 
 class SQLGenerator:
     """SQL 生成器"""
 
     table_cls = Table
+    field_type_cls = PypikaField
+    table_map: Dict[str, Table]
+    config: SqlConfig = None
 
-    def __init__(self, query_builder: QueryBuilder, config: SqlConfig):
+    def __init__(
+        self, query_builder: QueryBuilder, table_cls: Type[Table] = None, field_type_cls: Type[PypikaField] = None
+    ):
         """
         初始化生成器
         :param query_builder: PyPika 的 QueryBuilder 对象
-        :param config: SQL 配置
+        :param table_cls: 自定义的 Table 类
+        :param field_type_cls: 自定义的字段类型类
         """
         self.query_builder = query_builder
-        self.config = config
-        self.table_map: Dict[str, Table] = {}
+        self.table_cls = table_cls or self.table_cls
+        self.field_type_cls = field_type_cls or self.field_type_cls
 
     def _register_tables(self):
         """注册所有有效的表名"""
@@ -80,10 +86,13 @@ class SQLGenerator:
 
     def _get_pypika_field(self, field: Field) -> PypikaField:
         """根据 Field 获取 PyPika 字段"""
-        return self._get_table(field.table).field(field.raw_name)
+        table = self._get_table(field.table)
+        return self.field_type_cls.get_field(table, field)
 
-    def generate(self) -> QueryBuilder:
+    def generate(self, config: SqlConfig) -> QueryBuilder:
         """根据配置构建 SQL 查询"""
+        self.config = config
+        self.table_map = {}
         self._register_tables()
         query = self.query_builder
         query = self._build_from(query)
@@ -137,7 +146,6 @@ class SQLGenerator:
                 pypika_field = aggregate_func(pypika_field)
 
             pypika_field = pypika_field.as_(field.display_name)
-
             query = query.select(pypika_field)
         return query
 
@@ -153,10 +161,7 @@ class SQLGenerator:
         """处理条件"""
         field = self._get_pypika_field(condition.field)
         operator = condition.operator
-        data = Operator.handler(operator, field, condition.filter, condition.filters)
-        if not data:
-            raise UnsupportedOperatorError(operator)
-        return data
+        return Operator.handler(operator, field, condition.filter, condition.filters)
 
     def _apply_where_conditions(self, where_condition: WhereCondition) -> BasicCriterion:
         """递归构建 WHERE 子句"""
@@ -206,3 +211,9 @@ class SQLGenerator:
             if self.config.pagination.offset:
                 query = query.offset(self.config.pagination.offset)
         return query
+
+
+class BkBaseSqlGenerator(SQLGenerator):
+    """BK-BASE 版本的 SQL 生成器"""
+
+    table_cls = BkBaseTable
