@@ -92,7 +92,9 @@
                   border-radius: 2px;">
                 {{ item.left_table.display_name }}
               </span>
-              {{ getDataSourceText(item.left_table) }}
+              <span style="margin-left: 5px;">{{ commonData.link_table_table_type.
+                find(tableType => tableType.value === item.left_table.table_type)?.label }}/</span>
+              <span>{{ getDataSourceText(item.left_table) }}</span>
             </div>
             <div
               v-bk-tooltips="joinTypeList.find(type => type.value === item.join_type)?.label || item.join_type"
@@ -109,7 +111,9 @@
                   border-radius: 2px;">
                 {{ item.right_table.display_name }}
               </span>
-              {{ getDataSourceText(item.right_table) }}
+              <span style="margin-left: 5px;">{{ commonData.link_table_table_type.
+                find(tableType => tableType.value === item.right_table.table_type)?.label }}/</span>
+              <span>{{ getDataSourceText(item.right_table) }}</span>
             </div>
           </div>
           <template
@@ -144,6 +148,7 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
+  import CommonDataModel from '@model/strategy/common-data';
 
   import AuditIcon from '@components/audit-icon';
 
@@ -234,6 +239,13 @@
     run: fetchSystemWithAction,
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
+  });
+
+  const {
+    data: commonData,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
   });
 
   const findLabelByValue = (data: Array<{

@@ -1,8 +1,9 @@
 <template>
-  <div class="add-field-btn">
+  <div
+    class="add-field-btn"
+    @click="handleShowPop">
     <audit-icon
-      type="add"
-      @click="handleShowPop" />
+      type="add" />
   </div>
   <bk-popover
     ext-cls="field-custom-popover"

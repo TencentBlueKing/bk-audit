@@ -140,6 +140,7 @@
                 :input-search="false"
                 :list="dicts[item.key]"
                 :loading="fieldLoading"
+                :paste-fn="pasteFn"
                 :placeholder="t('请输入并Enter结束')"
                 trigger="focus"
                 @blur="isValueFocus[index] = false"
@@ -485,6 +486,8 @@
   } = useRequest(StrategyManageService.fetchStrategyFieldValue, {
     defaultValue: [],
   });
+
+  const pasteFn = (value: string) => ([{ id: value, name: value }]);
 
   // 将数据转为秒
   const handleSeconds = () => {

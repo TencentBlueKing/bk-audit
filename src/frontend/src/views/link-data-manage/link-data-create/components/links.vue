@@ -101,7 +101,7 @@
                   filterable
                   :placeholder="t('数据源类型')"
                   :prefix="t('数据源')"
-                  @change="() => handleSelectRightTableType(index)">
+                  @change="(value: string) => handleSelectRightTableType(value, index)">
                   <!-- rightTableTypeList，左表选中eventlog，右不显示 -->
                   <bk-option
                     v-for="item in rightTableTypeList"
@@ -193,14 +193,20 @@
   const { t } = useI18n();
   const tableFieldRef = ref();
   const selectVerifyRef = ref();
+  const links = defineModel<LinkDataDetailModel['config']['links']>('links', {
+    required: true,
+  });
+
   const tableTableMap = ref<Record<'BuildIn' | 'BizRt', TableData>>({
     BuildIn: [],
     BizRt: [],
   });
-
-  const links = defineModel<LinkDataDetailModel['config']['links']>('links', {
-    required: true,
+  const configTypeMap: Record<string, any> = ref({
+    EventLog: EventLogComponent,
+    BuildIn: ResourceDataComponent,
+    BizRt: OtherDataComponent,
   });
+
   const linkTableTableTypeList = ref<Array<Record<string, any>>>([]);
   const oldFirstLefType = ref('');
   const joinTypeList = ref<Array<Record<string, any>>>([]);
@@ -221,7 +227,7 @@
     return resultHeight > (windowHeight - 450) ? windowHeight - 450 : resultHeight;
   });
 
-  // 如果左表选了EventLog，右表不能再选，直接隐藏不显示
+  // 右表不能再选EventLog，如果左表选了，直接隐藏不显示
   const rightTableTypeList = computed(() => {
     if (links.value.some(link => link.left_table.table_type === 'EventLog')) {
       return linkTableTableTypeList.value.filter(item => item.value !== 'EventLog');
@@ -244,6 +250,11 @@
     return linkTableTableTypeList.value.filter(item => selectedTableTypes.has(item.value));
   });
 
+  /**
+   * 缓存 'BuildIn' 和 'BizRt' 类型的表格数据
+   * @param data - 需要缓存的表格数据，类型为 `TableData`
+   * @param type - 表格数据的类型，只能是 `'BuildIn'` 或 `'BizRt'`
+   */
   const handleUpdateTableData = (data: TableData, type: 'BuildIn' | 'BizRt') => {
     tableTableMap.value[type] = data;
   };
@@ -269,79 +280,74 @@
     ...overrides,
   });
 
+  /**
+   * 重置链接的字段和表信息
+   * @param link 链接对象
+   * @param resetLeft 是否重置左表
+   * @param resetRight 是否重置右表
+   */
+  const resetLink = (link: LinkDataDetailModel['config']['links'][0], resetLeft: boolean, resetRight: boolean) => ({
+    ...link,
+    left_table: {
+      ...link.left_table,
+      rt_id: resetLeft ? [] : link.left_table.rt_id,
+      system_ids: resetLeft ? [] : link.left_table.system_ids,
+      table_type: resetLeft ? '' : link.left_table.table_type,
+    },
+    right_table: {
+      ...link.right_table,
+      rt_id: resetRight ? [] : link.right_table.rt_id,
+      system_ids: resetRight ? [] : link.right_table.system_ids,
+      table_type: resetRight ? '' : link.right_table.table_type,
+    },
+    link_fields: link.link_fields.map(fieldItem => ({
+      left_field: resetLeft ? { field_name: '', display_name: '' } : fieldItem.left_field,
+      right_field: resetRight ? { field_name: '', display_name: '' } : fieldItem.right_field,
+    })),
+  });
+
+  /**
+ * 处理选择左表类型
+ * @param value 选择的表类型
+ * @param index 当前链接的索引
+ */
   const handleSelectLeftTableType = (value: string, index: number) => {
-    // 如果重选了主表，全部重置
     if (index === 0 && links.value.length > 1) {
       InfoBox(createInfoBoxConfig({
         onConfirm() {
-          links.value = links.value.map((item, linkIndex) => ({
-            ...item,
-            left_table: {
-              ...item.left_table,
-              rt_id: [],
-              system_ids: [],
-              table_type: linkIndex === 0 ? value : '',
-            },
-            right_table: {
-              ...item.right_table,
-              rt_id: [],
-              system_ids: [],
-              table_type: '',
-            },
-            link_fields: item.link_fields.map(() => ({
-              left_field: {
-                field_name: '',
-                display_name: '',
-              },
-              right_field: {
-                field_name: '',
-                display_name: '',
-              },
-            })),
-          }));
+          // 重置所有链接的表
+          links.value = links.value.map((item, linkIndex) => {
+            // 重置所有链接的表
+            const updatedLink = resetLink(item, true, true);
+            // 第一个链接的左表类型更新为新值
+            if (linkIndex === 0) {
+              updatedLink.left_table.table_type = value;
+            }
+            return updatedLink;
+          });
         },
         onClose() {
+          // 恢复旧的左表类型
           links.value[0].left_table.table_type = oldFirstLefType.value;
         },
       }));
       return;
     }
-    // 其他重新选择数据源后，清空对应rt_id, system_ids, link_fields
-    links.value[index].left_table = {
-      ...links.value[index].left_table,
-      rt_id: '',
-      system_ids: [],
-    };
-    links.value[index].link_fields =  links.value[index].link_fields.map(fieldItem => ({
-      left_field: {
-        field_name: '',
-        display_name: '',
-      },
-      right_field: fieldItem.right_field,
-    }));
+
+    // 其他情况，仅重置当前链接的左表
+    links.value[index] = resetLink(links.value[index], true, false);
+    links.value[index].left_table.table_type = value;
   };
 
-  const handleSelectRightTableType = (index: number) => {
-    // 清空对应rt_id, system_ids, link_fields
-    links.value[index].right_table = {
-      ...links.value[index].right_table,
-      rt_id: '',
-      system_ids: [],
-    };
-    links.value[index].link_fields =  links.value[index].link_fields.map(fieldItem => ({
-      left_field: fieldItem.left_field,
-      right_field: {
-        field_name: '',
-        display_name: '',
-      },
-    }));
+  /**
+   * 处理选择右表类型
+   * @param index 当前链接的索引
+   */
+  const handleSelectRightTableType = (value: string, index: number) => {
+    // 仅重置当前链接的右表
+    links.value[index] = resetLink(links.value[index], false, true);
+    links.value[index].right_table.table_type = value;
   };
-
-  const configTypeMap: Record<string, any> = ref({
-    EventLog: EventLogComponent,
-    BuildIn: ResourceDataComponent,
-    BizRt: OtherDataComponent,
-  });
 
   // 获取数据源
   const {
