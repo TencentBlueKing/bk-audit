@@ -154,6 +154,6 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
 )
 
 # 时间分区字段
-DATE_FORMAT = "YYYYMMDD"
+DATE_FORMAT = "%Y%m%d"
 DATE_PARTITION_FIELD = "thedate"
 TIMESTAMP_PARTITION_FIELD = "dtEventTimeStamp"
