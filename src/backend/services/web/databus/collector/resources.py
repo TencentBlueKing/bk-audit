@@ -508,19 +508,25 @@ class ToggleJoinDataResource(CollectorMeta):
                 SnapshotStorage.objects.create(snapshot=snapshot, storage_type=st)
         else:
             # Iterate over each storage associated with the snapshot
+            ret = None
             for storage in snapshot.storages.all():
                 if snapshot.join_data_type == JoinDataType.BASIC:
-                    BasicJoinHandler(
+                    ret = BasicJoinHandler(
                         system_id=snapshot.system_id,
                         resource_type_id=snapshot.resource_type_id,
                         storage_type=storage.storage_type,
-                    ).stop()
+                    ).stop(multiple_storage=True)
                 elif snapshot.join_data_type == JoinDataType.ASSET:
-                    AssetHandler(
+                    ret = AssetHandler(
                         system_id=snapshot.system_id,
                         resource_type_id=snapshot.resource_type_id,
                         storage_type=storage.storage_type,
-                    ).stop()
+                    ).stop(multiple_storage=True)
+                if not ret:
+                    break
+            else:
+                snapshot.status = SnapshotRunningStatus.CLOSED.value
+                snapshot.save()
         snapshot.refresh_from_db()
         return snapshot
 

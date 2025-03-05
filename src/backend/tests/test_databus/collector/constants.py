@@ -35,6 +35,9 @@ from services.web.databus.constants import (
 from tests.test_databus.collector_plugin.constants import PLUGIN_DATA as _PLUGIN_DATA
 from tests.test_databus.collector_plugin.constants import PLUGIN_ID as _PLUGIN_ID
 from tests.test_databus.collector_plugin.constants import PLUGIN_NAME as _PLUGIN_NAME
+from tests.test_databus.collector_plugin.constants import (
+    REPLICA_STORAGE_CLUSTER_CONFIG as _REPLICA_STORAGE_CLUSTER_CONFIG,
+)
 from tests.test_databus.storage.constants import CLUSTER_ID as _CLUSTER_ID
 from tests.test_databus.storage.constants import CLUSTER_NAME as _CLUSTER_NAME
 from tests.test_databus.storage.constants import PORT as _PORT
@@ -44,6 +47,7 @@ from tests.test_databus.storage.constants import SCHEMA as _SCHEMA
 PLUGIN_ID = _PLUGIN_ID
 PLUGIN_NAME = _PLUGIN_NAME
 PLUGIN_DATA = copy.deepcopy(_PLUGIN_DATA)
+REPLICA_STORAGE_CLUSTER_CONFIG = _REPLICA_STORAGE_CLUSTER_CONFIG
 
 # Base
 COLLECTOR_ID = 1

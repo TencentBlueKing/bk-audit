@@ -24,6 +24,7 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from services.web.databus.constants import (
     COLLECTOR_PLUGIN_ID,
+    DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     DEFAULT_STORAGE_CONFIG_KEY,
     ContainerCollectorType,
     SnapshotRunningStatus,
@@ -55,6 +56,7 @@ from tests.test_databus.collector.constants import (
     GET_COLLECTOR_RESULT_DATA,
     PLUGIN_DATA,
     PLUGIN_ID,
+    REPLICA_STORAGE_CLUSTER_CONFIG,
     RESOURCE_TYPE_ID,
     RESOURCE_TYPE_SCHEMA,
     STORAGE_CLUSTER_ID,
@@ -102,6 +104,12 @@ class CollectorTest(TestCase):
         GlobalMetaConfig.set(
             DEFAULT_STORAGE_CONFIG_KEY,
             STORAGE_CLUSTER_ID,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.namespace,
+        )
+        GlobalMetaConfig.set(
+            DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
+            REPLICA_STORAGE_CLUSTER_CONFIG,
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=self.namespace,
         )
@@ -267,6 +275,7 @@ class CollectorTest(TestCase):
     )
     @mock.patch("databus.collector.snapshot.join.etl_storage.api.bk_base.databus_tasks_post", mock.Mock())
     @mock.patch("databus.collector.snapshot.join.etl_storage.api.bk_base.databus_storages_post", mock.Mock())
+    @mock.patch("databus.collector.snapshot.join.etl_storage.api.bk_base.databus_storages_put", mock.Mock())
     @mock.patch(
         "databus.collector.snapshot.join.etl_storage.resource.meta.resource_type_schema",
         mock.Mock(return_value=RESOURCE_TYPE_SCHEMA),
