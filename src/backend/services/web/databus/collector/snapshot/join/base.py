@@ -92,7 +92,12 @@ class JoinConfig:
 class BaseJoinDataHandler(metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
-    def join_data_type(self):
+    def join_data_type(self) -> str:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def etl_storage_handler_cls(self) -> JoinDataEtlStorageHandler:
         pass
 
     def __init__(self, system_id: str, resource_type_id: str, storage_type: str):
@@ -113,18 +118,25 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
             bkbase_table_id=None
         )
 
-    def start(self):
+    def start(self, multiple_storage: bool = False):
+        """
+        如果是建立多个存储，则需要独立设置成功标记位
+        """
         try:
             # 创建DATAID
-            self.create_dataid()
-            # 创建清洗入库
-            self.create_data_etl_storage()
+            self.create_data_id()
+            # 创建清洗
+            self.create_data_etl()
+            # 创建入库
+            self.create_data_storage()
             # 更新采集项清洗链路
             self.update_log_clean_link()
             # 更新状态
-            self.update_status(SnapshotRunningStatus.RUNNING.value)
-            self.snapshot.status_msg = ""
-            self.snapshot.save()
+            if not multiple_storage:
+                self.update_status(SnapshotRunningStatus.RUNNING.value)
+                self.snapshot.status_msg = ""
+                self.snapshot.save()
+            return True
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             self.update_status(SnapshotRunningStatus.FAILED.value)
             self.snapshot.status_msg = str(err)
@@ -139,43 +151,98 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
                 self.snapshot.id,
                 err,
             )
+            return False
 
     def update_status(self, status: str) -> None:
         self.snapshot.status = status
 
-    def stop(self):
+    def stop(self, multiple_storage: bool = False):
         # 直接停止采集任务
-        params = {
-            "bkbase_data_id": self.snapshot.bkbase_data_id,
-            "data_scenario": "http",
-            "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
-            "config_mode": "full",
-            "scope": [{"deploy_plan_id": 0, "hosts": []}],
-        }
-        api.bk_base.stop_collector(**params)
-        # 更新状态
-        self.update_status(SnapshotRunningStatus.CLOSED.value)
-        self.snapshot.save()
+        try:
+            params = {
+                "bkbase_data_id": self.snapshot.bkbase_data_id,
+                "data_scenario": "http",
+                "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
+                "config_mode": "full",
+                "scope": [{"deploy_plan_id": 0, "hosts": []}],
+            }
+            api.bk_base.stop_collector(**params)
+            # 更新状态
+            if not multiple_storage:
+                self.update_status(SnapshotRunningStatus.CLOSED.value)
+                self.snapshot.save()
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            title = gettext("JoinDataStopFailed")
+            content = gettext("Error: %s") % str(err)
+            ErrorMsgHandler(title, content).send()
+            logger.exception(
+                "[Stop Join Data Failed] SystemID => %s, ResourceTypeID => %s, SnapshotID => %s; Err => %s",
+                self.system_id,
+                self.resource_type_id,
+                self.snapshot.id,
+                err,
+            )
+        return False
 
-    def create_dataid(self):
+    def create_data_id(self):
         # 判断是否已有
         logger.info(f"{self.__class__.__name__} Update or Create Collector; SnapshotID => {self.snapshot.id}")
         http_pull_handler = HttpPullHandler(self.system, self.resource_type, self.snapshot, self.join_data_type)
         self.snapshot.bkbase_data_id = http_pull_handler.update_or_create()
         self.snapshot.save()
 
-    def create_data_etl_storage(self):
+    def create_data_etl(self):
+        etl_storage_handler = self.etl_storage_handler_cls(
+            self.snapshot.bkbase_data_id,
+            self.system,
+            self.resource_type,
+            self.storage_type,
+        )
         # 已有清洗链路不做调整
         if self._get_table_id():
-            logger.info(f"{self.__class__.__name__} Skip EtlStorage; SnapshotID => {self.snapshot.id}")
-            return
-        # 没有清洗链路则创建
-        logger.info(f"{self.__class__.__name__} Create EtlStorage; SnapshotID => {self.snapshot.id}")
-        etl_storage_handler = JoinDataEtlStorageHandler(
-            self.snapshot.bkbase_data_id, self.system, self.resource_type, self.storage_type
-        )
-        self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id = etl_storage_handler.create()
+            logger.info(f"{self.__class__.__name__} Skip Etl; SnapshotID => {self.snapshot.id}")
+        else:
+            # 没有清洗链路则创建
+            logger.info(f"{self.__class__.__name__} Create Etl; SnapshotID => {self.snapshot.id}")
+
+            self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id = etl_storage_handler.create_clean()
         self.snapshot.save()
+
+    def create_data_storage(self):
+        etl_storage_handler = self.etl_storage_handler_cls(
+            self.snapshot.bkbase_data_id,
+            self.system,
+            self.resource_type,
+            self.storage_type,
+        )
+        # 已有入库不做调整
+        storage = self.snapshot.storages.filter(storage_type=self.storage_type).first()
+        try:
+            if storage.status == SnapshotRunningStatus.RUNNING:
+                logger.info(f"{self.__class__.__name__} Skip Storage; SnapshotID => {self.snapshot.id}")
+                return
+            if storage.status == SnapshotRunningStatus.FAILED:
+                etl_storage_handler.create_storage(update=True)
+            else:
+                etl_storage_handler.create_storage()
+            storage.status = SnapshotRunningStatus.RUNNING.value
+            storage.save()
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            storage.status == SnapshotRunningStatus.FAILED
+            storage.save()
+            title = gettext("CreateJoinDataStorageFailed")
+            content = gettext("Error: %s") % str(err)
+            ErrorMsgHandler(title, content).send()
+            logger.exception(
+                "[Creat Join Data Storage Failed] SystemID => %s, ResourceTypeID => %s, "
+                "SnapshotID => %s, StorageType => %s; Err => %s",
+                self.system_id,
+                self.resource_type_id,
+                self.snapshot.id,
+                self.storage_type,
+                err,
+            )
+            raise
 
     def _get_table_id(self) -> str:
         return self.snapshot.bkbase_table_id
@@ -201,6 +268,7 @@ class BasicJoinHandler(BaseJoinDataHandler):
     """基础关联数据处理"""
 
     join_data_type = JoinDataType.BASIC.value
+    etl_storage_handler_cls = JoinDataEtlStorageHandler
 
     def __init__(self, system_id: str, resource_type_id: str, storage_type: str = SnapShotStorageChoices.REDIS.value):
         super().__init__(system_id, resource_type_id, storage_type)
@@ -210,6 +278,7 @@ class AssetHandler(BaseJoinDataHandler):
     """资产数据处理"""
 
     join_data_type = JoinDataType.ASSET.value
+    etl_storage_handler_cls = AssetEtlStorageHandler
 
     def __init__(self, system_id: str, resource_type_id: str, storage_type: str = SnapShotStorageChoices.HDFS.value):
         super().__init__(system_id, resource_type_id, storage_type)
@@ -217,22 +286,6 @@ class AssetHandler(BaseJoinDataHandler):
     def load_collectors(self) -> QuerySet:
         """Asset更新无需更新相关日志采集项，因此直接返回空"""
         return CollectorConfig.objects.none()
-
-    def update_status(self, status: str) -> None:
-        self.snapshot.status = status
-
-    def create_data_etl_storage(self):
-        # 已有清洗链路不做调整
-        if self._get_table_id():
-            logger.info(f"{self.__class__.__name__} Skip EtlStorage; SnapshotID => {self.snapshot.id}")
-            return
-        # 没有清洗链路则创建
-        logger.info(f"{self.__class__.__name__} Create EtlStorage; SnapshotID => {self.snapshot.id}")
-        etl_storage_handler = AssetEtlStorageHandler(
-            self.snapshot.bkbase_data_id, self.system, self.resource_type, self.storage_type
-        )
-        self.snapshot.bkbase_processing_id, self.snapshot.bkbase_table_id = etl_storage_handler.create()
-        self.snapshot.save()
 
     @property
     def result_table_id(self):
