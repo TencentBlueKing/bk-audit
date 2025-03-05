@@ -29,7 +29,7 @@ from core.sql.terms import DorisField
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
-class CollectorSQLBuilder:
+class DorisSQLBuilder:
     """日志查询SQL构建器"""
 
     def __init__(
@@ -101,7 +101,7 @@ class CollectorSQLBuilder:
             order_field = sort_item["order_field"]
             order_type = sort_item["order_type"]
             order = Order.desc if order_type == OrderTypeChoices.DESC else Order.asc
-            query = query.orderby(self.get_pypika_fields(name=order_field), order)
+            query = query.orderby(self.get_pypika_fields(name=order_field), order=order)
         return query
 
     def build_data_sql(self) -> str:

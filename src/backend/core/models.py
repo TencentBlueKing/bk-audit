@@ -131,15 +131,11 @@ class OperateRecordModel(models.Model):
     objects = OperateRecordModelManager()
     _objects = models.Manager()
 
-    created_at = models.DateTimeField(gettext_lazy("创建时间"), default=timezone.now)
+    created_at = models.DateTimeField(gettext_lazy("创建时间"), default=timezone.now, db_index=True)
 
-    created_by = models.CharField(gettext_lazy("创建者"), max_length=32, default="", null=True, blank=True)
-    updated_at = models.DateTimeField(
-        gettext_lazy("更新时间"),
-        blank=True,
-        null=True,
-    )
-    updated_by = models.CharField(gettext_lazy("修改者"), max_length=32, blank=True, default="", null=True)
+    created_by = models.CharField(gettext_lazy("创建者"), max_length=32, default="", null=True, blank=True, db_index=True)
+    updated_at = models.DateTimeField(gettext_lazy("更新时间"), blank=True, null=True, db_index=True)
+    updated_by = models.CharField(gettext_lazy("修改者"), max_length=32, blank=True, default="", null=True, db_index=True)
 
     def save(self, update_record=True, *args, **kwargs):
         """
