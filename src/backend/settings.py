@@ -71,3 +71,29 @@ def load_settings(module_path: str, raise_exception: bool = True):
 
 load_settings(module_path=DJANGO_CONF_MODULE)
 load_settings(module_path=f"services.{DEPLOY_SERVICE}.settings", raise_exception=False)
+
+
+# 屏蔽DRF新版本路由注册的不兼容逻辑
+def is_already_registered(self, new_basename):
+    return False
+
+
+from bk_resource.routers import ResourceRouter  # noqa
+
+ResourceRouter.is_already_registered = is_already_registered
+
+# 目前 Django 仅是对 5.7 做了软性的不兼容改动，在没有使用 8.0 特异的功能时，对 5.7 版本的使用无影响，这边做个patch兼容5.7
+from django.db.backends.mysql.features import DatabaseFeatures  # noqa
+from django.utils.functional import cached_property  # noqa
+
+
+class PatchFeatures:
+    @cached_property
+    def minimum_database_version(self):
+        if self.connection.mysql_is_mariadb:
+            return (10, 4)
+        else:
+            return (5, 7)
+
+
+DatabaseFeatures.minimum_database_version = PatchFeatures.minimum_database_version
