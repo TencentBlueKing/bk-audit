@@ -23,19 +23,26 @@ from arrow import Arrow
 from django.test import TestCase
 from pypika import Order
 
+from services.web.query.constants import DATE_FORMAT
 from services.web.query.serializers import CollectorSearchReqSerializer
-from services.web.query.utils.collector import CollectorSQLBuilder
+from services.web.query.utils.doris import DorisSQLBuilder
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
-class TestCollectorSQLBuilder(TestCase):
-    """CollectorSQLBuilder 单元测试"""
+class TestDorisSQLBuilder(TestCase):
+    """DorisSQLBuilder 单元测试"""
 
     def setUp(self):
         # Mock GlobalMetaConfig.get 返回固定表名
         # 固定时间范围（2025-02-20 22:49:16 至 2025-02-20 23:49:16）
-        self.start_time = Arrow.fromdatetime(datetime(2025, 2, 20, 22, 49, 16))
-        self.end_time = Arrow.fromdatetime(datetime(2025, 2, 20, 23, 49, 16))
+        start_timestamp = datetime(2025, 2, 19, 22, 0, 0).timestamp()
+        end_timestamp = datetime(2025, 2, 20, 4, 0, 0).timestamp()
+        self.start_time = Arrow.fromtimestamp(start_timestamp)
+        self.end_time = Arrow.fromtimestamp(end_timestamp)
+        self.start_timestamp = int(start_timestamp * 1000)
+        self.end_timestamp = int(end_timestamp * 1000)
+        self.start_date = self.start_time.strftime(DATE_FORMAT)
+        self.end_date = self.end_time.strftime(DATE_FORMAT)
 
     def tearDown(self):
         mock.patch.stopall()
@@ -55,7 +62,7 @@ class TestCollectorSQLBuilder(TestCase):
             }
         )
         conditions.extend(filters or [])
-        return CollectorSQLBuilder(
+        return DorisSQLBuilder(
             table="test_rt.doris",
             filters=conditions or [],
             sort_list=sort_list or [],
@@ -70,14 +77,15 @@ class TestCollectorSQLBuilder(TestCase):
         data_sql = builder.build_data_sql()
         count_sql = builder.build_count_sql()
         expect = (
-            "SELECT * FROM test_rt.doris WHERE `thedate` BETWEEN '20250220' AND '20250220' AND `dtEventTimeStamp`"
-            " BETWEEN 1740091756000 AND 1740095356000 LIMIT 50"
+            f"SELECT * FROM test_rt.doris WHERE `thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} LIMIT 50"
         )
         self.assertEqual(data_sql, expect)
         # 验证统计 SQL
         expect = (
-            "SELECT COUNT(*) `count` FROM test_rt.doris WHERE `thedate` BETWEEN '20250220' AND '20250220' "
-            "AND `dtEventTimeStamp` BETWEEN 1740091756000 AND 1740095356000 LIMIT 1"
+            f"SELECT COUNT(*) `count` FROM test_rt.doris WHERE "
+            f"`thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} LIMIT 1"
         )
         self.assertEqual(count_sql, expect)
 
@@ -117,19 +125,21 @@ class TestCollectorSQLBuilder(TestCase):
         data_sql = builder.build_data_sql()
         count_sql = builder.build_count_sql()
         expect = (
-            "SELECT * FROM test_rt.doris WHERE `thedate` BETWEEN '20250220' AND '20250220' "
-            "AND `dtEventTimeStamp` BETWEEN 1740091756000 AND 1740095356000 AND `system_id` "
-            "IN ('bk-audit','bk-bscp') AND `action_id`='create_link_table' AND `instance_name` "
-            "LIKE '%123131%' AND `instance_data`['key1']='value1' LIMIT 50"
+            f"SELECT * FROM test_rt.doris WHERE `thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} "
+            f"AND `dtEventTimeStamp`<={self.end_timestamp} AND `system_id` "
+            f"IN ('bk-audit','bk-bscp') AND `action_id`='create_link_table' AND `instance_name` "
+            f"LIKE '%123131%' AND `instance_data`['key1']='value1' LIMIT 50"
         )
         print(data_sql)
         self.assertEqual(data_sql, expect)
         expect = (
-            "SELECT COUNT(*) `count` FROM test_rt.doris WHERE `thedate` "
-            "BETWEEN '20250220' AND '20250220' AND `dtEventTimeStamp` "
-            "BETWEEN 1740091756000 AND 1740095356000 AND `system_id` IN ('bk-audit','bk-bscp') "
-            "AND `action_id`='create_link_table' AND `instance_name` LIKE '%123131%' "
-            "AND `instance_data`['key1']='value1' LIMIT 1"
+            f"SELECT COUNT(*) `count` FROM test_rt.doris WHERE "
+            f"`thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} "
+            f"AND `system_id` IN ('bk-audit','bk-bscp') "
+            f"AND `action_id`='create_link_table' AND `instance_name` LIKE '%123131%' "
+            f"AND `instance_data`['key1']='value1' LIMIT 1"
         )
         print(count_sql)
         self.assertEqual(count_sql, expect)
@@ -144,15 +154,15 @@ class TestCollectorSQLBuilder(TestCase):
         data_sql = builder.build_data_sql()
         count_sql = builder.build_count_sql()
         expect = (
-            "SELECT * FROM test_rt.doris WHERE `thedate` BETWEEN '20250220' AND '20250220' "
-            "AND `dtEventTimeStamp` BETWEEN 1740091756000 AND 1740095356000 "
-            "ORDER BY `dtEventTimeStamp`,'ASC',`gseIndex`,'ASC' LIMIT 50"
+            f"SELECT * FROM test_rt.doris WHERE `thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} "
+            f"ORDER BY `dtEventTimeStamp` ASC,`gseIndex` ASC LIMIT 50"
         )
         self.assertEqual(data_sql, expect)
         expect = (
-            "SELECT COUNT(*) `count` FROM test_rt.doris WHERE `thedate` "
-            "BETWEEN '20250220' AND '20250220' AND `dtEventTimeStamp` "
-            "BETWEEN 1740091756000 AND 1740095356000 LIMIT 1"
+            f"SELECT COUNT(*) `count` FROM test_rt.doris WHERE "
+            f"`thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} LIMIT 1"
         )
         self.assertEqual(count_sql, expect)
 
@@ -162,15 +172,15 @@ class TestCollectorSQLBuilder(TestCase):
         data_sql = builder.build_data_sql()
         count_sql = builder.build_count_sql()
         expect = (
-            "SELECT * FROM test_rt.doris WHERE `thedate` "
-            "BETWEEN '20250220' AND '20250220' AND `dtEventTimeStamp` "
-            "BETWEEN 1740091756000 AND 1740095356000 LIMIT 30 OFFSET 30"
+            f"SELECT * FROM test_rt.doris WHERE `thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} "
+            f"AND `dtEventTimeStamp`<={self.end_timestamp} LIMIT 30 OFFSET 30"
         )
         self.assertEqual(data_sql, expect)
         expect = (
-            "SELECT COUNT(*) `count` FROM test_rt.doris WHERE `thedate` "
-            "BETWEEN '20250220' AND '20250220' AND `dtEventTimeStamp` "
-            "BETWEEN 1740091756000 AND 1740095356000 LIMIT 1"
+            f"SELECT COUNT(*) `count` FROM test_rt.doris WHERE "
+            f"`thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} LIMIT 1"
         )
         self.assertEqual(count_sql, expect)
 
@@ -188,15 +198,16 @@ class TestCollectorSQLBuilder(TestCase):
         data_sql = str(builder.build_data_sql())
         count_sql = str(builder.build_count_sql())
         expect = (
-            "SELECT * FROM test_rt.doris WHERE `thedate` BETWEEN '20250220' AND '20250220' "
-            "AND `dtEventTimeStamp` BETWEEN 1740091756000 AND 1740095356000 AND `log` "
-            "MATCH_ALL ('12313') LIMIT 50"
+            f"SELECT * FROM test_rt.doris WHERE `thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} AND `log` "
+            f"MATCH_ALL ('12313') LIMIT 50"
         )
         self.assertEqual(expect, data_sql)
         expect = (
-            "SELECT COUNT(*) `count` FROM test_rt.doris WHERE `thedate` BETWEEN '20250220' AND '20250220' "
-            "AND `dtEventTimeStamp` BETWEEN 1740091756000 AND 1740095356000 AND `log` "
-            "MATCH_ALL ('12313') LIMIT 1"
+            f"SELECT COUNT(*) `count` FROM test_rt.doris WHERE "
+            f"`thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} AND `log` "
+            f"MATCH_ALL ('12313') LIMIT 1"
         )
         self.assertEqual(expect, count_sql)
 
@@ -214,16 +225,15 @@ class TestCollectorSQLBuilder(TestCase):
         count_sql = builder.build_count_sql()
         data_sql = builder.build_data_sql()
         expect = (
-            "SELECT * FROM test_rt.doris WHERE `thedate` "
-            "BETWEEN '20250220' AND '20250220' AND `dtEventTimeStamp` "
-            "BETWEEN 1740091756000 AND 1740095356000 "
-            "AND `event_content` LIKE '%123%' LIMIT 50"
+            f"SELECT * FROM test_rt.doris WHERE `thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} "
+            f"AND `event_content` LIKE '%123%' LIMIT 50"
         )
         self.assertEqual(data_sql, expect)
         expect = (
-            "SELECT COUNT(*) `count` FROM test_rt.doris "
-            "WHERE `thedate` BETWEEN '20250220' AND '20250220' "
-            "AND `dtEventTimeStamp` BETWEEN 1740091756000 AND 1740095356000 "
-            "AND `event_content` LIKE '%123%' LIMIT 1"
+            f"SELECT COUNT(*) `count` FROM test_rt.doris "
+            f"WHERE `thedate`>='{self.start_date}' AND `thedate`<='{self.end_date}' "
+            f"AND `dtEventTimeStamp`>={self.start_timestamp} AND `dtEventTimeStamp`<={self.end_timestamp} "
+            f"AND `event_content` LIKE '%123%' LIMIT 1"
         )
         self.assertEqual(count_sql, expect)

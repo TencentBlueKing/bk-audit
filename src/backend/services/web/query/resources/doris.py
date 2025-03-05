@@ -31,9 +31,9 @@ from services.web.query.constants import COLLECT_SEARCH_CONFIG
 from services.web.query.serializers import (
     CollectorSearchConfigRespSerializer,
     CollectorSearchReqSerializer,
-    QuerySearchResponseSerializer,
+    CollectorSearchResponseSerializer,
 )
-from services.web.query.utils.collector import CollectorSQLBuilder
+from services.web.query.utils.doris import DorisSQLBuilder
 
 from .base import QueryBaseResource, SearchDataParser
 
@@ -50,7 +50,7 @@ class CollectorSearchConfigResource(QueryBaseResource):
 class CollectorSearchResource(QueryBaseResource, SearchDataParser):
     name = gettext_lazy("日志查询")
     RequestSerializer = CollectorSearchReqSerializer
-    serializer_class = QuerySearchResponseSerializer
+    serializer_class = CollectorSearchResponseSerializer
 
     def build_sql(self, validated_request_data):
         """
@@ -69,7 +69,7 @@ class CollectorSearchResource(QueryBaseResource, SearchDataParser):
         )
         plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
         collector_rt_id = plugin.build_result_table_id(settings.DEFAULT_BK_BIZ_ID, plugin.collector_plugin_name_en)
-        sql_builder = CollectorSQLBuilder(
+        sql_builder = DorisSQLBuilder(
             table=collector_rt_id,
             filters=filters,
             sort_list=validated_request_data["sort_list"],
@@ -109,13 +109,13 @@ class CollectorSearchResource(QueryBaseResource, SearchDataParser):
         # 请求总数
         total = count_resp.get("list", [{}])[0].get("count", 0)
         # 响应
-        resp = {
-            "page": page,
-            "num_pages": page_size,
-            "total": total,
-            "results": data,
-        }
+        resp = {"page": page, "num_pages": page_size, "total": total, "results": data}
         # 非正式环境返回原始SQL
         if not is_product():
-            resp.update({"query_sql": data_sql, "count_sql": count_sql})
+            resp.update(
+                {
+                    "query_sql": data_sql,
+                    "count_sql": count_sql,
+                }
+            )
         return resp

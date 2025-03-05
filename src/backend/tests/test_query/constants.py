@@ -20,13 +20,14 @@ import copy
 from typing import List, Union
 from unittest import mock
 
+import arrow
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 from iam import Resource
 
 from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE
 from apps.permission.handlers.actions import ActionMeta
-from services.web.query.constants import COLLECT_SEARCH_CONFIG
+from services.web.query.constants import COLLECT_SEARCH_CONFIG, DATE_FORMAT
 from services.web.query.constants import DEFAULT_TIMEDELTA as _DEFAULT_TIMEDELTA
 from tests.test_databus.collector_plugin.constants import INDEX_SET_ID as _INDEX_SET_ID
 from tests.test_databus.collector_plugin.constants import PLUGIN_DATA as _PLUGIN_DATA
@@ -98,10 +99,16 @@ FIELD_MAP_DATA = {
 }
 
 # CollectorSearch Params
+start_time = arrow.get("2022-01-01 00:00:00")
+end_time = arrow.get("2022-12-31 00:00:00")
+start_date = start_time.strftime(DATE_FORMAT)
+end_date = end_time.strftime(DATE_FORMAT)
+start_timestamp = int(start_time.timestamp()) * 1000
+end_timestamp = int(end_time.timestamp()) * 1000
 COLLECTOR_SEARCH_PARAMS = {
     "namespace": settings.DEFAULT_NAMESPACE,
-    "start_time": "2022-01-01 00:00:00",
-    "end_time": "2022-12-31 00:00:00",
+    "start_time": start_time.isoformat(),
+    "end_time": end_time.isoformat(),
     "filters": [
         {"field_name": "system_id", "operator": "include", "filters": ["s1", "s2"]},
         {"field_name": "action_id", "operator": "include", "filters": ["create_link_table"]},
@@ -313,9 +320,9 @@ COLLECTOR_SEARCH_DATA_RESP = {
     "IN (1) AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
     "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
     "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
-    "LIKE '%1%' AND `system_id` IN ('bk-audit') AND `thedate` BETWEEN '20220101' AND '20221231' "
-    "AND `dtEventTimeStamp` BETWEEN 1640995200000 AND 1672444800000 "
-    "ORDER BY `dtEventTimeStamp`,'DESC',`gseIndex`,'DESC',`iterationIndex`,'DESC' LIMIT 10",
+    f"LIKE '%1%' AND `system_id` IN ('bk-audit') AND `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
+    f"AND `dtEventTimeStamp`>={start_timestamp} AND `dtEventTimeStamp`<={end_timestamp} "
+    "ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 10",
     "count_sql": f"SELECT COUNT(*) `count` FROM {PLUGIN_RESULT_TABLE} WHERE `system_id` IN ('s1','s2') AND `action_id` "
     "IN ('create_link_table') AND `resource_type_id` IN ('audit_log','notice_group') AND `instance_name` "
     "LIKE '%123131%' AND `username` IN ('xxx') AND `event_id` IN ('xxx') AND `request_id` IN ('xxx') "
@@ -325,8 +332,8 @@ COLLECTOR_SEARCH_DATA_RESP = {
     "AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
     "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
     "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
-    "LIKE '%1%' AND `system_id` IN ('bk-audit') AND `thedate` BETWEEN '20220101' AND '20221231' "
-    "AND `dtEventTimeStamp` BETWEEN 1640995200000 AND 1672444800000 LIMIT 1",
+    f"LIKE '%1%' AND `system_id` IN ('bk-audit') AND `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
+    f"AND `dtEventTimeStamp`>={start_timestamp} AND `dtEventTimeStamp`<={end_timestamp} LIMIT 1",
 }
 
 # CollectorSearchData

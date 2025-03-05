@@ -33,7 +33,7 @@ from apps.permission.handlers.permission import Permission
 from core.exceptions import PermissionException, ValidationError
 from core.permissions import SearchLogPermission
 from core.serializers import OrderSerializer
-from core.utils.tools import format_date_string
+from core.utils.tools import format_date_string, parse_datetime
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import (
@@ -323,20 +323,30 @@ class CollectorSearchReqSerializer(serializers.Serializer):
         时间分区条件
         """
 
-        start_time = arrow.get(format_date_string(validated_request_data["start_time"]))
-        end_time = arrow.get(format_date_string(validated_request_data["end_time"]))
+        start_time = parse_datetime(validated_request_data["start_time"])
+        end_time = parse_datetime(validated_request_data["end_time"])
         start_ms = int(start_time.timestamp() * 1000)
         end_ms = int(end_time.timestamp() * 1000)
         return [
             {
                 "field_name": DATE_PARTITION_FIELD,
-                "operator": QueryConditionOperator.BETWEEN.value,
-                "filters": [start_time.format(DATE_FORMAT), end_time.format(DATE_FORMAT)],
+                "operator": QueryConditionOperator.GTE.value,
+                "filters": [start_time.strftime(DATE_FORMAT)],
+            },
+            {
+                "field_name": DATE_PARTITION_FIELD,
+                "operator": QueryConditionOperator.LTE.value,
+                "filters": [end_time.strftime(DATE_FORMAT)],
             },
             {
                 "field_name": TIMESTAMP_PARTITION_FIELD,
-                "operator": QueryConditionOperator.BETWEEN.value,
-                "filters": [start_ms, end_ms],
+                "operator": QueryConditionOperator.GTE.value,
+                "filters": [start_ms],
+            },
+            {
+                "field_name": TIMESTAMP_PARTITION_FIELD,
+                "operator": QueryConditionOperator.LTE.value,
+                "filters": [end_ms],
             },
         ]
 
