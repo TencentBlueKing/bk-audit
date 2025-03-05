@@ -28,7 +28,12 @@ from drf_yasg.views import get_schema_view
 from core.permissions import SwaggerPermission, TokenSwaggerPermission
 
 info = openapi.Info(title="Audit", default_version="v1", description="审计中心 API")
-schema_view = get_schema_view(info, public=True, permission_classes=(SwaggerPermission,))
+schema_view = get_schema_view(
+    info,
+    public=True,
+    permission_classes=(SwaggerPermission,),
+    url=settings.BK_BACKEND_URL,
+)
 token_schema_view = get_schema_view(info, public=True, permission_classes=(TokenSwaggerPermission,))
 
 urlpatterns = [

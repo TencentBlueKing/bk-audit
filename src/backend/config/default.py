@@ -64,6 +64,9 @@ MIDDLEWARE += (
     "apigw_manager.apigw.authentication.ApiGatewayJWTUserMiddleware",  # JWT 透传的用户信息
 )
 
+# 系统访问地址(用作 swagger 访问返回)
+BK_BACKEND_URL = os.getenv("BKAPP_BACKEND_URL")
+
 # 默认数据库自增字段
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
