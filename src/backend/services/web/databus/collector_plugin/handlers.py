@@ -66,8 +66,6 @@ class PluginEtlHandler:
         # 创建合流入库物理表名
         table_id = f"{settings.DEFAULT_BK_BIZ_ID}_{self.get_table_id()}"
         main_storage_params["physical_table_name"] = f"write_{{yyyyMMdd}}_{table_id}"
-        if replica_storage_params:
-            replica_storage_params["physical_table_name"] = f"write_{{yyyyMMdd}}_{table_id}"
 
         # 创建入库
         if not self.plugin.has_storage:
@@ -199,10 +197,9 @@ class PluginEtlHandler:
                 "result_table_name_alias": self.get_table_id(),
                 "storage_type": "doris",
                 "storage_cluster": replica_default_bkbase_cluster_id,
-                "expires": "31d",  # 无效，实际由metadata控制
+                "expires": "365d",  # 无效，实际由metadata控制
                 "fields": replica_fields,
-                "config": {"has_unique_key": True},
-                "from_raw_data": False,
+                "config": {"dimension_table": False, "data_model": "duplicate_table", "is_profiling": False},
             }
         return main_storage_params, replica_storage_params
 
