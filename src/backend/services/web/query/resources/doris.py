@@ -24,7 +24,6 @@ from django.utils.translation import gettext_lazy
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
-from core.utils.tools import is_product
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
@@ -114,8 +113,7 @@ class CollectorSearchResource(QueryBaseResource, SearchDataParser):
             "num_pages": page_size,
             "total": total,
             "results": data,
+            "query_sql": data_sql,
+            "count_sql": count_sql,
         }
-        # 非正式环境返回原始SQL
-        if not is_product():
-            resp.update({"query_sql": data_sql, "count_sql": count_sql})
         return resp
