@@ -24,6 +24,7 @@ from functools import wraps
 from typing import List, Union
 
 import arrow
+from arrow import Arrow
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from dateutil.tz import tzutc
@@ -108,7 +109,23 @@ def mstimestamp_to_date_string(timestamp: int) -> str:
     )
 
 
+def parse_datetime(date_string: str) -> Arrow:
+    """
+    解析时间:若无时区则默认为本地时区
+    """
+
+    date = arrow.get(date_string)
+    if isinstance(date.tzinfo, tzutc):
+        date = date.replace(tzinfo=timezone.get_default_timezone())
+    return date
+
+
 def format_date_string(date_string: str, output_format: str = api_settings.DATETIME_FORMAT):
+    """
+    将时间转为不带时区的本地时间字符串
+    :param date_string: 时间字符串，若不带时区，则默认为本地时区
+    :param output_format: 输出格式
+    """
     try:
         date = arrow.get(date_string)
         if isinstance(date.tzinfo, tzutc):
