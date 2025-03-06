@@ -25,12 +25,12 @@ from pypika import Order
 
 from services.web.query.constants import DATE_FORMAT
 from services.web.query.serializers import CollectorSearchReqSerializer
-from services.web.query.utils.collector import CollectorSQLBuilder
+from services.web.query.utils.doris import DorisSQLBuilder
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
-class TestCollectorSQLBuilder(TestCase):
-    """CollectorSQLBuilder 单元测试"""
+class TestDorisSQLBuilder(TestCase):
+    """DorisSQLBuilder 单元测试"""
 
     def setUp(self):
         # Mock GlobalMetaConfig.get 返回固定表名
@@ -62,7 +62,7 @@ class TestCollectorSQLBuilder(TestCase):
             }
         )
         conditions.extend(filters or [])
-        return CollectorSQLBuilder(
+        return DorisSQLBuilder(
             table="test_rt.doris",
             filters=conditions or [],
             sort_list=sort_list or [],
