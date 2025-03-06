@@ -29,7 +29,7 @@ from core.sql.terms import DorisField
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
-class CollectorSQLBuilder:
+class DorisSQLBuilder:
     """日志查询SQL构建器"""
 
     def __init__(
