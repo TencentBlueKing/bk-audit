@@ -27,7 +27,7 @@ import ModuleBase from './module-base';
 class EsQuery extends ModuleBase {
   constructor() {
     super();
-    this.module = '/api/v1/esquery';
+    this.module = '/api/v1/query';
   }
   // 字段列表
   getFieldMap(params: { fields: Array<string> }, payload = {} as IRequestPayload) {
@@ -46,6 +46,13 @@ class EsQuery extends ModuleBase {
     page_size : number
   }, payload = {} as IRequestPayload) {
     return Request.get<IRequestResponsePaginationData<SearchModel>>(`${this.path}/es_query/search/`, {
+      params,
+      payload,
+    });
+  }
+  // Doris新版搜索
+  getCollectorSearchList(params: Record<string, any>, payload = {} as IRequestPayload) {
+    return Request.post<IRequestResponsePaginationData<SearchModel>>(`${this.path}/collector_query/search/`, {
       params,
       payload,
     });
