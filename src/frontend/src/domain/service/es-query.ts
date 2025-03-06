@@ -50,4 +50,17 @@ export default {
         results: data.results,
       }));
   },
+  /**
+   * @desc Doris新版搜索
+   * @param { Object } params
+   */
+  fetchCollectorSearchList(params: Record<string, any>) {
+    return EsQuerySource.getCollectorSearchList(params, {
+      permission: 'page',
+    })
+      .then(({ data }) =>  ({
+        ...data,
+        results: data.results,
+      }));
+  },
 };

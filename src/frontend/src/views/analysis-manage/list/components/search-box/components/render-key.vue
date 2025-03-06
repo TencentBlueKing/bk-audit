@@ -57,7 +57,10 @@
             @change="handleChange" />
         </template>
       </div>
-      <div class="box-row">
+      <!-- 新版查询不支持此参数 -->
+      <div
+        v-if="!isDoris.enabled"
+        class="box-row">
         <render-field-config
           v-for="(fieldItem, fieldName) in queryStringField"
           :key="fieldName"
@@ -100,6 +103,8 @@
   import filedConfig from './render-field-config/config';
   import RenderFieldConfig from './render-field-config/index.vue';
 
+  import useFeature from '@/hooks/use-feature';
+
   interface Props {
     modelValue: Record<string, any>
   }
@@ -113,6 +118,7 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const { feature: isDoris } = useFeature('enable_doris');
 
   const localSearchModel = ref<Record<string, any>>({});
   const fieldConfigRef = ref();

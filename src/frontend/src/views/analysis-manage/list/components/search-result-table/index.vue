@@ -19,6 +19,7 @@
     ref="rootRef"
     class="search-result-list">
     <render-table
+      v-if="isInit"
       ref="listRef"
       :columns="tableColumn"
       :data-source="dataSource"
@@ -39,6 +40,7 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     type Ref,
     ref,
     watch,
@@ -48,13 +50,14 @@
     useRoute,
   } from 'vue-router';
 
-  import EsQueryService from '@service/es-query';
   import MetaManageService from '@service/meta-manage';
 
   import type SearchModel from '@model/es-query/search';
   import type StandardFieldModel from '@model/meta/standard-field';
 
   import useRequest from '@hooks/use-request';
+
+  import filedConfig from '@views/analysis-manage/list/components/search-box/components/render-field-config/config';
 
   import RenderAction from './components/render-field/action.vue';
   import RenderAuthInstanceButton from './components/render-field/auth-instance-button.vue';
@@ -68,20 +71,33 @@
   import RowExpandContent from './components/row-expand-content/index.vue';
   import SettingFiled from './components/setting-field/index.vue';
 
-  const props = defineProps<Props>();
-  const emits = defineEmits<Emits>();
-  const { t } = useI18n();
-  interface Props {
-    filter: Record<string, any>
-  }
+  import type { IRequestResponsePaginationData } from '@/utils/request';
 
+  interface Props {
+    filter: Record<string, any>,
+    dataSource: (params: any)=> Promise<IRequestResponsePaginationData<any>>,
+    isDoris: {
+      enabled: boolean
+    }
+  }
   interface Emits {
     (e: 'clearSearch'): void
   }
-
   interface Exposes {
     loading: Ref<boolean>,
   }
+  interface ResultFilter {
+    filters: Array<{
+      field_name: string,
+      operator: string,
+      filters: Array<string | number>
+    }>
+    [key: string]: any
+  }
+
+  const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
+  const { t } = useI18n();
 
   const initColumn: InstanceType<typeof Table>['$props']['columns'] = [
     {
@@ -208,24 +224,50 @@
       },
     },
   ];
-  // const fixedColum:InstanceType<typeof Table>['$props']['columns'] = [{
-  //   label: '',
-  //   fixed: 'right',
-  //   width: '39px',
-  // }];
   const rootRef = ref();
   const listRef = ref();
   const route = useRoute();
   const targetList = ref<Array<StandardFieldModel>>([]);
   const tableColumn = ref(initColumn);
   const isExpand = ref<Record<number, boolean>>({});
+  const isInit = ref(false);
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
 
-  const dataSource = EsQueryService.fetchSearchList;
-
   watch(() => props.filter, () => {
-    listRef.value.fetchData(props.filter);
+    if (!isInit.value) {
+      return;
+    }
+    listRef.value.fetchData(getFilter(props.filter));
   });
+
+  watch(() => props.dataSource, () => {
+    isInit.value = true;
+    nextTick(() => {
+      listRef.value.fetchData(getFilter(props.filter));
+    });
+  });
+
+  const getFilter = (filter: Record<string, any>) => {
+    if (!props.isDoris.enabled) {
+      return filter;
+    }
+    const resultFilter: ResultFilter = {
+      filters: [],
+    };
+    // 将查询参数添加到 filters 数组中
+    Object.entries(filter).forEach(([k, v]) => {
+      if (Object.keys(filedConfig).includes(k)) {
+        resultFilter.filters.push({
+          field_name: k,
+          operator: 'include', // 一期暂时写死include
+          filters: [v],
+        });
+      } else {
+        resultFilter[k] = v;
+      }
+    });
+    return resultFilter;
+  };
 
   /**
    * 获取用户自定义字段

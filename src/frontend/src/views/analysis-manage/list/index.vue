@@ -22,6 +22,7 @@
     <div class="analysis-manage-page">
       <search-box
         ref="searchBoxRef"
+        :is-doris="isDoris"
         @change="handleSearchChange" />
       <div class="search-result-action">
         <!-- <BkButton>导出</BkButton> -->
@@ -32,7 +33,9 @@
       <component
         :is="searchResultCom"
         ref="resultRef"
+        :data-source="dataSource"
         :filter="searchModel"
+        :is-doris="isDoris"
         @clear-search="handleClearSearch" />
       <div style="height: 52px; margin-top: 24px;">
         <search-page-footer />
@@ -46,12 +49,17 @@
     ref,
   } from 'vue';
 
+  import EsQueryService from '@service/es-query';
+
   import RenderTypeTab from './components/render-type-tab.vue';
   import SearchBox from './components/search-box/index.vue';
   import SearchPageFooter from './components/search-page-footer.vue';
   import SearchResultChart from './components/search-result-chart/index.vue';
   import SearchResultTable from './components/search-result-table/index.vue';
 
+  import useFeature from '@/hooks/use-feature';
+
+  const { feature: isDoris } = useFeature('enable_doris');
   const comMap = {
     table: SearchResultTable,
     chart: SearchResultChart,
@@ -62,6 +70,9 @@
 
   const searchModel = ref<Record<string, any>>({});
 
+  const dataSource = computed(() => (isDoris.value.enabled
+    ? EsQueryService.fetchCollectorSearchList
+    : EsQueryService.fetchSearchList));
   const searchResultCom = computed(() => comMap[renderType.value]);
   const isLoading = computed(() => (resultRef.value ? resultRef.value.loading : true));
 
