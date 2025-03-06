@@ -79,8 +79,8 @@
 
   const searchModel = ref<Record<string, any>>({
     datetime: [
-      dayjs(Date.now() - 3600000).format('YYYY-MM-DD HH:mm:ss'),
-      dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      dayjs(Date.now() - 3600000).format('YYYY-MM-DDTHH:mm:ssZ'),
+      dayjs().format('YYYY-MM-DDTHH:mm:ssZ'),
     ],
     datetime_origin: [
       'now-1h',
@@ -145,8 +145,8 @@
       searchModel.value = {
         // 用于查询的date参数
         datetime: [
-          dayjs(Date.now() - 3600000).format('YYYY-MM-DD HH:mm:ss'),
-          dayjs().format('YYYY-MM-DD HH:mm:ss'),
+          dayjs(Date.now() - 3600000).format('YYYY-MM-DDTHH:mm:ssZ'),
+          dayjs().format('YYYY-MM-DDTHH:mm:ssZ'),
         ],
         // 用于now语法的date参数（只用使用now语法，选择最近时间才会实时更新）
         datetime_origin: [
