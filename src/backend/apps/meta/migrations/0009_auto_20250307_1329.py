@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('meta', '0007_doris_support'),
+        ('meta', '0008_alter_field_is_index'),
     ]
 
     operations = [
