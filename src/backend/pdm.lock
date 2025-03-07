@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:f62d27ba5776011d7054a45da4dd9b1a91300d543774d7fada083bb80e0a9887"
+content_hash = "sha256:bd9de06c270298557c879abe17149543d3b19934c1314c8b95d01ccde5f9e1af"
 
 [[metadata.targets]]
 requires_python = "==3.10.*"
@@ -356,6 +356,34 @@ dependencies = [
     "python-json-logger>=0.1.7",
     "requests<3.0.0,>=2.22.0",
     "whitenoise<7,>=3.3.0",
+]
+files = [
+    {file = "blueapps-4.14.0.tar.gz", hash = "sha256:f3c08b0c79741004d19705199905d018e127929e655fd94b5bd009c695b414fb"},
+]
+
+[[package]]
+name = "blueapps"
+version = "4.14.0"
+extras = ["opentelemetry"]
+summary = "development framework for blueking"
+groups = ["default"]
+dependencies = [
+    "blueapps==4.14.0",
+    "django-prometheus<3.0.0,>=2.1.0",
+    "opentelemetry-api<2.0.0,>=1.6.2",
+    "opentelemetry-exporter-jaeger-proto-grpc<2.0.0,>=1.6.2",
+    "opentelemetry-exporter-jaeger-thrift<2.0.0,>=1.6.2",
+    "opentelemetry-exporter-jaeger<2.0.0,>=1.6.2",
+    "opentelemetry-exporter-otlp<2.0.0,>=1.6.2",
+    "opentelemetry-instrumentation-celery<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-dbapi<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-django<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-logging<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-redis<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-requests<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation<1.0.0,>=0.25b2",
+    "opentelemetry-sdk<2.0.0,>=1.6.2",
+    "prometheus-client<1.0.0,>=0.9.0",
 ]
 files = [
     {file = "blueapps-4.14.0.tar.gz", hash = "sha256:f3c08b0c79741004d19705199905d018e127929e655fd94b5bd009c695b414fb"},
