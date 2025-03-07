@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-04 00:45+0800\n"
+"POT-Creation-Date: 2025-03-07 20:59+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1091,6 +1091,12 @@ msgstr "是否时间字段"
 
 msgid "是否为Json格式"
 msgstr "是否为Json格式"
+
+msgid "是否中文分词"
+msgstr "是否中文分词"
+
+msgid "是否索引"
+msgstr "是否索引"
 
 msgid "是否纬度"
 msgstr "是否纬度"
@@ -2342,13 +2348,6 @@ msgstr "原始日志"
 msgid "迭代ID"
 msgstr "迭代ID"
 
-msgid "JoinDataCreateFailed"
-msgstr "JoinDataCreateFailed"
-
-#, python-format
-msgid "Error: %s"
-msgstr "Error: %s"
-
 msgid "资源快照状态"
 msgstr "资源快照状态"
 
@@ -2516,8 +2515,11 @@ msgstr "启用数据关联"
 msgid "拉取类型"
 msgstr "拉取类型"
 
-msgid "Storage Type"
+msgid "存储类型"
 msgstr "存储类型"
+
+msgid "关联数据类型"
+msgstr "关联数据类型"
 
 msgid "日志类型"
 msgstr "日志类型"
@@ -2572,6 +2574,19 @@ msgstr "最近源数据"
 
 msgid "解析后的最近源数据"
 msgstr "解析后的最近源数据"
+
+msgid "JoinDataCreateFailed"
+msgstr "JoinData 创建失败"
+
+#, python-format
+msgid "Error: %s"
+msgstr "错误：%s"
+
+msgid "JoinDataStopFailed"
+msgstr "JoinData 停止失败"
+
+msgid "CreateJoinDataStorageFailed"
+msgstr "创建 JoinData 存储失败"
 
 msgid "无法获取系统ID"
 msgstr "无法获取系统ID"
@@ -2705,6 +2720,18 @@ msgstr "增量"
 msgid "全量"
 msgstr "全量"
 
+msgid "通用关联数据"
+msgstr "通用关联数据"
+
+msgid "资产"
+msgstr "资产"
+
+msgid "主集群"
+msgstr "主集群"
+
+msgid "双写集群"
+msgstr "双写集群"
+
 msgid "Field Type Not Match"
 msgstr "字段类型不匹配"
 
@@ -2816,15 +2843,6 @@ msgstr "入库表"
 msgid "是否公共"
 msgstr "是否公共"
 
-msgid "BKBase HDFS Processing ID"
-msgstr "BKBase HDFS Processing ID"
-
-msgid "BKBase HDFS Table ID"
-msgstr "BKBase HDFS Table ID"
-
-msgid "HDFS Status"
-msgstr "HDFS Status"
-
 msgid "拉取配置"
 msgstr "拉取配置"
 
@@ -2836,6 +2854,12 @@ msgstr "RT是否授权"
 
 msgid "快照配置"
 msgstr "快照配置"
+
+msgid "快照"
+msgstr "快照"
+
+msgid "快照存储关联"
+msgstr "快照存储关联"
 
 msgid "操作时间"
 msgstr "操作时间"
@@ -2885,6 +2909,12 @@ msgstr "负责人"
 msgid "集群描述"
 msgstr "集群描述"
 
+msgid "是否为预定义集群，如果是则跳过集群创建更新流程，仅更新项目内配置。"
+msgstr "是否为预定义集群，如果是则跳过集群创建更新流程，仅更新项目内配置。"
+
+msgid "预定义集群额外配置"
+msgstr "预定义集群额外配置"
+
 msgid "当冷热数据处于开启状态时，冷热节点属性配置不能为空"
 msgstr "当冷热数据处于开启状态时，冷热节点属性配置不能为空"
 
@@ -2921,6 +2951,15 @@ msgstr "集群名"
 msgid "集群英文名称"
 msgstr "集群英文名称"
 
+msgid "是否为预定义集群，如果是则跳过集群创建更新流程。目前仅支持项目初始化时直接传递配置。"
+msgstr "是否为预定义集群，如果是则跳过集群创建更新流程。目前仅支持项目初始化时直接传递配置。"
+
+msgid "集群模式"
+msgstr "集群模式"
+
+msgid "配置信息"
+msgstr "配置信息"
+
 msgid "ChangePluginStorageFailed"
 msgstr "ChangePluginStorageFailed"
 
@@ -2938,6 +2977,9 @@ msgstr "联系BK助手"
 
 msgid "蓝鲸桌面"
 msgstr "蓝鲸桌面"
+
+msgid "Doris必须是预定义的"
+msgstr "Doris必须是预定义的"
 
 msgid "ES检索"
 msgstr "ES检索"
@@ -2973,17 +3015,17 @@ msgstr "集群不存在"
 msgid "过滤条件 Key 解析错误: {key}"
 msgstr "过滤条件 Key 解析错误: {key}"
 
-msgid "搜索(All)"
-msgstr "搜索(All)"
-
-msgid "搜索"
-msgstr "搜索"
-
 msgid "日志查询配置"
 msgstr "日志查询配置"
 
 msgid "日志查询"
 msgstr "日志查询"
+
+msgid "搜索(All)"
+msgstr "搜索(All)"
+
+msgid "搜索"
+msgstr "搜索"
 
 msgid "时间范围"
 msgstr "时间范围"
@@ -3789,6 +3831,9 @@ msgstr "字段描述"
 
 msgid "Map Field"
 msgstr "映射字段"
+
+msgid "Storage Type"
+msgstr "存储类型"
 
 msgid "control_id and control_version are required when strategy_type is model"
 msgstr "当策略类型为模型审计时，必须提供 control_id 和 control_version"
