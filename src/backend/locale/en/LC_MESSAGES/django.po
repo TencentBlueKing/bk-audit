@@ -8,8 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-04 00:45+0800\n"
-"POT-Creation-Date: 2025-02-28 11:23+0800\n"
+"POT-Creation-Date: 2025-03-07 20:59+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1092,6 +1091,12 @@ msgstr "Is Timefield"
 
 msgid "是否为Json格式"
 msgstr "Is Json"
+
+msgid "是否中文分词"
+msgstr "is_zh_analyzed"
+
+msgid "是否索引"
+msgstr "is_index"
 
 msgid "是否纬度"
 msgstr "Is Dimension"
@@ -2344,13 +2349,6 @@ msgstr "Original Log"
 msgid "迭代ID"
 msgstr "Iteration Index"
 
-msgid "JoinDataCreateFailed"
-msgstr "JoinDataCreateFailed"
-
-#, python-format
-msgid "Error: %s"
-msgstr "Error: %s"
-
 msgid "资源快照状态"
 msgstr "Snapshot Status"
 
@@ -2518,8 +2516,11 @@ msgstr "Enable Join Data"
 msgid "拉取类型"
 msgstr "Pull Type"
 
-msgid "Storage Type"
+msgid "存储类型"
 msgstr "Storage Type"
+
+msgid "关联数据类型"
+msgstr "Join Data Type"
 
 msgid "日志类型"
 msgstr "Log Type"
@@ -2574,6 +2575,19 @@ msgstr "Recent DataID Data"
 
 msgid "解析后的最近源数据"
 msgstr "Parsed Recent DataID Data"
+
+msgid "JoinDataCreateFailed"
+msgstr "JoinDataCreateFailed"
+
+#, python-format
+msgid "Error: %s"
+msgstr "Error: %s"
+
+msgid "JoinDataStopFailed"
+msgstr "JoinDataStopFailed"
+
+msgid "CreateJoinDataStorageFailed"
+msgstr "CreateJoinDataStorageFailed"
 
 msgid "无法获取系统ID"
 msgstr "Cannot get system id"
@@ -2707,6 +2721,18 @@ msgstr "Partial"
 msgid "全量"
 msgstr "Full"
 
+msgid "通用关联数据"
+msgstr "basic"
+
+msgid "资产"
+msgstr "asset"
+
+msgid "主集群"
+msgstr "Main Cluster"
+
+msgid "双写集群"
+msgstr "Replica CLuster"
+
 msgid "Field Type Not Match"
 msgstr "Field Type Not Match"
 
@@ -2818,15 +2844,6 @@ msgstr "Result Table"
 msgid "是否公共"
 msgstr "Is Public"
 
-msgid "BKBase HDFS Processing ID"
-msgstr "BKBase HDFS Processing ID"
-
-msgid "BKBase HDFS Table ID"
-msgstr "BKBase HDFS Table ID"
-
-msgid "HDFS Status"
-msgstr "HDFS Status"
-
 msgid "拉取配置"
 msgstr "Pull Config"
 
@@ -2838,6 +2855,12 @@ msgstr "is RT Authorized"
 
 msgid "快照配置"
 msgstr "Snapshot Config"
+
+msgid "快照"
+msgstr "Snapshot"
+
+msgid "快照存储关联"
+msgstr "Snapshot Storage"
 
 msgid "操作时间"
 msgstr "Operate Time"
@@ -2887,6 +2910,12 @@ msgstr "Manager"
 msgid "集群描述"
 msgstr "Storage Description"
 
+msgid "是否为预定义集群，如果是则跳过集群创建更新流程，仅更新项目内配置。"
+msgstr "Whether it is a predefined cluster. If yes, skip the cluster creation and update process, and only update the configuration within the project."
+
+msgid "预定义集群额外配置"
+msgstr "Additional configuration for predefined clusters"
+
 msgid "当冷热数据处于开启状态时，冷热节点属性配置不能为空"
 msgstr "Hot and cold node property configuration can not be empty when hot and cold data is enabled"
 
@@ -2923,6 +2952,15 @@ msgstr "Storage Name"
 msgid "集群英文名称"
 msgstr "Storage En Name"
 
+msgid "是否为预定义集群，如果是则跳过集群创建更新流程。目前仅支持项目初始化时直接传递配置。"
+msgstr "Whether it is a predefined cluster. If yes, skip the cluster creation and update process. Currently, configuration can only be passed directly during project initialization."
+
+msgid "集群模式"
+msgstr "Cluster Mode"
+
+msgid "配置信息"
+msgstr "Configuration Information"
+
 msgid "ChangePluginStorageFailed"
 msgstr "ChangePluginStorageFailed"
 
@@ -2940,6 +2978,9 @@ msgstr "Contact BK Customer Service"
 
 msgid "蓝鲸桌面"
 msgstr "BlueKing Desktop"
+
+msgid "Doris必须是预定义的"
+msgstr "Doris must be predefined"
 
 msgid "ES检索"
 msgstr "ES Query"
@@ -2975,17 +3016,17 @@ msgstr "集群不存在"
 msgid "过滤条件 Key 解析错误: {key}"
 msgstr "Filter Condition Key parsing error: {key}"
 
-msgid "搜索(All)"
-msgstr "Search(All)"
-
-msgid "搜索"
-msgstr "Search"
-
 msgid "日志查询配置"
 msgstr "Log Query Config"
 
 msgid "日志查询"
 msgstr "Collector Search"
+
+msgid "搜索(All)"
+msgstr "Search(All)"
+
+msgid "搜索"
+msgstr "Search"
 
 msgid "时间范围"
 msgstr "Time Limit"
@@ -3793,6 +3834,9 @@ msgstr "Field Description"
 
 msgid "Map Field"
 msgstr "Map Field"
+
+msgid "Storage Type"
+msgstr "Storage Type"
 
 msgid "control_id and control_version are required when strategy_type is model"
 msgstr "control_id and control_version are required when strategy_type is model"
