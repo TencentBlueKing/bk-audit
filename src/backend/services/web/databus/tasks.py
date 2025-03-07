@@ -72,12 +72,23 @@ def start_snapshot():
         for storage_type in storage_types:
             logger.info(f"[start_snapshot] Handling storage_type => {storage_type}")
 
+            ret = None
             if snapshot.join_data_type == "basic":
-                BasicJoinHandler(snapshot.system_id, snapshot.resource_type_id, storage_type).start()
+                ret = BasicJoinHandler(snapshot.system_id, snapshot.resource_type_id, storage_type).start(
+                    multiple_storage=True
+                )
             elif snapshot.join_data_type == "asset":
-                AssetHandler(snapshot.system_id, snapshot.resource_type_id, storage_type).start()
+                ret = AssetHandler(snapshot.system_id, snapshot.resource_type_id, storage_type).start(
+                    multiple_storage=True
+                )
             else:
                 logger.warning(f"[start_snapshot] Unknown join_data_type: {snapshot.join_data_type}")
+            if not ret:
+                break
+        else:
+            snapshot.status = SnapshotRunningStatus.RUNNING.value
+            snapshot.status_msg = ""
+            snapshot.save()
 
 
 @periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)

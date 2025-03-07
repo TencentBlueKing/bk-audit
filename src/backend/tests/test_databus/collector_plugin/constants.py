@@ -44,7 +44,7 @@ INDEX_SET_ID = 2
 STORAGE_CLUSTER_ID = _CLUSTER_ID
 REPLICA_STORAGE_CLUSTER_CONFIG = {
     "cluster_id": _REPLICA_WRITE_CLUSTER_ID,
-    "bkbase_cluster_id": _REPLICA_WRITE_CLUSTER_ID,
+    "bkbase_cluster_id": str(_REPLICA_WRITE_CLUSTER_ID),
 }
 PLUGIN_DATA = {
     "namespace": settings.DEFAULT_NAMESPACE,

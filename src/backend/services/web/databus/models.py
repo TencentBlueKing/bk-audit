@@ -222,6 +222,13 @@ class SnapshotStorage(models.Model):
         choices=SnapShotStorageChoices.choices,
         db_index=True,
     )
+    status = models.CharField(
+        gettext_lazy("状态"),
+        max_length=32,
+        choices=SnapshotRunningStatus.choices,
+        default=SnapshotRunningStatus.CLOSED.value,
+        db_index=True,
+    )
 
     class Meta:
         verbose_name = gettext_lazy("快照存储关联")
