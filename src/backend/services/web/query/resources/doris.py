@@ -24,13 +24,14 @@ from django.utils.translation import gettext_lazy
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from core.utils.tools import is_product
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
 from services.web.query.serializers import (
     CollectorSearchConfigRespSerializer,
     CollectorSearchReqSerializer,
-    QuerySearchResponseSerializer,
+    CollectorSearchResponseSerializer,
 )
 from services.web.query.utils.doris import DorisSQLBuilder
 
@@ -49,7 +50,7 @@ class CollectorSearchConfigResource(QueryBaseResource):
 class CollectorSearchResource(QueryBaseResource, SearchDataParser):
     name = gettext_lazy("日志查询")
     RequestSerializer = CollectorSearchReqSerializer
-    serializer_class = QuerySearchResponseSerializer
+    serializer_class = CollectorSearchResponseSerializer
 
     def build_sql(self, validated_request_data):
         """
@@ -108,12 +109,13 @@ class CollectorSearchResource(QueryBaseResource, SearchDataParser):
         # 请求总数
         total = count_resp.get("list", [{}])[0].get("count", 0)
         # 响应
-        resp = {
-            "page": page,
-            "num_pages": page_size,
-            "total": total,
-            "results": data,
-            "query_sql": data_sql,
-            "count_sql": count_sql,
-        }
+        resp = {"page": page, "num_pages": page_size, "total": total, "results": data}
+        # 非正式环境返回原始SQL
+        if not is_product():
+            resp.update(
+                {
+                    "query_sql": data_sql,
+                    "count_sql": count_sql,
+                }
+            )
         return resp
