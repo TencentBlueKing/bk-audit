@@ -310,7 +310,9 @@ COLLECTOR_SEARCH_DATA_RESP = {
             "system_info": {},
         }
     ],
-    "query_sql": f"SELECT * FROM {PLUGIN_RESULT_TABLE} WHERE `system_id` "
+    "query_sql": f"SELECT * FROM {PLUGIN_RESULT_TABLE} WHERE `system_id` IN ('bk-audit') "
+    f"AND `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
+    f"AND `dtEventTimeStamp`>={start_timestamp} AND `dtEventTimeStamp`<={end_timestamp} AND `system_id` "
     f"IN ('s1','s2') AND `action_id` IN ('create_link_table') "
     "AND `resource_type_id` IN ('audit_log','notice_group') AND `instance_name` "
     "LIKE '%123131%' AND `username` IN ('xxx') AND `event_id` IN ('xxx') AND `request_id` "
@@ -320,10 +322,11 @@ COLLECTOR_SEARCH_DATA_RESP = {
     "IN (1) AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
     "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
     "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
-    f"LIKE '%1%' AND `system_id` IN ('bk-audit') AND `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
+    f"LIKE '%1%' ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 10",
+    "count_sql": f"SELECT COUNT(*) `count` FROM {PLUGIN_RESULT_TABLE} "
+    f"WHERE `system_id` IN ('bk-audit') AND `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
     f"AND `dtEventTimeStamp`>={start_timestamp} AND `dtEventTimeStamp`<={end_timestamp} "
-    "ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 10",
-    "count_sql": f"SELECT COUNT(*) `count` FROM {PLUGIN_RESULT_TABLE} WHERE `system_id` IN ('s1','s2') AND `action_id` "
+    f"AND `system_id` IN ('s1','s2') AND `action_id` "
     "IN ('create_link_table') AND `resource_type_id` IN ('audit_log','notice_group') AND `instance_name` "
     "LIKE '%123131%' AND `username` IN ('xxx') AND `event_id` IN ('xxx') AND `request_id` IN ('xxx') "
     "AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` IN (1,2,-1) "
@@ -332,8 +335,135 @@ COLLECTOR_SEARCH_DATA_RESP = {
     "AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
     "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
     "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
-    f"LIKE '%1%' AND `system_id` IN ('bk-audit') AND `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
-    f"AND `dtEventTimeStamp`>={start_timestamp} AND `dtEventTimeStamp`<={end_timestamp} LIMIT 1",
+    f"LIKE '%1%' LIMIT 1",
+}
+
+COLLECTOR_SEARCH_ALL_DATA_RESP = {
+    "page": 1,
+    "num_pages": 10,
+    "total": 1,
+    "results": [
+        {
+            "__ext": None,
+            "__shard_key__": 29012278003,
+            "access_source_ip": "1.2.3.4",
+            "access_type": "WebUI",
+            "access_user_agent": "Mozilla/5.0",
+            "action_id": "view_system",
+            "bk_app_code": "bk-audit",
+            "bk_data_id": 546009,
+            "bk_receive_time": 1740736711,
+            "bk_storage_time": None,
+            "cloudid": 0,
+            "collector_config_id": 912,
+            "dteventtime": "2025-02-28 17:58:29",
+            "dteventtimestamp": 1740736709614,
+            "end_time": "2025-02-28 17:58:29",
+            "event_content": "\u83b7\u53d6\u7cfb\u7edf\u8be6\u60c5",
+            "event_id": "8fc08ffff5ba11efae7aded3b5168cdb",
+            "extend_data": {"request_data": {"namespace": "default", "system_id": "bk-audit"}},
+            "gseindex": 84079,
+            "instance_data": {},
+            "instance_id": "bk-audit",
+            "instance_name": "bk-audit",
+            "instance_origin_data": {},
+            "iterationindex": 0,
+            "localtime": "2025-02-28 17:58:00",
+            "log": "{}",
+            "path": None,
+            "request_id": "8014a83c39b7215696f9be7e1a6671ea",
+            "resource_type_id": "system",
+            "result_code": "\u6210\u529f(0)",
+            "result_content": "",
+            "scope_id": "",
+            "scope_type": "",
+            "serverip": "",
+            "snapshot_action_info": {
+                "action_id": "view_system",
+                "created_at": 1666854601129,
+                "created_by": "bk-audit",
+                "description": "",
+                "id": 922,
+                "name": "\u7cfb\u7edf\u67e5\u770b",
+                "name_en": "View System",
+                "sensitivity": 0,
+                "system_id": "bk-audit",
+                "type": "view",
+                "updated_at": 1666854601148,
+                "updated_by": "bk-audit",
+                "version": 1,
+            },
+            "snapshot_instance_data": {},
+            "snapshot_instance_name": None,
+            "snapshot_resource_type_info": {
+                "created_at": 1666854601123,
+                "created_by": "bk-audit",
+                "description": "",
+                "id": 127,
+                "name": "\u63a5\u5165\u7cfb\u7edf",
+                "name_en": "Systems",
+                "resource_type_id": "system",
+                "sensitivity": 0,
+                "system_id": "bk-audit",
+                "updated_at": 1666854602110,
+                "updated_by": "bk-audit",
+                "version": 1,
+            },
+            "snapshot_user_info": {
+                "department_full_name": "xxx/xxx",
+                "department_id": "123",
+                "department_name": "xxx",
+                "department_path": "xxx/xxx",
+                "display_name": "xxx",
+                "enabled": "1",
+                "gender": "\u7537",
+                "id": "123",
+                "leader_username": "xxx",
+                "manager_level": "0",
+                "manager_unit_name": "123",
+                "move_type_id": "1",
+                "phone": "",
+                "staff_status": "1",
+                "staff_type": "3",
+                "username": "xxx",
+            },
+            "start_time": "2025-02-28 17:58:29",
+            "system_id": "bk-audit",
+            "thedate": 20250228,
+            "time": 1740736709614,
+            "user_identify_src": "",
+            "user_identify_src_username": "",
+            "user_identify_tenant_id": "",
+            "user_identify_type": "-1",
+            "username": "xxx",
+            "system_info": {},
+        }
+    ],
+    "query_sql": f"SELECT * FROM {PLUGIN_RESULT_TABLE} WHERE `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
+    f"AND `dtEventTimeStamp`>={start_timestamp} AND `dtEventTimeStamp`<={end_timestamp} AND `system_id` "
+    f"IN ('s1','s2') AND `action_id` IN ('create_link_table') "
+    "AND `resource_type_id` IN ('audit_log','notice_group') AND `instance_name` "
+    "LIKE '%123131%' AND `username` IN ('xxx') AND `event_id` IN ('xxx') AND `request_id` "
+    "IN ('xxx') AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` "
+    "IN (1,2,-1) AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' "
+    "AND `user_identify_type` IN (0,1) AND `access_user_agent` IN ('1') AND `result_content` "
+    "IN (1) AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
+    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    f"LIKE '%1%' ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 10",
+    "count_sql": f"SELECT COUNT(*) `count` FROM {PLUGIN_RESULT_TABLE} "
+    f"WHERE `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
+    f"AND `dtEventTimeStamp`>={start_timestamp} AND `dtEventTimeStamp`<={end_timestamp} "
+    f"AND `system_id` IN ('s1','s2') AND `action_id` "
+    "IN ('create_link_table') AND `resource_type_id` IN ('audit_log','notice_group') AND `instance_name` "
+    "LIKE '%123131%' AND `username` IN ('xxx') AND `event_id` IN ('xxx') AND `request_id` IN ('xxx') "
+    "AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` IN (1,2,-1) "
+    "AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' AND `user_identify_type` "
+    "IN (0,1) AND `access_user_agent` IN ('1') AND `result_content` IN (1) "
+    "AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
+    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    f"LIKE '%1%' LIMIT 1",
 }
 
 # CollectorSearchData

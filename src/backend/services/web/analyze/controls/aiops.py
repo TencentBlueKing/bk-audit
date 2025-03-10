@@ -28,6 +28,7 @@ from django.db import transaction
 from django.db.models import Max, Q, QuerySet
 from django.utils.translation import gettext
 
+from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
@@ -788,7 +789,7 @@ class AiopsFeature:
 
     @property
     def available(self) -> bool:
-        if FeatureHandler("bkbase_aiops").check() and settings.BKBASE_PROJECT_ID:
+        if FeatureHandler(FeatureTypeChoices.BKBASE_AIOPS).check() and settings.BKBASE_PROJECT_ID:
             return True
         logger.info(
             "[AiopsFeatureCheckFailed] BkBase Aiops Not Supported or Project ID Unset; HelpText => %s", self.help_text

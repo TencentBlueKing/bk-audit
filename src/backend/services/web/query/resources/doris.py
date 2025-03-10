@@ -24,11 +24,13 @@ from django.utils.translation import gettext_lazy
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from apps.permission.handlers.actions import ActionEnum
 from core.utils.tools import is_product
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
 from services.web.query.serializers import (
+    CollectorSearchAllReqSerializer,
     CollectorSearchConfigRespSerializer,
     CollectorSearchReqSerializer,
     CollectorSearchResponseSerializer,
@@ -47,9 +49,9 @@ class CollectorSearchConfigResource(QueryBaseResource):
         return COLLECT_SEARCH_CONFIG.to_json()
 
 
-class CollectorSearchResource(QueryBaseResource, SearchDataParser):
-    name = gettext_lazy("日志查询")
-    RequestSerializer = CollectorSearchReqSerializer
+class CollectorSearchAllResource(QueryBaseResource, SearchDataParser):
+    name = gettext_lazy("日志搜索(All)")
+    RequestSerializer = CollectorSearchAllReqSerializer
     serializer_class = CollectorSearchResponseSerializer
 
     def build_sql(self, validated_request_data):
@@ -119,3 +121,10 @@ class CollectorSearchResource(QueryBaseResource, SearchDataParser):
                 }
             )
         return resp
+
+
+class CollectorSearchResource(CollectorSearchAllResource):
+    name = gettext_lazy("日志查询")
+    RequestSerializer = CollectorSearchReqSerializer
+    serializer_class = CollectorSearchResponseSerializer
+    audit_action = ActionEnum.SEARCH_REGULAR_EVENT

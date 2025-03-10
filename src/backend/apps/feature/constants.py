@@ -26,3 +26,18 @@ class FeatureStatusChoices(TextChoices):
     STAG = "stag", gettext_lazy("测试环境")
     PROD = "prod", gettext_lazy("正式环境")
     AVAILABLE = "available", gettext_lazy("已启用")
+
+
+class FeatureTypeChoices(TextChoices):
+    """
+    Feature Type
+    """
+
+    BKBASE_AIOPS = "bkbase_aiops", gettext_lazy("AIOPS")
+    BKLOG_OTLP = "bklog_otlp", gettext_lazy("OTLP")
+    WATERMARK = "watermark", gettext_lazy("水印")
+    BKVISION = "bkvision", gettext_lazy("BKVision")
+    BKNOTICE = "bknotice", gettext_lazy("通知")
+    BKBASE_DATA_SOURCE = "bkbase_data_source", gettext_lazy("数据源")
+    STORAGE_EDIT = "storage_edit", gettext_lazy("存储编辑")
+    ENABLE_DORIS = "enable_doris", gettext_lazy("启用 Doris")
