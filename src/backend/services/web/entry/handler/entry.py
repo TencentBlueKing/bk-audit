@@ -24,6 +24,7 @@ from blueapps.utils.logger import logger
 from django.conf import settings
 
 from apps.bk_crypto.crypto import asymmetric_cipher
+from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
@@ -122,6 +123,6 @@ class EntryHandler(object):
 class WatermarkFeature:
     @property
     def available(self) -> bool:
-        if FeatureHandler("watermark").check():
+        if FeatureHandler(FeatureTypeChoices.WATERMARK).check():
             return True
         return False

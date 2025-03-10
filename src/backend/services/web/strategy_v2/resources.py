@@ -39,8 +39,11 @@ from pypinyin import lazy_pinyin
 from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
+from apps.feature.constants import FeatureTypeChoices
+from apps.feature.handlers import FeatureHandler
 from apps.meta.models import DataMap, Tag
 from apps.meta.utils.fields import (
+    ACTION_ID,
     DIMENSION_FIELD_TYPES,
     EXTEND_DATA,
     FILED_DISPLAY_NAME_ALIAS_KEY,
@@ -48,6 +51,7 @@ from apps.meta.utils.fields import (
     SNAPSHOT_USER_INFO,
     SNAPSHOT_USER_INFO_HIDE_FIELDS,
     STRATEGY_DISPLAY_FIELDS,
+    SYSTEM_ID,
 )
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
@@ -63,6 +67,7 @@ from services.web.analyze.constants import (
 )
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
+from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
@@ -562,22 +567,45 @@ class ListStrategyFields(StrategyV2Base):
         data.sort(key=lambda field: (field["priority_index"], field["field_name"]), reverse=True)
         return data
 
-    def load_action_fields(self, namespace: str, system_id: str, action_id: str) -> List[dict]:
+    @classmethod
+    def load_action_fields(cls, namespace: str, system_id: str, action_id: str) -> List[dict]:
         data = []
         end_time = datetime.datetime.now()
         start_time = end_time - datetime.timedelta(days=7)
-        logs = resource.query.search_all(
-            namespace=namespace,
-            start_time=start_time.strftime(api_settings.DATETIME_FORMAT),
-            end_time=end_time.strftime(api_settings.DATETIME_FORMAT),
-            query_string="*",
-            sort_list="",
-            page=1,
-            page_size=1,
-            bind_system_info=False,
-            system_id=system_id,
-            action_id=action_id,
-        )
+        if FeatureHandler(FeatureTypeChoices.ENABLE_DORIS).check():
+            logs = resource.query.collector_search_all(
+                namespace=namespace,
+                start_time=start_time.strftime(api_settings.DATETIME_FORMAT),
+                end_time=end_time.strftime(api_settings.DATETIME_FORMAT),
+                page=1,
+                page_size=1,
+                bind_system_info=False,
+                filters=[
+                    {
+                        "field_name": SYSTEM_ID.field_name,
+                        "operator": QueryConditionOperator.INCLUDE.value,
+                        "filters": [system_id],
+                    },
+                    {
+                        "field_name": ACTION_ID.field_name,
+                        "operator": QueryConditionOperator.INCLUDE.value,
+                        "filters": [action_id],
+                    },
+                ],
+            )
+        else:
+            logs = resource.query.search_all(
+                namespace=namespace,
+                start_time=start_time.strftime(api_settings.DATETIME_FORMAT),
+                end_time=end_time.strftime(api_settings.DATETIME_FORMAT),
+                query_string="*",
+                sort_list="",
+                page=1,
+                page_size=1,
+                bind_system_info=False,
+                system_id=system_id,
+                action_id=action_id,
+            )
         if logs.get("results", []):
             for key, _ in logs["results"][0].get("extend_data", {}).items():
                 data.append(
