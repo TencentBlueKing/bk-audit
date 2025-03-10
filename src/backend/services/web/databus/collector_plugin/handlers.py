@@ -77,9 +77,10 @@ class PluginEtlHandler:
         # 更新入库
         else:
             main_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
+            replica_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
             api.bk_base.databus_storages_put(main_storage_params)
             if replica_storage_params:
-                api.bk_base.databus_storages_post(replica_storage_params)
+                api.bk_base.databus_storages_put(replica_storage_params)
 
         if replica_storage_params:
             replica_storage_params["bkbase_result_table_id"] = self.plugin.build_result_table_id(
