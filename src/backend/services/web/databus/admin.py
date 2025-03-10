@@ -24,6 +24,7 @@ from services.web.databus.models import (
     CollectorPlugin,
     RedisConfig,
     Snapshot,
+    SnapshotStorage,
 )
 
 
@@ -96,6 +97,14 @@ class RedisConfigAdmin(admin.ModelAdmin):
     search_fields = ["redis_id", "redis_name", "redis_name_en"]
 
 
+# 定义 SnapshotStorage 的内联管理
+class SnapshotStorageInline(admin.TabularInline):
+    model = SnapshotStorage
+    extra = 1  # 可以设置默认显示的额外行数
+    fields = ['storage_type', 'status']  # 显示 storage_type 和 status 字段
+
+
+# 定义 Snapshot 的管理界面
 @admin.register(Snapshot)
 class SnapshotAdmin(admin.ModelAdmin):
     list_display = [
@@ -106,10 +115,16 @@ class SnapshotAdmin(admin.ModelAdmin):
         "pull_type",
         "status",
         "bkbase_processing_id",
+        "storage_type",  # 显示存储类型和状态
     ]
     search_fields = ["system_id", "resource_type_id"]
     ordering = ["system_id", "resource_type_id"]
 
+    # 添加 SnapshotStorageInline 作为内联
+    inlines = [SnapshotStorageInline]
+
     @admin.display
-    def storage_type_display(self, instance) -> str:
-        return ", ".join([str(s.storage_type) for s in instance.storages.all()])
+    def storage_type(self, instance) -> str:
+        # 显示每个 Snapshot 关联的 storage_type 和 status 信息
+        storage_info = [f"{s.storage_type} ({s.status})" for s in instance.storages.all()]
+        return ", ".join(storage_info)

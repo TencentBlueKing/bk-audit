@@ -171,6 +171,7 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
             if not multiple_storage:
                 self.update_status(SnapshotRunningStatus.CLOSED.value)
                 self.snapshot.save()
+            return True
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             title = gettext("JoinDataStopFailed")
             content = gettext("Error: %s") % str(err)
