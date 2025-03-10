@@ -26,6 +26,7 @@
     width="100%" />
 </template>
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -51,7 +52,7 @@
 
   const { t } = useI18n();
 
-  const tableColumn = ref([
+  const tableColumn = [
     {
       label: () => t('变量名称'),
       render: ({ data }: { data: StrategyFieldEvent['event_basic_field_configs'][0]}) => <div
@@ -71,7 +72,7 @@
         </div>,
       width: 160,
     },
-  ]);
+  ] as Column[];
 
   const variableData = ref<StrategyFieldEvent['event_basic_field_configs']>([]);
 

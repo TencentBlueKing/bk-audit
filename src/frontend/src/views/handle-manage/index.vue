@@ -33,6 +33,7 @@
 </template>
 
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
     onUnmounted,
@@ -277,10 +278,9 @@
 
           </p>,
     },
-  ];
+  ] as Column[] ;
+
   let timeout: number| undefined = undefined;
-
-
   const listRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
@@ -293,11 +293,11 @@
   };
   const initSettings = () => ({
     fields: tableColumn.reduce((res, item) => {
-      if (item.field) {
+      if (item.field && item.label) {
         res.push({
-          label: item.label(),
-          field: item.field(),
-          disabled: !!disabledMap[item.field()],
+          label: (item.label as () => string)(),
+          field: (item.field as () => string)(),
+          disabled: !!disabledMap[(item.field as () => string)()],
         });
       }
       return res;

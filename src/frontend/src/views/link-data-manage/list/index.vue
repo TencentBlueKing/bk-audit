@@ -60,6 +60,7 @@
 </template>
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';
+  import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
   import { computed, h, onMounted, ref, shallowRef } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -177,7 +178,7 @@
   const searchKey = ref<Array<SearchKey>>([]);
   const leftLabelFilterCondition = ref('');
   const maxVersionMap = ref<Record<string, number>>({});
-  const tableColumn = ref([
+  const tableColumn = [
     {
       label: () => t('联表数据名称'),
       sort: 'custom',
@@ -267,7 +268,7 @@
         </auth-button>
       </>
       ),
-    }]);
+    }] as Column[];
 
   const styles = shallowRef({ left: '216px' });
   const disabledMap: Record<string, string> = {
@@ -278,12 +279,12 @@
     updated_at: 'updated_at',
   };
   const initSettings = () => ({
-    fields: tableColumn.value.reduce((res, item) => {
+    fields: tableColumn.reduce((res, item) => {
       if (item.field) {
         res.push({
-          label: item.label(),
-          field: item.field(),
-          disabled: !!disabledMap[item.field()],
+          label: (item.label as () => string)(),
+          field: (item.field as () => string)(),
+          disabled: !!disabledMap[(item.field as () => string)()],
         });
       }
       return res;
