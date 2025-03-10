@@ -87,6 +87,7 @@
   </skeleton-loading>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
     ref,
@@ -148,7 +149,7 @@
         </bk-button>
       ),
     },
-  ];
+  ] as Column[];
 
   const route = useRoute();
   const router = useRouter();
@@ -329,7 +330,7 @@
       border-radius: 2px;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s;
+      transition: all .15s;
 
       &.active {
         background: #fff;

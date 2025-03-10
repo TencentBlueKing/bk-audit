@@ -39,6 +39,7 @@
   </skeleton-loading>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
     onMounted,
@@ -149,7 +150,7 @@
       width: '180px',
       render: ({ data }: {data: SyetemModel}) => data.last_time || '--',
     },
-  ];
+  ] as Column[];
 
   const listRef = ref();
   const dataSource = MetaManageService.fetchSystemList;

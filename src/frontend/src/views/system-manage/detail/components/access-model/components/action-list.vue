@@ -28,6 +28,7 @@
   </div>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -66,7 +67,7 @@
       showOverflowTooltip: true,
       render: ({ data }: {data: SystemActionModel}) => data.type || '--',
     },
-  ];
+  ] as Column[];
 
   const route = useRoute();
 
