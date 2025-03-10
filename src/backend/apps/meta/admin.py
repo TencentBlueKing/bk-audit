@@ -95,6 +95,8 @@ class FieldAdmin(admin.ModelAdmin):
         "is_required",
         "is_display",
         "is_built_in",
+        "is_zh_analyzed",
+        "is_index",
         "priority_index",
     ]
     search_fields = ["field_name", "description"]
@@ -108,6 +110,8 @@ class FieldAdmin(admin.ModelAdmin):
         "is_delete",
         "is_required",
         "is_display",
+        "is_zh_analyzed",
+        "is_index",
         "is_built_in",
     ]
 
