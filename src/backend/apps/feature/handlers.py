@@ -23,7 +23,7 @@ from django.conf import settings
 from django.utils.module_loading import import_string
 
 from apps.exceptions import FeatureNotExist
-from apps.feature.constants import FeatureStatusChoices
+from apps.feature.constants import FeatureStatusChoices, FeatureTypeChoices
 from apps.feature.models import FeatureToggle
 from apps.feature.plugins import BaseFeaturePlugin
 
@@ -31,8 +31,8 @@ from apps.feature.plugins import BaseFeaturePlugin
 class FeatureHandler:
     """特性处理"""
 
-    def __init__(self, feature_id: str) -> None:
-        self.feature_id = feature_id
+    def __init__(self, feature_id: Union[str, FeatureTypeChoices]) -> None:
+        self.feature_id = str(feature_id)
         self.feature = self.get_feature()
 
     def check(self) -> bool:
@@ -53,8 +53,6 @@ class FeatureHandler:
     def get_feature(self) -> FeatureToggle:
         """获取Feature实例"""
 
-        # 校验Feature存在
-        self._feature_exist()
         # 存在数据库Feature时优先返回
         db_feature = self._get_db_feature()
         if db_feature:
@@ -74,6 +72,8 @@ class FeatureHandler:
     def _get_setting_feature(self) -> FeatureToggle:
         """从设置获取Feature"""
 
+        # 校验Feature存在
+        self._feature_exist()
         feature_status = settings.FEATURE_TOGGLE[self.feature_id]
         return FeatureToggle(
             feature_id=self.feature_id,

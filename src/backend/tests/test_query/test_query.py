@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+from copy import deepcopy
 from unittest import mock
 
 from core.exceptions import PermissionException
@@ -24,6 +24,7 @@ from tests.base import TestCase
 from tests.test_databus.collector_plugin.constants import PLUGIN_ID
 from tests.test_query.constants import (
     BKBASE_COLLECTOR_SEARCH_API_RESP,
+    COLLECTOR_SEARCH_ALL_DATA_RESP,
     COLLECTOR_SEARCH_CONFIG,
     COLLECTOR_SEARCH_DATA_RESP,
     COLLECTOR_SEARCH_PARAMS,
@@ -81,9 +82,23 @@ class CollectorQueryTest(TestCase):
     )
     @mock.patch(
         "services.web.query.resources.api.bk_base.query_sync.bulk_request",
-        mock.Mock(return_value=BKBASE_COLLECTOR_SEARCH_API_RESP),
+        mock.Mock(return_value=deepcopy(BKBASE_COLLECTOR_SEARCH_API_RESP)),
     )
     def test_collector_search(self):
         """CollectorSearchResource"""
         result = self.resource.query.collector_search(**COLLECTOR_SEARCH_PARAMS)
         self.assertEqual(result, COLLECTOR_SEARCH_DATA_RESP)
+
+    @mock.patch("services.web.query.resources.GlobalMetaConfig.get", mock.Mock(return_value=PLUGIN_ID))
+    @mock.patch(
+        "services.web.query.resources.SearchLogPermission.get_auth_systems",
+        mock.Mock(return_value=GET_AUTH_SYSTEMS_API_RESP),
+    )
+    @mock.patch(
+        "services.web.query.resources.api.bk_base.query_sync.bulk_request",
+        mock.Mock(return_value=deepcopy(BKBASE_COLLECTOR_SEARCH_API_RESP)),
+    )
+    def test_collector_search_all(self):
+        """CollectorSearchResource"""
+        result = self.resource.query.collector_search_all(**COLLECTOR_SEARCH_PARAMS)
+        self.assertEqual(result, COLLECTOR_SEARCH_ALL_DATA_RESP)

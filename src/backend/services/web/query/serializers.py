@@ -269,9 +269,9 @@ class CollectorOrderSerializer(OrderSerializer):
     )
 
 
-class CollectorSearchReqSerializer(serializers.Serializer):
+class CollectorSearchAllReqSerializer(serializers.Serializer):
     """
-    日志查询请求序列化器
+    日志查询(All)请求序列化器
     """
 
     namespace = serializers.CharField()
@@ -291,31 +291,6 @@ class CollectorSearchReqSerializer(serializers.Serializer):
         default=DEFAULT_COLLECTOR_SORT_LIST,
     )
     bind_system_info = serializers.BooleanField(default=True)
-
-    @classmethod
-    def _build_system_conditions(cls, validated_request_data) -> List[dict]:
-        """
-        过滤有权限的系统
-        """
-
-        namespace = validated_request_data["namespace"]
-        systems, authorized_systems = SearchLogPermission.get_auth_systems(namespace)
-        if not authorized_systems:
-            apply_data, apply_url = Permission().get_apply_data([ActionEnum.SEARCH_REGULAR_EVENT])
-            raise PermissionException(
-                action_name=ActionEnum.SEARCH_REGULAR_EVENT.name,
-                apply_url=apply_url,
-                permission=apply_data,
-            )
-        if len(systems) != len(authorized_systems):
-            return [
-                {
-                    "field_name": SYSTEM_ID.field_name,
-                    "operator": QueryConditionOperator.INCLUDE.value,
-                    "filters": authorized_systems,
-                }
-            ]
-        return []
 
     @classmethod
     def _build_time_conditions(cls, validated_request_data: dict) -> List[dict]:
@@ -354,9 +329,45 @@ class CollectorSearchReqSerializer(serializers.Serializer):
         attrs = super().validate(attrs)
         if not attrs.get("sort_list"):
             attrs["sort_list"] = DEFAULT_COLLECTOR_SORT_LIST
-        system_conditions = self._build_system_conditions(attrs)
         time_conditions = self._build_time_conditions(attrs)
-        attrs["filters"].extend([*system_conditions, *time_conditions])
+        attrs["filters"] = time_conditions + attrs["filters"]
+        return attrs
+
+
+class CollectorSearchReqSerializer(CollectorSearchAllReqSerializer):
+    """
+    日志查询请求序列化器
+    """
+
+    @classmethod
+    def _build_system_conditions(cls, validated_request_data) -> List[dict]:
+        """
+        过滤有权限的系统
+        """
+
+        namespace = validated_request_data["namespace"]
+        systems, authorized_systems = SearchLogPermission.get_auth_systems(namespace)
+        if not authorized_systems:
+            apply_data, apply_url = Permission().get_apply_data([ActionEnum.SEARCH_REGULAR_EVENT])
+            raise PermissionException(
+                action_name=ActionEnum.SEARCH_REGULAR_EVENT.name,
+                apply_url=apply_url,
+                permission=apply_data,
+            )
+        if len(systems) != len(authorized_systems):
+            return [
+                {
+                    "field_name": SYSTEM_ID.field_name,
+                    "operator": QueryConditionOperator.INCLUDE.value,
+                    "filters": authorized_systems,
+                }
+            ]
+        return []
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        system_conditions = self._build_system_conditions(attrs)
+        attrs["filters"] = system_conditions + attrs["filters"]
         return attrs
 
 
