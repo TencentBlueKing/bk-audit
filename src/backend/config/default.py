@@ -383,6 +383,9 @@ EVENT_KAFKA_SLEEP_TIME = float(os.getenv("BKAPP_EVENT_KAFKA_SLEEP_TIME", 0.5))
 # 系统访问地址(用作 swagger 访问返回)
 BK_BACKEND_URL = os.getenv("BKAPP_BACKEND_URL", BK_IAM_RESOURCE_API_HOST)
 
+# [在Django5.x将去除]设置为true在Django 4.x发行周期中继续使用Pytz Tzinfo对象
+USE_DEPRECATED_PYTZ = True
+
 """
 以下为框架代码 请勿修改
 """

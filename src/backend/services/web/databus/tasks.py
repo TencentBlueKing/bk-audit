@@ -232,7 +232,6 @@ def create_api_push_etl(collector_config_id: int):
     logger.info("[create_api_push_etl] End %s", datetime.datetime.now())
 
 
-@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:check_report_continues")
 def check_report_continues(end_time: datetime.datetime = None, time_period: int = None, time_range: int = None):
     """检查上报数据是否连续"""
