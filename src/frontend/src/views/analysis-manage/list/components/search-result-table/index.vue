@@ -19,7 +19,6 @@
     ref="rootRef"
     class="search-result-list">
     <render-table
-      v-if="isInit"
       ref="listRef"
       :columns="tableColumn"
       :data-source="dataSource"
@@ -230,21 +229,14 @@
   const targetList = ref<Array<StandardFieldModel>>([]);
   const tableColumn = ref(initColumn);
   const isExpand = ref<Record<number, boolean>>({});
-  const isInit = ref(false);
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
 
   watch(() => props.filter, () => {
-    if (!isInit.value) {
-      return;
-    }
-    listRef.value.fetchData(getFilter(props.filter));
-  });
-
-  watch(() => props.dataSource, () => {
-    isInit.value = true;
     nextTick(() => {
       listRef.value.fetchData(getFilter(props.filter));
     });
+  }, {
+    immediate: true,
   });
 
   // Doris接口查询的参数需要调整
