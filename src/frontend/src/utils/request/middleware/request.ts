@@ -16,9 +16,9 @@
 */
 import type {
   AxiosInterceptorManager,
-  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
 } from 'axios';
 
-export default (interceptors: AxiosInterceptorManager<AxiosRequestConfig>) => {
+export default (interceptors: AxiosInterceptorManager<InternalAxiosRequestConfig>) => {
   interceptors.use(request => request, undefined);
 };
