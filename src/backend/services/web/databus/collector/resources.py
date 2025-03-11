@@ -44,6 +44,7 @@ from apps.exceptions import (
     ParamsNotValid,
     SnapshotPreparingException,
 )
+from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
@@ -642,7 +643,10 @@ class ApiPushHost(GetApiPushResource):
 
     def perform_request(self, validated_request_data):
         collector = self.get_collector(validated_request_data["system_id"])
-        return {"enabled": bool(collector), "hosts": FeatureHandler("bklog_otlp").get_feature().config.get("hosts", [])}
+        return {
+            "enabled": bool(collector),
+            "hosts": FeatureHandler(FeatureTypeChoices.BKLOG_OTLP).get_feature().config.get("hosts", []),
+        }
 
 
 class DataIdResource(AuditMixinResource, abc.ABC):

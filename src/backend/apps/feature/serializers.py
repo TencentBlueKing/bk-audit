@@ -19,10 +19,12 @@ to the current version of the project delivered to anyone in the future.
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
+from apps.feature.constants import FeatureTypeChoices
+
 
 class FeatureToggleRequestSerializer(serializers.Serializer):
     """
     特性开关请求序列化
     """
 
-    feature_id = serializers.CharField(label=gettext_lazy("特性ID"))
+    feature_id = serializers.ChoiceField(label=gettext_lazy("特性ID"), choices=FeatureTypeChoices.choices)
