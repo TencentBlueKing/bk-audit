@@ -32,6 +32,7 @@
       </div>
       <component
         :is="searchResultCom"
+        v-if="isInit"
         ref="resultRef"
         :data-source="dataSource"
         :filter="searchModel"
@@ -47,6 +48,7 @@
   import {
     computed,
     ref,
+    watch,
   } from 'vue';
 
   import EsQueryService from '@service/es-query';
@@ -58,6 +60,7 @@
   import SearchResultTable from './components/search-result-table/index.vue';
 
   import useFeature from '@/hooks/use-feature';
+  import type { IRequestResponsePaginationData } from '@/utils/request';
 
   const { feature: isDoris } = useFeature('enable_doris');
   const comMap = {
@@ -67,14 +70,19 @@
   const renderType = ref<'chart'|'table'>('table');
   const searchBoxRef = ref();
   const resultRef = ref();
+  const dataSource = ref<(params: any)=> Promise<IRequestResponsePaginationData<any>>>(EsQueryService.fetchSearchList);
+  const isInit = ref(false);
 
   const searchModel = ref<Record<string, any>>({});
-
-  const dataSource = computed(() => (isDoris.value.enabled
-    ? EsQueryService.fetchCollectorSearchList
-    : EsQueryService.fetchSearchList));
   const searchResultCom = computed(() => comMap[renderType.value]);
   const isLoading = computed(() => (resultRef.value ? resultRef.value.loading : true));
+
+  watch(() => isDoris.value, (data) => {
+    if (data.enabled) {
+      dataSource.value = EsQueryService.fetchCollectorSearchList;
+    }
+    isInit.value = true;
+  });
 
   // 搜索
   const handleSearchChange = (value: Record<string, any>) => {
