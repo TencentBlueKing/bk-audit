@@ -33,6 +33,7 @@ from apps.meta.utils.fields import (
     LOG,
     REQUEST_ID,
     RESOURCE_TYPE_ID,
+    RESULT_CODE,
     RESULT_CONTENT,
     SNAPSHOT_ACTION_INFO,
     SNAPSHOT_INSTANCE_DATA,
@@ -123,9 +124,6 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
             field=ACCESS_SOURCE_IP, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
         ),
         FieldSearchConfig(
-            field=ACCESS_USER_AGENT, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
-        ),
-        FieldSearchConfig(
             field=RESULT_CONTENT, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
         ),
         FieldSearchConfig(field=LOG, allow_operators=[QueryConditionOperator.MATCH_ANY]),
@@ -148,8 +146,10 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(
             field=SNAPSHOT_INSTANCE_DATA, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.LIKE]
         ),
+        FieldSearchConfig(field=RESULT_CODE, allow_operators=[QueryConditionOperator.INCLUDE]),
         FieldSearchConfig(field=INSTANCE_NAME, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=EVENT_CONTENT, allow_operators=[QueryConditionOperator.LIKE]),
+        FieldSearchConfig(field=ACCESS_USER_AGENT, allow_operators=[QueryConditionOperator.LIKE]),
     ]
 )
 
