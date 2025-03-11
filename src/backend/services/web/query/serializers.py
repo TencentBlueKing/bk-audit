@@ -26,7 +26,6 @@ from rest_framework import serializers
 from rest_framework.settings import api_settings
 
 from api.bk_log.serializers import EsQueryFilterSerializer
-from apps.meta.serializers import FieldListSerializer
 from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE, SYSTEM_ID
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
@@ -376,7 +375,7 @@ class CollectorSearchConfigRespSerializer(serializers.Serializer):
     查询配置响应序列化器
     """
 
-    field = FieldListSerializer()
+    field = serializers.DictField()
     allow_operators = serializers.ListField(child=serializers.ChoiceField(choices=QueryConditionOperator.choices))
 
 
