@@ -25,6 +25,7 @@ export interface IFieldConfig {
   service?: (params?: Record<string, any>) => Promise<Array<any>>
   labelName?: string,
   valName?: string,
+  operator?: string
 }
 // eslint-disable-next-line no-useless-escape
 // const specialReg = /[`~!@#$%^&*()_\+=<>?:"{}|,.\/;'\\[\]·~！@#￥%……&*（）——\+={}|《》？：“”【】、；‘'，。、]/im;
@@ -33,6 +34,7 @@ export default {
     label: '系统名称',
     type: 'system-id',
     required: false,
+    operator: 'include',
     service: () => MetaManageService.fetchSystemWithAction({
       action_ids: 'search_regular_event',
     }),
@@ -41,17 +43,20 @@ export default {
     label: '操作事件名',
     type: 'action-id',
     required: false,
+    operator: 'include',
     service: MetaManageService.fetchBatchSystemActionList,
   },
   resource_type_id: {
     label: '资源类型',
     type: 'resource-type-id',
     required: false,
+    operator: 'include',
     service: MetaManageService.fetchBatchSystemResourceTypeList,
   },
   instance_name: {
     label: '资源实例名',
     type: 'string',
+    operator: 'like',
     required: false,
     // validator(str: string) {
     //   if (str === '') return true;
@@ -63,11 +68,13 @@ export default {
     label: '操作人',
     type: 'user-selector',
     required: false,
+    operator: 'include',
   },
   event_id: {
     label: '事件 ID',
     type: 'string',
     required: false,
+    operator: 'include',
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -83,6 +90,7 @@ export default {
     label: '请求 ID',
     type: 'string',
     required: false,
+    operator: 'include',
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -93,6 +101,7 @@ export default {
     label: '事件描述',
     type: 'string',
     required: false,
+    operator: 'like',
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -103,6 +112,7 @@ export default {
     label: '操作人账号类型',
     type: 'select',
     required: false,
+    operator: 'include',
   },
   // user_identify_tenant_id: {
   //   label: '操作人租户 ID',
@@ -113,11 +123,13 @@ export default {
     label: '操作途径',
     type: 'select',
     required: false,
+    operator: 'include',
   },
   access_source_ip: {
     label: '来源 IP',
     type: 'string',
     required: false,
+    operator: 'include',
     message: 'IP地址格式不正确',
     validator: (value: string) => {
       const ipv4 = /^((\d|[1-9]\d|1\d\d|2([0-4]\d|5[0-5]))\.){4}$/;
@@ -134,6 +146,7 @@ export default {
     label: '客户端类型',
     type: 'string',
     required: false,
+    operator: 'like',
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -149,6 +162,7 @@ export default {
     label: '资源实例 ID',
     type: 'string',
     required: false,
+    operator: 'include',
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -159,11 +173,13 @@ export default {
     label: '操作结果',
     type: 'select',
     required: false,
+    operator: 'include',
   },
   result_content: {
     label: '操作结果描述',
     type: 'string',
     required: false,
+    operator: 'include',
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -174,6 +190,7 @@ export default {
     label: '原始日志',
     type: 'string',
     required: false,
+    operator: 'match_any',
   },
   query_string: {
     label: '查询语句',

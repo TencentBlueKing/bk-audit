@@ -247,6 +247,7 @@
     });
   });
 
+  // Doris接口查询的参数需要调整
   const getFilter = (filter: Record<string, any>) => {
     if (!props.isDoris.enabled) {
       return filter;
@@ -256,11 +257,18 @@
     };
     // 将查询参数添加到 filters 数组中
     Object.entries(filter).forEach(([k, v]) => {
-      if (Object.keys(filedConfig).includes(k)) {
+      const config = filedConfig[k];
+      if (config && config.operator) {
+        let value: Array<string> = [];
+        if (config.service || config.type === 'select' || config.type === 'user-selector') {
+          value = v.split(',');
+        } else {
+          value.push(v);
+        }
         resultFilter.filters.push({
           field_name: k,
-          operator: 'include', // 一期暂时写死include
-          filters: [v],
+          operator: config.operator, // 一期暂时写死include
+          filters: value,
         });
       } else {
         resultFilter[k] = v;
