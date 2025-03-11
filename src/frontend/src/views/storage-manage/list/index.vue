@@ -118,6 +118,7 @@
   </skeleton-loading>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
     ref,
@@ -272,7 +273,7 @@
         </>
         ),
     },
-  ];
+  ] as Column[];
 
   const initSettings = () => ({
     showLineHeight: false,

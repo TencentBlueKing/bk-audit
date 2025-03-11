@@ -35,7 +35,7 @@
   </div>
 </template>
 <script setup lang="tsx">
-  import type { Table } from 'bkui-vue';
+  import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
   import {
     computed,
@@ -83,7 +83,7 @@
     loading: Ref<boolean>,
   }
 
-  const initColumn: InstanceType<typeof Table>['$props']['columns'] = [
+  const initColumn = [
     {
       label: () => '',
       type: 'expand',
@@ -207,7 +207,7 @@
         list: [],
       },
     },
-  ];
+  ] as  Column[];
   // const fixedColum:InstanceType<typeof Table>['$props']['columns'] = [{
   //   label: '',
   //   fixed: 'right',
@@ -267,6 +267,7 @@
       if (item.filter) {
         const values = data.map(obj => getValueFromPath(obj, item.field as string));
         const lists = [...new Set(values)].map(value => ({
+          label: value === undefined ? '--' : value,
           text: value === undefined ? '--' : value,
           value,
         }));

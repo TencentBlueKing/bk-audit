@@ -35,6 +35,7 @@
   </audit-sideslider>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
     onMounted,
@@ -134,7 +135,7 @@
           statusMsg={snapShotStatusList.value[data.resource_type_id]?.status_msg} />
       ),
     },
-  ];
+  ] as Column[];
 
   const route = useRoute();
   const isShowJobPlan = ref(false);
@@ -155,7 +156,7 @@
           status={snapShotStatusList.value[data.resource_type_id]?.hdfs_status}
           onChangeStatus={() => handleDataStatus()}/>,
       },
-    ];
+    ] as Column[];
   });
 
   /* 有相关权限才显示操作列

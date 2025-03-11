@@ -84,6 +84,7 @@
   </div>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     ref,
   } from 'vue';
@@ -153,7 +154,7 @@
         </bk-select>
       ),
     },
-  ];
+  ] as Column[];
   const map = [
     {
       id: 1,

@@ -59,6 +59,7 @@
   </audit-sideslider>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     onMounted,
     ref,
@@ -170,7 +171,7 @@
       </>
       ),
     },
-  ];
+  ] as Column[];
 
   // 获取权限
   useRequest(IamManageService.check, {
@@ -246,8 +247,8 @@
     background: white;
 
     /* 解决表格悬停超出 */
-    .bk-table-fixed .column_fixed{
-      bottom:80px !important;
+    .bk-table-fixed .column_fixed {
+      bottom: 80px !important;
     }
 
     .action-header {
