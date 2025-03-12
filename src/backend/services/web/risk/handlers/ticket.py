@@ -462,7 +462,7 @@ class AutoProcess(RiskFlowBaseHandler):
         template_info = api.bk_sops.get_template_info(
             template_id=self.process_application.sops_template_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID
         )
-        pa_params = pa_params or self.rule.pa_params
+        pa_params = pa_params if pa_params is not None else (self.rule.pa_params if self.rule else pa_params)
         constants = {}
         for c in template_info["pipeline_tree"]["constants"].values():
             field = pa_params.get(c["key"])
