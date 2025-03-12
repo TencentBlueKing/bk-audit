@@ -24,6 +24,7 @@ from bk_resource import api, resource
 from bk_resource.settings import bk_resource_settings
 from django.conf import settings
 
+from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from core.models import get_request_username
@@ -100,7 +101,7 @@ class JoinDataEtlStorageHandler:
 
     @property
     def storage_config(self):
-        return {
+        ret = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
             "raw_data_id": self.data_id,
             "data_type": "clean",
@@ -112,6 +113,7 @@ class JoinDataEtlStorageHandler:
             "fields": self.storage_fields,
             "physical_table_name": self.physical_table_name,
         }
+        return ret
 
     def get_storage_cluster(self):
         return RedisHandler.pick_redis(self.system_id).redis_name_en
@@ -481,6 +483,8 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                 ],
             }
         )
+        if self.storage_type == StorageType.DORIS:
+            config["config"] = {"data_model": "primary_table", "is_profiling": False}
         return config
 
     def get_storage_cluster(self):
