@@ -107,7 +107,11 @@ def generate_risk_from_event():
         ErrorMsgHandler(gettext("Generate Risk Failed"), str(err)).send()
 
 
-@periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(
+    run_every=crontab(minute=settings.PROCESS_ONE_RISK_PERIODIC_TASK_MINUTE),
+    queue="risk",
+    soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
 @lock(
     lock_name="celery:process_risk_ticket",
     load_lock_name=lambda **kwargs: f"celery:process_risk_ticket:{kwargs['risk_id'] if kwargs else None}",
@@ -203,7 +207,11 @@ def process_one_risk(*, risk_id: str):
         logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
 
-@periodic_task(run_every=crontab(minute="0"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(
+    run_every=crontab(minute=settings.SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE),
+    queue="risk",
+    soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
 @lock(lock_name="celery:sync_auto_result")
 def sync_auto_result(node_id: str = None):
     """同步处理节点状态"""
