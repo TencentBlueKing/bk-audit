@@ -386,6 +386,12 @@ BK_BACKEND_URL = os.getenv("BKAPP_BACKEND_URL", BK_IAM_RESOURCE_API_HOST)
 # [在Django5.x将去除]设置为true在Django 4.x发行周期中继续使用Pytz Tzinfo对象
 USE_DEPRECATED_PYTZ = True
 
+# 处理风险定时任务调度周期(分)
+PROCESS_ONE_RISK_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_PROCESS_ONE_RISK_PERIODIC_TASK_MINUTE", "*/10")
+
+# 同步处理套餐结果定时任务调度周期(分)
+SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE", "*/10")
+
 """
 以下为框架代码 请勿修改
 """
