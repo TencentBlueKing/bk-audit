@@ -113,8 +113,6 @@ class JoinDataEtlStorageHandler:
             "fields": self.storage_fields,
             "physical_table_name": self.physical_table_name,
         }
-        if self.storage_type == StorageType.DORIS:
-            ret["config"] = {"data_model": "primary_table", "is_profiling": False}
         return ret
 
     def get_storage_cluster(self):
@@ -485,6 +483,8 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                 ],
             }
         )
+        if self.storage_type == StorageType.DORIS:
+            config["config"] = {"data_model": "primary_table", "is_profiling": False}
         return config
 
     def get_storage_cluster(self):
