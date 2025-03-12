@@ -26,6 +26,7 @@ from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from django.conf import settings
+from django.utils import timezone
 from django.utils.translation import gettext
 
 from apps.notice.constants import MsgType
@@ -71,7 +72,7 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
     """
 
     # load strategy
-    strategy = Strategy.objects.filter(strategy_id=strategy_id).first()
+    strategy: Strategy = Strategy.objects.filter(strategy_id=strategy_id).first()
     if strategy is None:
         logger_celery.error("[CheckFlowStatusFailed] Strategy Not Found => %s", strategy_id)
         return
@@ -99,7 +100,8 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
         strategy.status = other_status
 
     # update status
-    strategy.save(update_fields=["status"])
+    strategy.updated_at = timezone.now()
+    strategy.save(update_record=False, update_fields=["status", "updated_at"])
 
     # check re-run
     if strategy.status == other_status:

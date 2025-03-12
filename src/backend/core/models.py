@@ -141,7 +141,7 @@ class OperateRecordModel(models.Model):
     )
     updated_by = models.CharField(gettext_lazy("修改者"), max_length=32, blank=True, default="", null=True)
 
-    def save(self, *args, **kwargs):
+    def save(self, update_record=True, *args, **kwargs):
         """
         Save the current instance. Override this in a subclass if you want to
         control the saving process.
@@ -151,6 +151,9 @@ class OperateRecordModel(models.Model):
         non-SQL backends), respectively. Normally, they should not be set.
         """
 
+        if not update_record:
+            # 禁止更新
+            return super().save(*args, **kwargs)
         operator = get_request_username()
         if not self.created_by:
             self.created_by = operator
