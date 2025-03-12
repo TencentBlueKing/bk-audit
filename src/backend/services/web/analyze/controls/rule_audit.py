@@ -27,8 +27,6 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext
 
-from apps.meta.constants import ConfigLevelChoices
-from apps.meta.models import GlobalMetaConfig
 from apps.notice.handlers import ErrorMsgHandler
 from core.lock import lock
 from services.web.analyze.constants import (
@@ -47,7 +45,6 @@ from services.web.analyze.constants import (
     FlowStatusToggleChoices,
     OffsetUnit,
     OutputBaselineType,
-    ResultTableType,
     WindowDependencyRule,
     WindowType,
 )
@@ -64,8 +61,7 @@ from services.web.analyze.tasks import (
     check_flow_status,
     toggle_monitor,
 )
-from services.web.analyze.utils import calculate_offline_flow_start_time
-from services.web.databus.constants import COLLECTOR_PLUGIN_ID
+from services.web.analyze.utils import calculate_offline_flow_start_time, is_asset
 from services.web.databus.models import CollectorPlugin
 from services.web.strategy_v2.constants import (
     BkBaseStorageType,
@@ -139,30 +135,24 @@ class RuleAuditController(BaseControl):
         操作日志rt_id
         """
 
-        collector_plugin_id = GlobalMetaConfig.get(
-            config_key=COLLECTOR_PLUGIN_ID,
-            config_level=ConfigLevelChoices.NAMESPACE.value,
-            instance_key=self.strategy.namespace,
-        )
-        plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
-        return plugin.build_result_table_id(settings.DEFAULT_BK_BIZ_ID, plugin.collector_plugin_name_en)
+        return CollectorPlugin.build_collector_rt(self.strategy.namespace)
 
     def check_source_type(self, result_table_id: str) -> str:
         """
         check batch / batch_join
         """
 
+        config_type = self.strategy.configs["config_type"]
         data_source = self.strategy.configs["data_source"]
         source_type = data_source["source_type"]
         result_table = api.bk_base.get_result_table(result_table_id=result_table_id, related=["storages"])
-        # 1. 实时计算&日志：实时流水表
-        if source_type == FlowDataSourceNodeType.REALTIME and self.event_log_rt_id == result_table_id:
+        # 1. 实时计算&(日志|其他单表)：实时流水表
+        if source_type == FlowDataSourceNodeType.REALTIME and (
+            self.event_log_rt_id == result_table_id or config_type != RuleAuditConfigType.LINK_TABLE
+        ):
             return FlowDataSourceNodeType.REALTIME
         # 2. 资产表：离线维表/实时维表
-        elif (
-            result_table["processing_type"] == ResultTableType.CDC
-            or result_table["result_table_type"] == ResultTableType.STATIC
-        ):
+        elif is_asset(result_table):
             if source_type == FlowDataSourceNodeType.REALTIME and BkBaseStorageType.REDIS in result_table.get(
                 "storages", {}
             ):
@@ -187,7 +177,7 @@ class RuleAuditController(BaseControl):
         if config_type == RuleAuditConfigType.LINK_TABLE:
             ltc = data_source["link_table"]
             link_table: LinkTable = get_object_or_404(LinkTable, uid=ltc["uid"], version=ltc["version"])
-            rt_ids = link_table.rt_ids
+            rt_ids = list(link_table.rt_ids)
         else:
             rt_ids = [data_source["rt_id"]]
         return rt_ids

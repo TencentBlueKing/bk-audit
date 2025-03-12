@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-02-28 11:23+0800\n"
+"POT-Creation-Date: 2025-03-12 01:51+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3530,6 +3530,9 @@ msgstr "Created By"
 msgid "Kafka"
 msgstr "Kafka"
 
+msgid "Doris"
+msgstr "Doris"
+
 msgid "Link Table Data"
 msgstr "Link Table Data"
 
@@ -3568,6 +3571,11 @@ msgstr "Rule audit SQL generates errors: {err}"
 #, fuzzy
 msgid "联表名称已存在"
 msgstr "Link Table Name Exists"
+
+#, python-brace-format
+msgid "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
+msgstr "Unsupported data source type: current type is {source_type}, supported types are: {support_source_types}"
+
 
 #, python-format
 msgid "source_field %s not found"
@@ -3705,6 +3713,9 @@ msgstr "Query Join Table Details"
 
 msgid "查询联表标签列表"
 msgstr "Query Join Table Tags List"
+
+msgid "规则审计调度类型检查"
+msgstr "Rule Audit Source Type Check"
 
 msgid "Source Field"
 msgstr "Source Field"
@@ -4019,6 +4030,9 @@ msgstr "Config type: %s requires link_table"
 
 msgid "Batch rule audit need schedule_config"
 msgstr "Batch rule audit need schedule_config"
+
+msgid "Support Source Types"
+msgstr "Support Source Types"
 
 msgid "版本日志"
 msgstr "Version Log"

@@ -46,3 +46,56 @@ BKM_STRATEGY_DATA = {
 }
 CREATE_BKM_DATA_RESULT = {"strategy_id": 1, "strategy_name": BKM_STRATEGY_DATA["strategy_name"]}
 UPDATE_BKM_DATA_RESULT = {**CREATE_BKM_DATA_RESULT}
+
+# 日志 RT 信息
+COLLECTOR_GET_RESULT_TABLE_DATA = {
+    'processing_type': 'clean',
+    'result_table_type': None,
+    'sensitivity': 'private',
+    'storages': {
+        'doris': {},
+        'es': {},
+        'hdfs': {},
+        'kafka': {},
+    },
+}
+
+# 资产表 RT 信息
+ASSET_GET_RESULT_TABLE_DATA = {
+    'processing_type': 'clean',
+    'result_table_type': 'upsert_static',
+    'storages': {
+        'doris': {},
+        'hdfs': {},
+        'ignite': {},
+        'kafka': {},
+    },
+}
+
+# 其他数据-实时流水表
+OTHERS_REAL_GET_RESULT_TABLE_DATA = {
+    'processing_type': 'clean',
+    'result_table_type': None,
+    'storages': {
+        'kafka': {},
+    },
+}
+
+# 其他数据-离线流水表
+OTHERS_BATCH_GET_RESULT_TABLE_DATA = {
+    'processing_type': 'batch',
+    'result_table_type': None,
+    'storages': {'hdfs': {}},
+}
+
+# 其他数据-资产
+OTHERS_BATCH_REAL_GET_RESULT_TABLE_DATA = {
+    'processing_type': 'clean',
+    'result_table_type': 'upsert_static',
+    'storages': {
+        'doris': {},
+        'hdfs': {},
+        'ignite': {},
+        'kafka': {},
+    },
+}

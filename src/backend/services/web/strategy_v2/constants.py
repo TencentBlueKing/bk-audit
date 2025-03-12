@@ -221,11 +221,13 @@ class BkBaseStorageType(TextChoices):
     HDFS = "hdfs", gettext_lazy("HDFS")
     REDIS = "redis", gettext_lazy("Redis")
     KAFKA = "kafka", gettext_lazy("Kafka")
+    DORIS = "doris", gettext_lazy("Doris")
 
 
 # 业务下的RT表允许的存储类型
 BIZ_RT_TABLE_ALLOW_STORAGES = {
     BkBaseStorageType.HDFS.value,
+    BkBaseStorageType.KAFKA.value,
 }
 
 
