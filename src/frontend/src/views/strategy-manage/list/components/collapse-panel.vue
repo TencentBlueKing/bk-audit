@@ -40,7 +40,7 @@
     isActive.value = !isActive.value;
   };
 </script>
-<style lang="postcss">
+<style scoped lang="postcss">
 .collapse-panel {
   .collapse-panel-title {
     display: flex;
@@ -51,7 +51,7 @@
     line-height: 28px;
     color: #63656e;
     cursor: pointer;
-    background: #eaebf0;
+    background: #f0f1f5;
     align-items: center;
   }
 }
