@@ -59,18 +59,18 @@ dependencies = [
     "arrow==1.2.2",
     "requests==2.31.0",
     "mistune==2.0.3",
-    "protobuf==3.19.5",
-    "opentelemetry-api==1.20.0",
-    "opentelemetry-sdk==1.20.0",
-    "opentelemetry-exporter-otlp==1.20.0",
-    "opentelemetry-exporter-jaeger==1.20.0",
-    "opentelemetry-instrumentation==0.41b0",
-    "opentelemetry-instrumentation-django==0.41b0",
-    "opentelemetry-instrumentation-dbapi==0.41b0",
-    "opentelemetry-instrumentation-redis==0.41b0",
-    "opentelemetry-instrumentation-requests==0.41b0",
-    "opentelemetry-instrumentation-celery==0.41b0",
-    "opentelemetry-instrumentation-logging==0.41b0",
+    "protobuf<6.0",
+    "opentelemetry-api==1.30.0",
+    "opentelemetry-sdk==1.30.0",
+    "opentelemetry-exporter-otlp==1.30.0",
+    "opentelemetry-exporter-jaeger==1.21.0",
+    "opentelemetry-instrumentation==0.51b0",
+    "opentelemetry-instrumentation-django==0.51b0",
+    "opentelemetry-instrumentation-dbapi==0.51b0",
+    "opentelemetry-instrumentation-redis==0.51b0",
+    "opentelemetry-instrumentation-requests==0.51b0",
+    "opentelemetry-instrumentation-celery==0.51b0",
+    "opentelemetry-instrumentation-logging==0.51b0",
     "django-prometheus==2.2.0",
     "numpy==1.24.2",
     "apigw-manager==2.0.0",
@@ -83,6 +83,11 @@ dependencies = [
     "pypika==0.48.9",
     "pydantic==2.10.4",
     "kafka-python==2.0.2",
+    "opentelemetry-instrumentation-kafka-python==0.51b0",
+    "opentelemetry-instrumentation-urllib3==0.51b0",
+    "opentelemetry-instrumentation-httpx==0.51b0",
+    "opentelemetry-instrumentation-asyncio==0.51b0",
+    "opentelemetry-instrumentation-threading==0.51b0",
 ]
 requires-python = "==3.10.*"
 readme = "README.md"
@@ -107,3 +112,6 @@ dev = [
     "PyYAML==6.0",
     "packaging==24.2",
 ]
+
+[tool.pdm.resolution]
+allow-prereleases = true # 允许安装预发行版本
