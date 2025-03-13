@@ -83,6 +83,7 @@
 
     .bk-tab-header {
       margin-left: 24px;
+      font-size: 14px;
     }
 
     .bk-tab-content {
