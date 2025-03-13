@@ -48,7 +48,7 @@
     isCollapseActive.value = !isCollapseActive.value;
   };
 </script>
-<style lang="postcss">
+<style scoped lang="postcss">
   .collapse-panel {
     .collapse-panel-title {
       height: 40px;
@@ -57,7 +57,7 @@
       line-height: 40px;
       color: #313238;
       cursor: pointer;
-      background: #dcdee5;
+      background: #f0f1f5;
     }
   }
 </style>
