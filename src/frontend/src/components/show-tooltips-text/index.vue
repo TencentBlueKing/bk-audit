@@ -20,9 +20,15 @@
     class="show-tooltips-text">
     {{ data || '--' }}
   </div>
+  <div
+    :id="`${data}`"
+    style="display: none;">
+    <div style="max-width: 300px; word-break: break-all;">
+      {{ data }}
+    </div>
+  </div>
 </template>
 <script setup lang="ts">
-  import DOMPurify from 'dompurify';
   import tippy, {
     type Instance,
     type SingleTarget,
@@ -44,13 +50,12 @@
 
   let tippyIns: Instance;
 
-  const getSafeContent = (content: string) => DOMPurify.sanitize(content);
-
   watch(() => props.data, (data) => {
     nextTick(() => {
-      if (hanldeIsShowTippy()) {
+      const template = document.getElementById(`${data}`);
+      if (hanldeIsShowTippy() && template) {
         tippyIns = tippy(rootRef.value as SingleTarget, {
-          content: getSafeContent(`<div style="max-width: 300px; word-break: break-all;">${data}</div>`),
+          content: template.innerHTML,
           placement: 'top',
           allowHTML: true,
           appendTo: () => document.body,

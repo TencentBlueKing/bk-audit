@@ -93,12 +93,9 @@
 
       &:last-child {
         flex: 1;
-
-        div {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
     }
   }
