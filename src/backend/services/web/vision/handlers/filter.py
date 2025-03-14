@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
@@ -35,10 +35,13 @@ from services.web.vision.exceptions import VisionPermissionInvalid
 from services.web.vision.handlers.convertor import DeptConvertor
 
 
-class FilterDataHandler:
+class FilterDataHandler(abc.ABC):
     """
     筛选数据处理
     """
+
+    def __init__(self, vision_handler_params: Optional[Dict] = None):
+        self.vision_handler_params = vision_handler_params or {}
 
     @abc.abstractmethod
     def get_data(self) -> List[Dict[str, str]]:
@@ -193,3 +196,19 @@ class TagFilterHandler(FilterDataHandler):
 
         # 检查通过则返回
         return input_data[0] if is_single else input_data
+
+
+class SystemAdministratorFilterHandler(FilterDataHandler):
+    def get_data(self) -> List[Dict[str, str]]:
+        return [{"label": "样例系统", "value": "bk-audit"}]
+
+    def check_data(self, input_data: Union[List[str], str, int]) -> Union[List[str], str, int]:
+        return "bk-audit"
+
+
+class SystemDiagnosisFilterHandler(FilterDataHandler):
+    def get_data(self) -> List[Dict[str, str]]:
+        return [{"label": "样例系统", "value": "bk-audit"}]
+
+    def check_data(self, input_data: Union[List[str], str, int]) -> Union[List[str], str, int]:
+        return "bk-audit"

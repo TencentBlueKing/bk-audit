@@ -18,16 +18,17 @@ to the current version of the project delivered to anyone in the future.
 
 from rest_framework import serializers
 
+from core.serializers import ExtraDataSerializerMixin
 from services.web.vision.models import VisionPanel
 
 
 class VisionPanelInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = VisionPanel
-        fields = ["id", "name"]
+        fields = ["id", "name", "scenario"]
 
 
-class QueryMetaReqSerializer(serializers.Serializer):
+class QueryMetaReqSerializer(ExtraDataSerializerMixin):
     share_uid = serializers.CharField()
     type = serializers.CharField()
 

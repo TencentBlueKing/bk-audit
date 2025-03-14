@@ -28,3 +28,22 @@ class OrderSerializer(serializers.Serializer):
             return attrs
         attrs["sort"] = [order_field] if order_type == OrderTypeChoices.ASC.value else [f"-{order_field}"]
         return attrs
+
+
+class ExtraDataSerializerMixin(serializers.Serializer):
+    """支持额外字段的序列化器"""
+
+    def to_internal_value(self, data):
+        """
+        重写此方法，以便在接收额外字段时，能将它们也包含在 validated_data 中
+        """
+        # 获取原有的字段
+        validated_data = super().to_internal_value(data)
+
+        # 获取额外的字段（不在预定义字段中的字段）
+        extra_fields = {key: value for key, value in data.items() if key not in validated_data}
+
+        # 将额外的字段添加到 validated_data 中
+        validated_data.update(extra_fields)
+
+        return validated_data
