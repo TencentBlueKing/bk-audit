@@ -24,7 +24,6 @@ from rest_framework.generics import get_object_or_404
 from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
 from services.web.vision.constants import PANEL
-from services.web.vision.handlers.query import VisionHandler
 from services.web.vision.models import VisionPanel, VisionPanelInstance
 from services.web.vision.serializers import (
     QueryMetaReqSerializer,
@@ -43,49 +42,47 @@ class ListPanels(BKVision):
     audit_action = ActionEnum.LIST_BASE_PANEL
 
     def perform_request(self, validated_request_data):
-        return VisionPanel.objects.all()
+        return VisionPanel.objects.filter(validated_request_data['scenario']).all()
 
 
-class QueryMeta(BKVision):
+class QueryMixIn(AuditMixinResource, abc.ABC):
+    def perform_request(self, validated_request_data):
+        panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
+        self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
+        if panel.vision_id:
+            validated_request_data["share_uid"] = panel.vision_id
+        return getattr(panel.get_vision_handler_class()(), self.query_method)(params=validated_request_data)
+
+    @property
+    @abc.abstractmethod
+    def query_method(self) -> str:
+        pass
+
+
+class QueryMeta(QueryMixIn, BKVision):
     name = gettext_lazy("查询视图配置")
     RequestSerializer = QueryMetaReqSerializer
     audit_action = ActionEnum.VIEW_BASE_PANEL
     audit_resource_type = PANEL
-
-    def perform_request(self, validated_request_data):
-        panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
-        self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
-        return VisionHandler().query_meta(params=validated_request_data)
+    query_method = 'query_meta'
 
 
-class QueryDataset(BKVision):
+class QueryDataset(QueryMixIn, BKVision):
     name = gettext_lazy("获取面板视图数据")
     audit_action = ActionEnum.VIEW_BASE_PANEL
     audit_resource_type = PANEL
-
-    def perform_request(self, validated_request_data):
-        panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
-        self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
-        return VisionHandler().query_dataset(params=validated_request_data)
+    query_method = 'query_dataset'
 
 
-class QueryFieldData(BKVision):
+class QueryFieldData(QueryMixIn, BKVision):
     name = gettext_lazy("获取字段数据")
     audit_action = ActionEnum.VIEW_BASE_PANEL
     audit_resource_type = PANEL
-
-    def perform_request(self, validated_request_data):
-        panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
-        self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
-        return VisionHandler().query_field_data(params=validated_request_data)
+    query_method = 'query_field_data'
 
 
-class QueryVariableData(BKVision):
+class QueryVariableData(QueryMixIn, BKVision):
     name = gettext_lazy("查询变量数据")
     audit_action = ActionEnum.VIEW_BASE_PANEL
     audit_resource_type = PANEL
-
-    def perform_request(self, validated_request_data):
-        panel = get_object_or_404(VisionPanel, id=validated_request_data.get("share_uid"))
-        self.add_audit_instance_to_context(instance=VisionPanelInstance(panel).instance)
-        return VisionHandler().query_variable_data(params=validated_request_data)
+    query_method = 'query_variable_data'
