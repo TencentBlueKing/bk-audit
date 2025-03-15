@@ -19,7 +19,7 @@ import datetime
 
 from rest_framework.settings import api_settings
 
-from services.web.analyze.constants import OffsetUnit
+from services.web.analyze.constants import OffsetUnit, ResultTableType
 
 
 def calculate_offline_flow_start_time(schedule_period: OffsetUnit):
@@ -43,3 +43,13 @@ def calculate_offline_flow_start_time(schedule_period: OffsetUnit):
     # 格式化时间字符串
     start_time_str = start_time.strftime(api_settings.DATETIME_FORMAT)
     return start_time_str
+
+
+def is_asset(result_table: dict):
+    """
+    判断是否为维表
+    """
+
+    processing_type = result_table.get("processing_type")
+    result_table_type = result_table.get("result_table_type")
+    return (processing_type == ResultTableType.CDC) or (result_table_type == ResultTableType.STATIC)
