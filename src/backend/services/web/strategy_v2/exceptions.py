@@ -94,3 +94,13 @@ class LinkTableNameExist(StrategyV2Exception):
     SATUS_CODE = 400
     ERROR_CODE = "011"
     MESSAGE = gettext_lazy("联表名称已存在")
+
+
+class NotSupportSourceType(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "012"
+    MESSAGE = gettext_lazy("不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}")
+
+    def __init__(self, source_type, support_source_types, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(source_type=source_type, support_source_types=support_source_types)
+        super().__init__(*args, **kwargs)

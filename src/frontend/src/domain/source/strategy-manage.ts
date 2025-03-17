@@ -184,6 +184,14 @@ class Strategy extends ModuleBase {
       params,
     });
   }
+  // 获取不同数据源可用调度方式
+  getSourceType(params: Record<string, any>) {
+    return Request.post <{
+      support_source_types: Array<'batch_join_source' | 'stream_source'>,
+    }>(`${this.path}/strategy/rule_audit_source_type_check/`, {
+      params,
+    });
+  }
 
 
   // 获取策略标签

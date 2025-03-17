@@ -56,7 +56,6 @@ from services.web.analyze.constants import (
     FlowStatusToggleChoices,
     OffsetUnit,
     OutputBaselineType,
-    ResultTableType,
     ScenePlanServingMode,
     WindowDependencyRule,
     WindowType,
@@ -69,7 +68,7 @@ from services.web.analyze.tasks import (
     check_flow_status,
     toggle_monitor,
 )
-from services.web.analyze.utils import calculate_offline_flow_start_time
+from services.web.analyze.utils import calculate_offline_flow_start_time, is_asset
 from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.handlers import EventHandler
@@ -328,10 +327,7 @@ class AIOpsController(Controller):
         """
 
         result_table = api.bk_base.get_result_table(result_table_id=result_table_id)
-        if (
-            result_table["processing_type"] == ResultTableType.CDC
-            or result_table["result_table_type"] == ResultTableType.STATIC
-        ):
+        if is_asset(result_table):
             return FlowDataSourceNodeType.BATCH
         else:
             return FlowDataSourceNodeType.BATCH_REAL
