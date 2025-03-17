@@ -20,23 +20,30 @@ import copy
 from unittest import mock
 
 from bk_resource import resource
+from django.conf import settings
 
+from api.bk_base.default import GetResultTable
 from api.bk_log.constants import INDEX_SET_ID
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from core.utils.tools import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
-from services.web.strategy_v2.constants import RiskLevel
+from services.web.strategy_v2.constants import RiskLevel, RuleAuditSourceType
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.test_collector_plugin import (
     CollectorPluginTest,
 )
 from tests.test_strategy_v2.constants import (
+    ASSET_GET_RESULT_TABLE_DATA,
     BKM_CONTROL_DATA,
     BKM_CONTROL_VERSION_DATA,
     BKM_STRATEGY_DATA,
+    COLLECTOR_GET_RESULT_TABLE_DATA,
     CREATE_BKM_DATA_RESULT,
     MOCK_INDEX_SET_ID,
+    OTHERS_BATCH_GET_RESULT_TABLE_DATA,
+    OTHERS_BATCH_REAL_GET_RESULT_TABLE_DATA,
+    OTHERS_REAL_GET_RESULT_TABLE_DATA,
     UPDATE_BKM_DATA_RESULT,
 )
 
@@ -95,3 +102,85 @@ class StrategyTest(TestCase):
         data = resource.strategy_v2.update_strategy(**params)
         UPDATE_BKM_DATA_RESULT["strategy_id"] = data["strategy_id"]
         self.assertEqual(data, UPDATE_BKM_DATA_RESULT)
+
+
+class TestRuleAuditSourceTypeCheck(TestCase):
+    @mock.patch.object(GetResultTable, "perform_request", lambda *args, **kwargs: COLLECTOR_GET_RESULT_TABLE_DATA)
+    def test_rule_audit_source_type_check_log(self):
+        """
+        测试日志 RT
+        """
+        actual = resource.strategy_v2.rule_audit_source_type_check(
+            {"namespace": settings.DEFAULT_NAMESPACE, "config_type": "EventLog", "rt_id": "test"}
+        )
+        expect = {
+            "support_source_types": [
+                RuleAuditSourceType.REALTIME.value,
+                RuleAuditSourceType.BATCH.value,
+            ]
+        }
+        self.assertEqual(actual, expect)
+
+    @mock.patch.object(GetResultTable, "perform_request", lambda *args, **kwargs: ASSET_GET_RESULT_TABLE_DATA)
+    def test_rule_audit_source_type_check_asset(self):
+        """
+        测试资产 RT
+        """
+        actual = resource.strategy_v2.rule_audit_source_type_check(
+            {"namespace": settings.DEFAULT_NAMESPACE, "config_type": "BuildIn", "rt_id": "test"}
+        )
+        expect = {
+            "support_source_types": [
+                RuleAuditSourceType.REALTIME.value,
+                RuleAuditSourceType.BATCH.value,
+            ]
+        }
+        self.assertEqual(actual, expect)
+
+    def test_rule_audit_source_type_check_other(self):
+        """
+        测试其他数据
+        """
+
+        # 可实时
+        with mock.patch.object(
+            GetResultTable, "perform_request", lambda *args, **kwargs: OTHERS_REAL_GET_RESULT_TABLE_DATA
+        ):
+            actual = resource.strategy_v2.rule_audit_source_type_check(
+                {"namespace": settings.DEFAULT_NAMESPACE, "config_type": "BizRt", "rt_id": "test"}
+            )
+            expect = {
+                "support_source_types": [
+                    RuleAuditSourceType.REALTIME.value,
+                ]
+            }
+            self.assertEqual(actual, expect)
+
+        # 可离线
+        with mock.patch.object(
+            GetResultTable, "perform_request", lambda *args, **kwargs: OTHERS_BATCH_GET_RESULT_TABLE_DATA
+        ):
+            actual = resource.strategy_v2.rule_audit_source_type_check(
+                {"namespace": settings.DEFAULT_NAMESPACE, "config_type": "BizRt", "rt_id": "test"}
+            )
+            expect = {
+                "support_source_types": [
+                    RuleAuditSourceType.BATCH.value,
+                ]
+            }
+            self.assertEqual(actual, expect)
+
+        # 可实时，可离线
+        with mock.patch.object(
+            GetResultTable, "perform_request", lambda *args, **kwargs: OTHERS_BATCH_REAL_GET_RESULT_TABLE_DATA
+        ):
+            actual = resource.strategy_v2.rule_audit_source_type_check(
+                {"namespace": settings.DEFAULT_NAMESPACE, "config_type": "BizRt", "rt_id": "test"}
+            )
+            expect = {
+                "support_source_types": [
+                    RuleAuditSourceType.REALTIME.value,
+                    RuleAuditSourceType.BATCH.value,
+                ]
+            }
+            self.assertEqual(actual, expect)

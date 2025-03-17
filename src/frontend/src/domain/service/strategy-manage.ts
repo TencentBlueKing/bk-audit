@@ -163,6 +163,15 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 获取不同数据源可用调度方式
+   */
+  fetchSourceType(params: {
+    table_id: string
+  }) {
+    return StrategySource.getSourceType(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取策略标签
    */
   fetchStrategyTags() {
