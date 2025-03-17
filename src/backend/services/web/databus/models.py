@@ -17,11 +17,15 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from blueapps.utils.request_provider import get_local_request_id, get_request_username
+from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy
 
+from apps.meta.constants import ConfigLevelChoices
+from apps.meta.models import GlobalMetaConfig
 from core.models import OperateRecordModel, SoftDeleteModel
 from services.web.databus.constants import (
+    COLLECTOR_PLUGIN_ID,
     DEFAULT_ALLOCATION_MIN_DAYS,
     DEFAULT_RETENTION,
     DEFAULT_STORAGE_REPLIES,
@@ -82,6 +86,20 @@ class CollectorPlugin(OperateRecordModel):
         """
 
         return cls.make_table_id(bk_biz_id, collector_plugin_name_en).replace(".", "_")
+
+    @classmethod
+    def build_collector_rt(cls, namespace: str):
+        """
+        根据namespace获取采集插件的result_table_id
+        """
+
+        collector_plugin_id = GlobalMetaConfig.get(
+            config_key=COLLECTOR_PLUGIN_ID,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=namespace,
+        )
+        plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
+        return plugin.build_result_table_id(settings.DEFAULT_BK_BIZ_ID, plugin.collector_plugin_name_en)
 
 
 class CollectorConfig(SoftDeleteModel):

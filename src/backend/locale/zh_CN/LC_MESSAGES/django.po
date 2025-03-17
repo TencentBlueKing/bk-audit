@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-07 20:59+0800\n"
+"POT-Creation-Date: 2025-03-12 01:51+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -3626,6 +3626,9 @@ msgstr "创建人"
 msgid "Kafka"
 msgstr "Kafka"
 
+msgid "Doris"
+msgstr "Doris"
+
 msgid "Link Table Data"
 msgstr "联表数据"
 
@@ -3664,6 +3667,10 @@ msgstr "规则审计SQL生成错误: {err}"
 #, fuzzy
 msgid "联表名称已存在"
 msgstr "联表名称已存在"
+
+#, python-brace-format
+msgid "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
+msgstr "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
 
 #, python-format
 msgid "source_field %s not found"
@@ -3801,6 +3808,9 @@ msgstr "查询联表详情"
 
 msgid "查询联表标签列表"
 msgstr "查询联表标签列表"
+
+msgid "规则审计调度类型检查"
+msgstr "规则审计调度类型检查"
 
 msgid "Source Field"
 msgstr "来源字段"
@@ -4099,6 +4109,9 @@ msgstr "配置类型：%s 需要 link_table"
 
 msgid "Batch rule audit need schedule_config"
 msgstr "离线规则审计的需要调度配置"
+
+msgid "Support Source Types"
+msgstr "调度类型"
 
 msgid "版本日志"
 msgstr "版本日志"

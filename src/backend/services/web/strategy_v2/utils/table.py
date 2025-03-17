@@ -26,13 +26,17 @@ from django.utils.module_loading import import_string
 
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
+from services.web.analyze.utils import is_asset
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.constants import (
     BIZ_RT_TABLE_ALLOW_STORAGES,
     BKBaseProcessingType,
+    BkBaseStorageType,
     ResultTableType,
+    RuleAuditSourceType,
 )
+from services.web.strategy_v2.models import LinkTable
 
 
 class TableHandler:
@@ -183,13 +187,7 @@ class BizRtTableHandler(TableHandler):
             )
         )
         # 日志 rt
-        collector_plugin_id = GlobalMetaConfig.get(
-            config_key=COLLECTOR_PLUGIN_ID, config_level=ConfigLevelChoices.NAMESPACE.value, instance_key=self.namespace
-        )
-        plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
-        log_rt_id = CollectorPlugin.make_table_id(settings.DEFAULT_BK_BIZ_ID, plugin.collector_plugin_name_en).replace(
-            ".", "_"
-        )
+        log_rt_id = CollectorPlugin.build_collector_rt(namespace=self.namespace)
         exclude_rt_ids.add(log_rt_id)
         return exclude_rt_ids
 
@@ -216,3 +214,50 @@ class BizRtTableHandler(TableHandler):
                 rt for rt in rts if rt and (rt.get("storages", {}).keys() & BIZ_RT_TABLE_ALLOW_STORAGES)
             )
         return self.format_result_tables(result_tables)
+
+
+class RuleAuditSourceTypeChecker:
+    def __init__(self, namespace: str):
+        self.namespace = namespace
+
+    def link_table_support_source_types(self, link_table: LinkTable) -> List[RuleAuditSourceType]:
+        """
+        判断联表是否支持某种调度类型
+        1. 实时计算：必须是日志作为实时流水表，其余都是资产作为离线维表；例如：一个日志与其他资产维表关联
+        2. 离线计算：全部都是资产作为离线维表，或者可以加上日志作为离线流水表；例如：一个日志和其他资产维表关联或者多个资产维表关联
+        """
+
+        support_source_types = []
+        collector_log_rt = CollectorPlugin.build_collector_rt(namespace=self.namespace)
+        rt_ids = link_table.rt_ids.copy()
+        # 如果有日志表则可以作为实时任务
+        if collector_log_rt in rt_ids:
+            rt_ids.remove(collector_log_rt)
+            support_source_types.append(RuleAuditSourceType.REALTIME)
+        # 需要确保其他 rt 必须为维表
+        rts = api.bk_base.get_result_tables(result_table_ids=rt_ids, related=["storages"])
+        if len(rts) != len(rt_ids):
+            return []
+        for rt in rts:
+            if not is_asset(rt):
+                return []
+        support_source_types.append(RuleAuditSourceType.BATCH)
+        return support_source_types
+
+    def rt_support_source_types(self, rt_id: str) -> List[RuleAuditSourceType]:
+        """
+        判断 rt 是否支持某种调度类型
+        1. 实时计算：rt 入 kafka；例如：实时的日志，资产或其他数据
+        2. 离线计算：入 HDFS 作为离线流水表，资产作为离线维表；例如：日志，资产，以及入 HDFS 存储的其他数据
+        """
+
+        support_source_types = []
+        rt = api.bk_base.get_result_table(result_table_id=rt_id, related=["storages"])
+        storage = rt.get("storages", {}).keys()
+        # 实时计算中：kafka 可作为实时流水表
+        if BkBaseStorageType.KAFKA in storage:
+            support_source_types.append(RuleAuditSourceType.REALTIME)
+        # 离线计算中：HDFS 可作为离线流水表；资产表可作为离线维表
+        if BkBaseStorageType.HDFS in storage or is_asset(rt):
+            support_source_types.append(RuleAuditSourceType.BATCH)
+        return support_source_types

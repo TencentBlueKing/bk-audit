@@ -27,6 +27,7 @@ from bk_resource import CacheResource, api, resource
 from bk_resource.base import Empty
 from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.cache import CacheTypeItem
+from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.db import transaction
@@ -98,6 +99,7 @@ from services.web.strategy_v2.constants import (
 from services.web.strategy_v2.exceptions import (
     ControlChangeError,
     LinkTableHasStrategy,
+    NotSupportSourceType,
     StrategyPendingError,
     StrategyTypeCanNotChange,
 )
@@ -140,6 +142,8 @@ from services.web.strategy_v2.serializers import (
     ListStrategyTagsResponseSerializer,
     ListTablesRequestSerializer,
     RetryStrategyRequestSerializer,
+    RuleAuditSourceTypeCheckReqSerializer,
+    RuleAuditSourceTypeCheckRespSerializer,
     StrategyInfoSerializer,
     ToggleStrategyRequestSerializer,
     UpdateLinkTableRequestSerializer,
@@ -148,7 +152,10 @@ from services.web.strategy_v2.serializers import (
     UpdateStrategyResponseSerializer,
 )
 from services.web.strategy_v2.utils.field_value import FieldValueHandler
-from services.web.strategy_v2.utils.table import TableHandler
+from services.web.strategy_v2.utils.table import (
+    RuleAuditSourceTypeChecker,
+    TableHandler,
+)
 
 
 class StrategyV2Base(AuditMixinResource, abc.ABC):
@@ -180,6 +187,36 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
 
         return RuleAuditSQLBuilder(strategy).build_sql()
 
+    def _check_source_type(self, validated_request_data):
+        """
+        校验 source_type 是否支持
+        """
+
+        # 只对规则审计校验
+        strategy_type = validated_request_data.get("strategy_type")
+        if strategy_type != StrategyType.RULE.value:
+            return
+
+        configs = validated_request_data.get("configs", {})
+        if not configs:
+            return
+        data_source = configs["data_source"]
+        source_type = configs["source_type"]
+        try:
+            support_source_types = resource.strategy_v2.rule_audit_source_type_check(
+                {
+                    "namespace": validated_request_data["namespace"],
+                    "config_type": configs["config_type"],
+                    "rt_id": data_source.get("rt_id"),
+                    "link_table": data_source.get("data_source"),
+                }
+            )["support_source_types"]
+        except APIRequestError as e:
+            logger.error(f"[{self.__class__.__name__}] get support_source_types error{e}.")
+            return
+        if source_type not in support_source_types:
+            raise NotSupportSourceType(source_type=source_type, support_source_types=support_source_types)
+
 
 class CreateStrategy(StrategyV2Base):
     name = gettext_lazy("Create Strategy")
@@ -189,6 +226,7 @@ class CreateStrategy(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         strategy_type = validated_request_data.get("strategy_type")
+        self._check_source_type(validated_request_data)
         with transaction.atomic():
             # pop tag
             tag_names = validated_request_data.pop("tags", [])
@@ -227,6 +265,7 @@ class UpdateStrategy(StrategyV2Base):
     audit_action = ActionEnum.EDIT_STRATEGY
 
     def perform_request(self, validated_request_data):
+        self._check_source_type(validated_request_data)
         # load strategy
         strategy: Strategy = get_object_or_404(Strategy, strategy_id=validated_request_data.pop("strategy_id", int()))
         # check strategy status
@@ -1101,3 +1140,22 @@ class ListLinkTableTags(LinkTableBase):
         ] + tag_count
         # response
         return tag_count
+
+
+class RuleAuditSourceTypeCheck(StrategyV2Base):
+    name = gettext_lazy("规则审计调度类型检查")
+    RequestSerializer = RuleAuditSourceTypeCheckReqSerializer
+    ResponseSerializer = RuleAuditSourceTypeCheckRespSerializer
+
+    def perform_request(self, validated_request_data):
+        namespace = validated_request_data["namespace"]
+        config_type = validated_request_data["config_type"]
+        rt_id = validated_request_data.get("rt_id")
+        link_table_dict = validated_request_data.get("link_table")
+        checker = RuleAuditSourceTypeChecker(namespace=namespace)
+        if config_type == RuleAuditConfigType.LINK_TABLE.value:
+            link_table: LinkTable = get_object_or_404(LinkTable, **link_table_dict)
+            support_source_types = checker.link_table_support_source_types(link_table)
+        else:
+            support_source_types = checker.rt_support_source_types(rt_id)
+        return {"support_source_types": support_source_types}
