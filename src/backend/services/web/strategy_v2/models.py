@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Optional
+from typing import Optional, Set
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
@@ -185,7 +185,7 @@ class LinkTable(OperateRecordModel):
         return cls.objects.filter(q)
 
     @cached_property
-    def rt_ids(self) -> list[str]:
+    def rt_ids(self) -> Set[str]:
         """
         获取当前联表中的所有结果表
         """
@@ -195,7 +195,7 @@ class LinkTable(OperateRecordModel):
         for link in links:
             rt_ids.add(link["left_table"]["rt_id"])
             rt_ids.add(link["right_table"]["rt_id"])
-        return list(rt_ids)
+        return rt_ids
 
 
 class LinkTableTag(OperateRecordModel):

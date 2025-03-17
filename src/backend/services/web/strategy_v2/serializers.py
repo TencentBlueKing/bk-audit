@@ -1080,3 +1080,33 @@ class RuleAuditSerializer(serializers.Serializer):
         if source_type == RuleAuditSourceType.BATCH and not attrs.get("schedule_config"):
             raise serializers.ValidationError(gettext("Batch rule audit need schedule_config"))
         return attrs
+
+
+class RuleAuditSourceTypeCheckReqSerializer(serializers.Serializer):
+    """
+    Rule Audit Source Type Check Req Serializer
+    """
+
+    namespace = serializers.CharField(label=gettext_lazy("Namespace"))
+    config_type = serializers.ChoiceField(
+        label=gettext_lazy("Rule Audit Config Type"), choices=RuleAuditConfigType.choices
+    )
+    rt_id = serializers.CharField(label=gettext_lazy("Result Table ID"), required=False, allow_blank=True)
+    link_table = RuleAuditLinkTableSerializer(label=gettext_lazy("Link Table"), required=False, allow_null=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        config_type = attrs["config_type"]
+        if config_type != RuleAuditConfigType.LINK_TABLE.value:
+            if not attrs.get("rt_id"):
+                raise serializers.ValidationError(gettext("Config type: %s need rt_id") % config_type)
+        elif not attrs.get("link_table"):
+            raise serializers.ValidationError(gettext("Config type: %s need link_table") % config_type)
+        return attrs
+
+
+class RuleAuditSourceTypeCheckRespSerializer(serializers.Serializer):
+    support_source_types = serializers.ListField(
+        label=gettext_lazy("Support Source Types"),
+        child=serializers.ChoiceField(choices=RuleAuditSourceType.choices),
+    )
