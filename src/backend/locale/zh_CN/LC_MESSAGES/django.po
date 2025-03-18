@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-12 01:51+0800\n"
+"POT-Creation-Date: 2025-03-18 13:48+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -830,6 +830,30 @@ msgstr "正式环境"
 
 msgid "已启用"
 msgstr "已启用"
+
+msgid "AIOPS"
+msgstr "AIOPS"
+
+msgid "OTLP"
+msgstr "OTLP"
+
+msgid "水印"
+msgstr "水印"
+
+msgid "BKVision"
+msgstr "BKVision"
+
+msgid "通知"
+msgstr "通知"
+
+msgid "数据源"
+msgstr "数据源"
+
+msgid "存储编辑"
+msgstr "存储编辑"
+
+msgid "启用 Doris"
+msgstr "启用 Doris"
 
 msgid "特性开关ID"
 msgstr "特性开关ID"
@@ -2255,9 +2279,6 @@ msgstr "滑动"
 msgid "Whole"
 msgstr "全部"
 
-msgid "数据源"
-msgstr "数据源"
-
 msgid "数据开发"
 msgstr "数据开发"
 
@@ -3018,6 +3039,9 @@ msgstr "过滤条件 Key 解析错误: {key}"
 msgid "日志查询配置"
 msgstr "日志查询配置"
 
+msgid "日志搜索(All)"
+msgstr "日志搜索(All)"
+
 msgid "日志查询"
 msgstr "日志查询"
 
@@ -3625,9 +3649,6 @@ msgstr "创建人"
 
 msgid "Kafka"
 msgstr "Kafka"
-
-msgid "Doris"
-msgstr "Doris"
 
 msgid "Link Table Data"
 msgstr "联表数据"
