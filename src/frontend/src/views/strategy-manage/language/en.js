@@ -264,5 +264,8 @@ export default {
     继续刷新: 'Refresh',
     '按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；': 'By day, the next scheduling time is 0:00 on the day; by hour, the next scheduling time is the hour of the next hour; and it is used as a fixed launch time;',
     '审计无权限，请前往BKBase申请授权': 'Audit does not have permission, please go to BKBase to apply for authorization',
+    当前数据源不支持该调度方式: 'The current data source does not support this scheduling method',
+    请先选择数据源: 'Please select a data source first',
+    当前预期结果不支持该调度方式: 'Current expected results do not support this scheduling method',
   },
 };

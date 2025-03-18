@@ -19,7 +19,7 @@
     <auth-collapse-panel
       is-active
       :label="t('规则配置')"
-      style="margin-bottom: 14px;">
+      style="margin-bottom: 14px">
       <div class="customize-rule">
         <bk-form-item
           label=""
@@ -27,12 +27,18 @@
           required>
           <span
             v-bk-tooltips="{
-              content: t('审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'),
-              extCls:'strategy-config-type-tooltips',
+              content: t(
+                '审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'
+              ),
+              extCls: 'strategy-config-type-tooltips',
               placement: 'top-start'
             }"
             class="label-is-required"
-            style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+            style="
+              color: #63656e;
+              cursor: pointer;
+              border-bottom: 1px dashed #979ba5;
+            ">
             {{ t('数据源') }}
           </span>
           <div class="select-group">
@@ -55,7 +61,9 @@
             </bk-form-item>
             <!-- 四种数据源，对应的输入类型 -->
             <component
-              :is="configTypeMap[formData.configs.config_type] || EventLogComponent"
+              :is="
+                configTypeMap[formData.configs.config_type] || EventLogComponent
+              "
               ref="configRef"
               :source-type="formData.configs.config_type"
               :table-data="tableData"
@@ -64,7 +72,10 @@
           </div>
           <!-- 联表详情 -->
           <link-data-detail-component
-            v-if="formData.configs.data_source.link_table && formData.configs.data_source.link_table.uid"
+            v-if="
+              formData.configs.data_source.link_table &&
+                formData.configs.data_source.link_table.uid
+            "
             :join-type-list="joinTypeList"
             :link-data-detail="linkDataDetail"
             @refresh-link-data="handleRefreshLinkData" />
@@ -75,11 +86,17 @@
           <template #label>
             <span
               v-bk-tooltips="{
-                content: t('需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'),
-                extCls:'strategy-config-type-tooltips',
+                content: t(
+                  '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
+                ),
+                extCls: 'strategy-config-type-tooltips',
                 placement: 'top-start'
               }"
-              style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+              style="
+                color: #63656e;
+                cursor: pointer;
+                border-bottom: 1px dashed #979ba5;
+              ">
               {{ t('预期结果') }}
             </span>
           </template>
@@ -97,11 +114,17 @@
           <template #label>
             <span
               v-bk-tooltips="{
-                content: t('配置对应的字段与规则，筛选出我们期望的数据；可能是风险数据。'),
-                extCls:'strategy-config-type-tooltips',
+                content: t(
+                  '配置对应的字段与规则，筛选出我们期望的数据；可能是风险数据。'
+                ),
+                extCls: 'strategy-config-type-tooltips',
                 placement: 'top-start'
               }"
-              style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+              style="
+                color: #63656e;
+                cursor: pointer;
+                border-bottom: 1px dashed #979ba5;
+              ">
               {{ t('风险发现规则') }}
             </span>
           </template>
@@ -116,37 +139,69 @@
     <auth-collapse-panel
       is-active
       :label="t('调度配置')"
-      style="margin-bottom: 12px;">
+      style="margin-bottom: 12px">
       <div class="dispatch-wrap">
         <bk-form-item
           :label="t('调度方式')"
           property="source_type"
-          style="margin-bottom: 12px;">
+          style="margin-bottom: 12px">
           <bk-radio-group
             v-model="formData.configs.data_source.source_type"
             :disabled="isEditMode"
             @change="handleSourceTypeChange">
-            <bk-radio label="batch_join_source">
+            <bk-radio
+              v-bk-tooltips="{
+                content: getSourceTypeStatus('batch_join_source').tips,
+                placement: 'top-start',
+                disabled: !getSourceTypeStatus('batch_join_source').disabled
+              }"
+              :disabled="getSourceTypeStatus('batch_join_source').disabled"
+              label="batch_join_source">
               <span
                 v-bk-tooltips="{
-                  content: t('按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；'),
-                  extCls:'strategy-config-type-tooltips',
-                  placement: 'top-start'
+                  content: t(
+                    '按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；'
+                  ),
+                  extCls: 'strategy-config-type-tooltips',
+                  placement: 'top-start',
+                  disabled: getSourceTypeStatus('batch_join_source').disabled
                 }"
-                style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+                style="
+                  color: #63656e;
+                  cursor: pointer;
+                  border-bottom: 1px dashed #979ba5;
+                ">
                 {{ t('固定周期调度') }}
               </span>
             </bk-radio>
-            <bk-radio label="stream_source">
+            <bk-radio
+              v-bk-tooltips="{
+                content: getSourceTypeStatus('stream_source').tips,
+                placement: 'top-start',
+                disabled: !getSourceTypeStatus('stream_source').disabled
+              }"
+              :disabled="getSourceTypeStatus('stream_source').disabled"
+              label="stream_source">
               <span
-                v-bk-tooltips="t('策略实时运行')"
-                style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+                v-bk-tooltips="{
+                  content: t('策略实时运行'),
+                  placement: 'top-start',
+                  disabled: getSourceTypeStatus('stream_source').disabled
+                }"
+                style="
+                  color: #63656e;
+                  cursor: pointer;
+                  border-bottom: 1px dashed #979ba5;
+                ">
                 {{ t('实时调度') }}
               </span>
             </bk-radio>
           </bk-radio-group>
         </bk-form-item>
-        <template v-if="formData.configs.data_source.source_type !== 'stream_source'">
+        <template
+          v-if="
+            formData.configs.data_source.source_type === 'batch_join_sources'
+          ">
           <span
             v-bk-tooltips="t('策略运行的周期')"
             class="label-is-required circle">
@@ -157,7 +212,7 @@
               class="is-required no-label"
               label-width="0"
               property="configs.schedule_config.count_freq"
-              style="margin-bottom: 12px;">
+              style="margin-bottom: 12px">
               <bk-input
                 v-model="formData.configs.schedule_config.count_freq"
                 class="schedule-input"
@@ -170,12 +225,12 @@
               class="is-required no-label"
               label-width="0"
               property="configs.schedule_config.schedule_period"
-              style="margin-bottom: 12px;">
+              style="margin-bottom: 12px">
               <bk-select
                 v-model="formData.configs.schedule_config.schedule_period"
                 class="schedule-select"
                 :clearable="false"
-                style="width: 68px;">
+                style="width: 68px">
                 <bk-option
                   v-for="(item, index) in commonData.offset_unit"
                   :key="index"
@@ -214,41 +269,41 @@
   import useRequest from '@/hooks/use-request';
 
   interface Where {
-    connector: 'and' | 'or' ;
+    connector: 'and' | 'or'
     conditions: Array<{
-      connector: 'and' | 'or';
+      connector: 'and' | 'or'
       conditions: Array<{
         condition: {
-          field: DatabaseTableFieldModel | '';
-          filter: string;
-          filters: string[];
-          operator: string,
+          field: DatabaseTableFieldModel | ''
+          filter: string
+          filters: string[]
+          operator: string
         }
       }>
-    }>;
+    }>
   }
   interface IFormData {
     configs: {
       data_source: {
-        system_ids: string[],
-        source_type: string,
+        system_ids: string[]
+        source_type: string
         rt_id: string | string[]
         link_table: {
-          uid: string,
-          version: number,
-        },
-      },
-      config_type: string,
-      select: Array<DatabaseTableFieldModel>,
-      where: Where,
+          uid: string
+          version: number
+        }
+      }
+      config_type: string
+      select: Array<DatabaseTableFieldModel>
+      where: Where
       schedule_config: {
-        count_freq: string,
-        schedule_period: string,
-      },
-    },
+        count_freq: string
+        schedule_period: string
+      }
+    }
   }
   interface Emits {
-    (e: 'updateFormData', value: IFormData): void;
+    (e: 'updateFormData', value: IFormData): void
   }
   interface Expose {
     getFields: () => IFormData
@@ -279,7 +334,7 @@
 
   const initDataSource: IFormData['configs']['data_source'] = {
     system_ids: [],
-    source_type: 'batch_join_source',
+    source_type: '',
     rt_id: [],
     link_table: {
       uid: '',
@@ -291,7 +346,7 @@
     configs: {
       data_source: {
         system_ids: [],
-        source_type: 'batch_join_source',
+        source_type: '',
         rt_id: [],
         link_table: {
           uid: '',
@@ -317,37 +372,108 @@
   const joinTypeList = ref<Array<Record<string, any>>>([]);
 
   // eslint-disable-next-line max-len
-  const hasData = computed(() => formData.value.configs.select.length || formData.value.configs.where.conditions.length);
+  const hasData = computed(() => formData.value.configs.select.length
+    || formData.value.configs.where.conditions.length);
 
-  const {
-    data: commonData,
-  } = useRequest(StrategyManageService.fetchStrategyCommon, {
-    defaultValue: new CommonDataModel(),
-    manual: true,
-    onSuccess() {
-      ruleAuditConfigType.value = commonData.value.rule_audit_config_type;
-      aggregateList.value = commonData.value.rule_audit_aggregate_type;
-      aggregateList.value = aggregateList.value.concat([{
-        label: t('不聚和'),
-        value: null,
-      }]);
-      joinTypeList.value = commonData.value.link_table_join_type;
-    },
+  const getSourceTypeStatus = computed(() => (type: 'batch_join_source' | 'stream_source') => {
+    // 检查是否支持批量调度
+    if (!sourceType.value.support_source_types.includes('batch_join_source')) {
+      return {
+        disabled: true,
+        tips: t('当前数据源不支持该调度方式'),
+      };
+    }
+
+    // 检查实时策略的条件
+    if (type === 'stream_source'
+      && (!formData.value.configs.select.length || formData.value.configs.select.some(item => item.aggregate))) {
+      // 如果此时source_type为stream_source，则重置为空
+      if (formData.value.configs.data_source.source_type === 'stream_source') {
+        formData.value.configs.data_source.source_type = '';
+      }
+      return {
+        disabled: true,
+        tips: t('当前预期结果不支持该调度方式'),
+      };
+    }
+
+    return {
+      disabled: false,
+      tips: '',
+    };
   });
+
+  const { data: commonData } = useRequest(
+    StrategyManageService.fetchStrategyCommon,
+    {
+      defaultValue: new CommonDataModel(),
+      manual: true,
+      onSuccess() {
+        ruleAuditConfigType.value = commonData.value.rule_audit_config_type;
+        aggregateList.value = commonData.value.rule_audit_aggregate_type;
+        aggregateList.value = aggregateList.value.concat([
+          {
+            label: t('不聚和'),
+            value: null,
+          },
+        ]);
+        joinTypeList.value = commonData.value.link_table_join_type;
+      },
+    },
+  );
+
+  const { run: fetchSourceType, data: sourceType } = useRequest(
+    StrategyManageService.fetchSourceType,
+    {
+      defaultValue: {
+        support_source_types: [],
+      },
+      onSuccess: () => {
+        // 获取第一个可用的调度方式
+        const firstAvailableSourceType = sourceType.value.support_source_types.find((type) => {
+          if (type === 'stream_source') {
+            // stream_source模式下:
+            // 1. 预期数据为空 或
+            // 2. 存在聚合算法的数据
+            // 都不能使用该模式
+            return !(!formData.value.configs.select.length
+              || formData.value.configs.select.some(item => item.aggregate));
+          }
+          return true; // 其他类型都可用
+        });
+
+        // 在无可用类型下，如果source_type不为空，则重置source_type
+        if (!firstAvailableSourceType) {
+          formData.value.configs.data_source.source_type = '';
+          return;
+        }
+
+        // 有可用类型下，如果source_type不在支持的类型列表中，则设置为第一个可用类型
+        if (!sourceType.value.support_source_types
+          .includes(formData.value.configs.data_source.source_type as 'batch_join_source' | 'stream_source')) {
+          formData.value.configs.data_source.source_type = firstAvailableSourceType;
+        }
+        handleSourceTypeChange();
+      },
+    },
+  );
 
   // 获取tableid
-  const {
-    data: tableData,
-    run: fetchTable,
-  } = useRequest(StrategyManageService.fetchTable, {
-    defaultValue: [],
-  });
+  const { data: tableData, run: fetchTable } = useRequest(
+    StrategyManageService.fetchTable,
+    {
+      defaultValue: [],
+    },
+  );
 
-  const setTableFields = (data: Array<{
-    field_type: string,
-    label: string,
-    value: string,
-  }>, displayOrRtId: string) => data.map(item => ({
+  const setTableFields = (
+    data: Array<{
+      field_type: string
+      label: string
+      value: string
+    }>,
+    displayOrRtId: string,
+  ) => data.map(item => ({
     table: displayOrRtId, // 别名，单表时为rt_id
     raw_name: item.value,
     display_name: item.label,
@@ -366,7 +492,10 @@
   };
 
   // 获取联表表字段
-  const fetchLinkTableFields = async (rtIdArr: string[][], rtIdArrDisplay: string[][]) => {
+  const fetchLinkTableFields = async (
+    rtIdArr: string[][],
+    rtIdArrDisplay: string[][],
+  ) => {
     // rt_id
     const idArr = Array.from(new Set(rtIdArr.reduce((acc, curr) => acc.concat(curr), [])));
     // 别名
@@ -381,19 +510,26 @@
     });
   };
 
-  const createInfoBoxConfig = (overrides: {onConfirm: () => void, onClose: () => void}): any => ({
+  const createInfoBoxConfig = (overrides: {
+    onConfirm: () => void
+    onClose: () => void
+  }): any => ({
     type: 'warning',
     title: t('切换数据源请注意'),
-    subTitle: () => h('div', {
-      style: {
-        color: '#4D4F56',
-        backgroundColor: '#f5f6fa',
-        padding: '12px 16px',
-        borderRadius: '2px',
-        fontSize: '14px',
-        textAlign: 'left',
+    subTitle: () => h(
+      'div',
+      {
+        style: {
+          color: '#4D4F56',
+          backgroundColor: '#f5f6fa',
+          padding: '12px 16px',
+          borderRadius: '2px',
+          fontSize: '14px',
+          textAlign: 'left',
+        },
       },
-    }, t('切换后，已配置的数据将被清空。是否继续？')),
+      t('切换后，已配置的数据将被清空。是否继续？'),
+    ),
     confirmText: t('继续切换'),
     cancelText: t('取消'),
     headerAlign: 'center',
@@ -462,7 +598,9 @@
 
     if (!isLinkTable) {
       if (Array.isArray(dataSource.rt_id)) {
-        return dataSourceConfig.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1];
+        return (
+          dataSourceConfig.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1]
+        );
       }
       return dataSourceConfig.rt_id !== dataSource.rt_id;
     }
@@ -478,7 +616,11 @@
 
   // 更新数据源后，获取对应表字段
   const handleUpdateDataSource = (dataSource: IFormData['configs']['data_source']) => {
-    if (!dataSource.rt_id || !dataSource.rt_id.length || (dataSource.link_table && !dataSource.link_table.uid)) {
+    if (
+      !dataSource.rt_id
+      || !dataSource.rt_id.length
+      || (dataSource.link_table && !dataSource.link_table.uid)
+    ) {
       tableFields.value = [];
     }
     if (isInitialState()) {
@@ -520,13 +662,23 @@
     linkDataDetail.value = detail;
     // 表id
     // eslint-disable-next-line max-len
-    const rtIdArr = linkDataDetail.value.config.links.map(item => [item.left_table.rt_id, item.right_table.rt_id]) as string[][];
+    const rtIdArr = linkDataDetail.value.config.links.map(item => [
+      item.left_table.rt_id,
+      item.right_table.rt_id,
+    ]) as string[][];
     // 表别名
     // eslint-disable-next-line max-len
-    const rtIdArrDisplay =  linkDataDetail.value.config.links.map(item => [item.left_table.display_name, item.right_table.display_name]) as string[][];
+    const rtIdArrDisplay = linkDataDetail.value.config.links.map(item => [
+      item.left_table.display_name,
+      item.right_table.display_name,
+    ]) as string[][];
     if (rtIdArr.length) {
       // 联表获取表字段
       fetchLinkTableFields(rtIdArr, rtIdArrDisplay);
+      fetchSourceType({
+        config_type: formData.value.configs.config_type,
+        link_table: formData.value.configs.data_source.link_table,
+      });
     }
   };
 
@@ -551,7 +703,7 @@
   };
 
   // 编辑
-  const  setFormData = (editData: StrategyModel) => {
+  const setFormData = (editData: StrategyModel) => {
     configType.value = editData.configs.config_type || '';
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
@@ -574,25 +726,39 @@
     }
   };
 
-  watch(() => formData.value, (data) => {
-    emits('updateFormData', data);
-  }, {
-    deep: true,
-  });
+  watch(
+    () => formData.value,
+    (data) => {
+      emits('updateFormData', data);
+    },
+    {
+      deep: true,
+    },
+  );
 
   // 日志、资源数据、其他数据获取表字段
-  watch(() => formData.value.configs.data_source.rt_id, (rtId) => {
-    if (rtId && rtId.length) {
-      const rtId = formData.value.configs.data_source.rt_id;
-      fetDatabaseTableFields(Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId);
-    }
-  });
+  watch(
+    () => formData.value.configs.data_source.rt_id,
+    (rtId) => {
+      if (rtId && rtId.length && formData.value.configs.config_type !== 'LinkTable') {
+        const rtId = formData.value.configs.data_source.rt_id;
+        fetDatabaseTableFields(Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId);
+        fetchSourceType({
+          config_type: formData.value.configs.config_type,
+          rt_id: Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId,
+        });
+      }
+    },
+  );
 
-  watch(() => props.editData, (data) => {
-    if (isEditMode || isCloneMode) {
-      setFormData(data);
-    }
-  });
+  watch(
+    () => props.editData,
+    (data) => {
+      if (isEditMode || isCloneMode) {
+        setFormData(data);
+      }
+    },
+  );
 
   defineExpose<Expose>({
     // 获取提交参数
@@ -602,25 +768,37 @@
       if (params.configs.config_type !== 'EventLog') {
         params.configs.data_source = {
           ...params.configs.data_source,
-          rt_id: (_.isArray(tableIdList) ?  _.last(tableIdList)  : tableIdList) as string,
+          rt_id: (_.isArray(tableIdList)
+            ? _.last(tableIdList)
+            : tableIdList) as string,
         };
       }
       // 如果select为空数组，传全部
       if (params.configs.select && params.configs.select.length === 0) {
         // 通过一次遍历完成 display_name 的设置和统计
-        const displayNameCount = tableFields.value.reduce<Record<string, number>>((acc, item) => {
-          const displayName = `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`;
-          acc[displayName] = (acc[displayName] || 0) + 1;
-          return acc;
-        }, {});
+        const displayNameCount = tableFields.value.reduce<Record<string, number>>(
+          (acc, item) => {
+            const displayName = `${item.display_name}${
+              item.aggregate ? `_${item.aggregate}` : ''
+            }`;
+            acc[displayName] = (acc[displayName] || 0) + 1;
+            return acc;
+          },
+          {},
+        );
 
         // 更新 params.configs.select，使用统计结果调整 display_name
         params.configs.select = tableFields.value.map((item) => {
-          const displayName = `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`;
+          const displayName = `${item.display_name}${
+            item.aggregate ? `_${item.aggregate}` : ''
+          }`;
           return {
             ...item,
             aggregate: null,
-            display_name: displayNameCount[displayName] > 1 ? `${item.table}.${item.display_name}` : displayName,
+            display_name:
+              displayNameCount[displayName] > 1
+                ? `${item.table}.${item.display_name}`
+                : displayName,
           };
         });
         expectedResultsRef.value.setSelect(params.configs.select);
