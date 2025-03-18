@@ -21,8 +21,9 @@ import os
 import time
 import traceback
 
+import requests
 from billiard.exceptions import SoftTimeLimitExceeded
-from bk_resource import resource
+from bk_resource import api, resource
 from bk_resource.exceptions import APIRequestError
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
@@ -32,8 +33,9 @@ from django.conf import settings
 from django.utils import timezone
 from django.utils.translation import gettext
 
+from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
-from apps.meta.models import GlobalMetaConfig, System
+from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.notice.handlers import ErrorMsgHandler
 from core.lock import lock
 from services.web.databus.collector.check.handlers import ReportCheckHandler
@@ -43,16 +45,23 @@ from services.web.databus.collector.snapshot.join.base import (
     AssetHandler,
     BasicJoinHandler,
 )
+from services.web.databus.collector.snapshot.join.http_pull import HttpPullHandler
 from services.web.databus.collector_plugin.handlers import PluginEtlHandler
 from services.web.databus.constants import (
     API_PUSH_ETL_RETRY_TIMES,
     API_PUSH_ETL_RETRY_WAIT_TIME,
     COLLECTOR_PLUGIN_ID,
+    PULL_HANDLER_PRE_CHECK_TIMEOUT,
     EtlConfigEnum,
     PluginSceneChoices,
     SnapshotRunningStatus,
 )
-from services.web.databus.models import CollectorConfig, CollectorPlugin, Snapshot
+from services.web.databus.models import (
+    CollectorConfig,
+    CollectorPlugin,
+    Snapshot,
+    SnapshotCheckStatistic,
+)
 
 
 @periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -279,3 +288,87 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
     # 创建或更新
     for plugin in plugins:
         PluginEtlHandler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
+
+
+@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:check_join_data")
+def check_join_data():
+    # 获取所有状态为 'running' 的快照记录
+    snapshots = Snapshot.objects.filter(status=SnapshotRunningStatus.RUNNING)
+
+    # 遍历每个快照记录并执行检查
+    for snapshot in snapshots:
+        system_id = snapshot.system_id
+        resource_type_id = snapshot.resource_type_id
+        join_data_type = snapshot.join_data_type
+
+        # 获取系统和资源类型信息
+        system = System.objects.get(system_id=system_id)
+        resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
+
+        # 构建请求体
+        body = {
+            "type": resource_type_id,
+            "method": "fetch_instance_list",
+            "filter": {"start_time": 0, "end_time": int(datetime.datetime.now().timestamp()) * 1000},
+            "page": {"offset": 0, "limit": 1},
+        }
+
+        try:
+            # 设置 HttpPullHandler
+            pull_handler = HttpPullHandler(system, resource_type, Snapshot(), join_data_type)
+            # 执行 HTTP 请求
+            web = requests.session()
+            resp = web.post(
+                pull_handler.url,
+                json=body,
+                headers={"Authorization": pull_handler.authorization},
+                timeout=PULL_HANDLER_PRE_CHECK_TIMEOUT,
+            )
+            resp.raise_for_status()  # 检查请求是否成功
+            content = resp.json()
+            result = content.get("result", True)
+            http_pull_count = content.get("data", {}).get("count", 0)
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            # 如果发生异常，将 storage_count 设置为 0，并且 result 设置为 False
+            logger.exception("[JoinDataCheckFailed] Error while querying storage: %s", e)
+            http_pull_count = 0
+            result = False
+        # 请求存储中的数据总数
+        count_sql = f"select count(*) as count from {snapshot.bkbase_table_id} limit 1"
+        bulk_req_params = [
+            {
+                "sql": count_sql,
+                "prefer_storage": StorageType.DORIS.value,
+            },
+            {
+                "sql": count_sql,
+                "prefer_storage": StorageType.HDFS.value,
+            },
+        ]
+
+        try:
+            # 尝试发送请求获取存储中的 count 数据
+            bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+            doris_count_resp, hdfs_count_resp = bulk_resp
+            doris_storage_count = doris_count_resp.get("list", [{}])[0].get("count", 0)
+            hdfs_storage_count = hdfs_count_resp.get("list", [{}])[0].get("count", 0)
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            # 如果发生异常，将 storage_count 设置为 0，并且 result 设置为 False
+            logger.exception("[JoinDataCheckFailed] Error while querying storage: %s", e)
+            doris_storage_count = 0
+            hdfs_storage_count = 0
+            result = False
+
+        # 将结果保存到 JoinDataCheckStatistic 表
+        SnapshotCheckStatistic.objects.update_or_create(
+            system_id=system_id,
+            resource_type_id=resource_type_id,
+            join_data_type=join_data_type,
+            defaults={
+                "http_pull_count": http_pull_count,
+                "doris_storage_count": doris_storage_count,
+                "hdfs_storage_count": hdfs_storage_count,
+                "result": result,
+            },
+        )

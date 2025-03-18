@@ -404,6 +404,7 @@ if IS_USE_CELERY:
     )
     CELERY_ENABLE_UTC = True
     CELERYBEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+    CELERY_RESULT_BACKEND = 'django-db'
 
 # remove disabled apps
 if locals().get("DISABLED_APPS"):

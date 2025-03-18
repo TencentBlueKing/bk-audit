@@ -31,7 +31,7 @@ class QuerySyncRequestSerializer(serializers.Serializer):
     sql = serializers.CharField(label=gettext_lazy("SQL"))
     prefer_storage = serializers.CharField(label=gettext_lazy("Storage"), allow_blank=True, default="")
     bkdata_authentication_method = serializers.ChoiceField(
-        label=gettext_lazy("认证方式"), choices=AuthType.choices, default=AuthType.TOKEN
+        label=gettext_lazy("认证方式"), choices=AuthType.choices, default=AuthType.USER
     )
     bkdata_data_token = serializers.CharField(label=gettext_lazy("Token"), required=False)
 

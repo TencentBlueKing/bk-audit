@@ -82,6 +82,7 @@ from services.web.databus.collector.serializers import (
     GetDataIdTailResponseSerializer,
     GetSystemDataIdListRequestSerializer,
     GetSystemDataIdListResponseSerializer,
+    SnapshotCheckStatisticSerializer,
     SnapshotStatusRequestSerializer,
     ToggleJoinDataRequestSerializer,
     ToggleJoinDataResponseSerializer,
@@ -113,7 +114,12 @@ from services.web.databus.constants import (
     SnapshotRunningStatus,
     SourcePlatformChoices,
 )
-from services.web.databus.models import CollectorConfig, Snapshot, SnapshotStorage
+from services.web.databus.models import (
+    CollectorConfig,
+    Snapshot,
+    SnapshotCheckStatistic,
+    SnapshotStorage,
+)
 from services.web.databus.tasks import create_api_push_etl
 
 
@@ -861,3 +867,11 @@ class DeleteDataId(DataIdResource):
             api.bk_base.databus_cleans_delete(processing_id=collector.processing_id)
         # 数据库删除
         CollectorConfig._objects.filter(collector_config_id=collector.collector_config_id).delete()
+
+
+class SnapshotStatisticResource(ModelResource, CollectorMeta):
+    name = gettext_lazy("快照统计信息")
+    model = SnapshotCheckStatistic
+    action = "list"
+    filter_fields = ["namespace"]
+    serializer_class = SnapshotCheckStatisticSerializer
