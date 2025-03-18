@@ -254,3 +254,15 @@ class StorageOperateLog(models.Model):
     @classmethod
     def create(cls, cluster_id):
         cls.objects.create(cluster_id=cluster_id, operator=get_request_username(), request_id=get_local_request_id())
+
+
+class SnapshotCheckStatistic(models.Model):
+    system_id = models.CharField(max_length=64)
+    resource_type_id = models.CharField(max_length=64)
+    join_data_type = models.CharField(max_length=32)
+    http_pull_count = models.IntegerField(default=0)
+    storage_count = models.IntegerField(default=0)
+    result = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = [["system_id", "resource_type_id", "join_data_type"]]

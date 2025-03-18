@@ -41,7 +41,11 @@ from services.web.databus.constants import (
     SnapShotStorageChoices,
     TargetNodeTypeChoices,
 )
-from services.web.databus.models import CollectorConfig, Snapshot
+from services.web.databus.models import (
+    CollectorConfig,
+    Snapshot,
+    SnapshotCheckStatistic,
+)
 
 
 class SnapshotStatusRequestSerializer(serializers.Serializer):
@@ -443,3 +447,13 @@ class DeleteDataIdRequestSerializer(serializers.Serializer):
     """
 
     bk_data_id = serializers.IntegerField(label=gettext_lazy("DataID"))
+
+
+class SnapshotCheckStatisticSerializer(serializers.Serializer):
+    """
+    Join Data Check Statistic
+    """
+
+    class Meta:
+        model = SnapshotCheckStatistic
+        fields = "__all__"
