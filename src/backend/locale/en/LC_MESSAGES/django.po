@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-12 01:51+0800\n"
+"POT-Creation-Date: 2025-03-18 13:48+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -830,6 +830,30 @@ msgstr "Production"
 
 msgid "已启用"
 msgstr "Enabled"
+
+msgid "AIOPS"
+msgstr "AIOPS"
+
+msgid "OTLP"
+msgstr "OTLP"
+
+msgid "水印"
+msgstr "Watermark"
+
+msgid "BKVision"
+msgstr "BKVision"
+
+msgid "通知"
+msgstr "Notice"
+
+msgid "数据源"
+msgstr "Data Source"
+
+msgid "存储编辑"
+msgstr "Edit Storage"
+
+msgid "启用 Doris"
+msgstr "Enable Doris"
 
 msgid "特性开关ID"
 msgstr "Feature Toggle ID"
@@ -2256,9 +2280,6 @@ msgstr "Slide"
 msgid "Whole"
 msgstr "Whole"
 
-msgid "数据源"
-msgstr "Data Source"
-
 msgid "数据开发"
 msgstr "Data Flow"
 
@@ -3019,6 +3040,9 @@ msgstr "Filter Condition Key parsing error: {key}"
 msgid "日志查询配置"
 msgstr "Log Query Config"
 
+msgid "日志搜索(All)"
+msgstr "Collector Search(All)"
+
 msgid "日志查询"
 msgstr "Collector Search"
 
@@ -3629,9 +3653,6 @@ msgstr "Created By"
 msgid "Kafka"
 msgstr "Kafka"
 
-msgid "Doris"
-msgstr "Doris"
-
 msgid "Link Table Data"
 msgstr "Link Table Data"
 
@@ -3674,7 +3695,6 @@ msgstr "Link Table Name Exists"
 #, python-brace-format
 msgid "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
 msgstr "Unsupported data source type: current type is {source_type}, supported types are: {support_source_types}"
-
 
 #, python-format
 msgid "source_field %s not found"
