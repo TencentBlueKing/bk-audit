@@ -59,6 +59,7 @@ PLUGIN_DATA = {
     "bkbase_processing_id": None,
     "bkbase_table_id": None,
     "has_storage": False,
+    "has_replica_storage": False,
     "auth_rt": False,
 }
 

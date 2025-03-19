@@ -64,6 +64,7 @@ class CollectorPlugin(OperateRecordModel):
     bkbase_table_id = models.CharField(gettext_lazy("清洗"), max_length=255, null=True)
     bkbase_processing_id = models.CharField(gettext_lazy("清洗"), max_length=255, null=True)
     has_storage = models.BooleanField(gettext_lazy("是否有存储"), default=False)
+    has_replica_storage = models.BooleanField(gettext_lazy("是否有副存储"), default=False)
     auth_rt = models.BooleanField(gettext_lazy("是否授权"), default=False)
 
     class Meta:
