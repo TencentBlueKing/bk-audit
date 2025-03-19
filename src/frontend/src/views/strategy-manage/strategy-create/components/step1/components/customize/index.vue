@@ -200,7 +200,7 @@
         </bk-form-item>
         <template
           v-if="
-            formData.configs.data_source.source_type === 'batch_join_sources'
+            formData.configs.data_source.source_type === 'batch_join_source'
           ">
           <span
             v-bk-tooltips="t('策略运行的周期')"
@@ -376,24 +376,19 @@
     || formData.value.configs.where.conditions.length);
 
   const getSourceTypeStatus = computed(() => (type: 'batch_join_source' | 'stream_source') => {
-    // 检查是否支持批量调度
-    if (!sourceType.value.support_source_types.includes('batch_join_source')) {
-      return {
-        disabled: true,
-        tips: t('当前数据源不支持该调度方式'),
-      };
-    }
-
-    // 检查实时策略的条件
-    if (type === 'stream_source'
-      && (!formData.value.configs.select.length || formData.value.configs.select.some(item => item.aggregate))) {
-      // 如果此时source_type为stream_source，则重置为空
-      if (formData.value.configs.data_source.source_type === 'stream_source') {
+    // 检查该类型是否在支持列表中，或者对于stream_source类型是否存在聚合字段有不为null的aggregate
+    if (!sourceType.value.support_source_types.includes(type)
+      || (type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate))) {
+      // 如果当前选中的就是实时调度且不满足条件，需要重置
+      if (type === 'stream_source' && formData.value.configs.data_source.source_type === 'stream_source') {
         formData.value.configs.data_source.source_type = '';
       }
+
       return {
         disabled: true,
-        tips: t('当前预期结果不支持该调度方式'),
+        tips: !sourceType.value.support_source_types.includes(type)
+          ? t('当前数据源不支持该调度方式')
+          : t('当前预期结果不支持该调度方式'),
       };
     }
 
@@ -433,11 +428,9 @@
         const firstAvailableSourceType = sourceType.value.support_source_types.find((type) => {
           if (type === 'stream_source') {
             // stream_source模式下:
-            // 1. 预期数据为空 或
             // 2. 存在聚合算法的数据
             // 都不能使用该模式
-            return !(!formData.value.configs.select.length
-              || formData.value.configs.select.some(item => item.aggregate));
+            return !formData.value.configs.select.some(item => item.aggregate);
           }
           return true; // 其他类型都可用
         });
