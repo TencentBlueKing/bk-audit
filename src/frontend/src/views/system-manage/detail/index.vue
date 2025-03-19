@@ -42,11 +42,13 @@
   import AccessModel from './components/access-model/index.vue';
   import ContentTab from './components/content-tab/index.vue';
   import DataReport from './components/data-report/index.vue';
+  import SystemDiagnosis from './components/system-diagnosis/index.vue';
   import SystemInfo from './components/system-info/index.vue';
 
   const contentComponentMap = {
     accessModel: AccessModel,
     dataReport: DataReport,
+    systemDiagnosis: SystemDiagnosis,
   };
   const contentType = ref<keyof typeof contentComponentMap>('accessModel');
   const appRef = ref();
