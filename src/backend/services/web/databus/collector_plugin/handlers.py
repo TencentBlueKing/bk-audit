@@ -70,19 +70,22 @@ class PluginEtlHandler:
         # 创建入库
         if not self.plugin.has_storage:
             api.bk_base.databus_storages_post(main_storage_params)
-            if replica_storage_params:
-                api.bk_base.databus_storages_post(replica_storage_params)
             self.plugin.has_storage = True
             self.plugin.save(update_fields=["has_storage"])
         # 更新入库
         else:
             main_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
-            replica_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
             api.bk_base.databus_storages_put(main_storage_params)
-            if replica_storage_params:
-                api.bk_base.databus_storages_put(replica_storage_params)
 
         if replica_storage_params:
+            if not self.plugin.has_replica_storage:
+                api.bk_base.databus_storages_post(replica_storage_params)
+                self.plugin.has_replica_storage = True
+                self.plugin.save(update_fields=["has_replica_storage"])
+            else:
+                replica_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
+                api.bk_base.databus_storages_put(replica_storage_params)
+
             replica_storage_params["bkbase_result_table_id"] = self.plugin.build_result_table_id(
                 replica_storage_params["bk_biz_id"], self.plugin.collector_plugin_name_en
             )
