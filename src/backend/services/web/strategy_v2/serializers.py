@@ -1091,7 +1091,9 @@ class RuleAuditSourceTypeCheckReqSerializer(serializers.Serializer):
     config_type = serializers.ChoiceField(
         label=gettext_lazy("Rule Audit Config Type"), choices=RuleAuditConfigType.choices
     )
-    rt_id = serializers.CharField(label=gettext_lazy("Result Table ID"), required=False, allow_null=True)
+    rt_id = serializers.CharField(
+        label=gettext_lazy("Result Table ID"), required=False, allow_null=True, allow_blank=True
+    )
     link_table = RuleAuditLinkTableSerializer(label=gettext_lazy("Link Table"), required=False, allow_null=True)
 
     def validate(self, attrs):
