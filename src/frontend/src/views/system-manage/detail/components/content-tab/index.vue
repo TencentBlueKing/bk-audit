@@ -32,6 +32,14 @@
       @click="handleChange('dataReport')">
       {{ t('数据上报') }}
     </div>
+    <div
+      class="tab-item"
+      :class="{
+        active: modelValue === 'systemDiagnosis'
+      }"
+      @click="handleChange('systemDiagnosis')">
+      {{ t('系统诊断') }}
+    </div>
   </div>
 </template>
 <script setup lang="ts">
@@ -40,7 +48,7 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   interface Props {
-    modelValue: 'accessModel' | 'dataReport'
+    modelValue: 'accessModel' | 'dataReport' | 'systemDiagnosis'
   }
   interface Emits {
     (e: 'update:modelValue', value: Props['modelValue']): void
@@ -85,7 +93,7 @@
           left: 0;
           height: 2px;
           background: #3a84ff;
-          content: "";
+          content: '';
         }
       }
 
