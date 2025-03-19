@@ -200,15 +200,15 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         configs = validated_request_data.get("configs", {})
         if not configs:
             return
-        data_source = configs["data_source"]
-        source_type = configs["source_type"]
+        data_source: dict = configs["data_source"]
+        source_type = data_source.get("source_type")
         try:
             support_source_types = resource.strategy_v2.rule_audit_source_type_check(
                 {
                     "namespace": validated_request_data["namespace"],
                     "config_type": configs["config_type"],
                     "rt_id": data_source.get("rt_id"),
-                    "link_table": data_source.get("data_source"),
+                    "link_table": data_source.get("link_table"),
                 }
             )["support_source_types"]
         except APIRequestError as e:

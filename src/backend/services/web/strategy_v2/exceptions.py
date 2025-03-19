@@ -103,3 +103,4 @@ class NotSupportSourceType(StrategyV2Exception):
 
     def __init__(self, source_type, support_source_types, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(source_type=source_type, support_source_types=support_source_types)
+        super().__init__(*args, **kwargs)
