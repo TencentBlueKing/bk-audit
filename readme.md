@@ -1,7 +1,8 @@
 ![logo.png](assets/logo.png)
 
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](https://github.com/TencentBlueKing/bk-audit/blob/master/LICENSE.txt)
-[![Release Version](https://img.shields.io/badge/release-1.16.0-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
+[![Release Version](https://img.shields.io/badge/release-1.17.0-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
+[![Coverage](https://codecov.io/gh/TencentBlueKing/bk-audit/branch/main/graph/badge.svg)](https://codecov.io/gh/TencentBlueKing/bk-audit)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/pulls)
 
 [(English Documents Available)](./readme_en.md)
@@ -17,7 +18,7 @@
 - 不知不觉：目标数据接入审计后，审计策略静默运行，业务完全无感知
 - 无处不在：只要有产生数据痕迹，即可洞见审计身影
 - 铁证如山：精准呈现审计风险全链路关联证据，一切痕迹无所遁形
-- AI智能审计：支持AI智能模型审计，接入数据、配置策略、指定处理规则简单三步灵活应对各类复杂审计场景
+- AI智能审计：支持定制规则&AI智能模型审计，接入数据、配置策略、指定处理规则简单三步灵活应对各类复杂审计场景
 
 ## Roadmap
 

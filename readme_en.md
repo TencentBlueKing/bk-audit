@@ -1,7 +1,8 @@
 ![logo.png](assets/logo.png)
 
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](https://github.com/TencentBlueKing/bk-audit/blob/master/LICENSE.txt)
-[![Release Version](https://img.shields.io/badge/release-1.16.0-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
+[![Release Version](https://img.shields.io/badge/release-1.17.0-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
+[![Coverage](https://codecov.io/gh/TencentBlueKing/bk-audit/branch/main/graph/badge.svg)](https://codecov.io/gh/TencentBlueKing/bk-audit)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/pulls)
 
 > Important Note: All branch may be unstable or unavailable during development. Please obtain stable binary files through [Releases](https://github.com/TencentBlueKing/bk-audit/releases).
@@ -15,7 +16,7 @@ The BK Audit Center aims to create benchmark audit products based on the BK ecos
 - Unconscious: Once the target data is plugged into the audit, the audit policy silently operates, making the business totally unaware.
 - Ubiquitous: As long as there are data traces, the presence of audit can be discerned.
 - Solid Proof: Precisely presents all linked evidence of audit risks, leaving no place for all traces to hide.
-- AI Intelligent Audit: Supports AI intelligent model auditing. With three simple steps – data integration, policy configuration, and rule setting, it flexibly copes with various complex audit scenarios.
+- AI Intelligent Audit: Support rule based/AI intelligent model auditing. With three simple steps – data integration, policy configuration, and rule setting, it flexibly copes with various complex audit scenarios.
 
 ## Roadmap
 
