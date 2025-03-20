@@ -147,6 +147,7 @@
           style="margin-bottom: 12px">
           <bk-radio-group
             v-model="formData.configs.data_source.source_type"
+            class="source-type-radio-group"
             :disabled="isEditMode"
             @change="handleSourceTypeChange">
             <bk-radio
@@ -156,24 +157,25 @@
                 disabled: !getSourceTypeStatus('batch_join_source').disabled
               }"
               :disabled="getSourceTypeStatus('batch_join_source').disabled"
-              label="batch_join_source">
-              <span
-                v-bk-tooltips="{
-                  content: t(
-                    '按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；'
-                  ),
-                  extCls: 'strategy-config-type-tooltips',
-                  placement: 'top-start',
-                  disabled: getSourceTypeStatus('batch_join_source').disabled
-                }"
-                style="
-                  color: #63656e;
-                  cursor: pointer;
-                  border-bottom: 1px dashed #979ba5;
-                ">
-                {{ t('固定周期调度') }}
-              </span>
-            </bk-radio>
+              label="batch_join_source" />
+            <span
+              v-bk-tooltips="{
+                content: t(
+                  '按天则下一调度时间为当天0点；按小时则为下一调度时间为下个小时整点；并作为固定发起时间；'
+                ),
+                extCls: 'strategy-config-type-tooltips',
+                placement: 'top-start',
+              }"
+              :style="{
+                color: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? '#c4c6cc' : '#63656e',
+                cursor: (isEditMode || getSourceTypeStatus('batch_join_source').disabled) ? 'not-allowed' : 'pointer',
+                borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
+                  ? '#c4c6cc' : '#979ba5'}`,
+                marginLeft: '6px',
+                lineHeight: '12px',
+              }">
+              {{ t('固定周期调度') }}
+            </span>
             <bk-radio
               v-bk-tooltips="{
                 content: getSourceTypeStatus('stream_source').tips,
@@ -181,21 +183,22 @@
                 disabled: !getSourceTypeStatus('stream_source').disabled
               }"
               :disabled="getSourceTypeStatus('stream_source').disabled"
-              label="stream_source">
-              <span
-                v-bk-tooltips="{
-                  content: t('策略实时运行'),
-                  placement: 'top-start',
-                  disabled: getSourceTypeStatus('stream_source').disabled
-                }"
-                style="
-                  color: #63656e;
-                  cursor: pointer;
-                  border-bottom: 1px dashed #979ba5;
-                ">
-                {{ t('实时调度') }}
-              </span>
-            </bk-radio>
+              label="stream_source" />
+            <span
+              v-bk-tooltips="{
+                content: t('策略实时运行'),
+                placement: 'top-start',
+              }"
+              :style="{
+                color: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? '#c4c6cc' : '#63656e',
+                cursor: (isEditMode || getSourceTypeStatus('stream_source').disabled) ? 'not-allowed' : 'pointer',
+                borderBottom: `1px dashed ${(isEditMode || getSourceTypeStatus('stream_source').disabled)
+                  ? '#c4c6cc' : '#979ba5'}`,
+                marginLeft: '6px',
+                lineHeight: '12px',
+              }">
+              {{ t('实时调度') }}
+            </span>
           </bk-radio-group>
         </bk-form-item>
         <template
@@ -376,19 +379,23 @@
     || formData.value.configs.where.conditions.length);
 
   const getSourceTypeStatus = computed(() => (type: 'batch_join_source' | 'stream_source') => {
-    // 检查该类型是否在支持列表中，或者对于stream_source类型是否存在聚合字段有不为null的aggregate
-    if (!sourceType.value.support_source_types.includes(type)
+    // 检查该类型是否在支持列表中，或者对于stream_source类型是否存在聚合字段有不为null的aggregate，或者是编辑模式
+    if (isEditMode
+      || !sourceType.value.support_source_types.includes(type)
       || (type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate))) {
-      // 如果当前选中的就是实时调度且不满足条件，需要重置
-      if (type === 'stream_source' && formData.value.configs.data_source.source_type === 'stream_source') {
+      // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
+      if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
         formData.value.configs.data_source.source_type = '';
       }
 
       return {
         disabled: true,
-        tips: !sourceType.value.support_source_types.includes(type)
-          ? t('当前数据源不支持该调度方式')
-          : t('当前预期结果不支持该调度方式'),
+        // eslint-disable-next-line no-nested-ternary
+        tips: isEditMode
+          ? t('编辑状态下不能编辑调度方式')
+          : !sourceType.value.support_source_types.includes(type)
+            ? t('不可选择，如仍需使用此数据，请联系系统管理员')
+            : t('当前"预期结果"中包含"聚合算法"，不支持使用当前调度方式'),
       };
     }
 
@@ -421,32 +428,24 @@
     StrategyManageService.fetchSourceType,
     {
       defaultValue: {
-        support_source_types: [],
+        support_source_types: ['batch_join_source', 'stream_source'],
       },
       onSuccess: () => {
-        // 获取第一个可用的调度方式
-        const firstAvailableSourceType = sourceType.value.support_source_types.find((type) => {
+        // 获取所有可用的调度方式
+        const availableSourceTypes = sourceType.value.support_source_types.filter((type) => {
           if (type === 'stream_source') {
             // stream_source模式下:
-            // 2. 存在聚合算法的数据
-            // 都不能使用该模式
+            // 存在聚合算法的数据不能使用该模式
             return !formData.value.configs.select.some(item => item.aggregate);
           }
           return true; // 其他类型都可用
         });
 
-        // 在无可用类型下，如果source_type不为空，则重置source_type
-        if (!firstAvailableSourceType) {
+        // 如果没有可用类型或当前选择的类型不在可用列表中，则重置source_type
+        if (!availableSourceTypes.length
+          || !availableSourceTypes.includes(formData.value.configs.data_source.source_type as 'batch_join_source' | 'stream_source')) {
           formData.value.configs.data_source.source_type = '';
-          return;
         }
-
-        // 有可用类型下，如果source_type不在支持的类型列表中，则设置为第一个可用类型
-        if (!sourceType.value.support_source_types
-          .includes(formData.value.configs.data_source.source_type as 'batch_join_source' | 'stream_source')) {
-          formData.value.configs.data_source.source_type = firstAvailableSourceType;
-        }
-        handleSourceTypeChange();
       },
     },
   );
@@ -839,6 +838,12 @@
 
   .dispatch-wrap {
     padding: 16px 24px;
+
+    :deep(.source-type-radio-group) {
+      .bk-radio-label {
+        display: none;
+      }
+    }
 
     .flex-center {
       display: flex;
