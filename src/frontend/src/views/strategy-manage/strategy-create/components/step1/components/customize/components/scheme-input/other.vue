@@ -111,6 +111,8 @@
 
   // 选择数据表
   const handleChangeDataSheet = () => {
+    // 手动选择数据，将已初始化的状态置为true
+    isInit = true;
     handleUpdateDataSource();
   };
 
