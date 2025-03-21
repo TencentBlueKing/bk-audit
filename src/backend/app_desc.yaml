@@ -8,16 +8,16 @@ modules:
         plan: 4C4G5R
         replicas: 5
       worker:
-        command: python manage.py celery worker -O fair -l info -Q celery,default --max-memory-per-child=524288 --autoscale=6,10
+        command: python manage.py celery worker -O fair -l info -Q celery,default --max-memory-per-child=524288 --autoscale=4,7
         plan: 4C4G5R
         replicas: 5
       risk-worker:
-        command: python manage.py celery worker -O fair -l info -Q risk --max-memory-per-child=524288 --autoscale=6,10
+        command: python manage.py celery worker -O fair -l info -Q risk --max-memory-per-child=524288 --autoscale=4,7
         plan: 4C4G5R
         replicas: 2
       notice:
         command: python manage.py celery worker  -O fair -l info -c 4 -Q notice --max-tasks-per-child=100
-        plan: 4C1G5R
+        plan: 2C2G5R
         replicas: 1
       beat:
         command: python manage.py celery beat -l info
