@@ -76,6 +76,14 @@ def start_snapshot():
             "[start_snapshot] SystemID => %s; ResourceTypeID => %s", snapshot.system_id, snapshot.resource_type_id
         )
 
+        try:
+            ResourceType.objects.get(system_id=snapshot.system_id, resource_type_id=snapshot.resource_type_id)
+        except ResourceType.DoesNotExist:
+            logger.error(
+                "[start_snapshot] System %s ResourceType Not Found => %s", snapshot.system_id, snapshot.resource_type_id
+            )
+            continue
+
         storage_types = snapshot.storages.values_list('storage_type', flat=True)
 
         for storage_type in storage_types:
@@ -304,7 +312,11 @@ def check_join_data():
 
         # 获取系统和资源类型信息
         system = System.objects.get(system_id=system_id)
-        resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
+        try:
+            resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
+        except ResourceType.DoesNotExist:
+            logger.error("[JoinDataCheckFailed] System %s ResourceType Not Found => %s", system_id, resource_type_id)
+            continue
 
         # 构建请求体
         body = {
