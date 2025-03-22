@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from unittest import mock
 
 from apps.meta.exceptions import BKAppNotExists
+from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.models import CustomField, Field, ResourceType, System, SystemRole
 from core.utils.tools import ordered_dict_to_json, trans_object_local
 from services.web.databus.models import Snapshot
@@ -319,3 +320,42 @@ class MetaTest(TestCase):
         """GetGlobalChoicesResource"""
         result = self.resource.meta.get_global_choices()
         self.assertEqual(result, GLOBAL_CHOICES)
+
+
+class TestChangeSystemDiagnosisPushResource(TestCase):
+    @mock.patch.object(SystemDiagnosisPushHandler, "change_push_status", return_value=True)
+    def test_change_push_enable_success(self, mock_change_push_status):
+        """
+        测试启用系统诊断推送时，接口返回成功（True）。
+        """
+        system = System.objects.create(**SYSTEM_DATA2)
+        validated_request_data = {"system_id": system.system_id, "enable": True}
+        response = self.resource.meta.change_system_diagnosis_push(validated_request_data)
+        self.assertEqual(response, {"success": True})
+        # 验证调用时传入的参数
+        mock_change_push_status.assert_called_once_with(enable_push=True)
+
+    @mock.patch.object(SystemDiagnosisPushHandler, "change_push_status", return_value=True)
+    def test_change_push_disable_success(self, mock_change_push_status):
+        """
+        测试禁用系统诊断推送时，接口返回成功（True）。
+        """
+        system = System.objects.create(**SYSTEM_DATA2)
+        validated_request_data = {"system_id": system.system_id, "enable": False}
+        response = self.resource.meta.change_system_diagnosis_push(validated_request_data)
+        self.assertEqual(response, {"success": True})
+        mock_change_push_status.assert_called_once_with(enable_push=False)
+
+
+class TestDeleteSystemDiagnosisPushResource(TestCase):
+    @mock.patch.object(SystemDiagnosisPushHandler, "delete_push")
+    def test_delete_push(self, mock_delete_push):
+        """
+        测试删除系统诊断推送时，delete_push 方法被正确调用。
+        该接口不返回数据，默认返回 None。
+        """
+        system = System.objects.create(**SYSTEM_DATA2)
+        validated_request_data = {"system_id": system.system_id}
+        result = self.resource.meta.delete_system_diagnosis_push(validated_request_data)
+        self.assertIsNone(result)
+        mock_delete_push.assert_called_once_with()

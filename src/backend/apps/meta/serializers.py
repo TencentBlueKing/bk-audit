@@ -388,3 +388,28 @@ class ListAllTagsRespSerializer(serializers.ModelSerializer):
 class GetGlobalChoiceResponseSerializer(serializers.Serializer):
     id = serializers.CharField()
     name = serializers.CharField()
+
+
+class ChangeSystemDiagnosisPushReqSerializer(serializers.Serializer):
+    """
+    Change System Diagnosis
+    """
+
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+    enable = serializers.BooleanField(label=gettext_lazy("是否启用"))
+
+
+class ChangeSystemDiagnosisPushRespSerializer(serializers.Serializer):
+    """
+    Change System Diagnosis
+    """
+
+    success = serializers.BooleanField(label=gettext_lazy("是否成功"))
+
+
+class DeleteSystemDiagnosisPushReqSerializer(serializers.Serializer):
+    """
+    Delete System Diagnosis
+    """
+
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"))

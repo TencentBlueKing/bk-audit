@@ -49,6 +49,7 @@ from apps.meta.constants import (
     SpaceType,
 )
 from apps.meta.exceptions import BKAppNotExists
+from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.models import (
     Action,
     CustomField,
@@ -63,6 +64,9 @@ from apps.meta.models import (
 )
 from apps.meta.serializers import (
     ActionSerializer,
+    ChangeSystemDiagnosisPushReqSerializer,
+    ChangeSystemDiagnosisPushRespSerializer,
+    DeleteSystemDiagnosisPushReqSerializer,
     FieldListRequestSerializer,
     FieldListSerializer,
     GetAppInfoRequestSerializer,
@@ -248,6 +252,16 @@ class SystemInfoResource(SystemAbstractResource):
             manager["username"]
             for manager in resource.meta.system_role_list(system_id=system_id, role=IAM_MANAGER_ROLE)
         ]
+        # 增加最后上报信息数据
+        try:
+            tail_log_item = resource.databus.collector.system_collectors_status(
+                namespace=system_info["namespace"], system_id=system_id
+            )
+        except ResourceModuleNotRegistered:
+            tail_log_item = {}
+        system_info["last_time"] = tail_log_item.get("last_time")
+        system_info["status"] = tail_log_item.get("status")
+        system_info["status_msg"] = tail_log_item.get("status_msg")
         self.add_audit_instance_to_context(instance=SystemInstance(system_info).instance)
         return system_info
 
@@ -674,3 +688,26 @@ class GetGlobalChoices(Meta, Resource):
 
     def perform_request(self, validated_request_data):
         return self.globals
+
+
+class ChangeSystemDiagnosisPush(Meta, Resource):
+    name = gettext_lazy("切换系统诊断推送")
+    RequestSerializer = ChangeSystemDiagnosisPushReqSerializer
+    ResponseSerializer = ChangeSystemDiagnosisPushRespSerializer
+
+    def perform_request(self, validated_request_data):
+        system_id = validated_request_data["system_id"]
+        enable = validated_request_data["enable"]
+        success = SystemDiagnosisPushHandler(system_id=system_id).change_push_status(enable_push=enable)
+        return {
+            "success": success,
+        }
+
+
+class DeleteSystemDiagnosisPush(Meta, Resource):
+    name = gettext_lazy("删除系统诊断推送")
+    RequestSerializer = DeleteSystemDiagnosisPushReqSerializer
+
+    def perform_request(self, validated_request_data):
+        system_id = validated_request_data["system_id"]
+        SystemDiagnosisPushHandler(system_id=system_id).delete_push()
