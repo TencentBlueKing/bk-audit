@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-18 13:48+0800\n"
+"POT-Creation-Date: 2025-03-22 15:21+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -729,6 +729,15 @@ msgstr "查询数据集"
 msgid "查询字段值"
 msgstr "查询字段值"
 
+msgid "创建订阅推送"
+msgstr "创建订阅推送"
+
+msgid "更新订阅推送"
+msgstr "更新订阅推送"
+
+msgid "删除订阅推送"
+msgstr "删除订阅推送"
+
 msgid "获取用户列表"
 msgstr "获取用户列表"
 
@@ -1014,6 +1023,12 @@ msgstr "分隔符过滤"
 msgid "保留匹配字符串"
 msgstr "保留匹配字符串"
 
+msgid "推送"
+msgstr "推送"
+
+msgid "暂停"
+msgstr "暂停"
+
 msgid "Namespace不存在"
 msgstr "Namespace不存在"
 
@@ -1022,6 +1037,12 @@ msgstr "应用信息不存在"
 
 msgid "Tag Name Invalid"
 msgstr "标签不合法"
+
+msgid "系统角色成员为空"
+msgstr "系统角色成员为空"
+
+msgid "系统诊断推送模板为空"
+msgstr "系统诊断推送模板为空"
 
 msgid "配置级别"
 msgstr "配置级别"
@@ -1062,8 +1083,29 @@ msgstr "访问地址"
 msgid "应用描述"
 msgstr "应用描述"
 
+msgid "是否开启系统诊断推送"
+msgstr "是否开启系统诊断推送"
+
 msgid "接入系统"
 msgstr "接入系统"
+
+msgid "系统诊断推送订阅uid"
+msgstr "系统诊断推送订阅uid"
+
+msgid "系统诊断推送状态"
+msgstr "系统诊断推送状态"
+
+msgid "系统诊断推送配置"
+msgstr "系统诊断推送配置"
+
+msgid "系统诊断推送结果"
+msgstr "系统诊断推送结果"
+
+msgid "系统诊断推送错误信息"
+msgstr "系统诊断推送错误信息"
+
+msgid "系统诊断"
+msgstr "系统诊断"
 
 msgid "角色名称"
 msgstr "角色名称"
@@ -1287,6 +1329,12 @@ msgstr "获取所有标签"
 msgid "获取全局枚举值配置"
 msgstr "获取全局枚举值配置"
 
+msgid "切换系统诊断推送"
+msgstr "切换系统诊断推送"
+
+msgid "删除系统诊断推送"
+msgstr "删除系统诊断推送"
+
 msgid "搜索关键字"
 msgstr "搜索关键字"
 
@@ -1359,6 +1407,12 @@ msgstr "文件"
 
 msgid "标签不能使用纯数字，请修改"
 msgstr "标签不能使用纯数字，请修改"
+
+msgid "是否启用"
+msgstr "是否启用"
+
+msgid "是否成功"
+msgstr "是否成功"
 
 msgid "事件ID"
 msgstr "事件ID"
@@ -1621,9 +1675,6 @@ msgstr "发送时间"
 msgid "Trace ID"
 msgstr "Trace ID"
 
-msgid "是否成功"
-msgstr "是否成功"
-
 msgid "是否重复"
 msgstr "是否重复"
 
@@ -1870,6 +1921,9 @@ msgstr "查看报表(组织架构)"
 msgid "查看报表(标签)"
 msgstr "查看报表(标签)"
 
+msgid "系统诊断报表查看"
+msgstr "系统诊断报表查看"
+
 msgid "采集新建"
 msgstr "采集新建"
 
@@ -1934,9 +1988,6 @@ msgstr "未执行"
 
 msgid "执行中"
 msgstr "执行中"
-
-msgid "暂停"
-msgstr "暂停"
 
 msgid "节点暂停"
 msgstr "节点暂停"
@@ -2458,6 +2509,9 @@ msgstr "DataID清洗字段历史"
 msgid "删除DataID接入"
 msgstr "删除DataID接入"
 
+msgid "快照统计信息"
+msgstr "快照统计信息"
+
 msgid "服务实例id"
 msgstr "服务实例id"
 
@@ -2800,6 +2854,9 @@ msgstr "清洗"
 
 msgid "是否有存储"
 msgstr "是否有存储"
+
+msgid "是否有副存储"
+msgstr "是否有副存储"
 
 msgid "是否授权"
 msgstr "是否授权"
