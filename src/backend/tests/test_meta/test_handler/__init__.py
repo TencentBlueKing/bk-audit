@@ -15,39 +15,3 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-from django.utils.translation import gettext_lazy
-
-from apps.exceptions import CoreException
-
-
-class MetaException(CoreException):
-    MODULE_CODE = CoreException.Modules.META
-
-
-class NamespaceNotExists(MetaException):
-    ERROR_CODE = "001"
-    MESSAGE = gettext_lazy("Namespace不存在")
-
-
-class BKAppNotExists(MetaException):
-    ERROR_CODE = "002"
-    MESSAGE = gettext_lazy("应用信息不存在")
-
-
-class TagNameInValid(MetaException):
-    ERROR_CODE = "003"
-    STATUS_CODE = 400
-    MESSAGE = gettext_lazy("Tag Name Invalid")
-
-
-class SystemRoleMemberEmpty(MetaException):
-    ERROR_CODE = "004"
-    STATUS_CODE = 500
-    MESSAGE = gettext_lazy("系统角色成员为空")
-
-
-class SystemDiagnosisPushTemplateEmpty(MetaException):
-    ERROR_CODE = "005"
-    STATUS_CODE = 500
-    MESSAGE = gettext_lazy("系统诊断推送模板为空")

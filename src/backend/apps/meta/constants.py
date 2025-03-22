@@ -48,6 +48,9 @@ SENSITIVE_REPLACE_VALUE = "******"
 
 TAG_NAME_REGEXP = re.compile(r"^[\w\u4e00-\u9fa5-_]+$")
 
+# 系统诊断推送模板
+SYSTEM_DIAGNOSIS_PUSH_TEMPLATE_KEY = "system_diagnosis_push_template"
+
 
 class SensitiveUserData:
     SYSTEM_ID = os.getenv("BKAPP_SENSITIVE_USER_DATA_SYSTEM_ID", "bk_usermgr")
@@ -128,3 +131,13 @@ class CollectorParamConditionTypeEnum(TextChoices):
 
 class CollectorParamConditionMatchType(TextChoices):
     INCLUDE = "include", gettext_lazy("保留匹配字符串")
+
+
+class SystemDiagnosisPushStatusEnum(TextChoices):
+    """
+    系统诊断推送状态
+    """
+
+    PUSH = "push", gettext_lazy("推送")
+    PAUSE = "pause", gettext_lazy("暂停")
+    FAILED = "failed", gettext_lazy("失败")
