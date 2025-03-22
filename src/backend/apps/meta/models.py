@@ -27,7 +27,11 @@ from django.db import models
 from django.utils.translation import gettext_lazy
 
 from apps.exceptions import MetaConfigNotExistException
-from apps.meta.constants import GLOBAL_CONFIG_LEVEL_INSTANCE, ConfigLevelChoices
+from apps.meta.constants import (
+    GLOBAL_CONFIG_LEVEL_INSTANCE,
+    ConfigLevelChoices,
+    SystemDiagnosisPushStatusEnum,
+)
 from core.models import OperateRecordModel, SoftDeleteModel, SoftDeleteModelManager
 
 
@@ -117,9 +121,30 @@ class System(OperateRecordModel):
     logo_url = models.CharField(gettext_lazy("应用图标"), max_length=255, null=True)
     system_url = models.CharField(gettext_lazy("访问地址"), max_length=255, null=True)
     description = models.TextField(gettext_lazy("应用描述"), null=True)
+    enable_system_diagnosis_push = models.BooleanField(gettext_lazy("是否开启系统诊断推送"), default=False)
 
     class Meta:
         verbose_name = gettext_lazy("接入系统")
+        verbose_name_plural = verbose_name
+        ordering = ["-id"]
+
+
+class SystemDiagnosisConfig(OperateRecordModel):
+    """
+    系统诊断: 从系统推送
+    """
+
+    system_id = models.CharField(gettext_lazy("系统ID"), max_length=64, null=False, unique=True)
+    push_uid = models.CharField(gettext_lazy("系统诊断推送订阅uid"), max_length=64, null=True, default=None)
+    push_status = models.CharField(
+        gettext_lazy("系统诊断推送状态"), choices=SystemDiagnosisPushStatusEnum.choices, null=True, blank=True, max_length=32
+    )
+    push_config = models.JSONField(gettext_lazy("系统诊断推送配置"), default=dict, blank=True, null=True)
+    push_result = models.JSONField(gettext_lazy("系统诊断推送结果"), default=dict, blank=True, null=True)
+    push_error_message = models.TextField(gettext_lazy("系统诊断推送错误信息"), null=True, default=None, blank=True)
+
+    class Meta:
+        verbose_name = gettext_lazy("系统诊断")
         verbose_name_plural = verbose_name
         ordering = ["-id"]
 
