@@ -18,12 +18,13 @@ to the current version of the project delivered to anyone in the future.
 
 import operator
 from collections import defaultdict
-from typing import List
+from typing import Dict, List
 
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.common_utils import ignored
 from blueapps.contrib.celery_tools.periodic import periodic_task
+from blueapps.utils.logger import logger_celery
 from blueapps.utils.logger import logger_celery as logger
 from celery.schedules import crontab
 from django.conf import settings
@@ -36,8 +37,17 @@ from apps.meta.constants import (
     IAM_RESOURCE_BATCH_SIZE,
     IAM_SYSTEM_BATCH_SIZE,
     PAAS_APP_BATCH_SIZE,
+    SystemDiagnosisPushStatusEnum,
 )
-from apps.meta.models import Action, Namespace, ResourceType, System, SystemRole
+from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
+from apps.meta.models import (
+    Action,
+    Namespace,
+    ResourceType,
+    System,
+    SystemDiagnosisConfig,
+    SystemRole,
+)
 from core.utils.tools import group_by
 
 
@@ -382,3 +392,38 @@ def sync_iam_resources_actions():
         ).delete()
 
     logger.info("[sync_iam_resources_and_actions] finished")
+
+
+@periodic_task(run_every=crontab(minute="*/30"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@transaction.atomic
+@ignored(Exception)
+def update_system_diagnosis_push():
+    """
+    定期更新系统诊断推送
+    """
+
+    logger.info("[update_system_diagnosis_push] started")
+    systems = System.objects.all().only("system_id", "enable_system_diagnosis_push")
+    system_ids = systems.values_list("system_id", flat=True)
+    sys_diagnosis_configs: Dict[str, SystemDiagnosisConfig] = {
+        config.system_id: config
+        for config in list(
+            SystemDiagnosisConfig.objects.filter(system_id__in=system_ids).only("system_id", "push_uid", "push_status")
+        )
+    }
+    for system in systems:
+        config = sys_diagnosis_configs.get(system.system_id)
+        if not (
+            system.enable_system_diagnosis_push
+            or config
+            and config.push_status == SystemDiagnosisPushStatusEnum.PUSH.value
+        ):
+            logger_celery.info(f"[update_system_diagnosis_push] system {system.system_id} skip update")
+            continue
+        # 系统开启诊断推送 or 推送配置状态不一致则更新
+        handler = SystemDiagnosisPushHandler(system_id=system.system_id)
+        try:
+            # 以系统推送状态为准进行更新
+            handler.change_push_status(system.enable_system_diagnosis_push)
+        except Exception as e:
+            logger_celery.error(f"[update_system_diagnosis_push] system {system.system_id} push error: {e}")

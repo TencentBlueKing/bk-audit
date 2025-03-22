@@ -29,6 +29,7 @@ from apps.meta.views import (
     meta_views,
     namespace_views,
     paas_views,
+    system_diagnosis_views,
     system_views,
     tag_views,
     user_manage_views,
@@ -48,6 +49,7 @@ router.register_module(system_views)
 router.register_module(paas_views)
 router.register_module(user_manage_views)
 router.register_module(tag_views)
+router.register_module(system_diagnosis_views)
 
 urlpatterns = [
     path("", include(base_router.urls)),
