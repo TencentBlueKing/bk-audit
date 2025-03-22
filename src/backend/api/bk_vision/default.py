@@ -66,3 +66,23 @@ class QueryFieldData(BKVision):
     method = "POST"
     action = "/api/v1/field/{uid}/preview_data/"
     url_keys = ["uid"]
+
+
+class CreateReportStrategy(BKVision):
+    name = gettext_lazy("创建订阅推送")
+    method = "POST"
+    action = "/api/v1/report/create_report_strategy/"
+
+
+class UpdateReportStrategy(BKVision):
+    name = gettext_lazy("更新订阅推送")
+    method = "PUT"
+    action = "/api/v1/report/update_report_strategy/{uid}/"
+    url_keys = ["uid"]
+
+
+class DeleteReportStrategy(BKVision):
+    name = gettext_lazy("删除订阅推送")
+    method = "DELETE"
+    action = "/api/v1/report/delete_report_strategy/{uid}/"
+    url_keys = ["uid"]

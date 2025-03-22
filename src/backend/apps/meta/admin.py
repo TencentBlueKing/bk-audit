@@ -28,6 +28,7 @@ from apps.meta.models import (
     ResourceType,
     SensitiveObject,
     System,
+    SystemDiagnosisConfig,
     SystemRole,
     Tag,
 )
@@ -47,10 +48,20 @@ class NamespaceAdmin(admin.ModelAdmin):
 
 @admin.register(System)
 class SystemAdmin(admin.ModelAdmin):
-    list_display = ["system_id", "namespace", "name", "name_en", "clients", "has_logo", "has_system_url", "roles"]
+    list_display = [
+        "system_id",
+        "namespace",
+        "name",
+        "name_en",
+        "clients",
+        "has_logo",
+        "has_system_url",
+        "roles",
+        "enable_system_diagnosis_push",
+    ]
     ordering = ["namespace", "system_id"]
     search_fields = ["system_id", "name", "name_en"]
-    list_filter = ["namespace"]
+    list_filter = ["namespace", "enable_system_diagnosis_push"]
 
     @admin.display(description="图标", boolean=True)
     def has_logo(self, obj: System):
@@ -139,3 +150,23 @@ class DataMapAdmin(admin.ModelAdmin):
 @admin.register(Tag)
 class TagAdmin(admin.ModelAdmin):
     list_display = ["tag_id", "tag_name"]
+
+
+@admin.register(SystemDiagnosisConfig)
+class SystemDiagnosisConfigAdmin(admin.ModelAdmin):
+    list_display = ["system_id", "get_system_name", "push_status", "error_exist", "created_at"]
+    list_display_links = ["system_id"]
+    search_fields = ["system_id", "push_status"]
+    list_filter = ["push_status"]
+    ordering = ["-created_at"]
+
+    @admin.display(description="系统名称")
+    def get_system_name(self, obj):
+        """通过system_id关联获取系统名称"""
+        system = System.objects.filter(system_id=obj.system_id).first()
+        return system.name if system else "-"
+
+    @admin.display(description="存在错误", boolean=True)
+    def error_exist(self, obj):
+        """错误状态标记"""
+        return bool(obj.push_error_message)

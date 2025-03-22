@@ -81,6 +81,7 @@ SYSTEM_DATA1 = {
     "logo_url": "",
     "system_url": None,
     "description": None,
+    "enable_system_diagnosis_push": False,
 }
 SYSTEM_DATA2 = {
     "system_id": settings.BK_IAM_SYSTEM_ID,
@@ -92,6 +93,7 @@ SYSTEM_DATA2 = {
     "logo_url": "https://bk.tencent.com",
     "system_url": None,
     "description": None,
+    "enable_system_diagnosis_push": False,
 }
 SYSTEM_BULK_DATA = list()
 SYSTEM_BULK_DATA.append(
@@ -276,7 +278,7 @@ SYSTEM_LIST_ALL_OF_ACTION_IDS_DATA = [
 SYSTEM_INFO_PARAMS = {"system_id": settings.BK_IAM_SYSTEM_ID}
 SYSTEM_DATA_COPY = copy.deepcopy(SYSTEM_DATA2)
 SYSTEM_DATA_COPY.update({"managers": [USERNAME]})
-SYSTEM_INFO_DATA = SYSTEM_DATA_COPY
+SYSTEM_INFO_DATA = {**SYSTEM_DATA_COPY, "status": 'unset', "status_msg": '未配置', "last_time": ""}
 
 # Resource Type List
 RESOURCE_TYPE_LIST_PARAMS = {"system_id": settings.BK_IAM_SYSTEM_ID}
@@ -509,3 +511,103 @@ GLOBAL_CHOICES = {
         {'id': 'between', 'name': '在之间'},
     ]
 }
+
+SYSTEM_DIAGNOSIS_PUSH_TEMPLATE = """{
+        "title": "【BKAudit】{{ system_name }}系统审计巡检报告",
+        "status": "push",
+        "recipient": {{ recipient|tojson|safe }},
+        "wechat_receivers": [],
+        "cycle_type": "period",
+        "crontab": "0 8 * * *",
+        "time_range": "Today",
+        "filters": {
+            "EZKZbYEhgroF8TgoAk4FVE": [
+                "now-24h",
+                "now"
+            ],
+            "tHHFiZQIxJiCtPhXPwkfAB": "{{ system_id }}",
+            "yplkBhNKbuaiCdwPmIwY1K": [
+                "now-1d/d",
+                "now-1d/d"
+            ]
+        },
+        "constants": {},
+        "space_uid": "xxx",
+        "dashboard_uid": "xxx",
+        "version": "latest",
+        "dashboard_title": "系统诊断",
+        "dashboard_width": 1920,
+        "modes": [
+            "mail"
+        ],
+        "advanced_setting": {
+            "dashboard_width": 1366
+        },
+        "topic": "【BKAudit】审计中心系统审计巡检报告",
+        "wechat_extra_info": "",
+        "webhook": "",
+        "cc_recipient": [],
+        "hyperlink": "https://xxx/{{ system_id }}",
+        "hyperlink_required": true
+    }"""
+
+SYSTEM_DIAGNOSIS_PUSH_ENABLE = {
+    'advanced_setting': {'dashboard_width': 1366},
+    'cc_recipient': [],
+    'constants': {},
+    'crontab': '0 8 * * *',
+    'cycle_type': 'period',
+    'dashboard_title': '系统诊断',
+    'dashboard_uid': 'xxx',
+    'dashboard_width': 1920,
+    'filters': {
+        'EZKZbYEhgroF8TgoAk4FVE': ['now-24h', 'now'],
+        'tHHFiZQIxJiCtPhXPwkfAB': 'test_system',
+        'yplkBhNKbuaiCdwPmIwY1K': ['now-1d/d', 'now-1d/d'],
+    },
+    'hyperlink': 'https://xxx/test_system',
+    'hyperlink_required': True,
+    'modes': ['mail'],
+    'recipient': ['test_user'],
+    'space_uid': 'xxx',
+    'status': 'push',
+    'time_range': 'Today',
+    'title': '【BKAudit】Test System系统审计巡检报告',
+    'topic': '【BKAudit】审计中心系统审计巡检报告',
+    'version': 'latest',
+    'webhook': '',
+    'wechat_extra_info': '',
+    'wechat_receivers': [],
+}
+
+SYSTEM_DIAGNOSIS_PUSH_DISABLE = {
+    'advanced_setting': {'dashboard_width': 1366},
+    'cc_recipient': [],
+    'constants': {},
+    'crontab': '0 8 * * *',
+    'cycle_type': 'period',
+    'dashboard_title': '系统诊断',
+    'dashboard_uid': 'xxx',
+    'dashboard_width': 1920,
+    'filters': {
+        'EZKZbYEhgroF8TgoAk4FVE': ['now-24h', 'now'],
+        'tHHFiZQIxJiCtPhXPwkfAB': 'test_system',
+        'yplkBhNKbuaiCdwPmIwY1K': ['now-1d/d', 'now-1d/d'],
+    },
+    'hyperlink': 'https://xxx/test_system',
+    'hyperlink_required': True,
+    'modes': ['mail'],
+    'recipient': ['test_user'],
+    'space_uid': 'xxx',
+    'status': 'pause',
+    'time_range': 'Today',
+    'title': '【BKAudit】Test System系统审计巡检报告',
+    'topic': '【BKAudit】审计中心系统审计巡检报告',
+    'uid': 'test_uid',
+    'version': 'latest',
+    'webhook': '',
+    'wechat_extra_info': '',
+    'wechat_receivers': [],
+}
+
+TEST_SYSTEM_ID = settings.BK_IAM_SYSTEM_ID

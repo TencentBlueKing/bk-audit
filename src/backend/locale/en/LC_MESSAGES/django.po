@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-18 13:48+0800\n"
+"POT-Creation-Date: 2025-03-22 15:21+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -729,6 +729,15 @@ msgstr "Search Dataset"
 msgid "查询字段值"
 msgstr "Search Field Value"
 
+msgid "创建订阅推送"
+msgstr "Create Report Strategy"
+
+msgid "更新订阅推送"
+msgstr "Update Report Strategy"
+
+msgid "删除订阅推送"
+msgstr "Delete Report Strategy"
+
 msgid "获取用户列表"
 msgstr "Get User List"
 
@@ -1014,6 +1023,12 @@ msgstr "By delimiter"
 msgid "保留匹配字符串"
 msgstr "Preserve matching strings"
 
+msgid "推送"
+msgstr "Push"
+
+msgid "暂停"
+msgstr "Pause"
+
 msgid "Namespace不存在"
 msgstr "Namespace does not exist"
 
@@ -1022,6 +1037,12 @@ msgstr "App info does not exist"
 
 msgid "Tag Name Invalid"
 msgstr "Tag Name Invalid"
+
+msgid "系统角色成员为空"
+msgstr "System Role Empty"
+
+msgid "系统诊断推送模板为空"
+msgstr "System diagnosis push template is empty"
 
 msgid "配置级别"
 msgstr "Config Level"
@@ -1062,8 +1083,29 @@ msgstr "System Url"
 msgid "应用描述"
 msgstr "App Description"
 
+msgid "是否开启系统诊断推送"
+msgstr "Enable system diagnosis push"
+
 msgid "接入系统"
 msgstr "System"
+
+msgid "系统诊断推送订阅uid"
+msgstr "System diagnosis push subscription UID"
+
+msgid "系统诊断推送状态"
+msgstr "System diagnosis push status"
+
+msgid "系统诊断推送配置"
+msgstr "System diagnosis push configuration"
+
+msgid "系统诊断推送结果"
+msgstr "System diagnosis push result"
+
+msgid "系统诊断推送错误信息"
+msgstr "System diagnosis push error message"
+
+msgid "系统诊断"
+msgstr "System diagnosis"
 
 msgid "角色名称"
 msgstr "Role Name"
@@ -1287,6 +1329,12 @@ msgstr "List All Tags"
 msgid "获取全局枚举值配置"
 msgstr "Get Global Choices"
 
+msgid "切换系统诊断推送"
+msgstr "Toggle system diagnosis push"
+
+msgid "删除系统诊断推送"
+msgstr "Delete system diagnosis push"
+
 msgid "搜索关键字"
 msgstr "Search Keyword"
 
@@ -1359,6 +1407,12 @@ msgstr "File"
 
 msgid "标签不能使用纯数字，请修改"
 msgstr "Tag invalid with all digit"
+
+msgid "是否启用"
+msgstr "Is Enabled"
+
+msgid "是否成功"
+msgstr "Is Success"
 
 msgid "事件ID"
 msgstr "Event ID"
@@ -1621,9 +1675,6 @@ msgstr "Send At"
 msgid "Trace ID"
 msgstr "TraceID"
 
-msgid "是否成功"
-msgstr "Is Success"
-
 msgid "是否重复"
 msgstr "Is Duplicated"
 
@@ -1870,6 +1921,9 @@ msgstr "View Audit Report by Department"
 msgid "查看报表(标签)"
 msgstr "View Audit Report bg Tag"
 
+msgid "系统诊断报表查看"
+msgstr "View System Diagnosis Report"
+
 msgid "采集新建"
 msgstr "Create Collection"
 
@@ -1934,9 +1988,6 @@ msgstr "Created"
 
 msgid "执行中"
 msgstr "Running"
-
-msgid "暂停"
-msgstr "Suspend"
 
 msgid "节点暂停"
 msgstr "Node Suspend"
@@ -2459,6 +2510,9 @@ msgstr "DataID tl Field History"
 msgid "删除DataID接入"
 msgstr "Delete DataID Source"
 
+msgid "快照统计信息"
+msgstr "Snapshot Statistics"
+
 msgid "服务实例id"
 msgstr "Service Instance ID"
 
@@ -2801,6 +2855,9 @@ msgstr "Etl"
 
 msgid "是否有存储"
 msgstr "has Storage"
+
+msgid "是否有副存储"
+msgstr "Has Replica Storage"
 
 msgid "是否授权"
 msgstr "is Authorizaed"
