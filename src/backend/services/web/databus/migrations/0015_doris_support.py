@@ -28,7 +28,7 @@ def migrate_storage_type(apps, schema_editor):
 
     for snapshot in snapshots_to_migrate:
         # 创建 SnapshotStorage 记录
-        if snapshot.storage_type in ['hdfs', 'redis', 'doris']:  # 验证存储类型是否有效
+        if snapshot.storage_type in ['hdfs', 'doris']:
             SnapshotStorage.objects.create(
                 snapshot=snapshot,
                 storage_type=snapshot.storage_type,
