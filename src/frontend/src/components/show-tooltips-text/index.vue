@@ -18,7 +18,16 @@
   <div
     ref="rootRef"
     class="show-tooltips-text">
-    {{ data || '--' }}
+    <span>
+      {{ data || '--' }}
+    </span>
+    <div
+      :id="`${data}`"
+      style="display: none;">
+      <div style="max-width: 300px; word-break: break-all;">
+        {{ data }}
+      </div>
+    </div>
   </div>
   <div
     :id="`${data}`"
