@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-22 15:21+0800\n"
+"POT-Creation-Date: 2025-03-24 20:40+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1028,6 +1028,9 @@ msgstr "推送"
 
 msgid "暂停"
 msgstr "暂停"
+
+msgid "失败"
+msgstr "失败"
 
 msgid "Namespace不存在"
 msgstr "Namespace不存在"
@@ -2254,9 +2257,6 @@ msgstr "AIOps"
 
 msgid "成功"
 msgstr "成功"
-
-msgid "失败"
-msgstr "失败"
 
 msgid "其他"
 msgstr "其他"
@@ -4217,6 +4217,24 @@ msgstr "筛选"
 
 msgid "不支持的权限，请联系管理员"
 msgstr "不支持的权限，请联系管理员！"
+
+msgid "不支持的VisionHandler，请联系管理员"
+msgstr "不支持的VisionHandler，请联系管理员"
+
+msgid "单系统诊断系统参数错误"
+msgstr "单系统诊断系统参数错误"
+
+msgid "按应用"
+msgstr "按应用"
+
+msgid "视图ID"
+msgstr "视图ID"
+
+msgid "处理器"
+msgstr "处理器"
+
+msgid "场景"
+msgstr "场景"
 
 msgid "仪表盘列表"
 msgstr "仪表盘列表"

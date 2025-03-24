@@ -24,7 +24,7 @@ from services.web.vision.constants import KeyVariable, PanelType
 from services.web.vision.handlers.filter import (
     DeptFilterHandler,
     FilterDataHandler,
-    SystemAdministratorFilterHandler,
+    SingleSystemDiagnosisFilterHandler,
     SystemDiagnosisFilterHandler,
     TagFilterHandler,
 )
@@ -88,12 +88,12 @@ class BasicVisionHandlerMixIn(abc.ABC):
     @property
     @abc.abstractmethod
     def action_key_variable(self):
-        pass
+        raise NotImplementedError()
 
     @property
     @abc.abstractmethod
     def filter_handler_class(self) -> Type[FilterDataHandler]:
-        pass
+        raise NotImplementedError()
 
 
 class CommonVisionHandler(VisionHandler):
@@ -137,15 +137,15 @@ class CommonVisionHandler(VisionHandler):
         return api.bk_vision.query_dataset(**params)
 
 
-class SystemAdministratorVisionHandler(BasicVisionHandlerMixIn, VisionHandler):
-    """系统管理员审计报表数据处理器，支持基于管理员权限的系统过滤"""
-
-    action_key_variable = KeyVariable.SYSTEM_ID
-    filter_handler_class = SystemAdministratorFilterHandler
-
-
 class SystemDiagnosisVisionHandler(BasicVisionHandlerMixIn, VisionHandler):
     """系统诊断审计报表数据处理器，支持基于独立诊断权限的系统过滤"""
 
     action_key_variable = KeyVariable.SYSTEM_ID
     filter_handler_class = SystemDiagnosisFilterHandler
+
+
+class SingleSystemDiagnosisVisionHandler(BasicVisionHandlerMixIn, VisionHandler):
+    """单系统诊断审计报表数据处理器，支持基于管理员权限的系统过滤"""
+
+    action_key_variable = KeyVariable.SYSTEM_ID
+    filter_handler_class = SingleSystemDiagnosisFilterHandler

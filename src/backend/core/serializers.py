@@ -3,6 +3,7 @@ from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
 from core.constants import OrderTypeChoices
+from core.utils.params import parse_nested_params
 
 
 class ChoiceListSerializer(serializers.Serializer):
@@ -33,6 +34,8 @@ class OrderSerializer(serializers.Serializer):
 class ExtraDataSerializerMixin(serializers.Serializer):
     """支持额外字段的序列化器"""
 
+    parse_nested_data = True
+
     def to_internal_value(self, data):
         """
         重写此方法，以便在接收额外字段时，能将它们也包含在 validated_data 中
@@ -46,4 +49,7 @@ class ExtraDataSerializerMixin(serializers.Serializer):
         # 将额外的字段添加到 validated_data 中
         validated_data.update(extra_fields)
 
+        # 解析嵌套数据
+        if self.parse_nested_data:
+            validated_data = parse_nested_params(validated_data)
         return validated_data

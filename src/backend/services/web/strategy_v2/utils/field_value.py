@@ -86,14 +86,14 @@ class FieldValueHandler:
         if self.system_id:
             self._values = self._db_data_to_list(
                 Action.objects.filter(system_id=self.system_id),
-                get_id=lambda item: item.action_id,
-                get_name=lambda item: f"{item.name}({item.action_id})",
+                get_id=lambda item: item.iam_action,
+                get_name=lambda item: f"{item.name}({item.iam_action})",
             )
             return
         self._values = self._db_data_with_system_to_list(
             Action.objects.all(),
-            get_id=lambda item: item.action_id,
-            get_name=lambda item: f"{item.name}({item.action_id})",
+            get_id=lambda item: item.iam_action,
+            get_name=lambda item: f"{item.name}({item.iam_action})",
         )
 
     def _load_field_user_identify_type(self) -> None:

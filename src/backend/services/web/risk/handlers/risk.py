@@ -113,6 +113,7 @@ class RiskHandler:
         生成风险标题
         """
 
+        create_params = create_params.copy()
         strategy: Strategy = Strategy.objects.filter(strategy_id=create_params["strategy_id"]).first()
         if not strategy or not strategy.risk_title:
             return
