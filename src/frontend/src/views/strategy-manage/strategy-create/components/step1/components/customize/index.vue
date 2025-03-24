@@ -373,6 +373,7 @@
   const configType = ref('');
   const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
   const joinTypeList = ref<Array<Record<string, any>>>([]);
+  const originSourceType = ref<'batch_join_source' | 'stream_source' | ''>('');
 
   // eslint-disable-next-line max-len
   const hasData = computed(() => formData.value.configs.select.length
@@ -440,6 +441,11 @@
           }
           return true; // 其他类型都可用
         });
+
+        // 如果是编辑模式，当originSourceType存在且在可用列表中，保持不变
+        if (isEditMode && originSourceType.value && availableSourceTypes.includes(originSourceType.value)) {
+          formData.value.configs.data_source.source_type = originSourceType.value;
+        }
 
         // 如果没有可用类型或当前选择的类型不在可用列表中，则重置source_type
         if (!availableSourceTypes.length
@@ -600,10 +606,10 @@
   };
 
   const mergeDataSource = (dataSource: IFormData['configs']['data_source']) => {
-    formData.value.configs.data_source = {
+    formData.value.configs.data_source = _.cloneDeep({
       ...formData.value.configs.data_source,
       ...dataSource,
-    };
+    });
   };
 
   // 更新数据源后，获取对应表字段
@@ -669,7 +675,10 @@
       fetchLinkTableFields(rtIdArr, rtIdArrDisplay);
       fetchSourceType({
         config_type: formData.value.configs.config_type,
-        link_table: formData.value.configs.data_source.link_table,
+        link_table: {
+          uid: linkDataDetail.value.uid,
+          version: linkDataDetail.value.version,
+        },
       });
     }
   };
@@ -704,6 +713,7 @@
     rulesComponentRef.value.setWhere(editData.configs.where);
     if (editData.configs.data_source) {
       formData.value.configs.data_source = editData.configs.data_source;
+      originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
     }
     if (formData.value.configs.config_type !== 'LinkTable') {
       fetchTable({
