@@ -33,7 +33,7 @@ dependencies = [
     "bk-audit[opentelemetry]==1.2.2b0",
     "bk-resource==0.4.11",
     "blueapps[opentelemetry]==4.16rc1",
-    "gunicorn==22.0.0",
+    "gunicorn==23.0.0",
     "django==4.2.19",
     "django-filter==2.4.0",
     "django-cors-headers==4.7.0",
