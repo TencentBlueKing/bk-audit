@@ -259,9 +259,9 @@ class SystemInfoResource(SystemAbstractResource):
             )
         except ResourceModuleNotRegistered:
             tail_log_item = {}
-        system_info["last_time"] = tail_log_item.get("last_time")
-        system_info["status"] = tail_log_item.get("status")
-        system_info["status_msg"] = tail_log_item.get("status_msg")
+        system_info["last_time"] = str(tail_log_item.get("last_time"))
+        system_info["status"] = str(tail_log_item.get("status"))
+        system_info["status_msg"] = str(tail_log_item.get("status_msg"))
         self.add_audit_instance_to_context(instance=SystemInstance(system_info).instance)
         return system_info
 

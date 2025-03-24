@@ -1,1377 +1,1481 @@
 {
-    "system_id": "bk-audit",
-    "operations": [
-        {
-            "operation": "upsert_system",
-            "data": {
-                "id": "bk-audit",
-                "name": "审计中心",
-                "name_en": "Audit Center",
-                "description": "审计中心",
-                "description_en": "Audit Center",
-                "clients": "bk-audit",
-                "provider_config": {
-                    "host": "",
-                    "auth": "basic"
-                }
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "system",
-                "name": "接入系统",
-                "name_en": "Systems",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "sensitive_action",
-                "name": "敏感操作",
-                "name_en": "Sensitive Action",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "sensitive_resource_type",
-                "name": "敏感资源类型",
-                "name_en": "Sensitive Resource Type",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "sensitive_object",
-                "name": "敏感信息对象",
-                "name_en": "Audit Sensitive Object",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "strategy",
-                "name": "审计策略",
-                "name_en": "Audit Strategy",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "notice_group",
-                "name": "通知组",
-                "name_en": "Notice Group",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "risk",
-                "name": "风险",
-                "name_en": "Risk",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "panel",
-                "name": "报表",
-                "name_en": "Statement",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "tag",
-                "name": "标签",
-                "name_en": "Tag",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_resource_type",
-            "data": {
-                "id": "link_table",
-                "name": "联表",
-                "name_en": "Link Table",
-                "description": "",
-                "description_en": "",
-                "parents": [],
-                "provider_config": {
-                    "path": "/api/v1/iam/resources/"
-                },
-                "version": 1
-            }
-        },
-        {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "system_list",
-                "name": "接入系统列表",
-                "name_en": "System List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "system"
-                    }
-                ]
-            }
-        },
-        {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "sensitive_action_list",
-                "name": "敏感操作列表",
-                "name_en": "Sensitive Action List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "system"
-                    },
-                    {
-                        "system_id": "bk-audit",
-                        "id": "sensitive_action"
-                    }
-                ]
-            }
-        },
-        {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "sensitive_resource_type_list",
-                "name": "敏感资源类型列表",
-                "name_en": "Sensitive Resource Type List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "system"
-                    },
-                    {
-                        "system_id": "bk-audit",
-                        "id": "sensitive_resource_type"
-                    }
-                ]
-            }
-        },
-        {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "strategy_list",
-                "name": "审计策略列表",
-                "name_en": "Audit Strategy List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "strategy"
-                    }
-                ]
-            }
-        },
-        {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "notice_group_list",
-                "name": "通知组列表",
-                "name_en": "Notice Group List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "notice_group"
-                    }
-                ]
-            }
-        },
-        {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "risk_list",
-                "name": "风险列表",
-                "name_en": "Risk List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "risk"
-                    }
-                ]
-            }
-        },
-        {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "panel_list",
-                "name": "报表列表",
-                "name_en": "Statement List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "panel"
-                    }
-                ]
-            }
-        },
-        {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "tag_list",
-                "name": "标签列表",
-                "name_en": "Tag List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "tag"
-                    }
-                ]
-            }
-        },
-       {
-            "operation": "upsert_instance_selection",
-            "data": {
-                "id": "link_table_list",
-                "name": "联表列表",
-                "name_en": "Link Table List",
-                "resource_type_chain": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "link_table"
-                    }
-                ]
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "search_regular_event",
-                "name": "审计日志检索(非敏感)",
-                "name_en": "Search Audit Event (Non-Sensitive)",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "system",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "system_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "access_audit_sensitive_info",
-                "name": "审计敏感信息查看",
-                "name_en": "Access Audit Sensitive Info",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "sensitive_object",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "sensitive_resource_type_list",
-                                "ignore_iam_path": false
-                            },
-                            {
-                                "system_id": "bk-audit",
-                                "id": "sensitive_action_list",
-                                "ignore_iam_path": false
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "search_regular_event"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_system",
-                "name": "系统列表访问",
-                "name_en": "List System",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "view_system",
-                "name": "系统查看",
-                "name_en": "View System",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "system",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "system_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_system"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_system",
-                "name": "系统编辑",
-                "name_en": "Edit System",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "system",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "system_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "view_system",
-                    "list_system"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_storage",
-                "name": "数据存储列表访问",
-                "name_en": "List Storage",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "view_storage",
-                "name": "数据存储查看",
-                "name_en": "View Storage",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_storage"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "create_storage",
-                "name": "数据存储创建",
-                "name_en": "Create Storage",
-                "type": "create",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_storage"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_storage",
-                "name": "数据存储编辑",
-                "name_en": "Edit Storage",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_storage",
-                    "view_storage"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "delete_storage",
-                "name": "数据存储删除",
-                "name_en": "Delete Storage",
-                "type": "delete",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_storage"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_sensitive_object",
-                "name": "敏感信息对象列表",
-                "name_en": "List Sensitive Object",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "view_sensitive_object",
-                "name": "敏感信息对象查看",
-                "name_en": "View Sensitive Object",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_sensitive_object"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "create_sensitive_object",
-                "name": "敏感信息对象创建",
-                "name_en": "Create Sensitive Object",
-                "type": "create",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_sensitive_object"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_sensitive_object",
-                "name": "敏感信息对象编辑",
-                "name_en": "Edit Sensitive Object",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_sensitive_object",
-                    "view_sensitive_object"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "delete_sensitive_object",
-                "name": "敏感信息对象删除",
-                "name_en": "Delete Sensitive Object",
-                "type": "delete",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_sensitive_object"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "access_global_setting",
-                "name": "全局设置查看",
-                "name_en": "View Global Setting",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "manage_global_setting",
-                "name": "全局设置管理",
-                "name_en": "Manage Global Setting",
-                "type": "manage",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "access_global_setting"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_strategy",
-                "name": "策略列表访问",
-                "name_en": "List Strategy",
-                "type": "list",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": ["list_notice_group"],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "create_strategy",
-                "name": "创建策略",
-                "name_en": "Create Strategy",
-                "type": "create",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_strategy",
-                    "list_notice_group",
-                    "list_link_table"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_strategy",
-                "name": "编辑策略",
-                "name_en": "Edit Strategy",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "strategy",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "strategy_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_strategy",
-                    "list_notice_group",
-                    "list_link_table"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "delete_strategy",
-                "name": "删除策略",
-                "name_en": "Delete Strategy",
-                "type": "delete",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "strategy",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "strategy_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_strategy"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_link_table",
-                "name": "联表列表访问",
-                "name_en": "List Link Table",
-                "type": "list",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "view_link_table",
-                "name": "查看联表",
-                "name_en": "View Link Table",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "link_table",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "link_table_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_link_table"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "create_link_table",
-                "name": "创建联表",
-                "name_en": "Create Link Table",
-                "type": "create",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_link_table"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_link_table",
-                "name": "编辑联表",
-                "name_en": "Edit Link Table",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "link_table",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "link_table_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "view_link_table"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "delete_link_table",
-                "name": "删除联表",
-                "name_en": "Delete Link Table",
-                "type": "delete",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "link_table",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "link_table_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "view_link_table"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_risk_v2",
-                "name": "审计风险列表(V2)",
-                "name_en": "List Risk (V2)",
-                "type": "list",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "risk",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "risk_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_risk_v2",
-                "name": "编辑审计风险(V2)",
-                "name_en": "Edit Risk (V2)",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "risk",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "risk_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_risk"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_notice_group",
-                "name": "通知组列表",
-                "name_en": "List Notice Group",
-                "type": "list",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "create_notice_group",
-                "name": "新建通知组",
-                "name_en": "Create Notice Group",
-                "type": "create",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [
-                    "list_notice_group"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_notice_group_v2",
-                "name": "编辑通知组(V2)",
-                "name_en": "Edit Notice Group V2",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "notice_group",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "notice_group_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_notice_group"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "delete_notice_group_v2",
-                "name": "删除通知组(V2)",
-                "name_en": "Delete Notice Group V2",
-                "type": "delete",
-                "version": 1,
-                "related_resource_types": [
-                    {
-                        "system_id": "bk-audit",
-                        "id": "notice_group",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "notice_group_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_notice_group"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_rule",
-                "name": "规则列表访问",
-                "name_en": "List Rules",
-                "type": "list",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "create_rule",
-                "name": "新建规则",
-                "name_en": "Create Rule",
-                "type": "create",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_rule",
-                "name": "编辑规则",
-                "name_en": "Edit Rule",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "delete_rule",
-                "name": "删除规则",
-                "name_en": "Delete Rule",
-                "type": "delete",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_pa",
-                "name": "处理套餐列表",
-                "name_en": "List Tools",
-                "type": "list",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "create_pa",
-                "name": "创建处理套餐",
-                "name_en": "Create Tool",
-                "type": "create",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "edit_pa",
-                "name": "编辑处理套餐",
-                "name_en": "Edit Tool",
-                "type": "edit",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "list_base_panel",
-                "name": "报表列表",
-                "name_en": "List Audit Report",
-                "type": "list",
-                "version": 1,
-                "related_resource_types": [],
-                "related_actions": [],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action",
-            "data": {
-                "id": "view_base_panel_v2",
-                "name": "查看报表(V2)",
-                "name_en": "View Audit Report V2",
-                "type": "view",
-                "version": 1,
-                "related_resource_types": [
-                     {
-                        "system_id": "bk-audit",
-                        "id": "panel",
-                        "selection_mode": "instance",
-                        "related_instance_selections": [
-                            {
-                                "system_id": "bk-audit",
-                                "id": "panel_list",
-                                "ignore_iam_path": true
-                            }
-                        ]
-                    }
-                ],
-                "related_actions": [
-                    "list_base_panel"
-                ],
-                "description": "",
-                "description_en": ""
-            }
-        },
-        {
-            "operation": "upsert_action_groups",
-            "data": [
-                {
-                    "name": "分析",
-                    "name_en": "Analysis",
-                    "sub_groups": [
-                        {
-                            "name": "检索",
-                            "name_en": "Search",
-                            "actions": [
-                                {
-                                    "id": "search_regular_event"
-                                },
-                                {
-                                    "id": "access_audit_sensitive_info"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "报表",
-                            "name_en": "Report",
-                            "actions": [
-                                {
-                                    "id": "list_base_panel"
-                                },
-                                {
-                                    "id": "view_base_panel_v2"
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "name": "跟踪",
-                    "name_en": "Trace",
-                    "sub_groups": [
-                        {
-                            "name": "策略",
-                            "name_en": "Strategy",
-                            "actions": [
-                                {
-                                    "id": "list_strategy"
-                                },
-                                {
-                                    "id": "create_strategy"
-                                },
-                                {
-                                    "id": "edit_strategy"
-                                },
-                                {
-                                    "id": "delete_strategy"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "风险",
-                            "name_en": "Risk",
-                            "actions": [
-                                {
-                                    "id": "list_risk_v2"
-                                },
-                                {
-                                    "id": "edit_risk_v2"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "规则",
-                            "name_en": "Rule",
-                            "actions": [
-                                {
-                                    "id": "list_rule"
-                                },
-                                {
-                                    "id": "create_rule"
-                                },
-                                {
-                                    "id": "edit_rule"
-                                },
-                                {
-                                    "id": "delete_rule"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "套餐",
-                            "name_en": "Process Application",
-                            "actions": [
-                                {
-                                    "id": "list_pa"
-                                },
-                                {
-                                    "id": "create_pa"
-                                },
-                                {
-                                    "id": "edit_pa"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "通知组",
-                            "name_en": "Notice Group",
-                            "actions": [
-                                {
-                                    "id": "list_notice_group"
-                                },
-                                {
-                                    "id": "create_notice_group"
-                                },
-                                {
-                                    "id": "edit_notice_group_v2"
-                                },
-                                {
-                                    "id": "delete_notice_group_v2"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "联表管理",
-                            "name_en": "Link Table",
-                            "actions": [
-                                {
-                                    "id": "list_link_table"
-                                },
-                                {
-                                    "id": "create_link_table"
-                                },
-                                {
-                                    "id": "edit_link_table"
-                                },
-                                {
-                                    "id": "delete_link_table"
-                                },
-                                {
-                                    "id": "view_link_table"
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "name": "接入",
-                    "name_en": "System",
-                    "sub_groups": [
-                        {
-                            "name": "系统接入",
-                            "name_en": "System",
-                            "actions": [
-                                {
-                                    "id": "list_system"
-                                },
-                                {
-                                    "id": "view_system"
-                                },
-                                {
-                                    "id": "edit_system"
-                                }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "name": "平台管理",
-                    "name_en": "Administration",
-                    "sub_groups": [
-                        {
-                            "name": "存储",
-                            "name_en": "Storage",
-                            "actions": [
-                                {
-                                    "id": "list_storage"
-                                },
-                                {
-                                    "id": "view_storage"
-                                },
-                                {
-                                    "id": "create_storage"
-                                },
-                                {
-                                    "id": "edit_storage"
-                                },
-                                {
-                                    "id": "delete_storage"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "审计敏感信息管理",
-                            "name_en": "Sensitive Info",
-                            "actions": [
-                                {
-                                    "id": "list_sensitive_object"
-                                },
-                                {
-                                    "id": "view_sensitive_object"
-                                },
-                                {
-                                    "id": "create_sensitive_object"
-                                },
-                                {
-                                    "id": "edit_sensitive_object"
-                                },
-                                {
-                                    "id": "delete_sensitive_object"
-                                }
-                            ]
-                        },
-                        {
-                            "name": "全局设置",
-                            "name_en": "Global Setting",
-                            "actions": [
-                                {
-                                    "id": "access_global_setting"
-                                },
-                                {
-                                    "id": "manage_global_setting"
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "operation": "upsert_resource_creator_actions",
-            "data": {
-                "config": [
-                    {
-                        "id": "strategy",
-                        "actions": [
-                            {
-                                "id": "edit_strategy",
-                                "required": true
-                            },
-                            {
-                                "id": "delete_strategy",
-                                "required": true
-                            }
-                        ]
-                    },
-                    {
-                        "id": "notice_group",
-                        "actions": [
-                            {
-                                "id": "edit_notice_group_v2",
-                                "required": true
-                            },
-                            {
-                                "id": "delete_notice_group_v2",
-                                "required": true
-                            }
-                        ]
-                    }
-                ]
-            }
+  "system_id": "bk-audit",
+  "operations": [
+    {
+      "operation": "upsert_system",
+      "data": {
+        "id": "bk-audit",
+        "name": "审计中心",
+        "name_en": "Audit Center",
+        "description": "审计中心",
+        "description_en": "Audit Center",
+        "clients": "bk-audit",
+        "provider_config": {
+          "host": "",
+          "auth": "basic"
         }
-    ]
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "system",
+        "name": "接入系统",
+        "name_en": "Systems",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "sensitive_action",
+        "name": "敏感操作",
+        "name_en": "Sensitive Action",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "sensitive_resource_type",
+        "name": "敏感资源类型",
+        "name_en": "Sensitive Resource Type",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "sensitive_object",
+        "name": "敏感信息对象",
+        "name_en": "Audit Sensitive Object",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "strategy",
+        "name": "审计策略",
+        "name_en": "Audit Strategy",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "notice_group",
+        "name": "通知组",
+        "name_en": "Notice Group",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "risk",
+        "name": "风险",
+        "name_en": "Risk",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "panel",
+        "name": "报表",
+        "name_en": "Statement",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "tag",
+        "name": "标签",
+        "name_en": "Tag",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "link_table",
+        "name": "联表",
+        "name_en": "Link Table",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "system_list",
+        "name": "接入系统列表",
+        "name_en": "System List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "system"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "sensitive_action_list",
+        "name": "敏感操作列表",
+        "name_en": "Sensitive Action List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "system"
+          },
+          {
+            "system_id": "bk-audit",
+            "id": "sensitive_action"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "sensitive_resource_type_list",
+        "name": "敏感资源类型列表",
+        "name_en": "Sensitive Resource Type List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "system"
+          },
+          {
+            "system_id": "bk-audit",
+            "id": "sensitive_resource_type"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "strategy_list",
+        "name": "审计策略列表",
+        "name_en": "Audit Strategy List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "strategy"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "notice_group_list",
+        "name": "通知组列表",
+        "name_en": "Notice Group List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "notice_group"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "risk_list",
+        "name": "风险列表",
+        "name_en": "Risk List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "risk"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "panel_list",
+        "name": "报表列表",
+        "name_en": "Statement List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "panel"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "tag_list",
+        "name": "标签列表",
+        "name_en": "Tag List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "tag"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "link_table_list",
+        "name": "联表列表",
+        "name_en": "Link Table List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "link_table"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "search_regular_event",
+        "name": "审计日志检索(非敏感)",
+        "name_en": "Search Audit Event (Non-Sensitive)",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "system",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "system_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "access_audit_sensitive_info",
+        "name": "审计敏感信息查看",
+        "name_en": "Access Audit Sensitive Info",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "sensitive_object",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "sensitive_resource_type_list",
+                "ignore_iam_path": false
+              },
+              {
+                "system_id": "bk-audit",
+                "id": "sensitive_action_list",
+                "ignore_iam_path": false
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "search_regular_event"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_system",
+        "name": "系统列表访问",
+        "name_en": "List System",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_system",
+        "name": "系统查看",
+        "name_en": "View System",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "system",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "system_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_system"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_system",
+        "name": "系统编辑",
+        "name_en": "Edit System",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "system",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "system_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "view_system",
+          "list_system"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_storage",
+        "name": "数据存储列表访问",
+        "name_en": "List Storage",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_storage",
+        "name": "数据存储查看",
+        "name_en": "View Storage",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_storage"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "create_storage",
+        "name": "数据存储创建",
+        "name_en": "Create Storage",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_storage"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_storage",
+        "name": "数据存储编辑",
+        "name_en": "Edit Storage",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_storage",
+          "view_storage"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "delete_storage",
+        "name": "数据存储删除",
+        "name_en": "Delete Storage",
+        "type": "delete",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_storage"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_sensitive_object",
+        "name": "敏感信息对象列表",
+        "name_en": "List Sensitive Object",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_sensitive_object",
+        "name": "敏感信息对象查看",
+        "name_en": "View Sensitive Object",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_sensitive_object"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "create_sensitive_object",
+        "name": "敏感信息对象创建",
+        "name_en": "Create Sensitive Object",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_sensitive_object"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_sensitive_object",
+        "name": "敏感信息对象编辑",
+        "name_en": "Edit Sensitive Object",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_sensitive_object",
+          "view_sensitive_object"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "delete_sensitive_object",
+        "name": "敏感信息对象删除",
+        "name_en": "Delete Sensitive Object",
+        "type": "delete",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_sensitive_object"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "access_global_setting",
+        "name": "全局设置查看",
+        "name_en": "View Global Setting",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "manage_global_setting",
+        "name": "全局设置管理",
+        "name_en": "Manage Global Setting",
+        "type": "manage",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "access_global_setting"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_strategy",
+        "name": "策略列表访问",
+        "name_en": "List Strategy",
+        "type": "list",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_notice_group"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "create_strategy",
+        "name": "创建策略",
+        "name_en": "Create Strategy",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_strategy",
+          "list_notice_group",
+          "list_link_table"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_strategy",
+        "name": "编辑策略",
+        "name_en": "Edit Strategy",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "strategy",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "strategy_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_strategy",
+          "list_notice_group",
+          "list_link_table"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "delete_strategy",
+        "name": "删除策略",
+        "name_en": "Delete Strategy",
+        "type": "delete",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "strategy",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "strategy_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_strategy"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_link_table",
+        "name": "联表列表访问",
+        "name_en": "List Link Table",
+        "type": "list",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_link_table",
+        "name": "查看联表",
+        "name_en": "View Link Table",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "link_table",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "link_table_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_link_table"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "create_link_table",
+        "name": "创建联表",
+        "name_en": "Create Link Table",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_link_table"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_link_table",
+        "name": "编辑联表",
+        "name_en": "Edit Link Table",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "link_table",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "link_table_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "view_link_table"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "delete_link_table",
+        "name": "删除联表",
+        "name_en": "Delete Link Table",
+        "type": "delete",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "link_table",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "link_table_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "view_link_table"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_risk_v2",
+        "name": "审计风险列表(V2)",
+        "name_en": "List Risk (V2)",
+        "type": "list",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "risk",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "risk_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_risk_v2",
+        "name": "编辑审计风险(V2)",
+        "name_en": "Edit Risk (V2)",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "risk",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "risk_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_risk"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_notice_group",
+        "name": "通知组列表",
+        "name_en": "List Notice Group",
+        "type": "list",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "create_notice_group",
+        "name": "新建通知组",
+        "name_en": "Create Notice Group",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [
+          "list_notice_group"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_notice_group_v2",
+        "name": "编辑通知组(V2)",
+        "name_en": "Edit Notice Group V2",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "notice_group",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "notice_group_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_notice_group"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "delete_notice_group_v2",
+        "name": "删除通知组(V2)",
+        "name_en": "Delete Notice Group V2",
+        "type": "delete",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "notice_group",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "notice_group_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_notice_group"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_rule",
+        "name": "规则列表访问",
+        "name_en": "List Rules",
+        "type": "list",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "create_rule",
+        "name": "新建规则",
+        "name_en": "Create Rule",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_rule",
+        "name": "编辑规则",
+        "name_en": "Edit Rule",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "delete_rule",
+        "name": "删除规则",
+        "name_en": "Delete Rule",
+        "type": "delete",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_pa",
+        "name": "处理套餐列表",
+        "name_en": "List Tools",
+        "type": "list",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "create_pa",
+        "name": "创建处理套餐",
+        "name_en": "Create Tool",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "edit_pa",
+        "name": "编辑处理套餐",
+        "name_en": "Edit Tool",
+        "type": "edit",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "list_base_panel",
+        "name": "报表列表",
+        "name_en": "List Audit Report",
+        "type": "list",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_system_diagnosis_panel",
+        "name": "系统诊断报表查看",
+        "name_en": "View System Diagnosis Panel",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "system",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "system_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "view_base_panel_v2"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_base_panel_v2",
+        "name": "查看报表(V2)",
+        "name_en": "View Audit Report V2",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "panel",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "panel_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_base_panel"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_tag_panel",
+        "name": "查看报表(标签)",
+        "name_en": "View Audit Report by Tag",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "tag",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "tag_list"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_base_panel",
+          "view_base_panel_v2"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_panel",
+        "name": "查看报表(组织架构)",
+        "name_en": "View Audit Report by Department",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk_usermgr",
+            "id": "department",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk_usermgr",
+                "id": "department"
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_base_panel",
+          "view_base_panel_v2"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action_groups",
+      "data": [
+        {
+          "name": "分析",
+          "name_en": "Analysis",
+          "sub_groups": [
+            {
+              "name": "检索",
+              "name_en": "Search",
+              "actions": [
+                {
+                  "id": "search_regular_event"
+                },
+                {
+                  "id": "access_audit_sensitive_info"
+                }
+              ]
+            },
+            {
+              "name": "报表",
+              "name_en": "Report",
+              "actions": [
+                {
+                  "id": "list_base_panel"
+                },
+                {
+                  "id": "view_base_panel_v2"
+                },
+                {
+                  "id": "view_tag_panel"
+                },
+                {
+                  "id": "view_panel"
+                }
+              ]
+            },
+            {
+              "name": "系统诊断",
+              "name_en": "SystemDiagnosis",
+              "actions": [
+                {
+                  "id": "view_system_diagnosis_panel"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "跟踪",
+          "name_en": "Trace",
+          "sub_groups": [
+            {
+              "name": "策略",
+              "name_en": "Strategy",
+              "actions": [
+                {
+                  "id": "list_strategy"
+                },
+                {
+                  "id": "create_strategy"
+                },
+                {
+                  "id": "edit_strategy"
+                },
+                {
+                  "id": "delete_strategy"
+                }
+              ]
+            },
+            {
+              "name": "风险",
+              "name_en": "Risk",
+              "actions": [
+                {
+                  "id": "list_risk_v2"
+                },
+                {
+                  "id": "edit_risk_v2"
+                }
+              ]
+            },
+            {
+              "name": "规则",
+              "name_en": "Rule",
+              "actions": [
+                {
+                  "id": "list_rule"
+                },
+                {
+                  "id": "create_rule"
+                },
+                {
+                  "id": "edit_rule"
+                },
+                {
+                  "id": "delete_rule"
+                }
+              ]
+            },
+            {
+              "name": "套餐",
+              "name_en": "Process Application",
+              "actions": [
+                {
+                  "id": "list_pa"
+                },
+                {
+                  "id": "create_pa"
+                },
+                {
+                  "id": "edit_pa"
+                }
+              ]
+            },
+            {
+              "name": "通知组",
+              "name_en": "Notice Group",
+              "actions": [
+                {
+                  "id": "list_notice_group"
+                },
+                {
+                  "id": "create_notice_group"
+                },
+                {
+                  "id": "edit_notice_group_v2"
+                },
+                {
+                  "id": "delete_notice_group_v2"
+                }
+              ]
+            },
+            {
+              "name": "联表管理",
+              "name_en": "Link Table",
+              "actions": [
+                {
+                  "id": "list_link_table"
+                },
+                {
+                  "id": "create_link_table"
+                },
+                {
+                  "id": "edit_link_table"
+                },
+                {
+                  "id": "delete_link_table"
+                },
+                {
+                  "id": "view_link_table"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "接入",
+          "name_en": "System",
+          "sub_groups": [
+            {
+              "name": "系统接入",
+              "name_en": "System",
+              "actions": [
+                {
+                  "id": "list_system"
+                },
+                {
+                  "id": "view_system"
+                },
+                {
+                  "id": "edit_system"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "平台管理",
+          "name_en": "Administration",
+          "sub_groups": [
+            {
+              "name": "存储",
+              "name_en": "Storage",
+              "actions": [
+                {
+                  "id": "list_storage"
+                },
+                {
+                  "id": "view_storage"
+                },
+                {
+                  "id": "create_storage"
+                },
+                {
+                  "id": "edit_storage"
+                },
+                {
+                  "id": "delete_storage"
+                }
+              ]
+            },
+            {
+              "name": "审计敏感信息管理",
+              "name_en": "Sensitive Info",
+              "actions": [
+                {
+                  "id": "list_sensitive_object"
+                },
+                {
+                  "id": "view_sensitive_object"
+                },
+                {
+                  "id": "create_sensitive_object"
+                },
+                {
+                  "id": "edit_sensitive_object"
+                },
+                {
+                  "id": "delete_sensitive_object"
+                }
+              ]
+            },
+            {
+              "name": "全局设置",
+              "name_en": "Global Setting",
+              "actions": [
+                {
+                  "id": "access_global_setting"
+                },
+                {
+                  "id": "manage_global_setting"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "operation": "upsert_resource_creator_actions",
+      "data": {
+        "config": [
+          {
+            "id": "strategy",
+            "actions": [
+              {
+                "id": "edit_strategy",
+                "required": true
+              },
+              {
+                "id": "delete_strategy",
+                "required": true
+              }
+            ]
+          },
+          {
+            "id": "notice_group",
+            "actions": [
+              {
+                "id": "edit_notice_group_v2",
+                "required": true
+              },
+              {
+                "id": "delete_notice_group_v2",
+                "required": true
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

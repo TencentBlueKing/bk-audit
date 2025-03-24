@@ -441,7 +441,7 @@ class ActionEnum:
         name_en="View Audit Report by Department",
         type="view",
         related_resource_types=[ResourceEnum.DEPT_BK_USERMGR],
-        related_actions=[],
+        related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
         version=1,
     )
     VIEW_TAG_PANEL = ActionMeta(
@@ -450,7 +450,18 @@ class ActionEnum:
         name_en="View Audit Report by Tag",
         type="view",
         related_resource_types=[ResourceEnum.TAG],
-        related_actions=[],
+        related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
+        version=1,
+    )
+
+    # 系统诊断
+    VIEW_SYSTEM_DIAGNOSIS_PANEL = ActionMeta(
+        id="view_system_diagnosis_panel",
+        name=gettext("系统诊断报表查看"),
+        name_en="View System Diagnosis Panel",
+        type="view",
+        related_resource_types=[ResourceEnum.SYSTEM],
+        related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
         version=1,
     )
 
