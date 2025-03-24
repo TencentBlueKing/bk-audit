@@ -27,6 +27,7 @@ from services.web.vision.constants import PANEL
 from services.web.vision.models import VisionPanel, VisionPanelInstance
 from services.web.vision.serializers import (
     QueryMetaReqSerializer,
+    VisionPanelInfoQuerySerializer,
     VisionPanelInfoSerializer,
 )
 
@@ -38,11 +39,12 @@ class BKVision(AuditMixinResource, abc.ABC):
 class ListPanels(BKVision):
     name = gettext_lazy("仪表盘列表")
     ResponseSerializer = VisionPanelInfoSerializer
+    RequestSerializer = VisionPanelInfoQuerySerializer
     many_response_data = True
     audit_action = ActionEnum.LIST_BASE_PANEL
 
     def perform_request(self, validated_request_data):
-        return VisionPanel.objects.filter(validated_request_data['scenario']).all()
+        return VisionPanel.objects.filter(scenario=validated_request_data['scenario']).all()
 
 
 class QueryMixIn(AuditMixinResource, abc.ABC):
