@@ -88,12 +88,12 @@ class BasicVisionHandlerMixIn(abc.ABC):
     @property
     @abc.abstractmethod
     def action_key_variable(self):
-        pass
+        raise NotImplementedError()
 
     @property
     @abc.abstractmethod
     def filter_handler_class(self) -> Type[FilterDataHandler]:
-        pass
+        raise NotImplementedError()
 
 
 class CommonVisionHandler(VisionHandler):
