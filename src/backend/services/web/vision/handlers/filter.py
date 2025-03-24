@@ -24,14 +24,18 @@ from bk_resource.exceptions import APIRequestError
 from bk_resource.utils.common_utils import ignored
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
+from django.db.models import QuerySet
 from iam.contrib.converter.queryset import DjangoQuerySetConverter
 
-from apps.meta.models import Tag
+from apps.meta.models import System, Tag
 from apps.permission.handlers.actions import ActionEnum, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
-from services.web.vision.exceptions import VisionPermissionInvalid
+from services.web.vision.exceptions import (
+    SingleSystemDiagnosisSystemParamsError,
+    VisionPermissionInvalid,
+)
 from services.web.vision.handlers.convertor import DeptConvertor
 
 
@@ -198,17 +202,85 @@ class TagFilterHandler(FilterDataHandler):
         return input_data[0] if is_single else input_data
 
 
-class SystemAdministratorFilterHandler(FilterDataHandler):
-    def get_data(self) -> List[Dict[str, str]]:
-        return [{"label": "样例系统", "value": "bk-audit"}]
-
-    def check_data(self, input_data: Union[List[str], str, int]) -> Union[List[str], str, int]:
-        return "bk-audit"
-
-
 class SystemDiagnosisFilterHandler(FilterDataHandler):
-    def get_data(self) -> List[Dict[str, str]]:
-        return [{"label": "样例系统", "value": "bk-audit"}]
+    """
+    获取系统诊断面板筛选数据
+    权限: 系统诊断面板查看系统权限
+    """
+
+    iam_action = ActionEnum.VIEW_SYSTEM_DIAGNOSIS_PANEL
+
+    def _fetch_iam_permissions_systems(self) -> QuerySet[System]:
+        """
+        获取用户IAM有权限的系统
+        """
+
+        # 获取用户
+        username = self.get_request_username()
+        # 获取有权限的系统
+        permission = Permission(username)
+        request = permission.make_request(action=get_action_by_id(self.iam_action), resources=[])
+        policies = permission.iam_client._do_policy_query(request)
+        if policies:
+            q = DjangoQuerySetConverter({"system.id": "system_id"}).convert(policies)
+            return System.objects.filter(q)
+        return System.objects.none()
+
+    def get_data(self, limit_systems: List[str] = None, internal=False) -> List[Dict[str, str]]:
+        # 获取有权限的系统
+        systems: QuerySet[System] = self._fetch_iam_permissions_systems().distinct().only("system_id", "name")
+        data = [
+            {"label": system.name, "value": system.system_id}
+            for system in systems
+            if not limit_systems or system.system_id in limit_systems
+        ]
+        return sorted(data, key=lambda item: item["label"])
 
     def check_data(self, input_data: Union[List[str], str, int]) -> Union[List[str], str, int]:
-        return "bk-audit"
+        # 检查
+        is_single = False
+        if not isinstance(input_data, list):
+            input_data = [input_data]
+            is_single = True
+
+        # 已授权的标签
+        authed_systems = [item["value"] for item in self.get_data(internal=True)]
+
+        # 为空则直接返回
+        if not input_data and authed_systems:
+            return authed_systems
+
+        # 逐个判断权限
+        no_permission_systems = set(input_data) - set(authed_systems)
+
+        # 有权限则跳过
+        if not no_permission_systems and input_data:
+            return input_data[0] if is_single else input_data
+
+        # 无权限申请
+        apply_data, apply_url = Permission().get_apply_data(
+            [self.iam_action],
+            [ResourceEnum.SYSTEM.create_instance(instance_id=item) for item in no_permission_systems],
+        )
+        raise PermissionException(
+            action_name=str(self.iam_action.name),
+            apply_url=apply_url,
+            permission=apply_data,
+        )
+
+
+class SingleSystemDiagnosisFilterHandler(SystemDiagnosisFilterHandler):
+    """
+    获取单个系统诊断面板筛选数据
+    权限: 系统编辑权限
+    """
+
+    iam_action = ActionEnum.EDIT_SYSTEM
+
+    def get_data(self, limit_systems: List[str] = None, internal=False) -> List[Dict[str, str]]:
+        constants = self.vision_handler_params.get("constants", {})
+        system_id = constants.get("system_id")
+        if internal or system_id and isinstance(system_id, str):
+            limit_systems = [] if internal else [system_id]
+            return super().get_data(limit_systems=limit_systems)
+        raise SingleSystemDiagnosisSystemParamsError()

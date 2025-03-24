@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-22 15:21+0800\n"
+"POT-Creation-Date: 2025-03-24 20:40+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1028,6 +1028,9 @@ msgstr "Push"
 
 msgid "暂停"
 msgstr "Pause"
+
+msgid "失败"
+msgstr "Failed"
 
 msgid "Namespace不存在"
 msgstr "Namespace does not exist"
@@ -2255,9 +2258,6 @@ msgstr "BK Base AIOps"
 
 msgid "成功"
 msgstr "Success"
-
-msgid "失败"
-msgstr "Failed"
 
 msgid "其他"
 msgstr "Other"
@@ -4236,6 +4236,26 @@ msgstr "Filter"
 
 msgid "不支持的权限，请联系管理员"
 msgstr "Unsupported privilege, Please Contact The Administrator!"
+
+#, fuzzy
+#| msgid "不支持的权限，请联系管理员"
+msgid "不支持的VisionHandler，请联系管理员"
+msgstr "Unsupported visionHandler, Please Contact The Administrator!"
+
+msgid "单系统诊断系统参数错误"
+msgstr "Single system diagnosis system params error"
+
+msgid "按应用"
+msgstr "Per app"
+
+msgid "视图ID"
+msgstr "Vision panel id"
+
+msgid "处理器"
+msgstr "Common vision handler"
+
+msgid "场景"
+msgstr "Scene"
 
 msgid "仪表盘列表"
 msgstr "Panel List"
