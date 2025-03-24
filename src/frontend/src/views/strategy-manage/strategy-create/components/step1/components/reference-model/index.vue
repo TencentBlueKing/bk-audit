@@ -150,6 +150,7 @@
 
   // 编辑
   const  setFormdata = (editData: StrategyModel) => {
+    formData.value.strategy_id = editData.strategy_id;
     formData.value.control_id = editData.control_id;
     formData.value.control_version = editData.control_version;
     const controlItem = controlMap.value[editData.control_id];
@@ -350,17 +351,43 @@
   });
 </script>
 <style lang="postcss" scoped>
-.inset-tip {
-  position: absolute;
-  top: 50%;
-  right: 30px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: normal;
-  line-height: normal;
-  color: #3a84ff;
-  background: #edf4ff;
-  border-radius: 2px;
-  transform: translateY(-50%);
+.strategy-reference-model {
+  .upgrade-tip {
+    margin-left: 13px;
+    font-size: 12px;
+    font-weight: 400;
+
+    .block {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 6px;
+      background: #ea3636;
+      border-radius: 50%;
+    }
+
+    .content {
+      color: #ea3636;
+    }
+
+    .btn {
+      color: #3a84ff;
+      cursor: pointer;
+    }
+  }
+
+  .inset-tip {
+    position: absolute;
+    top: 50%;
+    right: 30px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: normal;
+    line-height: normal;
+    color: #3a84ff;
+    background: #edf4ff;
+    border-radius: 2px;
+    transform: translateY(-50%);
+  }
 }
 </style>
