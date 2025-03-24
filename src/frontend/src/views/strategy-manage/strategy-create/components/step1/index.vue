@@ -659,30 +659,6 @@
 </script>
 <style lang="postcss" scoped>
 .create-strategy-page {
-  .upgrade-tip {
-    margin-left: 13px;
-    font-size: 12px;
-    font-weight: 400;
-
-    .block {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      margin-right: 6px;
-      background: #ea3636;
-      border-radius: 50%;
-    }
-
-    .content {
-      color: #ea3636;
-    }
-
-    .btn {
-      color: #3a84ff;
-      cursor: pointer;
-    }
-  }
-
   .flex-center {
     display: flex;
     align-items: center;
