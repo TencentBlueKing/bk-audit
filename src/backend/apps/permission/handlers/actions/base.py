@@ -15,9 +15,12 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import List
 
 from django.conf import settings
 from iam import Action
+
+from apps.permission.handlers.resource_types import ResourceTypeMeta
 
 
 class ActionMeta(Action):
@@ -32,8 +35,8 @@ class ActionMeta(Action):
         name_en: str,
         type: str,
         version: int,
-        related_resource_types: list = None,
-        related_actions: list = None,
+        related_resource_types: List[ResourceTypeMeta] = None,
+        related_actions: List["ActionMeta"] = None,
         description: str = "",
         description_en: str = "",
         system_id: str = "",
@@ -56,8 +59,8 @@ class ActionMeta(Action):
             "name_en": self.name_en,
             "type": self.type,
             "version": self.version,
-            "related_resource_types": self.related_resource_types,
-            "related_actions": self.related_actions,
+            "related_resource_types": [resource.to_json() for resource in self.related_resource_types],
+            "related_actions": [action.id for action in self.related_actions],
             "description": self.description,
             "description_en": self.description_en,
         }
