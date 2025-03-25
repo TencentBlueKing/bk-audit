@@ -80,7 +80,6 @@
           name: 'systemDetail',
           params: {
             id: data.system_id,
-            status: data.status,
           },
         };
         return (
