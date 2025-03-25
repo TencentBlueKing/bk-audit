@@ -315,5 +315,6 @@ export default {
     '子公司操作次数仅统计，请结合业务使用场景和敏感等级关注该信息。': 'Subcompany operation times only statistics, please pay attention to the business scenario and sensitive level.',
     '正式员工（非外包子公司）操作次数 TOP20 操作：': 'Formal employee (non-outsourcing subcompany) operation times TOP20 operation:',
     '正式员工操作次数仅统计，请结合业务使用场景和敏感等级关注该信息。': 'Formal employee operation times only statistics, please pay attention to the business scenario and sensitive level.',
+    系统诊断: 'System diagnosis',
   },
 };
