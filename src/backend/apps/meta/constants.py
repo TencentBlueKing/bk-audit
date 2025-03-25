@@ -51,6 +51,9 @@ TAG_NAME_REGEXP = re.compile(r"^[\w\u4e00-\u9fa5-_]+$")
 # 系统诊断推送模板
 SYSTEM_DIAGNOSIS_PUSH_TEMPLATE_KEY = "system_diagnosis_push_template"
 
+# 指定系统推送人
+SYSTEM_DIAGNOSIS_PUSH_RECIPIENTS_KEY = "system_diagnosis_system_push_recipients"
+
 
 class SensitiveUserData:
     SYSTEM_ID = os.getenv("BKAPP_SENSITIVE_USER_DATA_SYSTEM_ID", "bk_usermgr")
