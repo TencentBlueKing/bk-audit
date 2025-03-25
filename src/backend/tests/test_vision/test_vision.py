@@ -31,7 +31,7 @@ class TestVision(TestCase):
             id="just_test",
             name="just_test",
             vision_id="just_test_raw",
-            handler="SystemAdministratorVisionHandler",
+            handler="SystemDiagnosisVisionHandler",
         )
 
     def tearDown(self):
@@ -42,7 +42,7 @@ class TestVision(TestCase):
         mock.Mock(return_value=META_QUERY_RESPONSE['data']),
     )
     @mock.patch(
-        "services.web.vision.handlers.filter.SystemAdministratorFilterHandler.get_data",
+        "services.web.vision.handlers.filter.SystemDiagnosisFilterHandler.get_data",
         mock.Mock(return_value=CHECK_DATA),
     )
     def test_meta_query(self):
