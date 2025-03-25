@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
-from typing import List
+from typing import Dict, List
 
 from bk_resource import api
 from bk_resource.exceptions import APIRequestError
@@ -25,6 +25,7 @@ from django.db import transaction
 
 from apps.meta.constants import (
     IAM_MANAGER_ROLE,
+    SYSTEM_DIAGNOSIS_PUSH_RECIPIENTS_KEY,
     SYSTEM_DIAGNOSIS_PUSH_TEMPLATE_KEY,
     ConfigLevelChoices,
     SystemDiagnosisPushStatusEnum,
@@ -52,11 +53,23 @@ class SystemDiagnosisPushHandler:
         系统渲染数据
         """
 
-        recipient: List[str] = list(
-            SystemRole.objects.filter(system_id=self.system_id, role=IAM_MANAGER_ROLE).values_list(
-                "username", flat=True
-            )
+        push_recipients: Dict[str, List[str]] = GlobalMetaConfig.get(
+            config_key=SYSTEM_DIAGNOSIS_PUSH_RECIPIENTS_KEY,
+            config_level=ConfigLevelChoices.NAMESPACE,
+            instance_key=self.system.namespace,
+            default={},
         )
+        # 获取推送接收人
+        if push_recipients.get(self.system_id):
+            # 指定系统推送接收人
+            recipient = push_recipients[self.system_id]
+        else:
+            # 默认推送接收人:系统管理员
+            recipient: List[str] = list(
+                SystemRole.objects.filter(system_id=self.system_id, role=IAM_MANAGER_ROLE).values_list(
+                    "username", flat=True
+                )
+            )
         if not is_product():
             recipient = GlobalMetaConfig.get(config_key=SECURITY_PERSON_KEY)
         if not recipient:
