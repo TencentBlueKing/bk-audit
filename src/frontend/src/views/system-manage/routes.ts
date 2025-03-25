@@ -35,7 +35,7 @@ export default {
       },
     },
     {
-      path: 'detail/:id/:status',
+      path: 'detail/:id',
       component: () => import('@views/system-manage/detail/index.vue'),
       name: 'systemDetail',
       meta: {
