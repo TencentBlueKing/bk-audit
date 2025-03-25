@@ -20,8 +20,8 @@ export default {
   /**
    * @desc 获取左侧菜单
    */
-  fetchMenuList() {
-    return StatementManageSource.getMenuList({
+  fetchMenuList(params: { scenario: 'perapp' | 'default' }) {
+    return StatementManageSource.getMenuList(params, {
       permission: 'page',
     })
       .then(({ data }) => data);

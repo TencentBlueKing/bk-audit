@@ -70,6 +70,9 @@
     loading: isLoading,
   } = useRequest(StatementManageService.fetchMenuList, {
     manual: true,
+    defaultParams: {
+      scenario: 'default',
+    },
     defaultValue: [],
     onSuccess: (menuData) => {
       emit('statement-menuData', menuData);
