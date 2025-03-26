@@ -74,9 +74,23 @@
               </div>
               <bk-form-item
                 class="is-required risk-level-group"
-                :label="t('风险等级')"
+                label=""
                 label-width="160"
                 property="risk_level">
+                <template #label>
+                  <span
+                    v-bk-tooltips="{
+                      content: t('创建策略人工定义，标识和方便风险单快捷筛选，指引后续处理的跟进'),
+                      placement: 'top-start'
+                    }"
+                    style="
+                      color: #63656e;
+                      cursor: pointer;
+                      border-bottom: 1px dashed #979ba5;
+                    ">
+                    {{ t('风险等级') }}
+                  </span>
+                </template>
                 <bk-button-group>
                   <bk-button
                     v-for="item in riskLevelList"
@@ -85,7 +99,18 @@
                     :loading="commonLoading"
                     :selected="formData.risk_level === item.value"
                     @click="handleLevel(item.value)">
-                    {{ item.label }}
+                    <span
+                      v-bk-tooltips="{
+                        content: item.config.tips,
+                        extCls: 'strategy-way-tips',
+                        placement: 'top-start'
+                      }"
+                      style="
+                        line-height: 16px;
+                        border-bottom: 1px dashed #979ba5;
+                      ">
+                      {{ item.label }}
+                    </span>
                   </bk-button>
                 </bk-button-group>
               </bk-form-item>
@@ -156,7 +181,10 @@
                         extCls: 'strategy-way-tips',
                         placement: 'top-start'
                       }"
-                      class="tips">
+                      style="
+                        line-height: 16px;
+                        border-bottom: 1px dashed #979ba5;
+                      ">
                       {{ item.label }}
                     </span>
                   </bk-button>
@@ -458,6 +486,12 @@
   const riskLevelList = ref<Array<ItemType>>([]); // 风险等级列表
   const controlDetail = ref<ControlModel | null>(null);
 
+  const riskLevelTipMap: Record<'HIGH' | 'MIDDLE' | 'LOW', string> = {
+    HIGH: t('问题存在影响范围很大或程度很深，或已导致重大错报、合规违规或资产损失风险，不处理可能产生更严重问题，需立即介入并优先处置'),
+    MIDDLE: t('问题存在影响范围较大或程度较深，可能影响局部业务效率或安全性，需针对性制定措施并跟踪整改'),
+    LOW: t('问题存在但影响范围有限，短期内不会对有重大问题，可通过常规流程优化解决'),
+  };
+
   // 编辑
   const setFormData = (editData: StrategyModel) => {
     formData.value.status = editData.status;
@@ -484,7 +518,12 @@
     defaultValue: new CommonDataModel(),
     manual: true,
     onSuccess: (data) => {
-      riskLevelList.value = data.risk_level;
+      riskLevelList.value = data.risk_level.map(item => ({
+        ...item,
+        config: {
+          tips: riskLevelTipMap[item.value as 'HIGH' | 'MIDDLE' | 'LOW'],
+        },
+      }));
       strategyWayList.value = [{
         label: t('自定义规则审计'),
         value: 'rule',
