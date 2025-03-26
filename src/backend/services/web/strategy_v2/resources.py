@@ -1086,7 +1086,6 @@ class ListLinkTableAll(LinkTableBase):
     name = gettext_lazy("查询所有联表")
     ResponseSerializer = ListLinkTableAllResponseSerializer
     many_response_data = True
-    audit_action = ActionEnum.LIST_LINK_TABLE
 
     def perform_request(self, validated_request_data):
         return LinkTable.list_max_version_link_table()
