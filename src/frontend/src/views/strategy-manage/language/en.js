@@ -267,5 +267,9 @@ export default {
     '不可选择，如仍需使用此数据，请联系系统管理员': 'Not selectable, if you still need to use this data, please contact the system administrator',
     '当前“预期结果”中包含“聚合算法”，不支持使用当前调度方式': 'The current "Expected Results" contains "Aggregation Algorithm", which is not supported by the current scheduling method',
     调度方式不可编辑: 'Scheduling method cannot be edited',
+    '问题存在影响范围很大或程度很深，或已导致重大错报、合规违规或资产损失风险，不处理可能产生更严重问题，需立即介入并优先处置': 'The problem exists with a large or deep impact, or has caused significant false positives, compliance violations, or asset loss risks. It is not recommended to process it at this time. It is necessary to intervene immediately and prioritize it',
+    '问题存在影响范围较大或程度较深，可能影响局部业务效率或安全性，需针对性制定措施并跟踪整改': 'The problem exists with a large or deep impact, which may affect local business efficiency or security. Specific measures need to be taken and tracked for rectification',
+    '问题存在但影响范围有限，短期内不会对有重大问题，可通过常规流程优化解决': 'The problem exists but the impact range is limited, and it will not have a significant problem in the near future. It can be optimized by regular processes',
+    '创建策略人工定义，标识和方便风险单快捷筛选，指引后续处理的跟进': 'Create a strategy manually defined to identify and facilitate the filtering of risk tickets for subsequent processing',
   },
 };
