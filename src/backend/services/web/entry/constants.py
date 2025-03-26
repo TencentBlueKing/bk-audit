@@ -58,3 +58,8 @@ TENCENT_WEB_FOOTER = [
         "url": "",
     },
 ]
+
+# IAM WEB 访问地址
+IAM_WEB_URL_KEY = "iam_web_url"
+# 互娱应用系统和敏感操作安全管理规范访问地址
+IEG_STD_OP_DOC_URL_KEY = "ieg_std_op_doc_url"
