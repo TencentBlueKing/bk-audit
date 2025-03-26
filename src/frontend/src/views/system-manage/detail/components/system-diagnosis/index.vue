@@ -52,9 +52,9 @@
                 <span class="item-info-title">{{ t('权限中心未纳管操作操作：') }} </span>
                 {{ t('权限中心未纳管操作数 >0 表示该类 action_id 未在权限中心注册，请前往') }}
                 <a
-                  href="https://iam.woa.com/"
+                  :href="configData.system_diagnosis?.iam_web_url"
                   target="_blank">
-                  https://iam.woa.com/
+                  {{ configData.system_diagnosis?.iam_web_url }}
                 </a>
                 {{ t('调整相关系统接入配置；如符合系统设计，无需处理。') }}
               </div>
@@ -67,9 +67,9 @@
                 <span class="item-info-title">{{ t('权限中心未纳管资源类型操作：') }}</span>
                 {{ t('权限中心未纳管资源类型操作：权限中心未纳管操作数 >0 表示该类 action_id 未在权限中心注册，请前往') }}
                 <a
-                  href="https://iam.woa.com/"
+                  :href="configData.system_diagnosis?.iam_web_url"
                   target="_blank">
-                  https://iam.woa.com/
+                  {{ configData.system_diagnosis?.iam_web_url }}
                 </a>
                 {{ t('调整相关系统接入配置；如符合系统设计，无需处理。') }}
               </div>
@@ -169,9 +169,9 @@
                 <div style="margin-top: 8px;">
                   {{ t('规范参考：互娱应用系统和敏感操作安全管理规范（文本）') }}
                   <a
-                    href="https://iwiki.woa.com/p/4007716615"
+                    :href="configData.system_diagnosis?.ieg_std_op_doc_url"
                     target="_blank">
-                    https://iwiki.woa.com/p/4007716615
+                    {{ configData.system_diagnosis?.ieg_std_op_doc_url }}
                   </a>
                 </div>
               </div>
@@ -186,9 +186,9 @@
                 <div style="margin-top: 8px;">
                   {{ t('规范参考：互娱应用系统和敏感操作安全管理规范（文本）') }}
                   <a
-                    href="https://iwiki.woa.com/p/4007716615"
+                    :href="configData.system_diagnosis?.ieg_std_op_doc_url"
                     target="_blank">
-                    https://iwiki.woa.com/p/4007716615
+                    {{ configData.system_diagnosis?.ieg_std_op_doc_url }}
                   </a>
                 </div>
               </div>
@@ -203,9 +203,9 @@
                 <div style="margin-top: 8px;">
                   {{ t('规范参考：互娱应用系统和敏感操作安全管理规范（文本）') }}
                   <a
-                    href="https://iwiki.woa.com/p/4007716615"
+                    :href="configData.system_diagnosis?.ieg_std_op_doc_url"
                     target="_blank">
-                    https://iwiki.woa.com/p/4007716615
+                    {{ configData.system_diagnosis?.ieg_std_op_doc_url }}
                   </a>
                 </div>
               </div>
@@ -232,10 +232,12 @@
   import { useRoute } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
+  import RootManageService from '@service/root-manage';
   import StatementManageService from '@service/statement-manage';
 
   import IamApplyDataModel from '@model/iam/apply-data';
   import SystemModel from '@model/meta/system';
+  import ConfigModel from '@model/root/config';
 
   import useEventBus from '@/hooks/use-event-bus';
   import useMessage from '@/hooks/use-message';
@@ -318,6 +320,13 @@
     onSuccess: (data) => {
       status.value = data.status;
     },
+  });
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
   });
 
   watch(() => status.value, (data) => {
