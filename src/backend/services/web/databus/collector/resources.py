@@ -121,6 +121,7 @@ from services.web.databus.models import (
     SnapshotStorage,
 )
 from services.web.databus.tasks import create_api_push_etl
+from services.web.databus.utils import stop_bkbase_clean
 
 
 class CollectorMeta(AuditMixinResource, abc.ABC):
@@ -356,7 +357,7 @@ class DeleteCollectorResource(CollectorMeta, ModelResource):
         api.bk_log.stop_subscription(collector_config_id=collector.collector_config_id)
         # 停止清洗入库
         if collector.processing_id:
-            PluginEtlHandler.stop_bkbase_clean(collector.bkbase_table_id, collector.processing_id)
+            stop_bkbase_clean(collector.bkbase_table_id, collector.processing_id)
         # 数据库软删除
         super().perform_request(validated_request_data)
 
