@@ -32,6 +32,8 @@ from services.web.entry.constants import (
     DEFAULT_QUERY_STRING_HELP_KEY,
     DEFAULT_SCHEMA_HELP,
     DEFAULT_SCHEMA_HELP_KEY,
+    IAM_WEB_URL_KEY,
+    IEG_STD_OP_DOC_URL_KEY,
 )
 
 
@@ -89,6 +91,11 @@ class EntryHandler(object):
             # 全局配置
             "shared_res_url": settings.BK_SHARED_RES_URL,
             "version": cls.get_version(),
+            # 系统诊断
+            "system_diagnosis": {
+                "iam_web_url": GlobalMetaConfig.get(IAM_WEB_URL_KEY, default=""),
+                "ieg_std_op_doc_url": GlobalMetaConfig.get(IEG_STD_OP_DOC_URL_KEY, default=""),
+            },
         }
         return data
 
