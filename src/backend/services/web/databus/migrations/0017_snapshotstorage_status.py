@@ -3,6 +3,18 @@
 from django.db import migrations, models
 
 
+def migrate_snapshotstorage_status(apps, schema_editor):
+    Snapshot = apps.get_model('databus', 'Snapshot')
+    SnapshotStorage = apps.get_model('databus', 'SnapshotStorage')
+
+    # 获取所有状态为 'running' 的 Snapshot
+    running_snapshots = Snapshot.objects.filter(status='running')
+
+    # 更新与 'hdfs' 类型相关的 SnapshotStorage 记录的状态为 'running'
+    for snapshot in running_snapshots:
+        SnapshotStorage.objects.filter(snapshot=snapshot, storage_type='hdfs').update(status='running')
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -21,4 +33,5 @@ class Migration(migrations.Migration):
                 verbose_name='状态',
             ),
         ),
+        migrations.RunPython(migrate_snapshotstorage_status),
     ]

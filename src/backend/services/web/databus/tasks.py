@@ -298,7 +298,7 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
         PluginEtlHandler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
 
 
-@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="0", hour="5"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:check_join_data")
 def check_join_data():
     # 获取所有状态为 'running' 的快照记录
