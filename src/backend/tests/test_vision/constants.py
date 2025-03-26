@@ -27,11 +27,79 @@ META_QUERY_PARAMS = {
     "xo[tt]": "pp",
 }
 
-META_QUERY_PARAMS = {
-    "share_uid": "just_test",  # 替换为随机字符
-    "type": "dashboard",
-    "xo[tt]": "pp",
+DATASET_QUERY_PARAMS = {
+    "share_uid": "just_test",
+    "panel_uid": "4tJ44mxwu5PpPgTVSUJusT",
+    "dataset": {"db_type": None, "dataset_uid": "4tJ44mxwu5PpPgTVSUJusT", "datasource_uid": "4tJ44mxwu5PpPgTVSUJusT"},
+    "query": {
+        "limit": {"size": 1000, "offset": None},
+        "order": [],
+        "where": [],
+        "format": "point",
+        "params": "",
+        "metrics": [
+            {
+                "uid": "yyzzoe3a",
+                "name": "操作数",
+                "type": "",
+                "remark": "",
+                "map_uid": "",
+                "aggregate": None,
+                "is_joined": False,
+                "is_virtual": False,
+                "display_name": "操作数",
+            }
+        ],
+        "is_linked": False,
+        "raw_query": True,
+        "space_uid": "4tJ44mxwu5PpPgTVSUJusT",
+        "variation": [],
+        "dimensions": [
+            {
+                "uid": "yyzzoe3a",
+                "name": "操作数",
+                "type": "",
+                "remark": "",
+                "map_uid": "",
+                "aggregate": None,
+                "is_joined": False,
+                "is_virtual": False,
+                "display_name": "操作数",
+            }
+        ],
+        "drill_down": [],
+        "is_drilled": False,
+        "query_mode": "sql",
+        "query_text": "SELECT * from abc",
+        "link_fields": [],
+        "need_sample": False,
+        "process_code": "",
+        "time_compare": [],
+        "time_dimensions": {},
+        "need_time_compare": False,
+    },
+    "option": {
+        "link": None,
+        "father_variables": {},
+        "variables": [
+            {
+                "flag": "dtEventTime",
+                "type": "time-ranger",
+                "value": {
+                    "from": 1742870932604,
+                    "to": 1742957332604,
+                    "raw": {"from": "now-24h", "to": "now"},
+                    "datetime_str": {"from": "2025-03-25 10:48:52", "to": "2025-03-26 10:48:52"},
+                },
+            },
+            {"flag": "system_id", "type": "selector", "value": "bk-audit"},
+        ],
+        "constants": [{"flag": "system_id", "value": "bk-audit"}],
+    },
 }
+
+DATASET_QUERY_RESPONSE = {"result": True, "code": 200, "data": {'result': 'test'}}
+
 META_QUERY_RESPONSE = {
     "result": True,
     "code": 200,
@@ -43,7 +111,7 @@ META_QUERY_RESPONSE = {
             "updated_time": "2025-03-05 13:34:36",
             "space_uid": "xP5szf3VhtJwkjNz44u1Z7",
             "dashboard_uid": "hDs5B7k8cLhbVpmQm4Y6Jz",
-            "dashboard_title": "审计中心风险视图（全风险）",
+            "dashboard_title": "审计中心",
             "parent_version": "V80",
             "version": "V81",
             "description": "",
@@ -311,4 +379,5 @@ META_QUERY_RESPONSE = {
     "request_id": "",
     "trace_id": "",
 }
-CHECK_DATA = [{'name': 'a', 'value': 'A'}]
+GET_DATA = [{'name': 'a', 'value': 'A'}]
+CHECK_DATA = 'a'

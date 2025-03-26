@@ -20,7 +20,14 @@ from unittest import mock
 from services.web.vision.models import VisionPanel
 from tests.base import TestCase
 
-from .constants import CHECK_DATA, META_QUERY_PARAMS, META_QUERY_RESPONSE
+from .constants import (
+    CHECK_DATA,
+    DATASET_QUERY_PARAMS,
+    DATASET_QUERY_RESPONSE,
+    GET_DATA,
+    META_QUERY_PARAMS,
+    META_QUERY_RESPONSE,
+)
 
 
 class TestVision(TestCase):
@@ -34,22 +41,28 @@ class TestVision(TestCase):
             handler="SystemDiagnosisVisionHandler",
         )
 
-    def tearDown(self):
-        pass
-
     @mock.patch(
         "services.web.vision.handlers.query.api.bk_vision.query_meta",
         mock.Mock(return_value=META_QUERY_RESPONSE['data']),
     )
     @mock.patch(
         "services.web.vision.handlers.filter.SystemDiagnosisFilterHandler.get_data",
-        mock.Mock(return_value=CHECK_DATA),
+        mock.Mock(return_value=GET_DATA),
     )
     def test_meta_query(self):
         result = self.resource.vision.query_meta(**META_QUERY_PARAMS)
         for item in result['data']['panels']:
             if item['mode'] == 'action' and item['chartConfig']["flag"] == "system_id":
-                self.assertEqual(item['chartConfig']['json'], CHECK_DATA)
+                self.assertEqual(item['chartConfig']['json'], GET_DATA)
 
+    @mock.patch(
+        "services.web.vision.handlers.filter.SystemDiagnosisFilterHandler.check_data",
+        mock.Mock(return_value=CHECK_DATA),
+    )
+    @mock.patch(
+        "services.web.vision.handlers.query.api.bk_vision.query_dataset",
+        mock.Mock(return_value=DATASET_QUERY_RESPONSE['data']),
+    )
     def test_data_set_query(self):
-        pass
+        result = self.resource.vision.query_dataset(**DATASET_QUERY_PARAMS)
+        self.assertTrue(result['result'])
