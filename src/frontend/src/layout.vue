@@ -236,8 +236,7 @@
   interface Props {
     configData: ConfigModel,
   }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const props = defineProps<Props>();
+  defineProps<Props>();
   const router = useRouter();
   const route = useRoute();
   const isMenuFlod = ref(false);
