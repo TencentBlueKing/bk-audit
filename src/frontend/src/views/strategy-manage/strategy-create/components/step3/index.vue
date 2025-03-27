@@ -57,7 +57,7 @@
                     :permission="checkResultMap.list_notice_group"
                     :value="item.id" />
                   <template #extension>
-                    <div style=" color: #63656e;text-align: center;flex: 1;">
+                    <div class="create-notice-group">
                       <auth-router-link
                         action-id="create_notice_group"
                         class="create_notice_group"
@@ -82,9 +82,11 @@
                         class="rotate-loading"
                         svg
                         type="loading" />
-                      <audit-icon
-                        v-else
-                        type="refresh" />
+                      <template v-else>
+                        <audit-icon
+                          type="refresh" />
+                        {{ t('刷新') }}
+                      </template>
                     </div>
                   </template>
                 </bk-select>
@@ -119,7 +121,7 @@
                     :permission="checkResultMap.list_notice_group"
                     :value="item.id" />
                   <template #extension>
-                    <div style=" color: #63656e;text-align: center;flex: 1;">
+                    <div class="create-notice-group">
                       <auth-router-link
                         action-id="create_notice_group"
                         class="create_notice_group"
@@ -144,9 +146,11 @@
                         class="rotate-loading"
                         svg
                         type="loading" />
-                      <audit-icon
-                        v-else
-                        type="refresh" />
+                      <template v-else>
+                        <audit-icon
+                          type="refresh" />
+                        {{ t('刷新') }}
+                      </template>
                     </div>
                   </template>
                 </bk-select>
@@ -291,10 +295,18 @@
   margin-bottom: 32px;
 }
 
+.create-notice-group {
+  padding: 0 12px;
+  text-align: center;
+  flex: 1;
+}
+
 .refresh {
   padding: 0 12px;
-  color: #979ba5;
+  color: #3a84ff;
+  text-align: center;
   cursor: pointer;
   border-left: 1px solid #dcdee5;
+  flex: 1;
 }
 </style>
