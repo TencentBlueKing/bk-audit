@@ -208,19 +208,6 @@
     return Array.from(tableTypes) as Array<'BizRt' | 'BuildIn' | 'EventLog'>;
   };
 
-  watch(
-    () => props.linkDataDetail.config?.links,
-    (newLinks: LinkDataDetailModel['config']['links']) => {
-      if (newLinks) {
-        // 获取系统
-        fetchSystemWithAction();
-        uniqueTableTypes.value = extractUniqueTableTypes(newLinks);
-        fetchTableTypeData();
-      }
-    },
-    { immediate: true },
-  );
-
   // 获取全部联表版本信息
   useRequest(LinkDataManageService.fetchLinkTableAll, {
     defaultValue: [],
@@ -312,6 +299,19 @@
       },
     });
   };
+
+  watch(
+    () => props.linkDataDetail.config?.links,
+    (newLinks: LinkDataDetailModel['config']['links']) => {
+      if (newLinks) {
+        // 获取系统
+        fetchSystemWithAction();
+        uniqueTableTypes.value = extractUniqueTableTypes(newLinks);
+        fetchTableTypeData();
+      }
+    },
+    { immediate: true },
+  );
 </script>
 <style scoped lang="postcss">
 .link-data-detail {
