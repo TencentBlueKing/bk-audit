@@ -74,7 +74,12 @@ class SystemDiagnosisPushHandler:
             recipient = GlobalMetaConfig.get(config_key=SECURITY_PERSON_KEY)
         if not recipient:
             raise SystemRoleMemberEmpty()
-        return {"system_name": self.system.name, "recipient": recipient, "system_id": self.system_id}
+        return {
+            "system_name": self.system.name,
+            "recipient": recipient,
+            "system_id": self.system_id,
+            "system_diagnosis_extra": self.system.system_diagnosis_extra or {},
+        }
 
     @property
     def push_config(self) -> dict:
