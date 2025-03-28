@@ -626,7 +626,6 @@
     } else if (hasDataSourceChanged(dataSource)) {
       InfoBox(createInfoBoxConfig({
         onConfirm() {
-          tableFields.value = [];
           formData.value.configs.select = [];
           formData.value.configs.where = {
             connector: 'and',
