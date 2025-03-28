@@ -20,6 +20,7 @@ import abc
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext
 
 from apps.permission.handlers.actions import ActionEnum
@@ -27,6 +28,7 @@ from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
 from core.utils.renderers import API200Renderer
+from services.web.vision.models import Scenario, VisionPanel
 
 
 class API200ViewSet(ResourceViewSet, abc.ABC):
@@ -34,11 +36,20 @@ class API200ViewSet(ResourceViewSet, abc.ABC):
 
 
 class BKVisionViewSet(ResourceViewSet, abc.ABC):
+    escape_scenario = [Scenario.PER_APP.value]  # 单系统报表去除接口鉴权，直接采用 filter 鉴权
+
     def get_permissions(self):
         return [IAMPermission(actions=[ActionEnum.LIST_BASE_PANEL])]
 
 
 class PanelsViewSet(BKVisionViewSet):
+    def get_permissions(self):
+        if self.action in ["list"]:
+            scenario = self.request.query_params.get("scenario")
+            if scenario in self.escape_scenario:
+                return []
+        return super().get_permissions()
+
     resource_routes = [
         ResourceRoute("GET", resource.vision.list_panels),
     ]
@@ -46,6 +57,11 @@ class PanelsViewSet(BKVisionViewSet):
 
 class BKVisionInstanceViewSet(BKVisionViewSet):
     def get_permissions(self):
+        instance_id = self.get_instance_id()
+        panel: VisionPanel = get_object_or_404(VisionPanel, id=instance_id)
+        # 部分场景无需鉴权
+        if panel.scenario in self.escape_scenario:
+            return []
         return [
             InstanceActionPermission(
                 actions=[ActionEnum.VIEW_BASE_PANEL],
