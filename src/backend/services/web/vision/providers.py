@@ -24,7 +24,7 @@ from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult, SchemaResult
 
 from apps.permission.provider.base import BaseResourceProvider
-from services.web.vision.models import VisionPanel
+from services.web.vision.models import Scenario, VisionPanel
 from services.web.vision.serializers import VisionPanelInfoSerializer
 
 
@@ -34,12 +34,15 @@ class PanelBaseProvider(BaseResourceProvider):
 
     key_mapping = {}
 
+    def get_object(self):
+        return VisionPanel.objects.filter(scenario=Scenario.DEFAULT.value)
+
     def list_instance(self, filters, page, **options):
         queryset = VisionPanel.objects.none()
         with_path = False
 
         if not (filters.parent or filters.search):
-            queryset = VisionPanel.objects.all()
+            queryset = self.get_object()
         elif filters.search:
             # 返回结果需要带上资源拓扑路径信息
             with_path = True
@@ -49,7 +52,7 @@ class PanelBaseProvider(BaseResourceProvider):
             q_filter = Q()
             for keyword in keywords:
                 q_filter |= Q(name__icontains=keyword)
-            queryset = VisionPanel.objects.filter(q_filter)
+            queryset = self.get_object().filter(q_filter)
 
         if not with_path:
             results = [{"id": item.id, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]]
@@ -70,7 +73,7 @@ class PanelBaseProvider(BaseResourceProvider):
         if filters.ids:
             ids = [i for i in filters.ids]
 
-        queryset = VisionPanel.objects.filter(id__in=ids)
+        queryset = self.get_object().filter(id__in=ids)
 
         results = [{"id": item.id, "display_name": item.name} for item in queryset]
         return ListResult(results=results, count=queryset.count())
@@ -82,20 +85,20 @@ class PanelBaseProvider(BaseResourceProvider):
 
         converter = PathEqDjangoQuerySetConverter(self.key_mapping)
         filters = converter.convert(expression)
-        queryset = VisionPanel.objects.filter(filters)
+        queryset = self.get_object().filter(filters)
         results = [{"id": item.id, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]]
 
         return ListResult(results=results, count=queryset.count())
 
     def search_instance(self, filters, page, **options):
-        queryset = VisionPanel.objects.filter(id__contains=filters.keyword)
+        queryset = self.get_object().filter(id__contains=filters.keyword)
         results = [{"id": item.id, "display_name": item.name} for item in queryset[page.slice_from : page.slice_to]]
         return ListResult(results=results, count=queryset.count())
 
     def fetch_instance_list(self, filter, page, **options):
         start_time = datetime.datetime.fromtimestamp(int(filter.start_time // 1000))
         end_time = datetime.datetime.fromtimestamp(int(filter.end_time // 1000))
-        queryset = VisionPanel.objects.filter(event_time__gt=start_time, event_time__lte=end_time)
+        queryset = self.get_object().filter(event_time__gt=start_time, event_time__lte=end_time)
         results = [
             {
                 "id": item.id,
