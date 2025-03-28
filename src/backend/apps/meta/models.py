@@ -122,6 +122,7 @@ class System(OperateRecordModel):
     system_url = models.CharField(gettext_lazy("访问地址"), max_length=255, null=True)
     description = models.TextField(gettext_lazy("应用描述"), null=True)
     enable_system_diagnosis_push = models.BooleanField(gettext_lazy("是否开启系统诊断推送"), default=False)
+    system_diagnosis_extra = models.JSONField(gettext_lazy("系统诊断额外信息"), default=dict, blank=True, null=True)
 
     class Meta:
         verbose_name = gettext_lazy("接入系统")
