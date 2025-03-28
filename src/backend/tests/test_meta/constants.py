@@ -82,6 +82,7 @@ SYSTEM_DATA1 = {
     "system_url": None,
     "description": None,
     "enable_system_diagnosis_push": False,
+    "system_diagnosis_extra": {},
 }
 SYSTEM_DATA2 = {
     "system_id": settings.BK_IAM_SYSTEM_ID,
@@ -94,6 +95,7 @@ SYSTEM_DATA2 = {
     "system_url": None,
     "description": None,
     "enable_system_diagnosis_push": False,
+    "system_diagnosis_extra": {},
 }
 SYSTEM_BULK_DATA = list()
 SYSTEM_BULK_DATA.append(
