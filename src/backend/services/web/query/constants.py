@@ -126,7 +126,9 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(
             field=RESULT_CONTENT, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
         ),
-        FieldSearchConfig(field=LOG, allow_operators=[QueryConditionOperator.MATCH_ANY]),
+        FieldSearchConfig(
+            field=LOG, allow_operators=[QueryConditionOperator.MATCH_ANY, QueryConditionOperator.MATCH_ALL]
+        ),
         FieldSearchConfig(
             field=INSTANCE_DATA, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.LIKE]
         ),

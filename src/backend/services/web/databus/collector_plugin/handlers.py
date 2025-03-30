@@ -30,6 +30,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.fields import (
     BKBASE_STORAGE_UNIQUE_KEYS,
     BKDATA_ES_TYPE_MAP,
+    ES_NOT_JSON_FIELDS,
     EXT_FIELD_CONFIG,
     FIELD_TYPE_OBJECT,
     FIELD_TYPE_STRING,
@@ -152,12 +153,7 @@ class PluginEtlHandler:
                 cluster_info = item
         bkbase_cluster_id = cluster_info["cluster_config"].get("custom_option", {})["bkbase_cluster_id"]
         # 更新入库字段
-        replica_fields = self.get_fields()
-        for field in replica_fields:
-            field["physical_field"] = field["field_name"]
-            # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
-            field["is_doc_values"] = field.get("is_dimension", False)
-
+        es_fields = self.get_es_fields()
         # 获取主存储入库参数（目前为ES）
         main_storage_params = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
@@ -168,7 +164,7 @@ class PluginEtlHandler:
             "storage_type": "es",
             "storage_cluster": bkbase_cluster_id,
             "expires": "7d",  # 无效，实际由metadata控制
-            "fields": replica_fields,
+            "fields": es_fields,
             "config": {"has_unique_key": True},
             "from_raw_data": False,
         }
@@ -246,6 +242,18 @@ class PluginEtlHandler:
         )
         # 需要使用确定的FieldIndex避免合流失败
         return [{**field, "field_index": index} for index, field in enumerate(fields, 1)]
+
+    @classmethod
+    def get_es_fields(cls) -> List[dict]:
+        fields = cls.get_fields()
+        es_not_json_field_names = {field.field_name for field in ES_NOT_JSON_FIELDS}
+        for field in fields:
+            field["physical_field"] = field["field_name"]
+            # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
+            field["is_doc_values"] = field.get("is_dimension", False)
+            if field["field_name"] in es_not_json_field_names:
+                field["is_json"] = False
+        return fields
 
     @classmethod
     def get_doris_fields(cls) -> List[dict]:
