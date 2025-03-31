@@ -88,7 +88,7 @@ DATASET_QUERY_PARAMS = {
                 "value": {
                     "from": 1742870932604,
                     "to": 1742957332604,
-                    "raw": {"from": "now-24h", "to": "now"},
+                    "raw": {"from": "now-1d/d", "to": "now-1d/d"},
                     "datetime_str": {"from": "2025-03-25 10:48:52", "to": "2025-03-26 10:48:52"},
                 },
             },

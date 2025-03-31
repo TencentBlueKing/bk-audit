@@ -16,9 +16,13 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
-from typing import Type
+import json
+from typing import Optional, Type
 
 from bk_resource import api
+from bk_resource.utils.common_utils import get_md5
+from django.conf import settings
+from django.core.cache import cache
 
 from services.web.vision.constants import KeyVariable, PanelType
 from services.web.vision.handlers.filter import (
@@ -38,6 +42,31 @@ def modify_panel_meta(handler: FilterDataHandler, chart_config: dict, vision_dat
     chart_config["default"] = chart_config["json"][0]["value"] if chart_config["json"] else []
     # 替换外层默认值
     vision_data["filters"][uid] = chart_config["default"]
+
+
+class VariablesBasedDataSetQueryCacheMixIn:
+    """基于panel_id+variables进行缓存的数据集查询"""
+
+    def query_dataset(self, params: dict) -> dict:
+        option = params.get("option", {})
+        variables = option.get("variables", {})
+        panel_id = params.get("panel_uid")
+        cache_key = self._generate_cache_key(variables, panel_id)
+        if cache_key:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return cached_data
+
+        # 如果没有命中缓存，则执行查询
+        result = super().query_dataset(params)
+        if cache_key:
+            cache.set(cache_key, result, timeout=settings.VISION_CACHE_TIMEOUT)
+        return result
+
+    def _generate_cache_key(self, variables: dict, panel_id) -> Optional[str]:
+        """根据variables生成缓存键"""
+        cache_key = json.dumps(variables, sort_keys=True) + '_' + panel_id
+        return "variables_based_data_set_query_cache_" + get_md5(cache_key.encode())
 
 
 class VisionHandler:
@@ -137,14 +166,14 @@ class CommonVisionHandler(VisionHandler):
         return api.bk_vision.query_dataset(**params)
 
 
-class SystemDiagnosisVisionHandler(BasicVisionHandlerMixIn, VisionHandler):
+class SystemDiagnosisVisionHandler(VariablesBasedDataSetQueryCacheMixIn, BasicVisionHandlerMixIn, VisionHandler):
     """系统诊断审计报表数据处理器，支持基于独立诊断权限的系统过滤"""
 
     action_key_variable = KeyVariable.SYSTEM_ID
     filter_handler_class = SystemDiagnosisFilterHandler
 
 
-class SingleSystemDiagnosisVisionHandler(BasicVisionHandlerMixIn, VisionHandler):
+class SingleSystemDiagnosisVisionHandler(VariablesBasedDataSetQueryCacheMixIn, BasicVisionHandlerMixIn, VisionHandler):
     """单系统诊断审计报表数据处理器，支持基于管理员权限的系统过滤"""
 
     action_key_variable = KeyVariable.SYSTEM_ID

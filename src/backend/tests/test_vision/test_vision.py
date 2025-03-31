@@ -63,6 +63,11 @@ class TestVision(TestCase):
         "services.web.vision.handlers.query.api.bk_vision.query_dataset",
         mock.Mock(return_value=DATASET_QUERY_RESPONSE['data']),
     )
-    def test_data_set_query(self):
+    @mock.patch("django.core.cache.cache.get")
+    @mock.patch("django.core.cache.cache.set")
+    def test_data_set_query(self, mock_cache_set, mock_cache_get):
+        mock_cache_get.return_value = None
         result = self.resource.vision.query_dataset(**DATASET_QUERY_PARAMS)
         self.assertTrue(result['result'])
+        mock_cache_set.assert_called_once()
+        mock_cache_get.assert_called_once()
