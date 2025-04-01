@@ -109,6 +109,7 @@ class StrategyTableViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_tables),
         ResourceRoute("GET", resource.strategy_v2.get_rt_fields, endpoint="rt_fields"),
+        ResourceRoute("GET", resource.strategy_v2.get_rt_meta, endpoint="rt_meta"),
         ResourceRoute("GET", resource.strategy_v2.bulk_get_rt_fields, endpoint="bulk_rt_fields"),
     ]
 

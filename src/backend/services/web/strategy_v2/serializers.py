@@ -607,6 +607,14 @@ class GetRTFieldsRequestSerializer(serializers.Serializer):
     table_id = serializers.CharField(label=gettext_lazy("Table ID"))
 
 
+class GetRTMetaRequestSerializer(serializers.Serializer):
+    """
+    Get RT Meta
+    """
+
+    table_id = serializers.CharField(label=gettext_lazy("Table ID"))
+
+
 class BulkGetRTFieldsRequestSerializer(serializers.Serializer):
     """
     Bulk Get RT Fields
