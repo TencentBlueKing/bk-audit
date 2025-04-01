@@ -333,6 +333,13 @@ class EditAlertConfigs(BkBaseResource):
     url_keys = ["alert_config_id"]
 
 
+class GetRoleUsersList(BkBaseResource):
+    name = gettext_lazy("列举角色用户")
+    action = "/v3/auth/roles/{role_id}/users/"
+    method = "GET"
+    url_keys = ["role_id"]
+
+
 class QuerySyncResource(BkBaseResource):
     """
     查询数据
