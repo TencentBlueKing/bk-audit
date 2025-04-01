@@ -32,6 +32,9 @@ FIELD_TYPE_DOUBLE = "double"
 FIELD_TYPE_KEYWORD = "keyword"
 FIELD_TYPE_NESTED = "nested"
 
+SPEC_FIELD_TYPE_TIMESTAMP = "timestamp"
+SPEC_FIELD_TYPE_USER = "user"
+
 BKDATA_ES_TYPE_MAP = {
     FIELD_TYPE_INT: FIELD_TYPE_INT,
     FIELD_TYPE_LONG: FIELD_TYPE_LONG,
@@ -115,6 +118,7 @@ USERNAME = Field(
     option=dict(),
     priority_index=96,
     is_index=True,
+    property={'spec_type': SPEC_FIELD_TYPE_USER},
 )
 
 USER_IDENTIFY_TYPE = Field(
@@ -165,6 +169,7 @@ START_TIME = Field(
     is_time=True,
     option=dict(),
     priority_index=91,
+    property={'spec_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 END_TIME = Field(
@@ -176,6 +181,7 @@ END_TIME = Field(
     option=dict(),
     is_required=False,
     priority_index=90,
+    property={'spec_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 BK_APP_CODE = Field(
