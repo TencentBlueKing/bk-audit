@@ -42,7 +42,8 @@ from rest_framework.settings import api_settings
 from apps.audit.resources import AuditMixinResource
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
-from apps.meta.models import DataMap, Tag
+from apps.meta.constants import ConfigLevelChoices
+from apps.meta.models import DataMap, GlobalMetaConfig, Tag
 from apps.meta.utils.fields import (
     ACTION_ID,
     DIMENSION_FIELD_TYPES,
@@ -51,6 +52,7 @@ from apps.meta.utils.fields import (
     PYTHON_TO_ES,
     SNAPSHOT_USER_INFO,
     SNAPSHOT_USER_INFO_HIDE_FIELDS,
+    STANDARD_FIELDS,
     STRATEGY_DISPLAY_FIELDS,
     SYSTEM_ID,
 )
@@ -68,6 +70,8 @@ from services.web.analyze.constants import (
 )
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
+from services.web.databus.constants import COLLECTOR_PLUGIN_ID
+from services.web.databus.models import CollectorPlugin
 from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.models import Risk
@@ -125,6 +129,7 @@ from services.web.strategy_v2.serializers import (
     GetLinkTableResponseSerializer,
     GetRTFieldsRequestSerializer,
     GetRTFieldsResponseSerializer,
+    GetRTMetaRequestSerializer,
     GetStrategyCommonResponseSerializer,
     GetStrategyDisplayInfoRequestSerializer,
     GetStrategyFieldValueRequestSerializer,
@@ -646,7 +651,7 @@ class ListStrategyFields(StrategyV2Base):
                 action_id=action_id,
             )
         if logs.get("results", []):
-            for key, _ in logs["results"][0].get("extend_data", {}).items():
+            for key, __ in logs["results"][0].get("extend_data", {}).items():
                 data.append(
                     {
                         "field_name": f"{EXTEND_DATA.field_name}.{key}",
@@ -799,6 +804,69 @@ class BulkGetRTFields(StrategyV2Base):
             }
             for params, resp in zip(bulk_request_params, bulk_resp)
         ]
+
+
+class GetRTMeta(StrategyV2Base):
+    name = gettext_lazy("Get RT Meta")
+    RequestSerializer = GetRTMetaRequestSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        """获取数据表完整元信息"""
+        result_table_id = validated_request_data["table_id"]
+        result = self.get_meta(result_table_id)
+        result.update(self.get_data_manager(result_table_id))
+        result.update(self.get_last_data(result_table_id))
+        result["formatted_fields"] = self.modify_rt_fields(result["fields"], result_table_id)
+        return result
+
+    def get_meta(self, result_table_id):
+        """获取数据表的元信息。"""
+        return api.bk_base.get_result_table(result_table_id=result_table_id, related=["storages", "fields"])
+
+    def get_data_manager(self, result_table_id):
+        """获取数据表的维护者。"""
+        result = {
+            'managers': api.bk_base.get_role_users_list(role_id="result_table.manager", scope_id=result_table_id),
+            'viewers': api.bk_base.get_role_users_list(role_id="result_table.viewer", scope_id=result_table_id),
+        }
+        return result
+
+    def get_last_data(self, result_table_id):
+        """获取数据表的最新数据。"""
+        resp = api.bk_base.query_sync(
+            sql="select * from {} order by dteventtimestamp desc limit 5".format(result_table_id)
+        )
+        return {"last_data": resp.get("list", [{}])}
+
+    def modify_rt_fields(self, fields, result_table_id):
+        """获取数据表的字段信息。"""
+        result = [
+            {
+                "label": "{}({})".format(field["field_alias"] or field["field_name"], field["field_name"]),
+                "value": field["field_name"],
+                "field_type": field["field_type"],
+                "spec_field_type": field["field_type"],
+            }
+            for field in fields
+            if field["field_name"] not in BKBASE_INTERNAL_FIELD
+        ]
+        collector_plugin_id = GlobalMetaConfig.get(
+            config_key=COLLECTOR_PLUGIN_ID,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key='default',
+            default=None,
+        )
+        if collector_plugin_id:
+            plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
+            standard_fields = {field.field_name: field for field in STANDARD_FIELDS}
+            if result_table_id == plugin.bkbase_table_id:
+                for field in result:
+                    if field["value"] in standard_fields:
+                        field["spec_field_type"] = standard_fields[field["value"]].property.get(
+                            "spec_field_type", standard_fields[field["value"]].field_type
+                        )
+        return result
 
 
 class GetStrategyStatus(StrategyV2Base):
