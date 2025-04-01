@@ -336,6 +336,7 @@ class Field(OperateRecordModel):
     option = models.JSONField(gettext_lazy("jsonschema声明"), null=True, default=dict)
     description = models.TextField(gettext_lazy("描述"), null=True)
     priority_index = models.SmallIntegerField(gettext_lazy("优先指数"), default=0)
+    property = models.JSONField(gettext_lazy("通用属性列"), default=dict)
 
     class Meta:
         verbose_name = gettext_lazy("字段")
