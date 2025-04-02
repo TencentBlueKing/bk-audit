@@ -15,7 +15,6 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-import unittest
 
 from pydantic import ValidationError
 from pypika import Order as pypikaOrder
@@ -32,6 +31,7 @@ from core.sql.exceptions import TableNotRegisteredError
 from core.sql.model import (
     Condition,
     Field,
+    HavingCondition,
     JoinTable,
     LinkField,
     Order,
@@ -253,7 +253,7 @@ class TestSQLGenerator(TestCase):
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
-    def test_group_by_with_having(self):
+    def test_group_by_with_where(self):
         """测试 GROUP BY 子句"""
         config = SqlConfig(
             select_fields=[
@@ -281,6 +281,60 @@ class TestSQLGenerator(TestCase):
         expected_query = (
             'SELECT COUNT("users"."id") "user_id","users"."country" "user_country" '
             'FROM "users" "users" WHERE "users"."country"=\'Ireland\' GROUP BY "users"."country"'
+        )
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
+
+    def test_group_by_with_having(self):
+        """
+        测试在存在聚合字段的情况下，使用 HAVING 子句对聚合结果进行筛选
+        """
+        config = SqlConfig(
+            select_fields=[
+                Field(
+                    table="orders",
+                    raw_name="id",
+                    display_name="count_id",
+                    field_type=FieldType.INT,
+                    aggregate=AggregateType.COUNT,
+                ),
+                Field(
+                    table="orders",
+                    raw_name="status",
+                    display_name="status",
+                    field_type=FieldType.STRING,
+                ),
+            ],
+            from_table=Table(table_name="orders"),
+            group_by=[
+                Field(
+                    table="orders",
+                    raw_name="status",
+                    display_name="status",
+                    field_type=FieldType.STRING,
+                )
+            ],
+            having=HavingCondition(
+                condition=Condition(
+                    field=Field(
+                        table="orders",
+                        raw_name="id",
+                        display_name="count_id",
+                        field_type=FieldType.INT,
+                        aggregate=AggregateType.COUNT,
+                    ),
+                    operator=Operator.GT,
+                    filter=100,
+                )
+            ),
+        )
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
+
+        expected_query = (
+            'SELECT COUNT("orders"."id") "count_id","orders"."status" "status" '
+            'FROM "orders" "orders" '
+            'GROUP BY "orders"."status" '
+            'HAVING COUNT("orders"."id")>100'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -592,6 +646,84 @@ class TestSQLGenerator(TestCase):
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
 
+    def test_multi_join_nested_having(self):
+        """
+        测试多表联表 + 嵌套 HAVING 条件
+        """
+        config = SqlConfig(
+            select_fields=[
+                Field(
+                    table="orders",
+                    raw_name="price",
+                    display_name="total_price",
+                    field_type=FieldType.INT,
+                    aggregate=AggregateType.SUM,
+                ),
+                Field(
+                    table="products",
+                    raw_name="name",
+                    display_name="product_name",
+                    field_type=FieldType.STRING,
+                ),
+            ],
+            from_table=Table(table_name="users"),
+            join_tables=[
+                JoinTable(
+                    join_type=JoinType.INNER_JOIN,
+                    link_fields=[LinkField(left_field="id", right_field="user_id")],
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
+                ),
+                JoinTable(
+                    join_type=JoinType.LEFT_JOIN,
+                    link_fields=[LinkField(left_field="order_id", right_field="id")],
+                    left_table=Table(table_name="orders"),
+                    right_table=Table(table_name="products"),
+                ),
+            ],
+            having=HavingCondition(
+                connector=FilterConnector.AND,
+                conditions=[
+                    HavingCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="orders",
+                                raw_name="price",
+                                display_name="total_price",
+                                field_type=FieldType.INT,
+                                aggregate=AggregateType.SUM,
+                            ),
+                            operator=Operator.GT,
+                            filter=100,
+                        )
+                    ),
+                    HavingCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="orders",
+                                raw_name="price",
+                                display_name="total_price",
+                                field_type=FieldType.INT,
+                                aggregate=AggregateType.SUM,
+                            ),
+                            operator=Operator.LT,
+                            filter=500,
+                        )
+                    ),
+                ],
+            ),
+        )
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
+        expected_query = (
+            'SELECT SUM("orders"."price") "total_price","products"."name" "product_name" '
+            'FROM "users" "users" '
+            'JOIN "orders" "orders" ON "users"."id"="orders"."user_id" '
+            'LEFT JOIN "products" "products" ON "orders"."order_id"="products"."id" GROUP BY "products"."name" '
+            'HAVING SUM("orders"."price")>100 AND SUM("orders"."price")<500'
+        )
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
+
     def test_join_with_aggregation_and_group_by(self):
         """
         测试联表 + 聚合函数 + 显式分组
@@ -631,6 +763,20 @@ class TestSQLGenerator(TestCase):
                     filters=[],
                 )
             ),
+            having=HavingCondition(
+                condition=Condition(
+                    field=Field(
+                        table="orders",
+                        raw_name="price",
+                        display_name="orders_price",
+                        field_type=FieldType.INT,
+                        aggregate=AggregateType.SUM,
+                    ),
+                    operator=Operator.GT,
+                    filter="5",
+                    filters=[],
+                )
+            ),
             group_by=[
                 Field(table="users", raw_name="country", display_name="user_country", field_type=FieldType.STRING),
             ],
@@ -642,7 +788,8 @@ class TestSQLGenerator(TestCase):
             'FROM "users" "users" '
             'JOIN "orders" "orders" ON "users"."id"="orders"."user_id" '
             'WHERE "users"."country"=\'Ireland\' '
-            'GROUP BY "users"."country"'
+            'GROUP BY "users"."country" '
+            'HAVING SUM("orders"."price")>5'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
 
@@ -762,7 +909,3 @@ class TestSQLGenerator(TestCase):
             'JOIN "orders" "order_alias" ON "user_alias"."id"="order_alias"."user_id"'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
-
-
-if __name__ == "__main__":
-    unittest.main()
