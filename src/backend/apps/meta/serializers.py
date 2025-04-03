@@ -66,7 +66,7 @@ class NamespaceSerializer(serializers.ModelSerializer):
 class SystemSerializer(serializers.ModelSerializer):
     class Meta:
         model = System
-        exclude = ["updated_by", "updated_at", "created_by", "created_at"]
+        exclude = ["updated_by", "updated_at", "created_by", "created_at", "auth_token"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -92,7 +92,7 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = System
-        fields = ["namespace", "keyword", "order_field", "order_type", "status"]
+        fields = ["namespace", "keyword", "order_field", "order_type", "status", "source_type"]
 
     def validate(self, attrs: dict) -> dict:
         order_field = attrs.pop("order_field", "")
@@ -140,7 +140,17 @@ class SystemInfoResponseSerializer(SystemSerializer):
 class ResourceTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResourceType
-        fields = ["resource_type_id", "name", "name_en", "sensitivity", "provider_config", "version", "description"]
+        fields = [
+            "resource_type_id",
+            "name",
+            "name_en",
+            "sensitivity",
+            "provider_config",
+            "path",
+            "version",
+            "description",
+            "ancestors",
+        ]
 
 
 class ActionSerializer(serializers.ModelSerializer):

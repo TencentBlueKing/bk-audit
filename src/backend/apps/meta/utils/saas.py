@@ -21,7 +21,7 @@ import json
 import os
 from collections import defaultdict
 
-from django.conf import settings
+from core.utils.tools import is_product
 
 service_addresses = defaultdict(dict)
 if os.getenv("BKPAAS_SERVICE_ADDRESSES_BKSAAS"):
@@ -29,9 +29,7 @@ if os.getenv("BKPAAS_SERVICE_ADDRESSES_BKSAAS"):
     for item in service_addresses_data:
         app_code = item["key"]["bk_app_code"]
         module_name = item["key"]["module_name"]
-        service_addresses[app_code][module_name] = item["value"][
-            "prod" if settings.RUN_MODE == "PRODUCT" else "stag"
-        ].rstrip("/")
+        service_addresses[app_code][module_name] = item["value"]["prod" if is_product() else "stag"].rstrip("/")
 
 
 def get_saas_url(app_code: str, module_name: str = None) -> str:

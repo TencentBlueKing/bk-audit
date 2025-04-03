@@ -78,6 +78,10 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [origin for origin in str(os.getenv("BKAPP_CORS_ALLOWED_ORIGINS", "")).split(",") if origin]
 CSRF_TRUSTED_ORIGINS = [origin for origin in str(os.getenv("BKAPP_CSRF_TRUSTED_ORIGINS", "")).split(",") if origin]
 
+# celery任务本地执行，方便测试和调试
+CELERY_ALWAYS_EAGER = True
+CELERY_EAGER_PROPAGATES_EXCEPTIONS = True
+
 # 多人开发时，无法共享的本地配置可以放到新建的 local_settings.py 文件中
 # 并且把 local_settings.py 加入版本管理忽略文件中
 try:

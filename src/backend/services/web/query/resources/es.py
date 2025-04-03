@@ -22,10 +22,10 @@ from django.utils.translation import gettext_lazy
 from api.bk_log.constants import INDEX_SET_ID
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from apps.meta.permissions import SearchLogPermission
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from core.exceptions import PermissionException
-from core.permissions import SearchLogPermission
 from services.web.databus.constants import DEFAULT_STORAGE_CONFIG_KEY
 from services.web.query.serializers import (
     EsQueryAttrSerializer,

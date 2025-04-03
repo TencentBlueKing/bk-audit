@@ -15,22 +15,25 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
 import uuid
 from collections import defaultdict
-from typing import Union
+from typing import List, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from blueapps.utils.logger import logger
-from django.db import models
+from django.conf import settings
+from django.db import models, transaction
+from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy
 
 from apps.exceptions import MetaConfigNotExistException
 from apps.meta.constants import (
     GLOBAL_CONFIG_LEVEL_INSTANCE,
+    IAM_MANAGER_ROLE,
     ConfigLevelChoices,
     SystemDiagnosisPushStatusEnum,
+    SystemSourceTypeEnum,
 )
 from core.models import OperateRecordModel, SoftDeleteModel, SoftDeleteModelManager
 
@@ -113,21 +116,89 @@ class System(OperateRecordModel):
     """
 
     system_id = models.CharField(gettext_lazy("系统ID"), max_length=64, unique=True, null=False)
+    source_type = models.CharField(
+        gettext_lazy("系统来源类型"),
+        max_length=32,
+        choices=SystemSourceTypeEnum.choices,
+        default=SystemSourceTypeEnum.IAM_V3.value,
+    )
+    instance_id = models.CharField(gettext_lazy("系统实例ID"), max_length=32, null=False, default="")
     namespace = models.CharField(gettext_lazy("namespace"), max_length=32, db_index=True)
-    name = models.CharField(gettext_lazy("名称"), max_length=64, null=True)
-    name_en = models.CharField(gettext_lazy("英文名称"), max_length=64, null=True)
-    clients = models.JSONField(gettext_lazy("客户端"), max_length=64, null=True)
-    provider_config = models.JSONField(gettext_lazy("系统配置"), null=True)
-    logo_url = models.CharField(gettext_lazy("应用图标"), max_length=255, null=True)
-    system_url = models.CharField(gettext_lazy("访问地址"), max_length=255, null=True)
-    description = models.TextField(gettext_lazy("应用描述"), null=True)
+    name = models.CharField(gettext_lazy("名称"), max_length=64, null=True, blank=True)
+    name_en = models.CharField(gettext_lazy("英文名称"), max_length=64, null=True, blank=True)
+    clients = models.JSONField(gettext_lazy("客户端"), null=True, blank=True)
+    description = models.TextField(gettext_lazy("应用描述"), null=True, blank=True)
+    provider_config = models.JSONField(
+        gettext_lazy("系统配置"), null=True, default=dict, blank=True, help_text=gettext_lazy("IAM V3")
+    )
+    callback_url = models.CharField(gettext_lazy("回调地址"), max_length=255, null=True, blank=True)
+    auth_token = models.CharField(gettext_lazy("系统鉴权 Token"), max_length=64, null=True, blank=True)
+    managers = models.JSONField(gettext_lazy("系统管理员"), default=list, blank=True)
+    # paas 信息
+    logo_url = models.CharField(gettext_lazy("应用图标"), max_length=255, null=True, blank=True)
+    system_url = models.CharField(gettext_lazy("访问地址"), max_length=255, null=True, blank=True)
+    # 系统诊断
     enable_system_diagnosis_push = models.BooleanField(gettext_lazy("是否开启系统诊断推送"), default=False)
-    system_diagnosis_extra = models.JSONField(gettext_lazy("系统诊断额外信息"), default=dict, blank=True, null=True)
+    system_diagnosis_extra = models.JSONField(gettext_lazy("系统诊断额外信息"), default=dict, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("接入系统")
         verbose_name_plural = verbose_name
         ordering = ["-id"]
+        unique_together = [["source_type", "instance_id"]]
+
+    @classmethod
+    def build_system_id(cls, source_type: str, instance_id: str) -> str:
+        """
+        根据 source_type 和 instance_id 构造系统ID
+        """
+
+        # 兼容旧版;IAM v3 system_id 和 instance_id 相同
+        if source_type == SystemSourceTypeEnum.IAM_V3.value:
+            return instance_id
+        return f"{source_type}_{instance_id}"
+
+    @cached_property
+    def managers_list(self) -> List[str]:
+        """
+        获取管理员列表
+        """
+
+        if self.managers:
+            return list(self.managers)
+        elif self.source_type == SystemSourceTypeEnum.IAM_V3.value:
+            return list(
+                SystemRole.objects.filter(system_id=self.system_id, role=IAM_MANAGER_ROLE).values_list(
+                    "username", flat=True
+                )
+            )
+        return []
+
+    @cached_property
+    def base64_token(self):
+        """
+        获取 base64 编码的 token
+        """
+
+        from apps.permission.handlers.permission import FetchInstancePermission
+
+        return FetchInstancePermission.build_auth(settings.FETCH_INSTANCE_USERNAME, self.auth_token)
+
+    def save(self, update_record=True, *args, **kwargs):
+        self.system_id = self.build_system_id(self.source_type, self.instance_id)
+        super().save(update_record=update_record, *args, **kwargs)
+
+    @classmethod
+    @transaction.atomic
+    def bulk_delete_with_resources(cls, system_ids: List[str]):
+        """
+        批量删除系统及其资源
+        """
+
+        ResourceType.objects.filter(system_id__in=system_ids).delete()
+        Action.objects.filter(system_id__in=system_ids).delete()
+        SystemRole.objects.filter(system_id__in=system_ids).delete()
+        System.objects.filter(system_id__in=system_ids).delete()
 
 
 class SystemDiagnosisConfig(OperateRecordModel):
@@ -163,7 +234,7 @@ class SystemInstance:
 
 class SystemRole(OperateRecordModel):
     """
-    接入系统角色: 从 IAM 同步
+    接入系统角色: 从 IAM V3 同步
     目前仅有接入系统管理员角色，系统管理直接复用 IAM 管理员角色，不独立接入 IAM
     """
 
@@ -185,11 +256,15 @@ class ResourceType(OperateRecordModel):
     system_id = models.CharField(gettext_lazy("系统ID"), max_length=64, db_index=True, null=False)
     resource_type_id = models.CharField(gettext_lazy("资源类型ID"), max_length=64, db_index=True, null=False)
     name = models.CharField(gettext_lazy("名称"), max_length=64)
-    name_en = models.CharField(gettext_lazy("英文名称"), max_length=64)
-    sensitivity = models.IntegerField(gettext_lazy("敏感等级"))
-    provider_config = models.JSONField(gettext_lazy("资源类型配置"), null=True)
-    version = models.IntegerField(gettext_lazy("版本"))
+    name_en = models.CharField(gettext_lazy("英文名称"), max_length=64, null=True, blank=True)
+    sensitivity = models.IntegerField(gettext_lazy("敏感等级"), default=0)
+    provider_config = models.JSONField(
+        gettext_lazy("资源类型配置"), null=True, default=dict, blank=True, help_text=gettext_lazy("IAM V3")
+    )
+    path = models.CharField(gettext_lazy("资源路径"), max_length=255, default="")
+    version = models.IntegerField(gettext_lazy("版本"), default=0, blank=True)
     description = models.TextField(gettext_lazy("描述信息"), blank=True, null=True)
+    ancestors = models.JSONField(gettext_lazy("父资源类型"), default=list, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("资源类型")
@@ -204,6 +279,11 @@ class ResourceType(OperateRecordModel):
         except cls.DoesNotExist:
             return default or instance_id
 
+    def resource_request_url(self, system: System = None) -> str:
+        if not system:
+            system = System.objects.filter(system_id=self.system_id).first()
+        return system.callback_url.rstrip("/") + "/" + self.path.lstrip("/")
+
 
 class Action(OperateRecordModel):
     """
@@ -213,11 +293,12 @@ class Action(OperateRecordModel):
     system_id = models.CharField(gettext_lazy("系统ID"), max_length=64, db_index=True, null=False)
     action_id = models.CharField(gettext_lazy("操作ID"), max_length=64, null=True)
     name = models.CharField(gettext_lazy("名称"), max_length=64)
-    name_en = models.CharField(gettext_lazy("英文名称"), max_length=64)
-    sensitivity = models.IntegerField(gettext_lazy("敏感等级"))
-    type = models.CharField(gettext_lazy("操作类型"), max_length=64)
-    version = models.IntegerField(gettext_lazy("版本"))
+    name_en = models.CharField(gettext_lazy("英文名称"), max_length=64, null=True, blank=True)
+    sensitivity = models.IntegerField(gettext_lazy("敏感等级"), default=0)
+    type = models.CharField(gettext_lazy("操作类型"), max_length=64, blank=True, null=True)
+    version = models.IntegerField(gettext_lazy("版本"), default=0, blank=True)
     description = models.TextField(gettext_lazy("描述信息"), blank=True, null=True)
+    resource_type_ids = models.JSONField(gettext_lazy("资源类型ID"), default=list, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("操作")
