@@ -35,7 +35,7 @@ class FetchInstanceSerializer(serializers.Serializer):
 class FetchResourceTypeSerializer(FetchInstanceSerializer, serializers.ModelSerializer):
     class Meta:
         model = ResourceType
-        exclude = ["provider_config"]
+        exclude = ["provider_config", "path"]
 
 
 class FetchActionSerializer(FetchInstanceSerializer, serializers.ModelSerializer):

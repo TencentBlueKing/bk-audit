@@ -43,7 +43,9 @@ class TestUpdateSystemDiagnosisPush(TestCase):
         """
         场景1：系统未开启诊断推送，且没有关联配置（或配置状态非PUSH），应跳过更新
         """
-        system = System.objects.create(system_id="system_skip", name="System Skip", enable_system_diagnosis_push=False)
+        system = System.objects.create(
+            instance_id="system_skip", name="System Skip", enable_system_diagnosis_push=False
+        )
         # 未创建 SystemDiagnosisConfig
         with mock.patch.object(SystemDiagnosisPushHandler, "change_push_status") as mock_change:
             update_system_diagnosis_push()
@@ -58,7 +60,7 @@ class TestUpdateSystemDiagnosisPush(TestCase):
         """
         场景2：系统开启了诊断推送，则应调用更新接口，传入True
         """
-        System.objects.create(system_id="system_enabled", name="System Enabled", enable_system_diagnosis_push=True)
+        System.objects.create(instance_id="system_enabled", name="System Enabled", enable_system_diagnosis_push=True)
         # 模拟 handler.change_push_status 正常返回 True
         with mock.patch.object(SystemDiagnosisPushHandler, "change_push_status", return_value=True) as mock_change:
             update_system_diagnosis_push()
@@ -70,7 +72,7 @@ class TestUpdateSystemDiagnosisPush(TestCase):
         场景3：系统未开启推送，但存在关联配置且状态为PUSH，此时也需要更新（以系统实际状态为准，参数为False）
         """
         system = System.objects.create(
-            system_id="system_config_push", name="System Config Push", enable_system_diagnosis_push=False
+            instance_id="system_config_push", name="System Config Push", enable_system_diagnosis_push=False
         )
         # 创建关联的配置，push_status 为 PUSH
         SystemDiagnosisConfig.objects.create(
@@ -88,7 +90,7 @@ class TestUpdateSystemDiagnosisPush(TestCase):
         场景4：当 handler.change_push_status 调用时发生异常，定时任务应捕获异常并记录错误日志，而不向上抛出异常
         """
         system = System.objects.create(
-            system_id="system_exception", name="System Exception", enable_system_diagnosis_push=True
+            instance_id="system_exception", name="System Exception", enable_system_diagnosis_push=True
         )
         with mock.patch.object(
             SystemDiagnosisPushHandler, "change_push_status", side_effect=Exception("Test exception")
@@ -109,9 +111,9 @@ class TestUpdateSystemDiagnosisPush(TestCase):
          - system2：开启推送 → 应更新，参数True
          - system3：未开启推送但存在配置且状态为PUSH → 应更新，参数False
         """
-        system1 = System.objects.create(system_id="system1", name="System1", enable_system_diagnosis_push=False)
-        System.objects.create(system_id="system2", name="System2", enable_system_diagnosis_push=True)
-        system3 = System.objects.create(system_id="system3", name="System3", enable_system_diagnosis_push=False)
+        system1 = System.objects.create(instance_id="system1", name="System1", enable_system_diagnosis_push=False)
+        System.objects.create(instance_id="system2", name="System2", enable_system_diagnosis_push=True)
+        system3 = System.objects.create(instance_id="system3", name="System3", enable_system_diagnosis_push=False)
         SystemDiagnosisConfig.objects.create(
             system_id=system3.system_id,
             push_uid="dummy_uid",

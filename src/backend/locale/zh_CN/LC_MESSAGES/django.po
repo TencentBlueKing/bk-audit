@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-24 20:40+0800\n"
+"POT-Creation-Date: 2025-04-02 21:01+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -191,6 +191,9 @@ msgstr "获取IAM系统角色信息"
 
 msgid "获取IAM系统信息"
 msgstr "获取IAM系统信息"
+
+msgid "获取IAM系统详情"
+msgstr "获取IAM系统详情"
 
 msgid "服务列表查询"
 msgstr "服务列表查询"
@@ -1032,6 +1035,15 @@ msgstr "暂停"
 msgid "失败"
 msgstr "失败"
 
+msgid "权限中心V3"
+msgstr "权限中心V3"
+
+msgid "权限中心V4"
+msgstr "权限中心V4"
+
+msgid "审计中心"
+msgstr "审计中心"
+
 msgid "Namespace不存在"
 msgstr "Namespace不存在"
 
@@ -1068,14 +1080,35 @@ msgstr "namespace"
 msgid "系统ID"
 msgstr "系统ID"
 
+msgid "系统来源类型"
+msgstr "系统来源类型"
+
+msgid "系统实例ID"
+msgstr "系统实例ID"
+
 msgid "英文名称"
 msgstr "英文名称"
 
 msgid "客户端"
 msgstr "客户端"
 
+msgid "应用描述"
+msgstr "应用描述"
+
 msgid "系统配置"
 msgstr "系统配置"
+
+msgid "IAM V3"
+msgstr "权限中心V3"
+
+msgid "回调地址"
+msgstr "回调地址"
+
+msgid "系统鉴权 Token"
+msgstr "系统鉴权 Token"
+
+msgid "系统管理员"
+msgstr "系统管理员"
 
 msgid "应用图标"
 msgstr "应用图标"
@@ -1083,11 +1116,11 @@ msgstr "应用图标"
 msgid "访问地址"
 msgstr "访问地址"
 
-msgid "应用描述"
-msgstr "应用描述"
-
 msgid "是否开启系统诊断推送"
 msgstr "是否开启系统诊断推送"
+
+msgid "系统诊断额外信息"
+msgstr "系统诊断额外信息"
 
 msgid "接入系统"
 msgstr "接入系统"
@@ -1125,11 +1158,17 @@ msgstr "敏感等级"
 msgid "资源类型配置"
 msgstr "资源类型配置"
 
+msgid "资源路径"
+msgstr "资源路径"
+
 msgid "版本"
 msgstr "版本"
 
 msgid "描述信息"
 msgstr "描述信息"
+
+msgid "父资源类型"
+msgstr "父资源类型"
 
 msgid "资源类型"
 msgstr "资源类型"
@@ -1795,9 +1834,6 @@ msgstr "动作ID不存在：%(action_id)s"
 msgid "审计日志检索"
 msgstr "审计日志检索"
 
-msgid "高敏感资源审计检索"
-msgstr "高敏感资源审计检索"
-
 msgid "审计敏感信息查看"
 msgstr "审计敏感信息查看"
 
@@ -1827,21 +1863,6 @@ msgstr "数据存储删除"
 
 msgid "敏感信息对象列表"
 msgstr "敏感信息对象列表"
-
-msgid "敏感信息对象查看"
-msgstr "敏感信息对象查看"
-
-msgid "敏感信息对象创建"
-msgstr "敏感信息对象创建"
-
-msgid "敏感信息对象编辑"
-msgstr "敏感信息对象编辑"
-
-msgid "敏感信息对象删除"
-msgstr "敏感信息对象删除"
-
-msgid "全局设置查看"
-msgstr "全局设置查看"
 
 msgid "全局设置管理"
 msgstr "全局设置管理"
@@ -1902,9 +1923,6 @@ msgstr "编辑处理套餐"
 
 msgid "新建通知组"
 msgstr "新建通知组"
-
-msgid "编辑通知组"
-msgstr "编辑通知组"
 
 msgid "编辑通知组(V2)"
 msgstr "编辑通知组(V2)"
@@ -2024,9 +2042,6 @@ msgstr "用户管理"
 
 msgid "获取单个用户的leader信息"
 msgstr "获取单个用户的leader信息"
-
-msgid "审计中心"
-msgstr "审计中心"
 
 msgid "升序"
 msgstr "升序"

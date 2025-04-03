@@ -35,16 +35,6 @@ class ActionEnum:
         version=1,
     )
 
-    SEARCH_SENSITIVE_EVENT = ActionMeta(
-        id="search_sensitive_event",
-        name=gettext("高敏感资源审计检索"),
-        name_en="Search High Sensitive Resource Event",
-        type="view",
-        related_resource_types=[],
-        related_actions=[],
-        version=1,
-    )
-
     ACCESS_AUDIT_SENSITIVE_INFO = ActionMeta(
         id="access_audit_sensitive_info",
         name=gettext("审计敏感信息查看"),
@@ -132,48 +122,11 @@ class ActionEnum:
     )
 
     # 敏感对象管理
-
     LIST_SENSITIVE_OBJECT = ActionMeta(
         id="list_sensitive_object",
         name=gettext("敏感信息对象列表"),
         name_en="List SENSITIVE OBJECT",
         type="view",
-        related_resource_types=[],
-        related_actions=[],
-        version=1,
-    )
-    VIEW_SENSITIVE_OBJECT = ActionMeta(
-        id="view_sensitive_object",
-        name=gettext("敏感信息对象查看"),
-        name_en="View Sensitive Object",
-        type="view",
-        related_resource_types=[],
-        related_actions=[],
-        version=1,
-    )
-    CREATE_SENSITIVE_OBJECT = ActionMeta(
-        id="create_sensitive_object",
-        name=gettext("敏感信息对象创建"),
-        name_en="Create Sensitive Object",
-        type="create",
-        related_resource_types=[],
-        related_actions=[],
-        version=1,
-    )
-    EDIT_SENSITIVE_OBJECT = ActionMeta(
-        id="edit_sensitive_object",
-        name=gettext("敏感信息对象编辑"),
-        name_en="Edit Sensitive Object",
-        type="edit",
-        related_resource_types=[],
-        related_actions=[],
-        version=1,
-    )
-    DELETE_SENSITIVE_OBJECT = ActionMeta(
-        id="delete_sensitive_object",
-        name=gettext("敏感信息对象删除"),
-        name_en="Delete Sensitive Object",
-        type="delete",
         related_resource_types=[],
         related_actions=[],
         version=1,
@@ -381,30 +334,12 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
-    EDIT_NOTICE_GROUP = ActionMeta(
-        id="edit_notice_group",
-        name=gettext("编辑通知组"),
-        name_en="Edit Notice Group",
-        type="edit",
-        related_resource_types=[],
-        related_actions=[],
-        version=1,
-    )
     EDIT_NOTICE_GROUP_V2 = ActionMeta(
         id="edit_notice_group_v2",
         name=gettext("编辑通知组(V2)"),
         name_en="Edit Notice Group V2",
         type="edit",
         related_resource_types=[ResourceEnum.NOTICE_GROUP],
-        related_actions=[],
-        version=1,
-    )
-    DELETE_NOTICE_GROUP = ActionMeta(
-        id="delete_notice_group",
-        name=gettext("删除通知组"),
-        name_en="Delete Notice Group",
-        type="delete",
-        related_resource_types=[],
         related_actions=[],
         version=1,
     )
