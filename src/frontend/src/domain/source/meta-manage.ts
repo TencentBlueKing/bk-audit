@@ -45,6 +45,16 @@ class MetaManage extends ModuleBase {
       payload,
     });
   }
+  // 获取全局字典
+  getGlobalChoices(params: Record<string, any>, payload = {} as IRequestPayload) {
+    return Request.get<Record<string, Array<{
+      id: string,
+      name: string
+    }>>>(`${this.module}/globals/global_choices/`, {
+      params,
+      payload,
+    });
+  }
   // 根据特性id获取特性开关，用于判断是否显示按钮、菜单等
   getFeature(params: {feature_id: string}) {
     return Request.get<Record<'enabled', boolean>>(`/api/v1/feature/${params.feature_id}/`);

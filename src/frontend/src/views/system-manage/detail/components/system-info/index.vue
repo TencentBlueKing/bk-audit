@@ -53,6 +53,14 @@
             :max="3" />
         </div>
       </div>
+      <div class="item">
+        <div class="item-title">
+          {{ t('系统来源') }}
+        </div>
+        <div>
+          {{ GlobalChoices.meta_system_source_type.find(item => item.id === data.source_type)?.name || '--' }}
+        </div>
+      </div>
       <div class="item app-description">
         <div class="item-title">
           {{ t('系统描述') }}
@@ -91,6 +99,13 @@
       id: route.params.id,
     },
     defaultValue: new SystemModel(),
+    manual: true,
+  });
+
+  const {
+    data: GlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
     manual: true,
   });
 

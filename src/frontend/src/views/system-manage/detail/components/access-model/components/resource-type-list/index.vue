@@ -82,6 +82,13 @@
       ),
     },
     {
+      label: () => t('父资源名称'),
+      width: '200px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+        data.ancestors?.join('，') || '--'
+      ),
+    },
+    {
       label: () => t('敏感等级'),
       width: '200px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
@@ -93,7 +100,7 @@
       minWidth: 200,
       showOverflowTooltip: true,
       render: ({ data }: {data: SystemResourceTypeModel}) => (
-        `${systemDetailData.value.provider_config.host}${data.provider_config.path} `
+        `${systemDetailData.value.callback_url}${data.path} `
       ),
     },
     {
