@@ -19,6 +19,7 @@ const NODATA = 'nodata';
 const UNSET = 'unset';
 export default class System {
   id: number;
+  callback_url: string;
   clients: string;
   description: string;
   logo_url: string;
@@ -30,6 +31,7 @@ export default class System {
     healthz: string
     host: string
   };
+  source_type: string;
   system_id: string;
   system_url: string;
 
@@ -50,6 +52,7 @@ export default class System {
 
   constructor(payload = {} as System) {
     this.id = payload.id;
+    this.callback_url = payload.callback_url;
     this.clients = payload.clients;
     this.description = payload.description;
     this.logo_url = payload.logo_url;
@@ -62,6 +65,7 @@ export default class System {
     this.permission = payload.permission;
     this.status_msg = payload.status_msg;
     this.status = payload.status;
+    this.source_type = payload.source_type;
     this.last_time = payload.last_time;
 
     this.provider_config = this.initProviderConfig(payload.provider_config);
