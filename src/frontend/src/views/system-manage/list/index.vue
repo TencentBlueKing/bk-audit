@@ -52,6 +52,8 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
+  import useRequest from '@/hooks/use-request';
+
   enum FullEnum {
     FULL = 'full',
     FUZZY = 'fuzzy'
@@ -106,6 +108,27 @@
       render: ({ data }: {data: SyetemModel}) => <EditTag data={data.managers} key={data.id}/>,
     },
     {
+      label: () => t('系统来源'),
+      sort: 'custom',
+      filter: {
+        list: [
+          {
+            text: t('权限中心V3'),
+            value: 'iam_v3',
+          },
+          {
+            text: t('权限中心V4'),
+            value: 'iam_v4',
+          },
+          {
+            text: t('审计中心'),
+            value: 'bk_audit',
+          },
+        ],
+      },
+      render: ({ data }: {data: SyetemModel}) => (GlobalChoices.value.meta_system_source_type.find(item => item.id === data.source_type)?.name || '--'),
+    },
+    {
       label: () => t('数据上报状态'),
       sort: 'custom',
       width: '200px',
@@ -156,6 +179,13 @@
 
   const searckKey = ref('');
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
+
+  const {
+    data: GlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    manual: true,
+  });
 
   // 搜索
   const handleSearch = (keyword: string|number) => {
