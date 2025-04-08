@@ -84,9 +84,13 @@
     {
       label: () => t('父资源名称'),
       width: '200px',
-      render: ({ data }: {data: SystemResourceTypeModel}) => (
-        data.ancestors?.join('，') || '--'
-      ),
+      render: ({ data }: {data: SystemResourceTypeModel}) => {
+        const ancestorNames = data.ancestors?.map((ancestorId) => {
+          const ancestor = resourceTypeList.value.find(item => item.resource_type_id === ancestorId);
+          return ancestor?.name || ancestorId;
+        });
+        return ancestorNames?.join(' / ') || '--';
+      },
     },
     {
       label: () => t('敏感等级'),
