@@ -126,6 +126,9 @@
           },
         ],
       },
+      filterScope: SortScope.ALL,
+      match: FullEnum.FUZZY,
+      field: () => 'source_type',
       render: ({ data }: {data: SyetemModel}) => (GlobalChoices.value.meta_system_source_type.find(item => item.id === data.source_type)?.name || '--'),
     },
     {
