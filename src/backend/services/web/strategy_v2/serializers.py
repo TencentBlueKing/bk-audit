@@ -615,6 +615,15 @@ class GetRTMetaRequestSerializer(serializers.Serializer):
     table_id = serializers.CharField(label=gettext_lazy("Table ID"))
 
 
+class GetRTLastDataRequestSerializer(serializers.Serializer):
+    """
+    Get RT Last Data
+    """
+
+    table_id = serializers.CharField(label=gettext_lazy("Table ID"))
+    limit = serializers.IntegerField(label=gettext_lazy("Limit"), required=False, default=5)
+
+
 class BulkGetRTFieldsRequestSerializer(serializers.Serializer):
     """
     Bulk Get RT Fields
@@ -637,7 +646,9 @@ class GetRTFieldsResponseSerializer(serializers.Serializer):
 
     label = serializers.CharField(label=gettext_lazy("Label"))
     value = serializers.CharField(label=gettext_lazy("value"))
+    alias = serializers.CharField(label=gettext_lazy("Alias"))
     field_type = serializers.CharField(label=gettext_lazy("Field Type"))
+    spec_field_type = serializers.CharField(label=gettext_lazy("Spec Field Type"))
 
 
 class BulkGetRTFieldsResponseSerializer(serializers.Serializer):
