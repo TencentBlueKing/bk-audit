@@ -20,6 +20,7 @@ import abc
 import datetime
 import json
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import cached_property
 from typing import List, Optional
 
@@ -68,6 +69,7 @@ from services.web.analyze.constants import (
 )
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
+from services.web.analyze.utils import is_asset
 from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.models import Risk
@@ -124,6 +126,7 @@ from services.web.strategy_v2.serializers import (
     GetLinkTableResponseSerializer,
     GetRTFieldsRequestSerializer,
     GetRTFieldsResponseSerializer,
+    GetRTLastDataRequestSerializer,
     GetRTMetaRequestSerializer,
     GetStrategyCommonResponseSerializer,
     GetStrategyDisplayInfoRequestSerializer,
@@ -647,7 +650,7 @@ class ListStrategyFields(StrategyV2Base):
                 action_id=action_id,
             )
         if logs.get("results", []):
-            for key, __ in logs["results"][0].get("extend_data", {}).items():
+            for key, _ in logs["results"][0].get("extend_data", {}).items():
                 data.append(
                     {
                         "field_name": f"{EXTEND_DATA.field_name}.{key}",
@@ -798,14 +801,23 @@ class BulkGetRTFields(StrategyV2Base):
 class GetRTMeta(StrategyV2Base):
     name = gettext_lazy("Get RT Meta")
     RequestSerializer = GetRTMetaRequestSerializer
-    many_response_data = True
 
     def perform_request(self, validated_request_data):
         """获取数据表完整元信息"""
         result_table_id = validated_request_data["table_id"]
-        result = self.get_meta(result_table_id)
-        result.update(self.get_data_manager(result_table_id))
-        result.update(self.get_last_data(result_table_id))
+        futures = []
+
+        # 创建一个线程池来并发执行任务
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures.append(executor.submit(self.get_meta, result_table_id))
+            futures.append(executor.submit(self.get_data_manager, result_table_id))
+            futures.append(executor.submit(self.get_sensitivity_info, result_table_id))
+
+            # 获取并合并结果
+            result = {}
+            for future in as_completed(futures):
+                result.update(future.result())
+
         result["formatted_fields"] = enhance_rt_fields(result["fields"], result_table_id)
         return result
 
@@ -821,11 +833,40 @@ class GetRTMeta(StrategyV2Base):
         }
         return result
 
-    def get_last_data(self, result_table_id):
-        """获取数据表的最新数据。"""
-        resp = api.bk_base.query_sync(
-            sql="select * from {} order by dteventtimestamp desc limit 5".format(result_table_id)
-        )
+    def get_sensitivity_info(self, result_table_id):
+        return {
+            "sensitivity_info": api.bk_base.get_sensitivity_info_via_dataset(
+                data_set_type="result_table", data_set_id=result_table_id
+            )
+        }
+
+
+class GetRTLastData(StrategyV2Base):
+    name = gettext_lazy("Get RT Last Data")
+    RequestSerializer = GetRTLastDataRequestSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        """获取数据表的最新数据"""
+        result_table_id = validated_request_data["table_id"]
+        limit = validated_request_data['limit']
+        result = self.get_last_data(result_table_id, limit)
+        return result
+
+    def get_last_data(self, result_table_id, limit):
+        """获取数据表的最新数据"""
+        today = datetime.datetime.now().strftime('%Y%m%d')
+        rt_info = api.bk_base.get_result_table(result_table_id=result_table_id)
+        if not is_asset(rt_info):
+            # 非维表，添加过滤条件 thedate = current_date
+            sql = (
+                f"SELECT * FROM {result_table_id} WHERE thedate = {today} ORDER BY dteventtimestamp DESC LIMIT {limit}"
+            )
+        else:
+            # 维表，直接查询
+            sql = f"SELECT * FROM {result_table_id} LIMIT {limit}"
+
+        resp = api.bk_base.query_sync(sql=sql)
         return {"last_data": resp.get("list", [{}])}
 
 

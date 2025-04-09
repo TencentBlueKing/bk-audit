@@ -178,6 +178,7 @@ class SQLGenerator:
         if condition.field.aggregate:
             # 如果条件字段是聚合函数，则使用聚合函数处理
             field = self._build_aggregate(condition.field)
+            # 采用聚合函数规定的类型 or 字段本身类型
             filter_type = (condition.field.aggregate.result_data_type or condition.field.field_type).python_type
         else:
             # 否则，使用普通字段处理
