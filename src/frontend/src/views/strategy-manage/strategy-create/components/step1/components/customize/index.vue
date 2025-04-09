@@ -41,46 +41,55 @@
             ">
             {{ t('数据源') }}
           </span>
-          <div class="select-group">
+          <div
+            class="select-group"
+            :class="formData.configs.config_type === 'EventLog' ? 'select-group-grid' : ''">
             <bk-form-item
+              v-if="allConfigTypeTable.length"
               class="no-label"
               label-width="0"
               property="configs.config_type">
-              <bk-select
-                v-model="configType"
-                :clearable="Boolean(configType)"
+              <bk-cascader
+                v-slot="{data, node}"
+                v-model="tableId"
+                :filter-method="configTypeTableFilter"
                 filterable
-                :placeholder="t('请选择数据源类型')"
-                @change="handleDataSourceType">
-                <bk-option
-                  v-for="item in ruleAuditConfigType"
-                  :key="item.value"
-                  :label="item.label"
-                  :value="item.value" />
-              </bk-select>
+                id-key="value"
+                :list="allConfigTypeTable"
+                name-key="label"
+                placeholder="搜索数据名称、别名、数据ID等"
+                trigger="hover"
+                @change="handleChangeTable">
+                <p
+                  v-bk-tooltips="{
+                    disabled: !data.disabled || !data.leaf,
+                    content: node.pathNames[0] === '资产数据'
+                      ? t('该系统暂未上报资源数据')
+                      : t('审计无权限，请前往BKBase申请授权'),
+                    delay: 400,
+                  }">
+                  {{ node.name }}
+                </p>
+              </bk-cascader>
             </bk-form-item>
-            <!-- 四种数据源，对应的输入类型 -->
-            <component
-              :is="
-                configTypeMap[formData.configs.config_type] || EventLogComponent
-              "
-              ref="configRef"
-              v-model:data-source="formData.configs.data_source"
-              :has-data="hasData"
-              :source-type="formData.configs.config_type"
-              :table-data="tableData"
-              @reset-config="handleResetConfig"
-              @update-link-data-detail="handleUpdateLinkDataDetail" />
+            <template v-if="formData.configs.config_type === 'EventLog'">
+              <event-log-component
+                ref="eventLogRef"
+                @update-system="handleUpdateSystem" />
+            </template>
           </div>
           <!-- 联表详情 -->
           <link-data-detail-component
-            v-if="
-              formData.configs.data_source.link_table &&
-                formData.configs.data_source.link_table.uid
+            v-if="formData.configs.data_source.link_table
+              && formData.configs.data_source.link_table.uid
             "
             :join-type-list="joinTypeList"
             :link-data-detail="linkDataDetail"
             @refresh-link-data="handleRefreshLinkData" />
+          <!-- 其他数据表详情 -->
+          <other-table-detail-component
+            v-if="formData.configs.data_source.rt_id.length"
+            :rt-id="formData.configs.data_source.rt_id" />
         </bk-form-item>
         <bk-form-item
           label=""
@@ -252,10 +261,15 @@
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
   import _ from 'lodash';
-  import { computed, h, ref, watch } from 'vue';
+  import {
+    computed,
+    h,
+    ref,
+    watch  } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
+  import LinkDataManageService from '@service/link-data-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
@@ -264,12 +278,10 @@
   import StrategyModel from '@model/strategy/strategy';
 
   import ExpectedResults from './components/expected-results/index.vue';
+  import LinkDataDetailComponent from './components/link-table-detail/index.vue';
+  import OtherTableDetailComponent from './components/other-table-detail/index.vue';
   import RulesComponent from './components/rules/index.vue';
   import EventLogComponent from './components/scheme-input/event-log.vue';
-  import LinkDataDetailComponent from './components/scheme-input/link-table/detail.vue';
-  import LinkDataComponent from './components/scheme-input/link-table/index.vue';
-  import OtherDataComponent from './components/scheme-input/other.vue';
-  import ResourceDataComponent from './components/scheme-input/resource-data.vue';
 
   import useRequest from '@/hooks/use-request';
 
@@ -307,6 +319,19 @@
       }
     }
   }
+  interface ConfigTypeTableItem {
+    label: string
+    value: string
+    children: Array<{
+      label: string
+      value: string
+      version?: number
+      children?: Array<{
+        label: string
+        value: string
+      }>
+    }>
+  }
   interface Emits {
     (e: 'updateFormData', value: IFormData): void
   }
@@ -316,36 +341,20 @@
   interface Props {
     editData: StrategyModel
   }
-
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
   const route = useRoute();
-  const configRef = ref();
   const rulesComponentRef = ref();
   const expectedResultsRef = ref();
-  const linkDataDetail = ref<LinkDataDetailModel>(new LinkDataDetailModel());
+  const eventLogRef = ref();
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
 
-  const configTypeMap: Record<string, any> = {
-    EventLog: EventLogComponent,
-    BuildIn: ResourceDataComponent,
-    BizRt: OtherDataComponent,
-    LinkTable: LinkDataComponent,
-  };
-
-  const initDataSource: IFormData['configs']['data_source'] = {
-    system_ids: [],
-    source_type: '',
-    rt_id: [],
-    link_table: {
-      uid: '',
-      version: 0,
-    },
-  };
+  const tableId = ref<Array<string>>([]);
+  const previousTableId = ref<Array<string>>([]);
 
   const formData = ref<IFormData>({
     configs: {
@@ -370,11 +379,14 @@
       },
     },
   });
-  const ruleAuditConfigType = ref<Array<Record<string, any>>>([]);
+  const ruleAuditConfigType = ref<Array<{
+    label: string,
+    value: string
+  }>>([]);
   const aggregateList = ref<Array<Record<string, any>>>([]);
-  const configType = ref('');
   const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
   const joinTypeList = ref<Array<Record<string, any>>>([]);
+  const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
   const originSourceType = ref<'batch_join_source' | 'stream_source' | ''>('');
 
   const hasData = computed(() => Boolean(formData.value.configs.select.length
@@ -410,63 +422,123 @@
     };
   });
 
-  const { data: commonData } = useRequest(
-    StrategyManageService.fetchStrategyCommon,
-    {
-      defaultValue: new CommonDataModel(),
-      manual: true,
-      onSuccess() {
-        ruleAuditConfigType.value = commonData.value.rule_audit_config_type;
-        aggregateList.value = commonData.value.rule_audit_aggregate_type;
-        aggregateList.value = aggregateList.value.concat([
-          {
-            label: t('不聚和'),
-            value: null,
-          },
-        ]);
-        joinTypeList.value = commonData.value.link_table_join_type;
-      },
+  // 获取公共数据(字典)
+  const {
+    data: commonData,
+  } = useRequest(StrategyManageService.fetchStrategyCommon, {
+    defaultValue: new CommonDataModel(),
+    manual: true,
+    onSuccess() {
+      ruleAuditConfigType.value = commonData.value.rule_audit_config_type;
+      joinTypeList.value = commonData.value.link_table_join_type;
+      aggregateList.value = [
+        ...commonData.value.rule_audit_aggregate_type,
+        {
+          label: t('不聚和'),
+          value: null,
+        },
+      ];
+      // 获取到数据源类别后，获取所有tableid
+      getAllConfigTypeTable();
     },
-  );
-
-  const { run: fetchSourceType, data: sourceType } = useRequest(
-    StrategyManageService.fetchSourceType,
-    {
-      defaultValue: {
-        support_source_types: ['batch_join_source', 'stream_source'],
-      },
-      onSuccess: () => {
-        // 获取所有可用的调度方式
-        const availableSourceTypes = sourceType.value.support_source_types.filter((type) => {
-          if (type === 'stream_source') {
-            // stream_source模式下:
-            // 存在聚合算法的数据不能使用该模式
-            return !formData.value.configs.select.some(item => item.aggregate);
-          }
-          return true; // 其他类型都可用
-        });
-
-        // 如果是编辑模式，当originSourceType存在且在可用列表中，保持不变
-        if (isEditMode && originSourceType.value && availableSourceTypes.includes(originSourceType.value)) {
-          formData.value.configs.data_source.source_type = originSourceType.value;
-        }
-
-        // 如果没有可用类型或当前选择的类型不在可用列表中，则重置source_type
-        if (!availableSourceTypes.length
-          || !availableSourceTypes.includes(formData.value.configs.data_source.source_type as 'batch_join_source' | 'stream_source')) {
-          formData.value.configs.data_source.source_type = '';
-        }
-      },
-    },
-  );
+  });
 
   // 获取tableid
-  const { data: tableData, run: fetchTable } = useRequest(
-    StrategyManageService.fetchTable,
-    {
-      defaultValue: [],
+  const {
+    run: fetchTable,
+  } = useRequest(StrategyManageService.fetchTable, {
+    defaultValue: [],
+  });
+
+  // 获取联表tableid
+  const {
+    run: fetchLinkTableAll,
+  } = useRequest(LinkDataManageService.fetchLinkTableAll, {
+    defaultValue: [],
+  });
+
+  // 获取全部tableid
+  const getAllConfigTypeTable = () => {
+    const requests = ruleAuditConfigType.value.map((item) => {
+      if (item.value === 'LinkTable') {
+        return async () => {
+          const LinkTableData = await fetchLinkTableAll();
+          return [{
+            ...item,
+            children: LinkTableData.map(tableItem => ({
+              label: tableItem.name,
+              value: tableItem.uid,
+              version: tableItem.version,
+            })),
+          }];
+        };
+      }
+      return async () => {
+        const data = await fetchTable({
+          table_type: item.value,
+        });
+        return [{
+          ...item,
+          children: data.map(tableItem => ({
+            ...tableItem,
+            leaf: true,
+            disabled: !(tableItem.children && tableItem.children.length) && item.value !== 'EventLog',
+          })),
+        }];
+      };
+    });
+    // 获取全部table
+    Promise.all(requests.map(fn => fn()))
+      .then((results) => {
+        const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), [] as Array<ConfigTypeTableItem>);
+        allConfigTypeTable.value = flattenedResults;
+        console.log('allConfigTypeTable', allConfigTypeTable.value);
+        // 编辑
+        if (isEditMode || isCloneMode) {
+          setFormData(props.editData);
+        }
+      });
+  };
+
+  // 搜索数据源
+  const configTypeTableFilter = (node: Record<string, any>, key: string) => {
+    // 转换searchKey为小写以支持大小写不敏感的搜索
+    const lowercaseSearchKey = key.toLowerCase();
+    return (node.data.label.toLowerCase().includes(lowercaseSearchKey)
+      || node.data.value.toLowerCase().includes(lowercaseSearchKey));
+  };
+
+  // 选择tableid后，获取该table的可用调度方式
+  const {
+    run: fetchSourceType,
+    data: sourceType,
+  } = useRequest(StrategyManageService.fetchSourceType, {
+    defaultValue: {
+      support_source_types: ['batch_join_source', 'stream_source'],
     },
-  );
+    onSuccess: () => {
+      // 获取所有可用的调度方式
+      const availableSourceTypes = sourceType.value.support_source_types.filter((type) => {
+        if (type === 'stream_source') {
+          // stream_source模式下:
+          // 存在聚合算法的数据不能使用该模式
+          return !formData.value.configs.select.some(item => item.aggregate);
+        }
+        return true; // 其他类型都可用
+      });
+
+      // 如果是编辑模式，当originSourceType存在且在可用列表中，保持不变
+      if (isEditMode && originSourceType.value && availableSourceTypes.includes(originSourceType.value)) {
+        formData.value.configs.data_source.source_type = originSourceType.value;
+      }
+
+      // 如果没有可用类型或当前选择的类型不在可用列表中，则重置source_type
+      if (!availableSourceTypes.length
+        || !availableSourceTypes.includes(formData.value.configs.data_source.source_type as 'batch_join_source' | 'stream_source')) {
+        formData.value.configs.data_source.source_type = '';
+      }
+    },
+  });
 
   const setTableFields = (
     data: Array<{
@@ -484,7 +556,7 @@
     remark: '',
   }));
 
-  // 获取表字段
+  // 选择tableid后，获取表字段
   const fetDatabaseTableFields = (rtId: string) => {
     StrategyManageService.fetchTableRtFields({
       table_id: rtId,
@@ -493,7 +565,7 @@
     });
   };
 
-  // 获取联表表字段
+  // 选择tableid后，获取联表表字段
   const fetchLinkTableFields = async (
     rtIdArr: string[][],
     rtIdArrDisplay: string[][],
@@ -510,6 +582,64 @@
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
     });
+  };
+
+  // 获取关联表详情
+  const {
+    data: linkDataDetail,
+    run: fetchLinkDataSheetDetail,
+  } = useRequest(LinkDataManageService.fetchLinkDataDetail, {
+    defaultValue: new LinkDataDetailModel(),
+    onSuccess: () => {
+      // 设置联表version
+      formData.value.configs.data_source.link_table.version = linkDataDetail.value.version;
+      const rtIdArr = linkDataDetail.value.config.links.map(item => [
+        item.left_table.rt_id,
+        item.right_table.rt_id,
+      ]) as string[][];
+      // 表别名
+      const rtIdArrDisplay = linkDataDetail.value.config.links.map(item => [
+        item.left_table.display_name,
+        item.right_table.display_name,
+      ]) as string[][];
+      if (rtIdArr.length) {
+        // 联表获取表字段
+        fetchLinkTableFields(rtIdArr, rtIdArrDisplay);
+        // 获取表可用调度方式
+        fetchSourceType({
+          config_type: formData.value.configs.config_type,
+          link_table: {
+            uid: linkDataDetail.value.uid,
+            version: linkDataDetail.value.version,
+          },
+        });
+      }
+    },
+  });
+
+  // 刷新联表详情
+  const handleRefreshLinkData = () => {
+    fetchLinkDataSheetDetail({
+      uid: linkDataDetail.value.uid,
+    });
+    // 重置数据
+    formData.value.configs.select = [];
+    formData.value.configs.where = {
+      connector: 'and',
+      conditions: [],
+    };
+    rulesComponentRef.value.resetFormData();
+    expectedResultsRef.value.resetFormData();
+  };
+
+  const getFirstAndLast = (arr: Array<string>) => {
+    if (!arr || arr.length === 0) {
+      return { config_type: undefined,  rt_id_or_uid: undefined };
+    }
+    return {
+      config_type: arr[0],
+      rt_id_or_uid: arr[arr.length - 1],
+    };
   };
 
   const createInfoBoxConfig = (overrides: {
@@ -540,52 +670,73 @@
     ...overrides,
   });
 
-  // 重置data
-  const resetData = () => {
-    tableFields.value = [];
-    formData.value.configs.select = [];
-    formData.value.configs.where = {
-      connector: 'and',
-      conditions: [],
-    };
-    rulesComponentRef.value.resetFormData();
-    expectedResultsRef.value.resetFormData();
-  };
+  // 选择tableid和数据源类型
+  const handleChangeTable = (value: Array<string>) => {
+    const handleTableChangeCore = (value: Array<string>) => {
+      const typeAndId = getFirstAndLast(value);
+      const { config_type: configType, rt_id_or_uid: rtIdOrUid  } = typeAndId;
 
-  // 切换数据源类型： 默认使用离线模式batch_join_source，不切换类型
-  const handleDataSourceType = (item: string) => {
-    if (formData.value.configs.config_type === '' || !hasData.value) {
-      // 重置dataSource、tableData
-      formData.value.configs.data_source = _.cloneDeep(initDataSource);
-      tableData.value = [];
-      resetData();
+      // 更新数据源类型
+      formData.value.configs.config_type = configType || '';
 
-      formData.value.configs.config_type = item;
-      if (item !== '' && item !== 'LinkTable') {
-        fetchTable({
-          table_type: item,
-        });
+      // 重置数据源和表单
+      const resetDataSource = () => {
+        formData.value.configs.data_source = {
+          ...formData.value.configs.data_source,
+          ...{
+            rt_id: '',
+            link_table: { uid: '', version: 0 },
+            system_ids: [],
+          },
+        };
+        [eventLogRef, rulesComponentRef, expectedResultsRef].forEach(ref => ref.value?.resetFormData?.());
+      };
+
+      // 无有效类型时重置数据
+      if (!configType) {
+        resetDataSource();
+        tableFields.value = [];
+        return;
       }
+
+      // 统一处理数据源设置
+      if (configType === 'LinkTable') {
+        formData.value.configs.data_source.link_table.uid = rtIdOrUid || '';
+        rtIdOrUid && fetchLinkDataSheetDetail({ uid: rtIdOrUid });
+      } else {
+        formData.value.configs.data_source.rt_id = rtIdOrUid || '';
+        if (rtIdOrUid) {
+          fetDatabaseTableFields(rtIdOrUid);
+          fetchSourceType({ config_type: configType, rt_id: rtIdOrUid });
+        }
+      }
+
+      // 有填写预期结果、风险发现规则，重置
+      if (hasData.value) {
+        resetDataSource();
+      }
+
+      // 更新前次记录
+      previousTableId.value = value;
+    };
+
+    // 首次初始化或没有配置数据，直接处理
+    if (!formData.value.configs.config_type || !hasData.value) {
+      handleTableChangeCore(value);
       return;
     }
+    // 已有配置时弹窗确认
     InfoBox(createInfoBoxConfig({
-      onConfirm() {
-        // 重置dataSource、tableData
-        formData.value.configs.data_source = _.cloneDeep(initDataSource);
-        tableData.value = [];
-        resetData();
-
-        formData.value.configs.config_type = item;
-        if (item !== '' && item !== 'LinkTable') {
-          fetchTable({
-            table_type: item,
-          });
-        }
-      },
-      onClose() {
-        configType.value = formData.value.configs.config_type;
+      onConfirm: () => handleTableChangeCore(value),
+      onClose: () => {
+        tableId.value = previousTableId.value;
       },
     }));
+  };
+
+  // 更新系统
+  const handleUpdateSystem = (systemIds: Array<string>) => {
+    formData.value.configs.data_source.system_ids = systemIds;
   };
 
   // 更新预期数据
@@ -598,52 +749,6 @@
     formData.value.configs.where = where;
   };
 
-  // 重置配置
-  const handleResetConfig = () => {
-    resetData();
-  };
-
-  // 获取联表详情
-  const handleUpdateLinkDataDetail = (detail: LinkDataDetailModel) => {
-    linkDataDetail.value = detail;
-    // 表id
-    // eslint-disable-next-line max-len
-    const rtIdArr = linkDataDetail.value.config.links.map(item => [
-      item.left_table.rt_id,
-      item.right_table.rt_id,
-    ]) as string[][];
-    // 表别名
-    // eslint-disable-next-line max-len
-    const rtIdArrDisplay = linkDataDetail.value.config.links.map(item => [
-      item.left_table.display_name,
-      item.right_table.display_name,
-    ]) as string[][];
-    if (rtIdArr.length) {
-      // 联表获取表字段
-      fetchLinkTableFields(rtIdArr, rtIdArrDisplay);
-      fetchSourceType({
-        config_type: formData.value.configs.config_type,
-        link_table: {
-          uid: linkDataDetail.value.uid,
-          version: linkDataDetail.value.version,
-        },
-      });
-    }
-  };
-
-  // 刷新联表详情
-  const handleRefreshLinkData = () => {
-    configRef.value?.refreshLinkData();
-    // 重置数据
-    formData.value.configs.select = [];
-    formData.value.configs.where = {
-      connector: 'and',
-      conditions: [],
-    };
-    rulesComponentRef.value.resetFormData();
-    expectedResultsRef.value.resetFormData();
-  };
-
   const handleSourceTypeChange = () => {
     formData.value.configs.schedule_config = {
       count_freq: '',
@@ -651,9 +756,32 @@
     };
   };
 
+  const changeTableId = () => {
+    const tableItem = allConfigTypeTable.value.find(item => item.value === formData.value.configs.config_type);
+    if (!tableItem) return;
+    console.log('tableItem', tableItem);
+    // 联表和日志只有两层，直接拼接
+    if (tableItem.value === 'EventLog' || tableItem.value === 'LinkTable') {
+      tableId.value = [formData.value.configs.config_type, formData.value.configs.data_source.link_table.uid];
+      previousTableId.value = tableId.value ;
+    } else {
+      // 资产和其他数据还需要获取二级父id
+      tableItem.children.forEach((item) => {
+        if (item.children && item.children.length) {
+          item.children.forEach((cItem) => {
+            if (cItem.value === formData.value.configs.data_source.rt_id) {
+              const id = [item.value, formData.value.configs.data_source.rt_id];
+              tableId.value = [formData.value.configs.config_type, ...id];
+              previousTableId.value = tableId.value ;
+            }
+          });
+        }
+      });
+    }
+  };
+
   // 编辑
   const setFormData = (editData: StrategyModel) => {
-    configType.value = editData.configs.config_type || '';
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
@@ -663,17 +791,11 @@
       formData.value.configs.data_source = editData.configs.data_source;
       originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
     }
-    if (formData.value.configs.config_type !== 'LinkTable') {
-      fetchTable({
-        table_type: formData.value.configs.config_type,
-      }).then(() => {
-        if (configRef.value?.setConfigs) {
-          configRef.value.setConfigs(editData.configs);
-        }
-      });
-    }
+    // 转换tableid,反显
+    changeTableId();
   };
 
+  // 监听formData变化，更新数据
   watch(
     () => formData.value,
     (data) => {
@@ -681,30 +803,6 @@
     },
     {
       deep: true,
-    },
-  );
-
-  // 日志、资源数据、其他数据获取表字段
-  watch(
-    () => formData.value.configs.data_source.rt_id,
-    (rtId) => {
-      if (rtId && rtId.length && formData.value.configs.config_type !== 'LinkTable') {
-        const rtId = formData.value.configs.data_source.rt_id;
-        fetDatabaseTableFields(Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId);
-        fetchSourceType({
-          config_type: formData.value.configs.config_type,
-          rt_id: Array.isArray(rtId) ? rtId[rtId.length - 1] : rtId,
-        });
-      }
-    },
-  );
-
-  watch(
-    () => props.editData,
-    (data) => {
-      if (isEditMode || isCloneMode) {
-        setFormData(data);
-      }
     },
   );
 
@@ -778,13 +876,15 @@
     padding: 16px 32px 24px;
 
     .select-group {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 8px;
-
       :deep(.bk-form-item) {
         margin-bottom: 0;
       }
+    }
+
+    .select-group-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
     }
 
     :deep(.bk-infobox-title) {
