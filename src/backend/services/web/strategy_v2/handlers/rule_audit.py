@@ -32,7 +32,6 @@ from core.sql.functions import ConcatWs
 from core.sql.model import (
     Condition,
     Field,
-    HavingCondition,
     JoinTable,
     LinkField,
     SqlConfig,
@@ -228,18 +227,9 @@ class RuleAuditSQLBuilder:
             final_where = WhereCondition(connector=FilterConnector.AND, conditions=where_conditions_to_merge)
 
         # Step F. 构建前端传入的 having 条件
-        having_json = config_json.get("having")
-        having_conditions_to_merge = []
+        final_having = config_json.get("having")
 
-        if having_json:
-            having_conditions_to_merge.append(having_json)
-
-        # Step G. 合并所有having条件
-        final_having = None
-        if having_conditions_to_merge:
-            final_having = HavingCondition(connector=FilterConnector.AND, conditions=having_conditions_to_merge)
-
-        # Step H. 构造 SqlConfig 并返回
+        # Step G. 构造 SqlConfig 并返回
         return SqlConfig(
             select_fields=select_fields,
             from_table=from_table,
