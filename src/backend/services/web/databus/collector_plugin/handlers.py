@@ -30,7 +30,7 @@ from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.fields import (
     BKBASE_STORAGE_UNIQUE_KEYS,
     BKDATA_ES_TYPE_MAP,
-    ES_NOT_JSON_FIELDS,
+    DYNAMIC_JSON_FIELDS,
     EXT_FIELD_CONFIG,
     FIELD_TYPE_OBJECT,
     FIELD_TYPE_STRING,
@@ -246,7 +246,7 @@ class PluginEtlHandler:
     @classmethod
     def get_es_fields(cls) -> List[dict]:
         fields = cls.get_fields()
-        es_not_json_field_names = {field.field_name for field in ES_NOT_JSON_FIELDS}
+        es_not_json_field_names = {field.field_name for field in DYNAMIC_JSON_FIELDS}
         for field in fields:
             field["physical_field"] = field["field_name"]
             # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
@@ -261,6 +261,7 @@ class PluginEtlHandler:
         extra_info = {}
         for field in [*STANDARD_FIELDS, EXT_FIELD_CONFIG]:
             extra_info[field.field_name] = {'is_index': field.is_index, 'is_zh_analyzed': field.is_zh_analyzed}
+        dynamic_json_fields = {field.field_name for field in DYNAMIC_JSON_FIELDS}
         for field in fields:
             if field["field_name"] in extra_info:
                 field.update(extra_info[field["field_name"]])
@@ -268,6 +269,9 @@ class PluginEtlHandler:
                 field["is_zh_analyzed"] = True
             if field.get('is_zh_analyzed'):
                 field.pop("is_analyzed", None)
+            # 在计算平台支持标准json类型之前，is_json置为False防止创建variant类型
+            if field["field_name"] in dynamic_json_fields:
+                field["is_json"] = False
         return fields
 
     @classmethod

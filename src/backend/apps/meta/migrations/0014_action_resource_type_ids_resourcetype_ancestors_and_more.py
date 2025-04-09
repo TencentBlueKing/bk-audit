@@ -25,7 +25,7 @@ def migrate_meta_resource_type_path(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('meta', '0012_system_system_diagnosis_extra'),
+        ('meta', '0013_field_property'),
     ]
 
     operations = [
