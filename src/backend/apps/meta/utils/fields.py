@@ -459,6 +459,7 @@ REPORT_TIME = Field(
     option=dict(),
     is_required=True,
     is_display=False,
+    property={'spec_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 STORAGE_TIME = Field(
@@ -469,6 +470,7 @@ STORAGE_TIME = Field(
     option=dict(),
     is_required=True,
     is_display=False,
+    property={'spec_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 STANDARD_FIELDS = [
