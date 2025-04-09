@@ -270,6 +270,7 @@ def enhance_rt_fields(fields, result_table_id):
     result = [
         {
             "label": "{}({})".format(field["field_alias"] or field["field_name"], field["field_name"]),
+            "alias": field["field_alias"] or field["field_name"],
             "value": field["field_name"],
             "field_type": field["field_type"],
             "spec_field_type": field["field_type"],

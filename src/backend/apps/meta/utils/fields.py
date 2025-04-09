@@ -118,7 +118,7 @@ USERNAME = Field(
     option=dict(),
     priority_index=96,
     is_index=True,
-    property={'spec_type': SPEC_FIELD_TYPE_USER},
+    property={'spec_field_type': SPEC_FIELD_TYPE_USER},
 )
 
 USER_IDENTIFY_TYPE = Field(
@@ -169,7 +169,7 @@ START_TIME = Field(
     is_time=True,
     option=dict(),
     priority_index=91,
-    property={'spec_type': SPEC_FIELD_TYPE_TIMESTAMP},
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 END_TIME = Field(
@@ -181,7 +181,7 @@ END_TIME = Field(
     option=dict(),
     is_required=False,
     priority_index=90,
-    property={'spec_type': SPEC_FIELD_TYPE_TIMESTAMP},
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 BK_APP_CODE = Field(
@@ -459,6 +459,7 @@ REPORT_TIME = Field(
     option=dict(),
     is_required=True,
     is_display=False,
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 STORAGE_TIME = Field(
@@ -469,6 +470,7 @@ STORAGE_TIME = Field(
     option=dict(),
     is_required=True,
     is_display=False,
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 STANDARD_FIELDS = [
@@ -511,7 +513,7 @@ STANDARD_FIELDS = [
 ]
 
 # 这些字段 key 非固定，无法在 ES 中作为 json 字段
-ES_NOT_JSON_FIELDS = [
+DYNAMIC_JSON_FIELDS = [
     INSTANCE_DATA,
     INSTANCE_ORIGIN_DATA,
     EXTEND_DATA,
