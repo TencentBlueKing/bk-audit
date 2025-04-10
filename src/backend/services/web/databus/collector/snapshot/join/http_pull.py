@@ -16,8 +16,6 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import base64
-
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
@@ -63,18 +61,11 @@ class HttpPullHandler:
 
     @property
     def url(self):
-        return (
-            self.system.provider_config["host"].rstrip("/")
-            + "/"
-            + self.resource_type.provider_config["path"].lstrip("/")
-        )
+        return self.resource_type.resource_request_url(system=self.system)
 
     @property
     def authorization(self):
-        base64_token = base64.b64encode(
-            f"{settings.FETCH_INSTANCE_USERNAME}:{self.system.provider_config['token']}".encode("utf-8")
-        ).decode("utf-8")
-        return f"Basic {base64_token}"
+        return self.system.base64_token
 
     @property
     def config_name(self):

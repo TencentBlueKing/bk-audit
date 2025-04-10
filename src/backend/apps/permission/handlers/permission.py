@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+import base64
 import os
 from typing import Dict, List, Union
 
@@ -36,8 +36,11 @@ from iam.auth.models import ApiAuthRequest
 from iam.exceptions import AuthAPIError
 from iam.meta import setup_action, setup_resource, setup_system
 from iam.utils import gen_perms_apply_data
+from rest_framework.permissions import BasePermission
 
 from api.domains import BK_IAM_API_URL
+from apps.meta.models import GlobalMetaConfig
+from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
 from apps.permission.exceptions import ActionNotExistError, GetSystemInfoError
 from apps.permission.handlers.actions import ActionMeta, _all_actions, get_action_by_id
 from apps.permission.handlers.resource_types import _all_resources, get_resource_by_id
@@ -409,3 +412,18 @@ class Permission(object):
         self.iam_client.grant_or_revoke_path_permission(
             request=request, bk_token=self.bk_token, bk_username=self.username
         )
+
+
+class FetchInstancePermission(BasePermission):
+    @classmethod
+    def build_auth(cls, username, token):
+        base64_token = base64.b64encode(f"{username}:{token}".encode("utf-8")).decode("utf-8")
+        system_token = f"Basic {base64_token}"
+        return system_token
+
+    def has_permission(self, request, view):
+        system_token = self.build_auth(settings.FETCH_INSTANCE_USERNAME, GlobalMetaConfig.get(FETCH_INSTANCE_TOKEN_KEY))
+        user_auth_token = request.META.get("HTTP_AUTHORIZATION")
+        if system_token == user_auth_token:
+            return True
+        return False

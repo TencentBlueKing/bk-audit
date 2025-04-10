@@ -25,7 +25,7 @@ from drf_yasg.utils import swagger_auto_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.permissions import FetchInstancePermission
+from apps.permission.handlers.permission import FetchInstancePermission
 from services.puller.puller.serializers import (
     ResourceViewRequestSerializer,
     ResourceViewResponseSerializer,

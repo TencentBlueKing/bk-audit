@@ -21,7 +21,7 @@ import datetime
 import itertools
 from collections import OrderedDict
 from functools import wraps
-from typing import List, Union
+from typing import Iterator, List, Union
 
 import arrow
 from arrow import Arrow
@@ -240,3 +240,13 @@ def is_product() -> bool:
     """
 
     return settings.RUN_MODE == "PRODUCT"
+
+
+def data_chunks(data: list, limit: int) -> Iterator[List]:
+    """
+    数据分块
+    """
+
+    for i in range(0, len(data), limit):
+        # fmt: off
+        yield data[i: i + limit]
