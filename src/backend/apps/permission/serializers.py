@@ -47,7 +47,7 @@ class BatchIsAllowRequestSerializer(serializers.Serializer):
 class SystemListSerializer(serializers.ModelSerializer):
     class Meta:
         model = System
-        exclude = ["provider_config"]
+        exclude = ["provider_config", "auth_token"]
 
 
 class TagListSerializer(serializers.ModelSerializer):

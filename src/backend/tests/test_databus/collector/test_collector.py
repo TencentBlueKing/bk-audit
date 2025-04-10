@@ -84,9 +84,11 @@ class CollectorTest(TestCase):
         self.collector = CollectorConfig.objects.create(**COLLECTOR_DATA)
         CollectorPlugin.objects.create(**PLUGIN_DATA)
         System.objects.create(
-            system_id=self.system_id,
+            instance_id=self.system_id,
             namespace=self.namespace,
             provider_config={"host": SYSTEM_HOST, "token": SYSTEM_TOKEN},
+            callback_url=SYSTEM_HOST,
+            auth_token=SYSTEM_TOKEN,
         )
         ResourceType.objects.create(
             system_id=self.system_id,
@@ -94,6 +96,7 @@ class CollectorTest(TestCase):
             sensitivity=0,
             version=0,
             provider_config={"path": ""},
+            path="",
         )
         GlobalMetaConfig.set(
             COLLECTOR_PLUGIN_ID,

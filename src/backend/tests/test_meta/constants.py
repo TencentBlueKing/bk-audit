@@ -38,6 +38,7 @@ from apps.meta.constants import (
     CollectorParamConditionTypeEnum,
     ConfigLevelChoices,
     SpaceType,
+    SystemSourceTypeEnum,
 )
 from apps.meta.models import System
 from apps.meta.utils.fields import EVENT_ID
@@ -72,12 +73,15 @@ class PermissionMock(mock.MagicMock):
 # Base
 RESOURCE_TYPE_ID = "biz"
 SYSTEM_DATA1 = {
+    "instance_id": settings.BK_IAM_SYSTEM_ID + "test",
+    "source_type": SystemSourceTypeEnum.IAM_V3.value,
     "system_id": settings.BK_IAM_SYSTEM_ID + "test",
     "namespace": settings.DEFAULT_NAMESPACE,
     "name": settings.BK_IAM_SYSTEM_ID + "test",
     "name_en": settings.BK_IAM_SYSTEM_ID + "test",
     "clients": None,
     "provider_config": None,
+    "callback_url": "",
     "logo_url": "",
     "system_url": None,
     "description": None,
@@ -85,12 +89,15 @@ SYSTEM_DATA1 = {
     "system_diagnosis_extra": {},
 }
 SYSTEM_DATA2 = {
+    "instance_id": settings.BK_IAM_SYSTEM_ID,
+    "source_type": SystemSourceTypeEnum.IAM_V3.value,
     "system_id": settings.BK_IAM_SYSTEM_ID,
     "namespace": settings.DEFAULT_NAMESPACE,
     "name": settings.BK_IAM_SYSTEM_ID,
     "name_en": settings.BK_IAM_SYSTEM_ID,
     "clients": None,
     "provider_config": {"host": _SYSTEM_HOST},
+    "callback_url": _SYSTEM_HOST,
     "logo_url": "https://bk.tencent.com",
     "system_url": None,
     "description": None,
@@ -100,12 +107,14 @@ SYSTEM_DATA2 = {
 SYSTEM_BULK_DATA = list()
 SYSTEM_BULK_DATA.append(
     System(
+        instance_id=SYSTEM_DATA1["instance_id"],
         system_id=SYSTEM_DATA1["system_id"],
         namespace=SYSTEM_DATA1["namespace"],
         name=SYSTEM_DATA1["name"],
         name_en=SYSTEM_DATA1["name_en"],
         clients=SYSTEM_DATA1["clients"],
         provider_config=SYSTEM_DATA1["provider_config"],
+        callback_url=SYSTEM_DATA1["callback_url"],
         logo_url=SYSTEM_DATA1["logo_url"],
         system_url=SYSTEM_DATA1["system_url"],
         description=SYSTEM_DATA1["description"],
@@ -113,12 +122,14 @@ SYSTEM_BULK_DATA.append(
 )
 SYSTEM_BULK_DATA.append(
     System(
+        instance_id=SYSTEM_DATA2["instance_id"],
         system_id=SYSTEM_DATA2["system_id"],
         namespace=SYSTEM_DATA2["namespace"],
         name=SYSTEM_DATA2["name"],
         name_en=SYSTEM_DATA2["name_en"],
         clients=SYSTEM_DATA2["clients"],
         provider_config=SYSTEM_DATA2["provider_config"],
+        callback_url=SYSTEM_DATA2["callback_url"],
         logo_url=SYSTEM_DATA2["logo_url"],
         system_url=SYSTEM_DATA2["system_url"],
         description=SYSTEM_DATA2["description"],
@@ -137,8 +148,10 @@ RESOURCE_TYPE_DATA = {
     "name_en": "business",
     "sensitivity": 0,
     "provider_config": {"path": "/api/v1/iam/resources"},
+    "path": "/api/v1/iam/resources",
     "version": 1,
     "description": None,
+    "ancestors": [],
 }
 SNAPSHOT_RUNNING_STATUS_CLOSED = "closed"
 SNAPSHOT_DATA = {
@@ -398,6 +411,7 @@ GET_APP_INFO_DATA = {
 # Resource Type Schema
 SYSTEM_DATA_COPY = copy.deepcopy(SYSTEM_DATA2)
 SYSTEM_DATA_COPY["provider_config"].update({"token": _SYSTEM_TOKEN})
+SYSTEM_DATA_COPY.update({"auth_token": _SYSTEM_TOKEN})
 SYSTEM_OF_SCHEMA_DATA = SYSTEM_DATA_COPY
 GET_CACHE_OF_RESOURCE_TYPE_API_RESP = [
     {
@@ -511,7 +525,12 @@ GLOBAL_CHOICES = {
         {'id': 'match_all', 'name': '匹配全部'},
         {'id': 'match_any', 'name': '匹配任意'},
         {'id': 'between', 'name': '在之间'},
-    ]
+    ],
+    "meta_system_source_type": [
+        {"id": "iam_v3", "name": "权限中心V3"},
+        {"id": "iam_v4", "name": "权限中心V4"},
+        {"id": "bk_audit", "name": "审计中心"},
+    ],
 }
 
 SYSTEM_DIAGNOSIS_PUSH_TEMPLATE = """{
@@ -613,3 +632,62 @@ SYSTEM_DIAGNOSIS_PUSH_DISABLE = {
 }
 
 TEST_SYSTEM_ID = settings.BK_IAM_SYSTEM_ID
+
+EXPECT_IAM_SYSTEMS = [
+    {
+        'auth_token': 'xxx',
+        'callback_url': 'https://xxx.com',
+        'clients': ['xxx'],
+        'description': 'IAM V3测试系统',
+        'enable_system_diagnosis_push': False,
+        'instance_id': 'test_system',
+        'logo_url': "https://xxx.logo",
+        'managers': [],
+        'name': 'IAM V3测试系统',
+        'name_en': 'IAM V3测试系统',
+        'namespace': 'default',
+        'provider_config': {'auth': 'basic', 'healthz': '', 'host': 'https://xxx.com', 'token': 'xxx'},
+        'source_type': 'iam_v3',
+        'system_diagnosis_extra': {},
+        'system_id': 'test_system',
+        'system_url': "https://xxx.system",
+    },
+    {
+        'auth_token': 'xxx',
+        'callback_url': 'https://xxx.com/api/resource/',
+        'clients': ['app_code1', 'app_code2'],
+        'description': 'IAM V4 测试系统',
+        'enable_system_diagnosis_push': False,
+        'instance_id': 'test_system',
+        'logo_url': "https://app_code1.logo",
+        'managers': ['admin'],
+        'name': 'IAM V4 测试系统',
+        'name_en': 'IAM V4 测试系统',
+        'namespace': 'default',
+        'provider_config': {},
+        'source_type': 'iam_v4',
+        'system_diagnosis_extra': {},
+        'system_id': 'iam_v4_test_system',
+        'system_url': "https://app_code1.system",
+    },
+]
+
+AUDIT_CUSTOM_SYSTEM = {
+    'auth_token': 'xxx',
+    'callback_url': 'https://xxx.com/api/resource/',
+    'clients': ['app_code1', 'app_code2'],
+    'description': '审计自定义系统',
+    'enable_system_diagnosis_push': False,
+    'instance_id': 'audit_custom_system',
+    'logo_url': "https://app_code1.logo",
+    'managers': ['admin'],
+    'name': '审计自定义系统',
+    'name_en': '审计自定义系统',
+    'namespace': 'default',
+    'provider_config': {},
+    'source_type': 'bk_audit',
+    'system_diagnosis_extra': {},
+    'system_url': "https://app_code1.system",
+}
+
+ADD_CUSTOM_SYSTEMS = [*EXPECT_IAM_SYSTEMS, AUDIT_CUSTOM_SYSTEM]

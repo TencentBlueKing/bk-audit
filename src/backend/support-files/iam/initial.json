@@ -516,85 +516,6 @@
     {
       "operation": "upsert_action",
       "data": {
-        "id": "list_sensitive_object",
-        "name": "敏感信息对象列表",
-        "name_en": "List Sensitive Object",
-        "type": "view",
-        "version": 1,
-        "related_resource_types": [],
-        "related_actions": [],
-        "description": "",
-        "description_en": ""
-      }
-    },
-    {
-      "operation": "upsert_action",
-      "data": {
-        "id": "view_sensitive_object",
-        "name": "敏感信息对象查看",
-        "name_en": "View Sensitive Object",
-        "type": "view",
-        "version": 1,
-        "related_resource_types": [],
-        "related_actions": [
-          "list_sensitive_object"
-        ],
-        "description": "",
-        "description_en": ""
-      }
-    },
-    {
-      "operation": "upsert_action",
-      "data": {
-        "id": "create_sensitive_object",
-        "name": "敏感信息对象创建",
-        "name_en": "Create Sensitive Object",
-        "type": "create",
-        "version": 1,
-        "related_resource_types": [],
-        "related_actions": [
-          "list_sensitive_object"
-        ],
-        "description": "",
-        "description_en": ""
-      }
-    },
-    {
-      "operation": "upsert_action",
-      "data": {
-        "id": "edit_sensitive_object",
-        "name": "敏感信息对象编辑",
-        "name_en": "Edit Sensitive Object",
-        "type": "edit",
-        "version": 1,
-        "related_resource_types": [],
-        "related_actions": [
-          "list_sensitive_object",
-          "view_sensitive_object"
-        ],
-        "description": "",
-        "description_en": ""
-      }
-    },
-    {
-      "operation": "upsert_action",
-      "data": {
-        "id": "delete_sensitive_object",
-        "name": "敏感信息对象删除",
-        "name_en": "Delete Sensitive Object",
-        "type": "delete",
-        "version": 1,
-        "related_resource_types": [],
-        "related_actions": [
-          "list_sensitive_object"
-        ],
-        "description": "",
-        "description_en": ""
-      }
-    },
-    {
-      "operation": "upsert_action",
-      "data": {
         "id": "access_global_setting",
         "name": "全局设置查看",
         "name_en": "View Global Setting",
@@ -1408,33 +1329,9 @@
               ]
             },
             {
-              "name": "审计敏感信息管理",
-              "name_en": "Sensitive Info",
-              "actions": [
-                {
-                  "id": "list_sensitive_object"
-                },
-                {
-                  "id": "view_sensitive_object"
-                },
-                {
-                  "id": "create_sensitive_object"
-                },
-                {
-                  "id": "edit_sensitive_object"
-                },
-                {
-                  "id": "delete_sensitive_object"
-                }
-              ]
-            },
-            {
               "name": "全局设置",
               "name_en": "Global Setting",
               "actions": [
-                {
-                  "id": "access_global_setting"
-                },
                 {
                   "id": "manage_global_setting"
                 }

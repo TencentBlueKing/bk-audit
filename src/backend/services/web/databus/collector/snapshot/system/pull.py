@@ -28,7 +28,7 @@ from django.conf import settings
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
-from core.permissions import FetchInstancePermission
+from apps.permission.handlers.permission import FetchInstancePermission
 from services.web.databus.constants import (
     ACTION_DATA_NAME_FORMAT,
     RESOURCE_TYPE_DATA_NAME_FORMAT,
