@@ -29,7 +29,6 @@ from apps.meta.models import (
     SensitiveObject,
     System,
     SystemDiagnosisConfig,
-    SystemRole,
     Tag,
 )
 
@@ -49,7 +48,9 @@ class NamespaceAdmin(admin.ModelAdmin):
 @admin.register(System)
 class SystemAdmin(admin.ModelAdmin):
     list_display = [
+        "source_type",
         "system_id",
+        "instance_id",
         "namespace",
         "name",
         "name_en",
@@ -60,8 +61,8 @@ class SystemAdmin(admin.ModelAdmin):
         "enable_system_diagnosis_push",
     ]
     ordering = ["namespace", "system_id"]
-    search_fields = ["system_id", "name", "name_en"]
-    list_filter = ["namespace", "enable_system_diagnosis_push"]
+    search_fields = ["system_id", "name", "name_en", "instance_id"]
+    list_filter = ["namespace", "enable_system_diagnosis_push", "source_type"]
 
     @admin.display(description="图标", boolean=True)
     def has_logo(self, obj: System):
@@ -73,20 +74,29 @@ class SystemAdmin(admin.ModelAdmin):
 
     @admin.display(description="管理员")
     def roles(self, obj: System):
-        roles = SystemRole.objects.filter(system_id=obj.system_id)
-        return ",".join([role.username for role in roles])
+        return ",".join(obj.managers_list)
 
 
 @admin.register(ResourceType)
 class ResourceTypeAdmin(admin.ModelAdmin):
-    list_display = ["id", "system_id", "resource_type_id", "name", "name_en", "sensitivity", "version"]
+    list_display = ["id", "system_id", "resource_type_id", "name", "name_en", "sensitivity", "version", "ancestors"]
     ordering = ["system_id", "resource_type_id"]
     search_fields = ["system_id", "resource_type_id"]
 
 
 @admin.register(Action)
 class ActionAdmin(admin.ModelAdmin):
-    list_display = ["id", "system_id", "action_id", "type", "name", "name_en", "sensitivity", "version"]
+    list_display = [
+        "id",
+        "system_id",
+        "action_id",
+        "type",
+        "name",
+        "name_en",
+        "sensitivity",
+        "version",
+        "resource_type_ids",
+    ]
     ordering = ["system_id", "action_id"]
     search_fields = ["system_id", "action_id"]
 
