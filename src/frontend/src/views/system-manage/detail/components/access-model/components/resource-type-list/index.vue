@@ -89,7 +89,7 @@
           const ancestor = resourceTypeList.value.find(item => item.resource_type_id === ancestorId);
           return ancestor?.name || ancestorId;
         });
-        return ancestorNames?.join(' / ') || '--';
+        return ancestorNames?.join(',') || '--';
       },
     },
     {
