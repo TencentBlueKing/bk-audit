@@ -47,7 +47,7 @@ class TestSystemDiagnosisPushHandler(TestCase):
     def setUp(self):
         # 创建测试系统
         self.system = System.objects.create(
-            system_id="test_system", name="Test System", enable_system_diagnosis_push=False
+            instance_id="test_system", name="Test System", enable_system_diagnosis_push=False
         )
         # 初始化handler前先准备测试数据
         self.prepare_test_data()
