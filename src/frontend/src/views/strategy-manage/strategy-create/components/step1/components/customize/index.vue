@@ -65,9 +65,11 @@
                 configTypeMap[formData.configs.config_type] || EventLogComponent
               "
               ref="configRef"
+              v-model:data-source="formData.configs.data_source"
+              :has-data="hasData"
               :source-type="formData.configs.config_type"
               :table-data="tableData"
-              @update-data-source="handleUpdateDataSource"
+              @reset-config="handleResetConfig"
               @update-link-data-detail="handleUpdateLinkDataDetail" />
           </div>
           <!-- 联表详情 -->
@@ -250,7 +252,7 @@
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
   import _ from 'lodash';
-  import { computed, h, nextTick, ref, watch } from 'vue';
+  import { computed, h, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -375,9 +377,11 @@
   const joinTypeList = ref<Array<Record<string, any>>>([]);
   const originSourceType = ref<'batch_join_source' | 'stream_source' | ''>('');
 
-  // eslint-disable-next-line max-len
-  const hasData = computed(() => formData.value.configs.select.length
-    || formData.value.configs.where.conditions.length);
+  const hasData = computed(() => Boolean(formData.value.configs.select.length
+    || (formData.value.configs.where.conditions.length
+      && formData.value.configs.where.conditions[0].conditions.length
+      && formData.value.configs.where.conditions[0].conditions[0].condition.field
+      && formData.value.configs.where.conditions[0].conditions[0].condition.field.raw_name)));
 
   const getSourceTypeStatus = computed(() => (type: 'batch_join_source' | 'stream_source') => {
     // 检查该类型是否在支持列表中，或者对于stream_source类型是否存在聚合字段有不为null的aggregate，或者是编辑模式
@@ -536,13 +540,28 @@
     ...overrides,
   });
 
+  // 重置data
+  const resetData = () => {
+    tableFields.value = [];
+    formData.value.configs.select = [];
+    formData.value.configs.where = {
+      connector: 'and',
+      conditions: [],
+    };
+    rulesComponentRef.value.resetFormData();
+    expectedResultsRef.value.resetFormData();
+  };
+
   // 切换数据源类型： 默认使用离线模式batch_join_source，不切换类型
   const handleDataSourceType = (item: string) => {
     if (formData.value.configs.config_type === '' || !hasData.value) {
+      // 重置dataSource、tableData
+      formData.value.configs.data_source = _.cloneDeep(initDataSource);
+      tableData.value = [];
+      resetData();
+
       formData.value.configs.config_type = item;
       if (item !== '' && item !== 'LinkTable') {
-        tableData.value = [];
-        tableFields.value = [];
         fetchTable({
           table_type: item,
         });
@@ -551,18 +570,11 @@
     }
     InfoBox(createInfoBoxConfig({
       onConfirm() {
-        // 重置数据
+        // 重置dataSource、tableData
         formData.value.configs.data_source = _.cloneDeep(initDataSource);
-        formData.value.configs.select = [];
-        formData.value.configs.where = {
-          connector: 'and',
-          conditions: [],
-        };
         tableData.value = [];
-        tableFields.value = [];
-        configRef.value.resetFormData();
-        rulesComponentRef.value.resetFormData();
-        expectedResultsRef.value.resetFormData();
+        resetData();
+
         formData.value.configs.config_type = item;
         if (item !== '' && item !== 'LinkTable') {
           fetchTable({
@@ -576,74 +588,6 @@
     }));
   };
 
-  // 初始状态
-  const isInitialState = () => {
-    const isLinkTable = formData.value.configs.config_type === 'LinkTable';
-    const dataSourceConfig = formData.value.configs.data_source;
-
-    if (!hasData.value) return true;
-
-    if (!isLinkTable) {
-      return !dataSourceConfig.rt_id || !dataSourceConfig.rt_id.length;
-    }
-    return dataSourceConfig.link_table && !dataSourceConfig.link_table.uid;
-  };
-
-  // 数据源改变
-  const hasDataSourceChanged = (dataSource: IFormData['configs']['data_source']) => {
-    const isLinkTable = formData.value.configs.config_type === 'LinkTable';
-    const dataSourceConfig = formData.value.configs.data_source;
-
-    if (!isLinkTable) {
-      if (Array.isArray(dataSource.rt_id)) {
-        return (
-          dataSourceConfig.rt_id !== dataSource.rt_id[dataSource.rt_id.length - 1]
-        );
-      }
-      return dataSourceConfig.rt_id !== dataSource.rt_id;
-    }
-    return dataSourceConfig.link_table.uid !== dataSource.link_table.uid;
-  };
-
-  const mergeDataSource = (dataSource: IFormData['configs']['data_source']) => {
-    formData.value.configs.data_source = _.cloneDeep({
-      ...formData.value.configs.data_source,
-      ...dataSource,
-    });
-  };
-
-  // 更新数据源后，获取对应表字段
-  const handleUpdateDataSource = (dataSource: IFormData['configs']['data_source']) => {
-    if (
-      !dataSource.rt_id
-      || !dataSource.rt_id.length
-      || (dataSource.link_table && !dataSource.link_table.uid)
-    ) {
-      tableFields.value = [];
-    }
-    if (isInitialState()) {
-      mergeDataSource(dataSource);
-    } else if (hasDataSourceChanged(dataSource)) {
-      InfoBox(createInfoBoxConfig({
-        onConfirm() {
-          formData.value.configs.select = [];
-          formData.value.configs.where = {
-            connector: 'and',
-            conditions: [],
-          };
-          rulesComponentRef.value.resetFormData();
-          expectedResultsRef.value.resetFormData();
-          mergeDataSource(dataSource);
-        },
-        onClose() {
-          configRef.value.setConfigs(formData.value.configs);
-        },
-      }));
-    } else {
-      mergeDataSource(dataSource);
-    }
-  };
-
   // 更新预期数据
   const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
     formData.value.configs.select = expectedResult;
@@ -652,6 +596,11 @@
   // 更新风险规则
   const handleUpdateWhere = (where: Where) => {
     formData.value.configs.where = where;
+  };
+
+  // 重置配置
+  const handleResetConfig = () => {
+    resetData();
   };
 
   // 获取联表详情
@@ -718,11 +667,9 @@
       fetchTable({
         table_type: formData.value.configs.config_type,
       }).then(() => {
-        configRef.value.setConfigs(editData.configs);
-      });
-    } else {
-      nextTick(() => {
-        configRef.value.setConfigs(editData.configs);
+        if (configRef.value?.setConfigs) {
+          configRef.value.setConfigs(editData.configs);
+        }
       });
     }
   };
