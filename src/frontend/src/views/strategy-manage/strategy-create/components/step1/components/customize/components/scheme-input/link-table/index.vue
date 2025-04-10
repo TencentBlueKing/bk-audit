@@ -22,7 +22,7 @@
       property="configs.data_source.link_table.uid">
       <span>
         <bk-select
-          v-model="formData.configs.data_source.link_table.uid"
+          v-model="dataSource.link_table.uid"
           filterable
           :loading="loading"
           :no-match-text="t('无匹配数据')"
@@ -49,9 +49,8 @@
 </template>
 
 <script setup lang='ts'>
-  import {
-    ref,
-  } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { h, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -61,47 +60,38 @@
 
   import useRequest from '@hooks/use-request';
 
-  interface Expose {
-    refreshLinkData: () => void,
-    resetFormData: () => void,
-    setConfigs: (config: IFormData['configs']) => void;
-  }
-  interface Emits {
-    (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
-    (e: 'updateLinkDataDetail', value: LinkDataDetailModel): void,
-  }
-  interface IFormData {
-    configs: {
-      data_source: {
-        link_table: {
-          uid: string,
-          version: number,
-        },
-      },
+  interface IDataSource {
+    link_table: {
+      uid: string,
+      version: number,
     },
   }
-  const emits = defineEmits<Emits>();
-  const route = useRoute();
+
+  interface Props {
+    hasData: boolean,
+  }
+  interface Expose {
+    refreshLinkData: () => void,
+  }
+  interface Emits {
+    (e: 'updateLinkDataDetail', value: LinkDataDetailModel): void,
+    (e: 'resetConfig'): void;
+  }
+
+  const props = defineProps<Props>();
+  const emit = defineEmits<Emits>();
+  const dataSource = defineModel<IDataSource>('dataSource', {
+    required: true,
+  });
   const { t } = useI18n();
+  const route = useRoute();
+  const prevValue = ref({
+    uid: '',
+    version: 0,
+  });
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
-  let isInit = false;
-  if (!isEditMode && !isCloneMode && !isUpgradeMode) {
-    isInit = true;
-  }
-
-  const formData = ref<IFormData>({
-    configs: {
-      data_source: {
-        link_table: {
-          uid: '',
-          version: 0,
-        },
-      },
-    },
-  });
 
   // 获取关联表详情
   const {
@@ -110,24 +100,86 @@
   } = useRequest(LinkDataManageService.fetchLinkDataDetail, {
     defaultValue: new LinkDataDetailModel(),
     onSuccess: () => {
-      emits('updateLinkDataDetail', LinkDataDetail.value);
+      emit('updateLinkDataDetail', LinkDataDetail.value);
     },
+  });
+
+  const createInfoBoxConfig = (overrides: {
+    onConfirm: () => void
+    onClose: () => void
+  }): any => ({
+    type: 'warning',
+    title: t('切换数据源请注意'),
+    subTitle: () => h(
+      'div',
+      {
+        style: {
+          color: '#4D4F56',
+          backgroundColor: '#f5f6fa',
+          padding: '12px 16px',
+          borderRadius: '2px',
+          fontSize: '14px',
+          textAlign: 'left',
+        },
+      },
+      t('切换后，已配置的数据将被清空。是否继续？'),
+    ),
+    confirmText: t('继续切换'),
+    cancelText: t('取消'),
+    headerAlign: 'center',
+    contentAlign: 'center',
+    footerAlign: 'center',
+    ...overrides,
   });
 
   // 选择数据表
   const handleChangeLinkDataSheet = (id: string) => {
-    if (id !== '') {
-      fetchLinkDataSheetDetail({
-        uid: id,
-      });
+    // 首次选择时，直接更新数据并保存prevValue
+    if (!prevValue.value.uid || !props.hasData) {
+      if (id !== '') {
+        fetchLinkDataSheetDetail({ uid: id });
+        const selectItem = data.value.find(data => data.uid === id);
+        dataSource.value.link_table.version = selectItem ? selectItem.version : 0;
+        dataSource.value.link_table.uid = id;
+      }
+      // 保存当前值作为prevValue
+      prevValue.value = {
+        uid: dataSource.value.link_table.uid,
+        version: dataSource.value.link_table.version,
+      };
+      return;
     }
-    const selectItem = data.value.find(data => data.uid === id);
-    formData.value.configs.data_source.link_table.version = selectItem ? selectItem.version : 0;
-    emits('updateDataSource', formData.value.configs.data_source);
+
+    // 非首次选择时，显示确认对话框
+    InfoBox(createInfoBoxConfig({
+      onConfirm() {
+        // 先更新dataSource
+        dataSource.value.link_table.uid = id;
+        const selectItem = data.value.find(data => data.uid === id);
+        dataSource.value.link_table.version = selectItem ? selectItem.version : 0;
+
+        if (id !== '') {
+          // 获取详情
+          fetchLinkDataSheetDetail({ uid: id });
+        }
+
+        // 更新prevValue
+        prevValue.value = {
+          uid: dataSource.value.link_table.uid,
+          version: dataSource.value.link_table.version,
+        };
+
+        emit('resetConfig');
+      },
+      onClose() {
+        // 恢复到之前的值
+        dataSource.value.link_table.uid = prevValue.value.uid;
+        dataSource.value.link_table.version = prevValue.value.version;
+      },
+    }));
   };
 
   const refreshLinkTable = () => {
-    isInit = false;
     fetchLinkTableAll();
   };
 
@@ -139,49 +191,30 @@
   } = useRequest(LinkDataManageService.fetchLinkTableAll, {
     defaultValue: [],
     manual: true,
-    onSuccess: () => {
-      // 编辑首次进入不置空
-      if (!isInit) {
-        isInit = true;
-        return;
-      }
-      formData.value.configs.data_source.link_table = {
-        uid: '',
-        version: 0,
+  });
+
+  onMounted(() => {
+    if (isEditMode || isCloneMode) {
+      // 更新prevValue
+      prevValue.value = {
+        uid: dataSource.value.link_table.uid,
+        version: dataSource.value.link_table.version,
       };
-      emits('updateDataSource', formData.value.configs.data_source);
-    },
+      fetchLinkDataSheetDetail({
+        uid: dataSource.value.link_table.uid,
+        version: dataSource.value.link_table.version,
+      });
+    }
   });
 
   defineExpose<Expose>({
     refreshLinkData: () => {
       fetchLinkDataSheetDetail({
-        uid: formData.value.configs.data_source.link_table.uid,
+        uid: dataSource.value.link_table.uid,
       }).then(() => {
         // 更新version
-        formData.value.configs.data_source.link_table.version = LinkDataDetail.value.version;
-        emits('updateDataSource', formData.value.configs.data_source);
+        dataSource.value.link_table.version = LinkDataDetail.value.version;
       });
-    },
-    resetFormData: () => {
-      formData.value.configs.data_source.link_table = {
-        uid: '',
-        version: 0,
-      };
-    },
-    setConfigs(configs: IFormData['configs']) {
-      if (!configs.data_source.link_table.uid) {
-        return;
-      }
-      formData.value.configs.data_source.link_table = configs.data_source.link_table;
-      // 编辑是传入当前联表版本，用于判断是否需要提示更新
-      fetchLinkDataSheetDetail({
-        uid: formData.value.configs.data_source.link_table.uid,
-        version: formData.value.configs.data_source.link_table.version,
-      });
-      emits('updateDataSource', formData.value.configs.data_source);
-      // 设置为初始化
-      isInit = false;
     },
   });
 </script>

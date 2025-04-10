@@ -22,14 +22,13 @@
       property="configs.data_source.system_ids">
       <span>
         <bk-select
-          v-model="formData.configs.data_source.system_ids"
+          v-model="dataSource.system_ids"
           filterable
           :loading="isSystemListLoading"
           multiple
           multiple-mode="tag"
           :no-match-text="t('无匹配数据')"
-          :placeholder="t('请选择')"
-          @change="handleChangeSystem">
+          :placeholder="t('请选择')">
           <bk-option
             v-for="(system, systemIndex) in (props.tableData && !props.tableData.length) ? [] : statusSystems"
             :key="systemIndex"
@@ -64,15 +63,6 @@
 
   import useRequest from '@hooks/use-request';
 
-  interface Expose {
-    resetFormData: () => void,
-    setConfigs: (config: IFormData['configs']) => void;
-  }
-
-  interface Emits {
-    (e: 'updateDataSource', value: IFormData['configs']['data_source']): void,
-  }
-
   interface Props {
     tableData: Array<{
       label: string;
@@ -93,16 +83,10 @@
     },
   }
   const props = defineProps<Props>();
-  const emits = defineEmits<Emits>();
-  const { t } = useI18n();
-  const formData = ref<IFormData>({
-    configs: {
-      data_source: {
-        system_ids: [],
-        rt_id: '',
-      },
-    },
+  const dataSource = defineModel<IFormData['configs']['data_source']>('dataSource', {
+    required: true,
   });
+  const { t } = useI18n();
   const statusSystems = ref<Array<Record<string, any>>>([]);
 
   // 获取系统
@@ -142,28 +126,10 @@
     },
   });
 
-  // 选择系统
-  const handleChangeSystem = () => {
-    emits('updateDataSource', formData.value.configs.data_source);
-  };
-
   watch(() => props.tableData, (data) => {
     if (data) {
-      formData.value.configs.data_source.rt_id = data[0]?.value || '';
-      emits('updateDataSource', formData.value.configs.data_source);
+      dataSource.value.rt_id = data[0]?.value || '';
     }
-  }, {
-    immediate: true,
-  });
-
-  defineExpose<Expose>({
-    resetFormData: () => {
-      formData.value.configs.data_source.system_ids = [];
-    },
-    setConfigs(configs: IFormData['configs']) {
-      formData.value.configs.data_source.system_ids = configs.data_source.system_ids;
-      emits('updateDataSource', formData.value.configs.data_source);
-    },
   });
 </script>
 <style>

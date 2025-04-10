@@ -22,7 +22,7 @@
       property="configs.data_source.rt_id">
       <bk-cascader
         v-slot="{node,data}"
-        v-model="formData.configs.data_source.rt_id"
+        v-model="dataSource.rt_id"
         filterable
         id-key="value"
         :list="filterTableData"
@@ -45,21 +45,21 @@
 </template>
 
 <script setup lang='ts'>
+  import { InfoBox } from 'bkui-vue';
   import {
     computed,
+    h,
     ref,
-    watch,
-  } from 'vue';
+    watch  } from 'vue';
   import {
     useI18n,
   } from 'vue-i18n';
-  import {
-    useRoute,
-  } from 'vue-router';
 
+  interface Emits {
+    (e: 'resetConfig'): void;
+  }
   interface Expose {
-    resetFormData: () => void,
-    setConfigs: (config: FormData) => void;
+    setConfigs: (config: Record<string, any>) => void;
   }
   interface Props {
     tableData: Array<{
@@ -71,88 +71,104 @@
       }>
     }>;
     sourceType: string;
+    hasData: boolean;
   }
-  interface Emits {
-    (e: 'updateDataSource', value: FormData['data_source']): void,
-  }
-
 
   const props = defineProps<Props>();
-  const emits = defineEmits<Emits>();
+  const emit = defineEmits<Emits>();
+  const dataSource = defineModel<{
+    rt_id: Array<string>;
+  }>('dataSource', {
+    required: true,
+  });
 
   const { t } = useI18n();
-  const route = useRoute();
-  let isInit = false;
-  const isEditMode = route.name === 'strategyEdit';
-  const isCloneMode = route.name === 'strategyClone';
-  const isUpgradeMode = route.name === 'strategyUpgrade';
-  const formData = ref({
-    configs: {
-      data_source: {
-        rt_id: [] as Array<string>,
-      },
-    },
-  });
+
+  const prevValue = ref<Array<string>>([]);
+
   const filterTableData = computed(() => props.tableData.map(item => ({
     ...item,
     leaf: true,
     disabled: !(item.children && item.children.length),
   })));
-  type FormData = typeof formData.value['configs'];
-  if (!isEditMode && !isCloneMode && !isUpgradeMode)   {
-    isInit = true;
-  }
 
-  const handleUpdateDataSource = () => {
-    if (!isInit) return;
-    emits('updateDataSource', formData.value.configs.data_source);
-  };
+  const createInfoBoxConfig = (overrides: {
+    onConfirm: () => void
+    onClose: () => void
+  }): any => ({
+    type: 'warning',
+    title: t('切换数据源请注意'),
+    subTitle: () => h(
+      'div',
+      {
+        style: {
+          color: '#4D4F56',
+          backgroundColor: '#f5f6fa',
+          padding: '12px 16px',
+          borderRadius: '2px',
+          fontSize: '14px',
+          textAlign: 'left',
+        },
+      },
+      t('切换后，已配置的数据将被清空。是否继续？'),
+    ),
+    confirmText: t('继续切换'),
+    cancelText: t('取消'),
+    headerAlign: 'center',
+    contentAlign: 'center',
+    footerAlign: 'center',
+    ...overrides,
+  });
+
 
   const handleTableIdChange = () => {
-    // 手动选择数据，将已初始化的状态置为true
-    isInit = true;
-    handleUpdateDataSource();
+    if (!prevValue.value.length || !props.hasData) {
+      prevValue.value = [...dataSource.value.rt_id];
+      return;
+    }
+    InfoBox(createInfoBoxConfig({
+      onConfirm() {
+        prevValue.value = [...dataSource.value.rt_id];
+        emit('resetConfig');
+      },
+      onClose() {
+        // 恢复到之前的值
+        dataSource.value.rt_id = [...prevValue.value];
+      },
+    }));
   };
 
   watch(() => props.tableData, (data) => {
     if (data) {
-      formData.value.configs.data_source.rt_id = [];
-      handleUpdateDataSource();
       data.sort((a, b) => {
         if (a.children && a.children.length) return -1;
         if (b.children && b.children.length) return 1;
         return 0;
       });
     }
-  }, {
-    immediate: true,
   });
 
   defineExpose<Expose>({
-    resetFormData: () => {
-      formData.value.configs.data_source.rt_id = [];
-    },
     setConfigs(config: Record<string, any>) {
       if (Array.isArray(config.data_source.rt_id)) {
-        formData.value.configs.data_source.rt_id = config.data_source.rt_id;
+        dataSource.value.rt_id = config.data_source.rt_id;
+        return;
       }
       // 对tableid转换
       props.tableData.forEach((item) => {
         if (item.children && item.children.length) {
           item.children.forEach((cItem) => {
             if (cItem.value === config.data_source.rt_id) {
-              formData.value.configs.data_source.rt_id = [item.value, config.data_source.rt_id];
+              dataSource.value.rt_id = [item.value, config.data_source.rt_id];
             }
           });
         }
       });
-      isInit = true;
     },
   });
 </script>
 
-
-<style  lang="postcss" scoped>
+<style lang="postcss" scoped>
 .strategy-aiops-resource-data-wrap {
   .flex-center {
     display: flex;
