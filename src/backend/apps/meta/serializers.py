@@ -66,7 +66,7 @@ class NamespaceSerializer(serializers.ModelSerializer):
 class SystemSerializer(serializers.ModelSerializer):
     class Meta:
         model = System
-        exclude = ["updated_by", "updated_at", "created_by", "created_at"]
+        exclude = ["updated_by", "updated_at", "created_by", "created_at", "auth_token"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -89,10 +89,11 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
         label=gettext_lazy("排序方式"), required=False, allow_null=True, allow_blank=True, choices=OrderTypeChoices.choices
     )
     status = serializers.CharField(label=gettext_lazy("状态筛选"), required=False, allow_blank=True, allow_null=True)
+    source_type = serializers.CharField(label=gettext_lazy("来源类型"), required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = System
-        fields = ["namespace", "keyword", "order_field", "order_type", "status"]
+        fields = ["namespace", "keyword", "order_field", "order_type", "status", "source_type"]
 
     def validate(self, attrs: dict) -> dict:
         order_field = attrs.pop("order_field", "")
@@ -104,6 +105,9 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
 
     def validate_status(self, status: str) -> list:
         return [i for i in status.split(",") if i]
+
+    def validate_source_type(self, source_type: str) -> list:
+        return [i for i in source_type.split(",") if i]
 
 
 class SystemListAllRequestSerializer(serializers.ModelSerializer):
@@ -140,7 +144,17 @@ class SystemInfoResponseSerializer(SystemSerializer):
 class ResourceTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResourceType
-        fields = ["resource_type_id", "name", "name_en", "sensitivity", "provider_config", "version", "description"]
+        fields = [
+            "resource_type_id",
+            "name",
+            "name_en",
+            "sensitivity",
+            "provider_config",
+            "path",
+            "version",
+            "description",
+            "ancestors",
+        ]
 
 
 class ActionSerializer(serializers.ModelSerializer):

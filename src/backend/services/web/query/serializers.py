@@ -26,11 +26,11 @@ from rest_framework import serializers
 from rest_framework.settings import api_settings
 
 from api.bk_log.serializers import EsQueryFilterSerializer
+from apps.meta.permissions import SearchLogPermission
 from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE, SYSTEM_ID
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from core.exceptions import PermissionException, ValidationError
-from core.permissions import SearchLogPermission
 from core.serializers import OrderSerializer
 from core.utils.tools import format_date_string, parse_datetime
 from services.web.databus.constants import PluginSceneChoices

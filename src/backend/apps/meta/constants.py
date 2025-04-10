@@ -21,7 +21,7 @@ import re
 
 from django.utils.translation import gettext_lazy
 
-from core.choices import TextChoices
+from core.choices import TextChoices, register_choices
 from core.constants import OrderTypeChoices as _OrderTypeChoices
 
 IAM_MANAGER_ROLE = "members"
@@ -30,6 +30,8 @@ IAM_ACTION_BATCH_SIZE = 100
 IAM_RESOURCE_BATCH_SIZE = 100
 
 PAAS_APP_BATCH_SIZE = 20
+
+SYSTEM_SYNC_BATCH_SIZE = 20
 
 FETCH_INSTANCE_SCHEMA_METHOD = "fetch_resource_type_schema"
 FETCH_INSTANCE_SCHEMA_CACHE_TIMEOUT = 300
@@ -144,3 +146,14 @@ class SystemDiagnosisPushStatusEnum(TextChoices):
     PUSH = "push", gettext_lazy("推送")
     PAUSE = "pause", gettext_lazy("暂停")
     FAILED = "failed", gettext_lazy("失败")
+
+
+@register_choices("meta_system_source_type")
+class SystemSourceTypeEnum(TextChoices):
+    """
+    系统来源类型
+    """
+
+    IAM_V3 = "iam_v3", gettext_lazy("权限中心V3")
+    IAM_V4 = "iam_v4", gettext_lazy("权限中心V4")
+    AUDIT = "bk_audit", gettext_lazy("审计中心")
