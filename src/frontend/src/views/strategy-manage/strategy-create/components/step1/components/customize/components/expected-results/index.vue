@@ -22,8 +22,14 @@
     <template #item="{ element, index }: { element: DatabaseTableFieldModel, index: number }">
       <div
         :key="element.raw_name + element.aggregate + element.display_name"
-        class="query-field flex-center-wrap"
-        @click="handleEdit(element, index)">
+        class="query-field flex-center-wrap">
+        <div
+          class="edit-field"
+          @click="handleEdit(element, index)">
+          <audit-icon
+            style="margin-left: 7px;"
+            type="edit-fill" />
+        </div>
         <tooltips
           class="dragging-handle"
           :data="getMetricName(element)" />
@@ -61,6 +67,7 @@
   </vuedraggable>
 </template>
 <script setup lang="ts">
+  import _ from 'lodash';
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
@@ -95,9 +102,10 @@
 
   const localTableFields = computed(() => {
     if (isEdit.value) {
-      return [editItem.value];
+      return props.tableFields.filter(field => field.table === editItem.value.table
+        && field.raw_name === editItem.value.raw_name);
     }
-    return props.tableFields;
+    return _.cloneDeep(props.tableFields);
   });
 
   const updateExpectedResult = () => {
@@ -107,7 +115,7 @@
   const handleEdit = (element: DatabaseTableFieldModel, index: number) => {
     isEdit.value = true;
     editItem.value = element;
-    addFieldsRef.value.handleEditShowPop(element, index);
+    addFieldsRef.value.handleEditShowPop(index);
   };
 
   const getMetricName = (element: DatabaseTableFieldModel) => {
@@ -160,8 +168,16 @@
     line-height: 26px;
     color: #fff;
     white-space: nowrap;
-    background: #1eab8b;
+    background: #29bc9e;
     border-radius: 2px;
+
+    .edit-field {
+      width: 26px;
+      cursor: pointer;
+      background-color: #0eac8c;
+      border-bottom-left-radius: 2px;
+      border-top-left-radius: 2px;
+    }
 
     &:hover {
       .query-field-remove {
@@ -170,7 +186,7 @@
     }
 
     .dragging-handle {
-      width: 158px;
+      width: 130px;
       padding: 0 4px;
       cursor: move;
     }
@@ -185,7 +201,8 @@
   .flex-center-wrap {
     display: flex;
     align-items: center;
-    justify-content: center;
+
+    /* justify-content: center; */
     flex-wrap: wrap;
   }
 
@@ -197,6 +214,7 @@
     cursor: pointer;
     background: #eaebf0;
     border-radius: 2px;
+    justify-content: center;
   }
 }
 </style>
