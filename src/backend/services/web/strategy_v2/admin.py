@@ -46,7 +46,7 @@ class StrategyAdmin(admin.ModelAdmin):
         "tags",
         "is_deleted",
     ]
-    list_filter = ["namespace", "is_deleted"]
+    list_filter = ["namespace", "is_deleted", "strategy_type"]
     search_fields = ["strategy_id", "strategy_name"]
     ordering = ["-strategy_id"]
 
