@@ -38,9 +38,11 @@
             class="column-line column-line-bottom" />
         </template>
         <field-item
+          :aggregate-list="aggregateList"
           :conditions="conditions"
           :conditions-index="index"
           :config-type="configType"
+          :expected-result="expectedResult"
           :table-fields="tableFields"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
@@ -98,6 +100,8 @@
   }
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
+    expectedResult: Array<DatabaseTableFieldModel>,
+    aggregateList: Array<Record<string, any>>
     configType: string,
   }
   interface Emits {

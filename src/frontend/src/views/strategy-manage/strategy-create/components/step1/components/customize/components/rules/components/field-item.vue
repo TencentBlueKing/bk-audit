@@ -54,15 +54,18 @@
           </span>
         </template>
         <bk-option
-          v-for="item in tableFields"
-          :key="item.raw_name"
-          :label="configType === 'LinkTable' ? `${item.table}.${item.display_name}` : item.display_name"
+          v-for="(item, tableIndex) in localTableFields"
+          :key="tableIndex"
+          :label="configType === 'LinkTable' ?
+            `${getAggregateName(item)}${item.table}.${item.display_name}` :
+            `${getAggregateName(item)}${item.display_name}`"
           :value="item">
           <div v-if="configType === 'LinkTable'">
-            <span style=" color: #3a84ff;">{{ item.table }}.</span>{{ item.display_name }}
+            <span style=" color: #3a84ff;">{{ item.table }}.</span>
+            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
           </div>
           <div v-else>
-            {{ item.display_name }}
+            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
           </div>
         </bk-option>
       </bk-select>
@@ -187,7 +190,9 @@
   import useRequest from '@/hooks/use-request';
 
   interface Props {
-    tableFields: Array<DatabaseTableFieldModel>
+    tableFields: Array<DatabaseTableFieldModel>,
+    expectedResult: Array<DatabaseTableFieldModel>,
+    aggregateList: Array<Record<string, any>>,
     conditions: {
       connector: 'and' | 'or';
       conditions: Array<{
@@ -221,6 +226,7 @@
     value: string
   }>>([]);
   const dicts = ref<Record<string, Array<any>>>({});
+  const localTableFields = ref<Array<DatabaseTableFieldModel>>([]);
 
   const tagInput = ['include', 'exclude'];
 
@@ -253,6 +259,12 @@
   } = useRequest(StrategyManageService.fetchStrategyFieldValue, {
     defaultValue: [],
   });
+
+  const getAggregateName = (element: DatabaseTableFieldModel) => {
+    if (!element.aggregate) return '';
+    const item = props.aggregateList.find(item => item.value === element.aggregate);
+    return `[${item?.label}]`;
+  };
 
   const handleValidate = (value: any) => value.length > 0;
 
@@ -385,6 +397,17 @@
       }
     });
   };
+
+  // 合并预期结果，预期结果也可以在风险规则中使用
+  watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
+    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
+    localTableFields.value = [...tableFields, ...filteredExpectedResult].map(item => ({
+      ...item,
+    }));
+  }, {
+    immediate: true,
+    deep: true,
+  });
 
   watch(() => props.conditions, (data) => {
     localConditions.value = _.cloneDeep(data);
