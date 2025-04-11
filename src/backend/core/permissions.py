@@ -15,18 +15,10 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-import base64
 import os
 
-from bk_resource import resource
-from django.conf import settings
 from django.utils.translation import gettext_lazy
 from rest_framework.permissions import BasePermission
-
-from apps.meta.models import GlobalMetaConfig
-from apps.permission.constants import FETCH_INSTANCE_TOKEN_KEY
-from apps.permission.handlers.actions import ActionEnum
-from core.exceptions import PermissionException
 
 
 class Permission(BasePermission):
@@ -71,42 +63,5 @@ class TokenSwaggerPermission(BasePermission):
         token = request.GET.get("token")
         # 比对 Token
         if token == _token:
-            return True
-        return False
-
-
-class SearchLogPermission:
-    @classmethod
-    def get_auth_systems(cls, namespace) -> (list, list):
-        systems = resource.meta.system_list_all(namespace=namespace, action_ids=ActionEnum.SEARCH_REGULAR_EVENT.id)
-        authorized_systems = [
-            system["id"] for system in systems if system["permission"].get(ActionEnum.SEARCH_REGULAR_EVENT.id)
-        ]
-        return systems, authorized_systems
-
-    @classmethod
-    def any_search_log_permission(cls, namespace) -> None:
-        if not cls.get_auth_systems(namespace)[1]:
-            from apps.permission.handlers.permission import Permission
-
-            apply_data, apply_url = Permission().get_apply_data([ActionEnum.SEARCH_REGULAR_EVENT])
-            raise PermissionException(
-                action_name=ActionEnum.SEARCH_REGULAR_EVENT.name,
-                apply_url=apply_url,
-                permission=apply_data,
-            )
-
-
-class FetchInstancePermission(BasePermission):
-    @classmethod
-    def build_auth(cls, username, token):
-        base64_token = base64.b64encode(f"{username}:{token}".encode("utf-8")).decode("utf-8")
-        system_token = f"Basic {base64_token}"
-        return system_token
-
-    def has_permission(self, request, view):
-        system_token = self.build_auth(settings.FETCH_INSTANCE_USERNAME, GlobalMetaConfig.get(FETCH_INSTANCE_TOKEN_KEY))
-        user_auth_token = request.META.get("HTTP_AUTHORIZATION")
-        if system_token == user_auth_token:
             return True
         return False

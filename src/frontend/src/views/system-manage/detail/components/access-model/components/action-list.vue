@@ -55,12 +55,12 @@
           : (<span>{data.name}</span>)
       ),
     },
-    {
-      label: () => t('风险等级'),
-      render: ({ data }: {data: SystemActionModel}) => (
-        <render-sensitivity-level value={data.sensitivity} />
-      ),
-    },
+    // {
+    //   label: () => t('风险等级'),
+    //   render: ({ data }: {data: SystemActionModel}) => (
+    //     <render-sensitivity-level value={data.sensitivity} />
+    //   ),
+    // },
     {
       label: () => t('操作事件类型'),
       showOverflowTooltip: true,

@@ -19,6 +19,7 @@ const STATUS_RUNNING = 'running';
 const STATUS_PREPARING = 'preparing';
 const STATUS_FAILED = 'failed';
 export default class SystemResourceType {
+  ancestors: Array<string>;
   bkbase_url: string;
   name: string;
   name_en: string;
@@ -28,6 +29,7 @@ export default class SystemResourceType {
   provider_config: {
     path: string;
   };
+  path: string;
   version: number;
   status: string;
   // 权限
@@ -48,11 +50,13 @@ export default class SystemResourceType {
   };
 
   constructor(payload: SystemResourceType) {
+    this.ancestors = payload.ancestors;
     this.resource_type_id = payload.resource_type_id;
     this.description = payload.description;
     this.name = payload.name;
     this.name_en = payload.name_en;
     this.sensitivity = payload.sensitivity;
+    this.path = payload.path;
     this.provider_config = payload.provider_config;
     this.version = payload.version;
     this.status = payload.status;

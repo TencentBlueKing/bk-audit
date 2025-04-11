@@ -15,20 +15,3 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-from api.constants import APIGW_URL_FORMAT, ESB_URL_FORMAT, APIProvider
-from core.utils.tools import is_product
-
-
-def get_endpoint(api_name, provider=APIProvider.APIGW, stag="stag", prod="prod", stage=None):
-    """
-    获取BK-API endpoint
-    """
-    # 默认环境
-    if not stage:
-        stage = prod if is_product() else stag
-
-    # api provider
-    if provider == APIProvider.ESB:
-        return ESB_URL_FORMAT.format(api_name)
-    return APIGW_URL_FORMAT.format(api_name=api_name, stage=stage)

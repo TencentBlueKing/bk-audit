@@ -34,6 +34,15 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 获取全局字典
+   */
+  fetchGlobalChoices() {
+    return MetaManageSource.getGlobalChoices({}, {
+      cache: true,
+    })
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 根据特性id获取特性开关
    * @param { String } feature_id
    */

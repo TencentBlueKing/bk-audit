@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-03-24 20:40+0800\n"
+"POT-Creation-Date: 2025-04-02 21:01+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -191,6 +191,9 @@ msgstr "Get IAM System Role"
 
 msgid "获取IAM系统信息"
 msgstr "Get IAM System Info"
+
+msgid "获取IAM系统详情"
+msgstr "Retrieve System"
 
 msgid "服务列表查询"
 msgstr "List Services"
@@ -1032,6 +1035,15 @@ msgstr "Pause"
 msgid "失败"
 msgstr "Failed"
 
+msgid "权限中心V3"
+msgstr "IAM V3"
+
+msgid "权限中心V4"
+msgstr "IAM V4"
+
+msgid "审计中心"
+msgstr "BK Audit"
+
 msgid "Namespace不存在"
 msgstr "Namespace does not exist"
 
@@ -1068,14 +1080,35 @@ msgstr "Namespace"
 msgid "系统ID"
 msgstr "System ID"
 
+msgid "系统来源类型"
+msgstr "System Source Type"
+
+msgid "系统实例ID"
+msgstr "System Instance ID"
+
 msgid "英文名称"
 msgstr "En Name"
 
 msgid "客户端"
 msgstr "Client"
 
+msgid "应用描述"
+msgstr "App Description"
+
 msgid "系统配置"
 msgstr "System Config"
+
+msgid "IAM V3"
+msgstr "权限中心V3"
+
+msgid "回调地址"
+msgstr "Callback URL"
+
+msgid "系统鉴权 Token"
+msgstr "System Auth Token"
+
+msgid "系统管理员"
+msgstr "System Administrators"
 
 msgid "应用图标"
 msgstr "App Icon"
@@ -1083,11 +1116,11 @@ msgstr "App Icon"
 msgid "访问地址"
 msgstr "System Url"
 
-msgid "应用描述"
-msgstr "App Description"
-
 msgid "是否开启系统诊断推送"
 msgstr "Enable system diagnosis push"
+
+msgid "系统诊断额外信息"
+msgstr "System diagnosis extra info"
 
 msgid "接入系统"
 msgstr "System"
@@ -1125,11 +1158,17 @@ msgstr "Sensitivity"
 msgid "资源类型配置"
 msgstr "Resource Type Config"
 
+msgid "资源路径"
+msgstr "Resource Path"
+
 msgid "版本"
 msgstr "Version"
 
 msgid "描述信息"
 msgstr "Description"
+
+msgid "父资源类型"
+msgstr "Parent Resource Type"
 
 msgid "资源类型"
 msgstr "Resource Type"
@@ -1795,9 +1834,6 @@ msgstr "Action ID Not Exist：%(action_id)s"
 msgid "审计日志检索"
 msgstr "Search Audit Event"
 
-msgid "高敏感资源审计检索"
-msgstr "Search High Sensitive Resource Event"
-
 msgid "审计敏感信息查看"
 msgstr "Access Audit Sensitive Info"
 
@@ -1827,21 +1863,6 @@ msgstr "Delete Storage"
 
 msgid "敏感信息对象列表"
 msgstr "List Sensitive OBJECT"
-
-msgid "敏感信息对象查看"
-msgstr "View Sensitive Object"
-
-msgid "敏感信息对象创建"
-msgstr "Create Sensitive Object"
-
-msgid "敏感信息对象编辑"
-msgstr "Edit Sensitive Object"
-
-msgid "敏感信息对象删除"
-msgstr "Delete Sensitive Object"
-
-msgid "全局设置查看"
-msgstr "View Global Setting"
 
 msgid "全局设置管理"
 msgstr "Manage Global Setting"
@@ -1902,9 +1923,6 @@ msgstr "Edit Tool"
 
 msgid "新建通知组"
 msgstr "Create Notice Group"
-
-msgid "编辑通知组"
-msgstr "Edit Notice Group"
 
 msgid "编辑通知组(V2)"
 msgstr "Edit Notice Group V2"
@@ -2024,9 +2042,6 @@ msgstr "User Management"
 
 msgid "获取单个用户的leader信息"
 msgstr "Retrieve User Leader"
-
-msgid "审计中心"
-msgstr "BK Audit"
 
 msgid "升序"
 msgstr "Asc"

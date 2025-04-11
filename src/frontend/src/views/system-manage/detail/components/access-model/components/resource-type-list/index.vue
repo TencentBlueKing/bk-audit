@@ -82,6 +82,17 @@
       ),
     },
     {
+      label: () => t('父资源名称'),
+      width: '200px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => {
+        const ancestorNames = data.ancestors?.map((ancestorId) => {
+          const ancestor = resourceTypeList.value.find(item => item.resource_type_id === ancestorId);
+          return ancestor?.name || ancestorId;
+        });
+        return ancestorNames?.join(',') || '--';
+      },
+    },
+    {
       label: () => t('敏感等级'),
       width: '200px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
@@ -93,7 +104,7 @@
       minWidth: 200,
       showOverflowTooltip: true,
       render: ({ data }: {data: SystemResourceTypeModel}) => (
-        `${systemDetailData.value.provider_config.host}${data.provider_config.path} `
+        `${systemDetailData.value.callback_url}${data.path} `
       ),
     },
     {
@@ -159,15 +170,15 @@
   });
 
   /* 有相关权限才显示操作列
-    1. 拥有 access_global_setting 权限
+    1. 拥有 manage_global_setting 权限
     2. 拥有特性开关enabled为true
   */
   const checkPermission = async () => {
-    const { access_global_setting: accessGlobalSetting = false } = await IamManageService.check({ action_ids: 'access_global_setting' });
+    const { manage_global_setting: manageGlobalSetting = false } = await IamManageService.check({ action_ids: 'manage_global_setting' });
     const { enabled = false } = await MetaManageService.fetchFeature({
       feature_id: 'bkbase_aiops',
     });
-    controlsPermission.value =  accessGlobalSetting && enabled;
+    controlsPermission.value =  manageGlobalSetting && enabled;
   };
 
   // 获取系统详情
