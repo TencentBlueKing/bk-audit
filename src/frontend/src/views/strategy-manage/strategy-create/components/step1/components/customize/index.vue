@@ -88,7 +88,7 @@
             @refresh-link-data="handleRefreshLinkData" />
           <!-- 其他数据表详情 -->
           <other-table-detail-component
-            v-if="formData.configs.data_source.rt_id.length"
+            v-if="formData.configs.data_source.rt_id?.length"
             :rt-id="formData.configs.data_source.rt_id" />
         </bk-form-item>
         <bk-form-item
@@ -801,6 +801,18 @@
     }
     // 转换tableid,反显
     changeTableId();
+    if (formData.value.configs.config_type === 'LinkTable') {
+      fetchLinkDataSheetDetail({
+        uid: formData.value.configs.data_source.link_table.uid,
+        version: formData.value.configs.data_source.link_table.version,
+      });
+    } else {
+      fetDatabaseTableFields(formData.value.configs.data_source.rt_id as string);
+      fetchSourceType({
+        config_type: formData.value.configs.config_type,
+        rt_id: formData.value.configs.data_source.rt_id as string,
+      });
+    }
   };
 
   // 监听formData变化，更新数据
