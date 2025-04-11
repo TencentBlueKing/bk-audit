@@ -20,12 +20,12 @@ export default class RtzMeta  {
   result_table_name_alias: string;
   managers: Array<string>;
   processing_type: string;
-  formatted_fields: {
+  formatted_fields:  Array<{
     value: string;
     label: string;
     field_type: string;
     spec_field_type: string;
-  };
+  }>;
   sensitivity_info: {
     biz_role_memebers: Array<string>;
   };
