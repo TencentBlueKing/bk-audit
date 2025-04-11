@@ -1,3 +1,19 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
 <template>
   <div
     class="add-field-btn"
@@ -6,12 +22,14 @@
       type="add" />
   </div>
   <bk-popover
+    ref="popoverRef"
+    disable-outside-click
     ext-cls="field-custom-popover"
-    height="310"
+    height="500"
     :is-show="isShow"
     theme="light"
     trigger="click"
-    width="446"
+    width="980"
     @after-hidden="handleAfterHidden">
     <template #content>
       <div class="add-field-pop-content">
@@ -36,19 +54,26 @@
               <scroll-faker v-if="renderFieldList.length">
                 <div
                   v-for="(item, index) in renderFieldList"
-                  :key="item.raw_name"
-                  class="field-pop-select-item"
-                  :class="[selectIndex === index ? 'select-item-active' : '']"
-                  @click="() => handleSelectField(index, item)">
+                  :key="index"
+                  class="field-pop-select-item">
                   <div style="display: flex; align-items: center;">
-                    <audit-icon
-                      style="margin-right: 4px;font-size: 14px;"
-                      svg
-                      :type="item.field_type" />
-                    <span
-                      v-if="configType === 'LinkTable'"
-                      style=" color: #3a84ff;">{{ item.table }}.</span>
-                    <span>{{ item.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
+                    <bk-checkbox-group>
+                      <bk-checkbox
+                        :checked="isEdit"
+                        :disabled="isEdit"
+                        @change="(value: boolean) => handleChange(value, item)">
+                        <div style="display: flex; align-items: center">
+                          <audit-icon
+                            style="margin-right: 4px;font-size: 14px;"
+                            svg
+                            :type="item.field_type" />
+                          <span
+                            v-if="configType === 'LinkTable'"
+                            style=" color: #3a84ff;">{{ item.table }}.</span>
+                          <span>{{ item.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
+                        </div>
+                      </bk-checkbox>
+                    </bk-checkbox-group>
                   </div>
                   <div>{{ item.raw_name }}</div>
                 </div>
@@ -83,30 +108,21 @@
             </div>
           </div>
           <div class="field-pop-radio">
-            <div style=" margin-bottom: 8px;color: #313238;">
-              {{ t('聚合算法') }}
+            <div style=" margin-bottom: 12px;font-weight: 700">
+              {{ t('预期结果') }}
             </div>
-            <bk-radio-group v-model="formData.aggregate">
-              <div class="aggregate-list">
-                <bk-radio
-                  v-for="item in localAggregateList"
-                  :key="item.value"
-                  v-bk-tooltips="{
-                    disabled: !item.disabled,
-                    content: t('已添加')
-                  }"
-                  :disabled="item.disabled"
-                  :label="item.value">
-                  {{ item.label }}
-                </bk-radio>
-              </div>
-            </bk-radio-group>
+            <bk-table
+              :border="['outer', 'col', 'row']"
+              class="field-pop-radio-table"
+              :columns="columns"
+              :data="tableData"
+              :max-height="400" />
           </div>
         </div>
         <div class="field-pop-bth">
           <bk-button
             class="mr8"
-            :disabled="!formData.raw_name"
+            :disabled="!tableData.length"
             size="small"
             theme="primary"
             @click="handleAddField">
@@ -122,7 +138,8 @@
     </template>
   </bk-popover>
 </template>
-<script setup lang="ts">
+<script setup lang="tsx">
+  import _ from 'lodash';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -131,6 +148,11 @@
   import useDebouncedRef from '@hooks/use-debounced-ref';
 
   import { encodeRegexp } from '@utils/assist';
+
+  // 扩展DatabaseTableFieldModel类型，添加aggregateList属性
+  interface ExDatabaseTableFieldModel extends DatabaseTableFieldModel {
+    aggregateList: Record<string, any>[];
+  }
 
 
   interface Emits {
@@ -143,33 +165,36 @@
     configType: string,
   }
   interface Expose {
-    handleEditShowPop: (element: DatabaseTableFieldModel, index: number) => void,
+    handleEditShowPop: (index: number) => void,
   }
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  const { t } = useI18n();
   const isEdit = defineModel<boolean>({
     required: true,
   });
+  const { t } = useI18n();
 
   const isShow = ref(false);
-  const selectIndex = ref(-1);
   const editIndex = ref(-1);
-  const localAggregateList = ref<Array<Record<string, any>>>([]);
+  const commAggRef = ref<{
+    hide:() => void;
+  } | null>(null);
+  const localTableFields = ref<Array<ExDatabaseTableFieldModel>>([]);
   const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
   const isSearching = ref(false);
+  const tableData = ref<Array<ExDatabaseTableFieldModel>>([]);
 
   const searchKey = useDebouncedRef('');
 
-  const renderFieldList = computed(() => props.tableFields.reduce((result, item) => {
+  const renderFieldList = computed(() => localTableFields.value.reduce((result, item) => {
     const reg = new RegExp(encodeRegexp(searchKey.value), 'i');
     if (reg.test(item.raw_name) || reg.test(item.display_name)) {
       result.push(item);
     }
     isSearching.value = true;
     return result;
-  }, [] as Array<DatabaseTableFieldModel>));
+  }, [] as Array<ExDatabaseTableFieldModel>));
 
   const fieldAggregateMap = {
     string: ['COUNT', 'DISCOUNT'],
@@ -181,6 +206,100 @@
     timestamp: ['COUNT', 'MIX', 'MAX'],
   };
 
+  const columns = [
+    {
+      label: () => t('字段名'),
+      field: () => 'raw_name',
+      className: 'raw_name',
+    },
+    {
+      label: () => <div
+          v-bk-tooltips={{
+            content: t('sql示例："字段名"AS"显示名"'),
+          }}
+          style="border-bottom: 1px dashed #979ba5;">
+            { t('显示名') }
+        </div>,
+      render: ({ data }: {data:DatabaseTableFieldModel}) => <bk-input
+          v-model={data.display_name}
+          behavior="simplicity" />,
+      className: 'display-name-input',
+    },
+    {
+      label: () => <div>
+          <span
+            v-bk-tooltips={{
+              content: t('指合并同类数据，计算总和、平均等统计值；同时选择多个字段时，可用聚合算法是最小公集。'),
+            }}
+            style="border-bottom: 1px dashed #979ba5;">
+            { t('聚合算法') }
+          </span>
+          <bk-popover
+            ref={commAggRef}
+            width="150"
+            placement="bottom"
+            content="#hidden_pop_content"
+            theme="light"
+            trigger="click"
+            allow-html
+            extCls="comm-agg-pop"
+          >
+            <audit-icon
+              v-bk-tooltips={ {
+                content: t('批量设置聚合算法'),
+              }}
+              style="margin-left: 4px;color: #3A84FF;"
+              type="edit-fill"/>
+          </bk-popover>
+          <div style="display: none">
+            <div id="hidden_pop_content">
+              {(() => {
+                // 获取所有字段聚合算法交集
+                const commonAggs: Array<Record<string, any>> = props.aggregateList
+                  .filter(agg => tableData.value
+                    .every(field => field.aggregateList
+                      .some(item => item.value === agg.value)))
+                  .map(agg => ({
+                    ...agg,
+                    disabled: tableData.value
+                      .some(field => field.aggregateList
+                        .find(item => item.value === agg.value)?.disabled),
+                  }));
+
+                return commonAggs.map(item => (
+                  <div
+                    class={['common-agg-item', item.disabled ? 'is-disabled' : '']}
+                    onClick={() => {
+                      if (!item.disabled) {
+                        tableData.value = tableData.value.map(field => ({
+                          ...field,
+                          aggregate: item.value,
+                        }));
+                      }
+                      console.log('点击了聚合算法', commAggRef.value);
+                      commAggRef.value?.hide();
+                    }}>
+                    {item.label}
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+      </div>,
+      render: ({ data }: {data: ExDatabaseTableFieldModel}) => <bk-select v-model={data.aggregate}>
+            {data.aggregateList.map(item => (
+              <bk-option
+                key={item.value}
+                value={item.value}
+                label={item.label}
+                disabled={item.disabled}
+              />
+            ))}
+        </bk-select>,
+      className: 'aggregate-select',
+    },
+  ] as any;
+
   const handleClearSearch = () => {
     searchKey.value = '';
     isSearching.value = false;
@@ -188,46 +307,56 @@
 
   const handleShowPop = () => {
     isEdit.value = false;
-    isShow.value = true;
+    isShow.value = !isShow.value;
   };
 
-  const handleSelectField = (index: number, field: DatabaseTableFieldModel) => {
-    selectIndex.value = index;
-    // 每种类型字段拥有不同的聚合算法
-    // eslint-disable-next-line max-len
-    localAggregateList.value =  props.aggregateList.filter(item => fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚和');
-    // 同一字段不能重复添加同一聚合算法
-    // eslint-disable-next-line max-len
-    const hasAggregate = props.expectedResultList.filter(item => (item.table + item.raw_name) === (field.table +  field.raw_name));
-    if (hasAggregate.length) {
-      localAggregateList.value = localAggregateList.value.map((item) => {
-        if (hasAggregate.some(element => element.aggregate === item.value)) {
-          return {
-            ...item,
-            disabled: true,
-          };
-        }
-        return item;
-      });
-    }
-    formData.value = {
-      ...field,
-      aggregate: localAggregateList.value.find(item => !item.disabled)?.value, // 选择第一个可选项
+  const handleChange = (value: boolean, field: ExDatabaseTableFieldModel) => {
+    const createAggregateList = () => {
+      // 生成初始聚合列表
+      const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚和'));
+
+      // 检测重复聚合算法
+      const existingAggregates = new Set(props.expectedResultList
+        .filter(item => `${item.table}${item.raw_name}` === `${field.table}${field.raw_name}`)
+        .map(item => item.aggregate));
+
+      // 禁用已存在的选项
+      return baseList.map<Record<string, any>>(item => ({
+        ...item,
+        disabled: existingAggregates.has(item.value),
+      }));
     };
+
+    if (value) {
+      // 创建新对象避免参数修改
+      const processedField = {
+        ...field,
+        aggregateList: createAggregateList(),
+        aggregate: null,
+      };
+
+      // 设置初始选中值
+      processedField.aggregate = processedField.aggregateList.find(item => !item.disabled)?.value;
+
+      // 更新数据
+      tableData.value.push({
+        ...processedField,
+        aggregateList: processedField.aggregateList,
+      });
+      formData.value = new DatabaseTableFieldModel();
+    } else {
+      tableData.value = tableData.value.filter(({ raw_name: rawName }) => rawName !== field.raw_name);
+    }
   };
 
   const reset = () => {
     searchKey.value = '';
     isSearching.value = false;
     isEdit.value = false;
-    selectIndex.value = -1;
     editIndex.value = -1;
     formData.value = new DatabaseTableFieldModel();
-    // 重置可选
-    localAggregateList.value = props.aggregateList.map(item => ({
-      ...item,
-      disabled: false,
-    }));
+    // 重置tableData
+    tableData.value = [];
   };
 
   const handleAfterHidden = (value: { isShow: boolean}) => {
@@ -241,41 +370,59 @@
   };
 
   const handleAddField = () => {
+    const processItem = (item: ExDatabaseTableFieldModel) => {
+      // 处理显示名称
+      const withAggregate = `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`;
+
+      // 统计重复显示名
+      const displayNameCount = props.expectedResultList.reduce<Record<string, number>>(
+        (acc, cur) => ({ ...acc, [cur.display_name]: (acc[cur.display_name] || 0) + 1 }),
+        {},
+      );
+
+      // 生成最终显示名
+      const finalDisplayName = displayNameCount[withAggregate] >= 1
+        ? `${item.table}.${withAggregate}`
+        : withAggregate;
+
+      // 过滤不需要的属性
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { aggregateList, ...pureItem } = item;
+      return { ...pureItem, display_name: finalDisplayName };
+    };
+
     if (!isEdit.value) {
-      // 添加聚合算法后缀
-      formData.value.display_name = `${formData.value.display_name}${formData.value.aggregate ? `_${formData.value.aggregate}` : ''}`;
-      // 统计每个 display_name 的出现次数
-      const displayNameCount = props.expectedResultList.reduce<Record<string, number>>((acc, item) => {
-        acc[item.display_name] = (acc[item.display_name] || 0) + 1;
-        return acc;
-      }, {});
-      // 重复字段添加table前缀
-      formData.value.display_name = displayNameCount[formData.value.display_name] >= 1 ?  `${formData.value.table}.${formData.value.display_name}` :  formData.value.display_name;
-      emits('addExpectedResult', formData.value);
+      // 处理新增模式
+      const processedItems = tableData.value.map(processItem);
+      processedItems.forEach(item => emits('addExpectedResult', item));
     } else {
-      // 替换聚合算法后缀
-      const newAggregate = `${formData.value.aggregate ? `_${formData.value.aggregate}` : ''}`;
-      formData.value.display_name = formData.value.display_name.replace(/(_\w+)$/, newAggregate);
-      emits('addExpectedResult', formData.value, editIndex.value);
+      // 处理编辑模式
+      const [currentItem] = tableData.value;
+      if (currentItem) {
+        const processedItem = processItem(currentItem);
+        emits('addExpectedResult', processedItem, editIndex.value);
+      }
     }
-    // 重置数据
+
     handleCancel();
   };
 
-  watch(() => props.aggregateList, (data) => {
-    localAggregateList.value = data.map(item => ({
+  watch(() => props.tableFields, (data) => {
+    localTableFields.value = data.map(item => ({
       ...item,
-      disabled: false,
+      aggregateList: _.cloneDeep(props.aggregateList),
     }));
+    if (isEdit.value) {
+      handleChange(true, localTableFields.value[0]);
+    }
   }, {
     immediate: true,
   });
 
   defineExpose<Expose>({
-    handleEditShowPop: (element: DatabaseTableFieldModel, index: number) => {
+    handleEditShowPop: (index: number) => {
       isShow.value = true;
       editIndex.value = index;
-      handleSelectField(0, element);
     },
   });
 </script>
@@ -306,10 +453,10 @@
     flex-direction: column;
 
     .field-pop-select {
-      flex: 1;
       display: flex;
-      flex-direction: column;
+      width: 350px;
       height: 100%;
+      flex-direction: column;
 
       .input-icon {
         display: flex;
@@ -349,18 +496,33 @@
     }
 
     .field-pop-radio {
-      width: 136px;
-      padding: 8px 16px;
+      flex: 1;
+      padding: 16px;
       background: #f5f7fa;
 
-      .aggregate-list {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
+      :deep(.field-pop-radio-table) {
+        .bk-table-body {
+          .display-name-input,
+          .aggregate-select {
+            .cell {
+              padding: 0;
 
-        :deep(.bk-radio) {
-          padding-bottom: 12px;
-          margin-left: 0;
+              .bk-input--default {
+                height: 42px;
+                border: none;
+
+                .bk-input--text {
+                  &:hover {
+                    border: 1px solid #a3c5fd;
+                  }
+
+                  &:focus {
+                    border: 1px solid #3a84ff;
+                  }
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -380,4 +542,34 @@
   .field-custom-popover {
     padding: 0 !important;
   }
+
+  .comm-agg-pop {
+    padding: 5px 0 !important;
+
+    .common-agg-item {
+      position: relative;
+      display: flex;
+      min-height: 32px;
+      padding: 0 12px;
+      overflow: hidden;
+      color: #63656e;
+      text-align: left;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      align-items: center;
+
+      &:hover {
+        background-color: #f5f7fa;
+      }
+    }
+
+    .is-disabled {
+      color: #c4c6cc;
+      cursor: not-allowed;
+      background-color: transparent;
+    }
+  }
+
 </style>
