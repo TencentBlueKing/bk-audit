@@ -170,15 +170,15 @@
   });
 
   /* 有相关权限才显示操作列
-    1. 拥有 access_global_setting 权限
+    1. 拥有 manage_global_setting 权限
     2. 拥有特性开关enabled为true
   */
   const checkPermission = async () => {
-    const { access_global_setting: accessGlobalSetting = false } = await IamManageService.check({ action_ids: 'access_global_setting' });
+    const { manage_global_setting: manageGlobalSetting = false } = await IamManageService.check({ action_ids: 'manage_global_setting' });
     const { enabled = false } = await MetaManageService.fetchFeature({
       feature_id: 'bkbase_aiops',
     });
-    controlsPermission.value =  accessGlobalSetting && enabled;
+    controlsPermission.value =  manageGlobalSetting && enabled;
   };
 
   // 获取系统详情
