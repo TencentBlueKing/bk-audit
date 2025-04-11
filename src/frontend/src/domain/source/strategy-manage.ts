@@ -18,6 +18,7 @@ import type SearchModel from '@model/es-query/search';
 import type AiopsDetailModel from '@model/strategy/aiops-detail';
 import type AiopsPlanModel from '@model/strategy/aiops-plan';
 import type CommonDataModel from '@model/strategy/common-data';
+import type RtMetaModel from '@model/strategy/rt-meta';
 import type StrategyModel from '@model/strategy/strategy';
 import type StrategyFieldEvent from '@model/strategy/strategy-field-event';
 // import type StrategyFieldModel from '@model/strategy/strategy-field';
@@ -154,6 +155,24 @@ class Strategy extends ModuleBase {
         value: string;
       }>
     }>>(`${this.path}/strategy_table/`, {
+      params,
+    });
+  }
+  // 获取表格的信息
+  getTableRtMeta(params: {
+    table_id: string
+  }) {
+    return Request.get<RtMetaModel>(`${this.path}/strategy_table/rt_meta/`, {
+      params,
+    });
+  }
+  // 获取表格最后一条数据
+  getTableRtLastData(params: {
+    table_id: string
+  }) {
+    return Request.get<{
+      last_data: Array<Record<string, any>>;
+    }>(`${this.path}/strategy_table/rt_last_data/`, {
       params,
     });
   }
