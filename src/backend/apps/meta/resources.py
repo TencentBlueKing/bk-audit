@@ -16,7 +16,6 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import base64
 from abc import ABC
 from collections import defaultdict
 from enum import EnumMeta
@@ -62,6 +61,7 @@ from apps.meta.models import (
     SystemInstance,
     Tag,
 )
+from apps.meta.permissions import SearchLogPermission
 from apps.meta.serializers import (
     ActionSerializer,
     ChangeSystemDiagnosisPushReqSerializer,
@@ -108,7 +108,6 @@ from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.choices import list_registered_choices
 from core.models import get_request_username
-from core.permissions import FetchInstancePermission, SearchLogPermission
 from core.utils.cache import CacheMixin
 from core.utils.tools import get_app_info
 
@@ -188,13 +187,15 @@ class SystemListResource(SystemAbstractResource):
             queryset = queryset.filter(
                 Q(Q(name__icontains=keyword) | Q(name_en__icontains=keyword) | Q(system_id__icontains=keyword))
             )
+        if validated_request_data.get("source_type"):
+            queryset = queryset.filter(source_type__in=validated_request_data["source_type"])
         systems = self.serializer_class(queryset, many=self.many_response_data).data
         all_managers = resource.meta.system_role_list(role=IAM_MANAGER_ROLE)
         system_manager_map = defaultdict(list)
         for manager in all_managers:
             system_manager_map[manager["system_id"]].append(manager["username"])
         for system in systems:
-            system["managers"] = system_manager_map[system["system_id"]]
+            system["managers"] = system["managers"] or system_manager_map[system["system_id"]]
         actions = [ActionEnum.VIEW_SYSTEM, ActionEnum.EDIT_SYSTEM]
         systems = wrapper_permission_field(systems, actions, id_field=lambda x: x["system_id"])
         systems.sort(key=self.sort_system_by_permission)
@@ -449,14 +450,9 @@ class ResourceTypeSchema(Meta, CacheMixin, Resource):
         if cache_data is not None:
             return cache_data
         #  拼接请求参数
-        request_url = (
-            system.provider_config["host"].rstrip("/") + "/" + resource_type.provider_config["path"].lstrip("/")
-        )
+        request_url = resource_type.resource_request_url(system)
         request_body = {"type": resource_type.resource_type_id, "method": FETCH_INSTANCE_SCHEMA_METHOD}
-        base64_token = base64.b64encode(
-            f"{settings.FETCH_INSTANCE_USERNAME}:{system.provider_config['token']}".encode("utf-8")
-        ).decode("utf-8")
-        request_header = {"Authorization": f"Basic {base64_token}"}
+        request_header = {"Authorization": system.base64_token}
         # 请求数据
         web = requests.session()
         try:
@@ -473,7 +469,7 @@ class ResourceTypeSchema(Meta, CacheMixin, Resource):
                 request_body,
                 err,
             )
-            data = dict()
+            return []
         response_data = [
             {
                 "id": key,
@@ -653,10 +649,8 @@ class GetAssetPullInfo(Meta, Resource):
             "system_name": system.name,
             "resource_type_id": resource_type.resource_type_id,
             "resource_type_name": resource_type.name,
-            "url": "{}{}".format(system.provider_config["host"], resource_type.provider_config["path"]),
-            "token": FetchInstancePermission.build_auth(
-                settings.FETCH_INSTANCE_USERNAME, system.provider_config["token"]
-            ),
+            "url": resource_type.resource_request_url(system),
+            "token": system.base64_token,
         }
 
 

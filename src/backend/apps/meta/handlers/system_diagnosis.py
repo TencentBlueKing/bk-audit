@@ -24,14 +24,13 @@ from blueapps.utils.logger import logger
 from django.db import transaction
 
 from apps.meta.constants import (
-    IAM_MANAGER_ROLE,
     SYSTEM_DIAGNOSIS_PUSH_RECIPIENTS_KEY,
     SYSTEM_DIAGNOSIS_PUSH_TEMPLATE_KEY,
     ConfigLevelChoices,
     SystemDiagnosisPushStatusEnum,
 )
 from apps.meta.exceptions import SystemDiagnosisPushTemplateEmpty, SystemRoleMemberEmpty
-from apps.meta.models import GlobalMetaConfig, System, SystemDiagnosisConfig, SystemRole
+from apps.meta.models import GlobalMetaConfig, System, SystemDiagnosisConfig
 from core.render import Jinja2Renderer
 from core.utils.tools import is_product
 from services.web.risk.constants import SECURITY_PERSON_KEY
@@ -65,11 +64,7 @@ class SystemDiagnosisPushHandler:
             recipient = push_recipients[self.system_id]
         else:
             # 默认推送接收人:系统管理员
-            recipient: List[str] = list(
-                SystemRole.objects.filter(system_id=self.system_id, role=IAM_MANAGER_ROLE).values_list(
-                    "username", flat=True
-                )
-            )
+            recipient: List[str] = self.system.managers_list
         if not is_product():
             recipient = GlobalMetaConfig.get(config_key=SECURITY_PERSON_KEY)
         if not recipient:
