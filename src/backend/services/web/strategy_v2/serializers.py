@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+from datetime import datetime, timedelta
 from typing import List
 
 from django.utils.translation import gettext, gettext_lazy
@@ -36,6 +37,7 @@ from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
+    STRATEGY_STATUS_DEFAULT_INTERVAL,
     ConnectorChoices,
     LinkTableJoinType,
     LinkTableTableType,
@@ -364,6 +366,7 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(
         label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID"))
     )
+    risk_count = serializers.IntegerField(label=gettext_lazy("Risk Count"))
 
     class Meta:
         model = Strategy
@@ -1113,3 +1116,35 @@ class RuleAuditSourceTypeCheckRespSerializer(serializers.Serializer):
         label=gettext_lazy("Support Source Types"),
         child=serializers.ChoiceField(choices=RuleAuditSourceType.choices),
     )
+
+
+class StrategyRunningStatusListReqSerializer(serializers.Serializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False)
+    end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False)
+    limit = serializers.IntegerField(label=gettext_lazy("Limit"), default=100)
+    offset = serializers.IntegerField(label=gettext_lazy("Offset"), default=0)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not (attrs.get("start_time") and attrs.get("end_time")):
+            end_time = datetime.now()
+            start_time = end_time - timedelta(days=STRATEGY_STATUS_DEFAULT_INTERVAL)
+            attrs["start_time"] = start_time
+            attrs["end_time"] = end_time
+        if attrs["end_time"] < attrs["start_time"]:
+            raise serializers.ValidationError(gettext("End time must be greater than start time"))
+        return attrs
+
+
+class RunningStatusSerializer(serializers.Serializer):
+    schedule_time = serializers.CharField(label=gettext_lazy("调度时间"))
+    err_msg = serializers.CharField(label=gettext_lazy("错误信息"), allow_blank=True, allow_null=True)
+    status = serializers.CharField(label=gettext_lazy("状态"), allow_blank=True, allow_null=True)
+    status_str = serializers.CharField(label=gettext_lazy("状态字符串"), allow_blank=True, allow_null=True)
+    risk_count = serializers.IntegerField(label=gettext_lazy("风险数量"))
+    data_time = serializers.CharField(label=gettext_lazy("数据时间"))
+
+
+class StrategyRunningStatusListRespSerializer(serializers.Serializer):
+    strategy_running_status = RunningStatusSerializer(many=True)

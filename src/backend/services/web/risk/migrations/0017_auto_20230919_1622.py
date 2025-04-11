@@ -23,9 +23,4 @@ class Migration(migrations.Migration):
                 verbose_name="Risk ID",
             ),
         ),
-        migrations.AlterField(
-            model_name="risk",
-            name="strategy_id",
-            field=models.BigIntegerField(db_index=True, verbose_name="命中策略(ID)"),
-        ),
     ]

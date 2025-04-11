@@ -50,6 +50,8 @@ LOCAL_UPDATE_FIELDS = [
     "risk_guidance",
     "risk_title",
     "processor_groups",
+    "event_data_field_configs",
+    "event_evidence_field_configs",
 ]
 
 # 策略可用的调度时间依赖于事件的查询周期
@@ -284,3 +286,9 @@ class RuleAuditConditionOperator(TextChoices):
 
 # 规则审计条件连接符
 RuleAuditWhereConnector = FilterConnector
+
+# 策略运行状态默认时间间隔(天)
+STRATEGY_STATUS_DEFAULT_INTERVAL = 30 * 6
+
+# 策略关联风险默认时间间隔(天)
+STRATEGY_RISK_DEFAULT_INTERVAL = 30 * 6

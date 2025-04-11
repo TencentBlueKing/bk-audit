@@ -37,6 +37,7 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
+from services.web.strategy_v2.models import Strategy
 
 
 def generate_risk_id() -> str:
@@ -59,7 +60,13 @@ class Risk(models.Model):
     risk_id = models.CharField(gettext_lazy("Risk ID"), primary_key=True, max_length=255, default=generate_risk_id)
     event_content = models.TextField(EventMappingFields.EVENT_CONTENT.description, null=True, blank=True)
     raw_event_id = models.CharField(EventMappingFields.RAW_EVENT_ID.description, max_length=255, db_index=True)
-    strategy_id = models.BigIntegerField(EventMappingFields.STRATEGY_ID.description, db_index=True)
+    strategy = models.ForeignKey(
+        Strategy,
+        db_constraint=False,
+        verbose_name=EventMappingFields.STRATEGY_ID.description,
+        on_delete=models.CASCADE,
+        related_name='risks',
+    )
     event_evidence = models.TextField(EventMappingFields.EVENT_EVIDENCE.description, null=True, blank=True)
     event_type = models.JSONField(EventMappingFields.EVENT_TYPE.description, null=True, blank=True, default=list)
     event_data = models.JSONField(EventMappingFields.EVENT_DATA.description, null=True, blank=True)
@@ -99,7 +106,7 @@ class Risk(models.Model):
         verbose_name = gettext_lazy("Risk")
         verbose_name_plural = verbose_name
         ordering = ["-event_time"]
-        index_together = [["strategy_id", "raw_event_id", "status"]]
+        index_together = [["strategy", "raw_event_id", "status"], ["strategy", "event_time"]]
 
     @classmethod
     def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet:

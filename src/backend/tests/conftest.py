@@ -16,8 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import importlib
+from unittest import mock
 
 import pytest
+
+from api.bk_base.default import DataflowBatchStatusList, GetFlowGraph
+from tests.constants import MOCK_PROCESSING_ID, RISK_EVENT_TIMESTAMP
 
 
 @pytest.hookimpl(trylast=True)
@@ -25,3 +29,37 @@ def pytest_configure(config: pytest.Config) -> None:
     from django.conf import settings
 
     importlib.import_module(settings.ROOT_URLCONF)
+
+
+def mock_bk_base_get_flow_graph():
+    return mock.patch.object(
+        GetFlowGraph,
+        'perform_request',
+        lambda *args, **kwargs: {
+            "nodes": [
+                {"node_type": "batchv2", "result_table_ids": [MOCK_PROCESSING_ID]},
+                {"node_type": "scenario_app", "result_table_ids": [MOCK_PROCESSING_ID]},
+            ]
+        },
+    )
+
+
+def mock_bk_base_dataflow_batch_status_list():
+    return mock.patch.object(
+        DataflowBatchStatusList,
+        'perform_request',
+        lambda *args, **kwargs: [
+            {
+                'created_at': 1744158562000,
+                'data_time': RISK_EVENT_TIMESTAMP,
+                'err_msg': '',
+                'execute_id': 382899815,
+                'is_allowed': False,
+                'schedule_time': 1744158540000,
+                'started_at': 1744195083000,
+                'status': 'finished',
+                'status_str': '成功',
+                'updated_at': 1744195143000,
+            },
+        ],
+    )
