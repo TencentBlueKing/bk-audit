@@ -90,12 +90,18 @@ class Condition(BaseModel):
 
 class WhereCondition(BaseModel):
     """
-    筛选条件
+    Where筛选条件
     """
 
     connector: FilterConnector = FilterConnector.AND  # 连接符
     conditions: List["WhereCondition"] = PydanticField(default_factory=list)  # 子条件
     condition: Optional[Condition] = None  # 条件
+
+
+class HavingCondition(WhereCondition):
+    """Having筛选条件"""
+
+    pass
 
 
 class Order(BaseModel):
@@ -125,6 +131,7 @@ class SqlConfig(BaseModel):
     from_table: Optional[Table] = None  # 主表
     join_tables: Optional[List[JoinTable]] = None  # 联表
     where: Optional[WhereCondition] = None  # 筛选条件
+    having: Optional[HavingCondition] = None  # 筛选条件
     group_by: List[Field] = PydanticField(default_factory=list)  # 分组条件；如果未指定但有聚合函数，则会自动添加 group by 条件
     order_by: List[Order] = PydanticField(default_factory=list)  # 排序条件
     pagination: Optional[Pagination] = None  # 分页条件

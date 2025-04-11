@@ -607,6 +607,22 @@ class GetRTFieldsRequestSerializer(serializers.Serializer):
     table_id = serializers.CharField(label=gettext_lazy("Table ID"))
 
 
+class GetRTMetaRequestSerializer(serializers.Serializer):
+    """
+    Get RT Meta
+    """
+
+    table_id = serializers.CharField(label=gettext_lazy("Table ID"))
+
+
+class GetRTLastDataRequestSerializer(serializers.Serializer):
+    """
+    Get RT Last Data
+    """
+
+    table_id = serializers.CharField(label=gettext_lazy("Table ID"))
+
+
 class BulkGetRTFieldsRequestSerializer(serializers.Serializer):
     """
     Bulk Get RT Fields
@@ -629,7 +645,9 @@ class GetRTFieldsResponseSerializer(serializers.Serializer):
 
     label = serializers.CharField(label=gettext_lazy("Label"))
     value = serializers.CharField(label=gettext_lazy("value"))
+    alias = serializers.CharField(label=gettext_lazy("Alias"))
     field_type = serializers.CharField(label=gettext_lazy("Field Type"))
+    spec_field_type = serializers.CharField(label=gettext_lazy("Spec Field Type"))
 
 
 class BulkGetRTFieldsResponseSerializer(serializers.Serializer):
@@ -1006,6 +1024,7 @@ class RuleAuditWhereSerializer(serializers.Serializer):
     Rule Audit Where
     """
 
+    index = serializers.IntegerField(label=gettext_lazy("Index"), required=False, default=0)
     connector = serializers.ChoiceField(
         label=gettext_lazy("Connector"),
         choices=RuleAuditWhereConnector.choices,
@@ -1041,6 +1060,33 @@ class RuleAuditWhereSerializer(serializers.Serializer):
         return attrs
 
 
+class RuleAuditHavingSerializer(RuleAuditWhereSerializer):
+    def to_internal_value(self, instance):
+        """
+        自定义序列化逻辑: 递归解析 conditions
+        """
+
+        ret = super().to_representation(instance)
+
+        # 递归处理 conditions
+        conditions = instance.get('conditions', [])
+        ret['conditions'] = [
+            RuleAuditHavingSerializer(condition, context=self.context).data for condition in conditions
+        ]
+
+        return ret
+
+    def validate(self, attrs):
+        """如果 condition 存在，检查其 field 中的 aggregate"""
+        attrs = super().validate(attrs)
+        condition = attrs.get("condition", {})
+        if condition:
+            field = condition.get('field', {})
+            if field and 'aggregate' in field and not field['aggregate']:
+                raise serializers.ValidationError(gettext("Field in having condition must have aggregate set to True"))
+        return attrs
+
+
 class RuleAuditSerializer(serializers.Serializer):
     """
     Rule Audit
@@ -1054,6 +1100,7 @@ class RuleAuditSerializer(serializers.Serializer):
         label=gettext_lazy("Rule Audit Select"), child=RuleAuditFieldSerializer(), allow_empty=False
     )
     where = RuleAuditWhereSerializer(label=gettext_lazy("Rule Audit Where"), required=False)
+    having = RuleAuditHavingSerializer(label=gettext_lazy("Rule Audit Having"), required=False)
     schedule_config = ScheduleConfigSerializer(label=gettext_lazy("Rule Audit Schedule Config"), required=False)
 
     def validate(self, attrs):

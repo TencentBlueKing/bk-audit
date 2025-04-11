@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from functools import cached_property
 from typing import List
 
 from django.utils.translation import gettext_lazy
@@ -47,6 +48,22 @@ class FieldType(TextChoices):
     TIMESTAMP = "timestamp", gettext_lazy("时间戳")
     FLOAT = "float", gettext_lazy("浮点数")
 
+    @cached_property
+    def python_type(self):
+        """
+        将字段类型转换为 Python 类型
+        """
+        type_mapping = {
+            self.STRING: str,
+            self.DOUBLE: float,
+            self.INT: int,
+            self.LONG: int,
+            self.TEXT: str,
+            self.TIMESTAMP: int,
+            self.FLOAT: float,
+        }
+        return type_mapping[self.value]
+
 
 class AggregateType(TextChoices):
     """
@@ -77,6 +94,14 @@ class AggregateType(TextChoices):
         if aggregate_type not in aggregate_mapping:
             raise ValueError(f"不支持的聚合类型: {aggregate_type}")
         return aggregate_mapping[aggregate_type]
+
+    @cached_property
+    def result_data_type(self):
+        """
+        返回聚合函数的结果数据类型
+        """
+        if self.value in {self.COUNT, self.DISCOUNT}:
+            return FieldType.LONG
 
 
 class JoinType(TextChoices):

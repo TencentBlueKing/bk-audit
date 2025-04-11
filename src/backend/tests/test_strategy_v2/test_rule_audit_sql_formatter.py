@@ -452,7 +452,7 @@ class TestRuleAuditSQLFormatter(TestCase):
                     "table": "d",
                     "raw_name": "network_name",
                     "display_name": "网络名称",
-                    "field_type": "string",
+                    "field_type": "long",
                     "aggregate": "MAX",
                 },
             ],
@@ -491,6 +491,20 @@ class TestRuleAuditSQLFormatter(TestCase):
                     },
                 ],
             },
+            "having": {
+                "condition": {
+                    "field": {
+                        "table": "b",
+                        "raw_name": "resource_id",
+                        "display_name": "资源ID",
+                        "field_type": "long",
+                        "aggregate": "COUNT",
+                    },
+                    "operator": "gt",
+                    "filter": 100,
+                    "filters": [],
+                },
+            },
         }
 
         # Field mapping for additional fields
@@ -517,7 +531,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "LEFT JOIN network_rt_4 `d` ON `c`.`host_id`=`d`.`network_id` "
             "WHERE `a`.`event_type`='critical' AND `b`.`resource_status`<>'inactive' "
             "AND `a`.`system_id` IN ('sys_111') "
-            "GROUP BY `a`.`event_id`,`c`.`host_id`) `sub_table`"
+            "GROUP BY `a`.`event_id`,`c`.`host_id` HAVING COUNT(`b`.`resource_id`)>100) `sub_table`"
         )
 
         # Run the test
