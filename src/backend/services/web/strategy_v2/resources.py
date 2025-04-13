@@ -937,42 +937,111 @@ class GetEventFieldsConfig(StrategyV2Base):
             ]
         ]
 
-    def get_event_data_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
+    def get_event_data_field_configs(
+        self, strategy: Optional[Strategy], risk: Optional[Risk], has_permission: bool
+    ) -> List[EventInfoField]:
         """
         事件数据字段
+        合并策略配置的event_data_field_configs和风险中的event_data
         """
-
-        if not risk:
+        if not strategy:
             return []
+
+        # 收集所有的字段
+        field_dict = {}
+
+        # 1. 从策略配置中获取字段
+        for field in strategy.event_data_field_configs:
+            field_dict[field["field_name"]] = {
+                "display_name": field.get("display_name", field["field_name"]),
+                "example": "",
+                "description": "",
+            }
+
+        # 2. 从风险数据中获取字段
+        if risk:
+            risk_data = risk.event_data or {}
+            for key, value in risk_data.items():
+                if key not in field_dict:
+                    field_dict[key] = {"display_name": key, "example": "", "description": ""}
+                if has_permission:
+                    field_dict[key]["example"] = value
+
+        # 转换为EventInfoField列表
         return [
-            EventInfoField(field_name=key, display_name=key, description="", example=value if has_permission else "")
-            for key, value in (risk.event_data or {}).items()
+            EventInfoField(
+                field_name=key,
+                display_name=info["display_name"],
+                description=info["description"],
+                example=info["example"],
+            )
+            for key, info in field_dict.items()
         ]
 
-    def get_event_evidence_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
+    def get_event_evidence_field_configs(
+        self, strategy: Optional[Strategy], risk: Optional[Risk], has_permission: bool
+    ) -> List[EventInfoField]:
         """
         事件证据字段
+        合并策略配置的event_evidence_field_configs和风险中的event_evidence
         """
-
-        if not risk:
+        if not strategy:
             return []
-        try:
-            event_evidence = json.loads(risk.event_evidence)[0]
-        except (json.JSONDecodeError, IndexError, KeyError):
-            event_evidence = {}
+
+        # 收集所有的字段
+        field_dict = {}
+
+        # 1. 从策略配置中获取字段
+        for field in strategy.event_evidence_field_configs or []:
+            field_dict[field["field_name"]] = {
+                "display_name": field.get("display_name", field["field_name"]),
+                "example": "",
+                "description": field.get("description", ""),
+            }
+
+        # 2. 从风险数据中获取字段
+        if risk:
+            try:
+                event_evidence = json.loads(risk.event_evidence)[0] if risk.event_evidence else {}
+            except (json.JSONDecodeError, IndexError, KeyError):
+                event_evidence = {}
+
+            for key, value in event_evidence.items():
+                if key not in field_dict:
+                    field_dict[key] = {"display_name": key, "example": "", "description": ""}
+                if has_permission:
+                    field_dict[key]["example"] = value
+
+        # 转换为EventInfoField列表
         return [
-            EventInfoField(field_name=key, display_name=key, description="", example=value if has_permission else "")
-            for key, value in event_evidence.items()
+            EventInfoField(
+                field_name=key,
+                display_name=info["display_name"],
+                description=info["description"],
+                example=info["example"],
+            )
+            for key, info in field_dict.items()
         ]
 
     def perform_request(self, validated_request_data):
-        # 风险不存在: 基础字段
-        # 风险存在: 基础字段 + 事件数据字段 + 事件证据字段
-        # 有权限: 字段样例为风险值
-        # 无权限: 字段样例为空
+        """
+        获取策略配置字段
+        1. 没有策略：返回基础字段
+        2. 有策略：组合策略配置和实际风险数据
+        """
         strategy_id = validated_request_data.get("strategy_id")
+        strategy: Optional[Strategy] = Strategy.objects.filter(strategy_id=strategy_id).first()
+        if not strategy:
+            return {
+                "event_basic_field_configs": self.get_event_basic_field_configs(None, False),
+                "event_data_field_configs": [],
+                "event_evidence_field_configs": [],
+            }
+
+        # 有策略，查找相关风险
         risk: Optional[Risk] = Risk.objects.filter(strategy_id=strategy_id).order_by("-event_time").first()
         has_permission = False
+
         if risk:
             # 权限认证
             permission = RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK)
@@ -980,10 +1049,11 @@ class GetEventFieldsConfig(StrategyV2Base):
                 has_permission = permission.has_risk_permission(risk_id=risk.risk_id, operator=get_request_username())
             except PermissionException:
                 pass
+
         return {
             "event_basic_field_configs": self.get_event_basic_field_configs(risk, has_permission),
-            "event_data_field_configs": self.get_event_data_field_configs(risk, has_permission),
-            "event_evidence_field_configs": self.get_event_evidence_field_configs(risk, has_permission),
+            "event_data_field_configs": self.get_event_data_field_configs(strategy, risk, has_permission),
+            "event_evidence_field_configs": self.get_event_evidence_field_configs(strategy, risk, has_permission),
         }
 
 
