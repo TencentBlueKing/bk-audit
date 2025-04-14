@@ -291,7 +291,8 @@
   interface Where {
     connector: 'and' | 'or'
     conditions: Array<{
-      connector: 'and' | 'or'
+      connector: 'and' | 'or',
+      index: number,
       conditions: Array<{
         condition: {
           field: DatabaseTableFieldModel | ''
@@ -316,6 +317,7 @@
       config_type: string
       select: Array<DatabaseTableFieldModel>
       where: Where
+      having: Where
       schedule_config: {
         count_freq: string
         schedule_period: string
@@ -373,6 +375,10 @@
       config_type: '',
       select: [],
       where: {
+        connector: 'and',
+        conditions: [],
+      },
+      having: {
         connector: 'and',
         conditions: [],
       },
@@ -794,7 +800,7 @@
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
     expectedResultsRef.value.setSelect(editData.configs.select);
-    rulesComponentRef.value.setWhere(editData.configs.where);
+    rulesComponentRef.value.setWhere(editData.configs.where, editData.configs.having);
     if (editData.configs.data_source) {
       formData.value.configs.data_source = editData.configs.data_source;
       originSourceType.value = editData.configs.data_source.source_type as 'batch_join_source' |'stream_source' | '';
@@ -868,6 +874,30 @@
           };
         });
         expectedResultsRef.value.setSelect(params.configs.select);
+      }
+      // 添加having参数
+      if (params.configs.where) {
+        // 数据结构和where保持一致，将field的aggregate不为null的添加到having中
+        params.configs.having = {
+          connector: params.configs.where.connector,
+          conditions: params.configs.where.conditions
+            .map(group => ({
+              connector: group.connector,
+              index: group.index,
+              conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && item.condition.field?.aggregate),
+            }))
+            // 过滤掉没有聚合条件的组
+            .filter(group => group.conditions.length > 0),
+        };
+        // 将where中符合having的条件删除
+        params.configs.where.conditions = params.configs.where.conditions
+          .map(group => ({
+            connector: group.connector,
+            index: group.index,
+            conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && !item.condition.field?.aggregate),
+          }))
+          // 过滤掉没有聚合条件的组
+          .filter(group => group.conditions.length > 0);
       }
       return params;
     },
