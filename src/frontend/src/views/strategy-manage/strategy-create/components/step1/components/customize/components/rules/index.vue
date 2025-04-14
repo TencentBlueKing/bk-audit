@@ -82,12 +82,13 @@
 
   interface Expose {
     resetFormData: () => void,
-    setWhere: (whereData: Where) => void;
+    setWhere: (whereData: Where, having: Where) => void;
   }
   interface Where {
     connector: 'and' | 'or';
     conditions: Array<{
       connector: 'and' | 'or';
+      index: number; // 确保每个条件组都有索引值
       conditions: Array<{
         condition: {
           field: DatabaseTableFieldModel;
@@ -116,6 +117,7 @@
     connector: 'and',
     conditions: [{
       connector: 'and',
+      index: 0,
       conditions: [{
         condition: {
           field: new DatabaseTableFieldModel(),
@@ -140,11 +142,20 @@
 
   const handleDelete = (index: number) => {
     where.value.conditions.splice(index, 1);
+    // 重新计算索引值，保持索引的连续性，通过创建新对象而不是直接修改原对象
+    where.value.conditions = where.value.conditions.map((item, idx) => ({
+      ...item,
+      index: idx,
+    }));
   };
 
   const handleAddRuleItem = () => {
+    // 计算新添加条件组的索引值
+    const newIndex = where.value.conditions.length > 0
+      ? Math.max(...where.value.conditions.map(item => item.index || 0)) + 1 : 0;
     where.value.conditions.push({
       connector: 'and',
+      index: newIndex,
       conditions: [{
         condition: {
           field: new DatabaseTableFieldModel(),
@@ -191,6 +202,7 @@
         connector: 'and',
         conditions: [{
           connector: 'and',
+          index: 0,
           conditions: [{
             condition: {
               field: new DatabaseTableFieldModel(),
@@ -202,8 +214,11 @@
         }],
       };
     },
-    setWhere(whereData: Where) {
+    setWhere(whereData: Where, having: Where) {
       where.value = whereData;
+      // 将having条件合并到where条件中, conditions根据item.index进行排序合并
+      where.value.conditions = where.value.conditions.concat(having.conditions);
+      where.value.conditions.sort((a, b) => a.index - b.index);
     },
   });
 </script>
