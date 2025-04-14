@@ -195,6 +195,7 @@
     aggregateList: Array<Record<string, any>>,
     conditions: {
       connector: 'and' | 'or';
+      index: number,
       conditions: Array<{
         condition: {
           field: DatabaseTableFieldModel;
@@ -232,6 +233,7 @@
 
   const localConditions = ref<Props['conditions']>({
     connector: 'and',
+    index: 0,
     conditions: [{
       condition: {
         field: new DatabaseTableFieldModel(),
@@ -316,6 +318,24 @@
       }).then((data) => {
         dicts.value[value.raw_name] = data.filter((item: Record<string, any>) => item.id !== '');
       });
+      // 是否选中预期结果字段
+      const isExpectedResultField = value.aggregate;
+
+      if (isExpectedResultField) {
+        // 清空不是预期结果的字段
+        localConditions.value.conditions = localConditions.value.conditions.map((condItem, condIndex) => {
+          const { field } = condItem.condition;
+          if (!field.aggregate) {
+            // eslint-disable-next-line no-param-reassign
+            condItem.condition.field = new DatabaseTableFieldModel();
+            emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, condIndex, 'field');
+            // 重置数据
+            reSetOperator(condIndex);
+            reSetFilter(condIndex);
+          }
+          return condItem;
+        });
+      }
     }
     emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index, 'field');
     localConditions.value.conditions[index].condition.field = { ...value };
@@ -398,12 +418,35 @@
     });
   };
 
+  // 更新可选字段列表
+  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
+    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
+    // 检查是否已经选择了预期结果中的字段
+    const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
+
+    // 根据是否选择了预期结果字段来更新字段列表
+    localTableFields.value = hasSelectedExpectedResultField
+      ? [...filteredExpectedResult]
+      : [...tableFields, ...filteredExpectedResult];
+
+    localTableFields.value = localTableFields.value.map(item => ({ ...item }));
+  };
+
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
-    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
-    localTableFields.value = [...tableFields, ...filteredExpectedResult].map(item => ({
-      ...item,
-    }));
+    updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
+
+    // 检查并清理不在可选字段列表中的已选字段
+    localConditions.value.conditions.forEach((condItem, index) => {
+      const { field } = condItem.condition;
+      if (field?.display_name && !localTableFields.value.some(item => item.display_name === field.display_name)) {
+        // eslint-disable-next-line no-param-reassign
+        condItem.condition.field = new DatabaseTableFieldModel();
+        emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, index, 'field');
+        reSetOperator(index);
+        reSetFilter(index);
+      }
+    });
   }, {
     immediate: true,
     deep: true,
