@@ -21,34 +21,30 @@ from functools import cached_property
 from typing import List
 
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext
 
-from apps.notice.handlers import ErrorMsgHandler
-from core.lock import lock
 from services.web.analyze.constants import (
     AUDIT_EVENT_TABLE_FORMAT,
     BKBASE_DEFAULT_BASELINE_LOCATION,
     BKBASE_DEFAULT_COUNT_FREQ,
     BKBASE_DEFAULT_OFFSET,
     BKBASE_DEFAULT_WINDOW_COLOR,
-    BKBASE_FLOW_CONSUMING_MODE,
     RULE_AUDIT_STRATEGY_STOP_MAX_SLEEP_TIMES,
     RULE_AUDIT_STRATEGY_STOP_SLEEP_TIME,
     BaseControlTypeChoices,
     FlowDataSourceNodeType,
     FlowNodeStatusChoices,
     FlowSQLNodeType,
-    FlowStatusToggleChoices,
     OffsetUnit,
     OutputBaselineType,
     WindowDependencyRule,
     WindowType,
 )
-from services.web.analyze.controls.base import BaseControl
+from services.web.analyze.controls.base import BkbaseFlowController
 from services.web.analyze.exceptions import NotSupportDataSource
 from services.web.analyze.storage_node import (
     BaseStorageNode,
@@ -56,26 +52,18 @@ from services.web.analyze.storage_node import (
     HDFSStorageNode,
     QueueStorageNode,
 )
-from services.web.analyze.tasks import (
-    call_controller,
-    check_flow_status,
-    toggle_monitor,
-)
 from services.web.analyze.utils import calculate_offline_flow_start_time, is_asset
 from services.web.databus.models import CollectorPlugin
-from services.web.strategy_v2.constants import (
-    BkBaseStorageType,
-    RuleAuditConfigType,
-    StrategyStatusChoices,
-)
-from services.web.strategy_v2.exceptions import StrategyStatusUnexpected
+from services.web.strategy_v2.constants import BkBaseStorageType, RuleAuditConfigType
 from services.web.strategy_v2.models import LinkTable
 
 
-class RuleAuditController(BaseControl):
+class RuleAuditController(BkbaseFlowController):
     """
     RuleAuditController
     """
+
+    base_control_type = BaseControlTypeChoices.RULE_AUDIT
 
     def __init__(self, strategy_id: int):
         super().__init__(strategy_id)
@@ -84,35 +72,6 @@ class RuleAuditController(BaseControl):
         self.y_interval = 100
         self.x = 0
         self.y = 0
-
-    def create(self) -> None:
-        """
-        create bkbase flow
-        """
-
-        self.update_or_create(StrategyStatusChoices.STARTING)
-
-    def update(self) -> None:
-        """
-        update bkbase flow
-        """
-
-        self.update_or_create(StrategyStatusChoices.UPDATING)
-
-    @lock(load_lock_name=lambda self, status: f"RuleAuditHandler.update_or_create_{self.strategy.strategy_id}")
-    def update_or_create(self, status: str):
-        self.strategy.status = status
-        self.strategy.save(update_fields=["status"])
-        call_controller.delay(
-            func_name=self._update_or_create.__name__,
-            strategy_id=self.strategy.strategy_id,
-            base_control_type=BaseControlTypeChoices.RULE_AUDIT.value,
-            status=status,
-        )
-
-    @cached_property
-    def flow_name(self) -> str:
-        return f"RULE_AUDIT-{self.strategy.strategy_id}-{str(time.time_ns())}"
 
     @cached_property
     def raw_table_name(self) -> str:
@@ -289,6 +248,18 @@ class RuleAuditController(BaseControl):
             for last_node_id in last_node_ids
         ]
 
+    def delete_data_source_nodes(self, flow_id: int):
+        """
+        删除数据源节点
+        """
+
+        data_source_node_ids = self.strategy.backend_data.get("data_source_node_ids", [])
+        bulk_delete_params = [
+            {"flow_id": flow_id, "node_id": node_id, "confirm": "true"} for node_id in data_source_node_ids
+        ]
+        api.bk_base.delete_flow_node.bulk_request(bulk_delete_params, ignore_exceptions=True)
+        logger.info("[DeleteDataSourceNodes] FlowID => %s; NodeIDS => %s", flow_id, data_source_node_ids)
+
     def create_or_update_data_source_nodes(self, need_create: bool, flow_id: int) -> List[int]:
         """
         创建/更新数据源节点
@@ -296,12 +267,14 @@ class RuleAuditController(BaseControl):
 
         if not need_create:
             # 删除已有的数据源节点
-            data_source_node_ids = self.strategy.backend_data.get("data_source_node_ids", [])
-            bulk_delete_params = [
-                {"flow_id": flow_id, "node_id": node_id, "confirm": "true"} for node_id in data_source_node_ids
-            ]
-            api.bk_base.delete_flow_node.bulk_request(bulk_delete_params, ignore_exceptions=True)
-            logger.info("[DeleteDataSourceNodes] FlowID => %s; NodeIDS => %s", flow_id, data_source_node_ids)
+            try:
+                self.delete_data_source_nodes(flow_id)
+            except APIRequestError as e:
+                logger.warning(
+                    "[DeleteDataSourceNodes] FlowID => %s; Error => %s",
+                    flow_id,
+                    e,
+                )
         data_source_node_ids = []
         # 构建新的数据源节点
         self.y = self.y_interval
@@ -402,7 +375,7 @@ class RuleAuditController(BaseControl):
         flow_status = self._describe_flow_status()
         if flow_status not in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
             return
-        params = self.build_update_flow_params(flow_id=self.strategy.backend_data["flow_id"])
+        params = self.build_update_flow_params()
         api.bk_base.stop_flow(**params)
 
     @transaction.atomic()
@@ -426,130 +399,5 @@ class RuleAuditController(BaseControl):
         # 构建存储节点
         self.create_or_update_storage_nodes(need_create, flow_id, sql_node_id)
         self.strategy.backend_data["raw_table_name"] = self.raw_table_name
-        self.strategy.save(update_fields=["backend_data"])
+        self.strategy.save(update_record=False, update_fields=["backend_data"])
         return need_create
-
-    def _update_or_create(self, status: str) -> None:
-        try:
-            self._update_or_create_bkbase_flow()
-            self.enable(force=True)
-        except Exception as err:
-            if status == StrategyStatusChoices.STARTING:
-                self.strategy.status = StrategyStatusChoices.START_FAILED
-            elif status == StrategyStatusChoices.UPDATING:
-                self.strategy.status = StrategyStatusChoices.UPDATE_FAILED
-            else:
-                self.strategy.status = StrategyStatusChoices.FAILED
-            self.strategy.status_msg = str(err)
-            self.strategy.save(update_fields=["status", "status_msg"])
-            logger.error("[CreateOrUpdateFlowFailed]\nStrategy ID => %s\nError => %s", self.strategy.strategy_id, err)
-            ErrorMsgHandler(
-                title=gettext("Create or Update Flow Failed"),
-                content=gettext("Strategy ID:\t%s") % self.strategy.strategy_id,
-            ).send()
-
-    def check_flow_status(self, strategy_id: int, success_status: str, failed_status: str, other_status: str):
-        """
-        check bkbase flow status
-        """
-
-        return check_flow_status.delay(strategy_id, success_status, failed_status, other_status)
-
-    def build_update_flow_params(self, flow_id: str) -> dict:
-        """
-        构建更新流参数
-        """
-
-        return {
-            "flow_id": flow_id,
-            "consuming_mode": BKBASE_FLOW_CONSUMING_MODE,
-            "resource_sets": {
-                "stream": settings.BKBASE_STREAM_RESOURCE_SET_ID,
-                "batch": settings.BKBASE_BATCH_RESOURCE_SET_ID,
-            },
-        }
-
-    def _toggle_strategy(self, status: str, force: bool = False) -> None:
-        # update flow
-        params = self.build_update_flow_params(flow_id=self.strategy.backend_data.get("flow_id"))
-        if not force and (
-            not params["flow_id"]
-            or self.strategy.status
-            in [
-                StrategyStatusChoices.STARTING.value,
-                StrategyStatusChoices.STOPPING.value,
-                StrategyStatusChoices.UPDATING.value,
-                StrategyStatusChoices.FAILED.value,
-            ]
-        ):
-            return
-        match status:
-            case FlowStatusToggleChoices.START.value:
-                api.bk_base.start_flow(**params)
-                self.strategy.status = StrategyStatusChoices.STARTING
-                self.strategy.save(update_fields=["status"])
-                toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
-                self.check_flow_status(
-                    strategy_id=self.strategy.strategy_id,
-                    success_status=StrategyStatusChoices.RUNNING,
-                    failed_status=StrategyStatusChoices.START_FAILED,
-                    other_status=StrategyStatusChoices.STARTING,
-                )
-            case FlowStatusToggleChoices.RESTART.value:
-                api.bk_base.restart_flow(**params)
-                self.strategy.status = StrategyStatusChoices.UPDATING
-                self.strategy.save(update_fields=["status"])
-                toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=True)
-                self.check_flow_status(
-                    strategy_id=self.strategy.strategy_id,
-                    success_status=StrategyStatusChoices.RUNNING,
-                    failed_status=StrategyStatusChoices.UPDATE_FAILED,
-                    other_status=StrategyStatusChoices.UPDATING,
-                )
-            case FlowStatusToggleChoices.STOP.value:
-                api.bk_base.stop_flow(**params)
-                self.strategy.status = StrategyStatusChoices.STOPPING
-                self.strategy.save(update_fields=["status"])
-                toggle_monitor.delay(strategy_id=self.strategy.strategy_id, is_active=False)
-                self.check_flow_status(
-                    strategy_id=self.strategy.strategy_id,
-                    success_status=StrategyStatusChoices.DISABLED,
-                    failed_status=StrategyStatusChoices.STOP_FAILED,
-                    other_status=StrategyStatusChoices.STOPPING,
-                )
-            case _:
-                raise StrategyStatusUnexpected()
-
-    def _describe_flow_status(self) -> str:
-        """
-        获取Flow运行状态
-        """
-
-        flow_id = self.strategy.backend_data.get("flow_id")
-        if not flow_id:
-            return FlowNodeStatusChoices.NO_START
-        data = api.bk_base.get_flow_deploy_data(flow_id=flow_id)
-        if data:
-            return data["flow_status"]
-        return FlowNodeStatusChoices.NO_START
-
-    def delete(self) -> None:
-        flow_status = self._describe_flow_status()
-        if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
-            self._toggle_strategy(FlowStatusToggleChoices.STOP.value)
-
-    def enable(self, force: bool = False) -> None:
-        """
-        enable bkbase flow
-        """
-
-        flow_status = self._describe_flow_status()
-        if flow_status in [FlowNodeStatusChoices.NO_START]:
-            self._toggle_strategy(FlowStatusToggleChoices.START.value, force=force)
-        else:
-            self._toggle_strategy(FlowStatusToggleChoices.RESTART.value, force=force)
-
-    def disabled(self, force: bool = False) -> None:
-        flow_status = self._describe_flow_status()
-        if flow_status in [FlowNodeStatusChoices.RUNNING, FlowNodeStatusChoices.FAILED]:
-            self._toggle_strategy(FlowStatusToggleChoices.STOP.value, force=force)

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-02 21:01+0800\n"
+"POT-Creation-Date: 2025-04-15 10:22+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -164,6 +164,24 @@ msgstr "Storage"
 
 msgid "认证方式"
 msgstr "Auth Type"
+
+msgid "RT ID"
+msgstr "RT ID"
+
+msgid "查询开始时间"
+msgstr "Search Start Time"
+
+msgid "查询结束时间"
+msgstr "Search End Time"
+
+msgid "地域"
+msgstr "Region"
+
+msgid "限制条数"
+msgstr "Limit"
+
+msgid "偏移量"
+msgstr "Offset"
 
 msgid "获取消息类型"
 msgstr "Get Msg Type"
@@ -1389,6 +1407,11 @@ msgstr "Sort Type"
 msgid "状态筛选"
 msgstr "Status Filter"
 
+#, fuzzy
+#| msgid "系统来源类型"
+msgid "来源类型"
+msgstr "System Source Type"
+
 msgid "权限"
 msgstr "Permission"
 
@@ -1863,6 +1886,11 @@ msgstr "Delete Storage"
 
 msgid "敏感信息对象列表"
 msgstr "List Sensitive OBJECT"
+
+#, fuzzy
+#| msgid "全局设置管理"
+msgid "全局设置查看"
+msgstr "View Global Setting"
 
 msgid "全局设置管理"
 msgstr "Manage Global Setting"
@@ -3768,6 +3796,9 @@ msgstr "Link Table Name Exists"
 msgid "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
 msgstr "Unsupported data source type: current type is {source_type}, supported types are: {support_source_types}"
 
+msgid "策略无离线计算任务节点"
+msgstr "Strategy has no batchV2 calculation task nodes"
+
 #, python-format
 msgid "source_field %s not found"
 msgstr "source_field %s not found"
@@ -3908,6 +3939,9 @@ msgstr "Query Join Table Tags List"
 msgid "规则审计调度类型检查"
 msgstr "Rule Audit Source Type Check"
 
+msgid "查询策略运行状态列表"
+msgstr "Query Strategy Running Status List"
+
 msgid "Source Field"
 msgstr "Source Field"
 
@@ -3959,6 +3993,9 @@ msgstr "Processor Group"
 
 msgid "Strategy Name Duplicate"
 msgstr "Strategy Name Duplicate"
+
+msgid "Risk Count"
+msgstr "Risk Count"
 
 msgid "Toggle"
 msgstr "Toggle"
@@ -4224,6 +4261,30 @@ msgstr "Batch rule audit need schedule_config"
 
 msgid "Support Source Types"
 msgstr "Support Source Types"
+
+msgid "Limit"
+msgstr "Limit"
+
+msgid "Offset"
+msgstr "Offset"
+
+msgid "End time must be greater than start time"
+msgstr "End time must be greater than start time"
+
+msgid "调度时间"
+msgstr "Schedule Time"
+
+msgid "错误信息"
+msgstr "Error Message"
+
+msgid "状态字符串"
+msgstr "Status String"
+
+msgid "风险数量"
+msgstr "Risk Count"
+
+msgid "数据时间"
+msgstr "Data Time"
 
 msgid "版本日志"
 msgstr "Version Log"

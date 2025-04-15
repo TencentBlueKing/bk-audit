@@ -26,7 +26,6 @@ from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from django.conf import settings
-from django.utils import timezone
 from django.utils.translation import gettext
 
 from apps.notice.constants import MsgType
@@ -45,13 +44,14 @@ from services.web.analyze.controls.auth import (
     AssetAuthHandler,
     CollectorPluginAuthHandler,
 )
-from services.web.analyze.controls.base import Controller
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.models import Strategy
 
 
 @celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-def call_controller(func_name: str, strategy_id: int, base_control_type: str = None, *args, **kwargs):
+def call_controller(
+    func_name: str, strategy_id: int, base_control_type: BaseControlTypeChoices = None, *args, **kwargs
+):
     """
     call controller async
     """
@@ -60,7 +60,9 @@ def call_controller(func_name: str, strategy_id: int, base_control_type: str = N
 
         controller = RuleAuditController(strategy_id=strategy_id)
     else:
-        controller = Controller(strategy_id=strategy_id)
+        from services.web.analyze.controls.base import Controller
+
+        controller = Controller.get_typed_controller(strategy_id=strategy_id)
     controller_func = getattr(controller, func_name, None)
     controller_func(*args, **kwargs)
 
@@ -93,15 +95,14 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
                     if log.get("level") == BKBASE_ERROR_LOG_LEVEL
                 ]
             )
-            strategy.save(update_fields=["status_msg"])
+            strategy.save(update_record=False, update_fields=["status_msg"])
         else:
             strategy.status = other_status
     except (APIRequestError, TypeError, KeyError):
         strategy.status = other_status
 
     # update status
-    strategy.updated_at = timezone.now()
-    strategy.save(update_record=False, update_fields=["status", "updated_at"])
+    strategy.save(update_record=False, update_fields=["status"])
 
     # check re-run
     if strategy.status == other_status:
