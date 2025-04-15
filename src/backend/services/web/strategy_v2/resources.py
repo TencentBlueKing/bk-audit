@@ -31,10 +31,11 @@ from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet
 from django.db.models.aggregates import Min
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
 from rest_framework.settings import api_settings
@@ -79,6 +80,7 @@ from services.web.strategy_v2.constants import (
     LOCAL_UPDATE_FIELDS,
     NO_TAG_ID,
     NO_TAG_NAME,
+    STRATEGY_RISK_DEFAULT_INTERVAL,
     EventInfoField,
     LinkTableJoinType,
     LinkTableTableType,
@@ -104,6 +106,9 @@ from services.web.strategy_v2.exceptions import (
     StrategyTypeCanNotChange,
 )
 from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLBuilder
+from services.web.strategy_v2.handlers.strategy_running_status import (
+    StrategyRunningStatusHandler,
+)
 from services.web.strategy_v2.models import (
     LinkTable,
     LinkTableAuditInstance,
@@ -145,6 +150,8 @@ from services.web.strategy_v2.serializers import (
     RuleAuditSourceTypeCheckReqSerializer,
     RuleAuditSourceTypeCheckRespSerializer,
     StrategyInfoSerializer,
+    StrategyRunningStatusListReqSerializer,
+    StrategyRunningStatusListRespSerializer,
     ToggleStrategyRequestSerializer,
     UpdateLinkTableRequestSerializer,
     UpdateLinkTableResponseSerializer,
@@ -309,7 +316,7 @@ class UpdateStrategy(StrategyV2Base):
         # save strategy
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
-            # 不同且不在本地更新清单中的字段才触发远程更新
+            # 不同且不在本地更新清单中的字段才触发远程flow更新
             if inst_val != val and key not in LOCAL_UPDATE_FIELDS:
                 need_update_remote = True
             setattr(strategy, key, val)
@@ -317,7 +324,7 @@ class UpdateStrategy(StrategyV2Base):
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
         # update rule audit sql
-        if strategy.strategy_type == StrategyType.RULE:
+        if need_update_remote and strategy.strategy_type == StrategyType.RULE:
             strategy.sql = self.build_rule_audit_sql(strategy)
             strategy.save(update_fields=["sql"])
         # return
@@ -373,7 +380,21 @@ class ListStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         # init queryset
         order_field = validated_request_data.get("order_field") or "-strategy_id"
-        queryset = Strategy.objects.filter(namespace=validated_request_data["namespace"]).order_by(order_field)
+        queryset = Strategy.objects.filter(namespace=validated_request_data["namespace"])
+
+        # 策略关联风险起始时间
+        strategy_risk_start_time = timezone.now() - datetime.timedelta(days=STRATEGY_RISK_DEFAULT_INTERVAL)
+        # 关联风险数量
+        queryset = queryset.prefetch_related(
+            Prefetch(
+                'risks',
+                queryset=Risk.objects.filter(event_time__gte=strategy_risk_start_time),
+            )
+        ).annotate(risk_count=Count('risks', filter=Q(risks__event_time__gte=strategy_risk_start_time)))
+
+        # 排序
+        queryset = queryset.order_by(order_field)
+
         # 特殊筛选
         if HAS_UPDATE_TAG_ID in validated_request_data.get("tag", []):
             validated_request_data["tag"] = [t for t in validated_request_data["tag"] if t != HAS_UPDATE_TAG_ID]
@@ -433,6 +454,9 @@ class ToggleStrategy(StrategyV2Base):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         controller_cls = self.get_base_control_type(strategy.strategy_type)
+        # 更新处理人
+        strategy.updated_by = get_request_username()
+        strategy.save(update_fields=["updated_by"])
         if validated_request_data["toggle"]:
             call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
             return
@@ -451,6 +475,9 @@ class RetryStrategy(StrategyV2Base):
         need_update = strategy.backend_data and (
             strategy.backend_data.get("id") or strategy.backend_data.get("flow_id")
         )
+        # 更新处理人
+        strategy.updated_by = get_request_username()
+        strategy.save(update_fields=["updated_by"])
         func_name = BaseControl.update.__name__ if need_update else BaseControl.create.__name__
         try:
             call_controller(func_name, strategy.strategy_id, controller_cls)
@@ -1158,3 +1185,26 @@ class RuleAuditSourceTypeCheck(StrategyV2Base):
         else:
             support_source_types = checker.rt_support_source_types(rt_id)
         return {"support_source_types": support_source_types}
+
+
+class StrategyRunningStatusList(StrategyV2Base):
+    name = gettext_lazy("查询策略运行状态列表")
+    RequestSerializer = StrategyRunningStatusListReqSerializer
+    ResponseSerializer = StrategyRunningStatusListRespSerializer
+
+    def perform_request(self, validated_request_data):
+        strategy_id: int = validated_request_data["strategy_id"]
+        start_time: datetime.datetime = validated_request_data["start_time"]
+        end_time: datetime.datetime = validated_request_data["end_time"]
+        limit = validated_request_data["limit"]
+        offset = validated_request_data["offset"]
+        strategy = get_object_or_404(Strategy, strategy_id=strategy_id)
+        h = StrategyRunningStatusHandler.get_typed_handler(
+            strategy=strategy,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+            offset=offset,
+        )
+        strategy_running_status = h.get_strategy_running_status()
+        return {"strategy_running_status": strategy_running_status}

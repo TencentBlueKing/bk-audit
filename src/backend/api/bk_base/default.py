@@ -27,7 +27,10 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_base.constants import UNSUPPORTED_CODE
-from api.bk_base.serializers import QuerySyncRequestSerializer
+from api.bk_base.serializers import (
+    DataflowBatchStatusListReqSerializer,
+    QuerySyncRequestSerializer,
+)
 from api.domains import BK_BASE_API_URL
 
 
@@ -342,3 +345,13 @@ class QuerySyncResource(BkBaseResource):
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer
+
+
+class DataflowBatchStatusList(BkBaseResource):
+    """
+    查询离线任务状态列表
+    """
+
+    action = "/v3/dataflow/batch/data_makeup/status_list/"
+    method = "GET"
+    RequestSerializer = DataflowBatchStatusListReqSerializer

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-02 21:01+0800\n"
+"POT-Creation-Date: 2025-04-15 10:22+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -164,6 +164,24 @@ msgstr "存储类型"
 
 msgid "认证方式"
 msgstr "认证方式"
+
+msgid "RT ID"
+msgstr "RT ID"
+
+msgid "查询开始时间"
+msgstr "查询开始时间"
+
+msgid "查询结束时间"
+msgstr "查询结束时间"
+
+msgid "地域"
+msgstr "地域"
+
+msgid "限制条数"
+msgstr "限制条数"
+
+msgid "偏移量"
+msgstr "偏移量"
 
 msgid "获取消息类型"
 msgstr "获取消息类型"
@@ -1389,6 +1407,11 @@ msgstr "排序方式"
 msgid "状态筛选"
 msgstr "状态筛选"
 
+#, fuzzy
+#| msgid "系统来源类型"
+msgid "来源类型"
+msgstr "系统来源类型"
+
 msgid "权限"
 msgstr "权限"
 
@@ -1863,6 +1886,9 @@ msgstr "数据存储删除"
 
 msgid "敏感信息对象列表"
 msgstr "敏感信息对象列表"
+
+msgid "全局设置查看"
+msgstr "全局设置查看"
 
 msgid "全局设置管理"
 msgstr "全局设置管理"
@@ -3765,6 +3791,9 @@ msgstr "联表名称已存在"
 msgid "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
 msgstr "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
 
+msgid "策略无离线计算任务节点"
+msgstr "策略无离线计算任务节点"
+
 #, python-format
 msgid "source_field %s not found"
 msgstr "来源字段 %s 不存在"
@@ -3905,6 +3934,9 @@ msgstr "查询联表标签列表"
 msgid "规则审计调度类型检查"
 msgstr "规则审计调度类型检查"
 
+msgid "查询策略运行状态列表"
+msgstr "查询策略运行状态列表"
+
 msgid "Source Field"
 msgstr "来源字段"
 
@@ -3956,6 +3988,9 @@ msgstr "处理组"
 
 msgid "Strategy Name Duplicate"
 msgstr "策略名称重复"
+
+msgid "Risk Count"
+msgstr "风险数量"
 
 msgid "Toggle"
 msgstr "启停"
@@ -4205,6 +4240,30 @@ msgstr "离线规则审计的需要调度配置"
 
 msgid "Support Source Types"
 msgstr "调度类型"
+
+msgid "Limit"
+msgstr "限制量"
+
+msgid "Offset"
+msgstr "偏移量"
+
+msgid "End time must be greater than start time"
+msgstr "结束时间必须大于开始时间"
+
+msgid "调度时间"
+msgstr "调度时间"
+
+msgid "错误信息"
+msgstr "错误信息"
+
+msgid "状态字符串"
+msgstr "状态字符串"
+
+msgid "风险数量"
+msgstr "风险数量"
+
+msgid "数据时间"
+msgstr "数据时间"
 
 msgid "版本日志"
 msgstr "版本日志"
