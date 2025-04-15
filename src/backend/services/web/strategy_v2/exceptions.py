@@ -104,3 +104,9 @@ class NotSupportSourceType(StrategyV2Exception):
     def __init__(self, source_type, support_source_types, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(source_type=source_type, support_source_types=support_source_types)
         super().__init__(*args, **kwargs)
+
+
+class StrategyNoBatchV2Node(StrategyV2Exception):
+    SATUS_CODE = 400
+    ERROR_CODE = "013"
+    MESSAGE = gettext_lazy("策略无离线计算任务节点")
