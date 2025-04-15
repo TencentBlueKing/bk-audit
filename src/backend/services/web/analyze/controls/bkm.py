@@ -46,7 +46,7 @@ class BKMController(Controller):
         params = {"bk_biz_id": settings.DEFAULT_BK_BIZ_ID, "ids": [self.strategy.backend_data["id"]]}
         api.bk_monitor.delete_alarm_strategy(**params)
         self.strategy.status = StrategyStatusChoices.DISABLED.value
-        self.strategy.save(update_fields=["status"])
+        self.strategy.save(update_record=False, update_fields=["status"])
 
     def enable(self) -> None:
         self._toggle_strategy(True)
@@ -60,17 +60,17 @@ class BKMController(Controller):
             result = api.bk_monitor.save_alarm_strategy(**params)
             self.strategy.backend_data = result
             self.strategy.status = StrategyStatusChoices.RUNNING.value
-            self.strategy.save(update_fields=["backend_data", "status"])
+            self.strategy.save(update_record=False, update_fields=["backend_data", "status"])
         except Exception as err:  # NOCC:broad-except(需要处理所有异常)
             logger.error("[CreateBKMStrategyFailed] %s", err)
             self.strategy.status = StrategyStatusChoices.FAILED.value
-            self.strategy.save(update_fields=["status"])
+            self.strategy.save(update_record=False, update_fields=["status"])
 
     def _toggle_strategy(self, status: bool):
         params = {"is_enabled": status, "ids": [self.strategy.backend_data["id"]]}
         api.bk_monitor.switch_alarm_strategy(params)
         self.strategy.status = StrategyStatusChoices.RUNNING.value if status else StrategyStatusChoices.DISABLED.value
-        self.strategy.save(update_fields=["status"])
+        self.strategy.save(update_record=False, update_fields=["status"])
 
     def _build_bkm_params(self) -> dict:
         name = self._build_name()
