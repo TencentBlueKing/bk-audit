@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-15 10:22+0800\n"
+"POT-Creation-Date: 2025-04-16 10:37+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -152,6 +152,15 @@ msgstr "Get Alert Config Detail"
 
 msgid "修改部分告警策略配置配置"
 msgstr "Edit Alert Config"
+
+msgid "列举角色用户"
+msgstr "List the role users"
+
+msgid "获取敏感度信息"
+msgstr "Obtain sensitivity information"
+
+msgid "获取敏感对象"
+msgstr "Obtain sensitive objects"
 
 msgid "App Code"
 msgstr "App Code"
@@ -1248,6 +1257,9 @@ msgstr "Description"
 msgid "优先指数"
 msgstr "Priority Index"
 
+msgid "通用属性列"
+msgstr "General attribute column"
+
 msgid "字段"
 msgstr "Field"
 
@@ -1364,9 +1376,6 @@ msgstr "Get User Detail"
 
 msgid "未知用户"
 msgstr "Abnormal User"
-
-msgid "获取敏感对象"
-msgstr "Get Sensitive Obj"
 
 msgid "上传数据字典文件"
 msgstr "Upload Data Map File"
@@ -1693,10 +1702,6 @@ msgstr "Notice Group Name Duplicate"
 
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
-
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【BK Audit%s】"
 
 msgid "异常信息"
 msgstr "Error Msg"
@@ -2270,19 +2275,15 @@ msgstr "Unsupported aggregate type: '{aggregate_type}'."
 msgid "配置中必须指定 `from_table` 或 `join_tables`。"
 msgstr "`from_table` or `join_tables` must be specified in the configuration."
 
-#, fuzzy, python-brace-format
-#| msgid "操作符 {operator} 的值 {value} 不符合预期。"
 msgid "操作符 {operator} 的值 {value} 不符合预期。"
-msgstr "The value of operator {operator} is not as expected."
+msgstr "The {value} of operator {operator} is not as expected."
+
+#, python-brace-format
+msgid "条件表达式中字段 {field} 的值 {value} 无法转换成预期类型 {type}。"
+msgstr "The value {value} of the field {field} in the conditional expression cannot be converted to the expected type {type}."
 
 msgid "数据拉取"
 msgstr "Data Pull"
-
-msgid "未实现方法"
-msgstr "Unimplemented Method"
-
-msgid "未实现类型"
-msgstr "Unimplemented Type"
 
 msgid "Control Name"
 msgstr "Control Name"
@@ -3908,6 +3909,12 @@ msgstr "Get RT Fields"
 msgid "Bulk Get RT Fields"
 msgstr "Bulk Get RT Fields"
 
+msgid "Get RT Meta"
+msgstr "Get RT Meta"
+
+msgid "Get RT Last Data"
+msgstr "Get RT Last Data"
+
 msgid "Get Strategy Status"
 msgstr "Get Strategy Status"
 
@@ -4126,6 +4133,9 @@ msgstr "Plan variables"
 msgid "Table ID"
 msgstr "Table ID"
 
+msgid "Limit"
+msgstr "Limit"
+
 msgid "Table IDS"
 msgstr "Table IDS"
 
@@ -4134,6 +4144,12 @@ msgstr "Multiple separated by commas"
 
 msgid "value"
 msgstr "value"
+
+msgid "Alias"
+msgstr "Alias"
+
+msgid "Spec Field Type"
+msgstr "Spec Field Type"
 
 msgid "Strategy IDs"
 msgstr "Strategy IDs"
@@ -4232,6 +4248,9 @@ msgstr "Rule Audit Where must have either condition or conditions"
 msgid "Rule Audit Where can not have condition and conditions at the same time"
 msgstr "Rule Audit Where cannot have both condition and conditions at the same time"
 
+msgid "Field in having condition must have aggregate set to True"
+msgstr "Field in having condition must have aggregate set to True"
+
 msgid "Rule Audit Data Source"
 msgstr "Rule Audit Data Source"
 
@@ -4240,6 +4259,9 @@ msgstr "Rule Audit Select"
 
 msgid "Rule Audit Where"
 msgstr "Rule Audit Where"
+
+msgid "Rule Audit Having"
+msgstr "Rule Audit Having"
 
 msgid "Rule Audit Schedule Config"
 msgstr "Rule Audit Schedule Config"
@@ -4261,9 +4283,6 @@ msgstr "Batch rule audit need schedule_config"
 
 msgid "Support Source Types"
 msgstr "Support Source Types"
-
-msgid "Limit"
-msgstr "Limit"
 
 msgid "Offset"
 msgstr "Offset"
