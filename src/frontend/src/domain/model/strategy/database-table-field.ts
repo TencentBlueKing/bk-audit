@@ -21,6 +21,7 @@ export default class DatabaseTableField {
   field_type: string; // 字段类型 -- 来自 bkbase
   aggregate: any; // 聚合函数 -- 聚合算法
   remark: string; // 备注
+  spec_field_type: string;
 
   constructor(payload = {} as DatabaseTableField) {
     this.table = payload.table || '';
@@ -29,5 +30,6 @@ export default class DatabaseTableField {
     this.field_type = payload.field_type || '';
     this.aggregate = payload.aggregate || null;
     this.remark = payload.remark || '';
+    this.spec_field_type = payload.spec_field_type || '';
   }
 }

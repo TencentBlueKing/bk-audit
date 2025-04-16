@@ -67,6 +67,7 @@ export default class Strategy {
       connector: 'and' | 'or' ;
       conditions: Array<{
         connector: 'and' | 'or';
+        index: number;
         conditions: Array<{
           condition: {
             field: DatabaseTableFieldModel | '';
