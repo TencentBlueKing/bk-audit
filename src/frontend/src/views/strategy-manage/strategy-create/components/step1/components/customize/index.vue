@@ -268,7 +268,8 @@
     h,
     nextTick,
     ref,
-    watch  } from 'vue';
+    watch,
+    watchEffect } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -360,6 +361,7 @@
 
   const tableId = ref<Array<string>>([]);
   const previousTableId = ref<Array<string>>([]);
+  let isInit = false;
 
   const formData = ref<IFormData>({
     configs: {
@@ -501,11 +503,6 @@
       .then((results) => {
         const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), [] as Array<ConfigTypeTableItem>);
         allConfigTypeTable.value = flattenedResults;
-        console.log('allConfigTypeTable', allConfigTypeTable.value);
-        // 编辑
-        if (isEditMode || isCloneMode) {
-          setFormData(props.editData);
-        }
       });
   };
 
@@ -554,6 +551,7 @@
       field_type: string
       label: string
       value: string
+      spec_field_type: string
     }>,
     displayOrRtId: string,
   ) => data.map(item => ({
@@ -562,6 +560,7 @@
     display_name: item.label,
     field_type: item.field_type,
     aggregate: null,
+    spec_field_type: item.spec_field_type,
     remark: '',
   }));
 
@@ -729,6 +728,11 @@
       previousTableId.value = value;
     };
 
+    // 相同值返回
+    if (previousTableId.value.join(',') === value.join(',')) {
+      return;
+    }
+
     // 首次初始化或没有配置数据，直接处理
     if (!formData.value.configs.config_type || !hasData.value) {
       handleTableChangeCore(value);
@@ -831,6 +835,16 @@
       deep: true,
     },
   );
+
+  watchEffect(() => {
+    if ((isEditMode || isCloneMode) && (props.editData.strategy_id && allConfigTypeTable.value.length > 0)) {
+      if (isInit) {
+        return;
+      }
+      setFormData(props.editData);
+      isInit = true;
+    }
+  });
 
   defineExpose<Expose>({
     // 获取提交参数
