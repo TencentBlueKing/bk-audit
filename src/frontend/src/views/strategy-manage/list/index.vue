@@ -202,6 +202,15 @@
         :user-group-list="userGroupList" />
     </div>
   </audit-sideslider>
+
+  <audit-sideslider
+    ref="sidesliderRef"
+    v-model:isShow="showRecords"
+    :show-footer="false"
+    :title="t('运行记录')"
+    :width="960">
+    <strategy-records :data="strategyItem" />
+  </audit-sideslider>
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
@@ -243,6 +252,7 @@
   import getAssetsFile from '@utils/getAssetsFile';
 
   import StrategyDetail from './components/detail.vue';
+  import StrategyRecords from './components/records.vue';
   import RenderLabel from './components/render-label.vue';
 
   enum FullEnum {
@@ -312,6 +322,7 @@
   const listRef = ref();
   const switchSuccessMap = ref<Record<string, boolean>>({});
   const showDetail = ref(false);
+  const showRecords = ref(false);
   const styles = shallowRef({ left: '216px' });
   const strategyLabelList = ref<Array<{ tag_id: string, tag_name: string }>>([]);
   const searchKey = ref<Array<SearchKey>>([]);
@@ -543,37 +554,79 @@
         if (!data.isFailed) {
           if (data.isPending) {
             return <p
-            style='display: flex; align-items: center;'>
-            <audit-icon
-              class="rotate-loading mr4"
-              svg
-              type='loading' />
-            <span v-bk-tooltips={{
-              content: t('创建数据处理链路中，预计10分钟后策略正式运行'),
-              disabled: !['pending', 'starting', 'updating'].includes(data.status),
-            }}>  {statusMap.value[data.status] || data.status} </span>
-          </p>;
+              style='display: flex; align-items: center;'>
+              <audit-icon
+                class="rotate-loading mr4"
+                svg
+                type='loading' />
+              <span v-bk-tooltips={{
+                content: t('创建数据处理链路中，预计10分钟后策略正式运行'),
+                disabled: !['pending', 'starting', 'updating'].includes(data.status),
+              }}>  {statusMap.value[data.status] || data.status} </span>
+              <audit-icon
+                v-bk-tooltips={{
+                  content: t('点击查看运行记录'),
+                }}
+                class='operation-records'
+                style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+                onClick={() => handleRecord(data)}
+                type='copy' />
+            </p>;
           }
           return <p style='display: flex; align-items: center;max-width: 200px;'>
-          <audit-icon
-            svg
-            class='mr4'
-            type={data.statusTag} />
-          {statusMap.value[data.status] || data.status}
-        </p>;
+            <audit-icon
+              svg
+              class='mr4'
+              type={data.statusTag} />
+            {statusMap.value[data.status] || data.status}
+            <audit-icon
+              v-bk-tooltips={{
+                content: t('点击查看运行记录'),
+              }}
+              class='operation-records'
+              style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+              onClick={() => handleRecord(data)}
+              type='copy' />
+          </p>;
         }
         // failed
         if (data.status_msg) {
           return <p style='display: flex; align-items: baseline;'>
+            <audit-icon
+              class='mr4'
+              svg
+              type={data.statusTag} />
+            <span
+              style='border-bottom:1px dashed #C4C6CC;height: 32px;cursor: pointer;'
+              v-bk-tooltips={data.status_msg}>
+              {statusMap.value[data.status] || data.status}
+            </span>
+            <p>
+              <span>, </span>
+              <bk-button
+                text
+                theme='primary'
+                onClick={() => retryRequest(data.strategy_id)}>
+                {t('重试')}
+              </bk-button>
+            </p>
+            <p class='err-underline' />
+            <audit-icon
+              v-bk-tooltips={{
+                content: t('点击查看运行记录'),
+              }}
+              class='operation-records'
+              style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+              onClick={() => handleRecord(data)}
+              type='copy' />
+          </p>;
+        }
+        return <div style='display: flex; align-items: center;'>
           <audit-icon
-            class='mr4'
             svg
+            class='mr4'
             type={data.statusTag} />
-          <span
-            style='border-bottom:1px dashed #C4C6CC;height: 32px;cursor: pointer;'
-            v-bk-tooltips={data.status_msg}>
-            {statusMap.value[data.status] || data.status}
-          </span>
+          <span>{statusMap.value[data.status] || data.status}</span>
           <p>
             <span>, </span>
             <bk-button
@@ -583,25 +636,15 @@
               {t('重试')}
             </bk-button>
           </p>
-          <p class='err-underline' />
-        </p>;
-        }
-        return <div style='display: flex; align-items: center;'>
-        <audit-icon
-          svg
-          class='mr4'
-          type={data.statusTag} />
-        <span>{statusMap.value[data.status] || data.status}</span>
-        <p>
-          <span>, </span>
-          <bk-button
-            text
-            theme='primary'
-            onClick={() => retryRequest(data.strategy_id)}>
-            {t('重试')}
-          </bk-button>
-        </p>
-      </div>;
+          <audit-icon
+            v-bk-tooltips={{
+              content: t('点击查看运行记录'),
+            }}
+            class='operation-records'
+            style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+            onClick={() => handleRecord(data)}
+            type='copy' />
+        </div>;
       },
     },
     {
@@ -1011,6 +1054,12 @@
     showDetail.value = true;
   };
 
+  // 运行记录
+  const handleRecord = (data: StrategyModel) => {
+    strategyItem.value = data;
+    showRecords.value = true;
+  };
+
   // 新建
   const handleCreate = () => {
     removePageParams();
@@ -1341,6 +1390,18 @@
       background: #fafbfd;
       border: 1px solid rgb(151 155 165 / 30%);
       border-radius: 2px;
+    }
+  }
+}
+
+.operation-records {
+  display: none;
+}
+
+.hover-highlight {
+  &:hover {
+    .operation-records {
+      display: inline-block;
     }
   }
 }

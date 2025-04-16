@@ -285,12 +285,22 @@ export default {
   },
 
   /**
-* @desc 获取风险单风险等级
-*/
+  * @desc 获取风险单风险等级
+  */
   fetchRiskLevel(params: {
     strategy_ids: string
   }) {
     return StrategySource.getRiskLevel(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+  * @desc 获取风险单运行记录
+  */
+  fetchRisksRunning(params: {
+    strategy_id: string
+  }) {
+    return StrategySource.getRisksRunning(params)
       .then(({ data }) => data);
   },
 };
