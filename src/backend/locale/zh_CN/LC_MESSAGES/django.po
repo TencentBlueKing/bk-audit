@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-15 10:22+0800\n"
+"POT-Creation-Date: 2025-04-16 10:37+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -152,6 +152,15 @@ msgstr "获取告警策略配置详情"
 
 msgid "修改部分告警策略配置配置"
 msgstr "修改部分告警策略配置配置"
+
+msgid "列举角色用户"
+msgstr "列举角色用户"
+
+msgid "获取敏感对象"
+msgstr "获取敏感对象"
+
+msgid "获取敏感度信息"
+msgstr "获取敏感度信息"
 
 msgid "App Code"
 msgstr "App Code"
@@ -1248,6 +1257,9 @@ msgstr "描述"
 msgid "优先指数"
 msgstr "优先指数"
 
+msgid "通用属性列"
+msgstr "通用属性列"
+
 msgid "字段"
 msgstr "字段"
 
@@ -1364,9 +1376,6 @@ msgstr "获取用户详情"
 
 msgid "未知用户"
 msgstr "未知用户"
-
-msgid "获取敏感对象"
-msgstr "获取敏感对象"
 
 msgid "上传数据字典文件"
 msgstr "上传数据字典文件"
@@ -1693,10 +1702,6 @@ msgstr "通知组名称重复"
 
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
-
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【蓝鲸审计中心%s】"
 
 msgid "异常信息"
 msgstr "异常信息"
@@ -2272,14 +2277,12 @@ msgstr "配置中必须指定 `from_table` 或 `join_tables`。"
 msgid "操作符 {operator} 的值 {value} 不符合预期。"
 msgstr "操作符 {operator} 的值 {value} 不符合预期。"
 
+#, python-brace-format
+msgid "条件表达式中字段 {field} 的值 {value} 无法转换成预期类型 {type}。"
+msgstr "条件表达式中字段 {field} 的值 {value} 无法转换成预期类型 {type}。"
+
 msgid "数据拉取"
 msgstr "数据拉取"
-
-msgid "未实现方法"
-msgstr "未实现方法"
-
-msgid "未实现类型"
-msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -3810,9 +3813,6 @@ msgstr "策略类型"
 msgid "Configs"
 msgstr "配置"
 
-msgid "Rule Audit SQL"
-msgstr "规则审计 SQL"
-
 msgid "Link Table UID"
 msgstr "联表 UID"
 
@@ -3902,6 +3902,12 @@ msgstr "获取RT字段"
 
 msgid "Bulk Get RT Fields"
 msgstr "批量获取RT字段"
+
+msgid "Get RT Meta"
+msgstr "获取RT字段"
+
+msgid "Get RT Last Data"
+msgstr "获取RT最新数据"
 
 msgid "Get Strategy Status"
 msgstr "获取策略状态"
@@ -4121,6 +4127,9 @@ msgstr "方案参数"
 msgid "Table ID"
 msgstr "结果表ID"
 
+msgid "Limit"
+msgstr "限制量"
+
 msgid "Table IDS"
 msgstr "结果表IDS"
 
@@ -4129,6 +4138,12 @@ msgstr "多个以逗号分隔"
 
 msgid "value"
 msgstr "值"
+
+msgid "Alias"
+msgstr "别名"
+
+msgid "Spec Field Type"
+msgstr "审计风格字段类型"
 
 msgid "Strategy IDs"
 msgstr "策略ID"
@@ -4211,6 +4226,9 @@ msgstr "规则审计的 Where 必须包含 condition 或 conditions"
 msgid "Rule Audit Where can not have condition and conditions at the same time"
 msgstr "规则审计的 Where 不能同时包含 condition 和 conditions"
 
+msgid "Field in having condition must have aggregate set to True"
+msgstr "HAVING 条件中的字段必须设置聚合为 True"
+
 msgid "Rule Audit Data Source"
 msgstr "规则审计数据源"
 
@@ -4219,6 +4237,13 @@ msgstr "规则审计选择"
 
 msgid "Rule Audit Where"
 msgstr "规则审计的 Where"
+
+
+msgid "Rule Audit SQL"
+msgstr "规则审计 SQL"
+
+msgid "Rule Audit Having"
+msgstr "规则审计聚合过滤条件"
 
 msgid "Rule Audit Schedule Config"
 msgstr "规则审计的调度配置"
@@ -4240,9 +4265,6 @@ msgstr "离线规则审计的需要调度配置"
 
 msgid "Support Source Types"
 msgstr "调度类型"
-
-msgid "Limit"
-msgstr "限制量"
 
 msgid "Offset"
 msgstr "偏移量"
@@ -4394,6 +4416,6 @@ msgstr "自动处理规则"
 msgid "【审计中心】执行自动处理套餐审批"
 msgstr "【审计中心】执行自动处理套餐审批"
 
-#, python-format
 msgid "%s 操作关单"
 msgstr "%s 操作关单"
+
