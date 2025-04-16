@@ -23,8 +23,11 @@
           <span style="color: #3a84ff;">{{ riskCount }}</span>
           {{ t('个') }}
         </div>
-        <div>
+        <div v-if="isStreamSource">
           {{ t('2. 本策略为“实时调度”，源数据每新增 1 条都会执行 1 次，所以运行记录简化为按每 1 分钟进行 1 次统计') }}
+        </div>
+        <div v-else>
+          {{ t('2. 仅支持展示最近24条记录') }}
         </div>
       </template>
     </bk-alert>
@@ -33,13 +36,14 @@
       ref="tableRef"
       :border="['outer']"
       :columns="columns"
-      :data="runningData"
-      :max-height="650"
-      style="margin-top: 12px;" />
+      :data="strategyRunningStatus"
+      :max-height="700"
+      style="margin-top: 12px;"
+      @scroll-bottom="handleScrollBottom" />
   </div>
 </template>
 <script setup lang="tsx">
-  import { computed, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -56,7 +60,16 @@
 
   const { t } = useI18n();
 
+  // 当前偏移量
+  const currentOffset = ref(0);
+  const pageSize = 20;
+
+  const strategyRunningStatus = ref<typeof runningData.value.strategy_running_status>([]);
+
   const riskCount = computed(() => props.data.risk_count);
+
+  // 是否为实时调度
+  const isStreamSource = computed(() => props.data.configs?.data_source?.source_type === 'stream_source');
 
   const columns = [
     {
@@ -107,15 +120,43 @@
   const {
     data: runningData,
     run: fetchRisksRunning,
+    loading,
   } = useRequest(StrategyManageService.fetchRisksRunning, {
-    defaultValue: [],
-    onSuccess: (data) => {
-      console.log(data);
+    defaultValue: {
+      strategy_running_status: [],
+    },
+    onSuccess: (newData) => {
+      // 将新数据拼接到现有数据后面
+      strategyRunningStatus.value = [
+        ...strategyRunningStatus.value,
+        ...newData.strategy_running_status,
+      ];
     },
   });
 
-  watch(() => props.data, (data) => {
+  const handleScrollBottom = () => {
+    // 如果正在加载或者已经加载完所有数据，则不再请求
+    if (loading.value || currentOffset.value >= riskCount.value) return;
+
+    // 增加偏移量
+    currentOffset.value += pageSize;
+
+    // 加载更多数据
     fetchRisksRunning({
+      limit: pageSize,
+      offset: currentOffset.value,
+      strategy_id: props.data.strategy_id,
+    });
+  };
+
+  watch(() => props.data, (data) => {
+    // 切换策略时重置数据
+    currentOffset.value = 0;
+    strategyRunningStatus.value = [];
+
+    fetchRisksRunning({
+      limit: pageSize,
+      offset: 0,
       strategy_id: data.strategy_id,
     });
   }, {

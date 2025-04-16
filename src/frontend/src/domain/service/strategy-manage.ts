@@ -298,6 +298,8 @@ export default {
   * @desc 获取风险单运行记录
   */
   fetchRisksRunning(params: {
+    limit: number,
+    offset: number,
     strategy_id: string
   }) {
     return StrategySource.getRisksRunning(params)
