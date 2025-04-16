@@ -368,3 +368,9 @@ url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
 .audit-icon-float:before {
 	content: "\e194";
 }
+.audit-icon-yunxingjilu:before {
+	content: "\e196";
+}
+.audit-icon-object:before {
+	content: "\e197";
+}
