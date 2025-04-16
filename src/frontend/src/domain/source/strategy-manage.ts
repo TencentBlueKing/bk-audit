@@ -297,14 +297,18 @@ class Strategy extends ModuleBase {
   }
   // 获取风险单运行记录
   getRisksRunning(params: {
+    limit: number,
+    offset: number,
     strategy_id: string,
   }) {
-    return Request.get<Array<{
-      schedule_time: string,
-      status: string,
-      status_str: string,
-      risk_count: number,
-    }>>(`${this.path}/strategy/${params.strategy_id}/strategy_running_status_list/`, {
+    return Request.get<{
+      strategy_running_status: Array<{
+        schedule_time: string,
+        status: string,
+        status_str: string,
+        risk_count: number,
+      }>
+    }>(`${this.path}/strategy/${params.strategy_id}/strategy_running_status_list/`, {
       params,
     });
   }

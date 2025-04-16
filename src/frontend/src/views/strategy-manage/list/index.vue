@@ -565,12 +565,12 @@
               }}>  {statusMap.value[data.status] || data.status} </span>
               <audit-icon
                 v-bk-tooltips={{
-                  content: t('点击查看运行记录'),
+                  content: t('运行记录'),
                 }}
                 class='operation-records'
                 style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
                 onClick={() => handleRecord(data)}
-                type='copy' />
+                type='yunxingjilu' />
             </p>;
           }
           return <p style='display: flex; align-items: center;max-width: 200px;'>
@@ -581,12 +581,12 @@
             {statusMap.value[data.status] || data.status}
             <audit-icon
               v-bk-tooltips={{
-                content: t('点击查看运行记录'),
+                content: t('运行记录'),
               }}
               class='operation-records'
               style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
               onClick={() => handleRecord(data)}
-              type='copy' />
+              type='yunxingjilu' />
           </p>;
         }
         // failed
@@ -613,12 +613,12 @@
             <p class='err-underline' />
             <audit-icon
               v-bk-tooltips={{
-                content: t('点击查看运行记录'),
+                content: t('运行记录'),
               }}
               class='operation-records'
               style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
               onClick={() => handleRecord(data)}
-              type='copy' />
+              type='yunxingjilu' />
           </p>;
         }
         return <div style='display: flex; align-items: center;'>
@@ -638,12 +638,12 @@
           </p>
           <audit-icon
             v-bk-tooltips={{
-              content: t('点击查看运行记录'),
+              content: t('运行记录'),
             }}
             class='operation-records'
             style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
             onClick={() => handleRecord(data)}
-            type='copy' />
+            type='yunxingjilu' />
         </div>;
       },
     },
@@ -734,7 +734,7 @@
     {
       fixed: 'right',
       label: () => t('操作'),
-      width: '150px',
+      width: '200px',
       render: ({ data }: { data: StrategyModel }) => <>
       {
         data.isPending
@@ -791,6 +791,17 @@
       }
 
       {
+       <bk-button
+          text
+          theme="primary"
+          class="ml8"
+          onClick={() => handleRecord(data)}
+          v-bk-tooltips={t('运行记录')}>
+          {t('运行记录')}
+        </bk-button>
+      }
+
+      {
         data.isPending
           ? <bk-button
             text
@@ -813,13 +824,13 @@
             </auth-button>
           </audit-popconfirm>
       }
-
     </>,
     },
   ] as any[]);
   const disabledMap: Record<string, string> = {
     strategy_id: 'strategy_id',
     strategy_name: 'strategy_name',
+    risk_count: 'risk_count',
     tags: 'tags',
     status: 'status',
   };
