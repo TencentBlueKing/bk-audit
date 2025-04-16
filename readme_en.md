@@ -1,7 +1,7 @@
 ![logo.png](assets/logo.png)
 
 [![license](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](https://github.com/TencentBlueKing/bk-audit/blob/master/LICENSE.txt)
-[![Release Version](https://img.shields.io/badge/release-1.17.1-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
+[![Release Version](https://img.shields.io/badge/release-1.17.2-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/releases)
 [![Coverage](https://codecov.io/gh/TencentBlueKing/bk-audit/branch/main/graph/badge.svg)](https://codecov.io/gh/TencentBlueKing/bk-audit)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/TencentBlueKing/bk-audit/pulls)
 
@@ -37,10 +37,9 @@ The BK Audit Center aims to create benchmark audit products based on the BK ecos
 - [BK-SOPS](https://github.com/Tencent/bk-sops): BlueKing SOPS is a system that features workflow arrangement and execution using a graphical interface. It's a lightweight task scheduling and arrangement SaaS product of the Blueking system.
 - [BK-JOB](https://github.com/Tencent/bk-job):BlueKing JOB is a set of operation and maintenance script management platform with the ability to handle a large number of tasks concurrently.
 
-
 ## Contributing
 
-If you have good ideas or suggestions, please let us know by Issues or Pull Requests and contribute to the Blue Whale Open Source Community.      
+If you have good ideas or suggestions, please let us know by Issues or Pull Requests and contribute to the Blue Whale Open Source Community.
 [Tencent Open Source Incentive Program](https://opensource.tencent.com/contribution) welcome developers from all over the globe to contribute to Tencent Open Source projects.
 
 ## License
