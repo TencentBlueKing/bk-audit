@@ -648,6 +648,25 @@
       },
     },
     {
+      label: () => t('产生风险单'),
+      field: () => 'risk_count',
+      sort: 'custom',
+      render: ({ data }: { data: StrategyModel }) => {
+        const to = {
+          name: 'riskManageList',
+          query: {
+            strategy_id: data.strategy_id,
+          },
+        };
+        return data.risk_count ? <router-link to = {to} target='_blank'>
+          <span v-bk-tooltips={{
+            content: t('近6个月此策略产生风险单总数，点击查看'),
+            disabled: !data.risk_count,
+          }}>{data.risk_count}</span>
+        </router-link> : <span>{data.risk_count}</span>;
+      },
+    },
+    {
       label: () => t('启停'),
       field: () => 'status',
       width: 110,
@@ -817,7 +836,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['strategy_id', 'strategy_name', 'strategy_type', 'tags', 'status', 'updated_by', 'updated_at'],
+    checked: ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at'],
     showLineHeight: false,
   });
   const settings = computed(() => {
