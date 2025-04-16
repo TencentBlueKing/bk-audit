@@ -318,5 +318,7 @@ export default {
     系统诊断: 'System diagnosis',
     系统来源: 'System source',
     父资源名称: 'Parent resource name',
+    权限中心V3: 'IAM V3',
+    权限中心V4: 'IAM V4',
   },
 };
