@@ -1103,8 +1103,8 @@ class RuleAuditSerializer(serializers.Serializer):
     select = serializers.ListField(
         label=gettext_lazy("Rule Audit Select"), child=RuleAuditFieldSerializer(), allow_empty=False
     )
-    where = RuleAuditWhereSerializer(label=gettext_lazy("Rule Audit Where"), required=False)
-    having = RuleAuditHavingSerializer(label=gettext_lazy("Rule Audit Having"), required=False)
+    where = RuleAuditWhereSerializer(label=gettext_lazy("Rule Audit Where"), required=False, allow_null=True)
+    having = RuleAuditHavingSerializer(label=gettext_lazy("Rule Audit Having"), required=False, allow_null=True)
     schedule_config = ScheduleConfigSerializer(label=gettext_lazy("Rule Audit Schedule Config"), required=False)
 
     def validate(self, attrs):
