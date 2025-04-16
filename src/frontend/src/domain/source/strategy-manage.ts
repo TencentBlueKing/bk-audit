@@ -185,6 +185,7 @@ class Strategy extends ModuleBase {
         field_type: string;
         label: string;
         value: string;
+        spec_field_type: string;
       }>,
       table_id: string,
     }>>(`${this.path}/strategy_table/bulk_rt_fields/`, {
@@ -199,6 +200,7 @@ class Strategy extends ModuleBase {
       field_type: string;
       label: string;
       value: string;
+      spec_field_type: string;
     }>>(`${this.path}/strategy_table/rt_fields/`, {
       params,
     });
@@ -290,6 +292,19 @@ class Strategy extends ModuleBase {
         risk_level: string
       }
     }>(`${this.path}/strategy/display_info/`, {
+      params,
+    });
+  }
+  // 获取风险单运行记录
+  getRisksRunning(params: {
+    strategy_id: string,
+  }) {
+    return Request.get<Array<{
+      schedule_time: string,
+      status: string,
+      status_str: string,
+      risk_count: number,
+    }>>(`${this.path}/strategy/${params.strategy_id}/strategy_running_status_list/`, {
       params,
     });
   }
