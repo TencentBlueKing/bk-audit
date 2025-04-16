@@ -66,7 +66,7 @@
                           <audit-icon
                             style="margin-right: 4px;font-size: 14px;"
                             svg
-                            :type="item.field_type" />
+                            :type="item.spec_field_type" />
                           <span
                             v-if="configType === 'LinkTable'"
                             style=" color: #3a84ff;">{{ item.table }}.</span>
