@@ -58,7 +58,7 @@
       <div
         v-if="needCondition"
         class="condition"
-        @click="() => where.connector = where.connector === 'and' ? 'or' : 'and'">
+        @click="() => handleChangeConnector()">
         {{ where.connector }}
       </div>
     </div>
@@ -130,6 +130,11 @@
   });
   const needCondition = computed(() => where.value.conditions.length > 1);
 
+  // 是否有选中预期结果
+  const hasSelectedExpectedResult = computed(() => where.value.conditions
+    .some(item => item.conditions
+      .some(condItem => condItem.condition.field?.aggregate)));
+
   const getPaddingLeft = (index: number, conditions: Where['conditions'][0]) => {
     const beforeArr = where.value.conditions.slice(0, index);
     const afterArr = where.value.conditions.slice(index + 1);
@@ -147,6 +152,15 @@
       ...item,
       index: idx,
     }));
+  };
+
+  const handleChangeConnector = () => {
+    // 有预期结果字段 只能选and
+    if (hasSelectedExpectedResult.value) {
+      where.value.connector = 'and';
+      return;
+    }
+    where.value.connector = where.value.connector === 'and' ? 'or' : 'and';
   };
 
   const handleAddRuleItem = () => {
@@ -194,6 +208,12 @@
     emits('updateWhere', data);
   }, {
     deep: true,
+  });
+
+  watch(() => hasSelectedExpectedResult.value, (data) => {
+    if (data) {
+      where.value.connector = 'and';
+    }
   });
 
   defineExpose<Expose>({

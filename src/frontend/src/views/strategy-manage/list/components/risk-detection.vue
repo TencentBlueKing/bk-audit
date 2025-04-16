@@ -356,6 +356,14 @@
     if (data.configs.config_type === 'EventLog') {
       fetchSystemWithAction();
     }
+    if (data.configs.having && data.configs.having.conditions.length > 0) {
+      // 将having条件合并到where条件中, conditions根据item.index进行排序合并
+      // eslint-disable-next-line no-param-reassign
+      data.configs.where.conditions = data.configs.where.conditions.concat(data.configs.having.conditions);
+      data.configs.where.conditions.sort((a, b) => a.index - b.index);
+      // eslint-disable-next-line no-param-reassign
+      data.configs.having.conditions = [];
+    }
   }, {
     immediate: true,
   });
