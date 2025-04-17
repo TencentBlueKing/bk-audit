@@ -84,12 +84,19 @@
     {
       label: () => t('执行结果'),
       field: () => 'status_str',
-      render: ({ data }: { data: Record<string, any> }) => <p style='display: flex; align-items: center;max-width: 200px;'>
+      render: ({ data }: { data: Record<string, any> }) => <p
+        style='display: flex; align-items: center;max-width: 200px; cursor: pointer;'>
         <audit-icon
           svg
           class='mr4'
           type={statusMap[data.status as keyof typeof statusMap]} />
-        {data.status_str}
+        <span v-bk-tooltips={{
+          content: data.status === 'finished'
+          ? t('基于数据源执行成功，包括数据源有审计中心无法感知的问题时，但策略也会执行成功')
+           : data.err_msg,
+        }}>
+          {data.status_str}
+        </span>
       </p>,
     },
     {
