@@ -23,7 +23,6 @@
   </div>
   <bk-popover
     ref="popoverRef"
-    disable-outside-click
     ext-cls="field-custom-popover"
     height="500"
     :is-show="isShow"
@@ -111,12 +110,99 @@
             <div style=" margin-bottom: 12px;font-weight: 700">
               {{ t('预期结果') }}
             </div>
-            <bk-table
-              :border="['outer', 'col', 'row']"
-              class="field-pop-radio-table"
-              :columns="columns"
-              :data="tableData"
-              :max-height="400" />
+            <table class="field-pop-radio-table">
+              <thead>
+                <tr>
+                  <th>
+                    <span>{{ t('字段名') }}</span>
+                  </th>
+                  <th>
+                    <span
+                      v-bk-tooltips="{
+                        content: t('sql示例：`字段名` AS `显示名`')
+                      }"
+                      style="border-bottom: 1px dashed #979ba5;">
+                      {{ t('显示名') }}
+                    </span>
+                  </th>
+                  <th>
+                    <span
+                      v-bk-tooltips="{
+                        content: t('指合并同类数据，计算总和、平均等统计值；同时选择多个字段时，可用聚合算法是最小公集。')
+                      }"
+                      style="border-bottom: 1px dashed #979ba5;">
+                      {{ t('聚合算法') }}
+                    </span>
+                    <bk-popover
+                      ref="commAggRef"
+                      allow-html
+                      boundary="parent"
+                      content="#hidden_pop_content"
+                      ext-cls="comm-agg-pop"
+                      placement="bottom"
+                      theme="light"
+                      trigger="click"
+                      width="150">
+                      <audit-icon
+                        v-bk-tooltips="{
+                          content: t('批量设置聚合算法')
+                        }"
+                        style="margin-left: 4px;color: #3a84ff;"
+                        type="edit-fill" />
+                    </bk-popover>
+                    <div style="display: none">
+                      <div id="hidden_pop_content">
+                        <div
+                          v-for="(item, index) in commonAggs"
+                          :key="index"
+                          class="common-agg-item"
+                          :class="[item.disabled ? 'is-disabled' : '']"
+                          @click="handleCommonAggClick(item)">
+                          {{ item.label }}
+                        </div>
+                      </div>
+                    </div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="field-pop-radio-table-body">
+                <tr
+                  v-for="(item, index) in tableData"
+                  :key="index">
+                  <td style=" width: 150px;background-color: #fafbfd;">
+                    <div style="padding-left: 8px;">
+                      {{ item.raw_name }}
+                    </div>
+                  </td>
+                  <td style=" width: 280px;background-color: #fff;">
+                    <bk-input
+                      v-model="item.display_name"
+                      behavior="simplicity" />
+                  </td>
+                  <td style="background-color: #fff;">
+                    <bk-select
+                      v-model="item.aggregate"
+                      :popover-options="{ boundary: 'parent'}">
+                      <bk-option
+                        v-for="aggItem in item.aggregateList"
+                        :key="aggItem.value"
+                        :label="aggItem.label"
+                        :value="aggItem.value" />
+                    </bk-select>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div
+              v-if="!tableData.length"
+              style="border: 1px solid #ddd; border-top: 0;">
+              <bk-exception
+                class="exception-part"
+                scene="part"
+                type="empty">
+                {{ t('暂无数据') }}
+              </bk-exception>
+            </div>
           </div>
         </div>
         <div class="field-pop-bth">
@@ -206,99 +292,32 @@
     timestamp: ['COUNT', 'MIX', 'MAX'],
   };
 
-  const columns = [
-    {
-      label: () => t('字段名'),
-      field: () => 'raw_name',
-      className: 'raw_name',
-    },
-    {
-      label: () => <div
-          v-bk-tooltips={{
-            content: t('sql示例："字段名"AS"显示名"'),
-          }}
-          style="border-bottom: 1px dashed #979ba5;">
-            { t('显示名') }
-        </div>,
-      render: ({ data }: {data:DatabaseTableFieldModel}) => <bk-input
-          v-model={data.display_name}
-          behavior="simplicity" />,
-      className: 'display-name-input',
-    },
-    {
-      label: () => <div>
-          <span
-            v-bk-tooltips={{
-              content: t('指合并同类数据，计算总和、平均等统计值；同时选择多个字段时，可用聚合算法是最小公集。'),
-            }}
-            style="border-bottom: 1px dashed #979ba5;">
-            { t('聚合算法') }
-          </span>
-          <bk-popover
-            ref={commAggRef}
-            width="150"
-            placement="bottom"
-            content="#hidden_pop_content"
-            theme="light"
-            trigger="click"
-            allow-html
-            extCls="comm-agg-pop"
-          >
-            <audit-icon
-              v-bk-tooltips={ {
-                content: t('批量设置聚合算法'),
-              }}
-              style="margin-left: 4px;color: #3A84FF;"
-              type="edit-fill"/>
-          </bk-popover>
-          <div style="display: none">
-            <div id="hidden_pop_content">
-              {(() => {
-                // 获取所有字段聚合算法交集
-                const commonAggs: Array<Record<string, any>> = props.aggregateList
-                  .filter(agg => tableData.value
-                    .every(field => field.aggregateList
-                      .some(item => item.value === agg.value)))
-                  .map(agg => ({
-                    ...agg,
-                    disabled: tableData.value
-                      .some(field => field.aggregateList
-                        .find(item => item.value === agg.value)?.disabled),
-                  }));
+  // 计算公共聚合算法
+  const commonAggs = computed(() => props.aggregateList
+    .filter(agg => tableData.value
+      .every(field => field.aggregateList
+        .some(item => item.value === agg.value)))
+    .map(agg => ({
+      ...agg,
+      disabled: tableData.value
+        .some(field => field.aggregateList
+          .find(item => item.value === agg.value)?.disabled),
+    })) as Array<{
+      label: string,
+      value: string,
+      disabled: boolean,
+    }>);
 
-                return commonAggs.map(item => (
-                  <div
-                    class={['common-agg-item', item.disabled ? 'is-disabled' : '']}
-                    onClick={() => {
-                      if (!item.disabled) {
-                        tableData.value = tableData.value.map(field => ({
-                          ...field,
-                          aggregate: item.value,
-                        }));
-                      }
-                      console.log('点击了聚合算法', commAggRef.value);
-                      commAggRef.value?.hide();
-                    }}>
-                    {item.label}
-                  </div>
-                ));
-              })()}
-            </div>
-          </div>
-      </div>,
-      render: ({ data }: {data: ExDatabaseTableFieldModel}) => <bk-select v-model={data.aggregate}>
-            {data.aggregateList.map(item => (
-              <bk-option
-                key={item.value}
-                value={item.value}
-                label={item.label}
-                disabled={item.disabled}
-              />
-            ))}
-        </bk-select>,
-      className: 'aggregate-select',
-    },
-  ] as any;
+  // 处理公共聚合算法点击
+  const handleCommonAggClick = (item: Record<string, any>) => {
+    if (!item.disabled) {
+      tableData.value = tableData.value.map(field => ({
+        ...field,
+        aggregate: item.value,
+      }));
+    }
+    commAggRef.value?.hide();
+  };
 
   const handleClearSearch = () => {
     searchKey.value = '';
@@ -501,25 +520,37 @@
       background: #f5f7fa;
 
       :deep(.field-pop-radio-table) {
-        .bk-table-body {
-          .display-name-input,
-          .aggregate-select {
-            .cell {
-              padding: 0;
+        width: 100%;
+        border-collapse: collapse;
 
-              .bk-input--default {
-                height: 42px;
-                border: none;
+        th,
+        td {
+          padding: 8px;
+          border: 1px solid #ddd;
+        }
 
-                .bk-input--text {
-                  &:hover {
-                    border: 1px solid #a3c5fd;
-                  }
+        th {
+          text-align: left;
+          background-color: #f0f1f5;
+        }
 
-                  &:focus {
-                    border: 1px solid #3a84ff;
-                  }
-                }
+        .field-pop-radio-table-body {
+          th,
+          td {
+            padding: 0;
+          }
+
+          .bk-input--default {
+            height: 42px;
+            border: none;
+
+            .bk-input--text {
+              &:hover {
+                border: 1px solid #a3c5fd;
+              }
+
+              &:focus {
+                border: 1px solid #3a84ff;
               }
             }
           }
