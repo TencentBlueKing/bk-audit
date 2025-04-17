@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 import abc
 import datetime
-from typing import Dict, List, Type, TypedDict
+from typing import Dict, List, Optional, Type, TypedDict
 
 from bk_resource import api
 from django.db import models
@@ -27,7 +27,6 @@ from django.db.models.functions import TruncMinute
 from core.utils.tools import mstimestamp_to_date_string
 from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import RuleAuditSourceType, StrategyType
-from services.web.strategy_v2.exceptions import StrategyNoBatchV2Node
 from services.web.strategy_v2.models import Strategy
 
 
@@ -64,14 +63,14 @@ class StrategyRunningStatusHandler(abc.ABC):
         return handler_mapping.get(source_type, {}).get(strategy.strategy_type)
 
     @classmethod
-    def get_typed_handler(cls, *args, **kwargs) -> "StrategyRunningStatusHandler":
+    def get_typed_handler(cls, *args, **kwargs) -> Optional["StrategyRunningStatusHandler"]:
         """
         获取处理类实例
         """
 
         handler_cls = cls.get_handler_cls(kwargs["strategy"])
         if not handler_cls:
-            raise NotImplementedError()
+            return None
         return handler_cls(*args, **kwargs)
 
     def __init__(
@@ -107,7 +106,7 @@ class RuleAuditBatchV2StrategyRunningStatusHandler(StrategyRunningStatusHandler)
 
     processing_node_type = "batchv2"
 
-    def get_processing_node(self) -> dict:
+    def get_processing_node(self) -> Optional[dict]:
         """
         获取调度计算节点
         """
@@ -119,8 +118,6 @@ class RuleAuditBatchV2StrategyRunningStatusHandler(StrategyRunningStatusHandler)
             if node["node_type"] == self.processing_node_type:
                 node = node
                 break
-        if not node:
-            raise StrategyNoBatchV2Node()
         return node
 
     def get_processing_id(self, processing_node: dict) -> str:
@@ -136,6 +133,8 @@ class RuleAuditBatchV2StrategyRunningStatusHandler(StrategyRunningStatusHandler)
         """
 
         processing_node = self.get_processing_node()
+        if not processing_node:
+            return []
         processing_id = self.get_processing_id(processing_node)
         data = api.bk_base.dataflow_batch_status_list(
             processing_id=processing_id,
@@ -183,7 +182,11 @@ class RuleAuditBatchV2StrategyRunningStatusHandler(StrategyRunningStatusHandler)
         获取策略运行状态
         """
 
+        if not self.strategy.backend_data.get("flow_id"):
+            return []
         running_status_list = self.get_running_status_list()
+        if not running_status_list:
+            return []
         risk_count_map = self.get_risk_count_map()
         formatted_running_status_list = []
         for status in running_status_list:
