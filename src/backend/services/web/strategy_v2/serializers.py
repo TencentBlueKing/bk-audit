@@ -114,6 +114,8 @@ class StrategySerializer(serializers.Serializer):
                 raise serializers.ValidationError(gettext("Control Version not Exists"))
         elif strategy_type == StrategyType.RULE.value:
             if validated_request_data.get("configs", {}).get("config_type") != RuleAuditConfigType.LINK_TABLE:
+                validated_request_data["link_table_uid"] = None
+                validated_request_data["link_table_version"] = None
                 return
             link_table = validated_request_data.get("configs", {}).get("data_source", {}).get("link_table", {})
             # 提取策略内的联表信息

@@ -224,46 +224,56 @@ def sync_auto_result(node_id: str = None):
 
     # 逐个更新
     for node in nodes:
-        with transaction.atomic():
-            node = TicketNode.objects.select_for_update().get(id=node.id)
-            # 审批节点
-            if node.action == ForApprove.__name__:
-                sn = node.process_result.get("ticket", {}).get("sn")
-                if sn:
-                    status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
-                    node.process_result["status"] = status
-                    node.status = (
-                        TicketNodeStatus.FINISHED
-                        if node.process_result["status"]["current_status"]
-                        in [TicketStatus.TERMINATED, TicketStatus.FINISHED, TicketStatus.FAILED, TicketStatus.REVOKED]
-                        else TicketNodeStatus.RUNNING
-                    )
+        try:
+            with transaction.atomic():
+                node = TicketNode.objects.select_for_update().get(id=node.id)
+                # 审批节点
+                if node.action == ForApprove.__name__:
+                    sn = node.process_result.get("ticket", {}).get("sn")
+                    if sn:
+                        status = api.bk_itsm.ticket_approve_result(sn=[sn])[0]
+                        node.process_result["status"] = status
+                        node.status = (
+                            TicketNodeStatus.FINISHED
+                            if node.process_result["status"]["current_status"]
+                            in [
+                                TicketStatus.TERMINATED,
+                                TicketStatus.FINISHED,
+                                TicketStatus.FAILED,
+                                TicketStatus.REVOKED,
+                            ]
+                            else TicketNodeStatus.RUNNING
+                        )
+                    else:
+                        node.status = TicketNodeStatus.FINISHED
+                # 自动处理套餐节点
+                elif node.action == AutoProcess.__name__:
+                    task_id = node.process_result.get("task", {}).get("task_id", "")
+                    if task_id:
+                        status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
+                        node.process_result["status"] = status
+                        node.status = (
+                            TicketNodeStatus.FINISHED
+                            if node.process_result["status"]["state"]
+                            in [
+                                SOPSTaskStatus.EXPIRED,
+                                SOPSTaskStatus.FINISHED,
+                                SOPSTaskStatus.FAILED,
+                                SOPSTaskStatus.REVOKED,
+                            ]
+                            else TicketNodeStatus.RUNNING
+                        )
+                    else:
+                        node.status = TicketNodeStatus.FINISHED
+                # 其他节点只需要判断不为最后一个，则关闭
+                # 或 该风险单已关闭，则关闭
                 else:
-                    node.status = TicketNodeStatus.FINISHED
-            # 自动处理套餐节点
-            elif node.action == AutoProcess.__name__:
-                task_id = node.process_result.get("task", {}).get("task_id", "")
-                if task_id:
-                    status = api.bk_sops.get_task_status(task_id=task_id, bk_biz_id=settings.DEFAULT_BK_BIZ_ID)
-                    node.process_result["status"] = status
-                    node.status = (
-                        TicketNodeStatus.FINISHED
-                        if node.process_result["status"]["state"]
-                        in [
-                            SOPSTaskStatus.EXPIRED,
-                            SOPSTaskStatus.FINISHED,
-                            SOPSTaskStatus.FAILED,
-                            SOPSTaskStatus.REVOKED,
-                        ]
-                        else TicketNodeStatus.RUNNING
-                    )
-                else:
-                    node.status = TicketNodeStatus.FINISHED
-            # 其他节点只需要判断不为最后一个，则关闭
-            # 或 该风险单已关闭，则关闭
-            else:
-                last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
-                risk = Risk.objects.filter(risk_id=node.risk_id).first()
-                if (last_node and last_node.timestamp > node.timestamp) or (risk and risk.status == RiskStatus.CLOSED):
-                    node.status = TicketNodeStatus.FINISHED
-            node.save(update_fields=["process_result", "status"])
+                    last_node = TicketNode.objects.filter(risk_id=node.risk_id).order_by("-timestamp").first()
+                    risk = Risk.objects.filter(risk_id=node.risk_id).first()
+                    if (last_node and last_node.timestamp > node.timestamp) or (
+                        risk and risk.status == RiskStatus.CLOSED
+                    ):
+                        node.status = TicketNodeStatus.FINISHED
+                node.save(update_fields=["process_result", "status"])
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            logger_celery.exception("[SyncAutoResult] Error %s %s", node.id, err)

@@ -171,6 +171,8 @@ class ListEventResponseSerializer(serializers.Serializer):
 
 
 class RiskInfoSerializer(serializers.ModelSerializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+
     class Meta:
         model = Risk
         fields = "__all__"
