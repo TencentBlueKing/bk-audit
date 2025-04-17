@@ -281,5 +281,6 @@ export default {
     发起时间: 'Launch Time',
     执行结果: 'Execution Result',
     编辑状态下不能编辑调度方式: 'Cannot edit scheduling method in edit state',
+    '基于数据源执行成功，包括数据源有审计中心无法感知的问题时，但策略也会执行成功': 'Based on the data source, the execution is successful, including the situation where the data source has problems that the audit center cannot perceive, but the strategy will also execute successfully',
   },
 };
