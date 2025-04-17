@@ -26,7 +26,7 @@ from django.utils.module_loading import import_string
 
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
-from apps.meta.utils.fields import STANDARD_FIELDS
+from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
 from services.web.analyze.utils import is_asset
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
@@ -286,8 +286,8 @@ def enhance_rt_fields(fields, result_table_id):
     )
     if collector_plugin_id:
         plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
-        standard_fields = {field.field_name: field for field in STANDARD_FIELDS}
         if result_table_id == plugin.bkbase_table_id:
+            standard_fields = {field.field_name: field for field in STANDARD_FIELDS + BKLOG_BUILD_IN_FIELDS}
             for field in result:
                 if field["value"] in standard_fields:
                     field["spec_field_type"] = standard_fields[field["value"]].property.get(
