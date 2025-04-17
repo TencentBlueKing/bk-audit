@@ -112,10 +112,12 @@
       :rules="[
         { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
       ]">
+      <!-- 日志表特有，dict字典下拉 -->
       <bk-cascader
         v-if="dicts[condition.condition.field.raw_name] &&
           dicts[condition.condition.field.raw_name].length &&
-          condition.condition.field.raw_name !== 'action_id'"
+          condition.condition.field.raw_name !== 'action_id' &&
+          props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         class="consition-value"
         collapse-tags
@@ -127,13 +129,16 @@
         name-key="label"
         trigger="hover"
         @change="(value: Array<Array<string>>) => handleCascaderFilter(value, index)" />
+
+      <!-- 日志表特有，人员选择器 -->
       <audit-user-selector
-        v-else-if="condition.condition.field.raw_name.includes('username')"
+        v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         allow-create
         class="consition-value"
         :multiple="tagInput.includes(condition.condition.operator)"
         @change="(value: Array<string>) => handleFilter(Array.isArray(value) ? value : [value], index)" />
+
       <bk-tag-input
         v-else-if="tagInput.includes(condition.condition.operator)"
         v-model="condition.condition.filters"
