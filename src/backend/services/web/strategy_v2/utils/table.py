@@ -269,7 +269,7 @@ def enhance_rt_fields(fields, result_table_id):
     """在原始BKBase RT Field信息基础上，添加审计侧的附加信息。"""
     result = [
         {
-            "label": "{}({})".format(field["field_alias"] or field["field_name"], field["field_name"]),
+            "label": "{}".format(field["field_alias"] or field["field_name"]),
             "alias": field["field_alias"] or field["field_name"],
             "value": field["field_name"],
             "field_type": field["field_type"],
