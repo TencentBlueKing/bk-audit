@@ -26,7 +26,11 @@ from django.utils.module_loading import import_string
 
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
-from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
+from apps.meta.utils.fields import (
+    BKLOG_BUILD_IN_FIELDS,
+    SPEC_FIELD_TYPE_TIMESTAMP,
+    STANDARD_FIELDS,
+)
 from services.web.analyze.utils import is_asset
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
