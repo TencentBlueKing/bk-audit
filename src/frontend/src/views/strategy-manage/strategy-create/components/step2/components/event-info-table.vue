@@ -90,7 +90,6 @@
   const fieldMap: Record<string, string> = {
     event_id: 'raw_event_id',
     username: 'operator',
-    start_time: 'event_time',
     start_timeaccess_source_ip: 'event_source',
   };
   let isInit = false;
