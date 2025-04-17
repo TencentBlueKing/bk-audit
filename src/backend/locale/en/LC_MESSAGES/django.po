@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-16 10:37+0800\n"
+"POT-Creation-Date: 2025-05-08 17:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -158,9 +158,6 @@ msgstr "List the role users"
 
 msgid "获取敏感度信息"
 msgstr "Obtain sensitivity information"
-
-msgid "获取敏感对象"
-msgstr "Obtain sensitive objects"
 
 msgid "App Code"
 msgstr "App Code"
@@ -1377,6 +1374,9 @@ msgstr "Get User Detail"
 msgid "未知用户"
 msgstr "Abnormal User"
 
+msgid "获取敏感对象"
+msgstr "Obtain sensitive objects"
+
 msgid "上传数据字典文件"
 msgstr "Upload Data Map File"
 
@@ -2275,6 +2275,7 @@ msgstr "Unsupported aggregate type: '{aggregate_type}'."
 msgid "配置中必须指定 `from_table` 或 `join_tables`。"
 msgstr "`from_table` or `join_tables` must be specified in the configuration."
 
+#, python-brace-format
 msgid "操作符 {operator} 的值 {value} 不符合预期。"
 msgstr "The {value} of operator {operator} is not as expected."
 
