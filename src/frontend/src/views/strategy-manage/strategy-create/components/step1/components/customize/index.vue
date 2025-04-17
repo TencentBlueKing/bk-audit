@@ -307,6 +307,7 @@
   interface IFormData {
     configs: {
       data_source: {
+        display_name?: string
         system_ids: string[]
         source_type: string
         rt_id: string | string[]
@@ -318,7 +319,7 @@
       config_type: string
       select: Array<DatabaseTableFieldModel>
       where: Where
-      having: Where
+      having?: Where
       schedule_config: {
         count_freq: string
         schedule_period: string
@@ -688,6 +689,15 @@
         system_ids: [],
       },
     };
+    formData.value.configs.select = [];
+    formData.value.configs.where = {
+      connector: 'and',
+      conditions: [],
+    };
+    formData.value.configs.having = {
+      connector: 'and',
+      conditions: [],
+    };
     [eventLogRef, rulesComponentRef, expectedResultsRef].forEach(ref => ref.value?.resetFormData?.());
   };
 
@@ -892,7 +902,7 @@
       // 添加having参数
       if (params.configs.where) {
         // 数据结构和where保持一致，将field的aggregate不为null的添加到having中
-        params.configs.having = {
+        const having = {
           connector: params.configs.where.connector,
           conditions: params.configs.where.conditions
             .map(group => ({
@@ -903,16 +913,23 @@
             // 过滤掉没有聚合条件的组
             .filter(group => group.conditions.length > 0),
         };
-        // 将where中符合having的条件删除
-        params.configs.where.conditions = params.configs.where.conditions
-          .map(group => ({
-            connector: group.connector,
-            index: group.index,
-            conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && !item.condition.field?.aggregate),
-          }))
-          // 过滤掉没有聚合条件的组
-          .filter(group => group.conditions.length > 0);
+        if (having.conditions.length > 0) {
+          params.configs.having = having;
+          // 将where中符合having的条件删除
+          params.configs.where.conditions = params.configs.where.conditions
+            .map(group => ({
+              connector: group.connector,
+              index: group.index,
+              conditions: group.conditions.filter(item => typeof item.condition.field !== 'string' && !item.condition.field?.aggregate),
+            }))
+            // 过滤掉没有聚合条件的组
+            .filter(group => group.conditions.length > 0);
+        } else {
+          delete params.configs.having;
+        }
       }
+      // 同步display_name
+      params.configs.data_source.display_name = (params.configs.data_source.rt_id.length > 1 ? params.configs.data_source.rt_id : '') as string;
       return params;
     },
   });
