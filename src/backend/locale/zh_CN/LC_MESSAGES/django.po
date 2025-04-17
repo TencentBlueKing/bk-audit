@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-16 10:37+0800\n"
+"POT-Creation-Date: 2025-05-08 17:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -155,9 +155,6 @@ msgstr "修改部分告警策略配置配置"
 
 msgid "列举角色用户"
 msgstr "列举角色用户"
-
-msgid "获取敏感对象"
-msgstr "获取敏感对象"
 
 msgid "获取敏感度信息"
 msgstr "获取敏感度信息"
@@ -1376,6 +1373,9 @@ msgstr "获取用户详情"
 
 msgid "未知用户"
 msgstr "未知用户"
+
+msgid "获取敏感对象"
+msgstr "获取敏感对象"
 
 msgid "上传数据字典文件"
 msgstr "上传数据字典文件"
@@ -3813,6 +3813,9 @@ msgstr "策略类型"
 msgid "Configs"
 msgstr "配置"
 
+msgid "Rule Audit SQL"
+msgstr "规则审计 SQL"
+
 msgid "Link Table UID"
 msgstr "联表 UID"
 
@@ -4238,10 +4241,6 @@ msgstr "规则审计选择"
 msgid "Rule Audit Where"
 msgstr "规则审计的 Where"
 
-
-msgid "Rule Audit SQL"
-msgstr "规则审计 SQL"
-
 msgid "Rule Audit Having"
 msgstr "规则审计聚合过滤条件"
 
@@ -4416,6 +4415,6 @@ msgstr "自动处理规则"
 msgid "【审计中心】执行自动处理套餐审批"
 msgstr "【审计中心】执行自动处理套餐审批"
 
+#, python-format
 msgid "%s 操作关单"
 msgstr "%s 操作关单"
-

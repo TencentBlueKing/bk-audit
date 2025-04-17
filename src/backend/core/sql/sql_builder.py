@@ -197,18 +197,18 @@ class SQLGenerator:
                 condition.field.raw_name, condition.filter or condition.filters, condition.field.field_type
             )
 
-    def _apply_filter_conditions(self, where_condition: Union[WhereCondition, HavingCondition]) -> BasicCriterion:
+    def _apply_filter_conditions(self, condition: Union[WhereCondition, HavingCondition]) -> BasicCriterion:
         """递归构建 WHERE/HAVING 子句"""
         sql_condition = EmptyCriterion()
-        if where_condition.condition:
-            return self.handle_condition(where_condition.condition)
+        if condition.condition:
+            return self.handle_condition(condition.condition)
 
-        if where_condition.conditions:
-            for sub_condition in where_condition.conditions:
+        if condition.conditions:
+            for sub_condition in condition.conditions:
                 sub_condition = self._apply_filter_conditions(sub_condition)
-                if where_condition.connector == FilterConnector.AND:
+                if condition.connector == FilterConnector.AND:
                     sql_condition &= sub_condition
-                elif where_condition.connector == FilterConnector.OR:
+                elif condition.connector == FilterConnector.OR:
                     sql_condition |= sub_condition
         return sql_condition
 
