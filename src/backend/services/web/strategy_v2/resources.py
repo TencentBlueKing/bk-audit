@@ -1275,5 +1275,7 @@ class StrategyRunningStatusList(StrategyV2Base):
             limit=limit,
             offset=offset,
         )
+        if not h:
+            return {"strategy_running_status": []}
         strategy_running_status = h.get_strategy_running_status()
         return {"strategy_running_status": strategy_running_status}

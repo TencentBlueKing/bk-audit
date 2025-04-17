@@ -37,6 +37,7 @@ from services.web.databus.tasks import create_or_update_plugin_etl
 from services.web.entry.constants import (
     INIT_DORIS_FISHED_KEY,
     INIT_ES_FISHED_KEY,
+    INIT_EVENT_FINISHED_KEY,
     INIT_FIELDS_FINISHED_KEY,
     INIT_REDIS_FISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
@@ -199,9 +200,12 @@ class SystemInitHandler:
         self.post_init(INIT_FIELDS_FINISHED_KEY)
 
     def init_event(self):
+        if self.pre_check(INIT_EVENT_FINISHED_KEY):
+            return
         print("[InitEvent] Start")
         EventHandler().update_or_create_rt()
         print("[InitEvent] Stop")
+        self.post_init(INIT_EVENT_FINISHED_KEY)
 
     def init_log(self):
         """创建或更新采集入库"""
