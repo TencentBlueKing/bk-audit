@@ -865,7 +865,7 @@
         params.configs.data_source = {
           ...params.configs.data_source,
           rt_id: (_.isArray(tableIdList)
-            ? _.last(tableIdList)
+            ? (_.last(tableIdList) || '')
             : tableIdList) as string,
         };
       }
@@ -929,7 +929,7 @@
         }
       }
       // 同步display_name
-      params.configs.data_source.display_name = (params.configs.data_source.rt_id.length > 1 ? params.configs.data_source.rt_id : '') as string;
+      params.configs.data_source.display_name = (params.configs.data_source.rt_id?.length > 1 ? params.configs.data_source.rt_id : '') as string;
       return params;
     },
   });
