@@ -761,7 +761,9 @@ class LinkTableConfigTableSerializer(serializers.Serializer):
 
     rt_id = serializers.CharField(label=gettext_lazy("Result Table ID"))
     table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=LinkTableTableType.choices)
-    display_name = serializers.CharField(label=gettext_lazy("Display Name"), required=False)
+    display_name = serializers.CharField(
+        label=gettext_lazy("Display Name"), required=False, allow_blank=True, allow_null=True
+    )
     system_ids = serializers.ListField(
         label=gettext_lazy("System IDs"), child=serializers.CharField(max_length=64), required=False
     )
@@ -994,7 +996,9 @@ class RuleAuditDataSourceSerializer(serializers.Serializer):
         label=gettext_lazy("System ID"), child=serializers.CharField(), required=False, allow_empty=True
     )
     link_table = RuleAuditLinkTableSerializer(label=gettext_lazy("Link Table"), required=False, allow_null=True)
-    display_name = serializers.CharField(label=gettext_lazy("Display Name"), required=False)
+    display_name = serializers.CharField(
+        label=gettext_lazy("Display Name"), required=False, allow_blank=True, allow_null=True
+    )
 
     def validate(self, attrs):
         attrs = super().validate(attrs)

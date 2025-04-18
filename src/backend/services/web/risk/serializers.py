@@ -53,7 +53,7 @@ class CreateEventSerializer(serializers.Serializer):
     )
     strategy_id = serializers.IntegerField(label=EventMappingFields.STRATEGY_ID.description)
     event_data = serializers.JSONField(label=EventMappingFields.EVENT_DATA.description, default=dict, allow_null=True)
-    event_time = serializers.IntegerField(label=EventMappingFields.EVENT_TIME.description, default=int)
+    event_time = serializers.IntegerField(label=EventMappingFields.EVENT_TIME.description, default=int, allow_null=True)
     event_evidence = serializers.CharField(
         label=EventMappingFields.EVENT_EVIDENCE.description, default=str, allow_null=True, allow_blank=True
     )
