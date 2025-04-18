@@ -110,13 +110,13 @@
             <div style=" margin-bottom: 12px;font-weight: 700">
               {{ t('预期结果') }}
             </div>
-            <table class="field-pop-radio-table">
-              <thead>
+            <table class="field-pop-radio-table-head">
+              <thead class="field-pop-radio-table-head">
                 <tr>
-                  <th>
+                  <th style="width: 150px;">
                     <span>{{ t('字段名') }}</span>
                   </th>
-                  <th>
+                  <th style="width: 280px;">
                     <span
                       v-bk-tooltips="{
                         content: t('sql示例：`字段名` AS `显示名`')
@@ -165,36 +165,42 @@
                   </th>
                 </tr>
               </thead>
-              <tbody class="field-pop-radio-table-body">
-                <tr
-                  v-for="(item, index) in tableData"
-                  :key="index">
-                  <td style=" width: 150px;background-color: #fafbfd;">
-                    <div style="padding-left: 8px;">
-                      {{ item.raw_name }}
-                    </div>
-                  </td>
-                  <td style=" width: 280px;background-color: #fff;">
-                    <bk-input
-                      v-model="item.display_name"
-                      behavior="simplicity" />
-                  </td>
-                  <td style="background-color: #fff;">
-                    <bk-select
-                      v-model="item.aggregate"
-                      :popover-options="{ boundary: 'parent'}">
-                      <bk-option
-                        v-for="aggItem in item.aggregateList"
-                        :key="aggItem.value"
-                        :label="aggItem.label"
-                        :value="aggItem.value" />
-                    </bk-select>
-                  </td>
-                </tr>
-              </tbody>
             </table>
+            <scroll-faker
+              v-if="tableData.length"
+              style="height: 370px;">
+              <table class="field-pop-radio-table-body">
+                <tbody>
+                  <tr
+                    v-for="(item, index) in tableData"
+                    :key="index">
+                    <td style=" width: 150px;background-color: #fafbfd;">
+                      <div style="padding-left: 8px;">
+                        {{ item.raw_name }}
+                      </div>
+                    </td>
+                    <td style=" width: 280px;background-color: #fff;">
+                      <bk-input
+                        v-model="item.display_name"
+                        behavior="simplicity" />
+                    </td>
+                    <td style="background-color: #fff;">
+                      <bk-select
+                        v-model="item.aggregate"
+                        :popover-options="{ boundary: 'parent'}">
+                        <bk-option
+                          v-for="aggItem in item.aggregateList"
+                          :key="aggItem.value"
+                          :label="aggItem.label"
+                          :value="aggItem.value" />
+                      </bk-select>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </scroll-faker>
             <div
-              v-if="!tableData.length"
+              v-else
               style="border: 1px solid #ddd; border-top: 0;">
               <bk-exception
                 class="exception-part"
@@ -519,7 +525,7 @@
       padding: 16px;
       background: #f5f7fa;
 
-      :deep(.field-pop-radio-table) {
+      :deep(.field-pop-radio-table-head) {
         width: 100%;
         border-collapse: collapse;
 
@@ -533,25 +539,29 @@
           text-align: left;
           background-color: #f0f1f5;
         }
+      }
 
-        .field-pop-radio-table-body {
-          th,
-          td {
-            padding: 0;
-          }
+      :deep(.field-pop-radio-table-body) {
+        width: 100%;
+        border-collapse: collapse;
 
-          .bk-input--default {
-            height: 42px;
-            border: none;
+        th,
+        td {
+          padding: 0;
+          border: 1px solid #ddd;
+        }
 
-            .bk-input--text {
-              &:hover {
-                border: 1px solid #a3c5fd;
-              }
+        .bk-input--default {
+          height: 42px;
+          border: none;
 
-              &:focus {
-                border: 1px solid #3a84ff;
-              }
+          .bk-input--text {
+            &:hover {
+              border: 1px solid #a3c5fd;
+            }
+
+            &:focus {
+              border: 1px solid #3a84ff;
             }
           }
         }
