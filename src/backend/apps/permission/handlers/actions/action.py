@@ -35,6 +35,16 @@ class ActionEnum:
         version=1,
     )
 
+    REGULAR_EVENT_STATISTIC = ActionMeta(
+        id="regular_event_statistic",
+        name=gettext("审计日志统计"),
+        name_en="Regular Event Statistic",
+        type="view",
+        related_resource_types=[ResourceEnum.SYSTEM],
+        related_actions=[],
+        version=1,
+    )
+
     ACCESS_AUDIT_SENSITIVE_INFO = ActionMeta(
         id="access_audit_sensitive_info",
         name=gettext("审计敏感信息查看"),

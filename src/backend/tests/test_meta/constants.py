@@ -181,6 +181,7 @@ FIELDS_DATA = {
     "option": EVENT_ID.option,
     "description": str(EVENT_ID.description),
     "priority_index": EVENT_ID.priority_index,
+    "property": {},
 }
 CUSTOM_FIELD_DATA = {
     "username": USERNAME,
