@@ -734,7 +734,7 @@
     {
       fixed: 'right',
       label: () => t('操作'),
-      width: '200px',
+      width: '120px',
       render: ({ data }: { data: StrategyModel }) => <>
       {
         data.isPending
@@ -790,40 +790,55 @@
           </auth-button>
       }
 
-      {
-       <bk-button
-          text
-          theme="primary"
-          class="ml8"
-          onClick={() => handleRecord(data)}
-          v-bk-tooltips={t('运行记录')}>
-          {t('运行记录')}
-        </bk-button>
-      }
-
-      {
-        data.isPending
-          ? <bk-button
-            text
-            class="is-disabled ml8"
-            v-bk-tooltips={t('处理中，不能删除')}>
-            {t('删除')}
-          </bk-button>
-          : <audit-popconfirm
-            title={t('确认删除？')}
-            content={t('删除后不可恢复')}
-            class="ml8"
-            confirmHandler={() => handleRemove(data.strategy_id)}>
-            <auth-button
-              actionId="delete_strategy"
-              permission={data.permission.delete_strategy}
-              resource={data.strategy_id}
-              theme="primary"
-              text>
-              {t('删除')}
-            </auth-button>
-          </audit-popconfirm>
-      }
+      <bk-dropdown
+        popover-options={{
+          extCls: showRecords.value ? 'strategy-operation-dropdown-pop' : '',
+        }}
+        trigger="click"
+        style="margin-left: 8px">
+        {{
+          default: () => <bk-button text>
+            <audit-icon type="more" />
+          </bk-button>,
+          content: () => (
+            <bk-dropdown-menu>
+              <bk-dropdown-item>
+                <bk-button
+                  text
+                  class="ml8"
+                  onClick={() => handleRecord(data)}
+                  v-bk-tooltips={t('运行记录')}>
+                  {t('运行记录')}
+                </bk-button>
+              </bk-dropdown-item>
+              <bk-dropdown-item>
+                {data.isPending ? (
+                  <bk-button
+                    text
+                    class="is-disabled ml8"
+                    v-bk-tooltips={t('处理中，不能删除')}>
+                    {t('删除')}
+                  </bk-button>
+                ) : (
+                  <audit-popconfirm
+                    title={t('确认删除？')}
+                    content={t('删除后不可恢复')}
+                    class="ml8"
+                    confirmHandler={() => handleRemove(data.strategy_id)}>
+                    <auth-button
+                      actionId="delete_strategy"
+                      permission={data.permission.delete_strategy}
+                      resource={data.strategy_id}
+                      text>
+                      {t('删除')}
+                    </auth-button>
+                  </audit-popconfirm>
+                )}
+              </bk-dropdown-item>
+            </bk-dropdown-menu>
+          ),
+        }}
+      </bk-dropdown>
     </>,
     },
   ] as any[]);
@@ -1434,5 +1449,9 @@
       display: inline-block;
     }
   }
+}
+
+.strategy-operation-dropdown-pop {
+  z-index: 2000 !important;
 }
 </style>

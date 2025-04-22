@@ -35,11 +35,17 @@
     <template
       v-for="(item, key) in tableData"
       :key="key">
-      <div class="body">
+      <div
+        v-if="!(key === 'event_evidence_field_configs' && strategyType !== 'model')"
+        class="body">
         <div
           class="group"
           :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
-          <span> {{ groupMap[key] }} </span>
+          <span> {{
+            strategyType === 'model' && key === 'event_evidence_field_configs'
+              ? (groupMap as GroupMapModel).event_evidence_field_configs
+              : groupMap[key as keyof GroupMapBase]
+          }} </span>
         </div>
         <div class="value-row">
           <value-item
@@ -66,6 +72,15 @@
   import ValueItem from './valueItem.vue';
 
   import useRequest from '@/hooks/use-request';
+
+  type GroupMapBase = {
+    event_basic_field_configs: string;
+    event_data_field_configs: string;
+  };
+
+  type GroupMapModel = GroupMapBase & {
+    event_evidence_field_configs: string;
+  };
 
   interface Exposes{
     getData: () => StrategyFieldEvent,
@@ -107,10 +122,21 @@
     return initColumn;
   });
 
-  const groupMap = {
-    event_basic_field_configs: t('基本信息'),
-    event_data_field_configs: t('事件结果'),
-  };
+  const groupMap = computed<GroupMapBase | GroupMapModel>(() => {
+    const baseMap: GroupMapBase = {
+      event_basic_field_configs: t('基本信息'),
+      event_data_field_configs: t('事件结果'),
+    };
+
+    if (props.strategyType === 'model') {
+      const modelMap: GroupMapModel = {
+        ...baseMap,
+        event_evidence_field_configs: t('事件证据'),
+      };
+      return modelMap;
+    }
+    return baseMap;
+  });
 
   const createField = (item: DatabaseTableFieldModel) => ({
     field_name: item.raw_name,
@@ -125,11 +151,11 @@
     prefix: 'event_data',
   });
 
-  const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs') => {
-    if ((isEditMode || isCloneMode) && props.data[key].length && tableData.value[key].length && !isInit) {
+  const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
+    if ((isEditMode || isCloneMode) && props.data[key]?.length && tableData.value[key].length && !isInit) {
       // 编辑填充参数
       tableData.value[key] = tableData.value[key].map((item) => {
-        const editItem = props.data[key].find(edItem => edItem.field_name === item.field_name);
+        const editItem = props.data[key] && props.data[key].find(edItem => edItem.field_name === item.field_name);
         if (editItem) {
           return {
             field_name: item.field_name,
@@ -171,7 +197,7 @@
         props.select.forEach((item) => {
           if (fieldMap[item.raw_name]) {
             const field = tableData.value[key].find(fieldItem => fieldItem.field_name === fieldMap[item.raw_name]);
-            if (field && field.map_config) {
+            if (field && field.map_config && !field.map_config.source_field) {
               field.map_config.source_field = item.display_name;
             }
           }
