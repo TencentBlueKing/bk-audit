@@ -33,3 +33,12 @@ class CollectorQueryViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.query.collector_search, endpoint="search"),
         ResourceRoute("GET", resource.query.collector_search_config, endpoint="search_config"),
     ]
+
+
+class FavouriteQueryViewSet(ResourceViewSet):
+    resource_routes = [
+        ResourceRoute("POST", resource.query.create_favourite_search),
+        ResourceRoute("GET", resource.query.list_favourite_search),
+        ResourceRoute("PUT", resource.query.update_favourite_search, pk_field="id"),
+        ResourceRoute("DELETE", resource.query.delete_favourite_search, pk_field="id"),
+    ]

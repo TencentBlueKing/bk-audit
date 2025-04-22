@@ -52,6 +52,7 @@ from services.web.query.constants import (
     CollectorSortFieldChoices,
     ResultCodeChoices,
 )
+from services.web.query.models import FavoriteSearch
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
@@ -386,3 +387,26 @@ class CollectorSearchResponseSerializer(QuerySearchResponseSerializer):
 
     query_sql = serializers.CharField(required=False, allow_blank=True)
     count_sql = serializers.CharField(required=False, allow_blank=True)
+
+
+class FavoriteSearchSerializer(CollectorSearchAllReqSerializer, serializers.ModelSerializer):
+    """
+    查询收藏序列化器
+    """
+
+    class Meta:
+        model = FavoriteSearch
+        fields = [
+            "id",
+            "name",
+            "namespace",
+            "start_time",
+            "end_time",
+            "filters",
+            "sort_list",
+            "bind_system_info",
+            "created_by",
+            "created_at",
+            "updated_by",
+            "updated_at",
+        ]
