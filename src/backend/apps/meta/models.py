@@ -493,3 +493,17 @@ class Tag(OperateRecordModel):
         verbose_name = gettext_lazy("Tag")
         verbose_name_plural = verbose_name
         ordering = ["-tag_id"]
+
+
+class GeneralConfig(OperateRecordModel):
+    """用于存储通用配置，支持用户特定的配置"""
+
+    scene = models.CharField(max_length=255, help_text="配置场景，标识配置的应用场景")
+    config_name = models.CharField(max_length=255, help_text="配置名称，标识配置的名称")
+    config_content = models.JSONField(help_text="配置内容，存储具体的配置数据，JSON格式")
+
+    class Meta:
+        unique_together = ('scene', 'config_name', 'created_by')
+
+    def __str__(self):
+        return f"{self.scene} - {self.config_name} by {self.created_by}"
