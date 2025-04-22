@@ -23,6 +23,7 @@ from arrow import Arrow
 from django.test import TestCase
 from pypika import Order
 
+from core.sql.constants import FieldType
 from services.web.query.constants import DATE_FORMAT
 from services.web.query.serializers import CollectorSearchReqSerializer
 from services.web.query.utils.doris import DorisSQLBuilder
@@ -237,3 +238,42 @@ class TestDorisSQLBuilder(TestCase):
             f"AND `event_content` LIKE '%123%' LIMIT 1"
         )
         self.assertEqual(count_sql, expect)
+
+    def test_build_data_statistic_sql(self):
+        """测试 build_data_statistic_sql 方法"""
+
+        # 测试文本字段（STRING）
+        builder = self._get_builder()
+        field_name = "event_type"
+        field_type = FieldType.STRING
+        stats_sql = builder.build_data_statistic_sql(field_name, field_type)
+
+        # 对应的期望 SQL 查询
+        expected_text_sql = {
+            'non_empty_ratio': 'SELECT COUNT(`event_type`)/COUNT(*) `non_empty_ratio` FROM test_rt.doris',
+            'non_empty_rows': 'SELECT COUNT(`event_type`) `non_empty_rows` FROM test_rt.doris',
+            'top_5_time_series': "SELECT `test_rt.doris`.`event_type`,DATE_TRUNC(FROM_UNIXTIME(`test_rt.doris`.`dteventtimestamp`/1000),'MINUTE') `time_interval`,COUNT(`test_rt.doris`.`event_type`) `count` FROM test_rt.doris JOIN (SELECT `event_type`,COUNT(`event_type`) `count` FROM test_rt.doris GROUP BY `event_type` ORDER BY `count` DESC LIMIT 5) `sq0` ON `test_rt.doris`.`event_type`=`sq0`.`event_type` GROUP BY `test_rt.doris`.`time_interval`,`test_rt.doris`.`event_type` ORDER BY `test_rt.doris`.`time_interval` DESC",  # noqa
+            'top_5_values': 'SELECT `event_type`,COUNT(`event_type`) `count` FROM test_rt.doris GROUP BY `event_type` ORDER BY `count` DESC',  # noqa
+            'total_rows': 'SELECT COUNT(*) `total_rows` FROM test_rt.doris',
+        }
+
+        for key, expected_sql in expected_text_sql.items():
+            self.assertEqual(stats_sql[key], expected_sql)
+
+        # 测试数值字段（NUMERIC）
+        field_name = "amount"
+        field_type = FieldType.LONG
+        stats_sql = builder.build_data_statistic_sql(field_name, field_type)
+
+        # 对应的期望 SQL 查询
+        expected_numeric_sql = {
+            'total_rows': 'SELECT COUNT(*) `total_rows` FROM test_rt.doris',
+            'non_empty_rows': 'SELECT COUNT(`amount`) `non_empty_rows` FROM test_rt.doris',
+            'non_empty_ratio': 'SELECT COUNT(`amount`)/COUNT(*) `non_empty_ratio` FROM test_rt.doris',
+            'max_value': 'SELECT MAX(`amount`) `max_value` FROM test_rt.doris',
+            'min_value': 'SELECT MIN(`amount`) `min_value` FROM test_rt.doris',
+            'avg_value': 'SELECT AVG(`amount`) `avg_value` FROM test_rt.doris',
+            'median_value': 'SELECT MEDIAN(`amount`) `median_value` FROM test_rt.doris',
+        }
+        for key, expected_sql in expected_numeric_sql.items():
+            self.assertEqual(stats_sql[key], expected_sql)

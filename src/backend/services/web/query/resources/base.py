@@ -62,7 +62,7 @@ class SearchDataParser:
         return [HitsFormatter(value, [*sensitive_objs, *private_sensitive_objs]).value for value in data]
 
 
-class CreateFavouriteSearchResource(ModelResource):
+class CreateFavouriteSearchResource(QueryBaseResource, ModelResource):
     name = gettext_lazy("创建查询收藏")
     lookup_field = "id"
     model = FavoriteSearch
@@ -70,7 +70,7 @@ class CreateFavouriteSearchResource(ModelResource):
     serializer_class = FavoriteSearchSerializer
 
 
-class UpdateFavouriteSearchResource(ModelResource):
+class UpdateFavouriteSearchResource(QueryBaseResource, ModelResource):
     name = gettext_lazy("更新查询收藏")
     lookup_field = "id"
     model = FavoriteSearch
@@ -78,7 +78,7 @@ class UpdateFavouriteSearchResource(ModelResource):
     serializer_class = FavoriteSearchSerializer
 
 
-class DeleteFavouriteSearchResource(ModelResource):
+class DeleteFavouriteSearchResource(QueryBaseResource, ModelResource):
     name = gettext_lazy("删除查询收藏")
     lookup_field = "id"
     model = FavoriteSearch
@@ -86,7 +86,7 @@ class DeleteFavouriteSearchResource(ModelResource):
     serializer_class = FavoriteSearchSerializer
 
 
-class ListFavouriteSearchResource(ModelResource):
+class ListFavouriteSearchResource(QueryBaseResource, ModelResource):
     """支持过滤查询收藏列表，支持的filter参数有：name、created_by"""
 
     name = gettext_lazy("查询收藏列表")
