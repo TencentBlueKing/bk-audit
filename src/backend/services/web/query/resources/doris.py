@@ -15,6 +15,8 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from abc import ABCMeta, abstractmethod
+from typing import Dict
 
 from bk_resource import api, resource
 from blueapps.utils.logger import logger
@@ -24,15 +26,20 @@ from django.utils.translation import gettext_lazy
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from apps.meta.utils.fields import BKDATA_ES_TYPE_MAP, STANDARD_FIELDS
 from apps.permission.handlers.actions import ActionEnum
+from core.sql.constants import FieldType
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import COLLECT_SEARCH_CONFIG
 from services.web.query.serializers import (
     CollectorSearchAllReqSerializer,
+    CollectorSearchAllStatisticReqSerializer,
     CollectorSearchConfigRespSerializer,
     CollectorSearchReqSerializer,
     CollectorSearchResponseSerializer,
+    CollectorSearchStatisticReqSerializer,
+    CollectorSearchStatisticRespSerializer,
 )
 from services.web.query.utils.doris import DorisSQLBuilder
 
@@ -48,12 +55,9 @@ class CollectorSearchConfigResource(QueryBaseResource):
         return COLLECT_SEARCH_CONFIG.to_json()
 
 
-class CollectorSearchAllResource(QueryBaseResource, SearchDataParser):
-    name = gettext_lazy("日志搜索(All)")
-    RequestSerializer = CollectorSearchAllReqSerializer
-    serializer_class = CollectorSearchResponseSerializer
-
-    def build_sql(self, validated_request_data):
+class CollectorSearchBaseResource(QueryBaseResource, SearchDataParser, metaclass=ABCMeta):
+    @abstractmethod
+    def build_sql(self, validated_request_data) -> DorisSQLBuilder:
         """
         构建日志查询SQL
         """
@@ -77,23 +81,36 @@ class CollectorSearchAllResource(QueryBaseResource, SearchDataParser):
             page=page,
             page_size=page_size,
         )
+        return sql_builder
+
+
+class CollectorSearchAllResource(CollectorSearchBaseResource):
+    name = gettext_lazy("日志搜索(All)")
+    RequestSerializer = CollectorSearchAllReqSerializer
+    serializer_class = CollectorSearchResponseSerializer
+
+    def build_sql(self, validated_request_data) -> Dict[str, str]:
+        """
+        构建日志查询SQL，返回所有数据
+        """
+        sql_builder = super().build_sql(validated_request_data)
         data_sql = sql_builder.build_data_sql()
         count_sql = sql_builder.build_count_sql()
         logger.info(f"[{self.__class__.__name__}] search data_sql: {data_sql};count_sql:{count_sql}")
-        return data_sql, count_sql
+        return {"data": data_sql, "count": count_sql}
 
     def perform_request(self, validated_request_data):
         page = validated_request_data["page"]
         page_size = validated_request_data["page_size"]
         bind_system_info = validated_request_data["bind_system_info"]
-        data_sql, count_sql = self.build_sql(validated_request_data)
+        sqls = self.build_sql(validated_request_data)
         bulk_req_params = [
             {
-                "sql": data_sql,
+                "sql": sqls["data"],
                 "prefer_storage": StorageType.DORIS.value,
             },
             {
-                "sql": count_sql,
+                "sql": sqls["count"],
                 "prefer_storage": StorageType.DORIS.value,
             },
         ]
@@ -115,8 +132,58 @@ class CollectorSearchAllResource(QueryBaseResource, SearchDataParser):
             "num_pages": page_size,
             "total": total,
             "results": data,
-            "query_sql": data_sql,
-            "count_sql": count_sql,
+            "query_sql": sqls["data"],
+            "count_sql": sqls["count"],
+        }
+        return resp
+
+
+class CollectorSearchAllStatisticResource(CollectorSearchBaseResource):
+    name = gettext_lazy("日志统计查询(All)")
+    RequestSerializer = CollectorSearchAllStatisticReqSerializer
+    ResponseSerializer = CollectorSearchResponseSerializer
+    audit_action = ActionEnum.REGULAR_EVENT_STATISTIC
+    standard_fields_types = {
+        field.field_name: FieldType(BKDATA_ES_TYPE_MAP[field.field_type]) for field in STANDARD_FIELDS
+    }
+
+    def build_sql(self, validated_request_data) -> Dict[str, str]:
+        """
+        构建日志统计查询SQL
+        """
+        sql_builder = super().build_sql(validated_request_data)
+        # 调用 build_data_statistic_sql 获取统计信息
+        field_name = validated_request_data["field_name"]
+        field_type = self.standard_fields_types.get[field_name]
+        stats_sql = sql_builder.build_data_statistic_sql(
+            field_name=validated_request_data["field_name"], field_type=field_type
+        )  # 传入您需要的字段
+        logger.info(f"[{self.__class__.__name__}] search stats_sql: {stats_sql}")
+        return stats_sql
+
+    def perform_request(self, validated_request_data):
+        stats_sql = self.build_sql(validated_request_data)
+
+        # 创建请求参数，每个查询独立请求
+        bulk_req_params = [
+            {
+                "sql": query_sql,
+                "prefer_storage": StorageType.DORIS.value,
+            }
+            for query_sql in stats_sql.values()  # 从 stats_sql 字典中获取每个查询 SQL
+        ]
+        # 请求 BKBASE 数据
+        bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+        results = {}
+        for per_resp, sql_name in zip(bulk_resp, stats_sql.keys()):
+            per_ret = per_resp.get("list", [{}])[0]
+            if per_ret:
+                results[sql_name] = per_ret
+            else:
+                results[sql_name] = None
+        resp = {
+            "results": results,
+            "sqls": stats_sql,  # 返回每个统计查询的 SQL
         }
         return resp
 
@@ -125,4 +192,11 @@ class CollectorSearchResource(CollectorSearchAllResource):
     name = gettext_lazy("日志查询")
     RequestSerializer = CollectorSearchReqSerializer
     serializer_class = CollectorSearchResponseSerializer
+    audit_action = ActionEnum.SEARCH_REGULAR_EVENT
+
+
+class CollectorSearchStatisticResource(CollectorSearchAllResource):
+    name = gettext_lazy("日志统计统计")
+    RequestSerializer = CollectorSearchStatisticReqSerializer
+    serializer_class = CollectorSearchStatisticRespSerializer
     audit_action = ActionEnum.SEARCH_REGULAR_EVENT
