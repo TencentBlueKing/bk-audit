@@ -364,6 +364,7 @@ class Field(OperateRecordModel):
             "option": self.option,
             "description": str(self.description),
             "priority_index": self.priority_index,
+            "property": self.property,
         }
 
 
