@@ -292,6 +292,7 @@ INSTANCE_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=80,
+    property={"dynamic_content": True, "sub_keys": []},
 )
 
 INSTANCE_ORIGIN_DATA = Field(
@@ -304,6 +305,7 @@ INSTANCE_ORIGIN_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=79,
+    property={"dynamic_content": True, "sub_keys": []},
 )
 
 RESULT_CODE = Field(
@@ -338,6 +340,7 @@ EXTEND_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=76,
+    property={"dynamic_content": True, "sub_keys": []},
 )
 
 SNAPSHOT_USER_INFO = Field(
@@ -349,6 +352,24 @@ SNAPSHOT_USER_INFO = Field(
     is_required=False,
     is_display=False,
     is_json=True,
+    property={
+        "dynamic_content": False,
+        "sub_keys": [
+            ["action_id"],
+            ["created_at"],
+            ["created_by"],
+            ["description"],
+            ["id"],
+            ["name"],
+            ["name_en"],
+            ["sensitivity"],
+            ["system_id"],
+            ["type"],
+            ["updated_at"],
+            ["updated_by"],
+            ["version"],
+        ],
+    },
 )
 
 SNAPSHOT_RESOURCE_TYPE_INFO = Field(
@@ -360,6 +381,25 @@ SNAPSHOT_RESOURCE_TYPE_INFO = Field(
     is_required=False,
     is_display=False,
     is_json=True,
+    property={
+        "dynamic_content": False,
+        "sub_keys": [
+            ["action_id"],
+            ["created_at"],
+            ["created_by"],
+            ["description"],
+            ["id"],
+            ["name"],
+            ["name_en"],
+            ["resource_type_id"],
+            ["sensitivity"],
+            ["system_id"],
+            ["type"],
+            ["updated_at"],
+            ["updated_by"],
+            ["version"],
+        ],
+    },
 )
 
 SNAPSHOT_ACTION_INFO = Field(
@@ -372,6 +412,24 @@ SNAPSHOT_ACTION_INFO = Field(
     is_display=False,
     is_json=True,
     priority_index=USERNAME.priority_index,
+    property={
+        "dynamic_content": False,
+        "sub_keys": [
+            ["action_id"],
+            ["created_at"],
+            ["created_by"],
+            ["description"],
+            ["id"],
+            ["name"],
+            ["name_en"],
+            ["sensitivity"],
+            ["system_id"],
+            ["type"],
+            ["updated_at"],
+            ["updated_by"],
+            ["version"],
+        ],
+    },
 )
 
 SNAPSHOT_INSTANCE_NAME = Field(
@@ -397,6 +455,7 @@ SNAPSHOT_INSTANCE_DATA = Field(
     is_required=False,
     is_display=False,
     is_json=True,
+    property={"dynamic_content": True, "sub_keys": []},
 )
 
 SYSTEM_ID = Field(
@@ -535,6 +594,7 @@ EXT_FIELD_CONFIG = Field(
     is_json=True,
     is_dimension=False,
     is_display=False,
+    property={"dynamic_content": True, "sub_keys": []},
 )
 
 FLOW_MD5 = Field(

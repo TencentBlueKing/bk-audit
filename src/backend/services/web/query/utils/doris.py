@@ -15,22 +15,26 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import List
+from typing import List, Union
 
 from pypika import Criterion, Order
 from pypika.functions import Count
 from pypika.queries import QueryBuilder
-from pypika.terms import BasicCriterion, EmptyCriterion
+from pypika.terms import BasicCriterion, EmptyCriterion, Function
 
+from apps.meta.utils.fields import STANDARD_FIELDS
 from core.constants import OrderTypeChoices
 from core.sql.builder import BKBaseQueryBuilder, BkBaseTable
 from core.sql.constants import Operator
-from core.sql.terms import DorisField
+from core.sql.terms import DorisField, DorisJsonTypeExtractFunction, DorisVariantField
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
 class DorisSQLBuilder:
     """日志查询SQL构建器"""
+
+    VARIANT_FIELDS = {f.field_name for f in STANDARD_FIELDS if f.is_json and not f.property["dynamic_content"]}
+    JSON_TYPE_FIELDS = {f.field_name for f in STANDARD_FIELDS if f.is_json and f.property["dynamic_content"]}
 
     def __init__(
         self,
@@ -54,12 +58,15 @@ class DorisSQLBuilder:
 
         return BkBaseTable(table)
 
-    def get_pypika_fields(self, name: str, keys: List[str] = None) -> DorisField:
+    def get_pypika_fields(self, name: str, keys: List[str] = None) -> Union[DorisField, Function]:
         """
         获取pypika字段
         """
-
-        return DorisField(name=name, table=self.table, keys=keys)
+        if name in self.VARIANT_FIELDS:
+            return DorisVariantField(name=name, table=self.table, keys=keys)
+        if name in self.JSON_TYPE_FIELDS:
+            return DorisJsonTypeExtractFunction(DorisField(name=name, table=self.table), keys=keys)
+        return DorisField(name=name, table=self.table)
 
     def build_filters(self, pypika_field: DorisField, operator: str, filters: list) -> BasicCriterion:
         """
