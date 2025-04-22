@@ -40,6 +40,7 @@ from apps.meta.models import (
     Action,
     DataMap,
     Field,
+    GeneralConfig,
     GlobalMetaConfig,
     Namespace,
     ResourceType,
@@ -427,3 +428,11 @@ class DeleteSystemDiagnosisPushReqSerializer(serializers.Serializer):
     """
 
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+
+
+class GeneralConfigSerializer(serializers.ModelSerializer):
+    """Serializer for GeneralConfig"""
+
+    class Meta:
+        model = GeneralConfig
+        fields = ['id', 'scene', 'config_name', 'config_content', 'created_by', 'created_at', 'updated_at']

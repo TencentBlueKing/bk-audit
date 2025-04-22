@@ -54,6 +54,7 @@ from apps.meta.models import (
     CustomField,
     DataMap,
     Field,
+    GeneralConfig,
     GlobalMetaConfig,
     ResourceType,
     SensitiveObject,
@@ -69,6 +70,7 @@ from apps.meta.serializers import (
     DeleteSystemDiagnosisPushReqSerializer,
     FieldListRequestSerializer,
     FieldListSerializer,
+    GeneralConfigSerializer,
     GetAppInfoRequestSerializer,
     GetAppInfoResponseSerializer,
     GetAssetPullInfoRequestSerializer,
@@ -705,3 +707,37 @@ class DeleteSystemDiagnosisPush(Meta, Resource):
     def perform_request(self, validated_request_data):
         system_id = validated_request_data["system_id"]
         SystemDiagnosisPushHandler(system_id=system_id).delete_push()
+
+
+class CreateGeneralConfigResource(Meta, ModelResource):
+    name = gettext_lazy("创建通用配置")
+    lookup_field = "id"
+    model = GeneralConfig
+    action = "create"
+    serializer_class = GeneralConfigSerializer
+
+
+class UpdateGeneralConfigResource(Meta, ModelResource):
+    name = gettext_lazy("更新通用配置")
+    lookup_field = "id"
+    model = GeneralConfig
+    action = "update"
+    serializer_class = GeneralConfigSerializer
+
+
+class DeleteGeneralConfigResource(Meta, ModelResource):
+    name = gettext_lazy("删除通用配置")
+    lookup_field = "id"
+    model = GeneralConfig
+    action = "destroy"
+    serializer_class = GeneralConfigSerializer
+
+
+class ListGeneralConfigResource(Meta, ModelResource):
+    """支持过滤查询通用配置列表，支持的filter参数有：scene、config_name、created_by"""
+
+    name = gettext_lazy("通用配置列表")
+    model = GeneralConfig
+    filter_fields = ["scene", "config_name", "created_by"]
+    action = "list"
+    serializer_class = GeneralConfigSerializer

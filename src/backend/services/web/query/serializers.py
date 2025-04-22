@@ -334,7 +334,15 @@ class CollectorSearchAllReqSerializer(serializers.Serializer):
         return attrs
 
 
-class CollectorSearchReqSerializer(CollectorSearchAllReqSerializer):
+class CollectorSearchAllStatisticReqSerializer(CollectorSearchAllReqSerializer):
+    """
+    日志查询统计请求(All)序列化器
+    """
+
+    field_name = serializers.ChoiceField(label="字段名", choices=COLLECT_SEARCH_CONFIG.allowed_query_field_choices)
+
+
+class CollectorSearchReqPermissionCheckMixIn:
     """
     日志查询请求序列化器
     """
@@ -371,6 +379,24 @@ class CollectorSearchReqSerializer(CollectorSearchAllReqSerializer):
         return attrs
 
 
+class CollectorSearchReqSerializer(CollectorSearchReqPermissionCheckMixIn, CollectorSearchAllReqSerializer):
+    """
+    日志查询请求序列化器
+    """
+
+    pass
+
+
+class CollectorSearchStatisticReqSerializer(
+    CollectorSearchReqPermissionCheckMixIn, CollectorSearchAllStatisticReqSerializer
+):
+    """
+    日志查询统计请求序列化器
+    """
+
+    pass
+
+
 class CollectorSearchConfigRespSerializer(serializers.Serializer):
     """
     查询配置响应序列化器
@@ -387,6 +413,15 @@ class CollectorSearchResponseSerializer(QuerySearchResponseSerializer):
 
     query_sql = serializers.CharField(required=False, allow_blank=True)
     count_sql = serializers.CharField(required=False, allow_blank=True)
+
+
+class CollectorSearchStatisticRespSerializer(serializers.Serializer):
+    """
+    日志查询统计响应序列化器
+    """
+
+    sqls = serializers.DictField(allow_empty=True)
+    results = serializers.ListField(child=serializers.ListField(allow_empty=True), allow_empty=True)
 
 
 class FavoriteSearchSerializer(CollectorSearchAllReqSerializer, serializers.ModelSerializer):
