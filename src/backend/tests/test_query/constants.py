@@ -319,9 +319,10 @@ COLLECTOR_SEARCH_DATA_RESP = {
     "IN ('xxx') AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` "
     "IN (1,2,-1) AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' "
     "AND `user_identify_type` IN (0,1) AND `access_user_agent` LIKE '%1%' AND `result_content` "
-    "IN (1) AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
-    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
-    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    "IN (1) AND JSON_EXTRACT_STRING(`instance_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`instance_origin_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`extend_data`,'$.k1.k2') IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND JSON_EXTRACT_STRING(`snapshot_instance_data`,'$.k1.k2') "
     f"LIKE '%1%' ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 10",
     "count_sql": f"SELECT COUNT(*) `count` FROM {PLUGIN_RESULT_TABLE} "
     f"WHERE `system_id` IN ('bk-audit') AND `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
@@ -332,9 +333,10 @@ COLLECTOR_SEARCH_DATA_RESP = {
     "AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` IN (1,2,-1) "
     "AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' AND `user_identify_type` "
     "IN (0,1) AND `access_user_agent` LIKE '%1%' AND `result_content` IN (1) "
-    "AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
-    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
-    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    "AND JSON_EXTRACT_STRING(`instance_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`instance_origin_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`extend_data`,'$.k1.k2') IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND JSON_EXTRACT_STRING(`snapshot_instance_data`,'$.k1.k2') "
     f"LIKE '%1%' LIMIT 1",
 }
 
@@ -447,9 +449,10 @@ COLLECTOR_SEARCH_ALL_DATA_RESP = {
     "IN ('xxx') AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` "
     "IN (1,2,-1) AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' "
     "AND `user_identify_type` IN (0,1) AND `access_user_agent` LIKE '%1%' AND `result_content` "
-    "IN (1) AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
-    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
-    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    "IN (1) AND JSON_EXTRACT_STRING(`instance_data`,'$.k1.k2') IN (1) AND "
+    "JSON_EXTRACT_STRING(`instance_origin_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`extend_data`,'$.k1.k2') IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND JSON_EXTRACT_STRING(`snapshot_instance_data`,'$.k1.k2') "
     f"LIKE '%1%' ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 10",
     "count_sql": f"SELECT COUNT(*) `count` FROM {PLUGIN_RESULT_TABLE} "
     f"WHERE `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
@@ -460,9 +463,10 @@ COLLECTOR_SEARCH_ALL_DATA_RESP = {
     "AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` IN (1,2,-1) "
     "AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' AND `user_identify_type` "
     "IN (0,1) AND `access_user_agent` LIKE '%1%' AND `result_content` IN (1) "
-    "AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
-    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
-    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    "AND JSON_EXTRACT_STRING(`instance_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`instance_origin_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`extend_data`,'$.k1.k2') IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND JSON_EXTRACT_STRING(`snapshot_instance_data`,'$.k1.k2') "
     f"LIKE '%1%' LIMIT 1",
 }
 
