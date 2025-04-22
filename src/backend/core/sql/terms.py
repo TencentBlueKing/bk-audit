@@ -19,10 +19,10 @@ from typing import Any, Iterator, List, Optional, Union
 
 from pypika.terms import Criterion
 from pypika.terms import Field as _PypikaField
-from pypika.terms import NodeT
+from pypika.terms import Function, NodeT
 from pypika.utils import builder, format_alias_sql, format_quotes
 
-from core.sql.constants import DORIS_FIELD_KEY_QUOTE
+from core.sql.constants import DORIS_FIELD_KEY_QUOTE, FieldType
 from core.sql.model import Field, Table
 
 
@@ -80,12 +80,43 @@ class DorisField(PypikaField):
 
     key_quote: str = DORIS_FIELD_KEY_QUOTE
 
+    @classmethod
+    def get_field(cls, table: Table, field: Field, *args, **kwargs) -> "DorisField":
+        return cls(name=field.raw_name, table=field.table)
+
+    def match_all(self, arg: Union[list, tuple, set]) -> "MatchAllCriterion":
+        return MatchAllCriterion(self, arg)
+
+    def not_match_all(self, arg: Union[list, tuple, set]) -> "MatchAllCriterion":
+        return MatchAllCriterion(self, arg).negate()
+
+    def match_any(self, arg: Union[list, tuple, set]) -> "MatchAnyCriterion":
+        return MatchAnyCriterion(self, arg)
+
+    def not_match_any(self, arg: Union[list, tuple, set]) -> "MatchAnyCriterion":
+        return MatchAnyCriterion(self, arg).negate()
+
+
+class DorisPrimitiveField(DorisField):
+    """
+    Doris 普通类型字段支持
+    """
+
+    pass
+
+
+class DorisVariantField(DorisField):
+    """
+    Doris variant类型字段支持
+    """
+
     def __init__(self, keys: List[str] = None, *args, **kwargs):
-        """
-        :param keys: variant类型字段的keys
-        """
-        self.keys = keys
         super().__init__(*args, **kwargs)
+        self.keys = keys
+
+    @classmethod
+    def get_field(cls, table: Table, field: Field, *args, **kwargs) -> "DorisField":
+        return cls(keys=field.keys, *args, **kwargs)
 
     def format_keys_quote(self) -> str:
         """
@@ -118,18 +149,26 @@ class DorisField(PypikaField):
             return format_alias_sql(field_sql, field_alias, quote_char=quote_char, **kwargs)
         return field_sql
 
-    @classmethod
-    def get_field(cls, table: Table, field: Field, *args, **kwargs) -> "DorisField":
-        return cls(name=field.raw_name, table=field.table, keys=field.keys)
 
-    def match_all(self, arg: Union[list, tuple, set]) -> "MatchAllCriterion":
-        return MatchAllCriterion(self, arg)
+class DorisJsonTypeExtractFunction(Function):
+    """
+    Doris json类型字段检索支持
+    """
 
-    def not_match_all(self, arg: Union[list, tuple, set]) -> "MatchAllCriterion":
-        return MatchAllCriterion(self, arg).negate()
+    json_extract_functions = {
+        FieldType.STRING: 'JSON_EXTRACT_STRING',
+        FieldType.INT: 'JSON_EXTRACT_INT',
+        FieldType.FLOAT: 'JSON_EXTRACT_DOUBLE',
+        FieldType.DOUBLE: 'JSON_EXTRACT_DOUBLE',
+        FieldType.LONG: 'JSON_EXTRACT_LARGEINT',
+        FieldType.TEXT: 'JSON_EXTRACT_STRING',
+        FieldType.TIMESTAMP: 'JSON_EXTRACT_LARGEINT',
+    }
 
-    def match_any(self, arg: Union[list, tuple, set]) -> "MatchAnyCriterion":
-        return MatchAnyCriterion(self, arg)
-
-    def not_match_any(self, arg: Union[list, tuple, set]) -> "MatchAnyCriterion":
-        return MatchAnyCriterion(self, arg).negate()
+    def __init__(self, field: DorisField, keys: List[str], target_field_type: Optional[FieldType] = None, **kwargs):
+        super().__init__(name='JSON_EXTRACT', **kwargs)
+        self.target_field_type = target_field_type or FieldType.STRING
+        self.name = self.json_extract_functions.get(
+            self.target_field_type, self.json_extract_functions[FieldType.STRING]
+        )
+        self.args = [self.wrap_constant(param) for param in (field, f"$.{'.'.join(keys)}")]
