@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# flake8: noqa
 """
 TencentBlueKing is pleased to support the open source community by making
 蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
@@ -26,7 +27,10 @@ from pypika import Order
 from core.sql.constants import FieldType
 from services.web.query.constants import DATE_FORMAT
 from services.web.query.serializers import CollectorSearchReqSerializer
-from services.web.query.utils.doris import DorisSQLBuilder
+from services.web.query.utils.doris import (
+    DorisQuerySQLBuilder,
+    DorisStatisticSQLBuilder,
+)
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
@@ -48,13 +52,7 @@ class TestDorisSQLBuilder(TestCase):
     def tearDown(self):
         mock.patch.stopall()
 
-    def _get_builder(
-        self,
-        filters=None,
-        sort_list=None,
-        page=1,
-        page_size=50,
-    ):
+    def _get_builder(self, filters=None, sort_list=None, page=1, page_size=50, type='normal'):
         """创建 Builder 实例"""
         conditions = CollectorSearchReqSerializer._build_time_conditions(
             {
@@ -63,13 +61,22 @@ class TestDorisSQLBuilder(TestCase):
             }
         )
         conditions.extend(filters or [])
-        return DorisSQLBuilder(
-            table="test_rt.doris",
-            filters=conditions or [],
-            sort_list=sort_list or [],
-            page=page,
-            page_size=page_size,
-        )
+        if type == 'normal':
+            return DorisQuerySQLBuilder(
+                table="test_rt.doris",
+                filters=conditions or [],
+                sort_list=sort_list or [],
+                page=page,
+                page_size=page_size,
+            )
+        else:
+            return DorisStatisticSQLBuilder(
+                table="test_rt.doris",
+                filters=conditions or [],
+                sort_list=sort_list or [],
+                page=page,
+                page_size=page_size,
+            )
 
     def test_base_time_condition(self):
         """测试基础时间条件"""
@@ -243,18 +250,20 @@ class TestDorisSQLBuilder(TestCase):
         """测试 build_data_statistic_sql 方法"""
 
         # 测试文本字段（STRING）
-        builder = self._get_builder()
+        builder = self._get_builder(type='statistic')
         field_name = "event_type"
         field_type = FieldType.STRING
-        stats_sql = builder.build_data_statistic_sql(field_name, field_type)
-
-        # 对应的期望 SQL 查询
+        stats_sql = builder.build_statistic_sql(field_name, field_type)
         expected_text_sql = {
-            'non_empty_ratio': 'SELECT COUNT(`event_type`)/COUNT(*) `non_empty_ratio` FROM test_rt.doris',
-            'non_empty_rows': 'SELECT COUNT(`event_type`) `non_empty_rows` FROM test_rt.doris',
-            'top_5_time_series': "SELECT `test_rt.doris`.`event_type`,DATE_TRUNC(FROM_UNIXTIME(`test_rt.doris`.`dteventtimestamp`/1000),'MINUTE') `time_interval`,COUNT(`test_rt.doris`.`event_type`) `count` FROM test_rt.doris JOIN (SELECT `event_type`,COUNT(`event_type`) `count` FROM test_rt.doris GROUP BY `event_type` ORDER BY `count` DESC LIMIT 5) `sq0` ON `test_rt.doris`.`event_type`=`sq0`.`event_type` GROUP BY `test_rt.doris`.`time_interval`,`test_rt.doris`.`event_type` ORDER BY `test_rt.doris`.`time_interval` DESC",  # noqa
-            'top_5_values': 'SELECT `event_type`,COUNT(`event_type`) `count` FROM test_rt.doris GROUP BY `event_type` ORDER BY `count` DESC',  # noqa
-            'total_rows': 'SELECT COUNT(*) `total_rows` FROM test_rt.doris',
+            "avg_value": None,
+            "max_value": None,
+            "median_value": None,
+            "min_value": None,
+            "non_empty_ratio": "SELECT COUNT(`event_table`.`event_type`)/COUNT(*) `non_empty_ratio` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
+            "non_empty_rows": "SELECT COUNT(`event_table`.`event_type`) `non_empty_rows` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
+            "top_5_time_series": "SELECT `event_table`.`event_type`,DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE') `time_interval`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` JOIN (SELECT `event_table`.`event_type`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY `event_table`.`event_type` ORDER BY `event_table`.`count` DESC LIMIT 5) `sq0` ON `event_table`.`event_type`=`sq0`.`event_type` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE'),`event_table`.`event_type` ORDER BY DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE') DESC",
+            "top_5_values": "SELECT `event_table`.`event_type`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY `event_table`.`event_type` ORDER BY `event_table`.`count` DESC",
+            "total_rows": "SELECT COUNT(*) `total_rows` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
         }
 
         for key, expected_sql in expected_text_sql.items():
@@ -263,17 +272,19 @@ class TestDorisSQLBuilder(TestCase):
         # 测试数值字段（NUMERIC）
         field_name = "amount"
         field_type = FieldType.LONG
-        stats_sql = builder.build_data_statistic_sql(field_name, field_type)
+        stats_sql = builder.build_statistic_sql(field_name, field_type)
 
         # 对应的期望 SQL 查询
         expected_numeric_sql = {
-            'total_rows': 'SELECT COUNT(*) `total_rows` FROM test_rt.doris',
-            'non_empty_rows': 'SELECT COUNT(`amount`) `non_empty_rows` FROM test_rt.doris',
-            'non_empty_ratio': 'SELECT COUNT(`amount`)/COUNT(*) `non_empty_ratio` FROM test_rt.doris',
-            'max_value': 'SELECT MAX(`amount`) `max_value` FROM test_rt.doris',
-            'min_value': 'SELECT MIN(`amount`) `min_value` FROM test_rt.doris',
-            'avg_value': 'SELECT AVG(`amount`) `avg_value` FROM test_rt.doris',
-            'median_value': 'SELECT MEDIAN(`amount`) `median_value` FROM test_rt.doris',
+            "avg_value": "SELECT AVG(`event_table`.`amount`) `avg_value` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
+            "max_value": "SELECT MAX(`event_table`.`amount`) `max_value` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
+            "median_value": "SELECT MEDIAN(`event_table`.`amount`) `median_value` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
+            "min_value": "SELECT MIN(`event_table`.`amount`) `min_value` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
+            "non_empty_ratio": "SELECT COUNT(`event_table`.`amount`)/COUNT(*) `non_empty_ratio` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
+            "non_empty_rows": "SELECT COUNT(`event_table`.`amount`) `non_empty_rows` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
+            "top_5_time_series": None,
+            "top_5_values": None,
+            "total_rows": "SELECT COUNT(*) `total_rows` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
         }
         for key, expected_sql in expected_numeric_sql.items():
             self.assertEqual(stats_sql[key], expected_sql)
