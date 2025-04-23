@@ -435,4 +435,4 @@ class GeneralConfigSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = GeneralConfig
-        fields = ['id', 'scene', 'config_name', 'config_content', 'created_by', 'created_at', 'updated_at']
+        fields = ['id', 'scene', 'config_name', 'config_content']
