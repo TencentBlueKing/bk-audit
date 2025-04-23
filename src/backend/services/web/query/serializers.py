@@ -415,13 +415,47 @@ class CollectorSearchResponseSerializer(QuerySearchResponseSerializer):
     count_sql = serializers.CharField(required=False, allow_blank=True)
 
 
+class StatisticSQLSerializer(serializers.Serializer):
+    """
+    用于序列化 SQL 查询。
+    """
+
+    total_rows = serializers.CharField(allow_blank=True, allow_null=True)
+    non_empty_rows = serializers.CharField(allow_blank=True, allow_null=True)
+    non_empty_ratio = serializers.CharField(allow_blank=True, allow_null=True)
+    max_value = serializers.CharField(allow_blank=True, allow_null=True)
+    min_value = serializers.CharField(allow_blank=True, allow_null=True)
+    avg_value = serializers.CharField(allow_blank=True, allow_null=True)
+    median_value = serializers.CharField(allow_blank=True, allow_null=True)
+    top_5_values = serializers.CharField(allow_blank=True, allow_null=True)
+    top_5_time_series = serializers.CharField(allow_blank=True, allow_null=True)
+
+
+class StatisticResultSerializer(serializers.Serializer):
+    """
+    键对应 SQL 查询，值可以为空或者是任意结构。
+    """
+
+    total_rows = serializers.JSONField(
+        allow_null=True,
+    )
+    non_empty_rows = serializers.JSONField(allow_null=True)
+    non_empty_ratio = serializers.JSONField(allow_null=True)
+    max_value = serializers.JSONField(allow_null=True)
+    min_value = serializers.JSONField(allow_null=True)
+    avg_value = serializers.JSONField(allow_null=True)
+    median_value = serializers.JSONField(allow_null=True)
+    top_5_values = serializers.JSONField(allow_null=True)
+    top_5_time_series = serializers.JSONField(allow_null=True)
+
+
 class CollectorSearchStatisticRespSerializer(serializers.Serializer):
     """
     日志查询统计响应序列化器
     """
 
-    sqls = serializers.DictField(allow_empty=True)
-    results = serializers.ListField(child=serializers.ListField(allow_empty=True), allow_empty=True)
+    sqls = StatisticSQLSerializer()
+    results = StatisticResultSerializer()
 
 
 class FavoriteSearchSerializer(CollectorSearchAllReqSerializer, serializers.ModelSerializer):
