@@ -61,7 +61,6 @@
 <script setup lang='ts'>
   import {
     computed,
-    onMounted,
     ref,
     watch,
   } from 'vue';
@@ -69,7 +68,6 @@
 
   import CollectorManageService from '@service/collector-manage';
   import MetaManageService from '@service/meta-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -104,19 +102,6 @@
   });
 
   const isDisabled = computed(() => firstSystemIds.value.length > 0);
-
-  // 获取rt_id
-  const {
-    data: tableData,
-    run: fetchTable,
-  } = useRequest(StrategyManageService.fetchTable, {
-    defaultValue: [],
-    onSuccess: () => {
-      // EventLog 默认使用第一个rt_id（只有一个）
-      // 额外传递system_ids参数，只有EventLog才需要
-      modelValue.value.rt_id = tableData.value[0]?.value;
-    },
-  });
 
   // 获取系统
   const {
@@ -162,12 +147,6 @@
     }
   }, {
     immediate: true,
-  });
-
-  onMounted(() => {
-    fetchTable({
-      table_type: 'EventLog',
-    });
   });
 </script>
 <style>
