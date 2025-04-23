@@ -440,8 +440,4 @@ class FavoriteSearchSerializer(CollectorSearchAllReqSerializer, serializers.Mode
             "filters",
             "sort_list",
             "bind_system_info",
-            "created_by",
-            "created_at",
-            "updated_by",
-            "updated_at",
         ]
