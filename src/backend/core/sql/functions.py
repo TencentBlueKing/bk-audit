@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import Any
 
 from pypika.functions import Count
 from pypika.terms import Function
@@ -37,3 +38,17 @@ class ConcatWs(Function):
 
     def __init__(self, separator, *args):
         super(ConcatWs, self).__init__("CONCAT_WS", separator, *args)
+
+
+class DateTrunc(Function):
+    """日期截断函数"""
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__("DATE_TRUNC", *args, **kwargs)
+
+
+class FromUnixTime(Function):
+    """Unix时间戳转换为日期函数"""
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__("FROM_UNIXTIME", *args, **kwargs)
