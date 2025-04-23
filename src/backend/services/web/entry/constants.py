@@ -64,3 +64,5 @@ TENCENT_WEB_FOOTER = [
 IAM_WEB_URL_KEY = "iam_web_url"
 # 互娱应用系统和敏感操作安全管理规范访问地址
 IEG_STD_OP_DOC_URL_KEY = "ieg_std_op_doc_url"
+# bkbase WEB 访问地址
+BKBASE_WEB_URL_KEY = "bkbase_web_url"
