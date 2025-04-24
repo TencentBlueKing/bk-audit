@@ -69,8 +69,20 @@
             </render-info-item>
           </render-info-block>
         </div>
-        <div class="title">
-          {{ t('资源数据结构') }}
+        <div class="title-head">
+          <div class="title">
+            {{ t('资源数据结构') }}
+          </div>
+          <bk-button
+            class="ml10"
+            outline
+            theme="primary"
+            @click="handleViewMore">
+            {{ t('更多信息') }}
+            <audit-icon
+              style="margin-left: 5px; transform: rotate(-90deg);"
+              type="angle-line-down" />
+          </bk-button>
         </div>
         <bk-table
           ref="tableRef"
@@ -86,8 +98,10 @@
   import { watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RootManageService from '@service/root-manage';
   import StrategyManageService from '@service/strategy-manage';
 
+  import ConfigModel from '@model/root/config';
   import RtMetaModel from '@model/strategy/rt-meta';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
@@ -132,6 +146,20 @@
     },
   ];
 
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
+  const handleViewMore = () => {
+    const rtId = Array.isArray(props.rtId) ? props.rtId[props.rtId.length - 1] : props.rtId;
+    const prefix = rtId.split('_')[0];
+
+    window.open(`${configData.value.third_party_system.bkbase_web_url}#/data-mart/data-dictionary/detail?dataType=result_table&result_table_id=${props.rtId}&bk_biz_id=${prefix}`);
+  };
+
   // 获取表格信息
   const {
     data: rtMeta,
@@ -165,10 +193,16 @@
 .structure-preview {
   padding: 20px 40px;
 
-  .title {
+  .title-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 16px;
-    font-size: 14px;
-    font-weight: 700;
+
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+    }
   }
 
   .info-block {
