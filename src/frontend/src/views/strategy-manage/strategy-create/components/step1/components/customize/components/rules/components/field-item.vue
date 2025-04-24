@@ -461,7 +461,7 @@
     // 检查并清理不在可选字段列表中的已选字段
     localConditions.value.conditions.forEach((condItem, index) => {
       const { field } = condItem.condition;
-      if (field?.raw_name && !localTableFields.value.some(item => item.raw_name === field.raw_name)) {
+      if (field?.display_name && !localTableFields.value.some(item => item.display_name === field.display_name)) {
         // eslint-disable-next-line no-param-reassign
         condItem.condition.field = new DatabaseTableFieldModel();
         emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, index, 'field');
