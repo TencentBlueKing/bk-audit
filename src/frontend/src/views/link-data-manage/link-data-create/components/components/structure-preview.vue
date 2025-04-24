@@ -95,6 +95,7 @@
   </audit-sideslider>
 </template>
 <script setup lang="ts">
+  import type { Table } from 'bkui-vue';
   import { watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -144,7 +145,7 @@
       field: () => '',
       render: ({ data }: {data: Record<string, any>}) => rtLastData.value.last_data?.[data.value] || '--',
     },
-  ];
+  ] as  InstanceType<typeof Table>['$props']['columns'];
 
   const {
     data: configData,
