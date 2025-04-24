@@ -64,7 +64,7 @@ class TestDorisSQLBuilder(TestCase):
         if type == 'normal':
             return DorisQuerySQLBuilder(
                 table="test_rt.doris",
-                filters=conditions or [],
+                conditions=conditions or [],
                 sort_list=sort_list or [],
                 page=page,
                 page_size=page_size,
@@ -72,7 +72,7 @@ class TestDorisSQLBuilder(TestCase):
         else:
             return DorisStatisticSQLBuilder(
                 table="test_rt.doris",
-                filters=conditions or [],
+                conditions=conditions or [],
                 sort_list=sort_list or [],
                 page=page,
                 page_size=page_size,
@@ -102,29 +102,25 @@ class TestDorisSQLBuilder(TestCase):
         filters = [
             # IN 查询
             {
-                "field_name": "system_id",
-                "keys": [],
+                "field": {"raw_name": "system_id", "field_type": "string", "keys": []},
                 "operator": QueryConditionOperator.INCLUDE.value,
                 "filters": ["bk-audit", "bk-bscp"],
             },
             # 精确匹配
             {
-                "field_name": "action_id",
-                "keys": [],
+                "field": {"raw_name": "action_id", "field_type": "string", "keys": []},
                 "operator": QueryConditionOperator.EQ.value,
                 "filters": ["create_link_table"],
             },
             # 模糊匹配
             {
-                "field_name": "instance_name",
-                "keys": [],
+                "field": {"raw_name": "instance_name", "field_type": "string", "keys": []},
                 "operator": QueryConditionOperator.LIKE.value,
                 "filters": ["123131"],
             },
             # 嵌套字段查询
             {
-                "field_name": "instance_data",
-                "keys": ["key1"],
+                "field": {"raw_name": "instance_data", "field_type": "json", "keys": ["key1"]},
                 "operator": QueryConditionOperator.EQ.value,
                 "filters": ["value1"],
             },
@@ -196,8 +192,7 @@ class TestDorisSQLBuilder(TestCase):
         """测试全文检索操作符"""
         filters = [
             {
-                "field_name": "log",
-                "keys": [],
+                "field": {"raw_name": "log", "field_type": "string", "keys": []},
                 "operator": QueryConditionOperator.MATCH_ALL.value,
                 "filters": ["12313"],
             }
@@ -223,8 +218,7 @@ class TestDorisSQLBuilder(TestCase):
         """测试多值模糊查询(只会有一个值生效)"""
         filters = [
             {
-                "field_name": "event_content",
-                "keys": [],
+                "field": {"raw_name": "event_content", "field_type": "string", "keys": []},
                 "operator": QueryConditionOperator.LIKE.value,
                 "filters": ["123", "456"],
             }
@@ -261,8 +255,8 @@ class TestDorisSQLBuilder(TestCase):
             "min_value": None,
             "non_empty_ratio": "SELECT COUNT(`event_table`.`event_type`)/COUNT(*) `non_empty_ratio` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
             "non_empty_rows": "SELECT COUNT(`event_table`.`event_type`) `non_empty_rows` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
-            "top_5_time_series": "SELECT `event_table`.`event_type`,DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE') `time_interval`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` JOIN (SELECT `event_table`.`event_type`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY `event_table`.`event_type` ORDER BY `event_table`.`count` DESC LIMIT 5) `sq0` ON `event_table`.`event_type`=`sq0`.`event_type` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE'),`event_table`.`event_type` ORDER BY DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE') DESC",
-            "top_5_values": "SELECT `event_table`.`event_type`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY `event_table`.`event_type` ORDER BY `event_table`.`count` DESC",
+            "top_5_time_series": "SELECT `event_table`.`event_type`,DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE') `time_interval`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` JOIN (SELECT `event_table`.`event_type`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY `event_table`.`event_type` ORDER BY `count` DESC LIMIT 5) `sq0` ON `event_table`.`event_type`=`sq0`.`event_type` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE'),`event_table`.`event_type` ORDER BY DATE_TRUNC(FROM_UNIXTIME(`event_table`.`dteventtimestamp`/1000),'MINUTE') DESC",
+            "top_5_values": "SELECT `event_table`.`event_type`,COUNT(`event_table`.`event_type`) `count` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000 GROUP BY `event_table`.`event_type` ORDER BY `count` DESC LIMIT 5",
             "total_rows": "SELECT COUNT(*) `total_rows` FROM test_rt.doris `event_table` WHERE `event_table`.`thedate`>='20250219' AND `event_table`.`thedate`<='20250220' AND `event_table`.`dtEventTimeStamp`>=1739973600000 AND `event_table`.`dtEventTimeStamp`<=1739995200000",
         }
 
