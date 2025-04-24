@@ -107,7 +107,6 @@
     username: 'operator',
     start_timeaccess_source_ip: 'event_source',
   };
-  let isInit = false;
 
   const column = computed(() => {
     const initColumn = [
@@ -151,31 +150,7 @@
     prefix: 'event_data',
   });
 
-  const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs' | 'event_evidence_field_configs') => {
-    if ((isEditMode || isCloneMode) && props.data[key]?.length && tableData.value[key].length && !isInit) {
-      // 编辑填充参数
-      tableData.value[key] = tableData.value[key].map((item) => {
-        const editItem = props.data[key] && props.data[key].find(edItem => edItem.field_name === item.field_name);
-        if (editItem) {
-          return {
-            field_name: item.field_name,
-            display_name: item.display_name,
-            is_priority: editItem.is_priority,
-            map_config: {
-              target_value: editItem.map_config?.target_value,
-              source_field: editItem.map_config?.source_field || editItem.map_config?.target_value, // 固定值赋值，用于反显
-            },
-            description: editItem.description,
-            example: item.example,
-            prefix: '',
-          };
-        }
-        return {
-          ...item,
-        };
-      });
-      isInit = true;
-    }
+  const setTableData = (key: 'event_basic_field_configs' | 'event_data_field_configs') => {
     switch (key) {
     case 'event_basic_field_configs':
       if (tableData.value[key].length && props.select && props.select.length) {
@@ -213,7 +188,7 @@
   };
 
   const process = () => {
-    // 填充内容（是否重点展示、字段说明、字段自动填充）
+    // 填充内容（字段自动填充, 根据select更新event_data_field_configs)
     setTableData('event_basic_field_configs');
     setTableData('event_data_field_configs');
   };
@@ -226,7 +201,33 @@
       strategy_id: props.strategyId,
     },
     onSuccess: () => {
-      process();
+      if (isEditMode || isCloneMode) {
+        (Object.keys(tableData.value) as Array<keyof typeof tableData.value>).forEach((key)  => {
+          if (props.data[key]?.length && tableData.value[key]?.length) {
+            // 编辑填充参数
+            tableData.value[key] = tableData.value[key].map((item) => {
+              const editItem = props.data[key] && props.data[key].find(edItem => edItem.field_name === item.field_name);
+              if (editItem) {
+                return {
+                  field_name: item.field_name,
+                  display_name: item.display_name,
+                  is_priority: editItem.is_priority,
+                  map_config: {
+                    target_value: editItem.map_config?.target_value,
+                    source_field: editItem.map_config?.source_field || editItem.map_config?.target_value, // 固定值赋值，用于反显
+                  },
+                  description: editItem.description,
+                  example: item.example,
+                  prefix: '',
+                };
+              }
+              return {
+                ...item,
+              };
+            });
+          }
+        });
+      }
     },
     manual: true,
   });
