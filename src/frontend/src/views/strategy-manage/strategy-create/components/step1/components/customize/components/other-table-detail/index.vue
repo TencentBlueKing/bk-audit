@@ -61,6 +61,7 @@
   </div>
   <structure-preview
     v-model:show-structure="showStructure"
+    :rt-id="rtId"
     :rt-last-data="rtLastData.last_data[0]"
     :rt-meta="rtMeta" />
 </template>

@@ -41,43 +41,45 @@
             ">
             {{ t('数据源') }}
           </span>
-          <div
-            class="select-group"
-            :class="formData.configs.config_type === 'EventLog' ? 'select-group-grid' : ''">
-            <bk-form-item
-              v-if="allConfigTypeTable.length"
-              class="no-label"
-              label-width="0"
-              property="configs.config_type">
-              <bk-cascader
-                v-slot="{data, node}"
-                v-model="tableId"
-                :filter-method="configTypeTableFilter"
-                filterable
-                id-key="value"
-                :list="allConfigTypeTable"
-                name-key="label"
-                placeholder="搜索数据名称、别名、数据ID等"
-                trigger="hover"
-                @change="handleChangeTable">
-                <p
-                  v-bk-tooltips="{
-                    disabled: !data.disabled || !data.leaf,
-                    content: node.pathNames[0] === '资产数据'
-                      ? t('该系统暂未上报资源数据')
-                      : t('审计无权限，请前往BKBase申请授权'),
-                    delay: 400,
-                  }">
-                  {{ node.name }}
-                </p>
-              </bk-cascader>
-            </bk-form-item>
-            <template v-if="formData.configs.config_type === 'EventLog'">
-              <event-log-component
-                ref="eventLogRef"
-                @update-system="handleUpdateSystem" />
-            </template>
-          </div>
+          <bk-loading :loading="typeTableLoading">
+            <div
+              class="select-group"
+              :class="formData.configs.config_type === 'EventLog' ? 'select-group-grid' : ''">
+              <bk-form-item
+                v-if="allConfigTypeTable.length"
+                class="no-label"
+                label-width="0"
+                property="configs.config_type">
+                <bk-cascader
+                  v-slot="{data, node}"
+                  v-model="tableId"
+                  :filter-method="configTypeTableFilter"
+                  filterable
+                  id-key="value"
+                  :list="allConfigTypeTable"
+                  name-key="label"
+                  placeholder="搜索数据名称、别名、数据ID等"
+                  trigger="hover"
+                  @change="handleChangeTable">
+                  <p
+                    v-bk-tooltips="{
+                      disabled: !data.disabled || !data.leaf,
+                      content: node.pathNames[0] === '资产数据'
+                        ? t('该系统暂未上报资源数据')
+                        : t('审计无权限，请前往BKBase申请授权'),
+                      delay: 400,
+                    }">
+                    {{ node.name }}
+                  </p>
+                </bk-cascader>
+              </bk-form-item>
+              <template v-if="formData.configs.config_type === 'EventLog'">
+                <event-log-component
+                  ref="eventLogRef"
+                  @update-system="handleUpdateSystem" />
+              </template>
+            </div>
+          </bk-loading>
           <!-- 联表详情 -->
           <link-data-detail-component
             v-if="formData.configs.data_source.link_table
@@ -399,6 +401,7 @@
   const tableFields = ref<Array<DatabaseTableFieldModel>>([]);
   const joinTypeList = ref<Array<Record<string, any>>>([]);
   const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
+  const typeTableLoading = ref(false);
   const originSourceType = ref<'batch_join_source' | 'stream_source' | ''>('');
 
   const hasData = computed(() => Boolean(formData.value.configs.select.length
@@ -471,6 +474,7 @@
 
   // 获取全部tableid
   const getAllConfigTypeTable = () => {
+    typeTableLoading.value = true;
     const requests = ruleAuditConfigType.value.map((item) => {
       if (item.value === 'LinkTable') {
         return async () => {
@@ -504,6 +508,7 @@
       .then((results) => {
         const flattenedResults = results.reduce((acc, curr) => acc.concat(curr), [] as Array<ConfigTypeTableItem>);
         allConfigTypeTable.value = flattenedResults;
+        typeTableLoading.value = false;
       });
   };
 
@@ -725,9 +730,13 @@
       // 统一处理数据源设置
       if (configType === 'LinkTable') {
         formData.value.configs.data_source.link_table.uid = rtIdOrUid || '';
+        formData.value.configs.data_source.rt_id = '';
+        formData.value.configs.data_source.system_ids = [];
         rtIdOrUid && fetchLinkDataSheetDetail({ uid: rtIdOrUid });
       } else {
         formData.value.configs.data_source.rt_id = rtIdOrUid || '';
+        formData.value.configs.data_source.link_table.uid = '';
+        formData.value.configs.data_source.link_table.version = 0;
         if (rtIdOrUid) {
           fetDatabaseTableFields(rtIdOrUid);
           fetchSourceType({ config_type: configType, rt_id: rtIdOrUid });

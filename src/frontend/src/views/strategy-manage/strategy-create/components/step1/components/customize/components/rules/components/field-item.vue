@@ -165,6 +165,11 @@
     </bk-form-item>
     <div class="icon-group">
       <audit-icon
+        v-if="condition.condition.field.display_name"
+        class="view-icon"
+        type="view"
+        @click="dataStructurePreview(condition.condition.field.display_name)" />
+      <audit-icon
         style="margin-right: 10px; cursor: pointer;"
         type="add-fill"
         @click="handleAdd" />
@@ -192,7 +197,15 @@
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
+  import useEventBus from '@hooks/use-event-bus';
+
   import useRequest from '@/hooks/use-request';
+
+  const props = defineProps<Props>();
+
+  const emits = defineEmits<Emits>();
+
+  const { emit } = useEventBus();
 
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
@@ -224,8 +237,6 @@
     children?: Array<DataType>;
   }
 
-  const props = defineProps<Props>();
-  const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const conditionList = ref<Array<{
     label: string,
@@ -250,6 +261,10 @@
   });
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
+
+  const dataStructurePreview = (value: string) => {
+    emit('show-structure-preview', value);
+  };
 
   useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
@@ -470,7 +485,7 @@
 .rule-item-field {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr minmax(35px, auto);
+  grid-template-columns: 1fr 1fr 1fr minmax(65px, auto);
   gap: 8px;
 
   :deep(.bk-form-error) {
@@ -506,6 +521,12 @@
   .icon-group {
     font-size: 14px;
     color: #c4c6cc;
+
+    .view-icon {
+      margin-right: 10px;
+      color: #3a84ff;
+      cursor: pointer
+    }
   }
 }
 

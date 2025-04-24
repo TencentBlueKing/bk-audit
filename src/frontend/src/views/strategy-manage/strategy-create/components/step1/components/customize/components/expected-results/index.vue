@@ -102,8 +102,14 @@
 
   const localTableFields = computed(() => {
     if (isEdit.value) {
-      return props.tableFields.filter(field => field.table === editItem.value.table
-        && field.raw_name === editItem.value.raw_name);
+      return props.tableFields
+        .filter(field => field.table === editItem.value.table
+          && field.raw_name === editItem.value.raw_name)
+        .map(field => ({
+          ...field,
+          display_name: editItem.value.display_name,
+          aggregate: editItem.value.aggregate,
+        }));
     }
     return _.cloneDeep(props.tableFields);
   });
