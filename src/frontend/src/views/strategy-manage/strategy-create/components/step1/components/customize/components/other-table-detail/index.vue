@@ -50,7 +50,7 @@
         </render-info-item>
         <render-info-item
           :label="t('业务运维人员')">
-          {{ rtMeta.sensitivity_info?.biz_role_memebers?.join(',') || '--' }}
+          <edit-tag :data="rtMeta.sensitivity_info?.biz_role_memebers || []" />
         </render-info-item>
         <render-info-item
           :label="t('表类型')">
@@ -72,6 +72,8 @@
   import StrategyManageService from '@service/strategy-manage';
 
   import RtMetaModel from '@model/strategy/rt-meta';
+
+  import EditTag from '@components/edit-box/tag.vue';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
