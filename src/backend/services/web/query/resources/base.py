@@ -66,7 +66,7 @@ class CreateFavouriteSearchResource(QueryBaseResource, ModelResource):
     name = gettext_lazy("创建查询收藏")
     lookup_field = "id"
     model = FavoriteSearch
-    action = "list"
+    action = "create"
     serializer_class = FavoriteSearchSerializer
 
 

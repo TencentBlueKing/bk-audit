@@ -28,7 +28,12 @@ from core.constants import OrderTypeChoices
 from core.sql.builder import BKBaseQueryBuilder, BkBaseTable
 from core.sql.constants import FieldType, Operator
 from core.sql.functions import DateTrunc, FromUnixTime
-from core.sql.terms import DorisField, DorisJsonTypeExtractFunction, DorisVariantField
+from core.sql.terms import (
+    DorisField,
+    DorisJsonTypeExtractFunction,
+    DorisVariantField,
+    PypikaField,
+)
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
@@ -41,12 +46,12 @@ class BaseDorisSQLBuilder:
     def __init__(
         self,
         table: str,
-        filters: List[dict],
+        conditions: List[dict],
         sort_list: List[dict],
         page: int,
         page_size: int,
     ):
-        self.filters = filters
+        self.conditions = conditions
         self.sort_list = sort_list
         self.page = page
         self.page_size = page_size
@@ -63,9 +68,9 @@ class BaseDorisSQLBuilder:
         """
         获取pypika字段
         """
-        if name in self.VARIANT_FIELDS:
+        if name in self.VARIANT_FIELDS and keys:
             return DorisVariantField(name=name, table=self.table, keys=keys)
-        if name in self.JSON_TYPE_FIELDS:
+        if name in self.JSON_TYPE_FIELDS and keys:
             return DorisJsonTypeExtractFunction(DorisField(name=name, table=self.table), keys=keys)
         return DorisField(name=name, table=self.table)
 
@@ -85,9 +90,9 @@ class BaseDorisSQLBuilder:
         """
 
         condition = EmptyCriterion()
-        for item in self.filters:
+        for item in self.conditions:
             condition &= self.build_filters(
-                self.get_pypika_field(name=item["field_name"], keys=item.get("keys", [])),
+                self.get_pypika_field(name=item["field"]["raw_name"], keys=item["field"].get("keys", [])),
                 item["operator"],
                 item.get("filters", []),
             )
@@ -159,10 +164,10 @@ class DorisStatisticSQLBuilder(BaseDorisSQLBuilder):
         if field_type in (FieldType.STRING, FieldType.TEXT):  # 文本字段的统计
             # 4. Top 5（出现次数）值
             top_5_values_query = (
-                query.select(field, Count(field).as_("count")).groupby(field).orderby("count", order=Order.desc)
-            )
-
-            top_5_values_subquery = top_5_values_query.limit(5)  # 获取前5值
+                query.select(field, Count(field).as_("count"))
+                .groupby(field)
+                .orderby(PypikaField("count"), order=Order.desc)
+            ).limit(5)
 
             time_interval = DateTrunc(FromUnixTime(self.get_pypika_field('dteventtimestamp') / 1000), "MINUTE")
 
@@ -173,8 +178,8 @@ class DorisStatisticSQLBuilder(BaseDorisSQLBuilder):
                     time_interval.as_("time_interval"),
                     Count(field).as_("count"),
                 )
-                .join(top_5_values_subquery)
-                .on(field == getattr(top_5_values_subquery, field_name))  # 修改连接条件
+                .join(top_5_values_query)
+                .on(field == getattr(top_5_values_query, field_name))  # 修改连接条件
                 .groupby(time_interval, field)
                 .orderby(time_interval, order=Order.desc)
             )
