@@ -10,7 +10,7 @@ class FavoriteSearch(OperateRecordModel):
     namespace = models.CharField(max_length=255)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
-    filters = models.JSONField(help_text="The filters (conditions) for the search query.")
+    conditions = models.JSONField(help_text="The filters (conditions) for the search query.")
     sort_list = models.JSONField(help_text="Sorting options for the search query.")
     bind_system_info = models.BooleanField(default=True)
 

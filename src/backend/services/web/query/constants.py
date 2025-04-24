@@ -98,6 +98,21 @@ DEFAULT_COLLECTOR_SORT_LIST = [
     {"order_field": CollectorSortFieldChoices.ITERATION_INDEX.value, "order_type": OrderTypeChoices.DESC.value},
 ]
 
+OBJECT_FIELD_OPERATOR = [
+    QueryConditionOperator.EQ,
+    QueryConditionOperator.NEQ,
+    QueryConditionOperator.GT,
+    QueryConditionOperator.LT,
+    QueryConditionOperator.GTE,
+    QueryConditionOperator.LTE,
+    QueryConditionOperator.INCLUDE,
+    QueryConditionOperator.EXCLUDE,
+    QueryConditionOperator.LIKE,
+    QueryConditionOperator.NOT_LIKE,
+    QueryConditionOperator.ISNULL,
+    QueryConditionOperator.NOTNULL,
+]
+
 # 日志查询条件配置
 COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
     field_configs=[
@@ -129,25 +144,12 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(
             field=LOG, allow_operators=[QueryConditionOperator.MATCH_ANY, QueryConditionOperator.MATCH_ALL]
         ),
-        FieldSearchConfig(
-            field=INSTANCE_DATA, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.LIKE]
-        ),
-        FieldSearchConfig(
-            field=INSTANCE_ORIGIN_DATA, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.LIKE]
-        ),
-        FieldSearchConfig(
-            field=EXTEND_DATA, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.LIKE]
-        ),
-        FieldSearchConfig(
-            field=SNAPSHOT_RESOURCE_TYPE_INFO,
-            allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.LIKE],
-        ),
-        FieldSearchConfig(
-            field=SNAPSHOT_ACTION_INFO, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.LIKE]
-        ),
-        FieldSearchConfig(
-            field=SNAPSHOT_INSTANCE_DATA, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.LIKE]
-        ),
+        FieldSearchConfig(field=INSTANCE_DATA, allow_operators=OBJECT_FIELD_OPERATOR),
+        FieldSearchConfig(field=INSTANCE_ORIGIN_DATA, allow_operators=OBJECT_FIELD_OPERATOR),
+        FieldSearchConfig(field=EXTEND_DATA, allow_operators=OBJECT_FIELD_OPERATOR),
+        FieldSearchConfig(field=SNAPSHOT_RESOURCE_TYPE_INFO, allow_operators=OBJECT_FIELD_OPERATOR),
+        FieldSearchConfig(field=SNAPSHOT_ACTION_INFO, allow_operators=OBJECT_FIELD_OPERATOR),
+        FieldSearchConfig(field=SNAPSHOT_INSTANCE_DATA, allow_operators=OBJECT_FIELD_OPERATOR),
         FieldSearchConfig(field=RESULT_CODE, allow_operators=[QueryConditionOperator.INCLUDE]),
         FieldSearchConfig(field=INSTANCE_NAME, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=EVENT_CONTENT, allow_operators=[QueryConditionOperator.LIKE]),
