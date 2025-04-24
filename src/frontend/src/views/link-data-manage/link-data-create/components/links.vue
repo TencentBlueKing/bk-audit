@@ -34,6 +34,7 @@
                 :default-value="link.left_table.table_type"
                 theme="background">
                 <bk-cascader
+                  v-if="Array.isArray(link.left_table.rt_id)"
                   v-slot="{data, node}"
                   v-model="link.left_table.rt_id"
                   :filter-method="configTypeTableFilter"
@@ -94,6 +95,7 @@
                 :default-value="link.right_table.table_type"
                 theme="background">
                 <bk-cascader
+                  v-if="Array.isArray(link.right_table.rt_id)"
                   v-slot="{data, node}"
                   v-model="link.right_table.rt_id"
                   :filter-method="configTypeTableFilter"
