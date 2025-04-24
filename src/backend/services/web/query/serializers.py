@@ -32,6 +32,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from core.exceptions import PermissionException, ValidationError
 from core.serializers import OrderSerializer
+from core.sql.constants import FieldType
 from core.utils.tools import format_date_string, parse_datetime
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
@@ -223,15 +224,24 @@ class QuerySearchResponseSerializer(serializers.Serializer):
     results = serializers.ListField(child=serializers.JSONField())
 
 
-class QuerySearchFilterSerializer(serializers.Serializer):
+class QuerySearchFieldSerializer(serializers.Serializer):
+    """
+    查询字段序列化器
+    """
+
+    raw_name = serializers.CharField(label=gettext_lazy("Raw Name"))
+    field_type = serializers.ChoiceField(label=gettext_lazy("Field Type"), choices=FieldType.choices, default=None)
+    keys = serializers.ListField(
+        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
+    )
+
+
+class QuerySearchConditionSerializer(serializers.Serializer):
     """
     检索条件
     """
 
-    field_name = serializers.ChoiceField(label="字段名", choices=COLLECT_SEARCH_CONFIG.allowed_query_field_choices)
-    keys = serializers.ListField(
-        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
-    )
+    field = QuerySearchFieldSerializer(label=gettext_lazy("字段"))
     operator = serializers.ChoiceField(
         label=gettext_lazy("Operator"), choices=COLLECT_SEARCH_CONFIG.allowed_operator_choices
     )
@@ -246,12 +256,12 @@ class QuerySearchFilterSerializer(serializers.Serializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         # 判断操作是否允许
-        allow = COLLECT_SEARCH_CONFIG.judge_operator(attrs["field_name"], attrs["operator"])
+        allow = COLLECT_SEARCH_CONFIG.judge_operator(attrs["field"]["raw_name"], attrs["operator"])
         if not allow:
-            raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field_name"], attrs["operator"]))
+            raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field"], attrs["operator"]))
         # 判断字段是否支持嵌套 keys
-        if not COLLECT_SEARCH_CONFIG.query_field_map[attrs["field_name"]].field.is_json:
-            attrs["keys"] = []
+        if not COLLECT_SEARCH_CONFIG.query_field_map[attrs["field"]["raw_name"]].field.is_json:
+            attrs["field"]["keys"] = []
         return attrs
 
 
@@ -277,9 +287,9 @@ class CollectorSearchAllReqSerializer(serializers.Serializer):
     namespace = serializers.CharField()
     start_time = serializers.CharField()
     end_time = serializers.CharField()
-    filters = serializers.ListField(
+    conditions = serializers.ListField(
         label=gettext_lazy("检索条件列表"),
-        child=QuerySearchFilterSerializer(),
+        child=QuerySearchConditionSerializer(),
         allow_empty=True,
         default=list,
     )
@@ -304,22 +314,22 @@ class CollectorSearchAllReqSerializer(serializers.Serializer):
         end_ms = int(end_time.timestamp() * 1000)
         return [
             {
-                "field_name": DATE_PARTITION_FIELD,
+                "field": {"raw_name": DATE_PARTITION_FIELD, "field_type": "string"},
                 "operator": QueryConditionOperator.GTE.value,
                 "filters": [start_time.strftime(DATE_FORMAT)],
             },
             {
-                "field_name": DATE_PARTITION_FIELD,
+                "field": {"raw_name": DATE_PARTITION_FIELD, "field_type": "string"},
                 "operator": QueryConditionOperator.LTE.value,
                 "filters": [end_time.strftime(DATE_FORMAT)],
             },
             {
-                "field_name": TIMESTAMP_PARTITION_FIELD,
+                "field": {"raw_name": TIMESTAMP_PARTITION_FIELD, "field_type": "integer"},
                 "operator": QueryConditionOperator.GTE.value,
                 "filters": [start_ms],
             },
             {
-                "field_name": TIMESTAMP_PARTITION_FIELD,
+                "field": {"raw_name": TIMESTAMP_PARTITION_FIELD, "field_type": "integer"},
                 "operator": QueryConditionOperator.LTE.value,
                 "filters": [end_ms],
             },
@@ -330,7 +340,7 @@ class CollectorSearchAllReqSerializer(serializers.Serializer):
         if not attrs.get("sort_list"):
             attrs["sort_list"] = DEFAULT_COLLECTOR_SORT_LIST
         time_conditions = self._build_time_conditions(attrs)
-        attrs["filters"] = time_conditions + attrs["filters"]
+        attrs["conditions"] = time_conditions + attrs["conditions"]
         return attrs
 
 
@@ -365,7 +375,7 @@ class CollectorSearchReqPermissionCheckMixIn:
         if len(systems) != len(authorized_systems):
             return [
                 {
-                    "field_name": SYSTEM_ID.field_name,
+                    "field": {"raw_name": SYSTEM_ID.field_name, "field_type": "string", "keys": []},
                     "operator": QueryConditionOperator.INCLUDE.value,
                     "filters": authorized_systems,
                 }
@@ -375,7 +385,7 @@ class CollectorSearchReqPermissionCheckMixIn:
     def validate(self, attrs):
         attrs = super().validate(attrs)
         system_conditions = self._build_system_conditions(attrs)
-        attrs["filters"] = system_conditions + attrs["filters"]
+        attrs["conditions"] = system_conditions + attrs["conditions"]
         return attrs
 
 
@@ -471,7 +481,7 @@ class FavoriteSearchSerializer(CollectorSearchAllReqSerializer, serializers.Mode
             "namespace",
             "start_time",
             "end_time",
-            "filters",
+            "conditions",
             "sort_list",
             "bind_system_info",
             "created_by",
