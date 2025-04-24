@@ -166,50 +166,52 @@
                 </tr>
               </thead>
             </table>
-            <scroll-faker
+            <div
               v-if="tableData.length"
               style="height: 370px;">
-              <table class="field-pop-radio-table-body">
-                <tbody>
-                  <tr
-                    v-for="(item, index) in tableData"
-                    :key="index">
-                    <td style=" width: 150px;background-color: #fafbfd;">
-                      <div style="padding-left: 8px;">
-                        {{ item.raw_name }}
-                      </div>
-                    </td>
-                    <td style=" width: 280px;background-color: #fff;">
-                      <bk-input
-                        v-model="item.display_name"
-                        behavior="simplicity"
-                        :class="{ 'is-duplicate': item.isDuplicate }"
-                        @change="(val: string) => handleInputChange(val, item)">
-                        <template
-                          v-if="item.isDuplicate"
-                          #suffix>
-                          <span class="duplicate-icon">
-                            {{ t('重复') }}
-                          </span>
-                        </template>
-                      </bk-input>
-                    </td>
-                    <td style="background-color: #fff;">
-                      <bk-select
-                        v-model="item.aggregate"
-                        :popover-options="{ boundary: 'parent'}">
-                        <bk-option
-                          v-for="aggItem in item.aggregateList"
-                          :key="aggItem.value"
-                          :disabled="aggItem.disabled"
-                          :label="aggItem.label"
-                          :value="aggItem.value" />
-                      </bk-select>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </scroll-faker>
+              <scroll-faker>
+                <table class="field-pop-radio-table-body">
+                  <tbody v-if="tableData.length">
+                    <tr
+                      v-for="(item, index) in tableData"
+                      :key="index">
+                      <td style=" width: 150px;background-color: #fafbfd;">
+                        <div style="padding-left: 8px;">
+                          {{ item.raw_name }}
+                        </div>
+                      </td>
+                      <td style=" width: 280px;background-color: #fff;">
+                        <bk-input
+                          v-model="item.display_name"
+                          behavior="simplicity"
+                          :class="{ 'is-duplicate': item.isDuplicate }"
+                          @change="(val: string) => handleInputChange(val, item)">
+                          <template
+                            v-if="item.isDuplicate"
+                            #suffix>
+                            <span class="duplicate-icon">
+                              {{ t('重复') }}
+                            </span>
+                          </template>
+                        </bk-input>
+                      </td>
+                      <td style="background-color: #fff;">
+                        <bk-select
+                          v-model="item.aggregate"
+                          :popover-options="{ boundary: 'parent'}">
+                          <bk-option
+                            v-for="aggItem in item.aggregateList"
+                            :key="aggItem.value"
+                            :disabled="aggItem.disabled"
+                            :label="aggItem.label"
+                            :value="aggItem.value" />
+                        </bk-select>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </scroll-faker>
+            </div>
             <div
               v-else
               style="border: 1px solid #ddd; border-top: 0;">
