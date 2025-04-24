@@ -285,7 +285,7 @@
     hide:() => void;
   } | null>(null);
   const localTableFields = ref<Array<ExDatabaseTableFieldModel>>([]);
-  const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
+  // const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
   const isSearching = ref(false);
   const tableData = ref<Array<ExDatabaseTableFieldModel>>([]);
   const exist = ref(false);
@@ -446,7 +446,6 @@
     if (value) {
       // 处理并更新数据
       tableData.value.push(processField(field));
-      formData.value = new DatabaseTableFieldModel();
     } else {
       tableData.value = tableData.value.filter(({ raw_name: rawName }) => rawName !== field.raw_name);
     }
@@ -457,7 +456,6 @@
     isSearching.value = false;
     isEdit.value = false;
     editIndex.value = -1;
-    formData.value = new DatabaseTableFieldModel();
     // 重置tableData
     tableData.value = [];
   };
@@ -477,7 +475,7 @@
       tableData.value.forEach((item) => {
         // 过滤不需要的属性
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { aggregateList, ...pureItem } = item;
+        const { isDuplicate, aggregateList, ...pureItem } = item;
         emits('addExpectedResult', pureItem);
       });
     } else {
@@ -486,7 +484,7 @@
       if (currentItem) {
         // 过滤不需要的属性
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { aggregateList, ...pureItem } = currentItem;
+        const { isDuplicate, aggregateList, ...pureItem } = currentItem;
         emits('addExpectedResult', pureItem, editIndex.value);
       }
     }
