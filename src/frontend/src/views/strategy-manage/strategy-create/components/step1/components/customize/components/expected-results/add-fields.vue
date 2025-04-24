@@ -182,7 +182,17 @@
                     <td style=" width: 280px;background-color: #fff;">
                       <bk-input
                         v-model="item.display_name"
-                        behavior="simplicity" />
+                        behavior="simplicity"
+                        :class="{ 'is-duplicate': item.isDuplicate }"
+                        @change="(val: string) => handleInputChange(val, item)">
+                        <template
+                          v-if="item.isDuplicate"
+                          #suffix>
+                          <span class="duplicate-icon">
+                            {{ t('重复') }}
+                          </span>
+                        </template>
+                      </bk-input>
                     </td>
                     <td style="background-color: #fff;">
                       <bk-select
@@ -191,6 +201,7 @@
                         <bk-option
                           v-for="aggItem in item.aggregateList"
                           :key="aggItem.value"
+                          :disabled="aggItem.disabled"
                           :label="aggItem.label"
                           :value="aggItem.value" />
                       </bk-select>
@@ -214,7 +225,7 @@
         <div class="field-pop-bth">
           <bk-button
             class="mr8"
-            :disabled="!tableData.length"
+            :disabled="!tableData.length || exist"
             size="small"
             theme="primary"
             @click="handleAddField">
@@ -244,6 +255,7 @@
   // 扩展DatabaseTableFieldModel类型，添加aggregateList属性
   interface ExDatabaseTableFieldModel extends DatabaseTableFieldModel {
     aggregateList: Record<string, any>[];
+    isDuplicate: boolean;
   }
 
 
@@ -276,6 +288,7 @@
   const formData = ref<DatabaseTableFieldModel>(new DatabaseTableFieldModel());
   const isSearching = ref(false);
   const tableData = ref<Array<ExDatabaseTableFieldModel>>([]);
+  const exist = ref(false);
 
   const searchKey = useDebouncedRef('');
 
@@ -330,44 +343,109 @@
     isSearching.value = false;
   };
 
+
+  const handleInputChange = (value: string, currentItem: ExDatabaseTableFieldModel) => {
+    if (!value) return;
+
+    // 合并所有显示名(包括已存在的和当前已选的)
+    const allDisplayNames = [
+      ...props.expectedResultList,
+      ...tableData.value,
+    ];
+
+    // 2. 检查当前字段是否重复(排除自身)
+    // eslint-disable-next-line max-len
+    const filteredDisplayNames = allDisplayNames.filter(d => !(d.table === currentItem.table && d.raw_name === currentItem.raw_name));
+    // eslint-disable-next-line no-param-reassign
+    currentItem.isDuplicate = filteredDisplayNames.some(d => d.display_name === value);
+
+    // 3. 检查其他字段是否与当前字段重复
+    tableData.value.forEach((item) => {
+      if (item !== currentItem && item.display_name === value) {
+        // eslint-disable-next-line no-param-reassign
+        item.isDuplicate = true;
+      } else if (item !== currentItem) {
+        // 重新检查该字段是否与其他字段重复
+        const otherFiltered = allDisplayNames.filter(d => !(d.table === item.table && d.raw_name === item.raw_name));
+        // eslint-disable-next-line no-param-reassign
+        item.isDuplicate = otherFiltered.some(d => d.display_name === item.display_name);
+      }
+    });
+
+    exist.value = tableData.value.some(item => item.isDuplicate);
+  };
+
   const handleShowPop = () => {
     isEdit.value = false;
     isShow.value = !isShow.value;
   };
 
-  const handleChange = (value: boolean, field: ExDatabaseTableFieldModel) => {
-    const createAggregateList = () => {
-      // 生成初始聚合列表
-      const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚和'));
+  // 生成可用聚合算法列表
+  const createAggregateList = (field: ExDatabaseTableFieldModel) => {
+    const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚和'));
 
-      // 检测重复聚合算法
-      const existingAggregates = new Set(props.expectedResultList
-        .filter(item => `${item.table}${item.raw_name}` === `${field.table}${field.raw_name}`)
-        .map(item => item.aggregate));
+    // 检测重复聚合算法
+    const existingAggregates = new Set(props.expectedResultList
+      .filter(item => `${item.table}${item.raw_name}` === `${field.table}${field.raw_name}`
+        && (!field.aggregate || item.aggregate !== field.aggregate))
+      .map(item => item.aggregate));
 
-      // 禁用已存在的选项
-      return baseList.map<Record<string, any>>(item => ({
-        ...item,
-        disabled: existingAggregates.has(item.value),
-      }));
+    // 禁用已存在的选项
+    return baseList.map<Record<string, any>>(item => ({
+      ...item,
+      disabled: existingAggregates.has(item.value),
+    }));
+  };
+
+  // 处理字段数据
+  const processField = (field: ExDatabaseTableFieldModel) => {
+    // 创建新对象避免参数修改
+    const processedField = {
+      ...field,
+      aggregateList: createAggregateList(field),
+      aggregate: field.aggregate ? field.aggregate : null, // 编辑回显
     };
 
-    if (value) {
-      // 创建新对象避免参数修改
-      const processedField = {
-        ...field,
-        aggregateList: createAggregateList(),
-        aggregate: null,
-      };
-
-      // 设置初始选中值
+    // 设置初始选中值
+    if (processedField.aggregate === null) {
       processedField.aggregate = processedField.aggregateList.find(item => !item.disabled)?.value;
+    }
 
-      // 更新数据
-      tableData.value.push({
-        ...processedField,
-        aggregateList: processedField.aggregateList,
-      });
+    // 处理显示名称 - 编辑模式下不添加聚合算法后缀
+    const displayName = isEdit.value ? processedField.display_name
+      : `${processedField.display_name}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
+
+    // 统计重复显示名(包含已存在的和当前已选的)
+    const allDisplayNames = [
+      ...props.expectedResultList,
+      ...tableData.value,
+    ];
+
+    // 编辑模式下排除当前字段自身
+    const filteredDisplayNames = isEdit.value
+      ? allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name))
+      : allDisplayNames;
+
+    const displayNameCount = filteredDisplayNames.reduce<Record<string, number>>(
+      (acc, cur) => ({ ...acc, [cur.display_name]: (acc[cur.display_name] || 0) + 1 }),
+      {},
+    );
+
+    // 生成最终显示名
+    processedField.display_name = displayNameCount[displayName] >= 1
+      ? `${processedField.table}.${displayName}`
+      : displayName;
+
+    return {
+      ...processedField,
+      aggregateList: processedField.aggregateList,
+    };
+  };
+
+  const handleChange = (value: boolean, field: ExDatabaseTableFieldModel) => {
+    if (value) {
+      // 处理并更新数据
+      tableData.value.push(processField(field));
       formData.value = new DatabaseTableFieldModel();
     } else {
       tableData.value = tableData.value.filter(({ raw_name: rawName }) => rawName !== field.raw_name);
@@ -395,37 +473,21 @@
   };
 
   const handleAddField = () => {
-    const processItem = (item: ExDatabaseTableFieldModel) => {
-      // 处理显示名称
-      const withAggregate = `${item.display_name}${item.aggregate ? `_${item.aggregate}` : ''}`;
-
-      // 统计重复显示名
-      const displayNameCount = props.expectedResultList.reduce<Record<string, number>>(
-        (acc, cur) => ({ ...acc, [cur.display_name]: (acc[cur.display_name] || 0) + 1 }),
-        {},
-      );
-
-      // 生成最终显示名
-      const finalDisplayName = displayNameCount[withAggregate] >= 1
-        ? `${item.table}.${withAggregate}`
-        : withAggregate;
-
-      // 过滤不需要的属性
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { aggregateList, ...pureItem } = item;
-      return { ...pureItem, display_name: finalDisplayName };
-    };
-
     if (!isEdit.value) {
-      // 处理新增模式
-      const processedItems = tableData.value.map(processItem);
-      processedItems.forEach(item => emits('addExpectedResult', item));
+      tableData.value.forEach((item) => {
+        // 过滤不需要的属性
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { aggregateList, ...pureItem } = item;
+        emits('addExpectedResult', pureItem);
+      });
     } else {
       // 处理编辑模式
       const [currentItem] = tableData.value;
       if (currentItem) {
-        const processedItem = processItem(currentItem);
-        emits('addExpectedResult', processedItem, editIndex.value);
+        // 过滤不需要的属性
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { aggregateList, ...pureItem } = currentItem;
+        emits('addExpectedResult', pureItem, editIndex.value);
       }
     }
 
@@ -436,6 +498,7 @@
     localTableFields.value = data.map(item => ({
       ...item,
       aggregateList: _.cloneDeep(props.aggregateList),
+      isDuplicate: false,
     }));
     if (isEdit.value) {
       handleChange(true, localTableFields.value[0]);
@@ -549,6 +612,24 @@
         td {
           padding: 0;
           border: 1px solid #ddd;
+        }
+
+        .is-duplicate {
+          position: relative;
+
+          input {
+            background-color: #ffebeb;;
+          }
+
+          .duplicate-icon {
+            position: absolute;
+            top: 15px;
+            right: 10px;
+            padding: 1px;
+            font-size: 10px;
+            background: red;
+            border-radius: 2px;
+          }
         }
 
         .bk-input--default {

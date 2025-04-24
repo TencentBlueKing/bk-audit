@@ -68,36 +68,87 @@
           </render-info-item>
         </render-info-block>
       </div>
-      <div class="title">
-        {{ t('资源数据结构') }}
+      <div class="title-head">
+        <div class="title">
+          {{ t('资源数据结构') }}
+        </div>
+        <bk-button
+          class="ml10"
+          outline
+          theme="primary"
+          @click="handleViewMore">
+          {{ t('更多信息') }}
+          <audit-icon
+            style="margin-left: 5px; transform: rotate(-90deg);"
+            type="angle-line-down" />
+        </bk-button>
       </div>
       <bk-table
         ref="tableRef"
         :border="['outer']"
         :columns="columns"
         :data="rtMeta.formatted_fields"
-        :max-height="650" />
+        :max-height="650"
+        :row-class="(row: RtMetaModel['formatted_fields'][0]) => handleRowClass(row)" />
     </div>
   </audit-sideslider>
 </template>
 <script setup lang="ts">
+  import { onBeforeUnmount, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
   import RtMetaModel from '@model/strategy/rt-meta';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
 
+  import useEventBus from '@/hooks/use-event-bus';
+  import useRequest from '@/hooks/use-request';
+
   interface Props {
     rtMeta: RtMetaModel;
     rtLastData: Record<string, any>;
+    rtId: string | Array<string>;
   }
   const props = defineProps<Props>();
 
   const { t } = useI18n();
 
+  const { on, off } = useEventBus();
+
+  const activeDisplayName = ref('');
+
   const showStructure = defineModel<boolean>('showStructure', {
     required: true,
+  });
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
+  const handleViewMore = () => {
+    const rtId = Array.isArray(props.rtId) ? props.rtId[props.rtId.length - 1] : props.rtId;
+    const prefix = rtId.split('_')[0];
+
+    window.open(`${configData.value.third_party_system.bkbase_web_url}#/data-mart/data-dictionary/detail?dataType=result_table&result_table_id=${props.rtId}&bk_biz_id=${prefix}`);
+  };
+
+  const handleRowClass = (row: RtMetaModel['formatted_fields'][0]) => {
+    if (row.label === activeDisplayName.value) {
+      return 'active';
+    }
+    return '';
+  };
+
+  on('show-structure-preview', (value) => {
+    showStructure.value = true;
+    activeDisplayName.value = value as string;
   });
 
   const columns = [
@@ -125,21 +176,40 @@
       render: ({ data }: {data: Record<string, any>}) => props.rtLastData?.[data.value] || '--',
     },
   ];
+
+  // 销毁组件时去除监听，防止多次绑定触发
+  onBeforeUnmount(() => {
+    off('show-structure-preview');
+  });
 </script>
 <style scoped lang="postcss">
 .structure-preview {
   padding: 20px 40px;
 
-  .title {
+  .title-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 16px;
-    font-size: 14px;
-    font-weight: 700;
+
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+    }
   }
 
   .info-block {
     display: grid;
     margin-bottom: 12px;
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  :deep(.bk-table) {
+    .active {
+      td {
+        background-color: #fdf4e8;
+      }
+    }
   }
 }
 </style>
