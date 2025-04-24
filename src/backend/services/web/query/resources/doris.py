@@ -74,7 +74,7 @@ class CollectorSearchBaseResource(QueryBaseResource, SearchDataParser, metaclass
         page = validated_request_data["page"]
         page_size = validated_request_data["page_size"]
         namespace = validated_request_data["namespace"]
-        filters = validated_request_data["filters"]
+        conditions = validated_request_data["conditions"]
         # 获取默认日志 RT
         collector_plugin_id = GlobalMetaConfig.get(
             config_key=COLLECTOR_PLUGIN_ID,
@@ -85,7 +85,7 @@ class CollectorSearchBaseResource(QueryBaseResource, SearchDataParser, metaclass
         collector_rt_id = plugin.build_result_table_id(settings.DEFAULT_BK_BIZ_ID, plugin.collector_plugin_name_en)
         sql_builder = self.doris_sql_builder_class(
             table=collector_rt_id,
-            filters=filters,
+            conditions=conditions,
             sort_list=validated_request_data["sort_list"],
             page=page,
             page_size=page_size,
