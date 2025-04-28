@@ -113,7 +113,7 @@
             <table class="field-pop-radio-table-head">
               <thead class="field-pop-radio-table-head">
                 <tr>
-                  <th style="width: 150px;">
+                  <th style="width: 181px;">
                     <span>{{ t('字段名') }}</span>
                   </th>
                   <th>
@@ -154,7 +154,7 @@
                       </div>
                     </div>
                   </th>
-                  <th style="width: 280px;">
+                  <th style="width: 250px;">
                     <span
                       v-bk-tooltips="{
                         content: t('sql示例：`字段名` AS `显示名`')
@@ -175,9 +175,9 @@
                     <tr
                       v-for="(item, index) in tableData"
                       :key="index">
-                      <td style=" width: 150px;background-color: #fafbfd;">
-                        <div style="padding-left: 8px;">
-                          {{ item.raw_name }}
+                      <td style="background-color: #fafbfd;">
+                        <div style=" width: 180px;padding-left: 8px">
+                          <tool-tip-text :data="item.raw_name" />
                         </div>
                       </td>
                       <td style="background-color: #fff;">
@@ -193,7 +193,7 @@
                             :value="aggItem.value" />
                         </bk-select>
                       </td>
-                      <td style=" width: 280px;background-color: #fff;">
+                      <td style=" width: 250px;background-color: #fff;">
                         <bk-input
                           v-model="item.display_name"
                           behavior="simplicity"
@@ -254,6 +254,8 @@
   import useDebouncedRef from '@hooks/use-debounced-ref';
 
   import { encodeRegexp } from '@utils/assist';
+
+  import ToolTipText from '@/components/show-tooltips-text/index.vue';
 
   // 扩展DatabaseTableFieldModel类型，添加aggregateList属性
   interface ExDatabaseTableFieldModel extends DatabaseTableFieldModel {
