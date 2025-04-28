@@ -51,6 +51,7 @@
   import { useI18n } from 'vue-i18n';
 
   import linkDataManageService from '@service/link-data-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
 
@@ -63,7 +64,6 @@
     show(uid?:string):void
   }
   interface Props {
-    strategyTagMap: Record<string, string>,
     maxVersionMap: Record<string, number>
   }
 
@@ -76,12 +76,28 @@
     basicInfo: BasicInfo,
     linkStrategy: LinkStrategy,
   };
+  const strategyTagMap = ref<Record<string, string>>({});
 
   const panels = [
     { name: 'basicInfo', label: t('基础信息') },
     { name: 'linkStrategy', label: t('关联策略') },
   ];
   const active = ref<keyof typeof comMap>('basicInfo');
+
+  // 获取标签列表
+  useRequest(MetaManageService.fetchTags, {
+    defaultParams: {
+      page: 1,
+      page_size: 1,
+    },
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data) => {
+      data.forEach((item) => {
+        strategyTagMap.value[item.tag_id] = item.tag_name;
+      });
+    },
+  });
 
   const {
     loading,
