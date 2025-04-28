@@ -28,7 +28,8 @@
           multiple
           multiple-mode="tag"
           :no-match-text="t('无匹配数据')"
-          :placeholder="t('请选择')">
+          :placeholder="t('请选择')"
+          @change="handleChangeSystem">
           <bk-option
             v-for="(system, systemIndex) in statusSystems"
             :key="systemIndex"
@@ -133,5 +134,3 @@
   z-index: 9999 !important;
 }
 </style>
-
-
