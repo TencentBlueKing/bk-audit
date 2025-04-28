@@ -449,7 +449,7 @@
       aggregateList.value = [
         ...commonData.value.rule_audit_aggregate_type,
         {
-          label: t('不聚和'),
+          label: t('不聚合'),
           value: null,
         },
       ];

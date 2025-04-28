@@ -229,7 +229,7 @@ export default {
     '未配置时，默认查询语句为 select *': 'When not configured, the default query statement is select *',
     请选择字段: 'Please select a field',
     添加条件组: 'Add a conditional group',
-    不聚和: 'No Gathering',
+    不聚合: 'No Gathering',
     聚合算法: 'Aggregation Algorithm',
     无需配置: 'No configuration required',
     事件结果: 'Event Results',
