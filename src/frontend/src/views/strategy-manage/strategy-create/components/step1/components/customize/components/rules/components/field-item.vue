@@ -477,7 +477,10 @@
 
   watch(() => props.conditions, (data) => {
     localConditions.value = _.cloneDeep(data);
-    handleValueDicts();
+    if (props.configType === 'EventLog') {
+      // 日志表特有，dict字典下拉
+      handleValueDicts();
+    }
   }, {
     immediate: true,
   });

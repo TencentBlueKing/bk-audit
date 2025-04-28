@@ -182,7 +182,14 @@
     case 'event_data_field_configs':
       if (props.select && props.select.length) {
         // 根据select更新event_data_field_configs
-        tableData.value.event_data_field_configs = props.select.map(item => createField(item));
+        tableData.value.event_data_field_configs = props.select.map((item) => {
+          const existingField = tableData.value.event_data_field_configs.
+            find(fieldItem => fieldItem.field_name === item.raw_name);
+          if (existingField) {
+            return existingField;
+          }
+          return createField(item);
+        });
       }
     }
   };
