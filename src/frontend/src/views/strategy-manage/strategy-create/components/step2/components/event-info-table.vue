@@ -228,6 +228,7 @@
           }
         });
       }
+      process();
     },
     manual: true,
   });
