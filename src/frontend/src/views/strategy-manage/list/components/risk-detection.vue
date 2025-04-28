@@ -269,7 +269,7 @@
 
   const getMetricName = (element: DatabaseTableFieldModel) => {
     const item = commonData.value.rule_audit_aggregate_type.find(item => item.value === element.aggregate);
-    return `[${item?.label || t('不聚和')}] ${element.display_name}`;
+    return `[${item?.label || t('不聚合')}] ${element.display_name}`;
   };
 
   const findLabelByValue = (data: Array<{

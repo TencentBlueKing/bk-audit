@@ -60,7 +60,7 @@
                       <bk-checkbox
                         :checked="isEdit"
                         :disabled="isEdit"
-                        @change="(value: boolean) => handleChange(value, item)">
+                        @change="(value: boolean) => handleSelectField(value, item)">
                         <div style="display: flex; align-items: center">
                           <audit-icon
                             style="margin-right: 4px;font-size: 14px;"
@@ -116,15 +116,6 @@
                   <th style="width: 150px;">
                     <span>{{ t('字段名') }}</span>
                   </th>
-                  <th style="width: 280px;">
-                    <span
-                      v-bk-tooltips="{
-                        content: t('sql示例：`字段名` AS `显示名`')
-                      }"
-                      style="border-bottom: 1px dashed #979ba5;">
-                      {{ t('显示名') }}
-                    </span>
-                  </th>
                   <th>
                     <span
                       v-bk-tooltips="{
@@ -163,6 +154,15 @@
                       </div>
                     </div>
                   </th>
+                  <th style="width: 280px;">
+                    <span
+                      v-bk-tooltips="{
+                        content: t('sql示例：`字段名` AS `显示名`')
+                      }"
+                      style="border-bottom: 1px dashed #979ba5;">
+                      {{ t('显示名') }}
+                    </span>
+                  </th>
                 </tr>
               </thead>
             </table>
@@ -180,6 +180,19 @@
                           {{ item.raw_name }}
                         </div>
                       </td>
+                      <td style="background-color: #fff;">
+                        <bk-select
+                          v-model="item.aggregate"
+                          :popover-options="{ boundary: 'parent'}"
+                          @change="(val: string) => handleAggregateChange(val, item)">
+                          <bk-option
+                            v-for="aggItem in item.aggregateList"
+                            :key="aggItem.value"
+                            :disabled="aggItem.disabled"
+                            :label="aggItem.label"
+                            :value="aggItem.value" />
+                        </bk-select>
+                      </td>
                       <td style=" width: 280px;background-color: #fff;">
                         <bk-input
                           v-model="item.display_name"
@@ -194,18 +207,6 @@
                             </span>
                           </template>
                         </bk-input>
-                      </td>
-                      <td style="background-color: #fff;">
-                        <bk-select
-                          v-model="item.aggregate"
-                          :popover-options="{ boundary: 'parent'}">
-                          <bk-option
-                            v-for="aggItem in item.aggregateList"
-                            :key="aggItem.value"
-                            :disabled="aggItem.disabled"
-                            :label="aggItem.label"
-                            :value="aggItem.value" />
-                        </bk-select>
                       </td>
                     </tr>
                   </tbody>
@@ -345,7 +346,104 @@
     isSearching.value = false;
   };
 
+  const handleShowPop = () => {
+    isEdit.value = false;
+    isShow.value = !isShow.value;
+  };
 
+  // 生成可用聚合算法列表
+  const createAggregateList = (field: ExDatabaseTableFieldModel) => {
+    const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚合'));
+
+    // 检测重复聚合算法
+    const existingAggregates = new Set(props.expectedResultList
+      .filter(item => `${item.table}${item.raw_name}` === `${field.table}${field.raw_name}`
+        && (!field.aggregate || item.aggregate !== field.aggregate))
+      .map(item => item.aggregate));
+
+    // 禁用已存在的选项
+    return baseList.map<Record<string, any>>(item => ({
+      ...item,
+      disabled: existingAggregates.has(item.value),
+    }));
+  };
+
+  // 处理字段数据
+  const processField = (field: ExDatabaseTableFieldModel) => {
+    // 创建新对象避免参数修改
+    const processedField = {
+      ...field,
+      aggregateList: createAggregateList(field),
+      aggregate: field.aggregate ? field.aggregate : null, // 编辑回显
+    };
+
+    // 设置初始选中值
+    if (!isEdit.value && processedField.aggregate === null) {
+      processedField.aggregate = processedField.aggregateList.find(item => !item.disabled)?.value;
+    }
+
+    // 处理显示名称 - 编辑模式下不添加聚合算法后缀
+    const displayName = isEdit.value ? processedField.display_name
+      : `${processedField.display_name}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
+
+    // 统计重复显示名(包含已存在的和当前已选的)
+    const allDisplayNames = [
+      ...props.expectedResultList,
+      ...tableData.value,
+    ];
+
+    // 编辑模式下排除当前字段自身
+    const filteredDisplayNames = isEdit.value
+      ? allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name))
+      : allDisplayNames;
+
+    const displayNameCount = filteredDisplayNames.reduce<Record<string, number>>(
+      (acc, cur) => ({ ...acc, [cur.display_name]: (acc[cur.display_name] || 0) + 1 }),
+      {},
+    );
+
+    // 生成最终显示名
+    if (props.configType === 'LinkTable') {
+      processedField.display_name = `${processedField.table}.${displayName}`;
+    } else {
+      processedField.display_name = displayNameCount[displayName] >= 1
+        ? `${processedField.table}.${displayName}`
+        : displayName;
+    }
+
+    return {
+      ...processedField,
+      aggregateList: processedField.aggregateList,
+    };
+  };
+
+  // 选择字段
+  const handleSelectField = (value: boolean, field: ExDatabaseTableFieldModel) => {
+    if (value) {
+      // 处理并更新数据
+      tableData.value.push(processField(field));
+    } else {
+      tableData.value = tableData.value.filter(({ raw_name: rawName }) => rawName !== field.raw_name);
+    }
+  };
+
+  // 聚合算法变更时动态更新显示名后缀
+  const handleAggregateChange = (val: string, currentItem: ExDatabaseTableFieldModel) => {
+    // 判断当前显示名是否已经带有后缀，去除旧后缀
+    const baseName = currentItem.display_name.replace(/(_[A-Z]+)?$/, '');
+    // 拼接新后缀
+    if (val && val !== '不聚合') {
+      // eslint-disable-next-line no-param-reassign
+      currentItem.display_name = `${baseName}_${val}`;
+    } else {
+      // eslint-disable-next-line no-param-reassign
+      currentItem.display_name = baseName;
+    }
+    // 触发重复校验
+    handleInputChange(currentItem.display_name, currentItem);
+  };
+
+  // 修改显示名
   const handleInputChange = (value: string, currentItem: ExDatabaseTableFieldModel) => {
     if (!value) return;
 
@@ -375,82 +473,6 @@
     });
 
     exist.value = tableData.value.some(item => item.isDuplicate);
-  };
-
-  const handleShowPop = () => {
-    isEdit.value = false;
-    isShow.value = !isShow.value;
-  };
-
-  // 生成可用聚合算法列表
-  const createAggregateList = (field: ExDatabaseTableFieldModel) => {
-    const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚和'));
-
-    // 检测重复聚合算法
-    const existingAggregates = new Set(props.expectedResultList
-      .filter(item => `${item.table}${item.raw_name}` === `${field.table}${field.raw_name}`
-        && (!field.aggregate || item.aggregate !== field.aggregate))
-      .map(item => item.aggregate));
-
-    // 禁用已存在的选项
-    return baseList.map<Record<string, any>>(item => ({
-      ...item,
-      disabled: existingAggregates.has(item.value),
-    }));
-  };
-
-  // 处理字段数据
-  const processField = (field: ExDatabaseTableFieldModel) => {
-    // 创建新对象避免参数修改
-    const processedField = {
-      ...field,
-      aggregateList: createAggregateList(field),
-      aggregate: field.aggregate ? field.aggregate : null, // 编辑回显
-    };
-
-    // 设置初始选中值
-    if (processedField.aggregate === null) {
-      processedField.aggregate = processedField.aggregateList.find(item => !item.disabled)?.value;
-    }
-
-    // 处理显示名称 - 编辑模式下不添加聚合算法后缀
-    const displayName = isEdit.value ? processedField.display_name
-      : `${processedField.display_name}${processedField.aggregate ? `_${processedField.aggregate}` : ''}`;
-
-    // 统计重复显示名(包含已存在的和当前已选的)
-    const allDisplayNames = [
-      ...props.expectedResultList,
-      ...tableData.value,
-    ];
-
-    // 编辑模式下排除当前字段自身
-    const filteredDisplayNames = isEdit.value
-      ? allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name))
-      : allDisplayNames;
-
-    const displayNameCount = filteredDisplayNames.reduce<Record<string, number>>(
-      (acc, cur) => ({ ...acc, [cur.display_name]: (acc[cur.display_name] || 0) + 1 }),
-      {},
-    );
-
-    // 生成最终显示名
-    processedField.display_name = displayNameCount[displayName] >= 1
-      ? `${processedField.table}.${displayName}`
-      : displayName;
-
-    return {
-      ...processedField,
-      aggregateList: processedField.aggregateList,
-    };
-  };
-
-  const handleChange = (value: boolean, field: ExDatabaseTableFieldModel) => {
-    if (value) {
-      // 处理并更新数据
-      tableData.value.push(processField(field));
-    } else {
-      tableData.value = tableData.value.filter(({ raw_name: rawName }) => rawName !== field.raw_name);
-    }
   };
 
   const reset = () => {
@@ -501,7 +523,7 @@
       isDuplicate: false,
     }));
     if (isEdit.value) {
-      handleChange(true, localTableFields.value[0]);
+      handleSelectField(true, localTableFields.value[0]);
     }
   }, {
     immediate: true,
