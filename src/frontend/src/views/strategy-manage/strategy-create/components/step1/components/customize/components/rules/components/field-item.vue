@@ -104,7 +104,8 @@
       :property="(!tagInput.includes(condition.condition.operator) &&
         !(dicts[condition.condition.field.raw_name] &&
           dicts[condition.condition.field.raw_name].length &&
-          condition.condition.field.raw_name !== 'action_id') &&
+          condition.condition.field.raw_name !== 'action_id' &&
+          props.configType === 'EventLog') &&
         !condition.condition.field.raw_name.includes('username')) ?
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filter` :
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
@@ -148,7 +149,7 @@
         :content-width="350"
         has-delete-icon
         :input-search="false"
-        :list="condition.condition.field.raw_name !== 'action_id' ?
+        :list="(condition.condition.field.raw_name !== 'action_id' && props.configType === 'EventLog') ?
           dicts[condition.condition.field && condition.condition.field.raw_name] :
           []"
         :loading="fieldLoading"
