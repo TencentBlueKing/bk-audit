@@ -194,22 +194,60 @@ class CollectorSearchAllStatisticResource(CollectorSearchBaseResource):
             else:
                 results[sql_name] = None
         results.update((k, v) for k, v in stats_sql.items() if not v)
+        results['top_5_echarts_time_series'] = self.extract_time_series(results)
+        field_name = validated_request_data["field_name"]
+        field_type = self.standard_fields_types[field_name]
         resp = {
             "results": results,
             "sqls": stats_sql,  # 返回每个统计查询的 SQL
+            "numeric": field_type not in (FieldType.STRING, FieldType.TEXT),
         }
         return resp
+
+    def extract_time_series(self, results):
+        """
+        从 results["top_5_time_series"] 提取 ECharts 的 series 列表。
+        series 中的 name 来自原始对象中除 count 和 time_interval 外的那个 key。
+        """
+        raw = results.get("top_5_time_series") or []
+        if not raw:
+            return []
+
+        # 找到除 count 和 time_interval 外的第一个 key 作为系列名称字段
+        sample = raw[0]
+        name_keys = [k for k in sample.keys() if k not in ("count", "time_interval")]
+        if not name_keys:
+            return []
+        name_key = name_keys[0]
+
+        # 1. 去重并排序所有 time_interval
+        times = sorted({item["time_interval"] for item in raw})
+
+        # 2. 按首次出现顺序收集所有系列名称
+        names = list(dict.fromkeys(item[name_key] for item in raw))
+
+        # 3. 为每个系列填充 data，缺失时补 0
+        series = []
+        for name in names:
+            data = []
+            for t in times:
+                # 寻找匹配的记录，否则补 0
+                cnt = next((item["count"] for item in raw if item[name_key] == name and item["time_interval"] == t), 0)
+                data.append(cnt)
+            series.append({"name": name, "data": data})
+
+        return series
 
 
 class CollectorSearchResource(CollectorSearchAllResource):
     name = gettext_lazy("日志查询")
     RequestSerializer = CollectorSearchReqSerializer
-    serializer_class = CollectorSearchStatisticRespSerializer
+    ResponseSerializer = CollectorSearchResponseSerializer
     audit_action = ActionEnum.SEARCH_REGULAR_EVENT
 
 
 class CollectorSearchStatisticResource(CollectorSearchAllStatisticResource):
     name = gettext_lazy("日志统计统计")
     RequestSerializer = CollectorSearchStatisticReqSerializer
-    serializer_class = CollectorSearchStatisticRespSerializer
+    ResponseSerializer = CollectorSearchStatisticRespSerializer
     audit_action = ActionEnum.SEARCH_REGULAR_EVENT
