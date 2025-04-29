@@ -403,6 +403,7 @@
   const allConfigTypeTable = ref<Array<ConfigTypeTableItem>>([]);
   const typeTableLoading = ref(false);
   const originSourceType = ref<'batch_join_source' | 'stream_source' | ''>('');
+  const availableSourceTypes = ref<Array<string>>([]);
 
   const hasData = computed(() => Boolean(formData.value.configs.select.length
     || (formData.value.configs.where.conditions.length
@@ -415,11 +416,6 @@
     if (isEditMode
       || !sourceType.value.support_source_types.includes(type)
       || (type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate))) {
-      // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
-      if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
-        formData.value.configs.data_source.source_type = '';
-      }
-
       return {
         disabled: true,
         // eslint-disable-next-line no-nested-ternary
@@ -530,7 +526,7 @@
     },
     onSuccess: () => {
       // 获取所有可用的调度方式
-      const availableSourceTypes = sourceType.value.support_source_types.filter((type) => {
+      availableSourceTypes.value = sourceType.value.support_source_types.filter((type) => {
         if (type === 'stream_source') {
           // stream_source模式下:
           // 存在聚合算法的数据不能使用该模式
@@ -540,13 +536,13 @@
       });
 
       // 如果是编辑模式，当originSourceType存在且在可用列表中，保持不变
-      if (isEditMode && originSourceType.value && availableSourceTypes.includes(originSourceType.value)) {
+      if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
         formData.value.configs.data_source.source_type = originSourceType.value;
       }
 
       // 如果没有可用类型或当前选择的类型不在可用列表中，则重置source_type
-      if (!availableSourceTypes.length
-        || !availableSourceTypes.includes(formData.value.configs.data_source.source_type as 'batch_join_source' | 'stream_source')) {
+      if (!availableSourceTypes.value.length
+        || !availableSourceTypes.value.includes(formData.value.configs.data_source.source_type as 'batch_join_source' | 'stream_source')) {
         formData.value.configs.data_source.source_type = '';
       }
     },
@@ -774,6 +770,15 @@
   // 更新预期数据
   const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
     formData.value.configs.select = expectedResult;
+    // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
+    if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
+      formData.value.configs.data_source.source_type = '';
+      return;
+    }
+    // 如果是编辑模式，当originSourceType存在且在可用列表中，保持不变
+    if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
+      formData.value.configs.data_source.source_type = originSourceType.value;
+    }
   };
 
   // 更新风险规则
