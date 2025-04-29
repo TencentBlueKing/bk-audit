@@ -169,7 +169,7 @@ class DorisStatisticSQLBuilder(BaseDorisSQLBuilder):
                 .orderby(PypikaField("count"), order=Order.desc)
             ).limit(5)
 
-            time_interval = DateTrunc(FromUnixTime(self.get_pypika_field('dteventtimestamp') / 1000), "MINUTE")
+            time_interval = DateTrunc(FromUnixTime(self.get_pypika_field('dteventtimestamp') / 1000), "HOUR")
 
             # 5. 时间序列统计（按分钟）
             time_series_query = (
