@@ -457,6 +457,7 @@ class StatisticResultSerializer(serializers.Serializer):
     median_value = serializers.JSONField(allow_null=True)
     top_5_values = serializers.JSONField(allow_null=True)
     top_5_time_series = serializers.JSONField(allow_null=True)
+    top_5_echarts_time_series = serializers.JSONField(allow_null=True)
 
 
 class CollectorSearchStatisticRespSerializer(serializers.Serializer):
@@ -466,6 +467,7 @@ class CollectorSearchStatisticRespSerializer(serializers.Serializer):
 
     sqls = StatisticSQLSerializer()
     results = StatisticResultSerializer()
+    numeric = serializers.BooleanField()
 
 
 class FavoriteSearchSerializer(CollectorSearchAllReqSerializer, serializers.ModelSerializer):
