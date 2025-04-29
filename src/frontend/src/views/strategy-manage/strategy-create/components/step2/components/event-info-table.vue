@@ -138,7 +138,7 @@
   });
 
   const createField = (item: DatabaseTableFieldModel) => ({
-    field_name: item.raw_name,
+    field_name: item.display_name,
     display_name: item.display_name,
     is_priority: false,
     map_config: {
@@ -184,7 +184,7 @@
         // 根据select更新event_data_field_configs
         tableData.value.event_data_field_configs = props.select.map((item) => {
           const existingField = tableData.value.event_data_field_configs.
-            find(fieldItem => fieldItem.field_name === item.raw_name);
+            find(fieldItem => fieldItem.field_name === item.display_name);
           if (existingField) {
             return existingField;
           }
