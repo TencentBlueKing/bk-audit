@@ -22,6 +22,7 @@
     ref="variableTable"
     :columns="tableColumn"
     :data="variableData"
+    show-overflow-tooltip
     style="max-height: 320px;"
     width="100%" />
 </template>
@@ -78,7 +79,7 @@
   const variableData = ref<StrategyFieldEvent['event_basic_field_configs']>([]);
 
   const createField = (item: DatabaseTableFieldModel) => ({
-    field_name: item.raw_name,
+    field_name: item.display_name,
     display_name: item.display_name,
     is_priority: false,
     map_config: {
