@@ -111,7 +111,7 @@
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
       required
       :rules="[
-        { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
+        { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
       ]">
       <!-- 日志表特有，dict字典下拉 -->
       <bk-cascader
@@ -167,6 +167,7 @@
     <div class="icon-group">
       <audit-icon
         v-if="condition.condition.field.display_name"
+        v-bk-tooltips="t('预览当前字段格式与最新值')"
         class="view-icon"
         type="view"
         @click="dataStructurePreview(condition.condition.field.display_name)" />
