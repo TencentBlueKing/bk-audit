@@ -132,5 +132,9 @@
     .bk-modal-header {
       display: none;
     }
+
+    .bk-modal-wrapper {
+      z-index: 9999 !important;
+    }
   }
 </style>
