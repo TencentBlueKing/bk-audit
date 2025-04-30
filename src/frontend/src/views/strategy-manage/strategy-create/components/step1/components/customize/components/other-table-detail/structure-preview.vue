@@ -143,7 +143,7 @@
 
   const handleRowClass = (row: RtMetaModel['formatted_fields'][0]) => {
     if (row.label === activeDisplayName.value) {
-      return 'active';
+      return 'structure-preview-active';
     }
     return '';
   };
@@ -151,6 +151,16 @@
   on('show-structure-preview', (value) => {
     showStructure.value = true;
     activeDisplayName.value = value as string;
+    setTimeout(() => {
+      const element = document.querySelector('.structure-preview-active');
+      if (element) {
+        element.scrollIntoView({
+          behavior: 'smooth', // 平滑滚动（可选）
+          block: 'center',    // 垂直居中
+          inline: 'nearest',   // 水平方向保持原样
+        });
+      }
+    }, 500);
   });
 
   const columns = [
@@ -207,7 +217,7 @@
   }
 
   :deep(.bk-table) {
-    .active {
+    .structure-preview-active {
       td {
         background-color: #fdf4e8;
       }
