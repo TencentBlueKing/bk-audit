@@ -230,7 +230,9 @@ class QuerySearchFieldSerializer(serializers.Serializer):
     """
 
     raw_name = serializers.CharField(label=gettext_lazy("Raw Name"))
-    field_type = serializers.ChoiceField(label=gettext_lazy("Field Type"), choices=FieldType.choices, default=None)
+    field_type = serializers.ChoiceField(
+        label=gettext_lazy("Field Type"), choices=FieldType.choices, default=None, allow_null=True
+    )
     keys = serializers.ListField(
         label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
     )
@@ -375,7 +377,7 @@ class CollectorSearchReqPermissionCheckMixIn:
         if len(systems) != len(authorized_systems):
             return [
                 {
-                    "field": {"raw_name": SYSTEM_ID.field_name, "field_type": "string", "keys": []},
+                    "field": {"raw_name": SYSTEM_ID.field_name, "field_type": FieldType.STRING.value, "keys": []},
                     "operator": QueryConditionOperator.INCLUDE.value,
                     "filters": authorized_systems,
                 }
