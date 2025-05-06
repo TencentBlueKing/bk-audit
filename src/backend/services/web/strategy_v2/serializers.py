@@ -338,9 +338,7 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         choices=OrderTypeChoices.choices,
     )
     link_table_uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
-    strategy_type = serializers.ChoiceField(
-        label=gettext_lazy("Storage Type"), choices=StrategyType.choices, required=False
-    )
+    strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"), required=False)
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
