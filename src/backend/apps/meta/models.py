@@ -495,10 +495,16 @@ class Tag(OperateRecordModel):
         ordering = ["-tag_id"]
 
 
+class GeneralConfigScene(models.TextChoices):
+    """通用配置场景"""
+
+    SEARCH_CONFIG = "search_config", gettext_lazy("搜索配置")
+
+
 class GeneralConfig(OperateRecordModel):
     """用于存储通用配置，支持用户特定的配置"""
 
-    scene = models.CharField(max_length=255, help_text="配置场景，标识配置的应用场景")
+    scene = models.CharField(max_length=255, help_text="配置场景，标识配置的应用场景", choices=GeneralConfigScene.choices)
     config_name = models.CharField(max_length=255, help_text="配置名称，标识配置的名称")
     config_content = models.JSONField(help_text="配置内容，存储具体的配置数据，JSON格式")
 

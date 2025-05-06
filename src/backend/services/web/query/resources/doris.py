@@ -65,8 +65,7 @@ class CollectorSearchBaseResource(QueryBaseResource, SearchDataParser, metaclass
     def doris_sql_builder_class(self) -> Type[BaseDorisSQLBuilder]:
         pass
 
-    @abstractmethod
-    def build_sql(self, validated_request_data) -> BaseDorisSQLBuilder:
+    def get_sql_builder(self, validated_request_data) -> BaseDorisSQLBuilder:
         """
         构建日志查询SQL
         """
@@ -103,7 +102,7 @@ class CollectorSearchAllResource(CollectorSearchBaseResource):
         """
         构建日志查询SQL，返回所有数据
         """
-        sql_builder = super().build_sql(validated_request_data)
+        sql_builder = super().get_sql_builder(validated_request_data)
         data_sql = sql_builder.build_data_sql()
         count_sql = sql_builder.build_count_sql()
         logger.info(f"[{self.__class__.__name__}] search data_sql: {data_sql};count_sql:{count_sql}")
@@ -152,7 +151,6 @@ class CollectorSearchAllStatisticResource(CollectorSearchBaseResource):
     name = gettext_lazy("日志统计查询(All)")
     RequestSerializer = CollectorSearchAllStatisticReqSerializer
     ResponseSerializer = CollectorSearchStatisticRespSerializer
-    audit_action = ActionEnum.REGULAR_EVENT_STATISTIC
     doris_sql_builder_class = DorisStatisticSQLBuilder
     standard_fields_types = {
         field.field_name: FieldType(BKDATA_ES_TYPE_MAP[field.field_type]) for field in STANDARD_FIELDS
@@ -162,7 +160,7 @@ class CollectorSearchAllStatisticResource(CollectorSearchBaseResource):
         """
         构建日志统计查询SQL
         """
-        sql_builder = super().build_sql(validated_request_data)
+        sql_builder = super().get_sql_builder(validated_request_data)
         # 调用 build_data_statistic_sql 获取统计信息
         field_name = validated_request_data["field_name"]
         field_type = self.standard_fields_types[field_name]
@@ -236,18 +234,18 @@ class CollectorSearchAllStatisticResource(CollectorSearchBaseResource):
                 data.append(cnt)
             series.append({"name": name, "data": data})
 
-        return series
+        return {"series": series, "times": times}
 
 
 class CollectorSearchResource(CollectorSearchAllResource):
     name = gettext_lazy("日志查询")
     RequestSerializer = CollectorSearchReqSerializer
-    ResponseSerializer = CollectorSearchResponseSerializer
+    serializer_class = CollectorSearchResponseSerializer
     audit_action = ActionEnum.SEARCH_REGULAR_EVENT
 
 
 class CollectorSearchStatisticResource(CollectorSearchAllStatisticResource):
-    name = gettext_lazy("日志统计统计")
+    name = gettext_lazy("日志查询统计")
     RequestSerializer = CollectorSearchStatisticReqSerializer
     ResponseSerializer = CollectorSearchStatisticRespSerializer
     audit_action = ActionEnum.SEARCH_REGULAR_EVENT

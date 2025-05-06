@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import Union
+from typing import Optional, TypedDict, Union
 
 from django.conf import settings
 from django.utils.translation import gettext_lazy
@@ -67,6 +67,18 @@ PYTHON_TO_ES = {
     dict: FIELD_TYPE_OBJECT,
     float: FIELD_TYPE_DOUBLE,
 }
+
+
+class SubKey(TypedDict):
+    field_name: str
+    field_type: str
+    property: Optional['FieldProperty']
+
+
+class FieldProperty(TypedDict):
+    dynamic_content: bool
+    sub_keys: list[SubKey]
+
 
 EVENT_ID = Field(
     field_name="event_id",
@@ -292,7 +304,7 @@ INSTANCE_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=80,
-    property={"dynamic_content": True, "sub_keys": []},
+    property=FieldProperty(dynamic_content=True, sub_keys=[]),
 )
 
 INSTANCE_ORIGIN_DATA = Field(
@@ -305,7 +317,7 @@ INSTANCE_ORIGIN_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=79,
-    property={"dynamic_content": True, "sub_keys": []},
+    property=FieldProperty(dynamic_content=True, sub_keys=[]),
 )
 
 RESULT_CODE = Field(
@@ -340,7 +352,7 @@ EXTEND_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=76,
-    property={"dynamic_content": True, "sub_keys": []},
+    property=FieldProperty(dynamic_content=True, sub_keys=[]),
 )
 
 SNAPSHOT_USER_INFO = Field(
@@ -352,24 +364,31 @@ SNAPSHOT_USER_INFO = Field(
     is_required=False,
     is_display=False,
     is_json=True,
-    property={
-        "dynamic_content": False,
-        "sub_keys": [
-            ["action_id"],
-            ["created_at"],
-            ["created_by"],
-            ["description"],
-            ["id"],
-            ["name"],
-            ["name_en"],
-            ["sensitivity"],
-            ["system_id"],
-            ["type"],
-            ["updated_at"],
-            ["updated_by"],
-            ["version"],
+    property=FieldProperty(
+        dynamic_content=False,
+        sub_keys=[
+            SubKey(field_name="department_full_name", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="department_id", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="department_name", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="department_path", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="dimission_date", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="display_name", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="enabled", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="gender", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="id", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="leader_username", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="level_name", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="manager_level", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="manager_unit_name", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="move_date", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="move_id", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="move_type_id", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="phone", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="staff_status", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="staff_type", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="username", field_type=FIELD_TYPE_STRING, property=None),
         ],
-    },
+    ),
 )
 
 SNAPSHOT_RESOURCE_TYPE_INFO = Field(
@@ -381,25 +400,25 @@ SNAPSHOT_RESOURCE_TYPE_INFO = Field(
     is_required=False,
     is_display=False,
     is_json=True,
-    property={
-        "dynamic_content": False,
-        "sub_keys": [
-            ["action_id"],
-            ["created_at"],
-            ["created_by"],
-            ["description"],
-            ["id"],
-            ["name"],
-            ["name_en"],
-            ["resource_type_id"],
-            ["sensitivity"],
-            ["system_id"],
-            ["type"],
-            ["updated_at"],
-            ["updated_by"],
-            ["version"],
+    property=FieldProperty(
+        dynamic_content=False,
+        sub_keys=[
+            SubKey(field_name="action_id", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="created_at", field_type=FIELD_TYPE_LONG, property=None),
+            SubKey(field_name="created_by", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="description", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="id", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="name", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="name_en", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="resource_type_id", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="sensitivity", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="system_id", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="type", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="updated_at", field_type=FIELD_TYPE_LONG, property=None),
+            SubKey(field_name="updated_by", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="version", field_type=FIELD_TYPE_INT, property=None),
         ],
-    },
+    ),
 )
 
 SNAPSHOT_ACTION_INFO = Field(
@@ -412,24 +431,25 @@ SNAPSHOT_ACTION_INFO = Field(
     is_display=False,
     is_json=True,
     priority_index=USERNAME.priority_index,
-    property={
-        "dynamic_content": False,
-        "sub_keys": [
-            ["action_id"],
-            ["created_at"],
-            ["created_by"],
-            ["description"],
-            ["id"],
-            ["name"],
-            ["name_en"],
-            ["sensitivity"],
-            ["system_id"],
-            ["type"],
-            ["updated_at"],
-            ["updated_by"],
-            ["version"],
+    property=FieldProperty(
+        dynamic_content=False,
+        sub_keys=[
+            SubKey(field_name="action_id", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="created_at", field_type=FIELD_TYPE_LONG, property=None),
+            SubKey(field_name="created_by", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="description", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="id", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="name", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="name_en", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="resource_type_ids", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="sensitivity", field_type=FIELD_TYPE_INT, property=None),
+            SubKey(field_name="system_id", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="type", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="updated_at", field_type=FIELD_TYPE_LONG, property=None),
+            SubKey(field_name="updated_by", field_type=FIELD_TYPE_STRING, property=None),
+            SubKey(field_name="version", field_type=FIELD_TYPE_INT, property=None),
         ],
-    },
+    ),
 )
 
 SNAPSHOT_INSTANCE_NAME = Field(
@@ -594,7 +614,7 @@ EXT_FIELD_CONFIG = Field(
     is_json=True,
     is_dimension=False,
     is_display=False,
-    property={"dynamic_content": True, "sub_keys": []},
+    property=FieldProperty(dynamic_content=True, sub_keys=[]),
 )
 
 FLOW_MD5 = Field(

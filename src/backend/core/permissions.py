@@ -20,6 +20,8 @@ import os
 from django.utils.translation import gettext_lazy
 from rest_framework.permissions import BasePermission
 
+from core.models import get_request_username
+
 
 class Permission(BasePermission):
     code = 403
@@ -71,4 +73,4 @@ class IsCreator(BasePermission):
     """判断是否为创建者"""
 
     def has_object_permission(self, request, view, obj):
-        return obj.created_by == request.user
+        return obj.created_by == get_request_username()
