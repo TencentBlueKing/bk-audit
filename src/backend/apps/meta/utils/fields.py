@@ -404,7 +404,6 @@ SNAPSHOT_RESOURCE_TYPE_INFO = Field(
     property=FieldProperty(
         dynamic_content=False,
         sub_keys=[
-            SubKey(field_name="action_id", field_type=FIELD_TYPE_STRING, field_alias="操作ID", property=None),
             SubKey(field_name="created_at", field_type=FIELD_TYPE_LONG, field_alias="创建时间", property=None),
             SubKey(field_name="created_by", field_type=FIELD_TYPE_STRING, field_alias="创建者", property=None),
             SubKey(field_name="description", field_type=FIELD_TYPE_STRING, field_alias="描述信息", property=None),
