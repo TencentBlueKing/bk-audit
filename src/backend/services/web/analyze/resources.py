@@ -24,7 +24,7 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
-from core.utils.tools import choices_to_select_list
+from core.utils.data import choices_to_select_list
 from services.web.analyze.constants import ControlTypeChoices
 from services.web.analyze.models import Control, ControlVersion
 from services.web.analyze.serializers import (

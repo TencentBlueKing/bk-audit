@@ -36,6 +36,12 @@ class Builder:
         self.agg_count = agg_count
 
     def build_msg(self, msg_type: str) -> BUILD_RESPONSE_TYPE:
+        """
+        构建消息
+        :param msg_type: 消息类型
+        :return: (title, content, button, configs)
+        """
+
         _builder: Callable[[], BUILD_RESPONSE_TYPE] = getattr(self, f"build_{msg_type}")
         return _builder()
 

@@ -21,7 +21,7 @@ from unittest import mock
 from apps.meta.exceptions import BKAppNotExists
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.models import CustomField, Field, ResourceType, System, SystemRole
-from core.utils.tools import ordered_dict_to_json, trans_object_local
+from core.utils.data import ordered_dict_to_json, trans_object_local
 from services.web.databus.models import Snapshot
 from tests.base import TestCase
 from tests.test_meta.constants import (

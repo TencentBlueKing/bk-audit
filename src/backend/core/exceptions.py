@@ -115,3 +115,9 @@ class RiskRuleInUse(BlueException):
 class CoreException(BlueException):
     class Module:
         Vision = "100"
+
+
+class FileDownloadError(BlueException):
+    ERROR_CODE = "018"
+    STATUS_CODE = 500
+    MESSAGE = gettext_lazy("文件下载异常")

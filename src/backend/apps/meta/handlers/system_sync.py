@@ -35,7 +35,7 @@ from apps.meta.constants import (
     SystemSourceTypeEnum,
 )
 from apps.meta.models import Action, Namespace, ResourceType, System, SystemRole
-from core.utils.tools import group_by
+from core.utils.data import group_by
 
 
 def update_instance_attrs(instance, obj: dict, attrs: list) -> (bool, object):

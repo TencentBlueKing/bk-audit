@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 from django.contrib import admin
 from django.utils.translation import gettext_lazy
 
-from core.utils.tools import choices_to_items
+from core.utils.data import choices_to_items
 from services.web.analyze.constants import ControlTypeChoices
 from services.web.analyze.models import Control, ControlVersion
 
