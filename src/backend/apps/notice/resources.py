@@ -46,7 +46,7 @@ from apps.notice.serializers import (
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
-from core.utils.tools import choices_to_dict
+from core.utils.data import choices_to_dict
 
 
 class NoticeMeta(AuditMixinResource, abc.ABC):
