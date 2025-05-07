@@ -316,7 +316,7 @@ class Action(OperateRecordModel):
 
 class Field(OperateRecordModel):
     """
-    标准审计事件
+    标准审计字段
     """
 
     field_name = models.CharField(gettext_lazy("字段名称"), max_length=64, primary_key=True)

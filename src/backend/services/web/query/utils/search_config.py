@@ -68,10 +68,10 @@ class CollectorSearchConfig:
 
         return [
             {
-                "field": field.field.to_json(),
-                "allow_operators": [operator for operator in field.allow_operators],
+                "field": field_config.field.to_json(),
+                "allow_operators": [operator for operator in field_config.allow_operators],
             }
-            for field in self.field_configs
+            for field_config in self.field_configs
         ]
 
     @cached_property

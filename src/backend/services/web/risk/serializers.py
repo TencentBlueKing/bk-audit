@@ -27,7 +27,7 @@ from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
 from core.utils.distutils import strtobool
-from core.utils.tools import mstimestamp_to_date_string
+from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import EventMappingFields, RiskLabel, RiskRuleOperator
 from services.web.risk.models import (
     ProcessApplication,
@@ -163,6 +163,12 @@ class ListEventResponseSerializer(serializers.Serializer):
 
     def validate_results(self, results: List[dict]) -> List[dict]:
         for e in results:
+            if e.get("dtEventTimeStamp"):
+                # 优先使用 dtEventTimeStamp 生成
+                # 避免查询关联事件列表接口
+                # 由于 event_time 与 dtEventTimeStamp 不一致
+                # 导致关联事件为空或者不准确
+                e["event_time"] = e["dtEventTimeStamp"]
             try:
                 e["event_time"] = mstimestamp_to_date_string(int(e["event_time"]))
             except (KeyError, TypeError, ValueError):
@@ -199,6 +205,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
     risk_level = serializers.CharField(
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
+    title = serializers.CharField(label=gettext_lazy("Risk Title"), required=False)
 
     def validate(self, attrs: dict) -> dict:
         # 校验
@@ -226,6 +233,8 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["tags__contains"] = data.pop("tags")
         if data.get("event_content"):
             data["event_content__contains"] = data.pop("event_content")
+        if data.get("title"):
+            data["title__contains"] = data.pop("title")
         # 格式转换
         for key, val in attrs.items():
             if key in ["event_time__gte", "event_time__lt", "order_type", "order_field"]:
@@ -260,6 +269,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "risk_label",
             "experiences",
             "last_operate_time",
+            "title",
         ]
 
 

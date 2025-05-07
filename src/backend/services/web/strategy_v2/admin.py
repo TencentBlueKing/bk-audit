@@ -22,7 +22,7 @@ from django.contrib import admin
 from django.utils.translation import gettext_lazy
 
 from apps.meta.models import Tag
-from core.utils.tools import choices_to_items
+from core.utils.data import choices_to_items
 from services.web.analyze.constants import ControlTypeChoices
 from services.web.analyze.models import Control
 from services.web.strategy_v2.models import (

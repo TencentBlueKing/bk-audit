@@ -20,7 +20,7 @@ from unittest import mock
 
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
-from core.utils.tools import ordered_dict_to_json
+from core.utils.data import ordered_dict_to_json
 from services.web.databus.constants import (
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     DEFAULT_STORAGE_CONFIG_KEY,

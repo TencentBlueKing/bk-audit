@@ -15,8 +15,11 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from functools import cached_property
+from typing import List
 
 from django.utils.translation import gettext_lazy
+from pydantic import BaseModel
 
 from apps.meta.utils.fields import (
     ACCESS_SOURCE_IP,
@@ -42,8 +45,13 @@ from apps.meta.utils.fields import (
     USER_IDENTIFY_TYPE,
     USERNAME,
 )
-from core.choices import TextChoices
+from core.choices import TextChoices, register_choices
 from core.constants import OrderTypeChoices
+from services.web.query.utils.field import (
+    LOG_SEARCH_SNAPSHOT_FIELDS_MAP,
+    LOG_SEARCH_STANDARD_FIELDS_MAP,
+    LOG_SEARCH_SYSTEM_FIELDS_MAP,
+)
 from services.web.query.utils.search_config import (
     CollectorSearchConfig,
     FieldSearchConfig,
@@ -159,3 +167,125 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
 DATE_FORMAT = "%Y%m%d"
 DATE_PARTITION_FIELD = "thedate"
 TIMESTAMP_PARTITION_FIELD = "dtEventTimeStamp"
+
+
+class LogExportField(BaseModel):
+    """
+    日志导出字段
+    """
+
+    raw_name: str
+    display_name: str = ""
+    keys: List[str] = list
+
+    @cached_property
+    def full_key(self) -> str:
+        """
+        获取字段的完整键名
+        """
+
+        return LOG_FIELD_KEY_JOIN_CHAR.join([self.raw_name, *self.keys])
+
+
+class FileExportResult(BaseModel):
+    """
+    文件导出结果
+    """
+
+    origin_name: str  # 原始文件名
+    storage_name: str  # 存储文件名
+    size: int  # 文件大小(单位:字节)
+    url: str  # 下载地址
+
+
+@register_choices("log_export_task")
+class TaskEnum(TextChoices):
+    """
+    日志导出任务状态
+    """
+
+    READY = "READY", gettext_lazy("就绪")
+    RUNNING = "RUNNING", gettext_lazy("执行中")
+    SUCCESS = "SUCCESS", gettext_lazy("成功")
+    FAILURE = "FAILURE", gettext_lazy("失败")
+
+    @classmethod
+    def get_schedule_status(cls) -> List["TaskEnum"]:
+        """
+        获取可调度的状态
+        """
+
+        return [
+            cls.READY,
+            cls.FAILURE,
+        ]
+
+
+class LogExportFieldScope(TextChoices):
+    """
+    日志导出字段范围
+    """
+
+    ALL = "all", gettext_lazy("全部字段")
+    STANDARD = "standard", gettext_lazy("标准字段")
+    SPECIFIED = "specified", gettext_lazy("指定字段")
+
+
+# 日志字段 key 拼接字符
+LOG_FIELD_KEY_JOIN_CHAR = "/"
+
+# 文件上传路径
+FILE_UPLOAD_DEFAULT_PATH_FORMAT = "{namespace}/default/{file_name}"
+
+
+@register_choices("query_field_category")
+class FieldCategoryEnum(TextChoices):
+    """
+    字段分类
+    """
+
+    STANDARD = "standard", gettext_lazy("标准字段")
+    SNAPSHOT = "snapshot", gettext_lazy("快照字段")
+    SYSTEM = "system", gettext_lazy("系统字段")
+    CUSTOM = "custom", gettext_lazy("自定义字段")
+
+    @property
+    def color(self) -> str:
+        """
+        返回颜色
+        """
+
+        return {
+            self.STANDARD.value: '#C6EFCE',
+            self.SNAPSHOT.value: '#FCE4D6',
+            self.SYSTEM.value: '#DDEBF7',
+            self.CUSTOM.value: '#4F81BD',
+        }.get(self.value, '#FFFFFF')
+
+    @classmethod
+    def get_category_by_field(cls, field: LogExportField) -> "FieldCategoryEnum":
+        """
+        根据字段获取分类
+        """
+
+        for k, v in [
+            (LOG_SEARCH_STANDARD_FIELDS_MAP, cls.STANDARD),
+            (LOG_SEARCH_SNAPSHOT_FIELDS_MAP, cls.SNAPSHOT),
+            (LOG_SEARCH_SYSTEM_FIELDS_MAP, cls.SYSTEM),
+        ]:
+            if field.full_key in k:
+                return v
+        return cls.CUSTOM
+
+    @classmethod
+    def get_orders(cls) -> List["FieldCategoryEnum"]:
+        """
+        获取排序顺序
+        """
+
+        return [
+            cls.CUSTOM,
+            cls.STANDARD,
+            cls.SNAPSHOT,
+            cls.SYSTEM,
+        ]

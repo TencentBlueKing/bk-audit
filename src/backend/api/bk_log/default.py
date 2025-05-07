@@ -68,7 +68,7 @@ from api.bk_log.serializers import (
 )
 from api.domains import BK_LOG_API_URL
 from apps.bk_crypto.crypto import asymmetric_cipher
-from core.utils.tools import distinct
+from core.utils.data import distinct
 
 
 class BKLogBaseResource(BkApiResource, abc.ABC):

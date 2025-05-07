@@ -30,7 +30,7 @@ from api.bk_log.constants import (
     TemplateTypeChoices,
 )
 from core.exceptions import ValidationError
-from core.utils.tools import format_date_string
+from core.utils.time import format_date_string
 
 
 class StorageAuthInfoSerializer(serializers.Serializer):

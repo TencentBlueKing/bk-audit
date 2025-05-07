@@ -54,3 +54,7 @@ class ErrorCode(Enum):
 class OrderTypeChoices(TextChoices):
     ASC = "asc", gettext_lazy("升序")
     DESC = "desc", gettext_lazy("降序")
+
+
+# 文件下载流式传输分片大小(bytes)
+FILE_DOWNLOAD_CHUNK_SIZE = 8096
