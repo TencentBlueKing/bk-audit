@@ -91,7 +91,13 @@
           <!-- 其他数据表详情 -->
           <other-table-detail-component
             v-if="formData.configs.data_source.rt_id?.length"
-            :rt-id="formData.configs.data_source.rt_id" />
+            :rt-id="formData.configs.data_source.rt_id"
+            @show-structure-preview="handleShowStructureView" />
+          <!-- 查看表字段详情 -->
+          <structure-preview-component
+            v-model:show-structure="showStructure"
+            :current-view-field="currentViewField"
+            :rt-id="currentViewRtId" />
         </bk-form-item>
         <bk-form-item
           label=""
@@ -147,6 +153,7 @@
             :config-type="formData.configs.config_type"
             :expected-result="formData.configs.select"
             :table-fields="tableFields"
+            @show-structure-preview="handleShowStructureView"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
       </div>
@@ -288,6 +295,7 @@
   import OtherTableDetailComponent from './components/other-table-detail/index.vue';
   import RulesComponent from './components/rules/index.vue';
   import EventLogComponent from './components/scheme-input/event-log.vue';
+  import StructurePreviewComponent from './components/structure-preview/index.vue';
 
   import useRequest from '@/hooks/use-request';
 
@@ -404,6 +412,10 @@
   const typeTableLoading = ref(false);
   const originSourceType = ref<'batch_join_source' | 'stream_source' | ''>('');
   const availableSourceTypes = ref<Array<string>>([]);
+
+  const showStructure = ref(false);
+  const currentViewRtId = ref<string | Array<string>>([]);
+  const currentViewField = ref<string>('');
 
   const hasData = computed(() => Boolean(formData.value.configs.select.length
     || (formData.value.configs.where.conditions.length
@@ -643,6 +655,26 @@
     };
     rulesComponentRef.value.resetFormData();
     expectedResultsRef.value.resetFormData();
+  };
+
+  const findRtIdByDisplayName = (rtId: string | Array<string>) => {
+    const { links } = linkDataDetail.value.config;
+    const found = links.find(link => link.left_table.display_name === rtId || link.right_table.display_name === rtId);
+    if (!found) return '';
+    if (found.left_table.display_name === rtId) return found.left_table.rt_id;
+    return found.right_table.rt_id;
+  };
+
+  const handleShowStructureView = (rtId: string | Array<string>, presentViewField: string) => {
+    // 如果是联表，获取联表的rt_id
+    if (presentViewField) {
+      const firstRtId = findRtIdByDisplayName(rtId);
+      currentViewRtId.value = firstRtId;
+      currentViewField.value = presentViewField;
+    } else {
+      currentViewRtId.value = rtId;
+    }
+    showStructure.value = true;
   };
 
   const getFirstAndLast = (arr: Array<string>) => {
