@@ -26,11 +26,7 @@ from django.utils.module_loading import import_string
 
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
-from apps.meta.utils.fields import (
-    BKLOG_BUILD_IN_FIELDS,
-    SPEC_FIELD_TYPE_TIMESTAMP,
-    STANDARD_FIELDS,
-)
+from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
 from services.web.analyze.utils import is_asset
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
@@ -297,7 +293,4 @@ def enhance_rt_fields(fields, result_table_id):
                     field["spec_field_type"] = standard_fields[field["value"]].property.get(
                         "spec_field_type", standard_fields[field["value"]].field_type
                     )
-                elif field["value"] == "time":
-                    field["spec_field_type"] = SPEC_FIELD_TYPE_TIMESTAMP
-
     return result
