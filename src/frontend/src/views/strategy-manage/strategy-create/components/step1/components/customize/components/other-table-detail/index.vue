@@ -59,14 +59,9 @@
       </render-info-block>
     </div>
   </div>
-  <structure-preview
-    v-model:show-structure="showStructure"
-    :rt-id="rtId"
-    :rt-last-data="rtLastData.last_data[0]"
-    :rt-meta="rtMeta" />
 </template>
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
@@ -78,18 +73,19 @@
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
 
-  import StructurePreview from './structure-preview.vue';
-
   import useRequest from '@/hooks/use-request';
 
   interface Props {
     rtId: string | Array<string>;
   }
+  interface Emits {
+    (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
+  }
+
   const props = defineProps<Props>();
+  const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-
-  const showStructure = ref(false);
 
   // 获取表格信息
   const {
@@ -99,25 +95,12 @@
     defaultValue: new RtMetaModel(),
   });
 
-  // 获取表格最后一条数据
-  const {
-    data: rtLastData,
-    run: fetchTableRtLastData,
-  } = useRequest(StrategyManageService.fetchTableRtLastData, {
-    defaultValue: {
-      last_data: [],
-    },
-  });
-
   const dataStructurePreview = () => {
-    showStructure.value = true;
+    emit('show-structure-preview', props.rtId, '');
   };
 
   watch(() => props.rtId, () => {
     fetchTableRtMeta({
-      table_id: props.rtId,
-    });
-    fetchTableRtLastData({
       table_id: props.rtId,
     });
   }, {
