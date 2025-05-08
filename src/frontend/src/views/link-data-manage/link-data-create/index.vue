@@ -20,7 +20,7 @@
     v-model:isShow="showCreate"
     :show-footer="false"
     :title="isEditMode ? t('编辑联表') : t('新建联表')"
-    :width="960">
+    :width="1050">
     <smart-action
       class="create-link-data"
       :offset-target="getSmartActionOffsetTarget">
