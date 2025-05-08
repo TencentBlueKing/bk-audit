@@ -491,7 +491,7 @@
 .rule-item-field {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr minmax(65px, auto);
+  grid-template-columns: 216px 180px 1fr minmax(65px, auto);
   gap: 8px;
 
   :deep(.bk-form-error) {
