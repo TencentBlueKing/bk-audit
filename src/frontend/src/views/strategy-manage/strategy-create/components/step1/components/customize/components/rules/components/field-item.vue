@@ -60,6 +60,10 @@
             `${getAggregateName(item)}${item.table}.${item.display_name}` :
             `${getAggregateName(item)}${item.display_name}`"
           :value="item">
+          <audit-icon
+            style="margin-right: 4px;font-size: 14px;"
+            svg
+            :type="item.spec_field_type" />
           <div v-if="configType === 'LinkTable'">
             <span style=" color: #3a84ff;">{{ item.table }}.</span>
             <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
