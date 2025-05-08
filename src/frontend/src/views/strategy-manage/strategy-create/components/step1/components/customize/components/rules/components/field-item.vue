@@ -170,7 +170,7 @@
         v-bk-tooltips="t('预览当前字段格式与最新值')"
         class="view-icon"
         type="view"
-        @click="dataStructurePreview(condition.condition.field.display_name)" />
+        @click="dataStructurePreview(condition.condition.field)" />
       <audit-icon
         style="margin-right: 10px; cursor: pointer;"
         type="add-fill"
@@ -199,15 +199,7 @@
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
-  import useEventBus from '@hooks/use-event-bus';
-
   import useRequest from '@/hooks/use-request';
-
-  const props = defineProps<Props>();
-
-  const emits = defineEmits<Emits>();
-
-  const { emit } = useEventBus();
 
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
@@ -232,12 +224,17 @@
     (e: 'updateFieldItemList', conditionsIndex: number, value: Props['conditions']): void;
     (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
+    (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
   }
   interface DataType{
     label: string;
     value: string;
     children?: Array<DataType>;
   }
+
+  const props = defineProps<Props>();
+
+  const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
   const conditionList = ref<Array<{
@@ -264,8 +261,8 @@
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
 
-  const dataStructurePreview = (value: string) => {
-    emit('show-structure-preview', value);
+  const dataStructurePreview = (value: DatabaseTableFieldModel) => {
+    emits('show-structure-preview', value.table, value.display_name);
   };
 
   useRequest(StrategyManageService.fetchStrategyCommon, {
