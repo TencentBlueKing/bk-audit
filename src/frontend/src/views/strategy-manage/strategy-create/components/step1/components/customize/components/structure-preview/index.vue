@@ -60,7 +60,7 @@
             <render-info-item
               :label="t('业务运维人员')"
               style="width: 250px;">
-              {{ rtMeta.sensitivity_info?.biz_role_memebers?.join(',') || '--' }}
+              <edit-tag :data="rtMeta.sensitivity_info?.biz_role_memebers || []" />
             </render-info-item>
           </render-info-block>
           <render-info-block>
@@ -91,13 +91,13 @@
           :border="['outer']"
           :columns="columns"
           :data="rtMeta.formatted_fields"
-          :max-height="650" />
+          :max-height="650"
+          :row-class="(row: RtMetaModel['formatted_fields'][0]) => handleRowClass(row)" />
       </div>
     </bk-loading>
   </audit-sideslider>
 </template>
 <script setup lang="ts">
-  import type { Table } from 'bkui-vue';
   import { watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -107,13 +107,16 @@
   import ConfigModel from '@model/root/config';
   import RtMetaModel from '@model/strategy/rt-meta';
 
+  import EditTag from '@components/edit-box/tag.vue';
+
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
 
   import useRequest from '@/hooks/use-request';
 
   interface Props {
-    rtId: string;
+    rtId: string | Array<string>;
+    currentViewField: string;
   }
   const props = defineProps<Props>();
 
@@ -122,6 +125,27 @@
   const showStructure = defineModel<boolean>('showStructure', {
     required: true,
   });
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
+  const handleViewMore = () => {
+    const rtId = Array.isArray(props.rtId) ? props.rtId[props.rtId.length - 1] : props.rtId;
+    const prefix = rtId.split('_')[0];
+
+    window.open(`${configData.value.third_party_system.bkbase_web_url}#/data-mart/data-dictionary/detail?dataType=result_table&result_table_id=${props.rtId}&bk_biz_id=${prefix}`);
+  };
+
+  const handleRowClass = (row: RtMetaModel['formatted_fields'][0]) => {
+    if (row.label === props.currentViewField) {
+      return 'structure-preview-active';
+    }
+    return '';
+  };
 
   const columns = [
     {
@@ -147,21 +171,7 @@
       field: () => '',
       render: ({ data }: {data: Record<string, any>}) => rtLastData.value.last_data?.[data.value] || '--',
     },
-  ] as  InstanceType<typeof Table>['$props']['columns'];
-
-  const {
-    data: configData,
-  } =  useRequest(RootManageService.config, {
-    defaultValue: new ConfigModel(),
-    manual: true,
-  });
-
-  const handleViewMore = () => {
-    const rtId = Array.isArray(props.rtId) ? props.rtId[props.rtId.length - 1] : props.rtId;
-    const prefix = rtId.split('_')[0];
-
-    window.open(`${configData.value.third_party_system.bkbase_web_url}#/data-mart/data-dictionary/detail?dataType=result_table&result_table_id=${props.rtId}&bk_biz_id=${prefix}`);
-  };
+  ];
 
   // 获取表格信息
   const {
@@ -170,6 +180,18 @@
     run: fetchTableRtMeta,
   } = useRequest(StrategyManageService.fetchTableRtMeta, {
     defaultValue: new RtMetaModel(),
+    onSuccess() {
+      setTimeout(() => {
+        const element = document.querySelector('.structure-preview-active');
+        if (element) {
+          element.scrollIntoView({
+            behavior: 'smooth', // 平滑滚动（可选）
+            block: 'center',    // 垂直居中
+            inline: 'nearest',   // 水平方向保持原样
+          });
+        }
+      }, 500);
+    },
   });
 
   // 获取表格最后一条数据
@@ -181,6 +203,7 @@
       last_data: [],
     },
   });
+
 
   watch(() => props.rtId, () => {
     fetchTableRtMeta({
@@ -200,6 +223,7 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 16px;
+
   }
 
   .title {
@@ -211,6 +235,14 @@
     display: grid;
     margin-bottom: 12px;
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  :deep(.bk-table) {
+    .structure-preview-active {
+      td {
+        background-color: #fdf4e8;
+      }
+    }
   }
 }
 </style>
