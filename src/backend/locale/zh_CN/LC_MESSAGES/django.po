@@ -3283,18 +3283,17 @@ msgstr "日志查询配置"
 msgid "日志搜索(All)"
 msgstr "日志搜索(All)"
 
-#, fuzzy
-#| msgid "日志搜索(All)"
 msgid "日志统计查询(All)"
 msgstr "日志搜索(All)"
+
+msgid "日志统计查询(All)"
+msgstr "日志统计查询(All)"
 
 msgid "日志查询"
 msgstr "日志查询"
 
-#, fuzzy
-#| msgid "日志查询"
 msgid "日志查询统计"
-msgstr "日志查询"
+msgstr "日志查询统计"
 
 msgid "创建日志检索导出任务"
 msgstr "创建日志检索导出任务"
