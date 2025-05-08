@@ -41,7 +41,8 @@
               <bk-input
                 v-model="searchKey"
                 behavior="simplicity"
-                class="mb8">
+                class="mb8"
+                :placeholder="t('请输入关键字')">
                 <template #prefix>
                   <span class="input-icon">
                     <audit-icon type="search1" />
