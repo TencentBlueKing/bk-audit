@@ -512,8 +512,11 @@
   const configTypeTableFilter = (node: Record<string, any>, key: string) => {
     // 转换searchKey为小写以支持大小写不敏感的搜索
     const lowercaseSearchKey = key.toLowerCase();
-    return (node.data.label.toLowerCase().includes(lowercaseSearchKey)
-      || node.data.value.toLowerCase().includes(lowercaseSearchKey));
+    // 只匹配叶子节点
+    const isLeaf = !Array.isArray(node.children) || node.children.length === 0;
+    if (!isLeaf) return false;
+    return node.data.label.toLowerCase().includes(lowercaseSearchKey)
+      || node.data.value.toLowerCase().includes(lowercaseSearchKey);
   };
 
   // 选择tableid后，获取该table的可用调度方式
