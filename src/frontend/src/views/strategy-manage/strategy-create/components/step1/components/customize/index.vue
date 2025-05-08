@@ -58,7 +58,7 @@
                   id-key="value"
                   :list="allConfigTypeTable"
                   name-key="label"
-                  placeholder="搜索数据名称、别名、数据ID等"
+                  :placeholder="t('搜索数据名称、别名、数据ID等')"
                   trigger="hover"
                   @change="handleChangeTable">
                   <p

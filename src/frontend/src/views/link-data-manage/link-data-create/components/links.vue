@@ -42,7 +42,7 @@
                   id-key="value"
                   :list="index === 0 ? allConfigTypeTable : leftTableList"
                   name-key="label"
-                  placeholder="搜索数据名称、别名、数据ID等"
+                  :placeholder="t('搜索数据名称、别名、数据ID等')"
                   trigger="hover"
                   @change="(value: Array<string>) => handleSelectLeftTable(value, index)">
                   <p
@@ -103,7 +103,7 @@
                   id-key="value"
                   :list="rightTableList"
                   name-key="label"
-                  placeholder="搜索数据名称、别名、数据ID等"
+                  :placeholder="t('搜索数据名称、别名、数据ID等')"
                   trigger="hover"
                   @change="(value: Array<string>) => handleSelectRightTable(value, index)">
                   <p
