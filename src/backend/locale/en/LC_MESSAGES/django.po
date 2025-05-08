@@ -1230,8 +1230,6 @@ msgstr "Description"
 msgid "优先指数"
 msgstr "Priority Index"
 
-#, fuzzy
-#| msgid "业务属性"
 msgid "属性"
 msgstr "Property"
 
@@ -1284,7 +1282,7 @@ msgid "Tag"
 msgstr "Tag"
 
 msgid "搜索配置"
-msgstr ""
+msgstr "Search Config"
 
 msgid "获取 Namespace 列表"
 msgstr "Get Namespcae List"
@@ -1386,16 +1384,16 @@ msgid "删除系统诊断推送"
 msgstr "Delete system diagnosis push"
 
 msgid "创建通用配置"
-msgstr ""
+msgstr "Create Common Config"
 
 msgid "更新通用配置"
-msgstr ""
+msgstr "Update Common Config"
 
 msgid "删除通用配置"
-msgstr ""
+msgstr "Delete Common Config"
 
 msgid "通用配置列表"
-msgstr ""
+msgstr "Common Config List"
 
 msgid "搜索关键字"
 msgstr "Search Keyword"
@@ -1737,10 +1735,6 @@ msgstr "Builder initialization failed: {err}"
 
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
-
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【BK Audit%s】"
 
 msgid "异常信息"
 msgstr "Error Msg"
@@ -3268,18 +3262,14 @@ msgstr "Log Query Config"
 msgid "日志搜索(All)"
 msgstr "Collector Search(All)"
 
-#, fuzzy
-#| msgid "日志搜索(All)"
 msgid "日志统计查询(All)"
-msgstr "Collector Search(All)"
+msgstr "Collector Statistic Search(All)"
 
 msgid "日志查询"
 msgstr "Collector Search"
 
-#, fuzzy
-#| msgid "日志查询"
 msgid "日志查询统计"
-msgstr "Collector Search"
+msgstr "Collector Search Statistic"
 
 msgid "创建日志检索导出任务"
 msgstr "Create log search export task"

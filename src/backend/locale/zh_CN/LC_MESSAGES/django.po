@@ -1384,16 +1384,16 @@ msgid "删除系统诊断推送"
 msgstr "删除系统诊断推送"
 
 msgid "创建通用配置"
-msgstr ""
+msgstr "创建通用配置"
 
 msgid "更新通用配置"
-msgstr ""
+msgstr "更新通用配置"
 
 msgid "删除通用配置"
-msgstr ""
+msgstr "删除通用配置"
 
 msgid "通用配置列表"
-msgstr ""
+msgstr "通用配置列表"
 
 msgid "搜索关键字"
 msgstr "搜索关键字"
@@ -1735,10 +1735,6 @@ msgstr "构建器初始化失败: {err}"
 
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
-
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【蓝鲸审计中心%s】"
 
 msgid "异常信息"
 msgstr "异常信息"
@@ -2316,12 +2312,6 @@ msgstr "操作符 {operator} 的值 {value} 不符合预期。"
 
 msgid "数据拉取"
 msgstr "数据拉取"
-
-msgid "未实现方法"
-msgstr "未实现方法"
-
-msgid "未实现类型"
-msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -3265,18 +3255,17 @@ msgstr "日志查询配置"
 msgid "日志搜索(All)"
 msgstr "日志搜索(All)"
 
-#, fuzzy
-#| msgid "日志搜索(All)"
 msgid "日志统计查询(All)"
 msgstr "日志搜索(All)"
+
+msgid "日志统计查询(All)"
+msgstr "日志统计查询(All)"
 
 msgid "日志查询"
 msgstr "日志查询"
 
-#, fuzzy
-#| msgid "日志查询"
 msgid "日志查询统计"
-msgstr "日志查询"
+msgstr "日志查询统计"
 
 msgid "创建日志检索导出任务"
 msgstr "创建日志检索导出任务"
