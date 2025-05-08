@@ -299,5 +299,7 @@ export default {
     批量设置聚合算法: 'Batch setting aggregation algorithm',
     '指合并同类数据，计算总和、平均等统计值；同时选择多个字段时，可用聚合算法是最小公集。': 'Indicates the merging of similar data and the calculation of the total, average, etc. statistics values. When multiple fields are selected, the aggregation algorithm is the minimum public set.',
     'sql示例：`字段名` AS `显示名`': 'sql example: `Field name` AS `Display name`',
+    '处理中，不支持启停': 'Processing, not supported to start/stop',
+    预览当前字段格式与最新值: 'Preview current field format and latest value',
   },
 };
