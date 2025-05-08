@@ -715,6 +715,8 @@
       if (!configType) {
         resetDataSource();
         tableFields.value = [];
+        // 更新前次记录
+        previousTableId.value = value;
         return;
       }
 
