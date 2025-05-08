@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-02 21:01+0800\n"
+"POT-Creation-Date: 2025-05-08 15:25+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1230,6 +1230,9 @@ msgstr "Description"
 msgid "优先指数"
 msgstr "Priority Index"
 
+msgid "属性"
+msgstr "Property"
+
 msgid "字段"
 msgstr "Field"
 
@@ -1277,6 +1280,9 @@ msgstr "Tag Name"
 
 msgid "Tag"
 msgstr "Tag"
+
+msgid "搜索配置"
+msgstr "Search Config"
 
 msgid "获取 Namespace 列表"
 msgstr "Get Namespcae List"
@@ -1377,6 +1383,18 @@ msgstr "Toggle system diagnosis push"
 msgid "删除系统诊断推送"
 msgstr "Delete system diagnosis push"
 
+msgid "创建通用配置"
+msgstr "Create Common Config"
+
+msgid "更新通用配置"
+msgstr "Update Common Config"
+
+msgid "删除通用配置"
+msgstr "Delete Common Config"
+
+msgid "通用配置列表"
+msgstr "Common Config List"
+
 msgid "搜索关键字"
 msgstr "Search Keyword"
 
@@ -1388,6 +1406,9 @@ msgstr "Sort Type"
 
 msgid "状态筛选"
 msgstr "Status Filter"
+
+msgid "来源类型"
+msgstr "Source Type"
 
 msgid "权限"
 msgstr "Permission"
@@ -1671,10 +1692,6 @@ msgstr "Notice Group Name Duplicate"
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
 
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【BK Audit%s】"
-
 msgid "异常信息"
 msgstr "Error Msg"
 
@@ -1863,6 +1880,9 @@ msgstr "Delete Storage"
 
 msgid "敏感信息对象列表"
 msgstr "List Sensitive OBJECT"
+
+msgid "全局设置查看"
+msgstr "View Global Setting"
 
 msgid "全局设置管理"
 msgstr "Manage Global Setting"
@@ -2249,12 +2269,6 @@ msgstr "The value of operator {operator} is not as expected."
 
 msgid "数据拉取"
 msgstr "Data Pull"
-
-msgid "未实现方法"
-msgstr "Unimplemented Method"
-
-msgid "未实现类型"
-msgstr "Unimplemented Type"
 
 msgid "Control Name"
 msgstr "Control Name"
@@ -3115,8 +3129,14 @@ msgstr "Log Query Config"
 msgid "日志搜索(All)"
 msgstr "Collector Search(All)"
 
+msgid "日志统计查询(All)"
+msgstr "Collector Statistic Search(All)"
+
 msgid "日志查询"
 msgstr "Collector Search"
+
+msgid "日志查询统计"
+msgstr "Collector Search Statistic"
 
 msgid "搜索(All)"
 msgstr "Search(All)"
@@ -3132,6 +3152,12 @@ msgstr "Split by commas"
 
 msgid "多个字段以半角逗号分隔"
 msgstr "Split by commas"
+
+msgid "Raw Name"
+msgstr "Raw Name"
+
+msgid "Field Type"
+msgstr "Field Type"
 
 msgid "嵌套字段 key"
 msgstr "Nested field key"
@@ -4005,9 +4031,6 @@ msgstr "Children"
 msgid "Action ID"
 msgstr "Action ID"
 
-msgid "Field Type"
-msgstr "Field Type"
-
 msgid "Strategy Operator"
 msgstr "Strategy Operator"
 
@@ -4167,9 +4190,6 @@ msgstr "Link Table Count"
 
 msgid "Table"
 msgstr "Table"
-
-msgid "Raw Name"
-msgstr "Raw Name"
 
 msgid "Aggregate"
 msgstr "Aggregate"

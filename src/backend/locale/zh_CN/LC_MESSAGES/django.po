@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-02 21:01+0800\n"
+"POT-Creation-Date: 2025-05-08 15:25+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1230,6 +1230,9 @@ msgstr "描述"
 msgid "优先指数"
 msgstr "优先指数"
 
+msgid "属性"
+msgstr "属性"
+
 msgid "字段"
 msgstr "字段"
 
@@ -1277,6 +1280,9 @@ msgstr "标签名"
 
 msgid "Tag"
 msgstr "标签"
+
+msgid "搜索配置"
+msgstr "搜索配置"
 
 msgid "获取 Namespace 列表"
 msgstr "获取 Namespace 列表"
@@ -1377,6 +1383,18 @@ msgstr "切换系统诊断推送"
 msgid "删除系统诊断推送"
 msgstr "删除系统诊断推送"
 
+msgid "创建通用配置"
+msgstr "创建通用配置"
+
+msgid "更新通用配置"
+msgstr "更新通用配置"
+
+msgid "删除通用配置"
+msgstr "删除通用配置"
+
+msgid "通用配置列表"
+msgstr "通用配置列表"
+
 msgid "搜索关键字"
 msgstr "搜索关键字"
 
@@ -1388,6 +1406,9 @@ msgstr "排序方式"
 
 msgid "状态筛选"
 msgstr "状态筛选"
+
+msgid "来源类型"
+msgstr "来源类型"
 
 msgid "权限"
 msgstr "权限"
@@ -1671,10 +1692,6 @@ msgstr "通知组名称重复"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【蓝鲸审计中心%s】"
-
 msgid "异常信息"
 msgstr "异常信息"
 
@@ -1863,6 +1880,9 @@ msgstr "数据存储删除"
 
 msgid "敏感信息对象列表"
 msgstr "敏感信息对象列表"
+
+msgid "全局设置查看"
+msgstr "全局设置查看"
 
 msgid "全局设置管理"
 msgstr "全局设置管理"
@@ -2248,12 +2268,6 @@ msgstr "操作符 {operator} 的值 {value} 不符合预期。"
 
 msgid "数据拉取"
 msgstr "数据拉取"
-
-msgid "未实现方法"
-msgstr "未实现方法"
-
-msgid "未实现类型"
-msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -3114,8 +3128,14 @@ msgstr "日志查询配置"
 msgid "日志搜索(All)"
 msgstr "日志搜索(All)"
 
+msgid "日志统计查询(All)"
+msgstr "日志统计查询(All)"
+
 msgid "日志查询"
 msgstr "日志查询"
+
+msgid "日志查询统计"
+msgstr "日志查询统计"
 
 msgid "搜索(All)"
 msgstr "搜索(All)"
@@ -3131,6 +3151,12 @@ msgstr "多个字段使用逗号分隔"
 
 msgid "多个字段以半角逗号分隔"
 msgstr "多个字段以半角逗号分隔"
+
+msgid "Raw Name"
+msgstr "原始名称"
+
+msgid "Field Type"
+msgstr "字段类型"
 
 msgid "嵌套字段 key"
 msgstr "嵌套字段 key"
@@ -4002,9 +4028,6 @@ msgstr "子数据"
 msgid "Action ID"
 msgstr "操作ID"
 
-msgid "Field Type"
-msgstr "字段类型"
-
 msgid "Strategy Operator"
 msgstr "策略操作符"
 
@@ -4148,9 +4171,6 @@ msgstr "联表数"
 
 msgid "Table"
 msgstr "表"
-
-msgid "Raw Name"
-msgstr "原始名称"
 
 msgid "Aggregate"
 msgstr "聚合"
