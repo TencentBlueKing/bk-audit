@@ -15,11 +15,12 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import json
 from typing import Dict, Optional, Type, Union
 
 from pypika import Table
 from pypika.queries import QueryBuilder
-from pypika.terms import BasicCriterion, EmptyCriterion
+from pypika.terms import BasicCriterion, EmptyCriterion, Function
 
 from core.sql.builder import BkBaseTable
 from core.sql.constants import AggregateType, FilterConnector, Operator
@@ -30,6 +31,7 @@ from core.sql.exceptions import (
     TableNotRegisteredError,
     UnsupportedJoinTypeError,
 )
+from core.sql.functions import GetJsonObject
 from core.sql.model import Condition, Field, HavingCondition, SqlConfig
 from core.sql.model import Table as SqlTable
 from core.sql.model import WhereCondition
@@ -43,9 +45,14 @@ class SQLGenerator:
     field_type_cls = PypikaField
     table_map: Dict[str, Table]
     config: SqlConfig = None
+    drill_function = GetJsonObject
 
     def __init__(
-        self, query_builder: QueryBuilder, table_cls: Type[Table] = None, field_type_cls: Type[PypikaField] = None
+        self,
+        query_builder: QueryBuilder,
+        table_cls: Type[Table] = None,
+        field_type_cls: Type[PypikaField] = None,
+        drill_function: Type[Function] = None,
     ):
         """
         初始化生成器
@@ -56,6 +63,7 @@ class SQLGenerator:
         self.query_builder = query_builder
         self.table_cls = table_cls or self.table_cls
         self.field_type_cls = field_type_cls or self.field_type_cls
+        self.drill_function = drill_function or self.drill_function
 
     def _register_tables(self):
         """注册所有有效的表名"""
@@ -88,7 +96,17 @@ class SQLGenerator:
     def _get_pypika_field(self, field: Field) -> PypikaField:
         """根据 Field 获取 PyPika 字段"""
         table = self._get_table(field.table)
-        return self.field_type_cls.get_field(table, field)
+        pypika_field = self.field_type_cls.get_field(table, field)
+        # 若存在下钻字段
+        if field.keys:
+            pypika_field = self.drill_function(
+                pypika_field,
+                "$.{}".format(".".join([f"[{json.dumps(k)}]" for k in field.keys])),
+                str(field.field_type).upper(),
+            )
+            if hasattr(pypika_field, 'cast_to'):
+                pypika_field = pypika_field.cast_to()
+        return pypika_field
 
     def generate(self, config: SqlConfig) -> QueryBuilder:
         """根据配置构建 SQL 查询"""
