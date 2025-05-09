@@ -15,10 +15,10 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Any
+from typing import Any, Optional
 
-from pypika.functions import Count
-from pypika.terms import Function
+from pypika.functions import Cast, Count
+from pypika.terms import Function, Term
 
 
 class DisCount(Count):
@@ -38,6 +38,42 @@ class ConcatWs(Function):
 
     def __init__(self, separator, *args):
         super(ConcatWs, self).__init__("CONCAT_WS", separator, *args)
+
+
+class JsonValue(Function):
+    """
+    JSON_VALUE函数,用于Flink SQL
+    """
+
+    def __init__(self, json_column: Term, json_path: str, returning_type: str = None, alias: str = None):
+        path_term = Term.wrap_constant(json_path)
+        super().__init__("JSON_VALUE", json_column, path_term, alias=alias)
+        self._returning_type_str = returning_type.upper() if returning_type else None
+
+    def get_special_params_sql(self, **kwargs: Any) -> Any:
+        """添加RETURNING信息到SQL中"""
+        if self._returning_type_str:
+            return f" RETURNING {self._returning_type_str}"
+
+
+class GetJsonObject(Function):
+    """
+    GET_JSON_OBJECT函数,用于Hive SQL
+    """
+
+    def __init__(self, json_column: Term, json_path: str, returning_type: str = None, alias: str = None):
+        path_term = Term.wrap_constant(json_path)
+        super().__init__("GET_JSON_OBJECT", json_column, path_term, alias=alias)
+        self._returning_type_str = returning_type.upper() if returning_type else None
+
+    def cast_to(self, sql_type: Optional[str] = None, alias: str = None) -> Cast:
+        """将结果转换为指定类型"""
+        sql_type = (sql_type or self._returning_type_str).upper()
+        casted_expression = Cast(self, sql_type)
+
+        if alias:
+            return casted_expression.as_(alias)
+        return casted_expression
 
 
 class DateTrunc(Function):

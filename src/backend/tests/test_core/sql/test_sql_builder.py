@@ -148,6 +148,71 @@ class TestSQLGenerator(TestCase):
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
+    def test_where_conditions_with_keys(self):
+        """测试条件筛选的 SQL 生成，当 Field 带有 keys 时，生成 get_json_object 查询"""
+
+        config = SqlConfig(
+            select_fields=[
+                Field(
+                    table="users",
+                    raw_name="id",
+                    display_name="user_id",
+                    field_type=FieldType.INT,
+                ),
+            ],
+            from_table=Table(table_name="users"),
+            where=WhereCondition(
+                connector=FilterConnector.AND,
+                conditions=[
+                    WhereCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="users",
+                                raw_name="age",
+                                display_name="user_age",
+                                field_type=FieldType.INT,
+                            ),
+                            operator=Operator.EQ,
+                            filter=18,
+                        )
+                    ),
+                    WhereCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="users",
+                                raw_name="country",
+                                display_name="user_country",
+                                field_type=FieldType.STRING,
+                            ),
+                            operator=Operator.EQ,
+                            filter="Ireland",
+                        )
+                    ),
+                    WhereCondition(
+                        condition=Condition(
+                            field=Field(
+                                table="users",
+                                raw_name="address",
+                                display_name="user_address",
+                                field_type=FieldType.STRING,
+                                keys=["k1", "k2"],  # Nested field
+                            ),
+                            operator=Operator.EQ,
+                            filter="Dublin",
+                        )
+                    ),
+                ],
+            ),
+        )
+
+        # Modify the SQLGenerator to handle keys in the Field
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
+
+        expected_query = """SELECT "users"."id" "user_id" FROM "users" "users" WHERE "users"."age"=18 AND "users"."country"='Ireland' AND CAST(GET_JSON_OBJECT("users"."address",'$.["k1"].["k2"]') AS STRING)='Dublin'"""
+
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
+
     def test_invalid_field_source(self):
         """测试无效字段来源的捕获"""
         config = SqlConfig(
