@@ -30,10 +30,12 @@ type EventItem = {
 export default class StrategyFieldEvent {
   event_basic_field_configs: Array<EventItem>;
   event_data_field_configs: Array<EventItem>;
+  event_evidence_field_configs: Array<EventItem>;
 
   constructor(payload = {} as StrategyFieldEvent) {
     this.event_basic_field_configs = StrategyFieldEvent.processingData(payload.event_basic_field_configs, '');
     this.event_data_field_configs = StrategyFieldEvent.processingData(payload.event_data_field_configs, 'event_data');
+    this.event_evidence_field_configs = StrategyFieldEvent.processingData(payload.event_evidence_field_configs, 'event_evidence');
   }
 
   static processingData(data: Array<EventItem>, prefix = '') {

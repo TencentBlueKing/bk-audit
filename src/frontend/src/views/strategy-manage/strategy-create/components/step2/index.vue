@@ -76,6 +76,7 @@
                 width="490">
                 <template #content>
                   <variable-table
+                    :select="select"
                     :strategy-id="editData.strategy_id"
                     @is-copy="handleCopy" />
                 </template>
@@ -136,6 +137,7 @@
 
   interface IFormData {
     risk_title: string,
+    event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
   }
@@ -173,6 +175,7 @@
   const variableInputActive = ref(false);
   const formData = ref<IFormData>({
     risk_title: '',
+    event_evidence_field_configs: [],
     event_data_field_configs: [],
     event_basic_field_configs: [],
   });

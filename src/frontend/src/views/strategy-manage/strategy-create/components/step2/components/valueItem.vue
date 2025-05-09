@@ -176,7 +176,7 @@
   const countValue = ref('');
   const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 
-  const requiredField = ['raw_event_id', 'event_time', 'event_source', 'operator'];
+  const requiredField = ['raw_event_id', 'event_source', 'operator'];
   const optionalField = ['event_content', 'event_type'];
 
   const excludeKey = computed<Array<string>>(() => {
@@ -204,6 +204,7 @@
         display_name: countValue.value,
         field_type: '',
         aggregate: null,
+        spec_field_type: '',
         remark: '', // 备注s
       });
     }

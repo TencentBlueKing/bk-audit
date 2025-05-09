@@ -55,8 +55,7 @@
     @update="handleCreateUpdate" />
   <link-data-detail
     ref="detailRef"
-    :max-version-map="maxVersionMap"
-    :strategy-tag-map="strategyTagMap" />
+    :max-version-map="maxVersionMap" />
 </template>
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';

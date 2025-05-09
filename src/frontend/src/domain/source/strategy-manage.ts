@@ -18,6 +18,7 @@ import type SearchModel from '@model/es-query/search';
 import type AiopsDetailModel from '@model/strategy/aiops-detail';
 import type AiopsPlanModel from '@model/strategy/aiops-plan';
 import type CommonDataModel from '@model/strategy/common-data';
+import type RtMetaModel from '@model/strategy/rt-meta';
 import type StrategyModel from '@model/strategy/strategy';
 import type StrategyFieldEvent from '@model/strategy/strategy-field-event';
 // import type StrategyFieldModel from '@model/strategy/strategy-field';
@@ -157,6 +158,24 @@ class Strategy extends ModuleBase {
       params,
     });
   }
+  // 获取表格的信息
+  getTableRtMeta(params: {
+    table_id: string
+  }) {
+    return Request.get<RtMetaModel>(`${this.path}/strategy_table/rt_meta/`, {
+      params,
+    });
+  }
+  // 获取表格最后一条数据
+  getTableRtLastData(params: {
+    table_id: string
+  }) {
+    return Request.get<{
+      last_data: Array<Record<string, any>>;
+    }>(`${this.path}/strategy_table/rt_last_data/`, {
+      params,
+    });
+  }
   // 批量获取表格的字段列表
   getBatchTableRtFields(params: {
     table_ids: string
@@ -166,6 +185,7 @@ class Strategy extends ModuleBase {
         field_type: string;
         label: string;
         value: string;
+        spec_field_type: string;
       }>,
       table_id: string,
     }>>(`${this.path}/strategy_table/bulk_rt_fields/`, {
@@ -180,6 +200,7 @@ class Strategy extends ModuleBase {
       field_type: string;
       label: string;
       value: string;
+      spec_field_type: string;
     }>>(`${this.path}/strategy_table/rt_fields/`, {
       params,
     });
@@ -271,6 +292,23 @@ class Strategy extends ModuleBase {
         risk_level: string
       }
     }>(`${this.path}/strategy/display_info/`, {
+      params,
+    });
+  }
+  // 获取风险单运行记录
+  getRisksRunning(params: {
+    limit: number,
+    offset: number,
+    strategy_id: string,
+  }) {
+    return Request.get<{
+      strategy_running_status: Array<{
+        schedule_time: string,
+        status: string,
+        status_str: string,
+        risk_count: number,
+      }>
+    }>(`${this.path}/strategy/${params.strategy_id}/strategy_running_status_list/`, {
       params,
     });
   }

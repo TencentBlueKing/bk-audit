@@ -395,18 +395,6 @@
         message: t('系统不能为空'),
         trigger: 'change',
       }],
-    'configs.data_source.rt_id': [
-      {
-        validator: (value: Array<string>) => !!value && value.length > 0,
-        message: t('不能为空'),
-        trigger: 'change',
-      }],
-    'configs.data_source.link_table.uid': [
-      {
-        validator: (value: Array<string>) => !!value,
-        message: t('联表不能为空'),
-        trigger: 'change',
-      }],
     'configs.data_source.bk_biz_id': [
       {
         validator: (value: string) => !!value,
@@ -620,10 +608,8 @@
       ...formData.value,
       ...data,
     };
-    if (formData.value.configs.data_source
-      && formData.value.configs.data_source.rt_id
-      && formData.value.configs.data_source.rt_id.length) {
-      formRef.value.clearValidate('configs.data_source.rt_id');
+    if (formData.value.configs.config_type) {
+      formRef.value.clearValidate('configs.config_type');
     }
   };
 

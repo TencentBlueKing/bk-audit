@@ -54,15 +54,22 @@
           </span>
         </template>
         <bk-option
-          v-for="item in tableFields"
-          :key="item.raw_name"
-          :label="configType === 'LinkTable' ? `${item.table}.${item.display_name}` : item.display_name"
+          v-for="(item, tableIndex) in localTableFields"
+          :key="tableIndex"
+          :label="configType === 'LinkTable' ?
+            `${getAggregateName(item)}${item.table}.${item.display_name}` :
+            `${getAggregateName(item)}${item.display_name}`"
           :value="item">
+          <audit-icon
+            style="margin-right: 4px;font-size: 14px;"
+            svg
+            :type="item.spec_field_type" />
           <div v-if="configType === 'LinkTable'">
-            <span style=" color: #3a84ff;">{{ item.table }}.</span>{{ item.display_name }}
+            <span style=" color: #3a84ff;">{{ item.table }}.</span>
+            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
           </div>
           <div v-else>
-            {{ item.display_name }}
+            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
           </div>
         </bk-option>
       </bk-select>
@@ -101,18 +108,21 @@
       :property="(!tagInput.includes(condition.condition.operator) &&
         !(dicts[condition.condition.field.raw_name] &&
           dicts[condition.condition.field.raw_name].length &&
-          condition.condition.field.raw_name !== 'action_id') &&
+          condition.condition.field.raw_name !== 'action_id' &&
+          props.configType === 'EventLog') &&
         !condition.condition.field.raw_name.includes('username')) ?
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filter` :
         `configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.filters`"
       required
       :rules="[
-        { message: '', trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
+        { message: t('不能为空'), trigger: ['change', 'blur'], validator: (value: Array<any>) => handleValidate(value) },
       ]">
+      <!-- 日志表特有，dict字典下拉 -->
       <bk-cascader
         v-if="dicts[condition.condition.field.raw_name] &&
           dicts[condition.condition.field.raw_name].length &&
-          condition.condition.field.raw_name !== 'action_id'"
+          condition.condition.field.raw_name !== 'action_id' &&
+          props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         class="consition-value"
         collapse-tags
@@ -124,13 +134,16 @@
         name-key="label"
         trigger="hover"
         @change="(value: Array<Array<string>>) => handleCascaderFilter(value, index)" />
+
+      <!-- 日志表特有，人员选择器 -->
       <audit-user-selector
-        v-else-if="condition.condition.field.raw_name.includes('username')"
+        v-else-if="condition.condition.field.raw_name.includes('username') && props.configType === 'EventLog'"
         v-model="condition.condition.filters"
         allow-create
         class="consition-value"
         :multiple="tagInput.includes(condition.condition.operator)"
         @change="(value: Array<string>) => handleFilter(Array.isArray(value) ? value : [value], index)" />
+
       <bk-tag-input
         v-else-if="tagInput.includes(condition.condition.operator)"
         v-model="condition.condition.filters"
@@ -140,7 +153,7 @@
         :content-width="350"
         has-delete-icon
         :input-search="false"
-        :list="condition.condition.field.raw_name !== 'action_id' ?
+        :list="(condition.condition.field.raw_name !== 'action_id' && props.configType === 'EventLog') ?
           dicts[condition.condition.field && condition.condition.field.raw_name] :
           []"
         :loading="fieldLoading"
@@ -156,6 +169,12 @@
         @input="(value: string) => handleFilter(value, index)" />
     </bk-form-item>
     <div class="icon-group">
+      <audit-icon
+        v-if="condition.condition.field.display_name"
+        v-bk-tooltips="t('预览当前字段格式与最新值')"
+        class="view-icon"
+        type="view"
+        @click="dataStructurePreview(condition.condition.field)" />
       <audit-icon
         style="margin-right: 10px; cursor: pointer;"
         type="add-fill"
@@ -187,9 +206,12 @@
   import useRequest from '@/hooks/use-request';
 
   interface Props {
-    tableFields: Array<DatabaseTableFieldModel>
+    tableFields: Array<DatabaseTableFieldModel>,
+    expectedResult: Array<DatabaseTableFieldModel>,
+    aggregateList: Array<Record<string, any>>,
     conditions: {
       connector: 'and' | 'or';
+      index: number,
       conditions: Array<{
         condition: {
           field: DatabaseTableFieldModel;
@@ -206,6 +228,7 @@
     (e: 'updateFieldItemList', conditionsIndex: number, value: Props['conditions']): void;
     (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
+    (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
   }
   interface DataType{
     label: string;
@@ -214,18 +237,22 @@
   }
 
   const props = defineProps<Props>();
+
   const emits = defineEmits<Emits>();
+
   const { t } = useI18n();
   const conditionList = ref<Array<{
     label: string,
     value: string
   }>>([]);
   const dicts = ref<Record<string, Array<any>>>({});
+  const localTableFields = ref<Array<DatabaseTableFieldModel>>([]);
 
   const tagInput = ['include', 'exclude'];
 
   const localConditions = ref<Props['conditions']>({
     connector: 'and',
+    index: 0,
     conditions: [{
       condition: {
         field: new DatabaseTableFieldModel(),
@@ -237,6 +264,10 @@
   });
 
   const needCondition = computed(() => props.conditions.conditions.length > 1);
+
+  const dataStructurePreview = (value: DatabaseTableFieldModel) => {
+    emits('show-structure-preview', value.table, value.display_name);
+  };
 
   useRequest(StrategyManageService.fetchStrategyCommon, {
     defaultValue: new CommonDataModel(),
@@ -253,6 +284,12 @@
   } = useRequest(StrategyManageService.fetchStrategyFieldValue, {
     defaultValue: [],
   });
+
+  const getAggregateName = (element: DatabaseTableFieldModel) => {
+    if (!element.aggregate) return '';
+    const item = props.aggregateList.find(item => item.value === element.aggregate);
+    return `[${item?.label}]`;
+  };
 
   const handleValidate = (value: any) => value.length > 0;
 
@@ -304,12 +341,32 @@
       }).then((data) => {
         dicts.value[value.raw_name] = data.filter((item: Record<string, any>) => item.id !== '');
       });
+      // 是否选中预期结果字段
+      const isExpectedResultField = value.aggregate;
+
+      if (isExpectedResultField) {
+        // 清空不是预期结果的字段
+        localConditions.value.conditions = localConditions.value.conditions.map((condItem, condIndex) => {
+          const { field } = condItem.condition;
+          if (!field.aggregate) {
+            // eslint-disable-next-line no-param-reassign
+            condItem.condition.field = new DatabaseTableFieldModel();
+            emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, condIndex, 'field');
+            // 重置数据
+            reSetOperator(condIndex);
+            reSetFilter(condIndex);
+          }
+          return condItem;
+        });
+      }
     }
     emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index, 'field');
     localConditions.value.conditions[index].condition.field = { ...value };
     // 重置数据
     reSetOperator(index);
     reSetFilter(index);
+    // 重新计算可选项
+    updateTableFields(localConditions.value.conditions, props.tableFields, props.expectedResult);
   };
 
   const handleSelectOperator = (value: string, index: number) => {
@@ -386,9 +443,46 @@
     });
   };
 
+  // 更新可选字段列表
+  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
+    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
+    // 检查是否已经选择了预期结果中的字段
+    const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
+
+    // 根据是否选择了预期结果字段来更新字段列表
+    localTableFields.value = hasSelectedExpectedResultField
+      ? [...filteredExpectedResult]
+      : [...tableFields, ...filteredExpectedResult];
+
+    localTableFields.value = localTableFields.value.map(item => ({ ...item }));
+  };
+
+  // 合并预期结果，预期结果也可以在风险规则中使用
+  watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
+    updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
+
+    // 检查并清理不在可选字段列表中的已选字段
+    localConditions.value.conditions.forEach((condItem, index) => {
+      const { field } = condItem.condition;
+      if (field?.display_name && !localTableFields.value.some(item => item.display_name === field.display_name)) {
+        // eslint-disable-next-line no-param-reassign
+        condItem.condition.field = new DatabaseTableFieldModel();
+        emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, index, 'field');
+        reSetOperator(index);
+        reSetFilter(index);
+      }
+    });
+  }, {
+    immediate: true,
+    deep: true,
+  });
+
   watch(() => props.conditions, (data) => {
     localConditions.value = _.cloneDeep(data);
-    handleValueDicts();
+    if (props.configType === 'EventLog') {
+      // 日志表特有，dict字典下拉
+      handleValueDicts();
+    }
   }, {
     immediate: true,
   });
@@ -397,7 +491,7 @@
 .rule-item-field {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr minmax(35px, auto);
+  grid-template-columns: 216px 180px 1fr minmax(65px, auto);
   gap: 8px;
 
   :deep(.bk-form-error) {
@@ -433,6 +527,12 @@
   .icon-group {
     font-size: 14px;
     color: #c4c6cc;
+
+    .view-icon {
+      margin-right: 10px;
+      color: #3a84ff;
+      cursor: pointer
+    }
   }
 }
 

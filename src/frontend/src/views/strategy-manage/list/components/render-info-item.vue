@@ -71,7 +71,7 @@
 </style>
 <style>
   .info-label-tooltips {
-    width: 816px;
+    max-width: 816px;
     word-break: break-all;
   }
 </style>

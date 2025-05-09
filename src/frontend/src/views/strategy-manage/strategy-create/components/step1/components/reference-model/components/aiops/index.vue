@@ -254,6 +254,12 @@
     defaultValue: new CommonDataModel(),
     manual: true,
     onSuccess(data) {
+      if (!isEditMode && !isCloneMode && !isUpgradeMode) {
+        formData.value.configs.config_type = data.table_type[0].value;
+        fetchTable({
+          table_type: formData.value.configs.config_type,
+        });
+      }
       sourceTypeMap.value = commonData.value.table_type.reduce((
         res: Record<string, string>,
         item,
@@ -261,12 +267,6 @@
         res[item.value] = item.config.source_type;
         return res;
       }, {});
-      if (!isEditMode && !isCloneMode && !isUpgradeMode) {
-        formData.value.configs.config_type = data.table_type[0].value;
-        fetchTable({
-          table_type: formData.value.configs.config_type,
-        });
-      }
     },
   });
   // 获取tableid

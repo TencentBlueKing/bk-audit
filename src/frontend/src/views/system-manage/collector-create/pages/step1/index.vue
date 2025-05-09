@@ -90,6 +90,9 @@
                   :list="bizList"
                   :no-match-text="t('无匹配数据')"
                   :placeholder="t('请选择所属空间')"
+                  :popover-options="{
+                    extCls: 'bk-biz-id-select',
+                  }"
                   :search-placeholder="t('请输入关键字')"
                   @change="handleBizIdChange">
                   <template #virtualScrollRender="{ item }">
@@ -783,6 +786,12 @@
       text-align: center;
       content: '*';
     }
+  }
+}
+
+.bk-biz-id-select {
+  .permission-disable-component {
+    width: 100%;
   }
 }
 </style>

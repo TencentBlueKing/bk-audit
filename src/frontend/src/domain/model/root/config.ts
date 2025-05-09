@@ -56,6 +56,9 @@ export default class Config {
     iam_web_url: string;
     ieg_std_op_doc_url: string;
   };
+  third_party_system: {
+    bkbase_web_url: string;
+  };
 
   constructor(payload = {} as Config) {
     this.aegis_id = payload.aegis_id;
@@ -79,6 +82,7 @@ export default class Config {
     this.bk_biz_id = payload.bk_biz_id;
     this.shared_res_url = payload.shared_res_url;
     this.system_diagnosis = payload.system_diagnosis;
+    this.third_party_system = payload.third_party_system;
 
     this.help_info = this.initHelpInfo(payload.help_info);
   }

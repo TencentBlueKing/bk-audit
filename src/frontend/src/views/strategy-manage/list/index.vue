@@ -202,6 +202,15 @@
         :user-group-list="userGroupList" />
     </div>
   </audit-sideslider>
+
+  <audit-sideslider
+    ref="sidesliderRef"
+    v-model:isShow="showRecords"
+    :show-footer="false"
+    :title="t('运行记录')"
+    :width="960">
+    <strategy-records :data="strategyItem" />
+  </audit-sideslider>
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
@@ -243,6 +252,7 @@
   import getAssetsFile from '@utils/getAssetsFile';
 
   import StrategyDetail from './components/detail.vue';
+  import StrategyRecords from './components/records.vue';
   import RenderLabel from './components/render-label.vue';
 
   enum FullEnum {
@@ -312,6 +322,7 @@
   const listRef = ref();
   const switchSuccessMap = ref<Record<string, boolean>>({});
   const showDetail = ref(false);
+  const showRecords = ref(false);
   const styles = shallowRef({ left: '216px' });
   const strategyLabelList = ref<Array<{ tag_id: string, tag_name: string }>>([]);
   const searchKey = ref<Array<SearchKey>>([]);
@@ -543,37 +554,79 @@
         if (!data.isFailed) {
           if (data.isPending) {
             return <p
-            style='display: flex; align-items: center;'>
-            <audit-icon
-              class="rotate-loading mr4"
-              svg
-              type='loading' />
-            <span v-bk-tooltips={{
-              content: t('创建数据处理链路中，预计10分钟后策略正式运行'),
-              disabled: !['pending', 'starting', 'updating'].includes(data.status),
-            }}>  {statusMap.value[data.status] || data.status} </span>
-          </p>;
+              style='display: flex; align-items: center;'>
+              <audit-icon
+                class="rotate-loading mr4"
+                svg
+                type='loading' />
+              <span v-bk-tooltips={{
+                content: t('创建数据处理链路中，预计10分钟后策略正式运行'),
+                disabled: !['pending', 'starting', 'updating'].includes(data.status),
+              }}>  {statusMap.value[data.status] || data.status} </span>
+              <audit-icon
+                v-bk-tooltips={{
+                  content: t('运行记录'),
+                }}
+                class='operation-records'
+                style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+                onClick={() => handleRecord(data)}
+                type='yunxingjilu' />
+            </p>;
           }
           return <p style='display: flex; align-items: center;max-width: 200px;'>
-          <audit-icon
-            svg
-            class='mr4'
-            type={data.statusTag} />
-          {statusMap.value[data.status] || data.status}
-        </p>;
+            <audit-icon
+              svg
+              class='mr4'
+              type={data.statusTag} />
+            {statusMap.value[data.status] || data.status}
+            <audit-icon
+              v-bk-tooltips={{
+                content: t('运行记录'),
+              }}
+              class='operation-records'
+              style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+              onClick={() => handleRecord(data)}
+              type='yunxingjilu' />
+          </p>;
         }
         // failed
         if (data.status_msg) {
           return <p style='display: flex; align-items: baseline;'>
+            <audit-icon
+              class='mr4'
+              svg
+              type={data.statusTag} />
+            <span
+              style='border-bottom:1px dashed #C4C6CC;height: 32px;cursor: pointer;'
+              v-bk-tooltips={data.status_msg}>
+              {statusMap.value[data.status] || data.status}
+            </span>
+            <p>
+              <span>, </span>
+              <bk-button
+                text
+                theme='primary'
+                onClick={() => retryRequest(data.strategy_id)}>
+                {t('重试')}
+              </bk-button>
+            </p>
+            <p class='err-underline' />
+            <audit-icon
+              v-bk-tooltips={{
+                content: t('运行记录'),
+              }}
+              class='operation-records'
+              style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+              onClick={() => handleRecord(data)}
+              type='yunxingjilu' />
+          </p>;
+        }
+        return <div style='display: flex; align-items: center;'>
           <audit-icon
-            class='mr4'
             svg
+            class='mr4'
             type={data.statusTag} />
-          <span
-            style='border-bottom:1px dashed #C4C6CC;height: 32px;cursor: pointer;'
-            v-bk-tooltips={data.status_msg}>
-            {statusMap.value[data.status] || data.status}
-          </span>
+          <span>{statusMap.value[data.status] || data.status}</span>
           <p>
             <span>, </span>
             <bk-button
@@ -583,25 +636,34 @@
               {t('重试')}
             </bk-button>
           </p>
-          <p class='err-underline' />
-        </p>;
-        }
-        return <div style='display: flex; align-items: center;'>
-        <audit-icon
-          svg
-          class='mr4'
-          type={data.statusTag} />
-        <span>{statusMap.value[data.status] || data.status}</span>
-        <p>
-          <span>, </span>
-          <bk-button
-            text
-            theme='primary'
-            onClick={() => retryRequest(data.strategy_id)}>
-            {t('重试')}
-          </bk-button>
-        </p>
-      </div>;
+          <audit-icon
+            v-bk-tooltips={{
+              content: t('运行记录'),
+            }}
+            class='operation-records'
+            style='color: #3a84ff; margin-left: 4px; cursor: pointer;'
+            onClick={() => handleRecord(data)}
+            type='yunxingjilu' />
+        </div>;
+      },
+    },
+    {
+      label: () => t('产生风险单'),
+      field: () => 'risk_count',
+      sort: 'custom',
+      render: ({ data }: { data: StrategyModel }) => {
+        const to = {
+          name: 'riskManageList',
+          query: {
+            strategy_id: data.strategy_id,
+          },
+        };
+        return data.risk_count ? <router-link to = {to} target='_blank'>
+          <span v-bk-tooltips={{
+            content: t('近6个月此策略产生风险单总数，点击查看'),
+            disabled: !data.risk_count,
+          }}>{data.risk_count}</span>
+        </router-link> : <span>{data.risk_count}</span>;
       },
     },
     {
@@ -672,7 +734,7 @@
     {
       fixed: 'right',
       label: () => t('操作'),
-      width: '150px',
+      width: '120px',
       render: ({ data }: { data: StrategyModel }) => <>
       {
         data.isPending
@@ -728,36 +790,62 @@
           </auth-button>
       }
 
-      {
-        data.isPending
-          ? <bk-button
-            text
-            class="is-disabled ml8"
-            v-bk-tooltips={t('处理中，不能删除')}>
-            {t('删除')}
-          </bk-button>
-          : <audit-popconfirm
-            title={t('确认删除？')}
-            content={t('删除后不可恢复')}
-            class="ml8"
-            confirmHandler={() => handleRemove(data.strategy_id)}>
-            <auth-button
-              actionId="delete_strategy"
-              permission={data.permission.delete_strategy}
-              resource={data.strategy_id}
-              theme="primary"
-              text>
-              {t('删除')}
-            </auth-button>
-          </audit-popconfirm>
-      }
-
+      <bk-dropdown
+        popover-options={{
+          extCls: showRecords.value ? 'strategy-operation-dropdown-pop' : '',
+        }}
+        trigger="click"
+        style="margin-left: 8px">
+        {{
+          default: () => <bk-button text>
+            <audit-icon type="more" />
+          </bk-button>,
+          content: () => (
+            <bk-dropdown-menu>
+              <bk-dropdown-item>
+                <bk-button
+                  text
+                  class="ml8"
+                  onClick={() => handleRecord(data)}
+                  v-bk-tooltips={t('运行记录')}>
+                  {t('运行记录')}
+                </bk-button>
+              </bk-dropdown-item>
+              <bk-dropdown-item>
+                {data.isPending ? (
+                  <bk-button
+                    text
+                    class="is-disabled ml8"
+                    v-bk-tooltips={t('处理中，不能删除')}>
+                    {t('删除')}
+                  </bk-button>
+                ) : (
+                  <audit-popconfirm
+                    title={t('确认删除？')}
+                    content={t('删除后不可恢复')}
+                    class="ml8"
+                    confirmHandler={() => handleRemove(data.strategy_id)}>
+                    <auth-button
+                      actionId="delete_strategy"
+                      permission={data.permission.delete_strategy}
+                      resource={data.strategy_id}
+                      text>
+                      {t('删除')}
+                    </auth-button>
+                  </audit-popconfirm>
+                )}
+              </bk-dropdown-item>
+            </bk-dropdown-menu>
+          ),
+        }}
+      </bk-dropdown>
     </>,
     },
   ] as any[]);
   const disabledMap: Record<string, string> = {
     strategy_id: 'strategy_id',
     strategy_name: 'strategy_name',
+    risk_count: 'risk_count',
     tags: 'tags',
     status: 'status',
   };
@@ -774,7 +862,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['strategy_id', 'strategy_name', 'strategy_type', 'tags', 'status', 'updated_by', 'updated_at'],
+    checked: ['strategy_id', 'strategy_name', 'risk_count', 'tags', 'status', 'updated_by', 'updated_at'],
     showLineHeight: false,
   });
   const settings = computed(() => {
@@ -1009,6 +1097,12 @@
   const handleDetail = (data: StrategyModel) => {
     strategyItem.value = data;
     showDetail.value = true;
+  };
+
+  // 运行记录
+  const handleRecord = (data: StrategyModel) => {
+    strategyItem.value = data;
+    showRecords.value = true;
   };
 
   // 新建
@@ -1343,5 +1437,21 @@
       border-radius: 2px;
     }
   }
+}
+
+.operation-records {
+  display: none;
+}
+
+.hover-highlight {
+  &:hover {
+    .operation-records {
+      display: inline-block;
+    }
+  }
+}
+
+.strategy-operation-dropdown-pop {
+  z-index: 2000 !important;
 }
 </style>
