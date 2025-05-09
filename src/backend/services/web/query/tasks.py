@@ -67,7 +67,7 @@ def clean_duplicate_export_fields():
 @periodic_task(
     run_every=crontab(minute=settings.PROCESS_LOG_EXPORT_TASK_MINUTE),
     queue="log_export",
-    soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )
 @lock(
     load_lock_name=lambda **kwargs: f"celery:process_log_export_task:{kwargs.get('task_id') if kwargs else None}",
@@ -88,7 +88,7 @@ def process_log_export_task(task_id: int = None):
         process_one_log_export_task.delay(task.id)
 
 
-@celery_app.task(queue="log_export", soft_time_limit=settings.PROCESS_LOG_EXPORT_TASK_CACHE_LOCK_TIMEOUT)
+@celery_app.task(queue="log_export", time_limit=settings.PROCESS_LOG_EXPORT_TASK_LOCK_TIMEOUT)
 @lock(
     load_lock_name=lambda **kwargs: f"celery:process_one_log_export_task:{kwargs['task_id']}",
 )

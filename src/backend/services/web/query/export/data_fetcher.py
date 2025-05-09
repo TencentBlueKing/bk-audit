@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import math
-from typing import Iterable, List
+from typing import Generator, List
 
 from bk_resource import resource
 from django.conf import settings
@@ -67,7 +67,7 @@ class DataFetcher:
         resp = cls._fetch_data(query_params, page, page_size)
         return resp["results"]
 
-    def fetch_logs(self) -> Iterable[List[dict]]:
+    def fetch_logs(self) -> Generator[List[dict], None, None]:
         """
         检索日志
         """

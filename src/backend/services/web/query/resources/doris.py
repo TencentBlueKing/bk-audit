@@ -17,8 +17,10 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from bk_resource import api, resource
+from bkstorages.backends.bkrepo import BKRepoFile, BKRepoStorage
 from blueapps.utils.logger import logger
 from django.conf import settings
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
 
@@ -27,7 +29,6 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.tools import is_system_admin
 from apps.permission.handlers.actions import ActionEnum
-from core.utils.file import Filedownloader
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import COLLECT_SEARCH_CONFIG, TaskEnum
@@ -207,7 +208,7 @@ class GetCollectorSearchExportTask(SearchExportTaskBaseResource):
         return task
 
 
-class DownloadCollectorSearchExportTask(SearchExportTaskBaseResource, Filedownloader):
+class DownloadCollectorSearchExportTask(SearchExportTaskBaseResource):
     name = gettext_lazy("下载日志检索导出任务")
 
     def perform_request(self, validated_request_data):
@@ -218,4 +219,10 @@ class DownloadCollectorSearchExportTask(SearchExportTaskBaseResource, Filedownlo
         if task.status != TaskEnum.SUCCESS.value:
             raise LogExportTaskStatusError(status=dict(TaskEnum.choices).get(task.status))
         # 下载文件
-        return self.stream_download_file(task.result["origin_name"], task.result["url"])
+        origin_name = task.result["origin_name"]
+        storage_name = task.result["storage_name"]
+        # 创建流式响应对象
+        stream_response = FileResponse(BKRepoFile(storage_name, storage=BKRepoStorage()), filename=origin_name)
+        # 设置下载头信息
+        stream_response['Content-Type'] = 'application/octet-stream'
+        return stream_response

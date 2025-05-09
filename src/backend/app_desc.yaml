@@ -28,7 +28,7 @@ modules:
         plan: 4C1G5R
         replicas: 2
       log-export:
-        command: python manage.py celery worker -O fair -l info -Q log_export --autoscale=4,7 --max-tasks-per-child=100 -P gevent
+        command: python manage.py celery worker -O fair -l info -Q log_export --autoscale=4,7 --max-tasks-per-child=100  -P gevent --concurrency=32
         plan: 4C4G5R
         replicas: 5
     scripts:
