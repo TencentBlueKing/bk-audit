@@ -49,7 +49,7 @@ class BaseField(BaseModel):
     display_name: str  # 作为 sql 的列名，默认为原始字段名称
     field_type: FieldType  # 字段类型
     aggregate: Optional[AggregateType] = None  # 聚合函数
-    keys: List[str] = PydanticField(default_factory=list)  # 字段 key 仅适用于 Doris Variant 类型
+    keys: List[str] = PydanticField(default_factory=list)  # 字段 key 仅适用于下钻字段
 
 
 class Field(BaseField):
