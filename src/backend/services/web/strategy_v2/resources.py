@@ -61,8 +61,8 @@ from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
+from core.utils.data import choices_to_dict
 from core.utils.page import paginate_queryset
-from core.utils.tools import choices_to_dict
 from services.web.analyze.constants import (
     BaseControlTypeChoices,
     FilterOperator,

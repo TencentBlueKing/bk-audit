@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-08 17:23+0800\n"
+"POT-Creation-Date: 2025-05-12 01:08+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1254,8 +1254,8 @@ msgstr "描述"
 msgid "优先指数"
 msgstr "优先指数"
 
-msgid "通用属性列"
-msgstr "通用属性列"
+msgid "属性"
+msgstr "属性"
 
 msgid "字段"
 msgstr "字段"
@@ -1304,6 +1304,9 @@ msgstr "标签名"
 
 msgid "Tag"
 msgstr "标签"
+
+msgid "搜索配置"
+msgstr "搜索配置"
 
 msgid "获取 Namespace 列表"
 msgstr "获取 Namespace 列表"
@@ -1404,6 +1407,18 @@ msgstr "切换系统诊断推送"
 msgid "删除系统诊断推送"
 msgstr "删除系统诊断推送"
 
+msgid "创建通用配置"
+msgstr "创建通用配置"
+
+msgid "更新通用配置"
+msgstr "更新通用配置"
+
+msgid "删除通用配置"
+msgstr "删除通用配置"
+
+msgid "通用配置列表"
+msgstr "通用配置列表"
+
 msgid "搜索关键字"
 msgstr "搜索关键字"
 
@@ -1416,10 +1431,8 @@ msgstr "排序方式"
 msgid "状态筛选"
 msgstr "状态筛选"
 
-#, fuzzy
-#| msgid "系统来源类型"
 msgid "来源类型"
-msgstr "系统来源类型"
+msgstr "来源类型"
 
 msgid "权限"
 msgstr "权限"
@@ -1497,8 +1510,8 @@ msgstr "事件描述"
 msgid "请求ID"
 msgstr "请求ID"
 
-msgid "操作人"
-msgstr "操作人"
+msgid "操作人用户名"
+msgstr "操作人用户名"
 
 msgid "操作人账号类型"
 msgstr "操作人账号类型"
@@ -1512,11 +1525,11 @@ msgstr "操作人账号来源"
 msgid "操作人账号"
 msgstr "操作人账号"
 
-msgid "操作起始时间"
-msgstr "操作起始时间"
+msgid "事件开始时间"
+msgstr "事件开始时间"
 
-msgid "操作结束时间"
-msgstr "操作结束时间"
+msgid "事件结束时间"
+msgstr "事件结束时间"
 
 msgid "事件上报模块"
 msgstr "事件上报模块"
@@ -1623,6 +1636,18 @@ msgstr "AIOPS内置数据时间"
 msgid "AIOPS内置处理时间"
 msgstr "AIOPS内置处理时间"
 
+msgid "主机IP"
+msgstr "主机IP"
+
+msgid "采集路径"
+msgstr "采集路径"
+
+msgid "上报包序号"
+msgstr "上报包序号"
+
+msgid "上报包内位置"
+msgstr "上报包内位置"
+
 msgid "操作事件名称"
 msgstr "操作事件名称"
 
@@ -1634,6 +1659,31 @@ msgstr "用户信息"
 
 msgid "Notice"
 msgstr "通知"
+
+msgid ""
+"信息安全声明：\n"
+"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
+"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
+"    "
+msgstr ""
+"信息安全声明：\n"
+"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
+"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
+"    "
+
+#, python-format
+msgid "LogExportTask %s not found"
+msgstr "任务导出任务 %s 未发现"
+
+#, python-format
+msgid "【审计中心】检索结果导出数据-%s"
+msgstr "【审计中心】检索结果导出数据-%s"
+
+msgid "检索条件"
+msgstr "检索条件"
+
+msgid "日志下载"
+msgstr "日志下载"
 
 msgid "BkAudit"
 msgstr "蓝鲸审计中心"
@@ -1694,11 +1744,18 @@ msgstr "风险"
 msgid "异常"
 msgstr "异常"
 
+msgid "日志导出"
+msgstr "日志导出"
+
 msgid "责任人上级"
 msgstr "责任人上级"
 
 msgid "通知组名称重复"
 msgstr "通知组名称重复"
+
+#, python-brace-format
+msgid "构建器初始化失败: {err}"
+msgstr "构建器初始化失败: {err}"
 
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
@@ -2983,6 +3040,9 @@ msgstr "快照"
 msgid "快照存储关联"
 msgstr "快照存储关联"
 
+msgid "操作人"
+msgstr "操作人"
+
 msgid "操作时间"
 msgstr "操作时间"
 
@@ -3103,6 +3163,9 @@ msgstr "蓝鲸桌面"
 msgid "Doris必须是预定义的"
 msgstr "Doris必须是预定义的"
 
+msgid "任务状态"
+msgstr "任务状态"
+
 msgid "ES检索"
 msgstr "ES检索"
 
@@ -3130,6 +3193,24 @@ msgstr "GSE索引"
 msgid "迭代索引"
 msgstr "迭代索引"
 
+msgid "就绪"
+msgstr "就绪"
+
+msgid "全部字段"
+msgstr "全部字段"
+
+msgid "标准字段"
+msgstr "标准字段"
+
+msgid "快照字段"
+msgstr "快照字段"
+
+msgid "指定字段"
+msgstr "指定字段"
+
+msgid "系统字段"
+msgstr "系统字段"
+
 msgid "集群不存在"
 msgstr "集群不存在"
 
@@ -3137,14 +3218,95 @@ msgstr "集群不存在"
 msgid "过滤条件 Key 解析错误: {key}"
 msgstr "过滤条件 Key 解析错误: {key}"
 
+msgid "您没有权限执行该操作"
+msgstr "您没有权限执行该操作"
+
+#, python-brace-format
+msgid "任务状态异常: {status}"
+msgstr "任务状态异常: {status}"
+
+msgid "任务异常"
+msgstr "任务异常"
+
+#, python-brace-format
+msgid "导出数量 {current_count} 超过最大值: {max_count}"
+msgstr "导出数量 {current_count} 超过最大值: {max_count}"
+
+msgid "字段键"
+msgstr "字段键"
+
+msgid "展示名称"
+msgstr "展示名称"
+
+msgid "字段展示配置"
+msgstr "字段展示配置"
+
+msgid "任务名称"
+msgstr "任务名称"
+
+msgid "任务执行次数"
+msgstr "任务执行次数"
+
+msgid "任务执行结果"
+msgstr "任务执行结果"
+
+msgid "任务执行开始时间"
+msgstr "任务执行开始时间"
+
+msgid "任务执行结束时间"
+msgstr "任务执行结束时间"
+
+msgid "错误信息"
+msgstr "错误信息"
+
+msgid "检索参数"
+msgstr "检索参数"
+
+msgid "导出配置"
+msgstr "导出配置"
+
+msgid "当前记录数"
+msgstr ""
+
+msgid "总条数"
+msgstr "总条数"
+
+msgid "查询参数URL"
+msgstr "查询参数URL"
+
+msgid "日志导出任务"
+msgstr "日志导出任务"
+
 msgid "日志查询配置"
 msgstr "日志查询配置"
 
 msgid "日志搜索(All)"
 msgstr "日志搜索(All)"
 
+#, fuzzy
+#| msgid "日志搜索(All)"
+msgid "日志统计查询(All)"
+msgstr "日志搜索(All)"
+
 msgid "日志查询"
 msgstr "日志查询"
+
+#, fuzzy
+#| msgid "日志查询"
+msgid "日志查询统计"
+msgstr "日志查询"
+
+msgid "创建日志检索导出任务"
+msgstr "创建日志检索导出任务"
+
+msgid "获取日志检索导出任务列表"
+msgstr "获取日志检索导出任务列表"
+
+msgid "获取日志检索导出任务详情"
+msgstr "获取日志检索导出任务详情"
+
+msgid "下载日志检索导出任务"
+msgstr "下载日志检索导出任务"
 
 msgid "搜索(All)"
 msgstr "搜索(All)"
@@ -3160,6 +3322,12 @@ msgstr "多个字段使用逗号分隔"
 
 msgid "多个字段以半角逗号分隔"
 msgstr "多个字段以半角逗号分隔"
+
+msgid "Raw Name"
+msgstr "原始名称"
+
+msgid "Field Type"
+msgstr "字段类型"
 
 msgid "嵌套字段 key"
 msgstr "嵌套字段 key"
@@ -3179,6 +3347,22 @@ msgstr "字段%s不支持该操作符%s"
 
 msgid "检索条件列表"
 msgstr "检索条件列表"
+
+#, python-format
+msgid "嵌套字段 key 长度不能超过 %s"
+msgstr "嵌套字段 key 长度不能超过 %s"
+
+msgid "字段范围"
+msgstr "字段范围"
+
+msgid "指定字段时，字段列表不能为空"
+msgstr "指定字段时，字段列表不能为空"
+
+msgid "指定字段范围时，字段列表不能为空"
+msgstr "指定字段范围时，字段列表不能为空"
+
+msgid "导出参数"
+msgstr "导出参数"
 
 msgid "Risk"
 msgstr "风险"
@@ -4046,9 +4230,6 @@ msgstr "子数据"
 msgid "Action ID"
 msgstr "操作ID"
 
-msgid "Field Type"
-msgstr "字段类型"
-
 msgid "Strategy Operator"
 msgstr "策略操作符"
 
@@ -4201,9 +4382,6 @@ msgstr "联表数"
 
 msgid "Table"
 msgstr "表"
-
-msgid "Raw Name"
-msgstr "原始名称"
 
 msgid "Aggregate"
 msgstr "聚合"

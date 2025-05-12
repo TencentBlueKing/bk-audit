@@ -45,7 +45,7 @@ from apps.meta.utils.fields import EVENT_ID
 from apps.permission.constants import IAMSystems
 from apps.permission.handlers.actions import ActionEnum
 from core.choices import TextChoices
-from core.utils.tools import choices_to_dict, trans_object_local
+from core.utils.data import choices_to_dict, trans_object_local
 from services.web.databus.constants import JoinDataPullType
 from tests.test_databus.collector.constants import (
     COLLECTOR_STATUS_RESULT as _COLLECTOR_STATUS_RESULT,
@@ -510,6 +510,17 @@ RETRIEVE_USER_PARAMS = {
 RETRIEVE_USER_DATA = RETRIEVE_USER_API_RESP
 
 GLOBAL_CHOICES = {
+    'log_export_task': [
+        {'id': 'READY', 'name': '就绪'},
+        {'id': 'RUNNING', 'name': '执行中'},
+        {'id': 'SUCCESS', 'name': '成功'},
+        {'id': 'FAILURE', 'name': '失败'},
+    ],
+    'meta_system_source_type': [
+        {'id': 'iam_v3', 'name': '权限中心V3'},
+        {'id': 'iam_v4', 'name': '权限中心V4'},
+        {'id': 'bk_audit', 'name': '审计中心'},
+    ],
     'query_condition_operator': [
         {'id': 'eq', 'name': '=  等于'},
         {'id': 'neq', 'name': '!=  不等于'},
@@ -527,10 +538,11 @@ GLOBAL_CHOICES = {
         {'id': 'match_any', 'name': '匹配任意'},
         {'id': 'between', 'name': '在之间'},
     ],
-    "meta_system_source_type": [
-        {"id": "iam_v3", "name": "权限中心V3"},
-        {"id": "iam_v4", "name": "权限中心V4"},
-        {"id": "bk_audit", "name": "审计中心"},
+    'query_field_category': [
+        {'id': 'standard', 'name': '标准字段'},
+        {'id': 'snapshot', 'name': '快照字段'},
+        {'id': 'system', 'name': '系统字段'},
+        {'id': 'custom', 'name': '自定义字段'},
     ],
 }
 

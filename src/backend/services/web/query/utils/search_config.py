@@ -44,6 +44,7 @@ class CollectorSearchConfig:
     """
 
     field_configs: list[FieldSearchConfig]
+    field_category_map = {}
 
     @cached_property
     def allowed_operator_choices(self) -> list[tuple[str, str]]:
@@ -66,12 +67,19 @@ class CollectorSearchConfig:
         转换为 JSON 对象
         """
 
+        from services.web.query.constants import FieldCategoryEnum, LogExportField
+
         return [
             {
-                "field": field.field.to_json(),
-                "allow_operators": [operator for operator in field.allow_operators],
+                "field": field_config.field.to_json(),
+                "allow_operators": [operator for operator in field_config.allow_operators],
+                "category": FieldCategoryEnum.get_category_by_field(
+                    LogExportField(
+                        raw_name=field_config.field.field_name,
+                    )
+                ),
             }
-            for field in self.field_configs
+            for field_config in self.field_configs
         ]
 
     @cached_property
@@ -82,11 +90,14 @@ class CollectorSearchConfig:
 
         return {config.field.field_name: config for config in self.field_configs}
 
-    def judge_operator(self, field_name: str, operator: str) -> bool:
+    def judge_operator(self, field_name: str, keys: List[str], operator: str) -> bool:
         """
         判断操作符是否合法
         """
 
+        # 不对嵌套字段进行校验
+        if keys:
+            return True
         if field := self.query_field_map.get(field_name):
             return operator in field.allow_operators
         return False

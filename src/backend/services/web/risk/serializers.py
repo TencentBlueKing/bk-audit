@@ -27,7 +27,7 @@ from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
 from core.utils.distutils import strtobool
-from core.utils.tools import mstimestamp_to_date_string
+from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import EventMappingFields, RiskLabel, RiskRuleOperator
 from services.web.risk.models import (
     ProcessApplication,
