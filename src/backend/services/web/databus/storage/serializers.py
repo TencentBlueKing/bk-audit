@@ -27,7 +27,7 @@ from api.bk_log.serializers import (
     StorageHotWarmSerializer,
 )
 from core.exceptions import ValidationError
-from core.utils.tools import format_date_string
+from core.utils.time import format_date_string
 from services.web.databus.constants import DEFAULT_ALLOCATION_MIN_DAYS, ClusterMode
 from services.web.databus.models import RedisConfig
 

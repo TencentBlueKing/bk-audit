@@ -90,6 +90,9 @@ dependencies = [
     "opentelemetry-instrumentation-httpx==0.51b0",
     "opentelemetry-instrumentation-asyncio==0.51b0",
     "opentelemetry-instrumentation-threading==0.51b0",
+    "gevent==25.4.1",
+    "xlsxwriter==3.2.3",
+    "bkstorages==2.0.0",
 ]
 requires-python = "==3.11.*"
 readme = "README.md"

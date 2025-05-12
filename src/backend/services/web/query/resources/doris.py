@@ -19,19 +19,29 @@ from abc import ABCMeta, abstractmethod
 from typing import Dict, Type
 
 from bk_resource import api, resource
+from bkstorages.backends.bkrepo import BKRepoFile, BKRepoStorage
 from blueapps.utils.logger import logger
 from django.conf import settings
+from django.http import FileResponse
+from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
 
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.fields import BKDATA_ES_TYPE_MAP, STANDARD_FIELDS
+from apps.meta.utils.tools import is_system_admin
 from apps.permission.handlers.actions import ActionEnum
 from core.sql.constants import FieldType
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
-from services.web.query.constants import COLLECT_SEARCH_CONFIG
+from services.web.query.constants import COLLECT_SEARCH_CONFIG, TaskEnum
+from services.web.query.exceptions import (
+    LogExportMaxCountError,
+    LogExportTaskStatusError,
+)
+from services.web.query.export.data_fetcher import DataFetcher
+from services.web.query.models import ExportFieldLog, LogExportTask
 from services.web.query.serializers import (
     CollectorSearchAllReqSerializer,
     CollectorSearchAllStatisticReqSerializer,
@@ -40,14 +50,18 @@ from services.web.query.serializers import (
     CollectorSearchResponseSerializer,
     CollectorSearchStatisticReqSerializer,
     CollectorSearchStatisticRespSerializer,
+    ListLogExportRespSerializer,
+    LogExportReqSerializer,
+    LogExportRespSerializer,
 )
+from services.web.query.tasks import process_one_log_export_task
 from services.web.query.utils.doris import (
     BaseDorisSQLBuilder,
     DorisQuerySQLBuilder,
     DorisStatisticSQLBuilder,
 )
 
-from .base import QueryBaseResource, SearchDataParser
+from .base import QueryBaseResource, SearchDataParser, SearchExportTaskBaseResource
 
 
 class CollectorSearchConfigResource(QueryBaseResource):
@@ -249,3 +263,89 @@ class CollectorSearchStatisticResource(CollectorSearchAllStatisticResource):
     RequestSerializer = CollectorSearchStatisticReqSerializer
     ResponseSerializer = CollectorSearchStatisticRespSerializer
     audit_action = ActionEnum.SEARCH_REGULAR_EVENT
+
+
+class CreateCollectorSearchExportTask(SearchExportTaskBaseResource):
+    name = gettext_lazy("创建日志检索导出任务")
+    audit_action = ActionEnum.SEARCH_REGULAR_EVENT
+    RequestSerializer = LogExportReqSerializer
+    ResponseSerializer = LogExportRespSerializer
+
+    def record_export_fields(self, validated_request_data: dict):
+        """
+        记录导出字段信息
+        """
+
+        export_fields = validated_request_data["export_config"]["fields"]
+        export_field_logs = [
+            ExportFieldLog(raw_name=field["raw_name"], display_name=field["display_name"], keys=field["keys"])
+            for field in export_fields
+            if field["display_name"]
+        ]
+        ExportFieldLog.objects.bulk_create(export_field_logs)
+
+    def perform_request(self, validated_request_data):
+        # 获取总条数进行判断
+        total = DataFetcher.get_total(validated_request_data["query_params"])
+        if total > settings.LOG_EXPORT_MAX_COUNT:
+            raise LogExportMaxCountError(current_count=total, max_count=settings.LOG_EXPORT_MAX_COUNT)
+        try:
+            self.record_export_fields(validated_request_data)
+        except Exception as e:
+            logger.error(f"[{self.__class__.__name__}] create export field logs failed: {e}")
+        task: LogExportTask = LogExportTask.objects.create(
+            namespace=validated_request_data["namespace"],
+            name=validated_request_data["name"],
+            query_params=validated_request_data["query_params"],
+            export_config=validated_request_data["export_config"],
+            status=TaskEnum.READY.value,
+            search_params_url=validated_request_data["search_params_url"],
+            total=total,
+        )
+        process_one_log_export_task.apply_async(kwargs={"task_id": task.id})
+        return task
+
+
+class ListCollectorSearchExportTask(SearchExportTaskBaseResource):
+    name = gettext_lazy("获取日志检索导出任务列表")
+    ResponseSerializer = ListLogExportRespSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        namespace = validated_request_data["namespace"]
+        tasks = LogExportTask.objects.filter(namespace=namespace)
+        username = self.get_request_username()
+        if not is_system_admin(username):
+            tasks = tasks.filter(created_by=username)
+        return tasks
+
+
+class GetCollectorSearchExportTask(SearchExportTaskBaseResource):
+    name = gettext_lazy("获取日志检索导出任务详情")
+    ResponseSerializer = LogExportRespSerializer
+
+    def perform_request(self, validated_request_data):
+        task: LogExportTask = get_object_or_404(LogExportTask, id=validated_request_data["id"])
+        # 检查用户是否有权限访问该任务
+        self.validate_task_permission(task)
+        return task
+
+
+class DownloadCollectorSearchExportTask(SearchExportTaskBaseResource):
+    name = gettext_lazy("下载日志检索导出任务")
+
+    def perform_request(self, validated_request_data):
+        task: LogExportTask = get_object_or_404(LogExportTask, id=validated_request_data["id"])
+        # 检查用户是否有权限访问该任务
+        self.validate_task_permission(task)
+        # 检查任务状态
+        if task.status != TaskEnum.SUCCESS.value:
+            raise LogExportTaskStatusError(status=dict(TaskEnum.choices).get(task.status))
+        # 下载文件
+        origin_name = task.result["origin_name"]
+        storage_name = task.result["storage_name"]
+        # 创建流式响应对象
+        stream_response = FileResponse(BKRepoFile(storage_name, storage=BKRepoStorage()), filename=origin_name)
+        # 设置下载头信息
+        stream_response['Content-Type'] = 'application/octet-stream'
+        return stream_response
