@@ -215,6 +215,30 @@ class MetaManage extends ModuleBase {
       tag_name: string
     }>>(`${this.path}/tag/`);
   }
+  // 获取收藏的查询条件列表
+  getFavouriteQueryList(params: Record<string, any>) {
+    return Request.get<Array<{
+      config_name: string,
+      id: number,
+      config_content: Record<string, any>
+    }>>(`${this.path}/general_config/`, {
+      params,
+    });
+  }
+  // 收藏查询条件
+  favouriteQueryCreate(params: Record<string, any>) {
+    return Request.post(`${this.path}/general_config/`, {
+      params,
+    });
+  }
+  // 删除查询条件
+  favouriteQueryDelete(params: {
+    id: number
+  }) {
+    return Request.delete(`${this.path}/general_config/${params.id}/`, {
+      params,
+    });
+  }
 }
 
 export default new MetaManage();

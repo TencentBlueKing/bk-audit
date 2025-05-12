@@ -257,4 +257,30 @@ export default {
     return MetaManageSource.getTags()
       .then(({ data }) => data);
   },
+  /**
+   * @desc 收藏的查询条件列表
+   * @param { Object } params
+   */
+  fetchFavouriteQueryList(params: Record<string, any>) {
+    return MetaManageSource.getFavouriteQueryList(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 收藏查询条件
+   * @param { Object } params
+   */
+  favouriteQueryCreate(params: Record<string, any>) {
+    return MetaManageSource.favouriteQueryCreate(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 删除收藏查询条件
+   * @param { Object } params
+   */
+  favouriteQueryDelete(params: {
+    id: number
+  }) {
+    return MetaManageSource.favouriteQueryDelete(params)
+      .then(({ data }) => data);
+  },
 };
