@@ -25,7 +25,9 @@ export interface IFieldConfig {
   service?: (params?: Record<string, any>) => Promise<Array<any>>
   labelName?: string,
   valName?: string,
-  operator?: string
+  operator?: string,
+  help?: boolean,
+  canClose?: boolean,
 }
 // eslint-disable-next-line no-useless-escape
 // const specialReg = /[`~!@#$%^&*()_\+=<>?:"{}|,.\/;'\\[\]·~！@#￥%……&*（）——\+={}|《》？：“”【】、；‘'，。、]/im;
@@ -58,6 +60,7 @@ export default {
     type: 'string',
     operator: 'like',
     required: false,
+    help: true,
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -91,6 +94,7 @@ export default {
     type: 'string',
     required: false,
     operator: 'include',
+    canClose: true,
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -102,6 +106,8 @@ export default {
     type: 'string',
     required: false,
     operator: 'like',
+    help: true,
+    canClose: true,
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -113,6 +119,7 @@ export default {
     type: 'select',
     required: false,
     operator: 'include',
+    canClose: true,
   },
   // user_identify_tenant_id: {
   //   label: '操作人租户 ID',
@@ -124,6 +131,7 @@ export default {
     type: 'select',
     required: false,
     operator: 'include',
+    canClose: true,
   },
   access_source_ip: {
     label: '来源 IP',
@@ -131,6 +139,7 @@ export default {
     required: false,
     operator: 'include',
     message: 'IP地址格式不正确',
+    canClose: true,
     validator: (value: string) => {
       const ipv4 = /^((\d|[1-9]\d|1\d\d|2([0-4]\d|5[0-5]))\.){4}$/;
       const ipv6 = /^(([\da-fA-F]{1,4}):){8}$/;
@@ -147,6 +156,7 @@ export default {
     type: 'string',
     required: false,
     operator: 'like',
+    canClose: true,
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -163,6 +173,7 @@ export default {
     type: 'string',
     required: false,
     operator: 'include',
+    canClose: true,
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -174,12 +185,15 @@ export default {
     type: 'select',
     required: false,
     operator: 'include',
+    help: true,
+    canClose: true,
   },
   result_content: {
     label: '操作结果描述',
     type: 'string',
     required: false,
     operator: 'include',
+    canClose: true,
     // validator(str: string) {
     //   if (str === '') return true;
     //   return !specialReg.test(str);
@@ -191,6 +205,8 @@ export default {
     type: 'string',
     required: false,
     operator: 'match_any',
+    help: true,
+    canClose: true,
   },
   query_string: {
     label: '查询语句',

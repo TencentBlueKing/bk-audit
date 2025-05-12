@@ -44,6 +44,7 @@
         style="width: 368px; padding: 9px 15px;">
         <render-field-config
           ref="fieldConfigRef"
+          :base-config="fieldConfig"
           :model="model"
           :name="name"
           simple
