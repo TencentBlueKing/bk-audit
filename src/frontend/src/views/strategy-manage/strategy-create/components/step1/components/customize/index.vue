@@ -666,11 +666,13 @@
   };
 
   const handleShowStructureView = (rtId: string | Array<string>, presentViewField: string) => {
-    // 如果是联表，获取联表的rt_id
     if (presentViewField) {
+      currentViewField.value = presentViewField;
+    }
+    // 如果是联表，获取联表的rt_id
+    if (formData.value.configs.config_type === 'LinkTable') {
       const firstRtId = findRtIdByDisplayName(rtId);
       currentViewRtId.value = firstRtId;
-      currentViewField.value = presentViewField;
     } else {
       currentViewRtId.value = rtId;
     }
