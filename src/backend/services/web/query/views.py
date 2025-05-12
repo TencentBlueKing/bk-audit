@@ -34,3 +34,12 @@ class CollectorQueryViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.query.collector_search_statistic, endpoint="search_statistic"),
         ResourceRoute("GET", resource.query.collector_search_config, endpoint="search_config"),
     ]
+
+
+class CollectorQueryTaskViewSet(ResourceViewSet):
+    resource_routes = [
+        ResourceRoute("POST", resource.query.create_collector_search_export_task),
+        ResourceRoute("GET", resource.query.list_collector_search_export_task, enable_paginate=True),
+        ResourceRoute("GET", resource.query.get_collector_search_export_task, pk_field="id"),
+        ResourceRoute("GET", resource.query.download_collector_search_export_task, pk_field="id", endpoint="download"),
+    ]

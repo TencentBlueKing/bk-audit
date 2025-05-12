@@ -23,7 +23,7 @@ from django.db.models import QuerySet
 
 from apps.meta.models import Action, DataMap, ResourceType, System
 from apps.meta.utils.fields import SNAPSHOT_USER_INFO
-from core.utils.tools import choices_to_dict
+from core.utils.data import choices_to_dict
 from services.web.query.constants import AccessTypeChoices, UserIdentifyTypeChoices
 
 

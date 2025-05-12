@@ -56,6 +56,7 @@ def lock(lock_name: str = "", *, load_lock_name: callable = None, timeout: int =
         def wrapper(*args, **kwargs):
             # 初始化
             _lock_name = load_lock_name(*args, **kwargs) if callable(load_lock_name) else lock_name
+            logger.info("[CacheLockDecorator] LockName: %s args: %s kwargs: %s", _lock_name, args, kwargs)
             _lock = CacheLock(lock_name=_lock_name, timeout=timeout)
             # 检查
             if _lock.locked:
