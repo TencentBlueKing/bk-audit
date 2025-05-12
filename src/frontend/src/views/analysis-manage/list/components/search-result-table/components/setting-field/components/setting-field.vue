@@ -27,17 +27,17 @@
             type="search"
             @input="handleSearch" />
         </div>
-        <div style="height: calc(100vh - 214px);">
+        <div style="height: calc(100vh - 260px);">
           <scroll-faker>
             <ul class="list-content">
-              <li
+              <setting-field-item
                 v-for="(item, index) in sourceList"
-                :key="index"
-                class="item-list item-list-active"
-                @click="handelSelect(item, index)">
-                <span class="item-name">{{ t(item.description) }}</span>
-                <span class="item-icon"><audit-icon type="right" /></span>
-              </li>
+                :key="item.field_name"
+                :index="index"
+                :item="item"
+                :parent-item="item"
+                @add-sub-field="handleAddSubField"
+                @select="handelSelect" />
             </ul>
           </scroll-faker>
         </div>
@@ -58,7 +58,7 @@
                 v-for="(item, index) in initList"
                 :key="index"
                 class="not-allowed item-list">
-                <span class="item-name">{{ t(item.description) }}</span>
+                <span class="item-name">{{ item.description }}</span>
               </li>
               <vuedraggable
                 item-key="field_name"
@@ -71,7 +71,7 @@
                       <audit-icon
                         style="font-size: 13px;color: #c4c6cc;"
                         type="move" />
-                      {{ t(element.description) }}
+                      {{ element.description || element.field_name }}
                     </span>
                     <span
                       class="item-icon"
@@ -121,11 +121,14 @@
   } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
 
+  import EsQueryService from '@service/es-query';
   import MetaManageService from '@service/meta-manage';
 
   import type StandardFieldModel from '@model/meta/standard-field';
 
   import useRequest from '@hooks/use-request';
+
+  import SettingFieldItem from './setting-field-item.vue';
 
   interface Emits {
     (e: 'updateField'):void;
@@ -146,24 +149,22 @@
   const searchValue = ref('');
   const route = useRoute();
   const initSourceList = ref<Array<StandardFieldModel>>([]);
-  // 保留可选的字段
-  const optionFields = ['event_id', 'request_id', 'event_content', 'end_time',
-                        'access_source_ip', 'access_user_agent', 'result_content'];
   onMounted(async () => {
-    fetchStandardField({});
+    fetchStandardField();
   });
+
   /**
-   * 获取全量字段
+   * 获取字段
    */
   const {
     loading: sourceLoading,
     data: sourceList,
     run: fetchStandardField,
-  } = useRequest(MetaManageService.fetchStandardField, {
+  } = useRequest(EsQueryService.fetchSearchConfig, {
     defaultValue: [],
+    manual: true,
     onSuccess: (data) => {
       initSourceList.value = data;
-      sourceList.value = data.filter((item: StandardFieldModel) => optionFields.includes(item.field_name));
       fetchCustomFields({
         route_path: route.name,
       });
@@ -220,13 +221,55 @@
     emits('update:modelValue', false);
   };
 
-  const handelSelect = (item: any, index: number) => {
-    targetList.value.push(item);
-    sourceList.value.splice(index, 1);
+  const handelSelect = (item: any, index: number, parentItem: any, event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (
+      target.closest('.bk-select')
+      || target.closest('.sub-select-key-icon')
+      || target.closest('.sub-add-key-icon')
+    ) {
+      return;
+    }
+    const formatItem = {
+      ...item,
+      parentItem, // 记录父级
+      description: parentItem.field_name !== item.field_name
+        ? `${parentItem.description || parentItem.field_alias}/${item.description || item.field_alias}(${parentItem.field_name}/${item.field_name})`
+        : item.description,
+    };
+    targetList.value.push(formatItem);
+    // 判断是一级还是多级字段，决定 splice 的目标
+    if (parentItem
+      && parentItem.field_name !== item.field_name
+      && parentItem.property && Array.isArray(parentItem.property.sub_keys)) {
+      // 二级或多级字段，从父级的 sub_keys 删除
+      const subIndex = parentItem.property.sub_keys.findIndex((sub: any) => sub.field_name === item.field_name);
+      if (subIndex !== -1) {
+        parentItem.property.sub_keys.splice(subIndex, 1);
+      }
+    } else {
+      // 一级字段，从 sourceList 删除
+      sourceList.value.splice(index, 1);
+    }
     window.changeConfirm = true;
   };
+  const handleAddSubField = (parentItem: any, newItem: any) => {
+    parentItem.property.sub_keys.push(newItem);
+  };
   const handelDeleteSelect = (element: any) => {
-    sourceList.value.push(element);
+    if (element.field_alias) {
+      // eslint-disable-next-line no-param-reassign
+      element.description = element.field_alias;
+    }
+    // 判断是否有 parentItem 字段且 parentItem 不等于自身
+    if (element.parentItem && element.parentItem.field_name !== element.field_name
+      && element.parentItem.property && Array.isArray(element.parentItem.property.sub_keys)) {
+      // 还原到父级的 sub_keys
+      element.parentItem.property.sub_keys.push(element);
+    } else {
+      // 还原到 sourceList
+      sourceList.value.push(element);
+    }
     const index = targetList.value.findIndex(item => item.field_name === element.field_name);
     targetList.value.splice(index, 1);
     window.changeConfirm = true;
@@ -267,13 +310,13 @@
 
     .source-list,
     .target-list {
-      flex: 1;
       min-height: 500px;
 
       .list-content {
         .item-list {
           position: relative;
           display: flex;
+          width: auto;
           height: 32px;
           padding: 8px 24px 8px 32px;
           line-height: 32px;
@@ -281,14 +324,17 @@
           cursor: pointer;
           align-items: center;
 
-          /* .item-name{
-                        color:#63656E
-                    } */
           .item-icon {
             display: none;
             margin-left: auto;
             font-size: 14px;
             color: #3a84ff;
+          }
+
+          .sub-add-key-icon,
+          .sub-select-key-icon {
+            margin: 0 5px;
+            color: #c4c6cc;
           }
         }
 
@@ -309,11 +355,15 @@
       }
     }
 
+    .source-list {
+      width: 350px;
+    }
+
     .line {
       position: absolute;
       top: 60px;
       bottom: 48px;
-      left: 50%;
+      left: 37%;
       z-index: 1;
       width: 1px;
       background: lightgray;
