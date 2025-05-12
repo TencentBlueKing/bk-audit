@@ -63,4 +63,21 @@ export default {
         results: data.results,
       }));
   },
+  /**
+   * @desc 获取日志检索字段
+   */
+  fetchSearchConfig() {
+    return EsQuerySource.getSearchConfig()
+      .then(({ data }) => data.map(item => ({
+        ...item.field,
+        allow_operators: item.allow_operators,
+      })));
+  },
+  /**
+   * @desc 获取日志统计
+   */
+  fetchSearchStatistic(params: Record<string, any>) {
+    return EsQuerySource.getSearchStatistic(params)
+      .then(({ data }) => data);
+  },
 };

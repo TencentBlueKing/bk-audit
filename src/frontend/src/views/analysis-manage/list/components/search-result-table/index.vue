@@ -22,14 +22,15 @@
       ref="listRef"
       :columns="tableColumn"
       :data-source="dataSource"
+      :settings="settings"
       @clear-search="handleClearSearch"
       @request-success="handleRequestSuccess"
       @row-click="handleRowClick">
-      <template #expandRow="{ row }">
+      <!-- <template #expandRow="{ row }">
         <row-expand-content
           :data="row"
           :filter="filter" />
-      </template>
+      </template> -->
     </render-table>
     <setting-filed @update-field="handleUpdateField" />
   </div>
@@ -58,6 +59,7 @@
 
   import filedConfig from '@views/analysis-manage/list/components/search-box/components/render-field-config/config';
 
+  import FieldStatisticPopover from './components/field-statistic-popover/index.vue';
   import RenderAction from './components/render-field/action.vue';
   import RenderAuthInstanceButton from './components/render-field/auth-instance-button.vue';
   import RenderInstance from './components/render-field/instance.vue';
@@ -67,7 +69,7 @@
   import RenderUser from './components/render-field/user.vue';
   import RenderTable from './components/render-table.vue';
   import DiffDetail from './components/row-diff-detail/index.vue';
-  import RowExpandContent from './components/row-expand-content/index.vue';
+  // import RowExpandContent from './components/row-expand-content/index.vue';
   import SettingFiled from './components/setting-field/index.vue';
 
   import type { IRequestResponsePaginationData } from '@/utils/request';
@@ -99,12 +101,12 @@
   const { t } = useI18n();
 
   const initColumn: InstanceType<typeof Table>['$props']['columns'] = [
-    {
-      label: () => '',
-      type: 'expand',
-      width: '40px',
-      fixed: true,
-    },
+    // {
+    //   label: () => '',
+    //   type: 'expand',
+    //   width: '40px',
+    //   fixed: true,
+    // },
     {
       label: () => t('操作起始时间'),
       render: ({ data }: {data: SearchModel}) => (
@@ -127,7 +129,12 @@
       },
     },
     {
-      label: () => t('来源系统(ID)'),
+      label: () =>  <div style="display: flex; align-items: center;">
+        <label>{ t('来源系统(ID)') }</label>
+        <FieldStatisticPopover
+          fieldName="system_id"
+          params={ listRef.value?.getParamsMemo().value } />
+      </div>,
       field: 'system_info.name',
       render: ({ data }: {data: SearchModel}) => (
         data.system_id
@@ -140,7 +147,12 @@
       },
     },
     {
-      label: () => t('操作事件名(ID)'),
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('操作事件名(ID)') }</label>
+        <FieldStatisticPopover
+          fieldName="action_id"
+          params={ listRef.value?.getParamsMemo().value } />
+      </div>,
       field: 'snapshot_action_info.name',
       render: ({ data }: {data: SearchModel}) => {
         if (data.action_id) {
@@ -157,7 +169,12 @@
       },
     },
     {
-      label: () => t('资源类型(ID)'),
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('资源类型(ID)') }</label>
+        <FieldStatisticPopover
+          fieldName="resource_type_id"
+          params={ listRef.value?.getParamsMemo().value } />
+      </div>,
       field: 'snapshot_resource_type_info.name',
       render: ({ data }: {data: SearchModel}) => {
         if (data.resource_type_id) {
@@ -223,6 +240,11 @@
       },
     },
   ];
+  const settings = {
+    fields: [],
+    checked: [],
+    showLineHeight: false,
+  };
   const rootRef = ref();
   const listRef = ref();
   const route = useRoute();
@@ -230,14 +252,6 @@
   const tableColumn = ref(initColumn);
   const isExpand = ref<Record<number, boolean>>({});
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
-
-  watch(() => props.filter, () => {
-    nextTick(() => {
-      listRef.value.fetchData(getFilter(props.filter));
-    });
-  }, {
-    immediate: true,
-  });
 
   // Doris接口查询的参数需要调整
   const getFilter = (filter: Record<string, any>) => {
@@ -259,7 +273,7 @@
         }
         resultFilter.filters.push({
           field_name: k,
-          operator: config.operator, // 一期暂时写死include
+          operator: config.operator,
           filters: value,
         });
       } else {
@@ -327,6 +341,7 @@
     fetchCustomFields({
       route_path: route.name,
     });
+    listRef.value.fetchData(getFilter(props.filter));
   };
   /**
    * 合并新设置的列
@@ -357,9 +372,18 @@
     tableRef.value.setRowExpand(row, true);
     isExpand.value[index] = true;
   };
+
   const handleClearSearch = () => {
     emits('clearSearch');
   };
+
+  watch(() => props.filter, () => {
+    nextTick(() => {
+      listRef.value.fetchData(getFilter(props.filter));
+    });
+  }, {
+    immediate: true,
+  });
 
   defineExpose<Exposes>({
     loading: isLoading,
