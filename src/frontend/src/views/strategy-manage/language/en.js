@@ -301,5 +301,7 @@ export default {
     'sql示例：`字段名` AS `显示名`': 'sql example: `Field name` AS `Display name`',
     '处理中，不支持启停': 'Processing, not supported to start/stop',
     预览当前字段格式与最新值: 'Preview current field format and latest value',
+    数据预览: 'Data preview',
+    重复: 'repeat',
   },
 };
