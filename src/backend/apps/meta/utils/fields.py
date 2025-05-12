@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import Optional, TypedDict, Union
+from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 from django.conf import settings
 from django.utils.translation import gettext_lazy
@@ -64,6 +64,24 @@ PYTHON_TO_ES = {
     dict: FIELD_TYPE_OBJECT,
     float: FIELD_TYPE_DOUBLE,
 }
+
+
+def get_field_map(fields: List[Field]) -> Dict[str, Field]:
+    """
+    获取字段映射关系
+    :param fields:
+    :return:
+    """
+
+    return {field.field_name: field for field in fields}
+
+
+def get_field_choices(fields: List[Field]) -> List[Tuple[str, str]]:
+    """
+    获取字段枚举值
+    """
+
+    return [(field.field_name, str(field.description)) for field in fields]
 
 
 class SubKey(TypedDict):
@@ -124,7 +142,7 @@ USERNAME = Field(
     field_name="username",
     alias_name="username",
     field_type=FIELD_TYPE_STRING,
-    description=gettext_lazy("操作人"),
+    description=gettext_lazy("操作人用户名"),
     option=dict(),
     priority_index=96,
     is_index=True,
@@ -174,7 +192,7 @@ START_TIME = Field(
     field_name="start_time",
     alias_name="start_time",
     field_type=FIELD_TYPE_LONG,
-    description=gettext_lazy("操作起始时间"),
+    description=gettext_lazy("事件开始时间"),
     is_time=True,
     option=dict(),
     priority_index=91,
@@ -184,7 +202,7 @@ END_TIME = Field(
     field_name="end_time",
     alias_name="end_time",
     field_type=FIELD_TYPE_LONG,
-    description=gettext_lazy("操作结束时间"),
+    description=gettext_lazy("事件结束时间"),
     is_time=False,
     option=dict(),
     is_required=False,
@@ -714,6 +732,56 @@ LOCAL_TIME = Field(
     alias_name="localTime",
     field_type=FIELD_TYPE_STRING,
     description=gettext_lazy("AIOPS内置处理时间"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+CLOUD_ID = Field(
+    field_name="cloudId",
+    alias_name="cloudId",
+    field_type=FIELD_TYPE_INT,
+    description=gettext_lazy("云区域ID"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+SERVER_IP = Field(
+    field_name="serverIp",
+    alias_name="serverIp",
+    field_type=FIELD_TYPE_STRING,
+    description=gettext_lazy("主机IP"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+PATH = Field(
+    field_name="path",
+    alias_name="path",
+    field_type=FIELD_TYPE_STRING,
+    description=gettext_lazy("采集路径"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+GSE_INDEX = Field(
+    field_name="gseIndex",
+    alias_name="gseIndex",
+    field_type=FIELD_TYPE_INT,
+    description=gettext_lazy("上报包序号"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+ITERATION_INDEX = Field(
+    field_name="iterationIndex",
+    alias_name="iterationIndex",
+    field_type=FIELD_TYPE_INT,
+    description=gettext_lazy("上报包内位置"),
     option={},
     is_dimension=False,
     is_display=False,

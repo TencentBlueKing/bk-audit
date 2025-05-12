@@ -36,12 +36,12 @@ from apps.meta.utils.fields import (
     SNAPSHOT_RESOURCE_TYPE_INFO,
     SNAPSHOT_USER_INFO,
 )
-from core.utils.tools import (
+from core.utils.data import (
     choices_to_items,
     drop_dict_item_by_path,
     modify_dict_by_path,
-    mstimestamp_to_date_string,
 )
+from core.utils.time import mstimestamp_to_date_string
 from services.web.query.constants import (
     AccessTypeChoices,
     ResultCodeChoices,

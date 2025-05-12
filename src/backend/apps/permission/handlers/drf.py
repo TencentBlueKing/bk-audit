@@ -20,6 +20,7 @@ from functools import wraps
 from typing import Callable, List
 
 from bk_resource import resource
+from bk_resource.utils.common_utils import is_backend
 from iam import Resource
 from rest_framework import permissions
 
@@ -137,8 +138,8 @@ def wrapper_permission_field(
             continue
         instance_ids[instance_id] = True
 
-    # 无实例鉴权
-    if not instance_ids:
+    # 无实例鉴权 or 后台进程
+    if not instance_ids or is_backend():
         return result_list
 
     permission_result = resource.permission.batch_is_allowed(

@@ -30,7 +30,11 @@ APIGW_ENABLED = strtobool(os.getenv("BKAPP_USE_APIGW", "False"))
 BK_IAM_API_URL = get_endpoint("bk-iam", stag="stage")
 
 # 日志平台
-BK_LOG_API_URL = get_endpoint("log-search") if APIGW_ENABLED else get_endpoint("bk_log", APIProvider.ESB)
+BK_LOG_API_URL = (
+    (os.getenv("BKAPP_LOG_API_URL") or get_endpoint("log-search"))
+    if APIGW_ENABLED
+    else get_endpoint("bk_log", APIProvider.ESB)
+)
 
 # PaaSV3
 BK_PAAS_API_URL = get_endpoint(os.getenv("BKAPP_BK_PAAS_APIGW_NAME", "bkpaas3"), stage="prod")
@@ -39,9 +43,9 @@ BK_PAAS_API_URL = get_endpoint(os.getenv("BKAPP_BK_PAAS_APIGW_NAME", "bkpaas3"),
 USER_MANAGE_URL = get_endpoint("usermanage", APIProvider.ESB)
 
 # BkBase
-BK_BASE_API_URL = os.getenv("BK_BASE_API_URL")
-if not BK_BASE_API_URL:
-    BK_BASE_API_URL = get_endpoint(os.getenv("BKAPP_BK_BASE_APIGW_NAME", "bk-base"), stag="test")
+BK_BASE_API_URL = os.getenv("BKAPP_BASE_API_URL") or get_endpoint(
+    os.getenv("BKAPP_BK_BASE_APIGW_NAME", "bk-base"), stag="test"
+)
 
 # BkMonitor
 BK_MONITOR_API_URL = (
@@ -50,7 +54,7 @@ BK_MONITOR_API_URL = (
 BK_MONITOR_METRIC_PROXY_URL = settings.BK_MONITOR_METRIC_PROXY_URL
 
 # CMSI
-BK_CMSI_API_URL = get_endpoint("cmsi", APIProvider.ESB, stage="prod")
+BK_CMSI_API_URL = os.getenv("BKAPP_CMSI_URL") or get_endpoint("cmsi", APIProvider.ESB, stage="prod")
 
 # Watermark
 WATERMARK_API_URL = get_endpoint("devsecops", APIProvider.APIGW)

@@ -26,7 +26,7 @@ from django.utils.translation import gettext
 from iam import Resource
 
 from apps.permission.constants import PERMISSION_CACHE_EXPIRE
-from core.utils.tools import group_by
+from core.utils.data import group_by
 
 
 class InstanceInfo(object):
