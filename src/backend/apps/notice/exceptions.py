@@ -27,3 +27,12 @@ class NoticeBaseException(BlueException):
 class NoticeGroupNameDuplicate(NoticeBaseException):
     ERROR_CODE = "001"
     MESSAGE = gettext_lazy("通知组名称重复")
+
+
+class BuilderInitError(NoticeBaseException):
+    ERROR_CODE = "002"
+    MESSAGE = gettext_lazy("构建器初始化失败: {err}")
+
+    def __init__(self, err, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(err=err)
+        super().__init__(*args, **kwargs)

@@ -31,7 +31,7 @@ from apps.itsm.constants import (
 from apps.itsm.serializers import GetServicesRespSerializer
 from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
-from core.utils.tools import choices_to_dict
+from core.utils.data import choices_to_dict
 
 
 class ITSMMeta(AuditMixinResource, abc.ABC):

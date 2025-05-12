@@ -27,7 +27,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import RiskRuleInUse
-from core.utils.tools import choices_to_dict
+from core.utils.data import choices_to_dict
 from services.web.risk.constants import RiskRuleOperator, RiskStatus
 from services.web.risk.models import Risk, RiskRule, RiskRuleAuditInstance
 from services.web.risk.serializers import (

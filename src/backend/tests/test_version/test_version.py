@@ -20,7 +20,7 @@ from unittest import mock
 from django.conf import settings
 
 from core.models import get_request_username
-from core.utils.tools import ordered_dict_to_json
+from core.utils.data import ordered_dict_to_json
 from services.web.version.models import VersionLog, VersionLogVisit
 from services.web.version.utils import get_version_id
 from tests.base import TestCase

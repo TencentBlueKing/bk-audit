@@ -19,18 +19,23 @@ to the current version of the project delivered to anyone in the future.
 import abc
 from typing import List
 
-from blueapps.utils.request_provider import get_request_username
-
 from apps.audit.resources import AuditMixinResource
 from apps.meta.models import SensitiveObject
+from apps.meta.utils.tools import is_system_admin
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.models import get_request_username
+from services.web.query.exceptions import LogExportTaskNoPermission
+from services.web.query.models import LogExportTask
 from services.web.query.utils.formatter import HitsFormatter
 
 
 class QueryBaseResource(AuditMixinResource, abc.ABC):
     tags = ["Query"]
+
+    def get_request_username(self) -> str:
+        return get_request_username()
 
 
 class SearchDataParser:
@@ -56,3 +61,10 @@ class SearchDataParser:
                 )
         # parse
         return [HitsFormatter(value, [*sensitive_objs, *private_sensitive_objs]).value for value in data]
+
+
+class SearchExportTaskBaseResource(QueryBaseResource, abc.ABC):
+    def validate_task_permission(self, task: LogExportTask):
+        username = self.get_request_username()
+        if not (is_system_admin(username) or username == task.created_by):
+            raise LogExportTaskNoPermission()

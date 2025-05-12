@@ -39,9 +39,9 @@ class Table(BaseModel):
     alias: Optional[str] = None  # 别名
 
 
-class Field(BaseModel):
+class BaseField(BaseModel):
     """
-    字段
+    基础字段
     """
 
     table: str  # 表名
@@ -50,6 +50,12 @@ class Field(BaseModel):
     field_type: FieldType  # 字段类型
     aggregate: Optional[AggregateType] = None  # 聚合函数
     keys: List[str] = PydanticField(default_factory=list)  # 字段 key 仅适用于 Doris Variant 类型
+
+
+class Field(BaseField):
+    """
+    字段
+    """
 
     def __init__(self, **data):
         super().__init__(**data)
