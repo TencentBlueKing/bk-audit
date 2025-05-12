@@ -37,7 +37,7 @@ from apps.meta.handlers.system_sync import (
 )
 from apps.meta.models import System, SystemDiagnosisConfig
 from core.lock import lock
-from core.utils.tools import group_by
+from core.utils.data import group_by
 
 
 @periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
