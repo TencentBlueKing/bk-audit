@@ -16,9 +16,10 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import unittest
+from copy import deepcopy
 from unittest.mock import MagicMock, patch
 
+from services.web.analyze.constants import FlowDataSourceNodeType
 from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType
 from services.web.strategy_v2.exceptions import LinkTableConfigError
 from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLBuilder
@@ -362,7 +363,6 @@ class TestRuleAuditSQLFormatter(TestCase):
         """
         测试复杂联表场景，包含多个表、多种联接类型和复杂查询条件。
         """
-        # Mock LinkTable
         mock_link_table_obj = MagicMock()
         mock_link_table_obj.config = {
             "links": [
@@ -455,6 +455,14 @@ class TestRuleAuditSQLFormatter(TestCase):
                     "field_type": "long",
                     "aggregate": "MAX",
                 },
+                {
+                    "table": "d",
+                    "raw_name": "details",
+                    "display_name": "网络详情",
+                    "field_type": "int",
+                    "aggregate": "COUNT",
+                    "keys": ["host", "type"],
+                },
             ],
             "where": {
                 "connector": "and",
@@ -492,18 +500,42 @@ class TestRuleAuditSQLFormatter(TestCase):
                 ],
             },
             "having": {
-                "condition": {
-                    "field": {
-                        "table": "b",
-                        "raw_name": "resource_id",
-                        "display_name": "资源ID",
-                        "field_type": "long",
-                        "aggregate": "COUNT",
+                "connector": "and",
+                "conditions": [
+                    {
+                        "connector": "or",
+                        "conditions": [],
+                        "condition": {
+                            "field": {
+                                "table": "b",
+                                "raw_name": "resource_id",
+                                "display_name": "资源ID",
+                                "field_type": "long",
+                                "aggregate": "COUNT",
+                            },
+                            "operator": "gt",
+                            "filter": 100,
+                            "filters": [],
+                        },
                     },
-                    "operator": "gt",
-                    "filter": 100,
-                    "filters": [],
-                },
+                    {
+                        "connector": "or",
+                        "conditions": [],
+                        "condition": {
+                            "field": {
+                                "table": "d",
+                                "raw_name": "details",
+                                "display_name": "网络详情",
+                                "field_type": "int",
+                                "aggregate": "COUNT",
+                                "keys": ["host", "type"],
+                            },
+                            "operator": "gt",
+                            "filter": 300,
+                            "filters": [],
+                        },
+                    },
+                ],
             },
         }
 
@@ -518,20 +550,57 @@ class TestRuleAuditSQLFormatter(TestCase):
         # Expected SQL
         expected_sql = (
             "SELECT "
-            "udf_build_origin_data('事件ID|!@#$%^&*|资源ID|!@#$%^&*|主机ID|!@#$%^&*|网络名称',"
+            "udf_build_origin_data('事件ID|!@#$%^&*|资源ID|!@#$%^&*|主机ID|!@#$%^&*|网络名称|!@#$%^&*|网络详情',"
             "CONCAT_WS('',CAST(`sub_table`.`事件ID` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`资源ID` AS STRING),"
-            "'|!@#$%^&*|',CAST(`sub_table`.`主机ID` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`网络名称` AS STRING))) "
+            "'|!@#$%^&*|',CAST(`sub_table`.`主机ID` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`网络名称` AS STRING),"
+            "'|!@#$%^&*|',CAST(`sub_table`.`网络详情` AS STRING))) "
             "`event_data`,"
             "888 `strategy_id`,`sub_table`.`主机ID` `operator_name`,'456' `bk_biz_id` "
             "FROM ("
             "SELECT `a`.`event_id` `事件ID`,COUNT(`b`.`resource_id`) `资源ID`,`c`.`host_id` `主机ID`,"
-            "MAX(`d`.`network_name`) `网络名称` "
+            "MAX(`d`.`network_name`) `网络名称`,"
+            "COUNT(CAST(GET_JSON_OBJECT(`d`.`details`,'$.[\"host\"].[\"type\"]') AS INT)) `网络详情` "
             "FROM log_rt_1 `a` LEFT JOIN asset_rt_2 `b` ON `a`.`event_id`=`b`.`resource_id` "
             "JOIN host_rt_3 `c` ON `b`.`resource_id`=`c`.`host_id` "
             "LEFT JOIN network_rt_4 `d` ON `c`.`host_id`=`d`.`network_id` "
             "WHERE `a`.`event_type`='critical' AND `b`.`resource_status`<>'inactive' "
             "AND `a`.`system_id` IN ('sys_111') "
-            "GROUP BY `a`.`event_id`,`c`.`host_id` HAVING COUNT(`b`.`resource_id`)>100) `sub_table`"
+            "GROUP BY `a`.`event_id`,`c`.`host_id` "
+            "HAVING COUNT(`b`.`resource_id`)>100 AND "
+            "COUNT(CAST(GET_JSON_OBJECT(`d`.`details`,'$.[\"host\"].[\"type\"]') AS INT))>300) "
+            "`sub_table`"
+        )
+
+        # Run the test
+        self._build_and_assert_sql(strategy, expected_sql, mock_link_table_obj=mock_link_table_obj)
+
+        # 测试实时链路下的下钻sql
+        config_json = deepcopy(config_json)
+        config_json["data_source"]["source_type"] = FlowDataSourceNodeType.REALTIME
+
+        strategy = Strategy(strategy_id=888, configs=config_json, event_basic_field_configs=event_basic_field_configs)
+
+        expected_sql = (
+            "SELECT "
+            "udf_build_origin_data('事件ID|!@#$%^&*|资源ID|!@#$%^&*|主机ID|!@#$%^&*|网络名称|!@#$%^&*|网络详情',"
+            "CONCAT_WS('',CAST(`sub_table`.`事件ID` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`资源ID` AS STRING),"
+            "'|!@#$%^&*|',CAST(`sub_table`.`主机ID` AS STRING),'|!@#$%^&*|',CAST(`sub_table`.`网络名称` AS STRING),"
+            "'|!@#$%^&*|',CAST(`sub_table`.`网络详情` AS STRING))) "
+            "`event_data`,"
+            "888 `strategy_id`,`sub_table`.`主机ID` `operator_name`,'456' `bk_biz_id` "
+            "FROM ("
+            "SELECT `a`.`event_id` `事件ID`,COUNT(`b`.`resource_id`) `资源ID`,`c`.`host_id` `主机ID`,"
+            "MAX(`d`.`network_name`) `网络名称`,"
+            "COUNT(JSON_VALUE(`d`.`details`,'$.[\"host\"].[\"type\"]' RETURNING INT)) `网络详情` "
+            "FROM log_rt_1 `a` LEFT JOIN asset_rt_2 `b` ON `a`.`event_id`=`b`.`resource_id` "
+            "JOIN host_rt_3 `c` ON `b`.`resource_id`=`c`.`host_id` "
+            "LEFT JOIN network_rt_4 `d` ON `c`.`host_id`=`d`.`network_id` "
+            "WHERE `a`.`event_type`='critical' AND `b`.`resource_status`<>'inactive' "
+            "AND `a`.`system_id` IN ('sys_111') "
+            "GROUP BY `a`.`event_id`,`c`.`host_id` "
+            "HAVING COUNT(`b`.`resource_id`)>100 AND "
+            "COUNT(JSON_VALUE(`d`.`details`,'$.[\"host\"].[\"type\"]' RETURNING INT))>300) "
+            "`sub_table`"
         )
 
         # Run the test
@@ -653,7 +722,3 @@ class TestRuleAuditSQLFormatter(TestCase):
 
         # 断言
         self._build_and_assert_sql(strategy, expected_sql, mock_link_table_obj=mock_link_table_obj)
-
-
-if __name__ == "__main__":
-    unittest.main()

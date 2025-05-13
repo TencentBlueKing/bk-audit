@@ -53,7 +53,7 @@ class JsonValue(Function):
     def get_special_params_sql(self, **kwargs: Any) -> Any:
         """添加RETURNING信息到SQL中"""
         if self._returning_type_str:
-            return f" RETURNING {self._returning_type_str}"
+            return f"RETURNING {self._returning_type_str}"
 
 
 class GetJsonObject(Function):

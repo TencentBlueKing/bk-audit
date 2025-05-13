@@ -652,6 +652,7 @@ class GetRTFieldsResponseSerializer(serializers.Serializer):
     alias = serializers.CharField(label=gettext_lazy("Alias"))
     field_type = serializers.CharField(label=gettext_lazy("Field Type"))
     spec_field_type = serializers.CharField(label=gettext_lazy("Spec Field Type"))
+    property = serializers.DictField(label=gettext_lazy("Property"))
 
 
 class BulkGetRTFieldsResponseSerializer(serializers.Serializer):
@@ -972,6 +973,9 @@ class RuleAuditFieldSerializer(serializers.Serializer):
         label=gettext_lazy("Aggregate"), choices=RuleAuditAggregateType.choices, allow_null=True, default=None
     )
     remark = serializers.CharField(label=gettext_lazy("Remark"), required=False, default="", allow_blank=True)
+    keys = serializers.ListField(
+        label=gettext_lazy("Keys"), child=serializers.CharField(), required=False, allow_empty=True, default=list
+    )
 
 
 class RuleAuditLinkTableSerializer(serializers.Serializer):
@@ -1048,7 +1052,7 @@ class RuleAuditWhereSerializer(serializers.Serializer):
         自定义序列化逻辑: 递归解析 conditions
         """
 
-        ret = super().to_representation(instance)
+        ret = super().to_internal_value(instance)
 
         # 递归处理 conditions
         conditions = instance.get('conditions', [])
