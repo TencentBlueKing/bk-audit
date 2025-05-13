@@ -759,6 +759,17 @@ LOCAL_TIME = Field(
     is_display=False,
 )
 
+TIME = Field(
+    field_name="time",
+    alias_name="time",
+    field_type=FIELD_TYPE_LONG,
+    description=gettext_lazy("日志系统时间字段"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
+)
+
 CLOUD_ID = Field(
     field_name="cloudId",
     alias_name="cloudId",

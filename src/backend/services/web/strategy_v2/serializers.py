@@ -652,6 +652,7 @@ class GetRTFieldsResponseSerializer(serializers.Serializer):
     alias = serializers.CharField(label=gettext_lazy("Alias"))
     field_type = serializers.CharField(label=gettext_lazy("Field Type"))
     spec_field_type = serializers.CharField(label=gettext_lazy("Spec Field Type"))
+    property = serializers.DictField(label=gettext_lazy("Property"))
 
 
 class BulkGetRTFieldsResponseSerializer(serializers.Serializer):
