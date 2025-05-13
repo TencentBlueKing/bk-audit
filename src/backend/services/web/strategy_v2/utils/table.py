@@ -274,6 +274,7 @@ def enhance_rt_fields(fields, result_table_id):
             "value": field["field_name"],
             "field_type": field["field_type"],
             "spec_field_type": field["field_type"],
+            "property": {},
         }
         for field in fields
         if field["field_name"] not in BKBASE_INTERNAL_FIELD
@@ -293,4 +294,5 @@ def enhance_rt_fields(fields, result_table_id):
                     field["spec_field_type"] = standard_fields[field["value"]].property.get(
                         "spec_field_type", standard_fields[field["value"]].field_type
                     )
+                    field['property'] = standard_fields[field["value"]].property
     return result
