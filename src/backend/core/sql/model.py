@@ -107,7 +107,7 @@ class WhereCondition(BaseModel):
 class HavingCondition(WhereCondition):
     """Having筛选条件"""
 
-    pass
+    conditions: List["HavingCondition"] = PydanticField(default_factory=list)  # 子条件
 
 
 class Order(BaseModel):
