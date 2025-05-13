@@ -28,7 +28,7 @@ from pypika.terms import Function, Term, ValueWrapper
 from apps.meta.utils.fields import SYSTEM_ID
 from core.sql.builder import BKBaseQueryBuilder
 from core.sql.constants import FilterConnector, Operator
-from core.sql.functions import ConcatWs
+from core.sql.functions import ConcatWs, GetJsonObject, JsonValue
 from core.sql.model import (
     Condition,
     Field,
@@ -38,7 +38,8 @@ from core.sql.model import (
     Table,
     WhereCondition,
 )
-from core.sql.sql_builder import BkBaseSqlGenerator
+from core.sql.sql_builder import BkBaseComputeSqlGenerator
+from services.web.analyze.constants import FlowSQLNodeType
 from services.web.risk.constants import EventMappingFields
 from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType
 from services.web.strategy_v2.exceptions import (
@@ -265,7 +266,15 @@ class RuleAuditSQLBuilder:
         # 格式化别名
         for field in sql_config.select_fields:
             field.display_name = self.display2tmp_name_map[field.display_name]
-        sub_table = BkBaseSqlGenerator(query_builder=self.query_builder).generate(config=sql_config).as_("sub_table")
+        if self.strategy.sql_node_type == FlowSQLNodeType.REALTIME:
+            drill_function = JsonValue
+        else:
+            drill_function = GetJsonObject
+        sub_table = (
+            BkBaseComputeSqlGenerator(query_builder=self.query_builder, drill_function=drill_function)
+            .generate(config=sql_config)
+            .as_("sub_table")
+        )
         # 2. 构造 JSON_OBJECT(...) 参数
         display_names = self.display2tmp_name_map.keys()
         fields = [sub_table.field(field.display_name) for field in sql_config.select_fields]

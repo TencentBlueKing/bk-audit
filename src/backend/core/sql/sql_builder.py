@@ -265,7 +265,7 @@ class SQLGenerator:
         return query
 
 
-class BkBaseSqlGenerator(SQLGenerator):
-    """BK-BASE 版本的 SQL 生成器"""
+class BkBaseComputeSqlGenerator(SQLGenerator):
+    """BK-BASE 计算模块的 SQL 生成器"""
 
     table_cls = BkBaseTable
