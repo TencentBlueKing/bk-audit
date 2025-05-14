@@ -294,5 +294,33 @@ def enhance_rt_fields(fields, result_table_id):
                     field["spec_field_type"] = standard_fields[field["value"]].property.get(
                         "spec_field_type", standard_fields[field["value"]].field_type
                     )
-                    field['property'] = standard_fields[field["value"]].property
+                    field['property'] = enhance_property(standard_fields[field["value"]].property)
     return result
+
+
+def enhance_property(property_data):
+    """增强属性处理，将sub_keys信息转换成与字段一致的格式"""
+    if not property_data:
+        return {}
+
+    enhanced_property = {}
+
+    if "sub_keys" in property_data:
+        enhanced_property["sub_keys"] = [
+            {
+                "label": "{}".format(subkey["field_alias"] or subkey["field_name"]),
+                "alias": subkey["field_alias"] or subkey["field_name"],
+                "value": subkey["field_name"],
+                "field_type": subkey["field_type"],
+                "spec_field_type": subkey["field_type"],
+                "property": enhance_property(subkey["property"]),  # 递归处理嵌套的property
+            }
+            for subkey in property_data["sub_keys"]
+        ]
+
+    # 处理其他属性字段
+    for key, value in property_data.items():
+        if key != "sub_keys":
+            enhanced_property[key] = value
+
+    return enhanced_property
