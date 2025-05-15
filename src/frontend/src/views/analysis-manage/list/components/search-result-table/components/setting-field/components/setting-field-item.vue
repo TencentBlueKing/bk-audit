@@ -28,6 +28,7 @@
       <bk-popover
         ref="subSelectPopover"
         boundary="parent"
+        ext-cls="sub-select-popover"
         :is-show="isShow"
         placement="bottom"
         theme="light"
@@ -55,15 +56,15 @@
             <div
               v-if="!showAdd"
               style="width: 240px;
-                  color: #63656e;
-                  text-align: center;
-                  flex: 1;
-                  cursor: pointer;"
+                color: #63656e;
+                text-align: center;
+                flex: 1;
+                cursor: pointer;"
               @click="() => showAdd = true">
               <audit-icon
                 style="margin-right: 5px;
-                    font-size: 14px;
-                    color: #979ba5;"
+                  font-size: 14px;
+                  color: #979ba5;"
                 type="plus-circle" />
               <span>{{ t('自定义字段') }}</span>
               <audit-icon
@@ -73,17 +74,33 @@
             </div>
             <div
               v-else
-              style="width: 240px;">
-              <bk-input
-                v-model="customFields"
-                autofocus
-                :placeholder="t('输入字段ID，多级字段使用“/”分隔')"
-                @enter="confirmAdd" />
-              <bk-input
-                v-model="remark"
-                :placeholder="t('输入备注（非必填）')"
-                style="margin-top: 8px;"
-                @enter="confirmAdd" />
+              style="padding: 12px;">
+              <div>
+                <template
+                  v-for="( customItem, customIndex) in customFields"
+                  :key="customIndex">
+                  <bk-input
+                    v-model="customItem.field"
+                    autofocus
+                    :placeholder="t(`请输入${customIndex + 2}级字段`)"
+                    style="width: 115px; margin-top: 5px;" />
+                  <audit-icon
+                    v-if="customIndex === customFields.length - 1"
+                    class="add-icon"
+                    :class="[!customItem.field ? 'disabled-add-icon' : '']"
+                    type="add-fill"
+                    @click="() => customFields.push({ field: '' })" />
+                  <span
+                    v-else
+                    style="margin: 0 5px;">/</span>
+                </template>
+              </div>
+              <div>
+                <bk-input
+                  v-model="remark"
+                  :placeholder="t('输入备注（非必填）')"
+                  style="margin-top: 8px;" />
+              </div>
               <div style="margin-top: 8px; text-align: right;">
                 <bk-button
                   class="mr8"
@@ -128,7 +145,7 @@
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
   const showAdd = ref(false);
-  const customFields = ref('');
+  const customFields = ref([{ field: '' }]);
   const remark = ref('');
   // const subSelectPopover = ref();
   const isShow = ref(false);
@@ -145,21 +162,26 @@
     if (!props.parentItem) {
       return;
     }
-    const fieldPath = customFields.value.split('/').map(str => str.trim())
-      .filter(Boolean);
-    if (!fieldPath.length) return;
+    // 检查是否所有字段都已填写
+    if (customFields.value.some(item => !item.field)) {
+      return;
+    }
+
+    // 将多个字段合并为一个字符串，用 "/" 分隔
+    const fieldString = customFields.value.map(item => item.field).join('/');
 
     // 构造新字段对象
     const newItem = {
-      field_name: customFields.value,
-      field_alias: remark.value || customFields.value,
+      field_name: fieldString,
+      field_alias: remark.value || fieldString,
       is_json: false,
       property: {},
     };
+
     // 通过事件通知父组件，由父组件去修改数据
     emit('add-sub-field', props.parentItem, newItem);
     // 清空输入框并关闭弹窗
-    customFields.value = '';
+    customFields.value = [{ field: '' }];
     remark.value = '';
     showAdd.value = false;
   };
@@ -202,5 +224,25 @@
 
 .item-list-active:hover .item-icon {
   display: inline-block;
+}
+</style>
+<style lang="postcss">
+.sub-select-popover {
+  /* background-color: red; */
+
+  .add-icon {
+    margin-left: 5px;
+    color: #c4c6cc;
+
+    &:hover {
+      color: #3a84ff;
+    }
+  }
+
+  .disabled-add-icon {
+    color: #dcdee5;
+    cursor: not-allowed;
+    user-select: none
+  }
 }
 </style>
