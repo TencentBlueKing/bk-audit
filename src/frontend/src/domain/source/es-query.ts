@@ -72,6 +72,12 @@ class EsQuery extends ModuleBase {
       params,
     });
   }
+  // 创建日志检索导出任务
+  createQueryTask(params: Record<string, any>) {
+    return Request.post(`${this.path}/collector_query_task/`, {
+      params,
+    });
+  }
 }
 
 export default new EsQuery();
