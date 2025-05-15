@@ -67,6 +67,7 @@ from apps.meta.serializers import (
     ActionSerializer,
     ChangeSystemDiagnosisPushReqSerializer,
     ChangeSystemDiagnosisPushRespSerializer,
+    DeleteGeneralConfigReqSerializer,
     DeleteSystemDiagnosisPushReqSerializer,
     FieldListRequestSerializer,
     FieldListSerializer,
@@ -84,6 +85,7 @@ from apps.meta.serializers import (
     GlobalMetaConfigListSerializer,
     GlobalMetaConfigPostSerializer,
     ListAllTagsRespSerializer,
+    ListGeneralConfigReqSerializer,
     ListUsersRequestSerializer,
     ListUsersResponseSerializer,
     NamespaceSerializer,
@@ -715,6 +717,7 @@ class CreateGeneralConfigResource(Meta, ModelResource):
     model = GeneralConfig
     action = "create"
     serializer_class = GeneralConfigSerializer
+    RequestSerializer = GeneralConfigSerializer
 
 
 class UpdateGeneralConfigResource(Meta, ModelResource):
@@ -723,6 +726,7 @@ class UpdateGeneralConfigResource(Meta, ModelResource):
     model = GeneralConfig
     action = "update"
     serializer_class = GeneralConfigSerializer
+    RequestSerializer = GeneralConfigSerializer
 
 
 class DeleteGeneralConfigResource(Meta, ModelResource):
@@ -731,6 +735,7 @@ class DeleteGeneralConfigResource(Meta, ModelResource):
     model = GeneralConfig
     action = "destroy"
     serializer_class = GeneralConfigSerializer
+    RequestSerializer = DeleteGeneralConfigReqSerializer
 
 
 class ListGeneralConfigResource(Meta, ModelResource):
@@ -741,3 +746,4 @@ class ListGeneralConfigResource(Meta, ModelResource):
     filter_fields = ["scene", "config_name", "created_by"]
     action = "list"
     serializer_class = GeneralConfigSerializer
+    RequestSerializer = ListGeneralConfigReqSerializer

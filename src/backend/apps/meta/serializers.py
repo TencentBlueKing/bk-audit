@@ -41,6 +41,7 @@ from apps.meta.models import (
     DataMap,
     Field,
     GeneralConfig,
+    GeneralConfigScene,
     GlobalMetaConfig,
     Namespace,
     ResourceType,
@@ -445,3 +446,17 @@ class GeneralConfigSerializer(serializers.ModelSerializer):
             "updated_by",
             "updated_at",
         ]
+
+
+class DeleteGeneralConfigReqSerializer(serializers.Serializer):
+    """Delete General Config Request"""
+
+    id = serializers.IntegerField(label=gettext_lazy("配置ID"))
+
+
+class ListGeneralConfigReqSerializer(serializers.Serializer):
+    """List General Config Response"""
+
+    scene = serializers.ChoiceField(choices=GeneralConfigScene.choices, required=False)
+    config_name = serializers.CharField(max_length=255, required=False)
+    created_by = serializers.CharField(max_length=255)
