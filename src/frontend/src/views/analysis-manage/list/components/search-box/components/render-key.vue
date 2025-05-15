@@ -164,8 +164,7 @@
     <!-- 数据导出 -->
     <data-export
       v-model:is-show="isShowDataExport"
-      :data="list"
-      @field-added="handleFieldAdded" />
+      :data="list" />
   </div>
 </template>
 <script setup lang="ts">
@@ -180,8 +179,11 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import AccountManageService from '@service/account-manage';
   import EsQueryService from '@service/es-query';
   import MetaManageService from '@service/meta-manage';
+
+  import AccountModel from '@model/account/account';
 
   import DataExport from './data-export/index.vue';
   import filedConfig from './render-field-config/config';
@@ -250,47 +252,7 @@
     query_string: localFiledConfig.value.query_string,
   };
 
-  const list = ref<any[]>([]);
-
-  // 处理字段添加事件
-  const handleFieldAdded = ({ parentId, newItem }: { parentId: string, newItem: CascaderNode }) => {
-    // 递归查找父节点
-    const findParentNode = (nodes: CascaderNode[], id: string): CascaderNode | null => {
-      for (const node of nodes) {
-        if (node.id === id) {
-          return node;
-        }
-        if (node.children && node.children.length > 0) {
-          const found = findParentNode(node.children, id);
-          if (found) {
-            return found;
-          }
-        }
-      }
-      return null;
-    };
-
-    // 在级联选择器数据中查找父节点
-    const parentNode = findParentNode(list.value, parentId);
-
-    // 如果找到父节点，将新项添加到其子节点中
-    if (parentNode) {
-      // 确保新项有正确的level属性
-      // eslint-disable-next-line no-param-reassign
-      newItem.level = (parentNode.level || 1) + 1;
-
-      // 添加到父节点的children中，但要确保不覆盖field-add-button
-      const addButtonIndex = parentNode.children.findIndex(child => child.id === 'field-add-button');
-
-      if (addButtonIndex !== -1) {
-        // 在field-add-button前插入新项
-        parentNode.children.splice(addButtonIndex, 0, newItem);
-      } else {
-        // 如果没有field-add-button，直接添加到末尾
-        parentNode.children.push(newItem);
-      }
-    }
-  };
+  const list = ref<CascaderNode[]>([]);
 
   // eslint-disable-next-line max-len
   const convertToCascaderList = (arr: any[], level = 1, parentIds: string[] = []): CascaderNode[] => (Array.isArray(arr) ? arr.map((item: any) => {
@@ -326,16 +288,25 @@
     },
   });
 
+  const {
+    data: userInfo,
+  } = useRequest(AccountManageService.fetchUserInfo, {
+    defaultValue: new AccountModel(),
+    manual: true,
+    onSuccess: () => {
+      fetchFavouriteQueryList({
+        scene: 'search_config',
+        created_by: userInfo.value.username,
+      });
+    },
+  });
+
   // 获取收藏搜索条件列表
   const {
     run: fetchFavouriteQueryList,
     data: favouriteQueryList,
   } = useRequest(MetaManageService.fetchFavouriteQueryList, {
     defaultValue: [],
-    defaultParams: {
-      scene: 'search_config',
-    },
-    manual: true,
   });
 
   // 新增收藏搜索条件
@@ -345,7 +316,10 @@
     defaultValue: {},
     onSuccess: () => {
       messageSuccess(t('收藏成功'));
-      fetchFavouriteQueryList();
+      fetchFavouriteQueryList({
+        scene: 'search_config',
+        created_by: userInfo.value.username,
+      });
       favouriteQueryRef.value.hide();
     },
   });
@@ -357,7 +331,10 @@
     defaultValue: {},
     onSuccess: () => {
       messageSuccess(t('删除成功'));
-      fetchFavouriteQueryList();
+      fetchFavouriteQueryList({
+        scene: 'search_config',
+        created_by: userInfo.value.username,
+      });
     },
   });
 
@@ -412,6 +389,22 @@
     const item = favouriteQueryList.value.find((item: any) => item.id === id);
     if (item) {
       localSearchModel.value = item.config_content;
+
+      // 对比 localSearchModel 和 localFiledConfig
+      // 如果 localSearchModel 有的键在 localFiledConfig 中不存在，则添加
+      Object.keys(localSearchModel.value).forEach((key) => {
+        // 排除 datetime_origin 字段
+        if (key !== 'datetime_origin' && !localFiledConfig.value[key]) {
+          // 添加到 localFiledConfig
+          localFiledConfig.value[key] = {
+            label: Array.isArray(JSON.parse(key)) ? JSON.parse(key)[0] : key,
+            type: 'string',
+            required: false,
+            canClose: true,
+            operator: 'like', // 默认like
+          };
+        }
+      });
     }
   };
 
