@@ -77,6 +77,7 @@
     <!-- 添加其他条件 -->
     <search-cascader
       :data="list"
+      :filed-config="localFiledConfig"
       @select="handleCascaderSelect" />
     <!-- <div>
       <BkCheckbox>查询敏感数据</BkCheckbox>
@@ -96,7 +97,8 @@
         {{ t('重置') }}
       </bk-button>
       <bk-button
-        class="mr8">
+        class="mr8"
+        @click="() => isShowDataExport = !isShowDataExport">
         {{ t('导出') }}
       </bk-button>
       <bk-popover
@@ -159,6 +161,11 @@
       </bk-select>
       <!-- <BkButton>添加跟踪策略</BkButton> -->
     </div>
+    <!-- 数据导出 -->
+    <data-export
+      v-model:is-show="isShowDataExport"
+      :data="list"
+      @field-added="handleFieldAdded" />
   </div>
 </template>
 <script setup lang="ts">
@@ -176,6 +183,7 @@
   import EsQueryService from '@service/es-query';
   import MetaManageService from '@service/meta-manage';
 
+  import DataExport from './data-export/index.vue';
   import filedConfig from './render-field-config/config';
   import RenderFieldConfig from './render-field-config/index.vue';
   import SearchCascader from './search-cascader/index.vue';
@@ -185,10 +193,14 @@
   import useRequest from '@/hooks/use-request';
 
   interface CascaderNode {
+    allow_operators: string[]
+    children: CascaderNode[]
+    disabled: boolean
+    dynamic_content: boolean
     id: string
+    isJson: boolean
+    level: number
     name: string
-    disabled?: boolean
-    children?: CascaderNode[]
   }
 
   interface Props {
@@ -206,8 +218,11 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const { feature: isDoris } = useFeature('enable_doris');
+
   const isShow = ref(false);
   const favouriteQueryRef = ref();
+
+  const isShowDataExport = ref(false);
 
   const localSearchModel = ref<Record<string, any>>({});
   const favouriteSearch = ref<Record<string, any>>({});
@@ -237,20 +252,67 @@
 
   const list = ref<any[]>([]);
 
-  const convertToCascaderList = (arr: any[]): CascaderNode[] => (Array.isArray(arr) ? arr.map((item: any) => {
-    const children = item && item.property && Array.isArray(item.property.sub_keys)
-      ? convertToCascaderList(item.property.sub_keys)
-      : [];
-    return {
-      allow_operators: item?.allow_operators || [],
-      dynamic_content: item.property?.dynamic_content ?? false,
-      // 如果id在localFiledConfig的key中，disabled为true
-      disabled: Object.keys(localFiledConfig.value).includes(item?.field_name),
-      isJson: item?.is_json ?? false,
-      id: item?.field_name ?? '',
-      name: item?.description ?? item?.field_alias ?? '',
-      children,
+  // 处理字段添加事件
+  const handleFieldAdded = ({ parentId, newItem }: { parentId: string, newItem: CascaderNode }) => {
+    // 递归查找父节点
+    const findParentNode = (nodes: CascaderNode[], id: string): CascaderNode | null => {
+      for (const node of nodes) {
+        if (node.id === id) {
+          return node;
+        }
+        if (node.children && node.children.length > 0) {
+          const found = findParentNode(node.children, id);
+          if (found) {
+            return found;
+          }
+        }
+      }
+      return null;
     };
+
+    // 在级联选择器数据中查找父节点
+    const parentNode = findParentNode(list.value, parentId);
+
+    // 如果找到父节点，将新项添加到其子节点中
+    if (parentNode) {
+      // 确保新项有正确的level属性
+      // eslint-disable-next-line no-param-reassign
+      newItem.level = (parentNode.level || 1) + 1;
+
+      // 添加到父节点的children中，但要确保不覆盖field-add-button
+      const addButtonIndex = parentNode.children.findIndex(child => child.id === 'field-add-button');
+
+      if (addButtonIndex !== -1) {
+        // 在field-add-button前插入新项
+        parentNode.children.splice(addButtonIndex, 0, newItem);
+      } else {
+        // 如果没有field-add-button，直接添加到末尾
+        parentNode.children.push(newItem);
+      }
+    }
+  };
+
+  // eslint-disable-next-line max-len
+  const convertToCascaderList = (arr: any[], level = 1, parentIds: string[] = []): CascaderNode[] => (Array.isArray(arr) ? arr.map((item: any) => {
+    const currentId = item?.field_name ?? '';
+    // 创建包含所有父级ID的数组
+    const fullIds = level === 1 ?  [currentId] : [...parentIds, currentId];
+
+    const children = item && item.property && Array.isArray(item.property.sub_keys)
+      ? convertToCascaderList(item.property.sub_keys, level + 1, fullIds)
+      : [];
+    const newItem = {
+      allow_operators: item?.allow_operators || [],
+      children,
+      dynamic_content: item.property?.dynamic_content ?? false,
+      disabled: false,
+      id: level === 1 ? currentId : fullIds,
+      isJson: item?.is_json ?? false,
+      level,
+      name: item?.description ?? item?.field_alias ?? '',
+    };
+    newItem.id = Array.isArray(newItem.id) ? JSON.stringify(newItem.id) : newItem.id;
+    return newItem;
   }) : []);
 
   // 获取自定义检索字段
@@ -300,16 +362,21 @@
   });
 
   // 处理级联选择器选中事件，添加搜索项
-  const handleCascaderSelect = (item: any) => {
-    // 这里可以添加选中节点后的处理逻辑
+  const handleCascaderSelect = (item: CascaderNode, isChecked: boolean) => {
     if (item && item.id) {
-      localFiledConfig.value[item.id] = {
-        label: item.name,
-        type: 'string',
-        required: false,
-        canClose: true,
-        operator: 'like', // 默认like
-      };
+      if (isChecked) {
+        // 选中时添加搜索项
+        localFiledConfig.value[item.id] = {
+          label: item.name,
+          type: 'string',
+          required: false,
+          canClose: true,
+          operator: 'like', // 默认like
+        };
+      } else {
+        // 取消选中时删除搜索项
+        handleDeleteField(item.id);
+      }
     }
   };
 
