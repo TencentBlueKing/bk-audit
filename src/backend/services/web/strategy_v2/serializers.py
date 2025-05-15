@@ -1111,8 +1111,26 @@ class RuleAuditSerializer(serializers.Serializer):
     having = RuleAuditHavingSerializer(label=gettext_lazy("Rule Audit Having"), required=False, allow_null=True)
     schedule_config = ScheduleConfigSerializer(label=gettext_lazy("Rule Audit Schedule Config"), required=False)
 
+    def _normalize_empty_clause(self, clause: dict | None) -> dict | None:
+        # 传了 None 或者空容器 => 直接视为没有 where / having
+        if not clause:
+            return None
+
+        # 分别取出单条件 / 多条件
+        single = clause.get("condition")
+        multiple = clause.get("conditions")
+
+        # 如果二者都“空”（None、空 dict、空 list 都算）
+        if not single and not multiple:
+            return None
+        return clause
+
     def validate(self, attrs):
         attrs = super().validate(attrs)
+
+        attrs["where"] = self._normalize_empty_clause(attrs.get("where"))
+        attrs["having"] = self._normalize_empty_clause(attrs.get("having"))
+
         # 高层校验：确保 config_type 与 data_source 的业务逻辑匹配
         # 1. 日志需要指定 rt_id,system_ids
         # 2. 资产和其他数据需要指定 rt_id
