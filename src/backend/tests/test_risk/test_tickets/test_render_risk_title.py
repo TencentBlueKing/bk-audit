@@ -111,4 +111,4 @@ class TestListRenderingInRiskTitle(TestCase):
             "event_evidence": "not_a_json"
         }
         result = RiskHandler.render_risk_title(test_data)
-        self.assertEqual(result, "Risk: a, b, c | (未获取到变量值:nested_list)")    
+        self.assertEqual(result, "Risk: a, b, c | (未获取到变量值:nested_list)")
