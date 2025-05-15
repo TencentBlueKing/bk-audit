@@ -3284,9 +3284,6 @@ msgid "日志搜索(All)"
 msgstr "日志搜索(All)"
 
 msgid "日志统计查询(All)"
-msgstr "日志搜索(All)"
-
-msgid "日志统计查询(All)"
 msgstr "日志统计查询(All)"
 
 msgid "日志查询"
