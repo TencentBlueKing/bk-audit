@@ -111,20 +111,35 @@ class RiskHandler:
     def render_risk_title(cls, create_params: dict) -> Optional[str]:
         """
         生成风险标题
+        自动处理变量中的 list 类型，渲染为逗号拼接的字符串
         """
-
         create_params = create_params.copy()
         strategy: Strategy = Strategy.objects.filter(strategy_id=create_params["strategy_id"]).first()
         if not strategy or not strategy.risk_title:
-            return
+            return None
+
         # 事件证据为字符串需要转换成列表，并取第一条字典数据
         try:
             event_evidence = json.loads(create_params["event_evidence"])[0]
         except (json.JSONDecodeError, IndexError, KeyError):
             event_evidence = {}
         create_params["event_evidence"] = event_evidence
+
+        # 预处理 create_params，自动转换所有 list 为逗号拼接字符串
+        def preprocess_data(data):
+            if isinstance(data, dict):
+                return {k: preprocess_data(v) for k, v in data.items()}
+            elif isinstance(data, list):
+                return ", ".join(str(item) for item in data)
+            return data
+
+        processed_params = preprocess_data(create_params)
+
         try:
-            risk_title = Jinja2Renderer(undefined=RiskTitleUndefined).jinja_render(strategy.risk_title, create_params)
+            risk_title = Jinja2Renderer(undefined=RiskTitleUndefined).jinja_render(
+                strategy.risk_title,
+                processed_params  # 使用预处理后的参数
+            )
             return risk_title
         except UndefinedError as err:
             logger.exception(
