@@ -80,4 +80,11 @@ export default {
     return EsQuerySource.getSearchStatistic(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 创建日志检索导出任务
+   */
+  createQueryTask(params: Record<string, any>) {
+    return EsQuerySource.createQueryTask(params)
+      .then(({ data }) => data);
+  },
 };

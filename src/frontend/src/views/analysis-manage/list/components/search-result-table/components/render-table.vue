@@ -103,7 +103,7 @@
     paginationValidator?: (pagination: IPagination) => boolean
   }
   interface Emits {
-    (e: 'requestSuccess', value: any): void,
+    (e: 'requestSuccess', value: any, total: number): void,
     (e: 'clearSearch'): void,
   }
   interface Exposes {
@@ -156,7 +156,7 @@
       total: 1,
     },
     onSuccess(data) {
-      emits('requestSuccess', data.results);
+      emits('requestSuccess', data.results, data.total);
     },
   });
 

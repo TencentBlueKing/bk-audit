@@ -83,15 +83,21 @@
   }
   interface Emits {
     (e: 'clearSearch'): void
+    (e: 'updateTotal', total: number): void
   }
   interface Exposes {
     loading: Ref<boolean>,
+    tableSearchModel: Ref<Record<string, any>>,
   }
   interface ResultFilter {
-    filters: Array<{
-      field_name: string,
+    conditions: Array<{
+      field: {
+        raw_name: string,
+        field_type?: string,
+        keys: Array<string>,
+      },
       operator: string,
-      filters: Array<string | number>
+      filters: Array<string | number>,
     }>
     [key: string]: any
   }
@@ -133,7 +139,7 @@
         <label>{ t('来源系统(ID)') }</label>
         <FieldStatisticPopover
           fieldName="system_id"
-          params={ listRef.value?.getParamsMemo().value } />
+          params={ tableSearchModel.value } />
       </div>,
       field: 'system_info.name',
       render: ({ data }: {data: SearchModel}) => (
@@ -151,7 +157,7 @@
         <label>{ t('操作事件名(ID)') }</label>
         <FieldStatisticPopover
           fieldName="action_id"
-          params={ listRef.value?.getParamsMemo().value } />
+          params={ tableSearchModel.value } />
       </div>,
       field: 'snapshot_action_info.name',
       render: ({ data }: {data: SearchModel}) => {
@@ -173,7 +179,7 @@
         <label>{ t('资源类型(ID)') }</label>
         <FieldStatisticPopover
           fieldName="resource_type_id"
-          params={ listRef.value?.getParamsMemo().value } />
+          params={ tableSearchModel.value } />
       </div>,
       field: 'snapshot_resource_type_info.name',
       render: ({ data }: {data: SearchModel}) => {
@@ -252,6 +258,8 @@
   const tableColumn = ref(initColumn);
   const isExpand = ref<Record<number, boolean>>({});
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
+  // 经过表格处理的查询参数
+  const tableSearchModel = computed(() => (listRef.value ? listRef.value.getParamsMemo().value : {}));
 
   // Doris接口查询的参数需要调整
   const getFilter = (filter: Record<string, any>) => {
@@ -259,9 +267,9 @@
       return filter;
     }
     const resultFilter: ResultFilter = {
-      filters: [],
+      conditions: [],
     };
-    // 将查询参数添加到 filters 数组中
+    // 将查询参数添加到 conditions 数组中
     Object.entries(filter).forEach(([k, v]) => {
       const config = filedConfig[k];
       if (config && config.operator) {
@@ -271,11 +279,57 @@
         } else {
           value.push(v);
         }
-        resultFilter.filters.push({
-          field_name: k,
-          operator: config.operator,
-          filters: value,
-        });
+
+        // 检查 field 是否为数组字符串格式
+        if (k.startsWith('[') && k.endsWith(']')) {
+          try {
+            const parsedKeys = JSON.parse(k);
+            if (Array.isArray(parsedKeys) && parsedKeys.length > 0) {
+              resultFilter.conditions.push({
+                field: {
+                  raw_name: parsedKeys[0],
+                  // field_type: 'str',
+                  keys: parsedKeys.slice(1), // 排除第一个元素后的数组
+                },
+                operator: config.operator,
+                filters: value,
+              });
+            } else {
+              // 如果解析后不是数组或数组为空，按原样处理
+              resultFilter.conditions.push({
+                field: {
+                  raw_name: k,
+                  // field_type: 'str',
+                  keys: [],
+                },
+                operator: config.operator,
+                filters: value,
+              });
+            }
+          } catch (e) {
+            // 解析 JSON 失败，按原样处理
+            resultFilter.conditions.push({
+              field: {
+                raw_name: k,
+                // field_type: 'str',
+                keys: [],
+              },
+              operator: config.operator,
+              filters: value,
+            });
+          }
+        } else {
+          // 不是数组字符串格式，按原样处理
+          resultFilter.conditions.push({
+            field: {
+              raw_name: k,
+              // field_type: 'str',
+              keys: [],
+            },
+            operator: config.operator,
+            filters: value,
+          });
+        }
       } else {
         resultFilter[k] = v;
       }
@@ -318,7 +372,8 @@
   };
 
   // 根据返回内容生成列筛选项
-  const handleRequestSuccess = (data: Array<SearchModel>) => {
+  const handleRequestSuccess = (data: Array<SearchModel>, total: number) => {
+    emits('updateTotal', total);
     tableColumn.value = tableColumn.value?.map((item) => {
       if (item.filter) {
         const values = data.map(obj => getValueFromPath(obj, item.field as string));
@@ -387,6 +442,7 @@
 
   defineExpose<Exposes>({
     loading: isLoading,
+    tableSearchModel,
   });
 
 </script>
