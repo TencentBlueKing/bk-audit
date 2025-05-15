@@ -92,8 +92,10 @@
     searchBoxRef.value.clearValue();
   };
   // 获取表格数据
-  const handleUpdateTotal = (totalNumber: number) => {
-    total.value = totalNumber;
+  const handleUpdateTotal = (totalNumber: unknown) => {
+    if (typeof totalNumber === 'number') {
+      total.value = totalNumber;
+    }
   };
 
   watch(() => isDoris.value, (data) => {

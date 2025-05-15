@@ -74,9 +74,9 @@
           allow-auto-match
           allow-create
           clearable
-          :filter-callback="handleFilterCallback"
           :list="[]"
-          placeholder="输入关键字搜索" />
+          placeholder="输入关键字搜索"
+          @input="handleInput" />
         <template #content>
           <field-cascader
             v-model="selectedItems"
@@ -249,7 +249,8 @@
     createQueryTask(params);
   };
 
-  const handleFilterCallback = (value: string) => {
+  const handleInput = (value: string) => {
+    console.log('value', value);
     searchKeyword.value = value;
     isSearching.value = true;
   };
