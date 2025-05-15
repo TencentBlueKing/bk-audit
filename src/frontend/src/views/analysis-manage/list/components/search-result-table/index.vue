@@ -255,7 +255,7 @@
   const listRef = ref();
   const route = useRoute();
   const targetList = ref<Array<StandardFieldModel>>([]);
-  const tableColumn = ref(initColumn);
+  const tableColumn = ref(_.cloneDeep(initColumn));
   const isExpand = ref<Record<number, boolean>>({});
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
   // 经过表格处理的查询参数
@@ -350,7 +350,7 @@
     onSuccess: (data) => {
       targetList.value = data || [];
       const customList = formatFields();
-      tableColumn.value  = initColumn.concat(customList as []);
+      tableColumn.value = _.cloneDeep(initColumn).concat(customList as []);
       // tableColumn.value = tableColumn.value.concat(fixedColum);
     },
     manual: true,
@@ -403,14 +403,20 @@
    */
   const formatFields = () => {
     if (targetList.value.length) {
-      const lists = targetList.value.map(item => ({
-        label: () => t(item.description),
-        resizable: true,
-        field: item.field_name,
-        minWidth: 140,
-        showOverflowTooltip: true,
-        render: ({ data }: {data: SearchModel}) =>  (data[item.field_name as keyof SearchModel] || '--'),
-      }));
+      // 获取已有列的field集合，用于去重
+      const existingFields = new Set(initColumn.map(col => col.field));
+
+      // 过滤掉已存在的字段
+      const lists = targetList.value
+        .filter(item => !existingFields.has(item.field_name))
+        .map(item => ({
+          label: () => t(item.description),
+          resizable: true,
+          field: item.field_name,
+          minWidth: 140,
+          showOverflowTooltip: true,
+          render: ({ data }: {data: SearchModel}) =>  (data[item.field_name as keyof SearchModel] || '--'),
+        }));
       return lists;
     }
     return [];
