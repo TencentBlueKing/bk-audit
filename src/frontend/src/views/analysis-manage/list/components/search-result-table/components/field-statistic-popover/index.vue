@@ -35,17 +35,17 @@
         <div class="statistic-title">
           <span>
             {{ t('总行数：') }}
-            <span class="statistic-title-value">{{ statisticData.results.total_rows.length }}</span>
+            <span class="statistic-title-value">{{ statisticData.results.total_rows[0].total_rows }}</span>
           </span>
           <span style="margin: 0 32px;">
             {{ t('出现行数：') }}
-            <span class="statistic-title-value">{{ statisticData.results.non_empty_rows.length }}</span>
+            <span class="statistic-title-value">{{ statisticData.results.non_empty_rows[0].non_empty_rows }}</span>
           </span>
           <span>
             {{ t('日志条数：') }}
             <span class="statistic-title-value">
-              {{ ((statisticData.results.non_empty_rows.length
-                /statisticData.results.total_rows.length) * 100).toFixed(2) }}%
+              {{ ((statisticData.results.non_empty_rows[0].non_empty_rows
+                /statisticData.results.total_rows[0].total_rows) * 100).toFixed(2) }}%
             </span>
           </span>
         </div>
