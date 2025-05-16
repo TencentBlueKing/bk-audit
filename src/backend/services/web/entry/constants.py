@@ -33,6 +33,7 @@ INIT_DORIS_FISHED_KEY = "init_doris_finished_check"
 INIT_REDIS_FISHED_KEY = "init_redis_finished_check"
 INIT_PLUGIN_FISHED_KEY = "init_plugin_finished_check"
 INIT_SNAPSHOT_FINISHED_KEY = "init_snapshot_finished_check"
+INIT_EVENT_FINISHED_KEY = "init_event_finished_check"
 INIT_FIELDS_FINISHED_KEY = "init_fields_finished_check"
 
 DEFAULT_QUERY_STRING_HELP_KEY = "query_string_help"
@@ -63,3 +64,5 @@ TENCENT_WEB_FOOTER = [
 IAM_WEB_URL_KEY = "iam_web_url"
 # 互娱应用系统和敏感操作安全管理规范访问地址
 IEG_STD_OP_DOC_URL_KEY = "ieg_std_op_doc_url"
+# bkbase WEB 访问地址
+BKBASE_WEB_URL_KEY = "bkbase_web_url"

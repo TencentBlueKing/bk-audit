@@ -24,12 +24,13 @@ from pypika.terms import BasicCriterion, EmptyCriterion
 from core.sql.builder import BkBaseTable
 from core.sql.constants import AggregateType, FilterConnector, Operator
 from core.sql.exceptions import (
+    FilterValueError,
     InvalidAggregateTypeError,
     MissingFromOrJoinError,
     TableNotRegisteredError,
     UnsupportedJoinTypeError,
 )
-from core.sql.model import Condition, Field, SqlConfig
+from core.sql.model import Condition, Field, HavingCondition, SqlConfig
 from core.sql.model import Table as SqlTable
 from core.sql.model import WhereCondition
 from core.sql.terms import PypikaField
@@ -99,6 +100,7 @@ class SQLGenerator:
         query = self._build_select(query)
         query = self._build_where(query)
         query = self._build_group_by(query)
+        query = self._build_having(query)
         query = self._build_order_by(query)
         query = self._build_pagination(query)
         return query
@@ -136,45 +138,77 @@ class SQLGenerator:
     def _build_select(self, query: QueryBuilder) -> QueryBuilder:
         """添加 SELECT 子句"""
         for field in self.config.select_fields:
-            pypika_field = self._get_pypika_field(field)
-
-            # 如果存在聚合函数，使用 fn 调用
             if field.aggregate:
-                aggregate_func = AggregateType.get_function(field.aggregate)
-                if not aggregate_func:
-                    raise InvalidAggregateTypeError(field.aggregate)
-                pypika_field = aggregate_func(pypika_field)
+                # 如果存在聚合函数，使用 fn 调用
+                pypika_field = self._build_aggregate(field)
+            else:
+                pypika_field = self._get_pypika_field(field)
 
             pypika_field = pypika_field.as_(field.display_name)
             query = query.select(pypika_field)
         return query
 
+    def _build_aggregate(self, field: Field) -> PypikaField:
+        # 如果存在聚合函数，使用 fn 调用
+        pypika_field = self._get_pypika_field(field)
+        aggregate_func = AggregateType.get_function(field.aggregate)
+        if not aggregate_func:
+            raise InvalidAggregateTypeError(field.aggregate)
+        pypika_field = aggregate_func(pypika_field)
+        return pypika_field
+
     def _build_where(self, query: QueryBuilder) -> QueryBuilder:
         """添加 WHERE 子句"""
         if self.config.where:
-            criterion = self._apply_where_conditions(self.config.where)
+            criterion = self._apply_filter_conditions(self.config.where)
             if criterion:
                 query = query.where(criterion)
         return query
 
+    def _build_having(self, query: QueryBuilder) -> QueryBuilder:
+        """添加 HAVING 子句"""
+        if self.config.having:
+            criterion = self._apply_filter_conditions(self.config.having)
+            if criterion:
+                query = query.having(criterion)
+        return query
+
     def handle_condition(self, condition: Condition) -> BasicCriterion:
         """处理条件"""
-        field = self._get_pypika_field(condition.field)
+        if condition.field.aggregate:
+            # 如果条件字段是聚合函数，则使用聚合函数处理
+            field = self._build_aggregate(condition.field)
+            # 采用聚合函数规定的类型 or 字段本身类型
+            filter_type = (condition.field.aggregate.result_data_type or condition.field.field_type).python_type
+        else:
+            # 否则，使用普通字段处理
+            field = self._get_pypika_field(condition.field)
+            filter_type = condition.field.field_type.python_type
         operator = condition.operator
-        return Operator.handler(operator, field, condition.filter, condition.filters)
+        try:
+            return Operator.handler(
+                operator,
+                field,
+                filter_type(condition.filter) if condition.filter else None,
+                [filter_type(f) for f in condition.filters],
+            )
+        except ValueError:
+            raise FilterValueError(
+                condition.field.raw_name, condition.filter or condition.filters, condition.field.field_type
+            )
 
-    def _apply_where_conditions(self, where_condition: WhereCondition) -> BasicCriterion:
-        """递归构建 WHERE 子句"""
+    def _apply_filter_conditions(self, condition: Union[WhereCondition, HavingCondition]) -> BasicCriterion:
+        """递归构建 WHERE/HAVING 子句"""
         sql_condition = EmptyCriterion()
-        if where_condition.condition:
-            return self.handle_condition(where_condition.condition)
+        if condition.condition:
+            return self.handle_condition(condition.condition)
 
-        if where_condition.conditions:
-            for sub_condition in where_condition.conditions:
-                sub_condition = self._apply_where_conditions(sub_condition)
-                if where_condition.connector == FilterConnector.AND:
+        if condition.conditions:
+            for sub_condition in condition.conditions:
+                sub_condition = self._apply_filter_conditions(sub_condition)
+                if condition.connector == FilterConnector.AND:
                     sql_condition &= sub_condition
-                elif where_condition.connector == FilterConnector.OR:
+                elif condition.connector == FilterConnector.OR:
                     sql_condition |= sub_condition
         return sql_condition
 

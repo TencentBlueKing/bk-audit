@@ -53,7 +53,7 @@ class CreateEventSerializer(serializers.Serializer):
     )
     strategy_id = serializers.IntegerField(label=EventMappingFields.STRATEGY_ID.description)
     event_data = serializers.JSONField(label=EventMappingFields.EVENT_DATA.description, default=dict, allow_null=True)
-    event_time = serializers.IntegerField(label=EventMappingFields.EVENT_TIME.description, default=int)
+    event_time = serializers.IntegerField(label=EventMappingFields.EVENT_TIME.description, default=int, allow_null=True)
     event_evidence = serializers.CharField(
         label=EventMappingFields.EVENT_EVIDENCE.description, default=str, allow_null=True, allow_blank=True
     )
@@ -163,6 +163,12 @@ class ListEventResponseSerializer(serializers.Serializer):
 
     def validate_results(self, results: List[dict]) -> List[dict]:
         for e in results:
+            if e.get("dtEventTimeStamp"):
+                # 优先使用 dtEventTimeStamp 生成
+                # 避免查询关联事件列表接口
+                # 由于 event_time 与 dtEventTimeStamp 不一致
+                # 导致关联事件为空或者不准确
+                e["event_time"] = e["dtEventTimeStamp"]
             try:
                 e["event_time"] = mstimestamp_to_date_string(int(e["event_time"]))
             except (KeyError, TypeError, ValueError):
@@ -171,6 +177,8 @@ class ListEventResponseSerializer(serializers.Serializer):
 
 
 class RiskInfoSerializer(serializers.ModelSerializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+
     class Meta:
         model = Risk
         fields = "__all__"
@@ -199,6 +207,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
     risk_level = serializers.CharField(
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
+    title = serializers.CharField(label=gettext_lazy("Risk Title"), required=False)
 
     def validate(self, attrs: dict) -> dict:
         # 校验
@@ -226,6 +235,8 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["tags__contains"] = data.pop("tags")
         if data.get("event_content"):
             data["event_content__contains"] = data.pop("event_content")
+        if data.get("title"):
+            data["title__contains"] = data.pop("title")
         # 格式转换
         for key, val in attrs.items():
             if key in ["event_time__gte", "event_time__lt", "order_type", "order_field"]:
@@ -260,6 +271,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "risk_label",
             "experiences",
             "last_operate_time",
+            "title",
         ]
 
 

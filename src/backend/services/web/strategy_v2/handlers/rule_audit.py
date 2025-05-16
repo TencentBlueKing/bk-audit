@@ -209,28 +209,33 @@ class RuleAuditSQLBuilder:
 
         # Step C. 构建前端传入的 where 条件
         where_json = config_json.get("where")
-        conditions_to_merge = []
+        where_conditions_to_merge = []
+
         if where_json:
-            conditions_to_merge.append(where_json)
+            where_conditions_to_merge.append(where_json)
 
         # Step D. 为每个包含 system_ids 的表构建条件
         for table_name, system_ids in tables_with_system_ids.items():
             if not system_ids:  # 若没有 system_ids，可根据需要决定是否忽略或抛异常
                 continue
             system_ids_where = self.build_system_ids_condition(table_name, system_ids)
-            conditions_to_merge.append(system_ids_where)
+            where_conditions_to_merge.append(system_ids_where)
 
         # Step E. 合并所有条件
         final_where = None
-        if conditions_to_merge:
-            final_where = WhereCondition(connector=FilterConnector.AND, conditions=conditions_to_merge)
+        if where_conditions_to_merge:
+            final_where = WhereCondition(connector=FilterConnector.AND, conditions=where_conditions_to_merge)
 
-        # Step F. 构造 SqlConfig 并返回
+        # Step F. 构建前端传入的 having 条件
+        final_having = config_json.get("having")
+
+        # Step G. 构造 SqlConfig 并返回
         return SqlConfig(
             select_fields=select_fields,
             from_table=from_table,
             join_tables=join_tables,
             where=final_where,
+            having=final_having,
         )
 
     def format_alias(self, alias: str) -> str:

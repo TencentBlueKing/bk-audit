@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import json
+from datetime import datetime, timedelta
 from typing import List
 
 from django.utils.translation import gettext, gettext_lazy
@@ -36,6 +37,7 @@ from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
     STRATEGY_SCHEDULE_TIME,
+    STRATEGY_STATUS_DEFAULT_INTERVAL,
     ConnectorChoices,
     LinkTableJoinType,
     LinkTableTableType,
@@ -112,6 +114,8 @@ class StrategySerializer(serializers.Serializer):
                 raise serializers.ValidationError(gettext("Control Version not Exists"))
         elif strategy_type == StrategyType.RULE.value:
             if validated_request_data.get("configs", {}).get("config_type") != RuleAuditConfigType.LINK_TABLE:
+                validated_request_data["link_table_uid"] = None
+                validated_request_data["link_table_version"] = None
                 return
             link_table = validated_request_data.get("configs", {}).get("data_source", {}).get("link_table", {})
             # 提取策略内的联表信息
@@ -334,9 +338,7 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         choices=OrderTypeChoices.choices,
     )
     link_table_uid = serializers.CharField(label=gettext_lazy("Link Table UID"), required=False)
-    strategy_type = serializers.ChoiceField(
-        label=gettext_lazy("Storage Type"), choices=StrategyType.choices, required=False
-    )
+    strategy_type = serializers.CharField(label=gettext_lazy("Strategy Type"), required=False)
 
     def validate(self, attrs: dict) -> dict:
         data = super().validate(attrs)
@@ -364,6 +366,7 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(
         label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID"))
     )
+    risk_count = serializers.IntegerField(label=gettext_lazy("Risk Count"))
 
     class Meta:
         model = Strategy
@@ -607,6 +610,23 @@ class GetRTFieldsRequestSerializer(serializers.Serializer):
     table_id = serializers.CharField(label=gettext_lazy("Table ID"))
 
 
+class GetRTMetaRequestSerializer(serializers.Serializer):
+    """
+    Get RT Meta
+    """
+
+    table_id = serializers.CharField(label=gettext_lazy("Table ID"))
+
+
+class GetRTLastDataRequestSerializer(serializers.Serializer):
+    """
+    Get RT Last Data
+    """
+
+    table_id = serializers.CharField(label=gettext_lazy("Table ID"))
+    limit = serializers.IntegerField(label=gettext_lazy("Limit"), required=False, default=5)
+
+
 class BulkGetRTFieldsRequestSerializer(serializers.Serializer):
     """
     Bulk Get RT Fields
@@ -629,7 +649,9 @@ class GetRTFieldsResponseSerializer(serializers.Serializer):
 
     label = serializers.CharField(label=gettext_lazy("Label"))
     value = serializers.CharField(label=gettext_lazy("value"))
+    alias = serializers.CharField(label=gettext_lazy("Alias"))
     field_type = serializers.CharField(label=gettext_lazy("Field Type"))
+    spec_field_type = serializers.CharField(label=gettext_lazy("Spec Field Type"))
 
 
 class BulkGetRTFieldsResponseSerializer(serializers.Serializer):
@@ -737,7 +759,9 @@ class LinkTableConfigTableSerializer(serializers.Serializer):
 
     rt_id = serializers.CharField(label=gettext_lazy("Result Table ID"))
     table_type = serializers.ChoiceField(label=gettext_lazy("Table Type"), choices=LinkTableTableType.choices)
-    display_name = serializers.CharField(label=gettext_lazy("Display Name"), required=False)
+    display_name = serializers.CharField(
+        label=gettext_lazy("Display Name"), required=False, allow_blank=True, allow_null=True
+    )
     system_ids = serializers.ListField(
         label=gettext_lazy("System IDs"), child=serializers.CharField(max_length=64), required=False
     )
@@ -970,7 +994,9 @@ class RuleAuditDataSourceSerializer(serializers.Serializer):
         label=gettext_lazy("System ID"), child=serializers.CharField(), required=False, allow_empty=True
     )
     link_table = RuleAuditLinkTableSerializer(label=gettext_lazy("Link Table"), required=False, allow_null=True)
-    display_name = serializers.CharField(label=gettext_lazy("Display Name"), required=False)
+    display_name = serializers.CharField(
+        label=gettext_lazy("Display Name"), required=False, allow_blank=True, allow_null=True
+    )
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -1006,6 +1032,7 @@ class RuleAuditWhereSerializer(serializers.Serializer):
     Rule Audit Where
     """
 
+    index = serializers.IntegerField(label=gettext_lazy("Index"), required=False, default=0)
     connector = serializers.ChoiceField(
         label=gettext_lazy("Connector"),
         choices=RuleAuditWhereConnector.choices,
@@ -1031,13 +1058,37 @@ class RuleAuditWhereSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        # conditions 和 condition 必须只有一个存在
-        if not (attrs.get("condition") or attrs.get("conditions")):
-            raise serializers.ValidationError(gettext("Rule Audit Where must have condition or conditions"))
         if attrs.get("condition") and attrs.get("conditions"):
             raise serializers.ValidationError(
                 gettext("Rule Audit Where can not have condition and conditions at the same time")
             )
+        return attrs
+
+
+class RuleAuditHavingSerializer(RuleAuditWhereSerializer):
+    def to_internal_value(self, instance):
+        """
+        自定义序列化逻辑: 递归解析 conditions
+        """
+
+        ret = super().to_representation(instance)
+
+        # 递归处理 conditions
+        conditions = instance.get('conditions', [])
+        ret['conditions'] = [
+            RuleAuditHavingSerializer(condition, context=self.context).data for condition in conditions
+        ]
+
+        return ret
+
+    def validate(self, attrs):
+        """如果 condition 存在，检查其 field 中的 aggregate"""
+        attrs = super().validate(attrs)
+        condition = attrs.get("condition", {})
+        if condition:
+            field = condition.get('field', {})
+            if field and 'aggregate' in field and not field['aggregate']:
+                raise serializers.ValidationError(gettext("Field in having condition must have aggregate set to True"))
         return attrs
 
 
@@ -1053,11 +1104,30 @@ class RuleAuditSerializer(serializers.Serializer):
     select = serializers.ListField(
         label=gettext_lazy("Rule Audit Select"), child=RuleAuditFieldSerializer(), allow_empty=False
     )
-    where = RuleAuditWhereSerializer(label=gettext_lazy("Rule Audit Where"), required=False)
+    where = RuleAuditWhereSerializer(label=gettext_lazy("Rule Audit Where"), required=False, allow_null=True)
+    having = RuleAuditHavingSerializer(label=gettext_lazy("Rule Audit Having"), required=False, allow_null=True)
     schedule_config = ScheduleConfigSerializer(label=gettext_lazy("Rule Audit Schedule Config"), required=False)
+
+    def _normalize_empty_clause(self, clause: dict | None) -> dict | None:
+        # 传了 None 或者空容器 => 直接视为没有 where / having
+        if not clause:
+            return None
+
+        # 分别取出单条件 / 多条件
+        single = clause.get("condition")
+        multiple = clause.get("conditions")
+
+        # 如果二者都“空”（None、空 dict、空 list 都算）
+        if not single and not multiple:
+            return None
+        return clause
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+
+        attrs["where"] = self._normalize_empty_clause(attrs.get("where"))
+        attrs["having"] = self._normalize_empty_clause(attrs.get("having"))
+
         # 高层校验：确保 config_type 与 data_source 的业务逻辑匹配
         # 1. 日志需要指定 rt_id,system_ids
         # 2. 资产和其他数据需要指定 rt_id
@@ -1113,3 +1183,35 @@ class RuleAuditSourceTypeCheckRespSerializer(serializers.Serializer):
         label=gettext_lazy("Support Source Types"),
         child=serializers.ChoiceField(choices=RuleAuditSourceType.choices),
     )
+
+
+class StrategyRunningStatusListReqSerializer(serializers.Serializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False)
+    end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False)
+    limit = serializers.IntegerField(label=gettext_lazy("Limit"), default=100)
+    offset = serializers.IntegerField(label=gettext_lazy("Offset"), default=0)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not (attrs.get("start_time") and attrs.get("end_time")):
+            end_time = datetime.now()
+            start_time = end_time - timedelta(days=STRATEGY_STATUS_DEFAULT_INTERVAL)
+            attrs["start_time"] = start_time
+            attrs["end_time"] = end_time
+        if attrs["end_time"] < attrs["start_time"]:
+            raise serializers.ValidationError(gettext("End time must be greater than start time"))
+        return attrs
+
+
+class RunningStatusSerializer(serializers.Serializer):
+    schedule_time = serializers.CharField(label=gettext_lazy("调度时间"))
+    err_msg = serializers.CharField(label=gettext_lazy("错误信息"), allow_blank=True, allow_null=True)
+    status = serializers.CharField(label=gettext_lazy("状态"), allow_blank=True, allow_null=True)
+    status_str = serializers.CharField(label=gettext_lazy("状态字符串"), allow_blank=True, allow_null=True)
+    risk_count = serializers.IntegerField(label=gettext_lazy("风险数量"))
+    data_time = serializers.CharField(label=gettext_lazy("数据时间"))
+
+
+class StrategyRunningStatusListRespSerializer(serializers.Serializer):
+    strategy_running_status = RunningStatusSerializer(many=True)

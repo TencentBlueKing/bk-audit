@@ -67,6 +67,7 @@ export default class Strategy {
       connector: 'and' | 'or' ;
       conditions: Array<{
         connector: 'and' | 'or';
+        index: number;
         conditions: Array<{
           condition: {
             field: DatabaseTableFieldModel | '';
@@ -92,9 +93,11 @@ export default class Strategy {
   risk_hazard: string;
   risk_guidance: string;
   risk_title: string;
+  risk_count: number;
   strategy_type: string;
   event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
+  event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
   processor_groups: Array<number>;
   link_table_uid: string;
   link_table_version: number;
@@ -120,9 +123,11 @@ export default class Strategy {
     this.risk_hazard = payload.risk_hazard;
     this.risk_guidance = payload.risk_guidance;
     this.risk_title = payload.risk_title;
+    this.risk_count = payload.risk_count; // 风险数量
     this.strategy_type = payload.strategy_type;
     this.event_data_field_configs = payload.event_data_field_configs;
     this.event_basic_field_configs = payload.event_basic_field_configs;
+    this.event_evidence_field_configs = payload.event_evidence_field_configs;
     this.processor_groups = payload.processor_groups;
     this.link_table_uid = payload.link_table_uid;
     this.link_table_version = payload.link_table_version;

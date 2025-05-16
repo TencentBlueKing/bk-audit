@@ -27,7 +27,10 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from api.bk_base.constants import UNSUPPORTED_CODE
-from api.bk_base.serializers import QuerySyncRequestSerializer
+from api.bk_base.serializers import (
+    DataflowBatchStatusListReqSerializer,
+    QuerySyncRequestSerializer,
+)
 from api.domains import BK_BASE_API_URL
 
 
@@ -333,6 +336,19 @@ class EditAlertConfigs(BkBaseResource):
     url_keys = ["alert_config_id"]
 
 
+class GetRoleUsersList(BkBaseResource):
+    name = gettext_lazy("列举角色用户")
+    action = "/v3/auth/roles/{role_id}/users/"
+    method = "GET"
+    url_keys = ["role_id"]
+
+
+class GetSensitivityInfoViaDataset(BkBaseResource):
+    name = gettext_lazy("获取敏感度信息")
+    action = "/v3/auth/sensitivity/retrieve_dataset/"
+    method = "GET"
+
+
 class QuerySyncResource(BkBaseResource):
     """
     查询数据
@@ -342,3 +358,13 @@ class QuerySyncResource(BkBaseResource):
     method = "POST"
     TIMEOUT = 60 * 5
     RequestSerializer = QuerySyncRequestSerializer
+
+
+class DataflowBatchStatusList(BkBaseResource):
+    """
+    查询离线任务状态列表
+    """
+
+    action = "/v3/dataflow/batch/data_makeup/status_list/"
+    method = "GET"
+    RequestSerializer = DataflowBatchStatusListReqSerializer

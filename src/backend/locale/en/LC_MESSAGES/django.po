@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-02 21:01+0800\n"
+"POT-Creation-Date: 2025-05-08 17:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -153,6 +153,12 @@ msgstr "Get Alert Config Detail"
 msgid "修改部分告警策略配置配置"
 msgstr "Edit Alert Config"
 
+msgid "列举角色用户"
+msgstr "List the role users"
+
+msgid "获取敏感度信息"
+msgstr "Obtain sensitivity information"
+
 msgid "App Code"
 msgstr "App Code"
 
@@ -164,6 +170,24 @@ msgstr "Storage"
 
 msgid "认证方式"
 msgstr "Auth Type"
+
+msgid "RT ID"
+msgstr "RT ID"
+
+msgid "查询开始时间"
+msgstr "Search Start Time"
+
+msgid "查询结束时间"
+msgstr "Search End Time"
+
+msgid "地域"
+msgstr "Region"
+
+msgid "限制条数"
+msgstr "Limit"
+
+msgid "偏移量"
+msgstr "Offset"
 
 msgid "获取消息类型"
 msgstr "Get Msg Type"
@@ -1230,6 +1254,9 @@ msgstr "Description"
 msgid "优先指数"
 msgstr "Priority Index"
 
+msgid "通用属性列"
+msgstr "General attribute column"
+
 msgid "字段"
 msgstr "Field"
 
@@ -1348,7 +1375,7 @@ msgid "未知用户"
 msgstr "Abnormal User"
 
 msgid "获取敏感对象"
-msgstr "Get Sensitive Obj"
+msgstr "Obtain sensitive objects"
 
 msgid "上传数据字典文件"
 msgstr "Upload Data Map File"
@@ -1388,6 +1415,11 @@ msgstr "Sort Type"
 
 msgid "状态筛选"
 msgstr "Status Filter"
+
+#, fuzzy
+#| msgid "系统来源类型"
+msgid "来源类型"
+msgstr "System Source Type"
 
 msgid "权限"
 msgstr "Permission"
@@ -1671,10 +1703,6 @@ msgstr "Notice Group Name Duplicate"
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
 
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【BK Audit%s】"
-
 msgid "异常信息"
 msgstr "Error Msg"
 
@@ -1863,6 +1891,11 @@ msgstr "Delete Storage"
 
 msgid "敏感信息对象列表"
 msgstr "List Sensitive OBJECT"
+
+#, fuzzy
+#| msgid "全局设置管理"
+msgid "全局设置查看"
+msgstr "View Global Setting"
 
 msgid "全局设置管理"
 msgstr "Manage Global Setting"
@@ -2242,19 +2275,16 @@ msgstr "Unsupported aggregate type: '{aggregate_type}'."
 msgid "配置中必须指定 `from_table` 或 `join_tables`。"
 msgstr "`from_table` or `join_tables` must be specified in the configuration."
 
-#, fuzzy, python-brace-format
-#| msgid "操作符 {operator} 的值 {value} 不符合预期。"
+#, python-brace-format
 msgid "操作符 {operator} 的值 {value} 不符合预期。"
-msgstr "The value of operator {operator} is not as expected."
+msgstr "The {value} of operator {operator} is not as expected."
+
+#, python-brace-format
+msgid "条件表达式中字段 {field} 的值 {value} 无法转换成预期类型 {type}。"
+msgstr "The value {value} of the field {field} in the conditional expression cannot be converted to the expected type {type}."
 
 msgid "数据拉取"
 msgstr "Data Pull"
-
-msgid "未实现方法"
-msgstr "Unimplemented Method"
-
-msgid "未实现类型"
-msgstr "Unimplemented Type"
 
 msgid "Control Name"
 msgstr "Control Name"
@@ -3768,6 +3798,9 @@ msgstr "Link Table Name Exists"
 msgid "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
 msgstr "Unsupported data source type: current type is {source_type}, supported types are: {support_source_types}"
 
+msgid "策略无离线计算任务节点"
+msgstr "Strategy has no batchV2 calculation task nodes"
+
 #, python-format
 msgid "source_field %s not found"
 msgstr "source_field %s not found"
@@ -3877,6 +3910,12 @@ msgstr "Get RT Fields"
 msgid "Bulk Get RT Fields"
 msgstr "Bulk Get RT Fields"
 
+msgid "Get RT Meta"
+msgstr "Get RT Meta"
+
+msgid "Get RT Last Data"
+msgstr "Get RT Last Data"
+
 msgid "Get Strategy Status"
 msgstr "Get Strategy Status"
 
@@ -3907,6 +3946,9 @@ msgstr "Query Join Table Tags List"
 
 msgid "规则审计调度类型检查"
 msgstr "Rule Audit Source Type Check"
+
+msgid "查询策略运行状态列表"
+msgstr "Query Strategy Running Status List"
 
 msgid "Source Field"
 msgstr "Source Field"
@@ -3959,6 +4001,9 @@ msgstr "Processor Group"
 
 msgid "Strategy Name Duplicate"
 msgstr "Strategy Name Duplicate"
+
+msgid "Risk Count"
+msgstr "Risk Count"
 
 msgid "Toggle"
 msgstr "Toggle"
@@ -4089,6 +4134,9 @@ msgstr "Plan variables"
 msgid "Table ID"
 msgstr "Table ID"
 
+msgid "Limit"
+msgstr "Limit"
+
 msgid "Table IDS"
 msgstr "Table IDS"
 
@@ -4097,6 +4145,12 @@ msgstr "Multiple separated by commas"
 
 msgid "value"
 msgstr "value"
+
+msgid "Alias"
+msgstr "Alias"
+
+msgid "Spec Field Type"
+msgstr "Spec Field Type"
 
 msgid "Strategy IDs"
 msgstr "Strategy IDs"
@@ -4195,6 +4249,9 @@ msgstr "Rule Audit Where must have either condition or conditions"
 msgid "Rule Audit Where can not have condition and conditions at the same time"
 msgstr "Rule Audit Where cannot have both condition and conditions at the same time"
 
+msgid "Field in having condition must have aggregate set to True"
+msgstr "Field in having condition must have aggregate set to True"
+
 msgid "Rule Audit Data Source"
 msgstr "Rule Audit Data Source"
 
@@ -4203,6 +4260,9 @@ msgstr "Rule Audit Select"
 
 msgid "Rule Audit Where"
 msgstr "Rule Audit Where"
+
+msgid "Rule Audit Having"
+msgstr "Rule Audit Having"
 
 msgid "Rule Audit Schedule Config"
 msgstr "Rule Audit Schedule Config"
@@ -4224,6 +4284,27 @@ msgstr "Batch rule audit need schedule_config"
 
 msgid "Support Source Types"
 msgstr "Support Source Types"
+
+msgid "Offset"
+msgstr "Offset"
+
+msgid "End time must be greater than start time"
+msgstr "End time must be greater than start time"
+
+msgid "调度时间"
+msgstr "Schedule Time"
+
+msgid "错误信息"
+msgstr "Error Message"
+
+msgid "状态字符串"
+msgstr "Status String"
+
+msgid "风险数量"
+msgstr "Risk Count"
+
+msgid "数据时间"
+msgstr "Data Time"
 
 msgid "版本日志"
 msgstr "Version Log"

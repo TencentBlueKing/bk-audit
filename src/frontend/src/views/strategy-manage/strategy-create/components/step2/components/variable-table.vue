@@ -22,15 +22,17 @@
     ref="variableTable"
     :columns="tableColumn"
     :data="variableData"
+    show-overflow-tooltip
     style="max-height: 320px;"
     width="100%" />
 </template>
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { onActivated, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import StrategyManageService from '@service/strategy-manage';
 
+  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
   import {
@@ -43,7 +45,8 @@
     (e: 'isCopy'): void;
   }
   interface Props {
-    strategyId: number
+    strategyId: number,
+    select: Array<DatabaseTableFieldModel>,
   }
 
   const props = defineProps<Props>();
@@ -75,25 +78,53 @@
 
   const variableData = ref<StrategyFieldEvent['event_basic_field_configs']>([]);
 
-  useRequest(StrategyManageService.fetchStrategyEvent, {
+  const createField = (item: DatabaseTableFieldModel) => ({
+    field_name: item.display_name,
+    display_name: item.display_name,
+    is_priority: false,
+    map_config: {
+      target_value: '',
+      source_field: '',
+    },
+    description: '',
+    example: '',
+    prefix: 'event_data',
+  });
+
+  const process = () => {
+    if (props.select && props.select.length) {
+      // 根据select更新event_data_field_configs
+      tableData.value.event_data_field_configs = props.select.map(item => createField(item));
+    }
+    variableData.value = [
+      ...tableData.value.event_basic_field_configs,
+      ...tableData.value.event_data_field_configs,
+    ];
+  };
+
+  const {
+    data: tableData,
+  } = useRequest(StrategyManageService.fetchStrategyEvent, {
     defaultValue: new StrategyFieldEvent(),
     defaultParams: {
       strategy_id: props.strategyId,
     },
-    onSuccess: (data) => {
-      variableData.value = [
-        ...data.event_basic_field_configs,
-        ...data.event_data_field_configs,
-      ];
+    onSuccess: () => {
+      process();
     },
     manual: true,
   });
 
   const handleVariableCopy = (e: Event, prefix: string, value: string) => {
+    const formattedVariable = prefix ? `{{${prefix}.${value}}}` : `{{${value}}}`;
     e.stopPropagation();
     emits('isCopy');
-    execCopy(`{{${prefix}${value}}}`, t('变量 {variable} 复制成功', { variable: `{{${value}}}` }));
+    execCopy(formattedVariable, t('变量 {variable} 复制成功', { variable: `{{${value}}}` }));
   };
+
+  onActivated(() => {
+    process();
+  });
 </script>
 <style lang="postcss" scoped>
 .title {

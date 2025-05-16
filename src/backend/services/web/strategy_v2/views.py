@@ -31,7 +31,7 @@ from apps.permission.handlers.resource_types import ResourceEnum
 
 class StrategyViewSet(ResourceViewSet):
     def get_permissions(self):
-        if self.action in ["list"]:
+        if self.action in ["list", "strategy_running_status_list"]:
             return [IAMPermission(actions=[ActionEnum.LIST_STRATEGY])]
         if self.action in ["create"]:
             return [IAMPermission(actions=[ActionEnum.CREATE_STRATEGY])]
@@ -65,6 +65,12 @@ class StrategyViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.strategy_v2.get_strategy_display_info, endpoint="display_info"),
         ResourceRoute(
             "POST", resource.strategy_v2.rule_audit_source_type_check, endpoint="rule_audit_source_type_check"
+        ),
+        ResourceRoute(
+            "GET",
+            resource.strategy_v2.strategy_running_status_list,
+            pk_field="strategy_id",
+            endpoint="strategy_running_status_list",
         ),
     ]
 
@@ -109,6 +115,8 @@ class StrategyTableViewSet(ResourceViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.strategy_v2.list_tables),
         ResourceRoute("GET", resource.strategy_v2.get_rt_fields, endpoint="rt_fields"),
+        ResourceRoute("GET", resource.strategy_v2.get_rt_meta, endpoint="rt_meta"),
+        ResourceRoute("GET", resource.strategy_v2.get_rt_last_data, endpoint="rt_last_data"),
         ResourceRoute("GET", resource.strategy_v2.bulk_get_rt_fields, endpoint="bulk_rt_fields"),
     ]
 

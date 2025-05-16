@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-04-02 21:01+0800\n"
+"POT-Creation-Date: 2025-05-08 17:23+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -153,6 +153,12 @@ msgstr "获取告警策略配置详情"
 msgid "修改部分告警策略配置配置"
 msgstr "修改部分告警策略配置配置"
 
+msgid "列举角色用户"
+msgstr "列举角色用户"
+
+msgid "获取敏感度信息"
+msgstr "获取敏感度信息"
+
 msgid "App Code"
 msgstr "App Code"
 
@@ -164,6 +170,24 @@ msgstr "存储类型"
 
 msgid "认证方式"
 msgstr "认证方式"
+
+msgid "RT ID"
+msgstr "RT ID"
+
+msgid "查询开始时间"
+msgstr "查询开始时间"
+
+msgid "查询结束时间"
+msgstr "查询结束时间"
+
+msgid "地域"
+msgstr "地域"
+
+msgid "限制条数"
+msgstr "限制条数"
+
+msgid "偏移量"
+msgstr "偏移量"
 
 msgid "获取消息类型"
 msgstr "获取消息类型"
@@ -1230,6 +1254,9 @@ msgstr "描述"
 msgid "优先指数"
 msgstr "优先指数"
 
+msgid "通用属性列"
+msgstr "通用属性列"
+
 msgid "字段"
 msgstr "字段"
 
@@ -1388,6 +1415,11 @@ msgstr "排序方式"
 
 msgid "状态筛选"
 msgstr "状态筛选"
+
+#, fuzzy
+#| msgid "系统来源类型"
+msgid "来源类型"
+msgstr "系统来源类型"
 
 msgid "权限"
 msgstr "权限"
@@ -1671,10 +1703,6 @@ msgstr "通知组名称重复"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【蓝鲸审计中心%s】"
-
 msgid "异常信息"
 msgstr "异常信息"
 
@@ -1863,6 +1891,9 @@ msgstr "数据存储删除"
 
 msgid "敏感信息对象列表"
 msgstr "敏感信息对象列表"
+
+msgid "全局设置查看"
+msgstr "全局设置查看"
 
 msgid "全局设置管理"
 msgstr "全局设置管理"
@@ -2246,14 +2277,12 @@ msgstr "配置中必须指定 `from_table` 或 `join_tables`。"
 msgid "操作符 {operator} 的值 {value} 不符合预期。"
 msgstr "操作符 {operator} 的值 {value} 不符合预期。"
 
+#, python-brace-format
+msgid "条件表达式中字段 {field} 的值 {value} 无法转换成预期类型 {type}。"
+msgstr "条件表达式中字段 {field} 的值 {value} 无法转换成预期类型 {type}。"
+
 msgid "数据拉取"
 msgstr "数据拉取"
-
-msgid "未实现方法"
-msgstr "未实现方法"
-
-msgid "未实现类型"
-msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -3765,6 +3794,9 @@ msgstr "联表名称已存在"
 msgid "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
 msgstr "不支持的数据源类型:当前数据源类型为{source_type}, 支持的数据源类型为:{support_source_types}"
 
+msgid "策略无离线计算任务节点"
+msgstr "策略无离线计算任务节点"
+
 #, python-format
 msgid "source_field %s not found"
 msgstr "来源字段 %s 不存在"
@@ -3874,6 +3906,12 @@ msgstr "获取RT字段"
 msgid "Bulk Get RT Fields"
 msgstr "批量获取RT字段"
 
+msgid "Get RT Meta"
+msgstr "获取RT字段"
+
+msgid "Get RT Last Data"
+msgstr "获取RT最新数据"
+
 msgid "Get Strategy Status"
 msgstr "获取策略状态"
 
@@ -3904,6 +3942,9 @@ msgstr "查询联表标签列表"
 
 msgid "规则审计调度类型检查"
 msgstr "规则审计调度类型检查"
+
+msgid "查询策略运行状态列表"
+msgstr "查询策略运行状态列表"
 
 msgid "Source Field"
 msgstr "来源字段"
@@ -3956,6 +3997,9 @@ msgstr "处理组"
 
 msgid "Strategy Name Duplicate"
 msgstr "策略名称重复"
+
+msgid "Risk Count"
+msgstr "风险数量"
 
 msgid "Toggle"
 msgstr "启停"
@@ -4086,6 +4130,9 @@ msgstr "方案参数"
 msgid "Table ID"
 msgstr "结果表ID"
 
+msgid "Limit"
+msgstr "限制量"
+
 msgid "Table IDS"
 msgstr "结果表IDS"
 
@@ -4094,6 +4141,12 @@ msgstr "多个以逗号分隔"
 
 msgid "value"
 msgstr "值"
+
+msgid "Alias"
+msgstr "别名"
+
+msgid "Spec Field Type"
+msgstr "审计风格字段类型"
 
 msgid "Strategy IDs"
 msgstr "策略ID"
@@ -4176,6 +4229,9 @@ msgstr "规则审计的 Where 必须包含 condition 或 conditions"
 msgid "Rule Audit Where can not have condition and conditions at the same time"
 msgstr "规则审计的 Where 不能同时包含 condition 和 conditions"
 
+msgid "Field in having condition must have aggregate set to True"
+msgstr "HAVING 条件中的字段必须设置聚合为 True"
+
 msgid "Rule Audit Data Source"
 msgstr "规则审计数据源"
 
@@ -4184,6 +4240,9 @@ msgstr "规则审计选择"
 
 msgid "Rule Audit Where"
 msgstr "规则审计的 Where"
+
+msgid "Rule Audit Having"
+msgstr "规则审计聚合过滤条件"
 
 msgid "Rule Audit Schedule Config"
 msgstr "规则审计的调度配置"
@@ -4205,6 +4264,27 @@ msgstr "离线规则审计的需要调度配置"
 
 msgid "Support Source Types"
 msgstr "调度类型"
+
+msgid "Offset"
+msgstr "偏移量"
+
+msgid "End time must be greater than start time"
+msgstr "结束时间必须大于开始时间"
+
+msgid "调度时间"
+msgstr "调度时间"
+
+msgid "错误信息"
+msgstr "错误信息"
+
+msgid "状态字符串"
+msgstr "状态字符串"
+
+msgid "风险数量"
+msgstr "风险数量"
+
+msgid "数据时间"
+msgstr "数据时间"
 
 msgid "版本日志"
 msgstr "版本日志"

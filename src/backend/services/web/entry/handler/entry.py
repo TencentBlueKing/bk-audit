@@ -28,6 +28,7 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
+    BKBASE_WEB_URL_KEY,
     DEFAULT_QUERY_STRING_HELP_ENV_KEY,
     DEFAULT_QUERY_STRING_HELP_KEY,
     DEFAULT_SCHEMA_HELP,
@@ -95,6 +96,10 @@ class EntryHandler(object):
             "system_diagnosis": {
                 "iam_web_url": GlobalMetaConfig.get(IAM_WEB_URL_KEY, default=""),
                 "ieg_std_op_doc_url": GlobalMetaConfig.get(IEG_STD_OP_DOC_URL_KEY, default=""),
+            },
+            # 三方系统地址
+            "third_party_system": {
+                "bkbase_web_url": GlobalMetaConfig.get(BKBASE_WEB_URL_KEY, default=""),
             },
         }
         return data

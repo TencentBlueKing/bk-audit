@@ -145,6 +145,24 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 获取表格信息
+   */
+  fetchTableRtMeta(params: {
+    table_id: string
+  }) {
+    return StrategySource.getTableRtMeta(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取表格最后一条数据
+   */
+  fetchTableRtLastData(params: {
+    table_id: string
+  }) {
+    return StrategySource.getTableRtLastData(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 批量获取表格下的rt字段
    */
   fetchBatchTableRtFields(params: {
@@ -267,12 +285,24 @@ export default {
   },
 
   /**
-* @desc 获取风险单风险等级
-*/
+  * @desc 获取风险单风险等级
+  */
   fetchRiskLevel(params: {
     strategy_ids: string
   }) {
     return StrategySource.getRiskLevel(params)
+      .then(({ data }) => data);
+  },
+
+  /**
+  * @desc 获取风险单运行记录
+  */
+  fetchRisksRunning(params: {
+    limit: number,
+    offset: number,
+    strategy_id: string
+  }) {
+    return StrategySource.getRisksRunning(params)
       .then(({ data }) => data);
   },
 };

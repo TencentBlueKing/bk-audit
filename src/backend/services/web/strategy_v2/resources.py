@@ -20,6 +20,7 @@ import abc
 import datetime
 import json
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import cached_property
 from typing import List, Optional
 
@@ -31,10 +32,11 @@ from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, IntegerField, OuterRef, Q, QuerySet, Subquery
 from django.db.models.aggregates import Min
 from django.http import Http404
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
 from rest_framework.settings import api_settings
@@ -68,17 +70,18 @@ from services.web.analyze.constants import (
 )
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
+from services.web.analyze.utils import is_asset
 from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.risk.constants import EventMappingFields
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.constants import (
-    BKBASE_INTERNAL_FIELD,
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     LOCAL_UPDATE_FIELDS,
     NO_TAG_ID,
     NO_TAG_NAME,
+    STRATEGY_RISK_DEFAULT_INTERVAL,
     EventInfoField,
     LinkTableJoinType,
     LinkTableTableType,
@@ -104,6 +107,9 @@ from services.web.strategy_v2.exceptions import (
     StrategyTypeCanNotChange,
 )
 from services.web.strategy_v2.handlers.rule_audit import RuleAuditSQLBuilder
+from services.web.strategy_v2.handlers.strategy_running_status import (
+    StrategyRunningStatusHandler,
+)
 from services.web.strategy_v2.models import (
     LinkTable,
     LinkTableAuditInstance,
@@ -125,6 +131,8 @@ from services.web.strategy_v2.serializers import (
     GetLinkTableResponseSerializer,
     GetRTFieldsRequestSerializer,
     GetRTFieldsResponseSerializer,
+    GetRTLastDataRequestSerializer,
+    GetRTMetaRequestSerializer,
     GetStrategyCommonResponseSerializer,
     GetStrategyDisplayInfoRequestSerializer,
     GetStrategyFieldValueRequestSerializer,
@@ -145,6 +153,8 @@ from services.web.strategy_v2.serializers import (
     RuleAuditSourceTypeCheckReqSerializer,
     RuleAuditSourceTypeCheckRespSerializer,
     StrategyInfoSerializer,
+    StrategyRunningStatusListReqSerializer,
+    StrategyRunningStatusListRespSerializer,
     ToggleStrategyRequestSerializer,
     UpdateLinkTableRequestSerializer,
     UpdateLinkTableResponseSerializer,
@@ -155,6 +165,7 @@ from services.web.strategy_v2.utils.field_value import FieldValueHandler
 from services.web.strategy_v2.utils.table import (
     RuleAuditSourceTypeChecker,
     TableHandler,
+    enhance_rt_fields,
 )
 
 
@@ -309,7 +320,7 @@ class UpdateStrategy(StrategyV2Base):
         # save strategy
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
-            # 不同且不在本地更新清单中的字段才触发远程更新
+            # 不同且不在本地更新清单中的字段才触发远程flow更新
             if inst_val != val and key not in LOCAL_UPDATE_FIELDS:
                 need_update_remote = True
             setattr(strategy, key, val)
@@ -317,7 +328,7 @@ class UpdateStrategy(StrategyV2Base):
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
         # update rule audit sql
-        if strategy.strategy_type == StrategyType.RULE:
+        if need_update_remote and strategy.strategy_type == StrategyType.RULE:
             strategy.sql = self.build_rule_audit_sql(strategy)
             strategy.save(update_fields=["sql"])
         # return
@@ -373,7 +384,22 @@ class ListStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         # init queryset
         order_field = validated_request_data.get("order_field") or "-strategy_id"
-        queryset = Strategy.objects.filter(namespace=validated_request_data["namespace"]).order_by(order_field)
+        # 策略关联风险起始时间
+        strategy_risk_start_time = timezone.now() - datetime.timedelta(days=STRATEGY_RISK_DEFAULT_INTERVAL)
+        # init queryset
+        risk_count_subquery = (
+            Risk.objects.filter(strategy_id=OuterRef('strategy_id'), event_time__gte=strategy_risk_start_time)
+            .values('strategy_id')
+            .annotate(count=Count('*'))
+            .values('count')
+        )
+
+        queryset = Strategy.objects.filter(
+            namespace=validated_request_data["namespace"],
+        ).annotate(risk_count=Subquery(risk_count_subquery, output_field=IntegerField()))
+        # 排序
+        queryset = queryset.order_by(order_field)
+
         # 特殊筛选
         if HAS_UPDATE_TAG_ID in validated_request_data.get("tag", []):
             validated_request_data["tag"] = [t for t in validated_request_data["tag"] if t != HAS_UPDATE_TAG_ID]
@@ -433,6 +459,9 @@ class ToggleStrategy(StrategyV2Base):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         controller_cls = self.get_base_control_type(strategy.strategy_type)
+        # 更新处理人
+        strategy.updated_by = get_request_username()
+        strategy.save(update_fields=["updated_by"])
         if validated_request_data["toggle"]:
             call_controller(BaseControl.enable.__name__, strategy.strategy_id, controller_cls)
             return
@@ -451,6 +480,9 @@ class RetryStrategy(StrategyV2Base):
         need_update = strategy.backend_data and (
             strategy.backend_data.get("id") or strategy.backend_data.get("flow_id")
         )
+        # 更新处理人
+        strategy.updated_by = get_request_username()
+        strategy.save(update_fields=["updated_by"])
         func_name = BaseControl.update.__name__ if need_update else BaseControl.create.__name__
         try:
             call_controller(func_name, strategy.strategy_id, controller_cls)
@@ -771,15 +803,8 @@ class GetRTFields(StrategyV2Base):
 
     def perform_request(self, validated_request_data):
         fields = api.bk_base.get_rt_fields(result_table_id=validated_request_data["table_id"])
-        return [
-            {
-                "label": "{}({})".format(field["field_alias"] or field["field_name"], field["field_name"]),
-                "value": field["field_name"],
-                "field_type": field["field_type"],
-            }
-            for field in fields
-            if field["field_name"] not in BKBASE_INTERNAL_FIELD
-        ]
+        result = enhance_rt_fields(fields, validated_request_data["table_id"])
+        return result
 
 
 class BulkGetRTFields(StrategyV2Base):
@@ -799,6 +824,78 @@ class BulkGetRTFields(StrategyV2Base):
             }
             for params, resp in zip(bulk_request_params, bulk_resp)
         ]
+
+
+class GetRTMeta(StrategyV2Base):
+    name = gettext_lazy("Get RT Meta")
+    RequestSerializer = GetRTMetaRequestSerializer
+
+    def perform_request(self, validated_request_data):
+        """获取数据表完整元信息"""
+        result_table_id = validated_request_data["table_id"]
+        futures = []
+
+        # 创建一个线程池来并发执行任务
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures.append(executor.submit(self.get_meta, result_table_id))
+            futures.append(executor.submit(self.get_data_manager, result_table_id))
+            futures.append(executor.submit(self.get_sensitivity_info, result_table_id))
+
+            # 获取并合并结果
+            result = {}
+            for future in as_completed(futures):
+                result.update(future.result())
+
+        result["formatted_fields"] = enhance_rt_fields(result["fields"], result_table_id)
+        return result
+
+    def get_meta(self, result_table_id):
+        """获取数据表的元信息。"""
+        return api.bk_base.get_result_table(result_table_id=result_table_id, related=["storages", "fields"])
+
+    def get_data_manager(self, result_table_id):
+        """获取数据表的维护者。"""
+        result = {
+            'managers': api.bk_base.get_role_users_list(role_id="result_table.manager", scope_id=result_table_id),
+            'viewers': api.bk_base.get_role_users_list(role_id="result_table.viewer", scope_id=result_table_id),
+        }
+        return result
+
+    def get_sensitivity_info(self, result_table_id):
+        return {
+            "sensitivity_info": api.bk_base.get_sensitivity_info_via_dataset(
+                data_set_type="result_table", data_set_id=result_table_id
+            )
+        }
+
+
+class GetRTLastData(StrategyV2Base):
+    name = gettext_lazy("Get RT Last Data")
+    RequestSerializer = GetRTLastDataRequestSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        """获取数据表的最新数据"""
+        result_table_id = validated_request_data["table_id"]
+        limit = validated_request_data['limit']
+        result = self.get_last_data(result_table_id, limit)
+        return result
+
+    def get_last_data(self, result_table_id, limit):
+        """获取数据表的最新数据"""
+        today = datetime.datetime.now().strftime('%Y%m%d')
+        rt_info = api.bk_base.get_result_table(result_table_id=result_table_id)
+        if not is_asset(rt_info):
+            # 非维表，添加过滤条件 thedate = current_date
+            sql = (
+                f"SELECT * FROM {result_table_id} WHERE thedate = {today} ORDER BY dteventtimestamp DESC LIMIT {limit}"
+            )
+        else:
+            # 维表，直接查询
+            sql = f"SELECT * FROM {result_table_id} LIMIT {limit}"
+
+        resp = api.bk_base.query_sync(sql=sql)
+        return {"last_data": resp.get("list", [{}])}
 
 
 class GetStrategyStatus(StrategyV2Base):
@@ -1165,3 +1262,28 @@ class RuleAuditSourceTypeCheck(StrategyV2Base):
         else:
             support_source_types = checker.rt_support_source_types(rt_id)
         return {"support_source_types": support_source_types}
+
+
+class StrategyRunningStatusList(StrategyV2Base):
+    name = gettext_lazy("查询策略运行状态列表")
+    RequestSerializer = StrategyRunningStatusListReqSerializer
+    ResponseSerializer = StrategyRunningStatusListRespSerializer
+
+    def perform_request(self, validated_request_data):
+        strategy_id: int = validated_request_data["strategy_id"]
+        start_time: datetime.datetime = validated_request_data["start_time"]
+        end_time: datetime.datetime = validated_request_data["end_time"]
+        limit = validated_request_data["limit"]
+        offset = validated_request_data["offset"]
+        strategy = get_object_or_404(Strategy, strategy_id=strategy_id)
+        h = StrategyRunningStatusHandler.get_typed_handler(
+            strategy=strategy,
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+            offset=offset,
+        )
+        if not h:
+            return {"strategy_running_status": []}
+        strategy_running_status = h.get_strategy_running_status()
+        return {"strategy_running_status": strategy_running_status}

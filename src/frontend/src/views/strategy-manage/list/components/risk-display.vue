@@ -48,11 +48,17 @@
             <template
               v-for="(item, key) in tableData"
               :key="key">
-              <div class="body">
+              <div
+                v-if="!(key === 'event_evidence_field_configs' && data.strategy_type !== 'model')"
+                class="body">
                 <div
                   class="group"
                   :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
-                  <span> {{ groupMap[key] }} </span>
+                  <span> {{
+                    data.strategy_type === 'model' && key === 'event_evidence_field_configs'
+                      ? (groupMap as GroupMapModel).event_evidence_field_configs
+                      : groupMap[key as keyof GroupMapBase]
+                  }} </span>
                 </div>
                 <div class="value-row">
                   <value-item
@@ -79,6 +85,15 @@
   import RenderInfoItem from './render-info-item.vue';
   import ValueItem from './valueItem.vue';
 
+  type GroupMapBase = {
+    event_basic_field_configs: string;
+    event_data_field_configs: string;
+  };
+
+  type GroupMapModel = GroupMapBase & {
+    event_evidence_field_configs: string;
+  };
+
   interface Props {
     data: StrategyModel,
   }
@@ -92,15 +107,27 @@
     return initColumn;
   });
 
-  const groupMap = {
-    event_basic_field_configs: t('基本信息'),
-    event_data_field_configs: t('事件结果'),
-  };
+  const groupMap = computed<GroupMapBase | GroupMapModel>(() => {
+    const baseMap: GroupMapBase = {
+      event_basic_field_configs: t('基本信息'),
+      event_data_field_configs: t('事件结果'),
+    };
+
+    if (props.data.strategy_type === 'model') {
+      const modelMap: GroupMapModel = {
+        ...baseMap,
+        event_evidence_field_configs: t('事件证据'),
+      };
+      return modelMap;
+    }
+    return baseMap;
+  });
 
   const tableData = computed(() => {
     const data = {
       event_basic_field_configs: props.data.event_basic_field_configs,
       event_data_field_configs: props.data.event_data_field_configs,
+      event_evidence_field_configs: props.data.event_evidence_field_configs,
     };
     return new StrategyFieldEvent(data);
   });

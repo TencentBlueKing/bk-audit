@@ -26,11 +26,13 @@ from django.utils.module_loading import import_string
 
 from apps.meta.constants import ConfigLevelChoices, SpaceType
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
+from apps.meta.utils.fields import BKLOG_BUILD_IN_FIELDS, STANDARD_FIELDS
 from services.web.analyze.utils import is_asset
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.constants import (
     BIZ_RT_TABLE_ALLOW_STORAGES,
+    BKBASE_INTERNAL_FIELD,
     BKBaseProcessingType,
     BkBaseStorageType,
     ResultTableType,
@@ -261,3 +263,34 @@ class RuleAuditSourceTypeChecker:
         if BkBaseStorageType.HDFS in storage or is_asset(rt):
             support_source_types.append(RuleAuditSourceType.BATCH)
         return support_source_types
+
+
+def enhance_rt_fields(fields, result_table_id):
+    """在原始BKBase RT Field信息基础上，添加审计侧的附加信息。"""
+    result = [
+        {
+            "label": "{}".format(field["field_alias"] or field["field_name"]),
+            "alias": field["field_alias"] or field["field_name"],
+            "value": field["field_name"],
+            "field_type": field["field_type"],
+            "spec_field_type": field["field_type"],
+        }
+        for field in fields
+        if field["field_name"] not in BKBASE_INTERNAL_FIELD
+    ]
+    collector_plugin_id = GlobalMetaConfig.get(
+        config_key=COLLECTOR_PLUGIN_ID,
+        config_level=ConfigLevelChoices.NAMESPACE.value,
+        instance_key='default',
+        default=None,
+    )
+    if collector_plugin_id:
+        plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
+        if result_table_id == plugin.bkbase_table_id:
+            standard_fields = {field.field_name: field for field in STANDARD_FIELDS + BKLOG_BUILD_IN_FIELDS}
+            for field in result:
+                if field["value"] in standard_fields:
+                    field["spec_field_type"] = standard_fields[field["value"]].property.get(
+                        "spec_field_type", standard_fields[field["value"]].field_type
+                    )
+    return result

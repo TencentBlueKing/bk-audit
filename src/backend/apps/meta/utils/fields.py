@@ -32,6 +32,9 @@ FIELD_TYPE_DOUBLE = "double"
 FIELD_TYPE_KEYWORD = "keyword"
 FIELD_TYPE_NESTED = "nested"
 
+SPEC_FIELD_TYPE_TIMESTAMP = "timestamp"
+SPEC_FIELD_TYPE_USER = "user"
+
 BKDATA_ES_TYPE_MAP = {
     FIELD_TYPE_INT: FIELD_TYPE_INT,
     FIELD_TYPE_LONG: FIELD_TYPE_LONG,
@@ -115,6 +118,7 @@ USERNAME = Field(
     option=dict(),
     priority_index=96,
     is_index=True,
+    property={'spec_field_type': SPEC_FIELD_TYPE_USER},
 )
 
 USER_IDENTIFY_TYPE = Field(
@@ -165,6 +169,7 @@ START_TIME = Field(
     is_time=True,
     option=dict(),
     priority_index=91,
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 END_TIME = Field(
@@ -176,6 +181,7 @@ END_TIME = Field(
     option=dict(),
     is_required=False,
     priority_index=90,
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 BK_APP_CODE = Field(
@@ -453,6 +459,7 @@ REPORT_TIME = Field(
     option=dict(),
     is_required=True,
     is_display=False,
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 STORAGE_TIME = Field(
@@ -463,6 +470,7 @@ STORAGE_TIME = Field(
     option=dict(),
     is_required=True,
     is_display=False,
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 STANDARD_FIELDS = [
@@ -505,7 +513,7 @@ STANDARD_FIELDS = [
 ]
 
 # 这些字段 key 非固定，无法在 ES 中作为 json 字段
-ES_NOT_JSON_FIELDS = [
+DYNAMIC_JSON_FIELDS = [
     INSTANCE_DATA,
     INSTANCE_ORIGIN_DATA,
     EXTEND_DATA,
@@ -639,7 +647,68 @@ LOCAL_TIME = Field(
     is_display=False,
 )
 
-BKLOG_BUILD_IN_FIELDS = ["time", "__ext", "cloudId", "serverIp", "path", "gseIndex", "iterationIndex"]
+TIME = Field(
+    field_name="time",
+    alias_name="time",
+    field_type=FIELD_TYPE_LONG,
+    description=gettext_lazy("日志系统时间字段"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+    property={'spec_field_type': SPEC_FIELD_TYPE_USER},
+)
+
+CLOUD_ID = Field(
+    field_name="cloudId",
+    alias_name="cloudId",
+    field_type=FIELD_TYPE_INT,
+    description=gettext_lazy("云区域ID"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+SERVER_IP = Field(
+    field_name="serverIp",
+    alias_name="serverIp",
+    field_type=FIELD_TYPE_STRING,
+    description=gettext_lazy("主机IP"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+PATH = Field(
+    field_name="path",
+    alias_name="path",
+    field_type=FIELD_TYPE_STRING,
+    description=gettext_lazy("采集路径"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+GSE_INDEX = Field(
+    field_name="gseIndex",
+    alias_name="gseIndex",
+    field_type=FIELD_TYPE_INT,
+    description=gettext_lazy("上报包序号"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+ITERATION_INDEX = Field(
+    field_name="iterationIndex",
+    alias_name="iterationIndex",
+    field_type=FIELD_TYPE_INT,
+    description=gettext_lazy("上报包内位置"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+)
+
+BKLOG_BUILD_IN_FIELDS = [TIME, EXT_FIELD_CONFIG, CLOUD_ID, SERVER_IP, PATH, GSE_INDEX, ITERATION_INDEX]
 BKBASE_STORAGE_UNIQUE_KEYS = [SYSTEM_ID.field_name, ACTION_ID.field_name, EVENT_ID.field_name, START_TIME.field_name]
 
 FILED_DISPLAY_NAME_ALIAS_KEY = "field_display_name_alias"
