@@ -107,6 +107,14 @@ class RiskHandler:
 
         return data
 
+    # 预处理 create_params，自动转换所有 list 为逗号拼接字符串
+    @staticmethod
+    def preprocess_data(data):
+        if isinstance(data, dict):
+            return {k: RiskHandler.preprocess_data(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return ", ".join(str(item) for item in data)
+        return data
     @classmethod
     def render_risk_title(cls, create_params: dict) -> Optional[str]:
         """
@@ -125,15 +133,7 @@ class RiskHandler:
             event_evidence = {}
         create_params["event_evidence"] = event_evidence
 
-        # 预处理 create_params，自动转换所有 list 为逗号拼接字符串
-        def preprocess_data(data):
-            if isinstance(data, dict):
-                return {k: preprocess_data(v) for k, v in data.items()}
-            elif isinstance(data, list):
-                return ", ".join(str(item) for item in data)
-            return data
-
-        processed_params = preprocess_data(create_params)
+        processed_params = cls.preprocess_data(create_params)
 
         try:
             risk_title = Jinja2Renderer(undefined=RiskTitleUndefined).jinja_render(
