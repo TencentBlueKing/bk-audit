@@ -12,7 +12,7 @@ modules:
         plan: 4C4G5R
         replicas: 5
       risk-worker:
-        command: python manage.py celery worker -O fair -l info -Q risk --max-memory-per-child=524288 --autoscale=4,7
+        command: python manage.py celery worker -O fair -l info -Q risk --autoscale=4,7
         plan: 4C4G5R
         replicas: 2
       notice:
