@@ -818,6 +818,13 @@ class GetEventFieldsConfig(StrategyV2Base):
     RequestSerializer = GetEventInfoFieldsRequestSerializer
     ResponseSerializer = GetEventInfoFieldsResponseSerializer
 
+    @staticmethod
+    def preprocess_data(data):
+        if isinstance(data, dict):
+            return {k: GetEventFieldsConfig.preprocess_data(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return ", ".join(str(item) for item in data)
+        return data
     def get_event_basic_field_configs(self, risk: Optional[Risk], has_permission: bool) -> List[EventInfoField]:
         """
         基础字段
@@ -828,7 +835,7 @@ class GetEventFieldsConfig(StrategyV2Base):
                 field_name=field.field_name,
                 display_name=str(field.description),
                 description="",
-                example=getattr(risk, field.field_name, "") if risk and has_permission else "",
+                example=self.preprocess_data(getattr(risk, field.field_name, "")) if risk and has_permission else "",
             )
             for field in [
                 EventMappingFields.RAW_EVENT_ID,
@@ -849,7 +856,7 @@ class GetEventFieldsConfig(StrategyV2Base):
         if not risk:
             return []
         return [
-            EventInfoField(field_name=key, display_name=key, description="", example=value if has_permission else "")
+            EventInfoField(field_name=key, display_name=key, description="", example=self.preprocess_data(value) if has_permission else "")
             for key, value in (risk.event_data or {}).items()
         ]
 
@@ -865,7 +872,7 @@ class GetEventFieldsConfig(StrategyV2Base):
         except (json.JSONDecodeError, IndexError, KeyError):
             event_evidence = {}
         return [
-            EventInfoField(field_name=key, display_name=key, description="", example=value if has_permission else "")
+            EventInfoField(field_name=key, display_name=key, description="", example=self.preprocess_data(value) if has_permission else "")
             for key, value in event_evidence.items()
         ]
 
