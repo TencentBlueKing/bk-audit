@@ -14,22 +14,29 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-export default class DatabaseTableField {
-  table: string; // RT ID
-  raw_name: string; // bkbase 字段名
-  display_name: string; // 展示名称 -- 用于 AS 别名，查询中唯一
-  field_type: string; // 字段类型 -- 来自 bkbase
-  aggregate: any; // 聚合函数 -- 聚合算法
-  remark: string; // 备注
-  spec_field_type: string;
+export default class RtzMeta  {
+  result_table_id: string;
+  result_table_name: string;
+  result_table_name_alias: string;
+  managers: Array<string>;
+  processing_type: string;
+  formatted_fields:  Array<{
+    value: string;
+    label: string;
+    field_type: string;
+    spec_field_type: string;
+  }>;
+  sensitivity_info: {
+    biz_role_memebers: Array<string>;
+  };
 
-  constructor(payload = {} as DatabaseTableField) {
-    this.table = payload.table || '';
-    this.raw_name = payload.raw_name || '';
-    this.display_name = payload.display_name || '';
-    this.field_type = payload.field_type || '';
-    this.aggregate = payload.aggregate || null;
-    this.remark = payload.remark || '';
-    this.spec_field_type = payload.spec_field_type || '';
+  constructor(payload = {} as RtzMeta) {
+    this.result_table_id = payload.result_table_id;
+    this.result_table_name = payload.result_table_name;
+    this.result_table_name_alias = payload.result_table_name_alias;
+    this.managers = payload.managers;
+    this.processing_type = payload.processing_type;
+    this.formatted_fields = payload.formatted_fields;
+    this.sensitivity_info = payload.sensitivity_info;
   }
 }

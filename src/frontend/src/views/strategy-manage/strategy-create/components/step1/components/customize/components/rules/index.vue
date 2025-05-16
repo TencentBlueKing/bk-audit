@@ -38,10 +38,13 @@
             class="column-line column-line-bottom" />
         </template>
         <field-item
+          :aggregate-list="aggregateList"
           :conditions="conditions"
           :conditions-index="index"
           :config-type="configType"
+          :expected-result="expectedResult"
           :table-fields="tableFields"
+          @show-structure-preview="handleShowStructurePreview"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
           @update-field-item-list="handleUpdateFieldItemList" />
@@ -56,7 +59,7 @@
       <div
         v-if="needCondition"
         class="condition"
-        @click="() => where.connector = where.connector === 'and' ? 'or' : 'and'">
+        @click="() => handleChangeConnector()">
         {{ where.connector }}
       </div>
     </div>
@@ -80,12 +83,13 @@
 
   interface Expose {
     resetFormData: () => void,
-    setWhere: (whereData: Where) => void;
+    setWhere: (whereData: Where, having: Where) => void;
   }
   interface Where {
     connector: 'and' | 'or';
     conditions: Array<{
       connector: 'and' | 'or';
+      index: number; // 确保每个条件组都有索引值
       conditions: Array<{
         condition: {
           field: DatabaseTableFieldModel;
@@ -98,10 +102,13 @@
   }
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
+    expectedResult: Array<DatabaseTableFieldModel>,
+    aggregateList: Array<Record<string, any>>
     configType: string,
   }
   interface Emits {
     (e: 'updateWhere', value: Where): void;
+    (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
   }
 
   defineProps<Props>();
@@ -112,6 +119,7 @@
     connector: 'and',
     conditions: [{
       connector: 'and',
+      index: 0,
       conditions: [{
         condition: {
           field: new DatabaseTableFieldModel(),
@@ -124,6 +132,11 @@
   });
   const needCondition = computed(() => where.value.conditions.length > 1);
 
+  // 是否有选中预期结果
+  const hasSelectedExpectedResult = computed(() => where.value.conditions
+    .some(item => item.conditions
+      .some(condItem => condItem.condition.field?.aggregate)));
+
   const getPaddingLeft = (index: number, conditions: Where['conditions'][0]) => {
     const beforeArr = where.value.conditions.slice(0, index);
     const afterArr = where.value.conditions.slice(index + 1);
@@ -134,13 +147,35 @@
     return '16px';
   };
 
+  const handleShowStructurePreview = (table: string | Array<string>, currentViewField: string) => {
+    emits('show-structure-preview', table, currentViewField);
+  };
+
   const handleDelete = (index: number) => {
     where.value.conditions.splice(index, 1);
+    // 重新计算索引值，保持索引的连续性，通过创建新对象而不是直接修改原对象
+    where.value.conditions = where.value.conditions.map((item, idx) => ({
+      ...item,
+      index: idx,
+    }));
+  };
+
+  const handleChangeConnector = () => {
+    // 有预期结果字段 只能选and
+    if (hasSelectedExpectedResult.value) {
+      where.value.connector = 'and';
+      return;
+    }
+    where.value.connector = where.value.connector === 'and' ? 'or' : 'and';
   };
 
   const handleAddRuleItem = () => {
+    // 计算新添加条件组的索引值
+    const newIndex = where.value.conditions.length > 0
+      ? Math.max(...where.value.conditions.map(item => item.index || 0)) + 1 : 0;
     where.value.conditions.push({
       connector: 'and',
+      index: newIndex,
       conditions: [{
         condition: {
           field: new DatabaseTableFieldModel(),
@@ -181,12 +216,19 @@
     deep: true,
   });
 
+  watch(() => hasSelectedExpectedResult.value, (data) => {
+    if (data) {
+      where.value.connector = 'and';
+    }
+  });
+
   defineExpose<Expose>({
     resetFormData: () => {
       where.value = {
         connector: 'and',
         conditions: [{
           connector: 'and',
+          index: 0,
           conditions: [{
             condition: {
               field: new DatabaseTableFieldModel(),
@@ -198,8 +240,13 @@
         }],
       };
     },
-    setWhere(whereData: Where) {
+    setWhere(whereData: Where, having: Where) {
       where.value = whereData;
+      if (having && having.conditions.length > 0) {
+        // 将having条件合并到where条件中, conditions根据item.index进行排序合并
+        where.value.conditions = where.value.conditions.concat(having.conditions);
+        where.value.conditions.sort((a, b) => a.index - b.index);
+      }
     },
   });
 </script>

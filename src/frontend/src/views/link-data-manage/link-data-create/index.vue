@@ -20,7 +20,7 @@
     v-model:isShow="showCreate"
     :show-footer="false"
     :title="isEditMode ? t('编辑联表') : t('新建联表')"
-    :width="960">
+    :width="1050">
     <smart-action
       class="create-link-data"
       :offset-target="getSmartActionOffsetTarget">
@@ -137,13 +137,13 @@
     config: {
       links: [{
         left_table: {
-          rt_id: '',
+          rt_id: [],
           table_type: '',
           system_ids: [],
           display_name: '',
         },
         right_table: {
-          rt_id: '',
+          rt_id: [],
           table_type: '',
           system_ids: [],
           display_name: '',
@@ -242,7 +242,9 @@
       formData.value.uid = data.uid;
       formData.value.name = data.name;
       formData.value.tags = data.tags ? data.tags.map(item => item.toString()) : [];
-      formData.value.config.links = data.config.links;
+      if (linksRef.value.setValue) {
+        linksRef.value.setValue(data.config.links);
+      }
     },
   });
 
