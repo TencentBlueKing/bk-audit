@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('meta', '0014_field_property'),
+        ('meta', '0014_action_resource_type_ids_resourcetype_ancestors_and_more'),
     ]
 
     operations = [

@@ -3256,9 +3256,6 @@ msgstr "任务执行开始时间"
 msgid "任务执行结束时间"
 msgstr "任务执行结束时间"
 
-msgid "错误信息"
-msgstr "错误信息"
-
 msgid "检索参数"
 msgstr "检索参数"
 
@@ -3266,7 +3263,7 @@ msgid "导出配置"
 msgstr "导出配置"
 
 msgid "当前记录数"
-msgstr ""
+msgstr "当前记录数"
 
 msgid "总条数"
 msgstr "总条数"
