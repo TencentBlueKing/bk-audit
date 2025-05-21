@@ -24,6 +24,7 @@ from django.utils.translation import gettext_lazy
 from apps.audit.resources import AuditMixinResource
 from core.utils.tools import get_app_info
 from services.web.risk.handlers import EventHandler
+from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.models import Risk
 from services.web.risk.serializers import (
     CreateEventAPIResponseSerializer,
@@ -42,20 +43,43 @@ class CreateEvent(EventMeta):
     name = gettext_lazy("创建事件")
     RequestSerializer = CreateEventAPISerializer
     ResponseSerializer = CreateEventAPIResponseSerializer
+    bind_request = True
+
+    ADMIN_SOURCE = "ADMIN"  # 常量定义超级管理员来源标识
+
+    def _create_events(self, events, source):
+        #
+        event_ids = []
+        for event in events:
+            event["event_id"] = "{}{}".format(
+                event.get("strategy_id") or source, event["raw_event_id"] or uuid.uuid1().hex
+            )
+            event["event_source"] = source
+            event_ids.append(event["event_id"])
+        return event_ids
 
     def perform_request(self, validated_request_data):
+        gen_risk = validated_request_data.get("gen_risk", False)
         # 校验调用身份
         app = get_app_info()
-        # 创建事件
-        event_ids = []
-        for event in validated_request_data["events"]:
-            event["event_id"] = "{}{}".format(
-                event.get("strategy_id") or app.bk_app_code, event["raw_event_id"] or uuid.uuid1().hex
-            )
-            event["event_source"] = app.bk_app_code
-            event_ids.append(event["event_id"])
-        add_event(validated_request_data)
-        return {"event_ids": event_ids}
+        if app:
+            # 应用创建事件
+            event_ids = self._create_events(validated_request_data["events"], app.bk_app_code)
+            add_event(validated_request_data)
+            return {"event_ids": event_ids}
+
+        # 检查超级管理员权限
+        req = validated_request_data.get("_request")
+        if req and req.user.is_superuser:
+            # 超级管理员创建事件
+            event_ids = self._create_events(validated_request_data["events"], self.ADMIN_SOURCE)
+            if gen_risk:
+                for event in validated_request_data["events"]:
+                    RiskHandler().generate_risk(event)
+            add_event(validated_request_data)
+            return {"event_ids": event_ids}
+
+        raise PermissionError("无权限创建事件，需要应用身份或超级管理员权限")
 
 
 class ListEvent(EventMeta):

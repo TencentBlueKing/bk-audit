@@ -129,6 +129,7 @@ class CreateEventAPISerializer(serializers.Serializer):
     """
 
     events = CreateEventSerializer(many=True)
+    gen_risk = serializers.BooleanField(label=gettext_lazy("Generate Risk"), default=False)
 
 
 class ListEventRequestSerializer(serializers.Serializer):
