@@ -15,12 +15,13 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-from django.apps import AppConfig
-from django.utils.translation import gettext_lazy
+from bkstorages.backends.bkrepo import BKRepoStorage
 
 
-class EsqueryConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
-    name = "services.web.query"
-    verbose_name = gettext_lazy("检索")
+class LogExportStorage:
+    _instance = None
+
+    def __new__(cls) -> BKRepoStorage:
+        if cls._instance is None:
+            cls._instance = BKRepoStorage()
+        return cls._instance

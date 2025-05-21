@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-12 01:08+0800\n"
+"POT-Creation-Date: 2025-05-21 00:45+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1501,6 +1501,9 @@ msgstr "是否启用"
 msgid "是否成功"
 msgstr "是否成功"
 
+msgid "配置ID"
+msgstr "配置ID"
+
 msgid "事件ID"
 msgstr "事件ID"
 
@@ -1648,6 +1651,9 @@ msgstr "上报包序号"
 msgid "上报包内位置"
 msgstr "上报包内位置"
 
+msgid "日志系统时间字段"
+msgstr "日志系统时间字段"
+
 msgid "操作事件名称"
 msgstr "操作事件名称"
 
@@ -1659,17 +1665,6 @@ msgstr "用户信息"
 
 msgid "Notice"
 msgstr "通知"
-
-msgid ""
-"信息安全声明：\n"
-"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
-"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
-"    "
-msgstr ""
-"信息安全声明：\n"
-"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
-"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
-"    "
 
 #, python-format
 msgid "LogExportTask %s not found"
@@ -1750,6 +1745,17 @@ msgstr "日志导出"
 msgid "责任人上级"
 msgstr "责任人上级"
 
+msgid ""
+"信息安全声明：\n"
+"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
+"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
+"    "
+msgstr ""
+"信息安全声明：\n"
+"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
+"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
+"    "
+
 msgid "通知组名称重复"
 msgstr "通知组名称重复"
 
@@ -1759,6 +1765,10 @@ msgstr "构建器初始化失败: {err}"
 
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
+
+#, python-format
+msgid "【蓝鲸审计中心%s】"
+msgstr "【蓝鲸审计中心%s】"
 
 msgid "异常信息"
 msgstr "异常信息"
@@ -2340,6 +2350,12 @@ msgstr "条件表达式中字段 {field} 的值 {value} 无法转换成预期类
 
 msgid "数据拉取"
 msgstr "数据拉取"
+
+msgid "未实现方法"
+msgstr "未实现方法"
+
+msgid "未实现类型"
+msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -3166,8 +3182,8 @@ msgstr "Doris必须是预定义的"
 msgid "任务状态"
 msgstr "任务状态"
 
-msgid "ES检索"
-msgstr "ES检索"
+msgid "检索"
+msgstr "检索"
 
 msgid "WebUI"
 msgstr "WebUI"
@@ -3222,11 +3238,8 @@ msgid "您没有权限执行该操作"
 msgstr "您没有权限执行该操作"
 
 #, python-brace-format
-msgid "任务状态异常: {status}"
-msgstr "任务状态异常: {status}"
-
-msgid "任务异常"
-msgstr "任务异常"
+msgid "下载任务异常: {msg}"
+msgstr "下载任务异常: {msg}"
 
 #, python-brace-format
 msgid "导出数量 {current_count} 超过最大值: {max_count}"
@@ -3256,6 +3269,9 @@ msgstr "任务执行开始时间"
 msgid "任务执行结束时间"
 msgstr "任务执行结束时间"
 
+msgid "错误信息"
+msgstr "错误信息"
+
 msgid "检索参数"
 msgstr "检索参数"
 
@@ -3273,6 +3289,18 @@ msgstr "查询参数URL"
 
 msgid "日志导出任务"
 msgstr "日志导出任务"
+
+msgid "关联任务"
+msgstr "关联任务"
+
+msgid "下载时间"
+msgstr "下载时间"
+
+msgid "下载用户"
+msgstr "下载用户"
+
+msgid "任务下载记录"
+msgstr "任务下载记录"
 
 msgid "日志查询配置"
 msgstr "日志查询配置"
@@ -3300,6 +3328,13 @@ msgstr "获取日志检索导出任务详情"
 
 msgid "下载日志检索导出任务"
 msgstr "下载日志检索导出任务"
+
+#, python-format
+msgid "任务状态异常: %s"
+msgstr "任务状态异常: %s"
+
+msgid "任务已过期，无法下载"
+msgstr "任务已过期，无法下载"
 
 msgid "搜索(All)"
 msgstr "搜索(All)"
@@ -4394,9 +4429,6 @@ msgstr "单个筛选值，可以是字符串、整数或浮点数"
 msgid "Conditions"
 msgstr "条件"
 
-msgid "Rule Audit Where must have condition or conditions"
-msgstr "规则审计的 Where 必须包含 condition 或 conditions"
-
 msgid "Rule Audit Where can not have condition and conditions at the same time"
 msgstr "规则审计的 Where 不能同时包含 condition 和 conditions"
 
@@ -4444,9 +4476,6 @@ msgstr "结束时间必须大于开始时间"
 
 msgid "调度时间"
 msgstr "调度时间"
-
-msgid "错误信息"
-msgstr "错误信息"
 
 msgid "状态字符串"
 msgstr "状态字符串"
