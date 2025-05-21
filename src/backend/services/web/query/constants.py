@@ -222,6 +222,7 @@ class TaskEnum(TextChoices):
     RUNNING = "RUNNING", gettext_lazy("执行中")
     SUCCESS = "SUCCESS", gettext_lazy("成功")
     FAILURE = "FAILURE", gettext_lazy("失败")
+    EXPIRED = "EXPIRED", gettext_lazy("已过期")
 
     @classmethod
     def get_schedule_status(cls) -> List["TaskEnum"]:
@@ -262,8 +263,10 @@ class LogExportFieldScope(TextChoices):
 # 日志字段 key 拼接字符
 LOG_FIELD_KEY_JOIN_CHAR = ","
 
+# 日志导出根目录
+LOG_EXPORT_ROOT_PATH = "log_export"
 # 文件上传路径
-FILE_UPLOAD_DEFAULT_PATH_FORMAT = "{namespace}/default/{file_name}"
+LOG_EXPORT_FILE_NAME_FORMAT = LOG_EXPORT_ROOT_PATH + "/{namespace}/{file_name}"
 
 
 @register_choices("query_field_category")
