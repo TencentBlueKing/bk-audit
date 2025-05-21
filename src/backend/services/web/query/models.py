@@ -106,6 +106,14 @@ class LogExportTask(SoftDeleteModel):
         self.repeat_times += 1
         self.save(update_fields=["status", "task_start_time", "repeat_times"])
 
+    def update_task_expired(self):
+        """
+        更新任务状态为过期
+        """
+
+        self.status = TaskEnum.EXPIRED.value
+        self.save(update_fields=["status"])
+
     def send_notify(self):
         """
         发送通知
@@ -114,7 +122,44 @@ class LogExportTask(SoftDeleteModel):
         resource.notice.send_notice(
             relate_type=RelateType.LOG_EXPORT,
             relate_id=self.id,
-            agg_key=None,
+            agg_key=self.id,
             msg_type=[MsgType.MAIL],
             receivers=[self.created_by],
         )
+
+
+class TaskDownloadRecord(models.Model):
+    """
+    任务下载记录表
+    """
+
+    task = models.ForeignKey(
+        LogExportTask,
+        on_delete=models.CASCADE,
+        verbose_name=gettext_lazy("关联任务"),
+        related_name="download_records",
+    )
+    downloaded_at = models.DateTimeField(
+        gettext_lazy("下载时间"),
+        auto_now_add=True,
+    )
+    downloaded_by = models.CharField(
+        gettext_lazy("下载用户"),
+        max_length=64,
+        db_index=True,
+    )
+
+    class Meta:
+        verbose_name = gettext_lazy("任务下载记录")
+        verbose_name_plural = verbose_name
+        ordering = ["-downloaded_at"]
+
+    @classmethod
+    def create_download_record(cls, task: LogExportTask, username: str):
+        """
+        创建下载记录
+        :param task: 关联的任务
+        :param username: 下载用户
+        """
+
+        return cls.objects.create(task=task, downloaded_by=username)

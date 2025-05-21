@@ -49,7 +49,7 @@ class MailSender(Sender):
     def mail_content(self) -> str:
         context = {
             "title": self.title,
-            "notice_time": timezone.now().strftime(api_settings.DATETIME_FORMAT),
+            "notice_time": timezone.localtime().strftime(api_settings.DATETIME_FORMAT),
             "content": self.content,
             "footer_content": gettext("此为系统邮件，由蓝鲸审计中心自动发送，请勿回复"),
             "button": self.button,
