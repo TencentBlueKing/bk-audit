@@ -1,11 +1,15 @@
-from unittest.mock import MagicMock, patch
-
 from django.test import TestCase
+from unittest.mock import patch, MagicMock
 from django.utils import timezone
-
+from core.exceptions import PermissionException
 from services.web.risk.models import Risk
+from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.resources import GetEventFieldsConfig
+from services.web.strategy_v2.serializers import (
+    GetEventInfoFieldsRequestSerializer,
+    GetEventInfoFieldsResponseSerializer
+)
 
 
 class TestGetEventFieldsConfig(TestCase):
@@ -15,12 +19,12 @@ class TestGetEventFieldsConfig(TestCase):
             strategy_id=1,
             event_data_field_configs=[
                 {"field_name": "data_field1", "display_name": "Data Field 1"},
-                {"field_name": "data_field2"},
+                {"field_name": "data_field2"}
             ],
             event_evidence_field_configs=[
                 {"field_name": "evidence_field1", "display_name": "Evidence Field 1", "description": "Desc1"},
-                {"field_name": "evidence_field2"},
-            ],
+                {"field_name": "evidence_field2"}
+            ]
         )
 
         # Create risk with matching strategy_id
@@ -30,7 +34,7 @@ class TestGetEventFieldsConfig(TestCase):
             operator="user1",
             event_data={"data_field1": "value1", "data_field3": ["a", "b", "c"]},
             event_evidence='[{"evidence_field1": "ev_value1", "evidence_field3": {"nested": "value"}}]',
-            event_time=timezone.now(),
+            event_time=timezone.now()
         )
 
         self.config = GetEventFieldsConfig()
@@ -40,7 +44,10 @@ class TestGetEventFieldsConfig(TestCase):
         """Test basic event field configurations"""
         mock_preprocess.side_effect = lambda x: x
 
-        fields = self.config.get_event_basic_field_configs(risk=self.risk, has_permission=True)
+        fields = self.config.get_event_basic_field_configs(
+            risk=self.risk,
+            has_permission=True
+        )
         self.assertEqual(len(fields), 7)
         self.assertEqual(fields[0]["field_name"], "raw_event_id")
         self.assertEqual(fields[0]["example"], "event123")
@@ -50,7 +57,11 @@ class TestGetEventFieldsConfig(TestCase):
         """Test event data field configurations"""
         mock_preprocess.side_effect = lambda x: ", ".join(map(str, x)) if isinstance(x, list) else x
 
-        fields = self.config.get_event_data_field_configs(strategy=self.strategy, risk=self.risk, has_permission=True)
+        fields = self.config.get_event_data_field_configs(
+            strategy=self.strategy,
+            risk=self.risk,
+            has_permission=True
+        )
         field_dict = {f["field_name"]: f for f in fields}
         self.assertEqual(len(field_dict), 3)
         self.assertEqual(field_dict["data_field1"]["display_name"], "Data Field 1")
@@ -63,7 +74,9 @@ class TestGetEventFieldsConfig(TestCase):
         mock_preprocess.side_effect = lambda x: x
 
         fields = self.config.get_event_evidence_field_configs(
-            strategy=self.strategy, risk=self.risk, has_permission=True
+            strategy=self.strategy,
+            risk=self.risk,
+            has_permission=True
         )
         field_dict = {f["field_name"]: f for f in fields}
         self.assertEqual(len(field_dict), 3)
@@ -82,7 +95,9 @@ class TestGetEventFieldsConfig(TestCase):
         mock_username.return_value = "test_user"
         mock_preprocess.side_effect = lambda x: x
 
-        validated_request_data = {"strategy_id": 1}
+        validated_request_data = {
+            "strategy_id": 1
+        }
 
         response = self.config.perform_request(validated_request_data)
 
@@ -96,7 +111,9 @@ class TestGetEventFieldsConfig(TestCase):
         """Test request with non-existent strategy"""
         mock_preprocess.side_effect = lambda x: x
 
-        validated_request_data = {"strategy_id": 999}
+        validated_request_data = {
+            "strategy_id": 999
+        }
 
         response = self.config.perform_request(validated_request_data)
 
@@ -115,7 +132,9 @@ class TestGetEventFieldsConfig(TestCase):
         mock_username.return_value = "test_user"
         mock_preprocess.side_effect = lambda x: x
 
-        validated_request_data = {"strategy_id": 1}
+        validated_request_data = {
+            "strategy_id": 1
+        }
 
         response = self.config.perform_request(validated_request_data)
 

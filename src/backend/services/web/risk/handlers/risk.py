@@ -30,9 +30,8 @@ from django.utils import timezone
 from django.utils.translation import gettext
 from jinja2 import UndefinedError
 from rest_framework.settings import api_settings
-
-from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.format import preprocess_data
+from apps.meta.models import GlobalMetaConfig
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
@@ -130,7 +129,8 @@ class RiskHandler:
 
         try:
             risk_title = Jinja2Renderer(undefined=RiskTitleUndefined).jinja_render(
-                strategy.risk_title, processed_params  # 使用预处理后的参数
+                strategy.risk_title,
+                processed_params  # 使用预处理后的参数
             )
             return risk_title
         except UndefinedError as err:
