@@ -40,24 +40,18 @@ class LogExportTaskNoPermission(BlueException):
     MESSAGE = gettext_lazy("您没有权限执行该操作")
 
 
-class LogExportTaskStatusError(BlueException):
+class DownloadLogExportTaskError(BlueException):
     MODULE_CODE = "24"
     STATUS_CODE = 400
-    MESSAGE = gettext_lazy("任务状态异常: {status}")
+    MESSAGE = gettext_lazy("下载任务异常: {msg}")
 
-    def __init__(self, status, *args, **kwargs):
-        self.MESSAGE = self.MESSAGE.format(status=status)
+    def __init__(self, msg, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(msg=msg)
         super().__init__(*args, **kwargs)
 
 
-class LogExportTaskError(BlueException):
-    MODULE_CODE = "25"
-    STATUS_CODE = 500
-    MESSAGE = gettext_lazy("任务异常")
-
-
 class LogExportMaxCountError(BlueException):
-    MODULE_CODE = "26"
+    MODULE_CODE = "25"
     STATUS_CODE = 400
     MESSAGE = gettext_lazy("导出数量 {current_count} 超过最大值: {max_count}")
 

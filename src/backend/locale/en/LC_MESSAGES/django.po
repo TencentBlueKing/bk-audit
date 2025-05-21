@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-12 01:08+0800\n"
+"POT-Creation-Date: 2025-05-21 00:45+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1501,6 +1501,9 @@ msgstr "Is Enabled"
 msgid "是否成功"
 msgstr "Is Success"
 
+msgid "配置ID"
+msgstr "Config ID"
+
 msgid "事件ID"
 msgstr "Event ID"
 
@@ -1648,6 +1651,9 @@ msgstr "Report Package Index"
 msgid "上报包内位置"
 msgstr "Position in Report Package"
 
+msgid "日志系统时间字段"
+msgstr "Log System Time Field"
+
 msgid "操作事件名称"
 msgstr "Action Name"
 
@@ -1659,17 +1665,6 @@ msgstr "User Info"
 
 msgid "Notice"
 msgstr "Notice"
-
-msgid ""
-"信息安全声明：\n"
-"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
-"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
-"    "
-msgstr ""
-"Information Security Statement:\n"
-"    This email contains exported data, which is highly sensitive data asset. Please comply with laws and regulations for compliant use. Any leakage will bear corresponding legal liabilities.\n"
-"    If you are not the recipient of this email, please delete it and notify the sender by email.\n"
-"    "
 
 #, python-format
 msgid "LogExportTask %s not found"
@@ -1750,6 +1745,17 @@ msgstr "Log Export"
 msgid "责任人上级"
 msgstr "Person Superior"
 
+msgid ""
+"信息安全声明：\n"
+"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
+"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
+"    "
+msgstr ""
+"Information Security Statement:\n"
+"    This email contains exported data, which is highly sensitive data asset. Please comply with laws and regulations for compliant use. Any leakage will bear corresponding legal liabilities.\n"
+"    If you are not the recipient of this email, please delete it and notify the sender by email.\n"
+"    "
+
 msgid "通知组名称重复"
 msgstr "Notice Group Name Duplicate"
 
@@ -1759,6 +1765,11 @@ msgstr "Builder initialization failed: {err}"
 
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
+
+#, fuzzy, python-format
+#| msgid "审计中心"
+msgid "【蓝鲸审计中心%s】"
+msgstr "【蓝鲸审计中心%s】"
 
 msgid "异常信息"
 msgstr "Error Msg"
@@ -2340,6 +2351,12 @@ msgstr "The value {value} of the field {field} in the conditional expression can
 
 msgid "数据拉取"
 msgstr "Data Pull"
+
+msgid "未实现方法"
+msgstr "Method not implemented"
+
+msgid "未实现类型"
+msgstr "Type not implemented"
 
 msgid "Control Name"
 msgstr "Control Name"
@@ -3166,8 +3183,8 @@ msgstr "Doris must be predefined"
 msgid "任务状态"
 msgstr "Task Status"
 
-msgid "ES检索"
-msgstr "ES Query"
+msgid "检索"
+msgstr "Query"
 
 msgid "WebUI"
 msgstr "WebUI"
@@ -3221,12 +3238,10 @@ msgstr "Filter Condition Key parsing error: {key}"
 msgid "您没有权限执行该操作"
 msgstr "You don't have permission to perform this operation"
 
-#, python-brace-format
-msgid "任务状态异常: {status}"
-msgstr "Task status abnormal: {status}"
-
-msgid "任务异常"
-msgstr "Task Error"
+#, fuzzy, python-brace-format
+#| msgid "任务异常"
+msgid "下载任务异常: {msg}"
+msgstr "Download Task Exception: {msg}"
 
 #, python-brace-format
 msgid "导出数量 {current_count} 超过最大值: {max_count}"
@@ -3266,7 +3281,7 @@ msgid "导出配置"
 msgstr "Export Configuration"
 
 msgid "当前记录数"
-msgstr ""
+msgstr "Current record count"
 
 msgid "总条数"
 msgstr "Total Count"
@@ -3276,6 +3291,18 @@ msgstr "Query Parameters URL"
 
 msgid "日志导出任务"
 msgstr "Log Export Task"
+
+msgid "关联任务"
+msgstr "Related Task"
+
+msgid "下载时间"
+msgstr "Download Time"
+
+msgid "下载用户"
+msgstr "Download User"
+
+msgid "任务下载记录"
+msgstr "Task Download Record"
 
 msgid "日志查询配置"
 msgstr "Log Query Config"
@@ -3303,6 +3330,13 @@ msgstr "Get log search export task details"
 
 msgid "下载日志检索导出任务"
 msgstr "Download log search export task"
+
+#, python-format
+msgid "任务状态异常: %s"
+msgstr "Task status abnormal:  %s"
+
+msgid "任务已过期，无法下载"
+msgstr "Task expired, cannot download"
 
 msgid "搜索(All)"
 msgstr "Search(All)"
@@ -4415,9 +4449,6 @@ msgstr "A single filter value, which can be a string, integer, or float"
 msgid "Conditions"
 msgstr "Conditions"
 
-msgid "Rule Audit Where must have condition or conditions"
-msgstr "Rule Audit Where must have either condition or conditions"
-
 msgid "Rule Audit Where can not have condition and conditions at the same time"
 msgstr "Rule Audit Where cannot have both condition and conditions at the same time"
 
@@ -4465,9 +4496,6 @@ msgstr "End time must be greater than start time"
 
 msgid "调度时间"
 msgstr "Schedule Time"
-
-msgid "错误信息"
-msgstr "Error Message"
 
 msgid "状态字符串"
 msgstr "Status String"

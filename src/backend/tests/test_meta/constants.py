@@ -515,6 +515,7 @@ GLOBAL_CHOICES = {
         {'id': 'RUNNING', 'name': '执行中'},
         {'id': 'SUCCESS', 'name': '成功'},
         {'id': 'FAILURE', 'name': '失败'},
+        {'id': 'EXPIRED', 'name': '已过期'},
     ],
     'meta_system_source_type': [
         {'id': 'iam_v3', 'name': '权限中心V3'},

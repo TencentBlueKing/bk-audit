@@ -20,7 +20,7 @@ from django.contrib import admin
 from django.utils.translation import gettext_lazy
 
 from services.web.query.constants import TaskEnum
-from services.web.query.models import ExportFieldLog, LogExportTask
+from services.web.query.models import ExportFieldLog, LogExportTask, TaskDownloadRecord
 
 
 @admin.register(LogExportTask)
@@ -73,3 +73,14 @@ class ExportFieldLogAdmin(admin.ModelAdmin):
 
     # 只显示部分记录，分页配置
     list_per_page = 100
+
+
+@admin.register(TaskDownloadRecord)
+class TaskDownloadRecordAdmin(admin.ModelAdmin):
+    list_display = ["id", "downloaded_at", "downloaded_by", "task", "get_task_name"]
+    search_fields = ["downloaded_by", "task__name"]
+
+    def get_task_name(self, obj):
+        return obj.task.name if obj.task else "-"
+
+    get_task_name.short_description = "Task Name"

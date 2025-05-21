@@ -16,15 +16,17 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 from abc import ABCMeta, abstractmethod
+from datetime import timedelta
 from typing import Dict, Type
 
 from bk_resource import api, resource
-from bkstorages.backends.bkrepo import BKRepoFile, BKRepoStorage
+from bkstorages.backends.bkrepo import BKRepoFile
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
-from django.utils.translation import gettext_lazy
+from django.utils.timezone import now as timezone_now
+from django.utils.translation import gettext, gettext_lazy
 
 from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
@@ -37,11 +39,11 @@ from services.web.databus.constants import COLLECTOR_PLUGIN_ID
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import COLLECT_SEARCH_CONFIG, TaskEnum
 from services.web.query.exceptions import (
+    DownloadLogExportTaskError,
     LogExportMaxCountError,
-    LogExportTaskStatusError,
 )
 from services.web.query.export.data_fetcher import DataFetcher
-from services.web.query.models import ExportFieldLog, LogExportTask
+from services.web.query.models import ExportFieldLog, LogExportTask, TaskDownloadRecord
 from services.web.query.serializers import (
     CollectorSearchAllReqSerializer,
     CollectorSearchAllStatisticReqSerializer,
@@ -60,6 +62,7 @@ from services.web.query.utils.doris import (
     DorisQuerySQLBuilder,
     DorisStatisticSQLBuilder,
 )
+from services.web.query.utils.storage import LogExportStorage
 
 from .base import QueryBaseResource, SearchDataParser, SearchExportTaskBaseResource
 
@@ -340,12 +343,24 @@ class DownloadCollectorSearchExportTask(SearchExportTaskBaseResource):
         self.validate_task_permission(task)
         # 检查任务状态
         if task.status != TaskEnum.SUCCESS.value:
-            raise LogExportTaskStatusError(status=dict(TaskEnum.choices).get(task.status))
+            msg = gettext("任务状态异常: %s") % dict(TaskEnum.choices).get(task.status)
+            raise DownloadLogExportTaskError(msg=msg)
+        # 任务时间超过限制
+        if task.task_end_time < timezone_now() - timedelta(days=settings.LOG_EXPORT_MAX_DURATION):
+            msg = gettext("任务已过期，无法下载")
+            raise DownloadLogExportTaskError(msg=msg)
+
+        # 记录下载信息
+        TaskDownloadRecord.create_download_record(
+            task=task,
+            username=self.get_request_username(),
+        )
+
         # 下载文件
         origin_name = task.result["origin_name"]
         storage_name = task.result["storage_name"]
         # 创建流式响应对象
-        stream_response = FileResponse(BKRepoFile(storage_name, storage=BKRepoStorage()), filename=origin_name)
+        stream_response = FileResponse(BKRepoFile(storage_name, storage=LogExportStorage()), filename=origin_name)
         # 设置下载头信息
         stream_response['Content-Type'] = 'application/octet-stream'
         return stream_response
