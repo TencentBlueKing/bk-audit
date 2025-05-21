@@ -34,6 +34,7 @@ from services.web.query.export.file_exporter import XLSXExporter
 from services.web.query.export.file_uploader import BKRepoUploader
 from services.web.query.export.model import ExportConfig
 from services.web.query.models import ExportFieldLog, LogExportTask
+from services.web.query.utils.storage import LogExportStorage
 
 
 @periodic_task(run_every=crontab(hour="*/1"))
@@ -115,3 +116,39 @@ def process_one_log_export_task(task_id: int):
     except Exception as e:  # pylint: disable=broad-except
         task.update_task_failed(str(e))
         raise e
+
+
+@periodic_task(
+    run_every=crontab(minute=settings.PROCESS_EXPIRED_LOG_TASK_HOUR),
+    queue="log_export",
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
+@lock(
+    load_lock_name=lambda task_id=None, **kwargs: f"celery:process_expired_log_task:{task_id}",
+)
+def process_expired_log_task(task_id: int = None):
+    """
+    处理过期的日志导出任务，将他们的文件删除掉，并将任务设置为过期
+    :param task_id: 任务 ID；如果给定则加上这个筛选，没有给定则全部过期任务
+    """
+
+    storage = LogExportStorage()
+    # 过期任务的时间范围
+    start_time = datetime.now() - timedelta(days=settings.PROCESS_EXPIRED_LOG_TASK_MAX_DURATION)
+    end_time = datetime.now() - timedelta(days=settings.LOG_EXPORT_MAX_DURATION)
+    expired_tasks: QuerySet[LogExportTask] = LogExportTask.objects.filter(
+        task_end_time__range=[start_time, end_time],
+        status__in=[TaskEnum.SUCCESS.value],
+    )
+    if task_id:
+        expired_tasks = expired_tasks.filter(id=task_id)
+    for task in expired_tasks:
+        try:
+            if task.result and "storage_name" in task.result:
+                storage.delete(task.result["storage_name"])
+                task.update_task_expired()
+                logger_celery.info(f"Processed expired task {task.id}")
+            else:
+                logger_celery.warning(f"Task has no result {task.id}")
+        except Exception as e:  # pylint: disable=broad-except
+            logger_celery.error(f"Failed to process expired task {task.id}: {e}")
