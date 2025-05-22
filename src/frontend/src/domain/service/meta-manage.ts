@@ -274,6 +274,14 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 更新收藏查询条件
+   * @param { Object } params
+   */
+  favouriteQueryUpdate(params: Record<string, any>) {
+    return MetaManageSource.favouriteQueryUpdate(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 删除收藏查询条件
    * @param { Object } params
    */

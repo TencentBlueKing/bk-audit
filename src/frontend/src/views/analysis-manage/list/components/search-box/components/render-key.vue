@@ -324,6 +324,21 @@
     },
   });
 
+  // 更新收藏搜索条件
+  const {
+    run: favouriteQueryUpdate,
+  } = useRequest(MetaManageService.favouriteQueryUpdate, {
+    defaultValue: {},
+    onSuccess: () => {
+      messageSuccess(t('更新成功'));
+      fetchFavouriteQueryList({
+        scene: 'search_config',
+        created_by: userInfo.value.username,
+      });
+      favouriteQueryRef.value.hide();
+    },
+  });
+
   // 删除收藏搜索条件
   const {
     run: favouriteQueryDelete,
@@ -340,6 +355,7 @@
 
   // 处理级联选择器选中事件，添加搜索项
   const handleCascaderSelect = (item: CascaderNode, isChecked: boolean) => {
+    console.log(item, isChecked);
     if (item && item.id) {
       if (isChecked) {
         // 选中时添加搜索项
@@ -374,11 +390,21 @@
 
   // 确认收藏搜索条件
   const handleSubmitFavourite = () => {
-    favouriteQueryCreate({
-      scene: 'search_config',
-      config_name: favouriteSearch.value.name,
-      config_content: localSearchModel.value,
-    });
+    const exitId = favouriteQueryList.value.findIndex(item => item.config_name === favouriteSearch.value.name);
+    if (exitId >= 0) {
+      favouriteQueryUpdate({
+        id: exitId,
+        scene: 'search_config',
+        config_name: favouriteSearch.value.name,
+        config_content: localSearchModel.value,
+      });
+    } else {
+      favouriteQueryCreate({
+        scene: 'search_config',
+        config_name: favouriteSearch.value.name,
+        config_content: localSearchModel.value,
+      });
+    }
   };
 
   const handleCancel = () => {
@@ -397,7 +423,36 @@
         if (key !== 'datetime_origin' && !localFiledConfig.value[key]) {
           // 添加到 localFiledConfig
           localFiledConfig.value[key] = {
-            label: Array.isArray(JSON.parse(key)) ? JSON.parse(key)[0] : key,
+            label: (() => {
+              // 尝试在 list.value 中查找匹配的节点
+              const findNodeByKey = (nodes: CascaderNode[], searchKey: string): string | null => {
+                for (const node of nodes) {
+                  if (node.id === searchKey) {
+                    return node.name;
+                  }
+                  if (node.children && node.children.length > 0) {
+                    const found: string | null = findNodeByKey(node.children, searchKey);
+                    if (found) return found;
+                  }
+                }
+                console.log('未找到匹配的节点', key);
+                return null;
+              };
+
+              // 在 list.value 中查找
+              const foundName = findNodeByKey(list.value, key);
+              return foundName || (() => {
+                try {
+                  const parsedKey = JSON.parse(key);
+                  if (Array.isArray(parsedKey)) {
+                    return parsedKey.slice(1).join('/');
+                  }
+                  return key;
+                } catch (e) {
+                  return key;
+                }
+              })();
+            })(),
             type: 'string',
             required: false,
             canClose: true,

@@ -231,6 +231,13 @@ class MetaManage extends ModuleBase {
       params,
     });
   }
+  // 更新查询条件
+  favouriteQueryUpdate(params: Record<string, any>) {
+    const { id, ...rest } = params;
+    return Request.put(`${this.path}/general_config/${id}/`, {
+      params: rest,
+    });
+  }
   // 删除查询条件
   favouriteQueryDelete(params: {
     id: number
