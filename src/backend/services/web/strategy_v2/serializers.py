@@ -1058,6 +1058,9 @@ class RuleAuditWhereSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
+        # conditions 和 condition 必须只有一个存在
+        if not (attrs.get("condition") or attrs.get("conditions")):
+            raise serializers.ValidationError(gettext("Rule Audit Where must have condition or conditions"))
         if attrs.get("condition") and attrs.get("conditions"):
             raise serializers.ValidationError(
                 gettext("Rule Audit Where can not have condition and conditions at the same time")
