@@ -24,8 +24,7 @@
       :data-source="dataSource"
       :settings="settings"
       @clear-search="handleClearSearch"
-      @request-success="handleRequestSuccess"
-      @row-click="handleRowClick">
+      @request-success="handleRequestSuccess">
       <!-- <template #expandRow="{ row }">
         <row-expand-content
           :data="row"
@@ -50,6 +49,7 @@
     useRoute,
   } from 'vue-router';
 
+  import EsQueryService from '@service/es-query';
   import MetaManageService from '@service/meta-manage';
 
   import type SearchModel from '@model/es-query/search';
@@ -69,6 +69,7 @@
   import RenderUser from './components/render-field/user.vue';
   import RenderTable from './components/render-table.vue';
   import DiffDetail from './components/row-diff-detail/index.vue';
+  import LogBox from './components/row-expand-content/components/log-box/index.vue';
   // import RowExpandContent from './components/row-expand-content/index.vue';
   import SettingFiled from './components/setting-field/index.vue';
 
@@ -122,7 +123,12 @@
       showOverflowTooltip: true,
     },
     {
-      label: () => t('操作人'),
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('操作人') }</label>
+        <FieldStatisticPopover
+          fieldName="username"
+          params={ tableSearchModel.value } />
+      </div>,
       field: 'username',
       render: ({ data }: {data: SearchModel}) => (
         data.username
@@ -141,7 +147,7 @@
           fieldName="system_id"
           params={ tableSearchModel.value } />
       </div>,
-      field: 'system_info.name',
+      field: 'system_id',
       render: ({ data }: {data: SearchModel}) => (
         data.system_id
           ? <RenderSystem data={data}/>
@@ -159,7 +165,7 @@
           fieldName="action_id"
           params={ tableSearchModel.value } />
       </div>,
-      field: 'snapshot_action_info.name',
+      field: 'action_id',
       render: ({ data }: {data: SearchModel}) => {
         if (data.action_id) {
           if (!_.isEmpty(data.snapshot_action_info)) {
@@ -169,7 +175,7 @@
         }
         return '--';
       },
-      minWidth: 160,
+      width: 160,
       filter: {
         list: [],
       },
@@ -181,7 +187,7 @@
           fieldName="resource_type_id"
           params={ tableSearchModel.value } />
       </div>,
-      field: 'snapshot_resource_type_info.name',
+      field: 'resource_type_id',
       render: ({ data }: {data: SearchModel}) => {
         if (data.resource_type_id) {
           if (!_.isEmpty(data.snapshot_resource_type_info)) {
@@ -197,7 +203,13 @@
       },
     },
     {
-      label: () => t('资源实例(ID)'),
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('资源实例(ID)') }</label>
+        <FieldStatisticPopover
+          fieldName="instance_id"
+          params={ tableSearchModel.value } />
+      </div>,
+      field: 'instance_id',
       render: ({ data }: {data: SearchModel}) => {
         if (data.instance_name || data.instance_id) {
           if (!_.isEmpty(data.instance_data)) {
@@ -220,9 +232,14 @@
       minWidth: 160,
     },
     {
-      label: () => t('操作结果(Code)'),
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('操作结果(Code)') }</label>
+        <FieldStatisticPopover
+          fieldName="result_code"
+          params={ tableSearchModel.value } />
+      </div>,
       field: 'result_code',
-      minWidth: 160,
+      width: 160,
       render: ({ data }: {data: SearchModel}) => (
         data.result_code
           ? <RenderResult key={data.bk_receive_time} data={data}/>
@@ -245,6 +262,14 @@
         list: [],
       },
     },
+    {
+      fixed: 'right',
+      label: () => t('操作'),
+      width: '100px',
+      render: ({ data }: {data: SearchModel}) => (
+        <LogBox data={data} />
+      ),
+    },
   ];
   const settings = {
     fields: [],
@@ -256,10 +281,20 @@
   const route = useRoute();
   const targetList = ref<Array<StandardFieldModel>>([]);
   const tableColumn = ref(_.cloneDeep(initColumn));
-  const isExpand = ref<Record<number, boolean>>({});
+  // const isExpand = ref<Record<number, boolean>>({});
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
   // 经过表格处理的查询参数
   const tableSearchModel = computed(() => (listRef.value ? listRef.value.getParamsMemo().value : {}));
+
+  /**
+   * 获取字段
+   */
+  const {
+    data: sourceList,
+  } = useRequest(EsQueryService.fetchSearchConfig, {
+    defaultValue: [],
+    manual: true,
+  });
 
   // Doris接口查询的参数需要调整
   const getFilter = (filter: Record<string, any>) => {
@@ -338,6 +373,46 @@
   };
 
   /**
+   * 合并新设置的列
+   */
+  const formatFields = () => {
+    if (targetList.value.length) {
+      // 获取已有列的field集合，用于去重
+      const existingFields = new Set(initColumn.map(col => col.field));
+
+      // 过滤掉已存在的字段
+      const lists = targetList.value
+        .filter(item => !existingFields.has(item.field_name))
+        .map(item => ({
+          label: () => {
+            // 检查fieldName是否在sourceList中存在，且property为空或property.sub_keys为空数组
+            const fieldExists = sourceList.value.find(source => source.field_name === item.field_name);
+            const shouldShowPopover = fieldExists
+              && (!fieldExists.property
+                || (fieldExists.property.sub_keys && fieldExists.property.sub_keys.length === 0));
+
+            if (shouldShowPopover) {
+              return <div style="display: flex; align-items: center;">
+                <label>{ item.description }</label>
+                <FieldStatisticPopover
+                  fieldName={item.field_name}
+                  params={ tableSearchModel.value } />
+              </div>;
+            }
+            return item.description;
+          },
+          resizable: true,
+          field: item.field_name,
+          minWidth: 140,
+          showOverflowTooltip: true,
+          // render: ({ data }: {data: SearchModel}) =>  (data[item.field_name as keyof SearchModel] || '--'),
+        }));
+      return lists;
+    }
+    return [];
+  };
+
+  /**
    * 获取用户自定义字段
    */
   const {
@@ -350,7 +425,10 @@
     onSuccess: (data) => {
       targetList.value = data || [];
       const customList = formatFields();
-      tableColumn.value = _.cloneDeep(initColumn).concat(customList as []);
+      // 从倒数第二个元素开始拼接
+      const clonedInitColumn = _.cloneDeep(initColumn);
+      clonedInitColumn.splice(clonedInitColumn.length - 1, 0, ...customList);
+      tableColumn.value = clonedInitColumn;
       // tableColumn.value = tableColumn.value.concat(fixedColum);
     },
     manual: true,
@@ -398,41 +476,18 @@
     });
     listRef.value.fetchData(getFilter(props.filter));
   };
-  /**
-   * 合并新设置的列
-   */
-  const formatFields = () => {
-    if (targetList.value.length) {
-      // 获取已有列的field集合，用于去重
-      const existingFields = new Set(initColumn.map(col => col.field));
-
-      // 过滤掉已存在的字段
-      const lists = targetList.value
-        .filter(item => !existingFields.has(item.field_name))
-        .map(item => ({
-          label: () => t(item.description),
-          resizable: true,
-          field: item.field_name,
-          minWidth: 140,
-          showOverflowTooltip: true,
-          render: ({ data }: {data: SearchModel}) =>  (data[item.field_name as keyof SearchModel] || '--'),
-        }));
-      return lists;
-    }
-    return [];
-  };
 
   // 点击整行
-  const handleRowClick = (event: Event, row: any, index: number) => {
-    const tableRef = listRef.value.getTableRef();
-    if (isExpand.value[index]) {
-      tableRef.value.setRowExpand(row, false);
-      isExpand.value[index] = false;
-      return;
-    }
-    tableRef.value.setRowExpand(row, true);
-    isExpand.value[index] = true;
-  };
+  // const handleRowClick = (event: Event, row: any, index: number) => {
+  //   const tableRef = listRef.value.getTableRef();
+  //   if (isExpand.value[index]) {
+  //     tableRef.value.setRowExpand(row, false);
+  //     isExpand.value[index] = false;
+  //     return;
+  //   }
+  //   tableRef.value.setRowExpand(row, true);
+  //   isExpand.value[index] = true;
+  // };
 
   const handleClearSearch = () => {
     emits('clearSearch');

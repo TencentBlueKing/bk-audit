@@ -92,6 +92,7 @@
       <bk-button
         class="mr8"
         :disabled="!fields.length && exportRange === 'specified'"
+        :loading="createQueryTaskLoading"
         theme="primary"
         @click="handleConfirmSearch">
         {{ t('确定') }}
@@ -112,6 +113,7 @@
   import FieldCascader from '../field-cascader/index.vue';
 
   import useDebouncedRef from '@/hooks/use-debounced-ref';
+  import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
   interface CascaderItem {
@@ -132,6 +134,7 @@
 
   const props = defineProps<Props>();
   const { t } = useI18n();
+  const { messageSuccess } = useMessage();
   const isShow = defineModel<boolean>('isShow', {
     required: true,
   });
@@ -163,8 +166,13 @@
   // 创建导出任务
   const {
     run: createQueryTask,
+    loading: createQueryTaskLoading,
   } = useRequest(EsQueryService.createQueryTask, {
     defaultValue: {},
+    onSuccess: () => {
+      messageSuccess(t('创建成功'));
+      handleClosed();
+    },
   });
 
   // 弹出层隐藏后的处理
@@ -230,7 +238,6 @@
       // 删除tags逻辑
       tags.value = tags.value.filter(tag => tag !== displayName);
     }
-    console.log('tags', tags.value);
   };
 
   const handleClearSearch = () => {
@@ -250,7 +257,6 @@
   };
 
   const handleInput = (value: string) => {
-    console.log('value', value);
     searchKeyword.value = value;
     isSearching.value = true;
   };

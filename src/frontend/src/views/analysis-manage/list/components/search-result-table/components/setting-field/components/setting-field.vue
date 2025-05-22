@@ -71,7 +71,7 @@
                       <audit-icon
                         style="font-size: 13px;color: #c4c6cc;"
                         type="move" />
-                      {{ element.description || element.field_name }}
+                      {{ element.description || element.field_alias }}
                     </span>
                     <span
                       class="item-icon"
@@ -233,10 +233,13 @@
     const formatItem = {
       ...item,
       parentItem, // 记录父级
-      description: parentItem.field_name !== item.field_name
-        ? `${parentItem.description || parentItem.field_alias}/${item.description || item.field_alias}(${parentItem.field_name}/${item.field_name})`
-        : item.description,
+      field_name: parentItem && parentItem.field_name !== item.field_name
+        ? `${parentItem.field_name}.${item.field_name}`
+        : item.field_name,
     };
+    formatItem.description =  parentItem.field_name !== item.field_name
+      ? `${parentItem.description || parentItem.field_alias}/${item.description || item.field_alias}(${formatItem.field_name.replace(/\./g, '/')})`
+      : item.description;
     targetList.value.push(formatItem);
     // 判断是一级还是多级字段，决定 splice 的目标
     if (parentItem
