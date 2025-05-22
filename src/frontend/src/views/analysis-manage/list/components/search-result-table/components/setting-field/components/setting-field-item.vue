@@ -167,13 +167,13 @@
       return;
     }
 
-    // 将多个字段合并为一个字符串，用 "/" 分隔
-    const fieldString = customFields.value.map(item => item.field).join('/');
+    const fieldString = customFields.value.map(item => item.field).join('.');
+    const fieldAliasString = customFields.value.map(item => item.field).join('/');
 
     // 构造新字段对象
     const newItem = {
       field_name: fieldString,
-      field_alias: remark.value || fieldString,
+      field_alias: fieldAliasString,
       is_json: false,
       property: {},
     };
