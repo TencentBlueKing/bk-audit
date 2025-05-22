@@ -194,7 +194,7 @@ class SQLGenerator:
             )
         except ValueError:
             raise FilterValueError(
-                condition.field.raw_name, condition.filter or condition.filters, condition.field.field_type
+                condition.field.raw_name, condition.filter or condition.filters, filter_type, condition.field.aggregate
             )
 
     def _apply_filter_conditions(self, condition: Union[WhereCondition, HavingCondition]) -> BasicCriterion:
