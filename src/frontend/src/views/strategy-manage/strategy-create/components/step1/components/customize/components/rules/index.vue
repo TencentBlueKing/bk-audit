@@ -45,6 +45,7 @@
           :expected-result="expectedResult"
           :table-fields="tableFields"
           @show-structure-preview="handleShowStructurePreview"
+          @handleUpdateLocalConditions="handleUpdateLocalConditions"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
           @update-field-item-list="handleUpdateFieldItemList" />
@@ -207,7 +208,11 @@
   };
 
   const handleUpdateConnector = (value: 'and' | 'or', conditionsIndex: number) => {
-    where.value.conditions[conditionsIndex].connector = value;
+    where.value.conditions[conditionsIndex].connector = value;    
+  };
+
+  const handleUpdateLocalConditions = (value: any) => {
+    where.value.conditions[value.index] = value
   };
 
   watch(() => where.value, (data) => {

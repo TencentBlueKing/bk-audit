@@ -34,8 +34,9 @@
       label=""
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
-      required>
-      <bk-select
+      required
+      >
+      <!-- <bk-select
         v-model="condition.condition.field.display_name"
         filterable
         :placeholder="t('请选择字段')"
@@ -72,7 +73,14 @@
             <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
           </div>
         </bk-option>
-      </bk-select>
+      </bk-select> -->
+
+      <nodeSelect
+        :configData="localTableFields"
+        :configType="configType"
+        :aggregateList="props.aggregateList"
+        @handleNodeSelectedValue="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)"
+        />
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
@@ -205,6 +213,9 @@
 
   import useRequest from '@/hooks/use-request';
 
+  import nodeSelect from './tree.vue';
+
+
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
     expectedResult: Array<DatabaseTableFieldModel>,
@@ -229,6 +240,7 @@
     (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
     (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
+    (e: 'handleUpdateLocalConditions', value: any): void;
   }
   interface DataType{
     label: string;
@@ -444,7 +456,7 @@
   };
 
   // 更新可选字段列表
-  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
+  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {   
     const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
     // 检查是否已经选择了预期结果中的字段
     const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
@@ -456,7 +468,19 @@
 
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
   };
-
+  // 返回值
+  const onHandleNodeSelectedValue = (node: Record<string, any> ,val: string, condition: Record<string, any>) => {
+    console.log('node ,val, condition', node ,val, condition);
+    
+    condition.condition.field = { ...node}
+    condition.condition.field.display_name = val
+    if('fieldTypeValueAr' in node){
+      condition.condition.field.keys = node.fieldTypeValueAr
+    }
+    emits('handleUpdateLocalConditions', localConditions.value);
+    console.log(' localConditions.value',  localConditions.value);
+    
+  }
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
     updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
@@ -491,7 +515,7 @@
 .rule-item-field {
   position: relative;
   display: grid;
-  grid-template-columns: 216px 180px 1fr minmax(65px, auto);
+  grid-template-columns: 300px 180px 1fr minmax(65px, auto);
   gap: 8px;
 
   :deep(.bk-form-error) {
