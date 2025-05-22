@@ -85,8 +85,13 @@ class OperatorValueError(SQLGeneratorError):
 class FilterValueError(SQLGeneratorError):
     """当过滤值错误时抛出。"""
 
-    MESSAGE = gettext_lazy("条件表达式中字段 {field} 的值 {value} 无法转换成预期类型 {type}。")
+    MESSAGE = gettext_lazy("条件表达式中字段 {field} 的值 {aggregation} {value} 无法转换成预期类型 {type}。")
 
-    def __init__(self, field, value, type):
-        message = self.MESSAGE.format(field=field, type=type, value=value)
+    def __init__(self, field, value, type, aggregation):
+        message = self.MESSAGE.format(
+            field=field,
+            type=type,
+            value=f"({value})" if aggregation else value,
+            aggregation=aggregation if aggregation else "",
+        )
         super().__init__(message)
