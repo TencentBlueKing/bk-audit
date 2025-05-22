@@ -28,7 +28,7 @@
     :is-show="isShow"
     theme="light"
     trigger="click"
-    width="980"
+    width="auto"
     @after-hidden="handleAfterHidden">
     <template #content>
       <div class="add-field-pop-content">
@@ -52,6 +52,7 @@
             </div>
             <div class="field-pop-select-list">
               <scroll-faker v-if="renderFieldList.length">
+                <div v-if="isEdit">
                 <div
                   v-for="(item, index) in renderFieldList"
                   :key="index"
@@ -61,7 +62,7 @@
                       <bk-checkbox
                         :checked="isEdit"
                         :disabled="isEdit"
-                        @change="(value: boolean) => handleSelectField(value, item)">
+                        @change="() => handleSelectField(item)">
                         <div style="display: flex; align-items: center">
                           <audit-icon
                             style="margin-right: 4px;font-size: 14px;"
@@ -73,10 +74,19 @@
                           <span>{{ item.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
                         </div>
                       </bk-checkbox>
-                    </bk-checkbox-group>
+                    </bk-checkbox-group> 
                   </div>
                   <div>{{ item.raw_name }}</div>
                 </div>
+              </div>
+                <nodeSelect
+                    ref="nodeSelectRef"
+                    :configData="localTableFields"
+                    :expectedResultList="props.expectedResultList"
+                    :configType="configType"
+                    v-else
+                    @handleNodeChecked="onHandleNodeChecked"
+                      />
               </scroll-faker>
               <bk-exception
                 v-else-if="isSearching"
@@ -257,6 +267,7 @@
   import { encodeRegexp } from '@utils/assist';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
+  import nodeSelect from './tree.vue';
 
   // 扩展DatabaseTableFieldModel类型，添加aggregateList属性
   interface ExDatabaseTableFieldModel extends DatabaseTableFieldModel {
@@ -276,9 +287,12 @@
   }
   interface Expose {
     handleEditShowPop: (index: number) => void,
+    handleEditNode: (node: Record<string, any>) =>void
   }
 
+  const nodeSelectRef = ref(null);
   const props = defineProps<Props>();
+  const editNode = ref()
   const emits = defineEmits<Emits>();
   const isEdit = defineModel<boolean>({
     required: true,
@@ -355,7 +369,7 @@
   };
 
   // 生成可用聚合算法列表
-  const createAggregateList = (field: ExDatabaseTableFieldModel) => {
+  const createAggregateList = (field: ExDatabaseTableFieldModel) => {    
     const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚合'));
 
     // 检测重复聚合算法
@@ -372,7 +386,7 @@
   };
 
   // 处理字段数据
-  const processField = (field: ExDatabaseTableFieldModel) => {
+  const processField = (field: ExDatabaseTableFieldModel) => {    
     // 创建新对象避免参数修改
     const processedField = {
       ...field,
@@ -421,15 +435,15 @@
   };
 
   // 选择字段
-  const handleSelectField = (value: boolean, field: ExDatabaseTableFieldModel) => {
-    if (value) {
-      // 处理并更新数据
-      tableData.value.push(processField(field));
-    } else {
-      tableData.value = tableData.value.filter(({ raw_name: rawName }) => rawName !== field.raw_name);
-    }
+  const handleSelectField = (field: ExDatabaseTableFieldModel) => {
+    localTableFields.value = [editNode.value]    
+    tableData.value.push(processField(field === undefined ? editNode.value : field));
   };
-
+  const onHandleNodeChecked = (node: Array<ExDatabaseTableFieldModel>) => {
+    tableData.value = node.map(field =>{
+      return processField(field)
+    })
+  };
   // 聚合算法变更时动态更新显示名后缀
   const handleAggregateChange = (val: string, currentItem: ExDatabaseTableFieldModel) => {
     // 判断当前显示名是否已经带有后缀，去除旧后缀
@@ -504,9 +518,9 @@
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { isDuplicate, aggregateList, ...pureItem } = item;
         emits('addExpectedResult', pureItem);
-      });
+      });  
     } else {
-      // 处理编辑模式
+      // 处理编辑模式      
       const [currentItem] = tableData.value;
       if (currentItem) {
         // 过滤不需要的属性
@@ -526,7 +540,7 @@
       isDuplicate: false,
     }));
     if (isEdit.value) {
-      handleSelectField(true, localTableFields.value[0]);
+      handleSelectField(localTableFields.value[0]);
     }
   }, {
     immediate: true,
@@ -537,6 +551,9 @@
       isShow.value = true;
       editIndex.value = index;
     },
+    handleEditNode: (node: Record<string, any>)=>{
+     editNode.value = node
+    }
   });
 </script>
 <style scoped lang="postcss">
@@ -567,7 +584,8 @@
 
     .field-pop-select {
       display: flex;
-      width: 350px;
+      min-width: 350px;
+      width: auto;
       height: 100%;
       flex-direction: column;
 

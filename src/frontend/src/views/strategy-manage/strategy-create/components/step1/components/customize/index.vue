@@ -278,7 +278,8 @@
     nextTick,
     ref,
     watch,
-    watchEffect } from 'vue';
+    watchEffect,
+    onMounted } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -569,6 +570,7 @@
       label: string
       value: string
       spec_field_type: string
+      property?: Record<string, any>
     }>,
     displayOrRtId: string,
   ) => data.map(item => ({
@@ -579,6 +581,7 @@
     aggregate: null,
     spec_field_type: item.spec_field_type,
     remark: '',
+    property: item.property || {}
   }));
 
   // 选择tableid后，获取表字段
@@ -601,9 +604,9 @@
     const displayArr = Array.from(new Set(rtIdArrDisplay.reduce((acc, curr) => acc.concat(curr), [])));
     StrategyManageService.fetchBatchTableRtFields({
       table_ids: idArr.join(','),
-    }).then((data) => {
+    }).then((data) => {      
       tableFields.value = [];
-      data.forEach((item, index) => {
+      data.forEach((item: Record<string, any>, index) => {
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
     });
@@ -688,7 +691,9 @@
       rt_id_or_uid: arr[arr.length - 1],
     };
   };
-
+  const removeTreeData = () =>{
+    sessionStorage.removeItem('storage-tree-data')
+  }
   const createInfoBoxConfig = (overrides: {
     onConfirm: () => void
     onClose: () => void
@@ -715,6 +720,14 @@
     contentAlign: 'center',
     footerAlign: 'center',
     ...overrides,
+    onConfirm: () => {
+    removeTreeData(); // 无论外部是否传入 onConfirm，都先执行 removeTreeData
+    overrides.onConfirm?.(); // 如果外部传入了 onConfirm，再执行它
+  },
+  onClose: () => {
+    removeTreeData(); // 无论外部是否传入 onClose，都先执行 removeTreeData
+    overrides.onClose?.(); // 如果外部传入了 onClose，再执行它
+  },
   });
 
   // 重置数据源和表单
@@ -821,7 +834,7 @@
   };
 
   // 更新风险规则
-  const handleUpdateWhere = (where: Where) => {
+  const handleUpdateWhere = (where: Where) => {    
     formData.value.configs.where = where;
   };
 
@@ -986,6 +999,9 @@
       return params;
     },
   });
+  onMounted(() => {
+    sessionStorage.removeItem("storage-tree-data"); // 清除数据
+  })
 </script>
 <style scoped lang="postcss">
 .strategy-customize {

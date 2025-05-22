@@ -119,6 +119,7 @@
   };
 
   const handleEdit = (element: DatabaseTableFieldModel, index: number) => {
+    addFieldsRef.value.handleEditNode(element);
     isEdit.value = true;
     editItem.value = element;
     addFieldsRef.value.handleEditShowPop(index);
@@ -129,7 +130,7 @@
     return `[${item?.label}] ${element.display_name}`;
   };
 
-  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {
+  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {    
     if (editIndex !== undefined) {
       expectedResultList.value.splice(editIndex, 1, item);
     } else {
