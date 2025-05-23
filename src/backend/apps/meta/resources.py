@@ -103,6 +103,7 @@ from apps.meta.serializers import (
     SystemSearchBaseSerialzier,
     SystemSerializer,
     UpdateCustomFieldResponseSerializer,
+    UpdateGeneralConfigSerializer,
     UploadDataMapFileRequestSerializer,
     UploadDataMapFileResponseSerializer,
 )
@@ -726,7 +727,7 @@ class UpdateGeneralConfigResource(Meta, ModelResource):
     model = GeneralConfig
     action = "update"
     serializer_class = GeneralConfigSerializer
-    RequestSerializer = GeneralConfigSerializer
+    RequestSerializer = UpdateGeneralConfigSerializer
 
 
 class DeleteGeneralConfigResource(Meta, ModelResource):
