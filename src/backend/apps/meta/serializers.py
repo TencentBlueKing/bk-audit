@@ -434,8 +434,6 @@ class DeleteSystemDiagnosisPushReqSerializer(serializers.Serializer):
 class GeneralConfigSerializer(serializers.ModelSerializer):
     """Serializer for GeneralConfig"""
 
-    id = serializers.IntegerField(label=gettext_lazy("ID"))
-
     class Meta:
         model = GeneralConfig
         fields = [
@@ -448,6 +446,12 @@ class GeneralConfigSerializer(serializers.ModelSerializer):
             "updated_by",
             "updated_at",
         ]
+
+
+class UpdateGeneralConfigSerializer(GeneralConfigSerializer):
+    """Update General Config Request"""
+
+    id = serializers.IntegerField(label=gettext_lazy("配置ID"))
 
 
 class DeleteGeneralConfigReqSerializer(serializers.Serializer):
