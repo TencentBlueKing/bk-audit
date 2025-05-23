@@ -1048,7 +1048,7 @@ class RuleAuditWhereSerializer(serializers.Serializer):
         自定义序列化逻辑: 递归解析 conditions
         """
 
-        ret = super().to_representation(instance)
+        ret = super().to_internal_value(instance)
 
         # 递归处理 conditions
         conditions = instance.get('conditions', [])
