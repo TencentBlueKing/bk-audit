@@ -973,6 +973,9 @@ class RuleAuditFieldSerializer(serializers.Serializer):
         label=gettext_lazy("Aggregate"), choices=RuleAuditAggregateType.choices, allow_null=True, default=None
     )
     remark = serializers.CharField(label=gettext_lazy("Remark"), required=False, default="", allow_blank=True)
+    keys = serializers.ListField(
+        label=gettext_lazy("Keys"), child=serializers.CharField(), required=False, allow_empty=True, default=list
+    )
 
 
 class RuleAuditLinkTableSerializer(serializers.Serializer):
