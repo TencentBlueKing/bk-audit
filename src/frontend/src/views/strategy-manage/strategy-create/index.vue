@@ -231,7 +231,6 @@
   // 提交
   const handleSubmit = () => {
     const params = _.cloneDeep(formData.value);
-    console.log('提交>>>', params);
     
     // ai策略
     if (controlTypeId.value !== 'BKM') {

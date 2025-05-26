@@ -1,6 +1,6 @@
 <template>
-  <bk-select ref="selectRef" v-model="selectedValue" :auto-height="false" collapse-tags custom-content @search-change="handleSearch"
-    :popoverOptions="{ 'width': 'auto' }" display-key="name" id-key="id" multiple>
+  <bk-select ref="selectRef" v-model="selectedValue" :auto-height="false" collapse-tags custom-content filterable
+    @search-change="handleSearch" :popoverOptions="{ 'width': 'auto' }" display-key="name" id-key="id" multiple>
     <bk-tree ref="treeRef" children="children" :data="treeData" empty-text=" " label="raw_name"
       :node-content-action="['click']" :show-node-type-icon="false" @node-checked="handleNodeChecked"
       @nodeClick="handleNodeClick">
@@ -20,9 +20,20 @@
               </span>
             </span>
             <span v-else>
-              <span class="field-type-span">{{ getAggregateName(data) }}{{ data.display_name }}{{ data.raw_name ?
-                `(${data.raw_name})` : ``
-                }}
+              <span v-if="'textValue' in data" class="field-type-span">{{ getAggregateName(data) }}{{ data.display_name
+              }}
+              </span>
+
+              <span v-else class="field-type-span">
+                {{ getAggregateName(data) }}
+                <span v-if="('isStrategyEdit' in data)">
+                  {{ data.parent_display_name }}{{ data.parent_raw_name ?
+                    `(${data.parent_raw_name})` : ``
+                  }}</span>
+                <span v-else>{{ data.display_name }}{{ data.raw_name ?
+                  `(${data.raw_name})` : ``
+                }} </span>
+
                 <span v-for="(field, fieldIndex) in data?.fieldTypeValueAr" :key="fieldIndex">
                   <span class="subscript">/</span>
                   {{ field }}
@@ -30,8 +41,9 @@
               </span>
             </span>
           </div>
-          <div class="field-right"
-            v-if="data.spec_field_type === 'object' && ('dynamic_content' in data.property) && data.property.dynamic_content">
+          <div class="field-right" v-if="data.spec_field_type === 'object' &&
+            ('dynamic_content' in data.property)
+            && data.property.dynamic_content && !('from' in data)">
             <audit-icon @click.stop="handleAddNode(data)" style="margin-right: 4px;font-size: 14px;color: #3a84ff;" svg
               type="plus-circle" />
             <bk-popover width="300" placement="right" theme="light">
@@ -75,8 +87,7 @@
               </div>
 
               <bk-select v-else v-model="data.spec_field_type" size="small" empty-text="请选择字段类型" :filterable="false"
-                :popoverOptions="{ 'boundary': 'parent' }" style="width: 200px;"
-                @select="handleSelect(data)">
+                :popoverOptions="{ 'boundary': 'parent' }" style="width: 200px;" @select="handleSelect(data)">
                 <bk-option v-for="item in fieldTypeList" :id="item.id" :key="item.id"
                   :name="`${item.name}(${item.id})`" />
               </bk-select>
@@ -93,7 +104,8 @@
             <div class="field-edit-right edit-icon">
               <audit-icon v-if="data.spec_field_type !== ''" style="margin-right: 4px;font-size: 18px;color:#7bbe8a;"
                 svg type="check-line" @click.stop="handleAddFieldSubmit(data)" />
-              <audit-icon style="margin-right: 4px;font-size: 18px;color:#c1c3c9;" svg type="close" @click.stop="handleAddFieldClose(data)"/>
+              <audit-icon style="margin-right: 4px;font-size: 18px;color:#c1c3c9;" svg type="close"
+                @click.stop="handleAddFieldClose(data)" />
             </div>
           </div>
         </div>
@@ -102,20 +114,25 @@
   </bk-select>
 </template>
 <script setup lang="tsx">
-import { computed, ref, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted, nextTick } from 'vue';
 import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 import MetaManageService from '@service/meta-manage';
 import useRequest from '@hooks/use-request';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 
 
-  interface Emits {
-    (e: 'handleNodeSelectedValue', node: any, value: string ): void;
-  }
+interface Emits {
+  (e: 'handleNodeSelectedValue', node: any, value: string): void;
+}
 interface Props {
   configData: any[],
   configType: string,
   aggregateList: Array<Record<string, any>>,
+  condition: Record<string, any>,
+  conditions: Record<string, any>,
 }
+const route = useRoute();
+const router = useRouter();
 const props = defineProps<Props>();
 const emits = defineEmits<Emits>();
 
@@ -130,7 +147,7 @@ const newItem = {
   aggregate: null,
   parent_aggregate: null,
   children: [],
-  selectedValue:"",
+  selectedValue: "",
   display_name: "",
   parent_display_name: "",
   field_type: "",
@@ -142,7 +159,7 @@ const newItem = {
   parent_table: "",
   table: "",
 };
-const handleSelect = (val: Record<string, any>) =>{
+const handleSelect = (val: Record<string, any>) => {
   val.field_type = val.spec_field_type
 }
 const nodeInput = ref('');
@@ -160,29 +177,29 @@ const handleAddFieldClose = (val: Record<string, any>) => {
 };
 // 搜索逻辑
 const handleSearch = (keyword: string) => {
-  if (!keyword) {
-    treeData.value =  storageTreeData.value
-    return;
-  }
+  const searchAr = JSON.parse(JSON.stringify(treeData.value))
+  const searchInTree = (nodes: Record<string, any>) => {
 
-  const matchedNodes = searchTreeNodes(treeData.value, keyword);
+    return nodes.reduce((result:Record<string, any>, node: Record<string, any>) => {
+      // 检查当前节点      
+      if (node.raw_name.includes(keyword) || node.display_name.includes(keyword)) {
+        result.push(node);
+      }
+
+      // 如果有子节点，递归搜索
+      if (node.children && node.children.length > 0) {
+        result.push(...searchInTree(node.children));
+      }
+
+      return result;
+    }, []);
+  };
+
+  treeData.value = searchInTree(storageTreeData.value)
+
+
 };
 
-
-const searchTreeNodes = (nodes:Record<string, any> , keyword: string) => {  
-  const matchedNodes: Record<string, any>[] = []; // 使用 Record<string, any>[]
-
-  nodes.forEach((node: Record<string, any>)=> {
-    if (node.display_name.includes(keyword) || node.raw_name.includes(keyword)) {
-      matchedNodes.push(node);
-    }
-    if (node.children && node.children.length > 0) {
-      matchedNodes.push(...searchTreeNodes(node.children, keyword));
-    }
-  });
-  treeData.value  = matchedNodes;
-  return matchedNodes;
-}
 // 添加子项目
 const handleAddNode = (val: Record<string, any>) => {
   const findAndInsert = (nodes: Array<Record<string, any>>) => {
@@ -227,33 +244,37 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
   const fieldTypeValueAr = fieldTypeValue.value[val.parent_raw_name].map((item: Record<string, any>) => {
     return item[`field_value_${item.id}`]
   })
-  const fieldTypeValueText = fieldTypeValueAr.join('_')
+  const fieldTypeValueText = fieldTypeValueAr.join('/')
   treeData.value.forEach((node: Record<string, any>) => {
     if (node.raw_name === val.parent_raw_name) {
-      node.children.forEach((e: Record<string, any> )=> {
+      node.children.forEach((e: Record<string, any>) => {
         if (e.isEdit) {
           e.isEdit = false
           e.display_name = e.parent_display_name
           e.raw_name = e.parent_raw_name
           e.fieldTypeValueAr = fieldTypeValueAr
-          e.selectedValue = `${e.parent_display_name}(${e.parent_raw_name}_${fieldTypeValueText})`
+          e.selectedValue = `${e.parent_display_name}(${e.parent_raw_name})/${fieldTypeValueText}`
         }
+
       });
-       
+
     }
   })
   storageTreeData.value = treeData.value
+
 }
 // 选择
 const handleNodeClick = (nodes: Record<string, any>) => {
-  selectedValue.value = nodes.selectedValue;
-  emits('handleNodeSelectedValue', nodes, nodes.selectedValue);
+  if (!nodes.isEdit) {
+    selectedValue.value = nodes.selectedValue;
+    emits('handleNodeSelectedValue', nodes, nodes.selectedValue);
+  }
 };
 
 const handleNodeChecked = (nodes: Record<string, any>) => {
 };
 
-const getAggregateName = (element: Record<string, any>) => {  
+const getAggregateName = (element: Record<string, any>) => {
   // 添加的子项
   if ('parent_aggregate' in element) {
     if (!element.parent_aggregate) return '';
@@ -277,12 +298,12 @@ const {
 });
 
 const transformData = (data: any[]): Array<Record<string, any>> => {
-  return data.map((item: Record<string, any> )=> {
+  return data.map((item: Record<string, any>) => {
     // 如果有子节点（sub_keys），则递归处理
     if (item.property && item.property.sub_keys && item.property.sub_keys.length > 0) {
       return {
         ...item,
-        selectedValue: ('alias' in item) ?  '' : `${item.display_name}(${item.raw_name})` ,
+        selectedValue: ('alias' in item) ? '' : `${item.display_name}(${item.raw_name})`,
         children: transformData(item.property.sub_keys), // 递归处理子节点
         display_name: ('alias' in item) ? item.label : item.display_name, // 使用原始数据的 label 作为树节点的显示名称
         raw_name: ('alias' in item) ? item.value : item.raw_name     // 唯一标识符（根据你的需求可以是 value 或其他字段）
@@ -290,7 +311,7 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
     } else {
       return {
         ...item,
-        selectedValue:  ('alias' in item) ? '' : `${item.display_name}(${item.raw_name})` ,
+        selectedValue: ('alias' in item) ? '' : `${item.display_name}(${item.raw_name})`,
         children: [],
         display_name: ('alias' in item) ? item.label : item.display_name, // 使用原始数据的 label 作为树节点的显示名称
         raw_name: ('alias' in item) ? item.value : item.raw_name     // 唯一标识符（根据你的需求可以是 value 或其他字段）
@@ -300,18 +321,53 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
 }
 // 改造数据
 watch(() => props, (newData) => {
-  const initTreeData = JSON.parse(JSON.stringify(newData.configData))
-  treeData.value = transformData(initTreeData)
-  storageTreeData.value = transformData(initTreeData)
-  console.log('storageTreeData.value', storageTreeData.value);
-  
+  const haveTreeData = sessionStorage.getItem("rule-tree-data");
+  if (haveTreeData) {
+    treeData.value = JSON.parse(sessionStorage.getItem("rule-tree-data") || "[]");
+  } else {
+    const initTreeData = JSON.parse(JSON.stringify(newData.configData))
+
+    if (route.name === 'strategyEdit') {
+      // 编辑时手动插入数据回显
+      const initData = transformData(initTreeData).map(e => {
+
+        if ((newData.condition.condition.field.parent_raw_name === e.raw_name) && !('from' in e)) {
+          e.children.push({ ...newData.condition.condition.field, isStrategyEdit: true })
+        }
+        return e
+      })
+      treeData.value = initData
+
+    } else {
+      treeData.value = transformData(initTreeData)
+    }
+  }
+  storageTreeData.value = JSON.parse(JSON.stringify(treeData.value))
+  selectedValue.value = newData.condition.condition.field.display_name
+
 }, {
   deep: true,
   immediate: true,
 })
+// watch(
+//   () => storageTreeData.value,
+//   (newData) => {
+//     if (newData.length > 0) {
+//       sessionStorage.setItem("rule-tree-data", JSON.stringify(newData));
+
+//     }
+//   },
+//   {
+//     deep: true,
+//   }
+// );
 onMounted(() => {
   fetchGlobalChoices()
 })
+onBeforeRouteLeave((to, from, next) => {
+  sessionStorage.removeItem("rule-tree-data"); // 清除数据
+  next();
+});
 </script>
 <style scoped lang="postcss">
 .field {
@@ -319,6 +375,7 @@ onMounted(() => {
   width: 100%;
   justify-content: space-between;
   padding-right: 10px;
+
   .field-left {
     .field-type-span {
       color: #63656e;
