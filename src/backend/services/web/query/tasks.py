@@ -152,3 +152,34 @@ def process_expired_log_task(task_id: int = None):
                 logger_celery.warning(f"Task has no result {task.id}")
         except Exception as e:  # pylint: disable=broad-except
             logger_celery.error(f"Failed to process expired task {task.id}: {e}")
+
+
+@periodic_task(
+    run_every=crontab(hour="*/1"),  # 每小时执行一次
+    queue="log_export",
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
+@lock(
+    load_lock_name=lambda **kwargs: "celery:handle_stuck_log_tasks",
+)
+def handle_stuck_running_tasks():
+    """
+    处理状态为运行中且卡住的日志导出任务（超过1小时未更新视为卡住）
+    """
+    # 计算卡住的时间阈值：当前时间 - 1小时
+    stuck_time_threshold = datetime.now() - timedelta(hours=1)
+
+    # 查询状态为RUNNING、更新时间早于阈值、且未超过最大重试次数的任务
+    stuck_tasks = LogExportTask.objects.filter(
+        status=TaskEnum.RUNNING.value,
+        updated_at__lte=stuck_time_threshold,
+        repeat_times__lte=settings.PROCESS_LOG_EXPORT_TASK_MAX_REPEAT_TIMES,
+    )
+
+    for task in stuck_tasks:
+        try:
+            # 更新任务状态为失败，并记录错误信息
+            task.update_task_failed("Task stuck in 'RUNNING' status for over 1 hour")
+            logger_celery.info(f"Marked stuck task {task.id} as FAILURE")
+        except Exception as e:
+            logger_celery.error(f"Failed to process task {task.id}: {str(e)}")
