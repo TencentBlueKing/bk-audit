@@ -436,6 +436,18 @@ STUCK_TASK_SEARCH_DAYS = int(os.getenv("BKAPP_STUCK_TASK_SEARCH_DAYS", 7))
 # 处理状态为运行中且卡住的日志导出任务调度周期(小时)
 PROCESS_STUCK_LOG_TASK_HOUR = os.getenv("BKAPP_PROCESS_STUCK_LOG_TASK_HOUR", "*/1")
 
+#  Alert Configuration
+ALERT_DATA_ID = int(os.getenv("BKAPP_ALERT_DATA_ID", 0))
+
+#  Alert Configuration
+ALERT_ACCESS_TOKEN = os.getenv("BKAPP_ALERT_ACCESS_TOKEN", "")
+
+# 日志导出状态上报的数据ID
+LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))
+
+# 日志导出状态上报的数据token
+LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
+
 """
 以下为框架代码 请勿修改
 """

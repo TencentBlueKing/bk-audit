@@ -39,3 +39,13 @@ class ReportMetricSerializer(serializers.Serializer):
     data_id = serializers.IntegerField(label=gettext_lazy("数据通道标识"), min_value=0)
     access_token = serializers.CharField(label=gettext_lazy("数据通道标识验证码"))
     data = MetricDataSerializer(label=gettext_lazy("指标数据"), many=True)
+
+
+# 事件数据序列化器
+class EventDataSerializer(MetricDataSerializer):
+    event_name = serializers.CharField(label=gettext_lazy("事件名称"))
+    metrics = None
+
+
+class ReportEventSerializer(ReportMetricSerializer):
+    data = EventDataSerializer(label=gettext_lazy("事件数据"), many=True)

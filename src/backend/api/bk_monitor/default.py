@@ -25,7 +25,7 @@ from bk_resource.utils.cache import CacheTypeItem
 from django.utils.translation import gettext_lazy
 
 from api.bk_monitor.constants import BKMONITOR_METRIC_MAX_BATCH_SIZE
-from api.bk_monitor.serializers import ReportMetricSerializer
+from api.bk_monitor.serializers import ReportEventSerializer, ReportMetricSerializer
 from api.domains import BK_MONITOR_API_URL, BK_MONITOR_METRIC_PROXY_URL
 
 
@@ -130,3 +130,8 @@ class ReportMetric(APIResource):
             validated_request_data["data"] = datas[i: i + BKMONITOR_METRIC_MAX_BATCH_SIZE]
             results["results"].append(super().perform_request(validated_request_data))
         return results
+
+
+class ReportEvent(ReportMetric):
+    name = gettext_lazy("上报到监控自定义事件")
+    RequestSerializer = ReportEventSerializer
