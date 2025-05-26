@@ -60,6 +60,7 @@ class LogExportTask(SoftDeleteModel):
     current_records = models.IntegerField(gettext_lazy("当前记录数"), default=0)
     total = models.IntegerField(gettext_lazy("总条数"), default=0)
     search_params_url = models.TextField(gettext_lazy("查询参数URL"), blank=True, null=True)
+    alert_sented = models.BooleanField(gettext_lazy("是否已发送告警"), default=False)
 
     class Meta:
         verbose_name = gettext_lazy("日志导出任务")

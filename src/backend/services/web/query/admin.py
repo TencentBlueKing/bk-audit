@@ -37,6 +37,7 @@ class LogExportTaskAdmin(admin.ModelAdmin):
         "created_by",
         "created_at",
         "updated_at",
+        'alert_sented',
     ]
     search_fields = ["created_by", "status"]
     list_filter = ["status", "is_deleted", "namespace"]
