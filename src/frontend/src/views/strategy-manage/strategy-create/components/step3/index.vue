@@ -169,7 +169,7 @@
         class="ml8"
         theme="primary"
         @click="submit">
-        {{ t('提交+') }}
+        {{ t('提交') }}
       </bk-button>
       <bk-button
         class="ml8"

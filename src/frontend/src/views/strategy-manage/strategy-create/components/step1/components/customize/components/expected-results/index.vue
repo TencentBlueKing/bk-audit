@@ -68,16 +68,15 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, ref } from 'vue';
+  import { computed, ref, onMounted, nextTick, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
-
+  import { useRoute, useRouter } from 'vue-router';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import AddFields from './add-fields.vue';
-
   interface Expose {
     resetFormData: () => void,
     setSelect: (select: Array<DatabaseTableFieldModel>) => void;
@@ -91,6 +90,8 @@
     configType: string,
   }
 
+  const route = useRoute();
+  const router =useRouter();
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
@@ -114,14 +115,14 @@
     return _.cloneDeep(props.tableFields);
   });
 
-  const updateExpectedResult = () => {
+  const updateExpectedResult = () => {    
     emits('updateExpectedResult', expectedResultList.value);
   };
 
   const handleEdit = (element: DatabaseTableFieldModel, index: number) => {
-    addFieldsRef.value.handleEditNode(element);
     isEdit.value = true;
     editItem.value = element;
+    addFieldsRef.value.handleEditNode(element);
     addFieldsRef.value.handleEditShowPop(index);
   };
 

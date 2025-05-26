@@ -153,6 +153,7 @@
             :config-type="formData.configs.config_type"
             :expected-result="formData.configs.select"
             :table-fields="tableFields"
+            :configs-data="formData.configs"
             @show-structure-preview="handleShowStructureView"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
@@ -357,7 +358,7 @@
     getFields: () => IFormData
   }
   interface Props {
-    editData: StrategyModel
+    editData: any
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -820,14 +821,14 @@
   };
 
   // 更新预期数据
-  const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
+  const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {    
     formData.value.configs.select = expectedResult;
     // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
     if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
       formData.value.configs.data_source.source_type = '';
       return;
     }
-    // 如果是编辑模式，当originSourceType存在且在可用列表中，保持不变
+    // 如不果是编辑模式，当originSourceType存在且在可用列表中，保持变
     if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
       formData.value.configs.data_source.source_type = originSourceType.value;
     }
@@ -875,7 +876,7 @@
   };
 
   // 编辑
-  const setFormData = (editData: StrategyModel) => {
+  const setFormData = (editData: any) => {    
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
@@ -916,7 +917,7 @@
     if ((isEditMode || isCloneMode) && (props.editData.strategy_id && allConfigTypeTable.value.length > 0)) {
       if (isInit) {
         return;
-      }
+      }      
       setFormData(props.editData);
       isInit = true;
     }

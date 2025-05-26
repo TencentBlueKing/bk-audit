@@ -74,10 +74,11 @@
           </div>
         </bk-option>
       </bk-select> -->
-
       <nodeSelect
         :configData="localTableFields"
         :configType="configType"
+        :condition= "condition"
+        :conditions="conditions"
         :aggregateList="props.aggregateList"
         @handleNodeSelectedValue="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)"
         />
@@ -90,11 +91,6 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.operator`"
       required>
       <!-- 操作人账号特殊处理 -->
-      <!-- <bk-input
-        v-if="condition.field.raw_name ==='user_identify_src_username'"
-        v-model="condition.field.aggregate"
-        class="condition-equation"
-        :placeholder="t('请输入')" /> -->
       <bk-select
         v-model="condition.condition.operator"
         filterable
@@ -437,7 +433,7 @@
   };
 
   // 回显下拉值
-  const  handleValueDicts = () => {
+  const  handleValueDicts = () => {    
     localConditions.value.conditions.forEach((item) => {
       dicts.value[item.condition.field.raw_name] = [];
     });
@@ -445,7 +441,7 @@
       if (key) {
         fetchStrategyFieldValue({
           field_name: key,
-        }).then((data) => {
+        }).then((data) => {          
           dicts.value[key] = data;
           if (data && data.length) {
             handleCascader(key, data);
@@ -457,10 +453,13 @@
 
   // 更新可选字段列表
   const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {   
-    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
+    const filteredExpectedResult = expectedResult.filter(item => item.aggregate)
     // 检查是否已经选择了预期结果中的字段
     const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
 
+    const fromExpectedResult = filteredExpectedResult.map(i =>{
+      i.from = 'expectedResult'
+    })
     // 根据是否选择了预期结果字段来更新字段列表
     localTableFields.value = hasSelectedExpectedResultField
       ? [...filteredExpectedResult]
@@ -469,40 +468,36 @@
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
   };
   // 返回值
-  const onHandleNodeSelectedValue = (node: Record<string, any> ,val: string, condition: Record<string, any>) => {
-    console.log('node ,val, condition', node ,val, condition);
-    
+  const onHandleNodeSelectedValue = (node: Record<string, any> ,val: string, condition: Record<string, any>) => {    
     condition.condition.field = { ...node}
     condition.condition.field.display_name = val
     if('fieldTypeValueAr' in node){
       condition.condition.field.keys = node.fieldTypeValueAr
     }
-    emits('handleUpdateLocalConditions', localConditions.value);
-    console.log(' localConditions.value',  localConditions.value);
-    
+    emits('handleUpdateLocalConditions', localConditions.value);    
   }
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
     updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
 
     // 检查并清理不在可选字段列表中的已选字段
-    localConditions.value.conditions.forEach((condItem, index) => {
-      const { field } = condItem.condition;
-      if (field?.display_name && !localTableFields.value.some(item => item.display_name === field.display_name)) {
-        // eslint-disable-next-line no-param-reassign
-        condItem.condition.field = new DatabaseTableFieldModel();
-        emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, index, 'field');
-        reSetOperator(index);
-        reSetFilter(index);
-      }
-    });
+    // localConditions.value.conditions.forEach((condItem, index) => {
+    //   const { field } = condItem.condition;
+    //   if (field?.display_name && !localTableFields.value.some(item => item.display_name === field.display_name)) {
+    //     // eslint-disable-next-line no-param-reassign
+    //     condItem.condition.field = new DatabaseTableFieldModel();
+    //     // emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, index, 'field');
+    //     // reSetOperator(index);
+    //     // reSetFilter(index);
+    //   }
+    // });
   }, {
     immediate: true,
     deep: true,
   });
 
-  watch(() => props.conditions, (data) => {
-    localConditions.value = _.cloneDeep(data);
+  watch(() => props.conditions, (data) => {    
+    localConditions.value = JSON.parse(JSON.stringify(data));    
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
       handleValueDicts();

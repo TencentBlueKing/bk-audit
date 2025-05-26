@@ -1,67 +1,38 @@
 <template>
-  <bk-tree
-    ref="treeRef"
-    children="children"
-    :data="treeData"
-    empty-text=" "
-    label="raw_name"
-    selectable
-    show-checkbox
-    :node-content-action="['click', 'selected']"
-    :show-node-type-icon="false"
-    @nodeChecked="handleNodeChecked"
-    @nodeClick="handleNodeClick"
-  >
+  <bk-tree ref="treeRef" children="children" :data="treeData" empty-text=" " label="raw_name" selectable show-checkbox
+    :node-content-action="['click', 'selected']" :show-node-type-icon="false" @nodeChecked="handleNodeChecked"
+    @nodeClick="handleNodeClick">
     <template #default="{ data }">
       <div class="field" v-if="!data.isEdit">
         <div class="field-left">
-          <audit-icon
-            style="margin-right: 4px; font-size: 14px"
-            svg
-            :type="data.spec_field_type"
-          />
+          <audit-icon style="margin-right: 4px; font-size: 14px" svg :type="data.spec_field_type" />
           <span v-if="props.configType === 'LinkTable'">
             <span style="color: #3a84ff">{{ data.table }}.</span>
-            <span class="field-type-span"
-              >{{ data.display_name
-              }}{{ data.raw_name ? `(${data.raw_name})` : `` }}
-              <span
-                v-for="(field, fieldIndex) in data?.fieldTypeValueAr"
-                :key="fieldIndex"
-              >
+            <span class="field-type-span">{{ data.display_name
+            }}{{ data.raw_name ? `(${data.raw_name})` : `` }}
+              <span v-for="(field, fieldIndex) in data?.fieldTypeValueAr" :key="fieldIndex">
                 <span class="subscript">/</span>
                 {{ field }}
               </span>
             </span>
           </span>
           <span v-else>
-            <span class="field-type-span"
-              >{{ data.display_name
-              }}{{ data.raw_name ? `(${data.raw_name})` : `` }}
-              <span
-                v-for="(field, fieldIndex) in data?.fieldTypeValueAr"
-                :key="fieldIndex"
-              >
+            <span class="field-type-span">{{ data.display_name
+            }}{{ data.raw_name ? `(${data.raw_name})` : `` }}
+              <span v-for="(field, fieldIndex) in data?.fieldTypeValueAr" :key="fieldIndex">
                 <span class="subscript">/</span>
                 {{ field }}
               </span>
             </span>
           </span>
         </div>
-        <div
-          class="field-right"
-          v-if="
-            data.spec_field_type === 'object' &&
-            'dynamic_content' in data.property &&
-            data.property.dynamic_content
-          "
-        >
-          <audit-icon
-            @click.stop="handleAddNode(data)"
-            style="margin-right: 4px; font-size: 14px; color: #3a84ff"
-            svg
-            type="plus-circle"
-          />
+        <div class="field-right" v-if="
+          data.spec_field_type === 'object' &&
+          'dynamic_content' in data.property &&
+          data.property.dynamic_content
+        ">
+          <audit-icon @click.stop="handleAddNode(data)" style="margin-right: 4px; font-size: 14px; color: #3a84ff" svg
+            type="plus-circle" />
           <bk-popover width="300" placement="right" theme="light">
             <template #content>
               <div>
@@ -76,11 +47,7 @@
                 <br />
                 <p>以下是3级字段的实列</p>
                 <p>
-                  <audit-icon
-                    style="margin-top: 6px; margin-right: 4px; font-size: 14px"
-                    svg
-                    type="string"
-                  />
+                  <audit-icon style="margin-top: 6px; margin-right: 4px; font-size: 14px" svg type="string" />
                   <span style="color: #3a84ff">b.</span>
                   <span> one</span>
                   <span class="field-type-span">/</span>
@@ -90,11 +57,7 @@
                 </p>
               </div>
             </template>
-            <audit-icon
-              style="margin-right: 4px; font-size: 14px; color: #3a84ff"
-              svg
-              type="help-fill"
-            />
+            <audit-icon style="margin-right: 4px; font-size: 14px; color: #3a84ff" svg type="help-fill" />
           </bk-popover>
         </div>
       </div>
@@ -102,11 +65,7 @@
         <div class="field-edit">
           <div class="field-edit-left">
             <div class="field-type" v-if="data.spec_field_type !== ''">
-              <audit-icon
-                style="margin-right: 4px; font-size: 14px"
-                svg
-                :type="data.spec_field_type"
-              />
+              <audit-icon style="margin-right: 4px; font-size: 14px" svg :type="data.spec_field_type" />
               <span v-if="props.configType === 'LinkTable'">
                 <span style="color: #3a84ff">{{ data.parent_table }}.</span>
                 <span class="field-type-span">{{
@@ -119,58 +78,26 @@
               </span>
             </div>
 
-            <bk-select
-              v-else
-              v-model="data.spec_field_type"
-              size="small"
-              empty-text="请选择字段类型"
-              :filterable="false"
-              :popoverOptions="{ boundary: 'parent' }"
-              style="width: 200px"
-              @select="handleSelect(data)"
-            >
-              <bk-option
-                v-for="item in fieldTypeList"
-                :id="item.id"
-                :key="item.id"
-                :name="`${item.name}(${item.id})`"
-              />
+            <bk-select v-else v-model="data.spec_field_type" size="small" empty-text="请选择字段类型" :filterable="false"
+              :popoverOptions="{ boundary: 'parent' }" style="width: 200px" @select="handleSelect(data)">
+              <bk-option v-for="item in fieldTypeList" :id="item.id" :key="item.id"
+                :name="`${item.name}(${item.id})`" />
             </bk-select>
             <div v-if="data.spec_field_type !== ''">
-              <span
-                v-for="(subItem, index) in fieldTypeValue[data.parent_raw_name]"
-                :key="subItem.id"
-              >
+              <span v-for="(subItem, index) in fieldTypeValue[data.parent_raw_name]" :key="subItem.id">
                 <span class="field-type-span subscript">/</span>
-                <bk-input
-                  v-model="subItem[`field_value_${index}`]"
-                  class="edit-input"
-                  size="small"
-                />
+                <bk-input v-model="subItem[`field_value_${index}`]" class="edit-input" size="small" />
               </span>
 
-              <audit-icon
-                @click.stop="handleAddField(data)"
-                style="margin-left: 4px; font-size: 14px; color: #c4c6cc"
-                svg
-                type="add-fill"
-              />
+              <audit-icon @click.stop="handleAddField(data)" style="margin-left: 4px; font-size: 14px; color: #c4c6cc"
+                svg type="add-fill" />
             </div>
           </div>
           <div class="field-edit-right edit-icon">
-            <audit-icon
-              v-if="data.spec_field_type !== ''"
-              style="margin-right: 4px; font-size: 18px; color: #7bbe8a"
-              svg
-              type="check-line"
-              @click.stop="handleAddFieldSubmit(data)"
-            />
-            <audit-icon
-              style="margin-right: 4px; font-size: 18px; color: #c1c3c9"
-              svg
-              type="close"
-              @click.stop="handleAddFieldClose(data)"
-            />
+            <audit-icon v-if="data.spec_field_type !== ''" style="margin-right: 4px; font-size: 18px; color: #7bbe8a"
+              svg type="check-line" @click.stop="handleAddFieldSubmit(data)" />
+            <audit-icon style="margin-right: 4px; font-size: 18px; color: #c1c3c9" svg type="close"
+              @click.stop="handleAddFieldClose(data)" />
           </div>
         </div>
       </div>
@@ -183,7 +110,7 @@ import { computed, ref, watch, onMounted } from "vue";
 import DatabaseTableFieldModel from "@model/strategy/database-table-field";
 import MetaManageService from "@service/meta-manage";
 import useRequest from "@hooks/use-request";
-import { onBeforeRouteLeave } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 
 interface Emits {
   (e: "handleNodeChecked", node: any): void;
@@ -193,8 +120,14 @@ interface Props {
   configData: any[];
   configType: string;
   expectedResultList: any[];
+  searchKey: string;
+}
+interface Expose {
+  handleSearch: (val: string) => void,
 }
 
+const route = useRoute();
+const router = useRouter();
 const props = defineProps<Props>();
 const emits = defineEmits<Emits>();
 
@@ -203,7 +136,7 @@ const fieldTypeValue = ref<Record<string, Record<string, any>[]>>({});
 const fieldTypeList = ref<{ id: string; name: string }[]>([]);
 
 const treeData = ref<Record<string, any>[]>([]);
-const storageTreeData =ref<Record<string, any>[]>([]);
+const storageTreeData = ref<Record<string, any>[]>([]);
 const newItem = {
   aggregate: null,
   aggregateList: [],
@@ -225,26 +158,10 @@ const newItem = {
 };
 const nodeInput = ref("");
 const treeRef = ref();
-const handleSelect = (val: Record<string, any>) =>{
+const handleSelect = (val: Record<string, any>) => {
   val.field_type = val.spec_field_type
 }
-const searchTreeNodes = (nodes: Record<string, any>, keyword:string) => {
-  const matchedNodes: Record<string, any>[] = [];
 
-  nodes.forEach((node: Record<string, any>) => {
-    if (
-      node.display_name.includes(keyword) ||
-      node.raw_name.includes(keyword)
-    ) {
-      matchedNodes.push(node);
-    }
-    if (node.children && node.children.length > 0) {
-      matchedNodes.push(...searchTreeNodes(node.children, keyword));
-    }
-  });
-  treeData.value = matchedNodes;
-  return matchedNodes;
-};
 // 添加子项目
 const handleAddNode = (val: Record<string, any>) => {
   const findAndInsert = (nodes: Array<any>) => {
@@ -262,7 +179,6 @@ const handleAddNode = (val: Record<string, any>) => {
           newItem.parent_table = val.table;
           newItem.field_type = val.field_type;
           newItem.isDuplicate = val.isDuplicate;
-          newItem.isOpen = val.isOpen;
           newItem.table = val.table;
           fieldTypeValue.value[val.raw_name] = [
             {
@@ -299,14 +215,16 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
       return item[`field_value_${item.id}`];
     }
   );
-  const fieldTypeValueText = fieldTypeValueAr.join("_");
+  const fieldTypeValueText = fieldTypeValueAr.join("/");
   treeData.value.forEach((node: Record<string, any>) => {
     if (node.raw_name === val.parent_raw_name) {
       node.children.forEach((e: Record<string, any>) => {
         if (e.isEdit) {
           e.isEdit = false;
-          e.display_name = `${e.parent_display_name}(${e.parent_raw_name}_${fieldTypeValueText})`;
-          e.raw_name = `${e.parent_raw_name}_${fieldTypeValueText}`;
+          e.display_name = e.parent_display_name;
+          e.textValue = `${e.parent_display_name}(${e.parent_raw_name})/${fieldTypeValueText}`
+          e.raw_name = e.parent_raw_name;
+          e.keys = fieldTypeValueAr
           e.fieldTypeValueAr = fieldTypeValueAr;
         }
       });
@@ -324,7 +242,7 @@ const handleAddFieldClose = (val: Record<string, any>) => {
   storageTreeData.value = treeData.value;
 };
 // 选择
-const handleNodeClick = (nodes: Record<string, any>) => {};
+const handleNodeClick = (nodes: Record<string, any>) => { };
 
 const handleNodeChecked = (nodes: Record<string, any>) => {
   emits("handleNodeChecked", nodes);
@@ -365,6 +283,8 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
     }
   });
 };
+
+
 // 改造数据
 watch(
   () => props,
@@ -374,15 +294,47 @@ watch(
       treeData.value = JSON.parse(sessionStorage.getItem("storage-tree-data") || "[]");
     } else {
       const initTreeData = JSON.parse(JSON.stringify(newData.configData));
-      treeData.value = transformData(initTreeData);
-      storageTreeData.value = transformData(initTreeData);
+      if (route.name === 'strategyEdit') {
+        // 编辑时手动插入数据回显
+        const initData = transformData(initTreeData)
+        newData.expectedResultList.forEach(e => {
+          initData.forEach(item => {
+            if ('keys' in e && e?.keys.length >= 1 && (e.raw_name === item.raw_name)) {
+              const addItem = JSON.parse(JSON.stringify(newItem));
+              addItem.parent_display_name = item.display_name;
+              addItem.parent_aggregate = item.aggregate;
+              addItem.parent_raw_name = item.raw_name;
+              addItem.aggregateList = item.aggregateList;
+              addItem.parent_table = item.table;
+              addItem.field_type = item.field_type;
+              addItem.isDuplicate = item.isDuplicate;
+              addItem.isOpen = false;
+              addItem.isEdit = false;
+              addItem.table = item.table;
+              item.children.push({ ...addItem, ...e })
+            }
+          })
+        })
+        treeData.value = initData
+        storageTreeData.value = initData
+
+      } else {
+        treeData.value = transformData(initTreeData);
+        storageTreeData.value = transformData(treeData.value);
+
+      }
     }
+    console.log(' treeData.value', treeData.value);
+
   },
   {
     deep: true,
     immediate: true,
   }
 );
+
+
+
 watch(
   () => storageTreeData.value,
   (newData) => {
@@ -392,6 +344,27 @@ watch(
     deep: true,
   }
 );
+
+defineExpose<Expose>({
+  handleSearch: (val: string) => {
+    const searchInTree = (nodes: Record<string, any>) => {
+      return nodes.reduce((result: Record<string, any>, node: Record<string, any>) => {
+        // 检查当前节点      
+        if (node.raw_name.includes(val) || node.display_name.includes(val)) {
+          result.push(node);
+        }
+
+        // 如果有子节点，递归搜索
+        if (node.children && node.children.length > 0) {
+          result.push(...searchInTree(node.children));
+        }
+
+        return result;
+      }, []);
+    };
+    treeData.value = searchInTree(storageTreeData.value)
+  },
+});
 onMounted(() => {
   fetchGlobalChoices();
 });
@@ -459,7 +432,7 @@ onBeforeRouteLeave((to, from, next) => {
   }
 }
 
-.field-edit > * {
+.field-edit>* {
   margin: 0;
   /* 确保没有额外的外边距影响布局 */
 }
