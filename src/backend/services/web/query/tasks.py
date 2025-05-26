@@ -18,12 +18,13 @@ to the current version of the project delivered to anyone in the future.
 from datetime import datetime, timedelta
 from typing import Optional
 
+from bk_resource import api
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from django.conf import settings
-from django.db.models import Max, QuerySet
+from django.db.models import Count, Max, QuerySet
 
 from core.lock import lock
 from services.web.query.constants import TaskEnum
@@ -115,7 +116,35 @@ def process_one_log_export_task(task_id: int):
         ).export()
     except Exception as e:  # pylint: disable=broad-except
         task.update_task_failed(str(e))
+        if task.repeat_times >= settings.PROCESS_LOG_EXPORT_TASK_MAX_REPEAT_TIMES:
+            send_alert_for_failed_task(task, str(e))
         raise e
+
+
+def send_alert_for_failed_task(task: LogExportTask, error_msg: str):
+    """
+    对重试次数超过或等于最大重试次数的失败任务进行告警（预警）
+    """
+    timestamp = int(task.updated_at.timestamp()) * 1000
+
+    payload = {
+        "data_id": settings.ALERT_DATA_ID,
+        "access_token": settings.ALERT_ACCESS_TOKEN,
+        "data": [
+            {
+                "event_name": f"log_export_failed_task_{task.id}",
+                "event": {"content": f"任务 {task.id} 连续失败超过 {task.repeat_times} 次，错误信息: {error_msg}"},
+                "target": "bk_audit",
+                "dimension": {"module": "log_export", "location": "process_one_log_export_task"},
+                "timestamp": timestamp,
+            }
+        ],
+    }
+    try:
+        api.bk_monitor.report_metric(payload)
+        logger_celery.info(f"失败任务告警上报成功，任务 ID={task.id}")
+    except Exception as alert_error:
+        logger_celery.error(f"失败任务告警上报失败，任务 ID={task.id}, 错误: {alert_error}")
 
 
 @periodic_task(
@@ -155,7 +184,7 @@ def process_expired_log_task(task_id: int = None):
 
 
 @periodic_task(
-    run_every=crontab(hour=settings.PROCESS_STUCK_LOG_TASK_HOUR),
+    run_every=crontab(hour=settings.PROCESS_STUCK_LOG_TASK_HOUR),  # 每小时执行一次
     queue="log_export",
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )
@@ -166,7 +195,6 @@ def handle_stuck_running_tasks():
     """
     处理状态为运行中且卡住的日志导出任务（超过1小时未更新视为卡住）
     """
-
     # 时间范围配置（默认7天）
     max_search_days = settings.STUCK_TASK_SEARCH_DAYS
     search_start_time = datetime.now() - timedelta(days=max_search_days)
@@ -183,7 +211,59 @@ def handle_stuck_running_tasks():
 
     for task in stuck_tasks:
         try:
+            # 更新任务状态为失败，并记录错误信息
             task.update_task_failed("Task stuck in 'RUNNING' status for over 1 hour")
             logger_celery.info(f"Marked stuck task {task.id} as FAILURE")
         except Exception as e:
             logger_celery.error(f"Failed to process task {task.id}: {str(e)}")
+
+
+@periodic_task(
+    run_every=crontab(hour=settings.PROCESS_STUCK_LOG_TASK_HOUR),
+    queue="log_export",
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
+@lock(load_lock_name=lambda **kwargs: "celery:report_log_export_task_metrics")
+def report_log_export_task_metrics():
+    """
+    每小时上报日志导出任务状态指标：READY、RUNNING、FAILURE、EXPIRED 的任务数量
+    """
+
+    now = datetime.now()
+    timestamp = int(now.timestamp() * 1000)
+
+    status_counts = LogExportTask.objects.values("status").annotate(count=Count("id"))
+    status_map = {
+        TaskEnum.READY.value: 0,
+        TaskEnum.RUNNING.value: 0,
+        TaskEnum.FAILURE.value: 0,
+        TaskEnum.EXPIRED.value: 0,
+    }
+    for entry in status_counts:
+        status = entry["status"]
+        if status in status_map:
+            status_map[status] = entry["count"]
+
+    payload = {
+        "data_id": settings.LOG_EXPORT_STATUS_DATA_ID,
+        "access_token": settings.LOG_EXPORT_STATUS_ACCESS_TOKEN,
+        "data": [
+            {
+                "metrics": {"value": count},
+                "target": "bk_audit",
+                "dimension": {
+                    "module": "log_export",
+                    "location": "report_log_export_task_metrics",
+                    "status": status,
+                },
+                "timestamp": timestamp,
+            }
+            for status, count in status_map.items()
+        ],
+    }
+
+    try:
+        api.bk_monitor.report_metric(payload)
+        logger_celery.info(f"[report_log_export_task_metrics] 上报成功: {status_map}")
+    except Exception as e:
+        logger_celery.error(f"[report_log_export_task_metrics] 上报失败: {e}")
