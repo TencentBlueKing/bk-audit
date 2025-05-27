@@ -169,7 +169,9 @@ export default {
     table_ids: string
   }) {
     return StrategySource.getBatchTableRtFields(params)
-      .then(({ data }) => data);
+      .then(({ data }) => {
+        return data
+      });
   },
   /**
    * @desc 获取表格下的rt字段

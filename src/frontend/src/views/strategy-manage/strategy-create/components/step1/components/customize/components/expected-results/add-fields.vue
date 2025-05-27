@@ -28,7 +28,7 @@
     :is-show="isShow"
     theme="light"
     trigger="click"
-    width="980"
+    width="auto"
     @after-hidden="handleAfterHidden">
     <template #content>
       <div class="add-field-pop-content">
@@ -52,6 +52,7 @@
             </div>
             <div class="field-pop-select-list">
               <scroll-faker v-if="renderFieldList.length">
+                <div v-if="isEdit">
                 <div
                   v-for="(item, index) in renderFieldList"
                   :key="index"
@@ -61,7 +62,7 @@
                       <bk-checkbox
                         :checked="isEdit"
                         :disabled="isEdit"
-                        @change="(value: boolean) => handleSelectField(value, item)">
+                        @change="() => handleSelectField()">
                         <div style="display: flex; align-items: center">
                           <audit-icon
                             style="margin-right: 4px;font-size: 14px;"
@@ -70,13 +71,23 @@
                           <span
                             v-if="configType === 'LinkTable'"
                             style=" color: #3a84ff;">{{ item.table }}.</span>
-                          <span>{{ item.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
+                          <span>{{ item?.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
                         </div>
                       </bk-checkbox>
-                    </bk-checkbox-group>
+                    </bk-checkbox-group> 
                   </div>
                   <div>{{ item.raw_name }}</div>
                 </div>
+              </div>
+                <nodeSelect
+                    ref="nodeSelectRef"
+                    :searchKey="searchKey"
+                    :configData="localTableFields"
+                    :expectedResultList="props.expectedResultList"
+                    :configType="configType"
+                    v-else
+                    @handleNodeChecked="onHandleNodeChecked"
+                      />
               </scroll-faker>
               <bk-exception
                 v-else-if="isSearching"
@@ -177,8 +188,14 @@
                       v-for="(item, index) in tableData"
                       :key="index">
                       <td style="background-color: #fafbfd;">
-                        <div style=" width: 180px;padding-left: 8px">
+                        <div class="table-field">
                           <tool-tip-text :data="item.raw_name" />
+                          <span v-if="'fieldTypeValueAr' in item">
+                            <span v-for="(field, fieldIndex) in item?.fieldTypeValueAr" :key="fieldIndex">
+                             <span class="subscript">/</span>
+                             <span>{{ field }}</span>
+                            </span>
+                          </span>
                         </div>
                       </td>
                       <td style="background-color: #fff;">
@@ -255,16 +272,20 @@
   import useDebouncedRef from '@hooks/use-debounced-ref';
 
   import { encodeRegexp } from '@utils/assist';
+  import { useRoute, useRouter } from 'vue-router';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
+  import nodeSelect from './tree.vue';
 
   // 扩展DatabaseTableFieldModel类型，添加aggregateList属性
   interface ExDatabaseTableFieldModel extends DatabaseTableFieldModel {
     aggregateList: Record<string, any>[];
     isDuplicate: boolean;
+    display_name: string;
   }
-
-
+  interface NodeSelectComponent {
+    handleSearch: (data: string) => void;  // 根据你的实际参数类型调整
+  }
   interface Emits {
     (e: 'addExpectedResult', item: DatabaseTableFieldModel, index?: number): void;
   }
@@ -276,9 +297,14 @@
   }
   interface Expose {
     handleEditShowPop: (index: number) => void,
+    handleEditNode: (node: Record<string, any>) =>void
   }
 
+  const route = useRoute();
+  const router =useRouter();
+  const nodeSelectRef = ref<NodeSelectComponent | null>(null);
   const props = defineProps<Props>();
+  const editNode = ref()
   const emits = defineEmits<Emits>();
   const isEdit = defineModel<boolean>({
     required: true,
@@ -355,7 +381,7 @@
   };
 
   // 生成可用聚合算法列表
-  const createAggregateList = (field: ExDatabaseTableFieldModel) => {
+  const createAggregateList = (field: ExDatabaseTableFieldModel) => {    
     const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚合'));
 
     // 检测重复聚合算法
@@ -373,13 +399,16 @@
 
   // 处理字段数据
   const processField = (field: ExDatabaseTableFieldModel) => {
+    if('textValue' in field){
+      field.display_name =  field.textValue  as string
+    }
     // 创建新对象避免参数修改
     const processedField = {
       ...field,
       aggregateList: createAggregateList(field),
       aggregate: field.aggregate ? field.aggregate : null, // 编辑回显
     };
-
+    
     // 设置初始选中值
     if (!isEdit.value && processedField.aggregate === null) {
       processedField.aggregate = processedField.aggregateList.find(item => !item.disabled)?.value;
@@ -421,18 +450,21 @@
   };
 
   // 选择字段
-  const handleSelectField = (value: boolean, field: ExDatabaseTableFieldModel) => {
-    if (value) {
-      // 处理并更新数据
-      tableData.value.push(processField(field));
-    } else {
-      tableData.value = tableData.value.filter(({ raw_name: rawName }) => rawName !== field.raw_name);
-    }
+  const handleSelectField = () => {    
+    localTableFields.value = [editNode.value]    
+    tableData.value = [editNode.value].map(field =>{
+      return processField(field)
+    })
   };
-
+  const onHandleNodeChecked = (node: Array<ExDatabaseTableFieldModel>) => {
+    tableData.value = node.map(field =>{
+      return processField(field)
+    })
+  };
   // 聚合算法变更时动态更新显示名后缀
   const handleAggregateChange = (val: string, currentItem: ExDatabaseTableFieldModel) => {
     // 判断当前显示名是否已经带有后缀，去除旧后缀
+    // eslint-disable-next-line no-param-reassign
     const baseName = currentItem.display_name.replace(/(_[A-Z]+)?$/, '');
     // 拼接新后缀
     if (val && val !== '不聚合') {
@@ -504,14 +536,15 @@
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { isDuplicate, aggregateList, ...pureItem } = item;
         emits('addExpectedResult', pureItem);
-      });
+      });  
     } else {
-      // 处理编辑模式
+      // 处理编辑模式      
       const [currentItem] = tableData.value;
       if (currentItem) {
         // 过滤不需要的属性
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { isDuplicate, aggregateList, ...pureItem } = currentItem;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         emits('addExpectedResult', pureItem, editIndex.value);
       }
     }
@@ -519,24 +552,34 @@
     handleCancel();
   };
 
-  watch(() => props.tableFields, (data) => {
+  watch(() => props.tableFields, (data) => {    
     localTableFields.value = data.map(item => ({
       ...item,
       aggregateList: _.cloneDeep(props.aggregateList),
       isDuplicate: false,
     }));
     if (isEdit.value) {
-      handleSelectField(true, localTableFields.value[0]);
+      handleSelectField();
     }
   }, {
     immediate: true,
   });
 
+  watch(() => searchKey.value, (data) => {    
+      setTimeout(()=>{
+        if (nodeSelectRef.value) {
+          nodeSelectRef.value.handleSearch(data);
+        }
+      }, 200)
+  });
   defineExpose<Expose>({
     handleEditShowPop: (index: number) => {
       isShow.value = true;
       editIndex.value = index;
     },
+    handleEditNode: (node: Record<string, any>)=>{
+     editNode.value = node
+    }
   });
 </script>
 <style scoped lang="postcss">
@@ -567,7 +610,8 @@
 
     .field-pop-select {
       display: flex;
-      width: 350px;
+      min-width: 350px;
+      width: auto;
       height: 100%;
       flex-direction: column;
 
@@ -632,7 +676,11 @@
       :deep(.field-pop-radio-table-body) {
         width: 100%;
         border-collapse: collapse;
-
+        .table-field{
+          width: 180px;
+          padding-left: 8px;
+          overflow-wrap: break-word;
+        }
         th,
         td {
           padding: 0;
@@ -718,5 +766,15 @@
       background-color: transparent;
     }
   }
-
+  .subscript {
+  margin-left: 5px;
+  margin-right: 5px;
+  text-align: center;
+  display: inline-block;
+  height: 20px;
+  width: 10px;
+  padding-bottom: 2px;
+  background-color: #e3ecfd;
+  border-radius: 2px;
+}
 </style>

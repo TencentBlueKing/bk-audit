@@ -22,7 +22,8 @@ export default class DatabaseTableField {
   aggregate: any; // 聚合函数 -- 聚合算法
   remark: string; // 备注
   spec_field_type: string;
-
+  property: Record<string, any>;
+  from?: string;
   constructor(payload = {} as DatabaseTableField) {
     this.table = payload.table || '';
     this.raw_name = payload.raw_name || '';
@@ -31,5 +32,7 @@ export default class DatabaseTableField {
     this.aggregate = payload.aggregate || null;
     this.remark = payload.remark || '';
     this.spec_field_type = payload.spec_field_type || '';
+    this.property = payload.property || {};
+    this.from = payload.from || undefined;
   }
 }

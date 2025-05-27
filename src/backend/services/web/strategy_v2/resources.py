@@ -32,7 +32,7 @@ from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, IntegerField, OuterRef, Q, QuerySet, Subquery
+from django.db.models import Count, Q, QuerySet
 from django.db.models.aggregates import Min
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -384,22 +384,7 @@ class ListStrategy(StrategyV2Base):
     def perform_request(self, validated_request_data):
         # init queryset
         order_field = validated_request_data.get("order_field") or "-strategy_id"
-        # 策略关联风险起始时间
-        strategy_risk_start_time = timezone.now() - datetime.timedelta(days=STRATEGY_RISK_DEFAULT_INTERVAL)
-        # init queryset
-        risk_count_subquery = (
-            Risk.objects.filter(strategy_id=OuterRef('strategy_id'), event_time__gte=strategy_risk_start_time)
-            .values('strategy_id')
-            .annotate(count=Count('*'))
-            .values('count')
-        )
-
-        queryset = Strategy.objects.filter(
-            namespace=validated_request_data["namespace"],
-        ).annotate(risk_count=Subquery(risk_count_subquery, output_field=IntegerField()))
-        # 排序
-        queryset = queryset.order_by(order_field)
-
+        queryset = Strategy.objects.filter(namespace=validated_request_data["namespace"]).order_by(order_field)
         # 特殊筛选
         if HAS_UPDATE_TAG_ID in validated_request_data.get("tag", []):
             validated_request_data["tag"] = [t for t in validated_request_data["tag"] if t != HAS_UPDATE_TAG_ID]
