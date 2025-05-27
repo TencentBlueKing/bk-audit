@@ -52,16 +52,16 @@
         <template v-if="statisticData.results.max_value">
           <div class="values-container">
             <div class="item">
-              {{ t('最大值') }} <span class="item-count">{{ statisticData.results.max_value }}</span>
+              {{ t('最大值') }} <span class="item-count">{{ statisticData.results.max_value[0].max_value }}</span>
             </div>
             <div class="item">
-              {{ t('最小值') }} <span class="item-count">{{ statisticData.results.min_value }}</span>
+              {{ t('最小值') }} <span class="item-count">{{ statisticData.results.min_value[0].min_value }}</span>
             </div>
             <div class="item">
-              {{ t('平均值') }} <span class="item-count">{{ statisticData.results.avg_value }}</span>
+              {{ t('平均值') }} <span class="item-count">{{ statisticData.results.avg_value[0].avg_value }}</span>
             </div>
             <div class="item">
-              {{ t('中位数') }} <span class="item-count">{{ statisticData.results.median_value }}</span>
+              {{ t('中位数') }} <span class="item-count">{{ statisticData.results.median_value[0].median_value }}</span>
             </div>
           </div>
         </template>

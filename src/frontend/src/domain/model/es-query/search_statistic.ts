@@ -17,10 +17,10 @@
 
 export default class SearchStatistic {
   results: {
-    avg_value: number | null,
-    max_value: number | null,
-    min_value: number | null,
-    median_value: number | null,
+    avg_value:Array<Record<string, any>>,
+    max_value:Array<Record<string, any>>,
+    min_value:Array<Record<string, any>>,
+    median_value:Array<Record<string, any>>,
     non_empty_ratio: Array<Record<string, any>>
     non_empty_rows: Array<Record<string, any>>
     total_rows: Array<Record<string, any>>,

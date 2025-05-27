@@ -438,6 +438,14 @@
     if (item) {
       localSearchModel.value = item.config_content;
 
+      // 先清空所有 isFavourite 为 true 的元素
+      Object.keys(localFiledConfig.value).forEach((key) => {
+        if (localFiledConfig.value[key]?.isFavourite === true) {
+          console.log(111);
+          delete localFiledConfig.value[key];
+        }
+      });
+
       // 对比 localSearchModel 和 localFiledConfig
       // 如果 localSearchModel 有的键在 localFiledConfig 中不存在，则添加
       Object.keys(localSearchModel.value).forEach((key) => {
@@ -457,7 +465,6 @@
                     if (found) return found;
                   }
                 }
-                console.log('未找到匹配的节点', key);
                 return null;
               };
 
@@ -478,6 +485,7 @@
             type: 'string',
             required: false,
             canClose: true,
+            isFavourite: true,
             operator: 'like', // 默认like
           };
         }
