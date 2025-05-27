@@ -364,6 +364,20 @@
     {
       "operation": "upsert_action",
       "data": {
+        "id": "create_system",
+        "name": "系统创建",
+        "name_en": "Create System",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [],
+        "related_actions": [],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
         "id": "list_system",
         "name": "系统列表访问",
         "name_en": "List System",
