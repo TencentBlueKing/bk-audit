@@ -292,3 +292,13 @@ STRATEGY_STATUS_DEFAULT_INTERVAL = 30 * 6
 
 # 策略关联风险默认时间间隔(天)
 STRATEGY_RISK_DEFAULT_INTERVAL = 30 * 6
+
+
+class StrategyFieldSourceEnum(TextChoices):
+    """
+    策略字段来源
+    """
+
+    BASIC = "basic", gettext_lazy("基本字段")
+    DATA = "data", gettext_lazy("数据字段")
+    EVIDENCE = "evidence", gettext_lazy("证据字段")
