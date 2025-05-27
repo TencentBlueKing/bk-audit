@@ -61,32 +61,94 @@
       </bk-radio>
     </bk-radio-group>
     <template v-if="exportRange === 'specified'">
-      <bk-popover
-        ext-cls="data-export-popover"
-        :is-show="isShowCascader"
-        placement="bottom-start"
-        style="padding: 0;"
-        theme="light"
-        trigger="click"
-        @after-hidden="handleAfterHidden">
-        <bk-tag-input
-          v-model="tags"
-          allow-auto-match
-          allow-create
-          clearable
-          :list="[]"
-          placeholder="输入关键字搜索"
-          @input="handleInput" />
-        <template #content>
-          <field-cascader
-            v-model="selectedItems"
-            :data="data"
-            :is-searching="isSearching"
-            :search-keyword="searchKeyword"
-            @clear-search="handleClearSearch"
-            @select="handleSelect" />
-        </template>
-      </bk-popover>
+      <bk-select
+        ref="selectRef"
+        v-model="selectedNames"
+        :auto-height="false"
+        collapse-tags
+        custom-content
+        display-key="name"
+        id-key="id"
+        multiple
+        multiple-mode="tag"
+        :popover-options="{
+          'width': 'auto',
+          extCls: 'add-search-tree-pop'
+        }"
+        @search-change="handleSearch">
+        <bk-tree
+          ref="treeRef"
+          :check-strictly="false"
+          children="children"
+          :data="localData"
+          empty-text=" "
+          label="raw_name"
+          :node-content-action="['click']"
+          show-checkbox
+          :show-node-type-icon="false"
+          @node-checked="handleNodeChecked">
+          <template #default="{ data: nodeData }: { data: CascaderItem }">
+            <template v-if="!nodeData.isEdit">
+              <span> {{ nodeData.name }}</span>
+              <div>
+                <span
+                  class="category-type"
+                  :style="categoryStyleMap[nodeData.category as keyof typeof categoryStyleMap]">
+                  {{ categoryMap[nodeData.category as keyof typeof categoryMap] }}
+                </span>
+                <!-- 添加子字段 -->
+                <audit-icon
+                  v-if="nodeData.dynamic_content"
+                  style="margin-left: 5px;
+                  font-size: 14px;
+                  color: #3a84ff"
+                  type="plus-circle"
+                  @click.stop="handleAddNode(nodeData)" />
+              </div>
+            </template>
+            <template v-else>
+              <span> {{ nodeData.name }}</span>
+              <span style="margin: 0 5px;">/</span>
+              <!-- 多级字段输入 -->
+              <template
+                v-for="(item, index) in customFields"
+                :key="index">
+                <bk-input
+                  v-model="item.field"
+                  autofocus
+                  :placeholder="t('请输入')"
+                  style="width: 115px;" />
+                <audit-icon
+                  v-if="index === customFields.length - 1"
+                  v-bk-tooltips="t('添加下级字段')"
+                  class="add-icon"
+                  :class="[!item.field ? 'disabled-add-icon' : '']"
+                  type="add-fill"
+                  @click="() => customFields.push({ field: '' })" />
+                <span
+                  v-else
+                  style="margin: 0 5px;">/</span>
+              </template>
+              <div class="field-edit-right">
+                <audit-icon
+                  v-bk-tooltips="t('确认')"
+                  :class="[customFields.every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
+                  svg
+                  type="check-line"
+                  @click.stop="handleAddFieldSubmit(nodeData)" />
+                <audit-icon
+                  v-bk-tooltips="t('取消添加')"
+                  style="margin-right: 4px;
+                  font-size: 18px;
+                  color: #c1c3c9;"
+                  svg
+                  type="close"
+                  @click.stop="handleAddFieldClose(nodeData)" />
+              </div>
+            </template>
+          </template>
+        </bk-tree>
+      </bk-select>
     </template>
     <template #footer>
       <bk-button
@@ -105,98 +167,115 @@
 </template>
 
 <script setup lang="ts">
+  import _ from 'lodash';
   import { inject, type Ref, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import EsQueryService from '@service/es-query';
 
-  import FieldCascader from '../field-cascader/index.vue';
-
-  import useDebouncedRef from '@/hooks/use-debounced-ref';
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
   interface CascaderItem {
-    id: string
-    name: string
-    disabled: boolean
-    children: CascaderItem[]
-    isJson: boolean
     allow_operators: string[]
+    category?: string
+    children: CascaderItem[]
+    disabled: boolean
     dynamic_content: boolean
+    id: string
+    isJson: boolean
     level: number
+    name: string
+    isEdit: boolean
+    isOpen: boolean;
   }
 
   interface Props {
     data: CascaderItem[];
-    modelValue?: Record<string, boolean>;
+    modelValue?: CascaderItem[];
   }
 
   const props = defineProps<Props>();
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
+  const selectRef = ref();
   const isShow = defineModel<boolean>('isShow', {
     required: true,
   });
 
+  const categoryMap = {
+    system: t('系统'),
+    standard: t('标准'),
+    snapshot: t('快照'),
+  };
+
+  const categoryStyleMap = {
+    system: {
+      backgroundColor: '#E1ECFF',
+      color: '#1768EF',
+    },
+    standard: {
+      backgroundColor: '#DAF6E5',
+      color: '#299E56',
+    },
+    snapshot: {
+      backgroundColor: '#FCE5C0',
+      color: '#E38B02',
+    },
+  };
+
   const total = inject <Ref<number>>('total', ref(0));
   const exportRange = ref('all');
   const tableSearchModel = inject <Ref<Record<string, any>>>('tableSearchModel', ref({}));
-
-  const selectedItems = ref<Record<string, boolean>>({});
-
-  const tags = ref<Array<string>>([]);
-  const isShowCascader = ref(false);
 
   const fields = ref<Array<{
     keys: string[];
     raw_name: string;
     display_name: string;
   }>>([]);
-  const list = ref<Array<CascaderItem>>([]);
-
-  const searchKeyword = useDebouncedRef('');
   const isSearching = ref(false);
 
-  const renderPanels = ref<Array<{
-    parent: CascaderItem | null;
-    data: CascaderItem[];
-  }>>([]);
+  const localData = ref<CascaderItem[]>([]);
+  // 保存原始数据，用于在搜索关键词为空时恢复
+  const originalData = ref<CascaderItem[]>([]);
 
-  // 创建导出任务
-  const {
-    run: createQueryTask,
-    loading: createQueryTaskLoading,
-  } = useRequest(EsQueryService.createQueryTask, {
-    defaultValue: {},
-    onSuccess: () => {
-      messageSuccess(t('创建成功'));
-      handleClosed();
-    },
-  });
+  const selectedItems = ref<CascaderItem[]>([]);
+  const selectedNames = ref<Array<string>>([]);
+  const customFields = ref([{ field: '' }]);
 
-  // 弹出层隐藏后的处理
-  const handleAfterHidden = (value: { isShow: boolean}) => {
-    isShowCascader.value = value.isShow;
-    if (!value.isShow) {
-      // 重置面板状态，只保留第一级
-      renderPanels.value = [{
-        parent: null,
-        data: list.value,
-      }];
-      searchKeyword.value = '';
-      isSearching.value = false;
+  const handleSearch = (keyword: string) => {
+    isSearching.value = !!keyword;
+
+    if (!keyword) {
+      // 如果关键词为空，恢复原始数据
+      localData.value = [...originalData.value];
+      return;
     }
+
+    // 递归搜索匹配项
+    const filterNodes = (nodes: CascaderItem[]): CascaderItem[] => nodes.filter((node) => {
+      // 检查当前节点名称是否包含关键词
+      const isMatch = node.name.toLowerCase().includes(keyword.toLowerCase());
+
+      // 如果有子节点，递归搜索
+      if (node.children && node.children.length) {
+        const filteredChildren = filterNodes(node.children);
+        // 更新子节点为过滤后的结果
+        // eslint-disable-next-line no-param-reassign
+        node.children = filteredChildren;
+        // 如果子节点中有匹配项，或当前节点匹配，则保留该节点
+        return filteredChildren.length > 0 || isMatch;
+      }
+
+      // 如果是叶子节点，根据是否匹配决定是否保留
+      return isMatch;
+    });
+
+    // 对数据进行过滤
+    localData.value = filterNodes([...originalData.value]);
   };
 
-  const handleClosed = () => {
-    isShow.value = false;
-    exportRange.value = 'all';
-    fields.value = [];
-  };
-
-  // 处理选择事件
-  const handleSelect = (item: CascaderItem, isChecked: boolean) => {
+  const formatFields = (item: CascaderItem) => {
     const fieldId = item.id;
     let fieldKeys: string[] = [];
     let rawName = fieldId;
@@ -222,27 +301,80 @@
       display_name: displayName,
     };
 
-    if (isChecked) {
-      // 如果是选中，添加到字段列表（避免重复添加）
-      if (!fields.value.some(field => field.raw_name === fieldInfo.raw_name
-        && JSON.stringify(field.keys) === JSON.stringify(fieldInfo.keys))) {
-        fields.value.push(fieldInfo);
-      }
-      if (!tags.value.some(tag => tag === displayName)) {
-        tags.value.push(displayName);
-      }
-    } else {
-      // 如果是取消选中，从字段列表中移除
-      fields.value = fields.value.filter(field => field.raw_name !== fieldInfo.raw_name
-        || JSON.stringify(field.keys) !== JSON.stringify(fieldInfo.keys));
-      // 删除tags逻辑
-      tags.value = tags.value.filter(tag => tag !== displayName);
+    // 如果是选中，添加到字段列表（避免重复添加）
+    if (!fields.value.some(field => field.raw_name === fieldInfo.raw_name
+      && JSON.stringify(field.keys) === JSON.stringify(fieldInfo.keys))) {
+      fields.value.push(fieldInfo);
     }
   };
 
-  const handleClearSearch = () => {
-    searchKeyword.value = '';
-    isSearching.value = false;
+  const handleNodeChecked = (data: Array<CascaderItem>) => {
+    selectedNames.value = data.map(item => item.name);
+    selectedItems.value = data;
+    selectedItems.value.forEach((item) => {
+      formatFields(item);
+    });
+  };
+
+  const handleAddNode = (node: CascaderItem) => {
+    node.children.push({
+      allow_operators: [],
+      children: [],
+      disabled: false,
+      dynamic_content: false,
+      id: JSON.stringify([node.id]),
+      isJson: false,
+      level: node.level + 1,
+      name: node.name,
+      isOpen: false,
+      isEdit: true,
+    });
+    // eslint-disable-next-line no-param-reassign
+    node.isOpen = true;
+    originalData.value = _.cloneDeep(localData.value);
+  };
+
+  const handleAddFieldSubmit = (node: CascaderItem) => {
+    if (customFields.value.length === 0) {
+      return;
+    }
+    const newIdArray = [...JSON.parse(node.id), ...customFields.value.map(item => item.field)];
+    const newNameStr = `${node.name}/${customFields.value.map(item => item.field).join('/')}`;
+    // eslint-disable-next-line no-param-reassign
+    node.id = JSON.stringify(newIdArray);
+    // eslint-disable-next-line no-param-reassign
+    node.name = newNameStr;
+    // eslint-disable-next-line no-param-reassign
+    node.isEdit = false;
+    // 清空customFields
+    customFields.value = [{ field: '' }];
+  };
+
+  const handleAddFieldClose = (node: CascaderItem) => {
+    customFields.value = [{ field: '' }];
+    const nodeId = JSON.parse(node.id)[0];
+    const parentNode = localData.value.find(item => item.id === nodeId);
+    if (parentNode) {
+      parentNode.children.pop();
+    }
+  };
+
+  // 创建导出任务
+  const {
+    run: createQueryTask,
+    loading: createQueryTaskLoading,
+  } = useRequest(EsQueryService.createQueryTask, {
+    defaultValue: {},
+    onSuccess: () => {
+      messageSuccess(t('创建成功'));
+      handleClosed();
+    },
+  });
+
+  const handleClosed = () => {
+    isShow.value = false;
+    exportRange.value = 'all';
+    fields.value = [];
   };
 
   const handleConfirmSearch = () => {
@@ -256,22 +388,21 @@
     createQueryTask(params);
   };
 
-  const handleInput = (value: string) => {
-    searchKeyword.value = value;
-    isSearching.value = true;
-  };
-
   // 同步外部值的改动
   watch(() => props.modelValue, (newVal) => {
-    selectedItems.value = { ...newVal };
+    selectedItems.value = newVal || [];
   }, {
     immediate: true,
   });
 
-  // 监听搜索关键词变化
-  watch(() => searchKeyword.value, (newVal) => {
-    isSearching.value = !!newVal;
-  });
+  watch(
+    () => props.data,
+    (newVal) => {
+      localData.value = newVal;
+      // 保存原始数据副本
+      originalData.value = _.cloneDeep(newVal);
+    },
+  );
 
 </script>
 <style lang="postcss" scoped>

@@ -71,6 +71,7 @@ export default {
       .then(({ data }) => data.map(item => ({
         ...item.field,
         allow_operators: item.allow_operators,
+        category: item.category,
       })));
   },
   /**

@@ -196,6 +196,7 @@
 
   interface CascaderNode {
     allow_operators: string[]
+    category?: string
     children: CascaderNode[]
     disabled: boolean
     dynamic_content: boolean
@@ -203,6 +204,8 @@
     isJson: boolean
     level: number
     name: string
+    isEdit: boolean
+    isOpen: boolean;
   }
 
   interface Props {
@@ -266,12 +269,15 @@
     const newItem = {
       allow_operators: item?.allow_operators || [],
       children,
+      category: item?.category ?? '',
       dynamic_content: item.property?.dynamic_content ?? false,
       disabled: false,
       id: level === 1 ? currentId : fullIds,
       isJson: item?.is_json ?? false,
       level,
       name: item?.description ?? item?.field_alias ?? '',
+      isEdit: false,
+      isOpen: false,
     };
     newItem.id = Array.isArray(newItem.id) ? JSON.stringify(newItem.id) : newItem.id;
     return newItem;
@@ -284,6 +290,7 @@
     defaultValue: [],
     manual: true,
     onSuccess: () => {
+      console.log(SearchConfigList.value);
       list.value = convertToCascaderList(SearchConfigList.value);
     },
   });
@@ -354,23 +361,23 @@
   });
 
   // 处理级联选择器选中事件，添加搜索项
-  const handleCascaderSelect = (item: CascaderNode, isChecked: boolean) => {
-    console.log(item, isChecked);
-    if (item && item.id) {
-      if (isChecked) {
-        // 选中时添加搜索项
-        localFiledConfig.value[item.id] = {
-          label: item.name,
-          type: 'string',
-          required: false,
-          canClose: true,
-          operator: 'like', // 默认like
-        };
-      } else {
-        // 取消选中时删除搜索项
-        handleDeleteField(item.id);
+  const handleCascaderSelect = (selectArr: CascaderNode[]) => {
+    // 循环 selectArr 创建配置项
+    selectArr.forEach((item) => {
+      if (item && item.id) {
+        // 判断 localFiledConfig.value 中是否已经存在该 id
+        if (!localFiledConfig.value[item.id]) {
+          // 如果不存在，则添加搜索项
+          localFiledConfig.value[item.id] = {
+            label: item.name,
+            type: 'string',
+            required: false,
+            canClose: true,
+            operator: 'like', // 默认like
+          };
+        }
       }
-    }
+    });
   };
 
   // 删除搜索项
@@ -390,15 +397,19 @@
 
   // 确认收藏搜索条件
   const handleSubmitFavourite = () => {
-    const exitId = favouriteQueryList.value.findIndex(item => item.config_name === favouriteSearch.value.name);
-    if (exitId >= 0) {
+    // 查找是否存在同名的收藏条件
+    const existingItem = favouriteQueryList.value.find(item => item.config_name === favouriteSearch.value.name);
+
+    if (existingItem) {
+      // 如果存在，使用该项的实际 id 进行更新
       favouriteQueryUpdate({
-        id: exitId,
+        id: existingItem.id, // 使用实际的 id
         scene: 'search_config',
         config_name: favouriteSearch.value.name,
         config_content: localSearchModel.value,
       });
     } else {
+      // 如果不存在，创建新的收藏条件
       favouriteQueryCreate({
         scene: 'search_config',
         config_name: favouriteSearch.value.name,

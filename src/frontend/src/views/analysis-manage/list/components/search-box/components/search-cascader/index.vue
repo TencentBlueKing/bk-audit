@@ -15,61 +15,116 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-popover
-    ext-cls="add-search-cascader-popover"
-    :is-show="isShow"
-    placement="bottom"
-    style="padding: 0;"
-    theme="light"
-    trigger="click"
-    @after-hidden="handleAfterHidden">
-    <span
-      class="add-search-icon">
-      <audit-icon
-        style="margin-right: 5px;"
-        type="add" />
-      <span>{{ t('添加其他条件') }}</span>
-    </span>
-    <template #content>
-      <div class="add-search-cascader-content">
-        <div style="width: 290px; padding: 0 8px;">
-          <bk-input
-            v-model="searchKeyword"
-            behavior="simplicity"
-            class="mb8"
-            placeholder="请输入关键字">
-            <template #prefix>
-              <div style="line-height: 30px;">
-                <audit-icon
-                  type="search1" />
-              </div>
+  <div class="add-search-tree">
+    <bk-select
+      ref="selectRef"
+      v-model="selectedItems"
+      :auto-height="false"
+      collapse-tags
+      custom-content
+      display-key="name"
+      id-key="id"
+      multiple
+      :popover-options="{
+        'width': 'auto',
+        extCls: 'add-search-tree-pop'
+      }"
+      @search-change="handleSearch">
+      <template #trigger>
+        <span
+          style="color: #3884ff; cursor: pointer;">
+          <audit-icon
+            style="margin-right: 5px;"
+            type="add" />
+          <span>{{ t('添加其他条件') }}</span>
+        </span>
+      </template>
+      <bk-tree
+        ref="treeRef"
+        :check-strictly="false"
+        children="children"
+        :data="localData"
+        empty-text=" "
+        label="raw_name"
+        :node-content-action="['click']"
+        show-checkbox
+        :show-node-type-icon="false"
+        @node-checked="handleNodeChecked">
+        <template #default="{ data: nodeData }: { data: CascaderItem }">
+          <template v-if="!nodeData.isEdit">
+            <span> {{ nodeData.name }}</span>
+            <div>
+              <span
+                class="category-type"
+                :style="categoryStyleMap[nodeData.category as keyof typeof categoryStyleMap]">
+                {{ categoryMap[nodeData.category as keyof typeof categoryMap] }}
+              </span>
+              <!-- 添加子字段 -->
+              <audit-icon
+                v-if="nodeData.dynamic_content"
+                style="margin-left: 5px;
+                  font-size: 14px;
+                  color: #3a84ff"
+                type="plus-circle"
+                @click.stop="handleAddNode(nodeData)" />
+            </div>
+          </template>
+          <template v-else>
+            <span> {{ nodeData.name }}</span>
+            <span style="margin: 0 5px;">/</span>
+            <!-- 多级字段输入 -->
+            <template
+              v-for="(item, index) in customFields"
+              :key="index">
+              <bk-input
+                v-model="item.field"
+                autofocus
+                :placeholder="t('请输入')"
+                style="width: 115px;" />
+              <audit-icon
+                v-if="index === customFields.length - 1"
+                v-bk-tooltips="t('添加下级字段')"
+                class="add-icon"
+                :class="[!item.field ? 'disabled-add-icon' : '']"
+                type="add-fill"
+                @click="() => customFields.push({ field: '' })" />
+              <span
+                v-else
+                style="margin: 0 5px;">/</span>
             </template>
-          </bk-input>
-        </div>
-
-        <field-cascader
-          v-model="selectedItems"
-          :data="localData"
-          :is-searching="isSearching"
-          :search-keyword="searchKeyword"
-          @clear-search="handleClearSearch"
-          @select="handleSelect" />
-      </div>
-    </template>
-  </bk-popover>
+            <div class="field-edit-right">
+              <audit-icon
+                v-bk-tooltips="t('确认')"
+                :class="[customFields.every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
+                svg
+                type="check-line"
+                @click.stop="handleAddFieldSubmit(nodeData)" />
+              <audit-icon
+                v-bk-tooltips="t('取消添加')"
+                style="margin-right: 4px;
+                  font-size: 18px;
+                  color: #c1c3c9;"
+                svg
+                type="close"
+                @click.stop="handleAddFieldClose(nodeData)" />
+            </div>
+          </template>
+        </template>
+      </bk-tree>
+    </bk-select>
+  </div>
 </template>
 
 <script setup lang="ts">
+  import _ from 'lodash';
   import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import FieldCascader from '../field-cascader/index.vue';
   import type { IFieldConfig } from '../render-field-config/config';
-
-  import useDebouncedRef from '@/hooks/use-debounced-ref';
 
   interface CascaderItem {
     allow_operators: string[]
+    category?: string
     children: CascaderItem[]
     disabled: boolean
     dynamic_content: boolean
@@ -77,81 +132,224 @@
     isJson: boolean
     level: number
     name: string
+    isEdit: boolean
+    isOpen: boolean;
+  }
+
+  interface Emits {
+    (e: 'select', value: CascaderItem[]): void;
   }
 
   interface Props {
     data: CascaderItem[];
-    modelValue?: Record<string, boolean>;
+    modelValue?:  CascaderItem[];
     filedConfig: Record<string, IFieldConfig>
   }
 
-  interface Emits {
-    (e: 'update:modelValue', value: Record<string, boolean>): void;
-    (e: 'select', item: CascaderItem, isChecked: boolean): void;
-  }
-
   const props = defineProps<Props>();
-  const emits = defineEmits<Emits>();
+  const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const isShow = ref(false);
-  const searchKeyword = useDebouncedRef('');
+  const categoryMap = {
+    system: t('系统'),
+    standard: t('标准'),
+    snapshot: t('快照'),
+  };
+
+  const categoryStyleMap = {
+    system: {
+      backgroundColor: '#E1ECFF',
+      color: '#1768EF',
+    },
+    standard: {
+      backgroundColor: '#DAF6E5',
+      color: '#299E56',
+    },
+    snapshot: {
+      backgroundColor: '#FCE5C0',
+      color: '#E38B02',
+    },
+  };
+
   const isSearching = ref(false);
-  const selectedItems = ref<Record<string, boolean>>({});
+
   const localData = ref<CascaderItem[]>([]);
+  // 保存原始数据，用于在搜索关键词为空时恢复
+  const originalData = ref<CascaderItem[]>([]);
 
-  // 弹出层隐藏后的处理
-  const handleAfterHidden = (value: { isShow: boolean}) => {
-    isShow.value = value.isShow;
-    if (!value.isShow) {
-      searchKeyword.value = '';
-      isSearching.value = false;
+  const selectedItems = ref<Array<CascaderItem>>([]);
+  const customFields = ref([{ field: '' }]);
+
+  const handleSearch = (keyword: string) => {
+    isSearching.value = !!keyword;
+
+    if (!keyword) {
+      // 如果关键词为空，恢复原始数据
+      localData.value = [...originalData.value];
+      return;
     }
+
+    // 递归搜索匹配项
+    const filterNodes = (nodes: CascaderItem[]): CascaderItem[] => nodes.filter((node) => {
+      // 检查当前节点名称是否包含关键词
+      const isMatch = node.name.toLowerCase().includes(keyword.toLowerCase());
+
+      // 如果有子节点，递归搜索
+      if (node.children && node.children.length) {
+        const filteredChildren = filterNodes(node.children);
+        // 更新子节点为过滤后的结果
+        // eslint-disable-next-line no-param-reassign
+        node.children = filteredChildren;
+        // 如果子节点中有匹配项，或当前节点匹配，则保留该节点
+        return filteredChildren.length > 0 || isMatch;
+      }
+
+      // 如果是叶子节点，根据是否匹配决定是否保留
+      return isMatch;
+    });
+
+    // 对数据进行过滤
+    localData.value = filterNodes([...originalData.value]);
   };
 
-  // 处理选择事件
-  const handleSelect = (item: CascaderItem, isChecked: boolean) => {
-    emits('select', item, isChecked);
+  const handleNodeChecked = (data: Array<CascaderItem>) => {
+    selectedItems.value = data;
+    // 触发选择事件
+    emit('select', selectedItems.value);
   };
 
-  const handleClearSearch = () => {
-    searchKeyword.value = '';
-    isSearching.value = false;
+  // const handleNodeClick = (data: Array<CascaderItem>) => {
+  //   //
+  // };
+
+  const handleAddNode = (node: CascaderItem) => {
+    node.children.push({
+      allow_operators: [],
+      children: [],
+      disabled: false,
+      dynamic_content: false,
+      id: JSON.stringify([node.id]),
+      isJson: false,
+      level: node.level + 1,
+      name: node.name,
+      isOpen: false,
+      isEdit: true,
+    });
+    // eslint-disable-next-line no-param-reassign
+    node.isOpen = true;
+    originalData.value = _.cloneDeep(localData.value);
+  };
+
+  const handleAddFieldSubmit = (node: CascaderItem) => {
+    if (customFields.value.length === 0) {
+      return;
+    }
+    const newIdArray = [...JSON.parse(node.id), ...customFields.value.map(item => item.field)];
+    const newNameStr = `${node.name}/${customFields.value.map(item => item.field).join('/')}`;
+    // eslint-disable-next-line no-param-reassign
+    node.id = JSON.stringify(newIdArray);
+    // eslint-disable-next-line no-param-reassign
+    node.name = newNameStr;
+    // eslint-disable-next-line no-param-reassign
+    node.isEdit = false;
+    // 清空customFields
+    customFields.value = [{ field: '' }];
+  };
+
+  const handleAddFieldClose = (node: CascaderItem) => {
+    customFields.value = [{ field: '' }];
+    const nodeId = JSON.parse(node.id)[0];
+    const parentNode = localData.value.find(item => item.id === nodeId);
+    if (parentNode) {
+      parentNode.children.pop();
+    }
   };
 
   // 同步外部值的改动
   watch(() => props.modelValue, (newVal) => {
-    selectedItems.value = { ...newVal };
+    selectedItems.value = newVal || [];
   }, {
     immediate: true,
-  });
-
-  // 监听搜索关键词变化
-  watch(() => searchKeyword.value, (newVal) => {
-    isSearching.value = !!newVal;
   });
 
   // 设置disabled
   watch(
     () => props.data,
-    newVal => localData.value = newVal.map(item => ({
-      ...item,
-      disabled: Object.keys(props.filedConfig).includes(item.id),
-    })),
+    (newVal) => {
+      const processedData = newVal.map(item => ({
+        ...item,
+        disabled: Object.keys(props.filedConfig).includes(item.id),
+      }));
+
+      localData.value = processedData;
+      // 保存原始数据副本
+      originalData.value = _.cloneDeep(processedData);
+    },
   );
 </script>
 <style lang="postcss">
-  .add-search-popover {
-    padding: 0 !important;
-  }
+  .add-search-tree-pop {
+    .bk-node-row {
+      font-size: 12px;
 
-  .add-search-icon {
-    color: #3a84ff;
-    cursor: pointer;
-  }
+      .bk-node-content {
+        > span:first-child {
+          display: flex;
+          align-items: center;
+        }
 
-  .add-search-cascader-content {
-    width: auto;
-    min-width: 290px;
+        .bk-node-text {
+          display: flex;
+          min-width: 240px;
+          padding-right: 8px;;
+          margin-left: 8px;
+          align-items: center;
+          justify-content: space-between;
+
+          .category-type {
+            width: 28px;
+            height: 16px;
+            font-size: 10px;
+            line-height: 16px;
+            text-align: center;
+            border-radius: 2px;
+          }
+        }
+
+        .add-icon {
+          margin-left: 5px;
+          color: #c4c6cc;
+
+          &:hover {
+            color: #3a84ff;
+          }
+        }
+
+        .disabled-add-icon {
+          color: #dcdee5;
+          cursor: not-allowed;
+          user-select: none
+        }
+
+        .field-edit-right {
+          display: flex;
+          align-items: center;
+          margin-left: 5px;
+
+          .submit-icon {
+            margin-right: 4px;
+            font-size: 18px;
+            color: #7bbe8a;
+          }
+
+          .disabled-submit-icon {
+            font-size: 18px;
+            color: #dcdee5;
+            cursor: not-allowed;
+            user-select: none
+          }
+        }
+      }
+    }
   }
 </style>
