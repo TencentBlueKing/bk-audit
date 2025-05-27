@@ -78,7 +78,6 @@
         @tag-remove="handleRemoveTag">
         <bk-tree
           ref="treeRef"
-          :check-strictly="false"
           children="children"
           :data="localData"
           empty-text=" "
