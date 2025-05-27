@@ -63,7 +63,6 @@
     <template v-if="exportRange === 'specified'">
       <bk-select
         ref="selectRef"
-        v-model="selectedNames"
         :auto-height="false"
         collapse-tags
         custom-content
@@ -75,7 +74,8 @@
           'width': 'auto',
           extCls: 'add-search-tree-pop'
         }"
-        @search-change="handleSearch">
+        @search-change="handleSearch"
+        @tag-remove="handleRemoveTag">
         <bk-tree
           ref="treeRef"
           :check-strictly="false"
@@ -199,6 +199,7 @@
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const selectRef = ref();
+  const treeRef = ref();
   const isShow = defineModel<boolean>('isShow', {
     required: true,
   });
@@ -240,7 +241,6 @@
   const originalData = ref<CascaderItem[]>([]);
 
   const selectedItems = ref<CascaderItem[]>([]);
-  const selectedNames = ref<Array<string>>([]);
   const customFields = ref([{ field: '' }]);
 
   const handleSearch = (keyword: string) => {
@@ -309,11 +309,48 @@
   };
 
   const handleNodeChecked = (data: Array<CascaderItem>) => {
-    selectedNames.value = data.map(item => item.name);
+    selectRef.value.selected = data.map(item => ({
+      value: item.id,
+      label: item.name,
+    }));
+
+    // 获取所有选中项的 raw_name 和 keys 组合，用于后续比较
+    const selectedIdentifiers = data.map(item => ({
+      raw_name: item.id,
+      keys: item.children?.map(child => child.id) || [],
+    }));
+
+    // 删除不再选中的字段
+    fields.value = fields.value.filter(field => selectedIdentifiers.
+      some(selected => selected.raw_name === field.raw_name
+        && JSON.stringify(selected.keys) === JSON.stringify(field.keys)));
+
+    // 更新选中项并添加新字段
     selectedItems.value = data;
     selectedItems.value.forEach((item) => {
       formatFields(item);
     });
+  };
+
+  const handleRemoveTag = (id: string) => {
+    // 根据id在selectedItems中找到对应的节点
+    const nodeToRemove = selectedItems.value.find(node => node.id === id);
+    if (nodeToRemove) {
+      // 从selectedItems中移除该节点
+      selectedItems.value = selectedItems.value.filter(node => node !== nodeToRemove);
+      treeRef.value.setChecked(nodeToRemove, false);
+
+      // 获取当前所有选中项的 raw_name 和 keys 组合
+      const selectedIdentifiers = selectedItems.value.map(item => ({
+        raw_name: item.id,
+        keys: item.children?.map(child => child.id) || [],
+      }));
+
+      // 过滤 fields.value，只保留当前选中的字段
+      fields.value = fields.value.filter(field => selectedIdentifiers.
+        some(selected => selected.raw_name === field.raw_name
+          && JSON.stringify(selected.keys) === JSON.stringify(field.keys)));
+    }
   };
 
   const handleAddNode = (node: CascaderItem) => {

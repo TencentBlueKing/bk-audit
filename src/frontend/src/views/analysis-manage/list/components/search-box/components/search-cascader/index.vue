@@ -53,7 +53,7 @@
         <template #default="{ data: nodeData }: { data: CascaderItem }">
           <template v-if="!nodeData.isEdit">
             <span> {{ nodeData.name }}</span>
-            <div>
+            <div :class="[nodeData.disabled ? 'disabled-row' : '']">
               <span
                 class="category-type"
                 :style="categoryStyleMap[nodeData.category as keyof typeof categoryStyleMap]">
@@ -348,6 +348,24 @@
             cursor: not-allowed;
             user-select: none
           }
+        }
+      }
+
+      .bk-node-content:has(.disabled-row) {
+        cursor: not-allowed;
+
+        > span:first-child {
+          .bk-checkbox {
+            pointer-events: none;
+            cursor: not-allowed;
+            opacity: 60%;
+          }
+        }
+
+        .bk-node-text:has(.disabled-row) {
+          color: #dcdee5;
+          cursor: not-allowed;
+          user-select: none
         }
       }
     }
