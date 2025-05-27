@@ -261,7 +261,7 @@ class LogExportFieldScope(TextChoices):
 
 
 # 日志字段 key 拼接字符
-LOG_FIELD_KEY_JOIN_CHAR = ","
+LOG_FIELD_KEY_JOIN_CHAR = "/"
 
 # 日志导出根目录
 LOG_EXPORT_ROOT_PATH = "log_export"
