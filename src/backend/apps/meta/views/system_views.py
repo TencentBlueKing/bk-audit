@@ -32,19 +32,35 @@ class SystemsViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["all"]:
             return []
-        if self.action in ["action_search", "resource_type_search"]:
-            return []
         if self.action in ["list"]:
             return [IAMPermission(actions=[ActionEnum.LIST_SYSTEM])]
-        if self.action in ["search", "resource_type_schema_search"]:
+        return [InstanceActionPermission(actions=[ActionEnum.VIEW_SYSTEM], resource_meta=ResourceEnum.SYSTEM)]
+
+    resource_routes = [
+        ResourceRoute("GET", resource.meta.system_list, enable_paginate=True),
+        ResourceRoute("GET", resource.meta.system_info, pk_field="system_id"),
+        # 附带权限信息
+        ResourceRoute("GET", resource.meta.system_list_all, endpoint="all"),
+        # 新增系统操作
+        ResourceRoute("POST", resource.meta.create_system),
+        ResourceRoute("PUT", resource.meta.update_system, pk_field="system_id"),
+        ResourceRoute("PUT", resource.meta.favorite_system, pk_field="system_id", endpoint="favorite"),
+    ]
+
+
+class ResourceTypesViewSet(ResourceViewSet):
+    """资源类型接口"""
+
+    def get_permissions(self):
+        if self.action in ["resource_type_search"]:
+            return []
+        if self.action in ["resource_type_schema_search"]:
             return [
                 InstanceActionPermission(actions=[ActionEnum.SEARCH_REGULAR_EVENT], resource_meta=ResourceEnum.SYSTEM)
             ]
         return [InstanceActionPermission(actions=[ActionEnum.VIEW_SYSTEM], resource_meta=ResourceEnum.SYSTEM)]
 
     resource_routes = [
-        ResourceRoute("GET", resource.meta.system_list, enable_paginate=True),
-        ResourceRoute("GET", resource.meta.system_info, pk_field="system_id"),
         ResourceRoute(
             "GET",
             resource.meta.resource_type_list,
@@ -52,17 +68,33 @@ class SystemsViewSet(ResourceViewSet):
             endpoint="resource_types",
             decorators=[insert_action_permission_field(actions=[ActionEnum.MANAGE_GLOBAL_SETTING])],
         ),
-        ResourceRoute("GET", resource.meta.action_list, pk_field="system_id", endpoint="actions"),
         ResourceRoute("GET", resource.meta.resource_type_schema, pk_field="system_id", endpoint="resource_type_schema"),
         ResourceRoute("GET", resource.meta.resource_type_search_list, endpoint="resource_type_search"),
-        ResourceRoute("GET", resource.meta.action_search_list, endpoint="action_search"),
-        # 附带权限信息
-        ResourceRoute("GET", resource.meta.system_list_all, endpoint="all"),
-        # EsQuery
-        ResourceRoute("GET", resource.meta.system_info, pk_field="system_id", endpoint="search"),
         ResourceRoute(
             "GET", resource.meta.resource_type_schema, pk_field="system_id", endpoint="resource_type_schema_search"
         ),
+        # 新增资源类型操作
+        ResourceRoute("POST", resource.meta.create_resource_type),
+        ResourceRoute("PUT", resource.meta.update_resource_type, pk_field="system_id"),
+        ResourceRoute("PUT", resource.meta.bulk_update_resource_type, endpoint="bulk"),
+        ResourceRoute("DELETE", resource.meta.delete_resource_type, pk_field="system_id"),
+    ]
+
+
+class ActionsViewSet(ResourceViewSet):
+    """操作接口"""
+
+    def get_permissions(self):
+        return []
+
+    resource_routes = [
+        ResourceRoute("GET", resource.meta.action_list, pk_field="system_id", endpoint="actions"),
+        ResourceRoute("GET", resource.meta.action_search_list, endpoint="action_search"),
+        # 新增操作操作
+        ResourceRoute("POST", resource.meta.create_action),
+        ResourceRoute("PUT", resource.meta.update_action, pk_field="system_id"),
+        ResourceRoute("PUT", resource.meta.bulk_update_action, endpoint="bulk"),
+        ResourceRoute("DELETE", resource.meta.delete_action, pk_field="system_id"),
     ]
 
 
