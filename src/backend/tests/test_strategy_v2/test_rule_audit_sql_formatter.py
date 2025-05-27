@@ -559,7 +559,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "FROM ("
             "SELECT `a`.`event_id` `事件ID`,COUNT(`b`.`resource_id`) `资源ID`,`c`.`host_id` `主机ID`,"
             "MAX(`d`.`network_name`) `网络名称`,"
-            "COUNT(CAST(GET_JSON_OBJECT(`d`.`details`,'$.[\"host\"].[\"type\"]') AS INT)) `网络详情` "
+            "COUNT(GET_JSON_OBJECT(`d`.`details`,'$.[\"host\"].[\"type\"]')) `网络详情` "
             "FROM log_rt_1 `a` LEFT JOIN asset_rt_2 `b` ON `a`.`event_id`=`b`.`resource_id` "
             "JOIN host_rt_3 `c` ON `b`.`resource_id`=`c`.`host_id` "
             "LEFT JOIN network_rt_4 `d` ON `c`.`host_id`=`d`.`network_id` "
@@ -567,7 +567,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "AND `a`.`system_id` IN ('sys_111') "
             "GROUP BY `a`.`event_id`,`c`.`host_id` "
             "HAVING COUNT(`b`.`resource_id`)>100 AND "
-            "COUNT(CAST(GET_JSON_OBJECT(`d`.`details`,'$.[\"host\"].[\"type\"]') AS INT))>300) "
+            "COUNT(GET_JSON_OBJECT(`d`.`details`,'$.[\"host\"].[\"type\"]'))>300) "
             "`sub_table`"
         )
 
@@ -591,7 +591,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "FROM ("
             "SELECT `a`.`event_id` `事件ID`,COUNT(`b`.`resource_id`) `资源ID`,`c`.`host_id` `主机ID`,"
             "MAX(`d`.`network_name`) `网络名称`,"
-            "COUNT(JSON_VALUE(`d`.`details`,'$.[\"host\"].[\"type\"]' RETURNING INT)) `网络详情` "
+            "COUNT(JSON_VALUE(`d`.`details`,'$.[\"host\"].[\"type\"]')) `网络详情` "
             "FROM log_rt_1 `a` LEFT JOIN asset_rt_2 `b` ON `a`.`event_id`=`b`.`resource_id` "
             "JOIN host_rt_3 `c` ON `b`.`resource_id`=`c`.`host_id` "
             "LEFT JOIN network_rt_4 `d` ON `c`.`host_id`=`d`.`network_id` "
@@ -599,7 +599,7 @@ class TestRuleAuditSQLFormatter(TestCase):
             "AND `a`.`system_id` IN ('sys_111') "
             "GROUP BY `a`.`event_id`,`c`.`host_id` "
             "HAVING COUNT(`b`.`resource_id`)>100 AND "
-            "COUNT(JSON_VALUE(`d`.`details`,'$.[\"host\"].[\"type\"]' RETURNING INT))>300) "
+            "COUNT(JSON_VALUE(`d`.`details`,'$.[\"host\"].[\"type\"]'))>300) "
             "`sub_table`"
         )
 

@@ -68,7 +68,7 @@ class TestSQLGenerator(TestCase):
         query = SQLGenerator(self.query_builder).generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id","users"."name" "user_name",'
-            'CAST(GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') AS STRING) "user_profile" '
+            'GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') "user_profile" '
             'FROM "users" "users"'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
@@ -164,7 +164,7 @@ class TestSQLGenerator(TestCase):
             'FROM "users" "users" '
             'WHERE "users"."age"=18 AND "users"."country"=\'Ireland\' '
             'AND "users"."name" LIKE \'%Jack%\' '
-            'AND CAST(GET_JSON_OBJECT("users"."address",\'$.["k1"].["k2"]\') AS STRING)=\'Dublin\''
+            'AND GET_JSON_OBJECT("users"."address",\'$.["k1"].["k2"]\')=\'Dublin\''
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -314,9 +314,9 @@ class TestSQLGenerator(TestCase):
         query = generator.generate(config)
         expected_query = (
             'SELECT COUNT("users"."id") "user_id","users"."country" "user_country",'
-            'CAST(GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') AS STRING) "user_city" '
+            'GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') "user_city" '
             'FROM "users" "users" WHERE "users"."country"=\'Ireland\' '
-            'GROUP BY "users"."country",CAST(GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') AS STRING)'
+            'GROUP BY "users"."country",GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\')'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -382,10 +382,10 @@ class TestSQLGenerator(TestCase):
 
         expected_query = (
             'SELECT COUNT("orders"."id") "count_id","orders"."status" "status",'
-            'CAST(GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') AS STRING) "product_category" '
+            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') "product_category" '
             'FROM "orders" "orders" '
             'GROUP BY "orders"."status",'
-            'CAST(GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') AS STRING) '
+            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') '
             'HAVING COUNT("orders"."id")>100'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
@@ -419,9 +419,9 @@ class TestSQLGenerator(TestCase):
         # 期望自动分组 "id" 和 JSON字段
         expected_query = (
             'SELECT "orders"."id" "order_id",SUM("orders"."amount") "amount_sum",'
-            'CAST(GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\') AS STRING) "product_type" '
+            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\') "product_type" '
             'FROM "orders" "orders" '
-            'GROUP BY "orders"."id",CAST(GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\') AS STRING)'
+            'GROUP BY "orders"."id",GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\')'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
 
