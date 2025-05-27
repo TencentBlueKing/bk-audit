@@ -362,6 +362,16 @@
 
   // 处理级联选择器选中事件，添加搜索项
   const handleCascaderSelect = (selectArr: CascaderNode[]) => {
+    // 先检查并删除不在 selectArr 中的自定义字段
+    const selectIds = selectArr.map(item => item.id).filter(Boolean);
+    Object.keys(localFiledConfig.value).forEach((key) => {
+      const config = localFiledConfig.value[key];
+      if (config.customField && !selectIds.includes(key)) {
+        // 如果是自定义字段且不在当前选中的数组中，则删除
+        delete localFiledConfig.value[key];
+      }
+    });
+
     // 循环 selectArr 创建配置项
     selectArr.forEach((item) => {
       if (item && item.id) {
@@ -373,6 +383,7 @@
             type: 'string',
             required: false,
             canClose: true,
+            customField: true,
             operator: 'like', // 默认like
           };
         }
