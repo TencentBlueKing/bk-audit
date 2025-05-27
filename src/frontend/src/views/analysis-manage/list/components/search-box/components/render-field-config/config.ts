@@ -29,6 +29,7 @@ export interface IFieldConfig {
   help?: boolean,
   canClose?: boolean,
   customField?: boolean,
+  isFavourite?: boolean,
 }
 // eslint-disable-next-line no-useless-escape
 // const specialReg = /[`~!@#$%^&*()_\+=<>?:"{}|,.\/;'\\[\]·~！@#￥%……&*（）——\+={}|《》？：“”【】、；‘'，。、]/im;
