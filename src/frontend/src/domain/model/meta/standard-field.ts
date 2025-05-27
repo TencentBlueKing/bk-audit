@@ -30,9 +30,10 @@ export default class StandardField {
   priority_index: number;
   property: {
     dynamic_content: boolean;
-    sub_keys: Array<string>;
+    sub_keys: Record<string, any>[];
   };
   allow_operators: string[];
+  category: string;
 
   constructor(payload = {} as StandardField) {
     this.alias_name = payload.alias_name;
@@ -53,5 +54,6 @@ export default class StandardField {
       sub_keys: [],
     };
     this.allow_operators = payload.allow_operators || [];
+    this.category = payload.category;
   }
 }

@@ -64,6 +64,7 @@ class EsQuery extends ModuleBase {
     return Request.get<Array<{
       allow_operators: Array<string>,
       field: StandardFieldModel,
+      category: string,
     }>>(`${this.path}/collector_query/search_config/`);
   }
   // 获取日志统计
