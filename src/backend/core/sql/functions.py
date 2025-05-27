@@ -88,3 +88,10 @@ class FromUnixTime(Function):
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__("FROM_UNIXTIME", *args, **kwargs)
+
+
+class PercentileApprox(Function):
+    """近似百分位数函数"""
+
+    def __init__(self, *args: Any, **kwargs: Any):
+        super().__init__("PERCENTILE_APPROX", *args, **kwargs)

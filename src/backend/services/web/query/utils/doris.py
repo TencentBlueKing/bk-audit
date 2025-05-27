@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 from typing import List, Union
 
-from pypika.analytics import Median
 from pypika.enums import Order
 from pypika.functions import Avg, Count, Max, Min
 from pypika.queries import QueryBuilder
@@ -27,7 +26,7 @@ from apps.meta.utils.fields import STANDARD_FIELDS
 from core.constants import OrderTypeChoices
 from core.sql.builder import BKBaseQueryBuilder, BkBaseTable
 from core.sql.constants import FieldType, Operator
-from core.sql.functions import DateTrunc, FromUnixTime
+from core.sql.functions import DateTrunc, FromUnixTime, PercentileApprox
 from core.sql.terms import (
     DorisField,
     DorisJsonTypeExtractFunction,
@@ -201,7 +200,7 @@ class DorisStatisticSQLBuilder(BaseDorisSQLBuilder):
             max_value_query = query.select(Max(field).as_("max_value"))
             min_value_query = query.select(Min(field).as_("min_value"))
             avg_value_query = query.select(Avg(field).as_("avg_value"))
-            median_value_query = query.select(Median(field).as_("median_value"))
+            median_value_query = query.select(PercentileApprox(field, 0.5).as_("median_value"))
 
             # 返回每个查询
             return {
