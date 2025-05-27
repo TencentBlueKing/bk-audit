@@ -170,7 +170,6 @@ export default {
   }) {
     return StrategySource.getBatchTableRtFields(params)
       .then(({ data }) => {
-        console.log('data>>>>>>>>>>>>', data);
         return data
       });
   },

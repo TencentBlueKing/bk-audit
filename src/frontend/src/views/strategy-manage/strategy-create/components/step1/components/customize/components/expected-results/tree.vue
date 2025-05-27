@@ -324,8 +324,6 @@ watch(
 
       }
     }
-    console.log(' treeData.value', treeData.value);
-
   },
   {
     deep: true,
