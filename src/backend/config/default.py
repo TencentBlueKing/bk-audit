@@ -430,6 +430,12 @@ PROCESS_EXPIRED_LOG_TASK_MAX_DURATION = int(
     os.getenv("BKAPP_PROCESS_EXPIRED_LOG_TASK_MAX_DURATION", LOG_EXPORT_MAX_DURATION + 60)
 )
 
+# 日志导出任务时卡住任务的最大查询时间范围（天）
+STUCK_TASK_SEARCH_DAYS = int(os.getenv("BKAPP_STUCK_TASK_SEARCH_DAYS", 7))
+
+# 处理状态为运行中且卡住的日志导出任务调度周期(小时)
+PROCESS_STUCK_LOG_TASK_HOUR = os.getenv("BKAPP_PROCESS_STUCK_LOG_TASK_HOUR", "*/1")
+
 """
 以下为框架代码 请勿修改
 """
