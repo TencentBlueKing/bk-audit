@@ -46,6 +46,15 @@ class ActionEnum:
     )
 
     # 系统接入
+    CREATE_SYSTEM = ActionMeta(
+        id="create_system",
+        name=gettext("系统创建"),
+        name_en="Create System",
+        type="create",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
     LIST_SYSTEM = ActionMeta(
         id="list_system",
         name=gettext("系统列表访问"),
