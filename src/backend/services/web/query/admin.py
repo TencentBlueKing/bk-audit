@@ -27,14 +27,16 @@ from services.web.query.models import ExportFieldLog, LogExportTask, TaskDownloa
 class LogExportTaskAdmin(admin.ModelAdmin):
     list_display = [
         "id",
-        "created_at",
+        "name",
         "get_status_display",
         "repeat_times",
         "task_start_time",
         "task_end_time",
-        "name",
         "current_records",
         "total",
+        "created_by",
+        "created_at",
+        "updated_at",
     ]
     search_fields = ["created_by", "status"]
     list_filter = ["status", "is_deleted", "namespace"]
