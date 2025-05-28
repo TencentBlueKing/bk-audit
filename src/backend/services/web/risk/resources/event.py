@@ -60,14 +60,6 @@ class CreateEvent(EventMeta):
 
     def perform_request(self, validated_request_data):
         gen_risk = validated_request_data.get("gen_risk", False)
-        # 校验调用身份
-        app = get_app_info()
-        if app:
-            # 应用创建事件
-            event_ids = self._create_events(validated_request_data["events"], app.bk_app_code)
-            add_event(validated_request_data)
-            return {"event_ids": event_ids}
-
         # 检查超级管理员权限
         req = validated_request_data.get("_request")
         if req and req.user.is_superuser:
@@ -76,6 +68,13 @@ class CreateEvent(EventMeta):
             if gen_risk:
                 for event in validated_request_data["events"]:
                     RiskHandler().generate_risk(event)
+            add_event(validated_request_data)
+            return {"event_ids": event_ids}
+        # 校验调用身份
+        app = get_app_info()
+        if app:
+            # 应用创建事件
+            event_ids = self._create_events(validated_request_data["events"], app.bk_app_code)
             add_event(validated_request_data)
             return {"event_ids": event_ids}
 

@@ -22,7 +22,7 @@ class TestListRenderingInRiskTitle(TestCase):
             "event_data": {"list_field": ["a", "b", "c"]},
             "event_evidence": json.dumps([{"nested_list": [1, 2, 3]}]),
         }
-        result = RiskHandler.render_risk_title(test_data)  # noqa: F841
+        result = RiskHandler.render_risk_title(test_data)  # F841
         self.assertEqual(result, "Risk: a, b, c | 1, 2, 3")
 
     def test_empty_list_rendering(self):
@@ -32,7 +32,7 @@ class TestListRenderingInRiskTitle(TestCase):
             "event_data": {"list_field": []},
             "event_evidence": json.dumps([{"nested_list": []}]),
         }
-        result = RiskHandler.render_risk_title(test_data)  # noqa: F841
+        result = RiskHandler.render_risk_title(test_data)  # F841
         self.assertEqual(result, "Risk:  | ")
 
     def test_nested_list_rendering(self):
@@ -42,7 +42,7 @@ class TestListRenderingInRiskTitle(TestCase):
             "event_data": {"list_field": [["a", "b"], ["c"]]},
             "event_evidence": json.dumps([{"nested_list": [[1], [2, 3]]}]),
         }
-        result = RiskHandler.render_risk_title(test_data)  # noqa: F841
+        result = RiskHandler.render_risk_title(test_data)  # F841
         self.assertEqual(result, "Risk: ['a', 'b'], ['c'] | [1], [2, 3]")
 
     def test_mixed_data_types(self):
@@ -52,7 +52,7 @@ class TestListRenderingInRiskTitle(TestCase):
             "event_data": {"list_field": ["text", 123, True, None]},
             "event_evidence": json.dumps([{"nested_list": [1.5, "string"]}]),
         }
-        result = RiskHandler.render_risk_title(test_data)  # noqa: F841
+        result = RiskHandler.render_risk_title(test_data)  # F841
         self.assertEqual(result, "Risk: text, 123, True, None | 1.5, string")
 
     @patch('services.web.risk.handlers.risk.Jinja2Renderer')
@@ -81,7 +81,7 @@ class TestListRenderingInRiskTitle(TestCase):
             "event_data": {"list_field": ["中文", "日本語", "한국어"]},
             "event_evidence": json.dumps([{"nested_list": ["€", "£"]}]),
         }
-        result = RiskHandler.render_risk_title(test_data)  # noqa: F841
+        result = RiskHandler.render_risk_title(test_data)  # F841
         self.assertEqual(result, "Risk: 中文, 日本語, 한국어 | €, £")
 
     def test_missing_nested_list_key(self):
@@ -91,11 +91,11 @@ class TestListRenderingInRiskTitle(TestCase):
             "event_data": {"list_field": ["a", "b", "c"]},
             "event_evidence": json.dumps([{"other_key": "value"}]),
         }
-        result = RiskHandler.render_risk_title(test_data)  # noqa: F841
+        result = RiskHandler.render_risk_title(test_data)  # F841
         self.assertEqual(result, "Risk: a, b, c | (未获取到变量值:nested_list)")
 
     def test_invalid_event_evidence_json(self):
         """测试event_evidence为非法JSON格式时的处理"""
         test_data = {"strategy_id": 1, "event_data": {"list_field": ["a", "b", "c"]}, "event_evidence": "not_a_json"}
-        result = RiskHandler.render_risk_title(test_data)
+        result = RiskHandler.render_risk_title(test_data)  # F841
         self.assertEqual(result, "Risk: a, b, c | (未获取到变量值:nested_list)")
