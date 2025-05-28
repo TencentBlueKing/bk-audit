@@ -36,44 +36,6 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
       required
       >
-      <!-- <bk-select
-        v-model="condition.condition.field.display_name"
-        filterable
-        :placeholder="t('请选择字段')"
-        style="flex: 1;"
-        @change="(value: DatabaseTableFieldModel) => handleSelectField(value ,index)">
-        <template
-          v-if="configType === 'LinkTable' && condition.condition.field.table"
-          #prefix>
-          <span
-            style="
-              padding: 0 12px;
-              line-height: 32px;
-              color: #3a84ff;
-              background: #f0f1f5">
-            {{ condition.condition.field.table }}.
-          </span>
-        </template>
-        <bk-option
-          v-for="(item, tableIndex) in localTableFields"
-          :key="tableIndex"
-          :label="configType === 'LinkTable' ?
-            `${getAggregateName(item)}${item.table}.${item.display_name}` :
-            `${getAggregateName(item)}${item.display_name}`"
-          :value="item">
-          <audit-icon
-            style="margin-right: 4px;font-size: 14px;"
-            svg
-            :type="item.spec_field_type" />
-          <div v-if="configType === 'LinkTable'">
-            <span style=" color: #3a84ff;">{{ item.table }}.</span>
-            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
-          </div>
-          <div v-else>
-            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
-          </div>
-        </bk-option>
-      </bk-select> -->
       <nodeSelect
         :configData="localTableFields"
         :configType="configType"
