@@ -2,7 +2,7 @@
   <bk-select ref="selectRef" v-model="selectedValue" :auto-height="false" collapse-tags custom-content filterable
     @search-change="handleSearch" :popoverOptions="{ 'width': 'auto' }" display-key="name" id-key="id" multiple>
     <bk-tree ref="treeRef" children="children" :data="treeData" empty-text=" " label="raw_name"
-      :node-content-action="['click']" :show-node-type-icon="false" @node-checked="handleNodeChecked"
+      :node-content-action="['click']" :show-node-type-icon="false"
       @nodeClick="handleNodeClick">
       <template #default="{ data }">
         <div class="field" v-if="!(data.isEdit)">
@@ -264,15 +264,13 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
 
 }
 // 选择
-const handleNodeClick = (nodes: Record<string, any>) => {
+const handleNodeClick = (nodes: Record<string, any>) => {  
   if (!nodes.isEdit) {
     selectedValue.value = nodes.selectedValue;
     emits('handleNodeSelectedValue', nodes, nodes.selectedValue);
   }
 };
 
-const handleNodeChecked = (nodes: Record<string, any>) => {
-};
 
 const getAggregateName = (element: Record<string, any>) => {
   // 添加的子项
@@ -300,25 +298,39 @@ const {
 const transformData = (data: any[]): Array<Record<string, any>> => {
   return data.map((item: Record<string, any>) => {
     // 如果有子节点（sub_keys），则递归处理
-    if (item.property && item.property.sub_keys && item.property.sub_keys.length > 0) {
+    if (
+      item.property &&
+      item.property.sub_keys &&
+      item.property.sub_keys.length > 0
+    ) {
+      // 递归处理子节点，并确保子节点继承父级的 table
       return {
         ...item,
-        selectedValue: ('alias' in item) ? '' : `${item.display_name}(${item.raw_name})`,
-        children: transformData(item.property.sub_keys), // 递归处理子节点
-        display_name: ('alias' in item) ? item.label : item.display_name, // 使用原始数据的 label 作为树节点的显示名称
-        raw_name: ('alias' in item) ? item.value : item.raw_name     // 唯一标识符（根据你的需求可以是 value 或其他字段）
+        isEdit: false,
+        selectedValue: ('alias' in item) ? `${JSON.stringify(item.display_name)}()` : `${item.display_name}(${item.raw_name})`,
+        children: transformData(item.property.sub_keys).map(child => {
+          // 如果子节点没有 table，则继承父级的 table
+          return {
+            ...child,
+            table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
+          };
+        }),
+        display_name: "alias" in item ? item.label : item.display_name,
+        raw_name: "alias" in item ? item.value : item.raw_name,
       };
     } else {
       return {
+        
         ...item,
-        selectedValue: ('alias' in item) ? '' : `${item.display_name}(${item.raw_name})`,
+        isEdit: false,
+        selectedValue: ('alias' in item) ? `${item.label}(${item.value})` : `${item.display_name}(${item.raw_name})`,
         children: [],
-        display_name: ('alias' in item) ? item.label : item.display_name, // 使用原始数据的 label 作为树节点的显示名称
-        raw_name: ('alias' in item) ? item.value : item.raw_name     // 唯一标识符（根据你的需求可以是 value 或其他字段）
+        display_name: "alias" in item ? item.label : item.display_name,
+        raw_name: "alias" in item ? item.value : item.raw_name,
       };
     }
   });
-}
+};
 // 改造数据
 watch(() => props, (newData) => {
   const haveTreeData = sessionStorage.getItem("rule-tree-data");
@@ -349,18 +361,7 @@ watch(() => props, (newData) => {
   deep: true,
   immediate: true,
 })
-// watch(
-//   () => storageTreeData.value,
-//   (newData) => {
-//     if (newData.length > 0) {
-//       sessionStorage.setItem("rule-tree-data", JSON.stringify(newData));
 
-//     }
-//   },
-//   {
-//     deep: true,
-//   }
-// );
 onMounted(() => {
   fetchGlobalChoices()
 })

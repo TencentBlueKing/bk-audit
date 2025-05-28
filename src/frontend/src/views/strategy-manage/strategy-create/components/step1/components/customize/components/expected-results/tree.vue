@@ -1,8 +1,10 @@
 <template>
-  <bk-tree ref="treeRef" children="children" :data="treeData" empty-text=" " label="raw_name" selectable show-checkbox
-    :node-content-action="['click', 'selected']" :show-node-type-icon="false" @nodeChecked="handleNodeChecked"
-    @nodeClick="handleNodeClick">
+  <bk-tree ref="treeRef" children="children" :data="treeData" empty-text=" " label="raw_name"
+     :show-node-type-icon="false" 
+    >
     <template #default="{ data }">
+      <div class="node" v-if="data">
+        <bk-checkbox  style="width: 50px;" v-model="data.is_checked" :immediateEmitChange="false" :disabled="data.isEdit" @change="(val) => handleChangeBox(val, data)"> {{ data.is_checked }}</bk-checkbox>
       <div class="field" v-if="!data.isEdit">
         <div class="field-left">
           <audit-icon style="margin-right: 4px; font-size: 14px" svg :type="data.spec_field_type" />
@@ -101,6 +103,7 @@
           </div>
         </div>
       </div>
+    </div>
     </template>
   </bk-tree>
 </template>
@@ -134,6 +137,7 @@ const emits = defineEmits<Emits>();
 const fieldTypeValue = ref<Record<string, Record<string, any>[]>>({});
 
 const fieldTypeList = ref<{ id: string; name: string }[]>([]);
+const changeBoxData = ref<Record<string, any>[]>([]);
 
 const treeData = ref<Record<string, any>[]>([]);
 const storageTreeData = ref<Record<string, any>[]>([]);
@@ -143,6 +147,7 @@ const newItem = {
   parent_aggregate: null,
   children: [],
   display_name: "",
+  is_checked: false,
   parent_display_name: "",
   field_type: "",
   isEdit: true,
@@ -180,6 +185,7 @@ const handleAddNode = (val: Record<string, any>) => {
           newItem.field_type = val.field_type;
           newItem.isDuplicate = val.isDuplicate;
           newItem.table = val.table;
+          newItem.is_checked = false;
           fieldTypeValue.value[val.raw_name] = [
             {
               id: 0,
@@ -225,6 +231,8 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
           e.textValue = `${e.parent_display_name}(${e.parent_raw_name})/${fieldTypeValueText}`
           e.raw_name = e.parent_raw_name;
           e.keys = fieldTypeValueAr
+          node.isOpen = true;
+          e.is_checked = false;
           e.fieldTypeValueAr = fieldTypeValueAr;
         }
       });
@@ -244,7 +252,7 @@ const handleAddFieldClose = (val: Record<string, any>) => {
 // 选择
 const handleNodeClick = (nodes: Record<string, any>) => { };
 
-const handleNodeChecked = (nodes: Record<string, any>) => {
+const handleNodeChecked = (nodes: Record<string, any>) => {  
   emits("handleNodeChecked", nodes);
 };
 
@@ -258,7 +266,25 @@ const { run: fetchGlobalChoices } = useRequest(
     },
   }
 );
-
+const handleChangeBox = (val: boolean, data: Record<string, any>) => {
+  if (val) {
+    // 检查是否已存在相同的data
+    const isDuplicate = changeBoxData.value.some(
+      item => (item.raw_name === data.raw_name) && (item.display_name === data.display_name)
+    );
+    if (!isDuplicate) {
+      changeBoxData.value.push(data);
+    }
+  } else {
+    // 如果val为false，从changeBoxData中删除对应的data
+    const index = changeBoxData.value.findIndex(
+      item => (item.raw_name === data.raw_name) && (item.display_name === data.display_name)
+    );
+    if (index !== -1) {
+      changeBoxData.value.splice(index, 1);
+    }
+  }
+};
 const transformData = (data: any[]): Array<Record<string, any>> => {
   return data.map((item: Record<string, any>) => {
     // 如果有子节点（sub_keys），则递归处理
@@ -267,18 +293,28 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
       item.property.sub_keys &&
       item.property.sub_keys.length > 0
     ) {
+      // 递归处理子节点，并确保子节点继承父级的 table
       return {
         ...item,
-        children: transformData(item.property.sub_keys), // 递归处理子节点
-        display_name: "alias" in item ? item.label : item.display_name, // 使用原始数据的 label 作为树节点的显示名称
-        raw_name: "alias" in item ? item.value : item.raw_name, // 唯一标识符（根据你的需求可以是 value 或其他字段）
+        is_checked: false,
+        children: transformData(item.property.sub_keys).map(child => {
+          // 如果子节点没有 table，则继承父级的 table
+          return {
+            ...child,
+            table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
+            is_checked: false, 
+          };
+        }),
+        display_name: "alias" in item ? item.label : item.display_name,
+        raw_name: "alias" in item ? item.value : item.raw_name,
       };
     } else {
       return {
         ...item,
         children: [],
-        display_name: "alias" in item ? item.label : item.display_name, // 使用原始数据的 label 作为树节点的显示名称
-        raw_name: "alias" in item ? item.value : item.raw_name, // 唯一标识符（根据你的需求可以是 value 或其他字段）
+        display_name: "alias" in item ? item.label : item.display_name,
+        raw_name: "alias" in item ? item.value : item.raw_name,
+        is_checked: false,
       };
     }
   });
@@ -331,8 +367,15 @@ watch(
   }
 );
 
-
-
+watch(
+  () => changeBoxData.value,
+  (newData) => {
+    handleNodeChecked(newData)
+  },
+  {
+    deep: true,
+  }
+);
 watch(
   () => storageTreeData.value,
   (newData) => {
@@ -372,6 +415,8 @@ onBeforeRouteLeave((to, from, next) => {
 });
 </script>
 <style scoped lang="postcss">
+.node{
+  display: flex;
 .field {
   display: flex;
   width: 100%;
@@ -398,10 +443,10 @@ onBeforeRouteLeave((to, from, next) => {
   }
 }
 
-.field:hover {
+}
+.node:hover {
   background-color: #f5f7fa;
 }
-
 .field-edit {
   display: flex;
   align-items: center;
