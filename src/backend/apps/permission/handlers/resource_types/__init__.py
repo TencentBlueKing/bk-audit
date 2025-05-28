@@ -34,6 +34,7 @@ from apps.permission.handlers.resource_types.sensitive_object import (
 from apps.permission.handlers.resource_types.strategy import LinkTable, Strategy
 from apps.permission.handlers.resource_types.system import System
 from apps.permission.handlers.resource_types.tag import Tag
+from apps.permission.handlers.resource_types.tool import Tool
 
 
 class ResourceEnum:
@@ -51,6 +52,7 @@ class ResourceEnum:
     RISK = Risk
     PANEL = Panel
     TAG = Tag
+    TOOL = Tool
     # BK LOG
     SPACE_BK_LOG = SpaceBKLog
     BUSINESS_BK_LOG = BusinessBKLog
