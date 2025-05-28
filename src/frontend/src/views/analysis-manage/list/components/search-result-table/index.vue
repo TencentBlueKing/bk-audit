@@ -385,11 +385,9 @@
         .filter(item => !existingFields.has(item.field_name))
         .map(item => ({
           label: () => {
-            // 检查fieldName是否在sourceList中存在，且property为空或property.sub_keys为空数组
+            // 检查fieldName是否在sourceList中存在，且is_json为false
             const fieldExists = sourceList.value.find(source => source.field_name === item.field_name);
-            const shouldShowPopover = fieldExists
-              && (!fieldExists.property
-                || (fieldExists.property.sub_keys && fieldExists.property.sub_keys.length === 0));
+            const shouldShowPopover = fieldExists && fieldExists.is_json === false;
 
             if (shouldShowPopover) {
               return <div style="display: flex; align-items: center;">
