@@ -7,4 +7,5 @@ INSTALLED_APPS = (
     "services.web.risk",
     "services.web.version",
     "services.web.vision",
+    "services.web.tool",
 )
