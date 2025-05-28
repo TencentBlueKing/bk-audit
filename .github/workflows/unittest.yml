@@ -90,7 +90,7 @@ jobs:
       - name: Run tests
         run: |
           cd src/backend
-          pytest --cov=.
+          pytest -vvv -s --tb=long
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
