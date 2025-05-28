@@ -4,7 +4,7 @@
     >
     <template #default="{ data }">
       <div class="node" v-if="data">
-        <bk-checkbox  style="width: 50px;" v-model="data.is_checked" :immediateEmitChange="false" :disabled="data.isEdit" @change="(val) => handleChangeBox(val, data)"> {{ data.is_checked }}</bk-checkbox>
+        <bk-checkbox  style="width: 50px;" v-model="data.is_checked" :immediateEmitChange="false" :disabled="data.isEdit" @change="(val) => handleChangeBox(val, data)"></bk-checkbox>
       <div class="field" v-if="!data.isEdit">
         <div class="field-left">
           <audit-icon style="margin-right: 4px; font-size: 14px" svg :type="data.spec_field_type" />
