@@ -131,6 +131,13 @@ class SystemAbstractResource(Meta, AuditMixinResource, ModelResource, ABC):
 
 
 class SystemListResource(SystemAbstractResource):
+    """
+    TODO:
+    1. 返回权限模型信息
+    2. 返回更多系统信息
+    3. 系统状态信息
+    """
+
     name = gettext_lazy("获取系统列表")
     action = "list"
     many_response_data = True
@@ -220,6 +227,14 @@ class SystemListResource(SystemAbstractResource):
 
 
 class SystemListAllResource(SystemAbstractResource):
+    """
+    TODO:
+    1. 系统状态信息
+    2. 系统收藏排序以及收藏状态
+    3. 系统权限信息
+    4. 系统来源
+    """
+
     name = gettext_lazy("获取系统列表(All)")
     action = "list"
     many_response_data = True
@@ -240,6 +255,11 @@ class SystemListAllResource(SystemAbstractResource):
 
 
 class SystemInfoResource(SystemAbstractResource):
+    """
+    TODO:
+    1. 返回系统状态
+    """
+
     name = gettext_lazy("获取系统详情")
     lookup_field = "system_id"
     serializer_class = SystemInfoResponseSerializer
@@ -705,3 +725,86 @@ class DeleteSystemDiagnosisPush(Meta, Resource):
     def perform_request(self, validated_request_data):
         system_id = validated_request_data["system_id"]
         SystemDiagnosisPushHandler(system_id=system_id).delete_push()
+
+
+class CreateSystem(Meta, Resource):
+    name = gettext_lazy("创建系统")
+
+    def perform_request(self, validated_request_data):
+        pass
+
+
+class UpdateSystem(Meta, Resource):
+    name = gettext_lazy("更新系统")
+
+    def perform_request(self, validated_request_data):
+        pass
+
+
+class FavoriteSystem(Meta, Resource):
+    name = gettext_lazy("更新系统收藏")
+
+    def perform_request(self, validated_request_data):
+        pass
+
+
+class CreateResourceType(Meta, Resource):
+    name = gettext_lazy("创建资源类型")
+
+    def perform_request(self, validated_request_data):
+        pass
+
+
+class UpdateResourceType(Meta, Resource):
+    name = gettext_lazy("更新资源类型")
+
+    def perform_request(self, validated_request_data):
+        """
+        TODO: 需要判断是否需要更新后端资源拉取任务
+        """
+        pass
+
+
+class BulkUpdateResourceType(Meta, Resource):
+    name = gettext_lazy("批量更新资源类型")
+
+    def perform_request(self, validated_request_data):
+        pass
+
+
+class DeleteResourceType(Meta, Resource):
+    name = gettext_lazy("删除资源类型")
+
+    def perform_request(self, validated_request_data):
+        """
+        TODO: 需要判断是否需要删除/停用后端资源拉取任务
+        """
+        pass
+
+
+class CreateAction(Meta, Resource):
+    name = gettext_lazy("创建操作")
+
+    def perform_request(self, validated_request_data):
+        pass
+
+
+class UpdateAction(Meta, Resource):
+    name = gettext_lazy("更新操作")
+
+    def perform_request(self, validated_request_data):
+        pass
+
+
+class BulkUpdateAction(Meta, Resource):
+    name = gettext_lazy("批量更新操作")
+
+    def perform_request(self, validated_request_data):
+        pass
+
+
+class DeleteAction(Meta, Resource):
+    name = gettext_lazy("删除操作")
+
+    def perform_request(self, validated_request_data):
+        pass
