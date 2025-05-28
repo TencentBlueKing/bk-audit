@@ -73,5 +73,9 @@ class DataFetcher:
         """
 
         total = self.get_total(self.config.task.query_params)
+        # 更新总条数
+        if total != self.config.task.total:
+            self.config.task.total = total
+            self.config.task.save(update_fields=["total"])
         for i in range(0, math.ceil(total / self.page_size)):
             yield self.fetch_patch_logs(self.config.task.query_params, i + 1, self.page_size)

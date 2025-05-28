@@ -51,8 +51,8 @@ class LogExportTask(SoftDeleteModel):
     repeat_times = models.IntegerField(gettext_lazy("任务执行次数"), default=0)
     status = models.CharField(gettext_lazy("任务状态"), max_length=32, choices=TaskEnum.choices)
     result = models.JSONField(verbose_name=gettext_lazy("任务执行结果"), default=dict, blank=True, null=True)
-    task_start_time = models.DateTimeField(gettext_lazy("任务执行开始时间"), null=True, default=None)
-    task_end_time = models.DateTimeField(gettext_lazy("任务执行结束时间"), null=True, default=None)
+    task_start_time = models.DateTimeField(gettext_lazy("任务执行开始时间"), null=True, default=None, blank=True)
+    task_end_time = models.DateTimeField(gettext_lazy("任务执行结束时间"), null=True, default=None, blank=True)
     error_msg = models.TextField(gettext_lazy("错误信息"), blank=True, null=True)
 
     query_params = models.JSONField(gettext_lazy("检索参数"), default=dict, blank=True)
