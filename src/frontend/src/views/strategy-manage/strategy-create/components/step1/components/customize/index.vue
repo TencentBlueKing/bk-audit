@@ -153,6 +153,7 @@
             :config-type="formData.configs.config_type"
             :expected-result="formData.configs.select"
             :table-fields="tableFields"
+            :configs-data="formData.configs"
             @show-structure-preview="handleShowStructureView"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
@@ -278,7 +279,8 @@
     nextTick,
     ref,
     watch,
-    watchEffect } from 'vue';
+    watchEffect,
+    onMounted } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -356,7 +358,7 @@
     getFields: () => IFormData
   }
   interface Props {
-    editData: StrategyModel
+    editData: any
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -569,6 +571,7 @@
       label: string
       value: string
       spec_field_type: string
+      property?: Record<string, any>
     }>,
     displayOrRtId: string,
   ) => data.map(item => ({
@@ -579,6 +582,7 @@
     aggregate: null,
     spec_field_type: item.spec_field_type,
     remark: '',
+    property: item.property || {}
   }));
 
   // 选择tableid后，获取表字段
@@ -601,9 +605,9 @@
     const displayArr = Array.from(new Set(rtIdArrDisplay.reduce((acc, curr) => acc.concat(curr), [])));
     StrategyManageService.fetchBatchTableRtFields({
       table_ids: idArr.join(','),
-    }).then((data) => {
+    }).then((data) => {      
       tableFields.value = [];
-      data.forEach((item, index) => {
+      data.forEach((item: Record<string, any>, index) => {
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
       });
     });
@@ -688,7 +692,9 @@
       rt_id_or_uid: arr[arr.length - 1],
     };
   };
-
+  const removeTreeData = () =>{
+    sessionStorage.removeItem('storage-tree-data')
+  }
   const createInfoBoxConfig = (overrides: {
     onConfirm: () => void
     onClose: () => void
@@ -715,6 +721,14 @@
     contentAlign: 'center',
     footerAlign: 'center',
     ...overrides,
+    onConfirm: () => {
+    removeTreeData(); // 无论外部是否传入 onConfirm，都先执行 removeTreeData
+    overrides.onConfirm?.(); // 如果外部传入了 onConfirm，再执行它
+  },
+  onClose: () => {
+    removeTreeData(); // 无论外部是否传入 onClose，都先执行 removeTreeData
+    overrides.onClose?.(); // 如果外部传入了 onClose，再执行它
+  },
   });
 
   // 重置数据源和表单
@@ -807,21 +821,21 @@
   };
 
   // 更新预期数据
-  const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
+  const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {    
     formData.value.configs.select = expectedResult;
     // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
     if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
       formData.value.configs.data_source.source_type = '';
       return;
     }
-    // 如果是编辑模式，当originSourceType存在且在可用列表中，保持不变
+    // 如不果是编辑模式，当originSourceType存在且在可用列表中，保持变
     if (isEditMode && originSourceType.value && availableSourceTypes.value.includes(originSourceType.value)) {
       formData.value.configs.data_source.source_type = originSourceType.value;
     }
   };
 
   // 更新风险规则
-  const handleUpdateWhere = (where: Where) => {
+  const handleUpdateWhere = (where: Where) => {    
     formData.value.configs.where = where;
   };
 
@@ -862,7 +876,7 @@
   };
 
   // 编辑
-  const setFormData = (editData: StrategyModel) => {
+  const setFormData = (editData: any) => {    
     formData.value.configs.config_type = editData.configs.config_type || '';
     formData.value.configs.schedule_config = editData.configs.schedule_config;
     formData.value.configs.select = editData.configs.select;
@@ -903,7 +917,7 @@
     if ((isEditMode || isCloneMode) && (props.editData.strategy_id && allConfigTypeTable.value.length > 0)) {
       if (isInit) {
         return;
-      }
+      }      
       setFormData(props.editData);
       isInit = true;
     }
@@ -986,6 +1000,9 @@
       return params;
     },
   });
+  onMounted(() => {
+    sessionStorage.removeItem("storage-tree-data"); // 清除数据
+  })
 </script>
 <style scoped lang="postcss">
 .strategy-customize {
