@@ -145,6 +145,9 @@
         offset: [0, 8],
         zIndex: props.zIndex,
         hideOnClick: props.hideOnClick,
+        onTrigger(instance, event) {
+          event.stopPropagation();
+        },
       });
     }
   });

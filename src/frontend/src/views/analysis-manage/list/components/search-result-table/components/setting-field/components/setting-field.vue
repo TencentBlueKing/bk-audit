@@ -27,19 +27,93 @@
             type="search"
             @input="handleSearch" />
         </div>
-        <div style="height: calc(100vh - 214px);">
-          <scroll-faker>
-            <ul class="list-content">
-              <li
-                v-for="(item, index) in sourceList"
-                :key="index"
-                class="item-list item-list-active"
-                @click="handelSelect(item, index)">
-                <span class="item-name">{{ t(item.description) }}</span>
-                <span class="item-icon"><audit-icon type="right" /></span>
-              </li>
-            </ul>
-          </scroll-faker>
+        <div style="height: calc(100vh - 260px);">
+          <bk-tree
+            ref="treeRef"
+            :check-strictly="false"
+            children="children"
+            :data="sourceList"
+            empty-text=" "
+            :show-node-type-icon="false">
+            <template #default="{ data }: { data: CascaderNode }">
+              <template v-if="!data.isEdit">
+                <div
+                  class="item-list item-list-active"
+                  style="overflow-x: auto;"
+                  @click="handelSelect(data)">
+                  <div>
+                    <span
+                      class="category-type"
+                      :style="categoryStyleMap[data.category as keyof typeof categoryStyleMap]">
+                      {{ categoryMap[data.category as keyof typeof categoryMap] }}
+                    </span>
+                    <span
+                      style="
+                        margin-left: 8px;
+                        font-size: 12px;">{{ data.description }}</span>
+                  </div>
+                  <div>
+                    <span
+                      v-if="data.isJson && data.dynamic_content"
+                      class="item-icon"
+                      style="font-size: 12px;"
+                      @click.stop="handleAddNode(data)">
+                      <audit-icon type="add" />
+                    </span>
+                    <span
+                      class="item-icon"
+                      style="margin-left: 8px;">
+                      <audit-icon type="right" />
+                    </span>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <div class="add-item-list item-list-active">
+                  <scroll-faker>
+                    <span> {{ data.description }}</span>
+                    <span style="margin: 0 5px;">/</span>
+                    <!-- 多级字段输入 -->
+                    <template
+                      v-for="(item, index) in customFields"
+                      :key="index">
+                      <bk-input
+                        v-model="item.field"
+                        autofocus
+                        :placeholder="t('请输入')"
+                        style="width: 85px;" />
+                      <audit-icon
+                        v-if="index === customFields.length - 1"
+                        v-bk-tooltips="t('添加下级字段')"
+                        class="add-icon"
+                        :class="[!item.field ? 'disabled-add-icon' : '']"
+                        type="add-fill"
+                        @click="() => customFields.push({ field: '' })" />
+                      <span
+                        v-else
+                        style="margin: 0 5px;">/</span>
+                    </template>
+                    <span class="field-edit-right">
+                      <audit-icon
+                        v-bk-tooltips="t('确认')"
+                        :class="[customFields.every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
+                        svg
+                        type="check-line"
+                        @click.stop="handleAddFieldSubmit(data)" />
+                      <audit-icon
+                        v-bk-tooltips="t('取消添加')"
+                        style="margin-left: 4px;
+                          font-size: 18px;
+                          color: #c1c3c9;"
+                        svg
+                        type="close"
+                        @click.stop="handleAddFieldClose(data)" />
+                    </span>
+                  </scroll-faker>
+                </div>
+              </template>
+            </template>
+          </bk-tree>
         </div>
       </bk-loading>
     </div>
@@ -58,12 +132,12 @@
                 v-for="(item, index) in initList"
                 :key="index"
                 class="not-allowed item-list">
-                <span class="item-name">{{ t(item.description) }}</span>
+                <span class="item-name">{{ item.description }}</span>
               </li>
               <vuedraggable
                 item-key="field_name"
                 :list="targetList">
-                <template #item="{element}">
+                <template #item="{element}: { element: CascaderNode }">
                   <li
                     class="item-list item-list-active"
                     @click="handelDeleteSelect(element)">
@@ -71,7 +145,10 @@
                       <audit-icon
                         style="font-size: 13px;color: #c4c6cc;"
                         type="move" />
-                      {{ t(element.description) }}
+                      {{ element.description }}
+                      <span v-if="element.level > 1">
+                        ({{ element.field_name.replace(/\./g, '\/') }})
+                      </span>
                     </span>
                     <span
                       class="item-icon"
@@ -121,11 +198,24 @@
   } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
 
+  import EsQueryService from '@service/es-query';
   import MetaManageService from '@service/meta-manage';
 
-  import type StandardFieldModel from '@model/meta/standard-field';
-
   import useRequest from '@hooks/use-request';
+
+  interface CascaderNode {
+    allow_operators: string[]
+    category?: string
+    children: CascaderNode[]
+    disabled: boolean
+    dynamic_content: boolean
+    field_name: string
+    isJson: boolean
+    level: number
+    description: string
+    isEdit: boolean
+    isOpen: boolean;
+  }
 
   interface Emits {
     (e: 'updateField'):void;
@@ -133,6 +223,14 @@
   }
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const route = useRoute();
+
+  const searchValue = ref('');
+  const sourceList = ref<CascaderNode[]>([]);
+  const initSourceList = ref<CascaderNode[]>([]);
+  const targetList = ref<CascaderNode[]>([]);
+  const customFields = ref([{ field: '' }]);
+
   const initList = [
     { field_name: 'start_time', description: '操作起始时间' },
     { field_name: 'username', description: '操作人' },
@@ -143,27 +241,44 @@
     { field_name: 'result_code', description: '操作结果' },
     { field_name: 'access_type', description: '操作途径' },
   ];
-  const searchValue = ref('');
-  const route = useRoute();
-  const initSourceList = ref<Array<StandardFieldModel>>([]);
-  // 保留可选的字段
-  const optionFields = ['event_id', 'request_id', 'event_content', 'end_time',
-                        'access_source_ip', 'access_user_agent', 'result_content'];
+  const categoryMap = {
+    system: t('系统'),
+    standard: t('标准'),
+    snapshot: t('快照'),
+  };
+  const categoryStyleMap = {
+    system: {
+      backgroundColor: '#E1ECFF',
+      color: '#1768EF',
+    },
+    standard: {
+      backgroundColor: '#DAF6E5',
+      color: '#299E56',
+    },
+    snapshot: {
+      backgroundColor: '#FCE5C0',
+      color: '#E38B02',
+    },
+  };
+
   onMounted(async () => {
-    fetchStandardField({});
+    fetchStandardField();
   });
+
   /**
-   * 获取全量字段
+   * 获取字段
    */
   const {
     loading: sourceLoading,
-    data: sourceList,
+    // data: sourceList,
     run: fetchStandardField,
-  } = useRequest(MetaManageService.fetchStandardField, {
+  } = useRequest(EsQueryService.fetchSearchConfig, {
     defaultValue: [],
+    manual: true,
     onSuccess: (data) => {
-      initSourceList.value = data;
-      sourceList.value = data.filter((item: StandardFieldModel) => optionFields.includes(item.field_name));
+      const processedData = convertToCascaderList(data);
+      initSourceList.value = processedData;
+      sourceList.value = processedData;
       fetchCustomFields({
         route_path: route.name,
       });
@@ -175,7 +290,7 @@
    */
   const {
     loading: targetLoading,
-    data: targetList,
+    // data: targetList,
     run: fetchCustomFields,
   } = useRequest(MetaManageService.fetchCustomFields, {
     defaultParams: {
@@ -183,7 +298,16 @@
     },
     defaultValue: [],
     onSuccess: (data) => {
-      sourceList.value = removeCheckedFields(data, sourceList.value) || [];
+      targetList.value = convertToCascaderList(data);
+      console.log(targetList.value);
+      // 根据category字段排序：standard在前，system在中，snapshot在后
+      const sortedData = [...removeCheckedFields(targetList.value, sourceList.value) || []].sort((a, b) => {
+        const categoryOrder = { standard: 1, system: 2, snapshot: 3 };
+        const aOrder = categoryOrder[a.category as keyof typeof categoryOrder] || 999;
+        const bOrder = categoryOrder[b.category as keyof typeof categoryOrder] || 999;
+        return aOrder - bOrder;
+      });
+      sourceList.value = sortedData;
     },
   });
 
@@ -203,7 +327,7 @@
   /**
    * 删掉sourcelist已经选中的列/默认不可选的列
    */
-  const removeCheckedFields = (checkedLists:Array<StandardFieldModel>, data:Array<StandardFieldModel>) => {
+  const removeCheckedFields = (checkedLists:Array<CascaderNode>, data:Array<CascaderNode>) => {
     if (checkedLists.length) {
       const fieldNames = checkedLists.map(item => item.field_name);
       fieldNames.forEach((item) => {
@@ -216,25 +340,157 @@
     return data;
   };
 
-  const handleCancel = () => {
-    emits('update:modelValue', false);
-  };
+  // eslint-disable-next-line max-len
+  const convertToCascaderList = (arr: any[], level = 1, parentIds: string[] = []): CascaderNode[] => (Array.isArray(arr) ? arr.map((item: any) => {
+    const currentId = item?.field_name ?? '';
+    // 创建包含所有父级ID的数组
+    const fullIds = level === 1 ?  [currentId] : [...parentIds, currentId];
 
-  const handelSelect = (item: any, index: number) => {
-    targetList.value.push(item);
-    sourceList.value.splice(index, 1);
+    const children = item && item.property && Array.isArray(item.property.sub_keys)
+      ? convertToCascaderList(item.property.sub_keys, level + 1, fullIds)
+      : [];
+    const newItem = {
+      allow_operators: item?.allow_operators || [],
+      children,
+      category: item?.category ?? '',
+      dynamic_content: item.property?.dynamic_content ?? false,
+      disabled: false,
+      field_name: level === 1 ? currentId : fullIds,
+      isJson: item?.is_json ?? false,
+      level: item.field_name.split('.').length > 1 ? item.field_name.split('.').length : 1,
+      description: item?.description ?? item?.field_alias ?? '',
+      isEdit: false,
+      isOpen: false,
+    };
+    newItem.field_name = Array.isArray(newItem.field_name) ? JSON.stringify(newItem.field_name) : newItem.field_name;
+    return newItem;
+  }) : []);
+
+  const handelSelect = (item: CascaderNode) => {
+    const formatItem = {
+      ...item,
+    };
+    if (item.field_name && typeof item.field_name === 'string' && item.field_name.startsWith('[')) {
+      const fieldNameArr = JSON.parse(formatItem.field_name);
+      if (fieldNameArr.length > 1) {
+        formatItem.field_name = fieldNameArr.join('.');
+
+        // 获取第一个元素
+        const firstFieldName = fieldNameArr[0];
+        // 在sourceList中查找匹配的元素
+        const parentNode = sourceList.value.find(sourceItem => sourceItem.field_name === firstFieldName
+          || (typeof sourceItem.field_name === 'string'
+            && sourceItem.field_name.includes(firstFieldName)));
+
+        if (parentNode) {
+          if (!formatItem.description.includes(parentNode.description)) {
+            formatItem.description = `${parentNode.description}/${formatItem.description}`;
+          }
+          // 从二级字段删除
+          const subIndex = parentNode.children.findIndex((sub: CascaderNode) => sub.field_name === item.field_name);
+          if (subIndex !== -1) {
+            parentNode.children.splice(subIndex, 1);
+            parentNode.isOpen = true;
+          }
+        }
+      }
+    } else {
+      // 一级字段
+      const index = sourceList.value.findIndex((sourceItem: CascaderNode) => sourceItem.field_name === item.field_name);
+      if (index !== -1) {
+        sourceList.value.splice(index, 1);
+      }
+    }
+    targetList.value.push(formatItem);
     window.changeConfirm = true;
   };
-  const handelDeleteSelect = (element: any) => {
-    sourceList.value.push(element);
+
+  const handelDeleteSelect = (element: CascaderNode) => {
+    // 判断是否有 parentItem 字段且 parentItem 不等于自身
+    if (element.level > 1 && element.field_name && element.field_name.includes('.')) {
+      // 分割field_name，获取各级字段名
+      const fieldNameParts = element.field_name.split('.');
+      // 第一部分是父级字段名
+      const parentFieldName = fieldNameParts[0];
+      // 在sourceList中查找父节点
+      const parentNode = sourceList.value.find(item => item.field_name === parentFieldName);
+
+      if (parentNode) {
+        // 创建一个还原后的元素，恢复原始状态
+        const restoredElement = {
+          ...element,
+          // 恢复原始field_name（可能是JSON字符串）
+          field_name: JSON.stringify(element.field_name.split('.')),
+          // 恢复原始description（去掉父级部分）
+          description: (element.description.includes('/') && element.level < 3)
+            ? element.description.substring(element.description.indexOf('/') + 1)
+            : element.description,
+        };
+
+        // 将还原后的元素添加到父节点的children中
+        parentNode.children.push(restoredElement);
+        // 确保父节点是打开状态
+        parentNode.isOpen = true;
+      }
+    } else {
+      // 还原到 sourceList
+      sourceList.value.push(element);
+    }
     const index = targetList.value.findIndex(item => item.field_name === element.field_name);
     targetList.value.splice(index, 1);
     window.changeConfirm = true;
   };
+
+  const handleAddNode = (node: CascaderNode) => {
+    node.children.push({
+      allow_operators: [],
+      children: [],
+      disabled: false,
+      dynamic_content: false,
+      field_name: JSON.stringify([node.field_name]),
+      isJson: false,
+      level: node.level + 2,
+      description: node.description,
+      isOpen: false,
+      isEdit: true,
+    });
+    // eslint-disable-next-line no-param-reassign
+    node.isOpen = true;
+  };
+
+  const handleAddFieldSubmit = (node: CascaderNode) => {
+    if (customFields.value.length === 0) {
+      return;
+    }
+    const newFiledNameArray = [...JSON.parse(node.field_name), ...customFields.value.map(item => item.field)];
+    const newDescription = `${node.description}/${customFields.value.map(item => item.field).join('/')}`;
+    // eslint-disable-next-line no-param-reassign
+    node.field_name = JSON.stringify(newFiledNameArray);
+    // eslint-disable-next-line no-param-reassign
+    node.description = newDescription;
+    // eslint-disable-next-line no-param-reassign
+    node.isEdit = false;
+    // 清空customFields
+    customFields.value = [{ field: '' }];
+  };
+
+  const handleAddFieldClose = (node: CascaderNode) => {
+    customFields.value = [{ field: '' }];
+    const nodeFieldName = JSON.parse(node.field_name)[0];
+    const parentNode = sourceList.value.find(item => item.field_name === nodeFieldName);
+    if (parentNode) {
+      parentNode.children.pop();
+    }
+  };
+
   const handleSubmit = () => Promise.resolve()
     .then(() => {
       updateField(targetList.value);
     });
+
+  const handleCancel = () => {
+    emits('update:modelValue', false);
+  };
 
   const handleReset = () => {
     sourceList.value = sourceList.value.concat(targetList.value);
@@ -246,7 +502,7 @@
     sourceList.value = initSourceList.value.filter(item => item.description.indexOf(searchValue.value) !== -1);
   };
 
-  const updateField = async (fields: Array<StandardFieldModel>) => {
+  const updateField = async (fields: Array<CascaderNode>) => {
     await fetchUpdateCustomFields({
       route_path: route.name,
       fields,
@@ -257,93 +513,169 @@
   };
 </script>
 <style lang="postcss" scoped>
-.setting-filed-box {
-  .setting-filed-operation {
-    display: flex;
+.setting-filed-operation {
+  display: flex;
 
-    .search-input {
-      padding: 24px;
-    }
+  .search-input {
+    padding: 24px;
+  }
 
-    .source-list,
-    .target-list {
-      flex: 1;
-      min-height: 500px;
+  .source-list,
+  .target-list {
+    min-height: 500px;
 
-      .list-content {
-        .item-list {
-          position: relative;
-          display: flex;
-          height: 32px;
-          padding: 8px 24px 8px 32px;
-          line-height: 32px;
-          color: #63656e;
-          cursor: pointer;
-          align-items: center;
+    :deep(.bk-tree),
+    .list-content {
+      padding: 0 22px 0 8px;
 
-          /* .item-name{
-                        color:#63656E
-                    } */
-          .item-icon {
-            display: none;
-            margin-left: auto;
-            font-size: 14px;
-            color: #3a84ff;
-          }
+      .is-selected {
+        background-color: #fff;
+      }
+
+      .item-list {
+        position: relative;
+        display: flex;
+        width: auto;
+        padding-left: 8px;
+        font-size: 12px;
+        color: #63656e;
+        align-items: center;
+        justify-content: space-between;
+
+        .item-name {
+          margin-left: 8px;
         }
 
-        .not-allowed {
-          margin-left: 16px;
-          color: lightgray;
-          cursor: not-allowed;
-        }
-
-        .item-list-active:hover {
+        .item-icon {
+          display: none;
+          margin-left: auto;
+          font-size: 14px;
           color: #3a84ff;
-          background-color: #edf4ff;
+          cursor: pointer;
         }
 
-        .item-list-active:hover .item-icon {
-          display: inline-block;
+        .sub-add-key-icon,
+        .sub-select-key-icon {
+          margin: 0 5px;
+          color: #c4c6cc;
         }
+
+        .category-type {
+          width: 28px;
+          height: 16px;
+          font-size: 10px;
+          line-height: 16px;
+          text-align: center;
+          border-radius: 2px;
+        }
+      }
+
+      .not-allowed {
+        margin-left: 16px;
+        color: lightgray;
+        cursor: not-allowed;
+      }
+
+      .item-list-active:hover {
+        color: #3a84ff;
+        background-color: #edf4ff;
+      }
+
+      .item-list-active:hover .item-icon {
+        display: inline-block;
       }
     }
 
-    .line {
-      position: absolute;
-      top: 60px;
-      bottom: 48px;
-      left: 50%;
-      z-index: 1;
-      width: 1px;
-      background: lightgray;
-    }
+    .list-content {
+      padding: 0;
 
-    .target-list {
-      flex: 1;
-
-      .checked-number {
-        padding: 8px 24px;
-        color: #313238;
-        background-color: #f5f7fa;
+      .item-list {
+        height: 32px;
+        line-height: 32px;
       }
     }
   }
 
-  .setting-filed-footer {
-    position: absolute;
-    bottom: 0;
-    display: flex;
-    width: 100%;
-    height: 48px;
-    padding: 8px 24px;
-    line-height: 48px;
-    background-color: #fafbfd;
+  .source-list {
+    width: 350px;
 
-    .setting-filed-btn {
-      display: flex;
-      min-width: 88px;
+    :deep(.bk-tree) {
+      .add-item-list {
+        height: 32px;
+        font-size: 12px;
+        line-height: 32px;
+        color: #63656e;
+      }
+
+      .add-icon {
+        margin-left: 5px;
+        color: #c4c6cc;
+
+        &:hover {
+          color: #3a84ff;
+        }
+      }
+
+      .disabled-add-icon {
+        color: #dcdee5;
+        cursor: not-allowed;
+        user-select: none
+      }
+
+      .field-edit-right {
+        display: inline-block;
+        margin-left: 5px;
+
+        .submit-icon {
+          margin-right: 4px;
+          font-size: 18px;
+          color: #7bbe8a;
+        }
+
+        .disabled-submit-icon {
+          font-size: 18px;
+          color: #dcdee5;
+          cursor: not-allowed;
+          user-select: none
+        }
+      }
     }
+  }
+
+  .line {
+    position: absolute;
+    top: 60px;
+    bottom: 48px;
+    left: 37%;
+    z-index: 1;
+    width: 1px;
+    background: lightgray;
+  }
+
+  .target-list {
+    flex: 1;
+
+    .checked-number {
+      padding: 8px 24px;
+      color: #313238;
+      background-color: #f5f7fa;
+    }
+  }
+}
+
+.setting-filed-footer {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  width: 100%;
+  height: 48px;
+  padding: 8px 24px;
+  line-height: 48px;
+  background-color: #fafbfd;
+
+  .setting-filed-btn {
+    display: flex;
+    min-width: 88px;
   }
 }
 </style>

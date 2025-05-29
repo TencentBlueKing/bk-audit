@@ -22,14 +22,14 @@
       ref="listRef"
       :columns="tableColumn"
       :data-source="dataSource"
+      :settings="settings"
       @clear-search="handleClearSearch"
-      @request-success="handleRequestSuccess"
-      @row-click="handleRowClick">
-      <template #expandRow="{ row }">
+      @request-success="handleRequestSuccess">
+      <!-- <template #expandRow="{ row }">
         <row-expand-content
           :data="row"
           :filter="filter" />
-      </template>
+      </template> -->
     </render-table>
     <setting-filed @update-field="handleUpdateField" />
   </div>
@@ -49,6 +49,7 @@
     useRoute,
   } from 'vue-router';
 
+  import EsQueryService from '@service/es-query';
   import MetaManageService from '@service/meta-manage';
 
   import type SearchModel from '@model/es-query/search';
@@ -58,6 +59,7 @@
 
   import filedConfig from '@views/analysis-manage/list/components/search-box/components/render-field-config/config';
 
+  import FieldStatisticPopover from './components/field-statistic-popover/index.vue';
   import RenderAction from './components/render-field/action.vue';
   import RenderAuthInstanceButton from './components/render-field/auth-instance-button.vue';
   import RenderInstance from './components/render-field/instance.vue';
@@ -67,7 +69,8 @@
   import RenderUser from './components/render-field/user.vue';
   import RenderTable from './components/render-table.vue';
   import DiffDetail from './components/row-diff-detail/index.vue';
-  import RowExpandContent from './components/row-expand-content/index.vue';
+  import LogBox from './components/row-expand-content/components/log-box/index.vue';
+  // import RowExpandContent from './components/row-expand-content/index.vue';
   import SettingFiled from './components/setting-field/index.vue';
 
   import type { IRequestResponsePaginationData } from '@/utils/request';
@@ -81,15 +84,21 @@
   }
   interface Emits {
     (e: 'clearSearch'): void
+    (e: 'updateTotal', total: number): void
   }
   interface Exposes {
     loading: Ref<boolean>,
+    tableSearchModel: Ref<Record<string, any>>,
   }
   interface ResultFilter {
-    filters: Array<{
-      field_name: string,
+    conditions: Array<{
+      field: {
+        raw_name: string,
+        field_type?: string,
+        keys: Array<string>,
+      },
       operator: string,
-      filters: Array<string | number>
+      filters: Array<string | number>,
     }>
     [key: string]: any
   }
@@ -99,12 +108,12 @@
   const { t } = useI18n();
 
   const initColumn: InstanceType<typeof Table>['$props']['columns'] = [
-    {
-      label: () => '',
-      type: 'expand',
-      width: '40px',
-      fixed: true,
-    },
+    // {
+    //   label: () => '',
+    //   type: 'expand',
+    //   width: '40px',
+    //   fixed: true,
+    // },
     {
       label: () => t('操作起始时间'),
       render: ({ data }: {data: SearchModel}) => (
@@ -114,7 +123,12 @@
       showOverflowTooltip: true,
     },
     {
-      label: () => t('操作人'),
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('操作人') }</label>
+        <FieldStatisticPopover
+          fieldName="username"
+          params={ tableSearchModel.value } />
+      </div>,
       field: 'username',
       render: ({ data }: {data: SearchModel}) => (
         data.username
@@ -127,8 +141,13 @@
       },
     },
     {
-      label: () => t('来源系统(ID)'),
-      field: 'system_info.name',
+      label: () =>  <div style="display: flex; align-items: center;">
+        <label>{ t('来源系统(ID)') }</label>
+        <FieldStatisticPopover
+          fieldName="system_id"
+          params={ tableSearchModel.value } />
+      </div>,
+      field: 'system_id',
       render: ({ data }: {data: SearchModel}) => (
         data.system_id
           ? <RenderSystem data={data}/>
@@ -140,8 +159,13 @@
       },
     },
     {
-      label: () => t('操作事件名(ID)'),
-      field: 'snapshot_action_info.name',
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('操作事件名(ID)') }</label>
+        <FieldStatisticPopover
+          fieldName="action_id"
+          params={ tableSearchModel.value } />
+      </div>,
+      field: 'action_id',
       render: ({ data }: {data: SearchModel}) => {
         if (data.action_id) {
           if (!_.isEmpty(data.snapshot_action_info)) {
@@ -151,14 +175,19 @@
         }
         return '--';
       },
-      minWidth: 160,
+      width: 160,
       filter: {
         list: [],
       },
     },
     {
-      label: () => t('资源类型(ID)'),
-      field: 'snapshot_resource_type_info.name',
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('资源类型(ID)') }</label>
+        <FieldStatisticPopover
+          fieldName="resource_type_id"
+          params={ tableSearchModel.value } />
+      </div>,
+      field: 'resource_type_id',
       render: ({ data }: {data: SearchModel}) => {
         if (data.resource_type_id) {
           if (!_.isEmpty(data.snapshot_resource_type_info)) {
@@ -174,7 +203,13 @@
       },
     },
     {
-      label: () => t('资源实例(ID)'),
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('资源实例(ID)') }</label>
+        <FieldStatisticPopover
+          fieldName="instance_id"
+          params={ tableSearchModel.value } />
+      </div>,
+      field: 'instance_id',
       render: ({ data }: {data: SearchModel}) => {
         if (data.instance_name || data.instance_id) {
           if (!_.isEmpty(data.instance_data)) {
@@ -197,9 +232,14 @@
       minWidth: 160,
     },
     {
-      label: () => t('操作结果(Code)'),
+      label: () => <div style="display: flex; align-items: center;">
+        <label>{ t('操作结果(Code)') }</label>
+        <FieldStatisticPopover
+          fieldName="result_code"
+          params={ tableSearchModel.value } />
+      </div>,
       field: 'result_code',
-      minWidth: 160,
+      width: 160,
       render: ({ data }: {data: SearchModel}) => (
         data.result_code
           ? <RenderResult key={data.bk_receive_time} data={data}/>
@@ -222,21 +262,38 @@
         list: [],
       },
     },
+    {
+      fixed: 'right',
+      label: () => t('操作'),
+      width: '100px',
+      render: ({ data }: {data: SearchModel}) => (
+        <LogBox data={data} />
+      ),
+    },
   ];
+  const settings = {
+    fields: [],
+    checked: [],
+    showLineHeight: false,
+  };
   const rootRef = ref();
   const listRef = ref();
   const route = useRoute();
   const targetList = ref<Array<StandardFieldModel>>([]);
-  const tableColumn = ref(initColumn);
-  const isExpand = ref<Record<number, boolean>>({});
+  const tableColumn = ref(_.cloneDeep(initColumn));
+  // const isExpand = ref<Record<number, boolean>>({});
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
+  // 经过表格处理的查询参数
+  const tableSearchModel = computed(() => (listRef.value ? listRef.value.getParamsMemo().value : {}));
 
-  watch(() => props.filter, () => {
-    nextTick(() => {
-      listRef.value.fetchData(getFilter(props.filter));
-    });
-  }, {
-    immediate: true,
+  /**
+   * 获取字段
+   */
+  const {
+    data: sourceList,
+  } = useRequest(EsQueryService.fetchSearchConfig, {
+    defaultValue: [],
+    manual: true,
   });
 
   // Doris接口查询的参数需要调整
@@ -245,9 +302,9 @@
       return filter;
     }
     const resultFilter: ResultFilter = {
-      filters: [],
+      conditions: [],
     };
-    // 将查询参数添加到 filters 数组中
+    // 将查询参数添加到 conditions 数组中
     Object.entries(filter).forEach(([k, v]) => {
       const config = filedConfig[k];
       if (config && config.operator) {
@@ -257,16 +314,100 @@
         } else {
           value.push(v);
         }
-        resultFilter.filters.push({
-          field_name: k,
-          operator: config.operator, // 一期暂时写死include
-          filters: value,
-        });
+
+        // 检查 field 是否为数组字符串格式
+        if (k.startsWith('[') && k.endsWith(']')) {
+          try {
+            const parsedKeys = JSON.parse(k);
+            if (Array.isArray(parsedKeys) && parsedKeys.length > 0) {
+              resultFilter.conditions.push({
+                field: {
+                  raw_name: parsedKeys[0],
+                  // field_type: 'str',
+                  keys: parsedKeys.slice(1), // 排除第一个元素后的数组
+                },
+                operator: config.operator,
+                filters: value,
+              });
+            } else {
+              // 如果解析后不是数组或数组为空，按原样处理
+              resultFilter.conditions.push({
+                field: {
+                  raw_name: k,
+                  // field_type: 'str',
+                  keys: [],
+                },
+                operator: config.operator,
+                filters: value,
+              });
+            }
+          } catch (e) {
+            // 解析 JSON 失败，按原样处理
+            resultFilter.conditions.push({
+              field: {
+                raw_name: k,
+                // field_type: 'str',
+                keys: [],
+              },
+              operator: config.operator,
+              filters: value,
+            });
+          }
+        } else {
+          // 不是数组字符串格式，按原样处理
+          resultFilter.conditions.push({
+            field: {
+              raw_name: k,
+              // field_type: 'str',
+              keys: [],
+            },
+            operator: config.operator,
+            filters: value,
+          });
+        }
       } else {
         resultFilter[k] = v;
       }
     });
     return resultFilter;
+  };
+
+  /**
+   * 合并新设置的列
+   */
+  const formatFields = () => {
+    if (targetList.value.length) {
+      // 获取已有列的field集合，用于去重
+      const existingFields = new Set(initColumn.map(col => col.field));
+
+      // 过滤掉已存在的字段
+      const lists = targetList.value
+        .filter(item => !existingFields.has(item.field_name))
+        .map(item => ({
+          label: () => {
+            // 检查fieldName是否在sourceList中存在，且is_json为false
+            const fieldExists = sourceList.value.find(source => source.field_name === item.field_name);
+            const shouldShowPopover = fieldExists && fieldExists.is_json === false;
+
+            if (shouldShowPopover) {
+              return <div style="display: flex; align-items: center;">
+                <label>{ item.description }</label>
+                <FieldStatisticPopover
+                  fieldName={item.field_name}
+                  params={ tableSearchModel.value } />
+              </div>;
+            }
+            return item.description;
+          },
+          resizable: true,
+          field: item.field_name,
+          minWidth: 140,
+          showOverflowTooltip: true,
+          // render: ({ data }: {data: SearchModel}) =>  (data[item.field_name as keyof SearchModel] || '--'),
+        }));
+      return lists;
+    }
+    return [];
   };
 
   /**
@@ -282,7 +423,10 @@
     onSuccess: (data) => {
       targetList.value = data || [];
       const customList = formatFields();
-      tableColumn.value  = initColumn.concat(customList as []);
+      // 从倒数第二个元素开始拼接
+      const clonedInitColumn = _.cloneDeep(initColumn);
+      clonedInitColumn.splice(clonedInitColumn.length - 1, 0, ...customList);
+      tableColumn.value = clonedInitColumn;
       // tableColumn.value = tableColumn.value.concat(fixedColum);
     },
     manual: true,
@@ -304,7 +448,8 @@
   };
 
   // 根据返回内容生成列筛选项
-  const handleRequestSuccess = (data: Array<SearchModel>) => {
+  const handleRequestSuccess = (data: Array<SearchModel>, total: number) => {
+    emits('updateTotal', total);
     tableColumn.value = tableColumn.value?.map((item) => {
       if (item.filter) {
         const values = data.map(obj => getValueFromPath(obj, item.field as string));
@@ -327,42 +472,36 @@
     fetchCustomFields({
       route_path: route.name,
     });
-  };
-  /**
-   * 合并新设置的列
-   */
-  const formatFields = () => {
-    if (targetList.value.length) {
-      const lists = targetList.value.map(item => ({
-        label: () => t(item.description),
-        resizable: true,
-        field: item.field_name,
-        minWidth: 140,
-        showOverflowTooltip: true,
-        render: ({ data }: {data: SearchModel}) =>  (data[item.field_name as keyof SearchModel] || '--'),
-      }));
-      return lists;
-    }
-    return [];
+    listRef.value.fetchData(getFilter(props.filter));
   };
 
   // 点击整行
-  const handleRowClick = (event: Event, row: any, index: number) => {
-    const tableRef = listRef.value.getTableRef();
-    if (isExpand.value[index]) {
-      tableRef.value.setRowExpand(row, false);
-      isExpand.value[index] = false;
-      return;
-    }
-    tableRef.value.setRowExpand(row, true);
-    isExpand.value[index] = true;
-  };
+  // const handleRowClick = (event: Event, row: any, index: number) => {
+  //   const tableRef = listRef.value.getTableRef();
+  //   if (isExpand.value[index]) {
+  //     tableRef.value.setRowExpand(row, false);
+  //     isExpand.value[index] = false;
+  //     return;
+  //   }
+  //   tableRef.value.setRowExpand(row, true);
+  //   isExpand.value[index] = true;
+  // };
+
   const handleClearSearch = () => {
     emits('clearSearch');
   };
 
+  watch(() => props.filter, () => {
+    nextTick(() => {
+      listRef.value.fetchData(getFilter(props.filter));
+    });
+  }, {
+    immediate: true,
+  });
+
   defineExpose<Exposes>({
     loading: isLoading,
+    tableSearchModel,
   });
 
 </script>
