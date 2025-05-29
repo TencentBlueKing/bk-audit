@@ -285,6 +285,7 @@
   import nodeSelect from './tree.vue';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
+  import nodeSelect from './tree.vue';
 
   // 扩展DatabaseTableFieldModel类型，添加aggregateList属性
   interface ExDatabaseTableFieldModel extends DatabaseTableFieldModel {
@@ -312,7 +313,11 @@
     handleEditNode: (node: Record<string, any>) =>void
   }
 
+  const route = useRoute();
+  const router =useRouter();
+  const nodeSelectRef = ref<NodeSelectComponent | null>(null);
   const props = defineProps<Props>();
+  const editNode = ref()
   const emits = defineEmits<Emits>();
   const route = useRoute();
   const router = useRouter();
@@ -393,7 +398,7 @@
   };
 
   // 生成可用聚合算法列表
-  const createAggregateList = (field: ExDatabaseTableFieldModel) => {
+  const createAggregateList = (field: ExDatabaseTableFieldModel) => {    
     const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚合'));
 
     // 检测重复聚合算法
@@ -420,7 +425,7 @@
       aggregateList: createAggregateList(field),
       aggregate: field.aggregate ? field.aggregate : null, // 编辑回显
     };
-
+    
     // 设置初始选中值
     if (!isEdit.value && processedField.aggregate === null) {
       processedField.aggregate = processedField.aggregateList.find(item => !item.disabled)?.value;
@@ -448,6 +453,7 @@
     if (props.configType === 'LinkTable') {
       processedField.display_name = `${processedField.table}.${displayName}`;
     } else {
+      
       processedField.display_name = displayNameCount[displayName] >= 1
         ? `${processedField.table}.${displayName}`
         : displayName;
@@ -542,9 +548,9 @@
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { isDuplicate, aggregateList, ...pureItem } = item;
         emits('addExpectedResult', pureItem);
-      });
+      });  
     } else {
-      // 处理编辑模式
+      // 处理编辑模式      
       const [currentItem] = tableData.value;
       if (currentItem) {
         // 过滤不需要的属性
@@ -558,7 +564,7 @@
     handleCancel();
   };
 
-  watch(() => props.tableFields, (data) => {
+  watch(() => props.tableFields, (data) => {    
     localTableFields.value = data.map(item => ({
       ...item,
       aggregateList: _.cloneDeep(props.aggregateList),
