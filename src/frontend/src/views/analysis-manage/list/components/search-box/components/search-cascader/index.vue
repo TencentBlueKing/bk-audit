@@ -222,7 +222,13 @@
   };
 
   const handleNodeChecked = (data: Array<CascaderItem>) => {
-    selectedItems.value = data;
+    const { schema } = treeRef.value.getData();
+    // 过滤掉 __is_indeterminate 为 true 的项
+    selectedItems.value = data.filter((item) => {
+      const schemaItem = schema.get(item);
+      // eslint-disable-next-line no-underscore-dangle
+      return !schemaItem?.__is_indeterminate;
+    });
     // 触发选择事件
     emit('select', selectedItems.value);
   };
