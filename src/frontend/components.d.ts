@@ -37,6 +37,7 @@ declare module 'vue' {
     Option: typeof import('./src/components/auth/option.vue')['default']
     Page: typeof import('./src/components/apply-permission/page.vue')['default']
     PreviewResult: typeof import('./src/components/ip-selector/selector-box/components/preview-result/index.vue')['default']
+    RelationShip: typeof import('./src/components/relation-ship/index.vue')['default']
     RenderCustomInput: typeof import('./src/components/ip-selector/selector-box/components/render-custom-input.vue')['default']
     RenderDynamicTopo: typeof import('./src/components/ip-selector/selector-box/components/render-dynamic-topo.vue')['default']
     RenderList: typeof import('./src/components/render-list/index.vue')['default']

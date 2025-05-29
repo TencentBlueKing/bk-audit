@@ -34,45 +34,16 @@
       label=""
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
-      required>
-      <bk-select
-        v-model="condition.condition.field.display_name"
-        filterable
-        :placeholder="t('请选择字段')"
-        style="flex: 1;"
-        @change="(value: DatabaseTableFieldModel) => handleSelectField(value ,index)">
-        <template
-          v-if="configType === 'LinkTable' && condition.condition.field.table"
-          #prefix>
-          <span
-            style="
-              padding: 0 12px;
-              line-height: 32px;
-              color: #3a84ff;
-              background: #f0f1f5">
-            {{ condition.condition.field.table }}.
-          </span>
-        </template>
-        <bk-option
-          v-for="(item, tableIndex) in localTableFields"
-          :key="tableIndex"
-          :label="configType === 'LinkTable' ?
-            `${getAggregateName(item)}${item.table}.${item.display_name}` :
-            `${getAggregateName(item)}${item.display_name}`"
-          :value="item">
-          <audit-icon
-            style="margin-right: 4px;font-size: 14px;"
-            svg
-            :type="item.spec_field_type" />
-          <div v-if="configType === 'LinkTable'">
-            <span style=" color: #3a84ff;">{{ item.table }}.</span>
-            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
-          </div>
-          <div v-else>
-            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
-          </div>
-        </bk-option>
-      </bk-select>
+      required
+      >
+      <nodeSelect
+        :configData="localTableFields"
+        :configType="configType"
+        :condition= "condition"
+        :conditions="conditions"
+        :aggregateList="props.aggregateList"
+        @handleNodeSelectedValue="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)"
+        />
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
@@ -82,11 +53,6 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.operator`"
       required>
       <!-- 操作人账号特殊处理 -->
-      <!-- <bk-input
-        v-if="condition.field.raw_name ==='user_identify_src_username'"
-        v-model="condition.field.aggregate"
-        class="condition-equation"
-        :placeholder="t('请输入')" /> -->
       <bk-select
         v-model="condition.condition.operator"
         filterable
@@ -205,6 +171,9 @@
 
   import useRequest from '@/hooks/use-request';
 
+  import nodeSelect from './tree.vue';
+
+
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
     expectedResult: Array<DatabaseTableFieldModel>,
@@ -229,6 +198,7 @@
     (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
     (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
+    (e: 'handleUpdateLocalConditions', value: any): void;
   }
   interface DataType{
     label: string;
@@ -425,7 +395,7 @@
   };
 
   // 回显下拉值
-  const  handleValueDicts = () => {
+  const  handleValueDicts = () => {    
     localConditions.value.conditions.forEach((item) => {
       dicts.value[item.condition.field.raw_name] = [];
     });
@@ -433,7 +403,7 @@
       if (key) {
         fetchStrategyFieldValue({
           field_name: key,
-        }).then((data) => {
+        }).then((data) => {          
           dicts.value[key] = data;
           if (data && data.length) {
             handleCascader(key, data);
@@ -444,11 +414,14 @@
   };
 
   // 更新可选字段列表
-  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
-    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
+  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {   
+    const filteredExpectedResult = expectedResult.filter(item => item.aggregate)
     // 检查是否已经选择了预期结果中的字段
     const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
 
+    const fromExpectedResult = filteredExpectedResult.map(i =>{
+      i.from = 'expectedResult'
+    })
     // 根据是否选择了预期结果字段来更新字段列表
     localTableFields.value = hasSelectedExpectedResultField
       ? [...filteredExpectedResult]
@@ -456,29 +429,26 @@
 
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
   };
-
+  // 返回值
+  const onHandleNodeSelectedValue = (node: Record<string, any> ,val: string, condition: Record<string, any>) => {
+      
+    condition.condition.field = { ...node}
+    condition.condition.field.display_name = val
+    if('fieldTypeValueAr' in node){
+      condition.condition.field.keys = node.fieldTypeValueAr
+    }
+    emits('handleUpdateLocalConditions', localConditions.value);    
+  }
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
     updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
-
-    // 检查并清理不在可选字段列表中的已选字段
-    localConditions.value.conditions.forEach((condItem, index) => {
-      const { field } = condItem.condition;
-      if (field?.display_name && !localTableFields.value.some(item => item.display_name === field.display_name)) {
-        // eslint-disable-next-line no-param-reassign
-        condItem.condition.field = new DatabaseTableFieldModel();
-        emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, index, 'field');
-        reSetOperator(index);
-        reSetFilter(index);
-      }
-    });
   }, {
     immediate: true,
     deep: true,
   });
 
-  watch(() => props.conditions, (data) => {
-    localConditions.value = _.cloneDeep(data);
+  watch(() => props.conditions, (data) => {    
+    localConditions.value = JSON.parse(JSON.stringify(data));    
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
       handleValueDicts();
@@ -491,7 +461,7 @@
 .rule-item-field {
   position: relative;
   display: grid;
-  grid-template-columns: 216px 180px 1fr minmax(65px, auto);
+  grid-template-columns: 300px 180px 1fr minmax(65px, auto);
   gap: 8px;
 
   :deep(.bk-form-error) {
