@@ -231,6 +231,7 @@
   // 提交
   const handleSubmit = () => {
     const params = _.cloneDeep(formData.value);
+    
     // ai策略
     if (controlTypeId.value !== 'BKM') {
       InfoBox({
