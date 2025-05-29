@@ -27,7 +27,7 @@
       multiple
       :popover-options="{
         'width': 'auto',
-        extCls: 'add-search-tree-pop'
+        extCls: 'add-search-tree-pop',
       }"
       @search-change="handleSearch">
       <template #trigger>
@@ -60,21 +60,25 @@
                 {{ categoryMap[nodeData.category as keyof typeof categoryMap] }}
               </span>
               <!-- 添加子字段 -->
-              <audit-icon
-                v-if="nodeData.dynamic_content"
-                style="margin-left: 5px;
-                  font-size: 14px;
-                  color: #3a84ff"
-                type="plus-circle"
-                @click.stop="handleAddNode(nodeData)" />
+              <!-- <div style="width: 14px; height: 14px;"> -->
+              <span style="display: inline-block; width: 14px; height: 14px;">
+                <audit-icon
+                  v-if="nodeData.dynamic_content"
+                  style="margin-left: 5px;
+                        font-size: 14px;
+                        color: #3a84ff"
+                  type="plus-circle"
+                  @click.stop="handleAddNode(nodeData)" />
+              </span>
+              <!-- </div> -->
             </div>
           </template>
-          <template v-else>
-            <span> {{ nodeData.name }}</span>
+          <template v-else-if="nodeData.editName">
+            <span> {{ nodeData.editName[0].field }}</span>
             <span style="margin: 0 5px;">/</span>
             <!-- 多级字段输入 -->
             <template
-              v-for="(item, index) in customFields"
+              v-for="(item, index) in nodeData.editName.slice(1)"
               :key="index">
               <bk-input
                 v-model="item.field"
@@ -82,12 +86,12 @@
                 :placeholder="t('请输入')"
                 style="width: 115px;" />
               <audit-icon
-                v-if="index === customFields.length - 1"
+                v-if="index === nodeData.editName.slice(1).length - 1"
                 v-bk-tooltips="t('添加下级字段')"
                 class="add-icon"
                 :class="[!item.field ? 'disabled-add-icon' : '']"
                 type="add-fill"
-                @click="() => customFields.push({ field: '' })" />
+                @click="() => nodeData.editName && nodeData.editName.push({ field: '' })" />
               <span
                 v-else
                 style="margin: 0 5px;">/</span>
@@ -95,7 +99,8 @@
             <div class="field-edit-right">
               <audit-icon
                 v-bk-tooltips="t('确认')"
-                :class="[customFields.every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
+                :class="[nodeData.editName.slice(1).
+                  every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
                 svg
                 type="check-line"
                 @click.stop="handleAddFieldSubmit(nodeData)" />
@@ -132,6 +137,9 @@
     isJson: boolean
     level: number
     name: string
+    editName?: Array<{
+      field: string
+    }>
     isEdit: boolean
     isOpen: boolean;
   }
@@ -144,11 +152,13 @@
     data: CascaderItem[];
     modelValue?:  CascaderItem[];
     filedConfig: Record<string, IFieldConfig>
+    deleteFieldName: string;
   }
 
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const treeRef = ref();
 
   const categoryMap = {
     system: t('系统'),
@@ -178,7 +188,6 @@
   const originalData = ref<CascaderItem[]>([]);
 
   const selectedItems = ref<Array<CascaderItem>>([]);
-  const customFields = ref([{ field: '' }]);
 
   const handleSearch = (keyword: string) => {
     isSearching.value = !!keyword;
@@ -232,6 +241,7 @@
       isJson: false,
       level: node.level + 1,
       name: node.name,
+      editName: [{ field: node.name as string }, { field: '' }],
       isOpen: false,
       isEdit: true,
     });
@@ -241,11 +251,12 @@
   };
 
   const handleAddFieldSubmit = (node: CascaderItem) => {
-    if (customFields.value.length === 0) {
+    const customFields = node.editName;
+    if (!customFields || customFields.length === 0) {
       return;
     }
-    const newIdArray = [...JSON.parse(node.id), ...customFields.value.map(item => item.field)];
-    const newNameStr = `${node.name}/${customFields.value.map(item => item.field).join('/')}`;
+    const newIdArray = [...JSON.parse(node.id), ...customFields.slice(1).map(item => item.field)];
+    const newNameStr = customFields.map(item => item.field).join('/');
     // eslint-disable-next-line no-param-reassign
     node.id = JSON.stringify(newIdArray);
     // eslint-disable-next-line no-param-reassign
@@ -253,17 +264,30 @@
     // eslint-disable-next-line no-param-reassign
     node.isEdit = false;
     // 清空customFields
-    customFields.value = [{ field: '' }];
+    // eslint-disable-next-line no-param-reassign
+    delete node.editName;
   };
 
   const handleAddFieldClose = (node: CascaderItem) => {
-    customFields.value = [{ field: '' }];
+    // eslint-disable-next-line no-param-reassign
+    delete node.editName;
     const nodeId = JSON.parse(node.id)[0];
     const parentNode = localData.value.find(item => item.id === nodeId);
     if (parentNode) {
       parentNode.children.pop();
     }
   };
+
+  watch(() => props.deleteFieldName, (newVal) => {
+    // 根据id在selectedItems中找到对应的节点
+    const nodeToRemove = selectedItems.value.find(node => node.id === newVal);
+    if (nodeToRemove) {
+      // 从selectedItems中移除该节点
+      selectedItems.value = selectedItems.value.filter(node => node !== nodeToRemove);
+      treeRef.value.setChecked(nodeToRemove, false);
+      console.log('selectedItems.value', selectedItems.value);
+    }
+  });
 
   // 同步外部值的改动
   watch(() => props.modelValue, (newVal) => {
@@ -291,6 +315,11 @@
   .add-search-tree-pop {
     .bk-node-row {
       font-size: 12px;
+
+      .bk-node-action {
+        width: 14px;
+        height: 32px;
+      }
 
       .bk-node-content {
         > span:first-child {
