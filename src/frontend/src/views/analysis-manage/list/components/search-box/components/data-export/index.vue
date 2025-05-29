@@ -155,7 +155,7 @@
     <template #footer>
       <bk-button
         class="mr8"
-        :disabled="!fields.length && exportRange === 'specified'"
+        :disabled="!selectedItems.length && exportRange === 'specified'"
         :loading="createQueryTaskLoading"
         theme="primary"
         @click="handleConfirmSearch">
@@ -281,9 +281,10 @@
 
   const formatFields = (item: CascaderItem) => {
     const fieldId = item.id;
+    const displayName = item.name;
+
     let fieldKeys: string[] = [];
     let rawName = fieldId;
-    const displayName = item.name;
 
     // 尝试解析 ID，检查是否为数组字符串
     try {
@@ -313,27 +314,21 @@
   };
 
   const handleNodeChecked = (data: Array<CascaderItem>) => {
-    selectRef.value.selected = data.map(item => ({
+    const { schema } = treeRef.value.getData();
+
+    // 过滤掉 __is_indeterminate 为 true 的项
+    const filterData = data.filter((item) => {
+      const schemaItem = schema.get(item);
+      // eslint-disable-next-line no-underscore-dangle
+      return !schemaItem?.__is_indeterminate;
+    });
+
+    selectedItems.value = filterData;
+    // 设置select选中
+    selectRef.value.selected = filterData.map(item => ({
       value: item.id,
       label: item.name,
     }));
-
-    // 获取所有选中项的 raw_name 和 keys 组合，用于后续比较
-    const selectedIdentifiers = data.map(item => ({
-      raw_name: item.id,
-      keys: item.children?.map(child => child.id) || [],
-    }));
-
-    // 删除不再选中的字段
-    fields.value = fields.value.filter(field => selectedIdentifiers.
-      some(selected => selected.raw_name === field.raw_name
-        && JSON.stringify(selected.keys) === JSON.stringify(field.keys)));
-
-    // 更新选中项并添加新字段
-    selectedItems.value = data;
-    selectedItems.value.forEach((item) => {
-      formatFields(item);
-    });
   };
 
   const handleRemoveTag = (id: string) => {
@@ -343,17 +338,6 @@
       // 从selectedItems中移除该节点
       selectedItems.value = selectedItems.value.filter(node => node !== nodeToRemove);
       treeRef.value.setChecked(nodeToRemove, false);
-
-      // 获取当前所有选中项的 raw_name 和 keys 组合
-      const selectedIdentifiers = selectedItems.value.map(item => ({
-        raw_name: item.id,
-        keys: item.children?.map(child => child.id) || [],
-      }));
-
-      // 过滤 fields.value，只保留当前选中的字段
-      fields.value = fields.value.filter(field => selectedIdentifiers.
-        some(selected => selected.raw_name === field.raw_name
-          && JSON.stringify(selected.keys) === JSON.stringify(field.keys)));
     }
   };
 
@@ -423,6 +407,12 @@
   };
 
   const handleConfirmSearch = () => {
+    // 先重置
+    fields.value = [];
+    // 添加fields
+    selectedItems.value.forEach((item) => {
+      formatFields(item);
+    });
     const params = {
       query_params: tableSearchModel.value,
       export_config: {
