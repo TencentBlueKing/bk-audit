@@ -59,6 +59,9 @@ export default class Config {
   third_party_system: {
     bkbase_web_url: string;
   };
+  third_doc_url: {
+    search_rule_iwiki_url: string;
+  };
 
   constructor(payload = {} as Config) {
     this.aegis_id = payload.aegis_id;
@@ -83,6 +86,7 @@ export default class Config {
     this.shared_res_url = payload.shared_res_url;
     this.system_diagnosis = payload.system_diagnosis;
     this.third_party_system = payload.third_party_system;
+    this.third_doc_url = payload.third_doc_url;
 
     this.help_info = this.initHelpInfo(payload.help_info);
   }
