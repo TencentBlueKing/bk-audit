@@ -34,14 +34,16 @@
       label=""
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
-      required>
-      <node-select
-        :aggregate-list="aggregateList"
-        :condition="condition"
+      required
+      >
+      <nodeSelect
+        :configData="localTableFields"
+        :configType="configType"
+        :condition= "condition"
         :conditions="conditions"
-        :config-data="localTableFields"
-        :config-type="configType"
-        @handle-node-selected-value="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)" />
+        :aggregateList="props.aggregateList"
+        @handleNodeSelectedValue="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)"
+        />
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
@@ -167,9 +169,9 @@
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
-  import nodeSelect from './tree.vue';
-
   import useRequest from '@/hooks/use-request';
+
+  import nodeSelect from './tree.vue';
 
 
   interface Props {
@@ -253,6 +255,12 @@
     defaultValue: [],
   });
 
+  const getAggregateName = (element: DatabaseTableFieldModel) => {
+    if (!element.aggregate) return '';
+    const item = props.aggregateList.find(item => item.value === element.aggregate);
+    return `[${item?.label}]`;
+  };
+
   const handleValidate = (value: any) => value.length > 0;
 
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
@@ -277,6 +285,13 @@
     emits('updateFieldItemList', props.conditionsIndex, localConditions.value);
   };
 
+  const reSetOperator = (index: number) => {
+    if (localConditions.value.conditions[index].condition.operator !== '') {
+      localConditions.value.conditions[index].condition.operator = '';
+      handleSelectOperator('', index);
+    }
+  };
+
   const reSetFilter = (index: number) => {
     if (localConditions.value.conditions[index].condition.filter !== '') {
       localConditions.value.conditions[index].condition.filter = '';
@@ -288,6 +303,41 @@
     }
   };
 
+  const handleSelectField = (value: DatabaseTableFieldModel, index: number) => {
+    if (value) {
+      // 获取值的下拉选项
+      fetchStrategyFieldValue({
+        field_name: value.raw_name,
+      }).then((data) => {
+        dicts.value[value.raw_name] = data.filter((item: Record<string, any>) => item.id !== '');
+      });
+      // 是否选中预期结果字段
+      const isExpectedResultField = value.aggregate;
+
+      if (isExpectedResultField) {
+        // 清空不是预期结果的字段
+        localConditions.value.conditions = localConditions.value.conditions.map((condItem, condIndex) => {
+          const { field } = condItem.condition;
+          if (!field.aggregate) {
+            // eslint-disable-next-line no-param-reassign
+            condItem.condition.field = new DatabaseTableFieldModel();
+            emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, condIndex, 'field');
+            // 重置数据
+            reSetOperator(condIndex);
+            reSetFilter(condIndex);
+          }
+          return condItem;
+        });
+      }
+    }
+    emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index, 'field');
+    localConditions.value.conditions[index].condition.field = { ...value };
+    // 重置数据
+    reSetOperator(index);
+    reSetFilter(index);
+    // 重新计算可选项
+    updateTableFields(localConditions.value.conditions, props.tableFields, props.expectedResult);
+  };
 
   const handleSelectOperator = (value: string, index: number) => {
     emits('updateFieldItem', value, props.conditionsIndex, index, 'operator');
@@ -345,7 +395,7 @@
   };
 
   // 回显下拉值
-  const  handleValueDicts = () => {
+  const  handleValueDicts = () => {    
     localConditions.value.conditions.forEach((item) => {
       dicts.value[item.condition.field.raw_name] = [];
     });
@@ -353,7 +403,7 @@
       if (key) {
         fetchStrategyFieldValue({
           field_name: key,
-        }).then((data) => {
+        }).then((data) => {          
           dicts.value[key] = data;
           if (data && data.length) {
             handleCascader(key, data);
@@ -364,11 +414,14 @@
   };
 
   // 更新可选字段列表
-  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
-    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
+  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {   
+    const filteredExpectedResult = expectedResult.filter(item => item.aggregate)
     // 检查是否已经选择了预期结果中的字段
     const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
 
+    const fromExpectedResult = filteredExpectedResult.map(i =>{
+      i.from = 'expectedResult'
+    })
     // 根据是否选择了预期结果字段来更新字段列表
     localTableFields.value = hasSelectedExpectedResultField
       ? [...filteredExpectedResult]
@@ -377,17 +430,15 @@
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
   };
   // 返回值
-  const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
-    // eslint-disable-next-line no-param-reassign
-    condition.condition.field = { ...node };
-    // eslint-disable-next-line no-param-reassign
-    condition.condition.field.display_name = val;
-    if ('fieldTypeValueAr' in node) {
-      // eslint-disable-next-line no-param-reassign
-      condition.condition.field.keys = node.fieldTypeValueAr;
+  const onHandleNodeSelectedValue = (node: Record<string, any> ,val: string, condition: Record<string, any>) => {
+      
+    condition.condition.field = { ...node}
+    condition.condition.field.display_name = val
+    if('fieldTypeValueAr' in node){
+      condition.condition.field.keys = node.fieldTypeValueAr
     }
-    emits('handleUpdateLocalConditions', localConditions.value);
-  };
+    emits('handleUpdateLocalConditions', localConditions.value);    
+  }
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
     updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
@@ -396,8 +447,8 @@
     deep: true,
   });
 
-  watch(() => props.conditions, (data) => {
-    localConditions.value = JSON.parse(JSON.stringify(data));
+  watch(() => props.conditions, (data) => {    
+    localConditions.value = JSON.parse(JSON.stringify(data));    
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
       handleValueDicts();

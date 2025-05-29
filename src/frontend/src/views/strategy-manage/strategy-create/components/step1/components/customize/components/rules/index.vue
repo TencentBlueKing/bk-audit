@@ -44,10 +44,8 @@
           :config-type="configType"
           :expected-result="expectedResult"
           :table-fields="tableFields"
-          @handle-update-local-conditions="handleUpdateLocalConditions"
           @show-structure-preview="handleShowStructurePreview"
           @handleUpdateLocalConditions="handleUpdateLocalConditions"
-          @show-structure-preview="handleShowStructurePreview"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
           @update-field-item-list="handleUpdateFieldItemList" />
@@ -108,13 +106,14 @@
     expectedResult: Array<DatabaseTableFieldModel>,
     aggregateList: Array<Record<string, any>>
     configType: string,
+    configsData: Record<string, any>,
   }
   interface Emits {
     (e: 'updateWhere', value: Where): void;
     (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
   }
 
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
@@ -190,7 +189,7 @@
     });
   };
 
-  const handleUpdateFieldItemList = (conditionsIndex: number, value: Where['conditions'][0]) => {
+  const handleUpdateFieldItemList = (conditionsIndex: number, value: Where['conditions'][0]) => {    
     where.value.conditions[conditionsIndex] = value;
   };
 
@@ -210,14 +209,14 @@
   };
 
   const handleUpdateConnector = (value: 'and' | 'or', conditionsIndex: number) => {
-    where.value.conditions[conditionsIndex].connector = value;
+    where.value.conditions[conditionsIndex].connector = value;    
   };
 
   const handleUpdateLocalConditions = (value: any) => {
-    where.value.conditions[value.index] = value;
+    where.value.conditions[value.index] = value
   };
 
-  watch(() => where.value, (data) => {
+  watch(() => where.value, (data) => {    
     emits('updateWhere', data);
   }, {
     deep: true,
@@ -230,7 +229,7 @@
   });
 
   defineExpose<Expose>({
-    resetFormData: () => {
+    resetFormData: () => {      
       where.value = {
         connector: 'and',
         conditions: [{
@@ -247,7 +246,7 @@
         }],
       };
     },
-    setWhere(whereData: Where, having: Where) {
+    setWhere(whereData: Where, having: Where) {      
       where.value = whereData;
       if (having && having.conditions.length > 0) {
         // 将having条件合并到where条件中, conditions根据item.index进行排序合并
