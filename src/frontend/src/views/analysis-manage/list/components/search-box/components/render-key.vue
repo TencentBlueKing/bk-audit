@@ -77,6 +77,7 @@
     <!-- 添加其他条件 -->
     <search-cascader
       :data="list"
+      :delete-field-name="deleteFieldName"
       :filed-config="localFiledConfig"
       @select="handleCascaderSelect" />
     <!-- <div>
@@ -139,7 +140,7 @@
       </bk-popover>
       <bk-select
         filterable
-        placeholder="请选择已收藏条件"
+        :placeholder="t('请选择已收藏条件')"
         style="width: 400px;"
         @select="handleSelectFavourite">
         <bk-option
@@ -234,6 +235,8 @@
   const fieldConfigRef = ref();
   const isShowMore = ref(false);
 
+  const deleteFieldName = ref('');
+
   const localFiledConfig = ref(filedConfig);
   // eslint-disable-next-line max-len
   const allFieldNameList = computed(() => Object.keys(localFiledConfig.value) as Array<keyof typeof localFiledConfig.value>);
@@ -290,7 +293,6 @@
     defaultValue: [],
     manual: true,
     onSuccess: () => {
-      console.log(SearchConfigList.value);
       list.value = convertToCascaderList(SearchConfigList.value);
     },
   });
@@ -393,6 +395,7 @@
 
   // 删除搜索项
   const handleDeleteField = (fieldName: keyof typeof localFiledConfig.value) => {
+    deleteFieldName.value = fieldName;
     // 删除对应的搜索项
     delete localFiledConfig.value[fieldName];
   };
@@ -441,7 +444,6 @@
       // 先清空所有 isFavourite 为 true 的元素
       Object.keys(localFiledConfig.value).forEach((key) => {
         if (localFiledConfig.value[key]?.isFavourite === true) {
-          console.log(111);
           delete localFiledConfig.value[key];
         }
       });
