@@ -430,7 +430,8 @@
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
   };
   // 返回值
-  const onHandleNodeSelectedValue = (node: Record<string, any> ,val: string, condition: Record<string, any>) => {    
+  const onHandleNodeSelectedValue = (node: Record<string, any> ,val: string, condition: Record<string, any>) => {
+      
     condition.condition.field = { ...node}
     condition.condition.field.display_name = val
     if('fieldTypeValueAr' in node){
@@ -441,18 +442,6 @@
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
     updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
-
-    // 检查并清理不在可选字段列表中的已选字段
-    // localConditions.value.conditions.forEach((condItem, index) => {
-    //   const { field } = condItem.condition;
-    //   if (field?.display_name && !localTableFields.value.some(item => item.display_name === field.display_name)) {
-    //     // eslint-disable-next-line no-param-reassign
-    //     condItem.condition.field = new DatabaseTableFieldModel();
-    //     // emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, index, 'field');
-    //     // reSetOperator(index);
-    //     // reSetFilter(index);
-    //   }
-    // });
   }, {
     immediate: true,
     deep: true,

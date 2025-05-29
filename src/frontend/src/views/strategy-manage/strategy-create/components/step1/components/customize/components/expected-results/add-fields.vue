@@ -190,8 +190,8 @@
                       <td style="background-color: #fafbfd;">
                         <div class="table-field">
                           <tool-tip-text :data="item.raw_name" />
-                          <span v-if="'fieldTypeValueAr' in item">
-                            <span v-for="(field, fieldIndex) in item?.fieldTypeValueAr" :key="fieldIndex">
+                          <span v-if="item?.keys && item?.keys.length > 0">
+                            <span v-for="(field, fieldIndex) in item.keys" :key="fieldIndex">
                              <span class="subscript">/</span>
                              <span>{{ field }}</span>
                             </span>
@@ -246,7 +246,7 @@
         <div class="field-pop-bth">
           <bk-button
             class="mr8"
-            :disabled="!tableData.length || exist"
+            :disabled="!tableData.length || exist || isTableAggregate"
             size="small"
             theme="primary"
             @click="handleAddField">
@@ -282,6 +282,7 @@
     aggregateList: Record<string, any>[];
     isDuplicate: boolean;
     display_name: string;
+    keys?: string[];
   }
   interface NodeSelectComponent {
     handleSearch: (data: string) => void;  // 根据你的实际参数类型调整
@@ -423,11 +424,9 @@
       ...props.expectedResultList,
       ...tableData.value,
     ];
-
     // 编辑模式下排除当前字段自身
-    const filteredDisplayNames = isEdit.value
-      ? allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name))
-      : allDisplayNames;
+    const filteredDisplayNames = allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name))
+    
 
     const displayNameCount = filteredDisplayNames.reduce<Record<string, number>>(
       (acc, cur) => ({ ...acc, [cur.display_name]: (acc[cur.display_name] || 0) + 1 }),
@@ -438,6 +437,7 @@
     if (props.configType === 'LinkTable') {
       processedField.display_name = `${processedField.table}.${displayName}`;
     } else {
+      
       processedField.display_name = displayNameCount[displayName] >= 1
         ? `${processedField.table}.${displayName}`
         : displayName;
@@ -572,6 +572,18 @@
         }
       }, 200)
   });
+  const isTableAggregate = ref(false)
+  watch(() => tableData.value, (data) => {
+  // 检查data数组中是否有aggregate为空的项
+  const hasEmptyAggregate = data.some(item => {
+    // 检查当前项的aggregate是否存在或为null
+    return item.aggregate === undefined || item.aggregate === null || item.aggregate === '';
+  });
+  
+  // 设置isTableAggregate的值
+  isTableAggregate.value = hasEmptyAggregate;
+}, { deep: true })
+  
   defineExpose<Expose>({
     handleEditShowPop: (index: number) => {
       isShow.value = true;

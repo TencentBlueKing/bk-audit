@@ -4,7 +4,7 @@
     >
     <template #default="{ data }">
       <div class="node" v-if="data">
-        <bk-checkbox  style="width: 20px;" v-model="data.is_checked" :immediateEmitChange="false" :disabled="data.isEdit" @change="(val) => handleChangeBox(val, data)"></bk-checkbox>
+        <bk-checkbox  v-model="checkBoxMode[data.check_box_mode_name]" v-if="Object.keys(checkBoxMode).length > 0" style="width: 20px;" :immediateEmitChange="false" :disabled="data.isEdit" @change="(val) => handleChangeBox(val, data)"></bk-checkbox>
       <div class="field" v-if="!data.isEdit">
         <div class="field-left">
           <audit-icon style="margin-right: 4px; font-size: 14px" svg :type="data.spec_field_type" />
@@ -19,9 +19,12 @@
             </span>
           </span>
           <span v-else>
-            <span class="field-type-span">{{ data.display_name
-            }}{{ data.raw_name ? `(${data.raw_name})` : `` }}
-              <span v-for="(field, fieldIndex) in data?.fieldTypeValueAr" :key="fieldIndex">
+            <span class="field-type-span">
+              <span v-if="`parent_raw_name` in data">{{ data.parent_display_name
+            }}{{ data.parent_raw_name ? `(${data.parent_raw_name})` : `` }}</span>
+              <span v-else> {{ data.display_name
+            }}{{ `(${data.raw_name})` }}</span>
+              <span v-for="(field, fieldIndex) in data?.keys" :key="fieldIndex">
                 <span class="subscript">/</span>
                 {{ field }}
               </span>
@@ -129,6 +132,7 @@ interface Expose {
   handleSearch: (val: string) => void,
 }
 
+const checkBoxMode = ref<Record<string, boolean>>({});
 const route = useRoute();
 const router = useRouter();
 const props = defineProps<Props>();
@@ -146,7 +150,9 @@ const newItem = {
   aggregateList: [],
   parent_aggregate: null,
   children: [],
+  check_box_mode_name: '',
   display_name: "",
+  keys: [],
   is_checked: false,
   parent_display_name: "",
   field_type: "",
@@ -234,6 +240,7 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
           node.isOpen = true;
           e.is_checked = false;
           e.fieldTypeValueAr = fieldTypeValueAr;
+          e.check_box_mode_name = `${e.raw_name}-${e.parent_display_name}(${e.parent_raw_name})/${fieldTypeValueText}`
         }
       });
     }
@@ -252,7 +259,8 @@ const handleAddFieldClose = (val: Record<string, any>) => {
 // 选择
 const handleNodeClick = (nodes: Record<string, any>) => { };
 
-const handleNodeChecked = (nodes: Record<string, any>) => {  
+const handleNodeChecked = (nodes: Record<string, any>) => {
+  
   emits("handleNodeChecked", nodes);
 };
 
@@ -301,20 +309,25 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
           // 如果子节点没有 table，则继承父级的 table
           return {
             ...child,
-            table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
-            is_checked: false, 
+            table: child.table || item.table,
+            raw_name: child.raw_name || item.raw_name, // 保留子节点自己的raw_name
+            is_checked: false,
           };
         }),
+        keys: "alias" in item ? [item.value] : [],
         display_name: "alias" in item ? item.label : item.display_name,
-        raw_name: "alias" in item ? item.value : item.raw_name,
+        raw_name: item.raw_name,
+        check_box_mode_name: `${item.raw_name}-${item.display_name}`
       };
     } else {
       return {
         ...item,
         children: [],
+        keys: "alias" in item ? [item.value] : [],
         display_name: "alias" in item ? item.label : item.display_name,
-        raw_name: "alias" in item ? item.value : item.raw_name,
+        raw_name: item.raw_name,
         is_checked: false,
+        check_box_mode_name: "alias" in item ? `${item.value}_${item.label}` : `${item.raw_name}-${item.display_name}`
       };
     }
   });
@@ -325,6 +338,7 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
 watch(
   () => props,
   (newData) => {
+    checkBoxMode.value = {}
     const haveTreeData = sessionStorage.getItem("storage-tree-data");
     if (sessionStorage.getItem("storage-tree-data")) {
       treeData.value = JSON.parse(sessionStorage.getItem("storage-tree-data") || "[]");
@@ -347,6 +361,8 @@ watch(
               addItem.isOpen = false;
               addItem.isEdit = false;
               addItem.table = item.table;
+              addItem.spec_field_type = item.field_type;
+              addItem.check_box_mode_name = `${e.raw_name}-${e.display_name}-${e.keys.join("/")}`
               item.children.push({ ...addItem, ...e })
             }
           })
@@ -358,8 +374,19 @@ watch(
         treeData.value = transformData(initTreeData);
         storageTreeData.value = transformData(treeData.value);
 
-      }
+      }      
     }
+      // 遍历treeData.value并为每个节点添加checkBoxMode属性
+      const traverseAndSetCheckboxMode = (nodes: any[]) => {
+        nodes.forEach(node => {
+          checkBoxMode.value[node.check_box_mode_name] =  false;
+          if (node.children && node.children.length > 0) {
+            traverseAndSetCheckboxMode(node.children);
+          }
+        });
+      };
+      traverseAndSetCheckboxMode(treeData.value);      
+
   },
   {
     deep: true,

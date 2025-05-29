@@ -30,11 +30,9 @@
                   {{ data.parent_display_name }}{{ data.parent_raw_name ?
                     `(${data.parent_raw_name})` : ``
                   }}</span>
-                <span v-else>{{ data.display_name }}{{ data.raw_name ?
-                  `(${data.raw_name})` : ``
-                }} </span>
+                <span v-else>{{ data.display_name }}{{ `(${data.raw_name})`}}</span>
 
-                <span v-for="(field, fieldIndex) in data?.fieldTypeValueAr" :key="fieldIndex">
+                <span v-for="(field, fieldIndex) in data?.keys" :key="fieldIndex">
                   <span class="subscript">/</span>
                   {{ field }}
                 </span>
@@ -147,6 +145,7 @@ const newItem = {
   aggregate: null,
   parent_aggregate: null,
   children: [],
+  keys: [],
   selectedValue: "",
   display_name: "",
   parent_display_name: "",
@@ -252,7 +251,9 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
           e.isEdit = false
           e.display_name = e.parent_display_name
           e.raw_name = e.parent_raw_name
+          node.isOpen = true;
           e.fieldTypeValueAr = fieldTypeValueAr
+          e.keys = fieldTypeValueAr
           e.selectedValue = `${e.parent_display_name}(${e.parent_raw_name})/${fieldTypeValueText}`
         }
 
@@ -264,7 +265,7 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
 
 }
 // 选择
-const handleNodeClick = (nodes: Record<string, any>) => {  
+const handleNodeClick = (nodes: Record<string, any>) => {
   if (!nodes.isEdit) {
     selectedValue.value = nodes.selectedValue;
     emits('handleNodeSelectedValue', nodes, nodes.selectedValue);
@@ -312,21 +313,24 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
           // 如果子节点没有 table，则继承父级的 table
           return {
             ...child,
+            raw_name: item.raw_name,
             table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
           };
         }),
+        keys: "alias" in item ? [item.value] : [],
         display_name: "alias" in item ? item.label : item.display_name,
-        raw_name: "alias" in item ? item.value : item.raw_name,
+        raw_name: item.raw_name,
       };
     } else {
       return {
         
         ...item,
         isEdit: false,
+        keys: "alias" in item ? [item.value] : [],
         selectedValue: ('alias' in item) ? `${item.label}(${item.value})` : `${item.display_name}(${item.raw_name})`,
         children: [],
         display_name: "alias" in item ? item.label : item.display_name,
-        raw_name: "alias" in item ? item.value : item.raw_name,
+        raw_name: item.raw_name,
       };
     }
   });

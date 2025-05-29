@@ -1,0 +1,30 @@
+#!/bin/sh
+export PYTHONUTF8=1
+
+remote="$1"
+url="$2"
+
+exec < /dev/tty
+
+echo "正在触发AI CodeReview，请稍等片刻..."
+
+SH=bkaidev.apigw.o.woa.com/prod
+WSSH=prod-dot-intelligence-ws-dot-bkaidev.bkapps-sz.woa.com
+FSH=bkaidev.woa.com
+
+C:/Users/v_zzlgzhong/bkaidev/aidev_executable_2.exe review-code diff \
+-tk "gGZTFd0EArUKe+n+yELD5okR6xvmX882xFD5MqdTLM9bDBeyXEn3hg6NA0ncbONU" \
+--encrypted \
+-sh $SH \
+-crf codereviewer_openai \
+--session_id 494e8f2c-5fb1-46c3-9d18-2be8cb3d905d \
+-nsc -wssh $WSSH \
+-fsh $FSH \
+-rm $remote \
+ \
+-bac bkcodeai-vscode:0.2.6
+
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+exit 0
