@@ -23,4 +23,4 @@ from django.utils.translation import gettext_lazy
 class EsqueryConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "services.web.query"
-    verbose_name = gettext_lazy("ES检索")
+    verbose_name = gettext_lazy("检索")

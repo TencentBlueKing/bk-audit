@@ -16,12 +16,14 @@ class ChoiceListSerializer(serializers.Serializer):
     config = serializers.JSONField(label=gettext_lazy("Config"), required=False)
 
 
-class OrderSerializer(serializers.Serializer):
+class OrderBaseSerializer(serializers.Serializer):
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"), default=OrderTypeChoices.DESC.value, choices=OrderTypeChoices.choices
     )
 
+
+class OrderSerializer(OrderBaseSerializer):
     def validate(self, attrs: dict) -> dict:
         order_field = attrs.pop("order_field", "")
         order_type = attrs.pop("order_type", OrderTypeChoices.ASC.value)

@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from unittest import mock
 
-from core.utils.tools import ordered_dict_to_json
+from core.utils.data import ordered_dict_to_json
 from services.web.databus.models import StorageOperateLog
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.constants import (

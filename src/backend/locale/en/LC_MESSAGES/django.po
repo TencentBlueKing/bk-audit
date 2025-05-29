@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-08 17:23+0800\n"
+"POT-Creation-Date: 2025-05-21 00:45+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1254,8 +1254,8 @@ msgstr "Description"
 msgid "优先指数"
 msgstr "Priority Index"
 
-msgid "通用属性列"
-msgstr "General attribute column"
+msgid "属性"
+msgstr "Property"
 
 msgid "字段"
 msgstr "Field"
@@ -1304,6 +1304,9 @@ msgstr "Tag Name"
 
 msgid "Tag"
 msgstr "Tag"
+
+msgid "搜索配置"
+msgstr "Search Config"
 
 msgid "获取 Namespace 列表"
 msgstr "Get Namespcae List"
@@ -1404,6 +1407,18 @@ msgstr "Toggle system diagnosis push"
 msgid "删除系统诊断推送"
 msgstr "Delete system diagnosis push"
 
+msgid "创建通用配置"
+msgstr "Create Common Config"
+
+msgid "更新通用配置"
+msgstr "Update Common Config"
+
+msgid "删除通用配置"
+msgstr "Delete Common Config"
+
+msgid "通用配置列表"
+msgstr "Common Config List"
+
 msgid "搜索关键字"
 msgstr "Search Keyword"
 
@@ -1416,10 +1431,8 @@ msgstr "Sort Type"
 msgid "状态筛选"
 msgstr "Status Filter"
 
-#, fuzzy
-#| msgid "系统来源类型"
 msgid "来源类型"
-msgstr "System Source Type"
+msgstr "Source Type"
 
 msgid "权限"
 msgstr "Permission"
@@ -1488,6 +1501,9 @@ msgstr "Is Enabled"
 msgid "是否成功"
 msgstr "Is Success"
 
+msgid "配置ID"
+msgstr "Config ID"
+
 msgid "事件ID"
 msgstr "Event ID"
 
@@ -1497,8 +1513,8 @@ msgstr "Event Description"
 msgid "请求ID"
 msgstr "Request ID"
 
-msgid "操作人"
-msgstr "Operator"
+msgid "操作人用户名"
+msgstr "Operator Username"
 
 msgid "操作人账号类型"
 msgstr "Operator Account Type"
@@ -1512,10 +1528,10 @@ msgstr "Operator Src"
 msgid "操作人账号"
 msgstr "Operator Src Username"
 
-msgid "操作起始时间"
+msgid "事件开始时间"
 msgstr "Event Start Time"
 
-msgid "操作结束时间"
+msgid "事件结束时间"
 msgstr "Event End Time"
 
 msgid "事件上报模块"
@@ -1623,6 +1639,21 @@ msgstr "Aiops Build in Data Time"
 msgid "AIOPS内置处理时间"
 msgstr "AIOPS Build in Clean Time"
 
+msgid "主机IP"
+msgstr "Host IP"
+
+msgid "采集路径"
+msgstr "Collect Path"
+
+msgid "上报包序号"
+msgstr "Report Package Index"
+
+msgid "上报包内位置"
+msgstr "Position in Report Package"
+
+msgid "日志系统时间字段"
+msgstr "Log System Time Field"
+
 msgid "操作事件名称"
 msgstr "Action Name"
 
@@ -1634,6 +1665,20 @@ msgstr "User Info"
 
 msgid "Notice"
 msgstr "Notice"
+
+#, python-format
+msgid "LogExportTask %s not found"
+msgstr "LogExportTask %s not found"
+
+#, python-format
+msgid "【审计中心】检索结果导出数据-%s"
+msgstr "[BK Audit] Search Result Export Data - %s"
+
+msgid "检索条件"
+msgstr "Search Conditions"
+
+msgid "日志下载"
+msgstr "Log Download"
 
 msgid "BkAudit"
 msgstr "BkAudit"
@@ -1694,14 +1739,37 @@ msgstr "Risk"
 msgid "异常"
 msgstr "Error"
 
+msgid "日志导出"
+msgstr "Log Export"
+
 msgid "责任人上级"
 msgstr "Person Superior"
+
+msgid ""
+"信息安全声明：\n"
+"    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。\n"
+"    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。\n"
+"    "
+msgstr ""
+"Information Security Statement:\n"
+"    This email contains exported data, which is highly sensitive data asset. Please comply with laws and regulations for compliant use. Any leakage will bear corresponding legal liabilities.\n"
+"    If you are not the recipient of this email, please delete it and notify the sender by email.\n"
+"    "
 
 msgid "通知组名称重复"
 msgstr "Notice Group Name Duplicate"
 
+#, python-brace-format
+msgid "构建器初始化失败: {err}"
+msgstr "Builder initialization failed: {err}"
+
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
+
+#, fuzzy, python-format
+#| msgid "审计中心"
+msgid "【蓝鲸审计中心%s】"
+msgstr "【蓝鲸审计中心%s】"
 
 msgid "异常信息"
 msgstr "Error Msg"
@@ -1892,8 +1960,6 @@ msgstr "Delete Storage"
 msgid "敏感信息对象列表"
 msgstr "List Sensitive OBJECT"
 
-#, fuzzy
-#| msgid "全局设置管理"
 msgid "全局设置查看"
 msgstr "View Global Setting"
 
@@ -2285,6 +2351,12 @@ msgstr "The value {value} of the field {field} in the conditional expression can
 
 msgid "数据拉取"
 msgstr "Data Pull"
+
+msgid "未实现方法"
+msgstr "Method not implemented"
+
+msgid "未实现类型"
+msgstr "Type not implemented"
 
 msgid "Control Name"
 msgstr "Control Name"
@@ -2985,6 +3057,9 @@ msgstr "Snapshot"
 msgid "快照存储关联"
 msgstr "Snapshot Storage"
 
+msgid "操作人"
+msgstr "Operator"
+
 msgid "操作时间"
 msgstr "Operate Time"
 
@@ -3105,8 +3180,11 @@ msgstr "BlueKing Desktop"
 msgid "Doris必须是预定义的"
 msgstr "Doris must be predefined"
 
-msgid "ES检索"
-msgstr "ES Query"
+msgid "任务状态"
+msgstr "Task Status"
+
+msgid "检索"
+msgstr "Query"
 
 msgid "WebUI"
 msgstr "WebUI"
@@ -3132,6 +3210,24 @@ msgstr "GSE Index"
 msgid "迭代索引"
 msgstr "Iterative Index"
 
+msgid "就绪"
+msgstr "Ready"
+
+msgid "全部字段"
+msgstr "All Fields"
+
+msgid "标准字段"
+msgstr "Standard Fields"
+
+msgid "快照字段"
+msgstr "Snapshot Fields"
+
+msgid "指定字段"
+msgstr "Specified Fields"
+
+msgid "系统字段"
+msgstr "System Fields"
+
 msgid "集群不存在"
 msgstr "集群不存在"
 
@@ -3139,14 +3235,108 @@ msgstr "集群不存在"
 msgid "过滤条件 Key 解析错误: {key}"
 msgstr "Filter Condition Key parsing error: {key}"
 
+msgid "您没有权限执行该操作"
+msgstr "You don't have permission to perform this operation"
+
+#, fuzzy, python-brace-format
+#| msgid "任务异常"
+msgid "下载任务异常: {msg}"
+msgstr "Download Task Exception: {msg}"
+
+#, python-brace-format
+msgid "导出数量 {current_count} 超过最大值: {max_count}"
+msgstr "Log export count {current_count} exceeds the maximum value: {max_count}"
+
+msgid "字段键"
+msgstr "Field Key"
+
+msgid "展示名称"
+msgstr "Display Name"
+
+msgid "字段展示配置"
+msgstr "Field Display Config"
+
+msgid "任务名称"
+msgstr "Task Name"
+
+msgid "任务执行次数"
+msgstr "Task Execution Count"
+
+msgid "任务执行结果"
+msgstr "Task Execution Result"
+
+msgid "任务执行开始时间"
+msgstr "Task Execution Start Time"
+
+msgid "任务执行结束时间"
+msgstr "Task Execution End Time"
+
+msgid "错误信息"
+msgstr "Error Message"
+
+msgid "检索参数"
+msgstr "Search Parameters"
+
+msgid "导出配置"
+msgstr "Export Configuration"
+
+msgid "当前记录数"
+msgstr "Current record count"
+
+msgid "总条数"
+msgstr "Total Count"
+
+msgid "查询参数URL"
+msgstr "Query Parameters URL"
+
+msgid "日志导出任务"
+msgstr "Log Export Task"
+
+msgid "关联任务"
+msgstr "Related Task"
+
+msgid "下载时间"
+msgstr "Download Time"
+
+msgid "下载用户"
+msgstr "Download User"
+
+msgid "任务下载记录"
+msgstr "Task Download Record"
+
 msgid "日志查询配置"
 msgstr "Log Query Config"
 
 msgid "日志搜索(All)"
 msgstr "Collector Search(All)"
 
+msgid "日志统计查询(All)"
+msgstr "Collector Statistic Search(All)"
+
 msgid "日志查询"
 msgstr "Collector Search"
+
+msgid "日志查询统计"
+msgstr "Collector Search Statistic"
+
+msgid "创建日志检索导出任务"
+msgstr "Create log search export task"
+
+msgid "获取日志检索导出任务列表"
+msgstr "Get log search export task list"
+
+msgid "获取日志检索导出任务详情"
+msgstr "Get log search export task details"
+
+msgid "下载日志检索导出任务"
+msgstr "Download log search export task"
+
+#, python-format
+msgid "任务状态异常: %s"
+msgstr "Task status abnormal:  %s"
+
+msgid "任务已过期，无法下载"
+msgstr "Task expired, cannot download"
 
 msgid "搜索(All)"
 msgstr "Search(All)"
@@ -3162,6 +3352,12 @@ msgstr "Split by commas"
 
 msgid "多个字段以半角逗号分隔"
 msgstr "Split by commas"
+
+msgid "Raw Name"
+msgstr "Raw Name"
+
+msgid "Field Type"
+msgstr "Field Type"
 
 msgid "嵌套字段 key"
 msgstr "Nested field key"
@@ -3183,6 +3379,22 @@ msgstr "Field %s does not support the operator %s"
 
 msgid "检索条件列表"
 msgstr "Search Filters list"
+
+#, python-format
+msgid "嵌套字段 key 长度不能超过 %s"
+msgstr "Nested field key length cannot exceed %s"
+
+msgid "字段范围"
+msgstr "Field scope"
+
+msgid "指定字段时，字段列表不能为空"
+msgstr "Field list cannot be empty when specifying fields"
+
+msgid "指定字段范围时，字段列表不能为空"
+msgstr "Field list cannot be empty when specifying field scope"
+
+msgid "导出参数"
+msgstr "Export parameters"
 
 msgid "Risk"
 msgstr "Risk"
@@ -4050,9 +4262,6 @@ msgstr "Children"
 msgid "Action ID"
 msgstr "Action ID"
 
-msgid "Field Type"
-msgstr "Field Type"
-
 msgid "Strategy Operator"
 msgstr "Strategy Operator"
 
@@ -4222,9 +4431,6 @@ msgstr "Link Table Count"
 msgid "Table"
 msgstr "Table"
 
-msgid "Raw Name"
-msgstr "Raw Name"
-
 msgid "Aggregate"
 msgstr "Aggregate"
 
@@ -4242,9 +4448,6 @@ msgstr "A single filter value, which can be a string, integer, or float"
 
 msgid "Conditions"
 msgstr "Conditions"
-
-msgid "Rule Audit Where must have condition or conditions"
-msgstr "Rule Audit Where must have either condition or conditions"
 
 msgid "Rule Audit Where can not have condition and conditions at the same time"
 msgstr "Rule Audit Where cannot have both condition and conditions at the same time"
@@ -4293,9 +4496,6 @@ msgstr "End time must be greater than start time"
 
 msgid "调度时间"
 msgstr "Schedule Time"
-
-msgid "错误信息"
-msgstr "Error Message"
 
 msgid "状态字符串"
 msgstr "Status String"

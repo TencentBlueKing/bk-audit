@@ -109,28 +109,60 @@ COLLECTOR_SEARCH_PARAMS = {
     "namespace": settings.DEFAULT_NAMESPACE,
     "start_time": start_time.isoformat(),
     "end_time": end_time.isoformat(),
-    "filters": [
-        {"field_name": "system_id", "operator": "include", "filters": ["s1", "s2"]},
-        {"field_name": "action_id", "operator": "include", "filters": ["create_link_table"]},
-        {"field_name": "resource_type_id", "operator": "include", "filters": ["audit_log", "notice_group"]},
-        {"field_name": "instance_name", "operator": "like", "filters": ["123131"]},
-        {"field_name": "username", "operator": "include", "filters": ["xxx"]},
-        {"field_name": "event_id", "operator": "include", "filters": ["xxx"]},
-        {"field_name": "request_id", "operator": "include", "filters": ["xxx"]},
-        {"field_name": "instance_id", "operator": "include", "filters": ["xxx"]},
-        {"field_name": "log", "operator": "match_any", "filters": ["12313"]},
-        {"field_name": "access_type", "operator": "include", "filters": [1, 2, -1]},
-        {"field_name": "access_source_ip", "operator": "include", "filters": ["1.2.3.4"]},
-        {"field_name": "event_content", "operator": "like", "filters": ["123123"]},
-        {"field_name": "user_identify_type", "operator": "include", "filters": [0, 1]},
-        {"field_name": "access_user_agent", "operator": "like", "filters": ["1"]},
-        {"field_name": "result_content", "operator": "include", "filters": [1]},
-        {"field_name": "instance_data", "operator": "include", "filters": [1], "keys": ["k1", "k2"]},
-        {"field_name": "instance_origin_data", "operator": "include", "filters": [1], "keys": ["k1", "k2"]},
-        {"field_name": "extend_data", "operator": "include", "filters": [1], "keys": ["k1", "k2"]},
-        {"field_name": "snapshot_resource_type_info", "operator": "include", "filters": [1], "keys": ["k1", "k2"]},
-        {"field_name": "snapshot_action_info", "operator": "like", "filters": [1], "keys": ["k1", "k2"]},
-        {"field_name": "snapshot_instance_data", "operator": "like", "filters": [1], "keys": ["k1", "k2"]},
+    "conditions": [
+        {"field": {"raw_name": "system_id", "field_type": "string"}, "operator": "include", "filters": ["s1", "s2"]},
+        {
+            "field": {"raw_name": "action_id", "field_type": "string"},
+            "operator": "include",
+            "filters": ["create_link_table"],
+        },
+        {
+            "field": {"raw_name": "resource_type_id", "field_type": "string"},
+            "operator": "include",
+            "filters": ["audit_log", "notice_group"],
+        },
+        {"field": {"raw_name": "instance_name", "field_type": "string"}, "operator": "like", "filters": ["123131"]},
+        {"field": {"raw_name": "username", "field_type": "string"}, "operator": "include", "filters": ["xxx"]},
+        {"field": {"raw_name": "event_id", "field_type": "string"}, "operator": "include", "filters": ["xxx"]},
+        {"field": {"raw_name": "request_id", "field_type": "string"}, "operator": "include", "filters": ["xxx"]},
+        {"field": {"raw_name": "instance_id", "field_type": "string"}, "operator": "include", "filters": ["xxx"]},
+        {"field": {"raw_name": "log", "field_type": "string"}, "operator": "match_any", "filters": ["12313"]},
+        {"field": {"raw_name": "access_type", "field_type": "int"}, "operator": "include", "filters": [1, 2, -1]},
+        {"field": {"raw_name": "access_source_ip", "field_type": "int"}, "operator": "include", "filters": ["1.2.3.4"]},
+        {"field": {"raw_name": "event_content", "field_type": "string"}, "operator": "like", "filters": ["123123"]},
+        {"field": {"raw_name": "user_identify_type", "field_type": "int"}, "operator": "include", "filters": [0, 1]},
+        {"field": {"raw_name": "access_user_agent", "field_type": "string"}, "operator": "like", "filters": ["1"]},
+        {"field": {"raw_name": "result_content", "field_type": "int"}, "operator": "include", "filters": [1]},
+        {
+            "field": {"raw_name": "instance_data", "field_type": "string", "keys": ["k1", "k2"]},
+            "operator": "include",
+            "filters": [1],
+        },
+        {
+            "field": {"raw_name": "instance_origin_data", "field_type": "int", "keys": ["k1", "k2"]},
+            "operator": "include",
+            "filters": [1],
+        },
+        {
+            "field": {"raw_name": "extend_data", "field_type": "string", "keys": ["k1", "k2"]},
+            "operator": "include",
+            "filters": [1],
+        },
+        {
+            "field": {"raw_name": "snapshot_resource_type_info", "field_type": "int", "keys": ["k1", "k2"]},
+            "operator": "include",
+            "filters": [1],
+        },
+        {
+            "field": {"raw_name": "snapshot_action_info", "field_type": "string", "keys": ["k1", "k2"]},
+            "operator": "like",
+            "filters": [1],
+        },
+        {
+            "field": {"raw_name": "snapshot_instance_data", "field_type": "string", "keys": ["k1", "k2"]},
+            "operator": "like",
+            "filters": [1],
+        },
     ],
     "page": PAGE,
     "page_size": PAGE_SIZE,
@@ -319,9 +351,10 @@ COLLECTOR_SEARCH_DATA_RESP = {
     "IN ('xxx') AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` "
     "IN (1,2,-1) AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' "
     "AND `user_identify_type` IN (0,1) AND `access_user_agent` LIKE '%1%' AND `result_content` "
-    "IN (1) AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
-    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
-    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    "IN (1) AND JSON_EXTRACT_STRING(`instance_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`instance_origin_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`extend_data`,'$.k1.k2') IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND JSON_EXTRACT_STRING(`snapshot_instance_data`,'$.k1.k2') "
     f"LIKE '%1%' ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 10",
     "count_sql": f"SELECT COUNT(*) `count` FROM {PLUGIN_RESULT_TABLE} "
     f"WHERE `system_id` IN ('bk-audit') AND `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
@@ -332,9 +365,10 @@ COLLECTOR_SEARCH_DATA_RESP = {
     "AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` IN (1,2,-1) "
     "AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' AND `user_identify_type` "
     "IN (0,1) AND `access_user_agent` LIKE '%1%' AND `result_content` IN (1) "
-    "AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
-    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
-    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    "AND JSON_EXTRACT_STRING(`instance_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`instance_origin_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`extend_data`,'$.k1.k2') IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND JSON_EXTRACT_STRING(`snapshot_instance_data`,'$.k1.k2') "
     f"LIKE '%1%' LIMIT 1",
 }
 
@@ -447,9 +481,10 @@ COLLECTOR_SEARCH_ALL_DATA_RESP = {
     "IN ('xxx') AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` "
     "IN (1,2,-1) AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' "
     "AND `user_identify_type` IN (0,1) AND `access_user_agent` LIKE '%1%' AND `result_content` "
-    "IN (1) AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
-    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
-    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    "IN (1) AND JSON_EXTRACT_STRING(`instance_data`,'$.k1.k2') IN (1) AND "
+    "JSON_EXTRACT_STRING(`instance_origin_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`extend_data`,'$.k1.k2') IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND JSON_EXTRACT_STRING(`snapshot_instance_data`,'$.k1.k2') "
     f"LIKE '%1%' ORDER BY `dtEventTimeStamp` DESC,`gseIndex` DESC,`iterationIndex` DESC LIMIT 10",
     "count_sql": f"SELECT COUNT(*) `count` FROM {PLUGIN_RESULT_TABLE} "
     f"WHERE `thedate`>='{start_date}' AND `thedate`<='{end_date}' "
@@ -460,9 +495,10 @@ COLLECTOR_SEARCH_ALL_DATA_RESP = {
     "AND `instance_id` IN ('xxx') AND `log` MATCH_ANY ('12313') AND `access_type` IN (1,2,-1) "
     "AND `access_source_ip` IN ('1.2.3.4') AND `event_content` LIKE '%123123%' AND `user_identify_type` "
     "IN (0,1) AND `access_user_agent` LIKE '%1%' AND `result_content` IN (1) "
-    "AND `instance_data`['k1']['k2'] IN (1) AND `instance_origin_data`['k1']['k2'] IN (1) "
-    "AND `extend_data`['k1']['k2'] IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
-    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND `snapshot_instance_data`['k1']['k2'] "
+    "AND JSON_EXTRACT_STRING(`instance_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`instance_origin_data`,'$.k1.k2') IN (1) "
+    "AND JSON_EXTRACT_STRING(`extend_data`,'$.k1.k2') IN (1) AND `snapshot_resource_type_info`['k1']['k2'] IN (1) "
+    "AND `snapshot_action_info`['k1']['k2'] LIKE '%1%' AND JSON_EXTRACT_STRING(`snapshot_instance_data`,'$.k1.k2') "
     f"LIKE '%1%' LIMIT 1",
 }
 

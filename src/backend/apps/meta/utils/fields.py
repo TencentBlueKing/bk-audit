@@ -16,7 +16,8 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import Union
+from typing import Optional, TypedDict, Union
+from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 from django.conf import settings
 from django.utils.translation import gettext_lazy
@@ -68,6 +69,50 @@ PYTHON_TO_ES = {
     float: FIELD_TYPE_DOUBLE,
 }
 
+
+class SubKey(TypedDict):
+    field_name: str
+    field_type: str
+    field_alias: str
+    property: Optional['FieldProperty']
+
+
+class FieldProperty(TypedDict):
+    dynamic_content: bool
+    sub_keys: list[SubKey]
+
+
+
+def get_field_map(fields: List[Field]) -> Dict[str, Field]:
+    """
+    获取字段映射关系
+    :param fields:
+    :return:
+    """
+
+    return {field.field_name: field for field in fields}
+
+
+def get_field_choices(fields: List[Field]) -> List[Tuple[str, str]]:
+    """
+    获取字段枚举值
+    """
+
+    return [(field.field_name, str(field.description)) for field in fields]
+
+
+class SubKey(TypedDict):
+    field_name: str
+    field_type: str
+    field_alias: str
+    property: Optional['FieldProperty']
+
+
+class FieldProperty(TypedDict):
+    dynamic_content: bool
+    sub_keys: list[SubKey]
+
+
 EVENT_ID = Field(
     field_name="event_id",
     alias_name="event_id",
@@ -114,7 +159,7 @@ USERNAME = Field(
     field_name="username",
     alias_name="username",
     field_type=FIELD_TYPE_STRING,
-    description=gettext_lazy("操作人"),
+    description=gettext_lazy("操作人用户名"),
     option=dict(),
     priority_index=96,
     is_index=True,
@@ -165,7 +210,7 @@ START_TIME = Field(
     field_name="start_time",
     alias_name="start_time",
     field_type=FIELD_TYPE_LONG,
-    description=gettext_lazy("操作起始时间"),
+    description=gettext_lazy("事件开始时间"),
     is_time=True,
     option=dict(),
     priority_index=91,
@@ -176,7 +221,7 @@ END_TIME = Field(
     field_name="end_time",
     alias_name="end_time",
     field_type=FIELD_TYPE_LONG,
-    description=gettext_lazy("操作结束时间"),
+    description=gettext_lazy("事件结束时间"),
     is_time=False,
     option=dict(),
     is_required=False,
@@ -292,6 +337,7 @@ INSTANCE_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=80,
+    property=FieldProperty(dynamic_content=True, sub_keys=[]),
 )
 
 INSTANCE_ORIGIN_DATA = Field(
@@ -304,6 +350,7 @@ INSTANCE_ORIGIN_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=79,
+    property=FieldProperty(dynamic_content=True, sub_keys=[]),
 )
 
 RESULT_CODE = Field(
@@ -338,6 +385,7 @@ EXTEND_DATA = Field(
     option={"meta_field_type": FIELD_TYPE_TEXT},
     is_required=False,
     priority_index=76,
+    property=FieldProperty(dynamic_content=True, sub_keys=[]),
 )
 
 SNAPSHOT_USER_INFO = Field(
@@ -349,6 +397,31 @@ SNAPSHOT_USER_INFO = Field(
     is_required=False,
     is_display=False,
     is_json=True,
+    property=FieldProperty(
+        dynamic_content=False,
+        sub_keys=[
+            SubKey(field_name="department_full_name", field_type=FIELD_TYPE_STRING, field_alias="主岗全称", property=None),
+            SubKey(field_name="department_id", field_type=FIELD_TYPE_INT, field_alias="主岗ID", property=None),
+            SubKey(field_name="department_name", field_type=FIELD_TYPE_STRING, field_alias="主岗名称", property=None),
+            SubKey(field_name="department_path", field_type=FIELD_TYPE_STRING, field_alias="主岗路径ID", property=None),
+            SubKey(field_name="dimission_date", field_type=FIELD_TYPE_STRING, field_alias="离职时间", property=None),
+            SubKey(field_name="display_name", field_type=FIELD_TYPE_STRING, field_alias="展示名称", property=None),
+            SubKey(field_name="enabled", field_type=FIELD_TYPE_INT, field_alias="帐户是否启用", property=None),
+            SubKey(field_name="gender", field_type=FIELD_TYPE_STRING, field_alias="性别", property=None),
+            SubKey(field_name="id", field_type=FIELD_TYPE_INT, field_alias="ID", property=None),
+            SubKey(field_name="leader_username", field_type=FIELD_TYPE_STRING, field_alias="直属上级", property=None),
+            SubKey(field_name="level_name", field_type=FIELD_TYPE_STRING, field_alias="技术职级", property=None),
+            SubKey(field_name="manager_level", field_type=FIELD_TYPE_INT, field_alias="管理职级", property=None),
+            SubKey(field_name="manager_unit_name", field_type=FIELD_TYPE_INT, field_alias="签约主体", property=None),
+            SubKey(field_name="move_date", field_type=FIELD_TYPE_STRING, field_alias="异动时间", property=None),
+            SubKey(field_name="move_id", field_type=FIELD_TYPE_STRING, field_alias="异动编号", property=None),
+            SubKey(field_name="move_type_id", field_type=FIELD_TYPE_INT, field_alias="异动类型", property=None),
+            SubKey(field_name="phone", field_type=FIELD_TYPE_STRING, field_alias="电话", property=None),
+            SubKey(field_name="staff_status", field_type=FIELD_TYPE_INT, field_alias="员工状态", property=None),
+            SubKey(field_name="staff_type", field_type=FIELD_TYPE_INT, field_alias="员工类型", property=None),
+            SubKey(field_name="username", field_type=FIELD_TYPE_STRING, field_alias="用户名", property=None),
+        ],
+    ),
 )
 
 SNAPSHOT_RESOURCE_TYPE_INFO = Field(
@@ -360,6 +433,24 @@ SNAPSHOT_RESOURCE_TYPE_INFO = Field(
     is_required=False,
     is_display=False,
     is_json=True,
+    property=FieldProperty(
+        dynamic_content=False,
+        sub_keys=[
+            SubKey(field_name="created_at", field_type=FIELD_TYPE_LONG, field_alias="创建时间", property=None),
+            SubKey(field_name="created_by", field_type=FIELD_TYPE_STRING, field_alias="创建者", property=None),
+            SubKey(field_name="description", field_type=FIELD_TYPE_STRING, field_alias="描述信息", property=None),
+            SubKey(field_name="id", field_type=FIELD_TYPE_INT, field_alias="资源类型ID", property=None),
+            SubKey(field_name="name", field_type=FIELD_TYPE_STRING, field_alias="资源名称", property=None),
+            SubKey(field_name="name_en", field_type=FIELD_TYPE_STRING, field_alias="英文资源名称", property=None),
+            SubKey(field_name="resource_type_id", field_type=FIELD_TYPE_STRING, field_alias="资源类型ID", property=None),
+            SubKey(field_name="sensitivity", field_type=FIELD_TYPE_INT, field_alias="敏感等级", property=None),
+            SubKey(field_name="system_id", field_type=FIELD_TYPE_STRING, field_alias="系统ID", property=None),
+            SubKey(field_name="type", field_type=FIELD_TYPE_STRING, field_alias="资源类型", property=None),
+            SubKey(field_name="updated_at", field_type=FIELD_TYPE_LONG, field_alias="更新时间", property=None),
+            SubKey(field_name="updated_by", field_type=FIELD_TYPE_STRING, field_alias="更新者", property=None),
+            SubKey(field_name="version", field_type=FIELD_TYPE_INT, field_alias="版本", property=None),
+        ],
+    ),
 )
 
 SNAPSHOT_ACTION_INFO = Field(
@@ -372,6 +463,25 @@ SNAPSHOT_ACTION_INFO = Field(
     is_display=False,
     is_json=True,
     priority_index=USERNAME.priority_index,
+    property=FieldProperty(
+        dynamic_content=False,
+        sub_keys=[
+            SubKey(field_name="action_id", field_type=FIELD_TYPE_STRING, field_alias="操作ID", property=None),
+            SubKey(field_name="created_at", field_type=FIELD_TYPE_LONG, field_alias="创建时间", property=None),
+            SubKey(field_name="created_by", field_type=FIELD_TYPE_STRING, field_alias="创建者", property=None),
+            SubKey(field_name="description", field_type=FIELD_TYPE_STRING, field_alias="描述信息", property=None),
+            SubKey(field_name="id", field_type=FIELD_TYPE_INT, field_alias="ID", property=None),
+            SubKey(field_name="name", field_type=FIELD_TYPE_STRING, field_alias="操作名称", property=None),
+            SubKey(field_name="name_en", field_type=FIELD_TYPE_STRING, field_alias="操作英文名称", property=None),
+            SubKey(field_name="resource_type_ids", field_type=FIELD_TYPE_STRING, field_alias="资源类型ID", property=None),
+            SubKey(field_name="sensitivity", field_type=FIELD_TYPE_INT, field_alias="敏感等级", property=None),
+            SubKey(field_name="system_id", field_type=FIELD_TYPE_STRING, field_alias="系统ID", property=None),
+            SubKey(field_name="type", field_type=FIELD_TYPE_STRING, field_alias="操作类型", property=None),
+            SubKey(field_name="updated_at", field_type=FIELD_TYPE_LONG, field_alias="更新时间", property=None),
+            SubKey(field_name="updated_by", field_type=FIELD_TYPE_STRING, field_alias="更新者", property=None),
+            SubKey(field_name="version", field_type=FIELD_TYPE_INT, field_alias="版本", property=None),
+        ],
+    ),
 )
 
 SNAPSHOT_INSTANCE_NAME = Field(
@@ -397,6 +507,7 @@ SNAPSHOT_INSTANCE_DATA = Field(
     is_required=False,
     is_display=False,
     is_json=True,
+    property={"dynamic_content": True, "sub_keys": []},
 )
 
 SYSTEM_ID = Field(
@@ -535,6 +646,7 @@ EXT_FIELD_CONFIG = Field(
     is_json=True,
     is_dimension=False,
     is_display=False,
+    property=FieldProperty(dynamic_content=True, sub_keys=[]),
 )
 
 FLOW_MD5 = Field(
@@ -655,7 +767,7 @@ TIME = Field(
     option={},
     is_dimension=False,
     is_display=False,
-    property={'spec_field_type': SPEC_FIELD_TYPE_USER},
+    property={'spec_field_type': SPEC_FIELD_TYPE_TIMESTAMP},
 )
 
 CLOUD_ID = Field(
@@ -706,6 +818,17 @@ ITERATION_INDEX = Field(
     option={},
     is_dimension=False,
     is_display=False,
+)
+
+TIME = Field(
+    field_name="time",
+    alias_name="time",
+    field_type=FIELD_TYPE_LONG,
+    description=gettext_lazy("日志系统时间字段"),
+    option={},
+    is_dimension=False,
+    is_display=False,
+    property={'spec_field_type': SPEC_FIELD_TYPE_USER},
 )
 
 BKLOG_BUILD_IN_FIELDS = [TIME, EXT_FIELD_CONFIG, CLOUD_ID, SERVER_IP, PATH, GSE_INDEX, ITERATION_INDEX]

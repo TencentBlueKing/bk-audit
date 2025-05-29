@@ -316,7 +316,7 @@ class Action(OperateRecordModel):
 
 class Field(OperateRecordModel):
     """
-    标准审计事件
+    标准审计字段
     """
 
     field_name = models.CharField(gettext_lazy("字段名称"), max_length=64, primary_key=True)
@@ -336,7 +336,7 @@ class Field(OperateRecordModel):
     option = models.JSONField(gettext_lazy("jsonschema声明"), null=True, default=dict)
     description = models.TextField(gettext_lazy("描述"), null=True)
     priority_index = models.SmallIntegerField(gettext_lazy("优先指数"), default=0)
-    property = models.JSONField(gettext_lazy("通用属性列"), default=dict)
+    property = models.JSONField(gettext_lazy("属性"), default=dict)
 
     class Meta:
         verbose_name = gettext_lazy("字段")
@@ -365,6 +365,7 @@ class Field(OperateRecordModel):
             "option": self.option,
             "description": str(self.description),
             "priority_index": self.priority_index,
+            "property": self.property,
         }
 
 
@@ -492,3 +493,24 @@ class Tag(OperateRecordModel):
         verbose_name = gettext_lazy("Tag")
         verbose_name_plural = verbose_name
         ordering = ["-tag_id"]
+
+
+class GeneralConfigScene(models.TextChoices):
+    """通用配置场景"""
+
+    SEARCH_CONFIG = "search_config", gettext_lazy("搜索配置")
+
+
+class GeneralConfig(OperateRecordModel):
+    """用于存储通用配置，支持用户特定的配置"""
+
+    id = models.BigAutoField(primary_key=True)
+    scene = models.CharField(max_length=255, help_text="配置场景，标识配置的应用场景", choices=GeneralConfigScene.choices)
+    config_name = models.CharField(max_length=255, help_text="配置名称，标识配置的名称")
+    config_content = models.JSONField(help_text="配置内容，存储具体的配置数据，JSON格式")
+
+    class Meta:
+        unique_together = ('scene', 'config_name', 'created_by')
+
+    def __str__(self):
+        return f"{self.scene} - {self.config_name} by {self.created_by}"

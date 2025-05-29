@@ -24,7 +24,7 @@ from django.db import models
 from django.db.models import Count
 from django.db.models.functions import TruncMinute
 
-from core.utils.tools import mstimestamp_to_date_string
+from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import RuleAuditSourceType, StrategyType
 from services.web.strategy_v2.models import Strategy

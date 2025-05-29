@@ -23,16 +23,23 @@ import arrow
 from django.db.models.enums import ChoicesMeta
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
+from rest_framework.fields import empty
 from rest_framework.settings import api_settings
 
 from api.bk_log.serializers import EsQueryFilterSerializer
 from apps.meta.permissions import SearchLogPermission
-from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE, SYSTEM_ID
+from apps.meta.utils.fields import (
+    ACCESS_TYPE,
+    RESULT_CODE,
+    SYSTEM_ID,
+    get_field_choices,
+)
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from core.exceptions import PermissionException, ValidationError
-from core.serializers import OrderSerializer
-from core.utils.tools import format_date_string, parse_datetime
+from core.serializers import OrderBaseSerializer
+from core.sql.constants import FieldType
+from core.utils.time import format_date_string, parse_datetime
 from services.web.databus.constants import PluginSceneChoices
 from services.web.databus.models import CollectorPlugin
 from services.web.query.constants import (
@@ -44,14 +51,19 @@ from services.web.query.constants import (
     DEFAULT_PAGE_SIZE,
     DEFAULT_SORT_LIST,
     DEFAULT_TIMEDELTA,
+    LOG_EXPORT_FIELD_KEYS_MAX_LENGTH,
     SEARCH_MAX_LIMIT,
     SORT_ASC,
     SORT_DESC,
     TIMESTAMP_PARTITION_FIELD,
     AccessTypeChoices,
     CollectorSortFieldChoices,
+    FieldCategoryEnum,
+    LogExportFieldScope,
     ResultCodeChoices,
 )
+from services.web.query.models import LogExportTask
+from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
@@ -222,21 +234,31 @@ class QuerySearchResponseSerializer(serializers.Serializer):
     results = serializers.ListField(child=serializers.JSONField())
 
 
-class QuerySearchFilterSerializer(serializers.Serializer):
+class QuerySearchFieldSerializer(serializers.Serializer):
+    """
+    查询字段序列化器
+    """
+
+    raw_name = serializers.CharField(label=gettext_lazy("Raw Name"))
+    field_type = serializers.ChoiceField(
+        label=gettext_lazy("Field Type"), choices=FieldType.choices, default=None, allow_null=True
+    )
+    keys = serializers.ListField(
+        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
+    )
+
+
+class QuerySearchConditionSerializer(serializers.Serializer):
     """
     检索条件
     """
 
-    field_name = serializers.ChoiceField(label="字段名", choices=COLLECT_SEARCH_CONFIG.allowed_query_field_choices)
-    keys = serializers.ListField(
-        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
-    )
+    field = QuerySearchFieldSerializer(label=gettext_lazy("字段"))
     operator = serializers.ChoiceField(
         label=gettext_lazy("Operator"), choices=COLLECT_SEARCH_CONFIG.allowed_operator_choices
     )
     filters = serializers.ListField(
         label=gettext_lazy("筛选值"),
-        child=serializers.JSONField(),
         default=list,
         help_text=gettext_lazy("多个筛选值，每个值可以是字符串、整数或浮点数"),
         allow_empty=True,
@@ -244,17 +266,19 @@ class QuerySearchFilterSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        # 判断操作是否允许
-        allow = COLLECT_SEARCH_CONFIG.judge_operator(attrs["field_name"], attrs["operator"])
-        if not allow:
-            raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field_name"], attrs["operator"]))
         # 判断字段是否支持嵌套 keys
-        if not COLLECT_SEARCH_CONFIG.query_field_map[attrs["field_name"]].field.is_json:
-            attrs["keys"] = []
+        if not COLLECT_SEARCH_CONFIG.query_field_map[attrs["field"]["raw_name"]].field.is_json:
+            attrs["field"]["keys"] = []
+        # 判断操作是否允许
+        allow = COLLECT_SEARCH_CONFIG.judge_operator(
+            attrs["field"]["raw_name"], attrs["field"]["keys"], attrs["operator"]
+        )
+        if not allow:
+            raise ValidationError(message=gettext("字段%s不支持该操作符%s") % (attrs["field"], attrs["operator"]))
         return attrs
 
 
-class CollectorOrderSerializer(OrderSerializer):
+class CollectorOrderSerializer(OrderBaseSerializer):
     """
     采集器检索排序序列化器
     """
@@ -268,17 +292,17 @@ class CollectorOrderSerializer(OrderSerializer):
     )
 
 
-class CollectorSearchAllReqSerializer(serializers.Serializer):
+class CollectorSearchReqBaseSerializer(serializers.Serializer):
     """
-    日志查询(All)请求序列化器
+    日志查询请求序列化器
     """
 
     namespace = serializers.CharField()
     start_time = serializers.CharField()
     end_time = serializers.CharField()
-    filters = serializers.ListField(
+    conditions = serializers.ListField(
         label=gettext_lazy("检索条件列表"),
-        child=QuerySearchFilterSerializer(),
+        child=QuerySearchConditionSerializer(),
         allow_empty=True,
         default=list,
     )
@@ -290,6 +314,18 @@ class CollectorSearchAllReqSerializer(serializers.Serializer):
         default=DEFAULT_COLLECTOR_SORT_LIST,
     )
     bind_system_info = serializers.BooleanField(default=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs.get("sort_list"):
+            attrs["sort_list"] = DEFAULT_COLLECTOR_SORT_LIST
+        return attrs
+
+
+class CollectorSearchAllReqSerializer(CollectorSearchReqBaseSerializer):
+    """
+    日志查询(All)请求序列化器
+    """
 
     @classmethod
     def _build_time_conditions(cls, validated_request_data: dict) -> List[dict]:
@@ -303,22 +339,22 @@ class CollectorSearchAllReqSerializer(serializers.Serializer):
         end_ms = int(end_time.timestamp() * 1000)
         return [
             {
-                "field_name": DATE_PARTITION_FIELD,
+                "field": {"raw_name": DATE_PARTITION_FIELD, "field_type": "string"},
                 "operator": QueryConditionOperator.GTE.value,
                 "filters": [start_time.strftime(DATE_FORMAT)],
             },
             {
-                "field_name": DATE_PARTITION_FIELD,
+                "field": {"raw_name": DATE_PARTITION_FIELD, "field_type": "string"},
                 "operator": QueryConditionOperator.LTE.value,
                 "filters": [end_time.strftime(DATE_FORMAT)],
             },
             {
-                "field_name": TIMESTAMP_PARTITION_FIELD,
+                "field": {"raw_name": TIMESTAMP_PARTITION_FIELD, "field_type": "integer"},
                 "operator": QueryConditionOperator.GTE.value,
                 "filters": [start_ms],
             },
             {
-                "field_name": TIMESTAMP_PARTITION_FIELD,
+                "field": {"raw_name": TIMESTAMP_PARTITION_FIELD, "field_type": "integer"},
                 "operator": QueryConditionOperator.LTE.value,
                 "filters": [end_ms],
             },
@@ -326,14 +362,20 @@ class CollectorSearchAllReqSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        if not attrs.get("sort_list"):
-            attrs["sort_list"] = DEFAULT_COLLECTOR_SORT_LIST
         time_conditions = self._build_time_conditions(attrs)
-        attrs["filters"] = time_conditions + attrs["filters"]
+        attrs["conditions"] = time_conditions + attrs["conditions"]
         return attrs
 
 
-class CollectorSearchReqSerializer(CollectorSearchAllReqSerializer):
+class CollectorSearchAllStatisticReqSerializer(CollectorSearchAllReqSerializer):
+    """
+    日志查询统计请求(All)序列化器
+    """
+
+    field_name = serializers.ChoiceField(label="字段名", choices=COLLECT_SEARCH_CONFIG.allowed_query_field_choices)
+
+
+class CollectorSearchReqPermissionCheckMixIn:
     """
     日志查询请求序列化器
     """
@@ -356,7 +398,7 @@ class CollectorSearchReqSerializer(CollectorSearchAllReqSerializer):
         if len(systems) != len(authorized_systems):
             return [
                 {
-                    "field_name": SYSTEM_ID.field_name,
+                    "field": {"raw_name": SYSTEM_ID.field_name, "field_type": FieldType.STRING.value, "keys": []},
                     "operator": QueryConditionOperator.INCLUDE.value,
                     "filters": authorized_systems,
                 }
@@ -366,8 +408,26 @@ class CollectorSearchReqSerializer(CollectorSearchAllReqSerializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         system_conditions = self._build_system_conditions(attrs)
-        attrs["filters"] = system_conditions + attrs["filters"]
+        attrs["conditions"] = system_conditions + attrs["conditions"]
         return attrs
+
+
+class CollectorSearchReqSerializer(CollectorSearchReqPermissionCheckMixIn, CollectorSearchAllReqSerializer):
+    """
+    日志查询请求序列化器
+    """
+
+    pass
+
+
+class CollectorSearchStatisticReqSerializer(
+    CollectorSearchReqPermissionCheckMixIn, CollectorSearchAllStatisticReqSerializer
+):
+    """
+    日志查询统计请求序列化器
+    """
+
+    pass
 
 
 class CollectorSearchConfigRespSerializer(serializers.Serializer):
@@ -377,6 +437,7 @@ class CollectorSearchConfigRespSerializer(serializers.Serializer):
 
     field = serializers.DictField()
     allow_operators = serializers.ListField(child=serializers.ChoiceField(choices=QueryConditionOperator.choices))
+    category = serializers.ChoiceField(choices=FieldCategoryEnum.choices)
 
 
 class CollectorSearchResponseSerializer(QuerySearchResponseSerializer):
@@ -386,3 +447,124 @@ class CollectorSearchResponseSerializer(QuerySearchResponseSerializer):
 
     query_sql = serializers.CharField(required=False, allow_blank=True)
     count_sql = serializers.CharField(required=False, allow_blank=True)
+
+
+class StatisticSQLSerializer(serializers.Serializer):
+    """
+    用于序列化 SQL 查询。
+    """
+
+    total_rows = serializers.CharField(allow_blank=True, allow_null=True)
+    non_empty_rows = serializers.CharField(allow_blank=True, allow_null=True)
+    non_empty_ratio = serializers.CharField(allow_blank=True, allow_null=True)
+    max_value = serializers.CharField(allow_blank=True, allow_null=True)
+    min_value = serializers.CharField(allow_blank=True, allow_null=True)
+    avg_value = serializers.CharField(allow_blank=True, allow_null=True)
+    median_value = serializers.CharField(allow_blank=True, allow_null=True)
+    top_5_values = serializers.CharField(allow_blank=True, allow_null=True)
+    top_5_time_series = serializers.CharField(allow_blank=True, allow_null=True)
+
+
+class StatisticResultSerializer(serializers.Serializer):
+    """
+    键对应 SQL 查询，值可以为空或者是任意结构。
+    """
+
+    total_rows = serializers.JSONField(
+        allow_null=True,
+    )
+    non_empty_rows = serializers.JSONField(allow_null=True)
+    non_empty_ratio = serializers.JSONField(allow_null=True)
+    max_value = serializers.JSONField(allow_null=True)
+    min_value = serializers.JSONField(allow_null=True)
+    avg_value = serializers.JSONField(allow_null=True)
+    median_value = serializers.JSONField(allow_null=True)
+    top_5_values = serializers.JSONField(allow_null=True)
+    top_5_time_series = serializers.JSONField(allow_null=True)
+    top_5_echarts_time_series = serializers.JSONField(allow_null=True)
+
+
+class CollectorSearchStatisticRespSerializer(serializers.Serializer):
+    """
+    日志查询统计响应序列化器
+    """
+
+    sqls = StatisticSQLSerializer()
+    results = StatisticResultSerializer()
+    numeric = serializers.BooleanField()
+
+
+class LogExportField(serializers.Serializer):
+    """
+    日志导出字段序列化器
+    """
+
+    raw_name = serializers.ChoiceField(label=gettext_lazy("字段名"), choices=get_field_choices(LOG_SEARCH_ALL_FIELDS))
+    display_name = serializers.CharField(label=gettext_lazy("显示名称"), default="", allow_blank=True, allow_null=True)
+    keys = serializers.ListField(
+        label=gettext_lazy("嵌套字段 key"), child=serializers.CharField(), default=list, allow_empty=True
+    )
+
+    def validate_keys(self, value: List[str]):
+        if not value:
+            return []
+        if len(",".join(value)) > LOG_EXPORT_FIELD_KEYS_MAX_LENGTH:
+            raise ValidationError(message=gettext("嵌套字段 key 长度不能超过 %s") % LOG_EXPORT_FIELD_KEYS_MAX_LENGTH)
+        return value
+
+
+class LogExportConfigSerializer(serializers.Serializer):
+    """
+    日志导出配置序列化器
+    """
+
+    field_scope = serializers.ChoiceField(
+        label=gettext_lazy("字段范围"), choices=LogExportFieldScope.choices, help_text=gettext_lazy("指定字段时，字段列表不能为空")
+    )
+    fields = serializers.ListField(label=gettext_lazy("字段列表"), child=LogExportField(), default=list)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        field_scope = attrs["field_scope"]
+        if field_scope != LogExportFieldScope.SPECIFIED.value:
+            attrs["fields"] = []
+        elif not attrs.get("fields"):
+            raise ValidationError(message=gettext("指定字段范围时，字段列表不能为空"))
+        return attrs
+
+
+class LogExportReqSerializer(serializers.Serializer):
+    """
+    日志导出请求序列化器
+    """
+
+    namespace = serializers.CharField()
+    name = serializers.CharField(label=gettext_lazy("任务名称"), max_length=64, default="", allow_blank=True)
+    query_params = CollectorSearchReqBaseSerializer(label=gettext_lazy("检索参数"))
+    export_config = LogExportConfigSerializer(label=gettext_lazy("导出参数"))
+    search_params_url = serializers.CharField(label=gettext_lazy("查询参数URL"), default="", allow_blank=True)
+
+    def run_validation(self, data=empty):
+        if isinstance(data, dict) and data.get("query_params"):
+            data["query_params"]["namespace"] = data.get("namespace")
+        return super().run_validation(data)
+
+
+class LogExportRespSerializer(serializers.ModelSerializer):
+    """
+    日志导出响应序列化器
+    """
+
+    class Meta:
+        model = LogExportTask
+        fields = "__all__"
+
+
+class ListLogExportRespSerializer(serializers.ModelSerializer):
+    """
+    日志导出列表响应序列化器
+    """
+
+    class Meta:
+        model = LogExportTask
+        exclude = ["result", "query_params", "export_config"]

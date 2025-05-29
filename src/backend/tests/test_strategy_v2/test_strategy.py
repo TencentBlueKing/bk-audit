@@ -26,7 +26,7 @@ from api.bk_base.default import GetResultTable
 from api.bk_log.constants import INDEX_SET_ID
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
-from core.utils.tools import ordered_dict_to_json
+from core.utils.data import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
 from services.web.strategy_v2.constants import RiskLevel, RuleAuditSourceType
 from tests.base import TestCase

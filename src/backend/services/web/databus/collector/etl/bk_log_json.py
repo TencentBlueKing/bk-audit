@@ -21,7 +21,7 @@ from typing import List
 
 from apps.exceptions import JsonLoadsError
 from core.constants import DEFAULT_JSON_EXPAND_LEVEL
-from core.utils.tools import expand_json
+from core.utils.data import expand_json
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.etl.etl_config_handler.bk_log_json import JsonConfig
 from services.web.databus.constants import EtlConfigEnum
