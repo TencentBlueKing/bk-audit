@@ -68,14 +68,14 @@
                   </div>
                 </div>
               </template>
-              <template v-else>
+              <template v-else-if="data.editDescription">
                 <div class="add-item-list item-list-active">
                   <scroll-faker>
-                    <span> {{ data.description }}</span>
+                    <span> {{ data.editDescription[0].field }}</span>
                     <span style="margin: 0 5px;">/</span>
                     <!-- 多级字段输入 -->
                     <template
-                      v-for="(item, index) in customFields"
+                      v-for="(item, index) in data.editDescription.slice(1)"
                       :key="index">
                       <bk-input
                         v-model="item.field"
@@ -83,12 +83,12 @@
                         :placeholder="t('请输入')"
                         style="width: 85px;" />
                       <audit-icon
-                        v-if="index === customFields.length - 1"
+                        v-if="index === data.editDescription.slice(1).length - 1"
                         v-bk-tooltips="t('添加下级字段')"
                         class="add-icon"
                         :class="[!item.field ? 'disabled-add-icon' : '']"
                         type="add-fill"
-                        @click="() => customFields.push({ field: '' })" />
+                        @click="() => data.editDescription && data.editDescription.push({ field: '' })" />
                       <span
                         v-else
                         style="margin: 0 5px;">/</span>
@@ -96,7 +96,8 @@
                     <span class="field-edit-right">
                       <audit-icon
                         v-bk-tooltips="t('确认')"
-                        :class="[customFields.every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
+                        :class="[data.editDescription.slice(1).
+                          every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
                         svg
                         type="check-line"
                         @click.stop="handleAddFieldSubmit(data)" />
@@ -163,16 +164,17 @@
     </div>
     <div
       class="setting-filed-footer">
-      <audit-popconfirm
+      <!-- <audit-popconfirm
         :confirm-handler="handleSubmit"
         content=""
-        :title="t('确认更新？')">
-        <bk-button
-          class="setting-filed-btn mr8"
-          theme="primary">
-          {{ t('应用') }}
-        </bk-button>
-      </audit-popconfirm>
+        :title="t('确认更新？')"> -->
+      <bk-button
+        class="setting-filed-btn mr8"
+        theme="primary"
+        @click="handleSubmit">
+        {{ t('应用') }}
+      </bk-button>
+      <!-- </audit-popconfirm> -->
       <bk-button
         class="setting-filed-btn"
         @click="handleCancel">
@@ -213,6 +215,9 @@
     isJson: boolean
     level: number
     description: string
+    editDescription?: Array<{
+      field: string
+    }>
     isEdit: boolean
     isOpen: boolean;
   }
@@ -229,7 +234,6 @@
   const sourceList = ref<CascaderNode[]>([]);
   const initSourceList = ref<CascaderNode[]>([]);
   const targetList = ref<CascaderNode[]>([]);
-  const customFields = ref([{ field: '' }]);
 
   const initList = [
     { field_name: 'start_time', description: '操作起始时间' },
@@ -299,7 +303,6 @@
     defaultValue: [],
     onSuccess: (data) => {
       targetList.value = convertToCascaderList(data);
-      console.log(targetList.value);
       // 根据category字段排序：standard在前，system在中，snapshot在后
       const sortedData = [...removeCheckedFields(targetList.value, sourceList.value) || []].sort((a, b) => {
         const categoryOrder = { standard: 1, system: 2, snapshot: 3 };
@@ -328,8 +331,10 @@
    * 删掉sourcelist已经选中的列/默认不可选的列
    */
   const removeCheckedFields = (checkedLists:Array<CascaderNode>, data:Array<CascaderNode>) => {
-    if (checkedLists.length) {
-      const fieldNames = checkedLists.map(item => item.field_name);
+    const allCheckedLists = [...checkedLists, ...initList];
+    if (allCheckedLists.length) {
+      const fieldNames = allCheckedLists.map(item => item.field_name);
+      console.log(fieldNames);
       fieldNames.forEach((item) => {
         const index = data.findIndex(list => list.field_name === item);
         if (index !== -1) {
@@ -451,6 +456,7 @@
       isJson: false,
       level: node.level + 2,
       description: node.description,
+      editDescription: [{ field: node.description as string }, { field: '' }],
       isOpen: false,
       isEdit: true,
     });
@@ -459,23 +465,26 @@
   };
 
   const handleAddFieldSubmit = (node: CascaderNode) => {
-    if (customFields.value.length === 0) {
+    const customFields = node.editDescription;
+    if (!customFields || customFields.length === 0) {
       return;
     }
-    const newFiledNameArray = [...JSON.parse(node.field_name), ...customFields.value.map(item => item.field)];
-    const newDescription = `${node.description}/${customFields.value.map(item => item.field).join('/')}`;
+    const newIdArray = [...JSON.parse(node.field_name), ...customFields.slice(1).map(item => item.field)];
+    const newNameStr = customFields.map(item => item.field).join('/');
     // eslint-disable-next-line no-param-reassign
-    node.field_name = JSON.stringify(newFiledNameArray);
+    node.field_name = JSON.stringify(newIdArray);
     // eslint-disable-next-line no-param-reassign
-    node.description = newDescription;
+    node.description = newNameStr;
     // eslint-disable-next-line no-param-reassign
     node.isEdit = false;
     // 清空customFields
-    customFields.value = [{ field: '' }];
+    // eslint-disable-next-line no-param-reassign
+    delete node.editDescription;
   };
 
   const handleAddFieldClose = (node: CascaderNode) => {
-    customFields.value = [{ field: '' }];
+    // eslint-disable-next-line no-param-reassign
+    delete node.editDescription;
     const nodeFieldName = JSON.parse(node.field_name)[0];
     const parentNode = sourceList.value.find(item => item.field_name === nodeFieldName);
     if (parentNode) {
@@ -485,6 +494,7 @@
 
   const handleSubmit = () => Promise.resolve()
     .then(() => {
+      console.log(targetList.value);
       updateField(targetList.value);
     });
 
@@ -536,7 +546,7 @@
         position: relative;
         display: flex;
         width: auto;
-        padding-left: 8px;
+        padding: 0 8px;
         font-size: 12px;
         color: #63656e;
         align-items: center;
@@ -600,6 +610,11 @@
     width: 350px;
 
     :deep(.bk-tree) {
+      .bk-node-action {
+        width: 14px;
+        height: 32px;
+      }
+
       .add-item-list {
         height: 32px;
         font-size: 12px;
