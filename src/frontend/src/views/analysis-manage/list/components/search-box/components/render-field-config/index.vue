@@ -35,11 +35,9 @@
           <template #content>
             <div id="pop_content">
               {{ t('模糊匹配') }},
-              <bk-button
-                text
-                theme="primary">
-                {{ t('查看规则详情') }}
-              </bk-button>
+              <a
+                :href="configData.third_doc_url.search_rule_iwiki_url"
+                target="_blank"> {{ t('查看规则详情') }}</a>
             </div>
           </template>
         </bk-popover>
@@ -73,6 +71,10 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
+
   import useListeners from '@hooks/use-listeners';
   import useProps from '@hooks/use-props';
 
@@ -87,6 +89,8 @@
   import RenderSensitive from './strategy/sensitive.vue';
   import RenderSystemId from './strategy/system-id.vue';
   import RenderUserSelector from './strategy/user-selector.vue';
+
+  import useRequest from '@/hooks/use-request';
 
   interface Props {
     name: string,
@@ -129,6 +133,13 @@
   const deleteField = () => {
     emit('deleteField', props.name);
   };
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
 
   defineExpose<Exposes>({
     getValue(fieldValue?: string) {
