@@ -265,7 +265,7 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
 
 }
 // 选择
-const handleNodeClick = (nodes: Record<string, any>) => {
+const handleNodeClick = (nodes: Record<string, any>) => {  
   if (!nodes.isEdit) {
     selectedValue.value = nodes.selectedValue;
     emits('handleNodeSelectedValue', nodes, nodes.selectedValue);
@@ -296,7 +296,7 @@ const {
   },
 });
 
-const transformData = (data: any[]): Array<Record<string, any>> => {
+const transformData = (data: any[]): Array<Record<string, any>> => {  
   return data.map((item: Record<string, any>) => {
     // 如果有子节点（sub_keys），则递归处理
     if (
@@ -317,16 +317,15 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
             table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
           };
         }),
-        keys: "alias" in item ? [item.value] : [],
+        keys: "alias" in item ? [item.value] : (item.keys || []),
         display_name: "alias" in item ? item.label : item.display_name,
         raw_name: item.raw_name,
       };
     } else {
       return {
-        
         ...item,
         isEdit: false,
-        keys: "alias" in item ? [item.value] : [],
+        keys: "alias" in item ? [item.value] : (item.keys || []),
         selectedValue: ('alias' in item) ? `${item.label}(${item.value})` : `${item.display_name}(${item.raw_name})`,
         children: [],
         display_name: "alias" in item ? item.label : item.display_name,
