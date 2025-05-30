@@ -64,3 +64,31 @@ class SystemsViewSet(ResourceViewSet):
             "GET", resource.meta.resource_type_schema, pk_field="system_id", endpoint="resource_type_schema_search"
         ),
     ]
+
+
+class ResourceTypesViewSet(ResourceViewSet):
+    lookup_field = "unique_id"
+
+    def get_system_id(self):
+        return self.kwargs.get('system_id') or self.kwargs.get('unique_id', '').spilit(':')[0]
+
+    def get_permissions(self):
+        if self.action not in ["bulk_create"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.EDIT_SYSTEM],
+                    resource_meta=ResourceEnum.SYSTEM,
+                    get_instance_id=self.get_system_id,
+                )
+            ]
+        return []
+
+    resource_routes = [
+        ResourceRoute("GET", resource.meta.list_resource_type),
+        ResourceRoute("GET", resource.meta.get_resource_type_tree, endpoint="tree"),
+        ResourceRoute("POST", resource.meta.bulk_create_resource_type, endpoint="bulk_create"),
+        ResourceRoute("POST", resource.meta.create_resource_type),
+        ResourceRoute("GET", resource.meta.get_resource_type, pk_field='unique_id'),
+        ResourceRoute("PUT", resource.meta.update_resource_type, pk_field='unique_id'),
+        ResourceRoute("DELETE", resource.meta.delete_resource_type, pk_field='unique_id'),
+    ]

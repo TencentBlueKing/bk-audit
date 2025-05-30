@@ -144,9 +144,13 @@ class SystemInfoResponseSerializer(SystemSerializer):
 
 
 class ResourceTypeSerializer(serializers.ModelSerializer):
+    actions = serializers.SerializerMethodField()
+
     class Meta:
         model = ResourceType
         fields = [
+            "unique_id",
+            "system_id",
             "resource_type_id",
             "name",
             "name_en",
@@ -155,8 +159,87 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
             "path",
             "version",
             "description",
+            "ancestor",
             "ancestors",
+            'actions',
         ]
+        extra_kwargs = {
+            "unique_id": {"required": False, "allow_null": True, "allow_blank": True},
+        }
+
+        # ---------- 通用校验 / 自动填充 ----------
+        def validate(self, attrs):
+            """
+            统一处理 unique_id：
+              • 如果没传，就拼接并写回 attrs
+              • 如果传了，必须等于拼接结果
+            """
+            instance = getattr(self, "instance", None)
+
+            # 先拿到 system_id / resource_type_id（优先新值，其次旧值）
+            system_id = attrs.get("system_id") or (instance.system_id if instance else None)
+            res_type_id = attrs.get("resource_type_id") or (instance.resource_type_id if instance else None)
+
+            if system_id is None or res_type_id is None:
+                raise serializers.ValidationError("system_id 和 resource_type_id 必须同时提供")
+
+            expected = f"{system_id}:{res_type_id}"
+            attrs["unique_id"] = expected
+
+            return attrs
+
+    def get_actions(self, obj):
+        """
+        优化后的方法：优先从 context 中获取预加载的数据。
+        """
+        # 从 serializer 的 context 中获取预加载的查找字典
+        actions_lookup = self.context.get('actions_lookup')
+
+        if actions_lookup is not None:
+            # 如果查找字典存在（在 list 视图中），直接从中获取数据，避免查询数据库
+            key = (obj.system_id, obj.resource_type_id)
+            related_actions = actions_lookup.get(key, [])
+        else:
+            related_actions = Action.objects.filter(
+                system_id=obj.system_id, resource_type_ids__contains=obj.resource_type_id
+            )
+
+        return ActionSerializer(related_actions, many=True).data
+
+
+class ResourceTypeTreeSerializer(serializers.ModelSerializer):
+    children = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ResourceType
+        fields = ('system_id', 'resource_type_id', 'unique_id', 'name', 'name_en', 'description', 'children')
+
+    def get_children(self, obj: ResourceType):
+        try:
+            child_nodes = obj.tree_node.get_children().select_related("related")
+            child_resource_types = [child.related for child in child_nodes]
+            serializer = self.__class__(child_resource_types, many=True, context=self.context)
+            return serializer.data
+        except ResourceType.tree_node.RelatedObjectDoesNotExist:
+            return []
+
+
+class ResourceTypeTreeReqSerializer(serializers.Serializer):
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=True)
+
+
+class ListResourceTypeSerializer(serializers.Serializer):
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=True)
+    name = serializers.CharField(label=gettext_lazy("资源类型名称"), required=False)
+    name_en = serializers.CharField(label=gettext_lazy("资源类型英文名称"), required=False)
+
+
+class DeleteResourceTypeRequestSerializer(serializers.Serializer):
+    unique_id = serializers.CharField(label=gettext_lazy("unique_id"))
+
+
+class GetResourceTypeRequestSerializer(serializers.Serializer):
+    unique_id = serializers.CharField(label=gettext_lazy("unique_id"))
 
 
 class ActionSerializer(serializers.ModelSerializer):
