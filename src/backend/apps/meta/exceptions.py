@@ -51,3 +51,9 @@ class SystemDiagnosisPushTemplateEmpty(MetaException):
     ERROR_CODE = "005"
     STATUS_CODE = 500
     MESSAGE = gettext_lazy("系统诊断推送模板为空")
+
+
+class UniqueNameInValid(MetaException):
+    ERROR_CODE = "006"
+    STATUS_CODE = 400
+    MESSAGE = gettext_lazy("Unique name不合法。")
