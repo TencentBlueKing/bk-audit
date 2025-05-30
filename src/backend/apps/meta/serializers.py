@@ -145,6 +145,8 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResourceType
         fields = [
+            "unique_id",
+            "system_id",
             "resource_type_id",
             "name",
             "name_en",
@@ -153,8 +155,54 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
             "path",
             "version",
             "description",
+            "ancestor",
             "ancestors",
         ]
+        extra_kwargs = {
+            "unique_id": {"required": False, "allow_null": True, "allow_blank": True},
+        }
+
+        # ---------- 通用校验 / 自动填充 ----------
+        def validate(self, attrs):
+            """
+            统一处理 unique_id：
+              • 如果没传，就拼接并写回 attrs
+              • 如果传了，必须等于拼接结果
+            """
+            instance = getattr(self, "instance", None)
+
+            # 先拿到 system_id / resource_type_id（优先新值，其次旧值）
+            system_id = attrs.get("system_id") or (instance.system_id if instance else None)
+            res_type_id = attrs.get("resource_type_id") or (instance.resource_type_id if instance else None)
+
+            if system_id is None or res_type_id is None:
+                raise serializers.ValidationError("system_id 和 resource_type_id 必须同时提供")
+
+            expected = f"{system_id}:{res_type_id}"
+            incoming_uid = attrs.get("unique_id")
+
+            if incoming_uid in (None, "", " "):
+                # 前端没传；自动填
+                attrs["unique_id"] = expected
+            elif incoming_uid != expected:
+                # 前端传了，但不合法
+                raise serializers.ValidationError({"unique_id": f"unique_id 必须等于 {expected}"})
+
+            return attrs
+
+
+class ListResourceTypeSerializer(serializers.Serializer):
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=True)
+    name = serializers.CharField(label=gettext_lazy("资源类型名称"), required=False)
+    name_en = serializers.CharField(label=gettext_lazy("资源类型英文名称"), required=False)
+
+
+class DeleteResourceTypeRequestSerializer(serializers.Serializer):
+    unique_id = serializers.CharField(label=gettext_lazy("unique_id"))
+
+
+class GetResourceTypeRequestSerializer(serializers.Serializer):
+    unique_id = serializers.CharField(label=gettext_lazy("unique_id"))
 
 
 class ActionSerializer(serializers.ModelSerializer):
