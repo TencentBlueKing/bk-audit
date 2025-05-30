@@ -15,7 +15,6 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
 from unittest import mock
 
 from apps.meta.exceptions import BKAppNotExists
@@ -54,6 +53,10 @@ from tests.test_meta.constants import (
     RESOURCE_TYPE_LIST_DATA2,
     RESOURCE_TYPE_LIST_PARAMS,
     RESOURCE_TYPE_SCHEMA_PARAMS,
+    RESOURCE_TYPE_SON_DATA,
+    RESOURCE_TYPE_SON_SON2_DATA,
+    RESOURCE_TYPE_SON_SON_DATA,
+    RESOURCE_TYPE_TREE_DATA,
     RETRIEVE_USER_API_RESP,
     RETRIEVE_USER_DATA,
     RETRIEVE_USER_PARAMS,
@@ -321,6 +324,27 @@ class MetaTest(TestCase):
 
         result = self.resource.meta.get_global_choices()
         self.assertEqual(result, GLOBAL_CHOICES)
+
+    def test_manage_resource_type(self):
+        """CreateResourceTypeResource"""
+        root_unique_id = RESOURCE_TYPE_DATA["system_id"] + ":" + RESOURCE_TYPE_DATA["resource_type_id"]
+        created_1 = self.resource.meta.create_resource_type(**RESOURCE_TYPE_SON_DATA)
+        created_2 = self.resource.meta.create_resource_type(**RESOURCE_TYPE_SON_SON_DATA)
+        created_3 = self.resource.meta.create_resource_type(**RESOURCE_TYPE_SON_SON2_DATA)
+        _ = self.resource.meta.list_resource_type(system_id=RESOURCE_TYPE_DATA['system_id'])
+        result = self.resource.meta.get_resource_type_tree(system_id=RESOURCE_TYPE_DATA['system_id'])
+        self.assertEqual(result, RESOURCE_TYPE_TREE_DATA)
+        result = self.resource.meta.get_resource_type(unique_id=created_3["unique_id"])
+        self.assertEqual(
+            result["ancestors"], [RESOURCE_TYPE_SON_DATA["resource_type_id"], RESOURCE_TYPE_DATA["resource_type_id"]]
+        )
+        result = self.resource.meta.get_resource_type(unique_id=created_2["unique_id"])
+        self.assertEqual(
+            result["ancestors"], [RESOURCE_TYPE_SON_DATA["resource_type_id"], RESOURCE_TYPE_DATA["resource_type_id"]]
+        )
+        self.resource.meta.delete_resource_type(unique_id=root_unique_id)
+        result = self.resource.meta.get_resource_type(unique_id=created_3["unique_id"])
+        self.assertEqual(result["ancestors"], [RESOURCE_TYPE_SON_DATA["resource_type_id"]])
 
 
 class TestChangeSystemDiagnosisPushResource(TestCase):

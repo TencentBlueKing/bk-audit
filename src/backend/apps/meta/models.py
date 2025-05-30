@@ -17,15 +17,17 @@ to the current version of the project delivered to anyone in the future.
 """
 import uuid
 from collections import defaultdict
-from typing import List, Union
+from typing import List, Optional, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from blueapps.utils.logger import logger
 from django.conf import settings
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy
+from treebeard.exceptions import InvalidPosition, NodeAlreadySaved
+from treebeard.ns_tree import NS_Node
 
 from apps.exceptions import MetaConfigNotExistException
 from apps.meta.constants import (
@@ -35,6 +37,7 @@ from apps.meta.constants import (
     SystemDiagnosisPushStatusEnum,
     SystemSourceTypeEnum,
 )
+from apps.meta.exceptions import UniqueNameInValid
 from core.models import OperateRecordModel, SoftDeleteModel, SoftDeleteModelManager
 
 
@@ -248,6 +251,17 @@ class SystemRole(OperateRecordModel):
         ordering = ["-id"]
 
 
+class ResourceTypeTreeNode(NS_Node):
+    related = models.OneToOneField(
+        "ResourceType",
+        on_delete=models.DO_NOTHING,
+        related_name="tree_node",
+    )
+
+    def __str__(self) -> str:
+        return f"<ResourceTypeTreeNode {self.pk}→{self.related_id}>"
+
+
 class ResourceType(OperateRecordModel):
     """
     资源类型: 从 IAM 同步
@@ -255,16 +269,79 @@ class ResourceType(OperateRecordModel):
 
     system_id = models.CharField(gettext_lazy("系统ID"), max_length=64, db_index=True, null=False)
     resource_type_id = models.CharField(gettext_lazy("资源类型ID"), max_length=64, db_index=True, null=False)
+    unique_id = models.CharField(
+        gettext_lazy("唯一标识，资源类型场景下为'{系统ID}:{资源类型ID}'"), max_length=255, db_index=True, null=False, unique=True
+    )
     name = models.CharField(gettext_lazy("名称"), max_length=64)
     name_en = models.CharField(gettext_lazy("英文名称"), max_length=64, null=True, blank=True)
     sensitivity = models.IntegerField(gettext_lazy("敏感等级"), default=0)
-    provider_config = models.JSONField(
-        gettext_lazy("资源类型配置"), null=True, default=dict, blank=True, help_text=gettext_lazy("IAM V3")
-    )
+    provider_config = models.JSONField(gettext_lazy("资源类型配置"), null=True, default=dict, blank=True)
     path = models.CharField(gettext_lazy("资源路径"), max_length=255, default="")
     version = models.IntegerField(gettext_lazy("版本"), default=0, blank=True)
     description = models.TextField(gettext_lazy("描述信息"), blank=True, null=True)
-    ancestors = models.JSONField(gettext_lazy("父资源类型"), default=list, blank=True)
+    # 最多保存一个父 id；[] 表示根节点
+    ancestor = models.JSONField(gettext_lazy("父资源类型"), default=list, blank=True)
+
+    def __init__(self, *args, **kwargs):
+        ancestors_data = kwargs.pop('ancestors', None)
+        super().__init__(*args, **kwargs)
+        if ancestors_data is not None:
+            self.ancestors = ancestors_data
+
+    def __setattr__(self, name, value):
+        if name == 'ancestors':
+            if isinstance(value, list):
+                super().__setattr__('ancestor', value[:1])
+            else:
+                raise TypeError("ancestors must be a list")
+        else:
+            super().__setattr__(name, value)
+
+    def clean(self):
+        expected = f"{self.system_id}:{self.resource_type_id}"
+        if self.unique_id and self.unique_id != expected:
+            raise UniqueNameInValid(gettext_lazy("unique_id 必须为 %(val)s") % {"val": expected})
+        # 如果外部没传值，就自动填
+        self.unique_id = expected
+        super().clean()
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            self.clean()
+            super().save(*args, **kwargs)
+            # 同步树
+            self._sync_tree(self)
+
+    def delete(self, *args, **kwargs):
+        """
+        删除节点时：
+        1. 将直接子节点全部提为“森林”根节点；
+        2. 清空子节点的 ancestor 字段；
+        3. 删除自身 tree node；
+        4. 删除自身 ResourceType —— 全程同一事务。
+        """
+        with transaction.atomic():
+            # ① 行级锁自己，防并发
+            self.__class__.objects.select_for_update().filter(pk=self.pk)
+
+            node: Optional[ResourceTypeTreeNode] = getattr(self, "tree_node", None)
+
+            if node:
+                children: List[ResourceTypeTreeNode] = list(node.get_children())
+
+                # ② 移动子节点到根，并锁根节点
+                for child in children:
+                    ResourceTypeTreeNode.objects.select_for_update().filter(pk__in=[child.pk, child.get_root().pk])
+                    child.move(child.get_root(), pos="last-sibling")
+
+                # ③ 批量清空孩子的 ancestor
+                self.__class__.objects.filter(pk__in=[c.related_id for c in children]).update(ancestor=[])
+
+                # ④ 删除自己的 TreeNode
+                node.delete()
+
+            # ⑤ 同一事务内删除 ResourceType 本身
+            super().delete(*args, **kwargs)
 
     class Meta:
         verbose_name = gettext_lazy("资源类型")
@@ -283,6 +360,73 @@ class ResourceType(OperateRecordModel):
         if not system:
             system = System.objects.filter(system_id=self.system_id).first()
         return system.callback_url.rstrip("/") + "/" + self.path.lstrip("/")
+
+    @staticmethod
+    def _sync_tree(rt: "ResourceType"):
+        """
+        确保：
+          • 每个 ResourceType 恰有一个 TreeNode
+          • TreeNode 的父节点 == rt.ancestor（空则为根）
+        """
+        # 1. 锁定自身，防并发修改
+        rt = ResourceType.objects.select_for_update().select_related(None).get(pk=rt.pk)
+
+        # 2. 获取 / 创建 TreeNode（处理并发）
+        try:
+            node = rt.tree_node
+        except ResourceTypeTreeNode.DoesNotExist:
+            try:
+                node = ResourceTypeTreeNode.add_root(related=rt)
+            except IntegrityError:
+                node = rt.tree_node  # 并发事务已创建
+
+        # 3. 解析并锁定目标父节点
+        desired_parent: Optional[ResourceTypeTreeNode] = None
+        parent_ids = rt.ancestor or []
+        if parent_ids:
+            parent_rt = (
+                ResourceType.objects.select_for_update()
+                .filter(resource_type_id=parent_ids[0], system_id=rt.system_id)
+                .select_related("tree_node")
+                .first()
+            )
+            desired_parent = getattr(parent_rt, "tree_node", None)
+
+        # 4. 如父节点不同 → 迁移
+        current_parent = node.get_parent()
+        if current_parent == desired_parent:
+            return
+
+        # 环检测
+        if desired_parent and (desired_parent == node or desired_parent.is_descendant_of(node)):
+            raise ValueError(f"循环依赖：不能把 {node} 移到自身或其后代 {desired_parent} 下")
+
+        # 锁定即将写入的节点
+        lock_ids = [node.pk]
+        if desired_parent:
+            lock_ids.append(desired_parent.pk)
+        ResourceTypeTreeNode.objects.select_for_update().filter(pk__in=lock_ids)
+
+        try:
+            if desired_parent:
+                node.move(
+                    desired_parent,
+                    pos="sorted-child" if ResourceTypeTreeNode.node_order_by else "last-child",
+                )
+            else:
+                node.move(node.get_root(), pos="last-sibling")
+        except (InvalidPosition, NodeAlreadySaved) as exc:
+            logger.exception("Tree move failed: %s → %s", node, desired_parent)
+            raise ValueError(f"移动节点失败：{exc}") from exc
+
+    @property
+    def ancestors(self) -> List[dict]:
+        """
+        获取祖先节点
+        """
+        info = [item.related.resource_type_id for item in self.tree_node.get_ancestors()]
+        info.reverse()
+        return info
 
 
 class Action(OperateRecordModel):
