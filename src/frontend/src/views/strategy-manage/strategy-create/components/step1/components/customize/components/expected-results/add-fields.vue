@@ -573,11 +573,11 @@
       }, 200)
   });
   const isTableAggregate = ref(false)
-  watch(() => tableData.value, (data) => {
+  watch(() => tableData.value, (data) => {    
   // 检查data数组中是否有aggregate为空的项
   const hasEmptyAggregate = data.some(item => {
     // 检查当前项的aggregate是否存在或为null
-    return item.aggregate === undefined || item.aggregate === null || item.aggregate === '';
+    return item.aggregate === undefined || item.aggregate === '';
   });
   
   // 设置isTableAggregate的值
