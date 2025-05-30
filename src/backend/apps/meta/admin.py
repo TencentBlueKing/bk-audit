@@ -79,7 +79,7 @@ class SystemAdmin(admin.ModelAdmin):
 
 @admin.register(ResourceType)
 class ResourceTypeAdmin(admin.ModelAdmin):
-    list_display = ["id", "system_id", "resource_type_id", "name", "name_en", "sensitivity", "version", "ancestors"]
+    list_display = ["id", "system_id", "resource_type_id", "name", "name_en", "sensitivity", "version", "ancestor"]
     ordering = ["system_id", "resource_type_id"]
     search_fields = ["system_id", "resource_type_id"]
 
