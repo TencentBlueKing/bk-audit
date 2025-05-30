@@ -36,6 +36,7 @@ from django.db.models.enums import ChoicesMeta
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
+from rest_framework.response import Response
 
 from apps.audit.resources import AuditMixinResource
 from apps.meta import models
@@ -57,6 +58,7 @@ from apps.meta.models import (
     GeneralConfig,
     GlobalMetaConfig,
     ResourceType,
+    ResourceTypeTreeNode,
     SensitiveObject,
     System,
     SystemInstance,
@@ -68,6 +70,7 @@ from apps.meta.serializers import (
     ChangeSystemDiagnosisPushReqSerializer,
     ChangeSystemDiagnosisPushRespSerializer,
     DeleteGeneralConfigReqSerializer,
+    DeleteResourceTypeRequestSerializer,
     DeleteSystemDiagnosisPushReqSerializer,
     FieldListRequestSerializer,
     FieldListSerializer,
@@ -77,6 +80,7 @@ from apps.meta.serializers import (
     GetAssetPullInfoRequestSerializer,
     GetCustomFieldsRequestSerializer,
     GetGlobalsResponseSerializer,
+    GetResourceTypeRequestSerializer,
     GetResourceTypeSchemaRequestSerializer,
     GetSensitiveObjRequestSerializer,
     GetSensitiveObjResponseSerializer,
@@ -86,10 +90,13 @@ from apps.meta.serializers import (
     GlobalMetaConfigPostSerializer,
     ListAllTagsRespSerializer,
     ListGeneralConfigReqSerializer,
+    ListResourceTypeSerializer,
     ListUsersRequestSerializer,
     ListUsersResponseSerializer,
     NamespaceSerializer,
     ResourceTypeSerializer,
+    ResourceTypeTreeReqSerializer,
+    ResourceTypeTreeSerializer,
     RetrieveUserRequestSerializer,
     RetrieveUserResponseSerializer,
     SaveTagResponseSerializer,
@@ -109,7 +116,7 @@ from apps.meta.serializers import (
 )
 from apps.meta.utils.globals import Globals
 from apps.permission.handlers.actions import ActionEnum, get_action_by_id
-from apps.permission.handlers.drf import wrapper_permission_field
+from apps.permission.handlers.drf import IAMPermission, wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.choices import list_registered_choices
 from core.models import get_request_username
@@ -282,6 +289,181 @@ class ResourceTypeListResource(SystemAttrAbstractResource):
     name = gettext_lazy("资源类型列表")
     model = models.ResourceType
     serializer_class = ResourceTypeSerializer
+
+    def list(self, params: dict) -> list:
+        request, view_set = self.build_request_and_view_set(method="GET", params=params)
+        return self.list_in_view(view_set, request, params).data
+
+    @staticmethod
+    def list_in_view(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            resource_types_page = page
+        else:
+            resource_types_page = queryset
+
+        system_ids = {rt.system_id for rt in resource_types_page}
+        resource_type_ids_set = {rt.resource_type_id for rt in resource_types_page}
+        all_related_actions = Action.objects.filter(system_id__in=system_ids)
+        actions_lookup = defaultdict(list)
+        for action in all_related_actions:
+            for rt_id in action.resource_type_ids:
+                if rt_id in resource_type_ids_set:
+                    key = (action.system_id, rt_id)
+                    actions_lookup[key].append(action)
+
+        serializer_context = {
+            'request': request,
+            'actions_lookup': actions_lookup,
+        }
+        serializer = self.get_serializer(resource_types_page, many=True, context=serializer_context)
+
+        # 返回分页或普通列表响应
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+
+        return Response(serializer.data)
+
+
+class ListResourceType(Meta, ModelResource):
+    action = "list"
+    name = gettext_lazy("查询资源类型")
+    model = ResourceType
+    serializer_class = ResourceTypeSerializer
+    filter_fields = ["system_id", "name", "name_en"]
+    RequestSerializer = ListResourceTypeSerializer
+    many_response_data = True
+
+
+class GetResourceTypeTree(Meta, Resource):
+    """获取完整的资源类型树,
+    每个节点都包含其基本信息和 `children` 字段，`children` 字段是一个包含其所有直接子节点的数组。
+    如果一个节点没有子节点，其 `children` 数组为空 `[]`。
+
+    ```json
+    [
+      {
+        "system_id": "iam",
+        "resource_type_id": "system",
+        "unique_id": "iam:system",
+        "name": "权限中心",
+        "name_en": "IAM",
+        "description": "蓝鲸权限中心系统",
+        "children": [
+          {
+            "system_id": "iam",
+            "resource_type_id": "user",
+            "unique_id": "iam:user",
+            "name": "用户",
+            "name_en": "User",
+            "description": "权限中心的用户资源",
+            "children": []
+          }
+        ]
+      }
+    ]
+    """
+
+    name = gettext_lazy("获取完整的资源类型树")
+    serializer_class = ResourceTypeTreeSerializer
+    ResponseSerializer = ResourceTypeTreeSerializer
+    RequestSerializer = ResourceTypeTreeReqSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        root_nodes = (
+            ResourceTypeTreeNode.get_root_nodes()
+            .select_related('related')
+            .filter(related__system_id=validated_request_data['system_id'])
+        )
+        resource_type_ids_qs = root_nodes.values_list('related_id', flat=True)
+        return ResourceType.objects.filter(pk__in=resource_type_ids_qs)
+
+
+class GetResourceType(Meta, ModelResource):
+    """获取资源类型，unique_id为'{系统ID}:{资源类型ID}'"""
+
+    action = "retrieve"
+    name = gettext_lazy("获取资源类型")
+    model = ResourceType
+    serializer_class = ResourceTypeSerializer
+    RequestSerializer = GetResourceTypeRequestSerializer
+    lookup_field = "unique_id"
+
+
+class CreateResourceType(Meta, ModelResource):
+    """新增资源类型ResourceType，参数样例：
+
+    ```json
+    {
+      "system_id": "bk_paas",
+      "resource_type_id": "app",
+      "unique_id": "bk_paas:app",
+      "name": "应用",
+      "name_en": "Application",
+      "sensitivity": 1,
+      "provider_config": {"url": "/api/v1/iam/resources/"},
+      "path": "/api/v1/iam/resources/",
+      "version": 1,
+      "description": "蓝鲸PaaS平台的应用资源类型",
+      "ancestor": ["parent_app"]
+    }
+    ```
+    """
+
+    action = "create"
+    name = gettext_lazy("新建资源类型")
+    model = ResourceType
+    serializer_class = ResourceTypeSerializer
+    RequestSerializer = ResourceTypeSerializer
+    lookup_field = "unique_id"
+
+
+class BulkCreateResourceType(Meta, Resource):
+    """批量创建资源类型, 传入的参数为List[ResourceType], 单个ResourceType样例详见新建资源类型接口"""
+
+    name = gettext_lazy("批量创建资源类型")
+    serializer_class = ResourceTypeSerializer
+    RequestSerializer = ResourceTypeSerializer
+    many_request_data = True
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        resource_types = [ResourceType(**resource_type) for resource_type in validated_request_data]
+        system_ids = {resource_type.system_id for resource_type in resource_types}
+        p = IAMPermission(
+            actions=[ActionEnum.EDIT_SYSTEM],
+            resources=[ResourceEnum.SYSTEM.create_instance(system_id) for system_id in system_ids],
+        )
+        p.has_permission(None, None)
+        with transaction.atomic():
+            for resource_type in resource_types:
+                resource_type.save()
+        return resource_types
+
+
+class UpdateResourceType(Meta, ModelResource):
+    """更新资源类型"""
+
+    action = "update"
+    name = gettext_lazy("更新资源类型")
+    model = ResourceType
+    serializer_class = ResourceTypeSerializer
+    RequestSerializer = ResourceTypeSerializer
+    lookup_field = "unique_id"
+
+
+class DeleteResourceType(Meta, ModelResource):
+    """删除资源类型，unique_id为'{系统ID}:{资源类型ID}'"""
+
+    action = "destroy"
+    name = gettext_lazy("删除资源类型")
+    model = ResourceType
+    serializer_class = DeleteResourceTypeRequestSerializer
+    RequestSerializer = DeleteResourceTypeRequestSerializer
+    lookup_field = "unique_id"
 
 
 class ActionListResource(SystemAttrAbstractResource):

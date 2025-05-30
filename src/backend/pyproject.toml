@@ -98,6 +98,7 @@ dependencies = [
     "opentelemetry-instrumentation-httpx==0.51b0",
     "opentelemetry-instrumentation-asyncio==0.51b0",
     "opentelemetry-instrumentation-threading==0.51b0",
+    "django-treebeard>=4.7.1",
     "bkstorages==2.0.0",
     "gevent==25.4.1",
     "pympler>=1.1",
