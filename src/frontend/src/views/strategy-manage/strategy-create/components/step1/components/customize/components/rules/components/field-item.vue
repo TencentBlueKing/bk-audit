@@ -426,7 +426,6 @@
       : [...tableFields, ...filteredExpectedResult];
 
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
-    console.log('localTableFields', localTableFields.value);
     
   };
   // 返回值
