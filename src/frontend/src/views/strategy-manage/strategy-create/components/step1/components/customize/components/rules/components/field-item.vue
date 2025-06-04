@@ -393,7 +393,7 @@
   };
 
   // 回显下拉值
-  const  handleValueDicts = () => {    
+  const  handleValueDicts = () => {
     localConditions.value.conditions.forEach((item) => {
       dicts.value[item.condition.field.raw_name] = [];
     });
@@ -401,7 +401,7 @@
       if (key) {
         fetchStrategyFieldValue({
           field_name: key,
-        }).then((data) => {          
+        }).then((data) => {
           dicts.value[key] = data;
           if (data && data.length) {
             handleCascader(key, data);
@@ -412,8 +412,8 @@
   };
 
   // 更新可选字段列表
-  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {   
-    const filteredExpectedResult = expectedResult.filter(item => item.aggregate)
+  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
+    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
     // 检查是否已经选择了预期结果中的字段
     const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
 
@@ -426,7 +426,6 @@
       : [...tableFields, ...filteredExpectedResult];
 
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
-    
   };
   // 返回值
   const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
