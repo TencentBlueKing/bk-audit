@@ -73,11 +73,14 @@
   import { useRoute, useRouter } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
   import { useRoute, useRouter } from 'vue-router';
+  import Vuedraggable from 'vuedraggable';
+
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import AddFields from './add-fields.vue';
+
   interface Expose {
     resetFormData: () => void,
     setSelect: (select: Array<DatabaseTableFieldModel>) => void;
@@ -91,8 +94,6 @@
     configType: string,
   }
 
-  const route = useRoute();
-  const router =useRouter();
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const route = useRoute();
@@ -118,7 +119,7 @@
     return _.cloneDeep(props.tableFields);
   });
 
-  const updateExpectedResult = () => {    
+  const updateExpectedResult = () => {
     emits('updateExpectedResult', expectedResultList.value);
   };
 
@@ -134,7 +135,7 @@
     return `[${item?.label}] ${element.display_name}`;
   };
 
-  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {    
+  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {
     if (editIndex !== undefined) {
       expectedResultList.value.splice(editIndex, 1, item);
     } else {
