@@ -154,7 +154,7 @@
   }
 
   const props = defineProps<Props>();
-  
+
   const emits = defineEmits<Emits>();
 
   const router = useRouter();
