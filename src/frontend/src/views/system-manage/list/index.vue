@@ -20,7 +20,16 @@
     :loading="isLoading"
     name="systemList">
     <div class="system-list-page">
-      <div class="mb16">
+      <div class="mb16 action-header">
+        <bk-button
+          class="mr8"
+          theme="primary"
+          @click="handleCreate">
+          <audit-icon
+            style="margin-right: 8px;font-size: 14px;"
+            type="add" />
+          {{ t('接入系统') }}
+        </bk-button>
         <bk-input
           v-model="searckKey"
           :placeholder="t('请输入 应用名称、应用 ID 进行搜索')"
@@ -29,11 +38,14 @@
       </div>
       <render-list
         ref="listRef"
+        class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
         :reverse-sort-fields="['system_id','status']"
+        :settings="settings"
         @clear-search="handleClearSearch"
         @column-filter="handleColumnFilter"
+        @request-success="handleRequestSuccess"
         @row-click="handleRowClick" />
     </div>
   </skeleton-loading>
@@ -52,7 +64,16 @@
 
   import EditTag from '@components/edit-box/tag.vue';
 
-  import useRequest from '@/hooks/use-request';
+  import getAssetsFile from '@utils/getAssetsFile';
+
+  // import useRequest from '@/hooks/use-request';
+
+  interface Syetem {
+    page: number;
+    num_pages: number;
+    total: number;
+    results: Array<SyetemModel>
+  }
 
   enum FullEnum {
     FULL = 'full',
@@ -63,7 +84,7 @@
     ALL = 'all'
   }
   const { t } = useI18n();
-  const tableColumn = [
+  const tableColumn = ref([
     {
       label: () => '',
       width: '65px',
@@ -78,14 +99,29 @@
       sort: 'custom',
       field: () => 'name',
       render: ({ data }: {data: SyetemModel}) => {
+        const isNew = isNewData(data);
         const to = {
           name: 'systemDetail',
           params: {
             id: data.system_id,
           },
         };
-        return (
-          <auth-router-link
+        return (isNew
+          ? <div style='display: flex;align-items: center;'>
+            <auth-router-link
+              id={`systemDetailLink${data.system_id}`}
+              permission={data.permission.view_system}
+              actionId='view_system'
+              resource={data.system_id}
+              resourceTypeId="system"
+              to={to}>
+              {data.name}
+            </auth-router-link>
+            <img
+              class='table-new-tip'
+              src={getAssetsFile('new-tip.png')}/>
+          </div>
+          : <auth-router-link
             id={`systemDetailLink${data.system_id}`}
             permission={data.permission.view_system}
             actionId='view_system'
@@ -108,28 +144,24 @@
       render: ({ data }: {data: SyetemModel}) => <EditTag data={data.managers} key={data.id}/>,
     },
     {
-      label: () => t('系统来源'),
-      sort: 'custom',
-      filter: {
-        list: [
-          {
-            text: t('权限中心V3'),
-            value: 'iam_v3',
-          },
-          {
-            text: t('权限中心V4'),
-            value: 'iam_v4',
-          },
-          {
-            text: t('审计中心'),
-            value: 'bk_audit',
-          },
-        ],
-      },
-      filterScope: SortScope.ALL,
-      match: FullEnum.FUZZY,
-      field: () => 'source_type',
-      render: ({ data }: {data: SyetemModel}) => (GlobalChoices.value.meta_system_source_type.find(item => item.id === data.source_type)?.name || '--'),
+      label: () => t('权限模型'),
+      render: ({ data }: {data: SyetemModel}) => <>{
+        !data.model
+          ? <bk-tag theme="warning">{t('未配置')}</bk-tag>
+          : <div>
+            <bk-tag
+              style="margin-right: 4px"
+              theme="info"
+              v-bk-tooltips={t('已配置资源', { count: data.model.resources })}>
+              { data.model.resources }
+            </bk-tag>
+            <bk-tag
+              theme="info"
+              v-bk-tooltips={t('已配置操作', { count: data.model.operations })}>
+              { data.model.operations }
+            </bk-tag>
+          </div>
+      }</>,
     },
     {
       label: () => t('数据上报状态'),
@@ -175,7 +207,32 @@
       width: '180px',
       render: ({ data }: {data: SyetemModel}) => data.last_time || '--',
     },
-  ];
+    {
+      label: () => t('app code'),
+      sort: 'custom',
+      field: () => 'app_code',
+      width: '180px',
+      render: ({ data }: {data: SyetemModel}) => data.app_code || '--',
+    },
+    {
+      label: () => t('系统域名'),
+      sort: 'custom',
+      field: () => 'system_domain',
+      width: '180px',
+    },
+    {
+      label: () => t('创建时间'),
+      field: () => 'created_at',
+      width: 170,
+      render: ({ data }: {data: SyetemModel}) => data.created_at || '--',
+    },
+    {
+      label: () => t('创建人'),
+      field: () => 'created_by',
+      width: 140,
+      render: ({ data }: {data: SyetemModel}) => data.created_by || '--',
+    },
+  ] as any[]);
 
   const listRef = ref();
   const dataSource = MetaManageService.fetchSystemList;
@@ -183,12 +240,46 @@
   const searckKey = ref('');
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
 
-  const {
-    data: GlobalChoices,
-  } = useRequest(MetaManageService.fetchGlobalChoices, {
-    defaultValue: {},
-    manual: true,
+  const disabledMap: Record<string, string> = {
+    name: 'name',
+    system_id: 'system_id',
+    managers: 'managers',
+    id: 'id', // 权限模型
+    status: 'status',
+    last_time: 'last_time',
+  };
+  const initSettings = () => ({
+    fields: tableColumn.value.reduce((res, item) => {
+      if (item.field) {
+        res.push({
+          label: item.label(),
+          field: item.field(),
+          disabled: !!disabledMap[item.field()],
+        });
+      }
+      return res;
+    }, [] as Array<{
+      label: string, field: string, disabled: boolean,
+    }>),
+    checked: ['name', 'system_id', 'managers', 'id', 'status', 'status', 'last_time'],
+    showLineHeight: false,
   });
+  const settings = computed(() => {
+    const jsonStr = localStorage.getItem('audit-strategy-manage-list-setting');
+    if (jsonStr) {
+      const jsonSetting = JSON.parse(jsonStr);
+      jsonSetting.showLineHeight = false;
+      return jsonSetting;
+    }
+    return initSettings();
+  });
+
+  // const {
+  //   data: GlobalChoices,
+  // } = useRequest(MetaManageService.fetchGlobalChoices, {
+  //   defaultValue: {},
+  //   manual: true,
+  // });
 
   // 搜索
   const handleSearch = (keyword: string|number) => {
@@ -215,6 +306,42 @@
     });
   };
 
+  const handleCreate = () => {
+    //
+  };
+
+  // 判断是否是新建数据
+  const isNewData = (data: SyetemModel) => {
+    if (!data.created_at) {
+      return false;
+    }
+    const time = new Date(data.created_at).getTime();
+    const now = new Date().getTime();
+    const diff = Math.abs(now - time);
+    const isNew = diff < (5 * 60 * 1000);
+    return isNew;
+  };
+
+  // 将新建的tr高亮
+  const setNewCreateTrHighlight = (index: number, isNew : boolean) => {
+    const domList = document.querySelectorAll(`.audit-highlight-table .bk-table-body tbody tr:nth-child(${index + 1}) td`);
+    if (domList) {
+      domList.forEach((dom) => {
+        const el = dom as HTMLElement;
+        el.style.background = isNew ? '#f2fff4' : '#fff';
+      });
+    }
+  };
+
+  const handleRequestSuccess = (data: Syetem) => {
+    setTimeout(() => {
+      data.results.forEach((item, index) => {
+        const isNew = isNewData(item);
+        setNewCreateTrHighlight(index, isNew);
+      });
+    }, 1000);
+  };
+
   onMounted(() => {
     listRef.value.fetchData();
   });
@@ -225,9 +352,20 @@
     padding: 24px;
     background: #fff;
 
+    .action-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
     .audit-render-list {
       td {
         cursor: pointer;
+      }
+
+      .table-new-tip {
+        height: 14px;
+        margin-left: 8px;
       }
     }
   }
