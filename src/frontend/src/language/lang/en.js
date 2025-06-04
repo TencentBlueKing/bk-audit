@@ -103,7 +103,7 @@ export default {
   系统名称: 'System name',
   '全部（有权限）': 'All(with permission)',
   系统描述: 'System description',
-  系统接入: 'System Integrations',
+  系统列表: 'System list',
   系统负责人: 'System admin',
   数据上报状态: 'Status',
   最近数据时间: 'Latest data time',
