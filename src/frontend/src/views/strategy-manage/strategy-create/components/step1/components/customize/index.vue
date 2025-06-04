@@ -154,7 +154,6 @@
             :configs-data="formData.configs"
             :expected-result="formData.configs.select"
             :table-fields="tableFields"
-            :configs-data="formData.configs"
             @show-structure-preview="handleShowStructureView"
             @update-where="handleUpdateWhere" />
         </bk-form-item>
@@ -280,8 +279,7 @@
     nextTick,
     onMounted,    ref,
     watch,
-    watchEffect,
-    onMounted } from 'vue';
+    watchEffect } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -606,7 +604,7 @@
     const displayArr = Array.from(new Set(rtIdArrDisplay.reduce((acc, curr) => acc.concat(curr), [])));
     StrategyManageService.fetchBatchTableRtFields({
       table_ids: idArr.join(','),
-    }).then((data) => {      
+    }).then((data) => {
       tableFields.value = [];
       data.forEach((item: Record<string, any>, index) => {
         tableFields.value.push(...setTableFields(item.fields, displayArr[index]));
@@ -693,9 +691,9 @@
       rt_id_or_uid: arr[arr.length - 1],
     };
   };
-  const removeTreeData = () =>{
-    sessionStorage.removeItem('storage-tree-data')
-  }
+  const removeTreeData = () => {
+    sessionStorage.removeItem('storage-tree-data');
+  };
   const createInfoBoxConfig = (overrides: {
     onConfirm: () => void
     onClose: () => void
@@ -822,7 +820,7 @@
   };
 
   // 更新预期数据
-  const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {    
+  const handleUpdateExpectedResult = (expectedResult: Array<DatabaseTableFieldModel>) => {
     formData.value.configs.select = expectedResult;
     // 如果当前选中的就是实时调度且预期结果不满足条件，需要重置
     if (formData.value.configs.data_source.source_type === 'stream_source' && formData.value.configs.select.some(item => item.aggregate)) {
@@ -836,7 +834,7 @@
   };
 
   // 更新风险规则
-  const handleUpdateWhere = (where: Where) => {    
+  const handleUpdateWhere = (where: Where) => {
     formData.value.configs.where = where;
   };
 
@@ -918,7 +916,7 @@
     if ((isEditMode || isCloneMode) && (props.editData.strategy_id && allConfigTypeTable.value.length > 0)) {
       if (isInit) {
         return;
-      }      
+      }
       setFormData(props.editData);
       isInit = true;
     }
