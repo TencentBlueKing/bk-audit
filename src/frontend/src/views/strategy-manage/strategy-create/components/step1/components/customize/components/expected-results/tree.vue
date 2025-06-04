@@ -19,7 +19,12 @@
             </span>
           </span>
           <span v-else>
-            <span class="field-type-span">
+            <span v-if="`self_name` in data" class="field-type-span">
+            {{ data.self_name }} 
+            <span class="subscript">/</span>
+            {{ data.self_key_name }}
+            </span>
+            <span class="field-type-span" v-else>
               <span v-if="`parent_raw_name` in data">{{ data.parent_display_name
             }}{{ data.parent_raw_name ? `(${data.parent_raw_name})` : `` }}</span>
               <span v-else> {{ data.display_name
@@ -309,6 +314,8 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
           // 如果子节点没有 table，则继承父级的 table
           return {
             ...child,
+            self_name: `${item.display_name}(${item.raw_name})`,
+            self_key_name: `${child.alias}(${child.value})`,
             table: child.table || item.table,
             raw_name: child.raw_name || item.raw_name, // 保留子节点自己的raw_name
             is_checked: false,
@@ -386,7 +393,6 @@ watch(
         });
       };
       traverseAndSetCheckboxMode(treeData.value);      
-
   },
   {
     deep: true,
