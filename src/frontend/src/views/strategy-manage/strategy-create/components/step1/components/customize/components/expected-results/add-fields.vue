@@ -74,9 +74,14 @@
                           <span>{{ item?.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
                         </div>
                       </bk-checkbox>
-                    </bk-checkbox-group> 
+                    </bk-checkbox-group>
                   </div>
-                  <div>{{ item.raw_name }}</div>
+                  <div style="margin-left: 5px;margin-right: 5px;">
+                    <span v-if="'self_name' in item">{{ item.self_name }} / {{ item.self_key_name }}</span>
+                    <span v-else>{{ item.raw_name }} 
+                      <span v-for="key in item.keys" :key="key">/ {{ key }}</span>
+                    </span>
+                  </div>
                 </div>
               </div>
                 <nodeSelect
@@ -283,6 +288,8 @@
     isDuplicate: boolean;
     display_name: string;
     keys?: string[];
+    self_key_name?: string;
+    self_name?: string;
   }
   interface NodeSelectComponent {
     handleSearch: (data: string) => void;  // 根据你的实际参数类型调整
