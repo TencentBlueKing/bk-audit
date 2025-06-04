@@ -206,7 +206,7 @@
         aggregate: null,
         spec_field_type: '',
         remark: '',
-        property: {}
+        property: {},
       });
     }
     showAddCount.value = false;

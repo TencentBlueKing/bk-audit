@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
   const isDevelopment = mode === 'development';
 
   return {
-    // logLevel: 'error',
+    logLevel: 'error',
     base: process.env.AUDIT_VITE_BUILD_BASE_DIR || '/',
     publicDir: 'static',
     plugins: [
@@ -71,7 +71,6 @@ export default defineConfig(({ mode }) => {
     },
     envPrefix: 'AUDIT_',
     server: {
-      host: '127.0.0.1',
       https: true,
       port: 8082,
       strictPort: true,
