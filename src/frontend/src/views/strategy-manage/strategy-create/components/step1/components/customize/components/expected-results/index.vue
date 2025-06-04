@@ -68,15 +68,17 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, ref, onMounted, nextTick, watch } from 'vue';
+  import { computed, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import Vuedraggable from 'vuedraggable';
   import { useRoute, useRouter } from 'vue-router';
+  import Vuedraggable from 'vuedraggable';
+
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import AddFields from './add-fields.vue';
+
   interface Expose {
     resetFormData: () => void,
     setSelect: (select: Array<DatabaseTableFieldModel>) => void;
@@ -90,10 +92,10 @@
     configType: string,
   }
 
-  const route = useRoute();
-  const router =useRouter();
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const route = useRoute();
+  const router = useRouter();
   const { t } = useI18n();
   const addFieldsRef = ref();
 
@@ -115,7 +117,7 @@
     return _.cloneDeep(props.tableFields);
   });
 
-  const updateExpectedResult = () => {    
+  const updateExpectedResult = () => {
     emits('updateExpectedResult', expectedResultList.value);
   };
 
@@ -131,7 +133,7 @@
     return `[${item?.label}] ${element.display_name}`;
   };
 
-  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {    
+  const handleAdd = (item: DatabaseTableFieldModel, editIndex: number | undefined) => {
     if (editIndex !== undefined) {
       expectedResultList.value.splice(editIndex, 1, item);
     } else {
