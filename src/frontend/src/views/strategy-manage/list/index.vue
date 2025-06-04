@@ -216,7 +216,6 @@
   import _ from 'lodash';
   import {
     computed,
-    nextTick,
     onMounted,
     ref,
     shallowRef,
@@ -1296,12 +1295,12 @@
       strategyLabelList.value = labelList.value;
     }
 
-    nextTick(() => {
+    setTimeout(() => {
       data.results.forEach((item, index) => {
         const isNew = isNewData(item);
         setNewCreateTrHighlight(index, isNew);
       });
-    });
+    }, 1000);
   };
 
   const startPollingStatus = () => {

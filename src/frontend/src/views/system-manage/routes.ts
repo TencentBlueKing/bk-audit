@@ -30,7 +30,7 @@ export default {
       component: () => import('@views/system-manage/list/index.vue'),
       name: 'systemList',
       meta: {
-        title: '系统接入',
+        title: '系统列表',
         skeleton: 'systemList',
       },
     },

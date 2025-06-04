@@ -173,7 +173,7 @@
               <audit-icon
                 class="menu-item-icon"
                 type="insert" />
-              {{ t('系统接入') }}
+              {{ t('系统列表') }}
             </audit-menu-item>
           </audit-menu-item-group>
           <audit-menu-item-group v-if="configData.super_manager">
