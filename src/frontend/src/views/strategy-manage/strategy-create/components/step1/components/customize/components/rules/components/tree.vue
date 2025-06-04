@@ -1,16 +1,22 @@
 <template>
   <bk-select ref="selectRef" v-model="selectedValue" :auto-height="false" collapse-tags custom-content filterable
-    @search-change="handleSearch" :popoverOptions="{ 'width': 'auto' }" display-key="name" id-key="id" multiple>
+    @toggle="handleToggle" @search-change="handleSearch"
+    :popoverOptions="{ 'width': 'auto', 'height': 400, 'extCls': 'node-select' }" display-key="name" id-key="id"
+    multiple>
     <bk-tree ref="treeRef" children="children" :data="treeData" empty-text=" " label="raw_name"
-      :node-content-action="['click']" :show-node-type-icon="false"
-      @nodeClick="handleNodeClick">
+      :node-content-action="['click']" :show-node-type-icon="false" style="height: 340px;" @nodeClick="handleNodeClick">
       <template #default="{ data }">
         <div class="field" v-if="!(data.isEdit)">
           <div class="field-left">
             <audit-icon style="margin-right: 4px;font-size: 14px;" svg :type="data.spec_field_type" />
             <span v-if="props.configType === 'LinkTable'">
               <span style=" color: #3a84ff;">{{ data.table }}.</span>
-              <span class="field-type-span">{{ getAggregateName(data) }}{{ data.display_name }}{{ data.raw_name ?
+              <span v-if="'self_name' in data" class="field-type-span">
+                {{ data.self_name }}
+                <span class="subscript">/</span>
+                {{ data.self_key_name }}
+              </span>
+              <span v-else class="field-type-span">{{ getAggregateName(data) }}{{ data.display_name }}{{ data.raw_name ?
                 `(${data.raw_name})` : ``
                 }}
                 <span v-for="(field, fieldIndex) in data?.fieldTypeValueAr" :key="fieldIndex">
@@ -18,10 +24,16 @@
                   {{ field }}
                 </span>
               </span>
+
             </span>
             <span v-else>
               <span v-if="'textValue' in data" class="field-type-span">{{ getAggregateName(data) }}{{ data.display_name
               }}
+              </span>
+              <span v-else-if="'self_name' in data" class="field-type-span">
+                {{ data.self_name }}
+                <span class="subscript">/</span>
+                {{ data.self_key_name }}
               </span>
 
               <span v-else class="field-type-span">
@@ -30,7 +42,7 @@
                   {{ data.parent_display_name }}{{ data.parent_raw_name ?
                     `(${data.parent_raw_name})` : ``
                   }}</span>
-                <span v-else>{{ data.display_name }}{{ `(${data.raw_name})`}}</span>
+                <span v-else>{{ data.display_name }}{{ `(${data.raw_name})` }}</span>
 
                 <span v-for="(field, fieldIndex) in data?.keys" :key="fieldIndex">
                   <span class="subscript">/</span>
@@ -85,7 +97,8 @@
               </div>
 
               <bk-select v-else v-model="data.spec_field_type" size="small" empty-text="请选择字段类型" :filterable="false"
-                :popoverOptions="{ 'boundary': 'parent' }" style="width: 200px;" @select="handleSelect(data)">
+                :popoverOptions="{ 'placement': 'bottom', 'boundary': 'parent', 'extCls': 'option-select' }"
+                style="width: 200px;" @select="handleSelect(data)">
                 <bk-option v-for="item in fieldTypeList" :id="item.id" :key="item.id"
                   :name="`${item.name}(${item.id})`" />
               </bk-select>
@@ -112,7 +125,7 @@
   </bk-select>
 </template>
 <script setup lang="tsx">
-import { computed, ref, watch, onMounted, nextTick } from 'vue';
+import { computed, ref, watch, onMounted, nextTick, onUnmounted } from 'vue';
 import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 import MetaManageService from '@service/meta-manage';
 import useRequest from '@hooks/use-request';
@@ -165,6 +178,16 @@ const nodeInput = ref('');
 const treeRef = ref();
 const selectedValue = ref();
 const selectRef = ref(null);
+
+const handleToggle = (isToggle: boolean) => {
+  if (isToggle) {
+    const haveTreeData = sessionStorage.getItem("rule-tree-data");
+    if (haveTreeData) {
+      treeData.value = JSON.parse(sessionStorage.getItem("rule-tree-data") || "[]");
+    }
+  }
+
+}
 // 取消
 const handleAddFieldClose = (val: Record<string, any>) => {
   treeData.value.forEach((node: Record<string, any>) => {
@@ -179,7 +202,7 @@ const handleSearch = (keyword: string) => {
   const searchAr = JSON.parse(JSON.stringify(treeData.value))
   const searchInTree = (nodes: Record<string, any>) => {
 
-    return nodes.reduce((result:Record<string, any>, node: Record<string, any>) => {
+    return nodes.reduce((result: Record<string, any>, node: Record<string, any>) => {
       // 检查当前节点      
       if (node.raw_name.includes(keyword) || node.display_name.includes(keyword)) {
         result.push(node);
@@ -262,12 +285,12 @@ const handleAddFieldSubmit = (val: Record<string, any>) => {
     }
   })
   storageTreeData.value = treeData.value
-
+  sessionStorage.setItem("rule-tree-data", JSON.stringify(storageTreeData.value));
 }
 // 选择
-const handleNodeClick = (nodes: Record<string, any>) => {  
+const handleNodeClick = (nodes: Record<string, any>) => {
   if (!nodes.isEdit) {
-    selectedValue.value = nodes.selectedValue;
+    selectedValue.value = 'self_name' in nodes ? `${nodes.self_name}/${nodes.self_key_name}` : nodes.selectedValue;
     emits('handleNodeSelectedValue', nodes, nodes.selectedValue);
   }
 };
@@ -296,7 +319,7 @@ const {
   },
 });
 
-const transformData = (data: any[]): Array<Record<string, any>> => {  
+const transformData = (data: any[]): Array<Record<string, any>> => {
   return data.map((item: Record<string, any>) => {
     // 如果有子节点（sub_keys），则递归处理
     if (
@@ -314,6 +337,8 @@ const transformData = (data: any[]): Array<Record<string, any>> => {
           return {
             ...child,
             raw_name: item.raw_name,
+            self_name: `${item.display_name}(${item.raw_name})`,
+            self_key_name: `${child.alias}(${child.value})`,
             table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
           };
         }),
@@ -358,7 +383,7 @@ watch(() => props, (newData) => {
     }
   }
   storageTreeData.value = JSON.parse(JSON.stringify(treeData.value))
-  selectedValue.value = newData.condition.condition.field.display_name
+  selectedValue.value = 'self_name' in newData.condition.condition.field ? `${newData.condition.condition.field.self_name}/${newData.condition.condition.field.self_key_name}` : newData.condition.condition.field.display_name
 
 }, {
   deep: true,
@@ -367,6 +392,17 @@ watch(() => props, (newData) => {
 
 onMounted(() => {
   fetchGlobalChoices()
+  // 添加页面刷新监听
+  window.addEventListener('beforeunload', () => {
+    sessionStorage.removeItem("rule-tree-data")
+  })
+})
+
+// 组件卸载时移除监听
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', () => {
+    sessionStorage.removeItem("rule-tree-data")
+  })
 })
 onBeforeRouteLeave((to, from, next) => {
   sessionStorage.removeItem("rule-tree-data"); // 清除数据
@@ -448,5 +484,28 @@ onBeforeRouteLeave((to, from, next) => {
   padding-bottom: 2px;
   background-color: #e3ecfd;
   border-radius: 2px;
+}
+</style>
+<style lang="postcss">
+.node-select {
+  .bk-select-content {
+    .bk-select-dropdown {
+      min-height: 360px !important;
+
+      .bk-select-options {
+        .bk-scrollbar-wrapper {
+          height: 300px
+        }
+      }
+    }
+  }
+}
+
+.option-select {
+  .bk-select-content {
+    .bk-select-dropdown {
+      min-height: 200px !important;
+    }
+  }
 }
 </style>

@@ -457,11 +457,11 @@
       ruleAuditConfigType.value = commonData.value.rule_audit_config_type;
       joinTypeList.value = commonData.value.link_table_join_type;
       aggregateList.value = [
-        ...commonData.value.rule_audit_aggregate_type,
         {
           label: t('不聚合'),
           value: null,
         },
+        ...commonData.value.rule_audit_aggregate_type,
       ];
       // 获取到数据源类别后，获取所有tableid
       getAllConfigTypeTable();
