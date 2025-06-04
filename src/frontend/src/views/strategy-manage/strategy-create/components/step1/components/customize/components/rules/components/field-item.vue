@@ -34,16 +34,14 @@
       label=""
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
-      required
-      >
-      <nodeSelect
-        :configData="localTableFields"
-        :configType="configType"
-        :condition= "condition"
+      required>
+      <node-select
+        :aggregate-list="props.aggregateList"
+        :condition="condition"
         :conditions="conditions"
-        :aggregateList="props.aggregateList"
-        @handleNodeSelectedValue="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)"
-        />
+        :config-data="localTableFields"
+        :config-type="configType"
+        @handleNodeSelectedValue="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)" />
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
@@ -169,9 +167,9 @@
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
-  import useRequest from '@/hooks/use-request';
-
   import nodeSelect from './tree.vue';
+
+  import useRequest from '@/hooks/use-request';
 
 
   interface Props {
@@ -395,7 +393,7 @@
   };
 
   // 回显下拉值
-  const  handleValueDicts = () => {    
+  const  handleValueDicts = () => {
     localConditions.value.conditions.forEach((item) => {
       dicts.value[item.condition.field.raw_name] = [];
     });
@@ -403,7 +401,7 @@
       if (key) {
         fetchStrategyFieldValue({
           field_name: key,
-        }).then((data) => {          
+        }).then((data) => {
           dicts.value[key] = data;
           if (data && data.length) {
             handleCascader(key, data);
@@ -414,32 +412,30 @@
   };
 
   // 更新可选字段列表
-  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {   
-    const filteredExpectedResult = expectedResult.filter(item => item.aggregate)
+  const updateTableFields = (conditions: Props['conditions']['conditions'], tableFields: Array<DatabaseTableFieldModel>, expectedResult: Array<DatabaseTableFieldModel>) => {
+    const filteredExpectedResult = expectedResult.filter(item => item.aggregate);
     // 检查是否已经选择了预期结果中的字段
     const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
 
-    const fromExpectedResult = filteredExpectedResult.map(i =>{
-      i.from = 'expectedResult'
-    })
+    const fromExpectedResult = filteredExpectedResult.map((i) => {
+      i.from = 'expectedResult';
+    });
     // 根据是否选择了预期结果字段来更新字段列表
     localTableFields.value = hasSelectedExpectedResultField
       ? [...filteredExpectedResult]
       : [...tableFields, ...filteredExpectedResult];
 
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
-    
   };
   // 返回值
-  const onHandleNodeSelectedValue = (node: Record<string, any> ,val: string, condition: Record<string, any>) => {
-      
-    condition.condition.field = { ...node}
-    condition.condition.field.display_name = val
-    if('fieldTypeValueAr' in node){
-      condition.condition.field.keys = node.fieldTypeValueAr
+  const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
+    condition.condition.field = { ...node };
+    condition.condition.field.display_name = val;
+    if ('fieldTypeValueAr' in node) {
+      condition.condition.field.keys = node.fieldTypeValueAr;
     }
-    emits('handleUpdateLocalConditions', localConditions.value);    
-  }
+    emits('handleUpdateLocalConditions', localConditions.value);
+  };
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
     updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
@@ -448,8 +444,8 @@
     deep: true,
   });
 
-  watch(() => props.conditions, (data) => {    
-    localConditions.value = JSON.parse(JSON.stringify(data));    
+  watch(() => props.conditions, (data) => {
+    localConditions.value = JSON.parse(JSON.stringify(data));
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
       handleValueDicts();

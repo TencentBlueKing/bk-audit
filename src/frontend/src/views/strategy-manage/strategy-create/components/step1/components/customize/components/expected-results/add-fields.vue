@@ -53,46 +53,47 @@
             <div class="field-pop-select-list">
               <scroll-faker v-if="renderFieldList.length">
                 <div v-if="isEdit">
-                <div
-                  v-for="(item, index) in renderFieldList"
-                  :key="index"
-                  class="field-pop-select-item">
-                  <div style="display: flex; align-items: center;">
-                    <bk-checkbox-group>
-                      <bk-checkbox
-                        :checked="isEdit"
-                        :disabled="isEdit"
-                        @change="() => handleSelectField()">
-                        <div style="display: flex; align-items: center">
-                          <audit-icon
-                            style="margin-right: 4px;font-size: 14px;"
-                            svg
-                            :type="item.spec_field_type" />
-                          <span
-                            v-if="configType === 'LinkTable'"
-                            style=" color: #3a84ff;">{{ item.table }}.</span>
-                          <span>{{ item?.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
-                        </div>
-                      </bk-checkbox>
-                    </bk-checkbox-group>
-                  </div>
-                  <div style="margin-left: 5px;margin-right: 5px;">
-                    <span v-if="'self_name' in item">{{ item.self_name }} / {{ item.self_key_name }}</span>
-                    <span v-else>{{ item.raw_name }} 
-                      <span v-for="key in item.keys" :key="key">/ {{ key }}</span>
-                    </span>
+                  <div
+                    v-for="(item, index) in renderFieldList"
+                    :key="index"
+                    class="field-pop-select-item">
+                    <div style="display: flex; align-items: center;">
+                      <bk-checkbox-group>
+                        <bk-checkbox
+                          :checked="isEdit"
+                          :disabled="isEdit"
+                          @change="() => handleSelectField()">
+                          <div style="display: flex; align-items: center">
+                            <audit-icon
+                              style="margin-right: 4px;font-size: 14px;"
+                              svg
+                              :type="item.spec_field_type" />
+                            <span
+                              v-if="configType === 'LinkTable'"
+                              style=" color: #3a84ff;">{{ item.table }}.</span>
+                            <span>{{ item?.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
+                          </div>
+                        </bk-checkbox>
+                      </bk-checkbox-group>
+                    </div>
+                    <div style="margin-left: 5px;margin-right: 5px;">
+                      <span v-if="'self_name' in item">{{ item.self_name }} / {{ item.self_key_name }}</span>
+                      <span v-else>{{ item.raw_name }}
+                        <span
+                          v-for="key in item.keys"
+                          :key="key">/ {{ key }}</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-                <nodeSelect
-                    ref="nodeSelectRef"
-                    :searchKey="searchKey"
-                    :configData="localTableFields"
-                    :expectedResultList="props.expectedResultList"
-                    :configType="configType"
-                    v-else
-                    @handleNodeChecked="onHandleNodeChecked"
-                      />
+                <node-select
+                  v-else
+                  ref="nodeSelectRef"
+                  :config-data="localTableFields"
+                  :config-type="configType"
+                  :expected-result-list="props.expectedResultList"
+                  :search-key="searchKey"
+                  @handleNodeChecked="onHandleNodeChecked" />
               </scroll-faker>
               <bk-exception
                 v-else-if="isSearching"
@@ -196,9 +197,11 @@
                         <div class="table-field">
                           <tool-tip-text :data="item.raw_name" />
                           <span v-if="item?.keys && item?.keys.length > 0">
-                            <span v-for="(field, fieldIndex) in item.keys" :key="fieldIndex">
-                             <span class="subscript">/</span>
-                             <span>{{ field }}</span>
+                            <span
+                              v-for="(field, fieldIndex) in item.keys"
+                              :key="fieldIndex">
+                              <span class="subscript">/</span>
+                              <span>{{ field }}</span>
                             </span>
                           </span>
                         </div>
@@ -271,16 +274,17 @@
   import _ from 'lodash';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute, useRouter } from 'vue-router';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import useDebouncedRef from '@hooks/use-debounced-ref';
 
   import { encodeRegexp } from '@utils/assist';
-  import { useRoute, useRouter } from 'vue-router';
+
+  import nodeSelect from './tree.vue';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
-  import nodeSelect from './tree.vue';
 
   // 扩展DatabaseTableFieldModel类型，添加aggregateList属性
   interface ExDatabaseTableFieldModel extends DatabaseTableFieldModel {
@@ -308,12 +312,12 @@
     handleEditNode: (node: Record<string, any>) =>void
   }
 
-  const route = useRoute();
-  const router =useRouter();
-  const nodeSelectRef = ref<NodeSelectComponent | null>(null);
   const props = defineProps<Props>();
-  const editNode = ref()
   const emits = defineEmits<Emits>();
+  const route = useRoute();
+  const router = useRouter();
+  const nodeSelectRef = ref<NodeSelectComponent | null>(null);
+  const editNode = ref();
   const isEdit = defineModel<boolean>({
     required: true,
   });
@@ -389,7 +393,7 @@
   };
 
   // 生成可用聚合算法列表
-  const createAggregateList = (field: ExDatabaseTableFieldModel) => {    
+  const createAggregateList = (field: ExDatabaseTableFieldModel) => {
     const baseList = props.aggregateList.filter(item => (fieldAggregateMap[field.field_type as keyof typeof fieldAggregateMap].includes(item.value) || item.label === '不聚合'));
 
     // 检测重复聚合算法
@@ -407,8 +411,8 @@
 
   // 处理字段数据
   const processField = (field: ExDatabaseTableFieldModel) => {
-    if('textValue' in field){
-      field.display_name =  field.textValue  as string
+    if ('textValue' in field) {
+      field.display_name =  field.textValue  as string;
     }
     // 创建新对象避免参数修改
     const processedField = {
@@ -416,7 +420,7 @@
       aggregateList: createAggregateList(field),
       aggregate: field.aggregate ? field.aggregate : null, // 编辑回显
     };
-    
+
     // 设置初始选中值
     if (!isEdit.value && processedField.aggregate === null) {
       processedField.aggregate = processedField.aggregateList.find(item => !item.disabled)?.value;
@@ -432,8 +436,8 @@
       ...tableData.value,
     ];
     // 编辑模式下排除当前字段自身
-    const filteredDisplayNames = allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name))
-    
+    const filteredDisplayNames = allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name));
+
 
     const displayNameCount = filteredDisplayNames.reduce<Record<string, number>>(
       (acc, cur) => ({ ...acc, [cur.display_name]: (acc[cur.display_name] || 0) + 1 }),
@@ -444,7 +448,6 @@
     if (props.configType === 'LinkTable') {
       processedField.display_name = `${processedField.table}.${displayName}`;
     } else {
-      
       processedField.display_name = displayNameCount[displayName] >= 1
         ? `${processedField.table}.${displayName}`
         : displayName;
@@ -457,16 +460,12 @@
   };
 
   // 选择字段
-  const handleSelectField = () => {    
-    localTableFields.value = [editNode.value]    
-    tableData.value = [editNode.value].map(field =>{
-      return processField(field)
-    })
+  const handleSelectField = () => {
+    localTableFields.value = [editNode.value];
+    tableData.value = [editNode.value].map(field => processField(field));
   };
   const onHandleNodeChecked = (node: Array<ExDatabaseTableFieldModel>) => {
-    tableData.value = node.map(field =>{
-      return processField(field)
-    })
+    tableData.value = node.map(field => processField(field));
   };
   // 聚合算法变更时动态更新显示名后缀
   const handleAggregateChange = (val: string, currentItem: ExDatabaseTableFieldModel) => {
@@ -543,9 +542,9 @@
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { isDuplicate, aggregateList, ...pureItem } = item;
         emits('addExpectedResult', pureItem);
-      });  
+      });
     } else {
-      // 处理编辑模式      
+      // 处理编辑模式
       const [currentItem] = tableData.value;
       if (currentItem) {
         // 过滤不需要的属性
@@ -559,7 +558,7 @@
     handleCancel();
   };
 
-  watch(() => props.tableFields, (data) => {    
+  watch(() => props.tableFields, (data) => {
     localTableFields.value = data.map(item => ({
       ...item,
       aggregateList: _.cloneDeep(props.aggregateList),
@@ -572,33 +571,32 @@
     immediate: true,
   });
 
-  watch(() => searchKey.value, (data) => {    
-      setTimeout(()=>{
-        if (nodeSelectRef.value) {
-          nodeSelectRef.value.handleSearch(data);
-        }
-      }, 200)
+  watch(() => searchKey.value, (data) => {
+    setTimeout(() => {
+      if (nodeSelectRef.value) {
+        nodeSelectRef.value.handleSearch(data);
+      }
+    }, 200);
   });
-  const isTableAggregate = ref(false)
-  watch(() => tableData.value, (data) => {    
-  // 检查data数组中是否有aggregate为空的项
-  const hasEmptyAggregate = data.some(item => {
-    // 检查当前项的aggregate是否存在或为null
-    return item.aggregate === undefined || item.aggregate === '';
-  });
-  
-  // 设置isTableAggregate的值
-  isTableAggregate.value = hasEmptyAggregate;
-}, { deep: true })
-  
+  const isTableAggregate = ref(false);
+  watch(() => tableData.value, (data) => {
+    // 检查data数组中是否有aggregate为空的项
+    const hasEmptyAggregate = data.some(item =>
+      // 检查当前项的aggregate是否存在或为null
+      item.aggregate === undefined || item.aggregate === '');
+
+    // 设置isTableAggregate的值
+    isTableAggregate.value = hasEmptyAggregate;
+  }, { deep: true });
+
   defineExpose<Expose>({
     handleEditShowPop: (index: number) => {
       isShow.value = true;
       editIndex.value = index;
     },
-    handleEditNode: (node: Record<string, any>)=>{
-     editNode.value = node
-    }
+    handleEditNode: (node: Record<string, any>) => {
+      editNode.value = node;
+    },
   });
 </script>
 <style scoped lang="postcss">
