@@ -16,8 +16,36 @@
 -->
 <template>
   <div class="access-model-operation-list">
-    <div style="margin-bottom: 16px; font-size: 14px;">
-      {{ t('操作') }}
+    <h3 style="margin-bottom: 16px; line-height: 22px;">
+      {{ t('资源') }}
+    </h3>
+    <div class="access-model-action-header">
+      <div class="btns-wrap">
+        <bk-button
+          class="mr8"
+          theme="primary"
+          @click="handleCreate">
+          <audit-icon
+            style="margin-right: 8px;font-size: 14px;"
+            type="add" />
+          {{ t('新建资源类型') }}
+        </bk-button>
+        <bk-button>
+          {{ t('批量新增') }}
+        </bk-button>
+      </div>
+      <bk-search-select
+        v-model="searchKey"
+        class="search-input"
+        clearable
+        :condition="[]"
+        :data="searchData"
+        :defaut-using-item="{ inputHtml: t('请选择') }"
+        :placeholder="t('搜索操作ID、操作事件名、关联资源类型、风险等级、操作事件类型')"
+        style="width: 480px;"
+        unique-select
+        value-split-code=","
+        @update:model-value="handleSearch" />
     </div>
     <bk-loading :loading="loading">
       <bk-table
@@ -28,6 +56,8 @@
   </div>
 </template>
 <script setup lang="tsx">
+  import _ from 'lodash';
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -37,7 +67,28 @@
 
   import useRequest from '@hooks/use-request';
 
+  interface SearchKey {
+    id: string,
+    name: string,
+    values: [
+      {
+        id: string,
+        name: string
+      }
+    ]
+  }
+  interface SearchData{
+    name: string;
+    id: string;
+    children?: Array<SearchData>;
+    placeholder?: string;
+    multiple?: boolean;
+    onlyRecommendChildren?: boolean,
+  }
+
   const { t } = useI18n();
+  const route = useRoute();
+
   const tableColumn = [
     {
       label: () => t('操作 ID'),
@@ -55,22 +106,88 @@
           : (<span>{data.name}</span>)
       ),
     },
-    // {
-    //   label: () => t('风险等级'),
-    //   render: ({ data }: {data: SystemActionModel}) => (
-    //     <render-sensitivity-level value={data.sensitivity} />
-    //   ),
-    // },
+    {
+      label: () => t('关联资源类型'),
+      field: () => 'resource_type',
+    },
+    {
+      label: () => t('风险等级'),
+      render: ({ data }: {data: SystemActionModel}) => (
+        <render-sensitivity-level value={data.sensitivity} />
+      ),
+    },
     {
       label: () => t('操作事件类型'),
       showOverflowTooltip: true,
       render: ({ data }: {data: SystemActionModel}) => data.type || '--',
     },
+    {
+      label: () => t('操作'),
+      width: 120,
+      fixed: 'right',
+      render: ({ data }: {data: SystemActionModel}) => <>
+          <div style="display: flex">
+            <bk-button
+              theme='primary'
+              class='mr16'
+              onClick={() => handleEdit(data)}
+              text>
+              {t('编辑')}
+            </bk-button>
+            <bk-button
+              theme='primary'
+              onClick={() => handleDelete(data)}
+              text>
+              {t('删除')}
+            </bk-button>
+          </div>
+        </>,
+    },
+  ];
+  const searchData: SearchData[] = [
+    {
+      name: t('操作ID'),
+      id: 'action_id',
+      placeholder: t('请输入资源类型'),
+    },
+    {
+      name: t('操作事件名'),
+      id: 'name',
+      placeholder: t('请输入资源名称'),
+    },
+    {
+      name: t('关联资源类型'),
+      id: 'resource_type',
+      placeholder: t('请输入资源操作'),
+    },
+    {
+      name: t('风险等级'),
+      id: 'sensitivity',
+      placeholder: t('请输入敏感等级'),
+    },
+    {
+      name: t('操作事件类型'),
+      id: 'type',
+      placeholder: t('请输入资源状态'),
+    },
   ];
 
-  const route = useRoute();
+  const searchKey = ref<Array<SearchKey>>([]);
+
+  const handleEdit = (data: SystemActionModel) => {
+    console.log(data);
+  };
+
+  const handleDelete = (data: SystemActionModel) => {
+    console.log(data);
+  };
+
+  const handleCreate = () => {
+    console.log('新建');
+  };
 
   const {
+    run: fetchSystemActionList,
     loading,
     data,
   }  = useRequest(MetaManageService.fetchSystemActionList, {
@@ -80,6 +197,35 @@
     defaultValue: [],
     manual: true,
   });
+
+  const handleSearch = (keyword: Array<any>) => {
+    const search = {
+      action_id: '',
+      name: '',
+      resource_type: '',
+      sensitivity: '',
+      type: '',
+      id: route.params.id,
+    } as Record<string, any>;
+
+    keyword.forEach((item: SearchKey, index) => {
+      if (item.values) {
+        const value = item.values.map(item => item.id).join(',');
+        const list = search[item.id].split(',').filter((item: string) => !!item);
+        list.push(value);
+        _.uniq(list);
+        search[item.id] = list.join(',');
+      } else {
+        // 默认输入字段后匹配规则名称
+        const list = search.name.split(',').filter((item: string) => !!item);
+        list.push(item.id);
+        _.uniq(list);
+        search.name = list.join(',');
+        searchKey.value[index] = ({ id: 'name', name: t('资源名称'), values: [{ id: item.id, name: item.id }] });
+      }
+    });
+    fetchSystemActionList(search);
+  };
 </script>
 <style lang="postcss">
 .access-model-operation-list {
@@ -87,8 +233,13 @@
   margin-top: 16px;
   color: #313238;
   background-color: #fff;
-  border-radius: 2px;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
+
+  .access-model-action-header {
+    display: flex;
+    margin-bottom: 14px;
+    align-items: center;
+    justify-content: space-between;
+  }
 
   .sensitivity-tag {
     display: inline-block;
