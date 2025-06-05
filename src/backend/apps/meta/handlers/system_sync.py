@@ -528,5 +528,5 @@ def sync_iam_v3_system_roles(iam_systems):
             )
 
         if to_delete:
-            SystemRole.objects.filter(username__in=to_delete).delete()
+            SystemRole.objects.filter(system_id=system_id, username__in=to_delete).delete()
     logger.info("[sync_iam_system_roles] finished")
