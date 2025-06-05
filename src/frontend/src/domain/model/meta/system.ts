@@ -49,6 +49,14 @@ export default class System {
   status_msg: string;
   status: string;
   last_time: string;
+  model: {
+    resources: number;
+    operations: number;
+  } | null;
+  app_code: string;
+  system_domain: string;
+  created_at: string;
+  created_by: string;
 
   constructor(payload = {} as System) {
     this.id = payload.id;
@@ -69,6 +77,14 @@ export default class System {
     this.last_time = payload.last_time;
 
     this.provider_config = this.initProviderConfig(payload.provider_config);
+    this.model = {
+      resources: 10,
+      operations: 10,
+    };
+    this.app_code = payload.app_code;
+    this.system_domain = payload.system_domain;
+    this.created_at = payload.created_at;
+    this.created_by = payload.created_by;
   }
 
   initProviderConfig(providerConfig: System['provider_config']) {
