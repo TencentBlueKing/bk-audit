@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:ed44ae7e1bbb48c33fa1bbd9b6379eb38ddbcd66b94e483fb8bfbd820a6eb762"
+content_hash = "sha256:092a7a288f2aeaefdf0fe5b8fe2c49f1dfe1d9f8abdb68dcda07656c7f17abdd"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -873,6 +873,20 @@ dependencies = [
 files = [
     {file = "django_timezone_field-7.1-py3-none-any.whl", hash = "sha256:93914713ed882f5bccda080eda388f7006349f25930b6122e9b07bf8db49c4b4"},
     {file = "django_timezone_field-7.1.tar.gz", hash = "sha256:b3ef409d88a2718b566fabe10ea996f2838bc72b22d3a2900c0aa905c761380c"},
+]
+
+[[package]]
+name = "django-treebeard"
+version = "4.7.1"
+requires_python = ">=3.8"
+summary = "Efficient tree implementations for Django"
+groups = ["default"]
+dependencies = [
+    "Django>=3.2",
+]
+files = [
+    {file = "django-treebeard-4.7.1.tar.gz", hash = "sha256:846e462904b437155f76e04907ba4e48480716855f88b898df4122bdcfbd6e98"},
+    {file = "django_treebeard-4.7.1-py3-none-any.whl", hash = "sha256:995c7120153ab999898fe3043bbdcd8a0fc77cc106eb94de7350e9d02c885135"},
 ]
 
 [[package]]

@@ -90,6 +90,7 @@ dependencies = [
     "opentelemetry-instrumentation-httpx==0.51b0",
     "opentelemetry-instrumentation-asyncio==0.51b0",
     "opentelemetry-instrumentation-threading==0.51b0",
+    "django-treebeard>=4.7.1",
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
@@ -103,7 +104,7 @@ dev = [
     "pre-commit==2.9.2",
     "flake8==3.7.8",
     "seed-isort-config==1.9.2",
-    "coverage==6.2",
+    "coverage==7.8.2",
     "pytest==8.3.4 ",
     "pytest-cov==3.0.0",
     "pytest-django==4.10.0",

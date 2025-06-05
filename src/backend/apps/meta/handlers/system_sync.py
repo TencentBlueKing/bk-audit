@@ -311,13 +311,15 @@ class IamSystemSyncer(abc.ABC):
             (actions, Action, action_fields, IAM_ACTION_BATCH_SIZE),
             (resources, ResourceType, resource_fields, IAM_RESOURCE_BATCH_SIZE),
         ]
-        for param in sync_db_params:
-            instance_map, db_model, fields, batch_size = param
-            if instance_map["to_insert"]:
-                db_model.objects.bulk_create(instance_map["to_insert"])
-            if instance_map["to_update"]:
-                db_model.objects.bulk_update(instance_map["to_update"], fields=fields, batch_size=batch_size)
-            db_model.objects.filter(id__in=instance_map["to_delete"]).delete()
+        with transaction.atomic():
+            for param in sync_db_params:
+                instance_map, db_model, fields, batch_size = param
+                for item in instance_map["to_insert"]:
+                    item.save(force_insert=True)
+                for item in instance_map["to_update"]:
+                    item.save(force_update=True)
+                for item in instance_map["to_delete"]:
+                    item.delete()
 
         logger.info(f"[{self.cls_name}] finished")
 
