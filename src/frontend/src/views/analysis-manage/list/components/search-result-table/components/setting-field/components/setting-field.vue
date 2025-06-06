@@ -29,11 +29,11 @@
         </div>
         <div style="height: calc(100vh - 260px);">
           <bk-tree
+            v-if="sourceList.length"
             ref="treeRef"
             :check-strictly="false"
             children="children"
             :data="sourceList"
-            empty-text=" "
             :show-node-type-icon="false">
             <template #default="{ data }: { data: CascaderNode }">
               <template v-if="!data.isEdit">
@@ -47,10 +47,7 @@
                       :style="categoryStyleMap[data.category as keyof typeof categoryStyleMap]">
                       {{ categoryMap[data.category as keyof typeof categoryMap] }}
                     </span>
-                    <span
-                      style="
-                        margin-left: 8px;
-                        font-size: 12px;">{{ data.description }}</span>
+                    <span style="margin-left: 8px; font-size: 12px;">{{ data.description }}</span>
                   </div>
                   <div>
                     <span
@@ -68,14 +65,14 @@
                   </div>
                 </div>
               </template>
-              <template v-else-if="data.editDescription">
+              <template v-else>
                 <div class="add-item-list item-list-active">
                   <scroll-faker>
-                    <span> {{ data.editDescription[0].field }}</span>
+                    <span>{{ data.description }}</span>
                     <span style="margin: 0 5px;">/</span>
                     <!-- 多级字段输入 -->
                     <template
-                      v-for="(item, index) in data.editDescription.slice(1)"
+                      v-for="(item, index) in fieldTypeValue[data.field_name]"
                       :key="index">
                       <bk-input
                         v-model="item.field"
@@ -83,12 +80,12 @@
                         :placeholder="t('请输入')"
                         style="width: 85px;" />
                       <audit-icon
-                        v-if="index === data.editDescription.slice(1).length - 1"
+                        v-if="index === fieldTypeValue[data.field_name].length - 1"
                         v-bk-tooltips="t('添加下级字段')"
                         class="add-icon"
                         :class="[!item.field ? 'disabled-add-icon' : '']"
                         type="add-fill"
-                        @click="() => data.editDescription && data.editDescription.push({ field: '' })" />
+                        @click="() => item.field && fieldTypeValue[data.field_name].push({ field: '' })" />
                       <span
                         v-else
                         style="margin: 0 5px;">/</span>
@@ -96,8 +93,8 @@
                     <span class="field-edit-right">
                       <audit-icon
                         v-bk-tooltips="t('确认')"
-                        :class="[data.editDescription.slice(1).
-                          every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
+                        :class="[fieldTypeValue[data.field_name] && fieldTypeValue[data.field_name].
+                          some(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
                         svg
                         type="check-line"
                         @click.stop="handleAddFieldSubmit(data)" />
@@ -105,7 +102,8 @@
                         v-bk-tooltips="t('取消添加')"
                         style="margin-left: 4px;
                           font-size: 18px;
-                          color: #c1c3c9;"
+                          color: #c1c3c9;
+                          transform: translateY(4px);"
                         svg
                         type="close"
                         @click.stop="handleAddFieldClose(data)" />
@@ -115,6 +113,26 @@
               </template>
             </template>
           </bk-tree>
+          <bk-exception
+            v-if="isSearching && !sourceList.length"
+            scene="part"
+            style="height: 280px;padding-top: 40px;"
+            type="search-empty">
+            <div>
+              <div style="color: #63656e;">
+                {{ t('搜索结果为空') }}
+              </div>
+              <div style="margin-top: 8px; color: #979ba5;">
+                {{ t('可以尝试调整关键词') }} {{ t('或') }}
+                <bk-button
+                  text
+                  theme="primary"
+                  @click="handleClearSearch">
+                  {{ t('清空搜索条件') }}
+                </bk-button>
+              </div>
+            </div>
+          </bk-exception>
         </div>
       </bk-loading>
     </div>
@@ -215,9 +233,6 @@
     isJson: boolean
     level: number
     description: string
-    editDescription?: Array<{
-      field: string
-    }>
     isEdit: boolean
     isOpen: boolean;
   }
@@ -234,6 +249,8 @@
   const sourceList = ref<CascaderNode[]>([]);
   const initSourceList = ref<CascaderNode[]>([]);
   const targetList = ref<CascaderNode[]>([]);
+  const isSearching = ref(false);
+  const fieldTypeValue = ref<Record<string, Record<string, any>[]>>({});
 
   const initList = [
     { field_name: 'start_time', description: '操作起始时间' },
@@ -447,16 +464,19 @@
   };
 
   const handleAddNode = (node: CascaderNode) => {
+    if (fieldTypeValue.value[node.field_name]) {
+      return;
+    }
+    fieldTypeValue.value[node.field_name] = [{ field: '' }];
     node.children.push({
       allow_operators: [],
       children: [],
       disabled: false,
       dynamic_content: false,
-      field_name: JSON.stringify([node.field_name]),
+      field_name: node.field_name,
       isJson: false,
       level: node.level + 2,
       description: node.description,
-      editDescription: [{ field: node.description as string }, { field: '' }],
       isOpen: false,
       isEdit: true,
     });
@@ -465,12 +485,15 @@
   };
 
   const handleAddFieldSubmit = (node: CascaderNode) => {
-    const customFields = node.editDescription;
+    const customFields =  fieldTypeValue.value[node.field_name];
     if (!customFields || customFields.length === 0) {
       return;
     }
-    const newIdArray = [...JSON.parse(node.field_name), ...customFields.slice(1).map(item => item.field)];
-    const newNameStr = customFields.map(item => item.field).join('/');
+    if (customFields.some(field => !field.field)) {
+      return;
+    }
+    const newIdArray = [node.field_name, ...customFields.map(item => item.field)];
+    const newNameStr = `${node.description}/${customFields.map(item => item.field).join('/')}`;
     // eslint-disable-next-line no-param-reassign
     node.field_name = JSON.stringify(newIdArray);
     // eslint-disable-next-line no-param-reassign
@@ -479,13 +502,12 @@
     node.isEdit = false;
     // 清空customFields
     // eslint-disable-next-line no-param-reassign
-    delete node.editDescription;
+    delete fieldTypeValue.value[node.field_name];
   };
 
   const handleAddFieldClose = (node: CascaderNode) => {
-    // eslint-disable-next-line no-param-reassign
-    delete node.editDescription;
-    const nodeFieldName = JSON.parse(node.field_name)[0];
+    delete fieldTypeValue.value[node.field_name];
+    const nodeFieldName = node.field_name;
     const parentNode = sourceList.value.find(item => item.field_name === nodeFieldName);
     if (parentNode) {
       parentNode.children.pop();
@@ -509,7 +531,14 @@
   };
 
   const handleSearch = () => {
+    isSearching.value = true;
     sourceList.value = initSourceList.value.filter(item => item.description.indexOf(searchValue.value) !== -1);
+  };
+
+  const handleClearSearch = () => {
+    searchValue.value = '';
+    isSearching.value = false;
+    handleSearch();
   };
 
   const updateField = async (fields: Array<CascaderNode>) => {
@@ -642,12 +671,14 @@
         margin-left: 5px;
 
         .submit-icon {
+          transform: translateY(4px);
           margin-right: 4px;
           font-size: 18px;
           color: #7bbe8a;
         }
 
         .disabled-submit-icon {
+          transform: translateY(4px);
           font-size: 18px;
           color: #dcdee5;
           cursor: not-allowed;
