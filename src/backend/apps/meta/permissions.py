@@ -15,11 +15,24 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import List
 
 from bk_resource import resource
+from django.shortcuts import get_object_or_404
+from rest_framework.permissions import BasePermission
 
+from apps.meta.constants import SystemSourceTypeEnum
+from apps.meta.exceptions import SystemNotEditable
+from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import (
+    AnyOfPermissions,
+    InstanceActionPermission,
+    InstancePermission,
+)
+from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
+from core.models import get_request_username
 
 
 class SearchLogPermission:
@@ -42,3 +55,57 @@ class SearchLogPermission:
                 apply_url=apply_url,
                 permission=apply_data,
             )
+
+
+class SystemManagerPermission(InstancePermission):
+    def has_permission(self, request, view) -> bool:
+        system_id = self._get_instance_id(request, view)
+        system: System = get_object_or_404(System, system_id=system_id)
+        username = get_request_username()
+        return username in system.managers_list
+
+
+class SystemEditPermission(InstancePermission):
+    def has_permission(self, request, view) -> bool:
+        system_id = self._get_instance_id(request, view)
+        system: System = get_object_or_404(System, system_id=system_id)
+        if system.source_type not in SystemSourceTypeEnum.get_editable_sources():
+            raise SystemNotEditable(system_id=system.system_id)
+        return True
+
+
+class SystemPermissionHandler:
+    @staticmethod
+    def _generate_permission(action_enums, get_instance_id=None) -> BasePermission:
+        """
+        通用的权限生成方法，接收一个动作类型（如 VIEW 或 EDIT），
+        根据这个生成相应的权限
+        """
+
+        return AnyOfPermissions(
+            SystemManagerPermission(get_instance_id=get_instance_id),
+            InstanceActionPermission(
+                actions=action_enums,
+                resource_meta=ResourceEnum.SYSTEM,
+                get_instance_id=get_instance_id,
+            ),
+        )
+
+    @staticmethod
+    def system_edit_permissions(get_instance_id=None) -> List[BasePermission]:
+        """
+        获取编辑系统权限
+        """
+
+        return [
+            SystemPermissionHandler._generate_permission([ActionEnum.EDIT_SYSTEM], get_instance_id),
+            SystemEditPermission(get_instance_id=get_instance_id),
+        ]
+
+    @staticmethod
+    def system_view_permissions(get_instance_id=None) -> List[BasePermission]:
+        """
+        获取查看系统权限
+        """
+
+        return [SystemPermissionHandler._generate_permission([ActionEnum.VIEW_SYSTEM], get_instance_id)]
