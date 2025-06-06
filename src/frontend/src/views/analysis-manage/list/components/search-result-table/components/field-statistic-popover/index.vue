@@ -34,15 +34,15 @@
         class="statistic-content">
         <div class="statistic-title">
           <span>
-            {{ t('总行数：') }}
+            {{ t('总行数') }}:
             <span class="statistic-title-value">{{ statisticData.results.total_rows[0].total_rows }}</span>
           </span>
           <span style="margin: 0 32px;">
-            {{ t('出现行数：') }}
+            {{ t('出现行数') }}:
             <span class="statistic-title-value">{{ statisticData.results.non_empty_rows[0].non_empty_rows }}</span>
           </span>
           <span>
-            {{ t('日志条数：') }}
+            {{ t('日志条数') }}:
             <span class="statistic-title-value">
               {{ ((statisticData.results.non_empty_rows[0].non_empty_rows
                 /statisticData.results.total_rows[0].total_rows) * 100).toFixed(2) }}%
@@ -91,6 +91,7 @@
           <div class="statistic-field">
             <div class="title">
               {{ t('去重后字段统计') }}
+              <span class="values-number">{{ statisticData.results.top_5_values.length }}</span>
             </div>
             <ul class="field-list">
               <li
@@ -284,6 +285,13 @@
     .title {
       margin-bottom: 12px;
       font-weight: 700;
+
+      .values-number {
+        color: #979BA5;
+        padding: 0 10px;
+        background-color: #F0F1F5;
+        border-radius: 10px;
+      }
     }
   }
 }
