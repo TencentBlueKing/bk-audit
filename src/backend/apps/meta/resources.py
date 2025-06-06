@@ -15,26 +15,27 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+import abc
 from abc import ABC
 from collections import defaultdict
 from enum import EnumMeta
 from functools import cmp_to_key
+from typing import Set
 
 import openpyxl
 import requests
-from bk_resource import Resource, api, resource
+from bk_resource import CacheResource, Resource, api, resource
 from bk_resource.contrib.model import ModelResource
 from bk_resource.exceptions import APIRequestError
-from bk_resource.management.exceptions import ResourceModuleNotRegistered
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.core.cache import cache as default_cache
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.db.models.enums import ChoicesMeta
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import serializers
 from rest_framework.response import Response
 
@@ -47,8 +48,9 @@ from apps.meta.constants import (
     IAM_MANAGER_ROLE,
     RETRIEVE_USER_TIMEOUT,
     SpaceType,
+    SystemAuditStatusEnum,
 )
-from apps.meta.exceptions import BKAppNotExists
+from apps.meta.exceptions import ActionHasExist, BKAppNotExists, SystemHasExist
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.models import (
     Action,
@@ -61,14 +63,20 @@ from apps.meta.models import (
     ResourceTypeTreeNode,
     SensitiveObject,
     System,
+    SystemFavorite,
     SystemInstance,
     Tag,
 )
 from apps.meta.permissions import SearchLogPermission
 from apps.meta.serializers import (
+    ActionCreateSerializer,
+    ActionListReqSerializer,
     ActionSerializer,
+    ActionUpdateSerializer,
+    BulkActionCreateSerializer,
     ChangeSystemDiagnosisPushReqSerializer,
     ChangeSystemDiagnosisPushRespSerializer,
+    CreateSystemReqSerializer,
     DeleteGeneralConfigReqSerializer,
     DeleteResourceTypeRequestSerializer,
     DeleteSystemDiagnosisPushReqSerializer,
@@ -101,20 +109,29 @@ from apps.meta.serializers import (
     RetrieveUserResponseSerializer,
     SaveTagResponseSerializer,
     SaveTagsRequestSerializer,
+    SystemFavoriteReqSerializer,
     SystemInfoResponseSerializer,
     SystemListAllRequestSerializer,
     SystemListAllResponseSerializer,
     SystemListRequestSerializer,
+    SystemListSerializer,
     SystemRoleListRequestSerializer,
     SystemRoleSerializer,
     SystemSearchBaseSerialzier,
     SystemSerializer,
     UpdateCustomFieldResponseSerializer,
     UpdateGeneralConfigSerializer,
+    UpdateSystemReqSerializer,
     UploadDataMapFileRequestSerializer,
     UploadDataMapFileResponseSerializer,
 )
 from apps.meta.utils.globals import Globals
+from apps.meta.utils.system import (
+    PermissionSorter,
+    get_system_sort_key,
+    is_system_manager_func,
+    wrapper_system_status,
+)
 from apps.permission.handlers.actions import ActionEnum, get_action_by_id
 from apps.permission.handlers.drf import IAMPermission, wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
@@ -136,18 +153,22 @@ class NamespaceListResource(Meta, ModelResource):
     many_response_data = True
 
 
-class SystemAbstractResource(Meta, AuditMixinResource, ModelResource, ABC):
-    model = models.System
-    serializer_class = SystemSerializer
+class SystemAuditMixinResource(AuditMixinResource, abc.ABC):
     audit_resource_type = ResourceEnum.SYSTEM
 
 
-class SystemListResource(SystemAbstractResource):
+class SystemAbstractResource(Meta, SystemAuditMixinResource, ModelResource, ABC):
+    model = models.System
+    serializer_class = SystemSerializer
+
+
+class SystemListResource(SystemAbstractResource, CacheResource):
     """
-    TODO:
-    1. 返回权限模型信息
-    2. 返回更多系统信息
-    3. 系统状态信息
+    获取系统列表
+    1. 获取已接入审计中心的系统列表:
+    ```json
+    ?audit_status=accessed
+    ```
     """
 
     name = gettext_lazy("获取系统列表")
@@ -155,12 +176,7 @@ class SystemListResource(SystemAbstractResource):
     many_response_data = True
     RequestSerializer = SystemListRequestSerializer
     audit_action = ActionEnum.LIST_SYSTEM
-
-    @classmethod
-    def sort_system_by_permission(cls, system: dict) -> (int, str):
-        permission_obj = system.get("permission", {})
-        priority_index = min(len([is_allowed for is_allowed in permission_obj.values() if is_allowed]), 1)
-        return -priority_index, system.get("system_id") or system["id"]
+    serializer_class = SystemListSerializer
 
     def sort(self, systems: list, validated_request_data: dict):
         sort_keys = validated_request_data.get("sort", [])
@@ -200,7 +216,8 @@ class SystemListResource(SystemAbstractResource):
         return _systems
 
     def perform_request(self, validated_request_data: dict) -> any:
-        queryset = models.System.objects.all()
+        # 添加聚合注释
+        queryset = System.objects.with_action_resource_type_count()
         if validated_request_data.get("keyword"):
             keyword = validated_request_data["keyword"]
             queryset = queryset.filter(
@@ -208,6 +225,8 @@ class SystemListResource(SystemAbstractResource):
             )
         if validated_request_data.get("source_type"):
             queryset = queryset.filter(source_type__in=validated_request_data["source_type"])
+        if validated_request_data.get("audit_status"):
+            queryset = queryset.filter(audit_status__in=validated_request_data["audit_status"])
         systems = self.serializer_class(queryset, many=self.many_response_data).data
         all_managers = resource.meta.system_role_list(role=IAM_MANAGER_ROLE)
         system_manager_map = defaultdict(list)
@@ -215,86 +234,148 @@ class SystemListResource(SystemAbstractResource):
             system_manager_map[manager["system_id"]].append(manager["username"])
         for system in systems:
             system["managers"] = system["managers"] or system_manager_map[system["system_id"]]
+
+        system_managers = {system["system_id"]: system["managers"] for system in systems}
+        username = get_request_username()
         actions = [ActionEnum.VIEW_SYSTEM, ActionEnum.EDIT_SYSTEM]
-        systems = wrapper_permission_field(systems, actions, id_field=lambda x: x["system_id"])
-        systems.sort(key=self.sort_system_by_permission)
+        systems = wrapper_permission_field(
+            systems,
+            actions,
+            id_field=lambda x: x["system_id"],
+            always_allowed=lambda sys: username in system_managers.get(sys["system_id"]),
+        )
+        systems.sort(key=PermissionSorter.sort_key)
         if not systems:
             return systems
-        try:
-            # 绑定最后上报信息
-            tail_log_time_map = resource.databus.collector.bulk_system_collectors_status(
-                namespace=validated_request_data["namespace"],
-                system_ids=",".join([system["system_id"] for system in systems]),
-            )
-        except ResourceModuleNotRegistered:
-            tail_log_time_map = {}
-        for system in systems:
-            tail_log_item = tail_log_time_map.get(system["system_id"], {})
-            system["last_time"] = tail_log_item.get("last_time")
-            system["status"] = tail_log_item.get("status")
-            system["status_msg"] = tail_log_item.get("status_msg")
+
+        # 绑定系统状态
+        systems = wrapper_system_status(namespace=validated_request_data["namespace"], systems=systems)
+
+        # 数据过滤
         if validated_request_data.get("status"):
             systems = self.filter(systems, {"status": validated_request_data["status"]})
+        if validated_request_data.get("system_status"):
+            systems = self.filter(systems, {"system_status": validated_request_data["system_status"]})
         return self.sort(systems, validated_request_data)
 
 
-class SystemListAllResource(SystemAbstractResource):
+class SystemListAllResource(SystemAbstractResource, CacheResource):
     """
-    TODO:
-    1. 系统状态信息
-    2. 系统收藏排序以及收藏状态
-    3. 系统权限信息
-    4. 系统来源
+    获取系统列表(All)
+    1. 待接入的系统
+    ```json
+    输入：?with_favorite=false&with_system_status=false&sort_keys=audit_status
+    输出：
+    {
+        "data": [
+            {
+                "id": "xxx",
+                "name": "xxx",
+                "source_type": "iam_v3",
+                "audit_status": "accessed",
+                "system_id": "xxx"
+            }
+        ]
+    }
+    ```
+    2. 系统列表(快速切换)
+    ```json
+    输入：?action_ids=view_system&audit_status__in=accessed&with_favorite=true&with_system_status=true&sort_keys=favorite,permission'
+    输出：
+    {
+        "data": [
+            {
+              "id": "xxx",
+              "name": "xxx",
+              "source_type": "bk_audit",
+              "audit_status": "accessed",
+              "favorite": true,
+              "system_id": "xxx",
+              "last_time": "",
+              "status": "unset",
+              "status_msg": "未配置",
+              "system_status": "completed",
+              "permission": {
+                "view_system": true
+              }
+            }
+        ]
+    }
     """
 
     name = gettext_lazy("获取系统列表(All)")
     action = "list"
     many_response_data = True
-    filter_fields = ["namespace"]
+    filter_fields = {
+        "namespace": ["exact"],
+        "audit_status": ["in"],
+        "source_type": ["in"],
+    }
+    filter_backends = [DjangoFilterBackend]
     RequestSerializer = SystemListAllRequestSerializer
     serializer_class = SystemListAllResponseSerializer
     audit_action = ActionEnum.LIST_SYSTEM
 
+    def validate_request_data(self, request_data):
+        self.validated_data = super().validate_request_data(request_data)
+        return self.validated_data
+
+    def build_favorite_queryset(self, queryset: QuerySet[System]) -> QuerySet[System]:
+        # 构造收藏状态的子查询
+        username = get_request_username()
+        # 构造收藏状态的Exists表达式
+        favorite_exists = SystemFavorite.objects.filter(
+            system_id=OuterRef('system_id'), username=username, favorite=True
+        )
+        # 构造主查询集
+        queryset = queryset.annotate(
+            favorite=Exists(favorite_exists),
+        ).order_by('-favorite', 'name')
+        return queryset
+
+    @property
+    def queryset(self):
+        qs = super().queryset
+        if self.validated_data.get("with_favorite"):
+            qs = self.build_favorite_queryset(qs)
+        return qs
+
     def perform_request(self, validated_request_data: dict) -> any:
         systems = super().perform_request(validated_request_data)
-        if not validated_request_data.get("action_ids"):
-            return systems
+        # 绑定系统状态
+        namespace = validated_request_data["namespace"]
 
-        actions = [get_action_by_id(action) for action in validated_request_data["action_ids"]]
-        systems = wrapper_permission_field(systems, actions)
-        systems.sort(key=SystemListResource.sort_system_by_permission)
+        if validated_request_data.get("with_system_status"):
+            wrapper_system_status(namespace, systems)
+
+        if validated_request_data.get("action_ids"):
+            username = get_request_username()
+            system_ids = [system["system_id"] for system in systems]
+            is_system_manager = is_system_manager_func(system_ids, username)
+            actions = [get_action_by_id(action) for action in validated_request_data["action_ids"]]
+            systems = wrapper_permission_field(
+                systems, actions, always_allowed=lambda sys: is_system_manager(sys["system_id"])
+            )
+
+        # 排序
+        sort_keys = validated_request_data.get("sort_keys", [])
+        systems.sort(key=get_system_sort_key(sort_keys))
         return systems
 
 
 class SystemInfoResource(SystemAbstractResource):
-    """
-    TODO:
-    1. 返回系统状态
-    """
-
     name = gettext_lazy("获取系统详情")
     lookup_field = "system_id"
     serializer_class = SystemInfoResponseSerializer
     action = "retrieve"
     audit_action = ActionEnum.VIEW_SYSTEM
 
+    @property
+    def queryset(self):
+        return System.objects.with_action_resource_type_count()
+
     def perform_request(self, validated_request_data: dict) -> any:
-        system_id = validated_request_data["system_id"]
         system_info = super().perform_request(validated_request_data)
-        system_info["managers"] = [
-            manager["username"]
-            for manager in resource.meta.system_role_list(system_id=system_id, role=IAM_MANAGER_ROLE)
-        ]
-        # 增加最后上报信息数据
-        try:
-            tail_log_item = resource.databus.collector.system_collectors_status(
-                namespace=system_info["namespace"], system_id=system_id
-            )
-        except ResourceModuleNotRegistered:
-            tail_log_item = {}
-        system_info["last_time"] = str(tail_log_item.get("last_time"))
-        system_info["status"] = str(tail_log_item.get("status"))
-        system_info["status_msg"] = str(tail_log_item.get("status_msg"))
         self.add_audit_instance_to_context(instance=SystemInstance(system_info).instance)
         return system_info
 
@@ -327,9 +408,10 @@ class ResourceTypeListResource(SystemAttrAbstractResource):
         system_ids = {rt.system_id for rt in resource_types_page}
         resource_type_ids_set = {rt.resource_type_id for rt in resource_types_page}
         all_related_actions = Action.objects.filter(system_id__in=system_ids)
+        resource_type_id_map = Action.get_resource_type_id_map(list(system_ids))
         actions_lookup = defaultdict(list)
         for action in all_related_actions:
-            for rt_id in action.resource_type_ids:
+            for rt_id in resource_type_id_map.get(action.system_id, {}).get(action.action_id, []):
                 if rt_id in resource_type_ids_set:
                     key = (action.system_id, rt_id)
                     actions_lookup[key].append(action)
@@ -487,9 +569,55 @@ class DeleteResourceType(Meta, ModelResource):
 
 
 class ActionListResource(SystemAttrAbstractResource):
+    """
+    操作列表
+    1. 获取指定系统下的操作列表
+    ```json
+    返回:
+    {
+        "data": [
+            {
+                "action_id": "xxx",
+                "name": "xxx",
+                "name_en": "xxx",
+                "sensitivity": 0,
+                "type": null,
+                "version": 0,
+                "description": null,
+                "unique_id": "xxx",
+                "resource_type_ids": [
+                    "xxx1"
+                ]
+            }
+        ]
+    }
+    ```
+    """
+
     name = gettext_lazy("操作列表")
     model = models.Action
+    RequestSerializer = ActionListReqSerializer
     serializer_class = ActionSerializer
+    filter_fields = {
+        "system_id": ["exact"],
+        "sensitivity": ["exact"],
+        "name": ["icontains"],
+        "name_en": ["icontains"],
+        "type": ["exact"],
+    }
+    filter_backends = [DjangoFilterBackend]
+
+    def perform_request(self, validated_request_data: dict) -> any:
+        data = super().perform_request(validated_request_data)
+        resource_type_ids: Set[str] = set(validated_request_data.get("resource_type_ids", []))
+        system_id: str = validated_request_data["system_id"]
+        resource_type_id_map = Action.get_resource_type_id_map([system_id])
+        for action in data:
+            action["resource_type_ids"] = resource_type_id_map.get(system_id, {}).get(action["action_id"], [])
+        # 根据 resource_type_ids 过滤
+        if resource_type_ids:
+            data = [action for action in data if set(action["resource_type_ids"]) & resource_type_ids]
+        return data
 
 
 class SystemFilter(Meta, Resource, ABC):
@@ -952,84 +1080,124 @@ class ListGeneralConfigResource(Meta, ModelResource):
     RequestSerializer = ListGeneralConfigReqSerializer
 
 
-class CreateSystem(Meta, Resource):
+class CreateSystem(SystemAbstractResource, Meta):
+    """
+    创建审计中心系统
+    """
+
     name = gettext_lazy("创建系统")
+    RequestSerializer = CreateSystemReqSerializer
+    ResponseSerializer = SystemInfoResponseSerializer
+    audit_action = ActionEnum.CREATE_SYSTEM
+
+    def perform_request(self, validated_request_data: dict):
+        namespace = validated_request_data["namespace"]
+        system_id = validated_request_data["system_id"]
+        system, is_created = System.objects.get_or_create(
+            namespace=namespace, system_id=system_id, defaults=validated_request_data
+        )
+        if not is_created:
+            raise SystemHasExist(system_id=system_id)
+        return system
+
+
+class UpdateSystemAuditStatus(Meta, SystemAuditMixinResource):
+    """
+    更新系统审计状态为已接入
+    """
+
+    name = gettext_lazy("更新系统审计状态")
 
     def perform_request(self, validated_request_data):
-        pass
+        system_id = validated_request_data["system_id"]
+        system: System = get_object_or_404(System, system_id=system_id)
+        system.audit_status = SystemAuditStatusEnum.ACCESSED.value
+        system.save(update_fields=["audit_status"])
+        return system
 
 
-class UpdateSystem(Meta, Resource):
+class UpdateSystem(Meta, SystemAuditMixinResource):
     name = gettext_lazy("更新系统")
+    RequestSerializer = UpdateSystemReqSerializer
+    ResponseSerializer = SystemInfoResponseSerializer
+    audit_action = ActionEnum.EDIT_SYSTEM
+
+    @transaction.atomic
+    def update_system(self, system: System, validated_request_data: dict) -> dict:
+        need_update_join_data = False
+        for key, value in validated_request_data.items():
+            if key == "callback_url" and value != system.callback_url:
+                need_update_join_data = True
+            setattr(system, key, value)
+        system.save(update_fields=validated_request_data.keys())
+        return {
+            "system": system,
+            "need_update_join_data": need_update_join_data,
+        }
 
     def perform_request(self, validated_request_data):
-        pass
+        system_id = validated_request_data["system_id"]
+        system: System = get_object_or_404(System, system_id=system_id)
+        result = self.update_system(system, validated_request_data)
+        system, need_update_join_data = result["system"], result["need_update_join_data"]
+        if need_update_join_data:
+            system.update_join_data()
+        return system
 
 
 class FavoriteSystem(Meta, Resource):
     name = gettext_lazy("更新系统收藏")
+    RequestSerializer = SystemFavoriteReqSerializer
 
     def perform_request(self, validated_request_data):
-        pass
+        system_id = validated_request_data["system_id"]
+        favorite = validated_request_data["favorite"]
+        username = get_request_username()
+        SystemFavorite.objects.update_or_create(system_id=system_id, username=username, defaults={"favorite": favorite})
 
 
-class CreateResourceType(Meta, Resource):
-    name = gettext_lazy("创建资源类型")
-
-    def perform_request(self, validated_request_data):
-        pass
-
-
-class UpdateResourceType(Meta, Resource):
-    name = gettext_lazy("更新资源类型")
-
-    def perform_request(self, validated_request_data):
-        """
-        TODO: 需要判断是否需要更新后端资源拉取任务
-        """
-        pass
-
-
-class BulkUpdateResourceType(Meta, Resource):
-    name = gettext_lazy("批量更新资源类型")
-
-    def perform_request(self, validated_request_data):
-        pass
-
-
-class DeleteResourceType(Meta, Resource):
-    name = gettext_lazy("删除资源类型")
-
-    def perform_request(self, validated_request_data):
-        """
-        TODO: 需要判断是否需要删除/停用后端资源拉取任务
-        """
-        pass
-
-
-class CreateAction(Meta, Resource):
+class CreateAction(Meta, SystemAuditMixinResource):
     name = gettext_lazy("创建操作")
+    RequestSerializer = ActionCreateSerializer
+    ResponseSerializer = ActionSerializer
+    audit_action = ActionEnum.EDIT_SYSTEM
 
     def perform_request(self, validated_request_data):
-        pass
+        system_id = validated_request_data["system_id"]
+        action_id = validated_request_data["action_id"]
+        action, is_created = Action.objects.get_or_create(
+            unique_id=validated_request_data["unique_id"], defaults=validated_request_data
+        )
+        if not is_created:
+            raise ActionHasExist(system_id=system_id, action_id=action_id)
+        return action
 
 
-class UpdateAction(Meta, Resource):
+class UpdateAction(Meta, ModelResource, SystemAuditMixinResource):
     name = gettext_lazy("更新操作")
-
-    def perform_request(self, validated_request_data):
-        pass
-
-
-class BulkUpdateAction(Meta, Resource):
-    name = gettext_lazy("批量更新操作")
-
-    def perform_request(self, validated_request_data):
-        pass
+    model = Action
+    action = "update"
+    lookup_field = "unique_id"
+    audit_action = ActionEnum.EDIT_SYSTEM
+    serializer_class = ActionUpdateSerializer
+    RequestSerializer = ActionUpdateSerializer
 
 
-class DeleteAction(Meta, Resource):
+class DeleteAction(Meta, ModelResource, SystemAuditMixinResource):
     name = gettext_lazy("删除操作")
+    audit_action = ActionEnum.EDIT_SYSTEM
+    model = Action
+    action = "destroy"
+    lookup_field = "unique_id"
 
+
+class BulkCreateAction(Meta, ModelResource, SystemAuditMixinResource):
+    name = gettext_lazy("批量创建操作")
+    RequestSerializer = BulkActionCreateSerializer
+    audit_action = ActionEnum.EDIT_SYSTEM
+
+    @transaction.atomic
     def perform_request(self, validated_request_data):
-        pass
+        actions = validated_request_data["actions"]
+        for action in actions:
+            resource.meta.create_action(action)
