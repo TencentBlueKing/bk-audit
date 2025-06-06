@@ -16,7 +16,6 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import Optional, TypedDict, Union
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 from django.conf import settings
@@ -82,7 +81,6 @@ class FieldProperty(TypedDict):
     sub_keys: list[SubKey]
 
 
-
 def get_field_map(fields: List[Field]) -> Dict[str, Field]:
     """
     获取字段映射关系
@@ -99,18 +97,6 @@ def get_field_choices(fields: List[Field]) -> List[Tuple[str, str]]:
     """
 
     return [(field.field_name, str(field.description)) for field in fields]
-
-
-class SubKey(TypedDict):
-    field_name: str
-    field_type: str
-    field_alias: str
-    property: Optional['FieldProperty']
-
-
-class FieldProperty(TypedDict):
-    dynamic_content: bool
-    sub_keys: list[SubKey]
 
 
 EVENT_ID = Field(

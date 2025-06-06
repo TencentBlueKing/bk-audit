@@ -122,6 +122,7 @@ class CollectorStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(label=gettext_lazy("状态"), choices=LogReportStatus.choices)
     status_msg = serializers.CharField(label=gettext_lazy("状态描述"))
     last_time = serializers.DateTimeField(label=gettext_lazy("最后数据上报时间"), allow_null=True)
+    collector_count = serializers.IntegerField(label=gettext_lazy("采集项数量"))
 
 
 class CollectorStatusResponseSerializer(CollectorStatusSerializer):
@@ -130,6 +131,15 @@ class CollectorStatusResponseSerializer(CollectorStatusSerializer):
 
 class BulkSystemCollectorsStatusRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
+    system_ids = serializers.CharField(label=gettext_lazy("系统ID"))
+
+    def validate_system_ids(self, value: str):
+        if not value:
+            return []
+        return [system_id for system_id in value.split(",") if system_id]
+
+
+class BulkSystemSnapshotsStatusRequestSerializer(serializers.Serializer):
     system_ids = serializers.CharField(label=gettext_lazy("系统ID"))
 
     def validate_system_ids(self, value: str):
