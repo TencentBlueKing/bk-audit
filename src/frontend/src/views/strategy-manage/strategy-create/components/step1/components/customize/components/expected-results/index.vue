@@ -71,8 +71,6 @@
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
-  import { useRoute, useRouter } from 'vue-router';
-  import Vuedraggable from 'vuedraggable';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 

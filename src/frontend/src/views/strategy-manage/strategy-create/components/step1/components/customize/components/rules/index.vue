@@ -46,8 +46,6 @@
           :table-fields="tableFields"
           @handle-update-local-conditions="handleUpdateLocalConditions"
           @show-structure-preview="handleShowStructurePreview"
-          @handleUpdateLocalConditions="handleUpdateLocalConditions"
-          @show-structure-preview="handleShowStructurePreview"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
           @update-field-item-list="handleUpdateFieldItemList" />
