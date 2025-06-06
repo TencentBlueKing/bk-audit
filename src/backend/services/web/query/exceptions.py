@@ -32,3 +32,29 @@ class FilterKeyParseError(BlueException):
     def __init__(self, key, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(key=key)
         super().__init__(*args, **kwargs)
+
+
+class LogExportTaskNoPermission(BlueException):
+    MODULE_CODE = "23"
+    ERROR_CODE = "403"
+    MESSAGE = gettext_lazy("您没有权限执行该操作")
+
+
+class DownloadLogExportTaskError(BlueException):
+    MODULE_CODE = "24"
+    STATUS_CODE = 400
+    MESSAGE = gettext_lazy("下载任务异常: {msg}")
+
+    def __init__(self, msg, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(msg=msg)
+        super().__init__(*args, **kwargs)
+
+
+class LogExportMaxCountError(BlueException):
+    MODULE_CODE = "25"
+    STATUS_CODE = 400
+    MESSAGE = gettext_lazy("导出数量 {current_count} 超过最大值: {max_count}")
+
+    def __init__(self, current_count: int, max_count: int, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(current_count=current_count, max_count=max_count)
+        super().__init__(*args, **kwargs)

@@ -50,7 +50,8 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.meta.utils.saas import get_saas_url
 from core.cache import CacheType
-from core.utils.tools import format_date_string, replenish_params
+from core.utils.data import replenish_params
+from core.utils.time import format_date_string
 from services.web.databus.collector.bcs.yaml import YamlTemplate
 from services.web.databus.collector.etl.base import EtlClean
 from services.web.databus.collector.serializers import (

@@ -22,7 +22,7 @@ from django.utils.translation import gettext_lazy
 from pypika import Field
 from pypika import functions as fn
 
-from core.choices import TextChoices
+from core.choices import TextChoices, register_choices
 from core.sql.exceptions import OperatorValueError, UnsupportedOperatorError
 
 
@@ -35,6 +35,7 @@ class FilterConnector(TextChoices):
     OR = "or", gettext_lazy("OR")
 
 
+@register_choices("core_sql_field_type")
 class FieldType(TextChoices):
     """
     字段类型

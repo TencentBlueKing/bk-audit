@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from apps.meta.utils.fields import ACCESS_TYPE, RESULT_CODE, USER_IDENTIFY_TYPE
-from core.utils.tools import choices_to_select_list
+from core.utils.data import choices_to_select_list
 from services.web.query.constants import (
     AccessTypeChoices,
     ResultCodeChoices,

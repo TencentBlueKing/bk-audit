@@ -26,7 +26,7 @@ from api.bk_base.default import GetResultTable
 from api.bk_log.constants import INDEX_SET_ID
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
-from core.utils.tools import ordered_dict_to_json
+from core.utils.data import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
 from services.web.strategy_v2.constants import RiskLevel, RuleAuditSourceType
 from tests.base import TestCase
@@ -64,7 +64,10 @@ class StrategyTest(TestCase):
     def test_create_bkm_strategy(self) -> None:
         """CreateStrategy"""
         data = self._create_bkm_strategy()
-        self.assertEqual(ordered_dict_to_json(data), CREATE_BKM_DATA_RESULT)
+        # Create a copy of expected result and update strategy_id dynamically
+        expected_result = copy.deepcopy(CREATE_BKM_DATA_RESULT)
+        expected_result["strategy_id"] = data["strategy_id"]
+        self.assertEqual(ordered_dict_to_json(data), expected_result)
 
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
     def _create_bkm_strategy(self) -> dict:
@@ -100,8 +103,10 @@ class StrategyTest(TestCase):
             }
         )
         data = resource.strategy_v2.update_strategy(**params)
-        UPDATE_BKM_DATA_RESULT["strategy_id"] = data["strategy_id"]
-        self.assertEqual(data, UPDATE_BKM_DATA_RESULT)
+        # Create a fresh copy of expected result for update test
+        expected_result = copy.deepcopy(UPDATE_BKM_DATA_RESULT)
+        expected_result["strategy_id"] = data["strategy_id"]
+        self.assertEqual(data, expected_result)
 
 
 class TestRuleAuditSourceTypeCheck(TestCase):

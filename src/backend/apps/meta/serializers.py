@@ -40,6 +40,8 @@ from apps.meta.models import (
     Action,
     DataMap,
     Field,
+    GeneralConfig,
+    GeneralConfigScene,
     GlobalMetaConfig,
     Namespace,
     ResourceType,
@@ -427,3 +429,40 @@ class DeleteSystemDiagnosisPushReqSerializer(serializers.Serializer):
     """
 
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+
+
+class GeneralConfigSerializer(serializers.ModelSerializer):
+    """Serializer for GeneralConfig"""
+
+    class Meta:
+        model = GeneralConfig
+        fields = [
+            'id',
+            'scene',
+            'config_name',
+            'config_content',
+            "created_by",
+            "created_at",
+            "updated_by",
+            "updated_at",
+        ]
+
+
+class UpdateGeneralConfigSerializer(GeneralConfigSerializer):
+    """Update General Config Request"""
+
+    id = serializers.IntegerField(label=gettext_lazy("配置ID"))
+
+
+class DeleteGeneralConfigReqSerializer(serializers.Serializer):
+    """Delete General Config Request"""
+
+    id = serializers.IntegerField(label=gettext_lazy("配置ID"))
+
+
+class ListGeneralConfigReqSerializer(serializers.Serializer):
+    """List General Config Response"""
+
+    scene = serializers.ChoiceField(choices=GeneralConfigScene.choices, required=False)
+    config_name = serializers.CharField(max_length=255, required=False)
+    created_by = serializers.CharField(max_length=255)

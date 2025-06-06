@@ -32,7 +32,7 @@ from apps.meta.constants import (
     EtlConfigEnum,
 )
 from apps.meta.serializers import StorageDurationTimeSerializer
-from core.utils.tools import choices_to_dict, trans_object_local
+from core.utils.data import choices_to_dict, trans_object_local
 
 
 class Globals:

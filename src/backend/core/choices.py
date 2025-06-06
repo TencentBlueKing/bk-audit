@@ -62,7 +62,9 @@ def register_choices(name: str = None):
         # 将列表转换为Enum类型
         if isinstance(cls, list):
             cls = Enum(name, names=cls)
-
+        # 检测是否已经注册
+        if name in _default:
+            raise ValueError(f"{name} has already been registered.")
         _default[name] = cls
         return cls
 

@@ -25,6 +25,7 @@ from apps.meta.views import (
     custom_field_views,
     datamap_views,
     field_views,
+    general_config_views,
     global_views,
     meta_views,
     namespace_views,
@@ -50,6 +51,7 @@ router.register_module(paas_views)
 router.register_module(user_manage_views)
 router.register_module(tag_views)
 router.register_module(system_diagnosis_views)
+router.register_module(general_config_views)
 
 urlpatterns = [
     path("", include(base_router.urls)),

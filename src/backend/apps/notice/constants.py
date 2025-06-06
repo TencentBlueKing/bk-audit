@@ -60,6 +60,7 @@ class RelateType(TextChoices):
 
     RISK = "risk", gettext_lazy("风险")
     ERROR = "error", gettext_lazy("异常")
+    LOG_EXPORT = "log_export", gettext_lazy("日志导出")
 
 
 class MemberVariable(TextChoices):
@@ -77,3 +78,15 @@ class MemberVariable(TextChoices):
         """
 
         return cls._value2member_map_.get(key)
+
+
+# 日志导出信息安全声明
+LOG_EXPORT_SECURITY_STATEMENT = gettext_lazy(
+    """信息安全声明：
+    此邮件中包含导出数据，为高敏感数据资产，请遵守法律法规合规使用，如有泄露，承担相应的法律责任。
+    如果您不是这封邮件的接收者，请删除邮件，并邮件告知邮件发送方。
+    """
+)
+
+# BK Audit SaaS 后台模块
+BK_AUDIT_SAAS_BACKEND_MODULE = "api"

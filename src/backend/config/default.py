@@ -395,6 +395,59 @@ SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE = os.getenv("BKAPP_SYNC_AUTO_RESULT_PERIOD
 # 图表结果缓存时间(秒)
 VISION_CACHE_TIMEOUT = int(os.getenv("BKAPP_VISION_CACHE_TIMEOUT", "86400"))
 
+# 处理日志导出任务定时任务调度周期(分)
+PROCESS_LOG_EXPORT_TASK_MINUTE = os.getenv("BKAPP_PROCESS_LOG_EXPORT_TASK_MINUTE", "*/5")
+
+# 处理日志导出任务缓存锁超时时间(秒)
+PROCESS_LOG_EXPORT_TASK_LOCK_TIMEOUT = int(os.getenv("BKAPP_PROCESS_LOG_EXPORT_TASK_LOCK_TIMEOUT", 60 * 60 * 24 * 2))
+
+# 处理日志导出任务最大重试次数
+PROCESS_LOG_EXPORT_TASK_MAX_REPEAT_TIMES = int(os.getenv("BKAPP_PROCESS_LOG_EXPORT_TASK_MAX_REPEAT_TIMES", 3))
+
+# 日志导出任务调度最大时间周期(秒)
+LOG_EXPORT_TASK_MAX_PERIODIC_TIME = int(os.getenv("BKAPP_LOG_EXPORT_TASK_MAX_PERIODIC_TIME", 60 * 60 * 24 * 7))
+
+# 日志导出任务分页大小
+LOG_EXPORT_TASK_PAGE_SIZE = int(os.getenv("BKAPP_LOG_EXPORT_TASK_PAGE_SIZE", 100))
+
+# 初始化系统管理员
+SYSTEM_ADMIN = [p for p in os.getenv("BKAPP_SYSTEM_ADMIN", "admin").split(",") if p]
+
+# 日志字段清除时间周期(秒)
+LOG_FIELD_CLEAR_PERIODIC_TIME = int(os.getenv("BKAPP_LOG_FIELD_CLEAR_PERIODIC_TIME", 60 * 60 * 24))
+
+# 日志导出最大条数
+LOG_EXPORT_MAX_COUNT = int(os.getenv("BKAPP_LOG_EXPORT_MAX_COUNT", 100000))
+
+# 日志导出任务过期时间(天)
+LOG_EXPORT_MAX_DURATION = int(os.getenv("BKAPP_LOG_EXPORT_MAX_DURATION", 30))
+
+# 处理过期导出任务调度周期(小时)
+PROCESS_EXPIRED_LOG_TASK_HOUR = os.getenv("BKAPP_PROCESS_EXPIRED_LOG_TASK_HOUR", "*/24")
+
+# 处理过期任务最大调度时间(天)
+PROCESS_EXPIRED_LOG_TASK_MAX_DURATION = int(
+    os.getenv("BKAPP_PROCESS_EXPIRED_LOG_TASK_MAX_DURATION", LOG_EXPORT_MAX_DURATION + 60)
+)
+
+# 日志导出任务时卡住任务的最大查询时间范围（天）
+STUCK_TASK_SEARCH_DAYS = int(os.getenv("BKAPP_STUCK_TASK_SEARCH_DAYS", 7))
+
+# 处理状态为运行中且卡住的日志导出任务调度周期(小时)
+PROCESS_STUCK_LOG_TASK_HOUR = os.getenv("BKAPP_PROCESS_STUCK_LOG_TASK_HOUR", "*/1")
+
+#  Alert Configuration
+ALERT_DATA_ID = int(os.getenv("BKAPP_ALERT_DATA_ID", 0))
+
+#  Alert Configuration
+ALERT_ACCESS_TOKEN = os.getenv("BKAPP_ALERT_ACCESS_TOKEN", "")
+
+# 日志导出状态上报的数据ID
+LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))
+
+# 日志导出状态上报的数据token
+LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
+
 """
 以下为框架代码 请勿修改
 """

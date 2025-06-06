@@ -19,10 +19,12 @@ to the current version of the project delivered to anyone in the future.
 from typing import Dict
 
 from apps.notice.builders.error import ErrorBuilder
+from apps.notice.builders.log_export import LogExportBuilder
 from apps.notice.builders.risk import RiskBuilder
 from apps.notice.constants import RelateType
 
 BUILDERS: Dict = {
     RelateType.RISK: RiskBuilder,
     RelateType.ERROR: ErrorBuilder,
+    RelateType.LOG_EXPORT: LogExportBuilder,
 }

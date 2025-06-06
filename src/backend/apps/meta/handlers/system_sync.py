@@ -35,7 +35,7 @@ from apps.meta.constants import (
     SystemSourceTypeEnum,
 )
 from apps.meta.models import Action, Namespace, ResourceType, System, SystemRole
-from core.utils.tools import group_by
+from core.utils.data import group_by
 
 
 def update_instance_attrs(instance, obj: dict, attrs: list) -> (bool, object):
@@ -528,5 +528,5 @@ def sync_iam_v3_system_roles(iam_systems):
             )
 
         if to_delete:
-            SystemRole.objects.filter(username__in=to_delete).delete()
+            SystemRole.objects.filter(system_id=system_id, username__in=to_delete).delete()
     logger.info("[sync_iam_system_roles] finished")

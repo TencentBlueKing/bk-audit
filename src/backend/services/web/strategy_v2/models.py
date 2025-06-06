@@ -25,6 +25,7 @@ from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy
 
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
+from services.web.analyze.constants import FlowDataSourceNodeType, FlowSQLNodeType
 from services.web.analyze.models import Control, ControlVersion
 from services.web.strategy_v2.constants import (
     RiskLevel,
@@ -89,6 +90,12 @@ class Strategy(SoftDeleteModel):
     @property
     def control_version_inst(self) -> ControlVersion:
         return ControlVersion.objects.get(control_id=self.control_id, control_version=self.control_version)
+
+    @property
+    def sql_node_type(self) -> str:
+        data_source = self.configs["data_source"]
+        source_type = data_source.get("source_type", FlowDataSourceNodeType.BATCH_REAL)
+        return FlowSQLNodeType.get_sql_node_type(source_type)
 
 
 class StrategyAuditInstance(AuditInstance):

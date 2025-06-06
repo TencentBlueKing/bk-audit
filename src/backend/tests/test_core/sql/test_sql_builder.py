@@ -49,16 +49,28 @@ class TestSQLGenerator(TestCase):
         self.query_builder = QueryBuilder()
 
     def test_single_table_query(self):
-        """测试单表查询的 SQL 生成"""
+        """测试单表查询的 SQL 生成，包含普通字段和JSON字段"""
+        # 测试普通字段和JSON字段混合查询
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
                 Field(table="users", raw_name="name", display_name="user_name", field_type=FieldType.STRING),
+                Field(
+                    table="users",
+                    raw_name="profile",
+                    display_name="user_profile",
+                    field_type=FieldType.STRING,
+                    keys=["address", "city"],  # JSON字段子key查询
+                ),
             ],
-            from_table=Table(table_name="users"),  # 新增改动：使用 Table 对象，无 alias
+            from_table=Table(table_name="users"),
         )
         query = SQLGenerator(self.query_builder).generate(config)
-        expected_query = 'SELECT "users"."id" "user_id","users"."name" "user_name" FROM "users" "users"'
+        expected_query = (
+            'SELECT "users"."id" "user_id","users"."name" "user_name",'
+            'GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') "user_profile" '
+            'FROM "users" "users"'
+        )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
     def test_join_table_query(self):
@@ -87,7 +99,7 @@ class TestSQLGenerator(TestCase):
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
     def test_where_conditions(self):
-        """测试条件筛选的 SQL 生成"""
+        """测试条件筛选的 SQL 生成，包含普通字段和JSON字段"""
         config = SqlConfig(
             select_fields=[
                 Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
@@ -120,7 +132,10 @@ class TestSQLGenerator(TestCase):
                     WhereCondition(
                         condition=Condition(
                             field=Field(
-                                table="users", raw_name="name", display_name="user_name", field_type=FieldType.STRING
+                                table="users",
+                                raw_name="name",
+                                display_name="user_name",
+                                field_type=FieldType.STRING,
                             ),
                             operator=Operator.LIKE,
                             filter="%Jack%",
@@ -129,10 +144,14 @@ class TestSQLGenerator(TestCase):
                     WhereCondition(
                         condition=Condition(
                             field=Field(
-                                table="users", raw_name="name", display_name="user_name", field_type=FieldType.STRING
+                                table="users",
+                                raw_name="address",
+                                display_name="user_address",
+                                field_type=FieldType.STRING,
+                                keys=["k1", "k2"],  # JSON字段子key查询
                             ),
-                            operator=Operator.NOT_LIKE,
-                            filter="%Mark%",
+                            operator=Operator.EQ,
+                            filter="Dublin",
                         )
                     ),
                 ],
@@ -144,7 +163,8 @@ class TestSQLGenerator(TestCase):
             'SELECT "users"."id" "user_id" '
             'FROM "users" "users" '
             'WHERE "users"."age"=18 AND "users"."country"=\'Ireland\' '
-            'AND "users"."name" LIKE \'%Jack%\' AND NOT "users"."name" LIKE \'%Mark%\''
+            'AND "users"."name" LIKE \'%Jack%\' '
+            'AND GET_JSON_OBJECT("users"."address",\'$.["k1"].["k2"]\')=\'Dublin\''
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -254,17 +274,31 @@ class TestSQLGenerator(TestCase):
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
     def test_group_by_with_where(self):
-        """测试 GROUP BY 子句"""
+        """测试 GROUP BY 子句，包含普通字段和JSON字段"""
         config = SqlConfig(
             select_fields=[
                 Field(
                     table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT, aggregate="COUNT"
                 ),
                 Field(table="users", raw_name="country", display_name="user_country", field_type=FieldType.STRING),
+                Field(
+                    table="users",
+                    raw_name="profile",
+                    display_name="user_city",
+                    field_type=FieldType.STRING,
+                    keys=["address", "city"],  # 添加JSON字段子key查询
+                ),
             ],
             from_table=Table(table_name="users"),
             group_by=[
                 Field(table="users", raw_name="country", display_name="user_country", field_type=FieldType.STRING),
+                Field(
+                    table="users",
+                    raw_name="profile",
+                    display_name="user_city",
+                    field_type=FieldType.STRING,
+                    keys=["address", "city"],  # 分组字段也支持JSON子key
+                ),
             ],
             where=WhereCondition(
                 condition=Condition(
@@ -279,14 +313,16 @@ class TestSQLGenerator(TestCase):
         generator = SQLGenerator(self.query_builder)
         query = generator.generate(config)
         expected_query = (
-            'SELECT COUNT("users"."id") "user_id","users"."country" "user_country" '
-            'FROM "users" "users" WHERE "users"."country"=\'Ireland\' GROUP BY "users"."country"'
+            'SELECT COUNT("users"."id") "user_id","users"."country" "user_country",'
+            'GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') "user_city" '
+            'FROM "users" "users" WHERE "users"."country"=\'Ireland\' '
+            'GROUP BY "users"."country",GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\')'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
     def test_group_by_with_having(self):
         """
-        测试在存在聚合字段的情况下，使用 HAVING 子句对聚合结果进行筛选
+        测试在存在聚合字段的情况下，使用 HAVING 子句对聚合结果进行筛选，包含JSON字段
         """
         config = SqlConfig(
             select_fields=[
@@ -303,6 +339,13 @@ class TestSQLGenerator(TestCase):
                     display_name="status",
                     field_type=FieldType.STRING,
                 ),
+                Field(
+                    table="orders",
+                    raw_name="details",
+                    display_name="product_category",
+                    field_type=FieldType.STRING,
+                    keys=["product", "category"],  # 添加JSON字段子key查询
+                ),
             ],
             from_table=Table(table_name="orders"),
             group_by=[
@@ -311,7 +354,14 @@ class TestSQLGenerator(TestCase):
                     raw_name="status",
                     display_name="status",
                     field_type=FieldType.STRING,
-                )
+                ),
+                Field(
+                    table="orders",
+                    raw_name="details",
+                    display_name="product_category",
+                    field_type=FieldType.STRING,
+                    keys=["product", "category"],  # 分组字段也支持JSON子key
+                ),
             ],
             having=HavingCondition(
                 condition=Condition(
@@ -331,16 +381,18 @@ class TestSQLGenerator(TestCase):
         query = generator.generate(config)
 
         expected_query = (
-            'SELECT COUNT("orders"."id") "count_id","orders"."status" "status" '
+            'SELECT COUNT("orders"."id") "count_id","orders"."status" "status",'
+            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') "product_category" '
             'FROM "orders" "orders" '
-            'GROUP BY "orders"."status" '
+            'GROUP BY "orders"."status",'
+            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') '
             'HAVING COUNT("orders"."id")>100'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
     def test_auto_inferred_group_by(self):
         """
-        测试自动推导 GROUP BY：如果没有指定 group_by，但存在聚合字段，则对非聚合字段进行分组
+        测试自动推导 GROUP BY：如果没有指定 group_by，但存在聚合字段，则对非聚合字段进行分组，包含JSON字段
         """
         config = SqlConfig(
             select_fields=[
@@ -352,15 +404,24 @@ class TestSQLGenerator(TestCase):
                     field_type=FieldType.INT,
                     aggregate=AggregateType.SUM,
                 ),
+                Field(
+                    table="orders",
+                    raw_name="details",
+                    display_name="product_type",
+                    field_type=FieldType.STRING,
+                    keys=["product", "type"],  # 添加JSON字段子key查询
+                ),
             ],
             from_table=Table(table_name="orders"),
         )
         generator = SQLGenerator(self.query_builder)
         query = generator.generate(config)
-        # 期望自动分组 "id"
+        # 期望自动分组 "id" 和 JSON字段
         expected_query = (
-            'SELECT "orders"."id" "order_id",SUM("orders"."amount") "amount_sum" '
-            'FROM "orders" "orders" GROUP BY "orders"."id"'
+            'SELECT "orders"."id" "order_id",SUM("orders"."amount") "amount_sum",'
+            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\') "product_type" '
+            'FROM "orders" "orders" '
+            'GROUP BY "orders"."id",GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\')'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
 
