@@ -68,9 +68,8 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute, useRouter } from 'vue-router';
   import Vuedraggable from 'vuedraggable';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
@@ -94,8 +93,6 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  const route = useRoute();
-  const router = useRouter();
   const { t } = useI18n();
   const addFieldsRef = ref();
 

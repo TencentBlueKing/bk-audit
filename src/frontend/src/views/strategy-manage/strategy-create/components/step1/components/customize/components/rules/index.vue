@@ -44,7 +44,7 @@
           :config-type="configType"
           :expected-result="expectedResult"
           :table-fields="tableFields"
-          @handleUpdateLocalConditions="handleUpdateLocalConditions"
+          @handle-update-local-conditions="handleUpdateLocalConditions"
           @show-structure-preview="handleShowStructurePreview"
           @update-connector="handleUpdateConnector"
           @update-field-item="handleUpdateFieldItem"
@@ -106,14 +106,13 @@
     expectedResult: Array<DatabaseTableFieldModel>,
     aggregateList: Array<Record<string, any>>
     configType: string,
-    configsData: Record<string, any>,
   }
   interface Emits {
     (e: 'updateWhere', value: Where): void;
     (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
   }
 
-  const props = defineProps<Props>();
+  defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
