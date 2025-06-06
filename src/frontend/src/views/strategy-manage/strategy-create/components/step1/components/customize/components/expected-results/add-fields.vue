@@ -28,7 +28,7 @@
     :is-show="isShow"
     theme="light"
     trigger="click"
-    width="980"
+    width="auto"
     @after-hidden="handleAfterHidden">
     <template #content>
       <div class="add-field-pop-content">
@@ -52,31 +52,48 @@
             </div>
             <div class="field-pop-select-list">
               <scroll-faker v-if="renderFieldList.length">
-                <div
-                  v-for="(item, index) in renderFieldList"
-                  :key="index"
-                  class="field-pop-select-item">
-                  <div style="display: flex; align-items: center;">
-                    <bk-checkbox-group>
-                      <bk-checkbox
-                        :checked="isEdit"
-                        :disabled="isEdit"
-                        @change="(value: boolean) => handleSelectField(value, item)">
-                        <div style="display: flex; align-items: center">
-                          <audit-icon
-                            style="margin-right: 4px;font-size: 14px;"
-                            svg
-                            :type="item.spec_field_type" />
-                          <span
-                            v-if="configType === 'LinkTable'"
-                            style=" color: #3a84ff;">{{ item.table }}.</span>
-                          <span>{{ item.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
-                        </div>
-                      </bk-checkbox>
-                    </bk-checkbox-group>
+                <div v-if="isEdit">
+                  <div
+                    v-for="(item, index) in renderFieldList"
+                    :key="index"
+                    class="field-pop-select-item">
+                    <div style="display: flex; align-items: center;">
+                      <bk-checkbox-group>
+                        <bk-checkbox
+                          :checked="isEdit"
+                          :disabled="isEdit"
+                          @change="() => handleSelectField()">
+                          <div style="display: flex; align-items: center">
+                            <audit-icon
+                              style="margin-right: 4px;font-size: 14px;"
+                              svg
+                              :type="item.spec_field_type" />
+                            <span
+                              v-if="configType === 'LinkTable'"
+                              style=" color: #3a84ff;">{{ item.table }}.</span>
+                            <span>{{ item?.display_name.replace(/\(.*?\)/g, '').trim() }}</span>
+                          </div>
+                        </bk-checkbox>
+                      </bk-checkbox-group>
+                    </div>
+                    <div style="margin-right: 5px;margin-left: 5px;">
+                      <span v-if="'self_name' in item">{{ item.self_name }} / {{ item.self_key_name }}</span>
+                      <span v-else>{{ item.raw_name }}
+                        <span
+                          v-for="key in item.keys"
+                          :key="key">/ {{ key }}</span>
+                      </span>
+                    </div>
                   </div>
-                  <div>{{ item.raw_name }}</div>
                 </div>
+                <node-select
+                  v-else
+                  ref="nodeSelectRef"
+                  :config-data="localTableFields"
+                  :config-type="configType"
+                  :expected-result-list="props.expectedResultList"
+                  :search-key="searchKey"
+                  @handle-node-checked="onHandleNodeChecked" />
               </scroll-faker>
               <bk-exception
                 v-else-if="isSearching"
@@ -177,8 +194,16 @@
                       v-for="(item, index) in tableData"
                       :key="index">
                       <td style="background-color: #fafbfd;">
-                        <div style=" width: 180px;padding-left: 8px">
+                        <div class="table-field">
                           <tool-tip-text :data="item.raw_name" />
+                          <span v-if="item?.keys && item?.keys.length > 0">
+                            <span
+                              v-for="(field, fieldIndex) in item.keys"
+                              :key="fieldIndex">
+                              <span class="subscript">/</span>
+                              <span>{{ field }}</span>
+                            </span>
+                          </span>
                         </div>
                       </td>
                       <td style="background-color: #fff;">
@@ -229,7 +254,7 @@
         <div class="field-pop-bth">
           <bk-button
             class="mr8"
-            :disabled="!tableData.length || exist"
+            :disabled="!tableData.length || exist || isTableAggregate"
             size="small"
             theme="primary"
             @click="handleAddField">
@@ -256,15 +281,22 @@
 
   import { encodeRegexp } from '@utils/assist';
 
+  import nodeSelect from './tree.vue';
+
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
 
   // 扩展DatabaseTableFieldModel类型，添加aggregateList属性
   interface ExDatabaseTableFieldModel extends DatabaseTableFieldModel {
     aggregateList: Record<string, any>[];
     isDuplicate: boolean;
+    display_name: string;
+    keys?: string[];
+    self_key_name?: string;
+    self_name?: string;
   }
-
-
+  interface NodeSelectComponent {
+    handleSearch: (data: string) => void;  // 根据你的实际参数类型调整
+  }
   interface Emits {
     (e: 'addExpectedResult', item: DatabaseTableFieldModel, index?: number): void;
   }
@@ -276,10 +308,13 @@
   }
   interface Expose {
     handleEditShowPop: (index: number) => void,
+    handleEditNode: (node: Record<string, any>) =>void
   }
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const nodeSelectRef = ref<NodeSelectComponent | null>(null);
+  const editNode = ref();
   const isEdit = defineModel<boolean>({
     required: true,
   });
@@ -373,6 +408,10 @@
 
   // 处理字段数据
   const processField = (field: ExDatabaseTableFieldModel) => {
+    if ('textValue' in field) {
+      // eslint-disable-next-line no-param-reassign
+      field.display_name =  field.textValue  as string;
+    }
     // 创建新对象避免参数修改
     const processedField = {
       ...field,
@@ -394,11 +433,10 @@
       ...props.expectedResultList,
       ...tableData.value,
     ];
-
     // 编辑模式下排除当前字段自身
-    const filteredDisplayNames = isEdit.value
-      ? allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name))
-      : allDisplayNames;
+    // eslint-disable-next-line max-len
+    const filteredDisplayNames = allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name));
+
 
     const displayNameCount = filteredDisplayNames.reduce<Record<string, number>>(
       (acc, cur) => ({ ...acc, [cur.display_name]: (acc[cur.display_name] || 0) + 1 }),
@@ -421,18 +459,17 @@
   };
 
   // 选择字段
-  const handleSelectField = (value: boolean, field: ExDatabaseTableFieldModel) => {
-    if (value) {
-      // 处理并更新数据
-      tableData.value.push(processField(field));
-    } else {
-      tableData.value = tableData.value.filter(({ raw_name: rawName }) => rawName !== field.raw_name);
-    }
+  const handleSelectField = () => {
+    localTableFields.value = [editNode.value];
+    tableData.value = [editNode.value].map(field => processField(field));
   };
-
+  const onHandleNodeChecked = (node: Array<ExDatabaseTableFieldModel>) => {
+    tableData.value = node.map(field => processField(field));
+  };
   // 聚合算法变更时动态更新显示名后缀
   const handleAggregateChange = (val: string, currentItem: ExDatabaseTableFieldModel) => {
     // 判断当前显示名是否已经带有后缀，去除旧后缀
+    // eslint-disable-next-line no-param-reassign
     const baseName = currentItem.display_name.replace(/(_[A-Z]+)?$/, '');
     // 拼接新后缀
     if (val && val !== '不聚合') {
@@ -512,6 +549,7 @@
         // 过滤不需要的属性
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { isDuplicate, aggregateList, ...pureItem } = currentItem;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         emits('addExpectedResult', pureItem, editIndex.value);
       }
     }
@@ -526,16 +564,35 @@
       isDuplicate: false,
     }));
     if (isEdit.value) {
-      handleSelectField(true, localTableFields.value[0]);
+      handleSelectField();
     }
   }, {
     immediate: true,
   });
 
+  watch(() => searchKey.value, (data) => {
+    setTimeout(() => {
+      if (nodeSelectRef.value) {
+        nodeSelectRef.value.handleSearch(data);
+      }
+    }, 200);
+  });
+  const isTableAggregate = ref(false);
+  watch(() => tableData.value, (data) => {
+    // 检查data数组中是否有aggregate为空的项
+    const hasEmptyAggregate = data.some(item => item.aggregate === undefined || item.aggregate === '');
+
+    // 设置isTableAggregate的值
+    isTableAggregate.value = hasEmptyAggregate;
+  }, { deep: true });
+
   defineExpose<Expose>({
     handleEditShowPop: (index: number) => {
       isShow.value = true;
       editIndex.value = index;
+    },
+    handleEditNode: (node: Record<string, any>) => {
+      editNode.value = node;
     },
   });
 </script>
@@ -567,8 +624,9 @@
 
     .field-pop-select {
       display: flex;
-      width: 350px;
+      width: auto;
       height: 100%;
+      min-width: 350px;
       flex-direction: column;
 
       .input-icon {
@@ -633,6 +691,12 @@
         width: 100%;
         border-collapse: collapse;
 
+        .table-field {
+          width: 180px;
+          padding-left: 8px;
+          overflow-wrap: break-word;
+        }
+
         th,
         td {
           padding: 0;
@@ -685,38 +749,45 @@
     }
   }
 </style>
-<style>
-  .field-custom-popover {
-    padding: 0 !important;
-  }
+<style scoped>
+.field-custom-popover {
+  padding: 0 !important;
+}
 
-  .comm-agg-pop {
-    padding: 5px 0 !important;
+.comm-agg-pop {
+  padding: 5px 0 !important;
 
-    .common-agg-item {
-      position: relative;
-      display: flex;
-      min-height: 32px;
-      padding: 0 12px;
-      overflow: hidden;
-      color: #63656e;
-      text-align: left;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      cursor: pointer;
-      user-select: none;
-      align-items: center;
+  .common-agg-item {
+    position: relative;
+    display: flex;
+    min-height: 32px;
+    padding: 0 12px;
+    overflow: hidden;
+    color: #63656e;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    align-items: center;
 
-      &:hover {
-        background-color: #f5f7fa;
-      }
-    }
-
-    .is-disabled {
-      color: #c4c6cc;
-      cursor: not-allowed;
-      background-color: transparent;
+    &:hover {
+      background-color: #f5f7fa;
     }
   }
 
+  .is-disabled {
+    color: #c4c6cc;
+    cursor: not-allowed;
+    background-color: transparent;
+  }
+}
+
+.subscript {
+  margin-right: 5px;
+  margin-left: 5px;
+  font-weight: 700;
+  color: black;
+  text-align: center;
+}
 </style>

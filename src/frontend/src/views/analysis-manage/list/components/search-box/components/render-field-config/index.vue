@@ -24,6 +24,29 @@
         v-if="config.required"
         style="color: #ea3636;">*</span>
       <span :id="`${name}ItemLabelAppend`" />
+      <template v-if="config.help">
+        <bk-popover
+          :component-event-delay="300"
+          placement="top"
+          theme="light">
+          <audit-icon
+            style="color: #c4c6cc; cursor: pointer;"
+            type="help-fill" />
+          <template #content>
+            <div id="pop_content">
+              {{ t('模糊匹配') }},
+              <a
+                :href="configData.third_doc_url.search_rule_iwiki_url"
+                target="_blank"> {{ t('查看规则详情') }}</a>
+            </div>
+          </template>
+        </bk-popover>
+      </template>
+      <audit-icon
+        v-if="config.canClose"
+        class="search-item-lable-close"
+        type="close"
+        @click="deleteField" />
     </div>
     <component
       :is="renderCom"
@@ -48,10 +71,14 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
+
   import useListeners from '@hooks/use-listeners';
   import useProps from '@hooks/use-props';
 
-  import BaseConfig from './config';
+  import type { IFieldConfig } from './config';
   import RenderActionId from './strategy/action-id.vue';
   import RenderCascader from './strategy/cascader.vue';
   import RenderDatetimerang from './strategy/datetimerange.vue';
@@ -63,22 +90,29 @@
   import RenderSystemId from './strategy/system-id.vue';
   import RenderUserSelector from './strategy/user-selector.vue';
 
+  import useRequest from '@/hooks/use-request';
+
   interface Props {
     name: string,
     model: Record<string, any>
+    baseConfig: Record<string, IFieldConfig>
   }
   interface Exposes {
     getValue: (fieldValue?: string)=> Promise<Record<string, any>|string>
   }
+  interface Emit {
+    (e: 'deleteField', value: keyof typeof props.baseConfig): void
+  }
 
   const props = defineProps<Props>();
+  const emit = defineEmits<Emit>();
   const { t } = useI18n();
 
   const attrs = useAttrs();
   const inhertProps = useProps();
   const listeners = useListeners();
 
-  const config = BaseConfig[props.name as keyof typeof BaseConfig];
+  const config = props.baseConfig[props.name as keyof typeof props.baseConfig];
 
   const comMap = {
     'action-id': RenderActionId,
@@ -96,6 +130,17 @@
   const renderCom = computed(() => comMap[config.type as keyof typeof comMap]);
   const formItem = ref();
 
+  const deleteField = () => {
+    emit('deleteField', props.name);
+  };
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
   defineExpose<Exposes>({
     getValue(fieldValue?: string) {
       return formItem.value.getValue(fieldValue);
@@ -111,6 +156,19 @@
 
     .search-item-lable {
       margin-bottom: 6px;
+
+      .search-item-lable-close {
+        display: none;
+        float: right;
+        line-height: 20px;
+        cursor: pointer;
+      }
+
+      &:hover {
+        .search-item-lable-close {
+          display: block;
+        }
+      }
     }
 
     .bk-select {

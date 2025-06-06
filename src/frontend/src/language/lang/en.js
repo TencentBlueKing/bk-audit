@@ -527,4 +527,10 @@ export default {
   未知: 'Unknown',
   准备中: 'Preparing',
   '复制成功 {num} 个 IP': 'Copy {num} IPs successfully',
+  手动添加下级字段: 'Add the subordinate fields manually',
+  '如果你对字段有多级下钻的需求，请注意': 'If you require multi-level drill-down for fields, please note:​​',
+  '1.点击 “ + ”表示新增一级下钻': '1.Clicking "+" under "object1" adds a new drill-down level.',
+  '2.在请输入的输入框内，直接填写字段名': '2.Directly enter the field name in the input box labeled .',
+  '3.可通过多次添加来实现多级下钻，请严格注意字段级别': '3.Achieve multi-level drill-down by adding multiple times. ​Strictly adhere to field hierarchy.​​',
+  以下是3级字段的实例: 'Example of a 3-level field',
 };

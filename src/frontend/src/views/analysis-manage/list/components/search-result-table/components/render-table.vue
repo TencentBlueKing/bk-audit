@@ -103,13 +103,14 @@
     paginationValidator?: (pagination: IPagination) => boolean
   }
   interface Emits {
-    (e: 'requestSuccess', value: any): void,
+    (e: 'requestSuccess', value: any, total: number): void,
     (e: 'clearSearch'): void,
   }
   interface Exposes {
     fetchData: (params: Record<string, any>) => void,
     loading: Ref<boolean>,
     getTableRef: () => Ref<any>
+    getParamsMemo: () => Ref<Record<string, any>>
   }
 
   const props = defineProps<Props>();
@@ -131,6 +132,7 @@
   const tableMaxHeight = ref(0);
 
   const paramsMemo = ref<Record<string, any>>({});
+  const params = ref<Record<string, any>>({});
   const isSearching = ref(false);
 
   let isReady = false;
@@ -154,7 +156,7 @@
       total: 1,
     },
     onSuccess(data) {
-      emits('requestSuccess', data.results);
+      emits('requestSuccess', data.results, data.total);
     },
   });
 
@@ -168,15 +170,15 @@
       .then(() => (props.paginationValidator ? props.paginationValidator(pagination) : true))
       .then((result: boolean) => {
         if (result) {
-          const params = {
+          params.value = {
             ...paramsMemo.value,
             page: pagination.current,
             page_size: pagination.limit,
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
-          run(params);
-          replaceSearchParams(params);
+          run(params.value);
+          replaceSearchParams(params.value);
         }
       });
   };
@@ -244,6 +246,9 @@
     loading: isLoading,
     getTableRef() {
       return tableRef;
+    },
+    getParamsMemo() {
+      return params;
     },
   });
 </script>

@@ -205,7 +205,8 @@
         field_type: '',
         aggregate: null,
         spec_field_type: '',
-        remark: '', // 备注s
+        remark: '',
+        property: {},
       });
     }
     showAddCount.value = false;

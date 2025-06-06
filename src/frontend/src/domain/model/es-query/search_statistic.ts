@@ -14,25 +14,26 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-export default class DatabaseTableField {
-  table: string; // RT ID
-  raw_name: string; // bkbase 字段名
-  display_name: string; // 展示名称 -- 用于 AS 别名，查询中唯一
-  field_type: string; // 字段类型 -- 来自 bkbase
-  aggregate: any; // 聚合函数 -- 聚合算法
-  remark: string; // 备注
-  spec_field_type: string;
-  from?: string;
-  property: Record<string, any>;
-  constructor(payload = {} as DatabaseTableField) {
-    this.table = payload.table || '';
-    this.raw_name = payload.raw_name || '';
-    this.display_name = payload.display_name || '';
-    this.field_type = payload.field_type || '';
-    this.aggregate = payload.aggregate || null;
-    this.remark = payload.remark || '';
-    this.spec_field_type = payload.spec_field_type || '';
-    this.from = payload.from || '';
-    this.property = payload.property || {};
+
+export default class SearchStatistic {
+  results: {
+    avg_value:Array<Record<string, any>>,
+    max_value:Array<Record<string, any>>,
+    min_value:Array<Record<string, any>>,
+    median_value:Array<Record<string, any>>,
+    non_empty_ratio: Array<Record<string, any>>
+    non_empty_rows: Array<Record<string, any>>
+    total_rows: Array<Record<string, any>>,
+    top_5_values: Array<Record<string, any>>,
+
+    top_5_echarts_time_series: {
+      series: Array<Record<string, any>>,
+      times: Array<number>,
+    },
+  };
+
+  constructor(payload = {} as SearchStatistic) {
+    this.results = payload.results;
   }
 }
+

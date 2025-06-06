@@ -56,7 +56,6 @@
     clearValue: () => void;
   }
   const emit = defineEmits<Emits>();
-
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
 
   const comMap = {

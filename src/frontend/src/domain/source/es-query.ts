@@ -16,6 +16,8 @@
 */
 import type FieldMapModel from '@model/es-query/field-map';
 import type SearchModel from '@model/es-query/search';
+import type SearchStatisticModel from '@model/es-query/search_statistic';
+import type StandardFieldModel from '@model/meta/standard-field';
 
 import Request, {
   type IRequestPayload,
@@ -55,6 +57,26 @@ class EsQuery extends ModuleBase {
     return Request.post<IRequestResponsePaginationData<SearchModel>>(`${this.path}/collector_query/search/`, {
       params,
       payload,
+    });
+  }
+  // 获取日志检索字段
+  getSearchConfig() {
+    return Request.get<Array<{
+      allow_operators: Array<string>,
+      field: StandardFieldModel,
+      category: string,
+    }>>(`${this.path}/collector_query/search_config/`);
+  }
+  // 获取日志统计
+  getSearchStatistic(params: Record<string, any>) {
+    return Request.post<SearchStatisticModel>(`${this.path}/collector_query/search_statistic/`, {
+      params,
+    });
+  }
+  // 创建日志检索导出任务
+  createQueryTask(params: Record<string, any>) {
+    return Request.post(`${this.path}/collector_query_task/`, {
+      params,
     });
   }
 }

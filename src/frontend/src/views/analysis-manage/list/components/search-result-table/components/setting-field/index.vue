@@ -25,7 +25,7 @@
     class="setting-filed-box"
     :show-footer="false"
     title="列表字段显示设置"
-    :width="640">
+    :width="940">
     <setting-field
       v-model="isShow"
       @update-field="handleUpdateField" />
@@ -60,6 +60,7 @@
   position: absolute;
   top: 26px;
   right: 25px;
+  z-index: 3;
   width: 40px;
   height: 40px;
   font-size: 14px;
@@ -68,7 +69,6 @@
   text-align: center;
   cursor: pointer;
   background: #fafbfd;
-  border-left: 1px solid #dcdee5;
 }
 
 .setting-filed:hover {
