@@ -81,7 +81,7 @@
           ref="treeRef"
           children="children"
           :data="localData"
-          empty-text=" "
+          :empty-text="t('数据搜索为空')"
           label="raw_name"
           :node-content-action="['click']"
           show-checkbox
@@ -101,19 +101,21 @@
                   <audit-icon
                     v-if="nodeData.dynamic_content"
                     style="margin-left: 5px;
-                  font-size: 14px;
-                  color: #3a84ff"
+                      font-size: 14px;
+                      color: #3a84ff"
                     type="plus-circle"
                     @click.stop="handleAddNode(nodeData)" />
                 </span>
               </div>
             </template>
-            <template v-else-if="nodeData.editName">
-              <span> {{ nodeData.editName[0].field }}</span>
+            <div
+              v-else
+              style="display: flex; align-items: center;">
+              <span>{{ nodeData.name }}</span>
               <span style="margin: 0 5px;">/</span>
               <!-- 多级字段输入 -->
               <template
-                v-for="(item, index) in nodeData.editName.slice(1)"
+                v-for="(item, index) in fieldTypeValue[nodeData.id]"
                 :key="index">
                 <bk-input
                   v-model="item.field"
@@ -121,12 +123,12 @@
                   :placeholder="t('请输入')"
                   style="width: 115px;" />
                 <audit-icon
-                  v-if="index === nodeData.editName.slice(1).length - 1"
+                  v-if="index === fieldTypeValue[nodeData.id].length - 1"
                   v-bk-tooltips="t('添加下级字段')"
                   class="add-icon"
                   :class="[!item.field ? 'disabled-add-icon' : '']"
                   type="add-fill"
-                  @click="() => nodeData.editName && nodeData.editName.push({ field: '' })" />
+                  @click="() => item.field && fieldTypeValue[nodeData.id].push({ field: '' })" />
                 <span
                   v-else
                   style="margin: 0 5px;">/</span>
@@ -134,21 +136,21 @@
               <div class="field-edit-right">
                 <audit-icon
                   v-bk-tooltips="t('确认')"
-                  :class="[nodeData.editName.slice(1).
-                    every(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
+                  :class="[fieldTypeValue[nodeData.id] && fieldTypeValue[nodeData.id].
+                    some(field => !field.field) ? 'disabled-submit-icon' : 'submit-icon']"
                   svg
                   type="check-line"
                   @click.stop="handleAddFieldSubmit(nodeData)" />
                 <audit-icon
                   v-bk-tooltips="t('取消添加')"
                   style="margin-right: 4px;
-                  font-size: 18px;
-                  color: #c1c3c9;"
+                    font-size: 18px;
+                    color: #c1c3c9;"
                   svg
                   type="close"
                   @click.stop="handleAddFieldClose(nodeData)" />
               </div>
-            </template>
+            </div>
           </template>
         </bk-tree>
       </bk-select>
@@ -189,9 +191,6 @@
     isJson: boolean
     level: number
     name: string
-    editName?: Array<{
-      field: string
-    }>
     isEdit: boolean
     isOpen: boolean;
   }
@@ -247,6 +246,7 @@
   const originalData = ref<CascaderItem[]>([]);
 
   const selectedItems = ref<CascaderItem[]>([]);
+  const fieldTypeValue = ref<Record<string, Record<string, any>[]>>({});
 
   const handleSearch = (keyword: string) => {
     isSearching.value = !!keyword;
@@ -343,16 +343,19 @@
   };
 
   const handleAddNode = (node: CascaderItem) => {
+    if (fieldTypeValue.value[node.id]) {
+      return;
+    }
+    fieldTypeValue.value[node.id] = [{ field: '' }];
     node.children.push({
       allow_operators: [],
       children: [],
       disabled: false,
       dynamic_content: false,
-      id: JSON.stringify([node.id]),
+      id: node.id,
       isJson: false,
       level: node.level + 1,
       name: node.name,
-      editName: [{ field: node.name as string }, { field: '' }],
       isOpen: false,
       isEdit: true,
     });
@@ -362,12 +365,15 @@
   };
 
   const handleAddFieldSubmit = (node: CascaderItem) => {
-    const customFields = node.editName;
+    const customFields =  fieldTypeValue.value[node.id];
     if (!customFields || customFields.length === 0) {
       return;
     }
-    const newIdArray = [...JSON.parse(node.id), ...customFields.slice(1).map(item => item.field)];
-    const newNameStr = customFields.map(item => item.field).join('/');
+    if (customFields.some(field => !field.field)) {
+      return;
+    }
+    const newIdArray = [node.id, ...customFields.map(item => item.field)];
+    const newNameStr = `${node.name}/${customFields.map(item => item.field).join('/')}`;
     // eslint-disable-next-line no-param-reassign
     node.id = JSON.stringify(newIdArray);
     // eslint-disable-next-line no-param-reassign
@@ -376,13 +382,12 @@
     node.isEdit = false;
     // 清空customFields
     // eslint-disable-next-line no-param-reassign
-    delete node.editName;
+    delete fieldTypeValue.value[node.id];
   };
 
   const handleAddFieldClose = (node: CascaderItem) => {
-    // eslint-disable-next-line no-param-reassign
-    delete node.editName;
-    const nodeId = JSON.parse(node.id)[0];
+    delete fieldTypeValue.value[node.id];
+    const nodeId = node.id;
     const parentNode = localData.value.find(item => item.id === nodeId);
     if (parentNode) {
       parentNode.children.pop();
