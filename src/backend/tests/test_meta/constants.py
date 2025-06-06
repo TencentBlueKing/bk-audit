@@ -69,6 +69,14 @@ class PermissionMock(mock.MagicMock):
     def wrapper_permission_field(cls, systems, *args, **kwargs):
         return systems
 
+    @classmethod
+    def batch_make_resource(cls, resources):
+        return []
+
+    @staticmethod
+    def is_allowed(self, action):
+        return False
+
 
 # Base
 RESOURCE_TYPE_ID = "biz"
@@ -210,6 +218,9 @@ SYSTEM_LIST_OF_NOT_SORT_DATA = [
         "last_time": STATUS_ABNORMAL_COPY["last_time"],
         "status": STATUS_ABNORMAL_COPY["status"],
         "status_msg": STATUS_ABNORMAL_COPY["status_msg"],
+        "resource_type_count": 0,
+        "action_count": 0,
+        "system_status": "pending",
     },
 ]
 BULK_SYSTEM_COLLECTORS_STATUS_API_RESP = {
@@ -228,6 +239,9 @@ SYSTEM_LIST_DATA = [
         "last_time": STATUS_ABNORMAL_COPY["last_time"],
         "status": STATUS_ABNORMAL_COPY["status"],
         "status_msg": STATUS_ABNORMAL_COPY["status_msg"],
+        "resource_type_count": 0,
+        "action_count": 0,
+        "system_status": "pending",
     },
     {
         **SYSTEM_DATA2,
@@ -235,6 +249,9 @@ SYSTEM_LIST_DATA = [
         "last_time": STATUS_NORMAL_COPY["last_time"],
         "status": STATUS_NORMAL_COPY["status"],
         "status_msg": STATUS_NORMAL_COPY["status_msg"],
+        "resource_type_count": 1,
+        "action_count": 0,
+        "system_status": "pending",
     },
 ]
 SYSTEM_LIST_OF_NOT_SYSTEMS_PARAMS = {
@@ -252,6 +269,9 @@ SYSTEM_LIST_OF_SORT_EQ_DATA = [
         "last_time": STATUS_NORMAL_COPY["last_time"],
         "status": STATUS_NORMAL_COPY["status"],
         "status_msg": STATUS_NORMAL_COPY["status_msg"],
+        "resource_type_count": 1,
+        "action_count": 0,
+        "system_status": "pending",
     },
     {
         **SYSTEM_DATA1,
@@ -259,6 +279,9 @@ SYSTEM_LIST_OF_SORT_EQ_DATA = [
         "last_time": STATUS_ABNORMAL_COPY["last_time"],
         "status": STATUS_ABNORMAL_COPY["status"],
         "status_msg": STATUS_ABNORMAL_COPY["status_msg"],
+        "resource_type_count": 0,
+        "action_count": 0,
+        "system_status": "pending",
     },
 ]
 SYSTEM_LIST_OF_SORT_GT_PARAMS = {
@@ -276,10 +299,16 @@ SYSTEM_LIST_ALL_DATA = [
     {
         "id": SYSTEM_DATA2["system_id"],
         "name": SYSTEM_DATA2["name"],
+        "source_type": SYSTEM_DATA2['source_type'],
+        "audit_status": "pending",
+        "system_id": SYSTEM_DATA2["system_id"],
     },
     {
         "id": SYSTEM_DATA1["system_id"],
         "name": SYSTEM_DATA1["name"],
+        "source_type": SYSTEM_DATA1["source_type"],
+        "audit_status": "pending",
+        "system_id": SYSTEM_DATA1["system_id"],
     },
 ]
 SYSTEM_LIST_ALL_OF_ACTION_IDS_PARAMS = {"namespace": settings.DEFAULT_NAMESPACE}
@@ -287,6 +316,9 @@ SYSTEM_LIST_ALL_OF_ACTION_IDS_DATA = [
     {
         "id": settings.BK_IAM_SYSTEM_ID,
         "name": settings.BK_IAM_SYSTEM_ID,
+        "source_type": SYSTEM_DATA2['source_type'],
+        "audit_status": "pending",
+        "system_id": SYSTEM_DATA2["system_id"],
     }
 ]
 
@@ -294,7 +326,15 @@ SYSTEM_LIST_ALL_OF_ACTION_IDS_DATA = [
 SYSTEM_INFO_PARAMS = {"system_id": settings.BK_IAM_SYSTEM_ID}
 SYSTEM_DATA_COPY = copy.deepcopy(SYSTEM_DATA2)
 SYSTEM_DATA_COPY.update({"managers": [USERNAME]})
-SYSTEM_INFO_DATA = {**SYSTEM_DATA_COPY, "status": 'unset', "status_msg": '未配置', "last_time": ""}
+SYSTEM_INFO_DATA = {
+    **SYSTEM_DATA_COPY,
+    "status": 'unset',
+    "status_msg": '未配置',
+    "last_time": "",
+    "resource_type_count": 1,
+    "action_count": 0,
+    "system_status": "pending",
+}
 
 # Resource Type List
 RESOURCE_TYPE_LIST_PARAMS = {"system_id": settings.BK_IAM_SYSTEM_ID}
@@ -522,6 +562,13 @@ GLOBAL_CHOICES = {
         {'id': 'iam_v4', 'name': '权限中心V4'},
         {'id': 'bk_audit', 'name': '审计中心'},
     ],
+    'meta_system_audit_status': [{'id': 'pending', 'name': '待接入'}, {'id': 'accessed', 'name': '已接入'}],
+    'meta_system_status': [
+        {'id': 'pending', 'name': '待接入'},
+        {'id': 'completed', 'name': '待完善'},
+        {'id': 'abnormal', 'name': '数据异常'},
+        {'id': 'normal', 'name': '正常'},
+    ],
     'query_condition_operator': [
         {'id': 'eq', 'name': '=  等于'},
         {'id': 'neq', 'name': '!=  不等于'},
@@ -552,11 +599,6 @@ GLOBAL_CHOICES = {
         {'id': 'text', 'name': '文本'},
         {'id': 'timestamp', 'name': '时间戳'},
         {'id': 'float', 'name': '浮点数'},
-    ],
-    "meta_system_source_type": [
-        {"id": "iam_v3", "name": "权限中心V3"},
-        {"id": "iam_v4", "name": "权限中心V4"},
-        {"id": "bk_audit", "name": "审计中心"},
     ],
 }
 

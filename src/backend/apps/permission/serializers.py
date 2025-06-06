@@ -20,10 +20,11 @@ from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.models import System, Tag
+from apps.permission.handlers.actions import ActionEnum
 
 
 class CheckPermissionRequestSerializer(serializers.Serializer):
-    action_ids = serializers.CharField(label=gettext_lazy("操作ID"))
+    action_ids = serializers.CharField(label=gettext_lazy("操作ID"), help_text=ActionEnum.choices())
     resources = serializers.CharField(label=gettext_lazy("资源ID列表"), required=False, allow_null=True, allow_blank=True)
 
     def validate_action_ids(self, value: str):

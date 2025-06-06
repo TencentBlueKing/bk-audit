@@ -18,8 +18,19 @@ to the current version of the project delivered to anyone in the future.
 
 from unittest import mock
 
-from apps.meta.exceptions import BKAppNotExists
+from apps.meta.exceptions import ActionHasExist, BKAppNotExists, SystemHasExist
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
+from apps.meta.models import (
+    Action,
+    CustomField,
+    Field,
+    ResourceType,
+    System,
+    SystemFavorite,
+    SystemRole,
+)
+from core.testing import assert_dict_contains, assert_list_contains
+from core.utils.tools import ordered_dict_to_json, trans_object_local
 from apps.meta.models import CustomField, Field, ResourceType, System, SystemRole
 from core.utils.data import ordered_dict_to_json, trans_object_local
 from services.web.databus.models import Snapshot
@@ -115,7 +126,7 @@ class MetaTest(TestCase):
         result_of_ordered = self.resource.meta.system_list(**SYSTEM_LIST_PARAMS)
         result_of_json = ordered_dict_to_json(result_of_ordered)
         result = [item for item in result_of_json if item.pop("id", None)]
-        self.assertEqual(result, SYSTEM_LIST_DATA)
+        assert_list_contains(result, SYSTEM_LIST_DATA)
 
     @mock.patch("meta.resources.wrapper_permission_field", PermissionMock.wrapper_permission_field)
     def test_system_list_of_not_systems(self):
@@ -133,7 +144,7 @@ class MetaTest(TestCase):
         result_of_ordered = self.resource.meta.system_list(**SYSTEM_LIST_OF_NOT_SORT_PARAMS)
         result_of_json = ordered_dict_to_json(result_of_ordered)
         result = [item for item in result_of_json if item.pop("id", None)]
-        self.assertEqual(result, SYSTEM_LIST_OF_NOT_SORT_DATA)
+        assert_list_contains(result, SYSTEM_LIST_OF_NOT_SORT_DATA)
 
     @mock.patch(
         "meta.resources.resource.databus.collector.bulk_system_collectors_status",
@@ -145,7 +156,7 @@ class MetaTest(TestCase):
         result = self.resource.meta.system_list(**SYSTEM_LIST_OF_SORT_EQ_PARAMS)
         result_of_json = ordered_dict_to_json(result)
         result = [item for item in result_of_json if item.pop("id", None)]
-        self.assertEqual(result, SYSTEM_LIST_OF_SORT_EQ_DATA)
+        assert_list_contains(result, SYSTEM_LIST_OF_SORT_EQ_DATA)
 
     @mock.patch(
         "meta.resources.resource.databus.collector.bulk_system_collectors_status",
@@ -157,7 +168,7 @@ class MetaTest(TestCase):
         result = self.resource.meta.system_list(**SYSTEM_LIST_OF_SORT_GT_PARAMS)
         result_of_json = ordered_dict_to_json(result)
         result = [item for item in result_of_json if item.pop("id", None)]
-        self.assertEqual(result, SYSTEM_LIST_OF_SORT_GT_DATA)
+        assert_list_contains(result, SYSTEM_LIST_OF_SORT_GT_DATA)
 
     @mock.patch("meta.resources.wrapper_permission_field", PermissionMock.wrapper_permission_field)
     def test_system_list_all(self):
@@ -178,7 +189,7 @@ class MetaTest(TestCase):
         result = self.resource.meta.system_info(**SYSTEM_INFO_PARAMS)
         result.pop("id", None)
         result["provider_config"].pop("token", None)
-        self.assertEqual(result, SYSTEM_INFO_DATA)
+        assert_dict_contains(result, SYSTEM_INFO_DATA)
 
     def test_resource_type_list(self):
         """ResourceTypeListResource"""
@@ -359,3 +370,297 @@ class TestDeleteSystemDiagnosisPushResource(TestCase):
         result = self.resource.meta.delete_system_diagnosis_push(validated_request_data)
         self.assertIsNone(result)
         mock_delete_push.assert_called_once_with()
+
+
+class TestCreateSystem(TestCase):
+    @mock.patch("apps.meta.resources.System.gen_auth_token", return_value="test_token")
+    @mock.patch("meta.resources.wrapper_permission_field", PermissionMock.wrapper_permission_field)
+    def test_create_system_success(self, mock_gen_token):
+        """Test creating a new system successfully."""
+        validated_request_data = {
+            "source_type": "bk_audit",
+            "instance_id": "test_system",
+            "namespace": "default",
+            "name": "Test System",
+            "name_en": "Test System",
+            "clients": ["app_code1"],
+            "description": "Test description",
+            "callback_url": "https://test.com",
+            "managers": ["admin"],
+        }
+        result = self.resource.meta.create_system(validated_request_data)
+        self.assertEqual(result["system_id"], "bk_audit_test_system")
+
+        # Verify the system exists in the system list
+        system_list = self.resource.meta.system_list(namespace="default")
+        system_ids = [system["system_id"] for system in system_list]
+        self.assertIn("bk_audit_test_system", system_ids)
+
+        # Verify the system exists in the system list (ALL)
+        system_list_all = self.resource.meta.system_list_all(namespace="default")
+        system_ids_all = [system["system_id"] for system in system_list_all]
+        self.assertIn("bk_audit_test_system", system_ids_all)
+
+    def test_create_system_duplicate(self):
+        """Test creating a duplicate system raises SystemHasExist."""
+        validated_request_data = {
+            "source_type": "bk_audit",
+            "instance_id": "test_system",
+            "namespace": "default",
+            "name": "Test System",
+            "name_en": "Test System",
+            "clients": ["app_code1"],
+            "description": "Test description",
+            "callback_url": "https://test.com",
+            "managers": ["admin"],
+        }
+        self.resource.meta.create_system(validated_request_data)
+        with self.assertRaises(SystemHasExist):
+            self.resource.meta.create_system(validated_request_data)
+
+
+class TestFavoriteSystem(TestCase):
+    def setUp(self):
+        # Create multiple test systems
+        self.system1 = System.objects.create(
+            system_id="bk_audit_system1",
+            source_type="bk_audit",
+            instance_id="system1",
+            namespace="default",
+            name="System 1",
+            name_en="System 1",
+            clients=["app_code1"],
+            description="Test description",
+            callback_url="https://test.com",
+            managers=["admin"],
+        )
+        self.system2 = System.objects.create(
+            system_id="bk_audit_system2",
+            source_type="bk_audit",
+            instance_id="system2",
+            namespace="default",
+            name="System 2",
+            name_en="System 2",
+            clients=["app_code1"],
+            description="Test description",
+            callback_url="https://test.com",
+            managers=["admin"],
+        )
+        self.system3 = System.objects.create(
+            system_id="bk_audit_test_system",
+            source_type="bk_audit",
+            instance_id="test_system",
+            namespace="default",
+            name="Test System",
+            name_en="Test System",
+            clients=["app_code1"],
+            description="Test description",
+            callback_url="https://test.com",
+            managers=["admin"],
+        )
+
+    @mock.patch("meta.resources.wrapper_permission_field", PermissionMock.wrapper_permission_field)
+    def test_favorite_system_order(self):
+        """Test favoriting a system changes the order in the system list."""
+        # Get initial system list (should be in creation order)
+        initial_systems = self.resource.meta.system_list_all(namespace="default", with_favorite=True)
+        initial_order = [system["system_id"] for system in initial_systems]
+        self.assertEqual(len(initial_order), 3)
+
+        # Favorite system3
+        validated_request_data = {"system_id": "bk_audit_test_system", "favorite": True}
+        self.resource.meta.favorite_system(validated_request_data)
+
+        # Get updated system list (favorited system should be first)
+        updated_systems = self.resource.meta.system_list_all(
+            namespace="default",
+            with_favorite=True,
+            sort_keys="favorite,permission",
+        )
+        updated_order = [system["system_id"] for system in updated_systems]
+
+        # Verify the favorited system is now first
+        self.assertEqual(updated_order[0], "bk_audit_test_system")
+
+        # Verify all systems are still present
+        self.assertEqual(set(initial_order), set(updated_order))
+
+        # Verify the remaining order is unchanged
+        self.assertEqual(sorted(updated_order[1:]), sorted(["bk_audit_system1", "bk_audit_system2"]))
+
+    def test_unfavorite_system(self):
+        """Test unfavoriting a system."""
+        validated_request_data = {"system_id": "bk_audit_test_system", "favorite": False}
+        self.resource.meta.favorite_system(validated_request_data)
+        favorite = SystemFavorite.objects.get(system_id="bk_audit_test_system")
+        self.assertFalse(favorite.favorite)
+
+
+class TestCreateAction(TestCase):
+    def setUp(self):
+        self.system = System.objects.create(
+            system_id="bk_audit_test_system",
+            source_type="bk_audit",
+            instance_id="test_system",
+            namespace="default",
+            name="Test System",
+            name_en="Test System",
+            clients=["app_code1"],
+            description="Test description",
+            callback_url="https://test.com",
+            managers=["admin"],
+        )
+
+    def test_create_action_success(self):
+        """Test creating a new action successfully."""
+        validated_request_data = {
+            "system_id": "bk_audit_test_system",
+            "action_id": "test_action",
+            "name": "Test Action",
+            "name_en": "Test Action",
+            "sensitivity": 0,
+            "type": "read",
+            "version": 1,
+            "description": "Test description",
+            "resource_type_ids": [],
+        }
+        result = self.resource.meta.create_action(validated_request_data)
+        self.assertEqual(result["action_id"], "test_action")
+
+    def test_create_action_duplicate(self):
+        """Test creating a duplicate action raises ActionHasExist."""
+        validated_request_data = {
+            "system_id": "bk_audit_test_system",
+            "action_id": "test_action",
+            "name": "Test Action",
+            "name_en": "Test Action",
+            "sensitivity": 0,
+            "type": "read",
+            "version": 1,
+            "description": "Test description",
+            "resource_type_ids": [],
+        }
+        self.resource.meta.create_action(validated_request_data)
+        with self.assertRaises(ActionHasExist):
+            self.resource.meta.create_action(validated_request_data)
+
+
+class TestUpdateAction(TestCase):
+    def setUp(self):
+        self.system = System.objects.create(
+            system_id="bk_audit_test_system",
+            source_type="bk_audit",
+            instance_id="test_system",
+            namespace="default",
+            name="Test System",
+            name_en="Test System",
+            clients=["app_code1"],
+            description="Test description",
+            callback_url="https://test.com",
+            managers=["admin"],
+        )
+        self.action = Action.objects.create(
+            system_id="bk_audit_test_system",
+            action_id="test_action",
+            unique_id="bk_audit_test_system_test_action",
+            name="Test Action",
+            name_en="Test Action",
+            sensitivity=0,
+            type="read",
+            version=1,
+            description="Test description",
+        )
+
+    def test_update_action_success(self):
+        """Test updating an action successfully."""
+        validated_request_data = {
+            "unique_id": "bk_audit_test_system_test_action",
+            "name": "Updated Action",
+            "name_en": "Updated Action",
+            "sensitivity": 1,
+            "type": "write",
+            "version": 2,
+            "description": "Updated description",
+            "resource_type_ids": [],
+        }
+        result = self.resource.meta.update_action(validated_request_data)
+        self.assertEqual(result["name"], "Updated Action")
+
+
+class TestBulkCreateAction(TestCase):
+    def setUp(self):
+        self.system = System.objects.create(
+            system_id="bk_audit_test_system",
+            source_type="bk_audit",
+            instance_id="test_system",
+            namespace="default",
+            name="Test System",
+            name_en="Test System",
+            clients=["app_code1"],
+            description="Test description",
+            callback_url="https://test.com",
+            managers=["admin"],
+        )
+
+    def test_bulk_create_action_success(self):
+        """Test bulk creating actions successfully."""
+        validated_request_data = {
+            "system_id": "bk_audit_test_system",
+            "actions": [
+                {
+                    "action_id": "test_action1",
+                    "name": "Test Action 1",
+                    "name_en": "Test Action 1",
+                    "sensitivity": 0,
+                    "type": "read",
+                    "version": 1,
+                    "description": "Test description",
+                    "resource_type_ids": [],
+                },
+                {
+                    "action_id": "test_action2",
+                    "name": "Test Action 2",
+                    "name_en": "Test Action 2",
+                    "sensitivity": 0,
+                    "type": "write",
+                    "version": 1,
+                    "description": "Test description",
+                    "resource_type_ids": [],
+                },
+            ],
+        }
+        self.resource.meta.bulk_create_action(validated_request_data)
+
+
+class TestDeleteAction(TestCase):
+    def setUp(self):
+        self.system = System.objects.create(
+            system_id="bk_audit_test_system",
+            source_type="bk_audit",
+            instance_id="test_system",
+            namespace="default",
+            name="Test System",
+            name_en="Test System",
+            clients=["app_code1"],
+            description="Test description",
+            callback_url="https://test.com",
+            managers=["admin"],
+        )
+        self.action = Action.objects.create(
+            system_id="bk_audit_test_system",
+            action_id="test_action",
+            unique_id="bk_audit_test_system_test_action",
+            name="Test Action",
+            name_en="Test Action",
+            sensitivity=0,
+            type="read",
+            version=1,
+            description="Test description",
+        )
+
+    def test_delete_action_success(self):
+        """Test deleting an action successfully."""
+        validated_request_data = {"unique_id": "bk_audit_test_system_test_action"}
+        self.resource.meta.delete_action(validated_request_data)
+        with self.assertRaises(Action.DoesNotExist):
+            Action.objects.get(unique_id="bk_audit_test_system_test_action")

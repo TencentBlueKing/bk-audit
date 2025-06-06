@@ -159,6 +159,12 @@ class LogReportStatus(TextChoices):
     UNSET = "unset", gettext_lazy("未配置")
 
 
+class SnapshotReportStatus(TextChoices):
+    NORMAL = "normal", gettext_lazy("正常")
+    ABNORMAL = "abnormal", gettext_lazy("异常")
+    UNSET = "unset", gettext_lazy("未配置")
+
+
 class PluginSceneChoices(TextChoices):
     COLLECTOR = "collector", gettext_lazy("采集项")
     FLOW = "flow", gettext_lazy("数据开发")
