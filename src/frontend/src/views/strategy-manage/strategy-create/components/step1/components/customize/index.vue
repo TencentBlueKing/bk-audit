@@ -289,7 +289,6 @@
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
-  import StrategyModel from '@model/strategy/strategy';
 
   import ExpectedResults from './components/expected-results/index.vue';
   import LinkDataDetailComponent from './components/link-table-detail/index.vue';

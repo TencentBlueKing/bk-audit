@@ -76,7 +76,7 @@
                         </bk-checkbox>
                       </bk-checkbox-group>
                     </div>
-                    <div style="margin-left: 5px;margin-right: 5px;">
+                    <div style="margin-right: 5px;margin-left: 5px;">
                       <span v-if="'self_name' in item">{{ item.self_name }} / {{ item.self_key_name }}</span>
                       <span v-else>{{ item.raw_name }}
                         <span
@@ -93,7 +93,7 @@
                   :config-type="configType"
                   :expected-result-list="props.expectedResultList"
                   :search-key="searchKey"
-                  @handleNodeChecked="onHandleNodeChecked" />
+                  @handle-node-checked="onHandleNodeChecked" />
               </scroll-faker>
               <bk-exception
                 v-else-if="isSearching"
@@ -274,7 +274,6 @@
   import _ from 'lodash';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute, useRouter } from 'vue-router';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
@@ -314,8 +313,6 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  const route = useRoute();
-  const router = useRouter();
   const nodeSelectRef = ref<NodeSelectComponent | null>(null);
   const editNode = ref();
   const isEdit = defineModel<boolean>({
@@ -412,6 +409,7 @@
   // 处理字段数据
   const processField = (field: ExDatabaseTableFieldModel) => {
     if ('textValue' in field) {
+      // eslint-disable-next-line no-param-reassign
       field.display_name =  field.textValue  as string;
     }
     // 创建新对象避免参数修改
@@ -436,6 +434,7 @@
       ...tableData.value,
     ];
     // 编辑模式下排除当前字段自身
+    // eslint-disable-next-line max-len
     const filteredDisplayNames = allDisplayNames.filter(item => !(item.table === field.table && item.raw_name === field.raw_name));
 
 
@@ -581,9 +580,7 @@
   const isTableAggregate = ref(false);
   watch(() => tableData.value, (data) => {
     // 检查data数组中是否有aggregate为空的项
-    const hasEmptyAggregate = data.some(item =>
-      // 检查当前项的aggregate是否存在或为null
-      item.aggregate === undefined || item.aggregate === '');
+    const hasEmptyAggregate = data.some(item => item.aggregate === undefined || item.aggregate === '');
 
     // 设置isTableAggregate的值
     isTableAggregate.value = hasEmptyAggregate;
@@ -627,9 +624,9 @@
 
     .field-pop-select {
       display: flex;
-      min-width: 350px;
       width: auto;
       height: 100%;
+      min-width: 350px;
       flex-direction: column;
 
       .input-icon {
@@ -693,11 +690,13 @@
       :deep(.field-pop-radio-table-body) {
         width: 100%;
         border-collapse: collapse;
-        .table-field{
+
+        .table-field {
           width: 180px;
           padding-left: 8px;
           overflow-wrap: break-word;
         }
+
         th,
         td {
           padding: 0;
@@ -750,48 +749,45 @@
     }
   }
 </style>
-<style>
-  .field-custom-popover {
-    padding: 0 !important;
-  }
+<style scoped>
+.field-custom-popover {
+  padding: 0 !important;
+}
 
-  .comm-agg-pop {
-    padding: 5px 0 !important;
+.comm-agg-pop {
+  padding: 5px 0 !important;
 
-    .common-agg-item {
-      position: relative;
-      display: flex;
-      min-height: 32px;
-      padding: 0 12px;
-      overflow: hidden;
-      color: #63656e;
-      text-align: left;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      cursor: pointer;
-      user-select: none;
-      align-items: center;
+  .common-agg-item {
+    position: relative;
+    display: flex;
+    min-height: 32px;
+    padding: 0 12px;
+    overflow: hidden;
+    color: #63656e;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    align-items: center;
 
-      &:hover {
-        background-color: #f5f7fa;
-      }
-    }
-
-    .is-disabled {
-      color: #c4c6cc;
-      cursor: not-allowed;
-      background-color: transparent;
+    &:hover {
+      background-color: #f5f7fa;
     }
   }
-  .subscript {
-  margin-left: 5px;
+
+  .is-disabled {
+    color: #c4c6cc;
+    cursor: not-allowed;
+    background-color: transparent;
+  }
+}
+
+.subscript {
   margin-right: 5px;
+  margin-left: 5px;
+  font-weight: 700;
+  color: black;
   text-align: center;
-  display: inline-block;
-  height: 20px;
-  width: 10px;
-  padding-bottom: 2px;
-  background-color: #e3ecfd;
-  border-radius: 2px;
 }
 </style>
