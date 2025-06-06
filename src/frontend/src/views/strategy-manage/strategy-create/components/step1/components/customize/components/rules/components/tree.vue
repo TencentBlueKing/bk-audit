@@ -21,7 +21,7 @@
       :node-content-action="['click']"
       :show-node-type-icon="false"
       style="height: 340px;"
-      @nodeClick="handleNodeClick">
+      @node-click="handleNodeClick">
       <template #default="{ data }">
         <div
           v-if="!(data.isEdit)"
@@ -92,23 +92,19 @@
               ('dynamic_content' in data.property)
               && data.property.dynamic_content && !('from' in data)"
             class="field-right">
-            <audit-icon
-              style="margin-right: 4px;font-size: 14px;color: #3a84ff;"
-              svg
-              type="plus-circle"
-              @click.stop="handleAddNode(data)" />
             <bk-popover
               placement="right"
               theme="light"
               width="300">
               <template #content>
                 <div>
-                  <p>如果你对字段有多级下钻的需求，请注意：{{ data.spec_field_type }}</p>
-                  <p>1.点击 “ + ”表示新增一级下钻 </p>
-                  <p>2.在请输入的输入框内，直接填写字段名 </p>
-                  <p>3.可通过多次添加来实现多级下钻，请严格注意字段级别 </p>
+                  <h3>{{ t('手动添加下级字段') }}</h3>
+                  <p>{{ t('如果你对字段有多级下钻的需求，请注意') }}：</p>
+                  <p>{{ t('1.点击 “ + ”表示新增一级下钻') }} </p>
+                  <p>{{ t('2.在请输入的输入框内，直接填写字段名') }} </p>
+                  <p>{{ t('3.可通过多次添加来实现多级下钻，请严格注意字段级别') }} </p>
                   <br>
-                  <p>以下是3级字段的实列 </p>
+                  <p>{{ t('以下是3级字段的实例') }}:</p>
                   <p>
                     <audit-icon
                       style="margin-top: 6px;margin-right: 4px;font-size: 14px;"
@@ -126,7 +122,8 @@
               <audit-icon
                 style="margin-right: 4px;font-size: 14px;color: #3a84ff;"
                 svg
-                type="help-fill" />
+                type="plus-circle"
+                @click.stop="handleAddNode(data)" />
             </bk-popover>
           </div>
         </div>
@@ -143,11 +140,12 @@
                 <span v-if="props.configType === 'LinkTable'">
                   <span style=" color: #3a84ff;">{{ data.parent_table }}.</span>
                   <span class="field-type-span">{{ getAggregateName(data) }}{{ data.parent_raw_name ?
-                    `(${data.parent_raw_name})` : `` }}</span>
+                    `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
                   <span class="field-type-span">/</span>
                 </span>
                 <span v-else>
-                  <span class="field-type-span">{{ getAggregateName(data) }}{{ data.parent_raw_name }}</span>
+                  <span class="field-type-span">{{ getAggregateName(data) }}{{ data.parent_raw_name ?
+                    `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
                 </span>
               </div>
 
@@ -174,11 +172,14 @@
                   <bk-input
                     v-model="subItem[`field_value_${index}`]"
                     class="edit-input"
-                    size="small" />
+                    :placeholder="`请输入${index+2}级字段`"
+                    size="small"
+                    @enter="handleAddFieldSubmit(data)" />
                 </span>
 
                 <audit-icon
-                  style="margin-left: 4px;font-size: 14px;color:#c4c6cc;"
+                  v-bk-tooltips="{ content: '添加下级字段', placement: 'top' }"
+                  style="margin-left: 4px;font-size: 14px;color: #c4c6cc;"
                   svg
                   type="add-fill"
                   @click.stop="handleAddField(data)" />
@@ -187,12 +188,14 @@
             <div class="field-edit-right edit-icon">
               <audit-icon
                 v-if="data.spec_field_type !== ''"
-                style="margin-right: 4px;font-size: 18px;color:#7bbe8a;"
+                v-bk-tooltips="{ content: '确认', placement: 'top' }"
+                style="margin-right: 4px;font-size: 18px;color: #7bbe8a;"
                 svg
                 type="check-line"
                 @click.stop="handleAddFieldSubmit(data)" />
               <audit-icon
-                style="margin-right: 4px;font-size: 18px;color:#c1c3c9;"
+                v-bk-tooltips="{ content: '取消添加', placement: 'top' }"
+                style="margin-right: 4px;font-size: 18px;color: #c1c3c9;"
                 svg
                 type="close"
                 @click.stop="handleAddFieldClose(data)" />
@@ -204,12 +207,11 @@
   </bk-select>
 </template>
 <script setup lang="tsx">
-  import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-  import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+  import { onMounted, onUnmounted, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+  import { onBeforeRouteLeave, useRoute } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
-
-  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import useRequest from '@hooks/use-request';
 
@@ -225,9 +227,12 @@
     conditions: Record<string, any>,
   }
   const props = defineProps<Props>();
+
   const emits = defineEmits<Emits>();
+
+  const { t } = useI18n();
+
   const route = useRoute();
-  const router = useRouter();
   const fieldTypeValue = ref<Record<string, Record<string, any>[]>>({});
 
 
@@ -253,9 +258,9 @@
     table: '',
   };
   const handleSelect = (val: Record<string, any>) => {
+    // eslint-disable-next-line no-param-reassign
     val.field_type = val.spec_field_type;
   };
-  const nodeInput = ref('');
   const treeRef = ref();
   const selectedValue = ref();
   const selectRef = ref(null);
@@ -279,7 +284,7 @@
   };
   // 搜索逻辑
   const handleSearch = (keyword: string) => {
-    const searchAr = JSON.parse(JSON.stringify(treeData.value));
+    // eslint-disable-next-line max-len
     const searchInTree = (nodes: Record<string, any>) => nodes.reduce((result: Record<string, any>, node: Record<string, any>) => {
       // 检查当前节点
       if (node.raw_name.includes(keyword) || node.display_name.includes(keyword)) {
@@ -331,6 +336,13 @@
   };
   // 子项添加
   const handleAddField = (val: Record<string, any>) => {
+    const hasEmptyValue = fieldTypeValue.value[val.parent_raw_name].some((item: Record<string, any>) => {
+      const fieldKey = `field_value_${item.id}`;
+      return !item[fieldKey] || item[fieldKey].trim() === '';
+    });
+    if (hasEmptyValue) {
+      return;
+    }
     fieldTypeValue.value[val.parent_raw_name].push({
       id: fieldTypeValue.value[val.parent_raw_name].length,
       [`field_value_${fieldTypeValue.value[val.parent_raw_name].length}`]: '',
@@ -339,6 +351,13 @@
   // 确定添加
   const handleAddFieldSubmit = (val: Record<string, any>) => {
     const fieldTypeValueAr = fieldTypeValue.value[val.parent_raw_name].map((item: Record<string, any>) => item[`field_value_${item.id}`]);
+    const hasEmptyValue = fieldTypeValue.value[val.parent_raw_name].some((item: Record<string, any>) => {
+      const fieldKey = `field_value_${item.id}`;
+      return !item[fieldKey] || item[fieldKey].trim() === '';
+    });
+    if (hasEmptyValue) {
+      return;
+    }
     const fieldTypeValueText = fieldTypeValueAr.join('/');
     treeData.value.forEach((node: Record<string, any>) => {
       if (node.raw_name === val.parent_raw_name) {
@@ -347,6 +366,7 @@
             e.isEdit = false;
             e.display_name = e.parent_display_name;
             e.raw_name = e.parent_raw_name;
+            // eslint-disable-next-line no-param-reassign
             node.isOpen = true;
             e.fieldTypeValueAr = fieldTypeValueAr;
             e.keys = fieldTypeValueAr;
@@ -401,15 +421,13 @@
         ...item,
         isEdit: false,
         selectedValue: ('alias' in item) ? `${JSON.stringify(item.display_name)}()` : `${item.display_name}(${item.raw_name})`,
-        children: transformData(item.property.sub_keys).map(child =>
-          // 如果子节点没有 table，则继承父级的 table
-          ({
-            ...child,
-            raw_name: item.raw_name,
-            self_name: `${item.display_name}(${item.raw_name})`,
-            self_key_name: `${child.alias}(${child.value})`,
-            table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
-          })),
+        children: transformData(item.property.sub_keys).map(child => ({
+          ...child,
+          raw_name: item.raw_name,
+          self_name: `${item.display_name}(${item.raw_name})`,
+          self_key_name: `${child.alias}(${child.value})`,
+          table: child.table || item.table, // 如果子节点没有 table，则使用父级的 table
+        })),
         keys: 'alias' in item ? [item.value] : (item.keys || []),
         display_name: 'alias' in item ? item.label : item.display_name,
         raw_name: item.raw_name,
@@ -481,22 +499,22 @@
 
   .field-left {
     .field-type-span {
+      font-size: 12px;
       color: #63656e;
       text-align: center;
-      font-size: 12px;
     }
   }
 
   .field-right {
-    margin-left: 10px;
     margin-top: 3px;
+    margin-left: 10px;
 
   }
 
   .field-type-span {
+    font-size: 12px;
     color: #49bb07;
     text-align: center;
-    font-size: 12px;
   }
 }
 
@@ -511,7 +529,7 @@
   justify-content: space-between;
 
   :hover {
-    background-color: #ffffff;
+    background-color: #fff;
   }
 
   .field-edit-left {
@@ -519,9 +537,9 @@
 
     .field-type {
       .field-type-span {
+        font-size: 12px;
         color: #63656e;
         text-align: center;
-        font-size: 12px;
       }
 
     }
@@ -535,16 +553,17 @@
 
 .field-edit>* {
   margin: 0;
+
   /* 确保没有额外的外边距影响布局 */
 }
 
 .subscript {
-  margin-left: 5px;
-  margin-right: 5px;
   display: inline-block;
-  height: 28px;
   width: 10px;
+  height: 28px;
   padding-bottom: 2px;
+  margin-right: 5px;
+  margin-left: 5px;
   background-color: #e3ecfd;
   border-radius: 2px;
 }
