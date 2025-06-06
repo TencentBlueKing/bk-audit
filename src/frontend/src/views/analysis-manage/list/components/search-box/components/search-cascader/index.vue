@@ -238,6 +238,7 @@
   // };
 
   const handleAddNode = (node: CascaderItem) => {
+    console.log(fieldTypeValue.value);
     if (fieldTypeValue.value[node.id]) {
       return;
     }
@@ -261,6 +262,7 @@
 
   const handleAddFieldSubmit = (node: CascaderItem) => {
     const customFields =  fieldTypeValue.value[node.id];
+    const parentId = node.id;
     if (!customFields || customFields.length === 0) {
       return;
     }
@@ -276,8 +278,7 @@
     // eslint-disable-next-line no-param-reassign
     node.isEdit = false;
     // 清空customFields
-    // eslint-disable-next-line no-param-reassign
-    delete fieldTypeValue.value[node.id];
+    delete fieldTypeValue.value[parentId];
   };
 
   const handleAddFieldClose = (node: CascaderItem) => {

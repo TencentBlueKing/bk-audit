@@ -486,6 +486,7 @@
 
   const handleAddFieldSubmit = (node: CascaderNode) => {
     const customFields =  fieldTypeValue.value[node.field_name];
+    const parentFieldName = node.field_name;
     if (!customFields || customFields.length === 0) {
       return;
     }
@@ -501,8 +502,7 @@
     // eslint-disable-next-line no-param-reassign
     node.isEdit = false;
     // 清空customFields
-    // eslint-disable-next-line no-param-reassign
-    delete fieldTypeValue.value[node.field_name];
+    delete fieldTypeValue.value[parentFieldName];
   };
 
   const handleAddFieldClose = (node: CascaderNode) => {
