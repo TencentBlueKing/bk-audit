@@ -387,7 +387,7 @@
           label: () => {
             // 检查fieldName是否在sourceList中存在，且is_json为false
             const fieldExists = sourceList.value.find(source => source.field_name === item.field_name);
-            const shouldShowPopover = fieldExists && fieldExists.is_json === false;
+            const shouldShowPopover = fieldExists && fieldExists.is_json === false && fieldExists.field_name !== 'log';
 
             if (shouldShowPopover) {
               return <div style="display: flex; align-items: center;">
