@@ -26,7 +26,7 @@ import xlsxwriter
 from blueapps.utils.logger import logger_celery
 from django.core.files import File
 
-from core.utils.tools import unique_id
+from core.utils.data import unique_id
 from services.web.query.constants import FieldCategoryEnum
 from services.web.query.export.model import ExportConfig
 
