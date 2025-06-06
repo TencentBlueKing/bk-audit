@@ -16,7 +16,7 @@
           :disabled="data.isEdit"
           :immediate-emit-change="false"
           style="width: 20px;"
-          @change="(val) => handleChangeBox(val, data)" />
+          @change="(val: any) => handleChangeBox(val, data)" />
         <div
           v-if="!data.isEdit"
           class="field">
@@ -68,27 +68,19 @@
                 data.property.dynamic_content
             "
             class="field-right">
-            <audit-icon
-              style="margin-right: 4px; font-size: 14px; color: #3a84ff"
-              svg
-              type="plus-circle"
-              @click.stop="handleAddNode(data)" />
             <bk-popover
               placement="right"
               theme="light"
               width="300">
               <template #content>
                 <div>
-                  <p>
-                    如果你对字段有多级下钻的需求，请注意：{{
-                      data.spec_field_type
-                    }}
-                  </p>
-                  <p>1.点击 “ + ”表示新增一级下钻</p>
-                  <p>2.在请输入的输入框内，直接填写字段名</p>
-                  <p>3.可通过多次添加来实现多级下钻，请严格注意字段级别</p>
+                  <h3>{{ t('手动添加下级字段') }}</h3>
+                  <p>{{ t('如果你对字段有多级下钻的需求，请注意') }}：</p>
+                  <p>{{ t('1.点击 “ + ”表示新增一级下钻') }} </p>
+                  <p>{{ t('2.在请输入的输入框内，直接填写字段名') }} </p>
+                  <p>{{ t('3.可通过多次添加来实现多级下钻，请严格注意字段级别') }} </p>
                   <br>
-                  <p>以下是3级字段的实列</p>
+                  <p>{{ t('以下是3级字段的实例') }}:</p>
                   <p>
                     <audit-icon
                       style="margin-top: 6px; margin-right: 4px; font-size: 14px"
@@ -106,7 +98,8 @@
               <audit-icon
                 style="margin-right: 4px; font-size: 14px; color: #3a84ff"
                 svg
-                type="help-fill" />
+                type="plus-circle"
+                @click.stop="handleAddNode(data)" />
             </bk-popover>
           </div>
         </div>
@@ -121,14 +114,14 @@
                   svg
                   :type="data.spec_field_type" />
                 <span v-if="props.configType === 'LinkTable'">
-                  <span style="color: #3a84ff">{{ data.parent_table }}.</span>
-                  <span class="field-type-span">{{
-                    data.parent_raw_name ? `(${data.parent_raw_name})` : ``
-                  }}</span>
+                  <span style=" color: #3a84ff;">{{ data.parent_table }}.</span>
+                  <span class="field-type-span">{{ data.parent_raw_name ?
+                    `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
                   <span class="field-type-span">/</span>
                 </span>
                 <span v-else>
-                  <span class="field-type-span">{{ data.parent_raw_name }}</span>
+                  <span class="field-type-span">{{ data.parent_raw_name ?
+                    `${data.parent_display_name}(${data.parent_raw_name})` : `` }}</span>
                 </span>
               </div>
 
@@ -155,10 +148,13 @@
                   <bk-input
                     v-model="subItem[`field_value_${index}`]"
                     class="edit-input"
-                    size="small" />
+                    :placeholder="`请输入${index+2}级字段`"
+                    size="small"
+                    @enter="handleAddFieldSubmit(data)" />
                 </span>
 
                 <audit-icon
+                  v-bk-tooltips="{ content: '添加下级字段', placement: 'top' }"
                   style="margin-left: 4px; font-size: 14px; color: #c4c6cc"
                   svg
                   type="add-fill"
@@ -168,11 +164,13 @@
             <div class="field-edit-right edit-icon">
               <audit-icon
                 v-if="data.spec_field_type !== ''"
+                v-bk-tooltips="{ content: '确认', placement: 'top' }"
                 style="margin-right: 4px; font-size: 18px; color: #7bbe8a"
                 svg
                 type="check-line"
                 @click.stop="handleAddFieldSubmit(data)" />
               <audit-icon
+                v-bk-tooltips="{ content: '取消添加', placement: 'top' }"
                 style="margin-right: 4px; font-size: 18px; color: #c1c3c9"
                 svg
                 type="close"
@@ -186,12 +184,11 @@
 </template>
 
 <script setup lang="tsx">
-  import { computed, onMounted, ref, watch } from 'vue';
-  import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+  import { onMounted, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+  import { onBeforeRouteLeave, useRoute } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
-
-  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
   import useRequest from '@hooks/use-request';
 
@@ -208,12 +205,14 @@
   interface Expose {
     handleSearch: (val: string) => void,
   }
-
   const props = defineProps<Props>();
+
   const emits = defineEmits<Emits>();
+
+  const { t } = useI18n();
+
   const checkBoxMode = ref<Record<string, boolean>>({});
   const route = useRoute();
-  const router = useRouter();
   const fieldTypeValue = ref<Record<string, Record<string, any>[]>>({});
 
   const fieldTypeList = ref<{ id: string; name: string }[]>([]);
@@ -243,9 +242,9 @@
     isDuplicate: false,
     c: false,
   };
-  const nodeInput = ref('');
   const treeRef = ref();
   const handleSelect = (val: Record<string, any>) => {
+    // eslint-disable-next-line no-param-reassign
     val.field_type = val.spec_field_type;
   };
 
@@ -289,6 +288,13 @@
   };
   // 子项添加
   const handleAddField = (val: Record<string, any>) => {
+    const hasEmptyValue = fieldTypeValue.value[val.parent_raw_name].some((item: Record<string, any>) => {
+      const fieldKey = `field_value_${item.id}`;
+      return !item[fieldKey] || item[fieldKey].trim() === '';
+    });
+    if (hasEmptyValue) {
+      return;
+    }
     fieldTypeValue.value[val.parent_raw_name].push({
       id: fieldTypeValue.value[val.parent_raw_name].length,
       [`field_value_${fieldTypeValue.value[val.parent_raw_name].length}`]: '',
@@ -297,6 +303,13 @@
   // 确定添加
   const handleAddFieldSubmit = (val: Record<string, any>) => {
     const fieldTypeValueAr = fieldTypeValue.value[val.parent_raw_name].map(item => item[`field_value_${item.id}`]);
+    const hasEmptyValue = fieldTypeValue.value[val.parent_raw_name].some((item: Record<string, any>) => {
+      const fieldKey = `field_value_${item.id}`;
+      return !item[fieldKey] || item[fieldKey].trim() === '';
+    });
+    if (hasEmptyValue) {
+      return;
+    }
     const fieldTypeValueText = fieldTypeValueAr.join('/');
     treeData.value.forEach((node: Record<string, any>) => {
       if (node.raw_name === val.parent_raw_name) {
@@ -307,6 +320,7 @@
             e.textValue = `${e.parent_display_name}(${e.parent_raw_name})/${fieldTypeValueText}`;
             e.raw_name = e.parent_raw_name;
             e.keys = fieldTypeValueAr;
+            // eslint-disable-next-line no-param-reassign
             node.isOpen = true;
             e.is_checked = false;
             e.fieldTypeValueAr = fieldTypeValueAr;
@@ -326,8 +340,6 @@
     });
     storageTreeData.value = treeData.value;
   };
-  // 选择
-  const handleNodeClick = (nodes: Record<string, any>) => { };
 
   const handleNodeChecked = (nodes: Record<string, any>) => {
     emits('handleNodeChecked', nodes);
@@ -346,12 +358,14 @@
   const handleChangeBox = (val: boolean, data: Record<string, any>) => {
     if (val) {
       // 检查是否已存在相同的data
+      // eslint-disable-next-line max-len
       const isDuplicate = changeBoxData.value.some(item => (item.raw_name === data.raw_name) && (item.display_name === data.display_name));
       if (!isDuplicate) {
         changeBoxData.value.push(data);
       }
     } else {
       // 如果val为false，从changeBoxData中删除对应的data
+      // eslint-disable-next-line max-len
       const index = changeBoxData.value.findIndex(item => (item.raw_name === data.raw_name) && (item.display_name === data.display_name));
       if (index !== -1) {
         changeBoxData.value.splice(index, 1);
@@ -369,16 +383,14 @@
       return {
         ...item,
         is_checked: false,
-        children: transformData(item.property.sub_keys).map(child =>
-          // 如果子节点没有 table，则继承父级的 table
-          ({
-            ...child,
-            self_name: `${item.display_name}(${item.raw_name})`,
-            self_key_name: `${child.alias}(${child.value})`,
-            table: child.table || item.table,
-            raw_name: child.raw_name || item.raw_name, // 保留子节点自己的raw_name
-            is_checked: false,
-          })),
+        children: transformData(item.property.sub_keys).map(child => ({
+          ...child,
+          self_name: `${item.display_name}(${item.raw_name})`,
+          self_key_name: `${child.alias}(${child.value})`,
+          table: child.table || item.table,
+          raw_name: child.raw_name || item.raw_name,
+          is_checked: false,
+        })),
         keys: 'alias' in item ? [item.value] : [],
         display_name: 'alias' in item ? item.label : item.display_name,
         raw_name: item.raw_name,
@@ -403,7 +415,7 @@
     (newData) => {
       checkBoxMode.value = {};
       const haveTreeData = sessionStorage.getItem('storage-tree-data');
-      if (sessionStorage.getItem('storage-tree-data')) {
+      if (haveTreeData) {
         treeData.value = JSON.parse(sessionStorage.getItem('storage-tree-data') || '[]');
       } else {
         const initTreeData = JSON.parse(JSON.stringify(newData.configData));
@@ -475,6 +487,7 @@
 
   defineExpose<Expose>({
     handleSearch: (val: string) => {
+      // eslint-disable-next-line max-len
       const searchInTree = (nodes: Record<string, any>) => nodes.reduce((result: Record<string, any>, node: Record<string, any>) => {
         // 检查当前节点
         if (node.raw_name.includes(val) || node.display_name.includes(val)) {
@@ -500,38 +513,41 @@
   });
 </script>
 <style scoped lang="postcss">
-.node{
+.node {
   display: flex;
-.field {
-  display: flex;
-  width: 100%;
-  justify-content: space-between;
-  padding-right: 10px;
 
-  .field-left {
+  .field {
+    display: flex;
+    width: 100%;
+    justify-content: space-between;
+    padding-right: 10px;
+
+    .field-left {
+      .field-type-span {
+        font-size: 12px;
+        color: #63656e;
+        text-align: center;
+      }
+    }
+
+    .field-right {
+      margin-top: 3px;
+      margin-left: 10px;
+    }
+
     .field-type-span {
-      color: #63656e;
-      text-align: center;
       font-size: 12px;
+      color: #49bb07;
+      text-align: center;
     }
   }
 
-  .field-right {
-    margin-left: 10px;
-    margin-top: 3px;
-  }
-
-  .field-type-span {
-    color: #49bb07;
-    text-align: center;
-    font-size: 12px;
-  }
 }
 
-}
 .node:hover {
   background-color: #f5f7fa;
 }
+
 .field-edit {
   display: flex;
   align-items: center;
@@ -539,7 +555,7 @@
   justify-content: space-between;
 
   :hover {
-    background-color: #ffffff;
+    background-color: #fff;
   }
 
   .field-edit-left {
@@ -547,9 +563,9 @@
 
     .field-type {
       .field-type-span {
+        font-size: 12px;
         color: #63656e;
         text-align: center;
-        font-size: 12px;
       }
     }
 
@@ -562,16 +578,17 @@
 
 .field-edit>* {
   margin: 0;
+
   /* 确保没有额外的外边距影响布局 */
 }
 
 .subscript {
-  margin-left: 5px;
-  margin-right: 5px;
   display: inline-block;
-  height: 28px;
   width: 10px;
+  height: 28px;
   padding-bottom: 2px;
+  margin-right: 5px;
+  margin-left: 5px;
   background-color: #e3ecfd;
   border-radius: 2px;
 }
