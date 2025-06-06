@@ -36,12 +36,12 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
       required>
       <node-select
-        :aggregate-list="props.aggregateList"
+        :aggregate-list="aggregateList"
         :condition="condition"
         :conditions="conditions"
         :config-data="localTableFields"
         :config-type="configType"
-        @handleNodeSelectedValue="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)" />
+        @handle-node-selected-value="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)" />
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
@@ -253,12 +253,6 @@
     defaultValue: [],
   });
 
-  const getAggregateName = (element: DatabaseTableFieldModel) => {
-    if (!element.aggregate) return '';
-    const item = props.aggregateList.find(item => item.value === element.aggregate);
-    return `[${item?.label}]`;
-  };
-
   const handleValidate = (value: any) => value.length > 0;
 
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
@@ -283,13 +277,6 @@
     emits('updateFieldItemList', props.conditionsIndex, localConditions.value);
   };
 
-  const reSetOperator = (index: number) => {
-    if (localConditions.value.conditions[index].condition.operator !== '') {
-      localConditions.value.conditions[index].condition.operator = '';
-      handleSelectOperator('', index);
-    }
-  };
-
   const reSetFilter = (index: number) => {
     if (localConditions.value.conditions[index].condition.filter !== '') {
       localConditions.value.conditions[index].condition.filter = '';
@@ -301,41 +288,6 @@
     }
   };
 
-  const handleSelectField = (value: DatabaseTableFieldModel, index: number) => {
-    if (value) {
-      // 获取值的下拉选项
-      fetchStrategyFieldValue({
-        field_name: value.raw_name,
-      }).then((data) => {
-        dicts.value[value.raw_name] = data.filter((item: Record<string, any>) => item.id !== '');
-      });
-      // 是否选中预期结果字段
-      const isExpectedResultField = value.aggregate;
-
-      if (isExpectedResultField) {
-        // 清空不是预期结果的字段
-        localConditions.value.conditions = localConditions.value.conditions.map((condItem, condIndex) => {
-          const { field } = condItem.condition;
-          if (!field.aggregate) {
-            // eslint-disable-next-line no-param-reassign
-            condItem.condition.field = new DatabaseTableFieldModel();
-            emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, condIndex, 'field');
-            // 重置数据
-            reSetOperator(condIndex);
-            reSetFilter(condIndex);
-          }
-          return condItem;
-        });
-      }
-    }
-    emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index, 'field');
-    localConditions.value.conditions[index].condition.field = { ...value };
-    // 重置数据
-    reSetOperator(index);
-    reSetFilter(index);
-    // 重新计算可选项
-    updateTableFields(localConditions.value.conditions, props.tableFields, props.expectedResult);
-  };
 
   const handleSelectOperator = (value: string, index: number) => {
     emits('updateFieldItem', value, props.conditionsIndex, index, 'operator');
@@ -417,9 +369,6 @@
     // 检查是否已经选择了预期结果中的字段
     const hasSelectedExpectedResultField = conditions.some(condItem => condItem.condition.field?.aggregate);
 
-    const fromExpectedResult = filteredExpectedResult.map((i) => {
-      i.from = 'expectedResult';
-    });
     // 根据是否选择了预期结果字段来更新字段列表
     localTableFields.value = hasSelectedExpectedResultField
       ? [...filteredExpectedResult]
@@ -429,9 +378,12 @@
   };
   // 返回值
   const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
+    // eslint-disable-next-line no-param-reassign
     condition.condition.field = { ...node };
+    // eslint-disable-next-line no-param-reassign
     condition.condition.field.display_name = val;
     if ('fieldTypeValueAr' in node) {
+      // eslint-disable-next-line no-param-reassign
       condition.condition.field.keys = node.fieldTypeValueAr;
     }
     emits('handleUpdateLocalConditions', localConditions.value);
