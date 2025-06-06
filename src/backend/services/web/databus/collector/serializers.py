@@ -138,6 +138,15 @@ class BulkSystemCollectorsStatusRequestSerializer(serializers.Serializer):
         return [system_id for system_id in value.split(",") if system_id]
 
 
+class BulkSystemSnapshotsStatusRequestSerializer(serializers.Serializer):
+    system_ids = serializers.CharField(label=gettext_lazy("系统ID"))
+
+    def validate_system_ids(self, value: str):
+        if not value:
+            return []
+        return [system_id for system_id in value.split(",") if system_id]
+
+
 class BulkSystemCollectorsStatusResponseSerializer(serializers.Serializer):
     system_id0 = CollectorStatusSerializer()
     system_id1 = CollectorStatusSerializer()

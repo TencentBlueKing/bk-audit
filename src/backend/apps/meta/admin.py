@@ -26,9 +26,11 @@ from apps.meta.models import (
     GlobalMetaConfig,
     Namespace,
     ResourceType,
+    ResourceTypeActionRelation,
     SensitiveObject,
     System,
     SystemDiagnosisConfig,
+    SystemFavorite,
     Tag,
 )
 
@@ -59,10 +61,11 @@ class SystemAdmin(admin.ModelAdmin):
         "has_system_url",
         "roles",
         "enable_system_diagnosis_push",
+        "audit_status",
     ]
     ordering = ["namespace", "system_id"]
     search_fields = ["system_id", "name", "name_en", "instance_id"]
-    list_filter = ["namespace", "enable_system_diagnosis_push", "source_type"]
+    list_filter = ["namespace", "enable_system_diagnosis_push", "source_type", "audit_status"]
 
     @admin.display(description="图标", boolean=True)
     def has_logo(self, obj: System):
@@ -95,7 +98,6 @@ class ActionAdmin(admin.ModelAdmin):
         "name_en",
         "sensitivity",
         "version",
-        "resource_type_ids",
     ]
     ordering = ["system_id", "action_id"]
     search_fields = ["system_id", "action_id"]
@@ -180,3 +182,17 @@ class SystemDiagnosisConfigAdmin(admin.ModelAdmin):
     def error_exist(self, obj):
         """错误状态标记"""
         return bool(obj.push_error_message)
+
+
+@admin.register(SystemFavorite)
+class SystemFavoriteAdmin(admin.ModelAdmin):
+    list_display = ["system_id", "username", "favorite"]
+    list_filter = ["system_id", "favorite"]
+    search_fields = ["system_id", "username"]
+
+
+@admin.register(ResourceTypeActionRelation)
+class ResourceTypeActionRelationAdmin(admin.ModelAdmin):
+    list_display = ["id", "system_id", "resource_type_id", "action_id"]
+    ordering = ["-id"]
+    search_fields = ["system_id", "resource_type_id", "action_id"]

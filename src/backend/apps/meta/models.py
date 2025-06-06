@@ -17,13 +17,16 @@ to the current version of the project delivered to anyone in the future.
 """
 import uuid
 from collections import defaultdict
-from typing import List, Union
+from typing import Dict, List, Union
 
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import models, transaction
+from django.db.models import IntegerField, OuterRef, Q, QuerySet, Subquery, Value
+from django.db.models.aggregates import Count
+from django.db.models.functions import Coalesce
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy
 
@@ -31,11 +34,20 @@ from apps.exceptions import MetaConfigNotExistException
 from apps.meta.constants import (
     GLOBAL_CONFIG_LEVEL_INSTANCE,
     IAM_MANAGER_ROLE,
+    SYSTEM_AUTH_TOKEN_LENGTH,
+    SYSTEM_INSTANCE_SEPARATOR,
     ConfigLevelChoices,
+    SystemAuditStatusEnum,
     SystemDiagnosisPushStatusEnum,
     SystemSourceTypeEnum,
 )
-from core.models import OperateRecordModel, SoftDeleteModel, SoftDeleteModelManager
+from core.models import (
+    OperateRecordModel,
+    OperateRecordModelManager,
+    SoftDeleteModel,
+    SoftDeleteModelManager,
+)
+from core.utils.tools import generate_random_string
 
 
 class Unset:
@@ -110,10 +122,42 @@ class Namespace(SoftDeleteModel):
         ordering = ["-id"]
 
 
+class SystemModelManager(OperateRecordModelManager):
+    def with_action_resource_type_count(self) -> QuerySet:
+        """
+        获取带 action 和 resource_type count 的 queryset
+        """
+
+        qs = self.get_queryset()
+
+        action_count_subquery = (
+            Action.objects.filter(system_id=OuterRef("system_id"))
+            .values("system_id")
+            .annotate(count=Count("*"))
+            .values("count")
+        )
+
+        resource_type_count_subquery = (
+            ResourceType.objects.filter(system_id=OuterRef("system_id"))
+            .values("system_id")
+            .annotate(count=Count("*"))
+            .values("count")
+        )
+
+        queryset = qs.annotate(
+            action_count=Coalesce(Subquery(action_count_subquery, output_field=IntegerField()), Value(0)),
+            resource_type_count=Coalesce(Subquery(resource_type_count_subquery, output_field=IntegerField()), Value(0)),
+        )
+
+        return queryset
+
+
 class System(OperateRecordModel):
     """
     接入系统: 从 IAM 同步
     """
+
+    objects = SystemModelManager()
 
     system_id = models.CharField(gettext_lazy("系统ID"), max_length=64, unique=True, null=False)
     source_type = models.CharField(
@@ -126,7 +170,7 @@ class System(OperateRecordModel):
     namespace = models.CharField(gettext_lazy("namespace"), max_length=32, db_index=True)
     name = models.CharField(gettext_lazy("名称"), max_length=64, null=True, blank=True)
     name_en = models.CharField(gettext_lazy("英文名称"), max_length=64, null=True, blank=True)
-    clients = models.JSONField(gettext_lazy("客户端"), null=True, blank=True)
+    clients = models.JSONField(gettext_lazy("客户端"), null=True, blank=True, default=list)
     description = models.TextField(gettext_lazy("应用描述"), null=True, blank=True)
     provider_config = models.JSONField(
         gettext_lazy("系统配置"), null=True, default=dict, blank=True, help_text=gettext_lazy("IAM V3")
@@ -134,12 +178,19 @@ class System(OperateRecordModel):
     callback_url = models.CharField(gettext_lazy("回调地址"), max_length=255, null=True, blank=True)
     auth_token = models.CharField(gettext_lazy("系统鉴权 Token"), max_length=64, null=True, blank=True)
     managers = models.JSONField(gettext_lazy("系统管理员"), default=list, blank=True)
-    # paas 信息
+    # paas 同步信息
     logo_url = models.CharField(gettext_lazy("应用图标"), max_length=255, null=True, blank=True)
     system_url = models.CharField(gettext_lazy("访问地址"), max_length=255, null=True, blank=True)
     # 系统诊断
     enable_system_diagnosis_push = models.BooleanField(gettext_lazy("是否开启系统诊断推送"), default=False)
     system_diagnosis_extra = models.JSONField(gettext_lazy("系统诊断额外信息"), default=dict, blank=True)
+    # 审计状态
+    audit_status = models.CharField(
+        gettext_lazy("审计状态"),
+        choices=SystemAuditStatusEnum.choices,
+        max_length=16,
+        default=SystemAuditStatusEnum.PENDING.value,
+    )
 
     class Meta:
         verbose_name = gettext_lazy("接入系统")
@@ -184,9 +235,9 @@ class System(OperateRecordModel):
 
         return FetchInstancePermission.build_auth(settings.FETCH_INSTANCE_USERNAME, self.auth_token)
 
-    def save(self, update_record=True, *args, **kwargs):
+    def save(self, *args, **kwargs):
         self.system_id = self.build_system_id(self.source_type, self.instance_id)
-        super().save(update_record=update_record, *args, **kwargs)
+        super().save(*args, **kwargs)
 
     @classmethod
     @transaction.atomic
@@ -198,7 +249,58 @@ class System(OperateRecordModel):
         ResourceType.objects.filter(system_id__in=system_ids).delete()
         Action.objects.filter(system_id__in=system_ids).delete()
         SystemRole.objects.filter(system_id__in=system_ids).delete()
+        SystemDiagnosisConfig.objects.filter(system_id__in=system_ids).delete()
+        ResourceTypeActionRelation.objects.filter(system_id__in=system_ids).delete()
+        SystemFavorite.objects.filter(system_id__in=system_ids).delete()
         System.objects.filter(system_id__in=system_ids).delete()
+
+    @classmethod
+    def bulk_update_system_audit_status(cls, system_ids: List[str] = None):
+        """
+        批量更新系统审计状态: 有快照 or 有采集配置 => 已接入；否则 => 待接入
+        :param system_ids: 待更新的系统 ID
+        """
+
+        try:
+            from services.web.databus.models import CollectorConfig, Snapshot
+        except ImportError as e:
+            logger.warning(f"Failed to import required models: {e}")
+            return
+
+        system_ids = set(system_ids)
+        if not system_ids:
+            logger.warning("No systems found for the given IDs.")
+            return
+
+        # 查询关联了 Snapshot 或 CollectorConfig 的系统 ID
+        snapshot_systems = Snapshot.objects.filter(system_id__in=system_ids).values_list("system_id", flat=True)
+        collector_systems = CollectorConfig.objects.filter(system_id__in=system_ids).values_list("system_id", flat=True)
+
+        # 计算已接入和待接入的系统
+        accessed_systems = (set(snapshot_systems) | set(collector_systems)) & system_ids
+        pending_systems = system_ids - accessed_systems
+
+        # 批量更新状态
+        if accessed_systems:
+            cls.objects.filter(system_id__in=accessed_systems).update(
+                _update_record=False, audit_status=SystemAuditStatusEnum.ACCESSED.value
+            )
+        if pending_systems:
+            cls.objects.filter(system_id__in=pending_systems).update(
+                _update_record=False, audit_status=SystemAuditStatusEnum.PENDING.value
+            )
+
+        logger.info(
+            f"Updated audit status for {len(accessed_systems)} accessed and {len(pending_systems)} pending systems."
+        )
+
+    @classmethod
+    def gen_auth_token(cls) -> str:
+        """
+        生成系统鉴权 Token
+        """
+
+        return generate_random_string(length=SYSTEM_AUTH_TOKEN_LENGTH)
 
 
 class SystemDiagnosisConfig(OperateRecordModel):
@@ -292,13 +394,13 @@ class Action(OperateRecordModel):
 
     system_id = models.CharField(gettext_lazy("系统ID"), max_length=64, db_index=True, null=False)
     action_id = models.CharField(gettext_lazy("操作ID"), max_length=64, null=True)
+    unique_id = models.CharField(gettext_lazy("唯一标识"), max_length=255, db_index=True, unique=True)
     name = models.CharField(gettext_lazy("名称"), max_length=64)
     name_en = models.CharField(gettext_lazy("英文名称"), max_length=64, null=True, blank=True)
     sensitivity = models.IntegerField(gettext_lazy("敏感等级"), default=0)
     type = models.CharField(gettext_lazy("操作类型"), max_length=64, blank=True, null=True)
     version = models.IntegerField(gettext_lazy("版本"), default=0, blank=True)
     description = models.TextField(gettext_lazy("描述信息"), blank=True, null=True)
-    resource_type_ids = models.JSONField(gettext_lazy("资源类型ID"), default=list, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("操作")
@@ -312,6 +414,133 @@ class Action(OperateRecordModel):
             return cls.objects.get(system_id=system_id, action_id=instance_id).name
         except cls.DoesNotExist:
             return default or instance_id
+
+    @classmethod
+    def gen_unique_id(cls, system_id: str, action_id: str) -> str:
+        """
+        生成唯一的操作ID
+        """
+
+        return f"{system_id}{SYSTEM_INSTANCE_SEPARATOR}{action_id}"
+
+    def save(self, *args, **kwargs):
+        """
+        保存操作时，生成唯一的操作ID
+        """
+
+        if not self.unique_id:
+            self.unique_id = self.gen_unique_id(self.system_id, self.action_id)
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_resource_type_id_map(cls, system_id: str) -> Dict[str, List[str]]:
+        """
+        预加载资源类型ID的查询集方法
+        """
+
+        # 获取所有操作的关联资源类型
+        resource_relations = ResourceTypeActionRelation.objects.filter(
+            system_id=system_id,
+        ).values('system_id', 'action_id', 'resource_type_id')
+
+        # 构建操作ID到资源类型ID列表的映射
+        action_to_resources = defaultdict(list)
+        for relation in resource_relations:
+            action_to_resources[relation['action_id']].append(relation['resource_type_id'])
+
+        return action_to_resources
+
+    @cached_property
+    def resource_type_ids(self) -> List[str]:
+        """
+        从 ResourceTypeActionRelation 获取该操作的关联资源类型ID
+        """
+
+        return [
+            relation.resource_type_id
+            for relation in ResourceTypeActionRelation.objects.filter(action_id=self.action_id)
+        ]
+
+    @classmethod
+    def bulk_set_resource_types(cls, action_relations: List[dict]):
+        """
+        批量设置操作与资源类型关系
+        :param action_relations: [{
+            "system_id": "system_id",
+            "action_id": "action_id",
+            "resource_type_ids": ["resource_type1", ...]
+        }, ...]
+        """
+        if not action_relations:
+            return
+
+        # 第一步：查询现有关系
+        action_keys = {(r['system_id'], r['action_id']) for r in action_relations}
+        existing_q = Q()
+        for system_id, action_id in action_keys:
+            existing_q |= Q(system_id=system_id, action_id=action_id)
+
+        existing_relations = defaultdict(set)
+        for rel in ResourceTypeActionRelation.objects.filter(existing_q):
+            key = (rel.system_id, rel.action_id)
+            existing_relations[key].add(rel.resource_type_id)
+
+        # 第二步：计算差异 - 需要删除和需要添加的关系
+        to_delete = []
+        to_create = []
+
+        for relation in action_relations:
+            system_id = relation['system_id']
+            action_id = relation['action_id']
+            new_ids = set(relation['resource_type_ids'])
+
+            key = (system_id, action_id)
+            current_ids = existing_relations.get(key, set())
+
+            # 需要删除的关系
+            for res_id in current_ids - new_ids:
+                to_delete.append(Q(system_id=system_id, action_id=action_id, resource_type_id=res_id))
+
+            # 需要添加的关系
+            for res_id in new_ids - current_ids:
+                to_create.append(
+                    ResourceTypeActionRelation(system_id=system_id, action_id=action_id, resource_type_id=res_id)
+                )
+
+        # 第三步：批量执行操作
+        with transaction.atomic():
+            # 批量删除
+            if to_delete:
+                # 构建Q对象组合
+                delete_query = Q()
+                for q_obj in to_delete:
+                    delete_query |= q_obj
+                ResourceTypeActionRelation.objects.filter(delete_query).delete()
+
+            # 批量创建
+            if to_create:
+                ResourceTypeActionRelation.objects.bulk_create(to_create, batch_size=1000)
+
+    def set_resource_type_ids(self, resource_type_ids: List[str]):
+        """
+        设置操作关联的资源类型ID
+        """
+
+        self.bulk_set_resource_types(
+            [{"system_id": self.system_id, "action_id": self.action_id, "resource_type_ids": resource_type_ids}]
+        )
+
+
+class ResourceTypeActionRelation(OperateRecordModel):
+    system_id = models.CharField(gettext_lazy("系统ID"), max_length=64, db_index=True)
+    resource_type_id = models.CharField(gettext_lazy("资源类型ID"), max_length=64, db_index=True)
+    action_id = models.CharField(gettext_lazy("操作ID"), max_length=64, db_index=True)
+
+    class Meta:
+        verbose_name = gettext_lazy("资源类型操作关系")
+        verbose_name_plural = verbose_name
+        ordering = ["system_id", "resource_type_id"]
+        unique_together = [["system_id", "resource_type_id", "action_id"]]
 
 
 class Field(OperateRecordModel):
@@ -492,3 +721,18 @@ class Tag(OperateRecordModel):
         verbose_name = gettext_lazy("Tag")
         verbose_name_plural = verbose_name
         ordering = ["-tag_id"]
+
+
+class SystemFavorite(OperateRecordModel):
+    """
+    System Favorite
+    """
+
+    system_id = models.CharField(gettext_lazy("System ID"), max_length=64)
+    favorite = models.BooleanField(gettext_lazy("Favorite"), default=False)
+    username = models.CharField(gettext_lazy("Username"), max_length=64)
+
+    class Meta:
+        verbose_name = gettext_lazy("System Favorite")
+        verbose_name_plural = verbose_name
+        unique_together = [["system_id", "username"]]

@@ -59,28 +59,43 @@ class IAMPermission(permissions.BasePermission):
         return self
 
 
-class InstanceActionPermission(IAMPermission):
+class AnyOfPermissions(permissions.BasePermission):
     """
-    关联其他资源的权限检查
+    组合权限：只要其中任意一个权限实例通过，就整体通过
+    用法：
+        permission = AnyOfPermissions()
     """
 
-    def __init__(
-        self, actions: List[ActionMeta], resource_meta: ResourceTypeMeta, lookup_field=None, get_instance_id=None
-    ):
+    def __init__(self, *permissions: permissions.BasePermission):
+        self.permissions = permissions
+
+    def has_permission(self, request, view):
+        for permission in self.permissions:
+            if permission.has_permission(request, view):
+                return True
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        for permission in self.permissions:
+            if permission.has_object_permission(request, view, obj):
+                return True
+        return False
+
+
+class InstancePermission(permissions.BasePermission):
+    """
+    实例权限
+    """
+
+    def __init__(self, lookup_field=None, get_instance_id=None):
         """
-        :params: actions 操作
-        :params: resource_meta 操作关联的实例资源类型
         :params: lookup_field 自定义从view.kwargs中获取instance_id的key
         :params: get_instance_id 自定义获取instance_id的方法
         """
-        self.resource_meta = resource_meta
         self.lookup_field = lookup_field
         self.get_instance_id = get_instance_id
-        super(InstanceActionPermission, self).__init__(actions)
 
-    def has_permission(self, request, view):
-        # Perform the lookup filtering.
-
+    def _get_instance_id(self, request, view):
         if self.lookup_field:
             # 优先使用自定义的lookup_field
             instance_id = view.kwargs[self.lookup_field]
@@ -97,7 +112,30 @@ class InstanceActionPermission(IAMPermission):
                 )
 
                 instance_id = view.kwargs[lookup_url_kwarg]
+        return instance_id
 
+
+class InstanceActionPermission(IAMPermission, InstancePermission):
+    """
+    关联其他资源的权限检查
+    """
+
+    def __init__(
+        self, actions: List[ActionMeta], resource_meta: ResourceTypeMeta, lookup_field=None, get_instance_id=None
+    ):
+        """
+        :params: actions 操作
+        :params: resource_meta 操作关联的实例资源类型
+        :params: lookup_field 自定义从view.kwargs中获取instance_id的key
+        :params: get_instance_id 自定义获取instance_id的方法
+        """
+        self.resource_meta = resource_meta
+        IAMPermission.__init__(self, actions)
+        InstancePermission.__init__(self, lookup_field=lookup_field, get_instance_id=get_instance_id)
+
+    def has_permission(self, request, view):
+        # Perform the lookup filtering.
+        instance_id = self._get_instance_id(request, view)
         resource = self.resource_meta.create_instance(instance_id)
         self.resources = [resource]
         return super(InstanceActionPermission, self).has_permission(request, view)

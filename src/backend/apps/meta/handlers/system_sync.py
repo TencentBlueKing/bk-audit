@@ -260,6 +260,12 @@ class IamSystemSyncer(abc.ABC):
 
         return iam_systems
 
+    def _post_sync_resources_actions(self, system_map: Dict[str, dict]):
+        """
+        后置处理
+        """
+        pass
+
     @transaction.atomic
     def sync_resources_actions(self):
         """
@@ -277,8 +283,10 @@ class IamSystemSyncer(abc.ABC):
         actions = defaultdict(list)
         resource_fields = self.resource_type_fields
         action_fields = self.action_fields
+        system_map: Dict[str, dict] = {}
         for instance_id, system_info in system_infos.items():
             system_id = System.build_system_id(source_type=self.source_type, instance_id=instance_id)
+            system_map[system_id] = system_info
             # 资源
             to_insert, to_update, to_delete = sync_iam_objects(
                 system_id, system_info.get("resource_types", []), ResourceType, "resource_type_id", resource_fields
@@ -320,6 +328,8 @@ class IamSystemSyncer(abc.ABC):
             db_model.objects.filter(id__in=instance_map["to_delete"]).delete()
 
         logger.info(f"[{self.cls_name}] finished")
+
+        self._post_sync_resources_actions(system_map)
 
     def _update_system_info(self, db_system: System, base_info: dict) -> bool:
         """
@@ -425,7 +435,7 @@ class IAMV4SystemSyncer(IamSystemSyncer):
     source_type = SystemSourceTypeEnum.IAM_V4
     system_info_fields = ["name", "description", "clients", "callback_url", "auth_token", "managers"]
     resource_type_fields = ["name", "name_en", "ancestors"]
-    action_fields = ["name", "name_en", "resource_type_ids"]
+    action_fields = ["name", "name_en"]
 
     def get_iam_systems(self) -> Dict[str, dict]:
         return group_by(api.bk_iam_v4.list_system.fetch_all(), operator.itemgetter("id"))
@@ -478,6 +488,32 @@ class IAMV4SystemSyncer(IamSystemSyncer):
 
         return data
 
+    def _post_sync_resources_actions(self, system_map: Dict[str, dict]):
+        """
+        同步操作对应的资源类型
+        """
+
+        action_obj_map: Dict[str, Dict[str, Action]] = {}
+
+        # 获取所有已有的 Action 对象
+        action_objs = list(Action.objects.filter(system_id__in=list(system_map.keys())))
+
+        # 将 Action 对象按 system_id 和 action_id 映射
+        for action_obj in action_objs:
+            action_obj_map.setdefault(action_obj.system_id, {})[action_obj.action_id] = action_obj
+
+        # 构建 action_data_map
+        action_data_map = {
+            system_id: {action["id"]: action for action in info["actions"] if action.get("id")}
+            for system_id, info in system_map.items()
+        }
+
+        for system_id, action_map in action_obj_map.items():
+            for action_id, action_obj in action_map.items():
+                action_obj.set_resource_type_ids(
+                    action_data_map.get(system_id, {}).get(action_id, {}).get("resource_type_ids", [])
+                )
+
 
 def sync_iam_v3_system_roles(iam_systems):
     """
@@ -528,5 +564,5 @@ def sync_iam_v3_system_roles(iam_systems):
             )
 
         if to_delete:
-            SystemRole.objects.filter(username__in=to_delete).delete()
+            SystemRole.objects.filter(system_id=system_id, username__in=to_delete).delete()
     logger.info("[sync_iam_system_roles] finished")

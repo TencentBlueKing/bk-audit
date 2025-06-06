@@ -19,8 +19,11 @@ to the current version of the project delivered to anyone in the future.
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
+from apps.meta.constants import SYSTEM_INSTANCE_SEPARATOR
+from apps.meta.permissions import SystemManagerPermission
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
+    AnyOfPermissions,
     IAMPermission,
     InstanceActionPermission,
     insert_action_permission_field,
@@ -30,11 +33,26 @@ from apps.permission.handlers.resource_types import ResourceEnum
 
 class SystemsViewSet(ResourceViewSet):
     def get_permissions(self):
-        if self.action in ["all"]:
-            return []
         if self.action in ["list"]:
             return [IAMPermission(actions=[ActionEnum.LIST_SYSTEM])]
-        return [InstanceActionPermission(actions=[ActionEnum.VIEW_SYSTEM], resource_meta=ResourceEnum.SYSTEM)]
+        if self.action in ["retrieve"]:
+            return [
+                AnyOfPermissions(
+                    SystemManagerPermission(),
+                    InstanceActionPermission(actions=[ActionEnum.VIEW_SYSTEM], resource_meta=ResourceEnum.SYSTEM),
+                )
+            ]
+        if self.action in ["create"]:
+            return [IAMPermission(actions=[ActionEnum.CREATE_SYSTEM])]
+        if self.action in ["update"]:
+            return [
+                AnyOfPermissions(
+                    SystemManagerPermission(),
+                    InstanceActionPermission(actions=[ActionEnum.EDIT_SYSTEM], resource_meta=ResourceEnum.SYSTEM),
+                )
+            ]
+        # all,favorite
+        return []
 
     resource_routes = [
         ResourceRoute("GET", resource.meta.system_list, enable_paginate=True),
@@ -84,7 +102,39 @@ class ResourceTypesViewSet(ResourceViewSet):
 class ActionsViewSet(ResourceViewSet):
     """操作接口"""
 
+    lookup_field = "unique_id"
+
+    def get_system_id_by_unique_id(self) -> str:
+        return self.kwargs.get("unique_id", "").split(SYSTEM_INSTANCE_SEPARATOR)[0]
+
+    def get_system_id(self):
+        return self.request.data.get("system_id")
+
     def get_permissions(self):
+        if self.action in ["update", "destroy"]:
+            return [
+                AnyOfPermissions(
+                    SystemManagerPermission(get_instance_id=self.get_system_id_by_unique_id),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.EDIT_SYSTEM],
+                        resource_meta=ResourceEnum.SYSTEM,
+                        get_instance_id=self.get_system_id_by_unique_id,
+                    ),
+                )
+            ]
+        if self.action in ["bulk", "create"]:
+            return [
+                AnyOfPermissions(
+                    SystemManagerPermission(get_instance_id=self.get_system_id),
+                    InstanceActionPermission(
+                        actions=[ActionEnum.EDIT_SYSTEM],
+                        resource_meta=ResourceEnum.SYSTEM,
+                        get_instance_id=self.get_system_id,
+                    ),
+                )
+            ]
+
+        # actions,action_search
         return []
 
     resource_routes = [
@@ -92,7 +142,7 @@ class ActionsViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.meta.action_search_list, endpoint="action_search"),
         # 新增操作操作
         ResourceRoute("POST", resource.meta.create_action),
-        ResourceRoute("PUT", resource.meta.update_action, pk_field="system_id"),
-        ResourceRoute("PUT", resource.meta.bulk_update_action, endpoint="bulk"),
-        ResourceRoute("DELETE", resource.meta.delete_action, pk_field="system_id"),
+        ResourceRoute("PUT", resource.meta.update_action, pk_field="unique_id"),
+        ResourceRoute("POST", resource.meta.bulk_create_action, endpoint="bulk"),
+        ResourceRoute("DELETE", resource.meta.delete_action, pk_field="unique_id"),
     ]

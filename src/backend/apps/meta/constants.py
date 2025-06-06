@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import os
 import re
+from typing import List
 
 from django.utils.translation import gettext_lazy
 
@@ -157,3 +158,61 @@ class SystemSourceTypeEnum(TextChoices):
     IAM_V3 = "iam_v3", gettext_lazy("权限中心V3")
     IAM_V4 = "iam_v4", gettext_lazy("权限中心V4")
     AUDIT = "bk_audit", gettext_lazy("审计中心")
+
+    @classmethod
+    def get_editable_sources(cls) -> List[str]:
+        """
+        获取可编辑的来源
+        """
+
+        return [cls.AUDIT.value]
+
+
+@register_choices("meta_system_audit_status")
+class SystemAuditStatusEnum(TextChoices):
+    """
+    系统审计状态
+    """
+
+    PENDING = "pending", gettext_lazy("待接入")
+    ACCESSED = "accessed", gettext_lazy("已接入")
+
+    @classmethod
+    def get_order_value(cls, value) -> int:
+        """
+        获取排序优先级：值越大，优先级越高
+        """
+
+        return {
+            cls.PENDING.value: 0,
+            cls.ACCESSED.value: 1,
+        }.get(value, -1)
+
+
+@register_choices("meta_system_status")
+class SystemStatusEnum(TextChoices):
+    """
+    系统状态(用于前端展示)
+    """
+
+    PENDING = "pending", gettext_lazy("待接入")
+    COMPLETED = "completed", gettext_lazy("待完善")
+    ABNORMAL = "abnormal", gettext_lazy("数据异常")
+    NORMAL = "normal", gettext_lazy("正常")
+
+
+class SystemSortFieldEnum(TextChoices):
+    """
+    系统排序字段
+    """
+
+    PERMISSION = "permission", gettext_lazy("权限")
+    FAVORITE = "favorite", gettext_lazy("收藏")
+    AUDIT_STATUS = "audit_status", gettext_lazy("审计状态")
+
+
+# 系统授权token长度
+SYSTEM_AUTH_TOKEN_LENGTH = 32
+
+# 系统和具体实例的分隔符
+SYSTEM_INSTANCE_SEPARATOR = ":"

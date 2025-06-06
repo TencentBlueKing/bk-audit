@@ -21,6 +21,7 @@ import datetime
 import json
 import math
 from collections import defaultdict
+from typing import List
 
 import arrow
 import requests
@@ -57,6 +58,7 @@ from services.web.databus.collector.serializers import (
     ApplyDataIdSourceRequestSerializer,
     BulkSystemCollectorsStatusRequestSerializer,
     BulkSystemCollectorsStatusResponseSerializer,
+    BulkSystemSnapshotsStatusRequestSerializer,
     CollectorCreateRequestSerializer,
     CollectorCreateResponseSerializer,
     CollectorStatusRequestSerializer,
@@ -111,6 +113,7 @@ from services.web.databus.constants import (
     JoinDataPullType,
     JoinDataType,
     LogReportStatus,
+    SnapshotReportStatus,
     SnapshotRunningStatus,
     SourcePlatformChoices,
 )
@@ -377,7 +380,7 @@ class SystemCollectorsStatusResource(CollectorMeta):
             data.update(
                 {
                     "status": LogReportStatus.UNSET.value,
-                    "status_msg": LogReportStatus.UNSET.label,
+                    "status_msg": str(LogReportStatus.UNSET.label),
                     "last_time": str(),
                 }
             )
@@ -386,7 +389,7 @@ class SystemCollectorsStatusResource(CollectorMeta):
         data.update(
             {
                 "status": LogReportStatus.NODATA.value,
-                "status_msg": LogReportStatus.NODATA.label,
+                "status_msg": str(LogReportStatus.NODATA.label),
                 "last_time": DEFAULT_LAST_TIME_TIMESTAMP,
             }
         )
@@ -399,7 +402,7 @@ class SystemCollectorsStatusResource(CollectorMeta):
                     {
                         "last_time": collector.tail_log_time,
                         "status": LogReportStatus.NORMAL.value,
-                        "status_msg": LogReportStatus.NORMAL.label,
+                        "status_msg": str(LogReportStatus.NORMAL.label),
                     }
                 )
                 last_log_time = collector.tail_log_time.replace(tzinfo=None)
@@ -422,6 +425,38 @@ class BulkSystemCollectorsStatusResource(CollectorMeta):
             result[system_id] = resource.databus.collector.system_collectors_status(
                 namespace=validated_request_data["namespace"], system_id=system_id
             )
+        return result
+
+
+class BulkSystemSnapshotsStatusResource(CollectorMeta):
+    name = gettext_lazy("批量获取系统快照状态")
+    RequestSerializer = BulkSystemSnapshotsStatusRequestSerializer
+    cache_type = CacheType.SNAPSHOT
+
+    def perform_request(self, validated_request_data):
+        """
+        获取系统快照状态
+        1. 没有快照 -> 未配置
+        2. 有快照&快照状态都不为失败 -> 正常
+        3. 有快照&快照状态有失败 -> 异常
+        """
+        system_ids: List[str] = validated_request_data["system_ids"]
+        sts = Snapshot.objects.filter(system_id__in=system_ids).values("system_id", "status")
+        st_status_dict = defaultdict(list)
+        for status in sts:
+            st_status_dict[status["system_id"]].append(status["status"])
+        result = {}
+        for system_id in system_ids:
+            st_status = st_status_dict.get(system_id, [])
+            if len(st_status) == 0:
+                status = SnapshotReportStatus.UNSET.value
+            elif any([status == SnapshotRunningStatus.FAILED.value for status in st_status]):
+                status = SnapshotReportStatus.ABNORMAL.value
+            else:
+                status = SnapshotReportStatus.NORMAL.value
+            result[system_id] = {
+                "status": status,
+            }
         return result
 
 

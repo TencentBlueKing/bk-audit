@@ -17,9 +17,14 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from bk_resource import resource
+from django.shortcuts import get_object_or_404
 
+from apps.meta.models import System
 from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.drf import InstancePermission
 from core.exceptions import PermissionException
+from core.models import get_request_username
+from core.permissions import Permission
 
 
 class SearchLogPermission:
@@ -42,3 +47,11 @@ class SearchLogPermission:
                 apply_url=apply_url,
                 permission=apply_data,
             )
+
+
+class SystemManagerPermission(Permission, InstancePermission):
+    def has_permission(self, request, view) -> bool:
+        system_id = self._get_instance_id(request, view)
+        system: System = get_object_or_404(System, system_id=system_id)
+        username = get_request_username()
+        return username in system.managers_list
