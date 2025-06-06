@@ -18,7 +18,8 @@
   <bk-dialog
     v-model:is-show="isShow"
     quick-close
-    :title="t('审计日志导出')">
+    :title="t('审计日志导出')"
+    @closed="handleClosed">
     <div class="export-data-overview">
       <div class="export-data-overview-item">
         <div class="count">
