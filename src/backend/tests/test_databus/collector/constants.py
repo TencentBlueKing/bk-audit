@@ -187,18 +187,21 @@ COLLECTOR_STATUS_RESULT = {
     "status": "nodata",
     "status_msg": gettext_lazy("无数据"),
     "system_id": "bk-audit",
+    "collector_count": 1,
 }
 COLLECTOR_STATUS_RESULT_NODATA = {
     "last_time": "",
     "status": "unset",
     "status_msg": gettext_lazy("未配置"),
     "system_id": "bk-audittest",
+    "collector_count": 0,
 }
 COLLECTOR_STATUS_RESULT_NORMAL = {
     "last_time": "2022-01-01 00:00:00",
     "status": "normal",
     "status_msg": gettext_lazy("正常"),
     "system_id": "bk-audit",
+    "collector_count": 1,
 }
 
 # Collector Etl

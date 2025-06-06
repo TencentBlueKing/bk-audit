@@ -15,26 +15,3 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-import logging
-from enum import Enum
-
-from bk_resource.utils.cache import CacheTypeItem
-from django.utils.translation import gettext_lazy
-
-logger = logging.getLogger(__name__)
-
-
-class CacheTime(Enum):
-    MINUTE = 60
-    HOUR = 3600
-
-
-class CacheType(object):
-    """
-    缓存类型选项
-    @using_cache(CacheType.DATA(60 * 60))
-    """
-
-    COLLECTOR = CacheTypeItem(key="collector", timeout=CacheTime.MINUTE.value * 5, label=gettext_lazy("采集项"))
-    SNAPSHOT = CacheTypeItem(key="snapshot", timeout=CacheTime.MINUTE.value * 5, label=gettext_lazy("快照"))
