@@ -19,6 +19,8 @@ to the current version of the project delivered to anyone in the future.
 import copy
 import datetime
 import itertools
+import secrets
+import string
 from collections import OrderedDict
 from functools import wraps
 from typing import Iterator, List, Union
@@ -250,3 +252,19 @@ def data_chunks(data: list, limit: int) -> Iterator[List]:
     for i in range(0, len(data), limit):
         # fmt: off
         yield data[i: i + limit]
+
+
+def generate_random_string(length=32, alphabet=None):
+    """
+    生成一个指定长度的随机字符串。
+
+    :param length: 随机字符串的长度，默认为 32
+    :param alphabet: 字符集，默认为字母和数字的组合，如果需要自定义字符集可以传入
+    :return: 生成的随机字符串
+    """
+
+    # 默认字符集：字母（小写和大写）和数字
+    if alphabet is None:
+        alphabet = string.ascii_letters + string.digits
+
+    return ''.join(secrets.choice(alphabet) for _ in range(length))

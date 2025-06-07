@@ -46,6 +46,15 @@ class ActionEnum:
     )
 
     # 系统接入
+    CREATE_SYSTEM = ActionMeta(
+        id="create_system",
+        name=gettext("系统创建"),
+        name_en="Create System",
+        type="create",
+        related_resource_types=[],
+        related_actions=[],
+        version=1,
+    )
     LIST_SYSTEM = ActionMeta(
         id="list_system",
         name=gettext("系统列表访问"),
@@ -441,3 +450,12 @@ class ActionEnum:
         version=1,
         system_id=IAMSystems.BK_LOG.value,
     )
+
+    @classmethod
+    def choices(cls):
+        """生成 Django 模型 choices 需要的格式: [(id1, name1), (id2, name2), ...]"""
+        return [
+            (action.id, action.name)
+            for name, action in vars(cls).items()
+            if not name.startswith('_') and isinstance(action, ActionMeta)
+        ]

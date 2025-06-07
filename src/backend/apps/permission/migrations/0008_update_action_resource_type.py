@@ -16,25 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import logging
-from enum import Enum
+import os
 
-from bk_resource.utils.cache import CacheTypeItem
-from django.utils.translation import gettext_lazy
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
 
-logger = logging.getLogger(__name__)
-
-
-class CacheTime(Enum):
-    MINUTE = 60
-    HOUR = 3600
+from core.utils.distutils import strtobool
 
 
-class CacheType(object):
-    """
-    缓存类型选项
-    @using_cache(CacheType.DATA(60 * 60))
-    """
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
 
-    COLLECTOR = CacheTypeItem(key="collector", timeout=CacheTime.MINUTE.value * 5, label=gettext_lazy("采集项"))
-    SNAPSHOT = CacheTypeItem(key="snapshot", timeout=CacheTime.MINUTE.value * 5, label=gettext_lazy("快照"))
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
+
+
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0007_update_action_resource_type"),
+    ]
+
+    operations = [migrations.RunPython(forward_func)]

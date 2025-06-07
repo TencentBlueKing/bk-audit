@@ -1,0 +1,89 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+"""
+from typing import Dict, List
+
+from bk_resource import resource
+from django.db.models import QuerySet
+
+from apps.meta.constants import SystemAuditStatusEnum, SystemStatusEnum
+from apps.meta.models import System
+from services.web.databus.constants import LogReportStatus, SnapshotReportStatus
+
+
+def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, dict]:
+    """
+    获取系统状态信息
+    1. 系统未接入审计中心: 未接入
+    2.  系统已接入审计状态
+        1. 没有权限模型 or 没有日志上报 or 没有配置资产上报: 待完善
+        2. 资产上报异常 or 日志上报无数据: 数据异常
+        3. 否则：系统接入 & 有权限模型 & 日志上报正常 & 资产上报： 数据正常
+    """
+
+    # 排序复用缓存
+    system_ids = sorted(system_ids)
+
+    # 1. 获取系统审计状态
+    systems: QuerySet = (
+        System.objects.with_action_resource_type_count()
+        .filter(
+            namespace=namespace,
+            system_id__in=system_ids,
+        )
+        .values("system_id", "audit_status", "action_count", "resource_type_count")
+    )
+
+    # 2. 获取日志上报信息
+    system_ids = ",".join(system_ids)
+    tail_log_time_map = resource.databus.collector.bulk_system_collectors_status(
+        namespace=namespace,
+        system_ids=system_ids,
+    )
+    # 3. 获取资产上报信息
+    snapshot_status_map = resource.databus.collector.bulk_system_snapshots_status(system_ids=system_ids)
+
+    result = {}
+    for system in systems:
+        tail_log_item = tail_log_time_map.get(system["system_id"], {})
+        snapshot_status_item = snapshot_status_map.get(system["system_id"], {})
+        tail_log_status: LogReportStatus = tail_log_item.get("status")
+        has_permission_model = bool(system["action_count"] or system["resource_type_count"])
+        snapshot_status: SnapshotReportStatus = snapshot_status_item.get("status")
+        if system["audit_status"] == SystemAuditStatusEnum.PENDING:
+            # 系统审计状态为未接入: 未接入
+            system_status = SystemStatusEnum.PENDING.value
+        elif (
+            not has_permission_model
+            or tail_log_status in (LogReportStatus.UNSET, None)
+            or snapshot_status == SnapshotReportStatus.UNSET
+        ):
+            # 没有权限模型 or 没有日志上报 or 没有配置资产上报: 待完善
+            system_status = SystemStatusEnum.COMPLETED.value
+        elif tail_log_status == LogReportStatus.NODATA or snapshot_status == SnapshotReportStatus.ABNORMAL:
+            # 资产上报异常 or 日志上报无数据: 数据异常
+            system_status = SystemStatusEnum.ABNORMAL.value
+        else:
+            # 系统接入 & 有权限模型 & 日志上报正常 & 资产上报： 数据正常
+            system_status = SystemStatusEnum.NORMAL.value
+        result[system["system_id"]] = {
+            "system_status": system_status,
+            "tail_log_time_map": tail_log_item,
+            "snapshot_status_map": snapshot_status_map,
+            "has_permission_model": has_permission_model,
+        }
+    return result

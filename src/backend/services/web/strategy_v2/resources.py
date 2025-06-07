@@ -1074,6 +1074,7 @@ class GetStrategyDisplayInfo(StrategyV2Base):
 
 class LinkTableBase(AuditMixinResource, abc.ABC):
     tags = ["LinkTable"]
+    audit_resource_type = ResourceEnum.LINK_TABLE
 
     def add_audit_instance_to_context(self, link_table: LinkTable, old_link_table: Optional[dict] = None):
         if old_link_table:
