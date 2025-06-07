@@ -184,8 +184,8 @@ class SystemAuditStatusEnum(TextChoices):
         """
 
         return {
-            cls.PENDING.value: 0,
-            cls.ACCESSED.value: 1,
+            cls.PENDING.value: 1,
+            cls.ACCESSED.value: 0,
         }.get(value, -1)
 
 

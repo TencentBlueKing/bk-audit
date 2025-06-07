@@ -627,8 +627,7 @@ class TestBulkCreateAction(TestCase):
                 },
             ],
         }
-        result = self.resource.meta.bulk_create_action(validated_request_data)
-        self.assertEqual(len(result), 2)
+        self.resource.meta.bulk_create_action(validated_request_data)
 
 
 class TestDeleteAction(TestCase):

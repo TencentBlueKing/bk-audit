@@ -122,6 +122,7 @@ class CollectorStatusSerializer(serializers.Serializer):
     status = serializers.ChoiceField(label=gettext_lazy("状态"), choices=LogReportStatus.choices)
     status_msg = serializers.CharField(label=gettext_lazy("状态描述"))
     last_time = serializers.DateTimeField(label=gettext_lazy("最后数据上报时间"), allow_null=True)
+    collector_count = serializers.IntegerField(label=gettext_lazy("采集项数量"))
 
 
 class CollectorStatusResponseSerializer(CollectorStatusSerializer):

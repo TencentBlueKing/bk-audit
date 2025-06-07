@@ -37,7 +37,9 @@ from apps.meta.constants import (
     OrderTypeChoices,
     SensitiveResourceTypeEnum,
     SpaceType,
+    SystemAuditStatusEnum,
     SystemSortFieldEnum,
+    SystemStatusEnum,
 )
 from apps.meta.exceptions import TagNameInValid
 from apps.meta.models import SystemSourceTypeEnum  # 替换为你的实际路径
@@ -54,6 +56,7 @@ from apps.meta.models import (
     Tag,
 )
 from apps.meta.utils.format import format_resource_permission
+from apps.meta.utils.system import wrapper_system_status
 
 
 class SensitiveObjSerializer(serializers.ModelSerializer):
@@ -103,11 +106,27 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
         label=gettext_lazy("排序方式"), required=False, allow_null=True, allow_blank=True, choices=OrderTypeChoices.choices
     )
     system_status = serializers.CharField(
-        label=gettext_lazy("系统状态筛选"), required=False, allow_blank=True, allow_null=True
+        label=gettext_lazy("系统状态筛选"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=SystemStatusEnum.choices,
     )
     status = serializers.CharField(label=gettext_lazy("状态筛选"), required=False, allow_blank=True, allow_null=True)
-    source_type = serializers.CharField(label=gettext_lazy("来源类型"), required=False, allow_blank=True, allow_null=True)
-    audit_status = serializers.CharField(label=gettext_lazy("审计状态"), required=False, allow_blank=True, allow_null=True)
+    source_type = serializers.CharField(
+        label=gettext_lazy("来源类型"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=SystemSourceTypeEnum.choices,
+    )
+    audit_status = serializers.CharField(
+        label=gettext_lazy("审计状态"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text=SystemAuditStatusEnum.choices,
+    )
 
     class Meta:
         model = System
@@ -144,14 +163,18 @@ class SystemListRequestSerializer(serializers.ModelSerializer):
 
 
 class SystemListAllRequestSerializer(serializers.ModelSerializer):
-    action_ids = serializers.CharField(label=gettext_lazy("权限"), allow_blank=True, allow_null=True, required=False)
+    action_ids = serializers.CharField(
+        label=gettext_lazy("权限"), allow_blank=True, allow_null=True, required=False, help_text="view_system,edit_system"
+    )
     audit_status__in = serializers.CharField(
-        label=gettext_lazy("审计状态"),
+        label=gettext_lazy("系统审计状态"),
         required=False,
+        help_text=SystemAuditStatusEnum.choices,
     )
     source_type__in = serializers.CharField(
         label=gettext_lazy("来源类型"),
         required=False,
+        help_text=SystemSourceTypeEnum.choices,
     )
     with_favorite = serializers.BooleanField(label=gettext_lazy("携带收藏状态"), default=False)
     with_system_status = serializers.BooleanField(label=gettext_lazy("携带系统状态"), default=False)
@@ -159,7 +182,10 @@ class SystemListAllRequestSerializer(serializers.ModelSerializer):
         label=_("排序字段组合"),
         required=False,
         default=SystemSortFieldEnum.PERMISSION.value,
-        help_text="permission,favorite,audit_status",
+        help_text=SystemSortFieldEnum.choices,
+    )
+    order_type = serializers.ChoiceField(
+        label=gettext_lazy("排序方式"), default=OrderTypeChoices.DESC.value, choices=OrderTypeChoices.choices
     )
 
     def validate_sort_keys(self, value: str) -> list:
@@ -180,6 +206,7 @@ class SystemListAllRequestSerializer(serializers.ModelSerializer):
             "with_favorite",
             "with_system_status",
             "sort_keys",
+            "order_type",
         ]
 
 
@@ -213,7 +240,18 @@ class SystemRoleListRequestSerializer(serializers.ModelSerializer):
 class SystemInfoResponseSerializer(SystemSerializer):
     resource_type_count = serializers.IntegerField(label=gettext_lazy("资源类型数量"), required=False)
     action_count = serializers.IntegerField(label=gettext_lazy("操作数量"), required=False)
-    managers = serializers.ListField(label=gettext_lazy("应用负责人"), required=False)
+    managers = serializers.SerializerMethodField(label=gettext_lazy("管理员"), required=False)
+    last_time = serializers.CharField(label=gettext_lazy("最后上报时间"), required=False)
+
+    def get_managers(self, obj: System) -> list:
+        """管理员"""
+        return obj.managers_list
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # 增加最后上报信息数据
+        wrapper_system_status(namespace=data["namespace"], systems=[data])
+        return data
 
 
 class ResourceTypeSerializer(serializers.ModelSerializer):
@@ -233,9 +271,21 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
 
 
 class ActionSerializer(serializers.ModelSerializer):
+    resource_type_ids = serializers.ListField(child=serializers.CharField(), required=False)
+
     class Meta:
         model = Action
-        fields = ["action_id", "name", "name_en", "sensitivity", "type", "version", "description", "unique_id"]
+        fields = [
+            "action_id",
+            "name",
+            "name_en",
+            "sensitivity",
+            "type",
+            "version",
+            "description",
+            "unique_id",
+            "resource_type_ids",
+        ]
 
 
 class LabelDataSerializer(serializers.Serializer):
@@ -504,29 +554,54 @@ class DeleteSystemDiagnosisPushReqSerializer(serializers.Serializer):
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
 
 
-class CreateSystemReqSerializer(serializers.Serializer):
-    source_type = serializers.ChoiceField(
-        label=_("系统来源类型"), choices=SystemSourceTypeEnum.choices, default=SystemSourceTypeEnum.IAM_V3.value
-    )
-    instance_id = serializers.CharField(
-        label=_("系统实例ID"),
-        max_length=32,
-    )
-    namespace = serializers.CharField(label=_("namespace"), max_length=32)
-    name = serializers.CharField(label=_("名称"), max_length=64)
-    name_en = serializers.CharField(label=_("英文名称"), allow_blank=False, max_length=64, default="")
+class CreateSystemReqSerializer(serializers.ModelSerializer):
     clients = serializers.ListField(
         label=_("客户端"),
         child=serializers.CharField(),
         allow_empty=False,
     )
-    description = serializers.CharField(
-        label=_("应用描述"),
-        allow_blank=True,
-        default="",
+    managers = serializers.ListField(
+        label=_("系统管理员"),
+        child=serializers.CharField(),
+        allow_empty=True,
     )
-    callback_url = serializers.CharField(label=_("回调地址"), required=True, allow_blank=True, max_length=255)
-    managers = serializers.ListField(label=_("系统管理员"), child=serializers.CharField(), allow_empty=True, default=list)
+
+    class Meta:
+        model = System
+        fields = [
+            "instance_id",
+            "namespace",
+            "name",
+            "name_en",
+            "clients",
+            "description",
+            "callback_url",
+            "managers",
+        ]
+        extra_kwargs = {
+            "instance_id": {
+                "required": True,
+                "allow_blank": False,
+            },
+            "name": {
+                "required": True,
+                "allow_blank": False,
+            },
+            "name_en": {"allow_blank": True, "default": ""},
+            "description": {"allow_blank": True, "default": ""},
+            "callback_url": {
+                "allow_blank": True,
+                "default": "",
+            },
+        }
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        attrs["auth_token"] = System.gen_auth_token()
+        attrs["audit_status"] = SystemAuditStatusEnum.ACCESSED.value
+        attrs["source_type"] = SystemSourceTypeEnum.AUDIT.value
+        attrs["system_id"] = System.build_system_id(source_type=attrs["source_type"], instance_id=attrs["instance_id"])
+        return attrs
 
 
 class UpdateSystemReqSerializer(serializers.Serializer):
@@ -578,9 +653,9 @@ class ActionCreateSerializer(serializers.Serializer):
     system_id = serializers.CharField(label=_("系统ID"), max_length=64)
     action_id = serializers.CharField(label=_("操作ID"), max_length=64)
     name = serializers.CharField(label=_("名称"), max_length=64)
-    name_en = serializers.CharField(label=_("英文名称"), max_length=64, allow_blank=False, default="")
+    name_en = serializers.CharField(label=_("英文名称"), max_length=64, allow_blank=False, required=False)
     sensitivity = serializers.IntegerField(label=_("敏感等级"), default=0)
-    type = serializers.CharField(label=_("操作类型"), max_length=64, allow_blank=True, default=None)
+    type = serializers.CharField(label=_("操作类型"), max_length=64, allow_blank=True, allow_null=True, default=None)
     version = serializers.IntegerField(label=_("版本"), default=0)
     description = serializers.CharField(label=_("描述信息"), allow_blank=True, default="")
     resource_type_ids = serializers.ListField(
@@ -590,11 +665,16 @@ class ActionCreateSerializer(serializers.Serializer):
         default=list,
     )
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        attrs["unique_id"] = Action.gen_unique_id(system_id=attrs["system_id"], action_id=attrs["action_id"])
+        return attrs
 
-class ActionUpdateSerializer(serializers.Serializer):
+
+class ActionUpdateSerializer(serializers.ModelSerializer):
     unique_id = serializers.CharField(label=_("唯一标识"), max_length=255)
     name = serializers.CharField(label=_("名称"), max_length=64, required=False, allow_blank=False)
-    name_en = serializers.CharField(label=_("英文名称"), max_length=64, allow_blank=False)
+    name_en = serializers.CharField(label=_("英文名称"), max_length=64, allow_blank=False, required=False)
     sensitivity = serializers.IntegerField(label=_("敏感等级"), required=False)
     type = serializers.CharField(label=_("操作类型"), max_length=64, required=False, allow_blank=True)
     version = serializers.IntegerField(label=_("版本"), required=False)
@@ -610,10 +690,27 @@ class ActionUpdateSerializer(serializers.Serializer):
         required=False,
     )
 
+    class Meta:
+        model = System
+        fields = [
+            "unique_id",
+            "name",
+            "name_en",
+            "sensitivity",
+            "type",
+            "version",
+            "description",
+            "resource_type_ids",
+        ]
+
 
 class BulkActionCreateSerializer(serializers.Serializer):
+    """
+    Bulk Create Action
+    """
+
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
-    actions = serializers.ListField(child=ActionCreateSerializer(), allow_empty=False)
+    actions = serializers.ListField(child=ActionCreateSerializer(), allow_empty=False, help_text="操作的系统ID会被自动填充")
 
     def run_validation(self, data: dict = empty):
         if isinstance(data, dict) and isinstance(data.get("actions"), list):

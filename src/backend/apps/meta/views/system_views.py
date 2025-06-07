@@ -20,10 +20,9 @@ from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.meta.constants import SYSTEM_INSTANCE_SEPARATOR
-from apps.meta.permissions import SystemManagerPermission
+from apps.meta.permissions import SystemPermissionHandler
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
-    AnyOfPermissions,
     IAMPermission,
     InstanceActionPermission,
     insert_action_permission_field,
@@ -32,37 +31,31 @@ from apps.permission.handlers.resource_types import ResourceEnum
 
 
 class SystemsViewSet(ResourceViewSet):
+    lookup_field = "system_id"
+
     def get_permissions(self):
         if self.action in ["list"]:
             return [IAMPermission(actions=[ActionEnum.LIST_SYSTEM])]
         if self.action in ["retrieve"]:
-            return [
-                AnyOfPermissions(
-                    SystemManagerPermission(),
-                    InstanceActionPermission(actions=[ActionEnum.VIEW_SYSTEM], resource_meta=ResourceEnum.SYSTEM),
-                )
-            ]
+            return SystemPermissionHandler.system_view_permissions()
         if self.action in ["create"]:
             return [IAMPermission(actions=[ActionEnum.CREATE_SYSTEM])]
         if self.action in ["update"]:
-            return [
-                AnyOfPermissions(
-                    SystemManagerPermission(),
-                    InstanceActionPermission(actions=[ActionEnum.EDIT_SYSTEM], resource_meta=ResourceEnum.SYSTEM),
-                )
-            ]
-        # all,favorite
+            return SystemPermissionHandler.system_edit_permissions()
+        # all,favorite,actions
         return []
 
     resource_routes = [
         ResourceRoute("GET", resource.meta.system_list, enable_paginate=True),
         ResourceRoute("GET", resource.meta.system_info, pk_field="system_id"),
+        ResourceRoute("GET", resource.meta.action_list, pk_field="system_id", endpoint="actions"),
         # 附带权限信息
         ResourceRoute("GET", resource.meta.system_list_all, endpoint="all"),
         # 新增系统操作
         ResourceRoute("POST", resource.meta.create_system),
         ResourceRoute("PUT", resource.meta.update_system, pk_field="system_id"),
         ResourceRoute("PUT", resource.meta.favorite_system, pk_field="system_id", endpoint="favorite"),
+        ResourceRoute("PUT", resource.meta.update_system_audit_status, pk_field="system_id", endpoint="audit_status"),
     ]
 
 
@@ -112,37 +105,18 @@ class ActionsViewSet(ResourceViewSet):
 
     def get_permissions(self):
         if self.action in ["update", "destroy"]:
-            return [
-                AnyOfPermissions(
-                    SystemManagerPermission(get_instance_id=self.get_system_id_by_unique_id),
-                    InstanceActionPermission(
-                        actions=[ActionEnum.EDIT_SYSTEM],
-                        resource_meta=ResourceEnum.SYSTEM,
-                        get_instance_id=self.get_system_id_by_unique_id,
-                    ),
-                )
-            ]
+            return SystemPermissionHandler.system_edit_permissions(get_instance_id=self.get_system_id_by_unique_id)
         if self.action in ["bulk", "create"]:
-            return [
-                AnyOfPermissions(
-                    SystemManagerPermission(get_instance_id=self.get_system_id),
-                    InstanceActionPermission(
-                        actions=[ActionEnum.EDIT_SYSTEM],
-                        resource_meta=ResourceEnum.SYSTEM,
-                        get_instance_id=self.get_system_id,
-                    ),
-                )
-            ]
+            return SystemPermissionHandler.system_edit_permissions(get_instance_id=self.get_system_id)
 
-        # actions,action_search
+        # action_search
         return []
 
     resource_routes = [
-        ResourceRoute("GET", resource.meta.action_list, pk_field="system_id", endpoint="actions"),
         ResourceRoute("GET", resource.meta.action_search_list, endpoint="action_search"),
         # 新增操作操作
         ResourceRoute("POST", resource.meta.create_action),
-        ResourceRoute("PUT", resource.meta.update_action, pk_field="unique_id"),
         ResourceRoute("POST", resource.meta.bulk_create_action, endpoint="bulk"),
+        ResourceRoute("PUT", resource.meta.update_action, pk_field="unique_id"),
         ResourceRoute("DELETE", resource.meta.delete_action, pk_field="unique_id"),
     ]

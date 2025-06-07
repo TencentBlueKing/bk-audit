@@ -376,12 +376,14 @@ class SystemCollectorsStatusResource(CollectorMeta):
         # 获取系统下的采集信息
         collectors = CollectorConfig.objects.filter(system_id=validated_request_data["system_id"], is_deleted=False)
         # 未配置采集直接返回
+        collector_count = collectors.count()
         if not collectors.count():
             data.update(
                 {
                     "status": LogReportStatus.UNSET.value,
                     "status_msg": str(LogReportStatus.UNSET.label),
                     "last_time": str(),
+                    "collector_count": 0,
                 }
             )
             return data
@@ -411,6 +413,7 @@ class SystemCollectorsStatusResource(CollectorMeta):
             if data["last_time"]
             else str()
         )
+        data["collector_count"] = collector_count
         return data
 
 

@@ -47,14 +47,8 @@ from apps.meta.constants import (
     RETRIEVE_USER_TIMEOUT,
     SpaceType,
     SystemAuditStatusEnum,
-    SystemSourceTypeEnum,
 )
-from apps.meta.exceptions import (
-    ActionHasExist,
-    BKAppNotExists,
-    SystemHasExist,
-    SystemNotEditable,
-)
+from apps.meta.exceptions import ActionHasExist, BKAppNotExists, SystemHasExist
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.models import (
     Action,
@@ -63,7 +57,6 @@ from apps.meta.models import (
     Field,
     GlobalMetaConfig,
     ResourceType,
-    ResourceTypeActionRelation,
     SensitiveObject,
     System,
     SystemFavorite,
@@ -156,6 +149,14 @@ class SystemAbstractResource(Meta, SystemAuditMixinResource, ModelResource, ABC)
 
 
 class SystemListResource(SystemAbstractResource, CacheResource):
+    """
+    获取系统列表
+    1. 获取已接入审计中心的系统列表:
+    ```json
+    ?audit_status=accessed
+    ```
+    """
+
     name = gettext_lazy("获取系统列表")
     action = "list"
     many_response_data = True
@@ -245,6 +246,49 @@ class SystemListResource(SystemAbstractResource, CacheResource):
 
 
 class SystemListAllResource(SystemAbstractResource, CacheResource):
+    """
+    获取系统列表(All)
+    1. 待接入的系统
+    ```json
+    输入：?with_favorite=false&with_system_status=false&sort_keys=audit_status
+    输出：
+    {
+        "data": [
+            {
+                "id": "xxx",
+                "name": "xxx",
+                "source_type": "iam_v3",
+                "audit_status": "accessed",
+                "system_id": "xxx"
+            }
+        ]
+    }
+    ```
+    2. 系统列表(快速切换)
+    ```json
+    输入：?action_ids=view_system&audit_status__in=accessed&with_favorite=true&with_system_status=true&sort_keys=favorite,permission'
+    输出：
+    {
+        "data": [
+            {
+              "id": "xxx",
+              "name": "xxx",
+              "source_type": "bk_audit",
+              "audit_status": "accessed",
+              "favorite": true,
+              "system_id": "xxx",
+              "last_time": "",
+              "status": "unset",
+              "status_msg": "未配置",
+              "system_status": "completed",
+              "permission": {
+                "view_system": true
+              }
+            }
+        ]
+    }
+    """
+
     name = gettext_lazy("获取系统列表(All)")
     action = "list"
     many_response_data = True
@@ -317,14 +361,7 @@ class SystemInfoResource(SystemAbstractResource):
         return System.objects.with_action_resource_type_count()
 
     def perform_request(self, validated_request_data: dict) -> any:
-        system_id = validated_request_data["system_id"]
         system_info = super().perform_request(validated_request_data)
-        system_info["managers"] = [
-            manager["username"]
-            for manager in resource.meta.system_role_list(system_id=system_id, role=IAM_MANAGER_ROLE)
-        ]
-        # 增加最后上报信息数据
-        system_info = wrapper_system_status(namespace=system_info["namespace"], systems=[system_info])[0]
         self.add_audit_instance_to_context(instance=SystemInstance(system_info).instance)
         return system_info
 
@@ -342,6 +379,31 @@ class ResourceTypeListResource(SystemAttrAbstractResource):
 
 
 class ActionListResource(SystemAttrAbstractResource):
+    """
+    操作列表
+    1. 获取指定系统下的操作列表
+    ```json
+    返回:
+    {
+        "data": [
+            {
+                "action_id": "xxx",
+                "name": "xxx",
+                "name_en": "xxx",
+                "sensitivity": 0,
+                "type": null,
+                "version": 0,
+                "description": null,
+                "unique_id": "xxx",
+                "resource_type_ids": [
+                    "xxx1"
+                ]
+            }
+        ]
+    }
+    ```
+    """
+
     name = gettext_lazy("操作列表")
     model = models.Action
     serializer_class = ActionSerializer
@@ -777,82 +839,47 @@ class DeleteSystemDiagnosisPush(Meta, Resource):
         SystemDiagnosisPushHandler(system_id=system_id).delete_push()
 
 
-class CreateSystem(Meta, SystemAuditMixinResource):
+class CreateSystem(SystemAbstractResource, Meta):
+    """
+    创建审计中心系统
+    """
+
     name = gettext_lazy("创建系统")
     RequestSerializer = CreateSystemReqSerializer
     ResponseSerializer = SystemInfoResponseSerializer
     audit_action = ActionEnum.CREATE_SYSTEM
 
-    def update_system_audit_status(self, system: System) -> System:
-        """
-        更新系统审计状态
-        """
+    def perform_request(self, validated_request_data: dict):
+        namespace = validated_request_data["namespace"]
+        system_id = validated_request_data["system_id"]
+        system, is_created = System.objects.get_or_create(
+            namespace=namespace, system_id=system_id, defaults=validated_request_data
+        )
+        if not is_created:
+            raise SystemHasExist(system_id=system_id)
+        return system
 
+
+class UpdateSystemAuditStatus(Meta, SystemAuditMixinResource):
+    """
+    更新系统审计状态为已接入
+    """
+
+    name = gettext_lazy("更新系统审计状态")
+
+    def perform_request(self, validated_request_data):
+        system_id = validated_request_data["system_id"]
+        system: System = get_object_or_404(System, system_id=system_id)
         system.audit_status = SystemAuditStatusEnum.ACCESSED.value
         system.save(update_fields=["audit_status"])
         return system
 
-    def create_audit_system(self, validated_request_data: dict) -> System:
-        """
-        创建审计系统
-        """
 
-        source_type = validated_request_data["source_type"]
-        instance_id = validated_request_data["instance_id"]
-        namespace = validated_request_data["namespace"]
-        validated_request_data["auth_token"] = System.gen_auth_token()
-        validated_request_data["audit_status"] = SystemAuditStatusEnum.ACCESSED.value
-        system, is_created = System.objects.get_or_create(
-            namespace=namespace, source_type=source_type, instance_id=instance_id, defaults=validated_request_data
-        )
-        if not is_created:
-            raise SystemHasExist(source_type=source_type, instance_id=instance_id)
-        return system
-
-    def perform_request(self, validated_request_data: dict):
-        source_type = validated_request_data["source_type"]
-        if source_type not in SystemSourceTypeEnum.get_editable_sources():
-            # 不可编辑来源的系统仅修改其系统审计状态
-            instance_id = validated_request_data["instance_id"]
-            system: System = get_object_or_404(System, source_type=source_type, instance_id=instance_id)
-            return self.update_system_audit_status(system)
-        else:
-            return self.create_audit_system(validated_request_data)
-
-
-class SystemEditValidatorBase(abc.ABC):
-    """
-    系统编辑验证基类
-    """
-
-    def _validate_system_edit(self, system_id) -> System:
-        """
-        验证系统是否可编辑
-        """
-
-        system: System = get_object_or_404(System, system_id=system_id)
-        if system.source_type not in SystemSourceTypeEnum.get_editable_sources():
-            raise SystemNotEditable(system_id=system_id)
-        return system
-
-
-class UpdateSystem(Meta, SystemAuditMixinResource, SystemEditValidatorBase):
+class UpdateSystem(Meta, SystemAuditMixinResource):
     name = gettext_lazy("更新系统")
     RequestSerializer = UpdateSystemReqSerializer
     ResponseSerializer = SystemInfoResponseSerializer
     audit_action = ActionEnum.EDIT_SYSTEM
-
-    def update_join_data(self, system: System):
-        """
-        更新关联数据(异步)
-        """
-
-        try:
-            from services.web.databus.tasks import refresh_system_snapshots
-        except ImportError:
-            return
-
-        refresh_system_snapshots.delay(system_id=system.system_id)
 
     @transaction.atomic
     def update_system(self, system: System, validated_request_data: dict) -> dict:
@@ -869,12 +896,11 @@ class UpdateSystem(Meta, SystemAuditMixinResource, SystemEditValidatorBase):
 
     def perform_request(self, validated_request_data):
         system_id = validated_request_data["system_id"]
-        system: System = self._validate_system_edit(system_id)
+        system: System = get_object_or_404(System, system_id=system_id)
         result = self.update_system(system, validated_request_data)
-        system = result["system"]
-        need_update_join_data = result["need_update_join_data"]
+        system, need_update_join_data = result["system"], result["need_update_join_data"]
         if need_update_join_data:
-            self.update_join_data(system)
+            system.update_join_data()
         return system
 
 
@@ -923,142 +949,48 @@ class DeleteResourceType(Meta, Resource):
         pass
 
 
-class CreateAction(Meta, SystemAuditMixinResource, SystemEditValidatorBase):
+class CreateAction(Meta, SystemAuditMixinResource):
     name = gettext_lazy("创建操作")
     RequestSerializer = ActionCreateSerializer
     ResponseSerializer = ActionSerializer
     audit_action = ActionEnum.EDIT_SYSTEM
 
-    @transaction.atomic
-    def create_audit_action(self, system: System, validated_request_data: dict) -> Action:
-        """
-        创建审计操作
-        """
-
-        resource_type_ids = validated_request_data.pop("resource_type_ids", [])
-        if resource_type_ids:
-            resource_type_ids = ResourceType.objects.filter(
-                system_id=system.system_id, resource_type_id__in=resource_type_ids
-            ).values_list("resource_type_id", flat=True)
+    def perform_request(self, validated_request_data):
+        system_id = validated_request_data["system_id"]
         action_id = validated_request_data["action_id"]
         action, is_created = Action.objects.get_or_create(
-            system_id=system.system_id, action_id=action_id, defaults=validated_request_data
+            unique_id=validated_request_data["unique_id"], defaults=validated_request_data
         )
         if not is_created:
-            raise ActionHasExist(action_id=action_id)
-        if resource_type_ids:
-            action.set_resource_type_ids(resource_type_ids)
+            raise ActionHasExist(system_id=system_id, action_id=action_id)
         return action
 
-    def perform_request(self, validated_request_data):
-        system_id = validated_request_data["system_id"]
-        system: System = self._validate_system_edit(system_id)
-        return self.create_audit_action(system, validated_request_data)
 
-
-class UpdateAction(Meta, SystemAuditMixinResource, ModelResource, SystemEditValidatorBase):
+class UpdateAction(Meta, ModelResource, SystemAuditMixinResource):
     name = gettext_lazy("更新操作")
+    model = Action
+    action = "update"
+    lookup_field = "unique_id"
+    audit_action = ActionEnum.EDIT_SYSTEM
+    serializer_class = ActionUpdateSerializer
     RequestSerializer = ActionUpdateSerializer
-    ResponseSerializer = ActionSerializer
-    audit_action = ActionEnum.EDIT_SYSTEM
-
-    @transaction.atomic
-    def update_system_action(self, system: System, action: Action, validated_request_data: dict) -> Action:
-        resource_type_ids = validated_request_data.pop("resource_type_ids", None)
-        if resource_type_ids is not None:
-            resource_type_ids = ResourceType.objects.filter(
-                system_id=system.system_id, resource_type_id__in=resource_type_ids
-            ).values_list("resource_type_id", flat=True)
-        for key, value in validated_request_data.items():
-            setattr(action, key, value)
-            action.save(update_fields=validated_request_data.keys())
-        if resource_type_ids is not None:
-            action.set_resource_type_ids(resource_type_ids)
-        return action
-
-    def perform_request(self, validated_request_data):
-        unique_id = validated_request_data["unique_id"]
-        action: Action = get_object_or_404(Action, unique_id=unique_id)
-        system = self._validate_system_edit(action.system_id)
-        return self.update_system_action(system, action, validated_request_data)
 
 
-class BulkCreateAction(Meta, SystemAuditMixinResource, SystemEditValidatorBase):
-    name = gettext_lazy("批量创建操作")
-    RequestSerializer = BulkActionCreateSerializer
-    ResponseSerializer = ActionSerializer
-    many_response_data = True
-    audit_action = ActionEnum.EDIT_SYSTEM
-
-    @transaction.atomic
-    def perform_request(self, validated_request_data):
-        system_id = validated_request_data["system_id"]
-        self._validate_system_edit(system_id)
-        actions = validated_request_data["actions"]
-
-        # 步骤1: 批量创建操作对象
-        action_instances = []
-
-        # 预查询已存在的操作避免冲突
-        existing_action_ids = Action.objects.filter(
-            system_id=system_id, action_id__in=[a["action_id"] for a in actions]
-        ).values_list("action_id", flat=True)
-        existing_actions = set(existing_action_ids)
-
-        # 准备批量创建数据
-        for action_data in actions:
-            action_id = action_data["action_id"]
-
-            # 跳过已存在的操作
-            if action_id in existing_actions:
-                continue
-
-            action_instances.append(
-                Action(
-                    unique_id=Action.gen_unique_id(system_id, action_id),
-                    **{k: v for k, v in action_data.items() if k != "resource_type_ids"},
-                )
-            )
-
-        # 批量创建操作
-        created_actions = Action.objects.bulk_create(action_instances)
-
-        # 步骤2: 批量设置资源类型关系
-        relations_to_set = []
-        action_id_to_instance = {action.action_id: action for action in created_actions}
-
-        for action_data in actions:
-            if action_data["action_id"] not in action_id_to_instance:
-                continue
-
-            resource_type_ids = action_data.get("resource_type_ids", [])
-            if resource_type_ids:
-                relations_to_set.append(
-                    {
-                        "system_id": system_id,
-                        "action_id": action_data["action_id"],
-                        "resource_type_ids": resource_type_ids,
-                    }
-                )
-
-        # 批量设置资源类型关系
-        if relations_to_set:
-            Action.bulk_set_resource_types(relations_to_set)
-
-        return Action.objects.filter(system_id=system_id)
-
-
-class DeleteAction(Meta, SystemAuditMixinResource, SystemEditValidatorBase):
+class DeleteAction(Meta, ModelResource, SystemAuditMixinResource):
     name = gettext_lazy("删除操作")
     audit_action = ActionEnum.EDIT_SYSTEM
+    model = Action
+    action = "destroy"
+    lookup_field = "unique_id"
+
+
+class BulkCreateAction(Meta, ModelResource, SystemAuditMixinResource):
+    name = gettext_lazy("批量创建操作")
+    RequestSerializer = BulkActionCreateSerializer
+    audit_action = ActionEnum.EDIT_SYSTEM
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
-        unique_id = validated_request_data["unique_id"]
-        action: Action = get_object_or_404(Action, unique_id=unique_id)
-        self._validate_system_edit(system_id=action.system_id)
-
-        # 1. 删除操作资源类型关联
-        ResourceTypeActionRelation.objects.filter(system_id=action.system_id, action_id=action.action_id).delete()
-        # 2: 删除操作对象
-        Action.objects.filter(system_id=action.system_id, action_id=action.action_id).delete()
+        actions = validated_request_data["actions"]
+        for action in actions:
+            resource.meta.create_action(action)

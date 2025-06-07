@@ -66,20 +66,14 @@ class AnyOfPermissions(permissions.BasePermission):
         permission = AnyOfPermissions()
     """
 
-    def __init__(self, *permissions: permissions.BasePermission):
-        self.permissions = permissions
+    def __init__(self, *ops: permissions.BasePermission):
+        self.ops = ops
 
     def has_permission(self, request, view):
-        for permission in self.permissions:
-            if permission.has_permission(request, view):
-                return True
-        return False
+        return any(op.has_permission(request, view) for op in self.ops)
 
     def has_object_permission(self, request, view, obj):
-        for permission in self.permissions:
-            if permission.has_object_permission(request, view, obj):
-                return True
-        return False
+        return any(op.has_permission(request, view) and op.has_object_permission(request, view, obj) for op in self.ops)
 
 
 class InstancePermission(permissions.BasePermission):

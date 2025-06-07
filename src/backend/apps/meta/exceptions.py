@@ -56,10 +56,10 @@ class SystemDiagnosisPushTemplateEmpty(MetaException):
 class SystemHasExist(MetaException):
     ERROR_CODE = "006"
     STATUS_CODE = 400
-    MESSAGE = gettext_lazy("系统已存在: {source_type}_{instance_id}")
+    MESSAGE = gettext_lazy("系统已存在: {system_id}")
 
-    def __init__(self, source_type: str, instance_id: str, *args, **kwargs):
-        self.MESSAGE = self.MESSAGE.format(source_type=source_type, instance_id=instance_id)
+    def __init__(self, system_id: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(system_id=system_id)
         super().__init__(*args, **kwargs)
 
 
@@ -76,8 +76,8 @@ class SystemNotEditable(MetaException):
 class ActionHasExist(MetaException):
     ERROR_CODE = "008"
     STATUS_CODE = 400
-    MESSAGE = gettext_lazy("Action已存在: {action_id}")
+    MESSAGE = gettext_lazy("当前系统 {system_id} 下 操作已存在: {action_id}")
 
-    def __init__(self, action_id: str, *args, **kwargs):
-        self.MESSAGE = self.MESSAGE.format(action_id=action_id)
+    def __init__(self, system_id: str, action_id: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(system_id=system_id, action_id=action_id)
         super().__init__(*args, **kwargs)

@@ -151,6 +151,11 @@ class SystemModelManager(OperateRecordModelManager):
 
         return queryset
 
+    def create_audit_system(self, validated_data: Dict) -> "System":
+        """
+        创建审计系统
+        """
+
 
 class System(OperateRecordModel):
     """
@@ -209,6 +214,18 @@ class System(OperateRecordModel):
             return instance_id
         return f"{source_type}_{instance_id}"
 
+    def update_join_data(self):
+        """
+        更新系统关联数据(异步)
+        """
+
+        try:
+            from services.web.databus.tasks import refresh_system_snapshots
+        except ImportError:
+            return
+
+        refresh_system_snapshots.delay(system_id=self.system_id)
+
     @cached_property
     def managers_list(self) -> List[str]:
         """
@@ -236,7 +253,8 @@ class System(OperateRecordModel):
         return FetchInstancePermission.build_auth(settings.FETCH_INSTANCE_USERNAME, self.auth_token)
 
     def save(self, *args, **kwargs):
-        self.system_id = self.build_system_id(self.source_type, self.instance_id)
+        if not self.system_id:
+            self.system_id = self.build_system_id(self.source_type, self.instance_id)
         super().save(*args, **kwargs)
 
     @classmethod
@@ -250,9 +268,21 @@ class System(OperateRecordModel):
         Action.objects.filter(system_id__in=system_ids).delete()
         SystemRole.objects.filter(system_id__in=system_ids).delete()
         SystemDiagnosisConfig.objects.filter(system_id__in=system_ids).delete()
-        ResourceTypeActionRelation.objects.filter(system_id__in=system_ids).delete()
         SystemFavorite.objects.filter(system_id__in=system_ids).delete()
         System.objects.filter(system_id__in=system_ids).delete()
+
+    @transaction.atomic
+    def delete(self, *args, **kwargs):
+        """
+        删除系统及其资源
+        """
+
+        ResourceType.objects.filter(system_id=self.system_id).delete()
+        Action.objects.filter(system_id=self.system_id).delete()
+        SystemRole.objects.filter(system_id=self.system_id).delete()
+        SystemDiagnosisConfig.objects.filter(system_id=self.system_id).delete()
+        SystemFavorite.objects.filter(system_id=self.system_id).delete()
+        return super().delete(*args, **kwargs)
 
     @classmethod
     def bulk_update_system_audit_status(cls, system_ids: List[str] = None):
@@ -386,6 +416,17 @@ class ResourceType(OperateRecordModel):
             system = System.objects.filter(system_id=self.system_id).first()
         return system.callback_url.rstrip("/") + "/" + self.path.lstrip("/")
 
+    @transaction.atomic
+    def delete(self, *args, **kwargs):
+        """
+        删除资源类型
+        """
+
+        ResourceTypeActionRelation.objects.filter(
+            system_id=self.system_id, resource_type_id=self.resource_type_id
+        ).delete()
+        return super().delete(*args, **kwargs)
+
 
 class Action(OperateRecordModel):
     """
@@ -423,6 +464,7 @@ class Action(OperateRecordModel):
 
         return f"{system_id}{SYSTEM_INSTANCE_SEPARATOR}{action_id}"
 
+    @transaction.atomic
     def save(self, *args, **kwargs):
         """
         保存操作时，生成唯一的操作ID
@@ -430,12 +472,21 @@ class Action(OperateRecordModel):
 
         if not self.unique_id:
             self.unique_id = self.gen_unique_id(self.system_id, self.action_id)
-        super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
+
+    @transaction.atomic
+    def delete(self, *args, **kwargs):
+        """
+        删除操作时，删除关联的资源类型ID
+        """
+
+        ResourceTypeActionRelation.objects.filter(system_id=self.system_id, action_id=self.action_id).delete()
+        return super().delete(*args, **kwargs)
 
     @classmethod
     def get_resource_type_id_map(cls, system_id: str) -> Dict[str, List[str]]:
         """
-        预加载资源类型ID的查询集方法
+        获取资源类型ID到资源类型ID列表的映射
         """
 
         # 获取所有操作的关联资源类型
@@ -450,7 +501,7 @@ class Action(OperateRecordModel):
 
         return action_to_resources
 
-    @cached_property
+    @property
     def resource_type_ids(self) -> List[str]:
         """
         从 ResourceTypeActionRelation 获取该操作的关联资源类型ID
@@ -460,6 +511,14 @@ class Action(OperateRecordModel):
             relation.resource_type_id
             for relation in ResourceTypeActionRelation.objects.filter(action_id=self.action_id)
         ]
+
+    @resource_type_ids.setter
+    def resource_type_ids(self, value: List[str]):
+        """
+        设置该操作的关联资源类型ID
+        """
+
+        self.set_resource_type_ids(value)
 
     @classmethod
     def bulk_set_resource_types(cls, action_relations: List[dict]):
@@ -525,6 +584,10 @@ class Action(OperateRecordModel):
         """
         设置操作关联的资源类型ID
         """
+
+        resource_type_ids = ResourceType.objects.filter(
+            system_id=self.system_id, resource_type_id__in=resource_type_ids
+        ).values_list("resource_type_id", flat=True)
 
         self.bulk_set_resource_types(
             [{"system_id": self.system_id, "action_id": self.action_id, "resource_type_ids": resource_type_ids}]
