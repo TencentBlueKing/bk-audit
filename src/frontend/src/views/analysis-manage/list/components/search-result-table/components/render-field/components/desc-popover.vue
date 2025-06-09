@@ -113,7 +113,7 @@
         color: #63656e;
         word-break: break-all;
 
-        .max-line-clamp{
+        .max-line-clamp {
           display: -webkit-box;
           overflow: hidden;
           -webkit-box-orient: vertical;
@@ -123,7 +123,7 @@
         .copy-btn {
           position: absolute;
           right: 12px;
-          bottom:5px;
+          bottom: 5px;
           cursor: pointer;
 
           &:hover {

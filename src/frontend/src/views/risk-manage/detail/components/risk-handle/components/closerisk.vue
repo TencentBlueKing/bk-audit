@@ -35,12 +35,12 @@
   // const { t } = useI18n();
 </script>
 <style scoped>
-.reopen-mis-report-wrap{
+.reopen-mis-report-wrap {
   padding: 10px 16px;
   font-size: 12px;
-  color: #63656E;
-  background: #FFF;
-  border: 1px solid #EAEBF0;
+  color: #63656e;
+  background: #fff;
+  border: 1px solid #eaebf0;
   border-radius: 6px;
   box-shadow: 0 2px 6px 0 #0000000a;
 }

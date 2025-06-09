@@ -28,7 +28,7 @@
       style="text-align: center;">
       <p class="logo">
         <audit-icon
-          style="font-size: 18px;color: #3FC06D;"
+          style="font-size: 18px;color: #3fc06d;"
           type="check-line" />
       </p>
       <p class="title">
@@ -37,7 +37,7 @@
       <p>
         {{ t('规则新建后默认') }}<span style="font-weight: bold;">{{ t('不启用') }}</span>,
         {{ t('可在调整') }}
-        <span style="font-weight: bold;border-bottom: 1px dashed #63656E">
+        <span style="font-weight: bold;border-bottom: 1px dashed #63656e">
           {{ t('优先级') }}
         </span>
         {{ t('后手动启用') }}
@@ -99,31 +99,31 @@
   });
 </script>
 <style scoped lang="postcss">
-.batch-dialog-wrap :deep(.bk-modal-content){
+.batch-dialog-wrap :deep(.bk-modal-content) {
   overflow: visible !important;
 }
 
-.batch-prioriry-dialog{
+.batch-prioriry-dialog {
   margin-top: -24px;
 
-  .logo{
+  .logo {
     display: flex;
     width: 42px;
     height: 42px;
     margin: 0 auto;
-    background: #E5F6EA;
+    background: #e5f6ea;
     border-radius: 50%;
     align-items: center;
     justify-content: center;
   }
 
-  .title{
+  .title {
     margin: 15px 0 10px;
     font-size: 20px;
     color: #313238;
   }
 
-  .btns{
+  .btns {
     display: flex;
     width: 100%;
     margin-top: 24px;
