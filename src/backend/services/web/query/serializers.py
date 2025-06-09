@@ -30,6 +30,7 @@ from api.bk_log.serializers import EsQueryFilterSerializer
 from apps.meta.permissions import SearchLogPermission
 from apps.meta.utils.fields import (
     ACCESS_TYPE,
+    ES_SEARCH_ORIGIN_FIELDS,
     RESULT_CODE,
     SYSTEM_ID,
     get_field_choices,
