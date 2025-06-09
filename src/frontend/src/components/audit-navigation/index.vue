@@ -71,6 +71,11 @@
         'show-notice-navigation-main': showNotice.enabled
       }"
       :style="mainStyles">
+      <div
+        id="headerTips"
+        ref="headerTipsRef">
+        <slot name="headerTips" />
+      </div>
       <div class="page-title">
         <slot name="header" />
       </div>
@@ -155,14 +160,21 @@
   // const bodyHeaderStyles = computed(() => ({
   //   left: `${realSideWidth.value}px`,
   // }));
+  // 在 script setup 部分添加
+  const headerTipsRef = ref<HTMLElement | null>(null);
+
 
   const scrollStyles = computed(() => {
+    const headerTipsElement = document.getElementById('headerTips');
+    const headerTipsHeight = headerTipsElement ? headerTipsElement.offsetHeight : 0;
+
     const contentHeaderHeight = showNotice.value.enabled && showAlert.value ? 144 : 104;
     return {
       width: `calc(100vw - ${realSideWidth.value}px)`,
-      height: `calc(100vh - ${contentHeaderHeight}px)`,
+      height: `calc(100vh - ${contentHeaderHeight + headerTipsHeight}px)`,
     };
   });
+
 
   const contentStyles = computed(() => ({
     width: `${pageWidth.value - realSideWidth.value}px`,
@@ -229,6 +241,10 @@
     init();
     emit('menu-flod', !isSideMenuFixed.value);
     window.addEventListener('resize', resizeHandler);
+    if (headerTipsRef.value) {
+      const height = headerTipsRef.value.offsetHeight;
+      console.log('headerTips 高度:', height);
+    }
   });
   onBeforeUnmount(() => {
     window.removeEventListener('resize', resizeHandler);
