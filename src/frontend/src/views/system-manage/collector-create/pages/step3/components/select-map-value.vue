@@ -219,7 +219,7 @@
     overflow: hidden;
     cursor: pointer;
     border: 1px solid transparent;
-    transition: all 0.15s;
+    transition: all .15s;
     align-items: center;
 
     &:hover {
@@ -271,7 +271,7 @@
       position: absolute;
       right: 8px;
       font-size: 12px;
-      transition: all 0.15s;
+      transition: all .15s;
     }
 
     .remove-btn {
@@ -280,7 +280,7 @@
       z-index: 1;
       font-size: 12px;
       color: #c4c6cc;
-      transition: all 0.15s;
+      transition: all .15s;
 
       &:hover {
         color: #979ba5;
@@ -295,7 +295,7 @@
     }
   }
 
-  .tippy-box[data-theme~="alternative-field-pop-menu"] {
+  .tippy-box[data-theme~='alternative-field-pop-menu'] {
     .tippy-content {
       padding: 10px 0;
       font-size: 12px;

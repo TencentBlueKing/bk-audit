@@ -124,7 +124,7 @@
           width: 100%;
           height: 3px;
           background: #fff;
-          content: "";
+          content: '';
         }
       }
 
