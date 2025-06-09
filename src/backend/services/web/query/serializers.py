@@ -30,6 +30,7 @@ from api.bk_log.serializers import EsQueryFilterSerializer
 from apps.meta.permissions import SearchLogPermission
 from apps.meta.utils.fields import (
     ACCESS_TYPE,
+    ES_SEARCH_ORIGIN_FIELDS,
     RESULT_CODE,
     SYSTEM_ID,
     get_field_choices,
@@ -171,8 +172,8 @@ class EsQuerySearchAttrSerializer(serializers.Serializer):
         validated_data = super().to_internal_value(data)
         validated_data["filter"] = []
         for key, val in data.items():
-            # 屏蔽内置字段
-            if key in self.fields.fields.keys():
+            # 屏蔽内置字段 or 原始字段
+            if key in self.fields.fields.keys() or key in ES_SEARCH_ORIGIN_FIELDS:
                 continue
             # 提前解析
             items = {item for item in val.split(",") if item}
