@@ -382,6 +382,8 @@
   const isMenuFlod = ref(false);
   const curNavName = ref('');
   const titleRef = ref<string>('');
+
+
   const menuData = ref<Array<MenuDataType>>([]);
   const systemId = ref(null);
   // 项目列表
@@ -408,6 +410,8 @@
   });
 
   on('statement-menuData', (data) => {
+    console.log('audit-menu', data);
+
     menuData.value = data as Array<MenuDataType>;
     titleRef.value = menuData.value[0]?.name;
   });
@@ -599,4 +603,6 @@
     margin-left: 8px;  /* 添加左边距 */
   }
 }
+
+
 </style>
