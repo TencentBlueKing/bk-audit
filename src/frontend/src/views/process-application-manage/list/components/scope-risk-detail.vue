@@ -88,7 +88,7 @@
   });
 </script>
 <style scoped lang="postcss">
-.rule-table :deep(thead th){
-  background-color: #F5F7FA;
+.rule-table :deep(thead th) {
+  background-color: #f5f7fa;
 }
 </style>

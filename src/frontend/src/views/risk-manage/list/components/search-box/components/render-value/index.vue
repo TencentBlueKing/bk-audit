@@ -112,7 +112,7 @@
       cursor: pointer;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s;
+      transition: all .15s;
 
       &:hover {
         color: #dcdee5;

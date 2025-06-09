@@ -105,7 +105,7 @@
       width: 100%;
       height: 0;
       border-bottom: 3px dotted #63656e;
-      content: " ";
+      content: ' ';
     }
 
     .problem {

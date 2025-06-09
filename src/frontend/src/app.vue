@@ -92,6 +92,11 @@
           </template>
         </bk-dropdown>
       </template>
+      <template
+        v-if="route.meta?.nodeSideContent"
+        #nodeSideContent>
+        <router-view />
+      </template>
       <router-view />
       <version-log v-model:is-show="isShowVersionLog" />
     </layout>

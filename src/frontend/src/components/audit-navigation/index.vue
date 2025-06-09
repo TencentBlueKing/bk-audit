@@ -47,6 +47,12 @@
       </div>
       <slot name="sideAppendBefore" />
       <div
+        v-if="route.meta?.nodeSideContent"
+        class="none-side">
+        <slot name="nodeSideContent" />
+      </div>
+      <div
+        v-if="!route.meta?.nodeSideContent"
         class="audit-side-menu"
         :class="{
           'show-notice-side-menu': showNotice.enabled && showAlert
@@ -57,7 +63,9 @@
           <slot name="side" />
         </scroll-faker>
       </div>
-      <div class="audit-side-toggle-btn">
+      <div
+        v-if="!route.meta?.nodeSideContent"
+        class="audit-side-toggle-btn">
         <audit-icon
           class="fixed-flag"
           :class="{'is-open': isSideMenuFixed}"
@@ -107,6 +115,7 @@
     onMounted,
     ref,
   } from 'vue';
+  import { useRoute } from 'vue-router';
 
   import useEventBus from '@hooks/use-event-bus';
   import useFeature from '@hooks/use-feature';
@@ -119,7 +128,7 @@
   const emit = defineEmits<Emits>();
   const { emit: emits } = useEventBus();
   const { feature: showNotice } = useFeature('bknotice');
-
+  const route = useRoute();
   const apiUrl = `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/api/v1/bk-notice/announcements/`;
   const TOGGLE_CACHE = 'navigation_toggle_status';
   const PAGE_MIN_WIDTH = 1366;
@@ -166,7 +175,7 @@
 
   const scrollStyles = computed(() => {
     const headerTipsElement = document.getElementById('headerTips');
-    const headerTipsHeight = headerTipsElement ? headerTipsElement.offsetHeight : 0;
+    const headerTipsHeight = headerTipsElement ? headerTipsElement.offsetHeight : 32;
 
     const contentHeaderHeight = showNotice.value.enabled && showAlert.value ? 144 : 104;
     return {
@@ -241,10 +250,6 @@
     init();
     emit('menu-flod', !isSideMenuFixed.value);
     window.addEventListener('resize', resizeHandler);
-    if (headerTipsRef.value) {
-      const height = headerTipsRef.value.offsetHeight;
-      console.log('headerTips 高度:', height);
-    }
   });
   onBeforeUnmount(() => {
     window.removeEventListener('resize', resizeHandler);
@@ -409,5 +414,11 @@
 
 .show-notice-navigation-header {
   top: 40px !important;
+}
+
+.none-side {
+  width: 100vw;
+  height: 100%;
+  background: #fff;
 }
 </style>

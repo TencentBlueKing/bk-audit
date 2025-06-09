@@ -73,6 +73,9 @@
     <template #headerRight>
       <slot name="headerRight" />
     </template>
+    <template #nodeSideContent>
+      <slot name="nodeSideContent" />
+    </template>
     <template #side>
       <audit-menu
         :floded="isMenuFlod"

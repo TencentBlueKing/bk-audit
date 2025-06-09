@@ -170,7 +170,7 @@
 /* 离开和进入过程中的样式 */
 .v-enter-active,
 .v-leave-active {
-  transition: all 0.3s ease-out;
+  transition: all .3s ease-out;
 }
 
 </style>

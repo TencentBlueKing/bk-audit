@@ -61,7 +61,7 @@
     .arrow-flag {
       margin-right: 4px;
       transform: rotateZ(-90deg);
-      transition: all 0.15s;
+      transition: all .15s;
 
       &.is-show {
         transform: rotateZ(0);

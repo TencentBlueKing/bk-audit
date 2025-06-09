@@ -44,7 +44,7 @@
     background: #fff;
     border-radius: 2px;
     opacity: 100%;
-    transition: all 0.15s;
+    transition: all .15s;
     align-items: center;
 
     &:nth-child(n+2) {
@@ -82,7 +82,7 @@
       overflow: hidden;
       cursor: pointer;
       opacity: 0%;
-      transition: all 0.15s;
+      transition: all .15s;
       align-items: center;
       justify-content: center;
 

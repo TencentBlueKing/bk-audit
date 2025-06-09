@@ -140,14 +140,14 @@
 .log-collection-detail-box {
   margin-bottom: 24px;
 
-  .status-info-item{
-    .info-value{
+  .status-info-item {
+    .info-value {
       display: flex;
       align-items: center;
     }
   }
 
-  .mr4{
+  .mr4 {
     margin-right: 4px;
   }
 
