@@ -23,7 +23,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import cached_property
 from typing import List, Optional
-from apps.meta.utils.format import preprocess_data
+
 from bk_resource import CacheResource, api, resource
 from bk_resource.base import Empty
 from bk_resource.exceptions import APIRequestError
@@ -56,6 +56,7 @@ from apps.meta.utils.fields import (
     STRATEGY_DISPLAY_FIELDS,
     SYSTEM_ID,
 )
+from apps.meta.utils.format import preprocess_data
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.permission import Permission

@@ -30,8 +30,6 @@ from apps.meta.models import (
     SystemRole,
 )
 from core.testing import assert_dict_contains, assert_list_contains
-from core.utils.tools import ordered_dict_to_json, trans_object_local
-from apps.meta.models import CustomField, Field, ResourceType, System, SystemRole
 from core.utils.data import ordered_dict_to_json, trans_object_local
 from services.web.databus.models import Snapshot
 from tests.base import TestCase

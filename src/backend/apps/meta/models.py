@@ -47,7 +47,7 @@ from core.models import (
     SoftDeleteModel,
     SoftDeleteModelManager,
 )
-from core.utils.tools import generate_random_string
+from core.utils.data import generate_random_string
 
 
 class Unset:

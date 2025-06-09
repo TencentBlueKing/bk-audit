@@ -590,7 +590,8 @@ GLOBAL_CHOICES = {
         {'id': 'standard', 'name': '标准字段'},
         {'id': 'snapshot', 'name': '快照字段'},
         {'id': 'system', 'name': '系统字段'},
-        {'id': 'custom', 'name': '自定义字段'}],
+        {'id': 'custom', 'name': '自定义字段'},
+    ],
     "core_sql_field_type": [
         {'id': 'string', 'name': '字符串'},
         {'id': 'double', 'name': '双精度浮点数'},

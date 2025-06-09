@@ -43,7 +43,6 @@ from apps.meta.constants import (
     SystemStatusEnum,
 )
 from apps.meta.exceptions import TagNameInValid
-from apps.meta.models import SystemSourceTypeEnum
 from apps.meta.models import (
     Action,
     DataMap,
@@ -56,6 +55,7 @@ from apps.meta.models import (
     SensitiveObject,
     System,
     SystemRole,
+    SystemSourceTypeEnum,
     Tag,
 )
 from apps.meta.utils.format import format_resource_permission

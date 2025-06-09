@@ -27,7 +27,7 @@ def update_system_audit_status(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('meta', '0014_action_resource_type_ids_resourcetype_ancestors_and_more'),
+        ('meta', '0018_alter_field_property'),
     ]
 
     operations = [
