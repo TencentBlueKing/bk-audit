@@ -16,13 +16,13 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import Optional, TypedDict, Union
 from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from apps.meta.models import Field
+from services.web.risk.constants import EventMappingFields
 
 FIELD_TYPE_STRING = "string"
 FIELD_TYPE_OBJECT = "object"
@@ -82,7 +82,6 @@ class FieldProperty(TypedDict):
     sub_keys: list[SubKey]
 
 
-
 def get_field_map(fields: List[Field]) -> Dict[str, Field]:
     """
     获取字段映射关系
@@ -99,18 +98,6 @@ def get_field_choices(fields: List[Field]) -> List[Tuple[str, str]]:
     """
 
     return [(field.field_name, str(field.description)) for field in fields]
-
-
-class SubKey(TypedDict):
-    field_name: str
-    field_type: str
-    field_alias: str
-    property: Optional['FieldProperty']
-
-
-class FieldProperty(TypedDict):
-    dynamic_content: bool
-    sub_keys: list[SubKey]
 
 
 EVENT_ID = Field(
@@ -872,3 +859,8 @@ STRATEGY_DISPLAY_FIELDS = [
 ]
 
 DIMENSION_FIELD_TYPES = [FIELD_TYPE_STRING, FIELD_TYPE_INT, FIELD_TYPE_LONG, FIELD_TYPE_KEYWORD]
+
+# ES 搜索原始字段,其值不做处理
+ES_SEARCH_ORIGIN_FIELDS = [
+    EventMappingFields.RAW_EVENT_ID.field_name,
+]
