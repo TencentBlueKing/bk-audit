@@ -28,7 +28,7 @@
       </span>
     </template>
     <template #headerTips>
-      <system-header-tips />
+      <system-header-tips v-if="route.meta?.headerTips === 'systemInfo'" />
     </template>
     <template #header>
       <slot name="header" />
