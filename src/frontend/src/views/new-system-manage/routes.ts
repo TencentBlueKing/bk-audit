@@ -36,6 +36,7 @@ export default {
   meta: {
     navName: 'nweSystemManage',
     sideMenus,
+    headerTips: 'systemInfo',
   },
   children: [
     {
@@ -45,6 +46,7 @@ export default {
       meta: {
         title: '系统信息',
         skeleton: 'system-info',
+        headerTips: 'systemInfo',
       },
     },
     {
@@ -52,8 +54,9 @@ export default {
       component: () => import('@views/new-system-manage/system-diagnose/index.vue'),
       name: 'systemDiagnose',
       meta: {
-        title: '系统信息',
+        title: '系统诊断',
         skeleton: 'system-diagnose',
+        headerTips: 'systemDiagnose',
       },
     },
 
