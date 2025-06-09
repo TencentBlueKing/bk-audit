@@ -375,3 +375,8 @@ EVENT_BASIC_MAP_FIELDS = [
     EventMappingFields.EVENT_SOURCE,
     EventMappingFields.OPERATOR,
 ]
+
+# ES 搜索原始字段,其值不做处理
+ES_SEARCH_ORIGIN_FIELDS = [
+    EventMappingFields.RAW_EVENT_ID.field_name,
+]
