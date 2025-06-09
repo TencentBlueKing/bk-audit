@@ -30,7 +30,6 @@ from api.bk_log.serializers import EsQueryFilterSerializer
 from apps.meta.permissions import SearchLogPermission
 from apps.meta.utils.fields import (
     ACCESS_TYPE,
-    ES_SEARCH_ORIGIN_FIELDS,
     RESULT_CODE,
     SYSTEM_ID,
     get_field_choices,
@@ -66,6 +65,7 @@ from services.web.query.constants import (
 from services.web.query.models import LogExportTask
 from services.web.query.utils.field import LOG_SEARCH_ALL_FIELDS
 from services.web.query.utils.search_config import QueryConditionOperator
+from services.web.risk.constants import ES_SEARCH_ORIGIN_FIELDS
 
 
 class EsQueryAttrSerializer(serializers.Serializer):
