@@ -27,6 +27,9 @@
         {{ platformConfig.i18n.productName }}
       </span>
     </template>
+    <template #headerTips>
+      <system-header-tips v-if="route.meta?.headerTips === 'systemInfo'" />
+    </template>
     <template #header>
       <slot name="header" />
     </template>
@@ -56,6 +59,14 @@
           }"
           :to="{ name:'analysisManage', query: {} }">
           {{ t('审计配置') }}
+        </router-link>
+        <router-link
+          class="main-navigation-nav "
+          :class="{
+            active: curNavName === 'nweSystemManage'
+          }"
+          :to="{ name:'nweSystemManage', query: {} }">
+          {{ t('系统管理') }}
         </router-link>
       </div>
     </template>
@@ -192,6 +203,34 @@
             {{ item.name }}
           </audit-menu-item>
         </template>
+        <template v-else>
+          <div class="project-select">
+            <bk-select
+              v-model="projectId"
+              auto-focus
+              class="bk-select"
+              filterable>
+              <bk-option
+                v-for="(item, index) in projectList"
+                :id="item.value"
+                :key="index"
+                :disabled="item.disabled"
+                :name="item.label" />
+            </bk-select>
+          </div>
+          <template v-if="route.meta?.sideMenus">
+            <audit-menu-item
+              v-for="item in route.meta?.sideMenus as unknown as SideMenuItem[]"
+              :key="item?.pathName"
+              class="mt8"
+              :index="item?.pathName">
+              <audit-icon
+                class="menu-item-icon"
+                :type="item?.icon" />
+              {{ t(item?.title) }}
+            </audit-menu-item>
+          </template>
+        </template>
       </audit-menu>
     </template>
     <template #contentHeader>
@@ -209,6 +248,12 @@
     type Ref,
     ref,
     watch  } from 'vue';
+
+  interface SideMenuItem {
+    pathName: string;
+    icon: string;
+    title: string;
+  }
   import { useI18n } from 'vue-i18n';
   import {
     useRoute,
@@ -225,6 +270,8 @@
   import AuditMenuItem from '@components/audit-menu/item.vue';
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
+
+  import systemHeaderTips from '@views/new-system-manage/system-info/components/header-tips.vue';
 
   interface Exposes {
     titleRef: Ref<string>
@@ -246,14 +293,34 @@
   const handleSideMenuFlodChange = (value: boolean) => {
     isMenuFlod.value = !value;
   };
+  const projectId = ref(123);
+  // 项目列表
+  const projectList = ref([
+    {
+      value: 123,
+      label: '英雄联盟',
+      id: '111',
+      disabled: false,
+    },
+    {
+      value: 1,
+      label: 'DNF',
+      id: '122',
+      disabled: true,
+    },
+  ]);
 
   const platformConfig = usePlatformConfig();
 
   // 是否展示审计报表导航
   const { feature: hasBkvision } = useFeature('bkvision');
   const titleRef = ref<string>('');
+
+
   const menuData = ref<Array<MenuDataType>>([]);
   on('statement-menuData', (data) => {
+    console.log('audit-menu', data);
+
     menuData.value = data as Array<MenuDataType>;
     titleRef.value = menuData.value[0]?.name;
   });
@@ -309,5 +376,12 @@
     }
   }
 
+  .project-select {
+    width: 90%;
+    margin-top: 10px;
+    margin-left: 5%;
+  }
 }
+
+
 </style>

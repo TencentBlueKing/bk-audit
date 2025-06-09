@@ -27,6 +27,7 @@ import AnalysisManage from '@views/analysis-manage/routes';
 import EventManage from '@views/event-manage/routes';
 import HandleManage from '@views/handle-manage/routes';
 import LinkDataManage from '@views/link-data-manage/routes';
+import NewSystemManage from '@views/new-system-manage/routes';
 import NoticeGroup from '@views/notice-group/routes';
 import ApplicationManage from '@views/process-application-manage/routes';
 import RiskManage from '@views/risk-manage/routes';
@@ -60,6 +61,7 @@ export default (config: ConfigModel) => {
         ApplicationManage,
         RuleManage,
         StatementManage,
+        NewSystemManage,
       ],
     },
     {
