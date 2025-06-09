@@ -43,7 +43,7 @@
       border: 1px solid #eaebf0;
       border-bottom: none;
       border-left: none;
-      content: "";
+      content: '';
       transform: rotateZ(-45deg);
     }
   }

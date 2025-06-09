@@ -187,7 +187,7 @@
       }
     }
 
-    .field-type-row{
+    .field-type-row {
       flex: 1 1 80px;
       padding-left: 16px;
     }

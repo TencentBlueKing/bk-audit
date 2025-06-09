@@ -137,7 +137,7 @@
         border: 2px solid #3a84ff;
         border-top: 0;
         border-left: 0;
-        content: "";
+        content: '';
         transform: rotate(45deg) scaleY(1);
         transform-origin: center;
       }
