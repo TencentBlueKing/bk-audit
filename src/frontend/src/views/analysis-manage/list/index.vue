@@ -22,7 +22,6 @@
     <div class="analysis-manage-page">
       <search-box
         ref="searchBoxRef"
-        :is-doris="isDoris"
         @change="handleSearchChange" />
       <div class="search-result-action">
         <!-- <BkButton>导出</BkButton> -->
@@ -37,7 +36,8 @@
         :data-source="dataSource"
         :filter="searchModel"
         :is-doris="isDoris"
-        @clear-search="handleClearSearch" />
+        @clear-search="handleClearSearch"
+        @update-total="handleUpdateTotal" />
       <div style="height: 52px; margin-top: 24px;">
         <search-page-footer />
       </div>
@@ -47,6 +47,7 @@
 <script setup lang="ts">
   import {
     computed,
+    provide,
     ref,
     watch,
   } from 'vue';
@@ -76,13 +77,11 @@
   const searchModel = ref<Record<string, any>>({});
   const searchResultCom = computed(() => comMap[renderType.value]);
   const isLoading = computed(() => (resultRef.value ? resultRef.value.loading : true));
+  const tableSearchModel = computed(() => (resultRef.value ? resultRef.value.tableSearchModel : {}));
 
-  watch(() => isDoris.value, (data) => {
-    if (data.enabled) {
-      dataSource.value = EsQueryService.fetchCollectorSearchList;
-    }
-    isInit.value = true;
-  });
+  const total = ref<number>(0);
+  provide('total', total);
+  provide('tableSearchModel', tableSearchModel);
 
   // 搜索
   const handleSearchChange = (value: Record<string, any>) => {
@@ -92,6 +91,19 @@
   const handleClearSearch = () => {
     searchBoxRef.value.clearValue();
   };
+  // 获取表格数据
+  const handleUpdateTotal = (totalNumber: unknown) => {
+    if (typeof totalNumber === 'number') {
+      total.value = totalNumber;
+    }
+  };
+
+  watch(() => isDoris.value, (data) => {
+    if (data.enabled) {
+      dataSource.value = EsQueryService.fetchCollectorSearchList;
+    }
+    isInit.value = true;
+  });
 </script>
 <style lang="postcss">
   .analysis-manage-page {

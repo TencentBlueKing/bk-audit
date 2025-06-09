@@ -28,6 +28,12 @@ export default class StandardField {
   is_time: boolean;
   option: Record<string, any>;
   priority_index: number;
+  property: {
+    dynamic_content: boolean;
+    sub_keys: Record<string, any>[];
+  };
+  allow_operators: string[];
+  category: string;
 
   constructor(payload = {} as StandardField) {
     this.alias_name = payload.alias_name;
@@ -43,5 +49,11 @@ export default class StandardField {
     this.is_time = payload.is_time;
     this.option = payload.option || {};
     this.priority_index = payload.priority_index;
+    this.property = payload.property || {
+      dynamic_content: false,
+      sub_keys: [],
+    };
+    this.allow_operators = payload.allow_operators || [];
+    this.category = payload.category;
   }
 }

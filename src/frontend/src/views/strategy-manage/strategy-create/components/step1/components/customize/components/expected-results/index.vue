@@ -121,6 +121,7 @@
   const handleEdit = (element: DatabaseTableFieldModel, index: number) => {
     isEdit.value = true;
     editItem.value = element;
+    addFieldsRef.value.handleEditNode(element);
     addFieldsRef.value.handleEditShowPop(index);
   };
 

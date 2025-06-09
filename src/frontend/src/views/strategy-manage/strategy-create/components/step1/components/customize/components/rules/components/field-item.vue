@@ -35,44 +35,13 @@
       label-width="0"
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.field.display_name`"
       required>
-      <bk-select
-        v-model="condition.condition.field.display_name"
-        filterable
-        :placeholder="t('请选择字段')"
-        style="flex: 1;"
-        @change="(value: DatabaseTableFieldModel) => handleSelectField(value ,index)">
-        <template
-          v-if="configType === 'LinkTable' && condition.condition.field.table"
-          #prefix>
-          <span
-            style="
-              padding: 0 12px;
-              line-height: 32px;
-              color: #3a84ff;
-              background: #f0f1f5">
-            {{ condition.condition.field.table }}.
-          </span>
-        </template>
-        <bk-option
-          v-for="(item, tableIndex) in localTableFields"
-          :key="tableIndex"
-          :label="configType === 'LinkTable' ?
-            `${getAggregateName(item)}${item.table}.${item.display_name}` :
-            `${getAggregateName(item)}${item.display_name}`"
-          :value="item">
-          <audit-icon
-            style="margin-right: 4px;font-size: 14px;"
-            svg
-            :type="item.spec_field_type" />
-          <div v-if="configType === 'LinkTable'">
-            <span style=" color: #3a84ff;">{{ item.table }}.</span>
-            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
-          </div>
-          <div v-else>
-            <span>{{ getAggregateName(item) }}{{ item.display_name }}</span>
-          </div>
-        </bk-option>
-      </bk-select>
+      <node-select
+        :aggregate-list="aggregateList"
+        :condition="condition"
+        :conditions="conditions"
+        :config-data="localTableFields"
+        :config-type="configType"
+        @handle-node-selected-value="(node ,val) => onHandleNodeSelectedValue(node ,val, condition)" />
     </bk-form-item>
     <!-- 连接条件 -->
     <bk-form-item
@@ -82,11 +51,6 @@
       :property="`configs.where.conditions[${conditionsIndex}].conditions[${index}].condition.operator`"
       required>
       <!-- 操作人账号特殊处理 -->
-      <!-- <bk-input
-        v-if="condition.field.raw_name ==='user_identify_src_username'"
-        v-model="condition.field.aggregate"
-        class="condition-equation"
-        :placeholder="t('请输入')" /> -->
       <bk-select
         v-model="condition.condition.operator"
         filterable
@@ -203,7 +167,10 @@
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
+  import nodeSelect from './tree.vue';
+
   import useRequest from '@/hooks/use-request';
+
 
   interface Props {
     tableFields: Array<DatabaseTableFieldModel>,
@@ -229,6 +196,7 @@
     (e: 'updateFieldItem', value: DatabaseTableFieldModel | string | Array<string>, conditionsIndex: number, childConditionsIndex: number, type: 'field' | 'operator' | 'filter'): void;
     (e: 'updateConnector', value: 'and' | 'or', conditionsIndex: number): void;
     (e: 'show-structure-preview', rtId: string | Array<string>, currentViewField: string): void;
+    (e: 'handleUpdateLocalConditions', value: any): void;
   }
   interface DataType{
     label: string;
@@ -285,12 +253,6 @@
     defaultValue: [],
   });
 
-  const getAggregateName = (element: DatabaseTableFieldModel) => {
-    if (!element.aggregate) return '';
-    const item = props.aggregateList.find(item => item.value === element.aggregate);
-    return `[${item?.label}]`;
-  };
-
   const handleValidate = (value: any) => value.length > 0;
 
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
@@ -315,13 +277,6 @@
     emits('updateFieldItemList', props.conditionsIndex, localConditions.value);
   };
 
-  const reSetOperator = (index: number) => {
-    if (localConditions.value.conditions[index].condition.operator !== '') {
-      localConditions.value.conditions[index].condition.operator = '';
-      handleSelectOperator('', index);
-    }
-  };
-
   const reSetFilter = (index: number) => {
     if (localConditions.value.conditions[index].condition.filter !== '') {
       localConditions.value.conditions[index].condition.filter = '';
@@ -333,41 +288,6 @@
     }
   };
 
-  const handleSelectField = (value: DatabaseTableFieldModel, index: number) => {
-    if (value) {
-      // 获取值的下拉选项
-      fetchStrategyFieldValue({
-        field_name: value.raw_name,
-      }).then((data) => {
-        dicts.value[value.raw_name] = data.filter((item: Record<string, any>) => item.id !== '');
-      });
-      // 是否选中预期结果字段
-      const isExpectedResultField = value.aggregate;
-
-      if (isExpectedResultField) {
-        // 清空不是预期结果的字段
-        localConditions.value.conditions = localConditions.value.conditions.map((condItem, condIndex) => {
-          const { field } = condItem.condition;
-          if (!field.aggregate) {
-            // eslint-disable-next-line no-param-reassign
-            condItem.condition.field = new DatabaseTableFieldModel();
-            emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, condIndex, 'field');
-            // 重置数据
-            reSetOperator(condIndex);
-            reSetFilter(condIndex);
-          }
-          return condItem;
-        });
-      }
-    }
-    emits('updateFieldItem', _.cloneDeep(value), props.conditionsIndex, index, 'field');
-    localConditions.value.conditions[index].condition.field = { ...value };
-    // 重置数据
-    reSetOperator(index);
-    reSetFilter(index);
-    // 重新计算可选项
-    updateTableFields(localConditions.value.conditions, props.tableFields, props.expectedResult);
-  };
 
   const handleSelectOperator = (value: string, index: number) => {
     emits('updateFieldItem', value, props.conditionsIndex, index, 'operator');
@@ -456,29 +376,28 @@
 
     localTableFields.value = localTableFields.value.map(item => ({ ...item }));
   };
-
+  // 返回值
+  const onHandleNodeSelectedValue = (node: Record<string, any>, val: string, condition: Record<string, any>) => {
+    // eslint-disable-next-line no-param-reassign
+    condition.condition.field = { ...node };
+    // eslint-disable-next-line no-param-reassign
+    condition.condition.field.display_name = val;
+    if ('fieldTypeValueAr' in node) {
+      // eslint-disable-next-line no-param-reassign
+      condition.condition.field.keys = node.fieldTypeValueAr;
+    }
+    emits('handleUpdateLocalConditions', localConditions.value);
+  };
   // 合并预期结果，预期结果也可以在风险规则中使用
   watch(() => [props.tableFields, props.expectedResult], ([tableFields, expectedResult]) => {
     updateTableFields(localConditions.value.conditions, tableFields, expectedResult);
-
-    // 检查并清理不在可选字段列表中的已选字段
-    localConditions.value.conditions.forEach((condItem, index) => {
-      const { field } = condItem.condition;
-      if (field?.display_name && !localTableFields.value.some(item => item.display_name === field.display_name)) {
-        // eslint-disable-next-line no-param-reassign
-        condItem.condition.field = new DatabaseTableFieldModel();
-        emits('updateFieldItem', new DatabaseTableFieldModel(), props.conditionsIndex, index, 'field');
-        reSetOperator(index);
-        reSetFilter(index);
-      }
-    });
   }, {
     immediate: true,
     deep: true,
   });
 
   watch(() => props.conditions, (data) => {
-    localConditions.value = _.cloneDeep(data);
+    localConditions.value = JSON.parse(JSON.stringify(data));
     if (props.configType === 'EventLog') {
       // 日志表特有，dict字典下拉
       handleValueDicts();
@@ -491,7 +410,7 @@
 .rule-item-field {
   position: relative;
   display: grid;
-  grid-template-columns: 216px 180px 1fr minmax(65px, auto);
+  grid-template-columns: 300px 180px 1fr minmax(65px, auto);
   gap: 8px;
 
   :deep(.bk-form-error) {
