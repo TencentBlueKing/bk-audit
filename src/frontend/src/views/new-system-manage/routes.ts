@@ -59,7 +59,28 @@ export default {
         headerTips: 'systemDiagnose',
       },
     },
-
+    {
+      path: 'system-access',
+      component: () => import('@views/new-system-manage/system-access/index.vue'),
+      name: 'systemAccess',
+      meta: {
+        title: '系统接入',
+        skeleton: 'system-access',
+        headerTips: 'systemAccess',
+        nodeSideContent: true,
+      },
+    },
+    {
+      path: 'system-access-steps',
+      component: () => import('@views/new-system-manage/system-access/steps/index.vue'),
+      name: 'systemAccessSteps',
+      meta: {
+        title: '系统接入步骤',
+        skeleton: 'system-access-steps',
+        headerTips: 'systemAccessSteps',
+        nodeSideContent: true,
+      },
+    },
   ],
 };
 

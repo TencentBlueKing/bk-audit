@@ -285,7 +285,7 @@
       border-radius: 2px;
       align-items: center;
       justify-content: center;
-      transition: all 0.15s;
+      transition: all .15s;
 
       &.active {
         background: #fff;

@@ -246,8 +246,8 @@
     background: white;
 
     /* 解决表格悬停超出 */
-    .bk-table-fixed .column_fixed{
-      bottom:80px !important;
+    .bk-table-fixed .column_fixed {
+      bottom: 80px !important;
     }
 
     .action-header {

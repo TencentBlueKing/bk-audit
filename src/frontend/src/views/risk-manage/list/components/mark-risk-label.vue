@@ -53,7 +53,7 @@
           </bk-form-item>
           <p
             v-if="data.status === 'auto_process'"
-            style="display: flex; align-items: center;color: #63656E;">
+            style="display: flex; align-items: center;color: #63656e;">
             <bk-checkbox v-model="isForce" />
             <span style="margin-left: 4px;">{{ t('强制终止套餐') }}</span>
           </p>
@@ -217,11 +217,11 @@
   });
 </script>
 <style lang="postcss">
-.tippy-content div{
+.tippy-content div {
   white-space: pre-line;
 }
 
-.tippy-box{
+.tippy-box {
   line-height: 1.5;
 }
 </style>
