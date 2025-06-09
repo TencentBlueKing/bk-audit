@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-05-21 00:45+0800\n"
+"POT-Creation-Date: 2025-06-09 14:06+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -693,6 +693,9 @@ msgstr "Get Storage Info"
 msgid "上报到监控自定义指标"
 msgstr "Report to BKM Custom Metric"
 
+msgid "上报到监控自定义事件"
+msgstr "Report to BKM Custom Event"
+
 msgid "来源标识如IP"
 msgstr "Target"
 
@@ -713,6 +716,12 @@ msgstr "Data Token"
 
 msgid "指标数据"
 msgstr "Metric Data"
+
+msgid "事件名称"
+msgstr "Event Name"
+
+msgid "事件数据"
+msgstr "Event Data"
 
 msgid "查询多平台应用信息"
 msgstr "Get App Info"
@@ -1639,6 +1648,9 @@ msgstr "Aiops Build in Data Time"
 msgid "AIOPS内置处理时间"
 msgstr "AIOPS Build in Clean Time"
 
+msgid "日志系统时间字段"
+msgstr "Log System Time Field"
+
 msgid "主机IP"
 msgstr "Host IP"
 
@@ -1650,9 +1662,6 @@ msgstr "Report Package Index"
 
 msgid "上报包内位置"
 msgstr "Position in Report Package"
-
-msgid "日志系统时间字段"
-msgstr "Log System Time Field"
 
 msgid "操作事件名称"
 msgstr "Action Name"
@@ -2345,9 +2354,8 @@ msgstr "`from_table` or `join_tables` must be specified in the configuration."
 msgid "操作符 {operator} 的值 {value} 不符合预期。"
 msgstr "The {value} of operator {operator} is not as expected."
 
-#, python-brace-format
-msgid "条件表达式中字段 {field} 的值 {value} 无法转换成预期类型 {type}。"
-msgstr "The value {value} of the field {field} in the conditional expression cannot be converted to the expected type {type}."
+msgid "条件表达式中字段 {field} 的值 {aggregation} {value} 无法转换成预期类型 {type}。"
+msgstr "The value {aggregation} {value} of the field {field} in the conditional expression cannot be converted to the expected type {type}."
 
 msgid "数据拉取"
 msgstr "Data Pull"
@@ -3289,6 +3297,9 @@ msgstr "Total Count"
 msgid "查询参数URL"
 msgstr "Query Parameters URL"
 
+msgid "是否已发送告警"
+msgstr "Has the alert been sent"
+
 msgid "日志导出任务"
 msgstr "Log Export Task"
 
@@ -3756,6 +3767,9 @@ msgstr "Event IDs"
 
 msgid "Event ID"
 msgstr "Event ID"
+
+msgid "Generate Risk"
+msgstr "Generate Risk"
 
 msgid "Start Time"
 msgstr "Start Time"
@@ -4361,6 +4375,9 @@ msgstr "Alias"
 msgid "Spec Field Type"
 msgstr "Spec Field Type"
 
+msgid "Property"
+msgstr "Property"
+
 msgid "Strategy IDs"
 msgstr "Strategy IDs"
 
@@ -4436,6 +4453,9 @@ msgstr "Aggregate"
 
 msgid "Remark"
 msgstr "Remark"
+
+msgid "Keys"
+msgstr "Keys"
 
 msgid "UID"
 msgstr "UID"
