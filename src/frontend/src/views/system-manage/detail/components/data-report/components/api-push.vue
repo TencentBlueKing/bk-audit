@@ -415,7 +415,7 @@
     border-color: #3a84ff #3a84ff transparent transparent;
     border-style: solid;
     border-width: 6px;
-    content: "";
+    content: '';
     transform: rotate(45deg);
   }
 }
