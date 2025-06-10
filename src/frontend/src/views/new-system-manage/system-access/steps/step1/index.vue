@@ -67,7 +67,7 @@
           <bk-input
             v-model="formData.name"
             clearable
-            placeholder="请输入可访问的域名如 bkaudit.woa.com" />
+            placeholder="请输入可访问的域名" />
         </bk-form-item>
         <bk-form-item
           class="form-item-line"
