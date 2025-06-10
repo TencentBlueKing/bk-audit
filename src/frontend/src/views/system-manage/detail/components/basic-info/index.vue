@@ -17,25 +17,68 @@
 <template>
   <div class="system-basic-info">
     <h3>{{ t('系统信息') }}</h3>
+    <div style="display: flex">
+      <div class="item">
+        <div class="item-title">
+          {{ t('应用ID') }}:
+        </div>
+        <div>{{ data.system_id }}</div>
+      </div>
+      <div class="item">
+        <div class="item-title">
+          {{ t('系统名称') }}:
+        </div>
+        <div>{{ data.name }}</div>
+      </div>
+      <div class="item">
+        <div class="item-title">
+          {{ t('管理员') }}:
+        </div>
+        <div>
+          <edit-tag
+            :data="data.managers"
+            :max="5" />
+        </div>
+      </div>
+      <div class="item">
+        <div class="item-title">
+          {{ t('系统域名') }}:
+        </div>
+        <div class="description-value">
+          {{ data.system_url }}
+        </div>
+      </div>
+    </div>
+    <div
+      class="item"
+      style="margin: 0">
+      <div class="item-title">
+        {{ t('描述') }}:
+      </div>
+      <div class="description-value">
+        {{ data.description || '--' }}
+      </div>
+    </div>
+    <h3>{{ t('调用信息') }}</h3>
     <div class="item">
       <div class="item-title">
-        {{ t('应用ID') }}:
+        {{ t('可访问客户端') }}:
       </div>
-      <div>{{ data.system_id }}</div>
+      <div class="description-value">
+        {{ data.description || '--' }}
+      </div>
     </div>
     <div class="item">
       <div class="item-title">
-        {{ t('应用负责人') }}:
+        {{ t('资源实例回调地址') }}:
       </div>
-      <div>
-        <edit-tag
-          :data="data.managers"
-          :max="5" />
+      <div class="description-value">
+        {{ data.description || '--' }}
       </div>
     </div>
     <div class="item">
       <div class="item-title">
-        {{ t('应用描述') }}:
+        {{ t('鉴权token') }}:
       </div>
       <div class="description-value">
         {{ data.description || '--' }}
@@ -68,7 +111,7 @@
     color: #63656e;
 
     .item-title {
-      width: 80px;
+      width: 120px;
       margin-right: 12px;
       color: #979ba5;
       text-align: right;

@@ -20,13 +20,6 @@
       <h3 style="margin-bottom: 16px; line-height: 22px;">
         {{ t('资源') }}
       </h3>
-      <span style=" margin-left: 25px;line-height: 22px; color: #979ba5;">
-        {{ t('资源回调地址') }}:
-        <a
-          class="cursor"
-          href="xxx"
-          target="_blank">{{ 1111 }}</a>
-      </span>
     </div>
     <div class="resource-list-action-header">
       <div class="btns-wrap">

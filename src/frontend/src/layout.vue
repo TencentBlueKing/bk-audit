@@ -65,7 +65,9 @@
           :class="{
             active: curNavName === 'nweSystemManage'
           }"
-          :to="{ name:'nweSystemManage', query: {} }">
+          :to="{ name:'nweSystemManage', params: {
+            id: systemId
+          } }">
           {{ t('系统管理') }}
         </router-link>
       </div>
@@ -207,12 +209,16 @@
           </audit-menu-item>
         </template>
         <template v-else>
-          <div class="project-select">
+          <div class="system-select">
             <bk-select
-              v-model="projectId"
+              v-model="systemId"
               auto-focus
               class="bk-select"
-              filterable>
+              filterable
+              :popover-options="{
+                extCls: 'system-select-popover',
+              }"
+              @change="handleSystemChange">
               <bk-option
                 v-for="(item, index) in projectList"
                 :id="item.value"
@@ -221,17 +227,26 @@
                 :name="item.label" />
             </bk-select>
           </div>
-          <template v-if="route.meta?.sideMenus">
-            <audit-menu-item
-              v-for="item in route.meta?.sideMenus as unknown as SideMenuItem[]"
-              :key="item?.pathName"
-              class="mt8"
-              :index="item?.pathName">
-              <audit-icon
-                class="menu-item-icon"
-                :type="item?.icon" />
-              {{ t(item?.title) }}
-            </audit-menu-item>
+          <template v-if="route.meta.isGroup">
+            <audit-menu-item-group
+              v-for="item in route.meta.sideMenus as unknown as SideMenuItem[]"
+              :key="item.pathName">
+              <template #title>
+                <div>{{ t(item.groupName) }}</div>
+              </template>
+              <template #flod-title>
+                <div>{{ t(item.groupName) }}</div>
+              </template>
+              <audit-menu-item :index="item.pathName">
+                <audit-icon
+                  class="menu-item-icon"
+                  :type="item?.icon" />
+                {{ t(item.title) }}
+              </audit-menu-item>
+            </audit-menu-item-group>
+          </template>
+          <template v-else>
+            //
           </template>
         </template>
       </audit-menu>
@@ -256,6 +271,7 @@
     pathName: string;
     icon: string;
     title: string;
+    groupName: string
   }
   import { useI18n } from 'vue-i18n';
   import {
@@ -286,49 +302,55 @@
   interface Props {
     configData: ConfigModel,
   }
+
   defineProps<Props>();
+
   const router = useRouter();
   const route = useRoute();
-  const isMenuFlod = ref(false);
   const { on, off } = useEventBus();
+  const platformConfig = usePlatformConfig();
   const { t } = useI18n();
+  // 是否展示审计报表导航
+  const { feature: hasBkvision } = useFeature('bkvision');
+
+  const isMenuFlod = ref(false);
   const curNavName = ref('');
-  const handleSideMenuFlodChange = (value: boolean) => {
-    isMenuFlod.value = !value;
-  };
-  const projectId = ref(123);
+  const titleRef = ref<string>('');
+  const menuData = ref<Array<MenuDataType>>([]);
+  const systemId = ref('bk-audit');
   // 项目列表
   const projectList = ref([
     {
-      value: 123,
-      label: '英雄联盟',
-      id: '111',
+      label: '审计中心',
+      value: 'bk-audit',
       disabled: false,
     },
     {
-      value: 1,
       label: 'DNF',
-      id: '122',
-      disabled: true,
+      value: '2',
+      disabled: false,
+    },
+    {
+      label: 'DNF2',
+      value: '3',
+      disabled: false,
     },
   ]);
 
-  const platformConfig = usePlatformConfig();
-
-  // 是否展示审计报表导航
-  const { feature: hasBkvision } = useFeature('bkvision');
-  const titleRef = ref<string>('');
-
-
-  const menuData = ref<Array<MenuDataType>>([]);
   on('statement-menuData', (data) => {
     console.log('audit-menu', data);
 
     menuData.value = data as Array<MenuDataType>;
     titleRef.value = menuData.value[0]?.name;
   });
+
+  const handleSideMenuFlodChange = (value: boolean) => {
+    isMenuFlod.value = !value;
+  };
+
   // 导航路由切换
   const handleRouterChange = (routerName: string) => {
+    console.log(routerName);
     if (curNavName.value === 'auditStatement') {
       router.push({
         name: 'statementManageDetail',
@@ -343,15 +365,24 @@
       name: routerName,
     });
   };
+
+  // 系统切换
+  const handleSystemChange = (value: string) => {
+    // 在route.meta中添加systemId
+    console.log('audit-menu', value);
+  };
+
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
   }, {
     deep: true,
     immediate: true,
   });
+
   onBeforeUnmount(() => {
     off('statement-menuData');
   });
+
   defineExpose<Exposes>({
     titleRef,
   });
@@ -379,12 +410,43 @@
     }
   }
 
-  .project-select {
+  .system-select {
     width: 90%;
     margin-top: 10px;
     margin-left: 5%;
+
+    .bk-input--text {
+      color: #979ba5;
+      background-color: #40495e;
+    }
   }
 }
 
+.system-select-popover.bk-popover.bk-pop2-content[data-theme^='light'] {
+  color: #979ba5;
+  background-color: #182233;
+  border-color: #182233;
+  box-shadow: none;
 
+  .bk-select-content-wrapper {
+    .bk-select-search-wrapper {
+      border-bottom: 1px solid #3c4558;
+
+      .bk-select-search-input {
+        color: #c4c6cc;
+        background-color: #182233;
+      }
+    }
+  }
+
+  .bk-select-content {
+    .bk-select-option.is-hover {
+      background-color: #2d3542;
+    }
+
+    .is-selected:not(.is-checkbox) {
+      background-color: #294066 !important;
+    }
+  }
+}
 </style>
