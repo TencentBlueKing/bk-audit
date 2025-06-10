@@ -98,7 +98,7 @@ class ResourceTypesViewSet(ResourceViewSet):
     def get_system_id(self):
         return (
             self.request.query_params.get('system_id')
-            or self.request.data.get('system_it')
+            or self.request.data.get('system_id')
             or self.kwargs.get('unique_id', '').split(':')[0]
         )
 
