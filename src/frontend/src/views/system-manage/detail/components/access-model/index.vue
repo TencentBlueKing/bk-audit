@@ -16,19 +16,11 @@
 -->
 <template>
   <div style="padding-bottom: 24px;">
-    <resource-type-list :id="id" />
-    <action-list :id="id" />
+    <resource-type-list />
+    <action-list />
   </div>
 </template>
 <script setup lang="ts">
   import ActionList from './components/action-list.vue';
   import ResourceTypeList from './components/resource-type-list/index.vue';
-
-  interface Props {
-    id: string
-  }
-
-  withDefaults(defineProps<Props>(), {
-    id: '',
-  });
 </script>

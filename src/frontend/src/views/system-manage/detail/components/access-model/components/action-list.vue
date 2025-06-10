@@ -193,7 +193,7 @@
     data,
   }  = useRequest(MetaManageService.fetchSystemActionList, {
     defaultParams: {
-      id: route.params.id || props.id,
+      id: route.params.id,
     },
     defaultValue: [],
     manual: true,

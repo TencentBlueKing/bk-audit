@@ -299,7 +299,7 @@
     data: systemDetailData,
   } = useRequest(MetaManageService.fetchSystemDetail, {
     defaultParams: {
-      id: route.params.id || props.id,
+      id: route.params.id,
     },
     defaultValue: new SystemModel(),
     // manual: true,
@@ -335,9 +335,9 @@
   };
 
   Promise.all([fetchSystemDetail({
-    id: route.params.id || props.id,
+    id: route.params.id,
   }), fetchSysetemResourceTypeList({
-    id: route.params.id || props.id,
+    id: route.params.id,
   })]).then(() => {
     // 获取资源快照状态
     getSnapShotStatus();

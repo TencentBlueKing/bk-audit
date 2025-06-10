@@ -321,6 +321,10 @@
   const { on, off } = useEventBus();
   const platformConfig = usePlatformConfig();
   const { t } = useI18n();
+  // 是否展示审计报表导航
+  const { feature: hasBkvision } = useFeature('bkvision');
+
+  const isMenuFlod = ref(false);
   const curNavName = ref('');
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
