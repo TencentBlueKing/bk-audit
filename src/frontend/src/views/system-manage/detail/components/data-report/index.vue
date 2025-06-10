@@ -19,14 +19,17 @@
     <div class="box-layout-left">
       <api-push
         v-if="showApiPush.enabled"
+        :id="id"
         ref="apiRef"
         class="mb12"
         @change-checked="handleApiChecked" />
       <log-collection
+        :id="id"
         ref="listRef"
         @change-checked="handleChecked" />
     </div>
     <recent-data
+      :id="id"
       class="box-layout-right ml16"
       :data="collectorData" />
   </div>
@@ -47,6 +50,14 @@
     name: string;
   }
 
+  // 定义组件属性接口
+  interface Props {
+    id: string;
+  }
+
+  withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const listRef = ref();
   const apiRef = ref();
   const collectorData = ref < CollectorData >({ id: 0, name: '' });

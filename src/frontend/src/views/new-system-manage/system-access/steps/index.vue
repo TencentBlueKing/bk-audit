@@ -93,7 +93,7 @@
   const router = useRouter();
   //   console.log(route, );
 
-  const curStep = ref(1);
+  const curStep = ref(3);
   const stepsTitle = ref([
     {
       title: t('注册系统信息'),
