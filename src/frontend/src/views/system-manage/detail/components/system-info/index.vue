@@ -22,6 +22,9 @@
     <div class="system-base-box">
       <div class="system-name">
         {{ data.name }}
+        <bk-tag theme="warning">
+          {{ t('待接入') }}
+        </bk-tag>
       </div>
       <div>
         <a
@@ -34,29 +37,9 @@
         <span v-else>--</span>
       </div>
     </div>
-    <bk-dropdown
-      class="system-delete"
-      trigger="click">
-      <bk-button text>
-        <audit-icon type="more" />
-      </bk-button>
-      <template #content>
-        <bk-dropdown-menu>
-          <bk-dropdown-item>
-            <bk-button
-              text
-              @click="handleRemove(data)">
-              {{ t('删除') }}
-            </bk-button>
-          </bk-dropdown-item>
-        </bk-dropdown-menu>
-      </template>
-    </bk-dropdown>
   </div>
 </template>
 <script setup lang="ts">
-  import { InfoBox } from 'bkui-vue';
-  import { h } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import SystemModel from '@model/meta/system';
@@ -66,40 +49,6 @@
   }
   defineProps<Props>();
   const { t } = useI18n();
-
-  const handleRemove = (data: SystemModel) => {
-    InfoBox({
-      title: () => h('div', [
-        h('div', t('确认删除该联表数据？')),
-      ]),
-      subTitle: () => h('div', {
-        style: {
-          fontSize: '14px',
-          textAlign: 'left',
-        },
-      }, [
-        h('div', `${t('系统')}: ${data.name}`),
-        h('div', {
-          style: {
-            color: '#4D4F56',
-            backgroundColor: '#f5f6fa',
-            padding: '12px 16px',
-            borderRadius: '2px',
-            marginTop: '10px',
-          },
-        }, t('删除操作无法撤回，请谨慎操作！')),
-      ]),
-      confirmText: t('删除'),
-      cancelText: t('取消'),
-      headerAlign: 'center',
-      contentAlign: 'center',
-      footerAlign: 'center',
-      class: 'link-data-delete',
-      onConfirm() {
-        //
-      },
-    });
-  };
 </script>
 <style lang="postcss">
   .system-detail-box {

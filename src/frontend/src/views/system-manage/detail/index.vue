@@ -36,13 +36,10 @@
         :name="item.name">
         <template #label>
           <div class="customize-label">
-            <span v-if="index === 0">
+            <span v-if="index !== 0">
               <audit-icon
-                style="font-size: 14px;"
-                type="corret-fill" />
-            </span>
-            <span v-else>
-              {{ index + 1 }}
+                style="font-size: 14px; color: #f59500;"
+                type="alert" />
             </span>
             <div class="label-name">
               <h3>
@@ -78,7 +75,6 @@
   import AccessModel from './components/access-model/index.vue';
   import BasicInfo from './components/basic-info/index.vue';
   import DataReport from './components/data-report/index.vue';
-  import SystemDiagnosis from './components/system-diagnosis/index.vue';
   import SystemInfo from './components/system-info/index.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -91,7 +87,6 @@
     basicInfo: BasicInfo,
     accessModel: AccessModel,
     dataReport: DataReport,
-    systemDiagnosis: SystemDiagnosis,
   };
   const panels = [
     {
@@ -109,11 +104,6 @@
       label: t('日志上报'),
       describe: t('研发通过SDK上报日志数据'),
 
-    },
-    {
-      name: 'systemDiagnosis',
-      label: t('系统诊断'),
-      describe: t('接入数据是否有问题'),
     },
   ];
 
