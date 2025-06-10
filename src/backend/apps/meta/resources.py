@@ -75,6 +75,7 @@ from apps.meta.serializers import (
     ActionSerializer,
     ActionUpdateSerializer,
     BulkActionCreateSerializer,
+    BulkCreateResourceTypeSerializer,
     ChangeSystemDiagnosisPushReqSerializer,
     ChangeSystemDiagnosisPushRespSerializer,
     CreateSystemReqSerializer,
@@ -525,16 +526,16 @@ class CreateResourceType(Meta, ModelResource):
 
 
 class BulkCreateResourceType(Meta, Resource):
-    """批量创建资源类型, 传入的参数为List[ResourceType], 单个ResourceType样例详见新建资源类型接口"""
+    """批量创建资源类型, 传入的参数为{"resource_types": [{$ResourceType},{$ResourceType}]}, 单个ResourceType样例详见新建资源类型接口"""
 
     name = gettext_lazy("批量创建资源类型")
     serializer_class = ResourceTypeSerializer
-    RequestSerializer = ResourceTypeSerializer
-    many_request_data = True
+    RequestSerializer = BulkCreateResourceTypeSerializer
+    ResponseSerializer = ResourceTypeSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        resource_types = [ResourceType(**resource_type) for resource_type in validated_request_data]
+        resource_types = [ResourceType(**resource_type) for resource_type in validated_request_data["resource_types"]]
         system_ids = {resource_type.system_id for resource_type in resource_types}
         for p in chain.from_iterable(
             SystemPermissionHandler.system_edit_permissions(lambda: system_id) for system_id in system_ids
@@ -543,7 +544,7 @@ class BulkCreateResourceType(Meta, Resource):
         with transaction.atomic():
             for resource_type in resource_types:
                 resource_type.save()
-        return resource_types
+        return ResourceType.objects.filter(pk__in=[resource_type.pk for resource_type in resource_types])
 
 
 class UpdateResourceType(Meta, ModelResource):

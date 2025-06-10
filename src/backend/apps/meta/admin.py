@@ -27,6 +27,7 @@ from apps.meta.models import (
     Namespace,
     ResourceType,
     ResourceTypeActionRelation,
+    ResourceTypeTreeNode,
     SensitiveObject,
     System,
     SystemDiagnosisConfig,
@@ -196,3 +197,10 @@ class ResourceTypeActionRelationAdmin(admin.ModelAdmin):
     list_display = ["id", "system_id", "resource_type_id", "action_id"]
     ordering = ["-id"]
     search_fields = ["system_id", "resource_type_id", "action_id"]
+
+
+@admin.register(ResourceTypeTreeNode)
+class ResourceTypeTreeNodeAdmin(admin.ModelAdmin):
+    list_display = ["id", "related", "tree_id", "lft", "rgt", "depth"]
+    search_fields = ["related__system_id", "related__resource_type_id", "related__name"]
+    list_filter = ["tree_id", "depth"]
