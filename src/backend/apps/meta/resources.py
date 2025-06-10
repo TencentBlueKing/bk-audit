@@ -20,6 +20,7 @@ from abc import ABC
 from collections import defaultdict
 from enum import EnumMeta
 from functools import cmp_to_key
+from itertools import chain
 from typing import Set
 
 import openpyxl
@@ -67,7 +68,7 @@ from apps.meta.models import (
     SystemInstance,
     Tag,
 )
-from apps.meta.permissions import SearchLogPermission
+from apps.meta.permissions import SearchLogPermission, SystemPermissionHandler
 from apps.meta.serializers import (
     ActionCreateSerializer,
     ActionListReqSerializer,
@@ -133,7 +134,7 @@ from apps.meta.utils.system import (
     wrapper_system_status,
 )
 from apps.permission.handlers.actions import ActionEnum, get_action_by_id
-from apps.permission.handlers.drf import IAMPermission, wrapper_permission_field
+from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.choices import list_registered_choices
 from core.models import get_request_username
@@ -535,11 +536,10 @@ class BulkCreateResourceType(Meta, Resource):
     def perform_request(self, validated_request_data):
         resource_types = [ResourceType(**resource_type) for resource_type in validated_request_data]
         system_ids = {resource_type.system_id for resource_type in resource_types}
-        p = IAMPermission(
-            actions=[ActionEnum.EDIT_SYSTEM],
-            resources=[ResourceEnum.SYSTEM.create_instance(system_id) for system_id in system_ids],
-        )
-        p.has_permission(None, None)
+        for p in chain.from_iterable(
+            SystemPermissionHandler.system_edit_permissions(lambda: system_id) for system_id in system_ids
+        ):
+            p.has_permission(None, None)
         with transaction.atomic():
             for resource_type in resource_types:
                 resource_type.save()
