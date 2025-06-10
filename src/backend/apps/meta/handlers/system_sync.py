@@ -54,7 +54,7 @@ def sync_iam_objects(
     return: to_insert, to_update, to_delete
     to_insert: 待新建的DB实例列表
     to_update: 待更新的DB实例列表
-    to_delete: 待删除的DB实例PK列表
+    to_delete: 待删除的DB实例列表
     """
     bk_username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
     # 获取数据库存储实例
@@ -86,7 +86,7 @@ def sync_iam_objects(
                 **{field: iam_object[field] for field in fields},
             )
         )
-    to_delete = db_objects.filter(**{f"{db_id_field}__in": to_delete}).values_list("id", flat=True)
+    to_delete = list(db_objects.filter(**{f"{db_id_field}__in": to_delete}).only("pk"))
     return to_insert, to_update, to_delete
 
 
