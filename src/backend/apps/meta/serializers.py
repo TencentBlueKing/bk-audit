@@ -326,6 +326,10 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
         return ActionSerializer(related_actions, many=True).data
 
 
+class BulkCreateResourceTypeSerializer(serializers.Serializer):
+    resource_types = serializers.ListField(child=ResourceTypeSerializer())
+
+
 class ResourceTypeTreeSerializer(serializers.ModelSerializer):
     children = serializers.SerializerMethodField()
 
