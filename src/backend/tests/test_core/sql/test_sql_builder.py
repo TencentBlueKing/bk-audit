@@ -68,7 +68,7 @@ class TestSQLGenerator(TestCase):
         query = SQLGenerator(self.query_builder).generate(config)
         expected_query = (
             'SELECT "users"."id" "user_id","users"."name" "user_name",'
-            'GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') "user_profile" '
+            'CAST(GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') AS STRING) "user_profile" '
             'FROM "users" "users"'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
@@ -164,7 +164,7 @@ class TestSQLGenerator(TestCase):
             'FROM "users" "users" '
             'WHERE "users"."age"=18 AND "users"."country"=\'Ireland\' '
             'AND "users"."name" LIKE \'%Jack%\' '
-            'AND GET_JSON_OBJECT("users"."address",\'$.["k1"].["k2"]\')=\'Dublin\''
+            'AND CAST(GET_JSON_OBJECT("users"."address",\'$.["k1"].["k2"]\') AS STRING)=\'Dublin\''
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -314,9 +314,9 @@ class TestSQLGenerator(TestCase):
         query = generator.generate(config)
         expected_query = (
             'SELECT COUNT("users"."id") "user_id","users"."country" "user_country",'
-            'GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') "user_city" '
+            'CAST(GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') AS STRING) "user_city" '
             'FROM "users" "users" WHERE "users"."country"=\'Ireland\' '
-            'GROUP BY "users"."country",GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\')'
+            'GROUP BY "users"."country",CAST(GET_JSON_OBJECT("users"."profile",\'$.["address"].["city"]\') AS STRING)'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -382,10 +382,10 @@ class TestSQLGenerator(TestCase):
 
         expected_query = (
             'SELECT COUNT("orders"."id") "count_id","orders"."status" "status",'
-            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') "product_category" '
+            'CAST(GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') AS STRING) "product_category" '
             'FROM "orders" "orders" '
             'GROUP BY "orders"."status",'
-            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') '
+            'CAST(GET_JSON_OBJECT("orders"."details",\'$.["product"].["category"]\') AS STRING) '
             'HAVING COUNT("orders"."id")>100'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
@@ -419,9 +419,9 @@ class TestSQLGenerator(TestCase):
         # 期望自动分组 "id" 和 JSON字段
         expected_query = (
             'SELECT "orders"."id" "order_id",SUM("orders"."amount") "amount_sum",'
-            'GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\') "product_type" '
+            'CAST(GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\') AS STRING) "product_type" '
             'FROM "orders" "orders" '
-            'GROUP BY "orders"."id",GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\')'
+            'GROUP BY "orders"."id",CAST(GET_JSON_OBJECT("orders"."details",\'$.["product"].["type"]\') AS STRING)'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, got: {query}")
 
@@ -970,3 +970,54 @@ class TestSQLGenerator(TestCase):
             'JOIN "orders" "order_alias" ON "user_alias"."id"="order_alias"."user_id"'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
+
+    def test_json_field_cast_timestamp_to_long(self):
+        """
+        测试 TIMESTAMP 类型字段在 Hive 中 JSON 抽取后转换为 long（timestamp -> long）
+        """
+        config = SqlConfig(
+            select_fields=[
+                Field(
+                    table="event_rt",
+                    raw_name="raw",
+                    display_name="timestamp_extracted",
+                    field_type=FieldType.TIMESTAMP,
+                    is_json=True,
+                    keys=["timestamp"],
+                )
+            ],
+            from_table=Table(table_name="event_rt"),
+        )
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
+        expected_sql = (
+            'SELECT CAST(GET_JSON_OBJECT("event_rt"."raw",\'$.["timestamp"]\') AS LONG) "timestamp_extracted" '
+            'FROM "event_rt" "event_rt"'
+        )
+        self.assertEqual(str(query), expected_sql)
+
+    def test_json_field_cast_text_to_string(self):
+        """
+        测试 TEXT 类型字段在 Hive 中 JSON 抽取后转换为 string（text -> string）
+        """
+        config = SqlConfig(
+            select_fields=[
+                Field(
+                    table="event_rt",
+                    raw_name="raw",
+                    display_name="text_extracted",
+                    field_type=FieldType.TEXT.value,  # TEXT 类型
+                    is_json=True,
+                    keys=["text"],
+                )
+            ],
+            from_table=Table(table_name="event_rt"),
+        )
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
+        expected_sql = (
+            'SELECT CAST(GET_JSON_OBJECT("event_rt"."raw",\'$.["text"]\') AS STRING) "text_extracted" '
+            'FROM "event_rt" "event_rt"'
+        )
+
+        self.assertEqual(str(query), expected_sql, msg=f"\nExpected:\n{expected_sql}\nGot:\n{str(query)}")
