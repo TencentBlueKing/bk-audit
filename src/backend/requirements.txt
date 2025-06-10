@@ -30,6 +30,7 @@ djangorestframework==3.15.2
 drf-spectacular==0.28.0
 drf-yasg==1.21.9
 elasticsearch==7.17.9
+flower==2.0.1
 gevent==25.4.1
 gunicorn==23.0.0
 ipython==8.10.0

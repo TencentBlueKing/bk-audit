@@ -102,6 +102,7 @@ dependencies = [
     "bkstorages==2.0.0",
     "gevent==25.4.1",
     "pympler>=1.1",
+    "flower==2.0.1",
     "xlsxwriter==3.2.3",
     "nh3>=0.3.0"
 ]
