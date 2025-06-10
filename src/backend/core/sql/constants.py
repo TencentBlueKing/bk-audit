@@ -65,6 +65,22 @@ class FieldType(TextChoices):
         }
         return type_mapping[self.value]
 
+    @cached_property
+    def sql_data_type(self):
+        """
+        返回 Hive / Flink 通用 SQL 类型
+        """
+        type_mapping = {
+            self.STRING: 'string',
+            self.DOUBLE: 'double',
+            self.INT: 'int',
+            self.LONG: 'long',
+            self.TEXT: 'string',
+            self.TIMESTAMP: 'long',
+            self.FLOAT: 'float',
+        }
+        return type_mapping[self.value]
+
 
 class AggregateType(TextChoices):
     """
