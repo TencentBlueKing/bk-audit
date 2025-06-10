@@ -48,3 +48,10 @@ modules:
         command: gunicorn wsgi -w 4 -b :$PORT --access-logfile - --error-logfile - --access-logformat '[%(h)s] %({request_id}i)s %(u)s %(t)s "%(r)s" %(s)s %(D)s %(b)s "%(f)s" "%(a)s"'
         plan: 4C4G5R
         replicas: 5
+  flower:
+    language: Python
+    processes:
+      web:
+        command: celery -A blueapps.core flower --port=$PORT --basic-auth=$BKAPP_FLOWER_USERNAME:$BKAPP_FLOWER_PASSWARD
+        plan: 1C1G1R
+        replicas: 5
