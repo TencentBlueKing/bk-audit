@@ -1,7 +1,25 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
 <template>
   <div class="step">
     <div class="step-head">
-      <div class="head-left">
+      <div
+        class="head-left"
+        @click="handlerBack">
         <audit-icon
           class="back-icon"
           type="back" />
@@ -29,17 +47,31 @@
 
     <div class="step-footer">
       <div class="footer-btn">
-        <bk-button
-          v-if="curStep === 1"
-          theme="primary"
-          @click="handlerStep1Submit">
-          {{ t("提交并下一步") }}
-        </bk-button>
-        <bk-button
-          class="ml10"
-          @click="handlerCancel">
-          {{ t("取消") }}
-        </bk-button>
+        <div v-if="curStep === 1">
+          <bk-button
+            theme="primary"
+            @click="handlerStep1Submit">
+            {{ t("提交并下一步") }}
+          </bk-button>
+          <bk-button
+            class="ml10"
+            @click="handlerCancel">
+            {{ t("取消") }}
+          </bk-button>
+        </div>
+        <div v-if="curStep === 3">
+          <bk-button
+            @click="handlerStep3Cancel">
+            {{ t("上一步") }}
+          </bk-button>
+          <bk-button
+            class="ml10"
+            theme="primary"
+
+            @click="handlerStep3Submit">
+            {{ t("完成并下一步") }}
+          </bk-button>
+        </div>
       </div>
     </div>
   </div>
@@ -49,18 +81,19 @@
   import { InfoBox } from 'bkui-vue';
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
-  //   import { useRoute, useRouter } from 'vue-router';
   import Step1 from './step1/index.vue';
   import Step2 from './step2/index.vue';
   import Step3 from './step3/index.vue';
+  import Step4 from './step4/index.vue';
 
   const { t } = useI18n();
   //   const router = useRouter();
-  //   const route = useRoute();
+  const router = useRouter();
   //   console.log(route, );
 
-  const curStep = ref(3);
+  const curStep = ref(1);
   const stepsTitle = ref([
     {
       title: t('注册系统信息'),
@@ -73,7 +106,7 @@
     },
   ]);
 
-  const stepComponents = [Step1, Step2, Step3];
+  const stepComponents = [Step1, Step2, Step3, Step4];
   // step 提交
   const handlerStep1Submit = () => {
     InfoBox({
@@ -95,11 +128,19 @@
       confirmText: '确定接入',
       onConfirm() {
         console.log('删除成功');
+        curStep.value = 3;
       },
       onCancel() {
         console.log('删除失败');
       },
     });
+  };
+
+  const handlerStep3Cancel = () => {
+    curStep.value = 1;
+  };
+  const handlerStep3Submit = () => {
+    curStep.value = 4;
   };
   // 取消
   const handlerCancel = () => {
@@ -116,7 +157,11 @@
       },
     });
   };
-
+  const handlerBack = () => {
+    router.push({
+      name: 'systemAccess',
+    });
+  };
 </script>
 
 <style scoped lang="postcss">

@@ -23,7 +23,7 @@
       class="layout-box"
       :config-data="configData">
       <template #header>
-        <router-back />
+        <router-back v-if="!(route.meta?.isNoBack)" />
         <span>{{ t(pageTitle) }}</span>
         <div
           id="teleport-router-link"

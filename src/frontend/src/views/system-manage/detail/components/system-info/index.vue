@@ -38,14 +38,40 @@
       </div>
     </div>
   </div>
+  <div class="system-detail-box">
+    <img
+      class="app-logo"
+      :src="data.logo_url">
+    <div class="system-base-box">
+      <div class="system-name">
+        {{ data.name }}
+        <bk-tag theme="warning">
+          {{ t('待接入') }}
+        </bk-tag>
+      </div>
+      <div>
+        <a
+          v-if="data.system_url"
+          class="system-site"
+          :href="data.system_url"
+          target="_blank">
+          {{ data.system_url }}
+        </a>
+        <span v-else>--</span>
+      </div>
+    </div>
+  </div>
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
 
   import SystemModel from '@model/meta/system';
 
+  import useRequest from '@hooks/use-request';
+
   interface Props {
-    data: SystemModel
+    data: SystemModel;
+    id: string
   }
   defineProps<Props>();
   const { t } = useI18n();
@@ -70,6 +96,8 @@
     defaultValue: {},
     manual: true,
   });
+
+  console.log(GlobalChoices);
 
   defineExpose<Exposes>({
     loading,

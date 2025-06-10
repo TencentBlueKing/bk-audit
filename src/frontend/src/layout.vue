@@ -225,6 +225,16 @@
                 :key="index"
                 :disabled="item.disabled"
                 :name="item.label" />
+              <template #extension>
+                <div
+                  class="custom-extension"
+                  @click="handleRouterChange('systemAccess')">
+                  <audit-icon
+                    class="custom-extension-icon"
+                    type="add-fill" />
+                  <span class="extension-text">接入系统</span>
+                </div>
+              </template>
             </bk-select>
           </div>
           <template v-if="route.meta.isGroup">
@@ -263,6 +273,7 @@
   import {
     defineExpose,
     onBeforeUnmount,
+    onMounted,
     type Ref,
     ref,
     watch  } from 'vue';
@@ -310,10 +321,6 @@
   const { on, off } = useEventBus();
   const platformConfig = usePlatformConfig();
   const { t } = useI18n();
-  // 是否展示审计报表导航
-  const { feature: hasBkvision } = useFeature('bkvision');
-
-  const isMenuFlod = ref(false);
   const curNavName = ref('');
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
@@ -378,7 +385,9 @@
     deep: true,
     immediate: true,
   });
-
+  onMounted(() => {
+    systemId.value = projectList.value[0].value;
+  }),
   onBeforeUnmount(() => {
     off('statement-menuData');
   });
