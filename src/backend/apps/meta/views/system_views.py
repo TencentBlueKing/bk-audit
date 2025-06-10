@@ -22,8 +22,7 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from apps.meta.constants import SYSTEM_INSTANCE_SEPARATOR
 from apps.meta.permissions import SystemPermissionHandler
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
-from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.handlers.drf import IAMPermission, insert_action_permission_field
 
 
 class SystemsViewSet(ResourceViewSet):
@@ -32,7 +31,7 @@ class SystemsViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["list"]:
             return [IAMPermission(actions=[ActionEnum.LIST_SYSTEM])]
-        if self.action in ["retrieve"]:
+        if self.action in ["retrieve", "resource_types", "resource_type_schema"]:
             return SystemPermissionHandler.system_view_permissions()
         if self.action in ["create"]:
             return [IAMPermission(actions=[ActionEnum.CREATE_SYSTEM])]
@@ -45,6 +44,14 @@ class SystemsViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.meta.system_list, enable_paginate=True),
         ResourceRoute("GET", resource.meta.system_info, pk_field="system_id"),
         ResourceRoute("GET", resource.meta.action_list, pk_field="system_id", endpoint="actions"),
+        ResourceRoute(
+            "GET",
+            resource.meta.resource_type_list,
+            pk_field="system_id",
+            endpoint="resource_types",
+            decorators=[insert_action_permission_field(actions=[ActionEnum.MANAGE_GLOBAL_SETTING])],
+        ),
+        ResourceRoute("GET", resource.meta.resource_type_schema, pk_field="system_id", endpoint="resource_type_schema"),
         # 附带权限信息
         ResourceRoute("GET", resource.meta.system_list_all, endpoint="all"),
         # 新增系统操作
@@ -89,18 +96,19 @@ class ResourceTypesViewSet(ResourceViewSet):
     lookup_field = "unique_id"
 
     def get_system_id(self):
-        return self.kwargs.get('system_id') or self.kwargs.get('unique_id', '').spilit(':')[0]
+        return (
+            self.request.query_params.get('system_id')
+            or self.request.data.get('system_it')
+            or self.kwargs.get('unique_id', '').split(':')[0]
+        )
 
     def get_permissions(self):
-        if self.action not in ["bulk_create"]:
-            return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.EDIT_SYSTEM],
-                    resource_meta=ResourceEnum.SYSTEM,
-                    get_instance_id=self.get_system_id,
-                )
-            ]
-        return []
+        if self.action in ["create", "update", "destroy"]:
+            return SystemPermissionHandler.system_edit_permissions(self.get_system_id)
+        elif self.action in ["list", "retrieve", "tree"]:
+            return SystemPermissionHandler.system_view_permissions(self.get_system_id)
+        else:
+            return []
 
     resource_routes = [
         ResourceRoute("GET", resource.meta.list_resource_type),
