@@ -16,8 +16,38 @@
 -->
 <template>
   <div class="access-model-resource-list">
-    <div style="margin-bottom: 16px; font-size: 14px;">
-      {{ t('资源') }}
+    <div class="resource-list-header">
+      <h3 style="margin-bottom: 16px; line-height: 22px;">
+        {{ t('资源') }}
+      </h3>
+    </div>
+    <div class="resource-list-action-header">
+      <div class="btns-wrap">
+        <bk-button
+          class="mr8"
+          theme="primary"
+          @click="handleCreate">
+          <audit-icon
+            style="margin-right: 8px;font-size: 14px;"
+            type="add" />
+          {{ t('新建资源类型') }}
+        </bk-button>
+        <bk-button>
+          {{ t('批量新增') }}
+        </bk-button>
+      </div>
+      <bk-search-select
+        v-model="searchKey"
+        class="search-input"
+        clearable
+        :condition="[]"
+        :data="searchData"
+        :defaut-using-item="{ inputHtml: t('请选择') }"
+        :placeholder="t('搜索资源类型、资源名称、资源操作、启停状态、敏感等级、资源状态')"
+        style="width: 480px;"
+        unique-select
+        value-split-code=","
+        @update:model-value="handleSearch" />
     </div>
     <bk-loading :loading="loading || isSystemDataLoading">
       <bk-table
@@ -35,6 +65,7 @@
   </audit-sideslider>
 </template>
 <script setup lang="tsx">
+  import _ from 'lodash';
   import {
     computed,
     onMounted,
@@ -57,10 +88,27 @@
   import StatusTag from './components/status-tag.vue';
   import TaskSwitch from './components/task-switch.vue';
 
+  interface SearchKey {
+    id: string,
+    name: string,
+    values: [
+      {
+        id: string,
+        name: string
+      }
+    ]
+  }
+  interface SearchData{
+    name: string;
+    id: string;
+    children?: Array<SearchData>;
+    placeholder?: string;
+    multiple?: boolean;
+    onlyRecommendChildren?: boolean,
+  }
+
   const { t, locale } = useI18n();
-  const rowData = ref({
-    resource_type_id: '',
-  });
+  const route = useRoute();
 
   const baseTableColumn = [
     {
@@ -70,7 +118,6 @@
     },
     {
       label: () => t('资源名称'),
-      width: '200px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         data.description ? (
         <span
@@ -82,52 +129,18 @@
       ),
     },
     {
-      label: () => t('父资源名称'),
-      width: '200px',
-      render: ({ data }: {data: SystemResourceTypeModel}) => {
-        const ancestorNames = data.ancestors?.map((ancestorId) => {
-          const ancestor = resourceTypeList.value.find(item => item.resource_type_id === ancestorId);
-          return ancestor?.name || ancestorId;
-        });
-        return ancestorNames?.join(',') || '--';
-      },
+      label: () => t('资源操作'),
+      field: () => 'resource_action',
+      width: '250px',
     },
     {
       label: () => t('敏感等级'),
-      width: '200px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <render-sensitivity-level value={data.sensitivity} />
       ),
     },
     {
-      label: () => t('资源实例 URL'),
-      minWidth: 200,
-      showOverflowTooltip: true,
-      render: ({ data }: {data: SystemResourceTypeModel}) => (
-        `${systemDetailData.value.callback_url}${data.path} `
-      ),
-    },
-    {
-      label: () => t('数据结构'),
-      width: '150px',
-      render: ({ data }: {data: SystemResourceTypeModel}) => (
-          <div
-            onClick={() => handleJobPlan(data)}
-            style="color:#3a84ff"
-            class="cursor"
-            >
-            <audit-icon
-              class="mr8 schema-icon"
-              svg
-              type="schema"
-            />
-            <span class="ml5">schema</span>
-          </div>
-      ),
-    },
-    {
       label: () => t('数据更新方式'),
-      width: '150px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <DataUpdateTag
           data={data}
@@ -138,7 +151,6 @@
     },
     {
       label: () => t('资源状态'),
-      width: '150px',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <StatusTag
           status={snapShotStatusList.value[data.resource_type_id]?.status}
@@ -146,10 +158,41 @@
       ),
     },
   ];
+  const searchData: SearchData[] = [
+    {
+      name: t('资源类型'),
+      id: 'resource_type_id',
+      placeholder: t('请输入资源类型'),
+    },
+    {
+      name: t('资源名称'),
+      id: 'name',
+      placeholder: t('请输入资源名称'),
+    },
+    {
+      name: t('资源操作'),
+      id: 'resource_action',
+      placeholder: t('请输入资源操作'),
+    },
+    {
+      name: t('敏感等级'),
+      id: 'sensitivity',
+      placeholder: t('请输入敏感等级'),
+    },
+    {
+      name: t('资源状态'),
+      id: 'status',
+      placeholder: t('请输入资源状态'),
+    },
+  ];
 
-  const route = useRoute();
   const isShowJobPlan = ref(false);
   const controlsPermission = ref(false);
+  const rowData = ref({
+    resource_type_id: '',
+  });
+  const searchKey = ref<Array<SearchKey>>([]);
+
   const renderTableColumn = computed(() => {
     if (!controlsPermission.value) {
       return baseTableColumn;
@@ -160,14 +203,82 @@
         label: () => t('操作'),
         width: locale.value === 'en-US' ? 200 : 120,
         fixed: 'right',
-        render: ({ data }: {data: SystemResourceTypeModel}) => <TaskSwitch
-          data={data}
-          bkbaseUrl={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
-          status={snapShotStatusList.value[data.resource_type_id]?.status}
-          onChangeStatus={() => handleDataStatus()}/>,
+        render: ({ data }: {data: SystemResourceTypeModel}) => <>
+          <div style="display: flex">
+            <bk-button
+              theme='primary'
+              class='mr16'
+              onClick={() => handleEdit(data)}
+              text>
+              {t('编辑')}
+            </bk-button>
+            <TaskSwitch
+              data={data}
+              bkbaseUrl={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
+              status={snapShotStatusList.value[data.resource_type_id]?.status}
+              onChangeStatus={() => handleDataStatus()}/>
+            <bk-dropdown
+              trigger="click"
+              style="margin-left: 8px">
+              {{
+                default: () => <bk-button text>
+                  <audit-icon type="more" />
+                </bk-button>,
+                content: () => (
+                  <bk-dropdown-menu>
+                    <bk-dropdown-item>
+                      <bk-button
+                        text
+                        onClick={() => handleViewData(data)}
+                        v-bk-tooltips={t('点击跳转到bkbase，地址为')}>
+                        {t('数据详情')}
+                      </bk-button>
+                    </bk-dropdown-item>
+                    <bk-dropdown-item>
+                      <bk-button
+                        onClick={() => handleDelete(data)}
+                        text>
+                        {t('删除')}
+                      </bk-button>
+                    </bk-dropdown-item>
+                  </bk-dropdown-menu>
+                ),
+              }}
+            </bk-dropdown>
+          </div>
+        </>,
       },
     ];
   });
+
+  const handleSearch = (keyword: Array<any>) => {
+    const search = {
+      resource_type_id: '',
+      name: '',
+      resource_action: '',
+      sensitivity: '',
+      status: '',
+      id: route.params.id,
+    } as Record<string, any>;
+
+    keyword.forEach((item: SearchKey, index) => {
+      if (item.values) {
+        const value = item.values.map(item => item.id).join(',');
+        const list = search[item.id].split(',').filter((item: string) => !!item);
+        list.push(value);
+        _.uniq(list);
+        search[item.id] = list.join(',');
+      } else {
+        // 默认输入字段后匹配规则名称
+        const list = search.name.split(',').filter((item: string) => !!item);
+        list.push(item.id);
+        _.uniq(list);
+        search.name = list.join(',');
+        searchKey.value[index] = ({ id: 'name', name: t('资源名称'), values: [{ id: item.id, name: item.id }] });
+      }
+    });
+    fetchSysetemResourceTypeList(search);
+  };
 
   /* 有相关权限才显示操作列
     1. 拥有 manage_global_setting 权限
@@ -212,6 +323,7 @@
     run: fetchSnapShotStatus,
   } = useRequest(CollectorManageService.fetchSnapShotStatus, {
     defaultValue: {},
+
   });
 
   const getSnapShotStatus = () => {
@@ -236,9 +348,25 @@
     getSnapShotStatus();
   };
 
-  const handleJobPlan = (data: SystemResourceTypeModel) => {
-    isShowJobPlan.value = true;
-    rowData.value = data;
+  // const handleJobPlan = (data: SystemResourceTypeModel) => {
+  //   isShowJobPlan.value = true;
+  //   rowData.value = data;
+  // };
+
+  const handleEdit = (data: SystemResourceTypeModel) => {
+    console.log(data);
+  };
+
+  const handleViewData = (data: SystemResourceTypeModel) => {
+    console.log(data);
+  };
+
+  const handleDelete = (data: SystemResourceTypeModel) => {
+    console.log(data);
+  };
+
+  const handleCreate = () => {
+    console.log('新建');
   };
 
   onMounted(() => {
@@ -247,12 +375,20 @@
 </script>
 <style lang="postcss">
   .access-model-resource-list {
-    padding: 16px 24px;
-    margin-top: 24px;
+    padding: 6px 24px;
     color: #313238;
     background-color: #fff;
-    border-radius: 2px;
-    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 16%);
+
+    .resource-list-header {
+      display: flex;
+    }
+
+    .resource-list-action-header {
+      display: flex;
+      margin-bottom: 14px;
+      align-items: center;
+      justify-content: space-between;
+    }
 
     .schema-icon {
       font-size: 14px;

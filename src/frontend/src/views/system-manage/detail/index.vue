@@ -17,15 +17,43 @@
 <template>
   <skeleton-loading
     fullscreen
-    :loading="isLoading"
+    :loading="loading"
     :name="skeletonLoadingName">
     <div class="system-manage-detail-header">
-      <system-info ref="appRef" />
-      <content-tab v-model="contentType" />
+      <system-info
+        ref="appRef"
+        :data="data" />
     </div>
-    <component
-      :is="renderContentComponent"
-      v-if="!isLoading" />
+    <bk-tab
+      v-model:active="contentType"
+      class="system-manage-detail-tab"
+      type="card-grid"
+      @change="handleChange">
+      <bk-tab-panel
+        v-for="(item, index) in panels"
+        :key="index"
+        :label="item.label"
+        :name="item.name">
+        <template #label>
+          <div class="customize-label">
+            <span v-if="index !== 0">
+              <audit-icon
+                style="font-size: 14px; color: #f59500;"
+                type="alert" />
+            </span>
+            <div class="label-name">
+              <h3>
+                {{ item.label }}
+              </h3>
+              <span class="label-describe">{{ item.describe }}</span>
+            </div>
+          </div>
+        </template>
+        <component
+          :is="renderContentComponent"
+          :data="data" />
+      </bk-tab-panel>
+    </bk-tab>
   </skeleton-loading>
 </template>
 <script setup lang="ts">
@@ -34,26 +62,55 @@
     computed,
     ref,
   } from 'vue';
-  import { useRouter } from 'vue-router';
+  import { useI18n } from 'vue-i18n';
+  import { useRoute, useRouter } from 'vue-router';
+
+  import MetaManageService from '@service/meta-manage';
+
+  import SystemModel from '@model/meta/system';
 
   import useRouterBack from '@hooks/use-router-back';
   import useUrlSearch from '@hooks/use-url-search';
 
   import AccessModel from './components/access-model/index.vue';
-  import ContentTab from './components/content-tab/index.vue';
+  import BasicInfo from './components/basic-info/index.vue';
   import DataReport from './components/data-report/index.vue';
-  import SystemDiagnosis from './components/system-diagnosis/index.vue';
   import SystemInfo from './components/system-info/index.vue';
 
+  import useRequest from '@/hooks/use-request';
+
+  const { t } = useI18n();
+  const router = useRouter();
+  const route = useRoute();
+
   const contentComponentMap = {
+    basicInfo: BasicInfo,
     accessModel: AccessModel,
     dataReport: DataReport,
-    systemDiagnosis: SystemDiagnosis,
   };
+  const panels = [
+    {
+      name: 'basicInfo',
+      label: t('系统信息'),
+      describe: t('产品创建审计中心的系统信息'),
+    },
+    {
+      name: 'accessModel',
+      label: t('接入模型'),
+      describe: t('产品或研发注册资源与操作'),
+    },
+    {
+      name: 'dataReport',
+      label: t('日志上报'),
+      describe: t('研发通过SDK上报日志数据'),
+
+    },
+  ];
+
   const contentType = ref<keyof typeof contentComponentMap>('accessModel');
   const appRef = ref();
 
-  const { getSearchParams } = useUrlSearch();
+  const { getSearchParams, appendSearchParams } = useUrlSearch();
   const searchParams = getSearchParams();
   if (searchParams.contentType
     && _.has(contentComponentMap, searchParams.contentType)) {
@@ -66,10 +123,22 @@
     ? 'systemDetailList'
     : 'systemDetail'));
 
-  const isLoading = computed(() => (appRef.value ? appRef.value.loading : true));
+  const handleChange = (value: 'basicInfo' | 'accessModel' | 'dataReport' | 'systemDiagnosis') => {
+    appendSearchParams({
+      contentType: value,
+    });
+  };
 
-
-  const router = useRouter();
+  const {
+    data,
+    loading,
+  } = useRequest(MetaManageService.fetchSystemDetail, {
+    defaultParams: {
+      id: route.params.id,
+    },
+    defaultValue: new SystemModel(),
+    manual: true,
+  });
 
   useRouterBack(() => {
     router.push({
@@ -79,8 +148,30 @@
 </script>
 <style lang="postcss">
   .system-manage-detail-header {
-    margin: -20px -24px 0;
     background: #fff;
     box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+  }
+
+  .system-manage-detail-tab {
+    margin-top: 16px;
+
+    .bk-tab-header-item {
+      height: 54px;
+
+      .customize-label {
+        display: flex;
+        line-height: 22px;
+
+        .label-name {
+          margin-left: 5px;
+
+          .label-describe {
+            font-size: 12px;
+            line-height: 16px;
+            color: #c4c6cc;
+          }
+        }
+      }
+    }
   }
 </style>

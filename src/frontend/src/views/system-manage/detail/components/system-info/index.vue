@@ -15,107 +15,44 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <bk-loading :loading="loading">
-    <div class="system-detail-box">
-      <img
-        class="app-logo"
-        :src="data.logo_url">
-      <div class="system-base-box">
-        <div class="system-name">
-          {{ data.name }}
-        </div>
-        <div>
-          <a
-            v-if="data.system_url"
-            class="system-site"
-            :href="data.system_url"
-            target="_blank">
-            {{ data.system_url }}
-          </a>
-          <span v-else>--</span>
-        </div>
+  <div class="system-detail-box">
+    <img
+      class="app-logo"
+      :src="data.logo_url">
+    <div class="system-base-box">
+      <div class="system-name">
+        {{ data.name }}
+        <bk-tag theme="warning">
+          {{ t('待接入') }}
+        </bk-tag>
       </div>
-      <div class="item">
-        <div class="item-title">
-          {{ t('系统ID') }}
-        </div>
-        <div>
-          {{ data.system_id }}
-        </div>
-      </div>
-      <div class="item">
-        <div class="item-title">
-          {{ t('系统负责人') }}
-        </div>
-        <div>
-          <edit-tag
-            :data="data.managers"
-            :max="3" />
-        </div>
-      </div>
-      <div class="item">
-        <div class="item-title">
-          {{ t('系统来源') }}
-        </div>
-        <div>
-          {{ GlobalChoices.meta_system_source_type?.find(item => item.id === data.source_type)?.name || '--' }}
-        </div>
-      </div>
-      <div class="item app-description">
-        <div class="item-title">
-          {{ t('系统描述') }}
-        </div>
-        <div class="description-value">
-          {{ data.description || '--' }}
-        </div>
+      <div>
+        <a
+          v-if="data.system_url"
+          class="system-site"
+          :href="data.system_url"
+          target="_blank">
+          {{ data.system_url }}
+        </a>
+        <span v-else>--</span>
       </div>
     </div>
-  </bk-loading>
+  </div>
 </template>
 <script setup lang="ts">
-  import type { Ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
-
-  import MetaManageService from '@service/meta-manage';
 
   import SystemModel from '@model/meta/system';
 
-  import useRequest from '@hooks/use-request';
-
-  import EditTag from '@components/edit-box/tag.vue';
-
-  interface Exposes {
-    loading: Ref<boolean>
+  interface Props {
+    data: SystemModel
   }
+  defineProps<Props>();
   const { t } = useI18n();
-
-  const route = useRoute();
-  const {
-    data,
-    loading,
-  } = useRequest(MetaManageService.fetchSystemDetail, {
-    defaultParams: {
-      id: route.params.id,
-    },
-    defaultValue: new SystemModel(),
-    manual: true,
-  });
-
-  const {
-    data: GlobalChoices,
-  } = useRequest(MetaManageService.fetchGlobalChoices, {
-    defaultValue: {},
-    manual: true,
-  });
-
-  defineExpose<Exposes>({
-    loading,
-  });
-
 </script>
 <style lang="postcss">
   .system-detail-box {
+    position: relative;
     display: flex;
     padding: 24px;
     overflow: hidden;
@@ -149,21 +86,17 @@
       }
     }
 
-    .item {
-      padding-left: 64px;
-      font-size: 12px;
-      line-height: 26px;
-      color: #63656e;
+    .system-delete {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      color: #c5c7cd;
+      cursor: pointer;
 
-      .item-title {
-        color: #979ba5;
+      .bk-button-primary {
+        background-color: red;
+        border-color: red;
       }
-    }
-
-    .app-description {
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
     }
   }
 </style>

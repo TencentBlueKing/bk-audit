@@ -1,8 +1,6 @@
 <template>
-  <div>
-    <h1>系统诊断</h1>
-    <p>系统诊断功能</p>
-  </div>
+  <system-diagnosis />
 </template>
-
-`
+<script setup lang="ts">
+  import SystemDiagnosis from '@views/system-manage/detail/components/system-diagnosis/index.vue';
+</script>
