@@ -101,7 +101,11 @@ dependencies = [
     "django-treebeard>=4.7.1",
     "bkstorages==2.0.0",
     "gevent==25.4.1",
-    "pympler>=1.1"
+    "pympler>=1.1",
+    "flower==2.0.1",
+    "bkstorages==2.0.0",
+    "gevent==25.4.1",
+    "xlsxwriter==3.2.3"
 ]
 requires-python = "==3.11.*"
 readme = "README.md"

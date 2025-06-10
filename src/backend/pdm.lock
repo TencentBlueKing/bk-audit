@@ -377,6 +377,39 @@ files = [
 
 [[package]]
 name = "boto3"
+version = "1.38.34"
+requires_python = ">=3.9"
+summary = "The AWS SDK for Python"
+groups = ["default"]
+dependencies = [
+    "botocore<1.39.0,>=1.38.34",
+    "jmespath<2.0.0,>=0.7.1",
+    "s3transfer<0.14.0,>=0.13.0",
+]
+files = [
+    {file = "boto3-1.38.34-py3-none-any.whl", hash = "sha256:7d9409be63a11c1684427a9b06d6820ec72785cb275b56affe437f3709a80eb3"},
+    {file = "boto3-1.38.34.tar.gz", hash = "sha256:25e76b9fec8db8e21adaf84df0de5c58fa779be121bc327e07e920c7c0870394"},
+]
+
+[[package]]
+name = "botocore"
+version = "1.38.34"
+requires_python = ">=3.9"
+summary = "Low-level, data-driven core of boto 3."
+groups = ["default"]
+dependencies = [
+    "jmespath<2.0.0,>=0.7.1",
+    "python-dateutil<3.0.0,>=2.1",
+    "urllib3!=2.2.0,<3,>=1.25.4; python_version >= \"3.10\"",
+    "urllib3<1.27,>=1.25.4; python_version < \"3.10\"",
+]
+files = [
+    {file = "botocore-1.38.34-py3-none-any.whl", hash = "sha256:95ff2c4819498e94b321c9b5ac65d02267df93ff7ce7617323b19f19ea7cb545"},
+    {file = "botocore-1.38.34.tar.gz", hash = "sha256:a105f4d941f329aa72c43ddf42371ec4bee50ab3619fc1ef35d0005520219612"},
+]
+
+[[package]]
+name = "boto3"
 version = "1.38.38"
 requires_python = ">=3.9"
 summary = "The AWS SDK for Python"
@@ -939,6 +972,20 @@ files = [
 ]
 
 [[package]]
+name = "django-treebeard"
+version = "4.7.1"
+requires_python = ">=3.8"
+summary = "Efficient tree implementations for Django"
+groups = ["default"]
+dependencies = [
+    "Django>=3.2",
+]
+files = [
+    {file = "django-treebeard-4.7.1.tar.gz", hash = "sha256:846e462904b437155f76e04907ba4e48480716855f88b898df4122bdcfbd6e98"},
+    {file = "django_treebeard-4.7.1-py3-none-any.whl", hash = "sha256:995c7120153ab999898fe3043bbdcd8a0fc77cc106eb94de7350e9d02c885135"},
+]
+
+[[package]]
 name = "djangorestframework"
 version = "3.15.2"
 requires_python = ">=3.8"
@@ -1088,6 +1135,24 @@ files = [
 ]
 
 [[package]]
+name = "flower"
+version = "2.0.1"
+requires_python = ">=3.7"
+summary = "Celery Flower"
+groups = ["default"]
+dependencies = [
+    "celery>=5.0.5",
+    "humanize",
+    "prometheus-client>=0.8.0",
+    "pytz",
+    "tornado<7.0.0,>=5.0.0",
+]
+files = [
+    {file = "flower-2.0.1-py2.py3-none-any.whl", hash = "sha256:9db2c621eeefbc844c8dd88be64aef61e84e2deb29b271e02ab2b5b9f01068e2"},
+    {file = "flower-2.0.1.tar.gz", hash = "sha256:5ab717b979530770c16afb48b50d2a98d23c3e9fe39851dcf6bc4d01845a02a0"},
+]
+
+[[package]]
 name = "future"
 version = "0.18.2"
 requires_python = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
@@ -1188,6 +1253,17 @@ dependencies = [
 files = [
     {file = "gunicorn-23.0.0-py3-none-any.whl", hash = "sha256:ec400d38950de4dfd418cff8328b2c8faed0edb0d517d3394e457c317908ca4d"},
     {file = "gunicorn-23.0.0.tar.gz", hash = "sha256:f014447a0101dc57e294f6c18ca6b40227a4c90e9bdb586042628030cba004ec"},
+]
+
+[[package]]
+name = "humanize"
+version = "4.12.3"
+requires_python = ">=3.9"
+summary = "Python humanize utilities"
+groups = ["default"]
+files = [
+    {file = "humanize-4.12.3-py3-none-any.whl", hash = "sha256:2cbf6370af06568fa6d2da77c86edb7886f3160ecd19ee1ffef07979efc597f6"},
+    {file = "humanize-4.12.3.tar.gz", hash = "sha256:8430be3a615106fdfceb0b2c1b41c4c98c6b0fc5cc59663a5539b111dd325fb0"},
 ]
 
 [[package]]
@@ -2701,6 +2777,27 @@ files = [
 ]
 
 [[package]]
+name = "tornado"
+version = "6.5.1"
+requires_python = ">=3.9"
+summary = "Tornado is a Python web framework and asynchronous networking library, originally developed at FriendFeed."
+groups = ["default"]
+files = [
+    {file = "tornado-6.5.1-cp39-abi3-macosx_10_9_universal2.whl", hash = "sha256:d50065ba7fd11d3bd41bcad0825227cc9a95154bad83239357094c36708001f7"},
+    {file = "tornado-6.5.1-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:9e9ca370f717997cb85606d074b0e5b247282cf5e2e1611568b8821afe0342d6"},
+    {file = "tornado-6.5.1-cp39-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b77e9dfa7ed69754a54c89d82ef746398be82f749df69c4d3abe75c4d1ff4888"},
+    {file = "tornado-6.5.1-cp39-abi3-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:253b76040ee3bab8bcf7ba9feb136436a3787208717a1fb9f2c16b744fba7331"},
+    {file = "tornado-6.5.1-cp39-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:308473f4cc5a76227157cdf904de33ac268af770b2c5f05ca6c1161d82fdd95e"},
+    {file = "tornado-6.5.1-cp39-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:caec6314ce8a81cf69bd89909f4b633b9f523834dc1a352021775d45e51d9401"},
+    {file = "tornado-6.5.1-cp39-abi3-musllinux_1_2_i686.whl", hash = "sha256:13ce6e3396c24e2808774741331638ee6c2f50b114b97a55c5b442df65fd9692"},
+    {file = "tornado-6.5.1-cp39-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:5cae6145f4cdf5ab24744526cc0f55a17d76f02c98f4cff9daa08ae9a217448a"},
+    {file = "tornado-6.5.1-cp39-abi3-win32.whl", hash = "sha256:e0a36e1bc684dca10b1aa75a31df8bdfed656831489bc1e6a6ebed05dc1ec365"},
+    {file = "tornado-6.5.1-cp39-abi3-win_amd64.whl", hash = "sha256:908e7d64567cecd4c2b458075589a775063453aeb1d2a1853eedb806922f568b"},
+    {file = "tornado-6.5.1-cp39-abi3-win_arm64.whl", hash = "sha256:02420a0eb7bf617257b9935e2b754d1b63897525d8a289c9d65690d580b4dcf7"},
+    {file = "tornado-6.5.1.tar.gz", hash = "sha256:84ceece391e8eb9b2b95578db65e920d2a61070260594819589609ba9bc6308c"},
+]
+
+[[package]]
 name = "traitlets"
 version = "5.14.3"
 requires_python = ">=3.8"
@@ -2841,6 +2938,17 @@ files = [
     {file = "wrapt-1.17.2-cp311-cp311-win_amd64.whl", hash = "sha256:acc130bc0375999da18e3d19e5a86403667ac0c4042a094fefb7eec8ebac7cf3"},
     {file = "wrapt-1.17.2-py3-none-any.whl", hash = "sha256:b18f2d1533a71f069c7f82d524a52599053d4c7166e9dd374ae2136b7f40f7c8"},
     {file = "wrapt-1.17.2.tar.gz", hash = "sha256:41388e9d4d1522446fe79d3213196bd9e3b301a336965b9e27ca2788ebd122f3"},
+]
+
+[[package]]
+name = "xlsxwriter"
+version = "3.2.3"
+requires_python = ">=3.6"
+summary = "A Python module for creating Excel XLSX files."
+groups = ["default"]
+files = [
+    {file = "XlsxWriter-3.2.3-py3-none-any.whl", hash = "sha256:593f8296e8a91790c6d0378ab08b064f34a642b3feb787cf6738236bd0a4860d"},
+    {file = "xlsxwriter-3.2.3.tar.gz", hash = "sha256:ad6fd41bdcf1b885876b1f6b7087560aecc9ae5a9cc2ba97dcac7ab2e210d3d5"},
 ]
 
 [[package]]
