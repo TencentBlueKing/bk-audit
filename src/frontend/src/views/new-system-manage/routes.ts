@@ -14,43 +14,57 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import type { RouteLocationNormalized } from 'vue-router';
+
 const sideMenus = [
   {
     pathName: 'systemInfo',
     title: '系统信息',
+    groupName: '接入',
     icon: 'daiwochuli',
   },
   {
     pathName: 'systemDiagnose',
     title: '系统诊断',
+    groupName: '分析',
     icon: 'daiwochuli',
   },
 ];
 export default {
-  path: '/nwe-system-manage',
+  path: '/nwe-system-manage/:id',
   component: () => import('@views/new-system-manage/index.vue'),
   name: 'nweSystemManage',
-  redirect: {
-    name: 'systemInfo',
+  redirect: (to: RouteLocationNormalized) => {
+    // 获取当前路由的所有参数
+    const currentParams = to.params;
+    return {
+      name: 'systemInfo',
+      params: {
+        ...currentParams,
+      },
+    };
   },
   meta: {
     navName: 'nweSystemManage',
-    sideMenus,
+    isGroup: true,
     headerTips: 'systemInfo',
+    sideMenus,
   },
   children: [
     {
-      path: 'system-info',
+      path: 'system-info/:id',
       component: () => import('@views/new-system-manage/system-info/index.vue'),
       name: 'systemInfo',
       meta: {
         title: '系统信息',
         skeleton: 'system-info',
         headerTips: 'systemInfo',
+        groupName: '接入',
+        isNoBack: true,
       },
     },
     {
-      path: 'system-diagnose',
+      path: 'system-diagnose/:id',
       component: () => import('@views/new-system-manage/system-diagnose/index.vue'),
       name: 'systemDiagnose',
       meta: {

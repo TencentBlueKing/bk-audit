@@ -20,47 +20,17 @@
       <system-info
         id="bk-audit"
         ref="appRef" />
-      <content-tab
-        v-model="contentType"
-        :is-show-system-diagnosis="false" />
     </div>
-    <component
-      :is="renderContentComponent"
-      id="bk-audit" />
+    <data-report />
   </div>
 </template>
 <script setup lang="ts">
-  import _ from 'lodash';
-  import {
-    computed,
-    ref,
-  } from 'vue';
+  import { ref } from 'vue';
 
-  // import { useRouter } from 'vue-router';
-  import useUrlSearch from '@hooks/use-url-search';
-
-  import AccessModel from '@views/system-manage/detail/components/access-model/index.vue';
-  import ContentTab from '@views/system-manage/detail/components/content-tab/index.vue';
   import DataReport from '@views/system-manage/detail/components/data-report/index.vue';
   import SystemInfo from '@views/system-manage/detail/components/system-info/index.vue';
 
-  const contentComponentMap = {
-    accessModel: AccessModel,
-    dataReport: DataReport,
-  };
-  const contentType = ref<keyof typeof contentComponentMap>('accessModel');
   const appRef = ref();
-
-  const { getSearchParams } = useUrlSearch();
-  const searchParams = getSearchParams();
-  if (searchParams.contentType
-    && _.has(contentComponentMap, searchParams.contentType)) {
-    contentType.value = searchParams.contentType as keyof typeof contentComponentMap;
-  }
-
-  const renderContentComponent = computed(() => contentComponentMap[contentType.value]);
-
-  // const router = useRouter();
 
 </script>
 <style lang="postcss">
