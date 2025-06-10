@@ -393,6 +393,9 @@ class ResourceType(OperateRecordModel):
     # 最多保存一个父 id；[] 表示根节点
     ancestor = models.JSONField(gettext_lazy("父资源类型"), default=list, blank=True)
 
+    def __str__(self):
+        return f"<ResourceType {self.unique_id}, with ancestor {self.ancestor}>"
+
     def __init__(self, *args, **kwargs):
         ancestors_data = kwargs.pop('ancestors', None)
         super().__init__(*args, **kwargs)
@@ -507,6 +510,8 @@ class ResourceType(OperateRecordModel):
                 .first()
             )
             desired_parent = getattr(parent_rt, "tree_node", None)
+            if not desired_parent:
+                raise ValueError(f"父节点 {parent_ids[0]} 不存在")
 
         # 4. 如父节点不同 → 迁移
         current_parent = node.get_parent()
