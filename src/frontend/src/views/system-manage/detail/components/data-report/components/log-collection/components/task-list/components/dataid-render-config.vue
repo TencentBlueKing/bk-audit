@@ -59,7 +59,10 @@
 
   import useRequest from '@hooks/use-request';
 
-  const props = defineProps<Props>();
+
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
 
   const emit = defineEmits<Emits>();
 
@@ -67,11 +70,11 @@
 
   interface Props {
     data: CollectorModel;
+    id: string;
   }
   interface Emits {
     (e: 'getCollectorLists'): void
   }
-
   const router = useRouter();
   const route = useRoute();
 
@@ -96,7 +99,7 @@
       router.push({
         name: 'dataIdEdit',
         params: {
-          systemId: route.params.id,
+          systemId: route.params.id || props.id,
           bkDataId: props.data.bk_data_id,
         },
         query: {

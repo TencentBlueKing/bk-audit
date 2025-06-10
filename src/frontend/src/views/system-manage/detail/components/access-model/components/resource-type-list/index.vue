@@ -57,6 +57,13 @@
   import StatusTag from './components/status-tag.vue';
   import TaskSwitch from './components/task-switch.vue';
 
+  interface Props {
+    id: string
+  }
+
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const { t, locale } = useI18n();
   const rowData = ref({
     resource_type_id: '',
@@ -188,7 +195,7 @@
     data: systemDetailData,
   } = useRequest(MetaManageService.fetchSystemDetail, {
     defaultParams: {
-      id: route.params.id,
+      id: route.params.id || props.id,
     },
     defaultValue: new SystemModel(),
     // manual: true,
@@ -223,9 +230,9 @@
   };
 
   Promise.all([fetchSystemDetail({
-    id: route.params.id,
+    id: route.params.id || props.id,
   }), fetchSysetemResourceTypeList({
-    id: route.params.id,
+    id: route.params.id || props.id,
   })]).then(() => {
     // 获取资源快照状态
     getSnapShotStatus();

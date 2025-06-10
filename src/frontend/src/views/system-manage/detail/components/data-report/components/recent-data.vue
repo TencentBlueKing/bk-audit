@@ -99,9 +99,12 @@
       name: string;
       type?:string
     };
+    id: string
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const route = useRoute();
   const { t } = useI18n();
   const tableColumn = [
@@ -254,7 +257,7 @@
     loading.value = true;
     if (id === 'api') {
       fetchApiPushTailLog({
-        system_id: route.params.id,
+        system_id: route.params.id || props.id,
       }).finally(() => {
         loading.value = false;
       });
@@ -277,7 +280,7 @@
     loading.value = true;
     if (props.data.id === 'api') {
       fetchApiPushTailLog({
-        system_id: route.params.id,
+        system_id: route.params.id || props.id,
       }).finally(() => {
         loading.value = false;
       });

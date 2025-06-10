@@ -30,6 +30,7 @@
     <div class="step-footer">
       <div class="footer-btn">
         <bk-button
+          v-if="curStep === 1"
           theme="primary"
           @click="handlerStep1Submit">
           {{ t("提交并下一步") }}
@@ -59,7 +60,7 @@
   //   const route = useRoute();
   //   console.log(route, );
 
-  const curStep = ref(1);
+  const curStep = ref(3);
   const stepsTitle = ref([
     {
       title: t('注册系统信息'),
@@ -123,6 +124,9 @@
   position: relative;
   width: 100vw;
   height: 100vh;
+
+  /* max-height: 85vh; */
+  overflow: auto;
   background-color: #f5f7fa;
 
   .step-head {

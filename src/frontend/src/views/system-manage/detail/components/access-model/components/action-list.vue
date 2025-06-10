@@ -37,6 +37,13 @@
 
   import useRequest from '@hooks/use-request';
 
+  interface Props {
+    id: string
+  }
+
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const { t } = useI18n();
   const tableColumn = [
     {
@@ -75,7 +82,7 @@
     data,
   }  = useRequest(MetaManageService.fetchSystemActionList, {
     defaultParams: {
-      id: route.params.id,
+      id: route.params.id || props.id,
     },
     defaultValue: [],
     manual: true,

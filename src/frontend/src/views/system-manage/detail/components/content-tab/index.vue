@@ -17,6 +17,7 @@
 <template>
   <div class="content-tab-box">
     <div
+      v-if="isShowAccessModel"
       class="tab-item"
       :class="{
         active: modelValue === 'accessModel'
@@ -25,6 +26,7 @@
       {{ t('接入模型') }}
     </div>
     <div
+      v-if="isShowDataReport"
       class="tab-item"
       :class="{
         active: modelValue === 'dataReport'
@@ -33,6 +35,7 @@
       {{ t('数据上报') }}
     </div>
     <div
+      v-if="isShowSystemDiagnosis"
       class="tab-item"
       :class="{
         active: modelValue === 'systemDiagnosis'
@@ -48,13 +51,19 @@
   import useUrlSearch from '@hooks/use-url-search';
 
   interface Props {
-    modelValue: 'accessModel' | 'dataReport' | 'systemDiagnosis'
+    modelValue: 'accessModel' | 'dataReport' | 'systemDiagnosis',
+    isShowAccessModel: boolean,
+    isShowDataReport: boolean,
+    isShowSystemDiagnosis: boolean,
   }
   interface Emits {
     (e: 'update:modelValue', value: Props['modelValue']): void
   }
   withDefaults(defineProps<Props>(), {
     modelValue: 'accessModel',
+    isShowAccessModel: true,
+    isShowDataReport: true,
+    isShowSystemDiagnosis: true,
   });
 
   const emit = defineEmits<Emits>();

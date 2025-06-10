@@ -88,15 +88,24 @@
   interface Exposes {
     loading: Ref<boolean>
   }
+  interface Props {
+    id: string
+  }
+
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const { t } = useI18n();
 
   const route = useRoute();
+  console.log(route.params.id, 'route.params.id');
+
   const {
     data,
     loading,
   } = useRequest(MetaManageService.fetchSystemDetail, {
     defaultParams: {
-      id: route.params.id,
+      id: route.params.id || props.id,
     },
     defaultValue: new SystemModel(),
     manual: true,
