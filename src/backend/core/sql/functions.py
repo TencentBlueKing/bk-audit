@@ -20,6 +20,8 @@ from typing import Any, Optional, Self, Union
 from pypika.functions import Cast, Count
 from pypika.terms import Function, Term
 
+from core.sql.constants import FieldType
+
 
 class DisCount(Count):
     """
@@ -40,47 +42,47 @@ class ConcatWs(Function):
         super(ConcatWs, self).__init__("CONCAT_WS", separator, *args)
 
 
-class JsonValue(Function):
+class JsonExtractFunction(Function):
     """
-    JSON_VALUE函数,用于Flink SQL
+    通用 JSON 函数抽象基类，封装 returning_type 和 cast_to 逻辑
     """
 
-    ENABLE_RETURN_TYPE_DECLARATION = False  # bkbase暂不支持RETURNING {type} 声明
+    ENABLE_RETURN_TYPE_DECLARATION = True  # 控制是否启用类型声明
 
-    def __init__(self, json_column: Term, json_path: str, returning_type: str = None, alias: str = None):
+    def __init__(
+        self, func_name: str, json_column: Term, json_path: str, returning_type: str = None, alias: str = None
+    ):
         path_term = Term.wrap_constant(json_path)
-        super().__init__("JSON_VALUE", json_column, path_term, alias=alias)
-        self._returning_type_str = returning_type.upper() if returning_type else None
-
-    def get_special_params_sql(self, **kwargs: Any) -> Any:
-        """添加RETURNING信息到SQL中"""
-        if self.ENABLE_RETURN_TYPE_DECLARATION and self._returning_type_str:
-            return f"RETURNING {self._returning_type_str}"
-
-
-class GetJsonObject(Function):
-    """
-    GET_JSON_OBJECT函数,用于Hive SQL
-    """
-
-    ENABLE_RETURN_TYPE_DECLARATION = False  # bkbase暂不支持CAST和GET_JSON_OBJECT复合声明
-
-    def __init__(self, json_column: Term, json_path: str, returning_type: str = None, alias: str = None):
-        path_term = Term.wrap_constant(json_path)
-        super().__init__("GET_JSON_OBJECT", json_column, path_term, alias=alias)
-        self._returning_type_str = returning_type.upper() if returning_type else None
+        super().__init__(func_name, json_column, path_term, alias=alias)
+        self._returning_type_str = returning_type.lower() if returning_type else None
 
     def cast_to(self, sql_type: Optional[str] = None, alias: str = None) -> Union[Cast, Self]:
-        """将结果转换为指定类型"""
+        """统一类型转换逻辑，支持自动映射"""
         if self.ENABLE_RETURN_TYPE_DECLARATION and self._returning_type_str:
-            sql_type = (sql_type or self._returning_type_str).upper()
-            casted_expression = Cast(self, sql_type)
+            type_str = sql_type or self._returning_type_str
+            type_enum = FieldType(type_str)
+            sql_type = type_enum.sql_data_type
+            casted = Cast(self, sql_type)
+            return casted.as_(alias) if alias else casted
+        return self
 
-            if alias:
-                return casted_expression.as_(alias)
-            return casted_expression
-        else:
-            return self
+
+class JsonValue(JsonExtractFunction):
+    """
+    JSON_VALUE 函数（Flink）
+    """
+
+    def __init__(self, json_column: Term, json_path: str, returning_type: str = None, alias: str = None):
+        super().__init__("JSON_VALUE", json_column, json_path, returning_type, alias)
+
+
+class GetJsonObject(JsonExtractFunction):
+    """
+    GET_JSON_OBJECT 函数（Hive）
+    """
+
+    def __init__(self, json_column: Term, json_path: str, returning_type: str = None, alias: str = None):
+        super().__init__("GET_JSON_OBJECT", json_column, json_path, returning_type, alias)
 
 
 class DateTrunc(Function):
