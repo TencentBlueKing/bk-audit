@@ -49,6 +49,32 @@
   }
   defineProps<Props>();
   const { t } = useI18n();
+
+  const route = useRoute();
+  console.log(route.params.id, 'route.params.id');
+
+  const {
+    data,
+    loading,
+  } = useRequest(MetaManageService.fetchSystemDetail, {
+    defaultParams: {
+      id: route.params.id || props.id,
+    },
+    defaultValue: new SystemModel(),
+    manual: true,
+  });
+
+  const {
+    data: GlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    manual: true,
+  });
+
+  defineExpose<Exposes>({
+    loading,
+  });
+
 </script>
 <style lang="postcss">
   .system-detail-box {

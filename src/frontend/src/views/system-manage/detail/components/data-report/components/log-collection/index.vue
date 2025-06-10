@@ -29,11 +29,11 @@
           v-if="taskStatus !== 'taskEmpty'"
           action-id="edit_system"
           class="create-collector"
-          :resource="route.params.id"
+          :resource="route.params.id || props.id"
           :to="{
             name: 'collectorCreate',
             params: {
-              systemId: route.params.id
+              systemId: route.params.id || props.id
             }
           }">
           {{ t('新建') }}
@@ -42,6 +42,7 @@
       <div class="log-collection-content">
         <component
           :is="statusComponent"
+          :id="id"
           ref="listRef"
           @change-checked="(value: any) => handleChecked(value)"
           @change-status-com="(value: any) => handleStatusCom(value)" />
@@ -70,6 +71,12 @@
     handleCancelCheck: ()=> void
   }
 
+  interface Props {
+    id: string;
+  }
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const emit = defineEmits<Emits>();
   const route = useRoute();
 
