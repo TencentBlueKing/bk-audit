@@ -1113,7 +1113,6 @@ class UpdateSystemAuditStatus(Meta, SystemAuditMixinResource):
         system: System = get_object_or_404(System, system_id=system_id)
         system.audit_status = SystemAuditStatusEnum.ACCESSED.value
         system.save(update_fields=["audit_status"])
-        return system
 
 
 class UpdateSystem(Meta, SystemAuditMixinResource):
