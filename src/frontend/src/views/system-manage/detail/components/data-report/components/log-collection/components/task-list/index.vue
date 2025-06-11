@@ -58,6 +58,7 @@
           <div class="collector-item-operation">
             <component
               :is="statusCom[statusMap[item.collector_config_id]?.operation]"
+              :id="props.id"
               :checked="checked"
               :current="current"
               :data="item"
@@ -98,6 +99,7 @@
           <div class="collector-item-operation">
             <component
               :is="dataIdStatusCom[dataIdStatusMap[item.bk_data_id].operation]"
+              :id="props.id"
               :checked="checked"
               :current="current"
               :data="item"
@@ -145,6 +147,13 @@
   interface IStatus {
     [status: string]: Component
   }
+  interface Props {
+    id: string
+  }
+
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const emit = defineEmits<Emits>();
 
   const route = useRoute();
@@ -204,9 +213,9 @@
   });
 
   Promise.all([fetchList({
-    system_id: route.params.id,
+    system_id: route.params.id || props.id,
   }), fetchSystemDataIdList({
-    system_id: route.params.id,
+    system_id: route.params.id || props.id,
   })]).then((data) => {
     const result = [...data[0], ...data[1]];
     if (data[0].length) handleChecked(result[0].collector_config_id, result[0].collector_config_name);
@@ -256,12 +265,12 @@
 
   const handleFetchLists = () => {
     fetchList({
-      system_id: route.params.id,
+      system_id: route.params.id || props.id,
     });
   };
   const handleDataIdList = () => {
     fetchSystemDataIdList({
-      system_id: route.params.id,
+      system_id: route.params.id || props.id,
     });
   };
   defineExpose<Exposes>({
