@@ -57,6 +57,7 @@
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
 
@@ -84,6 +85,7 @@
     ALL = 'all'
   }
   const { t } = useI18n();
+  const router = useRouter();
   const tableColumn = ref([
     {
       label: () => '',
@@ -307,7 +309,9 @@
   };
 
   const handleCreate = () => {
-    //
+    router.push({
+      name: 'systemAccess',
+    });
   };
 
   // 判断是否是新建数据

@@ -17,7 +17,7 @@
 <template>
   <div class="access-model-operation-list">
     <h3 style="margin-bottom: 16px; line-height: 22px;">
-      {{ t('资源') }}
+      {{ t('操作') }}
     </h3>
     <div class="access-model-action-header">
       <div class="btns-wrap">
@@ -28,7 +28,7 @@
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
-          {{ t('新建资源类型') }}
+          {{ t('新建操作') }}
         </bk-button>
         <bk-button>
           {{ t('批量新增') }}
@@ -54,6 +54,7 @@
         :data="data" />
     </bk-loading>
   </div>
+  <add-action ref="addActionRef" />
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
@@ -67,6 +68,7 @@
 
   import useRequest from '@hooks/use-request';
 
+  import addAction from './add-action/index.vue';
 
   interface SearchKey {
     id: string,
@@ -89,6 +91,7 @@
 
   const { t } = useI18n();
   const route = useRoute();
+  const addActionRef = ref();
 
   const tableColumn = [
     {
@@ -184,7 +187,7 @@
   };
 
   const handleCreate = () => {
-    console.log('新建');
+    addActionRef.value.handleOpen();
   };
 
   const {
