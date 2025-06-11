@@ -29,6 +29,7 @@ from services.web.analyze.constants import FlowDataSourceNodeType, FlowSQLNodeTy
 from services.web.analyze.models import Control, ControlVersion
 from services.web.strategy_v2.constants import (
     RiskLevel,
+    StrategyFieldSourceEnum,
     StrategyStatusChoices,
     StrategyType,
 )
@@ -245,3 +246,27 @@ class LinkTableAuditInstance(AuditInstance):
         from services.web.strategy_v2.serializers import LinkTableInfoSerializer
 
         return LinkTableInfoSerializer(self.instance).data
+
+
+class StrategyTool(OperateRecordModel):
+    """
+    Strategy Tool
+    """
+
+    strategy = models.ForeignKey(
+        Strategy,
+        db_constraint=False,
+        on_delete=models.CASCADE,
+        related_name="tools",
+        verbose_name=gettext_lazy("Strategy"),
+    )
+    tool_uid = models.CharField(gettext_lazy("工具UID"), max_length=64, db_index=True)
+    tool_version = models.IntegerField(gettext_lazy("工具版本"), db_index=True)
+    field_name = models.CharField(gettext_lazy("字段名"), max_length=64, db_index=True)
+    field_source = models.CharField(gettext_lazy("字段来源"), max_length=16, choices=StrategyFieldSourceEnum.choices)
+
+    class Meta:
+        verbose_name = gettext_lazy("Strategy Tool")
+        verbose_name_plural = verbose_name
+        ordering = ["-id"]
+        unique_together = [("strategy", "field_source", "field_name", "tool_uid")]  # 策略中的指定字段只能关联一个工具

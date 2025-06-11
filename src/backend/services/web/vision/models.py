@@ -29,6 +29,7 @@ from services.web.vision.exceptions import VisionHandlerInvalid
 class Scenario(TextChoices):
     DEFAULT = "default", gettext_lazy("默认")
     PER_APP = "per_app", gettext_lazy("按应用")
+    TOOL = "tool", gettext_lazy("工具")
 
 
 class VisionPanel(SoftDeleteModel):

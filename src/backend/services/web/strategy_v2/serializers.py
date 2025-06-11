@@ -61,6 +61,7 @@ from services.web.strategy_v2.exceptions import (
     StrategyTypeNotSupport,
 )
 from services.web.strategy_v2.models import LinkTable, Strategy
+from services.web.tool.constants import DataSearchDrillConfig
 
 
 class MapFieldSerializer(serializers.Serializer):
@@ -84,6 +85,9 @@ class EventFieldSerializer(serializers.Serializer):
     display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
     is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
     description = serializers.CharField(label=gettext_lazy("Field Description"), default="", allow_blank=True)
+    drill_config = DataSearchDrillConfig.drf_serializer(
+        label=gettext_lazy("下钻配置"), default=None, allow_null=True, many=True
+    )
 
 
 class EventBasicFieldSerializer(EventFieldSerializer):
