@@ -318,7 +318,7 @@ files = [
 
 [[package]]
 name = "blueapps"
-version = "4.15.8"
+version = "4.16rc1"
 summary = "development framework for blueking"
 groups = ["default"]
 dependencies = [
@@ -326,7 +326,7 @@ dependencies = [
     "Mako<2.0,>=1.0.6",
     "MarkupSafe<3.0.0,>=1.1.1",
     "PyJWT<3.0,>=1.6.1",
-    "Werkzeug<4,>=1.0.0",
+    "Werkzeug<4.0.0,>=1.0.0",
     "bkoauth>=0.0.12",
     "cryptography>=2.7",
     "pyCryptodome>=3.9.7",
@@ -335,7 +335,35 @@ dependencies = [
     "whitenoise<7,>=3.3.0",
 ]
 files = [
-    {file = "blueapps-4.15.8.tar.gz", hash = "sha256:143495199e0d77e0e65e92119dc54234d44c863c763479c1d5d3d223e9ea9b57"},
+    {file = "blueapps-4.16rc1.tar.gz", hash = "sha256:e16b35b15583bf2ba9d0dc6515e84bf19d995784f4572f48d3d0913d0238f79b"},
+]
+
+[[package]]
+name = "blueapps"
+version = "4.16rc1"
+extras = ["opentelemetry"]
+summary = "development framework for blueking"
+groups = ["default"]
+dependencies = [
+    "blueapps==4.16rc1",
+    "django-prometheus<3.0.0,>=2.1.0",
+    "opentelemetry-api<2.0.0,>=1.6.2",
+    "opentelemetry-exporter-jaeger-proto-grpc<2.0.0,>=1.6.2",
+    "opentelemetry-exporter-jaeger-thrift<2.0.0,>=1.6.2",
+    "opentelemetry-exporter-jaeger<2.0.0,>=1.6.2",
+    "opentelemetry-exporter-otlp<2.0.0,>=1.6.2",
+    "opentelemetry-instrumentation-celery<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-dbapi<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-django<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-logging<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-redis<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation-requests<1.0.0,>=0.25b2",
+    "opentelemetry-instrumentation<1.0.0,>=0.25b2",
+    "opentelemetry-sdk<2.0.0,>=1.6.2",
+    "prometheus-client<1.0.0,>=0.9.0",
+]
+files = [
+    {file = "blueapps-4.16rc1.tar.gz", hash = "sha256:e16b35b15583bf2ba9d0dc6515e84bf19d995784f4572f48d3d0913d0238f79b"},
 ]
 
 [[package]]

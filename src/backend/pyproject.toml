@@ -32,7 +32,7 @@ dependencies = [
     "bkapi-component-open>=1.1.0",
     "bk-audit[opentelemetry]==1.2.2b0",
     "bk-resource==0.4.11",
-    "blueapps==4.15.8",
+    "blueapps[opentelemetry]==4.16rc1",
     "gunicorn==23.0.0",
     "django==4.2.19",
     "django-filter==2.4.0",
