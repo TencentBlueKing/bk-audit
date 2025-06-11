@@ -62,6 +62,9 @@ export default class Config {
   third_doc_url: {
     search_rule_iwiki_url: string;
   };
+  metric: {
+    metric_report_trace_url: string;
+  };
 
   constructor(payload = {} as Config) {
     this.aegis_id = payload.aegis_id;
@@ -87,7 +90,7 @@ export default class Config {
     this.system_diagnosis = payload.system_diagnosis;
     this.third_party_system = payload.third_party_system;
     this.third_doc_url = payload.third_doc_url;
-
+    this.metric = payload.metric;
     this.help_info = this.initHelpInfo(payload.help_info);
   }
 
