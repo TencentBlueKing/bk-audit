@@ -451,3 +451,12 @@ class ActionEnum:
         version=1,
         system_id=IAMSystems.BK_LOG.value,
     )
+    USE_TOOL = ActionMeta(
+        id="use_tool",
+        name=gettext("使用工具"),
+        name_en="Use Tool",
+        type="view",
+        related_resource_types=[ResourceEnum.TOOL],
+        related_actions=[],
+        version=1,
+    )
