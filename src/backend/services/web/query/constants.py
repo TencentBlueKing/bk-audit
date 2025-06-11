@@ -27,6 +27,7 @@ from apps.meta.utils.fields import (
     ACCESS_TYPE,
     ACCESS_USER_AGENT,
     ACTION_ID,
+    BK_APP_CODE,
     EVENT_CONTENT,
     EVENT_ID,
     EXTEND_DATA,
@@ -39,10 +40,16 @@ from apps.meta.utils.fields import (
     RESOURCE_TYPE_ID,
     RESULT_CODE,
     RESULT_CONTENT,
+    SCOPE_ID,
+    SCOPE_TYPE,
     SNAPSHOT_ACTION_INFO,
     SNAPSHOT_INSTANCE_DATA,
+    SNAPSHOT_INSTANCE_NAME,
     SNAPSHOT_RESOURCE_TYPE_INFO,
     SYSTEM_ID,
+    USER_IDENTIFY_SRC,
+    USER_IDENTIFY_SRC_USERNAME,
+    USER_IDENTIFY_TENANT_ID,
     USER_IDENTIFY_TYPE,
     USERNAME,
 )
@@ -168,6 +175,26 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(field=INSTANCE_NAME, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=EVENT_CONTENT, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=ACCESS_USER_AGENT, allow_operators=[QueryConditionOperator.LIKE]),
+        FieldSearchConfig(
+            field=USER_IDENTIFY_TENANT_ID, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
+        ),
+        FieldSearchConfig(
+            field=USER_IDENTIFY_SRC, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
+        ),
+        FieldSearchConfig(
+            field=USER_IDENTIFY_SRC_USERNAME,
+            allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ],
+        ),
+        FieldSearchConfig(
+            field=BK_APP_CODE, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
+        ),
+        FieldSearchConfig(
+            field=SCOPE_TYPE, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
+        ),
+        FieldSearchConfig(field=SCOPE_ID, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]),
+        FieldSearchConfig(
+            field=SNAPSHOT_INSTANCE_NAME, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
+        ),
     ]
 )
 
