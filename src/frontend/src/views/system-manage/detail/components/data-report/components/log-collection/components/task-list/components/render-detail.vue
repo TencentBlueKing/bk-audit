@@ -49,13 +49,15 @@
 
   interface Props {
     data: CollectorModel;
+    id:string;
   }
 
   interface Emits {
     (e: 'getCollectorLists'): void
   }
-  const props = defineProps<Props>();
-
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
@@ -67,7 +69,7 @@
     router.push({
       name: 'collectorEdit',
       params: {
-        systemId: route.params.id,
+        systemId: route.params.id || props.id,
         collectorConfigId: props.data.collector_config_id,
       },
     });
