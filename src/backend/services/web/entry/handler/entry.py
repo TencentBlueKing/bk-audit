@@ -106,6 +106,8 @@ class EntryHandler(object):
             "third_doc_url": {
                 "search_rule_iwiki_url": GlobalMetaConfig.get(SEARCH_RULE_IWIKI_URL_KEY, default=""),
             },
+            # metric
+            "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
         }
         return data
 

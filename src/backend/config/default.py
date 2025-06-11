@@ -448,6 +448,9 @@ LOG_EXPORT_STATUS_DATA_ID = int(os.getenv("BKAPP_LOG_EXPORT_STATUS_DATA_ID", 0))
 # 日志导出状态上报的数据token
 LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN", "")
 
+# metric report
+METRIC_REPORT_TRACE_URL = os.getenv("BKAPP_METRIC_REPORT_TRACE_URL", "")
+
 """
 以下为框架代码 请勿修改
 """
