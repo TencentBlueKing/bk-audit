@@ -157,8 +157,6 @@
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
-  import SelectVerify from '@views/link-data-manage/link-data-create/components/components/select-verify.vue';
-
   interface Exposes {
     getValue: () => Promise<any>;
   }
