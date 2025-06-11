@@ -25,29 +25,25 @@
         :to="{
           name: 'collectorCreate',
           params: {
-            systemId: route.params.id
+            systemId: route.params.id || id
           }
         }">
         {{ t('立即新建') }}
       </router-link>
     </div>
-    <!-- <div>
-      <router-link
-        :to="{
-          name: 'collectorCreate',
-          params: {
-            systemId: route.params.id
-          }
-        }">
-        {{ t('新建采集') }}
-      </router-link>
-    </div> -->
   </div>
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
+  interface Props {
+    id: string
+  }
+
+  withDefaults(defineProps<Props>(), {
+    id: '',
+  });
   const { t } = useI18n();
   const route = useRoute();
 </script>

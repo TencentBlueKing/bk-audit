@@ -242,6 +242,16 @@
                 :key="index"
                 :disabled="item.disabled"
                 :name="item.label" />
+              <template #extension>
+                <div
+                  class="custom-extension"
+                  @click="handleRouterChange('systemAccess')">
+                  <audit-icon
+                    class="custom-extension-icon"
+                    type="add-fill" />
+                  <span class="extension-text">接入系统</span>
+                </div>
+              </template>
             </bk-select>
           </div>
           <template v-if="route.meta.isGroup">
@@ -280,6 +290,7 @@
   import {
     defineExpose,
     onBeforeUnmount,
+    onMounted,
     type Ref,
     ref,
     watch  } from 'vue';
@@ -327,6 +338,7 @@
   const { on, off } = useEventBus();
   const platformConfig = usePlatformConfig();
   const { t } = useI18n();
+
   // 是否展示审计报表导航
   const { feature: hasBkvision } = useFeature('bkvision');
 
@@ -334,7 +346,7 @@
   const curNavName = ref('');
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
-  const systemId = ref('bk-audit');
+  const systemId = ref(' ');
   // 项目列表
   const projectList = ref([
     {
@@ -367,7 +379,7 @@
 
   // 导航路由切换
   const handleRouterChange = (routerName: string) => {
-    console.log(routerName);
+    console.log('systemInfo', routerName);
     if (curNavName.value === 'auditStatement') {
       router.push({
         name: 'statementManageDetail',
@@ -395,7 +407,9 @@
     deep: true,
     immediate: true,
   });
-
+  onMounted(() => {
+    systemId.value = projectList.value[0].value;
+  }),
   onBeforeUnmount(() => {
     off('statement-menuData');
   });
@@ -444,6 +458,23 @@
   background-color: #182233;
   border-color: #182233;
   box-shadow: none;
+
+  .custom-extension {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    padding: 0 10px;
+    font-size: 12px;
+    cursor: pointer;
+    background-color: #eaebf0;
+    align-items: center;  /* 垂直居中 */
+    justify-content: center;  /* 水平居中 */
+    gap: 4px;  /* 图标和文字间距 */
+  }
+
+  .custom-extension-icon {
+    font-size: 14px;
+  }
 
   .bk-select-content-wrapper {
     .bk-select-search-wrapper {
