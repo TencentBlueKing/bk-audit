@@ -31,7 +31,7 @@ const sideMenus = [
   },
 ];
 export default {
-  path: '/nwe-system-manage/:id',
+  path: '/nwe-system-manage/:id?',
   component: () => import('@views/new-system-manage/index.vue'),
   name: 'nweSystemManage',
   redirect: (to: RouteLocationNormalized) => {

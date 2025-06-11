@@ -93,8 +93,6 @@
 
   import StrategyManageService from '@service/strategy-manage';
 
-  import SelectVerify from './select-verify.vue';
-
   interface FieldItem {
     field_type: string;
     label: string;

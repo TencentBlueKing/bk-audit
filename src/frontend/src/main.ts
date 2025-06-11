@@ -44,6 +44,7 @@ import ScrollFaker from '@components/scroll-faker/index.vue';
 import SkeletonLoading from '@components/skeleton-loading/index.vue';
 import SmartAction from '@components/smart-action/index.vue';
 import DatePicker from '@blueking/date-picker';
+import SelectVerify from '@components/select-verify/index.vue';
 
 import WaterMark from '@utils/assist/water-mark';
 
@@ -98,6 +99,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     BKApp.component('SkeletonLoading', SkeletonLoading);
     BKApp.component('SmartAction', SmartAction);
     BKApp.component('DatePicker', DatePicker);
+    BKApp.component('SelectVerify', SelectVerify);
 
     BKApp.directive('bk-tooltips', bkTooltips);
     BKApp.directive('cursor', cursor);

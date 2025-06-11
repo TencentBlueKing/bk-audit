@@ -185,7 +185,6 @@
 
   import JoinType from './components/join-type.vue';
   import EventLogComponent from './components/scheme-input/event-log.vue';
-  import SelectVerify from './components/select-verify.vue';
   import StructurePreview from './components/structure-preview.vue';
   import TableField from './components/table-field.vue';
 

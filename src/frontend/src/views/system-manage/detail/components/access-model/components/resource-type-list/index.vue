@@ -63,6 +63,7 @@
     :width="640">
     <job-plan :data="rowData" />
   </audit-sideslider>
+  <add-resource ref="addResourceRef" />
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
@@ -83,6 +84,7 @@
 
   import useRequest from '@hooks/use-request';
 
+  import addResource from './components/add-resource/index.vue';
   import DataUpdateTag from './components/data-update-tag.vue';
   import JobPlan from './components/job-plan.vue';
   import StatusTag from './components/status-tag.vue';
@@ -187,6 +189,7 @@
   ];
 
   const isShowJobPlan = ref(false);
+  const addResourceRef = ref();
   const controlsPermission = ref(false);
   const rowData = ref({
     resource_type_id: '',
@@ -366,7 +369,7 @@
   };
 
   const handleCreate = () => {
-    console.log('新建');
+    addResourceRef.value.handleOpen();
   };
 
   onMounted(() => {
