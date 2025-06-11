@@ -90,18 +90,24 @@
 
   import EditInfo from './edit-info/index.vue';
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
+
+
   const emit = defineEmits<Emits>();
 
 
   interface Props {
     data: CollectorModel;
     current: number;
+    id: string;
     checked: number
   }
   interface Emits {
     (e: 'getCollectorLists'): void
   }
+
   const { t } = useI18n();
 
   const route = useRoute();
@@ -145,7 +151,7 @@
     router.push({
       name: 'dataIdEdit',
       params: {
-        systemId: route.params.id,
+        systemId: route.params.id || props.id,
         bkDataId: props.data.bk_data_id,
       },
     });

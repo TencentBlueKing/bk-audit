@@ -60,6 +60,7 @@ export default {
         skeleton: 'system-info',
         headerTips: 'systemInfo',
         groupName: '接入',
+        isNoBack: true,
       },
     },
     {

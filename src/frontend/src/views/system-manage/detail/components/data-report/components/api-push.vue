@@ -38,7 +38,7 @@
               <auth-button
                 v-if="!data.enabled"
                 action-id="edit_system"
-                :resource="route.params.id"
+                :resource="route.params.id || props.id"
                 style="margin-left: 19px;"
                 text
                 theme="primary"
@@ -78,14 +78,14 @@
                       class="operation-icon">
                       <auth-component
                         action-id="edit_system"
-                        :resource="route.params.id">
+                        :resource="route.params.id || props.id">
                         <audit-icon
                           :type="isHide?'view':'hide'"
                           @click.stop="handleGetToken" />
                       </auth-component>
                       <auth-component
                         action-id="edit_system"
-                        :resource="route.params.id">
+                        :resource="route.params.id || props.id">
                         <audit-icon
                           v-bk-tooltips="t('复制')"
                           class="ml12"
@@ -149,6 +149,13 @@
   interface Exposes {
     handleCancelCheck: ()=>void
   }
+  interface Props {
+    id: string
+  }
+
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+  });
 
   const emit = defineEmits<Emits>();
   const route = useRoute();
@@ -171,7 +178,7 @@
       hosts: [],
     },
     defaultParams: {
-      system_id: route.params.id,
+      system_id: route.params.id || props.id,
     },
     manual: true,
   });
@@ -199,7 +206,7 @@
     if (!hasGetToken.value) {
       isTokenLoading.value = true;
       fetchApiPush({
-        system_id: route.params.id,
+        system_id: route.params.id || props.id,
       }).finally(() => {
         hasGetToken.value = true;
         isHide.value = !isHide.value;
@@ -215,7 +222,7 @@
     if (!hasGetToken.value) {
       isTokenLoading.value = true;
       fetchApiPush({
-        system_id: route.params.id,
+        system_id: route.params.id || props.id,
       }).finally(() => {
         hasGetToken.value = true;
         isTokenLoading.value = false;
@@ -231,7 +238,7 @@
     isHide.value = true;
     isGeting.value = true;
     createApiPush({
-      system_id: route.params.id,
+      system_id: route.params.id || props.id,
     });
     data.value.enabled = true;
     timer.value = setInterval(() => getToken(), 2000);
@@ -239,7 +246,7 @@
 
   const getToken = () => {
     fetchApiPush({
-      system_id: route.params.id,
+      system_id: route.params.id || props.id,
     }).finally(() => {
       if (token.value.token) {
         isGeting.value = false;
