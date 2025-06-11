@@ -140,5 +140,4 @@ class BkvisionConfig(BaseModel):
     BK Vision配置 -- 当工具为 BK Vision时使用
     """
 
-    space_uid: str  # BK Vision 空间 ID
     uid: str  # BK Vision 图表ID
