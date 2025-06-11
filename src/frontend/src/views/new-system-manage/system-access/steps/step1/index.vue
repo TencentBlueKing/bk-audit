@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="step1-box">
+  <div
+    v-if="!showModelType"
+    class="step1-box">
     <div class="step1-tip">
       <img
         class="remind-icon"
@@ -219,18 +221,53 @@
       </bk-form>
     </bk-card>
   </div>
+  <div
+    v-else
+    class="step1-select-model-type">
+    <bk-alert theme="info">
+      {{ t('接入系统需要通过「权限模型」来描述自身系统下的资源和操作，并定义他们之间的关系。后续接入系统在审计中心的操作日志上传将依赖权限模型的定义。') }}
+      <a
+        class="link-icon"
+        href=""
+        target="_blank">
+        <audit-icon
+          svg
+          type="jump-link" />
+        {{ t('查看详细说明') }}
+      </a>
+    </bk-alert>
+    <div class="select-model-type-container">
+      <div class="title">
+        {{ t('你的系统模型属于以下哪种类型？') }}
+      </div>
+      <div>{{ t('请点击选择系统类型') }}</div>
+      <div class="type-list">
+        <div class="type-list-item">
+          <h3 style="margin-bottom: 8px;">
+            {{ t('复杂权限系统') }}
+          </h3>
+          <span>{{ t('需要严格控制到具体数据、资源的访问权限和操作范围。') }}</span>
+        </div>
+        <div class="type-list-item">
+          <h3 style="margin-bottom: 8px;">
+            {{ t('简单权限系统') }}
+          </h3>
+          <span>{{ t('仅涉及页面访问、操作级别的简单权限控制') }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  //   import { useRoute, useRouter } from 'vue-router';
 
   const { t } = useI18n();
-  //   const router = useRouter();
-  //   const route = useRoute();
   const formRef = ref('');
   const rules = ref({});
+
+  const showModelType = ref(true);
   const popoverTable = ref([
     {
       type: '业务',
@@ -392,5 +429,37 @@
     }
   }
 
+}
+
+.step1-select-model-type {
+  padding: 16px 24px;
+
+  .select-model-type-container {
+    width: 45%;
+    min-width: 840px;
+    margin: 72px auto;
+    text-align: center;
+
+    .title {
+      margin-bottom: 10px;
+      font-size: 20px;
+      line-height: 28px;
+    }
+
+    .type-list {
+      display: flex;
+      margin-top: 30px;
+      text-align: left;
+      justify-content: space-between;
+
+      .type-list-item {
+        padding: 24px;
+        cursor: pointer;
+        background: #fff;
+        border-radius: 3px;
+        box-shadow: 0 2px 4px 0 #0000001a, 0 2px 4px 0 #1919290d;
+      }
+    }
+  }
 }
 </style>
