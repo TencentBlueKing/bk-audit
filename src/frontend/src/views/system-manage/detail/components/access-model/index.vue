@@ -21,6 +21,6 @@
   </div>
 </template>
 <script setup lang="ts">
-  import ActionList from './components/action-list.vue';
+  import ActionList from './components/action-list/index.vue';
   import ResourceTypeList from './components/resource-type-list/index.vue';
 </script>
