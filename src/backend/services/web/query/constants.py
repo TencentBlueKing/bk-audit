@@ -175,26 +175,13 @@ COLLECT_SEARCH_CONFIG = CollectorSearchConfig(
         FieldSearchConfig(field=INSTANCE_NAME, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=EVENT_CONTENT, allow_operators=[QueryConditionOperator.LIKE]),
         FieldSearchConfig(field=ACCESS_USER_AGENT, allow_operators=[QueryConditionOperator.LIKE]),
-        FieldSearchConfig(
-            field=USER_IDENTIFY_TENANT_ID, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
-        ),
-        FieldSearchConfig(
-            field=USER_IDENTIFY_SRC, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
-        ),
-        FieldSearchConfig(
-            field=USER_IDENTIFY_SRC_USERNAME,
-            allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ],
-        ),
-        FieldSearchConfig(
-            field=BK_APP_CODE, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
-        ),
-        FieldSearchConfig(
-            field=SCOPE_TYPE, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
-        ),
-        FieldSearchConfig(field=SCOPE_ID, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]),
-        FieldSearchConfig(
-            field=SNAPSHOT_INSTANCE_NAME, allow_operators=[QueryConditionOperator.INCLUDE, QueryConditionOperator.EQ]
-        ),
+        FieldSearchConfig(field=USER_IDENTIFY_TENANT_ID, allow_operators=[QueryConditionOperator.LIKE]),
+        FieldSearchConfig(field=USER_IDENTIFY_SRC, allow_operators=[QueryConditionOperator.LIKE]),
+        FieldSearchConfig(field=USER_IDENTIFY_SRC_USERNAME, allow_operators=[QueryConditionOperator.LIKE]),
+        FieldSearchConfig(field=BK_APP_CODE, allow_operators=[QueryConditionOperator.LIKE]),
+        FieldSearchConfig(field=SCOPE_TYPE, allow_operators=[QueryConditionOperator.LIKE]),
+        FieldSearchConfig(field=SCOPE_ID, allow_operators=[QueryConditionOperator.LIKE]),
+        FieldSearchConfig(field=SNAPSHOT_INSTANCE_NAME, allow_operators=[QueryConditionOperator.LIKE]),
     ]
 )
 
