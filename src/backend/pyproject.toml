@@ -90,6 +90,7 @@ dependencies = [
     "opentelemetry-instrumentation-httpx==0.51b0",
     "opentelemetry-instrumentation-asyncio==0.51b0",
     "opentelemetry-instrumentation-threading==0.51b0",
+    "drf-pydantic==2.7.1",
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
