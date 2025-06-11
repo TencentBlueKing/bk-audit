@@ -49,13 +49,18 @@
 
   import useRequest from '@hooks/use-request';
 
+  interface Exposes {
+    loading: boolean
+  }
+
   interface Props {
-    data: SystemModel;
+    data?: SystemModel;  // 改为可选属性
     id: string
   }
 
   const props = withDefaults(defineProps<Props>(), {
     id: '',
+    data: undefined,  // 默认值设为undefined
   });
   const { t } = useI18n();
 
@@ -83,7 +88,7 @@
   console.log(GlobalChoices);
 
   defineExpose<Exposes>({
-    loading,
+    loading: loading.value,  // 使用.value获取实际布尔值
   });
 
 </script>
