@@ -41,14 +41,56 @@
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
+
+  import MetaManageService from '@service/meta-manage';
 
   import SystemModel from '@model/meta/system';
 
-  interface Props {
-    data: SystemModel
+  import useRequest from '@hooks/use-request';
+
+  interface Exposes {
+    loading: boolean
   }
-  defineProps<Props>();
+
+  interface Props {
+    data?: SystemModel;  // 改为可选属性
+    id: string
+  }
+
+  const props = withDefaults(defineProps<Props>(), {
+    id: '',
+    data: undefined,  // 默认值设为undefined
+  });
   const { t } = useI18n();
+
+  const route = useRoute();
+  console.log(route.params.id, 'route.params.id');
+
+  const {
+    data,
+    loading,
+  } = useRequest(MetaManageService.fetchSystemDetail, {
+    defaultParams: {
+      id: route.params.id || props.id,
+    },
+    defaultValue: new SystemModel(),
+    manual: true,
+  });
+
+  const {
+    data: GlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    manual: true,
+  });
+
+  console.log(GlobalChoices);
+
+  defineExpose<Exposes>({
+    loading: loading.value,  // 使用.value获取实际布尔值
+  });
+
 </script>
 <style lang="postcss">
   .system-detail-box {
