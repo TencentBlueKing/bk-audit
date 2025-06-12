@@ -91,6 +91,7 @@ class SystemSerializer(serializers.ModelSerializer):
 class SystemListSerializer(SystemSerializer):
     resource_type_count = serializers.IntegerField(label=gettext_lazy("资源类型数量"), required=False)
     action_count = serializers.IntegerField(label=gettext_lazy("操作数量"), required=False)
+    collector_count = serializers.IntegerField(label=gettext_lazy("采集器数量"), required=False)
 
     class Meta:
         model = System
@@ -244,6 +245,7 @@ class SystemRoleListRequestSerializer(serializers.ModelSerializer):
 class SystemInfoResponseSerializer(SystemSerializer):
     resource_type_count = serializers.IntegerField(label=gettext_lazy("资源类型数量"), required=False)
     action_count = serializers.IntegerField(label=gettext_lazy("操作数量"), required=False)
+    collector_count = serializers.IntegerField(label=gettext_lazy("采集器数量"), required=False)
     managers = serializers.SerializerMethodField(label=gettext_lazy("管理员"), required=False)
     last_time = serializers.CharField(label=gettext_lazy("最后上报时间"), required=False)
 

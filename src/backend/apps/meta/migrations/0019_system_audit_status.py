@@ -4,6 +4,8 @@ from typing import List
 import django.utils.timezone
 from django.db import migrations, models
 
+from apps.meta.constants import SystemSourceTypeEnum
+
 
 def populate_unique_id(apps, schema_editor):
     from apps.meta.models import Action
@@ -21,7 +23,9 @@ def update_system_audit_status(apps, schema_editor):
 
     from apps.meta.models import System
 
-    system_ids: List[str] = System.objects.filter(audit_status__isnull=True).values_list("system_id", flat=True)
+    system_ids: List[str] = System.objects.filter(
+        source_type__in=[SystemSourceTypeEnum.IAM_V3.value, SystemSourceTypeEnum.IAM_V4.value]
+    ).values_list("system_id", flat=True)
     System.bulk_update_system_audit_status(system_ids=system_ids)
 
 
