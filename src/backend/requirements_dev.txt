@@ -14,5 +14,3 @@ pytest-xdist==2.4.0
 PyYAML==6.0
 seed-isort-config==1.9.2
 xmlrunner==1.7.7
---extra-index-url https://mirrors.cloud.tencent.com/pypi/simple
---index-url https://pypi.org/simple
