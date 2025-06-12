@@ -27,7 +27,11 @@ from celery.schedules import crontab
 from django.conf import settings
 from django.db import transaction
 
-from apps.meta.constants import PAAS_APP_BATCH_SIZE, SystemDiagnosisPushStatusEnum
+from apps.meta.constants import (
+    PAAS_APP_BATCH_SIZE,
+    SystemDiagnosisPushStatusEnum,
+    SystemSourceTypeEnum,
+)
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.handlers.system_sync import (
     IamSystemSyncer,
@@ -100,15 +104,17 @@ def sync_system_paas_info():
                 or deploy_info.get("stag", {}).get("url")
                 or market_addres.get("market_address")
             )
-            if any(
-                [
-                    db_system.logo_url != paas_system["logo_url"],
-                    db_system.system_url != paas_system_url,
-                ]
-            ):
-                db_system.logo_url = paas_system["logo_url"]
-                db_system.system_url = paas_system_url
+            # 更新 logo
+            if db_system.logo_url != paas_system["logo_url"]:
                 need_update = True
+                db_system.logo_url = paas_system["logo_url"]
+            # 更新系统 URL
+            if (
+                db_system.source_type not in SystemSourceTypeEnum.get_editable_sources()
+                and db_system.system_url != paas_system_url
+            ):
+                need_update = True
+                db_system.system_url = paas_system_url
             break
         if need_update:
             to_update.append(db_system)
