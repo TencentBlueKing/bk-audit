@@ -255,6 +255,10 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
     """
 
     experiences = serializers.IntegerField(required=False)
+    event_content = serializers.SerializerMethodField()
+
+    def get_event_content(self, obj):
+        return getattr(obj, "event_content_short", obj.event_content)
 
     class Meta:
         model = Risk
