@@ -724,6 +724,7 @@ class CreateSystemReqSerializer(serializers.ModelSerializer):
             "clients",
             "description",
             "callback_url",
+            "system_url",
             "managers",
         ]
         extra_kwargs = {
@@ -789,6 +790,12 @@ class UpdateSystemReqSerializer(serializers.Serializer):
         child=serializers.CharField(),
         required=False,
         allow_empty=True,
+    )
+    system_url = serializers.CharField(
+        label=_("系统地址"),
+        required=False,
+        allow_blank=False,
+        max_length=255,
     )
 
 

@@ -22,16 +22,6 @@ source = "."
 [tool.pdm]
 distribution = false
 
-[[tool.pdm.source]]
-name = "tencent"
-url = "https://mirrors.cloud.tencent.com/pypi/simple"
-verify_ssl = true
-
-[[tool.pdm.source]]
-name = "pypi"
-url = "https://pypi.org/simple"
-verify_ssl = true
-
 [tool.pdm.resolution]
 respect-source-order = true
 
