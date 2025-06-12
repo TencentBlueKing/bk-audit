@@ -70,5 +70,3 @@ sentry-sdk==1.28.1
 stackprinter==0.2.12
 whitenoise==5.2.0
 xlsxwriter==3.2.3
---extra-index-url https://mirrors.cloud.tencent.com/pypi/simple
---index-url https://pypi.org/simple
