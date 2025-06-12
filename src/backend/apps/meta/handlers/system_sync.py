@@ -95,13 +95,15 @@ class IamSystemSyncer(abc.ABC):
     IAM系统同步器
     """
 
-    def __init__(self, cls_name: str, *args, **kwargs):
+    def __init__(self, cls_name: str = None, *args, **kwargs):
         self.bk_username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
         self.default_ns = settings.DEFAULT_NAMESPACE
 
-    def __new__(cls, cls_name: str, *args, **kwargs) -> "IamSystemSyncer":
+    def __new__(cls, cls_name: str = None, *args, **kwargs) -> "IamSystemSyncer":
         if cls.__name__ != IamSystemSyncer.__name__:
             return super().__new__(cls)
+        if cls_name is None:
+            cls_name = cls.__name__
         sub_cls = {sub_cls.cls_name(): sub_cls for sub_cls in cls.__subclasses__()}
         return sub_cls[cls_name](cls_name, *args, **kwargs)
 
