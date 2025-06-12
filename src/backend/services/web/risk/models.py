@@ -25,6 +25,7 @@ from bk_audit.log.models import AuditInstance
 from blueapps.utils.request_provider import get_request_username
 from django.db import models
 from django.db.models import Max, Q, QuerySet
+from django.db.models.functions import Substr
 from django.utils.translation import gettext_lazy
 from iam import DjangoQuerySetConverter
 
@@ -32,6 +33,7 @@ from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_
 from apps.permission.handlers.permission import Permission
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
 from services.web.risk.constants import (
+    LIST_RISK_FIELD_MAX_LENGTH,
     EventMappingFields,
     RiskLabel,
     RiskStatus,
@@ -131,7 +133,12 @@ class Risk(OperateRecordModel):
         from services.web.risk.provider import RiskResourceProvider
 
         q |= DjangoQuerySetConverter(key_mapping=RiskResourceProvider.key_mapping).convert(policies)
-        return queryset.filter(q)
+        return (
+            queryset.filter(q)
+            .exclude(status=RiskStatus.CLOSED)
+            .annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH))
+            .defer("event_content")
+        )
 
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
