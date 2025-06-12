@@ -23,6 +23,7 @@ from functools import cmp_to_key
 from itertools import chain
 from typing import Set
 
+import django_filters as df
 import openpyxl
 import requests
 from bk_resource import CacheResource, Resource, api, resource
@@ -61,6 +62,7 @@ from apps.meta.models import (
     GeneralConfig,
     GlobalMetaConfig,
     ResourceType,
+    ResourceTypeActionRelation,
     ResourceTypeTreeNode,
     SensitiveObject,
     System,
@@ -104,6 +106,7 @@ from apps.meta.serializers import (
     ListUsersRequestSerializer,
     ListUsersResponseSerializer,
     NamespaceSerializer,
+    ResourceTypeListSerializer,
     ResourceTypeSerializer,
     ResourceTypeTreeReqSerializer,
     ResourceTypeTreeSerializer,
@@ -123,6 +126,7 @@ from apps.meta.serializers import (
     SystemSerializer,
     UpdateCustomFieldResponseSerializer,
     UpdateGeneralConfigSerializer,
+    UpdateResourceTypeSerializer,
     UpdateSystemReqSerializer,
     UploadDataMapFileRequestSerializer,
     UploadDataMapFileResponseSerializer,
@@ -388,10 +392,47 @@ class SystemAttrAbstractResource(Meta, ModelResource, ABC):
     many_response_data = True
 
 
+class ResourceTypeFilter(df.FilterSet):
+    # ────────────── 直接字段 ──────────────
+    system_id = df.CharFilter(lookup_expr="exact")
+    resource_type_id = df.CharFilter(lookup_expr="icontains")  # 模糊
+    name = df.CharFilter(lookup_expr="icontains")  # 模糊
+    name_en = df.CharFilter(lookup_expr="icontains")  # 模糊
+    sensitivity = df.NumberFilter()  # 精确匹配 (也可以用 RangeFilter)
+
+    # ────────────── 自定义：按 action_id 筛 ──────────────
+    actions = df.CharFilter(method="filter_by_actions")
+
+    # 约定 URL 传参: actions=edit,delete,view
+
+    class Meta:
+        model = ResourceType
+        fields = ["resource_type_id", "name", "name_en", "sensitivity", "actions"]
+
+    # ---------------- 核心逻辑 ----------------
+    def filter_by_actions(self, queryset, name, value):
+        """
+        只保留『包含任意一个给定 action_id』的资源类型：
+        ?actions=edit,delete
+        """
+        action_ids = [v.strip() for v in value.split(",") if v.strip()]
+        if not action_ids:
+            return queryset
+
+        rel_qs = ResourceTypeActionRelation.objects.filter(
+            system_id=OuterRef("system_id"),
+            resource_type_id=OuterRef("resource_type_id"),
+            action_id__in=action_ids,
+        )
+        return queryset.filter(Exists(rel_qs))
+
+
 class ResourceTypeListResource(SystemAttrAbstractResource):
     name = gettext_lazy("资源类型列表")
     model = models.ResourceType
     serializer_class = ResourceTypeSerializer
+    RequestSerializer = ResourceTypeListSerializer
+    view_set_attrs = {"filterset_class": ResourceTypeFilter}
 
     def list(self, params: dict) -> list:
         request, view_set = self.build_request_and_view_set(method="GET", params=params)
@@ -554,7 +595,7 @@ class UpdateResourceType(Meta, ModelResource):
     name = gettext_lazy("更新资源类型")
     model = ResourceType
     serializer_class = ResourceTypeSerializer
-    RequestSerializer = ResourceTypeSerializer
+    RequestSerializer = UpdateResourceTypeSerializer
     lookup_field = "unique_id"
 
 
