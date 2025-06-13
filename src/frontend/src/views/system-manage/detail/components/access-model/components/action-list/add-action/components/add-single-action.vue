@@ -23,17 +23,17 @@
       ref="formRef"
       class="customize-form"
       form-type="vertical"
-      :model="formData"
-      :rules="rules">
+      :model="formData">
       <div class="flex-center">
         <bk-form-item
           class="is-required mr16"
           :label="t('操作ID')"
           label-width="100"
-          property="id"
+          property="action_id"
+          required
           style="flex: 1;">
           <bk-input
-            v-model.trim="formData.id"
+            v-model.trim="formData.action_id"
             :placeholder="t('请输入操作ID')"
             style="width: 100%;" />
         </bk-form-item>
@@ -41,10 +41,11 @@
           class="is-required mr16"
           :label="t('操作名称')"
           label-width="100"
-          property="id"
+          property="name"
+          required
           style="flex: 1;">
           <bk-input
-            v-model.trim="formData.action_name"
+            v-model.trim="formData.name"
             :placeholder="t('请输入操作名称')"
             style="width: 100%;" />
         </bk-form-item>
@@ -54,63 +55,129 @@
         label-width="160"
         property="description">
         <bk-select
-          v-model="formData.resource"
-          allow-create
-          class="bk-select"
-          filterable
-          :input-search="false"
-          multiple
-          multiple-mode="tag"
-          :placeholder="t('请选择依赖资源')"
-          :search-placeholder="t('请输入关键字')">
-          <bk-option
-            v-for="(item, index) in parentResourceList"
-            :key="index"
-            :label="item.name"
-            :value="item.id" />
-        </bk-select>
-      </bk-form-item>
-      <bk-form-item
-        :label="t('分组标签')"
-        label-width="160"
-        property="description">
-        <bk-select
-          v-model="formData.tag"
-          allow-create
-          class="bk-select"
-          filterable
-          :input-search="false"
-          multiple
-          multiple-mode="tag"
-          :placeholder="t('请选择分组标签')"
-          :search-placeholder="t('请输入关键字')">
-          <bk-option
-            v-for="(item, index) in parentResourceList"
-            :key="index"
-            :label="item.name"
-            :value="item.id" />
+          ref="selectRef"
+          v-model="formData.resource_type_ids"
+          :auto-height="false"
+          custom-content
+          display-key="name"
+          id-key="resource_type_id"
+          @search-change="handleSearch">
+          <bk-tree
+            ref="treeRef"
+            children="children"
+            :data="parentResourceList"
+            :empty-text="t('数据搜索为空')"
+            label="raw_name"
+            :search="searchValue"
+            :show-node-type-icon="false"
+            @node-click="handleNodeClick">
+            <template #default="{ data }: { data: SystemResourceTypeTree }">
+              <span> {{ data.name }}</span>
+            </template>
+          </bk-tree>
         </bk-select>
       </bk-form-item>
     </audit-form>
   </div>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import _ from 'lodash';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
+
+  import MetaManageService from '@service/meta-manage';
+
+  import SystemActionModel from '@model/meta/system-action';
+  import type SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
+
+  import useMessage from '@/hooks/use-message';
+  import useRequest from '@/hooks/use-request';
+
+  interface Emits {
+    (e: 'updateAction'): void;
+  }
+
+  interface Props {
+    isEdit: boolean;
+    editData: SystemActionModel;
+  }
+
+  const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
+  const formRef = ref();
+  const { messageSuccess } = useMessage();
+  const selectRef = ref();
+  const treeRef = ref();
+  const route = useRoute();
 
   const formData  = ref({
-    id: '',
-    action_name: '',
-    resource: '',
-    tag: '',
+    action_id: '',
+    name: '',
+    resource_type_ids: '',
   });
-  const rules = ref({});
-  const parentResourceList = ref([{
-    name: '1',
-    id: 1,
-  }]);
+  const searchValue = ref('');
+
+  if (props.isEdit) {
+    nextTick(() => {
+      formData.value.action_id = props.editData.action_id;
+      formData.value.name = props.editData.name;
+      // eslint-disable-next-line prefer-destructuring
+      formData.value.resource_type_ids = props.editData.resource_type_ids[0];
+
+      selectRef.value.selected = [{
+        value: formData.value.resource_type_ids,
+        label: formData.value.name,
+      }];
+    });
+  }
+
+  // 获取父级资源
+  const {
+    data: parentResourceList,
+  }  = useRequest(MetaManageService.fetchParentResourceType, {
+    defaultParams: {
+      system_id: route.params.id,
+    },
+    defaultValue: [],
+    manual: true,
+  });
+
+  const handleSearch = (keyword: string) => {
+    searchValue.value = keyword;
+  };
+
+  const handleNodeClick = (data: SystemResourceTypeTree) => {
+    // 设置select选中
+    selectRef.value.selected = [{
+      value: data.resource_type_id,
+      label: data.name,
+    }];
+    formData.value.resource_type_ids = data.resource_type_id;
+  };
+
+  defineExpose({
+    submit() {
+      return formRef.value.validate().then(() => {
+        const params: Record<string, any> = _.cloneDeep(formData.value);
+        params.resource_type_ids = [params.resource_type_ids];
+        params.system_id = route.params.id;
+
+        if (props.isEdit) {
+          return  MetaManageService.updateAction(params).then(() => {
+            messageSuccess(t('更新成功'));
+            emits('updateAction');
+          });
+        }
+        return MetaManageService.createAction(params).then(() => {
+          messageSuccess(t('新增成功'));
+          emits('updateAction');
+        });
+      });
+    },
+  });
 </script>
 <style scoped lang="postcss">
 .add-single-resource {

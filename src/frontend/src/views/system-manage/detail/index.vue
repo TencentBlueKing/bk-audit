@@ -36,15 +36,28 @@
         :name="item.name">
         <template #label>
           <div class="customize-label">
-            <span v-if="index !== 0">
+            <span
+              v-if="(item.name === 'accessModel' && !data.model_count) ||
+                (item.name === 'dataReport' && !data.collector_count)">
               <audit-icon
-                style="font-size: 14px; color: #f59500;"
+                v-bk-tooltips="{
+                  content: item.name === 'accessModel' ? t('未完成权限模型配置，请尽快配置') : t('未完成日志数据上报，请尽快配置，避免影响后续策略使用'),
+                }"
+                style="font-size: 16px; color: #f59500;"
                 type="alert" />
             </span>
             <div class="label-name">
-              <h3>
-                {{ item.label }}
-              </h3>
+              <div style="display: flex; align-items: center;">
+                <h3>
+                  {{ item.label }}
+                </h3>
+                <span
+                  v-bk-tooltips="{
+                    content: t(`资源数据: ${data.resource_type_count}，操作数据: ${data.action_count}`),
+                    disabled: item.name !== 'accessModel'
+                  }"
+                  class="count">{{ item.name === 'accessModel' ? data.model_count : data.collector_count }}</span>
+              </div>
               <span class="label-describe">{{ item.describe }}</span>
             </div>
           </div>
@@ -164,6 +177,16 @@
 
         .label-name {
           margin-left: 5px;
+
+          .count {
+            width: 23px;
+            height: 16px;
+            margin-left: 5px;
+            line-height: 16px;
+            text-align: center;
+            background: #f0f1f5;
+            border-radius: 8px;
+          }
 
           .label-describe {
             font-size: 12px;

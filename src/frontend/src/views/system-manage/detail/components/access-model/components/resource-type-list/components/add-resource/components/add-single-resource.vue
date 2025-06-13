@@ -25,7 +25,10 @@
       <bk-radio-button label="customize">
         {{ t('自定义') }}
       </bk-radio-button>
-      <bk-radio-button label="other">
+      <bk-radio-button
+        v-bk-tooltips="t('暂不支持，敬请期待')"
+        disabled
+        label="other">
         {{ t('从其他系统引入') }}
       </bk-radio-button>
     </bk-radio-group>
@@ -33,17 +36,17 @@
       ref="formRef"
       class="customize-form"
       form-type="vertical"
-      :model="formData"
-      :rules="rules">
+      :model="formData">
       <div class="flex-center">
         <bk-form-item
           class="is-required mr16"
           :label="t('资源类型id')"
           label-width="100"
-          property="id"
+          property="resource_type_id"
+          required
           style="flex: 1;">
           <bk-input
-            v-model.trim="formData.id"
+            v-model.trim="formData.resource_type_id"
             :placeholder="t('请输入资源类型id')"
             style="width: 100%;" />
         </bk-form-item>
@@ -51,10 +54,11 @@
           class="is-required mr16"
           :label="t('资源类型名称')"
           label-width="100"
-          property="id"
+          property="name"
+          required
           style="flex: 1;">
           <bk-input
-            v-model.trim="formData.resource_name"
+            v-model.trim="formData.name"
             :placeholder="t('请输入资源类型名称')"
             style="width: 100%;" />
         </bk-form-item>
@@ -62,23 +66,46 @@
       <bk-form-item
         :label="t('所属父级资源')"
         label-width="160"
-        property="description">
+        property="ancestors"
+        required>
         <bk-select
-          v-model="formData.parent_resource"
-          allow-create
-          class="bk-select"
-          filterable
-          :input-search="false"
-          multiple
-          multiple-mode="tag"
-          :placeholder="t('请选择')"
-          :search-placeholder="t('请输入关键字')">
-          <bk-option
-            v-for="(item, index) in parentResourceList"
-            :key="index"
-            :label="item.name"
-            :value="item.id" />
+          ref="selectRef"
+          v-model="formData.ancestors"
+          :auto-height="false"
+          custom-content
+          display-key="name"
+          id-key="resource_type_id"
+          @search-change="handleSearch">
+          <bk-tree
+            ref="treeRef"
+            children="children"
+            :data="parentResourceList"
+            :empty-text="t('数据搜索为空')"
+            label="raw_name"
+            :search="searchValue"
+            :show-node-type-icon="false"
+            @node-click="handleNodeClick">
+            <template #default="{ data }: { data: SystemResourceTypeTree }">
+              <span> {{ data.name }}</span>
+            </template>
+          </bk-tree>
         </bk-select>
+      </bk-form-item>
+      <bk-form-item
+        class="sensitivity-level-group"
+        :label="t('敏感等级')"
+        label-width="160"
+        property="sensitivity"
+        required>
+        <bk-button-group>
+          <bk-button
+            v-for="item in sensitivityList"
+            :key="item.value"
+            :selected="formData.sensitivity === item.value"
+            @click="handleSensitivity(item.value)">
+            <span>{{ item.label }}</span>
+          </bk-button>
+        </bk-button-group>
       </bk-form-item>
     </audit-form>
     <div class="other-action">
@@ -103,23 +130,125 @@
   </div>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import _ from 'lodash';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
+
+  import MetaManageService from '@service/meta-manage';
+
+  import type SystemResourceTypeModel from '@model/meta/system-resource-type';
+  import type SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
+
+  interface Emits {
+    (e: 'updateResource'): void;
+  }
+  interface Props {
+    isEdit: boolean;
+    editData: SystemResourceTypeModel;
+  }
+
+  import useMessage from '@/hooks/use-message';
+  import useRequest from '@/hooks/use-request';
+
+  const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
+
+  const sensitivityList = [
+    {
+      value: 2,
+      label: '二级(低)',
+    },
+    {
+      value: 3,
+      label: '三级(中)',
+    },
+    {
+      value: 4,
+      label: '四级(高)',
+    },
+  ];
 
   const { t } = useI18n();
-
+  const route = useRoute();
+  const selectRef = ref();
+  const formRef = ref();
+  const { messageSuccess } = useMessage();
+  const addType = ref('customize');
   const formData  = ref({
-    id: '',
-    resource_name: '',
-    parent_resource: '',
+    resource_type_id: '',
+    name: '',
+    ancestors: '',
+    sensitivity: 2,
   });
-  const rules = ref({});
-  const addType = ref('QQ');
-  const parentResourceList = ref([{
-    name: '1',
-    id: 1,
-  }]);
+  const searchValue = ref('');
   const actionArr = ref([]);
+
+  if (props.isEdit) {
+    nextTick(() => {
+      formData.value.resource_type_id = props.editData.resource_type_id;
+      formData.value.name = props.editData.name;
+      // eslint-disable-next-line prefer-destructuring
+      formData.value.ancestors = props.editData.ancestors[0];
+      formData.value.sensitivity = props.editData.sensitivity;
+
+      selectRef.value.selected = [{
+        value: formData.value.ancestors,
+        label: formData.value.name,
+      }];
+    });
+  }
+
+  // 获取父级资源
+  const {
+    data: parentResourceList,
+  }  = useRequest(MetaManageService.fetchParentResourceType, {
+    defaultParams: {
+      system_id: route.params.id,
+    },
+    defaultValue: [],
+    manual: true,
+  });
+
+  const handleSearch = (keyword: string) => {
+    searchValue.value = keyword;
+  };
+
+  const handleNodeClick = (data: SystemResourceTypeTree) => {
+    // 设置select选中
+    selectRef.value.selected = [{
+      value: data.resource_type_id,
+      label: data.name,
+    }];
+    formData.value.ancestors = data.resource_type_id;
+  };
+
+  const handleSensitivity = (value: number) => {
+    formData.value.sensitivity = value;
+  };
+
+  defineExpose({
+    submit() {
+      return formRef.value.validate().then(() => {
+        const params: Record<string, any> = _.cloneDeep(formData.value);
+        params.ancestors = [params.ancestors];
+        params.system_id = route.params.id;
+        params.unique_id = `${route.params.id}:${params.resource_type_id}`;
+        // 编辑
+        if (props.isEdit) {
+          return MetaManageService.updateResourceType(params).then(() => {
+            messageSuccess(t('编辑成功'));
+            emits('updateResource');
+          });
+        }
+        // 新增
+        return MetaManageService.createResourceType(params).then(() => {
+          messageSuccess(t('创建成功'));
+          emits('updateResource');
+        });
+      });
+    },
+  });
 </script>
 <style scoped lang="postcss">
 .add-single-resource {
@@ -131,6 +260,45 @@
     .flex-center {
       display: flex;
       align-items: center;
+    }
+
+    .sensitivity-level-group {
+      :deep(.bk-button-group) {
+        .bk-button {
+          &:first-child:hover:not(.is-disabled, .is-selected) {
+            color: #979ba5;
+            border-color: #979ba5;
+          }
+
+          &:first-child.is-selected {
+            color: #fff;
+            background-color: #979ba5;
+            border-color: #979ba5;
+          }
+
+          &:nth-child(2):hover:not(.is-disabled, .is-selected) {
+            color: #ff9c01;
+            border-color: #ff9c01;
+          }
+
+          &:nth-child(2).is-selected {
+            color: #fff;
+            background-color: #ff9c01;
+            border-color: #ff9c01;
+          }
+
+          &:hover:not(.is-disabled, .is-selected) {
+            color: #ea3636;
+            border-color: #ea3636;
+          }
+
+          &.is-selected {
+            color: #fff;
+            background-color: #ea3636;
+            border-color: #ea3636;
+          }
+        }
+      }
     }
   }
 
