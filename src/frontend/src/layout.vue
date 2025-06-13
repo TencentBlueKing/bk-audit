@@ -217,14 +217,46 @@
               filterable
               :popover-options="{
                 extCls: 'system-select-popover',
+                width: 'auto'
               }"
               @change="handleSystemChange">
               <bk-option
-                v-for="(item, index) in projectList"
-                :id="item.value"
-                :key="index"
-                :disabled="item.disabled"
-                :name="item.label" />
+                v-for="item in projectList"
+                :id="item.id"
+                :key="item.id"
+                :disabled="!(item.permission.view_system)"
+                :name="item.name">
+                <div
+                  class="popover"
+                  :style="item.permission.view_system ? `color: #C4C6CC;` : `color: #70737A;`">
+                  <span>{{ item.name }}({{ item.id }})
+                    <bk-popover
+                      v-if="item.system_status !== 'normal'"
+                      :content="t('系统尚未完成日志数据上报，请继续上报')"
+                      placement="top"
+                      theme="light">
+                      <bk-tag
+                        size="small"
+                        style="margin-left: 8px;"
+                        theme="warning"
+                        type="filled">
+                        {{ systemStatusText(item.system_status) }}
+                      </bk-tag>
+                    </bk-popover>
+                  </span>
+                  <span>
+                    <img
+                      v-if="item.favorite"
+                      class="pentagram-fill"
+                      src="@images/pentagram-fill.svg">
+                    <img
+                      v-if="!(item.permission.view_system)"
+                      class="pentagram-fill"
+                      src="@images/lock-1.svg">
+                  </span>
+                </div>
+              </bk-option>
+
               <template #extension>
                 <div
                   class="custom-extension"
@@ -290,6 +322,8 @@
     useRouter,
   } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
+
   import ConfigModel from '@model/root/config';
 
   import useEventBus from '@hooks/use-event-bus';
@@ -302,6 +336,8 @@
   import AuditNavigation from '@components/audit-navigation/index.vue';
 
   import systemHeaderTips from '@views/new-system-manage/system-info/components/header-tips.vue';
+
+  import useRequest from '@/hooks/use-request';
 
   interface Exposes {
     titleRef: Ref<string>
@@ -329,29 +365,49 @@
   const curNavName = ref('');
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
-  const systemId = ref(' ');
+  const systemId = ref('');
   // 项目列表
-  const projectList = ref([
-    {
-      label: '审计中心',
-      value: 'bk-audit',
-      disabled: false,
-    },
-    {
-      label: 'DNF',
-      value: '2',
-      disabled: false,
-    },
-    {
-      label: 'DNF2',
-      value: '3',
-      disabled: false,
-    },
-  ]);
+  interface SystemItem {
+    id: string;
+    name: string;
+    permission: {
+      view_system: boolean;
+    };
+    system_status: 'pending' | 'completed' | 'abnormal' | 'normal';
+    favorite: boolean;
+  }
 
+  const projectList = ref<SystemItem[]>([]);
+  // 获取系统 列表
+  const transformToSystemItem = (data: any[]): SystemItem[] => data.map(item => ({
+    id: item.id || '',
+    name: item.name || '',
+    permission: {
+      view_system: item.permission?.view_system || false,
+    },
+    system_status: item.system_status || 'pending',
+    favorite: item.favorite || false,
+  }));
+
+  const {
+    run: fetchSystemWithAction,
+  } = useRequest(MetaManageService.fetchSystemWithAction, {
+    defaultValue: [],
+    onSuccess: (data: any[]) => {
+      projectList.value = transformToSystemItem(data);
+      systemId.value = sessionStorage.getItem('systemProjectId') || data[0]?.id || '';
+    },
+  });
+  const systemStatusText = (val: string) => {
+    const statusMap = {
+      pending: '待接入',
+      completed: '待完善',
+      abnormal: '数据异常',
+      normal: '正常',
+    };
+    return statusMap[val as keyof typeof statusMap] || val; // 如果找不到对应状态，返回原值
+  };
   on('statement-menuData', (data) => {
-    console.log('audit-menu', data);
-
     menuData.value = data as Array<MenuDataType>;
     titleRef.value = menuData.value[0]?.name;
   });
@@ -362,7 +418,6 @@
 
   // 导航路由切换
   const handleRouterChange = (routerName: string) => {
-    console.log('systemInfo', routerName);
     if (curNavName.value === 'auditStatement') {
       router.push({
         name: 'statementManageDetail',
@@ -373,6 +428,11 @@
       titleRef.value = menuData.value.find(item => item.id === routerName)?.name || '';
       return;
     }
+    if (routerName === 'systemAccess') {
+      const routePath = router.resolve({ name: routerName }).href;
+      window.open(routePath, '_blank');
+      return;
+    }
     router.push({
       name: routerName,
     });
@@ -381,7 +441,13 @@
   // 系统切换
   const handleSystemChange = (value: string) => {
     // 在route.meta中添加systemId
-    console.log('audit-menu', value);
+    sessionStorage.setItem('systemProjectId', value);
+    router.push({
+      name: 'systemInfo',
+      params: {
+        id: value,
+      },
+    });
   };
 
   watch(route, () => {
@@ -391,7 +457,13 @@
     immediate: true,
   });
   onMounted(() => {
-    systemId.value = projectList.value[0].value;
+    fetchSystemWithAction({
+      sort_keys: 'favorite,permission,audit_status',
+      action_ids: 'view_system',
+      with_favorite: true,
+      with_system_status: true,
+      audit_status__in: 'pending,accessed',
+    });
   }),
   onBeforeUnmount(() => {
     off('statement-menuData');
@@ -478,6 +550,20 @@
     .is-selected:not(.is-checkbox) {
       background-color: #294066 !important;
     }
+  }
+
+  .popover {
+    position: relative;
+    display: flex;
+    width: 100%;
+    align-items: center;  /* 垂直居中 */
+    justify-content: space-between;  /* 两端对齐 */
+  }
+
+  .pentagram-fill {
+    width: 14px;
+    height: 14px;
+    margin-left: 8px;  /* 添加左边距 */
   }
 }
 </style>
