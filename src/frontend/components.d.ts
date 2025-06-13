@@ -53,6 +53,7 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     ScrollFaker: typeof import('./src/components/scroll-faker/index.vue')['default']
     SelectorBox: typeof import('./src/components/ip-selector/selector-box/index.vue')['default']
+    SelectVerify: typeof import('./src/components/select-verify/index.vue')['default']
     ShowTooltipsText: typeof import('./src/components/show-tooltips-text/index.vue')['default']
     SkeletonLoading: typeof import('./src/components/skeleton-loading/index.vue')['default']
     SmartAction: typeof import('./src/components/smart-action/index.vue')['default']
