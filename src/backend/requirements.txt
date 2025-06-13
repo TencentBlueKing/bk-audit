@@ -67,6 +67,7 @@ raven==6.10.0
 redis==3.5.3
 requests==2.32.4
 sentry-sdk==1.45.1
+sqlglot==26.26.0
 stackprinter==0.2.12
 whitenoise==5.2.0
 xlsxwriter==3.2.3

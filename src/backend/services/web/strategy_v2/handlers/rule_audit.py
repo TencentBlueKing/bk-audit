@@ -26,9 +26,10 @@ from pypika import functions as fn
 from pypika.terms import Function, Term, ValueWrapper
 
 from apps.meta.utils.fields import SYSTEM_ID
-from core.sql.builder import BKBaseQueryBuilder
+from core.sql.builder.builder import BKBaseQueryBuilder
+from core.sql.builder.functions import ConcatWs, GetJsonObject, JsonValue
+from core.sql.builder.generator import BkBaseComputeSqlGenerator
 from core.sql.constants import FilterConnector, Operator
-from core.sql.functions import ConcatWs, GetJsonObject, JsonValue
 from core.sql.model import (
     Condition,
     Field,
@@ -38,7 +39,6 @@ from core.sql.model import (
     Table,
     WhereCondition,
 )
-from core.sql.sql_builder import BkBaseComputeSqlGenerator
 from services.web.analyze.constants import FlowSQLNodeType
 from services.web.risk.constants import EventMappingFields
 from services.web.strategy_v2.constants import LinkTableTableType, RuleAuditConfigType

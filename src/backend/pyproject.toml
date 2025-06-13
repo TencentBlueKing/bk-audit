@@ -95,7 +95,10 @@ dependencies = [
     "pympler>=1.1",
     "xlsxwriter==3.2.3",
     "nh3>=0.3.0",
+    "django-treebeard==4.7.1",
+    "flower==2.0.1",
     "drf-pydantic==2.7.1",
+    "sqlglot==26.26.0",
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
