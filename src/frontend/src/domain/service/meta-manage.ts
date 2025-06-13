@@ -19,6 +19,7 @@ import RetrieveUserModel from '@model/meta/retrieve-user';
 import SystemModel from '@model/meta/system';
 import SystemActionModel from '@model/meta/system-action';
 import SystemResourceTypeModel from '@model/meta/system-resource-type';
+import SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
 import UserModel from '@model/meta/user';
 
 import MetaManageSource from '../source/meta-manage';
@@ -113,6 +114,38 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 删除操作
+   * @param { String } unique_id
+   */
+  deleteAction(params: Record<'unique_id', string>) {
+    return MetaManageSource.deleteAction(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取操作
+   * @param { String } unique_id
+   */
+  fetchActionByUniqueId(params: Record<'unique_id', string>) {
+    return MetaManageSource.getActionByUniqueId(params)
+      .then(({ data }) => new SystemActionModel(data));
+  },
+  /**
+   * @desc 新建操作
+   * @param { Object } params
+   */
+  createAction(params: Record<string, any>) {
+    return MetaManageSource.createAction(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 更新操作
+   * @param { Object } params
+   */
+  updateAction(params: Record<string, any>) {
+    return MetaManageSource.updateAction(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 资源类型列表
    * @param { String } id
    */
@@ -128,6 +161,46 @@ export default {
    */
   fetchBatchSystemResourceTypeList(params: Record<'system_ids', string>) {
     return MetaManageSource.getBatchResourceTypeBySysetemIds(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 删除资源类型
+   * @param { String } unique_id
+   */
+  deleteResourceType(params: Record<'unique_id', string>) {
+    return MetaManageSource.deleteResourceType(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取资源类型
+   * @param { String } unique_id
+   */
+  fetchResourceTypeByUniqueId(params: Record<'unique_id', string>) {
+    return MetaManageSource.getResourceTypeByUniqueId(params)
+      .then(({ data }) => new SystemResourceTypeModel(data));
+  },
+  /**
+   * @desc 获取父级资源
+   * @param { String } system_ids
+   */
+  fetchParentResourceType(params: Record<'system_id', string>) {
+    return MetaManageSource.getParentResourceType(params)
+      .then(({ data }) => data.map(item => new SystemResourceTypeTree(item)));
+  },
+  /**
+   * @desc 新建资源
+   * @param { Object } params
+   */
+  createResourceType(params: Record<string, any>) {
+    return MetaManageSource.createResourceType(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 更新资源
+   * @param { Object } params
+   */
+  updateResourceType(params: Record<string, any>) {
+    return MetaManageSource.updateResourceType(params)
       .then(({ data }) => data);
   },
   /**

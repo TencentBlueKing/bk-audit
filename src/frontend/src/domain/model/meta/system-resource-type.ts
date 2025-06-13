@@ -36,6 +36,11 @@ export default class SystemResourceType {
   permission: {
     manage_global_setting: boolean
   };
+  action: Array<{
+    name: string;
+    description: string;
+  }>;
+  unique_id: string;
 
   static switchMap: Record<string, boolean> = {
     [STATUS_CLOSED]: false,
@@ -49,7 +54,7 @@ export default class SystemResourceType {
     [STATUS_FAILED]: '停用',
   };
 
-  constructor(payload: SystemResourceType) {
+  constructor(payload = {} as SystemResourceType) {
     this.ancestors = payload.ancestors;
     this.resource_type_id = payload.resource_type_id;
     this.description = payload.description;
@@ -62,6 +67,8 @@ export default class SystemResourceType {
     this.status = payload.status;
     this.bkbase_url = payload.bkbase_url;
     this.permission = payload.permission;
+    this.action = payload.action;
+    this.unique_id = payload.unique_id;
   }
 
   get swithValue() {

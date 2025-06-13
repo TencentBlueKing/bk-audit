@@ -30,7 +30,7 @@
             type="add" />
           {{ t('新建操作') }}
         </bk-button>
-        <bk-button>
+        <bk-button @click="handleBatchCreate">
           {{ t('批量新增') }}
         </bk-button>
       </div>
@@ -54,7 +54,9 @@
         :data="data" />
     </bk-loading>
   </div>
-  <add-action ref="addActionRef" />
+  <add-action
+    ref="addActionRef"
+    @update-action="handleUpdateAction" />
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
@@ -64,11 +66,13 @@
 
   import MetaManageService from '@service/meta-manage';
 
-  import type SystemActionModel from '@model/meta/system-action';
+  import SystemActionModel from '@model/meta/system-action';
 
   import useRequest from '@hooks/use-request';
 
   import addAction from './add-action/index.vue';
+
+  import useMessage from '@/hooks/use-message';
 
   interface SearchKey {
     id: string,
@@ -92,6 +96,7 @@
   const { t } = useI18n();
   const route = useRoute();
   const addActionRef = ref();
+  const { messageSuccess } = useMessage();
 
   const tableColumn = [
     {
@@ -112,7 +117,17 @@
     },
     {
       label: () => t('关联资源类型'),
-      field: () => 'resource_type',
+      render: ({ data }: {data: SystemActionModel}) => (
+        <>
+          { (data.resource_type_ids && data.resource_type_ids.length)
+            ? data.resource_type_ids.map((item, index) => (
+              <div key={index}>
+                { item}
+              </div>
+            )) : '--'
+          }
+        </>
+      ),
     },
     {
       label: () => t('风险等级'),
@@ -178,18 +193,6 @@
 
   const searchKey = ref<Array<SearchKey>>([]);
 
-  const handleEdit = (data: SystemActionModel) => {
-    console.log(data);
-  };
-
-  const handleDelete = (data: SystemActionModel) => {
-    console.log(data);
-  };
-
-  const handleCreate = () => {
-    addActionRef.value.handleOpen();
-  };
-
   const {
     run: fetchSystemActionList,
     loading,
@@ -201,6 +204,56 @@
     defaultValue: [],
     manual: true,
   });
+
+  // 删除操作
+  const {
+    run: deleteAction,
+  } = useRequest(MetaManageService.deleteAction, {
+    defaultValue: {},
+    onSuccess: () => {
+      messageSuccess(t('删除成功'));
+      fetchSystemActionList({
+        id: route.params.id,
+      });
+    },
+  });
+
+  // 获取资源
+  const {
+    data: actionData,
+    run: fetchActionByUniqueId,
+  } = useRequest(MetaManageService.fetchActionByUniqueId, {
+    defaultValue: new SystemActionModel(),
+    onSuccess: () => {
+      addActionRef.value.handleOpen(false, actionData.value);
+    },
+  });
+
+  const handleEdit = (data: SystemActionModel) => {
+    fetchActionByUniqueId({
+      unique_id: data.unique_id,
+    });
+  };
+
+  const handleDelete = (data: SystemActionModel) => {
+    deleteAction({
+      unique_id: data.unique_id,
+    });
+  };
+
+  const handleBatchCreate = () => {
+    addActionRef.value.handleOpen(true);
+  };
+
+  const handleCreate = () => {
+    addActionRef.value.handleOpen();
+  };
+
+  const handleUpdateAction = () => {
+    fetchSystemActionList({
+      id: route.params.id,
+    });
+  };
 
   const handleSearch = (keyword: Array<any>) => {
     const search = {

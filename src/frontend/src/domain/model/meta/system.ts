@@ -15,9 +15,17 @@
   to the current version of the project delivered to anyone in the future.
 */
 const NORMAL = 'normal';
+const PENDING = 'pending';
+const COMPLETED = 'completed';
+const ABNORMAL = 'abnormal';
+const ACCESSED = 'accessed';
 const NODATA = 'nodata';
 const UNSET = 'unset';
 export default class System {
+  action_count: number;
+  resource_type_count: number;
+  collector_count: number;
+  audit_status: string;
   id: number;
   callback_url: string;
   clients: string;
@@ -46,19 +54,26 @@ export default class System {
     [NODATA]: 'abnormal',
     [UNSET]: 'unknown',
   };
+  static auditTextMap: Record<string, string> = {
+    [PENDING]: '待接入',
+    [COMPLETED]: '待完善',
+    [ABNORMAL]: '数据异常',
+    [NORMAL]: '正常',
+    [ACCESSED]: '已接入',
+  };
   status_msg: string;
   status: string;
   last_time: string;
-  model: {
-    resources: number;
-    operations: number;
-  } | null;
   app_code: string;
   system_domain: string;
   created_at: string;
   created_by: string;
 
   constructor(payload = {} as System) {
+    this.audit_status = payload.audit_status;
+    this.resource_type_count = payload.resource_type_count;
+    this.collector_count = payload.collector_count;
+    this.action_count = payload.action_count;
     this.id = payload.id;
     this.callback_url = payload.callback_url;
     this.clients = payload.clients;
@@ -77,10 +92,6 @@ export default class System {
     this.last_time = payload.last_time;
 
     this.provider_config = this.initProviderConfig(payload.provider_config);
-    this.model = {
-      resources: 10,
-      operations: 10,
-    };
     this.app_code = payload.app_code;
     this.system_domain = payload.system_domain;
     this.created_at = payload.created_at;
@@ -103,5 +114,13 @@ export default class System {
 
   get managersText() {
     return this.managers.join(',');
+  }
+
+  get auditText() {
+    return System.auditTextMap[this.audit_status];
+  }
+
+  get model_count() {
+    return this.action_count + this.resource_type_count;
   }
 }
