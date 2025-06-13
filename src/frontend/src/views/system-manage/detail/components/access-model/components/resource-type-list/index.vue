@@ -32,7 +32,7 @@
             type="add" />
           {{ t('新建资源类型') }}
         </bk-button>
-        <bk-button>
+        <bk-button @click="handleBatchCreate">
           {{ t('批量新增') }}
         </bk-button>
       </div>
@@ -63,7 +63,9 @@
     :width="640">
     <job-plan :data="rowData" />
   </audit-sideslider>
-  <add-resource ref="addResourceRef" />
+  <add-resource
+    ref="addResourceRef"
+    @update-resource="handleUpdateResource" />
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
@@ -80,7 +82,7 @@
   import MetaManageService from '@service/meta-manage';
 
   import SystemModel from '@model/meta/system';
-  import type SystemResourceTypeModel from '@model/meta/system-resource-type';
+  import SystemResourceTypeModel from '@model/meta/system-resource-type';
 
   import useRequest from '@hooks/use-request';
 
@@ -89,6 +91,8 @@
   import JobPlan from './components/job-plan.vue';
   import StatusTag from './components/status-tag.vue';
   import TaskSwitch from './components/task-switch.vue';
+
+  import useMessage from '@/hooks/use-message';
 
   interface SearchKey {
     id: string,
@@ -111,6 +115,7 @@
 
   const { t, locale } = useI18n();
   const route = useRoute();
+  const { messageSuccess } = useMessage();
 
   const baseTableColumn = [
     {
@@ -133,7 +138,24 @@
     {
       label: () => t('资源操作'),
       field: () => 'resource_action',
-      width: '250px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+        <ul>
+          { (data.action && data.action.length) ? data.action.map((item, index) => (
+            <li
+              style="height: 30px;"
+              key={index}>
+              <span
+                v-bk-tooltips={{
+                  content: item.description,
+                }}
+                style="border-bottom:1px dashed #C4C6CC;"
+                >
+                {item.name}
+              </span>
+            </li>
+          )) : '--' }
+        </ul>
+      ),
     },
     {
       label: () => t('敏感等级'),
@@ -326,7 +348,30 @@
     run: fetchSnapShotStatus,
   } = useRequest(CollectorManageService.fetchSnapShotStatus, {
     defaultValue: {},
+  });
 
+  // 删除资源
+  const {
+    run: deleteResourceType,
+  } = useRequest(MetaManageService.deleteResourceType, {
+    defaultValue: {},
+    onSuccess: () => {
+      messageSuccess(t('删除成功'));
+      fetchSysetemResourceTypeList({
+        id: route.params.id,
+      });
+    },
+  });
+
+  // 获取资源
+  const {
+    data: resourceTypeData,
+    run: fetchResourceTypeByUniqueId,
+  } = useRequest(MetaManageService.fetchResourceTypeByUniqueId, {
+    defaultValue: new SystemResourceTypeModel(),
+    onSuccess: () => {
+      addResourceRef.value.handleOpen(false, resourceTypeData.value);
+    },
   });
 
   const getSnapShotStatus = () => {
@@ -357,7 +402,9 @@
   // };
 
   const handleEdit = (data: SystemResourceTypeModel) => {
-    console.log(data);
+    fetchResourceTypeByUniqueId({
+      unique_id: data.unique_id,
+    });
   };
 
   const handleViewData = (data: SystemResourceTypeModel) => {
@@ -365,11 +412,24 @@
   };
 
   const handleDelete = (data: SystemResourceTypeModel) => {
-    console.log(data);
+    deleteResourceType({
+      unique_id: data.unique_id,
+    });
+  };
+
+  const handleBatchCreate = () => {
+    addResourceRef.value.handleOpen(true);
   };
 
   const handleCreate = () => {
     addResourceRef.value.handleOpen();
+  };
+
+  const handleUpdateResource = () => {
+    handleDataStatus();
+    fetchSysetemResourceTypeList({
+      id: route.params.id,
+    });
   };
 
   onMounted(() => {
