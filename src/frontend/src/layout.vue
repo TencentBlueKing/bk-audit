@@ -213,7 +213,7 @@
             {{ t('所有风险') }}
           </audit-menu-item>
         </template>
-        <template v-else-if="menuData.length">
+        <template v-else-if="menuData.length && curNavName === 'auditStatement'">
           <audit-menu-item
             v-for="item in menuData"
             :key="item.id"
@@ -225,7 +225,7 @@
             {{ item.name }}
           </audit-menu-item>
         </template>
-        <template v-else>
+        <template v-else-if="curNavName === 'nweSystemManage'">
           <div class="system-select">
             <bk-select
               v-model="systemId"
@@ -382,7 +382,7 @@
   const curNavName = ref('');
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
-  const systemId = ref('');
+  const systemId = ref(null);
   // 项目列表
   interface SystemItem {
     id: string;
@@ -395,24 +395,20 @@
   }
 
   const projectList = ref<SystemItem[]>([]);
-  // 获取系统 列表
-  const transformToSystemItem = (data: any[]): SystemItem[] => data.map(item => ({
-    id: item.id || '',
-    name: item.name || '',
-    permission: {
-      view_system: item.permission?.view_system || false,
-    },
-    system_status: item.system_status || 'pending',
-    favorite: item.favorite || false,
-  }));
 
   const {
     run: fetchSystemWithAction,
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
     onSuccess: (data: any[]) => {
-      projectList.value = transformToSystemItem(data);
-      systemId.value = sessionStorage.getItem('systemProjectId') || data[0]?.id || '';
+      projectList.value = data;
+      systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
+      router.push({
+        name: 'systemInfo',
+        params: {
+          id: systemId.value,
+        },
+      });
     },
   });
   const systemStatusText = (val: string) => {
@@ -473,6 +469,7 @@
     deep: true,
     immediate: true,
   });
+
   onMounted(() => {
     fetchSystemWithAction({
       sort_keys: 'favorite,permission,audit_status',
