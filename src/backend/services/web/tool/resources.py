@@ -18,12 +18,18 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
+from bk_resource import Resource
 from django.db import transaction
 from django.db.models import Q
 from django.http import Http404
 from django.utils.translation import gettext, gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
+from core.sql.parser.praser import SqlQueryAnalysis
+from services.web.tool.serializer import (
+    SqlAnalyseRequestSerializer,
+    SqlAnalyseResponseSerializer,
+)
 from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
@@ -180,3 +186,20 @@ class GetToolDetail(ToolBase):
         if not tool:
             raise Http404(gettext("Tool not found: %s") % uid)
         return tool
+
+
+class SqlAnalyseResource(ToolBase, Resource):
+    """解析SQL，返回引用表、变量和结果字段信息"""
+
+    name = gettext_lazy("SQL解析")
+    RequestSerializer = SqlAnalyseRequestSerializer
+    ResponseSerializer = SqlAnalyseResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        analyser = SqlQueryAnalysis(
+            validated_request_data["sql"],
+            dialect=validated_request_data.get("dialect") or None,
+        )
+        analyser.parse_sql()
+        parsed = analyser.get_parsed_def()
+        return parsed.model_dump()
