@@ -23,6 +23,7 @@ import type StandardFieldModel from '@model/meta/standard-field';
 import type SystemModel from '@model/meta/system';
 import type SystemActionModel from '@model/meta/system-action';
 import type SystemResourceTypeModel from '@model/meta/system-resource-type';
+import type SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
 import type UserModel from '@model/meta/user';
 
 import Request, {
@@ -90,9 +91,10 @@ class MetaManage extends ModuleBase {
       payload,
     });
   }
-  // 获取系统详情
+  // 操作列表
   getAllActionBySysetemId(params: Record<'id', string>, payload = {} as IRequestPayload) {
     return Request.get<Array<SystemActionModel>>(`${this.path}/systems/${params.id}/actions/`, {
+      params,
       payload,
     });
   }
@@ -102,15 +104,62 @@ class MetaManage extends ModuleBase {
       params,
     });
   }
+  // 删除操作
+  deleteAction(params: Record<'unique_id', string>) {
+    return Request.delete(`${this.path}/actions/${params.unique_id}/`);
+  }
+  // 获取操作
+  getActionByUniqueId(params: Record<'unique_id', string>) {
+    return Request.get<SystemActionModel>(`${this.path}/action/${params.unique_id}/`);
+  }
+  // 新建操作
+  createAction(params: Record<string, any>) {
+    return Request.post(`${this.path}/actions/`, {
+      params,
+    });
+  }
+  // 更新操作
+  updateAction(params: Record<string, any>) {
+    return Request.put(`${this.path}/action/${params.unique_id}/`, {
+      params,
+    });
+  }
   // 资源类型列表
   getAllResourceTypeBySysetemId(params: Record<'id', string>, payload = {} as IRequestPayload) {
     return Request.get<Array<SystemResourceTypeModel>>(`${this.path}/systems/${params.id}/resource_types/`, {
+      params,
       payload,
     });
   }
   // 资源类型列表(搜索)
   getBatchResourceTypeBySysetemIds(params: Record<'system_ids', string>) {
     return Request.get<Array<Record<'id'|'name', string>>>(`${this.path}/systems/resource_type_search/`, {
+      params,
+    });
+  }
+  // 删除资源类型
+  deleteResourceType(params: Record<'unique_id', string>) {
+    return Request.delete(`${this.path}/resource_types/${params.unique_id}/`);
+  }
+  // 获取资源类型
+  getResourceTypeByUniqueId(params: Record<'unique_id', string>) {
+    return Request.get<SystemResourceTypeModel>(`${this.path}/resource_types/${params.unique_id}/`);
+  }
+  // 获取父级资源
+  getParentResourceType(params: Record<'system_id', string>) {
+    return Request.get<Array<SystemResourceTypeTree>>(`${this.path}/resource_types/tree/`, {
+      params,
+    });
+  }
+  // 新建资源
+  createResourceType(params: Record<string, any>) {
+    return Request.post(`${this.path}/resource_types/`, {
+      params,
+    });
+  }
+  // 更新资源
+  updateResourceType(params: Record<string, any>) {
+    return Request.put(`${this.path}/resource_types/${params.unique_id}/`, {
       params,
     });
   }

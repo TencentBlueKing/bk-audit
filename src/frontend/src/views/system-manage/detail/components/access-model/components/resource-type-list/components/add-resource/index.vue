@@ -19,10 +19,10 @@
     v-model:is-show="isShowAdd"
     show-footer
     show-header-slot
-    :title="t('添加资源')"
+    :title="isEdit ? t('编辑资源') : t('添加资源')"
     :width="920">
     <template #header>
-      <span>{{ t('添加资源') }}</span>
+      <span>{{ isEdit ? t('编辑资源') : t('添加资源') }}</span>
       <bk-radio-group
         v-model="addType"
         class="add-resource-type"
@@ -35,19 +35,31 @@
         </bk-radio-button>
       </bk-radio-group>
     </template>
-    <component :is="addComponents" />
+    <component
+      :is="addComponents"
+      :edit-data="editData"
+      :is-edit="isEdit"
+      @update-resource="handleUpdateResource" />
   </audit-sideslider>
 </template>
 <script setup lang="ts">
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import SystemResourceTypeModel from '@model/meta/system-resource-type';
+
   import addBatchResource from './components/add-batch-resource.vue';
   import addSingleResource from './components/add-single-resource.vue';
 
-  interface Exposes {
-    handleOpen: () => void,
+  interface Emits {
+    (e: 'updateResource'): void;
   }
+
+  interface Exposes {
+    handleOpen: (isBatch?: boolean, resourceTypeData?: SystemResourceTypeModel) => void,
+  }
+
+  const emits = defineEmits<Emits>();
 
   const comMap = {
     single: addSingleResource,
@@ -57,11 +69,28 @@
   const { t } = useI18n();
   const isShowAdd = ref(false);
   const addType = ref<keyof typeof comMap>('single');
+  const editData = ref<SystemResourceTypeModel>();
+  const isEdit = ref(false);
 
   const addComponents = computed(() =>  comMap[addType.value]);
 
+  const handleUpdateResource = () => {
+    emits('updateResource');
+  };
+
   defineExpose<Exposes>({
-    handleOpen() {
+    handleOpen(isBatch?: boolean, resourceTypeData?: SystemResourceTypeModel) {
+      if (isBatch) {
+        addType.value = 'batch';
+      }
+      if (resourceTypeData) {
+        addType.value = 'single';
+        isEdit.value = true;
+        editData.value = resourceTypeData;
+      } else {
+        isEdit.value = false;
+        editData.value = new SystemResourceTypeModel();
+      }
       isShowAdd.value = true;
     },
   });

@@ -35,19 +35,31 @@
         </bk-radio-button>
       </bk-radio-group>
     </template>
-    <component :is="addComponents" />
+    <component
+      :is="addComponents"
+      :edit-data="editData"
+      :is-edit="isEdit"
+      @update-action="handleUpdateAction" />
   </audit-sideslider>
 </template>
 <script setup lang="ts">
   import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import SystemActionModel from '@model/meta/system-action';
+
   import addBatchResource from './components/add-batch-action.vue';
   import addSingleResource from './components/add-single-action.vue';
 
-  interface Exposes {
-    handleOpen: () => void,
+  interface Emits {
+    (e: 'updateAction'): void;
   }
+
+  interface Exposes {
+    handleOpen: (isBatch?: boolean, actionData?: SystemActionModel) => void,
+  }
+
+  const emits = defineEmits<Emits>();
 
   const comMap = {
     single: addSingleResource,
@@ -57,11 +69,26 @@
   const { t } = useI18n();
   const isShowAdd = ref(false);
   const addType = ref<keyof typeof comMap>('single');
-
   const addComponents = computed(() =>  comMap[addType.value]);
+  const editData = ref<SystemActionModel>();
+  const isEdit = ref(false);
+
+  const handleUpdateAction = () => {
+    emits('updateAction');
+  };
 
   defineExpose<Exposes>({
-    handleOpen() {
+    handleOpen(isBatch?: boolean, actionData?: SystemActionModel) {
+      if (isBatch) {
+        addType.value = 'batch';
+      }
+      if (actionData) {
+        editData.value = actionData;
+        isEdit.value = true;
+      } else {
+        editData.value = new SystemActionModel();
+        isEdit.value = false;
+      }
       isShowAdd.value = true;
     },
   });
