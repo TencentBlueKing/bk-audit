@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from pypika import Order as pypikaOrder
 from pypika.queries import QueryBuilder
 
+from core.sql.builder.generator import SQLGenerator
 from core.sql.constants import (
     AggregateType,
     FieldType,
@@ -40,7 +41,6 @@ from core.sql.model import (
     Table,
     WhereCondition,
 )
-from core.sql.sql_builder import SQLGenerator
 from tests.base import TestCase
 
 
