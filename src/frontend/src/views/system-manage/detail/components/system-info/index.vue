@@ -23,7 +23,7 @@
       <div class="system-name">
         {{ data.name }}
         <bk-tag theme="warning">
-          {{ t('待接入') }}
+          {{ t(data.auditText || '') }}
         </bk-tag>
       </div>
       <div>

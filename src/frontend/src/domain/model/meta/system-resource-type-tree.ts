@@ -14,30 +14,22 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-export default class SystemAction {
-  action_id: string;
-  description: string;
+export default class SystemResourceTypeTree {
+  system_id: string;
+  resource_type_id: string;
+  unique_id: string;
   name: string;
   name_en: string;
-  sensitivity: number;
-  type: string;
-  version: string;
-  resource_type_ids: Array<string>;
-  unique_id: string;
+  description: string;
+  children: Array<SystemResourceTypeTree>;
 
-  constructor(payload = {} as SystemAction) {
-    this.action_id = payload.action_id;
-    this.description = payload.description;
+  constructor(payload: SystemResourceTypeTree) {
+    this.system_id = payload.system_id;
+    this.resource_type_id = payload.resource_type_id;
+    this.unique_id = `${payload.system_id}-${payload.resource_type_id}`;
     this.name = payload.name;
     this.name_en = payload.name_en;
-    this.sensitivity = payload.sensitivity;
-    this.type = payload.type;
-    this.version = payload.version;
-    this.resource_type_ids = payload.resource_type_ids;
-    this.unique_id = payload.unique_id;
-  }
-
-  get isSensitivity() {
-    return this.sensitivity !== 0;
+    this.description = payload.description;
+    this.children = payload.children;
   }
 }

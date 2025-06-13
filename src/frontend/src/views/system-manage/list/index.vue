@@ -148,19 +148,19 @@
     {
       label: () => t('权限模型'),
       render: ({ data }: {data: SyetemModel}) => <>{
-        !data.model
+        data.audit_status !== 'accessed'
           ? <bk-tag theme="warning">{t('未配置')}</bk-tag>
           : <div>
             <bk-tag
               style="margin-right: 4px"
               theme="info"
-              v-bk-tooltips={t('已配置资源', { count: data.model.resources })}>
-              { data.model.resources }
+              v-bk-tooltips={t('已配置资源', { count: data.resource_type_count })}>
+              { data.resource_type_count }
             </bk-tag>
             <bk-tag
               theme="info"
-              v-bk-tooltips={t('已配置操作', { count: data.model.operations })}>
-              { data.model.operations }
+              v-bk-tooltips={t('已配置操作', { count: data.action_count })}>
+              { data.action_count }
             </bk-tag>
           </div>
       }</>,
