@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 from typing import List, Optional, Union
 
+from drf_pydantic import BaseModel as DRFBaseModel
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 from pypika import Order as PypikaOrder
@@ -30,7 +31,7 @@ from core.sql.constants import (
 )
 
 
-class Table(BaseModel):
+class Table(DRFBaseModel):
     """
     表
     """
@@ -63,6 +64,17 @@ class Field(BaseField):
             self.display_name = self.raw_name
 
 
+class Condition(BaseModel):
+    """
+    条件
+    """
+
+    field: Field  # 字段
+    operator: Operator  # 操作符
+    filters: List[Union[str, int, float]] = PydanticField(default_factory=list)  # 多个筛选值 - 如果操作符需要操作多个值，使用该字段
+    filter: Union[str, int, float] = PydanticField(default_factory=str)  # 筛选值 - 如果操作符只需要一个值，使用该字段
+
+
 class LinkField(BaseModel):
     """
     关联字段
@@ -81,17 +93,6 @@ class JoinTable(BaseModel):
     link_fields: List[LinkField]  # 连接字段
     left_table: Table  # 左表
     right_table: Table  # 右表
-
-
-class Condition(BaseModel):
-    """
-    条件
-    """
-
-    field: Field  # 字段
-    operator: Operator  # 操作符
-    filters: List[Union[str, int, float]] = PydanticField(default_factory=list)  # 多个筛选值 - 如果操作符需要操作多个值，使用该字段
-    filter: Union[str, int, float] = PydanticField(default_factory=str)  # 筛选值 - 如果操作符只需要一个值，使用该字段
 
 
 class WhereCondition(BaseModel):

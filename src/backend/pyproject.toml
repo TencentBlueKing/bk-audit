@@ -22,6 +22,14 @@ source = "."
 [tool.pdm]
 distribution = false
 
+[[tool.pdm.source]]
+name = "tencent"
+url = "https://mirrors.cloud.tencent.com/pypi/simple"
+verify_ssl = true
+
+[tool.pdm.resolution]
+respect-source-order = true
+
 [project]
 name = "bk-audit"
 version = "1.15.0"
@@ -90,7 +98,13 @@ dependencies = [
     "opentelemetry-instrumentation-httpx==0.51b0",
     "opentelemetry-instrumentation-asyncio==0.51b0",
     "opentelemetry-instrumentation-threading==0.51b0",
+    "django-treebeard==4.7.1",
+    "flower==2.0.1",
+    "bkstorages==2.0.0",
+    "gevent==25.4.1",
+    "xlsxwriter==3.2.3",
     "drf-pydantic==2.7.1",
+    "sqlglot==26.26.0",
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
@@ -98,10 +112,7 @@ license = { text = "MIT" }
 
 [dependency-groups]
 dev = [
-    "virtualenv===20.0.8",
-    "virtualenv-clone==0.2.6",
-    "virtualenvwrapper==4.7.1",
-    "pre-commit==2.9.2",
+    "pre-commit==4.2.0",
     "flake8==3.7.8",
     "seed-isort-config==1.9.2",
     "coverage==7.8.2",
