@@ -174,8 +174,10 @@
 
 
   const scrollStyles = computed(() => {
-    const headerTipsElement = document.getElementById('headerTips');
-    const headerTipsHeight = headerTipsElement ? headerTipsElement.offsetHeight : 32;
+    let headerTipsHeight = 0;
+    if (headerTipsRef.value) {
+      headerTipsHeight = 32;
+    }
 
     const contentHeaderHeight = showNotice.value.enabled && showAlert.value ? 144 : 104;
     return {
