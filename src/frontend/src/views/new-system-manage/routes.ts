@@ -52,7 +52,7 @@ export default {
   },
   children: [
     {
-      path: 'system-info/:id',
+      path: 'system-info/:id?',
       component: () => import('@views/new-system-manage/system-info/index.vue'),
       name: 'systemInfo',
       meta: {
@@ -64,7 +64,7 @@ export default {
       },
     },
     {
-      path: 'system-diagnose/:id',
+      path: 'system-diagnose/:id?',
       component: () => import('@views/new-system-manage/system-diagnose/index.vue'),
       name: 'systemDiagnose',
       meta: {

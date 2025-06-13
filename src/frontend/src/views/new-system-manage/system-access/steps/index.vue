@@ -42,12 +42,15 @@
     </div>
 
     <div class="step-content">
-      <component :is="stepComponents[curStep - 1]" />
+      <component
+        :is="stepComponents(curStep)"
+        ref="stepRef"
+        @handler-validates="handlerValidates" />
     </div>
 
     <div class="step-footer">
       <div class="footer-btn">
-        <div v-if="curStep === 1">
+        <div v-if=" Number(curStep) === 1">
           <bk-button
             theme="primary"
             @click="handlerStep1Submit">
@@ -59,7 +62,7 @@
             {{ t("取消") }}
           </bk-button>
         </div>
-        <div v-if="curStep === 3">
+        <div v-if=" Number(curStep) === 3">
           <bk-button
             @click="handlerStep3Cancel">
             {{ t("上一步") }}
@@ -79,21 +82,31 @@
 
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
+
+  import MetaManageService from '@service/meta-manage';
 
   import Step1 from './step1/index.vue';
   import Step2 from './step2/index.vue';
   import Step3 from './step3/index.vue';
   import Step4 from './step4/index.vue';
 
-  const { t } = useI18n();
-  //   const router = useRouter();
-  const router = useRouter();
-  //   console.log(route, );
+  import useRequest from '@/hooks/use-request';
 
-  const curStep = ref(2);
+  const { t } = useI18n();
+  const route = useRoute();
+  const router = useRouter();
+
+  // 将 curStep 定义为计算属性，确保始终返回数字类型
+  const curStep = computed<number>(() => {
+    const step = Number(route.query.step);
+    return isNaN(step) ? 1 : step;
+  });
+
+  const stepRef = ref();
+
   const stepsTitle = ref([
     {
       title: t('注册系统信息'),
@@ -106,49 +119,100 @@
     },
   ]);
 
-  const stepComponents = [Step1, Step2, Step3, Step4];
+  // 创建系统
+  const {
+    run: fetchSystemCreated,
+  } = useRequest(MetaManageService.fetchSystemCreated, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      router.replace({
+        query: {
+          ...route.query,
+          step: 1.5,
+        },
+        params: {
+          id: data.system_id,
+        },
+      });
+      // 更新路由参数
+      router.replace({
+        query: {
+          ...route.query,
+          step: 1.5,
+        },
+        params: {
+          id: data.system_id,
+        },
+      });
+    },
+  });
+  const stepComponents = (step: number | string) => {
+    const steps = [Step1, Step2, Step3, Step4];
+    // 确保step在1-4范围内，超出则返回最后一个组件
+    const numStep = typeof step === 'string' ? Number(step) : step;
+    const index = Math.min(Math.max(Math.floor(numStep), 1), steps.length) - 1;
+    return steps[index];
+  };
+
   // step 提交
   const handlerStep1Submit = () => {
+    stepRef.value.handlerFormData();
+  };
+  interface FormData {
+    name: string;
+    instance_id: string;
+    [key: string]: any;
+  }
+
+  const handlerValidates: (...args: unknown[]) => void = (data: unknown) => {
+    if (typeof data !== 'object' || data === null) return;
+    const formData = data as FormData;
     InfoBox({
       type: 'warning',
-      title: '确认接入该系统?',
+      title: t('确认接入该系统?'),
       contentAlign: 'left',
       content: (
         <div>
           <div>
-            <span>系统：</span>
-            <span style="color: #313238;">配置平台（CMDB）</span>
+            <span>{t('系统')}：</span>
+            <span style="color: #313238;">{`${formData.name}(${formData.instance_id})`}</span>
           </div>
           <div style="background: #F5F6FA; border-radius: 2px;padding:16px;margin-top: 10px;font-size: 12px;color: #4D4F56;line-height: 22px;letter-spacing: 0;">
-            当前系统为从“审计中心”接入，在审计中心所做的变更将会完全同步至权限中心，请确认后操作
+            {t('当前系统为从“审计中心”接入，在审计中心所做的变更将会完全同步至权限中心，请确认后操作')}
           </div>
         </div>
       ),
-      cancelText: '取消',
-      confirmText: '确定接入',
+      cancelText: t('取消'),
+      confirmText: t('确定接入'),
       onConfirm() {
-        console.log('删除成功');
-        curStep.value = 3;
+        fetchSystemCreated(formData);
       },
-      onCancel() {
-        console.log('删除失败');
+      onCancel() {},
+    });
+  };
+  const handlerStep3Cancel = () => {
+    router.replace({
+      query: {
+        ...route.query,
+        step: 1,
       },
     });
   };
-
-  const handlerStep3Cancel = () => {
-    curStep.value = 1;
-  };
   const handlerStep3Submit = () => {
-    curStep.value = 4;
+    router.replace({
+      query: {
+        ...route.query,
+        step: 4,
+      },
+    });
   };
   // 取消
   const handlerCancel = () => {
     InfoBox({
-      title: '确认取消当前操作?',
-      content: '已填写的内容将会丢失，请谨慎操作！',
-      cancelText: '留着当前页',
-      confirmText: '确认取消',
+      title: t('确认取消当前操作?'),
+      content: t('已填写的内容将会丢失，请谨慎操作！'),
+      cancelText: t('留着当前页'),
+      confirmText: t('确认取消'),
       onConfirm() {
         console.log('删除成功');
       },
