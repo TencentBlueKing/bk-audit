@@ -22,6 +22,7 @@ from django.utils.translation import gettext_lazy
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from rest_framework.fields import empty
+from rest_framework.validators import UniqueTogetherValidator
 
 from apps.meta.constants import (
     ALLOWED_LIST_USER_FIELDS,
@@ -284,26 +285,26 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
             "unique_id": {"required": False, "allow_null": True, "allow_blank": True},
         }
 
-        # ---------- 通用校验 / 自动填充 ----------
-        def validate(self, attrs):
-            """
-            统一处理 unique_id：
-              • 如果没传，就拼接并写回 attrs
-              • 如果传了，必须等于拼接结果
-            """
-            instance = getattr(self, "instance", None)
+    # ---------- 通用校验 / 自动填充 ----------
+    def validate(self, attrs):
+        """
+        统一处理 unique_id：
+          • 如果没传，就拼接并写回 attrs
+          • 如果传了，必须等于拼接结果
+        """
+        instance = getattr(self, "instance", None)
 
-            # 先拿到 system_id / resource_type_id（优先新值，其次旧值）
-            system_id = attrs.get("system_id") or (instance.system_id if instance else None)
-            res_type_id = attrs.get("resource_type_id") or (instance.resource_type_id if instance else None)
+        # 先拿到 system_id / resource_type_id（优先新值，其次旧值）
+        system_id = attrs.get("system_id") or (instance.system_id if instance else None)
+        res_type_id = attrs.get("resource_type_id") or (instance.resource_type_id if instance else None)
 
-            if system_id is None or res_type_id is None:
-                raise serializers.ValidationError("system_id 和 resource_type_id 必须同时提供")
+        if system_id is None or res_type_id is None:
+            raise serializers.ValidationError("system_id 和 resource_type_id 必须同时提供")
 
-            expected = f"{system_id}:{res_type_id}"
-            attrs["unique_id"] = expected
+        expected = f"{system_id}:{res_type_id}"
+        attrs["unique_id"] = expected
 
-            return attrs
+        return attrs
 
     def get_actions(self, obj):
         """
@@ -326,6 +327,16 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
                 ),  # 使用values_list而不是values
             )
         return ActionSerializer(related_actions, many=True).data
+
+
+class UpdateResourceTypeSerializer(ResourceTypeSerializer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.validators = [
+            v
+            for v in self.validators
+            if not (isinstance(v, UniqueTogetherValidator) and v.fields == ('system_id', 'resource_type_id'))
+        ]
 
 
 class BulkCreateResourceTypeSerializer(serializers.Serializer):
@@ -357,6 +368,14 @@ class ListResourceTypeSerializer(serializers.Serializer):
     system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=True)
     name = serializers.CharField(label=gettext_lazy("资源类型名称"), required=False)
     name_en = serializers.CharField(label=gettext_lazy("资源类型英文名称"), required=False)
+
+
+class ResourceTypeListSerializer(serializers.Serializer):
+    system_id = serializers.CharField(label=gettext_lazy("系统ID"), required=True)
+    name = serializers.CharField(label=gettext_lazy("资源类型名称"), required=False)
+    name_en = serializers.CharField(label=gettext_lazy("资源类型英文名称"), required=False)
+    sensitivity = serializers.IntegerField(required=False)
+    actions = serializers.CharField(required=False, label=gettext_lazy("操作ID列表，多个用逗号分隔"))
 
 
 class DeleteResourceTypeRequestSerializer(serializers.Serializer):
