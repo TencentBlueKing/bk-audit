@@ -120,7 +120,7 @@
     },
   ];
 
-  const contentType = ref<keyof typeof contentComponentMap>('accessModel');
+  const contentType = ref<keyof typeof contentComponentMap>('basicInfo');
   const appRef = ref();
 
   const { getSearchParams, appendSearchParams } = useUrlSearch();

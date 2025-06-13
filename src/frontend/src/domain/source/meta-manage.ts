@@ -64,6 +64,12 @@ class MetaManage extends ModuleBase {
   getAllNamespace() {
     return Request.get<NamespaceModel>(`${this.module}/namespaces/`);
   }
+  // 创建系统
+  createdSysetem(params: Record<string, any>) {
+    return Request.post(`${this.path}/systems/`, {
+      params,
+    });
+  }
   // 获取系统列表
   getAllSysetem(
     params: {
