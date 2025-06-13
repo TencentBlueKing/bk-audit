@@ -214,11 +214,9 @@
       cancelText: t('留着当前页'),
       confirmText: t('确认取消'),
       onConfirm() {
-        console.log('删除成功');
+        router.go(-1);
       },
-      onCancel() {
-        console.log('删除失败');
-      },
+      onCancel() {},
     });
   };
   const handlerBack = () => {
