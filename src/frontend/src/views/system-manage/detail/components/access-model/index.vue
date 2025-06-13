@@ -16,11 +16,26 @@
 -->
 <template>
   <div style="padding-bottom: 24px;">
-    <resource-type-list />
+    <resource-type-list v-if="isShowreSource" />
     <action-list />
   </div>
 </template>
 <script setup lang="ts">
+  import { computed, ref } from 'vue';
+  import { useRoute } from 'vue-router';
+
   import ActionList from './components/action-list/index.vue';
   import ResourceTypeList from './components/resource-type-list/index.vue';
+
+  const route = useRoute();
+  const isShowreSource =  ref(computed(() => {
+    if (route.name === 'systemAccessSteps') {
+      if ('type' in route.query) {
+        return route.query.type !== 'simple';
+      }
+      return true;
+    }
+    return true;
+  }));
+
 </script>

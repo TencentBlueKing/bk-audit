@@ -29,7 +29,7 @@
     <div class="access-btn">
       <div
         class="btn btn-left"
-        @click="handleRouterChange('systemAccessSteps')">
+        @click="handleRouterChange('systemAccessSteps', true)">
         <div class="btn-icon">
           <audit-icon
             class="btn-icon-add"
@@ -49,16 +49,31 @@
         @mouseenter="handleMouseenter"
         @mouseleave="handleMouseleave">
         <div class="btn">
-          <div class="btn-icon">
+          <div
+            class="btn-icon"
+            :style="dataList.length > 0 ? '' : 'background: #F5F7FA;'">
             <img
               class="btn-icon-add"
-              src="@images/Import.svg">
+              :src="dataList.length > 0 ? ImportActiveSvg : ImportSvg">
           </div>
           <div class="access-text">
             <div class="access-text-top">
-              {{ t("待接入的系统") }}<span class="text-top-num">5</span>
+              {{ t("待接入的系统") }}<span class="text-top-num">{{ dataList.length }}</span>
             </div>
-            <div class="access-text-bottom">
+            <div
+              v-if="dataList.length > 0"
+              v-bk-tooltips="{ content: '暂无待接入的系统'}"
+              class="access-text-bottom">
+              {{
+                t(
+                  "已在其他安全产品中注册系统的权限模型，但尚未同步注册到审计中心"
+                )
+              }}
+            </div>
+            <div
+              v-else
+              v-bk-tooltips="{ content: '暂无待接入的系统'}"
+              class="access-text-bottom">
               {{
                 t(
                   "已在其他安全产品中注册系统的权限模型，但尚未同步注册到审计中心"
@@ -68,64 +83,74 @@
           </div>
         </div>
         <bk-select
-          v-show="isShowSelect"
-          v-model="selectedValue"
+          v-if="isShowSelect"
+          v-model="systemId"
           class="bk-select"
-          display-key="label"
           filterable
-          id-key="value"
-          :input-search="false"
-          :list="dataList">
-          <template #optionRender="{ item }">
+          :popover-options="{
+            width: 'auto'
+          }"
+          @change="handleSelecChange">
+          <bk-option
+            v-for="item in dataList"
+            :id="item.id"
+            :key="item.id"
+            :name="item.name">
             <div style="display: flex;width: 100%;justify-content: space-between;">
               <div>
-                <span>{{ item.label }}</span>
-                <span style="color: #c4c6cc;">({{ item.value }})</span>
+                <span>{{ item.name }}</span>
+                <span style="color: #c4c6cc;">({{ item.id }})</span>
               </div>
-              <div style="color: #c4c6cc;">
-                来源：权限中心
+              <div style="margin-left: 10px;color: #c4c6cc;">
+                {{ t('来源：') }} {{ sourceType(item.source_type) }}
               </div>
             </div>
-          </template>
+          </bk-option>
         </bk-select>
       </div>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRoute, useRouter } from 'vue-router';
+  import { useRouter } from 'vue-router';
+
+  import MetaManageService from '@service/meta-manage';
+
+  import ImportSvg from '@images/Import.svg';
+  import ImportActiveSvg from '@images/Import-active.svg';
+
+  import useRequest from '@/hooks/use-request';
 
   const { t } = useI18n();
   const router = useRouter();
-  const route = useRoute();
+  // const route = useRoute();
   const isShowSelect = ref(false);
-  console.log(route);
 
-  const handleRouterChange = (name: string) => {
+  const handleRouterChange = (name: string, isNewSystem: boolean) => {
     router.push({
       name,
+      query: {
+        step: '1',  // 改为字符串类型
+        showModelType: 'false',  // 改为字符串类型
+        isNewSystem: isNewSystem.toString(),  // 转为字符串
+      },
     });
   };
-  const selectedValue = ref();
-  const dataList = ref([
-    {
-      disabled: false,
-      value: 111,
-      label: '地下城',
-    },
-    {
-      disabled: false,
-      value: 11,
-      label: 'PPP',
-    },
-    {
-      disabled: false,
-      value: 1,
-      label: 'XXX',
-    },
-  ]);
+  const systemId = ref();
+  // 定义服务返回数据的类型
+  interface EventSourceApp {
+    id: string;
+    name: string;
+  }
+
+  // 组件需要的数据类型
+  interface SystemItem extends EventSourceApp {
+    source_type: string;
+  }
+
+  const dataList = ref<SystemItem[]>([]);
 
   const handleMouseenter = () => {
     isShowSelect.value = true;
@@ -134,6 +159,55 @@
     // isShowSelect.value = false
   };
 
+  const {
+    run: fetchSystemWithAction,
+  } = useRequest(MetaManageService.fetchSystemWithAction, {
+    defaultValue: [] as SystemItem[],
+    onSuccess: (data: EventSourceApp[]) => {
+      // 转换服务返回数据为 SystemItem 类型
+      dataList.value = data.map(item => ({
+        ...item,
+        source_type: 'unknown', // 添加默认来源类型
+      }));
+    },
+  });
+
+  const sourceType = (type: string) => {
+    if (type === 'iam_v3') {
+      return t('权限中心V3');
+    }
+    if (type === 'iam_v4') {
+      return t('权限中心V4');
+    }
+    if (type === 'bk_audit') {
+      return t('审计中心');
+    }
+  };
+
+  const handleSelecChange = (val: string) => {
+    let systemVal = null;
+    dataList.value.forEach((i) => {
+      if (i.id === val) {
+        systemVal = JSON.stringify(i);
+      }
+    });
+    router.push({
+      name: 'systemAccessSteps',
+      query: {
+        step: '1',  // 改为字符串类型
+        showModelType: 'false',  // 改为字符串类型
+        isNewSystem: 'false',  // 改为字符串类型
+        systemVal,
+      },
+    });
+  };
+  onMounted(() => {
+    fetchSystemWithAction({
+      sort_keys: 'audit_status',
+      with_favorite: false,
+      with_system_status: false,
+    });
+  });
 </script>
 
 <style scoped lang="postcss">

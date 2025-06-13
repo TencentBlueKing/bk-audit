@@ -22,9 +22,11 @@
     <span class="tips-text">
       {{ t('当前系统未完成配置') }}：1.<span
         class="tips-link"
-        @click="handleRouterChange('systemAccess')">
+        @click="handleRouterChange('systemAccessSteps', false, 1)">
         {{ t('注册系统信息') }}</span>
-      -> 2.<span class="tips-link">{{ t('注册权限模型') }}
+      -> 2.<span
+        class="tips-link"
+        @click="handleRouterChange('systemAccessSteps', false, 2)">{{ t('注册权限模型') }}
       </span>-> 3.<span class="tips-link">{{ t('上报日志数据') }}</span>
     </span>
   </div>
@@ -33,16 +35,25 @@
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
   import {
-    // useRoute,
+    useRoute,
     useRouter,
   } from 'vue-router';
 
   const { t } = useI18n();
   const router = useRouter();
-  // const route = useRoute();
-  const handleRouterChange = (name: string) => {
+  const route = useRoute();
+
+  const handleRouterChange = (name: string, isNewSystem: boolean, step: number) => {
     router.push({
       name,
+      query: {
+        step: step.toString(),
+        showModelType: 'false',
+        isNewSystem: isNewSystem.toString(),
+      },
+      params: {
+        id: route.params.id,
+      },
     });
   };
 </script>

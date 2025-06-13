@@ -16,9 +16,11 @@
 -->
 <template>
   <div
-    v-if="!showModelType"
+    v-if="showModelType"
     class="step1-box">
-    <div class="step1-tip">
+    <div
+      v-if="!isNewSystem"
+      class="step1-tip">
       <img
         class="remind-icon"
         src="@images/remind.svg">
@@ -45,7 +47,7 @@
       </template>
 
       <bk-form
-        ref="formRef"
+        ref="baseFormRef"
         class="example"
         form-type="vertical"
         :model="formData"
@@ -54,12 +56,15 @@
           <bk-form-item
             class="form-item"
             label="系统 ID"
+            property="instance_id"
             required>
             <bk-input
-              v-model="formData.id"
+              v-model="formData.instance_id"
               clearable
+              :disabled="!isNewSystem"
               placeholder="请输入系统 ID" />
           </bk-form-item>
+
           <bk-form-item
             class="form-item form-item-right"
             label="系统名称"
@@ -71,27 +76,32 @@
               placeholder="请输入系统名称" />
           </bk-form-item>
         </div>
-
         <bk-form-item
           class="form-item-line"
           label="管理员"
+          property="managers"
           required>
-          <audit-user-selector :model-value="formData.user" />
+          <audit-user-selector
+            :model-value="formData.managers"
+            @change="handlerManagersChange" />
         </bk-form-item>
+
         <bk-form-item
           class="form-item-line"
           label="系统域名"
+          property="system_url"
           required>
           <bk-input
-            v-model="formData.name"
+            v-model="formData.system_url"
             clearable
             placeholder="请输入可访问的域名" />
         </bk-form-item>
+
         <bk-form-item
           class="form-item-line"
           label="描述">
           <bk-input
-            v-model="formData.name"
+            v-model="formData.description"
             clearable
             placeholder="请输入"
             :rows="6"
@@ -117,14 +127,14 @@
       </template>
 
       <bk-form
-        ref="formRef"
+        ref="callFormRef"
         class="example"
         form-type="vertical"
         :model="formData"
         :rules="rules">
         <bk-form-item
           class="form-item-line form-item-top"
-          property="kh"
+          property="clients"
           required>
           <template #label>
             <span>{{ t("可访问客户端") }}</span>
@@ -145,6 +155,7 @@
               </template>
             </bk-popover>
           </template>
+
           <div
             v-for="item in clientList"
             :key="item.id"
@@ -170,8 +181,11 @@
               @click="deleteClient(item.id)" />
           </div>
         </bk-form-item>
+
+
         <bk-form-item
           class="form-item-line"
+          property="callback_url"
           required>
           <template #label>
             <bk-popover
@@ -214,13 +228,15 @@
             </bk-popover>
           </template>
           <bk-input
-            v-model="formData.name"
+            v-model="formData.callback_url"
             clearable
             placeholder="请输入资源回调url" />
         </bk-form-item>
       </bk-form>
     </bk-card>
   </div>
+
+
   <div
     v-else
     class="step1-select-model-type">
@@ -242,13 +258,17 @@
       </div>
       <div>{{ t('请点击选择系统类型') }}</div>
       <div class="type-list">
-        <div class="type-list-item">
+        <div
+          class="type-list-item"
+          @click="handlerRouteChange('complex')">
           <h3 style="margin-bottom: 8px;">
             {{ t('复杂权限系统') }}
           </h3>
           <span>{{ t('需要严格控制到具体数据、资源的访问权限和操作范围。') }}</span>
         </div>
-        <div class="type-list-item">
+        <div
+          class="type-list-item"
+          @click="handlerRouteChange('simple')">
           <h3 style="margin-bottom: 8px;">
             {{ t('简单权限系统') }}
           </h3>
@@ -260,14 +280,40 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { computed, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute, useRouter } from 'vue-router';
+
+  interface Exposes {
+    handlerFormData: () => void,
+  }
+  interface Emits {
+    (e: 'handlerValidates', val: Record<string, any>): void
+  }
+  const emit = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const formRef = ref('');
-  const rules = ref({});
+  const callFormRef = ref();
+  const baseFormRef = ref();
 
-  const showModelType = ref(true);
+  const rules = {
+    clients: [
+      {
+        validator: (value: string[]) => value.every(item => item.trim()),
+        trigger: 'blur',
+        message: t('可访问客户端存在空值'),
+      },
+    ],
+  };
+  const route = useRoute();
+  const router = useRouter();
+  const isNewSystem = ref(computed(() => route.query.isNewSystem === 'true'));
+  const showModelType = ref(computed(() => {
+    if (Number(route.query.step) === 1.5) {
+      return false;
+    }
+    return true;
+  }));
   const popoverTable = ref([
     {
       type: '业务',
@@ -288,11 +334,24 @@
       log: '新增 1 个叫“王者荣耀”的业务',
     },
   ]);
-  const formData = ref({
+  interface FormData {
+    name: string;
+    instance_id: string;
+    callback_url: string;
+    managers: string[];
+    description: string;
+    clients: string[];
+    system_url: string;
+  }
+
+  const formData = ref<FormData>({
     name: '',
-    id: '',
-    user: [],
-    kh: [],
+    instance_id: '',
+    callback_url: '',
+    managers: [],
+    description: '',
+    clients: [],
+    system_url: '',
   });
   const clientList = ref([
     {
@@ -300,6 +359,22 @@
       value: '',
     },
   ]);
+  const handlerManagersChange = (val: string[]) => {
+    formData.value.managers = val;
+  };
+
+  const handlerRouteChange = (type: string) => {
+    router.replace({
+      query: {
+        ...route.query,
+        step: 2,
+        type,
+      },
+      params: {
+        id: route.params.id,
+      },
+    });
+  };
   // 添加客户端项
   const addClient = () => {
     // 生成新的唯一ID：当前最大ID+1
@@ -322,6 +397,44 @@
       });
     }
   };
+
+  // 表单验证
+  const handlerFormData = async () => {
+    try {
+      // 同时验证两个表单
+      await Promise.all([
+        baseFormRef.value.validate(),
+        callFormRef.value.validate(),
+      ]);
+      emit('handlerValidates', formData.value);
+      return true; // 返回验证成功状态
+    } catch (error) {
+      return false; // 返回验证失败状态
+    }
+  };
+  watch(() => clientList.value, (newData) => {
+    formData.value.clients = newData.map(i => i.value);
+  }, {
+    deep: true,
+  });
+  onMounted(() => {
+    nextTick(() => {
+      if (route.query.systemVal) {
+        const systemValStr = typeof route.query.systemVal === 'string'
+          ? route.query.systemVal
+          : route.query.systemVal[0] || '';
+        if (systemValStr) {
+          const systemVal = JSON.parse(systemValStr);
+          formData.value.instance_id = systemVal.id;
+          formData.value.name = systemVal.name;
+        }
+      }
+    });
+  });
+
+  defineExpose<Exposes>({
+    handlerFormData,
+  });
 </script>
 
 <style scoped lang="postcss">
