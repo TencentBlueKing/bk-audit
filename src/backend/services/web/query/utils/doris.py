@@ -24,15 +24,16 @@ from pypika.terms import BasicCriterion, Criterion, EmptyCriterion, Function
 
 from apps.meta.utils.fields import STANDARD_FIELDS
 from core.constants import OrderTypeChoices
-from core.sql.builder import BKBaseQueryBuilder, BkBaseTable
-from core.sql.constants import FieldType, Operator
-from core.sql.functions import DateTrunc, FromUnixTime, PercentileApprox
-from core.sql.terms import (
+from core.sql.builder.builder import BKBaseQueryBuilder, BkBaseTable
+from core.sql.builder.functions import DateTrunc, FromUnixTime, PercentileApprox
+from core.sql.builder.terms import (
     DorisField,
     DorisJsonTypeExtractFunction,
     DorisVariantField,
     PypikaField,
 )
+from core.sql.builder.utils import operate
+from core.sql.constants import FieldType
 from services.web.query.utils.search_config import QueryConditionOperator
 
 
@@ -81,7 +82,7 @@ class BaseDorisSQLBuilder:
         if operator in [QueryConditionOperator.LIKE.value, QueryConditionOperator.NOT_LIKE.value]:
             filters = [f"%{item}%" for item in filters]
         value = filters[0] if filters else ""
-        return Operator.handler(operator, pypika_field, value, filters)
+        return operate(operator, pypika_field, value, filters)
 
     def _build_filter_condition(self) -> Criterion:
         """

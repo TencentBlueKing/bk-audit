@@ -23,6 +23,19 @@ class SQLGeneratorError(Exception):
     """基础异常类，用于所有 SQLGenerator 相关的异常。"""
 
 
+class SQLParserError(Exception):
+    """基础异常类，用于所有 SQLParser 相关的异常。"""
+
+
+class SQLParseError(SQLGeneratorError):
+    """当 SQL 解析失败时抛出。"""
+
+    MESSAGE = gettext_lazy("SQL解析失败。")
+
+    def __init__(self, message):
+        super().__init__(message or self.MESSAGE)
+
+
 class TableNotRegisteredError(SQLGeneratorError):
     """当请求的表未在配置中注册时抛出。"""
 
