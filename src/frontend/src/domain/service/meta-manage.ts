@@ -59,6 +59,22 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 创建系统
+   * @param { String } action_ids
+   */
+  fetchSystemCreated(params:{
+      instance_id: string;
+      name: string;
+      name_en?: string;
+      clients: string[];
+      description?: string;
+      callback_url?: string;
+      managers: string[]
+    }) {
+    return MetaManageSource.createdSysetem(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取系统列表
    * @param { Object } params
    */

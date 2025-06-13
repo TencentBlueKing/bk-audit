@@ -15,8 +15,21 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <system-detail />
+  <system-detail :key="componentKey" />
 </template>
 <script setup lang="ts">
+  import { ref, watch } from 'vue';
+  import { useRoute } from 'vue-router';
+
   import SystemDetail from '@views/system-manage/detail/index.vue';
+
+  const route = useRoute();
+  const componentKey = ref(0);
+  watch(
+    () => route.query,
+    () => {
+      componentKey.value += 1;
+    },
+    { deep: true },
+  );
 </script>
