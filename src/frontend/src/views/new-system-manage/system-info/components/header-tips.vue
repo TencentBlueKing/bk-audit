@@ -15,47 +15,73 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="header-tips">
+  <div
+    v-if="isShow"
+    class="header-tips">
     <audit-icon
       class="menu-item-icon"
       type="remind-fill" />
     <span class="tips-text">
-      {{ t('当前系统未完成配置') }}：1.<span
-        class="tips-link"
-        @click="handleRouterChange('systemAccessSteps', false, 1)">
+      {{ t('当前系统未完成配置') }}：1.<span>
         {{ t('注册系统信息') }}</span>
       -> 2.<span
-        class="tips-link"
+        :class="isCompleted ? 'tips-link' : ''"
         @click="handleRouterChange('systemAccessSteps', false, 2)">{{ t('注册权限模型') }}
-      </span>-> 3.<span class="tips-link">{{ t('上报日志数据') }}</span>
+      </span>-> 3.<span
+        :class="isCompleted ? 'tips-link' : ''"
+        @click="handleRouterChange('systemAccessSteps', false, 3)">{{ t('上报日志数据') }}</span>
     </span>
   </div>
 </template>
 
 <script setup lang="ts">
+  import { onMounted, onUnmounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
     useRoute,
     useRouter,
   } from 'vue-router';
 
+  import SystemModel from '@model/meta/system';
+
+  import useEventBus from '@hooks/use-event-bus';
+
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
+  const { on, off } = useEventBus();
+  const isCompleted = ref(false);
+  const isShow = ref(false);
 
   const handleRouterChange = (name: string, isNewSystem: boolean, step: number) => {
-    router.push({
-      name,
-      query: {
-        step: step.toString(),
-        showModelType: 'false',
-        isNewSystem: isNewSystem.toString(),
-      },
-      params: {
-        id: route.params.id,
-      },
-    });
+    if (isCompleted.value) {
+      router.push({
+        name,
+        query: {
+          step: step.toString(),
+          showModelType: 'false',
+          isNewSystem: isNewSystem.toString(),
+        },
+        params: {
+          id: route.params.id,
+        },
+      });
+    }
   };
+  // 监听事件
+  onMounted(() => {
+    on('get-system-info', (data: unknown) => {
+      const systemInfo = data as SystemModel;
+      isCompleted.value = (systemInfo.system_status === 'completed');
+      isShow.value = !(systemInfo.system_status === 'normal' || systemInfo.system_status === 'abnormal');
+    // 处理数据...
+    });
+  });
+
+  // 组件卸载时移除监听
+  onUnmounted(() => {
+    off('get-system-info');
+  });
 </script>
 
 <style scoped lang="postcss">

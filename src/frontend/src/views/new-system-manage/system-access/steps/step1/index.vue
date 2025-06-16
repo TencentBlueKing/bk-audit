@@ -284,6 +284,12 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
+  import MetaManageService from '@service/meta-manage';
+
+  import SystemModel from '@model/meta/system';
+
+  import useRequest from '@/hooks/use-request';
+
   interface Exposes {
     handlerFormData: () => void,
   }
@@ -412,11 +418,33 @@
       return false; // 返回验证失败状态
     }
   };
+
+
+  const {
+    run: fetchSystemDetail,
+  } = useRequest(MetaManageService.fetchSystemDetail, {
+    defaultParams: [],
+    defaultValue: new SystemModel(),
+    onSuccess: (result) => {
+      clientList.value = result.clients.map((item: string, index: number) => ({
+        id: index,
+        value: item,
+      }));
+      formData.value.instance_id = result.system_id;
+      formData.value.name = result.name;
+      formData.value.managers = result.managers;
+      formData.value.callback_url = result.callback_url;
+      formData.value.system_url = result.system_url;
+      formData.value.description = result.description;
+    },
+  });
+
   watch(() => clientList.value, (newData) => {
     formData.value.clients = newData.map(i => i.value);
   }, {
     deep: true,
   });
+
   onMounted(() => {
     nextTick(() => {
       if (route.query.systemVal) {
@@ -428,6 +456,11 @@
           formData.value.instance_id = systemVal.id;
           formData.value.name = systemVal.name;
         }
+      }
+      if (route.query.fromStep) {
+        fetchSystemDetail({
+          id: route.params.id,
+        });
       }
     });
   });

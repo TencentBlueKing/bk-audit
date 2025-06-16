@@ -49,32 +49,49 @@
     </div>
 
     <div class="step-footer">
-      <div class="footer-btn">
-        <div v-if=" Number(curStep) === 1">
-          <bk-button
-            theme="primary"
-            @click="handlerStep1Submit">
-            {{ t("提交并下一步") }}
-          </bk-button>
-          <bk-button
-            class="ml10"
-            @click="handlerCancel">
-            {{ t("取消") }}
-          </bk-button>
-        </div>
-        <div v-if=" Number(curStep) === 3">
-          <bk-button
-            @click="handlerStep3Cancel">
-            {{ t("上一步") }}
-          </bk-button>
-          <bk-button
-            class="ml10"
-            theme="primary"
+      <div
+        v-if=" Number(curStep) === 1"
+        class="footer-btn">
+        <bk-button
+          theme="primary"
+          @click="handlerStep1Submit">
+          {{ t("提交并下一步") }}
+        </bk-button>
+        <bk-button
+          class="ml10"
+          @click="handlerCancel">
+          {{ t("取消") }}
+        </bk-button>
+      </div>
+      <div
+        v-if=" Number(curStep) === 2"
+        class="footer-btn2">
+        <bk-button
+          @click="handlerStep2Cancel">
+          {{ t("上一步") }}
+        </bk-button>
+        <bk-button
+          class="ml10"
+          theme="primary"
 
-            @click="handlerStep3Submit">
-            {{ t("完成并下一步") }}
-          </bk-button>
-        </div>
+          @click="handlerStep2Submit">
+          {{ t("提交并下一步") }}
+        </bk-button>
+      </div>
+      <div
+        v-if=" Number(curStep) === 3"
+        class="footer-btn2">
+        <bk-button
+          @click="handlerStep3Cancel">
+          {{ t("上一步") }}
+        </bk-button>
+        <bk-button
+          class="ml10"
+          theme="primary"
+
+          @click="handlerStep3Submit">
+          {{ t("完成并下一步") }}
+        </bk-button>
       </div>
     </div>
   </div>
@@ -190,11 +207,31 @@
       onCancel() {},
     });
   };
-  const handlerStep3Cancel = () => {
+
+  const handlerStep2Cancel = () => {
     router.replace({
       query: {
         ...route.query,
         step: 1,
+        fromStep: 2,
+      },
+    });
+  };
+
+  const handlerStep2Submit = () => {
+    router.replace({
+      query: {
+        ...route.query,
+        step: 3,
+      },
+    });
+  };
+
+  const handlerStep3Cancel = () => {
+    router.replace({
+      query: {
+        ...route.query,
+        step: 2,
       },
     });
   };
@@ -306,9 +343,18 @@
       left: 20%;
       transform: translateY(-50%);
 
-      .ml10 {
-        margin-left: 10px;
-      }
+    }
+
+    .footer-btn2 {
+      position: absolute;
+      top: 50%;
+      left: 20px;
+      transform: translateY(-50%);
+
+    }
+
+    .ml10 {
+      margin-left: 10px;
     }
   }
 }
