@@ -23,7 +23,7 @@
       <div class="system-name">
         {{ data.name }}
         <bk-tag theme="warning">
-          {{ t(data.auditText || '') }}
+          {{ t(systemStatusText(data.system_status) || '') }}
         </bk-tag>
       </div>
       <div>
@@ -65,7 +65,6 @@
   const { t } = useI18n();
 
   const route = useRoute();
-  console.log(route.params.id, 'route.params.id');
 
   const {
     data,
@@ -85,7 +84,11 @@
     manual: true,
   });
 
-  console.log(GlobalChoices);
+  const systemStatusText = (val: string) => {
+    if (!GlobalChoices.value?.meta_system_status) return val;
+    const statusItem = GlobalChoices.value.meta_system_status.find(item => item.id === val);
+    return statusItem?.name || val; // 如果找不到对应状态，返回原值
+  };
 
   defineExpose<Exposes>({
     loading: loading.value,  // 使用.value获取实际布尔值
