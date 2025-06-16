@@ -265,8 +265,46 @@ class SystemInfoResponseSerializer(SystemSerializer):
         return data
 
 
+class ActionListReqSerializer(serializers.Serializer):
+    system_id = serializers.CharField()
+    name__icontains = serializers.CharField(required=False)
+    name_en__icontains = serializers.CharField(required=False)
+    sensitivity = serializers.IntegerField(required=False)
+    type = serializers.CharField(required=False)
+    resource_type_ids = serializers.CharField(required=False)
+
+    def validate_resource_type_ids(self, value) -> List[str]:
+        if not value:
+            return []
+        return [resource_type_id for resource_type_id in value.split(",") if resource_type_id.strip()]
+
+
+class ActionSerializer(serializers.ModelSerializer):
+    resource_type_ids = serializers.ListField(child=serializers.CharField(), required=False)
+
+    class Meta:
+        model = Action
+        fields = [
+            "action_id",
+            "name",
+            "name_en",
+            "sensitivity",
+            "type",
+            "version",
+            "description",
+            "unique_id",
+            "resource_type_ids",
+        ]
+
+
 class ResourceTypeSerializer(serializers.ModelSerializer):
-    actions = serializers.SerializerMethodField()
+    actions = serializers.SerializerMethodField(label=gettext_lazy("操作详情"))
+    # 支持在创建资源类型时快捷创建操作
+    actions_to_create = serializers.ListField(
+        child=ActionSerializer(),
+        required=False,
+        write_only=True,
+    )
 
     class Meta:
         model = ResourceType
@@ -283,7 +321,8 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
             "description",
             "ancestor",
             "ancestors",
-            'actions',
+            "actions",
+            "actions_to_create",
         ]
         extra_kwargs = {
             "unique_id": {"required": False, "allow_null": True, "allow_blank": True},
@@ -295,6 +334,7 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
         统一处理 unique_id：
           • 如果没传，就拼接并写回 attrs
           • 如果传了，必须等于拼接结果
+        处理actions_to_create，由于需要预填充，所以需要在 run_validation 中处理
         """
         instance = getattr(self, "instance", None)
 
@@ -302,12 +342,20 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
         system_id = attrs.get("system_id") or (instance.system_id if instance else None)
         res_type_id = attrs.get("resource_type_id") or (instance.resource_type_id if instance else None)
 
-        if system_id is None or res_type_id is None:
+        if not system_id or not res_type_id:
             raise serializers.ValidationError("system_id 和 resource_type_id 必须同时提供")
 
         expected = f"{system_id}:{res_type_id}"
-        attrs["unique_id"] = expected
-
+        if not attrs.get("unique_id"):
+            attrs["unique_id"] = expected
+        elif attrs["unique_id"] != expected:
+            raise serializers.ValidationError("unique_id 必须为 system_id 和 resource_type_id 的组合")
+        if attrs.get("actions_to_create", []):
+            system_id = attrs.get("system_id")
+            res_type_id = attrs.get("resource_type_id")
+            for action in attrs["actions_to_create"]:
+                action["system_id"] = system_id
+                action["resource_type_ids"] = [res_type_id]
         return attrs
 
     def get_actions(self, obj):
