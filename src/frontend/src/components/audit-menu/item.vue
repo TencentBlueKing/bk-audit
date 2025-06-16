@@ -36,9 +36,14 @@
 
   interface Props {
     index: string;
+    isSelfRouterChange?: boolean
   }
-
+  interface Emits {
+    (e: 'selfRouterChange'): void
+  }
   const props = defineProps<Props>();
+
+  const emit = defineEmits<Emits>();
 
   const route = useRoute();
 
@@ -61,7 +66,11 @@
 
 
   const handleClick = () => {
-    menu.change(props.index);
+    if (props.isSelfRouterChange) {
+      emit('selfRouterChange');
+    } else {
+      menu.change(props.index);
+    }
   };
 
 </script>

@@ -245,14 +245,26 @@
                     </bk-popover>
                   </span>
                   <span>
-                    <img
-                      v-if="item.favorite"
-                      class="pentagram-fill"
-                      src="@images/pentagram-fill.svg">
-                    <img
-                      v-if="!(item.permission.view_system)"
-                      class="pentagram-fill"
-                      src="@images/lock-1.svg">
+                    <span v-if="item.permission.view_system">
+                      <img
+                        v-if="item.favorite"
+                        class="pentagram-fill"
+                        src="@images/pentagram-fill.svg">
+                      <img
+                        v-if="!(item.favorite)"
+                        class="pentagram-fill"
+                        src="@images/pentagram.svg"
+                        style="color: #4d4f56;">
+                    </span>
+
+                    <span v-else>
+                      <img
+                        v-if="!(item.permission.view_system)"
+                        class="pentagram-fill"
+                        src="@images/lock-1.svg">
+                    </span>
+
+
                   </span>
                 </div>
               </bk-option>
@@ -279,7 +291,10 @@
               <template #flod-title>
                 <div>{{ t(item.groupName) }}</div>
               </template>
-              <audit-menu-item :index="item.pathName">
+              <audit-menu-item
+                :index="item.pathName"
+                is-self-router-change
+                @self-router-change="selfRouterChange(item)">
                 <audit-icon
                   class="menu-item-icon"
                   :type="item?.icon" />
@@ -386,23 +401,9 @@
     onSuccess: (data: any[]) => {
       projectList.value = data;
       systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
-      router.push({
-        name: 'systemInfo',
-        params: {
-          id: systemId.value,
-        },
-      });
     },
   });
-  const systemStatusText = (val: string) => {
-    const statusMap = {
-      pending: '待接入',
-      completed: '待完善',
-      abnormal: '数据异常',
-      normal: '正常',
-    };
-    return statusMap[val as keyof typeof statusMap] || val; // 如果找不到对应状态，返回原值
-  };
+
   on('statement-menuData', (data) => {
     menuData.value = data as Array<MenuDataType>;
     titleRef.value = menuData.value[0]?.name;
@@ -445,12 +446,44 @@
       },
     });
   };
+  // 全局数据
+  const {
+    data: GlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    manual: true,
+  });
 
+  const systemStatusText = (val: string) => {
+    if (!GlobalChoices.value?.meta_system_status) return val;
+    const statusItem = GlobalChoices.value.meta_system_status.find(item => item.id === val);
+    return statusItem?.name || val; // 如果找不到对应状态，返回原值
+  };
+  const selfRouterChange = (item: SideMenuItem) => {
+    router.push({
+      name: item.pathName,
+      params: {
+        id: systemId.value,
+      },
+    });
+  };
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
   }, {
     deep: true,
     immediate: true,
+  });
+
+  watch(systemId, (newId) => {
+    router.push({
+      name: 'systemInfo',
+      params: {
+        id: newId,
+      },
+    });
+  }, {
+    deep: true,
+    // immediate: true,
   });
 
   onMounted(() => {
