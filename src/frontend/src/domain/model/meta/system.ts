@@ -28,7 +28,7 @@ export default class System {
   audit_status: string;
   id: number;
   callback_url: string;
-  clients: string;
+  clients: Array<string>;
   description: string;
   logo_url: string;
   managers: Array<string>;
@@ -42,7 +42,7 @@ export default class System {
   source_type: string;
   system_id: string;
   system_url: string;
-
+  system_status: string;
   // 权限
   permission: {
     edit_system: boolean,
@@ -96,6 +96,7 @@ export default class System {
     this.system_domain = payload.system_domain;
     this.created_at = payload.created_at;
     this.created_by = payload.created_by;
+    this.system_status = payload.system_status;
   }
 
   initProviderConfig(providerConfig: System['provider_config']) {

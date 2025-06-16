@@ -82,6 +82,7 @@
 
   import SystemModel from '@model/meta/system';
 
+  import useEventBus from '@hooks/use-event-bus';
   import useRouterBack from '@hooks/use-router-back';
   import useUrlSearch from '@hooks/use-url-search';
 
@@ -95,6 +96,7 @@
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
+  const { emit } = useEventBus();
 
   const contentComponentMap = {
     basicInfo: BasicInfo,
@@ -151,6 +153,9 @@
     },
     defaultValue: new SystemModel(),
     manual: true,
+    onSuccess: (result) => {
+      emit('get-system-info', result);
+    },
   });
 
   useRouterBack(() => {

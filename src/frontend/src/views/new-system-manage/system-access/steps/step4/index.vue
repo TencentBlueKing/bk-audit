@@ -38,14 +38,18 @@
 
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   const { t } = useI18n();
   const router = useRouter();
+  const route = useRoute();
 
   const handleRouterChange = () => {
     router.push({
       name: 'nweSystemManage',
+      params: {
+        id: route.params.id,
+      },
     });
   };
 </script>
