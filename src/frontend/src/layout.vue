@@ -396,8 +396,6 @@
   const isMenuFlod = ref(false);
   const curNavName = ref('');
   const titleRef = ref<string>('');
-
-
   const menuData = ref<Array<MenuDataType>>([]);
   const systemId = ref(null);
   // 项目列表
@@ -420,18 +418,10 @@
     onSuccess: (data: any[]) => {
       projectList.value = data;
       systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
-      router.push({
-        name: 'systemInfo',
-        params: {
-          id: systemId.value,
-        },
-      });
     },
   });
 
   on('statement-menuData', (data) => {
-    console.log('audit-menu', data);
-
     menuData.value = data as Array<MenuDataType>;
     titleRef.value = menuData.value[0]?.name;
   });
@@ -501,17 +491,6 @@
     immediate: true,
   });
 
-  watch(systemId, (newId) => {
-    router.push({
-      name: 'systemInfo',
-      params: {
-        id: newId,
-      },
-    });
-  }, {
-    deep: true,
-    // immediate: true,
-  });
 
   onMounted(() => {
     fetchSystemWithAction({
@@ -519,7 +498,7 @@
       action_ids: 'view_system',
       with_favorite: true,
       with_system_status: true,
-      audit_status__in: 'pending,accessed',
+      audit_status__in: 'accessed',
     });
   }),
   onBeforeUnmount(() => {
@@ -623,6 +602,4 @@
     margin-left: 8px;  /* 添加左边距 */
   }
 }
-
-
 </style>

@@ -26,7 +26,7 @@
         {{ t('注册系统信息') }}</span>
       -> 2.<span
         :class="isCompleted ? 'tips-link' : ''"
-        @click="handleRouterChange('systemAccessSteps', false, 2)">{{ t('注册权限模型') }}
+        @click="handleRouterChange('systemAccessSteps', false, 1.5)">{{ t('注册权限模型') }}
       </span>-> 3.<span
         :class="isCompleted ? 'tips-link' : ''"
         @click="handleRouterChange('systemAccessSteps', false, 3)">{{ t('上报日志数据') }}</span>
