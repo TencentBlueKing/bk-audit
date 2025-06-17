@@ -137,7 +137,7 @@
     },
     {
       label: () => t('资源操作'),
-      field: () => 'resource_action',
+      field: () => 'action',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <ul>
           { (data.action && data.action.length) ? data.action.map((item, index) => (
@@ -195,7 +195,7 @@
     },
     {
       name: t('资源操作'),
-      id: 'resource_action',
+      id: 'action',
       placeholder: t('请输入资源操作'),
     },
     {
@@ -239,7 +239,6 @@
             </bk-button>
             <TaskSwitch
               data={data}
-              bkbaseUrl={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
               status={snapShotStatusList.value[data.resource_type_id]?.status}
               onChangeStatus={() => handleDataStatus()}/>
             <bk-dropdown
@@ -251,14 +250,14 @@
                 </bk-button>,
                 content: () => (
                   <bk-dropdown-menu>
-                    <bk-dropdown-item>
-                      <bk-button
-                        text
-                        onClick={() => handleViewData(data)}
-                        v-bk-tooltips={t('点击跳转到bkbase，地址为')}>
+                    {snapShotStatusList.value[data.resource_type_id]?.bkbase_url && (<bk-dropdown-item>
+                      <a
+                        v-bk-tooltips={t('点击跳转到bkbase', { url: snapShotStatusList.value[data.resource_type_id]?.bkbase_url })}
+                        href={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
+                        target="_blank">
                         {t('数据详情')}
-                      </bk-button>
-                    </bk-dropdown-item>
+                      </a>
+                    </bk-dropdown-item>)}
                     <bk-dropdown-item>
                       <bk-button
                         onClick={() => handleDelete(data)}
@@ -280,7 +279,7 @@
     const search = {
       resource_type_id: '',
       name: '',
-      resource_action: '',
+      action: '',
       sensitivity: '',
       status: '',
       id: route.params.id,
@@ -407,10 +406,6 @@
     });
   };
 
-  const handleViewData = (data: SystemResourceTypeModel) => {
-    console.log(data);
-  };
-
   const handleDelete = (data: SystemResourceTypeModel) => {
     deleteResourceType({
       unique_id: data.unique_id,
@@ -426,9 +421,10 @@
   };
 
   const handleUpdateResource = () => {
-    handleDataStatus();
     fetchSysetemResourceTypeList({
       id: route.params.id,
+    }).then(() => {
+      getSnapShotStatus();
     });
   };
 

@@ -35,15 +35,18 @@
         </bk-radio-button>
       </bk-radio-group>
     </template>
-    <component
-      :is="addComponents"
+    <add-single-resource
+      v-if="addType === 'single'"
       :edit-data="editData"
       :is-edit="isEdit"
+      @update-resource="handleUpdateResource" />
+    <add-batch-resource
+      v-else
       @update-resource="handleUpdateResource" />
   </audit-sideslider>
 </template>
 <script setup lang="ts">
-  import { computed, ref } from 'vue';
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import SystemResourceTypeModel from '@model/meta/system-resource-type';
@@ -61,18 +64,11 @@
 
   const emits = defineEmits<Emits>();
 
-  const comMap = {
-    single: addSingleResource,
-    batch: addBatchResource,
-  };
-
   const { t } = useI18n();
   const isShowAdd = ref(false);
-  const addType = ref<keyof typeof comMap>('single');
-  const editData = ref<SystemResourceTypeModel>();
+  const addType = ref('single');
+  const editData = ref<SystemResourceTypeModel>(new SystemResourceTypeModel());
   const isEdit = ref(false);
-
-  const addComponents = computed(() =>  comMap[addType.value]);
 
   const handleUpdateResource = () => {
     emits('updateResource');
@@ -80,17 +76,14 @@
 
   defineExpose<Exposes>({
     handleOpen(isBatch?: boolean, resourceTypeData?: SystemResourceTypeModel) {
-      if (isBatch) {
-        addType.value = 'batch';
-      }
-      if (resourceTypeData) {
-        addType.value = 'single';
-        isEdit.value = true;
-        editData.value = resourceTypeData;
-      } else {
-        isEdit.value = false;
-        editData.value = new SystemResourceTypeModel();
-      }
+      // 设置资源类型模式（批量/单个）
+      addType.value = isBatch ? 'batch' : 'single';
+
+      // 处理编辑/新增逻辑
+      isEdit.value = !!resourceTypeData;
+      editData.value = resourceTypeData || new SystemResourceTypeModel();
+
+      // 显示侧边栏
       isShowAdd.value = true;
     },
   });

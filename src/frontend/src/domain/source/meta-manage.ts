@@ -75,12 +75,16 @@ class MetaManage extends ModuleBase {
     params: {
       page:number,
       page_size: number,
-      keyword?: string
+      audit_status: 'accessed'
+      keyword?: string,
     },
     payload = {} as IRequestPayload,
   ) {
     return Request.get<IRequestResponsePaginationData<SystemModel>>(`${this.path}/systems/`, {
-      params,
+      params: {
+        ...params,
+        audit_status: params.audit_status || 'accessed',
+      },
       payload,
     });
   }
@@ -124,6 +128,12 @@ class MetaManage extends ModuleBase {
       params,
     });
   }
+  // 批量新建操作
+  batchCreateAction(params: Record<string, any>) {
+    return Request.post(`${this.path}/actions/bulk/`, {
+      params,
+    });
+  }
   // 更新操作
   updateAction(params: Record<string, any>) {
     return Request.put(`${this.path}/action/${params.unique_id}/`, {
@@ -160,6 +170,12 @@ class MetaManage extends ModuleBase {
   // 新建资源
   createResourceType(params: Record<string, any>) {
     return Request.post(`${this.path}/resource_types/`, {
+      params,
+    });
+  }
+  // 批量创建资源
+  batchCreateResourceType(params: Record<string, any>) {
+    return Request.post(`${this.path}/resource_types/bulk_create/`, {
       params,
     });
   }
