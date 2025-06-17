@@ -44,7 +44,7 @@ def wrapper_system_status(namespace: str, systems: List[dict]) -> List[dict]:
         system["last_time"] = tail_log_time_map.get("last_time")
         system["status"] = tail_log_time_map.get("status")
         system["status_msg"] = tail_log_time_map.get("status_msg", "")
-        system["collector_count"] = status_map.get("collector_count", 0)
+        system["collector_count"] = tail_log_time_map.get("collector_count", 0)
         # 系统状态
         system["system_status"] = system_status
     return systems

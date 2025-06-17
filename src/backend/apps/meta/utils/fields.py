@@ -22,7 +22,6 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy
 
 from apps.meta.models import Field
-from services.web.risk.constants import EventMappingFields
 
 FIELD_TYPE_STRING = "string"
 FIELD_TYPE_OBJECT = "object"
@@ -859,8 +858,3 @@ STRATEGY_DISPLAY_FIELDS = [
 ]
 
 DIMENSION_FIELD_TYPES = [FIELD_TYPE_STRING, FIELD_TYPE_INT, FIELD_TYPE_LONG, FIELD_TYPE_KEYWORD]
-
-# ES 搜索原始字段,其值不做处理
-ES_SEARCH_ORIGIN_FIELDS = [
-    EventMappingFields.RAW_EVENT_ID.field_name,
-]

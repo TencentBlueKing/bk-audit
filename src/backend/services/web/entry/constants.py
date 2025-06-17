@@ -68,3 +68,5 @@ IEG_STD_OP_DOC_URL_KEY = "ieg_std_op_doc_url"
 BKBASE_WEB_URL_KEY = "bkbase_web_url"
 # 检索规则 iwiki 地址
 SEARCH_RULE_IWIKI_URL_KEY = "search_rule_iwiki_url"
+# V3 系统新建地址
+V3_SYSTEM_CREATE_URL_KEY = "v3_system_create_url"
