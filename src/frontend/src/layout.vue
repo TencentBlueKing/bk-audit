@@ -406,6 +406,12 @@
     onSuccess: (data: any[]) => {
       projectList.value = data;
       systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
+      router.push({
+        name: 'systemInfo',
+        params: {
+          id: systemId.value,
+        },
+      });
     },
   });
 
