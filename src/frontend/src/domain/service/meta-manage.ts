@@ -75,6 +75,22 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 更新系统
+   * @param { String } action_ids
+   */
+  fetchSystemUpdate(params:{
+      system_id: string;
+      name: string;
+      name_en?: string;
+      clients: string[];
+      description?: string;
+      callback_url?: string;
+      managers: string[]
+    }) {
+    return MetaManageSource.updateSysetem(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取系统列表
    * @param { Object } params
    */

@@ -90,7 +90,7 @@
           :popover-options="{
             width: 'auto'
           }"
-          @change="handleSelecChange">
+          @change="handleSelectChange">
           <bk-option
             v-for="item in dataList"
             :id="item.id"
@@ -139,17 +139,11 @@
     });
   };
   const systemId = ref();
-  // 定义服务返回数据的类型
-  interface EventSourceApp {
+  interface SystemItem {
     id: string;
     name: string;
-  }
-
-  // 组件需要的数据类型
-  interface SystemItem extends EventSourceApp {
     source_type: string;
   }
-
   const dataList = ref<SystemItem[]>([]);
 
   const handleMouseenter = () => {
@@ -162,31 +156,28 @@
   const {
     run: fetchSystemWithAction,
   } = useRequest(MetaManageService.fetchSystemWithAction, {
-    defaultValue: [] as SystemItem[],
-    onSuccess: (data: EventSourceApp[]) => {
-      // 转换服务返回数据为 SystemItem 类型
-      dataList.value = data.map(item => ({
-        ...item,
-        source_type: 'unknown', // 添加默认来源类型
-      }));
+    defaultValue: [],
+    onSuccess: (data) => {
+      dataList.value = data;
     },
+  });
+  // 全局数据
+  const {
+    data: GlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    manual: true,
   });
 
   const sourceType = (type: string) => {
-    if (type === 'iam_v3') {
-      return t('权限中心V3');
-    }
-    if (type === 'iam_v4') {
-      return t('权限中心V4');
-    }
-    if (type === 'bk_audit') {
-      return t('审计中心');
-    }
+    if (!GlobalChoices.value?.meta_system_source_type) return type;
+    const statusItem = GlobalChoices.value.meta_system_source_type.find(item => item.id === type);
+    return statusItem?.name || type; // 如果找不到对应状态，返回原值
   };
 
-  const handleSelecChange = (val: string) => {
+  const handleSelectChange = (val: string) => {
     let systemVal = null;
-    dataList.value.forEach((i) => {
+    dataList.value.forEach((i: SystemItem) => {
       if (i.id === val) {
         systemVal = JSON.stringify(i);
       }
@@ -203,9 +194,9 @@
   };
   onMounted(() => {
     fetchSystemWithAction({
-      sort_keys: 'audit_status',
       with_favorite: false,
       with_system_status: false,
+      audit_status__in: 'pending',
     });
   });
 </script>

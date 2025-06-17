@@ -474,17 +474,6 @@
     immediate: true,
   });
 
-  watch(systemId, (newId) => {
-    router.push({
-      name: 'systemInfo',
-      params: {
-        id: newId,
-      },
-    });
-  }, {
-    deep: true,
-    // immediate: true,
-  });
 
   onMounted(() => {
     fetchSystemWithAction({
@@ -492,7 +481,7 @@
       action_ids: 'view_system',
       with_favorite: true,
       with_system_status: true,
-      audit_status__in: 'pending,accessed',
+      audit_status__in: 'accessed',
     });
   }),
   onBeforeUnmount(() => {

@@ -70,6 +70,12 @@ class MetaManage extends ModuleBase {
       params,
     });
   }
+  // 更新系统
+  updateSysetem(params: Record<string, any>) {
+    return Request.put(`${this.path}/systems/${params.system_id}/`, {
+      params,
+    });
+  }
   // 获取系统列表
   getAllSysetem(
     params: {
