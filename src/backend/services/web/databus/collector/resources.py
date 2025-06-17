@@ -378,7 +378,7 @@ class SystemCollectorsStatusResource(CollectorMeta):
         collectors = CollectorConfig.objects.filter(system_id=validated_request_data["system_id"], is_deleted=False)
         # 未配置采集直接返回
         collector_count = collectors.count()
-        if not collectors.count():
+        if not collector_count:
             data.update(
                 {
                     "status": LogReportStatus.UNSET.value,
