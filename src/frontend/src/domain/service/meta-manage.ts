@@ -83,6 +83,7 @@ export default {
       page:number,
       page_size: number,
       keyword?: string
+      audit_status: 'accessed'
     }) {
     return MetaManageSource.getAllSysetem(params, {
       permission: 'page',
@@ -154,6 +155,14 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 批量新建操作
+   * @param { Object } params
+   */
+  batchCreateAction(params: Record<string, any>) {
+    return MetaManageSource.batchCreateAction(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 更新操作
    * @param { Object } params
    */
@@ -209,6 +218,14 @@ export default {
    */
   createResourceType(params: Record<string, any>) {
     return MetaManageSource.createResourceType(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 批量新建资源
+   * @param { Object } params
+   */
+  batchCreateResourceType(params: Record<string, any>) {
+    return MetaManageSource.batchCreateResourceType(params)
       .then(({ data }) => data);
   },
   /**

@@ -40,14 +40,14 @@
       <div class="flex-center">
         <bk-form-item
           class="is-required mr16"
-          :label="t('资源类型id')"
+          :label="t('资源类型ID')"
           label-width="100"
           property="resource_type_id"
           required
           style="flex: 1;">
           <bk-input
             v-model.trim="formData.resource_type_id"
-            :placeholder="t('请输入资源类型id')"
+            :placeholder="t('请输入资源类型ID')"
             style="width: 100%;" />
         </bk-form-item>
         <bk-form-item
@@ -66,8 +66,7 @@
       <bk-form-item
         :label="t('所属父级资源')"
         label-width="160"
-        property="ancestors"
-        required>
+        property="ancestors">
         <bk-select
           ref="selectRef"
           v-model="formData.ancestors"
@@ -81,7 +80,6 @@
             children="children"
             :data="parentResourceList"
             :empty-text="t('数据搜索为空')"
-            label="raw_name"
             :search="searchValue"
             :show-node-type-icon="false"
             @node-click="handleNodeClick">
@@ -231,9 +229,8 @@
     submit() {
       return formRef.value.validate().then(() => {
         const params: Record<string, any> = _.cloneDeep(formData.value);
-        params.ancestors = [params.ancestors];
+        params.ancestors = params.ancestors ? [params.ancestors] : [];
         params.system_id = route.params.id;
-        params.unique_id = `${route.params.id}:${params.resource_type_id}`;
         // 编辑
         if (props.isEdit) {
           return MetaManageService.updateResourceType(params).then(() => {
