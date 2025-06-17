@@ -141,7 +141,9 @@
             <bk-popover
               placement="top"
               theme="dark">
-              <span class="item-right-tips">
+              <span
+                class="item-right-tips"
+                @click="handlerJumpLink">
                 <audit-icon
                   class="jump-link"
                   type="jump-link" />
@@ -314,6 +316,13 @@
   const route = useRoute();
   const router = useRouter();
   const isNewSystem = ref(computed(() => route.query.isNewSystem === 'true'));
+  const handlerJumpLink = () => {
+    const configStr = sessionStorage.getItem('BK_AUDIT_CONFIG');
+    if (configStr) {
+      const link = JSON.parse(sessionStorage.getItem('BK_AUDIT_CONFIG') || '{}').third_party_system?.v3_system_create_url;
+      window.open(link, '_blank');
+    }
+  };
   const showModelType = ref(computed(() => {
     if (Number(route.query.step) === 1.5) {
       return false;
@@ -445,7 +454,7 @@
     deep: true,
   });
 
-  onMounted(() => {
+  watch(() => route, () => {
     nextTick(() => {
       if (route.query.systemVal) {
         const systemValStr = typeof route.query.systemVal === 'string'
@@ -463,6 +472,12 @@
         });
       }
     });
+  }, {
+    deep: true,
+    immediate: true,
+  });
+  onMounted(() => {
+
   });
 
   defineExpose<Exposes>({

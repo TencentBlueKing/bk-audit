@@ -74,7 +74,7 @@ window.changeConfirm = false;
 Promise.all([RootManageService.config(), EntryManageService.watermark()])
   .then(([config, data]) => {
     const BKApp = createApp(App);
-
+    sessionStorage.setItem('BK_AUDIT_CONFIG', JSON.stringify(config));
     BKApp.use(BkuiVue);
     BKApp.use(i18n);
     BKApp.use(createRouter(config));
