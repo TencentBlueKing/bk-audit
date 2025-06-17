@@ -75,8 +75,8 @@ class SystemEditPermission(InstancePermission):
 
 
 class SystemPermissionHandler:
-    @staticmethod
-    def _generate_permission(action_enums, get_instance_id=None) -> BasePermission:
+    @classmethod
+    def _generate_permission(cls, action_enums, lookup_field=None, get_instance_id=None) -> BasePermission:
         """
         通用的权限生成方法，接收一个动作类型（如 VIEW 或 EDIT），
         根据这个生成相应的权限
@@ -87,25 +87,32 @@ class SystemPermissionHandler:
             InstanceActionPermission(
                 actions=action_enums,
                 resource_meta=ResourceEnum.SYSTEM,
+                lookup_field=lookup_field,
                 get_instance_id=get_instance_id,
             ),
         )
 
-    @staticmethod
-    def system_edit_permissions(get_instance_id=None) -> List[BasePermission]:
+    @classmethod
+    def system_edit_permissions(cls, get_instance_id=None, lookup_field=None) -> List[BasePermission]:
         """
         获取编辑系统权限
         """
 
         return [
-            SystemPermissionHandler._generate_permission([ActionEnum.EDIT_SYSTEM], get_instance_id),
-            SystemEditPermission(get_instance_id=get_instance_id),
+            SystemPermissionHandler._generate_permission(
+                [ActionEnum.EDIT_SYSTEM], lookup_field=lookup_field, get_instance_id=get_instance_id
+            ),
+            SystemEditPermission(lookup_field=lookup_field, get_instance_id=get_instance_id),
         ]
 
-    @staticmethod
-    def system_view_permissions(get_instance_id=None) -> List[BasePermission]:
+    @classmethod
+    def system_view_permissions(cls, get_instance_id=None, lookup_field=None) -> List[BasePermission]:
         """
         获取查看系统权限
         """
 
-        return [SystemPermissionHandler._generate_permission([ActionEnum.VIEW_SYSTEM], get_instance_id)]
+        return [
+            SystemPermissionHandler._generate_permission(
+                [ActionEnum.VIEW_SYSTEM], lookup_field=lookup_field, get_instance_id=get_instance_id
+            )
+        ]
