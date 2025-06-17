@@ -20,10 +20,16 @@ export default class EventSourceApp {
   permission: {
     search_regular_event: boolean;
   };
+  source_type: string;
+  audit_status: string;
+  system_id: string;
 
   constructor(payload = {} as EventSourceApp) {
     this.id = payload.id;
     this.name = payload.name;
     this.permission = payload.permission;
+    this.source_type = payload.source_type;
+    this.audit_status = payload.audit_status;
+    this.system_id = payload.system_id;
   }
 }
