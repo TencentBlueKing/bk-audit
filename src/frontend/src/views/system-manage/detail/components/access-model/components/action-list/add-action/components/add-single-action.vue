@@ -67,7 +67,6 @@
             children="children"
             :data="parentResourceList"
             :empty-text="t('数据搜索为空')"
-            label="raw_name"
             :search="searchValue"
             :show-node-type-icon="false"
             @node-click="handleNodeClick">
@@ -162,7 +161,7 @@
     submit() {
       return formRef.value.validate().then(() => {
         const params: Record<string, any> = _.cloneDeep(formData.value);
-        params.resource_type_ids = [params.resource_type_ids];
+        params.resource_type_ids = params.resource_type_ids ? [params.resource_type_ids] : [];
         params.system_id = route.params.id;
 
         if (props.isEdit) {

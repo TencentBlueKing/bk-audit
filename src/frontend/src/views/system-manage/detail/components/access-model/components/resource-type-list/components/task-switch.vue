@@ -40,14 +40,6 @@
         {{ t('启用') }}
       </bk-button>
     </auth-component>
-    <a
-      v-if="bkbaseUrl"
-      v-bk-tooltips="t('查看计算平台的任务详情')"
-      class="ml8"
-      :href="bkbaseUrl"
-      target="_blank">
-      {{ t('数据详情') }}
-    </a>
   </div>
 </template>
 <script setup lang="tsx">
@@ -65,7 +57,6 @@
   interface Props{
     data: Record<string, any>;
     status: string,
-    bkbaseUrl: string,
   }
   interface Emits {
     (e: 'changeStatus'): void

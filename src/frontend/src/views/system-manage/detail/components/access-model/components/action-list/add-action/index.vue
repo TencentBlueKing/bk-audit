@@ -35,21 +35,24 @@
         </bk-radio-button>
       </bk-radio-group>
     </template>
-    <component
-      :is="addComponents"
+    <add-single-action
+      v-if="addType === 'single'"
       :edit-data="editData"
       :is-edit="isEdit"
+      @update-action="handleUpdateAction" />
+    <add-batch-action
+      v-else
       @update-action="handleUpdateAction" />
   </audit-sideslider>
 </template>
 <script setup lang="ts">
-  import { computed, ref } from 'vue';
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import SystemActionModel from '@model/meta/system-action';
 
-  import addBatchResource from './components/add-batch-action.vue';
-  import addSingleResource from './components/add-single-action.vue';
+  import addBatchAction from './components/add-batch-action.vue';
+  import addSingleAction from './components/add-single-action.vue';
 
   interface Emits {
     (e: 'updateAction'): void;
@@ -61,16 +64,10 @@
 
   const emits = defineEmits<Emits>();
 
-  const comMap = {
-    single: addSingleResource,
-    batch: addBatchResource,
-  };
-
   const { t } = useI18n();
   const isShowAdd = ref(false);
-  const addType = ref<keyof typeof comMap>('single');
-  const addComponents = computed(() =>  comMap[addType.value]);
-  const editData = ref<SystemActionModel>();
+  const addType = ref('single');
+  const editData = ref<SystemActionModel>(new SystemActionModel());
   const isEdit = ref(false);
 
   const handleUpdateAction = () => {
@@ -79,16 +76,14 @@
 
   defineExpose<Exposes>({
     handleOpen(isBatch?: boolean, actionData?: SystemActionModel) {
-      if (isBatch) {
-        addType.value = 'batch';
-      }
-      if (actionData) {
-        editData.value = actionData;
-        isEdit.value = true;
-      } else {
-        editData.value = new SystemActionModel();
-        isEdit.value = false;
-      }
+      // 设置操作模式（批量/单个）
+      addType.value = isBatch ? 'batch' : 'single';
+
+      // 处理编辑/新增状态
+      isEdit.value = !!actionData;
+      editData.value = actionData || new SystemActionModel();
+
+      // 显示侧边栏
       isShowAdd.value = true;
     },
   });
