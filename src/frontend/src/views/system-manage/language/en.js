@@ -326,5 +326,6 @@ export default {
     已配置资源: 'Configured {count} resources',
     已配置操作: 'Configured {count} operations',
     接入系统: 'New',
+    点击跳转到bkbase: 'Click to jump to bkbase, URL: {url}',
   },
 };

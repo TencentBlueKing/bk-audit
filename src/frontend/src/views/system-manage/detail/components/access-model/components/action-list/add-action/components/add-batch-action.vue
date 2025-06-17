@@ -15,171 +15,180 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="add-batch-resource">
+  <div class="add-batch-action">
     <div class="render-field">
       <div class="field-header-row">
         <div class="field-select">
           <bk-checkbox
             v-model="isSelectedAll" />
         </div>
-        <div class="field-value">
+        <div class="field-value is-required">
           {{ t('操作ID') }}
         </div>
-        <div class="field-value">
+        <div class="field-value is-required">
           {{ t('操作名称') }}
         </div>
         <div class="field-value">
           {{ t('依赖资源') }}
           <bk-popover
-            ref="commAggRef"
-            allow-html
-            boundary="parent"
-            content="#hidden_parent_resource_pop_content"
-            ext-cls="comm-agg-pop"
+            ref="batchPopover"
             placement="bottom"
             theme="light"
-            trigger="click">
+            trigger="click"
+            width="380">
             <audit-icon
               style="margin-left: 4px;color: #3a84ff;"
               type="edit-fill" />
-          </bk-popover>
-          <div style="display: none">
-            <div id="hidden_parent_resource_pop_content">
+            <template #content>
               <h3>{{ t('批量编辑依赖资源') }}</h3>
               <audit-form
                 ref="formRef"
                 class="customize-form"
                 form-type="vertical"
-                :model="formData"
-                :rules="rules">
+                :model="formData">
                 <bk-form-item
                   :label="t('依赖资源')"
                   label-width="160"
-                  property="description">
+                  property="resource_type_ids"
+                  required>
                   <bk-select
-                    v-model="formData.parent_resource"
-                    allow-create
-                    class="bk-select"
-                    filterable
-                    :input-search="false"
-                    multiple
-                    multiple-mode="tag"
-                    :placeholder="t('请选择')"
-                    :search-placeholder="t('请输入关键字')">
-                    <bk-option
-                      v-for="(item, index) in parentResourceList"
-                      :key="index"
-                      :label="item.name"
-                      :value="item.id" />
+                    ref="batchSelectRef"
+                    v-model="formData.resource_type_ids"
+                    :auto-height="false"
+                    custom-content
+                    display-key="name"
+                    id-key="resource_type_id"
+                    @search-change="handleSearch">
+                    <bk-tree
+                      ref="treeRef"
+                      children="children"
+                      :data="parentResourceList"
+                      :empty-text="t('数据搜索为空')"
+                      :search="searchValue"
+                      :show-node-type-icon="false"
+                      @node-click="(data: SystemResourceTypeTree) => handleNodeClick(data, 'batch')">
+                      <template #default="{ data }: { data: SystemResourceTypeTree }">
+                        <span> {{ data.name }}</span>
+                      </template>
+                    </bk-tree>
                   </bk-select>
                 </bk-form-item>
               </audit-form>
-            </div>
-          </div>
-        </div>
-        <div class="field-value">
-          {{ t('标签分组') }}
-          <bk-popover
-            ref="commAggRef"
-            allow-html
-            boundary="parent"
-            content="#hidden_pop_content"
-            ext-cls="comm-agg-pop"
-            placement="bottom"
-            theme="light"
-            trigger="click">
-            <audit-icon
-              style="margin-left: 4px;color: #3a84ff;"
-              type="edit-fill" />
+              <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #3a84ff; text-align: right;">
+                <bk-button
+                  class="mr8"
+                  :disabled="!formData.resource_type_ids"
+                  size="small"
+                  theme="primary"
+                  @click="handleSubmitBatch()">
+                  {{ t('确定') }}
+                </bk-button>
+                <bk-button
+                  size="small"
+                  @click="handleCancelBatch()">
+                  {{ t('取消') }}
+                </bk-button>
+              </div>
+            </template>
           </bk-popover>
-          <div style="display: none">
-            <div id="hidden_pop_content">
-              <h3>{{ t('批量编辑标签分组') }}</h3>
-              <audit-form
-                ref="formRef"
-                class="customize-form"
-                form-type="vertical"
-                :model="formData"
-                :rules="rules">
-                <bk-form-item
-                  :label="t('标签分组')"
-                  label-width="160"
-                  property="description">
-                  <bk-select
-                    v-model="formData.risk_level"
-                    allow-create
-                    class="bk-select"
-                    filterable
-                    :input-search="false"
-                    multiple
-                    multiple-mode="tag"
-                    :placeholder="t('请选择')"
-                    :search-placeholder="t('请输入关键字')">
-                    <bk-option
-                      v-for="(item, index) in riskLevelList"
-                      :key="index"
-                      :label="item.name"
-                      :value="item.id" />
-                  </bk-select>
-                </bk-form-item>
-              </audit-form>
-            </div>
-          </div>
         </div>
         <div class="field-operation" />
       </div>
-      <template
-        v-for="(fieldItem, fieldIndex) in renderData"
-        :key="fieldIndex">
-        <div class="field-row">
-          <div class="field-select">
-            <bk-checkbox
-              v-model="fieldItem.isSelected" />
-          </div>
-          <div class="field-value">
-            <field-input
-              ref="fieldItemRef"
-              v-model="fieldItem.id"
-              required
-              theme="background" />
-          </div>
-          <div class="field-value">
-            <field-input
-              ref="fieldItemRef"
-              v-model="fieldItem.resource_name"
-              required
-              theme="background" />
-          </div>
-          <div class="field-value">
-            <field-select
-              ref="fieldItemRef"
-              :default-value="fieldItem.parent_resource || ''"
-              :field-name="fieldItem.parent_resource"
-              :options="[]"
-              required
-              theme="background" />
-          </div>
-          <div class="field-value">
-            <field-select
-              ref="fieldItemRef"
-              :default-value="fieldItem.risk_level || ''"
-              :field-name="fieldItem.risk_level"
-              :options="[]"
-              required
-              theme="background" />
-          </div>
-          <div class="field-operation">
-            <div class="icon-group">
-              <audit-icon
-                style="margin-right: 10px; cursor: pointer;"
-                type="add-fill" />
-              <audit-icon
-                style="cursor: pointer;"
-                type="reduce-fill" />
+      <audit-form
+        ref="tableFormRef"
+        form-type="vertical"
+        :model="formData">
+        <template
+          v-for="(item, index) in formData.renderData"
+          :key="index">
+          <div class="field-row">
+            <div class="field-select">
+              <bk-checkbox
+                v-model="item.isSelected" />
+            </div>
+            <div class="field-value">
+              <bk-form-item
+                error-display-type="tooltips"
+                label=""
+                label-width="0"
+                :property="`renderData[${index}].action_id`"
+                required
+                :rules="[
+                  { message: '不能为空', trigger: 'change', validator: (value: string) => !!value},
+                  { message: 'ID重复，请修改', trigger: 'change', validator: (value: string) => {
+                    const duplicates = formData.renderData.filter(
+                      (item, idx) => item.action_id === value && idx !== index
+                    );
+                    if (duplicates.length > 0) {
+                      return false;
+                    }
+                    return true;
+                  }}
+                ]">
+                <bk-input
+                  ref="fieldItemRef"
+                  v-model="item.action_id" />
+              </bk-form-item>
+            </div>
+            <div class="field-value">
+              <bk-form-item
+                error-display-type="tooltips"
+                label=""
+                label-width="0"
+                :property="`renderData[${index}].name`"
+                required>
+                <bk-input
+                  ref="fieldItemRef"
+                  v-model="item.name" />
+              </bk-form-item>
+            </div>
+            <div class="field-value">
+              <bk-form-item
+                error-display-type="tooltips"
+                label=""
+                label-width="0">
+                <bk-select
+                  ref="singleSelectRef"
+                  v-model="item.resource_type_ids"
+                  :auto-height="false"
+                  custom-content
+                  display-key="name"
+                  id-key="resource_type_id"
+                  @search-change="handleSearch">
+                  <bk-tree
+                    ref="treeRef"
+                    children="children"
+                    :data="parentResourceList"
+                    :empty-text="t('数据搜索为空')"
+                    :search="searchValue"
+                    :show-node-type-icon="false"
+                    @node-click="(data: SystemResourceTypeTree) => handleNodeClick(data, index)">
+                    <template #default="{ data }: { data: SystemResourceTypeTree }">
+                      <span> {{ data.name }}</span>
+                    </template>
+                  </bk-tree>
+                </bk-select>
+              </bk-form-item>
+            </div>
+            <div class="field-operation">
+              <div class="icon-group">
+                <audit-icon
+                  style="margin-right: 10px; cursor: pointer;"
+                  type="add-fill"
+                  @click="handleAdd(index)" />
+                <audit-icon
+                  v-bk-tooltips="{
+                    content: t('至少保留一个'),
+                    disabled: formData.renderData.length > 1,
+                  }"
+                  :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : 'delete-icon']"
+                  type="reduce-fill"
+                  @click="handleDelete(index)" />
+              </div>
             </div>
           </div>
-        </div>
-      </template>
+        </template>
+      </audit-form>
     </div>
   </div>
 </template>
@@ -188,43 +197,136 @@
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute } from 'vue-router';
 
-  import FieldInput from '../../../field-input.vue';
-  import fieldSelect from '../../../field-select.vue';
+  import MetaManageService from '@service/meta-manage';
 
-  interface ResourceFieldType {
-    id: string,
-    resource_name: string,
-    parent_resource: string,
-    risk_level: string,
-    isSelected: false,
+  import type SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
+
+  import useMessage from '@/hooks/use-message';
+  import useRequest from '@/hooks/use-request';
+
+  interface Emits {
+    (e: 'updateAction'): void;
   }
 
+  interface ResourceFieldType {
+    action_id: string,
+    name: string,
+    resource_type_ids: string,
+    isSelected: boolean,
+  }
+
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const route = useRoute();
+  const { messageSuccess } = useMessage();
+
+  const singleSelectRef = ref();
+  const batchSelectRef = ref();
+  const batchPopover = ref();
+  const tableFormRef = ref();
+
   const isSelectedAll = ref(false);
-  const parentResourceList = ref([{
-    name: '1',
-    id: 1,
-  }]);
-  const riskLevelList = ref([{
-    name: '1',
-    id: 1,
-  }]);
-  const formData  = ref({
-    parent_resource: '',
-    risk_level: '',
+  const searchValue = ref('');
+
+  const formData  = ref<{
+    resource_type_ids: string,
+    renderData: ResourceFieldType[],
+  }>({
+    resource_type_ids: '',
+    renderData: [{
+      action_id: '',
+      name: '',
+      resource_type_ids: '',
+      isSelected: false,
+    }],
   });
-  const rules = ref({});
-  const renderData = ref<ResourceFieldType[]>([{
-    id: '',
-    resource_name: '',
-    parent_resource: '',
-    risk_level: '',
-    isSelected: false,
-  }]);
+
+  // 获取父级资源
+  const {
+    data: parentResourceList,
+  }  = useRequest(MetaManageService.fetchParentResourceType, {
+    defaultParams: {
+      system_id: route.params.id,
+    },
+    defaultValue: [],
+    manual: true,
+  });
+
+  const handleSearch = (keyword: string) => {
+    searchValue.value = keyword;
+  };
+
+  const handleNodeClick = (data: SystemResourceTypeTree, typeOrIndex: string | number) => {
+    // 根据类型选择对应的select引用
+    const currentSelectRef = typeOrIndex === 'batch' ? batchSelectRef.value : singleSelectRef.value[typeOrIndex];
+
+    // 设置选中项并关闭弹窗
+    currentSelectRef.selected = [{
+      value: data.resource_type_id,
+      label: data.name,
+    }];
+    currentSelectRef.hidePopover();
+
+    // 更新表单数据
+    formData.value.resource_type_ids = data.resource_type_id;
+  };
+
+  const handleSubmitBatch = () => {
+    formData.value.renderData = formData.value.renderData.map(item => ({
+      ...item,
+      resource_type_ids: formData.value.resource_type_ids,
+    }));
+    batchPopover.value.hide();
+  };
+
+  const handleCancelBatch = () => {
+    formData.value.resource_type_ids = '';
+    batchPopover.value.hide();
+  };
+
+  const handleAdd = (index: number) => {
+    // 在对应index后添加新字段
+    formData.value.renderData.splice(index + 1, 0, {
+      action_id: '',
+      name: '',
+      resource_type_ids: '',
+      isSelected: false,
+    });
+  };
+
+  const handleDelete = (index: number) => {
+    // 只有一个不能再删除
+    if (formData.value.renderData.length === 1) {
+      return;
+    }
+    // 在对应index后删除字段
+    formData.value.renderData.splice(index, 1);
+  };
+
+  defineExpose({
+    submit() {
+      return tableFormRef.value.validate().then(() => {
+        const params = {
+          system_id: route.params.id,
+          actions: formData.value.renderData.map(item => ({
+            action_id: item.action_id,
+            name: item.name,
+            resource_type_ids: item.resource_type_ids ? [item.resource_type_ids] : [],
+            system_id: route.params.id,
+          })),
+        };
+        return MetaManageService.batchCreateAction(params).then(() => {
+          messageSuccess(t('批量创建成功'));
+          emits('updateAction');
+        });
+      });
+    },
+  });
 </script>
 <style lang="postcss" scoped>
-.add-batch-resource {
+.add-batch-action {
   padding: 24px;
 
   .icon-group {
@@ -256,13 +358,40 @@
     border-left: 1px solid #dcdee5;
   }
 
-  .field-value {
+  :deep(.field-value) {
     display: flex;
-    width: 160px;
+    width: 250px;
     overflow: hidden;
     border-left: 1px solid #dcdee5;
     align-items: center;
+
+    .bk-form-item.is-error {
+      .bk-input--text {
+        background-color: #ffebeb;
+      }
+    }
+
+    .bk-form-item {
+      width: 100%;
+      margin-bottom: 0;
+
+      .bk-input {
+        height: 42px;
+        border: none;
+      }
+
+      .bk-input.is-focused:not(.is-readonly) {
+        border: 1px solid #3a84ff;
+        outline: 0;
+        box-shadow: 0 0 3px #a3c5fd;
+      }
+
+      .bk-form-error-tips {
+        top: 12px
+      }
+    }
   }
+
 
   .field-header-row {
     display: flex;
@@ -273,7 +402,15 @@
     background: #f0f1f5;
 
     .field-value {
-      padding-left: 16px;
+      padding-left: 8px;
+    }
+
+    .field-value.is-required {
+      &::after {
+        margin-left: 4px;
+        color: red;
+        content: '*';
+      }
     }
 
     .field-select,

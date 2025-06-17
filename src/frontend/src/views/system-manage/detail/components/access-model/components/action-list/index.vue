@@ -171,12 +171,12 @@
     },
     {
       name: t('操作事件名'),
-      id: 'name',
+      id: 'name__icontains',
       placeholder: t('请输入资源名称'),
     },
     {
       name: t('关联资源类型'),
-      id: 'resource_type',
+      id: 'resource_type_ids',
       placeholder: t('请输入资源操作'),
     },
     {
@@ -258,8 +258,8 @@
   const handleSearch = (keyword: Array<any>) => {
     const search = {
       action_id: '',
-      name: '',
-      resource_type: '',
+      name__icontains: '',
+      resource_type_ids: '',
       sensitivity: '',
       type: '',
       id: route.params.id,
