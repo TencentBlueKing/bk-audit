@@ -45,7 +45,7 @@
           {{ t('系统域名') }}:
         </div>
         <div class="description-value">
-          {{ data.system_url }}
+          {{ data.system_url ||'--' }}
         </div>
       </div>
     </div>
@@ -64,8 +64,11 @@
       <div class="item-title">
         {{ t('可访问客户端') }}:
       </div>
-      <div class="description-value">
-        {{ data.description || '--' }}
+      <div
+        v-for="item in data.clients"
+        :key="item"
+        class="description-value">
+        {{ item }}
       </div>
     </div>
     <div class="item">
@@ -73,7 +76,7 @@
         {{ t('资源实例回调地址') }}:
       </div>
       <div class="description-value">
-        {{ data.description || '--' }}
+        {{ data.callback_url || '--' }}
       </div>
     </div>
     <div class="item">

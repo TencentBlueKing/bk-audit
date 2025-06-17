@@ -64,6 +64,14 @@
         </bk-button>
       </div>
       <div
+        v-if=" Number(curStep) === 1.5"
+        class="footer-btn">
+        <bk-button
+          @click="handlerStepSubmit">
+          {{ t("上一步") }}
+        </bk-button>
+      </div>
+      <div
         v-if=" Number(curStep) === 2"
         class="footer-btn2">
         <bk-button
@@ -73,7 +81,6 @@
         <bk-button
           class="ml10"
           theme="primary"
-
           @click="handlerStep2Submit">
           {{ t("提交并下一步") }}
         </bk-button>
@@ -88,7 +95,6 @@
         <bk-button
           class="ml10"
           theme="primary"
-
           @click="handlerStep3Submit">
           {{ t("完成并下一步") }}
         </bk-button>
@@ -151,7 +157,15 @@
           id: data.system_id,
         },
       });
-      // 更新路由参数
+    },
+  });
+
+  // 更新系统
+  const {
+    run: fetchSystemUpdate,
+  } = useRequest(MetaManageService.fetchSystemUpdate, {
+    defaultValue: [],
+    onSuccess: (data) => {
       router.replace({
         query: {
           ...route.query,
@@ -163,6 +177,7 @@
       });
     },
   });
+
   const stepComponents = (step: number | string) => {
     const steps = [Step1, Step2, Step3, Step4];
     // 确保step在1-4范围内，超出则返回最后一个组件
@@ -202,17 +217,32 @@
       cancelText: t('取消'),
       confirmText: t('确定接入'),
       onConfirm() {
-        fetchSystemCreated(formData);
+        if ('fromStep' in route.query) {
+          fetchSystemUpdate({
+            ...formData,
+            system_id: formData.instance_id,
+          });
+        } else {
+          fetchSystemCreated(formData);
+        }
       },
       onCancel() {},
     });
   };
-
-  const handlerStep2Cancel = () => {
+  const handlerStepSubmit = () => {
     router.replace({
       query: {
         ...route.query,
         step: 1,
+        fromStep: 1.5,
+      },
+    });
+  };
+  const handlerStep2Cancel = () => {
+    router.replace({
+      query: {
+        ...route.query,
+        step: 1.5,
         fromStep: 2,
       },
     });

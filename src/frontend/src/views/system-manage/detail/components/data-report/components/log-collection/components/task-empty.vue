@@ -21,31 +21,49 @@
       style="height: 100px; margin-top: 22px;">
     <div style="font-size: 14px;">
       {{ t('暂无任务') }}，
-      <router-link
-        :to="{
-          name: 'collectorCreate',
-          params: {
-            systemId: route.params.id || id
-          }
-        }">
-        {{ t('立即新建') }}
-      </router-link>
+      <span v-if="route.name === 'systemAccessSteps'">
+        <a
+          href="#"
+          @click.prevent="openNewWindow">
+          {{ t('立即新建') }}
+        </a>
+      </span>
+      <span v-else>
+        <router-link
+          :to="{
+            name: 'collectorCreate',
+            params: {
+              systemId: route.params.id || id
+            }
+          }">
+          {{ t('立即新建') }}
+        </router-link>
+      </span>
     </div>
   </div>
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
-  import { useRoute } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   interface Props {
     id: string
   }
 
-  withDefaults(defineProps<Props>(), {
-    id: '',
-  });
+  const props = defineProps<Props>();
   const { t } = useI18n();
   const route = useRoute();
+  const router = useRouter();
+  const openNewWindow = () => {
+    const routeObj = {
+      name: 'collectorCreate',
+      params: {
+        systemId: route.params.id || props.id,
+      },
+    };
+    const { href } = router.resolve(routeObj);
+    window.open(href, '_blank', 'noopener,noreferrer');
+  };
 </script>
 <style lang="postcss" scoped>
   .no-task {
