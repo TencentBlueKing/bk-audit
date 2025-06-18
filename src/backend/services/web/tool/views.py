@@ -2,8 +2,19 @@
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
+from services.web.tool.permissions import CreatorBasePermissionPermission
+
 
 class ToolViewSet(ResourceViewSet):
+    lookup_field = "uid"
+
+    def get_permissions(self):
+        if self.action == "update":
+            return [CreatorBasePermissionPermission()]
+        if self.action == "destroy":
+            return [CreatorBasePermissionPermission()]
+        return []
+
     resource_routes = [
         ResourceRoute("GET", resource.tool.list_tool_tags, endpoint="tags"),
         ResourceRoute("GET", resource.tool.list_tool, enable_paginate=True),
