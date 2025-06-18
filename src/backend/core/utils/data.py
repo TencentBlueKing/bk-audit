@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import copy
 import itertools
 import json
+import uuid
 from collections import OrderedDict
 from functools import wraps
 from json import JSONDecodeError
@@ -206,3 +207,8 @@ def extract_nested_value(data: Any, keys: List[str]) -> Any:
         else:
             return Empty()
     return current
+
+
+def unique_id():
+    """生成32个字符的唯一ID ."""
+    return uuid.uuid3(uuid.uuid1(), uuid.uuid4().hex).hex
