@@ -267,6 +267,7 @@ class SystemInfoResponseSerializer(SystemSerializer):
 
 class ActionListReqSerializer(serializers.Serializer):
     system_id = serializers.CharField()
+    action_id = serializers.CharField(required=False)
     name__icontains = serializers.CharField(required=False)
     name_en__icontains = serializers.CharField(required=False)
     sensitivity = serializers.IntegerField(required=False)
@@ -297,13 +298,36 @@ class ActionSerializer(serializers.ModelSerializer):
         ]
 
 
+class ActionCreateSerializer(serializers.Serializer):
+    system_id = serializers.CharField(label=_("系统ID"), max_length=64)
+    action_id = serializers.CharField(label=_("操作ID"), max_length=64)
+    name = serializers.CharField(label=_("名称"), max_length=64)
+    name_en = serializers.CharField(label=_("英文名称"), max_length=64, allow_blank=False, required=False)
+    sensitivity = serializers.IntegerField(label=_("敏感等级"), default=0)
+    type = serializers.CharField(label=_("操作类型"), max_length=64, allow_blank=True, allow_null=True, default=None)
+    version = serializers.IntegerField(label=_("版本"), default=0)
+    description = serializers.CharField(label=_("描述信息"), allow_blank=True, default="")
+    resource_type_ids = serializers.ListField(
+        label=_("资源类型ID"),
+        child=serializers.CharField(),
+        allow_empty=True,
+        default=list,
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        attrs["unique_id"] = Action.gen_unique_id(system_id=attrs["system_id"], action_id=attrs["action_id"])
+        return attrs
+
+
 class ResourceTypeSerializer(serializers.ModelSerializer):
     actions = serializers.SerializerMethodField(label=gettext_lazy("操作详情"))
     # 支持在创建资源类型时快捷创建操作
     actions_to_create = serializers.ListField(
-        child=ActionSerializer(),
+        child=ActionCreateSerializer(),
         required=False,
         write_only=True,
+        help_text=gettext_lazy("操作的 system_id 和 resource_type_ids 会被自动填充"),
     )
 
     class Meta:
@@ -328,13 +352,18 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
             "unique_id": {"required": False, "allow_null": True, "allow_blank": True},
         }
 
+    def run_validation(self, data: dict = empty):
+        # 需要在 run_validation 中默认填充 action 中的 system_id 和 resource_type_ids
+        if isinstance(data, dict) and isinstance(data.get("actions_to_create"), list):
+            for action in data["actions_to_create"]:
+                action["system_id"] = data.get("system_id")
+                action["resource_type_ids"] = [data.get("resource_type_id")]
+        return super().run_validation(data)
+
     # ---------- 通用校验 / 自动填充 ----------
     def validate(self, attrs):
         """
-        统一处理 unique_id：
-          • 如果没传，就拼接并写回 attrs
-          • 如果传了，必须等于拼接结果
-        处理actions_to_create，由于需要预填充，所以需要在 run_validation 中处理
+        统一处理 unique_id：默认填充为拼接结果
         """
         instance = getattr(self, "instance", None)
 
@@ -345,17 +374,7 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
         if not system_id or not res_type_id:
             raise serializers.ValidationError("system_id 和 resource_type_id 必须同时提供")
 
-        expected = f"{system_id}:{res_type_id}"
-        if not attrs.get("unique_id"):
-            attrs["unique_id"] = expected
-        elif attrs["unique_id"] != expected:
-            raise serializers.ValidationError("unique_id 必须为 system_id 和 resource_type_id 的组合")
-        if attrs.get("actions_to_create", []):
-            system_id = attrs.get("system_id")
-            res_type_id = attrs.get("resource_type_id")
-            for action in attrs["actions_to_create"]:
-                action["system_id"] = system_id
-                action["resource_type_ids"] = [res_type_id]
+        attrs["unique_id"] = f"{system_id}:{res_type_id}"
         return attrs
 
     def get_actions(self, obj):
@@ -436,39 +455,6 @@ class DeleteResourceTypeRequestSerializer(serializers.Serializer):
 
 class GetResourceTypeRequestSerializer(serializers.Serializer):
     unique_id = serializers.CharField(label=gettext_lazy("unique_id"))
-
-
-class ActionListReqSerializer(serializers.Serializer):
-    system_id = serializers.CharField()
-    action_id = serializers.CharField(required=False)
-    name__icontains = serializers.CharField(required=False)
-    name_en__icontains = serializers.CharField(required=False)
-    sensitivity = serializers.IntegerField(required=False)
-    type = serializers.CharField(required=False)
-    resource_type_ids = serializers.CharField(required=False)
-
-    def validate_resource_type_ids(self, value) -> List[str]:
-        if not value:
-            return []
-        return [resource_type_id for resource_type_id in value.split(",") if resource_type_id.strip()]
-
-
-class ActionSerializer(serializers.ModelSerializer):
-    resource_type_ids = serializers.ListField(child=serializers.CharField(), required=False)
-
-    class Meta:
-        model = Action
-        fields = [
-            "action_id",
-            "name",
-            "name_en",
-            "sensitivity",
-            "type",
-            "version",
-            "description",
-            "unique_id",
-            "resource_type_ids",
-        ]
 
 
 class LabelDataSerializer(serializers.Serializer):
@@ -874,28 +860,6 @@ class UpdateSystemReqSerializer(serializers.Serializer):
 class SystemFavoriteReqSerializer(serializers.Serializer):
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
     favorite = serializers.BooleanField(label=gettext_lazy("是否收藏"))
-
-
-class ActionCreateSerializer(serializers.Serializer):
-    system_id = serializers.CharField(label=_("系统ID"), max_length=64)
-    action_id = serializers.CharField(label=_("操作ID"), max_length=64)
-    name = serializers.CharField(label=_("名称"), max_length=64)
-    name_en = serializers.CharField(label=_("英文名称"), max_length=64, allow_blank=False, required=False)
-    sensitivity = serializers.IntegerField(label=_("敏感等级"), default=0)
-    type = serializers.CharField(label=_("操作类型"), max_length=64, allow_blank=True, allow_null=True, default=None)
-    version = serializers.IntegerField(label=_("版本"), default=0)
-    description = serializers.CharField(label=_("描述信息"), allow_blank=True, default="")
-    resource_type_ids = serializers.ListField(
-        label=_("资源类型ID"),
-        child=serializers.CharField(),
-        allow_empty=True,
-        default=list,
-    )
-
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-        attrs["unique_id"] = Action.gen_unique_id(system_id=attrs["system_id"], action_id=attrs["action_id"])
-        return attrs
 
 
 class ActionUpdateSerializer(serializers.ModelSerializer):
