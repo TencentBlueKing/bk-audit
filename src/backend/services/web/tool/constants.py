@@ -130,6 +130,7 @@ class SQLDataSearchConfig(BaseModel):
     SQL模式数据查询配置 -- 当工具为数据检索且配置类型为 SQL 类型时使用
     """
 
+    sql: str
     referenced_tables: List[Table]  # RT表
     input_variable: List[SQLDataSearchInputVariable]  # 输入字段
     output_fields: List[SQLDataSearchOutputField]  # 输出字段
@@ -140,5 +141,4 @@ class BkvisionConfig(BaseModel):
     BK Vision配置 -- 当工具为 BK Vision时使用
     """
 
-    space_uid: str  # BK Vision 空间 ID
     uid: str  # BK Vision 图表ID

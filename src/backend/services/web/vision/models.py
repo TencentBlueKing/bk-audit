@@ -39,7 +39,7 @@ class VisionPanel(SoftDeleteModel):
 
     id = models.CharField(gettext_lazy("ID"), primary_key=True, max_length=255)
     vision_id = models.CharField(gettext_lazy("视图ID"), max_length=255, null=True)
-    name = models.CharField(gettext_lazy("Name"), max_length=255)
+    name = models.CharField(gettext_lazy("Name"), max_length=255, blank=True, null=True)
     priority_index = models.IntegerField(gettext_lazy("优先指数"), default=0)
     handler = models.CharField(gettext_lazy("处理器"), max_length=255, default="CommonVisionHandler")
     scenario = models.CharField(gettext_lazy("场景"), max_length=255, default="default", choices=Scenario.choices)
