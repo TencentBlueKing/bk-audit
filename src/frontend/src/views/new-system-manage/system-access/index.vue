@@ -23,8 +23,8 @@
       {{ t("尚未接入系统") }}
     </div>
     <div class="title-text">
-      <span>{{ t("请选择以下类型进行接入，") }}</span>
-      <span class="text-link">{{ t("查看接入指引") }}</span>
+      <span>{{ t("请选择以下类型进行接入") }}</span>
+      <!-- <span class="text-link">{{ t("查看接入指引") }}</span> -->
     </div>
     <div class="access-btn">
       <div
@@ -62,7 +62,7 @@
             </div>
             <div
               v-if="dataList.length > 0"
-              v-bk-tooltips="{ content: '暂无待接入的系统'}"
+              v-bk-tooltips="{ content: t('暂无待接入的系统')}"
               class="access-text-bottom">
               {{
                 t(
@@ -72,7 +72,7 @@
             </div>
             <div
               v-else
-              v-bk-tooltips="{ content: '暂无待接入的系统'}"
+              v-bk-tooltips="{ content: t('暂无待接入的系统')}"
               class="access-text-bottom">
               {{
                 t(
@@ -95,16 +95,34 @@
             v-for="item in dataList"
             :id="item.id"
             :key="item.id"
+            :disabled="item.audit_status === 'accessed'"
             :name="item.name">
-            <div style="display: flex;width: 100%;justify-content: space-between;">
+            <div
+              v-if="item.audit_status === 'pending'"
+              style="display: flex;width: 100%;justify-content: space-between;">
               <div>
                 <span>{{ item.name }}</span>
                 <span style="color: #c4c6cc;">({{ item.id }})</span>
               </div>
               <div style="margin-left: 10px;color: #c4c6cc;">
-                {{ t('来源：') }} {{ sourceType(item.source_type) }}
+                {{ t('来源') }}：{{ sourceType(item.source_type) }}
               </div>
             </div>
+            <bk-popover
+              v-if="item.audit_status === 'accessed'"
+              content="已接入审计中心"
+              placement="top"
+              theme="light">
+              <div style="display: flex;width: 100%;justify-content: space-between;">
+                <div>
+                  <span>{{ item.name }}</span>
+                  <span style="color: #c4c6cc;">({{ item.id }})</span>
+                </div>
+                <div style="margin-left: 10px;color: #c4c6cc;">
+                  {{ t('来源') }}：{{ sourceType(item.source_type) }}
+                </div>
+              </div>
+            </bk-popover>
           </bk-option>
         </bk-select>
       </div>
@@ -143,6 +161,7 @@
     id: string;
     name: string;
     source_type: string;
+    audit_status: string;
   }
 
   const dataList = ref<SystemItem[]>([]);
@@ -195,9 +214,11 @@
   };
   onMounted(() => {
     fetchSystemWithAction({
+      sort_keys: 'audit_status',
       with_favorite: false,
       with_system_status: false,
-      audit_status__in: 'pending',
+      source_type__in: 'iam_v3,iam_v4',
+      order_type: 'desc',
     });
   });
 </script>
@@ -286,6 +307,8 @@
       }
 
       .access-text {
+        width: 85%;
+
         .access-text-top {
           height: 24px;
           margin-top: 24px;

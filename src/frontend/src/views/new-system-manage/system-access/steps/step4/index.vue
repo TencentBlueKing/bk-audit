@@ -93,8 +93,9 @@
   .step4-btn {
     position: absolute;
     left: 50%;
-    width: 178px;
     height: 32px;
+    padding-right: 10px;
+    padding-left: 10px;
     margin-top: 238px;
     font-size: 14px;
     line-height: 32px;

@@ -323,6 +323,19 @@ class MetaManage extends ModuleBase {
       params,
     });
   }
+
+  // 更新系统审计状态
+  updateSystemAuditStatus(params: Record<string, any>) {
+    return Request.put(`${this.path}/systems/${params.system_id}/audit_status/`, {
+      params,
+    });
+  }
+  // 更新系统收藏
+  updateSystemAuditFavorite(params: Record<string, any>) {
+    return Request.put(`${this.path}/systems/${params.system_id}/favorite/`, {
+      params,
+    });
+  }
 }
 
 export default new MetaManage();

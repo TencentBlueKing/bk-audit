@@ -33,12 +33,12 @@
           :steps="stepsTitle" />
       </div>
 
-      <div class="head-right">
+      <!-- <div class="head-right">
         <audit-icon
           class="help-fill-icon"
           type="help-fill" />
         <span class="head-right-text">{{ t("系统接入指引") }}</span>
-      </div>
+      </div> -->
     </div>
 
     <div class="step-content">
@@ -177,7 +177,13 @@
       });
     },
   });
-
+  // 更新系统审计状态
+  const {
+    run: fetchSystemAuditStatusUpdate,
+  } = useRequest(MetaManageService.fetchSystemAuditStatusUpdate, {
+    defaultValue: [],
+    onSuccess: () => {},
+  });
   const stepComponents = (step: number | string) => {
     const steps = [Step1, Step2, Step3, Step4];
     // 确保step在1-4范围内，超出则返回最后一个组件
@@ -217,13 +223,30 @@
       cancelText: t('取消'),
       confirmText: t('确定接入'),
       onConfirm() {
-        if ('fromStep' in route.query) {
-          fetchSystemUpdate({
+        if ('systemVal' in route.query) {
+          fetchSystemAuditStatusUpdate({
             ...formData,
             system_id: formData.instance_id,
+          }).then(() => {
+            router.replace({
+              query: {
+                ...route.query,
+                step: 2,
+              },
+              params: {
+                id: formData.instance_id,
+              },
+            });
           });
         } else {
-          fetchSystemCreated(formData);
+          if ('fromStep' in route.query) {
+            fetchSystemUpdate({
+              ...formData,
+              system_id: formData.instance_id,
+            });
+          } else {
+            fetchSystemCreated(formData);
+          }
         }
       },
       onCancel() {},
