@@ -21,6 +21,7 @@
     auto-focus
     class="audit-user-selector"
     :collapse-tags="collapseTags"
+    :disabled="isDisabled"
     filterable
     :model-value="localValue"
     :multiple="multiple"
@@ -56,7 +57,8 @@
     allowCreate?: boolean,
     multiple?: boolean,
     collapseTags?: boolean,
-    needRecord?:boolean
+    needRecord?:boolean,
+    isDisabled?:boolean,
   }
   interface Option{
     display_name: string,
@@ -73,6 +75,7 @@
     allowCreate: false,
     multiple: true,
     collapseTags: true,
+    isDisabled: false,
   });
   const emit = defineEmits<Emits>();
   const rememberList = ref<Array<Option>>([]);

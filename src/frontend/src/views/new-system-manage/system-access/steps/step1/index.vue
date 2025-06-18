@@ -24,7 +24,7 @@
       <img
         class="remind-icon"
         src="@images/remind.svg">
-      <span class="remind-text">当前系统为从“权限中心”接入，在审计中心所做的变更将会完全同步至审计中心，请确认后操作</span>
+      <span class="remind-text">{{ t('当前系统为从“权限中心”接入，在审计中心所做的变更将会完全同步至审计中心，请确认后操作') }}</span>
       <audit-icon
         class="close-icon"
         type="close" />
@@ -42,7 +42,7 @@
       </template>
       <template #header>
         <div class="card-header">
-          基础信息
+          {{ t('基础信息') }}
         </div>
       </template>
 
@@ -55,55 +55,59 @@
         <div class="form-item-box">
           <bk-form-item
             class="form-item"
-            label="系统 ID"
+            :label="t('系统ID')"
             property="instance_id"
             required>
             <bk-input
               v-model="formData.instance_id"
               clearable
-              :disabled="!isNewSystem"
-              placeholder="请输入系统 ID" />
+              :disabled="isDisabled"
+              :placeholder="t('请输入系统ID')" />
           </bk-form-item>
 
           <bk-form-item
             class="form-item form-item-right"
-            label="系统名称"
+            :label="t('系统名称')"
             property="name"
             required>
             <bk-input
               v-model="formData.name"
               clearable
-              placeholder="请输入系统名称" />
+              :disabled="isDisabled"
+              :placeholder="t('请输入系统名称')" />
           </bk-form-item>
         </div>
         <bk-form-item
           class="form-item-line"
-          label="管理员"
+          :label="t('管理员')"
           property="managers"
-          required>
+          :required="!isDisabled">
           <audit-user-selector
+            :is-disabled="isDisabled"
             :model-value="formData.managers"
             @change="handlerManagersChange" />
         </bk-form-item>
 
         <bk-form-item
           class="form-item-line"
-          label="系统域名"
+          :label="t('系统域名')"
           property="system_url"
-          required>
+          :required="!isDisabled">
           <bk-input
             v-model="formData.system_url"
             clearable
-            placeholder="请输入可访问的域名" />
+            :disabled="isDisabled"
+            :placeholder="t('请输入可访问的域名')" />
         </bk-form-item>
 
         <bk-form-item
           class="form-item-line"
-          label="描述">
+          :label="t('描述')">
           <bk-input
             v-model="formData.description"
             clearable
-            placeholder="请输入"
+            :disabled="isDisabled"
+            :placeholder="t('请输入')"
             :rows="6"
             type="textarea" />
         </bk-form-item>
@@ -122,7 +126,7 @@
       </template>
       <template #header>
         <div class="card-header">
-          调用信息
+          {{ t('调用信息') }}
         </div>
       </template>
 
@@ -147,13 +151,13 @@
                 <audit-icon
                   class="jump-link"
                   type="jump-link" />
-                <span>去新建</span>
+                <span>{{ t('去新建') }}</span>
               </span>
               <template #content>
-                <div>有权限调用权限中心获取或操作到该系统权限数</div>
-                <div>据的客户端列表，即 app_code 列表。例如某系</div>
-                <div>统由一个客户端注册，但是需要多个客户端都可以</div>
-                <div>调用鉴权接口进行该系统的鉴权。</div>
+                <div>{{ t('有权限调用权限中心获取或操作到该系统权限数') }}</div>
+                <div>{{ t('据的客户端列表，即 app_code 列表。例如某系') }}</div>
+                <div>{{ t('统由一个客户端注册，但是需要多个客户端都可以') }}</div>
+                <div>{{ t('调用鉴权接口进行该系统的鉴权。') }}</div>
               </template>
             </bk-popover>
           </template>
@@ -165,18 +169,20 @@
             <bk-input
               v-model="item.value"
               clearable
-              placeholder="请输入可访问客户端" />
+              :disabled="isDisabled"
+              :placeholder="t('请输入可访问客户端')" />
             <audit-icon
+              v-if="!isDisabled"
               class="add-fill"
               type="add-fill"
               @click="addClient()" />
             <audit-icon
-              v-if="clientList.length === 1"
-              v-bk-tooltips="{ content: '至少保留一个', placement: 'top' }"
+              v-if="clientList.length === 1 && !isDisabled"
+              v-bk-tooltips="{ content: t('至少保留一个'), placement: 'top' }"
               class="reduce-fill"
               type="reduce-fill" />
             <audit-icon
-              v-if="clientList.length > 1"
+              v-if="clientList.length > 1 && !isDisabled"
               class="reduce-fill"
               style="color: #979ba5;"
               type="reduce-fill"
@@ -232,7 +238,8 @@
           <bk-input
             v-model="formData.callback_url"
             clearable
-            placeholder="请输入资源回调url" />
+            :disabled="isDisabled"
+            :placeholder="t('请输入资源回调url')" />
         </bk-form-item>
       </bk-form>
     </bk-card>
@@ -303,6 +310,7 @@
   const { t } = useI18n();
   const callFormRef = ref();
   const baseFormRef = ref();
+  const isDisabled = ref(false);
 
   const rules = {
     clients: [
@@ -428,13 +436,13 @@
     }
   };
 
-
   const {
     run: fetchSystemDetail,
   } = useRequest(MetaManageService.fetchSystemDetail, {
     defaultParams: [],
     defaultValue: new SystemModel(),
     onSuccess: (result) => {
+      isDisabled.value = !(result.source_type === 'bk_audit');
       clientList.value = result.clients.map((item: string, index: number) => ({
         id: index,
         value: item,
@@ -462,8 +470,9 @@
           : route.query.systemVal[0] || '';
         if (systemValStr) {
           const systemVal = JSON.parse(systemValStr);
-          formData.value.instance_id = systemVal.id;
-          formData.value.name = systemVal.name;
+          fetchSystemDetail({
+            id: systemVal.id,
+          });
         }
       }
       if (route.query.fromStep) {
@@ -614,6 +623,7 @@
       justify-content: space-between;
 
       .type-list-item {
+        width: 45%;
         padding: 24px;
         cursor: pointer;
         background: #fff;
