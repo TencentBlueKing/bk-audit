@@ -249,6 +249,10 @@ class SystemInfoResponseSerializer(SystemSerializer):
     managers = serializers.SerializerMethodField(label=gettext_lazy("管理员"), required=False)
     last_time = serializers.CharField(label=gettext_lazy("最后上报时间"), required=False)
 
+    class Meta:
+        model = System
+        fields = "__all__"
+
     def get_managers(self, obj: System) -> list:
         """管理员"""
         return obj.managers_list
@@ -369,6 +373,7 @@ class GetResourceTypeRequestSerializer(serializers.Serializer):
 
 class ActionListReqSerializer(serializers.Serializer):
     system_id = serializers.CharField()
+    action_id = serializers.CharField(required=False)
     name__icontains = serializers.CharField(required=False)
     name_en__icontains = serializers.CharField(required=False)
     sensitivity = serializers.IntegerField(required=False)
