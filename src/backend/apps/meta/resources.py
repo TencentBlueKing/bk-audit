@@ -601,6 +601,7 @@ class ActionListResource(SystemAttrAbstractResource):
     serializer_class = ActionSerializer
     filter_fields = {
         "system_id": ["exact"],
+        "action_id": ["exact"],
         "sensitivity": ["exact"],
         "name": ["icontains"],
         "name_en": ["icontains"],
