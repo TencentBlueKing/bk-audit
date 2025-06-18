@@ -2,6 +2,10 @@ spec_version: 2
 modules:
   api:
     language: Python
+    env_variables:
+      - key: CELERY_RDBSIG
+        value: 1
+        description: 支持通过信号celery的rdb
     processes:
       web:
         command: gunicorn wsgi -w 4 --threads 16 -b :$PORT --access-logfile - --error-logfile - --access-logformat '[%(h)s] %({request_id}i)s %(u)s %(t)s "%(r)s" %(s)s %(D)s %(b)s "%(f)s" "%(a)s"'
@@ -12,7 +16,7 @@ modules:
         plan: 4C4G5R
         replicas: 5
       risk-worker:
-        command: python manage.py celery worker -O fair -l info -Q risk --autoscale=4,7
+        command: python manage.py celery worker -O fair -l info -Q risk --autoscale=4,7 --max-tasks-per-child=3000
         plan: 4C4G5R
         replicas: 2
       notice:
