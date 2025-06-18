@@ -266,12 +266,14 @@
                       <img
                         v-if="item.favorite"
                         class="pentagram-fill"
-                        src="@images/pentagram-fill.svg">
+                        src="@images/pentagram-fill.svg"
+                        @click.stop="handlerFavorite(item,false)">
                       <img
                         v-if="!(item.favorite)"
                         class="pentagram-fill"
                         src="@images/pentagram.svg"
-                        style="color: #4d4f56;">
+                        style="color: #4d4f56;"
+                        @click.stop="handlerFavorite(item,true)">
                     </span>
 
                     <span v-else>
@@ -287,14 +289,27 @@
               </bk-option>
 
               <template #extension>
-                <div
+                <bk-button
                   class="custom-extension"
+                  :disabled="!permissionCreateSystem"
                   @click="handleRouterChange('systemAccess')">
                   <audit-icon
                     class="custom-extension-icon"
                     type="add-fill" />
-                  <span class="extension-text">接入系统</span>
-                </div>
+                  <span
+                    v-if="permissionCreateSystem"
+                    class="extension-text"
+                    style="color: #4d4f56;">接入系统</span>
+                  <bk-popover
+                    v-else
+                    :content="t('暂无权限')"
+                    placement="top"
+                    theme="light">
+                    <span
+                      class="extension-text"
+                      style="color: #4d4f56;">接入系统</span>
+                  </bk-popover>
+                </bk-button>
               </template>
             </bk-select>
           </div>
@@ -354,6 +369,7 @@
     useRouter,
   } from 'vue-router';
 
+  import IamManageService from '@service/iam-manage';
   import MetaManageService from '@service/meta-manage';
 
   import ConfigModel from '@model/root/config';
@@ -410,6 +426,18 @@
   }
 
   const projectList = ref<SystemItem[]>([]);
+  const permissionCreateSystem = ref(false);
+  // 获取新建权限
+  useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'create_system',
+    },
+    defaultValue: {},
+    manual: true,
+    onSuccess: (data) => {
+      permissionCreateSystem.value = data.create_system;
+    },
+  });
 
   const {
     run: fetchSystemWithAction,
@@ -471,6 +499,12 @@
     manual: true,
   });
 
+  // 更新系统收藏
+  const {
+    run: fetchSystemAuditFavoriteUpdate,
+  } = useRequest(MetaManageService.fetchSystemAuditFavoriteUpdate, {
+    defaultValue: {},
+  });
   const systemStatusText = (val: string) => {
     if (!GlobalChoices.value?.meta_system_status) return val;
     const statusItem = GlobalChoices.value.meta_system_status.find(item => item.id === val);
@@ -484,6 +518,21 @@
       },
     });
   };
+  // 系统收藏
+  const handlerFavorite = (item: Record<string, any>, val: boolean) => {
+    fetchSystemAuditFavoriteUpdate({
+      system_id: item.id,
+      favorite: val,
+    }).then(() => {
+      fetchSystemWithAction({
+        sort_keys: 'favorite,permission',
+        action_ids: 'view_system',
+        with_favorite: true,
+        with_system_status: true,
+        audit_status__in: 'accessed',
+      });
+    });
+  };
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
   }, {
@@ -494,7 +543,7 @@
 
   onMounted(() => {
     fetchSystemWithAction({
-      sort_keys: 'favorite,permission,audit_status',
+      sort_keys: 'favorite,permission',
       action_ids: 'view_system',
       with_favorite: true,
       with_system_status: true,
@@ -556,7 +605,6 @@
     height: 100%;
     padding: 0 10px;
     font-size: 12px;
-    cursor: pointer;
     background-color: #eaebf0;
     align-items: center;  /* 垂直居中 */
     justify-content: center;  /* 水平居中 */
@@ -564,7 +612,9 @@
   }
 
   .custom-extension-icon {
+    margin-right: 10px;
     font-size: 14px;
+    color: #4d4f56;
   }
 
   .bk-select-content-wrapper {

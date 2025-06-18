@@ -413,4 +413,32 @@ export default {
     return MetaManageSource.favouriteQueryDelete(params)
       .then(({ data }) => data);
   },
+
+  /**
+   * @desc 更新系统审计状态
+   * @param { String } action_ids
+   */
+  fetchSystemAuditStatusUpdate(params:{
+      system_id: string;
+      name: string;
+      name_en?: string;
+      clients: string[];
+      description?: string;
+      callback_url?: string;
+      managers: string[]
+    }) {
+    return MetaManageSource.updateSystemAuditStatus(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 更新系统收藏
+   * @param { String } action_ids
+   */
+  fetchSystemAuditFavoriteUpdate(params:{
+        system_id: string;
+        favorite: boolean
+      }) {
+    return MetaManageSource.updateSystemAuditFavorite(params)
+      .then(({ data }) => data);
+  },
 };
