@@ -286,6 +286,13 @@
     (e: 'updateResource'): void;
   }
 
+  interface Props {
+    sensitivityList: Array<{
+      label: string;
+      value: number;
+    }>
+  }
+
   interface ResourceFieldType {
     resource_type_id: string,
     name: string,
@@ -294,22 +301,8 @@
     isSelected: boolean,
   }
 
+  defineProps<Props>();
   const emits = defineEmits<Emits>();
-
-  const sensitivityList = [
-    {
-      value: 2,
-      label: '二级(低)',
-    },
-    {
-      value: 3,
-      label: '三级(中)',
-    },
-    {
-      value: 4,
-      label: '四级(高)',
-    },
-  ];
 
   const { t } = useI18n();
   const route = useRoute();
