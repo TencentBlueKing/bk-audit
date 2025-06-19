@@ -96,6 +96,9 @@
 
   import useMessage from '@/hooks/use-message';
 
+  interface Emits {
+    (e: 'updateAction'): void;
+  }
   interface Props {
     canEditSystem: boolean;
   }
@@ -119,6 +122,7 @@
   }
 
   const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
   const { t, locale } = useI18n();
   const route = useRoute();
   const { messageSuccess } = useMessage();
@@ -127,7 +131,7 @@
     {
       label: () => t('资源类型'),
       field: () => 'resource_type_id',
-      width: '250px',
+      width: '200px',
     },
     {
       label: () => t('资源名称'),
@@ -391,6 +395,7 @@
       fetchSysetemResourceTypeList({
         id: route.params.id,
       });
+      emits('updateAction');
     },
   });
 
@@ -452,7 +457,7 @@
     addResourceRef.value.handleOpen();
   };
 
-  const handleUpdateResource = () => {
+  const updateResource = () => {
     fetchSysetemResourceTypeList({
       id: route.params.id,
     }).then(() => {
@@ -460,8 +465,19 @@
     });
   };
 
+  const handleUpdateResource = () => {
+    updateResource();
+    emits('updateAction');
+  };
+
   onMounted(() => {
     checkPermission();
+  });
+
+  defineExpose({
+    updateResource() {
+      updateResource();
+    },
   });
 </script>
 <style lang="postcss">
