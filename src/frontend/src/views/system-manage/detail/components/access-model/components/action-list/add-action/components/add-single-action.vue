@@ -69,14 +69,29 @@
             children="children"
             :data="parentResourceList"
             :empty-text="t('数据搜索为空')"
+            label="name"
+            node-key="resource_type_id"
             :search="searchValue"
+            selectable
+            :selected="selected"
             :show-node-type-icon="false"
-            @node-click="handleNodeClick">
-            <template #default="{ data }: { data: SystemResourceTypeTree }">
-              <span> {{ data.name }}</span>
-            </template>
-          </bk-tree>
+            @node-click="handleNodeClick" />
         </bk-select>
+      </bk-form-item>
+      <bk-form-item
+        class="sensitivity-level-group"
+        :label="t('敏感等级')"
+        label-width="160"
+        property="sensitivity">
+        <bk-button-group>
+          <bk-button
+            v-for="item in sensitivityList"
+            :key="item.value"
+            :selected="formData.sensitivity === item.value"
+            @click="handleSensitivity(item.value)">
+            <span>{{ item.label }}</span>
+          </bk-button>
+        </bk-button-group>
       </bk-form-item>
     </audit-form>
   </div>
@@ -102,6 +117,10 @@
   interface Props {
     isEdit: boolean;
     editData: SystemActionModel;
+    sensitivityList: Array<{
+      label: string;
+      value: number;
+    }>
   }
 
   const props = defineProps<Props>();
@@ -118,17 +137,35 @@
     action_id: '',
     name: '',
     resource_type_ids: '',
+    sensitivity: 1,
   });
   const searchValue = ref('');
+  const selected = ref<Array<string>>([]);
 
   if (props.isEdit) {
     nextTick(() => {
       formData.value.action_id = props.editData.action_id;
       formData.value.name = props.editData.name;
+      formData.value.sensitivity = props.editData.sensitivity;
       // eslint-disable-next-line prefer-destructuring
       formData.value.resource_type_ids = props.editData.resource_type_ids[0];
     });
   }
+
+  // 添加递归查找函数
+  // eslint-disable-next-line max-len
+  const findResourceRecursive = (items: SystemResourceTypeTree[], targetId: string): SystemResourceTypeTree | undefined => {
+    for (const item of items) {
+      if (item.resource_type_id === targetId) {
+        return item;
+      }
+      if (item.children && item.children.length > 0) {
+        const found = findResourceRecursive(item.children, targetId);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
 
   // 获取父级资源
   const {
@@ -139,6 +176,19 @@
     },
     defaultValue: [],
     manual: true,
+    onSuccess: () => {
+      // 编辑反选
+      if (formData.value.resource_type_ids && props.isEdit) {
+        const finedAncestor = findResourceRecursive(parentResourceList.value, formData.value.resource_type_ids);
+        if (finedAncestor) {
+          selectRef.value.selected = [{
+            value: finedAncestor.resource_type_id,
+            label: finedAncestor.name,
+          }];
+          selected.value = [finedAncestor.resource_type_id];
+        }
+      }
+    },
   });
 
   const handleSearch = (keyword: string) => {
@@ -152,6 +202,10 @@
       label: data.name,
     }];
     formData.value.resource_type_ids = data.resource_type_id;
+  };
+
+  const handleSensitivity = (value: number) => {
+    formData.value.sensitivity = value;
   };
 
   defineExpose({
@@ -186,6 +240,45 @@
     .flex-center {
       display: flex;
       align-items: center;
+    }
+
+    .sensitivity-level-group {
+      :deep(.bk-button-group) {
+        .bk-button {
+          &:first-child:hover:not(.is-disabled, .is-selected) {
+            color: #979ba5;
+            border-color: #979ba5;
+          }
+
+          &:first-child.is-selected {
+            color: #fff;
+            background-color: #979ba5;
+            border-color: #979ba5;
+          }
+
+          &:nth-child(2):hover:not(.is-disabled, .is-selected) {
+            color: #ff9c01;
+            border-color: #ff9c01;
+          }
+
+          &:nth-child(2).is-selected {
+            color: #fff;
+            background-color: #ff9c01;
+            border-color: #ff9c01;
+          }
+
+          &:hover:not(.is-disabled, .is-selected) {
+            color: #ea3636;
+            border-color: #ea3636;
+          }
+
+          &.is-selected {
+            color: #fff;
+            background-color: #ea3636;
+            border-color: #ea3636;
+          }
+        }
+      }
     }
   }
 }
