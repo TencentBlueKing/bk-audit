@@ -21,15 +21,17 @@
     name="systemList">
     <div class="system-list-page">
       <div class="mb16 action-header">
-        <bk-button
+        <auth-button
+          action-id="create_system"
           class="mr8"
+          :permission="permissionCheckData"
           theme="primary"
           @click="handleCreate">
           <audit-icon
             style="margin-right: 8px;font-size: 14px;"
             type="add" />
           {{ t('接入系统') }}
-        </bk-button>
+        </auth-button>
         <bk-input
           v-model="searckKey"
           :placeholder="t('请输入 应用名称、应用 ID 进行搜索')"
@@ -59,6 +61,7 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
+  import IamManageService from '@service/iam-manage';
   import MetaManageService from '@service/meta-manage';
 
   import type SyetemModel from '@model/meta/system';
@@ -66,6 +69,8 @@
   import EditTag from '@components/edit-box/tag.vue';
 
   import getAssetsFile from '@utils/getAssetsFile';
+
+  import useRequest from '@/hooks/use-request';
 
   // import useRequest from '@/hooks/use-request';
 
@@ -242,6 +247,8 @@
   const searckKey = ref('');
   const isLoading = computed(() => (listRef.value ? listRef.value.loading : true));
 
+  const permissionCheckData = ref();
+
   const disabledMap: Record<string, string> = {
     name: 'name',
     system_id: 'system_id',
@@ -274,6 +281,18 @@
       return jsonSetting;
     }
     return initSettings();
+  });
+
+  // 获取策略新建权限
+  useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'create_system',
+    },
+    defaultValue: {},
+    manual: true,
+    onSuccess: (data) => {
+      permissionCheckData.value = data.create_strategy;
+    },
   });
 
   // const {

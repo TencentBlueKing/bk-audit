@@ -68,6 +68,7 @@
   interface Emits {
     (e: 'update:modelValue', value:Array<string>): void
     (e: 'change', value:Array<string>): void
+    (e: 'blur'): void
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -164,6 +165,7 @@
   };
   const handleBlur = () => {
     sessionStorage.setItem('audit-userlist', JSON.stringify(rememberList.value));
+    emit('blur');
   };
 
   watch(() => props.modelValue, (modelValue: Props['modelValue']) => {
