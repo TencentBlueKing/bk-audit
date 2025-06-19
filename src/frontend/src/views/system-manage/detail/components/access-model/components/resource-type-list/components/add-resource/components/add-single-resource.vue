@@ -107,7 +107,9 @@
         </bk-button-group>
       </bk-form-item>
     </audit-form>
-    <div class="other-action">
+    <div
+      v-if="!isEdit"
+      class="other-action">
       <h3 style="margin-bottom: 16px;">
         {{ t('还可以快捷创建该资源的以下操作：') }}
       </h3>
