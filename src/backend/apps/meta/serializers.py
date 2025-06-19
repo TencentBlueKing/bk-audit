@@ -374,7 +374,12 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
         if not system_id or not res_type_id:
             raise serializers.ValidationError("system_id 和 resource_type_id 必须同时提供")
 
-        attrs["unique_id"] = f"{system_id}:{res_type_id}"
+        expected = f"{system_id}:{res_type_id}"
+        if not attrs.get("unique_id"):
+            attrs["unique_id"] = expected
+        elif attrs["unique_id"] != expected:
+            raise serializers.ValidationError("unique_id 必须为 system_id 和 resource_type_id 的组合")
+
         return attrs
 
     def get_actions(self, obj):
@@ -401,6 +406,8 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
 
 
 class UpdateResourceTypeSerializer(ResourceTypeSerializer):
+    unique_id = serializers.CharField(validators=[])
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.validators = [
