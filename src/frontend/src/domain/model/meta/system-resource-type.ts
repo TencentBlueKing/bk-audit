@@ -19,7 +19,7 @@ const STATUS_RUNNING = 'running';
 const STATUS_PREPARING = 'preparing';
 const STATUS_FAILED = 'failed';
 export default class SystemResourceType {
-  ancestors: Array<string>;
+  ancestor: Array<string>;
   bkbase_url: string;
   name: string;
   name_en: string;
@@ -36,7 +36,7 @@ export default class SystemResourceType {
   permission: {
     manage_global_setting: boolean
   };
-  action: Array<{
+  actions: Array<{
     name: string;
     description: string;
   }>;
@@ -55,7 +55,7 @@ export default class SystemResourceType {
   };
 
   constructor(payload = {} as SystemResourceType) {
-    this.ancestors = payload.ancestors;
+    this.ancestor = payload.ancestor;
     this.resource_type_id = payload.resource_type_id;
     this.description = payload.description;
     this.name = payload.name;
@@ -67,7 +67,7 @@ export default class SystemResourceType {
     this.status = payload.status;
     this.bkbase_url = payload.bkbase_url;
     this.permission = payload.permission;
-    this.action = payload.action;
+    this.actions = payload.actions;
     this.unique_id = payload.unique_id;
   }
 

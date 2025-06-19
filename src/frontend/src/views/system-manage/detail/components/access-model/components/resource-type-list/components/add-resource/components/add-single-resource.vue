@@ -47,6 +47,7 @@
           style="flex: 1;">
           <bk-input
             v-model.trim="formData.resource_type_id"
+            :disabled="isEdit"
             :placeholder="t('请输入资源类型ID')"
             style="width: 100%;" />
         </bk-form-item>
@@ -66,10 +67,10 @@
       <bk-form-item
         :label="t('所属父级资源')"
         label-width="160"
-        property="ancestors">
+        property="ancestor">
         <bk-select
           ref="selectRef"
-          v-model="formData.ancestors"
+          v-model="formData.ancestor"
           :auto-height="false"
           custom-content
           display-key="name"
@@ -111,17 +112,17 @@
         {{ t('还可以快捷创建该资源的以下操作：') }}
       </h3>
       <bk-checkbox-group v-model="actionArr">
-        <bk-checkbox label="new">
-          {{ t('新建脚本') }}
+        <bk-checkbox label="create">
+          {{ t('新建') }}{{ formData.name }}
         </bk-checkbox>
         <bk-checkbox label="edit">
-          {{ t('编辑脚本') }}
+          {{ t('编辑') }}{{ formData.name }}
         </bk-checkbox>
         <bk-checkbox label="view">
-          {{ t('查看脚本') }}
+          {{ t('查看') }}{{ formData.name }}
         </bk-checkbox>
         <bk-checkbox label="delete">
-          {{ t('删除脚本') }}
+          {{ t('删除') }}{{ formData.name }}
         </bk-checkbox>
       </bk-checkbox-group>
     </div>
@@ -166,6 +167,12 @@
       label: '四级(高)',
     },
   ];
+  const actionMap = {
+    create: '新建',
+    edit: '编辑',
+    view: '查看',
+    delete: '删除',
+  };
 
   const { t } = useI18n();
   const route = useRoute();
@@ -176,7 +183,7 @@
   const formData  = ref({
     resource_type_id: '',
     name: '',
-    ancestors: '',
+    ancestor: '',
     sensitivity: 2,
   });
   const searchValue = ref('');
@@ -184,14 +191,15 @@
 
   if (props.isEdit) {
     nextTick(() => {
+      console.log(props.editData);
       formData.value.resource_type_id = props.editData.resource_type_id;
       formData.value.name = props.editData.name;
       // eslint-disable-next-line prefer-destructuring
-      formData.value.ancestors = props.editData.ancestors[0];
+      formData.value.ancestor = props.editData.ancestor[0];
       formData.value.sensitivity = props.editData.sensitivity;
 
       selectRef.value.selected = [{
-        value: formData.value.ancestors,
+        value: formData.value.ancestor,
         label: formData.value.name,
       }];
     });
@@ -218,7 +226,7 @@
       value: data.resource_type_id,
       label: data.name,
     }];
-    formData.value.ancestors = data.resource_type_id;
+    formData.value.ancestor = data.resource_type_id;
   };
 
   const handleSensitivity = (value: number) => {
@@ -229,8 +237,15 @@
     submit() {
       return formRef.value.validate().then(() => {
         const params: Record<string, any> = _.cloneDeep(formData.value);
-        params.ancestors = params.ancestors ? [params.ancestors] : [];
+        if (actionArr.value.length > 0) {
+          params.actions_to_create = actionArr.value.map(item => ({
+            action_id: `${item}_${params.resource_type_id}`,
+            name: `${actionMap[item]}_${params.name}`,
+          }));
+        }
+        params.ancestor = params.ancestor ? [params.ancestor] : [];
         params.system_id = route.params.id;
+        params.unique_id = `${route.params.id}:${params.resource_type_id}`;
         // 编辑
         if (props.isEdit) {
           return MetaManageService.updateResourceType(params).then(() => {
