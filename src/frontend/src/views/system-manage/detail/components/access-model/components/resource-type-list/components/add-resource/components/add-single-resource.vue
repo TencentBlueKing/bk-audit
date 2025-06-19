@@ -180,6 +180,7 @@
   const route = useRoute();
   const selectRef = ref();
   const formRef = ref();
+  const treeRef = ref();
   const { messageSuccess } = useMessage();
   const addType = ref('customize');
   const formData  = ref({
@@ -193,19 +194,28 @@
 
   if (props.isEdit) {
     nextTick(() => {
-      console.log(props.editData);
       formData.value.resource_type_id = props.editData.resource_type_id;
       formData.value.name = props.editData.name;
       // eslint-disable-next-line prefer-destructuring
       formData.value.ancestor = props.editData.ancestor[0];
       formData.value.sensitivity = props.editData.sensitivity;
-
-      selectRef.value.selected = [{
-        value: formData.value.ancestor,
-        label: formData.value.name,
-      }];
     });
   }
+
+  // 添加递归查找函数
+  // eslint-disable-next-line max-len
+  const findResourceRecursive = (items: SystemResourceTypeTree[], targetId: string): SystemResourceTypeTree | undefined => {
+    for (const item of items) {
+      if (item.resource_type_id === targetId) {
+        return item;
+      }
+      if (item.children && item.children.length > 0) {
+        const found = findResourceRecursive(item.children, targetId);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
 
   // 获取父级资源
   const {
@@ -216,6 +226,18 @@
     },
     defaultValue: [],
     manual: true,
+    onSuccess: () => {
+      if (formData.value.ancestor && props.isEdit) {
+        const finedAncestor = findResourceRecursive(parentResourceList.value, formData.value.ancestor);
+        if (finedAncestor) {
+          selectRef.value.selected = [{
+            value: finedAncestor.resource_type_id,
+            label: finedAncestor.name,
+          }];
+          treeRef.value.setSelect([`${finedAncestor.resource_type_id}`]);
+        }
+      }
+    },
   });
 
   const handleSearch = (keyword: string) => {
