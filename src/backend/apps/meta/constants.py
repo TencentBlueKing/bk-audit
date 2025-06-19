@@ -22,7 +22,7 @@ from typing import List
 
 from django.utils.translation import gettext_lazy
 
-from core.choices import TextChoices, register_choices
+from core.choices import IntegerChoices, TextChoices, register_choices
 from core.constants import OrderTypeChoices as _OrderTypeChoices
 
 IAM_MANAGER_ROLE = "members"
@@ -219,3 +219,16 @@ SYSTEM_AUTH_TOKEN_LENGTH = 32
 
 # 系统和具体实例的分隔符
 SYSTEM_INSTANCE_SEPARATOR = ":"
+
+
+@register_choices("meta_system_sensitivity")
+class SystemSensitivityEnum(IntegerChoices):
+    """
+    系统敏感级别(用于前端展示枚举值)
+    """
+
+    EMPTY = 0, gettext_lazy("无")
+    NONE = 1, gettext_lazy("不敏感")
+    LOW = 2, gettext_lazy("低")
+    MIDDLE = 3, gettext_lazy("中")
+    HIGH = 4, gettext_lazy("高")
