@@ -41,9 +41,11 @@
       v-if="addType === 'single'"
       :edit-data="editData"
       :is-edit="isEdit"
+      :sensitivity-list="sensitivityList"
       @update-action="handleUpdateAction" />
     <add-batch-action
       v-else
+      :sensitivity-list="sensitivityList"
       @update-action="handleUpdateAction" />
   </audit-sideslider>
 </template>
@@ -65,6 +67,25 @@
   }
 
   const emits = defineEmits<Emits>();
+
+  const sensitivityList = [
+    {
+      value: 1,
+      label: '一级(不敏感)',
+    },
+    {
+      value: 2,
+      label: '二级(低)',
+    },
+    {
+      value: 3,
+      label: '三级(中)',
+    },
+    {
+      value: 4,
+      label: '四级(高)',
+    },
+  ];
 
   const { t } = useI18n();
   const isShowAdd = ref(false);
