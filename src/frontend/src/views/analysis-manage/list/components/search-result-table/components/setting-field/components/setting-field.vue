@@ -351,7 +351,6 @@
     const allCheckedLists = [...checkedLists, ...initList];
     if (allCheckedLists.length) {
       const fieldNames = allCheckedLists.map(item => item.field_name);
-      console.log(fieldNames);
       fieldNames.forEach((item) => {
         const index = data.findIndex(list => list.field_name === item);
         if (index !== -1) {
@@ -671,17 +670,17 @@
         margin-left: 5px;
 
         .submit-icon {
-          transform: translateY(4px);
           margin-right: 4px;
           font-size: 18px;
           color: #7bbe8a;
+          transform: translateY(4px);
         }
 
         .disabled-submit-icon {
-          transform: translateY(4px);
           font-size: 18px;
           color: #dcdee5;
           cursor: not-allowed;
+          transform: translateY(4px);
           user-select: none
         }
       }

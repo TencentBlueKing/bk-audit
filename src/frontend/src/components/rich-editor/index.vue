@@ -152,7 +152,6 @@
     if (props.height) {
       nextTick(() => {
         const el = document.querySelector('.ql-container.ql-snow') as HTMLElement;
-        // console.log(el, props.height);
         if (el) {
           el.style.height = props.height;
         }

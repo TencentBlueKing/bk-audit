@@ -35,6 +35,7 @@
           style="flex: 1;">
           <bk-input
             v-model.trim="formData.action_id"
+            :disabled="isEdit"
             :placeholder="t('请输入操作ID')"
             style="width: 100%;" />
         </bk-form-item>

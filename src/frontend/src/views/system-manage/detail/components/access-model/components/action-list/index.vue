@@ -76,6 +76,9 @@
 
   import useMessage from '@/hooks/use-message';
 
+  interface Emits {
+    (e: 'updateResource'): void;
+  }
   interface Props {
     canEditSystem: boolean;
   }
@@ -99,6 +102,7 @@
   }
 
   const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const route = useRoute();
   const addActionRef = ref();
@@ -223,6 +227,7 @@
       fetchSystemActionList({
         id: route.params.id,
       });
+      emits('updateResource');
     },
   });
 
@@ -262,6 +267,7 @@
     fetchSystemActionList({
       id: route.params.id,
     });
+    emits('updateResource');
   };
 
   const handleSearch = (keyword: Array<any>) => {
@@ -292,6 +298,14 @@
     });
     fetchSystemActionList(search);
   };
+
+  defineExpose({
+    updateAction() {
+      fetchSystemActionList({
+        id: route.params.id,
+      });
+    },
+  });
 </script>
 <style lang="postcss">
 .access-model-operation-list {

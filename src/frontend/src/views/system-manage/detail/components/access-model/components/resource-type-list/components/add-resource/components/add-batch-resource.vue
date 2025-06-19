@@ -31,7 +31,7 @@
         <div class="field-value">
           {{ t('所属父级资源') }}
           <bk-popover
-            ref="ancestorsPopover"
+            ref="ancestorPopover"
             placement="bottom"
             theme="light"
             trigger="click"
@@ -48,10 +48,10 @@
                 <bk-form-item
                   :label="t('所属父级资源')"
                   label-width="160"
-                  property="ancestors">
+                  property="ancestor">
                   <bk-select
                     ref="batchSelectRef"
-                    v-model="formData.ancestors"
+                    v-model="formData.ancestor"
                     :auto-height="false"
                     custom-content
                     display-key="name"
@@ -76,15 +76,15 @@
               <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #3a84ff; text-align: right;">
                 <bk-button
                   class="mr8"
-                  :disabled="!formData.ancestors"
+                  :disabled="!formData.ancestor"
                   size="small"
                   theme="primary"
-                  @click="handleSubmitBatch('ancestors')">
+                  @click="handleSubmitBatch('ancestor')">
                   {{ t('确定') }}
                 </bk-button>
                 <bk-button
                   size="small"
-                  @click="handleCancelBatch('ancestors')">
+                  @click="handleCancelBatch('ancestor')">
                   {{ t('取消') }}
                 </bk-button>
               </div>
@@ -203,7 +203,7 @@
                 label-width="0">
                 <bk-select
                   ref="singleSelectRef"
-                  v-model="item.ancestors"
+                  v-model="item.ancestor"
                   :auto-height="false"
                   custom-content
                   display-key="name"
@@ -289,7 +289,7 @@
   interface ResourceFieldType {
     resource_type_id: string,
     name: string,
-    ancestors: string,
+    ancestor: string,
     sensitivity: string,
     isSelected: boolean,
   }
@@ -318,23 +318,23 @@
   const singleSelectRef = ref();
   const batchSelectRef = ref();
   const tableFormRef = ref();
-  const ancestorsPopover = ref();
+  const ancestorPopover = ref();
   const sensitivityPopover = ref();
 
   const isSelectedAll = ref(false);
   const searchValue = ref('');
 
   const formData  = ref<{
-    ancestors: string,
+    ancestor: string,
     sensitivity: string,
     renderData: ResourceFieldType[],
   }>({
-    ancestors: '',
+    ancestor: '',
     sensitivity: '',
     renderData: [{
       resource_type_id: '',
       name: '',
-      ancestors: '',
+      ancestor: '',
       sensitivity: '',
       isSelected: false,
     }],
@@ -364,20 +364,24 @@
       value: data.resource_type_id,
       label: data.name,
     }];
-    currentSelectRef.hidePopover();
 
     // 更新表单数据
-    formData.value.ancestors = data.resource_type_id;
+    if (typeOrIndex === 'batch') {
+      formData.value.ancestor = data.resource_type_id;
+    } else {
+      currentSelectRef.hidePopover();
+      formData.value.renderData[typeOrIndex as number].ancestor = data.resource_type_id;
+    }
   };
 
-  const handleSubmitBatch = (type: 'ancestors' | 'sensitivity') => {
-    if (type === 'ancestors') {
-      // 更新formData.value.ancestors
+  const handleSubmitBatch = (type: 'ancestor' | 'sensitivity') => {
+    if (type === 'ancestor') {
+      // 更新formData.value.ancestor
       formData.value.renderData = formData.value.renderData.map(item => ({
         ...item,
-        ancestors: formData.value.ancestors,
+        ancestor: formData.value.ancestor,
       }));
-      ancestorsPopover.value.hide();
+      ancestorPopover.value.hide();
       return;
     }
     // 更新formData.value.sensitivity
@@ -388,10 +392,10 @@
     sensitivityPopover.value.hide();
   };
 
-  const handleCancelBatch = (type: 'ancestors' | 'sensitivity') => {
-    if (type === 'ancestors') {
-      formData.value.ancestors = '';
-      ancestorsPopover.value.hide();
+  const handleCancelBatch = (type: 'ancestor' | 'sensitivity') => {
+    if (type === 'ancestor') {
+      formData.value.ancestor = '';
+      ancestorPopover.value.hide();
       return;
     }
     formData.value.sensitivity = '';
@@ -403,7 +407,7 @@
     formData.value.renderData.splice(index + 1, 0, {
       resource_type_id: '',
       name: '',
-      ancestors: '',
+      ancestor: '',
       sensitivity: '',
       isSelected: false,
     });
@@ -425,7 +429,7 @@
           resource_types: formData.value.renderData.map(item => ({
             resource_type_id: item.resource_type_id,
             name: item.name,
-            ancestors: item.ancestors ? [item.ancestors] : [],
+            ancestor: item.ancestor ? [item.ancestor] : [],
             sensitivity: item.sensitivity,
             system_id: route.params.id,
           })),

@@ -252,10 +252,6 @@
     init();
     emit('menu-flod', !isSideMenuFixed.value);
     window.addEventListener('resize', resizeHandler);
-    if (headerTipsRef.value) {
-      const height = headerTipsRef.value.offsetHeight;
-      console.log('headerTips 高度:', height);
-    }
   });
   onBeforeUnmount(() => {
     window.removeEventListener('resize', resizeHandler);
