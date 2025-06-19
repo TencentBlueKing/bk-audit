@@ -135,7 +135,6 @@ class Risk(OperateRecordModel):
         q |= DjangoQuerySetConverter(key_mapping=RiskResourceProvider.key_mapping).convert(policies)
         return (
             queryset.filter(q)
-            .exclude(status=RiskStatus.CLOSED)
             .annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH))
             .defer("event_content")
         )
