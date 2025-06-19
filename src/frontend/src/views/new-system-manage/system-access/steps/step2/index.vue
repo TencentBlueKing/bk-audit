@@ -16,11 +16,17 @@
 -->
 <template>
   <div class="step2">
-    <step2 can-edit-system />
+    <step2 :can-edit-system="canEditSystem" />
   </div>
 </template>
 <script setup lang="ts">
   import Step2 from '@views/system-manage/detail/components/access-model/index.vue';
+
+  interface Props {
+    canEditSystem: boolean;
+  }
+
+  defineProps<Props>();
 </script>
 <style scoped lang="postcss">
 .step2 {

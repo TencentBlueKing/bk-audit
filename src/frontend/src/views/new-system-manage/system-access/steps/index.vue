@@ -45,7 +45,9 @@
       <component
         :is="stepComponents(curStep)"
         ref="stepRef"
-        @handler-validates="handlerValidates" />
+        :can-edit-system="canEditSystem"
+        @handler-validates="handlerValidates"
+        @update-can-edit-system="handleUpdate" />
     </div>
 
     <div class="step-footer">
@@ -118,9 +120,16 @@
 
   import useRequest from '@/hooks/use-request';
 
+  interface FormData {
+    name: string;
+    instance_id: string;
+    [key: string]: any;
+  }
+
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
+  const canEditSystem = ref(true);
 
   // 将 curStep 定义为计算属性，确保始终返回数字类型
   const curStep = computed<number>(() => {
@@ -177,6 +186,7 @@
       });
     },
   });
+
   // 更新系统审计状态
   const {
     run: fetchSystemAuditStatusUpdate,
@@ -184,6 +194,7 @@
     defaultValue: [],
     onSuccess: () => {},
   });
+
   const stepComponents = (step: number | string) => {
     const steps = [Step1, Step2, Step3, Step4];
     // 确保step在1-4范围内，超出则返回最后一个组件
@@ -196,11 +207,6 @@
   const handlerStep1Submit = () => {
     stepRef.value.handlerFormData();
   };
-  interface FormData {
-    name: string;
-    instance_id: string;
-    [key: string]: any;
-  }
 
   const handlerValidates: (...args: unknown[]) => void = (data: unknown) => {
     if (typeof data !== 'object' || data === null) return;
@@ -223,7 +229,7 @@
       cancelText: t('取消'),
       confirmText: t('确定接入'),
       onConfirm() {
-        if ('systemVal' in route.query) {
+        if ('systemId' in route.query) {
           fetchSystemAuditStatusUpdate({
             ...formData,
             system_id: formData.instance_id,
@@ -308,6 +314,9 @@
       },
       onCancel() {},
     });
+  };
+  const handleUpdate = (value: any) => {
+    canEditSystem.value = !value;
   };
   const handlerBack = () => {
     router.push({

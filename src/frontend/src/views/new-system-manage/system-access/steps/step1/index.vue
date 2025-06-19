@@ -304,6 +304,7 @@
   }
   interface Emits {
     (e: 'handlerValidates', val: Record<string, any>): void
+    (e: 'updateCanEditSystem', val: boolean): void
   }
   const emit = defineEmits<Emits>();
 
@@ -443,6 +444,7 @@
     defaultValue: new SystemModel(),
     onSuccess: (result) => {
       isDisabled.value = !(result.source_type === 'bk_audit');
+      emit('updateCanEditSystem', isDisabled.value);
       clientList.value = result.clients.map((item: string, index: number) => ({
         id: index,
         value: item,
@@ -464,16 +466,10 @@
 
   watch(() => route, () => {
     nextTick(() => {
-      if (route.query.systemVal) {
-        const systemValStr = typeof route.query.systemVal === 'string'
-          ? route.query.systemVal
-          : route.query.systemVal[0] || '';
-        if (systemValStr) {
-          const systemVal = JSON.parse(systemValStr);
-          fetchSystemDetail({
-            id: systemVal.id,
-          });
-        }
+      if (route.query.systemId) {
+        fetchSystemDetail({
+          id: route.query.systemId,
+        });
       }
       if (route.query.fromStep) {
         fetchSystemDetail({
