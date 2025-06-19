@@ -18,8 +18,13 @@
   <div style="padding-bottom: 24px;">
     <resource-type-list
       v-if="isShowreSource"
-      :can-edit-system="canEditSystem" />
-    <action-list :can-edit-system="canEditSystem" />
+      ref="resourceTypeListRef"
+      :can-edit-system="canEditSystem"
+      @update-action="handleUpdateAction" />
+    <action-list
+      ref="actionListRef"
+      :can-edit-system="canEditSystem"
+      @update-resource="handleUpdateResource" />
   </div>
 </template>
 <script setup lang="ts">
@@ -36,6 +41,9 @@
   defineProps<Props>();
   const route = useRoute();
 
+  const resourceTypeListRef = ref();
+  const actionListRef = ref();
+
   const isShowreSource =  ref(computed(() => {
     if (route.name === 'systemAccessSteps') {
       if ('type' in route.query) {
@@ -46,4 +54,11 @@
     return true;
   }));
 
+  const handleUpdateAction = () => {
+    actionListRef.value?.updateAction();
+  };
+
+  const handleUpdateResource = () => {
+    resourceTypeListRef.value?.updateResource();
+  };
 </script>
