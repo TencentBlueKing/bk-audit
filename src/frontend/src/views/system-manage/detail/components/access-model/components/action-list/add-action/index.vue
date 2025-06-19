@@ -19,10 +19,10 @@
     v-model:is-show="isShowAdd"
     show-footer
     show-header-slot
-    :title="t('添加资源')"
+    :title="isEdit ? t('编辑操作') : t('添加操作')"
     :width="920">
     <template #header>
-      <span>{{ t('添加资源') }}</span>
+      <span>{{ isEdit ? t('编辑操作') : t('添加操作') }}</span>
       <bk-radio-group
         v-model="addType"
         class="add-resource-type"
@@ -30,7 +30,9 @@
         <bk-radio-button label="single">
           {{ t('单个模式') }}
         </bk-radio-button>
-        <bk-radio-button label="batch">
+        <bk-radio-button
+          :disabled="isEdit"
+          label="batch">
           {{ t('批量模式') }}
         </bk-radio-button>
       </bk-radio-group>

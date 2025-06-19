@@ -159,6 +159,7 @@
         const params: Record<string, any> = _.cloneDeep(formData.value);
         params.resource_type_ids = params.resource_type_ids ? [params.resource_type_ids] : [];
         params.system_id = route.params.id;
+        params.unique_id = `${route.params.id}:${params.action_id}`;
 
         if (props.isEdit) {
           return  MetaManageService.updateAction(params).then(() => {
