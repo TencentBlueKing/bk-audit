@@ -141,6 +141,13 @@
 
   import useRequest from '@/hooks/use-request';
 
+  interface SystemItem {
+    id: string;
+    name: string;
+    source_type: string;
+    audit_status: string;
+  }
+
   const { t } = useI18n();
   const router = useRouter();
   // const route = useRoute();
@@ -157,13 +164,6 @@
     });
   };
   const systemId = ref();
-  interface SystemItem {
-    id: string;
-    name: string;
-    source_type: string;
-    audit_status: string;
-  }
-
   const dataList = ref<SystemItem[]>([]);
 
   const handleMouseenter = () => {
@@ -196,19 +196,13 @@
   };
 
   const handleSelectChange = (val: string) => {
-    let systemVal = null;
-    dataList.value.forEach((i: SystemItem) => {
-      if (i.id === val) {
-        systemVal = JSON.stringify(i);
-      }
-    });
     router.push({
       name: 'systemAccessSteps',
       query: {
         step: '1',  // 改为字符串类型
         showModelType: 'false',  // 改为字符串类型
         isNewSystem: 'false',  // 改为字符串类型
-        systemVal,
+        systemId: val,
       },
     });
   };
