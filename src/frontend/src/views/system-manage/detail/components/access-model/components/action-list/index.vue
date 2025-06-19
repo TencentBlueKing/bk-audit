@@ -21,18 +21,20 @@
     </h3>
     <div class="access-model-action-header">
       <div class="btns-wrap">
-        <bk-button
-          class="mr8"
-          theme="primary"
-          @click="handleCreate">
-          <audit-icon
-            style="margin-right: 8px;font-size: 14px;"
-            type="add" />
-          {{ t('新建操作') }}
-        </bk-button>
-        <bk-button @click="handleBatchCreate">
-          {{ t('批量新增') }}
-        </bk-button>
+        <template v-if="canEditSystem">
+          <bk-button
+            class="mr8"
+            theme="primary"
+            @click="handleCreate">
+            <audit-icon
+              style="margin-right: 8px;font-size: 14px;"
+              type="add" />
+            {{ t('新建操作') }}
+          </bk-button>
+          <bk-button @click="handleBatchCreate">
+            {{ t('批量新增') }}
+          </bk-button>
+        </template>
       </div>
       <bk-search-select
         v-model="searchKey"
@@ -60,7 +62,7 @@
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -74,6 +76,9 @@
 
   import useMessage from '@/hooks/use-message';
 
+  interface Props {
+    canEditSystem: boolean;
+  }
   interface SearchKey {
     id: string,
     name: string,
@@ -93,12 +98,13 @@
     onlyRecommendChildren?: boolean,
   }
 
+  const props = defineProps<Props>();
   const { t } = useI18n();
   const route = useRoute();
   const addActionRef = ref();
   const { messageSuccess } = useMessage();
 
-  const tableColumn = [
+  const tableColumn = computed(() => [
     {
       label: () => t('操作 ID'),
       field: () => 'action_id',
@@ -140,7 +146,8 @@
       showOverflowTooltip: true,
       render: ({ data }: {data: SystemActionModel}) => data.type || '--',
     },
-    {
+    // 只有当 canEditSystem 为 true 时才显示操作列
+    ...(props.canEditSystem ? [{
       label: () => t('操作'),
       width: 120,
       fixed: 'right',
@@ -161,8 +168,9 @@
             </bk-button>
           </div>
         </>,
-    },
-  ];
+    }] : []),
+  ]);
+
   const searchData: SearchData[] = [
     {
       name: t('操作ID'),
@@ -218,21 +226,22 @@
     },
   });
 
-  // 获取资源
-  const {
-    data: actionData,
-    run: fetchActionByUniqueId,
-  } = useRequest(MetaManageService.fetchActionByUniqueId, {
-    defaultValue: new SystemActionModel(),
-    onSuccess: () => {
-      addActionRef.value.handleOpen(false, actionData.value);
-    },
-  });
+  // 获取操作
+  // const {
+  //   data: actionData,
+  //   run: fetchActionByUniqueId,
+  // } = useRequest(MetaManageService.fetchActionByUniqueId, {
+  //   defaultValue: new SystemActionModel(),
+  //   onSuccess: () => {
+  //     addActionRef.value.handleOpen(false, actionData.value);
+  //   },
+  // });
 
   const handleEdit = (data: SystemActionModel) => {
-    fetchActionByUniqueId({
-      unique_id: data.unique_id,
-    });
+    // fetchActionByUniqueId({
+    //   unique_id: data.unique_id,
+    // });
+    addActionRef.value.handleOpen(false, data);
   };
 
   const handleDelete = (data: SystemActionModel) => {

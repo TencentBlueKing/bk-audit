@@ -64,7 +64,9 @@
         </template>
         <component
           :is="renderContentComponent"
-          :data="data" />
+          :can-edit-system="canEditSystem"
+          :data="data"
+          @update-system-detail="handleUpdateSystemDetail" />
       </bk-tab-panel>
     </bk-tab>
   </skeleton-loading>
@@ -138,6 +140,8 @@
     ? 'systemDetailList'
     : 'systemDetail'));
 
+  const canEditSystem = computed(() => data.value.source_type !== 'iam_v3' && data.value.source_type !== 'iam_v4');
+
   const handleChange = (value: 'basicInfo' | 'accessModel' | 'dataReport' | 'systemDiagnosis') => {
     appendSearchParams({
       contentType: value,
@@ -147,6 +151,7 @@
   const {
     data,
     loading,
+    run: fetchSystemDetail,
   } = useRequest(MetaManageService.fetchSystemDetail, {
     defaultParams: {
       id: route.params.id,
@@ -157,6 +162,12 @@
       emit('get-system-info', result);
     },
   });
+
+  const handleUpdateSystemDetail = () => {
+    fetchSystemDetail({
+      id: route.params.id,
+    });
+  };
 
   useRouterBack(() => {
     router.push({

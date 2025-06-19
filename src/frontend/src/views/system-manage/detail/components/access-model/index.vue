@@ -16,8 +16,10 @@
 -->
 <template>
   <div style="padding-bottom: 24px;">
-    <resource-type-list v-if="isShowreSource" />
-    <action-list />
+    <resource-type-list
+      v-if="isShowreSource"
+      :can-edit-system="canEditSystem" />
+    <action-list :can-edit-system="canEditSystem" />
   </div>
 </template>
 <script setup lang="ts">
@@ -27,7 +29,13 @@
   import ActionList from './components/action-list/index.vue';
   import ResourceTypeList from './components/resource-type-list/index.vue';
 
+  interface Props {
+    canEditSystem: boolean;
+  }
+
+  defineProps<Props>();
   const route = useRoute();
+
   const isShowreSource =  ref(computed(() => {
     if (route.name === 'systemAccessSteps') {
       if ('type' in route.query) {
