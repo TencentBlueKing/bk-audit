@@ -62,6 +62,7 @@ from apps.meta.models import (
 )
 from apps.meta.utils.format import format_resource_permission
 from apps.meta.utils.system import wrapper_system_status
+from core.models import get_request_username
 
 
 class SensitiveObjSerializer(serializers.ModelSerializer):
@@ -815,6 +816,10 @@ class CreateSystemReqSerializer(serializers.ModelSerializer):
         attrs["audit_status"] = SystemAuditStatusEnum.ACCESSED.value
         attrs["source_type"] = SystemSourceTypeEnum.AUDIT.value
         attrs["system_id"] = System.build_system_id(source_type=attrs["source_type"], instance_id=attrs["instance_id"])
+        # 添加创建者为管理员
+        created_by = get_request_username()
+        if created_by not in attrs["managers"]:
+            attrs["managers"].append(created_by)
         return attrs
 
 

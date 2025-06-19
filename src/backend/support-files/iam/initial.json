@@ -1305,6 +1305,9 @@
               "name_en": "System",
               "actions": [
                 {
+                  "id": "create_system"
+                },
+                {
                   "id": "list_system"
                 },
                 {
