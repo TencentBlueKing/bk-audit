@@ -30,7 +30,9 @@
         <bk-radio-button label="single">
           {{ t('单个模式') }}
         </bk-radio-button>
-        <bk-radio-button label="batch">
+        <bk-radio-button
+          :disabled="isEdit"
+          label="batch">
           {{ t('批量模式') }}
         </bk-radio-button>
       </bk-radio-group>
