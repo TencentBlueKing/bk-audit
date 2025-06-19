@@ -68,6 +68,7 @@ export default class System {
   system_domain: string;
   created_at: string;
   created_by: string;
+  auth_token: string;
 
   constructor(payload = {} as System) {
     this.audit_status = payload.audit_status;
@@ -97,6 +98,7 @@ export default class System {
     this.created_at = payload.created_at;
     this.created_by = payload.created_by;
     this.system_status = payload.system_status;
+    this.auth_token = payload.auth_token;
   }
 
   initProviderConfig(providerConfig: System['provider_config']) {

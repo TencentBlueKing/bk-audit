@@ -23,18 +23,20 @@
     </div>
     <div class="resource-list-action-header">
       <div class="btns-wrap">
-        <bk-button
-          class="mr8"
-          theme="primary"
-          @click="handleCreate">
-          <audit-icon
-            style="margin-right: 8px;font-size: 14px;"
-            type="add" />
-          {{ t('新建资源类型') }}
-        </bk-button>
-        <bk-button @click="handleBatchCreate">
-          {{ t('批量新增') }}
-        </bk-button>
+        <template v-if="canEditSystem">
+          <bk-button
+            class="mr8"
+            theme="primary"
+            @click="handleCreate">
+            <audit-icon
+              style="margin-right: 8px;font-size: 14px;"
+              type="add" />
+            {{ t('新建资源类型') }}
+          </bk-button>
+          <bk-button @click="handleBatchCreate">
+            {{ t('批量新增') }}
+          </bk-button>
+        </template>
       </div>
       <bk-search-select
         v-model="searchKey"
@@ -94,6 +96,9 @@
 
   import useMessage from '@/hooks/use-message';
 
+  interface Props {
+    canEditSystem: boolean;
+  }
   interface SearchKey {
     id: string,
     name: string,
@@ -113,6 +118,7 @@
     onlyRecommendChildren?: boolean,
   }
 
+  const props = defineProps<Props>();
   const { t, locale } = useI18n();
   const route = useRoute();
   const { messageSuccess } = useMessage();
@@ -140,13 +146,14 @@
       field: () => 'action',
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <ul>
-          { (data.action && data.action.length) ? data.action.map((item, index) => (
+          { (data.actions && data.actions.length) ? data.actions.map((item, index) => (
             <li
               style="height: 30px;"
               key={index}>
               <span
                 v-bk-tooltips={{
                   content: item.description,
+                  disabled: !item.description,
                 }}
                 style="border-bottom:1px dashed #C4C6CC;"
                 >
@@ -161,6 +168,24 @@
       label: () => t('敏感等级'),
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         <render-sensitivity-level value={data.sensitivity} />
+      ),
+    },
+    {
+      label: () => t('数据结构'),
+      width: '150px',
+      render: ({ data }: {data: SystemResourceTypeModel}) => (
+          <div
+            onClick={() => handleJobPlan(data)}
+            style="color:#3a84ff"
+            class="cursor"
+            >
+            <audit-icon
+              class="mr8 schema-icon"
+              svg
+              type="schema"
+            />
+            <span class="ml5">schema</span>
+          </div>
       ),
     },
     {
@@ -230,45 +255,52 @@
         fixed: 'right',
         render: ({ data }: {data: SystemResourceTypeModel}) => <>
           <div style="display: flex">
-            <bk-button
-              theme='primary'
-              class='mr16'
-              onClick={() => handleEdit(data)}
-              text>
-              {t('编辑')}
-            </bk-button>
+            {props.canEditSystem && (
+              <bk-button
+                theme='primary'
+                class='mr16'
+                onClick={() => handleEdit(data)}
+                text>
+                {t('编辑')}
+              </bk-button>
+            )}
             <TaskSwitch
               data={data}
               status={snapShotStatusList.value[data.resource_type_id]?.status}
               onChangeStatus={() => handleDataStatus()}/>
-            <bk-dropdown
-              trigger="click"
-              style="margin-left: 8px">
-              {{
-                default: () => <bk-button text>
-                  <audit-icon type="more" />
-                </bk-button>,
-                content: () => (
-                  <bk-dropdown-menu>
-                    {snapShotStatusList.value[data.resource_type_id]?.bkbase_url && (<bk-dropdown-item>
-                      <a
-                        v-bk-tooltips={t('点击跳转到bkbase', { url: snapShotStatusList.value[data.resource_type_id]?.bkbase_url })}
-                        href={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
-                        target="_blank">
-                        {t('数据详情')}
-                      </a>
-                    </bk-dropdown-item>)}
-                    <bk-dropdown-item>
-                      <bk-button
-                        onClick={() => handleDelete(data)}
-                        text>
-                        {t('删除')}
-                      </bk-button>
-                    </bk-dropdown-item>
-                  </bk-dropdown-menu>
-                ),
-              }}
-            </bk-dropdown>
+            {(snapShotStatusList.value[data.resource_type_id]?.bkbase_url || props.canEditSystem) && (
+              <bk-dropdown
+                trigger="click"
+                style="margin-left: 8px">
+                {{
+                  default: () => <bk-button text>
+                    <audit-icon type="more" />
+                  </bk-button>,
+                  content: () => (
+                    <bk-dropdown-menu>
+                      {snapShotStatusList.value[data.resource_type_id]?.bkbase_url && (
+                        <bk-dropdown-item>
+                          <a
+                            v-bk-tooltips={t('点击跳转到bkbase', { url: snapShotStatusList.value[data.resource_type_id]?.bkbase_url })}
+                            href={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
+                            target="_blank">
+                            {t('数据详情')}
+                          </a>
+                        </bk-dropdown-item>
+                      )}
+                      {props.canEditSystem && (
+                        <bk-dropdown-item>
+                          <bk-button
+                            onClick={() => handleDelete(data)}
+                            text>
+                            {t('删除')}
+                          </bk-button>
+                        </bk-dropdown-item>
+                      )}
+                    </bk-dropdown-menu>
+                  ),
+                }}
+              </bk-dropdown>)}
           </div>
         </>,
       },
@@ -395,10 +427,10 @@
     getSnapShotStatus();
   };
 
-  // const handleJobPlan = (data: SystemResourceTypeModel) => {
-  //   isShowJobPlan.value = true;
-  //   rowData.value = data;
-  // };
+  const handleJobPlan = (data: SystemResourceTypeModel) => {
+    isShowJobPlan.value = true;
+    rowData.value = data;
+  };
 
   const handleEdit = (data: SystemResourceTypeModel) => {
     fetchResourceTypeByUniqueId({

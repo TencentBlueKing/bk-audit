@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="step2">
-    <step2 />
+    <step2 can-edit-system />
   </div>
 </template>
 <script setup lang="ts">
