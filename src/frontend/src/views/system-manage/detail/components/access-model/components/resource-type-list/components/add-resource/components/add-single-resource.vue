@@ -81,13 +81,13 @@
             children="children"
             :data="parentResourceList"
             :empty-text="t('数据搜索为空')"
+            label="name"
+            node-key="resource_type_id"
             :search="searchValue"
+            selectable
+            :selected="selected"
             :show-node-type-icon="false"
-            @node-click="handleNodeClick">
-            <template #default="{ data }: { data: SystemResourceTypeTree }">
-              <span> {{ data.name }}</span>
-            </template>
-          </bk-tree>
+            @node-click="handleNodeClick" />
         </bk-select>
       </bk-form-item>
       <bk-form-item
@@ -147,6 +147,10 @@
   interface Props {
     isEdit: boolean;
     editData: SystemResourceTypeModel;
+    sensitivityList: Array<{
+      label: string;
+      value: number;
+    }>
   }
 
   import useMessage from '@/hooks/use-message';
@@ -155,20 +159,6 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
-  const sensitivityList = [
-    {
-      value: 2,
-      label: '二级(低)',
-    },
-    {
-      value: 3,
-      label: '三级(中)',
-    },
-    {
-      value: 4,
-      label: '四级(高)',
-    },
-  ];
   const actionMap = {
     create: '新建',
     edit: '编辑',
@@ -187,10 +177,11 @@
     resource_type_id: '',
     name: '',
     ancestor: '',
-    sensitivity: 2,
+    sensitivity: 1,
   });
   const searchValue = ref('');
   const actionArr = ref([]);
+  const selected = ref<Array<string>>([]);
 
   if (props.isEdit) {
     nextTick(() => {
@@ -227,6 +218,7 @@
     defaultValue: [],
     manual: true,
     onSuccess: () => {
+      // 编辑反选
       if (formData.value.ancestor && props.isEdit) {
         const finedAncestor = findResourceRecursive(parentResourceList.value, formData.value.ancestor);
         if (finedAncestor) {
@@ -234,7 +226,7 @@
             value: finedAncestor.resource_type_id,
             label: finedAncestor.name,
           }];
-          treeRef.value.setSelect([`${finedAncestor.resource_type_id}`]);
+          selected.value = [finedAncestor.resource_type_id];
         }
       }
     },

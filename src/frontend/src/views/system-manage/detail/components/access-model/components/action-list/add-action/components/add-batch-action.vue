@@ -81,12 +81,67 @@
                   :disabled="!formData.resource_type_ids"
                   size="small"
                   theme="primary"
-                  @click="handleSubmitBatch()">
+                  @click="handleSubmitBatch('resource_type_ids')">
                   {{ t('确定') }}
                 </bk-button>
                 <bk-button
                   size="small"
-                  @click="handleCancelBatch()">
+                  @click="handleCancelBatch('resource_type_ids')">
+                  {{ t('取消') }}
+                </bk-button>
+              </div>
+            </template>
+          </bk-popover>
+        </div>
+        <div class="field-value  is-required">
+          {{ t('敏感等级') }}
+          <bk-popover
+            ref="sensitivityPopover"
+            placement="bottom"
+            theme="light"
+            trigger="click"
+            width="380">
+            <audit-icon
+              style="margin-left: 4px;color: #3a84ff;"
+              type="edit-fill" />
+            <template #content>
+              <h3>{{ t('批量编辑敏感等级') }}</h3>
+              <audit-form
+                ref="formRef"
+                form-type="vertical"
+                :model="formData">
+                <bk-form-item
+                  :label="t('敏感等级')"
+                  label-width="160"
+                  property="sensitivity">
+                  <bk-select
+                    v-model="formData.sensitivity"
+                    class="batch-sensitivity"
+                    filterable
+                    :input-search="false"
+                    :placeholder="t('请选择')"
+                    :popover-options="{ boundary: 'parent' }"
+                    :search-placeholder="t('请输入关键字')">
+                    <bk-option
+                      v-for="(item, index) in sensitivityList"
+                      :key="index"
+                      :label="item.label"
+                      :value="item.value" />
+                  </bk-select>
+                </bk-form-item>
+              </audit-form>
+              <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #3a84ff; text-align: right;">
+                <bk-button
+                  class="mr8"
+                  :disabled="!formData.sensitivity"
+                  size="small"
+                  theme="primary"
+                  @click="handleSubmitBatch('sensitivity')">
+                  {{ t('确定') }}
+                </bk-button>
+                <bk-button
+                  size="small"
+                  @click="handleCancelBatch('sensitivity')">
                   {{ t('取消') }}
                 </bk-button>
               </div>
@@ -171,6 +226,28 @@
                 </bk-select>
               </bk-form-item>
             </div>
+            <div class="field-value">
+              <bk-form-item
+                error-display-type="tooltips"
+                label=""
+                label-width="0"
+                :property="`renderData[${index}].sensitivity`"
+                required>
+                <bk-select
+                  v-model="item.sensitivity"
+                  class="bk-select"
+                  filterable
+                  :input-search="false"
+                  :placeholder="t('请选择')"
+                  :search-placeholder="t('请输入关键字')">
+                  <bk-option
+                    v-for="(selectItem, selectIndex) in sensitivityList"
+                    :key="selectIndex"
+                    :label="selectItem.label"
+                    :value="selectItem.value" />
+                </bk-select>
+              </bk-form-item>
+            </div>
             <div class="field-operation">
               <div class="icon-group">
                 <audit-icon
@@ -207,6 +284,12 @@
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
+  interface Props {
+    sensitivityList: Array<{
+      label: string;
+      value: number;
+    }>
+  }
   interface Emits {
     (e: 'updateAction'): void;
   }
@@ -215,9 +298,11 @@
     action_id: string,
     name: string,
     resource_type_ids: string,
+    sensitivity: string,
     isSelected: boolean,
   }
 
+  defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const route = useRoute();
@@ -225,6 +310,7 @@
 
   const singleSelectRef = ref();
   const batchSelectRef = ref();
+  const sensitivityPopover = ref();
   const batchPopover = ref();
   const tableFormRef = ref();
 
@@ -233,13 +319,16 @@
 
   const formData  = ref<{
     resource_type_ids: string,
+    sensitivity: string,
     renderData: ResourceFieldType[],
   }>({
     resource_type_ids: '',
+    sensitivity: '',
     renderData: [{
       action_id: '',
       name: '',
       resource_type_ids: '',
+      sensitivity: '',
       isSelected: false,
     }],
   });
@@ -278,17 +367,31 @@
     }
   };
 
-  const handleSubmitBatch = () => {
+  const handleSubmitBatch = (type: 'resource_type_ids' | 'sensitivity') => {
+    if (type === 'resource_type_ids') {
+      // 更新formData.value.ancestor
+      formData.value.renderData = formData.value.renderData.map(item => ({
+        ...item,
+        resource_type_ids: formData.value.resource_type_ids,
+      }));
+      batchPopover.value.hide();
+      return;
+    }
     formData.value.renderData = formData.value.renderData.map(item => ({
       ...item,
-      resource_type_ids: formData.value.resource_type_ids,
+      sensitivity: formData.value.sensitivity,
     }));
-    batchPopover.value.hide();
+    sensitivityPopover.value.hide();
   };
 
-  const handleCancelBatch = () => {
-    formData.value.resource_type_ids = '';
-    batchPopover.value.hide();
+  const handleCancelBatch = (type: 'resource_type_ids' | 'sensitivity') => {
+    if (type === 'resource_type_ids') {
+      formData.value.resource_type_ids = '';
+      batchPopover.value.hide();
+      return;
+    }
+    formData.value.sensitivity = '';
+    sensitivityPopover.value.hide();
   };
 
   const handleAdd = (index: number) => {
@@ -297,6 +400,7 @@
       action_id: '',
       name: '',
       resource_type_ids: '',
+      sensitivity: '',
       isSelected: false,
     });
   };
@@ -319,6 +423,7 @@
             action_id: item.action_id,
             name: item.name,
             resource_type_ids: item.resource_type_ids ? [item.resource_type_ids] : [],
+            sensitivity: item.sensitivity,
             system_id: route.params.id,
           })),
         };
@@ -365,7 +470,7 @@
 
   :deep(.field-value) {
     display: flex;
-    width: 250px;
+    width: 160px;
     overflow: hidden;
     border-left: 1px solid #dcdee5;
     align-items: center;
