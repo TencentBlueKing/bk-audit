@@ -58,6 +58,7 @@
                     custom-content
                     display-key="name"
                     id-key="resource_type_id"
+                    :popover-options="{ boundary: 'parent' }"
                     @search-change="handleSearch">
                     <bk-tree
                       ref="treeRef"
@@ -267,10 +268,14 @@
       value: data.resource_type_id,
       label: data.name,
     }];
-    currentSelectRef.hidePopover();
 
     // 更新表单数据
-    formData.value.resource_type_ids = data.resource_type_id;
+    if (typeOrIndex === 'batch') {
+      formData.value.resource_type_ids = data.resource_type_id;
+    } else {
+      currentSelectRef.hidePopover();
+      formData.value.renderData[typeOrIndex as number].resource_type_ids = data.resource_type_id;
+    }
   };
 
   const handleSubmitBatch = () => {

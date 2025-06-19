@@ -28,7 +28,20 @@
         <div class="item-title">
           {{ t('系统名称') }}:
         </div>
-        <div>{{ data.name }}</div>
+        <div class="item-value">
+          <template v-if="!edits.name">
+            <span>{{ data.name || '--' }}</span>
+            <audit-icon
+              v-if="canEditSystem"
+              class="edit-icon"
+              type="edit-fill"
+              @click="toggleEdit('name')" />
+          </template>
+          <bk-input
+            v-else
+            v-model="formData.name"
+            @blur="handleBlur('name')" />
+        </div>
       </div>
       <div class="item">
         <div class="item-title">
@@ -57,8 +70,19 @@
         <div class="item-title">
           {{ t('系统域名') }}:
         </div>
-        <div class="description-value">
-          {{ data.system_url ||'--' }}
+        <div class="item-value">
+          <template v-if="!edits.system_url">
+            <span>{{ data.system_url || '--' }}</span>
+            <audit-icon
+              v-if="canEditSystem"
+              class="edit-icon"
+              type="edit-fill"
+              @click="toggleEdit('system_url')" />
+          </template>
+          <bk-input
+            v-else
+            v-model="formData.system_url"
+            @blur="handleBlur('system_url')" />
         </div>
       </div>
     </div>
@@ -88,10 +112,23 @@
       <div class="item-title">
         {{ t('可访问客户端') }}:
       </div>
-      <div
-        v-for="item in data.clients"
-        :key="item">
-        {{ item }}
+      <div>
+        <template
+          v-for="(item, index) in data.clients"
+          :key="item">
+          <div v-if="!edits.clients[index]">
+            <span>{{ item }}</span>
+            <audit-icon
+              v-if="canEditSystem"
+              class="edit-icon"
+              type="edit-fill"
+              @click="toggleClientEdit(index, item)" />
+          </div>
+          <bk-input
+            v-else
+            v-model="formData.clients[index]"
+            @blur="handleClientBlur(index)" />
+        </template>
       </div>
     </div>
     <div class="item">
@@ -117,14 +154,29 @@
       <div class="item-title">
         {{ t('鉴权token') }}:
       </div>
-      <div>
-        {{ data.auth_token || '--' }}
+      <div class="item-value">
+        <template v-if="!viewAuthToken">
+          <span>******</span>
+          <audit-icon
+            style="margin-left: 5px; cursor: pointer;"
+            type="view"
+            @click="() => viewAuthToken = !viewAuthToken" />
+        </template>
+        <span v-else>
+          {{ data.auth_token || '--' }}
+        </span>
+        <span
+          v-bk-tooltips="t('复制')"
+          style="margin-left: 5px; cursor: pointer;"
+          @click.stop="()=>handleCopy(data.auth_token)">
+          <audit-icon type="copy" />
+        </span>
       </div>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -132,6 +184,8 @@
   import SystemModel from '@model/meta/system';
 
   import EditTag from '@components/edit-box/tag.vue';
+
+  import { execCopy } from '@utils/assist';
 
   import useRequest from '@/hooks/use-request';
 
@@ -145,10 +199,12 @@
   }
 
   type FormFieldType = {
+    name: string;
     managers: string[];
     description: string;
     clients: string[];
     callback_url: string;
+    system_url: string;
   };
 
   const props = defineProps<Props>();
@@ -156,17 +212,22 @@
 
   const { t } = useI18n();
   const edits = ref({
+    name: false,
     managers: false,
     description: false,
-    clients: false,
+    clients: [] as Array<boolean>,
     callback_url: false,
+    system_url: false,
   });
+  const viewAuthToken = ref(false);
 
   const formData = ref<FormFieldType>({
+    name: '',
     managers: [],
     description: '',
     clients: [],
     callback_url: '',
+    system_url: '',
   });
 
   // 更新系统
@@ -180,30 +241,56 @@
     },
   });
 
+  const handleCopy = (val: any) => {
+    execCopy(JSON.stringify(val), t('复制成功'));
+  };
+
   const resetFormData = () => {
     formData.value = {
+      name: '',
       managers: [],
       description: '',
       clients: [],
       callback_url: '',
+      system_url: '',
     };
   };
 
-  const toggleEdit = (key:  keyof typeof edits.value) => {
+  const toggleEdit = (key: Exclude<keyof typeof edits.value, 'clients'>) => {
     edits.value[key] = !edits.value[key];
     if (edits.value[key]) {
       formData.value[key] = props.data[key] as any;
     }
   };
 
+  const toggleClientEdit = (index: number, value: string) => {
+    edits.value.clients[index] = !edits.value.clients[index];
+    if (edits.value.clients[index]) {
+      formData.value.clients[index] = value;
+    }
+  };
+
   // 更新系统字段
-  const handleBlur = (key: keyof typeof edits.value) => {
+  const handleBlur = (key: Exclude<keyof typeof edits.value, 'clients'>) => {
     toggleEdit(key);
     fetchSystemUpdate({
       system_id: props.data.system_id,
       [key]: formData.value[key],
     });
   };
+
+  const handleClientBlur = (index: number) => {
+    toggleClientEdit(index, '');
+    fetchSystemUpdate({
+      system_id: props.data.system_id,
+      clients: formData.value.clients,
+    });
+  };
+
+  // 监听props.data, clients有多少元素，edits中的clients就有多少个false元素的数组
+  watch(() => props.data.clients, () => {
+    edits.value.clients = Array(props.data.clients.length).fill(false);
+  });
 
 </script>
 <style scoped lang="postcss">

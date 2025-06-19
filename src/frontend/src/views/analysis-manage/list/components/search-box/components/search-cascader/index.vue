@@ -238,7 +238,6 @@
   // };
 
   const handleAddNode = (node: CascaderItem) => {
-    console.log(fieldTypeValue.value);
     if (fieldTypeValue.value[node.id]) {
       return;
     }
@@ -297,7 +296,6 @@
       // 从selectedItems中移除该节点
       selectedItems.value = selectedItems.value.filter(node => node !== nodeToRemove);
       treeRef.value.setChecked(nodeToRemove, false);
-      console.log('selectedItems.value', selectedItems.value);
     }
   });
 
