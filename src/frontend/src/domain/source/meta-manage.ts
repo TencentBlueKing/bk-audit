@@ -126,7 +126,7 @@ class MetaManage extends ModuleBase {
   }
   // 获取操作
   getActionByUniqueId(params: Record<'unique_id', string>) {
-    return Request.get<SystemActionModel>(`${this.path}/action/${params.unique_id}/`);
+    return Request.get<SystemActionModel>(`${this.path}/actions/${params.unique_id}/`);
   }
   // 新建操作
   createAction(params: Record<string, any>) {
@@ -142,7 +142,7 @@ class MetaManage extends ModuleBase {
   }
   // 更新操作
   updateAction(params: Record<string, any>) {
-    return Request.put(`${this.path}/action/${params.unique_id}/`, {
+    return Request.put(`${this.path}/actions/${params.unique_id}/`, {
       params,
     });
   }

@@ -27,6 +27,7 @@
       <div class="flex-center">
         <bk-form-item
           class="is-required mr16"
+          :disabled="isEdit"
           :label="t('操作ID')"
           label-width="100"
           property="action_id"
@@ -125,11 +126,6 @@
       formData.value.name = props.editData.name;
       // eslint-disable-next-line prefer-destructuring
       formData.value.resource_type_ids = props.editData.resource_type_ids[0];
-
-      selectRef.value.selected = [{
-        value: formData.value.resource_type_ids,
-        label: formData.value.name,
-      }];
     });
   }
 
