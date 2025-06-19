@@ -660,6 +660,13 @@ GLOBAL_CHOICES = {
         {'id': 'timestamp', 'name': '时间戳'},
         {'id': 'float', 'name': '浮点数'},
     ],
+    "meta_system_sensitivity": [
+        {'id': 0, 'name': '无'},
+        {'id': 1, 'name': '不敏感'},
+        {'id': 2, 'name': '低'},
+        {'id': 3, 'name': '中'},
+        {'id': 4, 'name': '高'},
+    ],
 }
 
 SYSTEM_DIAGNOSIS_PUSH_TEMPLATE = """{
