@@ -222,13 +222,14 @@
                 extCls: 'system-select-popover',
                 width: 'auto'
               }"
+              :search-with-pinyin="false"
               @change="handleSystemChange">
               <bk-option
                 v-for="item in projectList"
                 :id="item.id"
                 :key="item.id"
                 :disabled="!(item.permission.view_system)"
-                :name="item.name">
+                :name="`${item.name}(${item.id})`">
                 <div
                   class="popover"
                   :style="item.permission.view_system ? `color: #C4C6CC;` : `color: #70737A;`">
@@ -263,10 +264,16 @@
                     </span>
 
                     <span v-else>
-                      <img
-                        v-if="!(item.permission.view_system)"
-                        class="pentagram-fill"
-                        src="@images/lock-1.svg">
+                      <auth-component
+                        action-id="view_system"
+                        :permission="item.permission.view_system"
+                        :resource="item.id"
+                        style="cursor: pointer;">
+                        <img
+                          v-if="!(item.permission.view_system)"
+                          class="pentagram-fill"
+                          src="@images/lock-1.svg">
+                      </auth-component>
                     </span>
 
 
@@ -477,6 +484,7 @@
       },
     });
   };
+
   // 全局数据
   const {
     data: GlobalChoices,
@@ -636,6 +644,7 @@
     width: 14px;
     height: 14px;
     margin-left: 8px;  /* 添加左边距 */
+    cursor: pointer;
   }
 }
 </style>
