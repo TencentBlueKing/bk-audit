@@ -21,6 +21,7 @@ from django.utils.translation import gettext
 from apps.permission.exceptions import ResourceNotExistError
 from apps.permission.handlers.resource_types.base import ResourceTypeMeta
 from apps.permission.handlers.resource_types.biz_bk_log import BusinessBKLog, SpaceBKLog
+from apps.permission.handlers.resource_types.bk_vision import ShareBkVision
 from apps.permission.handlers.resource_types.collection_bk_log import CollectionBKLog
 from apps.permission.handlers.resource_types.dept_bk_usermgr import DeptBKUsermgr
 from apps.permission.handlers.resource_types.notice_group import NoticeGroup
@@ -59,6 +60,8 @@ class ResourceEnum:
     COLLECTION_BK_LOG = CollectionBKLog
     # BK User
     DEPT_BK_USERMGR = DeptBKUsermgr
+    # BK Vision
+    SHARE_BK_VISION = ShareBkVision
 
 
 _all_resources = {resource.id: resource for resource in ResourceEnum.__dict__.values() if hasattr(resource, "id")}

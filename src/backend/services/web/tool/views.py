@@ -2,6 +2,10 @@
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
+from apps.permission.handlers.actions import ActionEnum
+from apps.permission.handlers.resource_types import ResourceEnum
+from core.utils.data import get_value_by_request
+from services.web.tool.permission import UseToolPermission
 from services.web.tool.permissions import CreatorBasePermissionPermission
 
 
@@ -13,7 +17,17 @@ class ToolViewSet(ResourceViewSet):
             return [CreatorBasePermissionPermission()]
         if self.action == "destroy":
             return [CreatorBasePermissionPermission()]
+        if self.action in ["execute"]:
+            return [
+                UseToolPermission(
+                    actions=[ActionEnum.USE_TOOL],
+                    resource_meta=ResourceEnum.TOOL,
+                )
+            ]
         return []
+
+    def get_tool_uid(self):
+        return get_value_by_request(self.request, "uid")
 
     resource_routes = [
         ResourceRoute("GET", resource.tool.list_tool_tags, endpoint="tags"),
