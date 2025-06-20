@@ -63,4 +63,18 @@ interface URLSearchParams {
 
 type ValueOf<T> = T[keyof T];
 
+declare module '@blueking/bk-trace-core' {
+  interface BkTraceOptions {
+    url: string
+    appCode: string
+    appVersion: string
+    spaceID?: string
+    spaceType?: string
+  }
 
+  const BkTrace: {
+    install: (app: any, options: BkTraceOptions) => void
+  }
+  
+  export default BkTrace
+}
