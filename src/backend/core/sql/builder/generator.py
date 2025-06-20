@@ -22,8 +22,11 @@ from pypika import Table
 from pypika.queries import QueryBuilder
 from pypika.terms import BasicCriterion, EmptyCriterion, Function
 
-from core.sql.builder import BkBaseTable
-from core.sql.constants import AggregateType, FilterConnector, Operator
+from core.sql.builder.builder import BkBaseTable
+from core.sql.builder.functions import GetJsonObject
+from core.sql.builder.terms import PypikaField
+from core.sql.builder.utils import get_function, operate
+from core.sql.constants import FilterConnector
 from core.sql.exceptions import (
     FilterValueError,
     InvalidAggregateTypeError,
@@ -31,11 +34,9 @@ from core.sql.exceptions import (
     TableNotRegisteredError,
     UnsupportedJoinTypeError,
 )
-from core.sql.functions import GetJsonObject
 from core.sql.model import Condition, Field, HavingCondition, SqlConfig
 from core.sql.model import Table as SqlTable
 from core.sql.model import WhereCondition
-from core.sql.terms import PypikaField
 
 
 class SQLGenerator:
@@ -169,7 +170,7 @@ class SQLGenerator:
     def _build_aggregate(self, field: Field) -> PypikaField:
         # 如果存在聚合函数，使用 fn 调用
         pypika_field = self._get_pypika_field(field)
-        aggregate_func = AggregateType.get_function(field.aggregate)
+        aggregate_func = get_function(field.aggregate)
         if not aggregate_func:
             raise InvalidAggregateTypeError(field.aggregate)
         pypika_field = aggregate_func(pypika_field)
@@ -204,7 +205,7 @@ class SQLGenerator:
             filter_type = condition.field.field_type.python_type
         operator = condition.operator
         try:
-            return Operator.handler(
+            return operate(
                 operator,
                 field,
                 filter_type(condition.filter) if condition.filter else None,

@@ -2,10 +2,10 @@ from unittest.mock import MagicMock
 
 from django.test import TestCase
 
+from core.sql.builder.generator import QueryBuilder, SQLGenerator
 from core.sql.constants import AggregateType, FieldType, Operator
 from core.sql.exceptions import FilterValueError
 from core.sql.model import Condition, Field
-from core.sql.sql_builder import QueryBuilder, SQLGenerator
 
 
 class FilterValueErrorTests(TestCase):

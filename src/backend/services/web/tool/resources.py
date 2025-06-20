@@ -18,9 +18,15 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
+from bk_resource import Resource
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
+from core.sql.parser.praser import SqlQueryAnalysis
+from services.web.tool.serializer import (
+    SqlAnalyseRequestSerializer,
+    SqlAnalyseResponseSerializer,
+)
 
 
 class ToolBase(AuditMixinResource, abc.ABC):
@@ -88,3 +94,20 @@ class GetToolDetail(ToolBase):
 
     def perform_request(self, validated_request_data):
         pass
+
+
+class SqlAnalyseResource(ToolBase, Resource):
+    """解析SQL，返回引用表、变量和结果字段信息"""
+
+    name = gettext_lazy("SQL解析")
+    RequestSerializer = SqlAnalyseRequestSerializer
+    ResponseSerializer = SqlAnalyseResponseSerializer
+
+    def perform_request(self, validated_request_data):
+        analyser = SqlQueryAnalysis(
+            validated_request_data["sql"],
+            dialect=validated_request_data.get("dialect") or None,
+        )
+        analyser.parse_sql()
+        parsed = analyser.get_parsed_def()
+        return parsed.model_dump()
