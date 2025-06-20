@@ -23,6 +23,7 @@ from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
 from pydantic.v1 import root_validator
 
+from api.bk_base.constants import StorageType
 from core.choices import TextChoices
 
 
@@ -130,10 +131,11 @@ class SQLDataSearchConfig(BaseModel):
     SQL模式数据查询配置 -- 当工具为数据检索且配置类型为 SQL 类型时使用
     """
 
-    sql: str
+    sql: str = PydanticField(title="SQL语句")
     referenced_tables: List[Table]  # RT表
-    input_variable: List[SQLDataSearchInputVariable]  # 输入字段
+    input_variable: List[SQLDataSearchInputVariable]  # 输入变量
     output_fields: List[SQLDataSearchOutputField]  # 输出字段
+    prefer_storage: StorageType = PydanticField(default=StorageType.DORIS.value)
 
 
 class BkvisionConfig(BaseModel):

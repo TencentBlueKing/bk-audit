@@ -30,6 +30,7 @@ class CoreException(BlueException):
         DATABUS = "02"
         STRATEGY_V2 = "03"
         ANALYZE = "04"
+        TOOL = "05"
         IAM = "99"
 
 

@@ -38,3 +38,11 @@ class StorageType(TextChoices):
 
     HDFS = "hdfs", gettext_lazy("HDFS")
     DORIS = "doris", gettext_lazy("Doris")
+
+
+class UserAuthActionEnum(TextChoices):
+    """
+    用户认证行为枚举
+    """
+
+    RT_QUERY = "result_table.query_data", gettext_lazy("结果表查询")

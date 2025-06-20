@@ -212,3 +212,7 @@ def extract_nested_value(data: Any, keys: List[str]) -> Any:
 def unique_id():
     """生成32个字符的唯一ID ."""
     return uuid.uuid3(uuid.uuid1(), uuid.uuid4().hex).hex
+
+
+def get_value_by_request(request, key: str):
+    return request.query_params.get(key, request.data.get(key))
