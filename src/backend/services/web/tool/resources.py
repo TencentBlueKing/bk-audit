@@ -33,7 +33,9 @@ from services.web.tool.serializer import (
 from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
+from services.web.tool.executor.tool import SqlQueryAnalysis, ToolExecutorFactory
 from services.web.tool.models import Tool
+from services.web.tool.serializers import ExecuteToolReqSerializer
 from services.web.tool.serlializers import (
     ListRequestSerializer,
     ToolCreateRequestSerializer,
@@ -144,9 +146,21 @@ class UpdateTool(ToolBase):
 
 class ExecuteTool(ToolBase):
     name = gettext_lazy("工具执行")
+    RequestSerializer = ExecuteToolReqSerializer
 
     def perform_request(self, validated_request_data):
-        pass
+        """
+        1. 获取工具
+        2. 执行工具
+        """
+
+        uid = validated_request_data["uid"]
+        params = validated_request_data["params"]
+        tool: Tool = Tool.last_version_tool(uid=uid)
+        if not tool:
+            raise Tool.DoesNotExist()
+        executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
+        return executor.execute(params).model_dump()
 
 
 class ListToolAll(ToolBase):
