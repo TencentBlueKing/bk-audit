@@ -22,11 +22,6 @@ source = "."
 [tool.pdm]
 distribution = false
 
-[[tool.pdm.source]]
-name = "tencent"
-url = "https://mirrors.cloud.tencent.com/pypi/simple"
-verify_ssl = true
-
 [tool.pdm.resolution]
 respect-source-order = true
 
@@ -40,7 +35,7 @@ dependencies = [
     "bkapi-component-open>=1.1.0",
     "bk-audit[opentelemetry]==1.2.2b0",
     "bk-resource==0.4.11",
-    "blueapps[opentelemetry]==4.16rc1",
+    "blueapps[opentelemetry]==4.16rc2",
     "gunicorn==23.0.0",
     "django==4.2.19",
     "django-filter==2.4.0",
@@ -105,6 +100,7 @@ dependencies = [
     "xlsxwriter==3.2.3",
     "pympler>=1.1",
     "drf-pydantic==2.7.1",
+    "setuptools<81",
     "sqlglot==26.26.0",
 ]
 requires-python = "==3.11.*"

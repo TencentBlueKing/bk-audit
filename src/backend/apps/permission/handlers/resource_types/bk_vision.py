@@ -15,16 +15,17 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from django.utils.translation import gettext_lazy
 
-from enum import Enum
-
-from django.conf import settings
-
-PERMISSION_CACHE_EXPIRE = 5 * 60
-FETCH_INSTANCE_TOKEN_KEY = "FETCH_INSTANCE_TOKEN"
+from apps.permission.constants import IAMSystems
+from apps.permission.handlers.resource_types import ResourceTypeMeta
 
 
-class IAMSystems(Enum):
-    BK_AUDIT = settings.BK_IAM_SYSTEM_ID
-    BK_LOG = "bk_log"
-    BK_VISION = "bkvision"
+class BkVisionBase(ResourceTypeMeta):
+    system_id = IAMSystems.BK_VISION.value
+
+
+class ShareBkVision(BkVisionBase):
+    id = "share"
+    name = gettext_lazy("嵌入分享")
+    selection_mode = "instance"
