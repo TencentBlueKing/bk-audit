@@ -399,6 +399,16 @@ class ActionEnum:
         related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
         version=1,
     )
+    # 查看场景视图
+    VIEW_SCENARIO_PANEL = ActionMeta(
+        id="view_scenario_panel",
+        name=gettext("查看场景视图"),
+        name_en="View Scenario Panel",
+        type="view",
+        related_resource_types=[ResourceEnum.TAG],
+        related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
+        version=1,
+    )
 
     # 日志平台
     CREATE_COLLECTION_BK_LOG = ActionMeta(

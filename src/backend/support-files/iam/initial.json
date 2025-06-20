@@ -1127,6 +1127,36 @@
       }
     },
     {
+      "operation": "upsert_action",
+      "data": {
+        "id": "view_scenario_panel",
+        "name": "查看场景视图",
+        "name_en": "View Scenario Panel",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "tag",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "tag_list",
+                "ignore_iam_path": false
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_base_panel",
+          "view_base_panel_v2"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
       "operation": "upsert_action_groups",
       "data": [
         {
@@ -1169,6 +1199,9 @@
               "actions": [
                 {
                   "id": "view_system_diagnosis_panel"
+                },
+                {
+                  "id": "view_scenario_panel"
                 }
               ]
             }

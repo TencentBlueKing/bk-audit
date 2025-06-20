@@ -153,21 +153,14 @@ class DeptFilterHandler(FilterDataHandler):
         )
 
 
-class TagFilterHandler(FilterDataHandler):
-    """
-    获取标签数据
-    """
+class TagBasedPermissionFilterHandler(FilterDataHandler):
+    iam_action: ActionEnum = None  # 子类必须指定
 
     def get_data(self) -> List[Dict[str, str]]:
-        # 初始化
-        authed_tag = set()
-
-        # 获取用户
         username = self.get_request_username()
-
-        # 获取有权限的标签
         permission = Permission(username)
-        request = permission.make_request(action=get_action_by_id(ActionEnum.VIEW_TAG_PANEL), resources=[])
+        request = permission.make_request(action=get_action_by_id(self.iam_action), resources=[])
+
         policies = permission.iam_client._do_policy_query(request)
         if policies:
             condition = DjangoQuerySetConverter({"tag.id": "tag_id"}).convert(policies)
@@ -178,28 +171,38 @@ class TagFilterHandler(FilterDataHandler):
         return data
 
     def check_data(self, input_data: Union[List[str], str, int]) -> Union[List[str], str, int]:
-        # 检查
         is_single = False
         if not isinstance(input_data, list):
             input_data = [input_data]
             is_single = True
 
-        # 已授权的标签
         authed_tags = [item["value"] for item in self.get_data()]
-
-        # 为空则直接返回
         if not input_data and authed_tags:
             return authed_tags
 
-        # 检验权限
         Permission(self.get_request_username()).is_allowed(
-            action=ActionEnum.VIEW_TAG_PANEL,
+            action=self.iam_action,
             resources=[ResourceEnum.TAG.create_instance(item) for item in input_data],
             raise_exception=True,
         )
 
-        # 检查通过则返回
         return input_data[0] if is_single else input_data
+
+
+class TagFilterHandler(TagBasedPermissionFilterHandler):
+    """
+    获取标签数据
+    """
+
+    iam_action = ActionEnum.VIEW_TAG_PANEL
+
+
+class ScenarioViewFilterHandler(TagBasedPermissionFilterHandler):
+    """
+    获取场景视图权限下可用的标签（Tag）列表
+    """
+
+    iam_action = ActionEnum.VIEW_SCENARIO_PANEL
 
 
 class SystemDiagnosisFilterHandler(FilterDataHandler):
