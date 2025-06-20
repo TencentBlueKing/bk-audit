@@ -409,6 +409,15 @@ class ActionEnum:
         related_actions=[LIST_BASE_PANEL, VIEW_BASE_PANEL],
         version=1,
     )
+    USE_TOOL = ActionMeta(
+        id="use_tool",
+        name=gettext("使用工具"),
+        name_en="Use Tool",
+        type="view",
+        related_resource_types=[ResourceEnum.TOOL],
+        related_actions=[],
+        version=1,
+    )
 
     # 日志平台
     CREATE_COLLECTION_BK_LOG = ActionMeta(
@@ -451,12 +460,13 @@ class ActionEnum:
         version=1,
         system_id=IAMSystems.BK_LOG.value,
     )
-    USE_TOOL = ActionMeta(
-        id="use_tool",
-        name=gettext("使用工具"),
-        name_en="Use Tool",
+    # bkvision
+    VIEW_SHARE_BKVISION = ActionMeta(
+        id="view_share",
+        name=gettext("查看嵌入分享"),
+        name_en="View Share",
         type="view",
-        related_resource_types=[ResourceEnum.TOOL],
-        related_actions=[],
+        related_resource_types=[ResourceEnum.SHARE_BK_VISION],
         version=1,
+        system_id=IAMSystems.BK_VISION.value,
     )

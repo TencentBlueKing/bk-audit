@@ -16,15 +16,16 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from enum import Enum
-
-from django.conf import settings
-
-PERMISSION_CACHE_EXPIRE = 5 * 60
-FETCH_INSTANCE_TOKEN_KEY = "FETCH_INSTANCE_TOKEN"
+from apps.permission.handlers.drf import InstanceActionPermission
+from core.models import get_request_username
+from services.web.tool.models import Tool
 
 
-class IAMSystems(Enum):
-    BK_AUDIT = settings.BK_IAM_SYSTEM_ID
-    BK_LOG = "bk_log"
-    BK_VISION = "bkvision"
+class UseToolPermission(InstanceActionPermission):
+    def has_permission(self, request, view):
+        tool_uid = self._get_instance_id(request, view)
+        tool: Tool = Tool.last_version_tool(uid=tool_uid)
+        username = get_request_username()
+        if username == tool.updated_by:
+            return True
+        return super().has_permission(request, view)

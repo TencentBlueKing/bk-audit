@@ -53,3 +53,9 @@ class DataflowBatchStatusListReqSerializer(serializers.Serializer):
     geog_area_code = serializers.CharField(label=gettext_lazy("地域"), default="inland")
     limit = serializers.IntegerField(label=gettext_lazy("限制条数"), default=100)
     offset = serializers.IntegerField(label=gettext_lazy("偏移量"), default=0)
+
+
+class UserAuthCheckReqSerializer(serializers.Serializer):
+    user_id = serializers.CharField(label=gettext_lazy("用户ID"))
+    action_id = serializers.CharField(label=gettext_lazy("动作ID"))
+    object_id = serializers.CharField(label=gettext_lazy("对象ID"))
