@@ -11,6 +11,7 @@
 *.sh
 static/assets*
 venv
+.venv
 USERRES
 rule_engine
 profiles

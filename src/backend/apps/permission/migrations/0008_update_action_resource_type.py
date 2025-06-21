@@ -16,32 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext_lazy
+import os
 
-from core.exceptions import CoreException
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
 
-
-class VisionException(CoreException):
-    MODULE_CODE = CoreException.Module.Vision
-
-
-class VisionPermissionInvalid(VisionException):
-    ERROR_CODE = "001"
-    STATUS_CODE = 500
-    MESSAGE = gettext_lazy("不支持的权限，请联系管理员")
+from core.utils.distutils import strtobool
 
 
-class VisionHandlerInvalid(VisionException):
-    ERROR_CODE = "002"
-    STATUS_CODE = 500
-    MESSAGE = gettext_lazy("不支持的VisionHandler:{handler}，请联系管理员")
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
 
-    def __init__(self, handler: str, *args, **kwargs):
-        self.MESSAGE = self.MESSAGE.format(handler=handler)
-        super().__init__(*args, **kwargs)
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
 
 
-class SingleSystemDiagnosisSystemParamsError(VisionException):
-    ERROR_CODE = "003"
-    STATUS_CODE = 500
-    MESSAGE = gettext_lazy("单系统诊断系统参数错误")
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0007_update_action_resource_type"),
+    ]
+
+    operations = [migrations.RunPython(forward_func)]
