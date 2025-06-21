@@ -56,6 +56,8 @@ import i18n from '@language/index.js';
 import App from './app.vue';
 import Exception from './exception.vue';
 
+import BkTrace from '@blueking/bk-trace-core';
+
 import('tippy.js/dist/tippy.css');
 import('tippy.js/themes/light.css');
 import('bkui-vue/dist/style.css');
@@ -115,6 +117,16 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     // 水印
     if (data.enabled) {
       WaterMark(data.watermark.items[0].data);
+    }
+    if (config.metric) {
+    // 数据上报SDK
+      BKApp.use(BkTrace, {
+        url: config.metric.metric_report_trace_url,
+        appCode: config.app_code,
+        appVersion: config.static_version,
+        spaceID: '',
+        spaceType: '',
+      });
     }
 
     BKApp.mount('#app');

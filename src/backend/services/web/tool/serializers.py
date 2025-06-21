@@ -15,16 +15,9 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-from enum import Enum
-
-from django.conf import settings
-
-PERMISSION_CACHE_EXPIRE = 5 * 60
-FETCH_INSTANCE_TOKEN_KEY = "FETCH_INSTANCE_TOKEN"
+from rest_framework import serializers
 
 
-class IAMSystems(Enum):
-    BK_AUDIT = settings.BK_IAM_SYSTEM_ID
-    BK_LOG = "bk_log"
-    BK_VISION = "bkvision"
+class ExecuteToolReqSerializer(serializers.Serializer):
+    uid = serializers.CharField()
+    params = serializers.JSONField()

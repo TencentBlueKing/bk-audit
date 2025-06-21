@@ -9,6 +9,7 @@ def format_resource_permission(permissions: Dict):
         result["{}_{}".format(action_id, IAMSystems.BK_LOG.value)] = is_allowed
     return result
 
+
 # 预处理 create_params，自动转换所有 list 为逗号拼接字符串
 def preprocess_data(data):
     if isinstance(data, dict):

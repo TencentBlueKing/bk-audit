@@ -27,9 +27,19 @@ class Tool(ResourceTypeMeta):
     id = "tool"
     name = gettext("工具")
     selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": "tool"}]
+    related_instance_selections = [{"system_id": system_id, "id": "tool_list"}]
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
         # 仅返回需要申请的工具
-        pass
+        from services.web.tool.models import Tool
+
+        resource = cls.create_simple_instance(instance_id, attribute)
+
+        instance_name = str(instance_id)
+        tool = Tool.last_version_tool(instance_id)
+        if tool:
+            instance_name = tool.name
+
+        resource.attribute = {"id": str(instance_id), "name": instance_name}
+        return resource
