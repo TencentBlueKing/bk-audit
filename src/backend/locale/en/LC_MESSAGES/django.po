@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-09 14:06+0800\n"
+"POT-Creation-Date: 2025-06-21 22:10+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -2053,6 +2053,9 @@ msgstr "View Audit Report bg Tag"
 msgid "系统诊断报表查看"
 msgstr "View System Diagnosis Report"
 
+msgid "查看场景视图"
+msgstr "View Scene Vision"
+
 msgid "采集新建"
 msgstr "Create Collection"
 
@@ -2354,6 +2357,7 @@ msgstr "`from_table` or `join_tables` must be specified in the configuration."
 msgid "操作符 {operator} 的值 {value} 不符合预期。"
 msgstr "The {value} of operator {operator} is not as expected."
 
+#, python-brace-format
 msgid "条件表达式中字段 {field} 的值 {aggregation} {value} 无法转换成预期类型 {type}。"
 msgstr "The value {aggregation} {value} of the field {field} in the conditional expression cannot be converted to the expected type {type}."
 
@@ -4553,10 +4557,9 @@ msgstr "Filter"
 msgid "不支持的权限，请联系管理员"
 msgstr "Unsupported privilege, Please Contact The Administrator!"
 
-#, fuzzy
-#| msgid "不支持的权限，请联系管理员"
-msgid "不支持的VisionHandler，请联系管理员"
-msgstr "Unsupported visionHandler, Please Contact The Administrator!"
+#, fuzzy, python-brace-format
+msgid "不支持的VisionHandler:{handler}，请联系管理员"
+msgstr "Unsupported visionHandler:{handler}, Please Contact The Administrator!"
 
 msgid "单系统诊断系统参数错误"
 msgstr "Single system diagnosis system params error"

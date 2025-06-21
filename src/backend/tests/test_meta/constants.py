@@ -517,11 +517,6 @@ GLOBAL_CHOICES = {
         {'id': 'FAILURE', 'name': '失败'},
         {'id': 'EXPIRED', 'name': '已过期'},
     ],
-    'meta_system_source_type': [
-        {'id': 'iam_v3', 'name': '权限中心V3'},
-        {'id': 'iam_v4', 'name': '权限中心V4'},
-        {'id': 'bk_audit', 'name': '审计中心'},
-    ],
     'query_condition_operator': [
         {'id': 'eq', 'name': '=  等于'},
         {'id': 'neq', 'name': '!=  不等于'},
@@ -543,7 +538,8 @@ GLOBAL_CHOICES = {
         {'id': 'standard', 'name': '标准字段'},
         {'id': 'snapshot', 'name': '快照字段'},
         {'id': 'system', 'name': '系统字段'},
-        {'id': 'custom', 'name': '自定义字段'}],
+        {'id': 'custom', 'name': '自定义字段'},
+    ],
     "core_sql_field_type": [
         {'id': 'string', 'name': '字符串'},
         {'id': 'double', 'name': '双精度浮点数'},
