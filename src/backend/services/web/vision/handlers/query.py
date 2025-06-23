@@ -26,15 +26,16 @@ from django.core.cache import cache
 
 from services.web.vision.constants import KeyVariable, PanelType
 from services.web.vision.handlers.filter import (
-    DeptFilterHandler,
-    FilterDataHandler,
-    SingleSystemDiagnosisFilterHandler,
-    SystemDiagnosisFilterHandler,
-    TagFilterHandler,
+    DataFilter,
+    DeptFilter,
+    ScenarioViewFilter,
+    SingleSystemDiagnosisFilter,
+    SystemDiagnosisFilter,
+    TagFilter,
 )
 
 
-def modify_panel_meta(handler: FilterDataHandler, chart_config: dict, vision_data: dict, uid: str):
+def modify_panel_meta(handler: DataFilter, chart_config: dict, vision_data: dict, uid: str):
     """基于自定义的图表处理器结果，修改面板元数据"""
     # 获取数据
     chart_config["json"] = handler.get_data()
@@ -121,7 +122,7 @@ class BasicVisionHandlerMixIn(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def filter_handler_class(self) -> Type[FilterDataHandler]:
+    def filter_handler_class(self) -> Type[DataFilter]:
         raise NotImplementedError()
 
 
@@ -145,10 +146,10 @@ class CommonVisionHandler(VisionHandler):
             match self.parse_flag(chart_config.get("flag")):
                 # 组织架构
                 case KeyVariable.DEPARTMENT:
-                    modify_panel_meta(DeptFilterHandler(params), chart_config, vision_data, uid)
+                    modify_panel_meta(DeptFilter(params), chart_config, vision_data, uid)
                 # 标签
                 case KeyVariable.TAG:
-                    modify_panel_meta(TagFilterHandler(params), chart_config, vision_data, uid)
+                    modify_panel_meta(TagFilter(params), chart_config, vision_data, uid)
         return vision_data
 
     def query_dataset(self, params: dict) -> dict:
@@ -159,22 +160,29 @@ class CommonVisionHandler(VisionHandler):
             match self.parse_flag(variable_config["flag"]):
                 # 组织架构
                 case KeyVariable.DEPARTMENT:
-                    variable_config["value"] = DeptFilterHandler(params).check_data(variable_config["value"])
+                    variable_config["value"] = DeptFilter(params).check_data(variable_config["value"])
                 # 标签
                 case KeyVariable.TAG:
-                    variable_config["value"] = TagFilterHandler(params).check_data(variable_config["value"])
+                    variable_config["value"] = TagFilter(params).check_data(variable_config["value"])
         return api.bk_vision.query_dataset(**params)
+
+
+class ScenarioViewHandler(BasicVisionHandlerMixIn, VisionHandler):
+    """场景视图数据处理器"""
+
+    action_key_variable = KeyVariable.TAG
+    filter_handler_class = ScenarioViewFilter
 
 
 class SystemDiagnosisVisionHandler(VariablesBasedDataSetQueryCacheMixIn, BasicVisionHandlerMixIn, VisionHandler):
     """系统诊断审计报表数据处理器，支持基于独立诊断权限的系统过滤"""
 
     action_key_variable = KeyVariable.SYSTEM_ID
-    filter_handler_class = SystemDiagnosisFilterHandler
+    filter_handler_class = SystemDiagnosisFilter
 
 
 class SingleSystemDiagnosisVisionHandler(VariablesBasedDataSetQueryCacheMixIn, BasicVisionHandlerMixIn, VisionHandler):
     """单系统诊断审计报表数据处理器，支持基于管理员权限的系统过滤"""
 
     action_key_variable = KeyVariable.SYSTEM_ID
-    filter_handler_class = SingleSystemDiagnosisFilterHandler
+    filter_handler_class = SingleSystemDiagnosisFilter
