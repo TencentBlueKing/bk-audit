@@ -136,6 +136,20 @@
           </audit-menu-item-group>
           <audit-menu-item-group>
             <template #title>
+              <div>{{ t('工具') }}</div>
+            </template>
+            <template #flod-title>
+              <div>{{ t('工具') }}</div>
+            </template>
+            <audit-menu-item index="tools">
+              <audit-icon
+                class="menu-item-icon"
+                type="data-storage" />
+              {{ t('工具广场') }}
+            </audit-menu-item>
+          </audit-menu-item-group>
+          <audit-menu-item-group>
+            <template #title>
               <div>{{ t('接入') }}</div>
             </template>
             <template #flod-title>
