@@ -52,7 +52,7 @@ class VisionPanel(SoftDeleteModel):
         try:
             return getattr(importlib.import_module("services.web.vision.handlers.query"), self.handler)
         except (ImportError, AttributeError):
-            raise VisionHandlerInvalid()
+            raise VisionHandlerInvalid(self.handler)
 
 
 class VisionPanelInstance:

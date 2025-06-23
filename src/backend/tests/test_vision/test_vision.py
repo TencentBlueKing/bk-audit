@@ -46,7 +46,7 @@ class TestVision(TestCase):
         mock.Mock(return_value=META_QUERY_RESPONSE['data']),
     )
     @mock.patch(
-        "services.web.vision.handlers.filter.SystemDiagnosisFilterHandler.get_data",
+        "services.web.vision.handlers.filter.SystemDiagnosisFilter.get_data",
         mock.Mock(return_value=GET_DATA),
     )
     def test_meta_query(self):
@@ -56,7 +56,7 @@ class TestVision(TestCase):
                 self.assertEqual(item['chartConfig']['json'], GET_DATA)
 
     @mock.patch(
-        "services.web.vision.handlers.filter.SystemDiagnosisFilterHandler.check_data",
+        "services.web.vision.handlers.filter.SystemDiagnosisFilter.check_data",
         mock.Mock(return_value=CHECK_DATA),
     )
     @mock.patch(

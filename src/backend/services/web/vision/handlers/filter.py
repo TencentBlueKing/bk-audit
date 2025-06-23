@@ -28,7 +28,7 @@ from django.db.models import QuerySet
 from iam.contrib.converter.queryset import DjangoQuerySetConverter
 
 from apps.meta.models import System, Tag
-from apps.permission.handlers.actions import ActionEnum, get_action_by_id
+from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
@@ -39,7 +39,7 @@ from services.web.vision.exceptions import (
 from services.web.vision.handlers.convertor import DeptConvertor
 
 
-class FilterDataHandler(abc.ABC):
+class DataFilter(abc.ABC):
     """
     筛选数据处理
     """
@@ -79,7 +79,7 @@ class FilterDataHandler(abc.ABC):
         return getattr(user, "username", "")
 
 
-class DeptFilterHandler(FilterDataHandler):
+class DeptFilter(DataFilter):
     """
     获取组织架构筛选数据
     """
@@ -153,10 +153,11 @@ class DeptFilterHandler(FilterDataHandler):
         )
 
 
-class TagFilterHandler(FilterDataHandler):
-    """
-    获取标签数据
-    """
+class TagBasedPermissionFilter(DataFilter):
+    @property
+    @abc.abstractmethod
+    def iam_action(self) -> ActionMeta:
+        raise NotImplementedError()
 
     def get_data(self) -> List[Dict[str, str]]:
         # 初始化
@@ -167,7 +168,7 @@ class TagFilterHandler(FilterDataHandler):
 
         # 获取有权限的标签
         permission = Permission(username)
-        request = permission.make_request(action=get_action_by_id(ActionEnum.VIEW_TAG_PANEL), resources=[])
+        request = permission.make_request(action=get_action_by_id(self.iam_action), resources=[])
         policies = permission.iam_client._do_policy_query(request)
         if policies:
             condition = DjangoQuerySetConverter({"tag.id": "tag_id"}).convert(policies)
@@ -193,16 +194,38 @@ class TagFilterHandler(FilterDataHandler):
 
         # 检验权限
         Permission(self.get_request_username()).is_allowed(
-            action=ActionEnum.VIEW_TAG_PANEL,
+            action=self.iam_action,
             resources=[ResourceEnum.TAG.create_instance(item) for item in input_data],
             raise_exception=True,
         )
 
+        # 将场景方案的tag_id转换为tag_name返回
+        tags = Tag.objects.filter(pk__in=input_data).values("tag_id", "tag_name")
+        # 创建tag_id到tag_name的映射
+        tag_map = {tag["tag_id"]: tag["tag_name"] for tag in tags}
+        # 按输入顺序返回对应的tag_name
+        result = [tag_map[tag_id] for tag_id in input_data]
         # 检查通过则返回
-        return input_data[0] if is_single else input_data
+        return result[0] if is_single else result
 
 
-class SystemDiagnosisFilterHandler(FilterDataHandler):
+class TagFilter(TagBasedPermissionFilter):
+    """
+    获取标签数据
+    """
+
+    iam_action = ActionEnum.VIEW_TAG_PANEL
+
+
+class ScenarioViewFilter(TagBasedPermissionFilter):
+    """
+    获取场景视图权限下可用的标签（Tag）列表
+    """
+
+    iam_action = ActionEnum.VIEW_SCENARIO_PANEL
+
+
+class SystemDiagnosisFilter(DataFilter):
     """
     获取系统诊断面板筛选数据
     权限: 系统诊断面板查看系统权限
@@ -269,7 +292,7 @@ class SystemDiagnosisFilterHandler(FilterDataHandler):
         )
 
 
-class SingleSystemDiagnosisFilterHandler(SystemDiagnosisFilterHandler):
+class SingleSystemDiagnosisFilter(SystemDiagnosisFilter):
     """
     获取单个系统诊断面板筛选数据
     权限: 系统编辑权限
