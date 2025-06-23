@@ -35,6 +35,7 @@ import StatementManage from '@views/statement-manage/routes';
 import StorageManage from '@views/storage-manage/routes';
 import StrategyManage from '@views/strategy-manage/routes';
 import SystemManage from '@views/system-manage/routes';
+import Tools from '@views/tools/routes';
 
 import { changeConfirm } from '@utils/assist';
 
@@ -60,6 +61,7 @@ export default (config: ConfigModel) => {
         ApplicationManage,
         RuleManage,
         StatementManage,
+        Tools,
       ],
     },
     {
