@@ -95,6 +95,7 @@ from services.web.strategy_v2.constants import (
     RuleAuditSourceType,
     RuleAuditWhereConnector,
     StrategyAlgorithmOperator,
+    StrategyFieldSourceEnum,
     StrategyOperator,
     StrategyStatusChoices,
     StrategyType,
@@ -118,6 +119,7 @@ from services.web.strategy_v2.models import (
     Strategy,
     StrategyAuditInstance,
     StrategyTag,
+    StrategyTool,
 )
 from services.web.strategy_v2.serializers import (
     BulkGetRTFieldsRequestSerializer,
@@ -168,6 +170,7 @@ from services.web.strategy_v2.utils.table import (
     TableHandler,
     enhance_rt_fields,
 )
+from services.web.tool.constants import DataSearchDrillConfig
 
 
 class StrategyV2Base(AuditMixinResource, abc.ABC):
@@ -180,6 +183,36 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             return
         tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names])
         StrategyTag.objects.bulk_create([StrategyTag(strategy_id=strategy_id, tag_id=t["tag_id"]) for t in tags])
+
+    def _save_strategy_tools(self, strategy: Strategy, validated_request_data: dict) -> None:
+        StrategyTool.objects.filter(strategy=strategy).delete()
+
+        tools_to_create = []
+        field_config_map = [
+            (StrategyFieldSourceEnum.BASIC.value, "event_basic_field_configs"),
+            (StrategyFieldSourceEnum.DATA.value, "event_data_field_configs"),
+            (StrategyFieldSourceEnum.EVIDENCE.value, "event_evidence_field_configs"),
+        ]
+
+        for field_source, config_key in field_config_map:
+            for field_cfg in validated_request_data.get(config_key):
+                drill_configs_raw = field_cfg.get("drill_config")
+                drill_configs = [DataSearchDrillConfig.model_validate(dc) for dc in drill_configs_raw]
+
+                for drill in drill_configs:
+                    tool = drill.tool
+                    tools_to_create.append(
+                        StrategyTool(
+                            strategy=strategy,
+                            field_name=field_cfg.get("field_name"),
+                            tool_uid=tool.uid,
+                            tool_version=tool.version,
+                            field_source=field_source,
+                        )
+                    )
+
+        if tools_to_create:
+            StrategyTool.objects.bulk_create(tools_to_create)
 
     @staticmethod
     def get_base_control_type(strategy_type: str) -> Optional[str]:
@@ -246,6 +279,7 @@ class CreateStrategy(StrategyV2Base):
             strategy: Strategy = Strategy.objects.create(**validated_request_data)
             # save strategy tag
             self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+            self._save_strategy_tools(strategy, validated_request_data)
             if strategy_type == StrategyType.RULE:
                 strategy.sql = self.build_rule_audit_sql(strategy)
                 strategy.save(update_fields=["sql"])
@@ -328,6 +362,7 @@ class UpdateStrategy(StrategyV2Base):
         strategy.save(update_fields=validated_request_data.keys())
         # save strategy tag
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
+        self._save_strategy_tools(strategy, validated_request_data)
         # update rule audit sql
         if need_update_remote and strategy.strategy_type == StrategyType.RULE:
             strategy.sql = self.build_rule_audit_sql(strategy)
@@ -358,6 +393,8 @@ class DeleteStrategy(StrategyV2Base):
         strategy = get_object_or_404(Strategy, strategy_id=validated_request_data["strategy_id"])
         # delete tags
         StrategyTag.objects.filter(strategy_id=validated_request_data["strategy_id"]).delete()
+        StrategyTool.objects.filter(strategy=strategy).delete()
+
         # delete
         try:
             call_controller(
@@ -395,9 +432,13 @@ class ListStrategy(StrategyV2Base):
             .values('count')
         )
 
-        queryset = Strategy.objects.filter(
-            namespace=validated_request_data["namespace"],
-        ).annotate(risk_count=Subquery(risk_count_subquery, output_field=IntegerField()))
+        queryset = (
+            Strategy.objects.filter(
+                namespace=validated_request_data["namespace"],
+            )
+            .annotate(risk_count=Subquery(risk_count_subquery, output_field=IntegerField()))
+            .prefetch_related("tools")
+        )
         # 排序
         queryset = queryset.order_by(order_field)
 

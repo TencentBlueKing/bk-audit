@@ -29,6 +29,7 @@ from apps.meta.models import GlobalMetaConfig
 from core.utils.data import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
 from services.web.strategy_v2.constants import RiskLevel, RuleAuditSourceType
+from services.web.strategy_v2.models import StrategyTool
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.test_collector_plugin import (
     CollectorPluginTest,
@@ -60,6 +61,22 @@ class StrategyTest(TestCase):
         self.c = Control.objects.create(**BKM_CONTROL_DATA)
         self.c_version = ControlVersion.objects.create(**{**BKM_CONTROL_VERSION_DATA, "control_id": self.c.control_id})
 
+    def _inject_tool_config(self, data, field_name="field_1", field_source="basic"):
+        key_map = {
+            "basic": "event_basic_field_configs",
+            "data": "event_data_field_configs",
+            "evidence": "event_evidence_field_configs",
+        }
+        key = key_map.get(field_source, "event_basic_field_configs")
+        data[key] = [
+            {
+                "field_name": field_name,
+                "display_name": "字段名",
+                "is_priority": True,
+                "drill_config": [{"tool": {"uid": "fake_tool_uid", "version": 1, "params": {}}, "config": []}],
+            }
+        ]
+
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
     def test_create_bkm_strategy(self) -> None:
         """CreateStrategy"""
@@ -69,9 +86,20 @@ class StrategyTest(TestCase):
         expected_result["strategy_id"] = data["strategy_id"]
         self.assertEqual(ordered_dict_to_json(data), expected_result)
 
+        tools = StrategyTool.objects.filter(strategy_id=data["strategy_id"])
+        self.assertEqual(len(tools), 1)
+        tool = tools[0]
+        self.assertEqual(tool.field_name, "field_1")
+        self.assertEqual(tool.tool_uid, "fake_tool_uid")
+        self.assertEqual(tool.tool_version, 1)
+        self.assertEqual(tool.field_source, "basic")
+
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
-    def _create_bkm_strategy(self) -> dict:
+    def _create_bkm_strategy(self, name_suffix="") -> dict:
         params = copy.deepcopy(BKM_STRATEGY_DATA)
+        self._inject_tool_config(params)
+        if name_suffix:
+            params["strategy_name"] += f"_{name_suffix}"
         params.update(
             {
                 "control_id": self.c_version.control_id,
@@ -90,6 +118,7 @@ class StrategyTest(TestCase):
         """UpdateStrategy"""
         data = self._create_bkm_strategy()
         params = copy.deepcopy(BKM_STRATEGY_DATA)
+        self._inject_tool_config(params, field_name="field_2", field_source="evidence")
         params.update(
             {
                 "strategy_id": data["strategy_id"],
@@ -107,6 +136,35 @@ class StrategyTest(TestCase):
         expected_result = copy.deepcopy(UPDATE_BKM_DATA_RESULT)
         expected_result["strategy_id"] = data["strategy_id"]
         self.assertEqual(data, expected_result)
+
+        tools = StrategyTool.objects.filter(strategy_id=data["strategy_id"])
+        self.assertEqual(len(tools), 1)
+        tool = tools[0]
+        self.assertEqual(tool.field_name, "field_2")
+        self.assertEqual(tool.tool_uid, "fake_tool_uid")
+        self.assertEqual(tool.tool_version, 1)
+        self.assertEqual(tool.field_source, "evidence")
+
+    @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
+    def test_list_strategy(self):
+        """ListStrategy"""
+        data1 = self._create_bkm_strategy(name_suffix="11")
+        data2 = self._create_bkm_strategy(name_suffix="22")
+
+        result = resource.strategy_v2.list_strategy(namespace=self.namespace, order_field="-strategy_id")
+
+        # 确保返回多个策略
+        strategy_ids = [s["strategy_id"] for s in result]
+        self.assertIn(data1["strategy_id"], strategy_ids)
+        self.assertIn(data2["strategy_id"], strategy_ids)
+
+        # 校验 tool 字段也在（工具数目等）
+        for strategy_data in result:
+            if strategy_data["strategy_id"] in [data1["strategy_id"], data2["strategy_id"]]:
+                self.assertIn("tools", strategy_data)
+                self.assertEqual(len(strategy_data["tools"]), 1)
+                tool = strategy_data["tools"][0]
+                self.assertEqual(tool["tool_uid"], "fake_tool_uid")
 
 
 class TestRuleAuditSourceTypeCheck(TestCase):
