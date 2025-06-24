@@ -60,7 +60,7 @@ from services.web.strategy_v2.exceptions import (
     SchedulePeriodInvalid,
     StrategyTypeNotSupport,
 )
-from services.web.strategy_v2.models import LinkTable, Strategy
+from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTool
 from services.web.tool.constants import DataSearchDrillConfig
 
 
@@ -362,6 +362,17 @@ class ListStrategyRequestSerializer(serializers.Serializer):
         return data
 
 
+class StrategyToolSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StrategyTool
+        fields = [
+            "field_name",
+            "field_source",
+            "tool_uid",
+            "tool_version",
+        ]
+
+
 class ListStrategyResponseSerializer(serializers.ModelSerializer):
     """
     List Strategy
@@ -371,6 +382,7 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
         label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID"))
     )
     risk_count = serializers.IntegerField(label=gettext_lazy("Risk Count"))
+    tools = StrategyToolSerializer(many=True, read_only=True)
 
     class Meta:
         model = Strategy
