@@ -15,17 +15,23 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from bk_resource import resource
 from django.db.models import QuerySet
 
-from apps.meta.constants import SystemAuditStatusEnum, SystemStatusEnum
+from apps.meta.constants import SystemAuditStatusEnum, SystemStageEnum, SystemStatusEnum
 from apps.meta.models import System
-from services.web.databus.constants import LogReportStatus, SnapshotReportStatus
+from services.web.databus.constants import (
+    LogReportStatus,
+    SnapshotReportStatus,
+    SnapshotStatusDict,
+    SystemStatusDict,
+    TailLogStatusDict,
+)
 
 
-def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, dict]:
+def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, SystemStatusDict]:
     """
     获取系统状态信息
     1. 系统未接入审计中心: 未接入
@@ -59,8 +65,8 @@ def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, dict
 
     result = {}
     for system in systems:
-        tail_log_item = tail_log_time_map.get(system["system_id"], {})
-        snapshot_status_item = snapshot_status_map.get(system["system_id"], {})
+        tail_log_item: TailLogStatusDict = tail_log_time_map.get(system["system_id"], {})
+        snapshot_status_item: SnapshotStatusDict = snapshot_status_map.get(system["system_id"], {})
         tail_log_status: LogReportStatus = tail_log_item.get("status")
         has_permission_model = bool(system["action_count"] or system["resource_type_count"])
         snapshot_status: SnapshotReportStatus = snapshot_status_item.get("status")
@@ -80,10 +86,33 @@ def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, dict
         else:
             # 系统接入 & 有权限模型 & 日志上报正常 & 资产上报： 数据正常
             system_status = SystemStatusEnum.NORMAL.value
-        result[system["system_id"]] = {
-            "system_status": system_status,
-            "tail_log_time_map": tail_log_item,
-            "snapshot_status_map": snapshot_status_map,
-            "has_permission_model": has_permission_model,
-        }
+        system_stage = fetch_system_stage(
+            system_status=system_status,
+            has_permission_model=has_permission_model,
+            has_collector=bool(tail_log_item.get("collector_count", 0)),
+        )
+        result[system["system_id"]] = SystemStatusDict(
+            system_status=system_status,
+            tail_log_item=tail_log_item,
+            snapshot_status_item=snapshot_status_item,
+            has_permission_model=has_permission_model,
+            system_stage=system_stage,
+        )
     return result
+
+
+def fetch_system_stage(
+    system_status: Union[SystemStatusEnum, str], has_permission_model: bool, has_collector: bool
+) -> SystemStageEnum:
+    """
+    获取系统阶段信息
+    """
+
+    if system_status == SystemStatusEnum.PENDING.value:
+        return SystemStageEnum.PENDING.value
+    elif not has_permission_model:
+        return SystemStageEnum.PERMISSION_MODEL.value
+    elif not has_collector:
+        return SystemStageEnum.COLLECTOR.value
+    else:
+        return SystemStageEnum.COMPLETED.value

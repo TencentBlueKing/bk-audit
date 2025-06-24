@@ -174,7 +174,7 @@ class SystemSourceTypeEnum(TextChoices):
 @register_choices("meta_system_audit_status")
 class SystemAuditStatusEnum(TextChoices):
     """
-    系统审计状态
+    系统审计状态(判断系统是否已经接入审计中心)
     """
 
     PENDING = "pending", gettext_lazy("待接入")
@@ -195,13 +195,31 @@ class SystemAuditStatusEnum(TextChoices):
 @register_choices("meta_system_status")
 class SystemStatusEnum(TextChoices):
     """
-    系统状态(用于前端展示)
+    系统状态(前端展示系统数据状态信息)
     """
 
     PENDING = "pending", gettext_lazy("待接入")
     COMPLETED = "completed", gettext_lazy("待完善")
     ABNORMAL = "abnormal", gettext_lazy("数据异常")
     NORMAL = "normal", gettext_lazy("正常")
+
+
+@register_choices("meta_system_stage")
+class SystemStageEnum(TextChoices):
+    """
+    系统阶段(前端展示系统接入阶段信息)
+    """
+
+    PENDING = "pending", gettext_lazy("待接入")
+    PERMISSION_MODEL = "permission_model", gettext_lazy("权限模型")
+    COLLECTOR = "collector", gettext_lazy("日志采集")
+    COMPLETED = "completed", gettext_lazy("已完成")
+
+
+class LogReportStatus(TextChoices):
+    NORMAL = "normal", gettext_lazy("正常")
+    NODATA = "nodata", gettext_lazy("无数据")
+    UNSET = "unset", gettext_lazy("未配置")
 
 
 class SystemSortFieldEnum(TextChoices):
