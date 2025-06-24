@@ -1107,6 +1107,21 @@ msgstr "Abnormal"
 msgid "正常"
 msgstr "Normal"
 
+msgid "权限模型"
+msgstr "Permission Model"
+
+msgid "日志采集"
+msgstr "Log Collector"
+
+msgid "已完成"
+msgstr "Completed"
+
+msgid "无数据"
+msgstr "No-data"
+
+msgid "未配置"
+msgstr "Not ready"
+
 msgid "权限"
 msgstr "Permission"
 
@@ -1583,6 +1598,23 @@ msgstr "Delete Action"
 msgid "批量创建操作"
 msgstr "Batch Create Action"
 
+msgid "状态信息"
+msgstr "Status Message"
+
+#, fuzzy
+#| msgid "最后数据上报时间"
+msgid "最后上报时间"
+msgstr "Last Data Time"
+
+msgid "采集器数量"
+msgstr "Collector Count"
+
+msgid "系统状态"
+msgstr "System Status"
+
+msgid "系统阶段"
+msgstr "System Stage"
+
 #, fuzzy
 #| msgid "资源类型"
 msgid "资源类型数量"
@@ -1590,9 +1622,6 @@ msgstr "Resource Type Count"
 
 msgid "操作数量"
 msgstr "Action Count"
-
-msgid "采集器数量"
-msgstr "Collector Count"
 
 msgid "搜索关键字"
 msgstr "Search Keyword"
@@ -1626,11 +1655,6 @@ msgstr "Sort Field"
 
 msgid "管理员"
 msgstr "Manage"
-
-#, fuzzy
-#| msgid "最后数据上报时间"
-msgid "最后上报时间"
-msgstr "Last Data Time"
 
 msgid "操作详情"
 msgstr "Action Detail"
@@ -3127,12 +3151,6 @@ msgstr "Dynamic Topo"
 msgid "静态拓扑"
 msgstr "Static Topo"
 
-msgid "无数据"
-msgstr "No-data"
-
-msgid "未配置"
-msgstr "Not ready"
-
 msgid "审计事件"
 msgstr "Audit Event"
 
@@ -3300,9 +3318,6 @@ msgstr "Is Public"
 
 msgid "拉取配置"
 msgstr "Pull Config"
-
-msgid "状态信息"
-msgstr "Status Message"
 
 msgid "is RT Authorized"
 msgstr "is RT Authorized"
@@ -3708,9 +3723,6 @@ msgstr "Auto-Processing"
 
 msgid "已关单"
 msgstr "Closed"
-
-msgid "已完成"
-msgstr "Finished"
 
 msgid "误报"
 msgstr "False positive"
