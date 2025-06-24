@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:6c71b325188954ca1e85d1cf25e69c0e6c01418a2258057fa2c6fc1563261575"
+content_hash = "sha256:1df4f397b294e6631c715fb1fba800a2578c7e1e65c5cfb5b299bc56e13740d5"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -373,39 +373,6 @@ dependencies = [
 ]
 files = [
     {file = "blueapps-4.16rc1.tar.gz", hash = "sha256:e16b35b15583bf2ba9d0dc6515e84bf19d995784f4572f48d3d0913d0238f79b"},
-]
-
-[[package]]
-name = "boto3"
-version = "1.38.34"
-requires_python = ">=3.9"
-summary = "The AWS SDK for Python"
-groups = ["default"]
-dependencies = [
-    "botocore<1.39.0,>=1.38.34",
-    "jmespath<2.0.0,>=0.7.1",
-    "s3transfer<0.14.0,>=0.13.0",
-]
-files = [
-    {file = "boto3-1.38.34-py3-none-any.whl", hash = "sha256:7d9409be63a11c1684427a9b06d6820ec72785cb275b56affe437f3709a80eb3"},
-    {file = "boto3-1.38.34.tar.gz", hash = "sha256:25e76b9fec8db8e21adaf84df0de5c58fa779be121bc327e07e920c7c0870394"},
-]
-
-[[package]]
-name = "botocore"
-version = "1.38.34"
-requires_python = ">=3.9"
-summary = "Low-level, data-driven core of boto 3."
-groups = ["default"]
-dependencies = [
-    "jmespath<2.0.0,>=0.7.1",
-    "python-dateutil<3.0.0,>=2.1",
-    "urllib3!=2.2.0,<3,>=1.25.4; python_version >= \"3.10\"",
-    "urllib3<1.27,>=1.25.4; python_version < \"3.10\"",
-]
-files = [
-    {file = "botocore-1.38.34-py3-none-any.whl", hash = "sha256:95ff2c4819498e94b321c9b5ac65d02267df93ff7ce7617323b19f19ea7cb545"},
-    {file = "botocore-1.38.34.tar.gz", hash = "sha256:a105f4d941f329aa72c43ddf42371ec4bee50ab3619fc1ef35d0005520219612"},
 ]
 
 [[package]]
