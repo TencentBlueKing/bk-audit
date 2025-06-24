@@ -32,21 +32,23 @@ def wrapper_system_status(namespace: str, systems: List[dict]) -> List[dict]:
     try:
         from services.web.databus.handler.system_status import fetch_system_status
 
-        system_status_map: Dict[str, dict] = fetch_system_status(namespace, [system["system_id"] for system in systems])
+        system_status_map = fetch_system_status(namespace, [system["system_id"] for system in systems])
     except ImportError as e:
         logger.warning(f"Failed to fetch system status: {e}")
         system_status_map = {}
     for system in systems:
         # 日志上报状态
         status_map = system_status_map.get(system["system_id"], {})
-        tail_log_time_map = status_map.get("tail_log_time_map", {})
+        tail_log_item = status_map.get("tail_log_item", {})
         system_status = status_map.get("system_status")
-        system["last_time"] = tail_log_time_map.get("last_time")
-        system["status"] = tail_log_time_map.get("status")
-        system["status_msg"] = tail_log_time_map.get("status_msg", "")
-        system["collector_count"] = tail_log_time_map.get("collector_count", 0)
+        system["last_time"] = tail_log_item.get("last_time")
+        system["status"] = tail_log_item.get("status")
+        system["status_msg"] = tail_log_item.get("status_msg", "")
+        system["collector_count"] = tail_log_item.get("collector_count", 0)
         # 系统状态
         system["system_status"] = system_status
+        # 系统阶段
+        system["system_stage"] = status_map.get("system_stage")
     return systems
 
 
