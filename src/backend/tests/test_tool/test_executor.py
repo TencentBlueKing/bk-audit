@@ -3,9 +3,11 @@ from unittest import mock
 
 from django.test import TestCase
 
-from api.bk_base.default import QuerySyncResource, UserAuthCheck
+from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
 from apps.permission.handlers.permission import Permission
 from core.sql.model import Table
+from core.sql.parser.model import ParsedSQLInfo
+from core.sql.parser.praser import SqlQueryAnalysis
 from services.web.tool.constants import (
     BkvisionConfig,
     SQLDataSearchConfig,
@@ -19,11 +21,9 @@ from services.web.tool.executor.model import (
 from services.web.tool.executor.tool import (
     BkVisionExecutor,
     SqlDataSearchExecutor,
-    SqlQueryAnalysis,
     ToolExecutorFactory,
 )
 from services.web.tool.models import BkvisionToolConfig, DataSearchToolConfig, Tool
-from services.web.tool.parser.model import ParsedSQLInfo
 from services.web.vision.models import VisionPanel
 
 
@@ -33,8 +33,10 @@ class TestSqlDataSearchExecutor(TestCase):
         # Mock SqlQueryAnalysis
         self.mock_analyzer_cls = mock.MagicMock(spec=SqlQueryAnalysis)
         self.mock_analyzer_instance = self.mock_analyzer_cls.return_value
-        self.mock_analyzer_instance.generate_sql_with_values.return_value = "SELECT * FROM mocked_table"
-        self.mock_analyzer_instance.generate_count_sql_with_values.return_value = "SELECT COUNT(*) FROM mocked_table"
+        self.mock_analyzer_instance.generate_sql_with_values.return_value = {
+            "data": "SELECT * FROM mocked_table",
+            "count": "SELECT COUNT(*) FROM mocked_table",
+        }
         self.mock_analyzer_instance.get_parsed_def.return_value = ParsedSQLInfo(
             referenced_tables=[Table(table_name="mocked_table")],
             original_sql="SELECT * FROM table",
@@ -69,27 +71,33 @@ class TestSqlDataSearchExecutor(TestCase):
             QuerySyncResource,
             'bulk_request',
             return_value=[{"list": [{"field1": "value1"}, {"field2": "value2"}]}, {"list": [{"count": 2}]}],
-        ).start()
+        )
+        self.mock_bkbase_api = self.mock_bkbase_api.start()
+        self.patcher_auth = mock.patch.object(
+            UserAuthBatchCheck,
+            "perform_request",
+            return_value=[{"result": True, "user_id": "test_user", "object_id": "mocked_table"}],
+        )
+        self.mock_auth_api = self.patcher_auth.start()
 
     def tearDown(self):
         mock.patch.stopall()
 
     def test_execute_with_tool_object(self):
         """测试通过Tool对象初始化执行SQL查询"""
-        with mock.patch.object(UserAuthCheck, 'bulk_request', return_value=[True]):
-            executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.mock_analyzer_cls)
-            result = executor.execute(self.sql_params).model_dump()
-            self.assertDictEqual(
-                result,
-                {
-                    'count_sql': 'SELECT COUNT(*) FROM mocked_table',
-                    'num_pages': 100,
-                    'page': 1,
-                    'query_sql': 'SELECT * FROM mocked_table',
-                    'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-                    'total': 2,
-                },
-            )
+        executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.mock_analyzer_cls)
+        result = executor.execute(self.sql_params).model_dump()
+        self.assertDictEqual(
+            result,
+            {
+                'count_sql': 'SELECT COUNT(*) FROM mocked_table',
+                'num_pages': 100,
+                'page': 1,
+                'query_sql': 'SELECT * FROM mocked_table',
+                'results': [{'field1': 'value1'}, {'field2': 'value2'}],
+                'total': 2,
+            },
+        )
 
     def test_execute_with_config_object(self):
         """测试通过配置对象直接初始化执行SQL查询"""
@@ -100,24 +108,27 @@ class TestSqlDataSearchExecutor(TestCase):
             output_fields=[],
             prefer_storage="doris",
         )
-        with mock.patch.object(UserAuthCheck, 'bulk_request', return_value=[True]):
-            executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.mock_analyzer_cls)
-            result = executor.execute(self.sql_params).model_dump()
-            self.assertDictEqual(
-                result,
-                {
-                    'count_sql': 'SELECT COUNT(*) FROM mocked_table',
-                    'num_pages': 100,
-                    'page': 1,
-                    'query_sql': 'SELECT * FROM mocked_table',
-                    'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-                    'total': 2,
-                },
-            )
+        executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.mock_analyzer_cls)
+        result = executor.execute(self.sql_params).model_dump()
+        self.assertDictEqual(
+            result,
+            {
+                'count_sql': 'SELECT COUNT(*) FROM mocked_table',
+                'num_pages': 100,
+                'page': 1,
+                'query_sql': 'SELECT * FROM mocked_table',
+                'results': [{'field1': 'value1'}, {'field2': 'value2'}],
+                'total': 2,
+            },
+        )
 
     def test_execute_permission_denied(self):
         """测试无权限时抛出 DataSearchTablePermission 异常"""
-        with mock.patch.object(UserAuthCheck, 'bulk_request', return_value=[False]):
+        with mock.patch.object(
+            UserAuthBatchCheck,
+            "perform_request",
+            return_value=[{"result": False, "user_id": "test_user", "object_id": "mocked_table"}],
+        ):
             executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.mock_analyzer_cls)
             with self.assertRaises(DataSearchTablePermission):
                 executor.execute(self.sql_params)
@@ -145,20 +156,22 @@ class TestBkVisionExecutor(TestCase):
 
     def test_execute_with_tool_object(self):
         """测试通过Tool对象初始化执行BK Vision查询"""
-        with mock.patch.object(Permission, "is_allowed", return_value=True):
+        with mock.patch.object(Permission, "is_allowed", return_value=True) as mock_is_allowed:
             executor = BkVisionExecutor(self.vision_tool)
             result = executor.execute({})
             self.assertIsInstance(result, BkVisionExecuteResult)
             self.assertEqual(result.panel_id, "panel_123")
+            mock_is_allowed.assert_called_once()
 
     def test_execute_with_config_object(self):
         """测试通过配置对象直接初始化执行BK Vision查询"""
         config = BkvisionConfig(uid="vision_panel_123")
-        with mock.patch.object(Permission, "is_allowed", return_value=True):
+        with mock.patch.object(Permission, "is_allowed", return_value=True) as mock_is_allowed:
             with mock.patch.object(Tool, 'fetch_tool_vision_panel', return_value=self.mock_panel):
                 executor = BkVisionExecutor(config)
                 result = executor.execute({})
                 self.assertEqual(result.panel_id, "panel_123")
+                mock_is_allowed.assert_called_once()
 
     def test_execute_permission_denied(self):
         """测试无权限时抛出异常"""

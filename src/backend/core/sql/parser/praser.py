@@ -146,7 +146,7 @@ class SqlQueryAnalysis:
         limit: Optional[int] = None,
         offset: Optional[int] = None,
         with_count: bool = False,
-    ) -> Any:
+    ) -> dict:
         """使用 sqlglot 将 SQL 模板中的命名参数替换为实际值。
 
         - ``limit`` 和 ``offset`` 参数用于在生成的 SQL 中添加分页语句；
