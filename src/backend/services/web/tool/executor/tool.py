@@ -16,9 +16,10 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
-from typing import Any, Dict, Generic, Optional, Type, TypeVar, Union
+from typing import Generic, Optional, Type, TypeVar, Union
 
 from bk_resource import api
+from blueapps.utils.logger import logger
 from pydantic import BaseModel
 
 from api.bk_base.constants import UserAuthActionEnum
@@ -26,6 +27,7 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.models import get_request_username
+from core.sql.parser.praser import SqlQueryAnalysis
 from services.web.tool.constants import (
     BkvisionConfig,
     DataSearchConfigTypeEnum,
@@ -39,38 +41,7 @@ from services.web.tool.executor.model import (
     DataSearchToolExecuteResult,
 )
 from services.web.tool.models import Tool
-from services.web.tool.parser.model import ParsedSQLInfo
 from services.web.vision.handlers.query import VisionHandler
-
-
-class SqlQueryAnalysis(abc.ABC):
-    def __init__(self, sql: str):
-        """
-        初始化 SQL 查询分析器。
-        """
-        self.sql = sql
-
-    def generate_sql_with_values(self, params: Dict[str, Any], page: int, page_size: int) -> str:
-        """
-        根据提供的参数生成可执行的 SQL。
-        """
-
-        pass
-
-    def generate_count_sql_with_values(self, params: Dict[str, Any]) -> str:
-        """
-        根据提供的参数生成统计总数 SQL。
-        """
-
-        pass
-
-    def get_parsed_def(self) -> ParsedSQLInfo:
-        """
-        获取解析后的SQL信息
-        """
-
-        pass
-
 
 TConfig = TypeVar('TConfig', bound=BaseModel)
 TParams = TypeVar('TParams', bound=BaseModel)
@@ -153,11 +124,10 @@ class SqlDataSearchExecutor(
     def validate_permission(self, params: DataSearchToolExecuteParams):
         """
         校验权限: 校验工具更新人 or 当前请求用户有表查询条件
-        TODO: 使用批量 check 接口
         """
         user_id = self.tool.updated_by if self.tool else get_request_username()
         parsed_def = self.analyzer.get_parsed_def()
-        bulk_params = [
+        permissions = [
             {
                 "user_id": user_id,
                 "action_id": UserAuthActionEnum.RT_QUERY.value,
@@ -165,11 +135,11 @@ class SqlDataSearchExecutor(
             }
             for table in parsed_def.referenced_tables
         ]
-        bulk_resp = api.bk_base.user_auth_check.bulk_request(bulk_params)
-        for param, resp in zip(bulk_params, bulk_resp):
-            if resp:
+        bulk_resp = api.bk_base.user_auth_batch_check({"permissions": permissions})
+        for rt in bulk_resp:
+            if rt.get("result"):
                 continue
-            raise DataSearchTablePermission(param["user_id"], param["object_id"])
+            raise DataSearchTablePermission(rt.get("user_id"), rt.get("object_id"))
 
     def _execute(self, params: TParams):
         """
@@ -179,10 +149,14 @@ class SqlDataSearchExecutor(
         # 渲染变量
         variable_values_for_rendering = {tv.raw_name: tv.value for tv in params.tool_variables}
         # 生成可执行的 SQL
-        executable_sql = self.analyzer.generate_sql_with_values(
-            params=variable_values_for_rendering, page=params.page, page_size=params.page_size
+        limit = params.page_size
+        offset = params.page * params.page_size
+        sql_result = self.analyzer.generate_sql_with_values(
+            params=variable_values_for_rendering, limit=limit, offset=offset, with_count=True
         )
-        count_sql = self.analyzer.generate_count_sql_with_values(params=variable_values_for_rendering)
+        logger.info(f"{[self.__class__.__name__]} Execute SQL: {sql_result}")
+        executable_sql = sql_result["data"]
+        count_sql = sql_result["count"]
         bulk_req_params = [
             {
                 "sql": executable_sql,

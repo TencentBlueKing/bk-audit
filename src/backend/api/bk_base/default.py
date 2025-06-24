@@ -30,6 +30,7 @@ from api.bk_base.constants import UNSUPPORTED_CODE
 from api.bk_base.serializers import (
     DataflowBatchStatusListReqSerializer,
     QuerySyncRequestSerializer,
+    UserAuthBatchCheckReqSerializer,
     UserAuthCheckReqSerializer,
 )
 from api.domains import BK_BASE_API_URL
@@ -380,3 +381,13 @@ class UserAuthCheck(BkBaseResource):
     method = "POST"
     url_keys = ["user_id"]
     RequestSerializer = UserAuthCheckReqSerializer
+
+
+class UserAuthBatchCheck(BkBaseResource):
+    """
+    批量校验用户与对象权限
+    """
+
+    action = "/v3/auth/users/batch_check/"
+    method = "POST"
+    RequestSerializer = UserAuthBatchCheckReqSerializer
