@@ -22,11 +22,6 @@ source = "."
 [tool.pdm]
 distribution = false
 
-[[tool.pdm.source]]
-name = "tencent"
-url = "https://mirrors.cloud.tencent.com/pypi/simple"
-verify_ssl = true
-
 [tool.pdm.resolution]
 respect-source-order = true
 
@@ -98,7 +93,7 @@ dependencies = [
     "opentelemetry-instrumentation-httpx==0.51b0",
     "opentelemetry-instrumentation-asyncio==0.51b0",
     "opentelemetry-instrumentation-threading==0.51b0",
-    "django-treebeard>=4.7.1",
+    "django-treebeard==4.7.1",
     "bkstorages==2.0.0",
     "gevent==25.4.1",
     "pympler>=1.1",
