@@ -36,11 +36,13 @@ from apps.meta.constants import (
     RETRIEVE_USER_FIELDS,
     TAG_NAME_REGEXP,
     ConfigLevelChoices,
+    LogReportStatus,
     OrderTypeChoices,
     SensitiveResourceTypeEnum,
     SpaceType,
     SystemAuditStatusEnum,
     SystemSortFieldEnum,
+    SystemStageEnum,
     SystemStatusEnum,
 )
 from apps.meta.exceptions import TagNameInValid
@@ -78,6 +80,25 @@ class NamespaceSerializer(serializers.ModelSerializer):
 
 
 class SystemSerializer(serializers.ModelSerializer):
+    status_msg = serializers.CharField(label=gettext_lazy("状态信息"), required=False)
+    status = serializers.ChoiceField(
+        label=gettext_lazy("状态"), required=False, allow_null=True, choices=LogReportStatus.choices
+    )
+    last_time = serializers.CharField(label=gettext_lazy("最后上报时间"), required=False, allow_null=True)
+    collector_count = serializers.IntegerField(label=gettext_lazy("采集器数量"), required=False)
+    system_status = serializers.ChoiceField(
+        label=gettext_lazy("系统状态"),
+        required=False,
+        choices=SystemStatusEnum.choices,
+        allow_null=True,
+    )
+    system_stage = serializers.ChoiceField(
+        label=gettext_lazy("系统阶段"),
+        required=False,
+        choices=SystemStageEnum.choices,
+        allow_null=True,
+    )
+
     class Meta:
         model = System
         exclude = ["auth_token"]
@@ -93,7 +114,6 @@ class SystemSerializer(serializers.ModelSerializer):
 class SystemListSerializer(SystemSerializer):
     resource_type_count = serializers.IntegerField(label=gettext_lazy("资源类型数量"), required=False)
     action_count = serializers.IntegerField(label=gettext_lazy("操作数量"), required=False)
-    collector_count = serializers.IntegerField(label=gettext_lazy("采集器数量"), required=False)
 
     class Meta:
         model = System
@@ -247,9 +267,7 @@ class SystemRoleListRequestSerializer(serializers.ModelSerializer):
 class SystemInfoResponseSerializer(SystemSerializer):
     resource_type_count = serializers.IntegerField(label=gettext_lazy("资源类型数量"), required=False)
     action_count = serializers.IntegerField(label=gettext_lazy("操作数量"), required=False)
-    collector_count = serializers.IntegerField(label=gettext_lazy("采集器数量"), required=False)
     managers = serializers.SerializerMethodField(label=gettext_lazy("管理员"), required=False)
-    last_time = serializers.CharField(label=gettext_lazy("最后上报时间"), required=False)
 
     class Meta:
         model = System

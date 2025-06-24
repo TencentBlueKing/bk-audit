@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-24 11:47+0800\n"
+"POT-Creation-Date: 2025-06-24 17:15+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1096,6 +1096,21 @@ msgstr "数据异常"
 msgid "正常"
 msgstr "正常"
 
+msgid "权限模型"
+msgstr "权限模型"
+
+msgid "日志采集"
+msgstr "日志采集"
+
+msgid "已完成"
+msgstr "已完成"
+
+msgid "无数据"
+msgstr "无数据"
+
+msgid "未配置"
+msgstr "未配置"
+
 msgid "权限"
 msgstr "权限"
 
@@ -1571,14 +1586,28 @@ msgstr "删除操作"
 msgid "批量创建操作"
 msgstr "批量创建操作"
 
+msgid "状态信息"
+msgstr "状态信息"
+
+#, fuzzy
+#| msgid "最后数据上报时间"
+msgid "最后上报时间"
+msgstr "最后数据上报时间"
+
+msgid "采集器数量"
+msgstr "采集器数量"
+
+msgid "系统状态"
+msgstr "系统状态"
+
+msgid "系统阶段"
+msgstr "系统阶段"
+
 msgid "资源类型数量"
 msgstr "资源类型数量"
 
 msgid "操作数量"
 msgstr "操作数量"
-
-msgid "采集器数量"
-msgstr "采集器数量"
 
 msgid "搜索关键字"
 msgstr "搜索关键字"
@@ -1616,11 +1645,6 @@ msgstr "排序字段"
 
 msgid "管理员"
 msgstr "管理员"
-
-#, fuzzy
-#| msgid "最后数据上报时间"
-msgid "最后上报时间"
-msgstr "最后数据上报时间"
 
 msgid "操作详情"
 msgstr "操作详情"
@@ -3084,12 +3108,6 @@ msgstr "动态拓扑"
 msgid "静态拓扑"
 msgstr "静态拓扑"
 
-msgid "无数据"
-msgstr "无数据"
-
-msgid "未配置"
-msgstr "未配置"
-
 msgid "审计事件"
 msgstr "审计事件"
 
@@ -3254,9 +3272,6 @@ msgstr "是否公共"
 
 msgid "拉取配置"
 msgstr "拉取配置"
-
-msgid "状态信息"
-msgstr "状态信息"
 
 msgid "is RT Authorized"
 msgstr "RT是否授权"
@@ -3659,9 +3674,6 @@ msgstr "套餐处理中"
 
 msgid "已关单"
 msgstr "已关单"
-
-msgid "已完成"
-msgstr "已完成"
 
 msgid "误报"
 msgstr "误报"
