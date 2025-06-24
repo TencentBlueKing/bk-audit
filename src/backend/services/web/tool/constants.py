@@ -95,6 +95,7 @@ class ToolDrillConfig(BaseModel):
     target_field: str  # 目标字段
     source_field: Optional[str] = None  # 来源字段
     target_value: Optional[str] = None  # 固定值
+    field_source: Optional[str] = None
 
     @root_validator
     def check_exclusive_fields(cls, values):
