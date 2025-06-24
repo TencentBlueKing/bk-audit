@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import os
+from typing import TypedDict
 
 from django.utils.translation import gettext_lazy
 
@@ -29,6 +30,8 @@ from apps.meta.constants import (
 )
 from apps.meta.constants import ContainerCollectorType as _ContainerCollectorType
 from apps.meta.constants import EtlConfigEnum as _EtlConfigEnum
+from apps.meta.constants import LogReportStatus as _LogReportStatus
+from apps.meta.constants import SystemStageEnum, SystemStatusEnum
 from apps.meta.utils.fields import (
     FIELD_TYPE_DOUBLE,
     FIELD_TYPE_LONG,
@@ -153,10 +156,7 @@ class TargetNodeTypeChoices(TextChoices):
     INSTANCE = "INSTANCE", gettext_lazy("静态拓扑")
 
 
-class LogReportStatus(TextChoices):
-    NORMAL = "normal", gettext_lazy("正常")
-    NODATA = "nodata", gettext_lazy("无数据")
-    UNSET = "unset", gettext_lazy("未配置")
+LogReportStatus = _LogReportStatus
 
 
 class SnapshotReportStatus(TextChoices):
@@ -234,3 +234,35 @@ class JoinDataType(TextChoices):
 class ClusterMode(TextChoices):
     MAIN = "main", gettext_lazy("主集群")
     REPLICA = "replica", gettext_lazy("双写集群")
+
+
+class SnapshotStatusDict(TypedDict):
+    """
+    snapshot status map
+    """
+
+    status: SnapshotReportStatus
+
+
+class TailLogStatusDict(TypedDict):
+    """
+    tail log map
+    """
+
+    system_id: str
+    status: LogReportStatus
+    status_msg: str
+    last_time: str
+    collector_count: int
+
+
+class SystemStatusDict(TypedDict):
+    """
+    system status dict
+    """
+
+    system_status: SystemStatusEnum
+    tail_log_item: TailLogStatusDict
+    snapshot_status_item: SnapshotStatusDict
+    has_permission_model: bool
+    system_stage: SystemStageEnum
