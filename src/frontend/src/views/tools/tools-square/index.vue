@@ -15,9 +15,125 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div>工具广场</div>
+  <div class="tools-square">
+    <div class="content-header">
+      <bk-tab
+        v-model:active="active"
+        style="margin-left: 20px;"
+        type="unborder-card">
+        <bk-tab-panel
+          v-for="item in panels"
+          :key="item.name"
+          :label="item.label"
+          :name="item.name">
+          <content
+            ref="concentRef"
+            @handle-checked-tags="handleCheckedTags" />
+        </bk-tab-panel>
+      </bk-tab>
+    </div>
+    <div class="content-content">
+      <div class="content-tag">
+        {{ t('已选场景') }}:
+        <span>{{ checkedTags.join('、') }}</span>
+        <span
+          class="clear-tag"
+          @click="handleClear">{{ t('清除已选') }}</span>
+      </div>
+      <div class="content-card">
+        <content-card ref="ContentCardRef" />
+      </div>
+    </div>
+  </div>
 </template>
 
-  <script setup lang='ts'>
-  </script>
+<script setup lang='ts'>
+  import { ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
+  import ContentCard from './square-content/concent-card.vue';
+  import Content from './square-content/index.vue';
+
+  const { t } = useI18n();
+  const active = ref('all');
+  const concentRef = ref<InstanceType<typeof Content>[]>([]);
+  const ContentCardRef = ref<InstanceType<typeof ContentCard>[]>([]);
+  const panels = ref([
+    { name: 'all', label: '全部' },
+    { name: 'my', label: '我创建的' },
+    { name: 'history', label: '最近使用的' },
+  ]);
+  const checkedTags = ref<string[]>([]);
+
+  const handleCheckedTags = (tags: string[]) => {
+    if (JSON.stringify(checkedTags.value) !== JSON.stringify(tags)) {
+      checkedTags.value = tags;
+    }
+  };
+
+  const handleClear = () => {
+    const activeIndex = panels.value.findIndex(p => p.name === active.value);
+    if (activeIndex >= 0 && concentRef.value[activeIndex]) {
+      concentRef.value[activeIndex].clearCheckedTags();
+    } else {
+      checkedTags.value = []; // 确保无论如何都能清空
+    }
+  };
+
+  watch(() => active.value, (val) => {
+    // 获取当前激活tab对应的组件实例
+    const activeIndex = panels.value.findIndex(p => p.name === val);
+    if (activeIndex >= 0 && concentRef.value[activeIndex]) {
+      // 直接从子组件获取最新状态
+      checkedTags.value = [...concentRef.value[activeIndex].checkedTags];
+    } else {
+      checkedTags.value = []; // 如果没有找到组件实例，清空选中状态
+    }
+  }, { immediate: true });
+
+</script>
+
+<style scoped lang="postcss">
+.tools-square {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #fff;
+
+  .content-header {
+    top: 0;
+    width: 100%;
+    background-color: #fff;
+
+    /deep/ .bk-tab--unborder-card .bk-tab-header {
+      border-bottom: none;
+      box-shadow: 0 3px 4px 0 #0000000a;
+    }
+  }
+
+  .content-content {
+    width: 100%;
+    height: 100%;
+    margin-top: 12px;
+
+    .content-tag {
+      margin-left: 20px;
+      font-size: 12px;
+      letter-spacing: 0;
+      color: #979ba5;
+
+      .clear-tag {
+        margin-left: 20px;
+        color: #3a84ff;
+        cursor: pointer;
+      }
+    }
+  }
+
+  .content-card {
+    margin-top: 12px;
+    margin-left: 20px;
+  }
+}
+</style>

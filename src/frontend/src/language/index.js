@@ -38,6 +38,9 @@ import strategyZh from '@views/strategy-manage/language/zh.js';
 import systemEn from '@views/system-manage/language/en.js';
 import systemZh from '@views/system-manage/language/zh.js';
 
+import allEn from '../../src/language/lang/en.js';
+import allZh from '../../src/language/lang/zh.js';
+
 let localeLanguage = 'zh-CN';
 const bluekingLanguage = Cookie.get('blueking_language');
 if (bluekingLanguage && bluekingLanguage.toLowerCase() === 'en') {
@@ -60,6 +63,7 @@ const i18n = createI18n({
       ...ruleZh.ruleManage,
       ...applicationZh.applicationManage,
       ...linkZh.linkDataManage,
+      ...allZh,
     },
     'en-US': {
       ...analysisEn.analysisManage,
@@ -72,6 +76,7 @@ const i18n = createI18n({
       ...ruleEn.ruleManage,
       ...applicationEn.applicationManage,
       ...linkEn.linkDataManage,
+      ...allEn,
     },
   },
 });
