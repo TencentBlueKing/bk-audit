@@ -118,6 +118,7 @@
   import Step3 from './step3/index.vue';
   import Step4 from './step4/index.vue';
 
+  import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
   interface FormData {
@@ -207,6 +208,7 @@
   const handlerStep1Submit = () => {
     stepRef.value.handlerFormData();
   };
+  const { messageSuccess } = useMessage();
 
   const handlerValidates: (...args: unknown[]) => void = (data: unknown) => {
     if (typeof data !== 'object' || data === null) return;
@@ -234,6 +236,7 @@
             ...formData,
             system_id: formData.instance_id,
           }).then(() => {
+            messageSuccess(t('系统新建成功'));
             router.replace({
               query: {
                 ...route.query,
@@ -249,9 +252,13 @@
             fetchSystemUpdate({
               ...formData,
               system_id: formData.instance_id,
+            }).then(() => {
+              messageSuccess(t('系统新建成功'));
             });
           } else {
-            fetchSystemCreated(formData);
+            fetchSystemCreated(formData).then(() => {
+              messageSuccess(t('系统新建成功'));
+            });
           }
         }
       },
