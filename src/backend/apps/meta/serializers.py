@@ -45,7 +45,7 @@ from apps.meta.constants import (
     SystemStageEnum,
     SystemStatusEnum,
 )
-from apps.meta.exceptions import TagNameInValid
+from apps.meta.exceptions import TagNameInValid, UniqueNameInValid
 from apps.meta.models import (
     Action,
     DataMap,
@@ -368,16 +368,30 @@ class ResourceTypeSerializer(serializers.ModelSerializer):
             "actions_to_create",
         ]
         extra_kwargs = {
-            "unique_id": {"required": False, "allow_null": True, "allow_blank": True},
+            "unique_id": {
+                "required": False,
+                "allow_null": True,
+                "allow_blank": True,
+            }
         }
 
     def run_validation(self, data: dict = empty):
-        # 需要在 run_validation 中默认填充 action 中的 system_id 和 resource_type_ids
-        if isinstance(data, dict) and isinstance(data.get("actions_to_create"), list):
-            for action in data["actions_to_create"]:
-                action["system_id"] = data.get("system_id")
-                action["resource_type_ids"] = [data.get("resource_type_id")]
-        return super().run_validation(data)
+        try:
+            # 需要在 run_validation 中默认填充 action 中的 system_id 和 resource_type_ids
+            if isinstance(data, dict) and isinstance(data.get("actions_to_create"), list):
+                for action in data["actions_to_create"]:
+                    action["system_id"] = data.get("system_id")
+                    action["resource_type_ids"] = [data.get("resource_type_id")]
+            return super().run_validation(data)
+        except Exception as e:
+            if (
+                isinstance(e, serializers.ValidationError)
+                and e.detail.get("unique_id")
+                and e.detail.get("unique_id")[0].code == "unique"
+            ):
+                raise UniqueNameInValid(message=gettext_lazy("资源类型已存在"))
+            else:
+                raise
 
     # ---------- 通用校验 / 自动填充 ----------
     def validate(self, attrs):
