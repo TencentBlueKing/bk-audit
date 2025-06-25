@@ -160,3 +160,8 @@ class SystemSourceTypeEnum(TextChoices):
     IAM_V3 = "iam_v3", gettext_lazy("权限中心V3")
     IAM_V4 = "iam_v4", gettext_lazy("权限中心V4")
     AUDIT = "bk_audit", gettext_lazy("审计中心")
+
+
+# 未标签
+NO_TAG_ID = "-2"
+NO_TAG_NAME = gettext_lazy("No Tag")

@@ -17,20 +17,24 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+from collections import defaultdict
 
 from bk_resource import Resource
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import Http404
 from django.utils.translation import gettext, gettext_lazy
+from pypinyin import lazy_pinyin
 
 from apps.audit.resources import AuditMixinResource
+from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
+from apps.meta.models import Tag
 from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
 from core.sql.parser.praser import SqlQueryAnalysis
 from services.web.tool.executor.tool import ToolExecutorFactory
-from services.web.tool.models import Tool
+from services.web.tool.models import Tool, ToolTag
 from services.web.tool.serializer import (
     SqlAnalyseRequestSerializer,
     SqlAnalyseResponseSerializer,
@@ -41,15 +45,16 @@ from services.web.tool.serializers import (
 )
 from services.web.tool.serlializers import (
     ListRequestSerializer,
+    ListToolTagsResponseSerializer,
     ToolCreateRequestSerializer,
     ToolDeleteRetrieveRequestSerializer,
-    TooListAllResponseSerializer,
-    TooListResponseSerializer,
+    ToolListAllResponseSerializer,
+    ToolListResponseSerializer,
     ToolResponseSerializer,
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
 )
-from services.web.tool.tool import create_tool_with_config
+from services.web.tool.tool import create_tool_with_config, sync_resource_tags
 
 
 class ToolBase(AuditMixinResource, abc.ABC):
@@ -58,29 +63,62 @@ class ToolBase(AuditMixinResource, abc.ABC):
 
 class ListToolTags(ToolBase):
     name = gettext_lazy("列出工具标签")
+    ResponseSerializer = ListToolTagsResponseSerializer
+    many_response_data = True
 
     def perform_request(self, validated_request_data):
-        pass
+        tag_count = list(ToolTag.objects.values("tag_id").annotate(tool_count=Count("tag_id")).order_by())
+        tag_map = {t.tag_id: {"name": t.tag_name} for t in Tag.objects.all()}
+        for t in tag_count:
+            t.update({"tag_name": tag_map.get(t["tag_id"], {}).get("name", t["tag_id"])})
+
+        tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
+
+        tag_count = [
+            {
+                "tag_name": str(NO_TAG_NAME),
+                "tag_id": NO_TAG_ID,
+                "tool_count": Tool.all_latest_tools()
+                .exclude(uid__in=ToolTag.objects.values_list("tool_uid", flat=True).distinct())
+                .count(),
+            }
+        ] + tag_count
+
+        return tag_count
 
 
 class ListTool(ToolBase):
     name = gettext_lazy("获取工具列表")
     RequestSerializer = ListRequestSerializer
     many_response_data = True
-    ResponseSerializer = TooListResponseSerializer
+    ResponseSerializer = ToolListResponseSerializer
 
     def perform_request(self, validated_request_data):
+        tags = validated_request_data.pop("tags", [])
         keyword = validated_request_data.get("keyword", "").strip()
         limit = validated_request_data["limit"]
         offset = validated_request_data["offset"]
+        tools_qs = Tool.all_latest_tools().order_by("-updated_at")
 
-        latest_tools_qs = Tool.all_latest_tools().order_by("-updated_at")
         if keyword:
-            latest_tools_qs = latest_tools_qs.filter(
+            tools_qs = tools_qs.filter(
                 Q(name__icontains=keyword) | Q(description__icontains=keyword) | Q(created_by__icontains=keyword)
             )
 
-        paged_qs = latest_tools_qs[offset : offset + limit]
+        if tags:
+            tool_uid_list = list(ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct())
+
+            tools_qs = tools_qs.filter(uid__in=tool_uid_list)
+
+        paged_qs = tools_qs[offset : offset + limit]
+
+        tool_uids = [tool.uid for tool in paged_qs]
+        tag_map = defaultdict(list)
+        for t in ToolTag.objects.filter(tool_uid__in=tool_uids):
+            tag_map[t.tool_uid].append(t.tag_id)
+
+        for tool in paged_qs:
+            setattr(tool, "tags", tag_map.get(tool.uid, []))
 
         serialized_data = self.ResponseSerializer(paged_qs, many=True).data
 
@@ -102,10 +140,67 @@ class DeleteTool(ToolBase):
     @transaction.atomic
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
-        Tool.objects.filter(uid=uid, is_deleted=False).delete()
+        Tool.delete_by_uid(uid)
 
 
 class CreateTool(ToolBase):
+    """
+    ```json
+    请求参数：data_search工具类型
+    {
+      "tool_type": "data_search",
+      "name": "xxx",
+      "namespace": "xxx",
+      "description": "xxx",
+      "tags": ["xxx", "xxx"],
+      "config": {
+        "referenced_tables": [
+          {
+            "table_name": "xxx"
+          },
+          {
+            "table_name": "xxx"
+          }
+        ],
+        "input_variable": [
+          {
+            "raw_name": "xxx",
+            "display_name": "xxx",
+            "description": "xxx",
+            "required": false,
+            "field_category": "input",
+            "choices": []
+          }
+        ],
+        "output_fields": [
+          {
+            "raw_name": "xxx",
+            "display_name": "xxx",
+            "description": "xxx"
+          }
+        ],
+        "sql": "SELECT * FROM xxx WHERE $condition",
+        "prefer_storage": "doris"
+      }
+    }
+    请求参数：bk_vision工具类型
+    {
+      "tool_type": "bk_vision",
+      "name": "xxx",
+      "namespace": "xxx",
+      "description": "xxx",
+      "tags": ["xxx"],
+      "config": {
+        "uid": "xxx"
+      }
+    }
+    响应结构：
+     "data": {
+            "uid": "xxx",
+            "version": xxx
+        },
+    """
+
     name = gettext_lazy("新增工具")
     RequestSerializer = ToolCreateRequestSerializer  # 统一使
     ResponseSerializer = ToolResponseSerializer
@@ -115,6 +210,59 @@ class CreateTool(ToolBase):
 
 
 class UpdateTool(ToolBase):
+    """
+    ```json
+    请求参数：data_search工具类型
+    {
+      "name": "xxx",
+      "description": "xxx",
+      "tags": ["xxx", "xxx"],
+      "config": {
+        "referenced_tables": [
+          {
+            "table_name": "xxx"
+          },
+          {
+            "table_name": "xxx"
+          }
+        ],
+        "input_variable": [
+          {
+            "raw_name": "xxx",
+            "display_name": "xxx",
+            "description": "xxx",
+            "required": false,
+            "field_category": "input",
+            "choices": []
+          }
+        ],
+        "output_fields": [
+          {
+            "raw_name": "xxx",
+            "display_name": "xxx",
+            "description": "xxx"
+          }
+        ],
+        "sql": "SELECT * FROM xxx WHERE $condition",
+        "prefer_storage": "doris"
+      }
+    }
+    请求参数：bk_vision工具类型
+    {
+      "name": "xxx",
+      "description": "xxx",
+      "tags": ["xxx"],
+      "config": {
+        "uid": "xxx"
+      }
+    }
+    响应结构：
+     "data": {
+            "uid": "xxx",
+            "version": xxx
+        },
+    """
+
     name = gettext_lazy("编辑工具")
     audit_action = ActionEnum.USE_TOOL
     RequestSerializer = ToolUpdateRequestSerializer
@@ -123,6 +271,7 @@ class UpdateTool(ToolBase):
     @transaction.atomic
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
+        tag_names = validated_request_data.pop("tags")
         tool = Tool.last_version_tool(uid)
         if not tool:
             raise Http404(gettext("Tool not found: %s") % uid)
@@ -143,7 +292,12 @@ class UpdateTool(ToolBase):
         for key, value in validated_request_data.items():
             setattr(tool, key, value)
         tool.save(update_fields=validated_request_data.keys())
-
+        sync_resource_tags(
+            resource_uid=tool.uid,
+            tag_names=tag_names,
+            relation_model=ToolTag,
+            relation_resource_field="tool_uid",
+        )
         return tool
 
 
@@ -230,11 +384,11 @@ class ExecuteTool(ToolBase):
 class ListToolAll(ToolBase):
     name = gettext_lazy("工具列表(all)")
     many_response_data = True
-    ResponseSerializer = TooListAllResponseSerializer
+    ResponseSerializer = ToolListAllResponseSerializer
 
     def perform_request(self, validated_request_data):
         tool_qs = Tool.all_latest_tools().order_by("-updated_at")
-        serialized_data = TooListAllResponseSerializer(tool_qs, many=True).data
+        serialized_data = ToolListAllResponseSerializer(tool_qs, many=True).data
 
         current_user = get_request_username()
         data = wrapper_permission_field(
