@@ -1134,6 +1134,12 @@ msgstr "Middle"
 msgid "高"
 msgstr "High"
 
+msgid "简单权限"
+msgstr "Simple Permission"
+
+msgid "复杂权限"
+msgstr "Complex Permission"
+
 msgid "Namespace不存在"
 msgstr "Namespace does not exist"
 
@@ -1214,6 +1220,9 @@ msgstr "System Auth Token"
 
 msgid "系统管理员"
 msgstr "System Administrators"
+
+msgid "权限类型"
+msgstr "Permission Type"
 
 msgid "应用图标"
 msgstr "App Icon"
