@@ -11,7 +11,7 @@ from services.web.tool.constants import (
     ToolTypeEnum,
 )
 from services.web.tool.models import (
-    BkvisionToolConfig,
+    BkVisionToolConfig,
     DataSearchToolConfig,
     Tool,
     ToolTag,
@@ -71,7 +71,7 @@ def _create_bkvision_tool(tool: Tool, config_data: dict):
             "id": unique_id(),
         },
     )
-    BkvisionToolConfig.objects.create(tool=tool, panel=panel)
+    BkVisionToolConfig.objects.create(tool=tool, panel=panel)
 
 
 def sync_resource_tags(

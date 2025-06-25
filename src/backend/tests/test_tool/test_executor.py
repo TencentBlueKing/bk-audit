@@ -5,8 +5,6 @@ from django.test import TestCase
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
 from apps.permission.handlers.permission import Permission
-from core.sql.model import Table
-from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
 from services.web.tool.constants import (
     BkvisionConfig,
@@ -23,26 +21,14 @@ from services.web.tool.executor.tool import (
     SqlDataSearchExecutor,
     ToolExecutorFactory,
 )
-from services.web.tool.models import BkvisionToolConfig, DataSearchToolConfig, Tool
+from services.web.tool.models import BkVisionToolConfig, DataSearchToolConfig, Tool
 from services.web.vision.models import VisionPanel
 
 
 class TestSqlDataSearchExecutor(TestCase):
     def setUp(self):
         """设置SQL查询执行器的测试环境和mock对象"""
-        # Mock SqlQueryAnalysis
-        self.mock_analyzer_cls = mock.MagicMock(spec=SqlQueryAnalysis)
-        self.mock_analyzer_instance = self.mock_analyzer_cls.return_value
-        self.mock_analyzer_instance.generate_sql_with_values.return_value = {
-            "data": "SELECT * FROM mocked_table",
-            "count": "SELECT COUNT(*) FROM mocked_table",
-        }
-        self.mock_analyzer_instance.get_parsed_def.return_value = ParsedSQLInfo(
-            referenced_tables=[Table(table_name="mocked_table")],
-            original_sql="SELECT * FROM table",
-            sql_variables=[],
-            result_fields=[],
-        )
+        self.analyzer_cls = SqlQueryAnalysis
 
         # 创建测试Tool对象
         self.sql_tool = Tool.objects.create(
@@ -85,15 +71,15 @@ class TestSqlDataSearchExecutor(TestCase):
 
     def test_execute_with_tool_object(self):
         """测试通过Tool对象初始化执行SQL查询"""
-        executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.mock_analyzer_cls)
+        executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.analyzer_cls)
         result = executor.execute(self.sql_params).model_dump()
         self.assertDictEqual(
             result,
             {
-                'count_sql': 'SELECT COUNT(*) FROM mocked_table',
+                'count_sql': 'SELECT COUNT(*) AS count FROM (SELECT * FROM table) AS _sub',
                 'num_pages': 100,
                 'page': 1,
-                'query_sql': 'SELECT * FROM mocked_table',
+                'query_sql': 'SELECT * FROM table LIMIT 100',
                 'results': [{'field1': 'value1'}, {'field2': 'value2'}],
                 'total': 2,
             },
@@ -108,15 +94,15 @@ class TestSqlDataSearchExecutor(TestCase):
             output_fields=[],
             prefer_storage="doris",
         )
-        executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.mock_analyzer_cls)
+        executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
         result = executor.execute(self.sql_params).model_dump()
         self.assertDictEqual(
             result,
             {
-                'count_sql': 'SELECT COUNT(*) FROM mocked_table',
+                'count_sql': 'SELECT COUNT(*) AS count FROM (SELECT * FROM config_table) AS _sub',
                 'num_pages': 100,
                 'page': 1,
-                'query_sql': 'SELECT * FROM mocked_table',
+                'query_sql': 'SELECT * FROM config_table LIMIT 100',
                 'results': [{'field1': 'value1'}, {'field2': 'value2'}],
                 'total': 2,
             },
@@ -129,7 +115,7 @@ class TestSqlDataSearchExecutor(TestCase):
             "perform_request",
             return_value=[{"result": False, "user_id": "test_user", "object_id": "mocked_table"}],
         ):
-            executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.mock_analyzer_cls)
+            executor = SqlDataSearchExecutor(source=self.sql_tool, analyzer_cls=self.analyzer_cls)
             with self.assertRaises(DataSearchTablePermission):
                 executor.execute(self.sql_params)
 
@@ -152,7 +138,7 @@ class TestBkVisionExecutor(TestCase):
         self.mock_panel = VisionPanel.objects.create(
             id="panel_123", vision_id="vision_panel_123", scenario="tool", handler="VisionHandler"
         )
-        BkvisionToolConfig.objects.create(tool=self.vision_tool, panel=self.mock_panel)
+        BkVisionToolConfig.objects.create(tool=self.vision_tool, panel=self.mock_panel)
 
     def test_execute_with_tool_object(self):
         """测试通过Tool对象初始化执行BK Vision查询"""
@@ -183,7 +169,7 @@ class TestBkVisionExecutor(TestCase):
 
 class TestToolExecutorFactory(TestCase):
     def setUp(self):
-        self.mock_analyzer_cls = mock.MagicMock(spec=SqlQueryAnalysis)
+        self.analyzer_cls = SqlQueryAnalysis
 
         # 创建测试Tool对象
         self.sql_tool = Tool.objects.create(
@@ -208,7 +194,7 @@ class TestToolExecutorFactory(TestCase):
 
     def test_create_sql_executor(self):
         """测试工厂创建SQL执行器"""
-        factory = ToolExecutorFactory(self.mock_analyzer_cls)
+        factory = ToolExecutorFactory(self.analyzer_cls)
         executor = factory.create_from_tool(self.sql_tool)
 
         self.assertIsInstance(executor, SqlDataSearchExecutor)
@@ -216,7 +202,7 @@ class TestToolExecutorFactory(TestCase):
 
     def test_create_vision_executor(self):
         """测试工厂创建BK Vision执行器"""
-        factory = ToolExecutorFactory(self.mock_analyzer_cls)
+        factory = ToolExecutorFactory(self.analyzer_cls)
         executor = factory.create_from_tool(self.vision_tool)
 
         self.assertIsInstance(executor, BkVisionExecutor)
@@ -226,6 +212,6 @@ class TestToolExecutorFactory(TestCase):
         """测试工厂处理不支持的工具类型"""
         invalid_tool = Tool.objects.create(tool_type="invalid_type", name="invalid_tool", version=1, namespace="test")
 
-        factory = ToolExecutorFactory(self.mock_analyzer_cls)
+        factory = ToolExecutorFactory(self.analyzer_cls)
         with self.assertRaises(ValueError):
             factory.create_from_tool(invalid_tool)

@@ -80,9 +80,9 @@ class DataSearchToolConfig(OperateRecordModel):
         verbose_name_plural = verbose_name
 
 
-class BkvisionToolConfig(OperateRecordModel):
+class BkVisionToolConfig(OperateRecordModel):
     """
-    Bkvision工具配置
+    BkVision工具配置
     """
 
     tool = models.OneToOneField(Tool, on_delete=models.CASCADE, related_name="bkvision_config")
