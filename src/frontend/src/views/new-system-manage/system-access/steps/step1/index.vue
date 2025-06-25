@@ -24,17 +24,20 @@
       <img
         class="remind-icon"
         src="@images/remind.svg">
-      <span class="remind-text">{{ t('当前系统为从“权限中心”接入，在审计中心所做的变更将会完全同步至审计中心，请确认后操作') }}</span>
+      <span class="remind-text">{{ t('当前系统为从“权限中心”接入，在审计中心所做的变更将会完全同步至权限中心，请确认后操作') }}</span>
       <audit-icon
         class="close-icon"
         type="close" />
     </div>
 
     <bk-card
+      ref="cardRefOne"
       class="step1-card"
       is-collapse>
       <template #icon>
-        <div class="card-icon">
+        <div
+          class="card-icon"
+          @click="handlerCardRef('cardRefOne')">
           <audit-icon
             class="angle-fill-down"
             type="angle-fill-down" />
@@ -58,11 +61,26 @@
             :label="t('系统ID')"
             property="instance_id"
             required>
+            <template #label>
+              <bk-popover
+                placement="top"
+                theme="light">
+                <span class="dashed-underline">{{ t("系统ID") }}</span>
+                <template #content>
+                  <div>{{ t('唯一ID,建议是系统通用英文名称或简写；如"审计中心"系统id为"bk-audit"') }}</div>
+                </template>
+              </bk-popover>
+            </template>
             <bk-input
               v-model="formData.instance_id"
+              v-bk-tooltips="{
+                content: t('不可修改'),
+                disabled: !isDisabled,
+                placement: 'top'
+              }"
               clearable
               :disabled="isDisabled"
-              :placeholder="t('请输入系统ID')" />
+              :placeholder="t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成')" />
           </bk-form-item>
 
           <bk-form-item
@@ -70,11 +88,31 @@
             :label="t('系统名称')"
             property="name"
             required>
+            <template #label>
+              <bk-popover
+                placement="top"
+                theme="light">
+                <span class="dashed-underline">{{ t("系统名称") }}</span>
+                <template #content>
+                  <div>{{ t('系统中文名称，简单清晰，也尽量避免重名') }}</div>
+                </template>
+              </bk-popover>
+            </template>
             <bk-input
               v-model="formData.name"
+              v-bk-tooltips="{
+                content: t('当前不支持修改'),
+                disabled: !isDisabled,
+                placement: 'top'
+              }"
               clearable
               :disabled="isDisabled"
-              :placeholder="t('请输入系统名称')" />
+              :placeholder="t('请输入50字符内，可由汉字/小写英文字母/数字/“_”组成')"
+              @blur="handlerBlur"
+              @focus="handlerFocus" />
+            <span
+              v-if="isShowNameTip"
+              class="name-tip">{{ t('有重名系统，请注意确认') }}</span>
           </bk-form-item>
         </div>
         <bk-form-item
@@ -83,6 +121,11 @@
           property="managers"
           :required="!isDisabled">
           <audit-user-selector
+            v-bk-tooltips="{
+              content: t('当前不支持修改'),
+              disabled: !isDisabled,
+              placement: 'top'
+            }"
             :is-disabled="isDisabled"
             :model-value="formData.managers"
             @change="handlerManagersChange" />
@@ -95,6 +138,11 @@
           :required="!isDisabled">
           <bk-input
             v-model="formData.system_url"
+            v-bk-tooltips="{
+              content: t('当前不支持修改'),
+              disabled: !isDisabled,
+              placement: 'top'
+            }"
             clearable
             :disabled="isDisabled"
             :placeholder="t('请输入可访问的域名')" />
@@ -105,8 +153,14 @@
           :label="t('描述')">
           <bk-input
             v-model="formData.description"
+            v-bk-tooltips="{
+              content: t('当前不支持修改'),
+              disabled: !isDisabled,
+              placement: 'top'
+            }"
             clearable
             :disabled="isDisabled"
+            :maxlength="255"
             :placeholder="t('请输入')"
             :rows="6"
             type="textarea" />
@@ -115,10 +169,13 @@
     </bk-card>
 
     <bk-card
+      ref="cardRefTwo"
       class="step1-card"
       is-collapse>
       <template #icon>
-        <div class="card-icon">
+        <div
+          class="card-icon"
+          @click="handlerCardRef('cardRefTwo')">
           <audit-icon
             class="angle-fill-down"
             type="angle-fill-down" />
@@ -165,6 +222,11 @@
           <div
             v-for="item in clientList"
             :key="item.id"
+            v-bk-tooltips="{
+              content: t('当前不支持修改'),
+              disabled: !isDisabled,
+              placement: 'top'
+            }"
             class="item-concent">
             <bk-input
               v-model="item.value"
@@ -199,7 +261,7 @@
             <bk-popover
               placement="top"
               theme="light">
-              <span>{{ t("资源实例回调地址") }}</span>
+              <span class="dashed-underline">{{ t("资源实例回调地址") }}</span>
               <template #content>
                 <div>资源，指资源类型，如果系统要对某些操作实现数据级（资源）的权限控制，则需引入资源。同</div>
                 <div>时，审计中心会记录到数据级的操作。以下是资源、资源实例和日志的示例：</div>
@@ -221,7 +283,8 @@
                       prop="cz" />
                     <bk-table-column
                       label="记录日志描述"
-                      prop="log" />
+                      prop="log"
+                      width="250" />
                   </bk-table>
                 </div>
 
@@ -237,6 +300,11 @@
           </template>
           <bk-input
             v-model="formData.callback_url"
+            v-bk-tooltips="{
+              content: t('当前不支持修改'),
+              disabled: !isDisabled,
+              placement: 'top'
+            }"
             clearable
             :disabled="isDisabled"
             :placeholder="t('请输入资源回调url')" />
@@ -306,25 +374,114 @@
     (e: 'handlerValidates', val: Record<string, any>): void
     (e: 'updateCanEditSystem', val: boolean): void
   }
-  const emit = defineEmits<Emits>();
+  interface FormData {
+    name: string;
+    instance_id: string;
+    callback_url: string;
+    managers: string[];
+    description: string;
+    clients: string[];
+    system_url: string;
+  }
 
+  const emit = defineEmits<Emits>();
+  const formData = ref<FormData>({
+    name: '',
+    instance_id: '',
+    callback_url: '',
+    managers: [],
+    description: '',
+    clients: [],
+    system_url: '',
+  });
+  const clientList = ref([
+    {
+      id: 1,
+      value: '',
+    },
+  ]);
   const { t } = useI18n();
+  const isShowNameTip = ref(false);
   const callFormRef = ref();
   const baseFormRef = ref();
   const isDisabled = ref(false);
-
+  const cardRefOne = ref();
+  const cardRefTwo = ref();
   const rules = {
+    instance_id: [
+      {
+        validator: (value: string) => isDisabled.value || !!value,
+        trigger: 'blur',
+        message: t('系统ID不能为空'),
+      },
+      {
+        validator: (value: string) => isDisabled.value || /^[\u4e00-\u9fa5a-z0-9_]+$/.test(value),
+        trigger: 'blur',
+        message: t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成'),
+      },
+      {
+        validator: (value: string) => isDisabled.value || value.length <= 20,
+        trigger: 'blur',
+        message: t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成'),
+      },
+      {
+        validator: (value: string) => isDisabled.value || !systemList.value.some(system => system.system_id === value),
+        trigger: 'blur',
+        message: t('此id已接入审计中心，请前往系统列表确认'),
+      },
+    ],
+    name: [
+      {
+        validator: (value: string) => isDisabled.value || !!value,
+        trigger: 'blur',
+        message: t('系统名称不能为空'),
+      },
+      {
+        validator: (value: string) => isDisabled.value || /^[\u4e00-\u9fa5a-z0-9_]+$/.test(value),
+        trigger: 'blur',
+        message: t('请输入50字符内，可由汉字/小写英文字母/数字/“_”组成'),
+      },
+      {
+        validator: (value: string) => isDisabled.value || value.length <= 50,
+        trigger: 'blur',
+        message: t('请输入50字符内，可由汉字/小写英文字母/数字/“_”组成'),
+      },
+    ],
     clients: [
       {
         validator: (value: string[]) => value.every(item => item.trim()),
         trigger: 'blur',
         message: t('可访问客户端存在空值'),
       },
+      {
+        validator: (value: string[]) => {
+          const uniqueValues = new Set(value.map(v => v.toLowerCase()));
+          return uniqueValues.size === value.length;
+        },
+        trigger: 'blur',
+        message: t('可访问客户端存在重复值'),
+      },
     ],
   };
   const route = useRoute();
   const router = useRouter();
   const isNewSystem = ref(computed(() => route.query.isNewSystem === 'true'));
+
+  const handlerBlur = async () => {
+    try {
+      await baseFormRef.value.validate('name');
+      if (formData.value.name && systemList.value.some(system => system.name === formData.value.name)) {
+        isShowNameTip.value = true;
+      } else {
+        isShowNameTip.value = false;
+      }
+    } catch (error) {
+      isShowNameTip.value = false;
+    }
+  };
+  const handlerFocus = () => {
+    isShowNameTip.value = false;
+  };
   const handlerJumpLink = () => {
     const configStr = sessionStorage.getItem('BK_AUDIT_CONFIG');
     if (configStr) {
@@ -358,31 +515,25 @@
       log: '新增 1 个叫“王者荣耀”的业务',
     },
   ]);
-  interface FormData {
-    name: string;
-    instance_id: string;
-    callback_url: string;
-    managers: string[];
-    description: string;
-    clients: string[];
-    system_url: string;
-  }
 
-  const formData = ref<FormData>({
-    name: '',
-    instance_id: '',
-    callback_url: '',
-    managers: [],
-    description: '',
-    clients: [],
-    system_url: '',
+  const {
+    data: systemList,
+    run: fetchSystemWithAction,
+  } = useRequest(MetaManageService.fetchSystemWithAction, {
+    defaultValue: [],
   });
-  const clientList = ref([
-    {
-      id: 1,
-      value: '',
-    },
-  ]);
+
+  const handlerCardRef = (ref: string) => {
+    switch (ref) {
+    case 'cardRefOne':
+      cardRefOne.value.handleCollapse();
+      break;
+    case 'cardRefTwo':
+      cardRefTwo.value.handleCollapse();
+      break;
+    }
+  };
+
   const handlerManagersChange = (val: string[]) => {
     formData.value.managers = val;
   };
@@ -464,6 +615,14 @@
     deep: true,
   });
 
+  watch(() => formData.value.name, (newData) => {
+    if (newData === '') {
+      isShowNameTip.value = false;
+    }
+  }, {
+    deep: true,
+  });
+
   watch(() => route, () => {
     nextTick(() => {
       if (route.query.systemId) {
@@ -482,7 +641,7 @@
     immediate: true,
   });
   onMounted(() => {
-
+    fetchSystemWithAction();
   });
 
   defineExpose<Exposes>({
@@ -495,8 +654,23 @@
   position: absolute;
   left: 50%;
   width: 60%;
+  padding-bottom: 150px;
   margin-top: 10px;
   transform: translateX(-50%);
+
+  .rotate-right {
+    transform: rotate(90deg);
+    transition: transform .3s ease;
+  }
+
+  .name-tip {
+    position: absolute;
+    top: 35px;
+    left: 5px;
+    font-size: 12px;
+    line-height: 1;
+    color: #ea3636;
+  }
 
   .step1-tip {
     display: flex;
@@ -529,6 +703,7 @@
 
   .step1-card {
     margin-top: 10px;
+    overflow: auto;
 
     .card-header {
       height: 22px;
@@ -628,5 +803,11 @@
       }
     }
   }
+
+}
+
+.dashed-underline {
+  padding-bottom: 2px; /* 可选，增加文字和虚线间距 */
+  border-bottom: 1px dashed #c4c6cc;
 }
 </style>
