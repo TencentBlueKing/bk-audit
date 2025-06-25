@@ -44,6 +44,7 @@ from rest_framework.settings import api_settings
 from apps.audit.resources import AuditMixinResource
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
+from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import DataMap, Tag
 from apps.meta.utils.fields import (
     ACTION_ID,
@@ -80,8 +81,6 @@ from services.web.strategy_v2.constants import (
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     LOCAL_UPDATE_FIELDS,
-    NO_TAG_ID,
-    NO_TAG_NAME,
     STRATEGY_RISK_DEFAULT_INTERVAL,
     EventInfoField,
     LinkTableJoinType,
