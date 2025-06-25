@@ -6,7 +6,7 @@ from django.utils import timezone
 from apps.meta.models import Tag
 from services.web.tool.constants import DataSearchConfigTypeEnum, ToolTypeEnum
 from services.web.tool.models import (
-    BkvisionToolConfig,
+    BkVisionToolConfig,
     DataSearchToolConfig,
     Tool,
     ToolTag,
@@ -76,7 +76,7 @@ class ToolResourceTestCase(TestCase):
             scenario=Scenario.TOOL.value,
             handler="VisionHandler",
         )
-        BkvisionToolConfig.objects.create(tool=tool, panel=panel)
+        BkVisionToolConfig.objects.create(tool=tool, panel=panel)
         return tool
 
     def test_list_tool(self):
@@ -150,7 +150,7 @@ class ToolResourceTestCase(TestCase):
         self.assertEqual(tool.tool_type, ToolTypeEnum.BK_VISION.value)
         panel = VisionPanel.objects.filter(vision_id=vision_uid, is_deleted=False).first()
         self.assertIsNotNone(panel)
-        bk_config = BkvisionToolConfig.objects.filter(tool=tool).first()
+        bk_config = BkVisionToolConfig.objects.filter(tool=tool).first()
         self.assertIsNotNone(bk_config)
         self.assertEqual(bk_config.panel.id, panel.id)
 
