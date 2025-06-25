@@ -1155,6 +1155,12 @@ msgstr "中"
 msgid "高"
 msgstr "高"
 
+msgid "简单权限"
+msgstr "简单权限"
+
+msgid "复杂权限"
+msgstr "复杂权限"
+
 msgid "Namespace不存在"
 msgstr "Namespace不存在"
 
@@ -1235,6 +1241,9 @@ msgstr "系统鉴权 Token"
 
 msgid "系统管理员"
 msgstr "系统管理员"
+
+msgid "权限类型"
+msgstr "权限类型"
 
 msgid "应用图标"
 msgstr "应用图标"

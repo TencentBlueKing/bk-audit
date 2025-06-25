@@ -230,6 +230,7 @@ class SystemSortFieldEnum(TextChoices):
     PERMISSION = "permission", gettext_lazy("权限")
     FAVORITE = "favorite", gettext_lazy("收藏")
     AUDIT_STATUS = "audit_status", gettext_lazy("审计状态")
+    NAME = "name", gettext_lazy("名称")
 
 
 # 系统授权token长度
@@ -250,6 +251,16 @@ class SystemSensitivityEnum(IntegerChoices):
     LOW = 2, gettext_lazy("低")
     MIDDLE = 3, gettext_lazy("中")
     HIGH = 4, gettext_lazy("高")
+
+
+@register_choices("meta_system_permission_type")
+class SystemPermissionTypeEnum(TextChoices):
+    """
+    系统权限类型
+    """
+
+    SIMPLE = "simple", gettext_lazy("简单权限")
+    COMPLEX = "complex", gettext_lazy("复杂权限")
 
 
 # 未标签

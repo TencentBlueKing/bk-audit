@@ -95,6 +95,7 @@ SYSTEM_DATA1 = {
     "description": None,
     "enable_system_diagnosis_push": False,
     "system_diagnosis_extra": {},
+    "permission_type": "complex",
 }
 SYSTEM_DATA2 = {
     "instance_id": settings.BK_IAM_SYSTEM_ID,
@@ -111,6 +112,7 @@ SYSTEM_DATA2 = {
     "description": None,
     "enable_system_diagnosis_push": False,
     "system_diagnosis_extra": {},
+    "permission_type": "complex",
 }
 SYSTEM_BULK_DATA = list()
 SYSTEM_BULK_DATA.append(
@@ -357,6 +359,7 @@ SYSTEM_LIST_ALL_DATA = [
         "source_type": SYSTEM_DATA2['source_type'],
         "audit_status": "pending",
         "system_id": SYSTEM_DATA2["system_id"],
+        "permission_type": "complex",
     },
     {
         "id": SYSTEM_DATA1["system_id"],
@@ -364,6 +367,7 @@ SYSTEM_LIST_ALL_DATA = [
         "source_type": SYSTEM_DATA1["source_type"],
         "audit_status": "pending",
         "system_id": SYSTEM_DATA1["system_id"],
+        "permission_type": "complex",
     },
 ]
 SYSTEM_LIST_ALL_OF_ACTION_IDS_PARAMS = {"namespace": settings.DEFAULT_NAMESPACE}
@@ -374,6 +378,7 @@ SYSTEM_LIST_ALL_OF_ACTION_IDS_DATA = [
         "source_type": SYSTEM_DATA2['source_type'],
         "audit_status": "pending",
         "system_id": SYSTEM_DATA2["system_id"],
+        "permission_type": "complex",
     }
 ]
 
@@ -390,37 +395,6 @@ SYSTEM_INFO_DATA = {
     "action_count": 0,
     "system_status": "pending",
     "system_stage": "pending",
-}
-{
-    'resource_type_count': 1,
-    'action_count': 0,
-    'managers': ['admin'],
-    'created_at': '2025-06-24 17:03:11',
-    'created_by': 'admin',
-    'updated_at': '2025-06-24 17:03:24',
-    'updated_by': 'admin',
-    'system_id': 'bk-audit',
-    'source_type': 'iam_v3',
-    'instance_id': 'bk-audit',
-    'namespace': 'default',
-    'name': 'bk-audit',
-    'name_en': 'bk-audit',
-    'clients': None,
-    'description': None,
-    'provider_config': {'host': 'https://bk.tencent.com'},
-    'callback_url': 'https://bk.tencent.com',
-    'auth_token': None,
-    'logo_url': 'https://bk.tencent.com',
-    'system_url': None,
-    'enable_system_diagnosis_push': False,
-    'system_diagnosis_extra': {},
-    'audit_status': 'pending',
-    'last_time': None,
-    'status': None,
-    'status_msg': '',
-    'collector_count': 0,
-    'system_status': 'pending',
-    'system_stage': "pending",
 }
 
 # Resource Type List
@@ -719,6 +693,10 @@ GLOBAL_CHOICES = {
         {'id': "permission_model", 'name': '权限模型'},
         {'id': "collector", 'name': '日志采集'},
         {'id': "completed", 'name': '已完成'},
+    ],
+    "meta_system_permission_type": [
+        {"id": "simple", "name": "简单权限"},
+        {"id": "complex", "name": "复杂权限"},
     ],
 }
 
