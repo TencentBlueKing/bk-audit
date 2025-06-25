@@ -58,6 +58,11 @@ class Tool(SoftDeleteModel):
         )
         return panel
 
+    @classmethod
+    def delete_by_uid(cls, uid: str):
+        Tool.objects.filter(uid=uid, is_deleted=False).delete()
+        ToolTag.objects.filter(tool_uid=uid).delete()
+
 
 class DataSearchToolConfig(OperateRecordModel):
     """

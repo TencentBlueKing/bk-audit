@@ -33,6 +33,9 @@ class ToolCreateRequestSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     version = serializers.IntegerField(default=1, label=gettext_lazy("版本"))
+    tags = serializers.ListField(
+        child=serializers.CharField(), required=False, allow_empty=True, label=gettext_lazy("标签列表"), default=[]
+    )
 
     def validate(self, attrs):
         tool_type = attrs["tool_type"]
@@ -53,6 +56,9 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
     config = serializers.DictField(label=gettext_lazy("工具配置"))
     name = serializers.CharField(label=gettext_lazy("工具名称"))
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
+    tags = serializers.ListField(
+        child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")
+    )
 
     def validate(self, attrs):
 
@@ -80,7 +86,7 @@ class ToolDeleteRetrieveRequestSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
 
 
-class TooListAllResponseSerializer(serializers.Serializer):
+class ToolListAllResponseSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     name = serializers.CharField(label=gettext_lazy("工具名称"))
     tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
@@ -89,7 +95,7 @@ class TooListAllResponseSerializer(serializers.Serializer):
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
 
 
-class TooListResponseSerializer(serializers.Serializer):
+class ToolListResponseSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     name = serializers.CharField(label=gettext_lazy("工具名称"))
     tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
@@ -114,3 +120,16 @@ class ListRequestSerializer(serializers.Serializer):
     keyword = serializers.CharField(required=False, allow_blank=True, label="搜索关键字")
     limit = serializers.IntegerField(required=False, min_value=1, default=10, label="每页条数")
     offset = serializers.IntegerField(required=False, min_value=0, default=0, label="偏移量")
+    tags = serializers.ListField(
+        child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
+    )
+
+
+class ListToolTagsResponseSerializer(serializers.Serializer):
+    """
+    List Tool Tags
+    """
+
+    tag_id = serializers.CharField(label=gettext_lazy("Tag ID"))
+    tag_name = serializers.CharField(label=gettext_lazy("Tag Name"))
+    tool_count = serializers.IntegerField(label=gettext_lazy("Tool Count"))
