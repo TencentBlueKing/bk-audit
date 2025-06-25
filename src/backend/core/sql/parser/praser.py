@@ -169,11 +169,9 @@ class SqlQueryAnalysis:
             )
             count_sql = count_expr.sql(dialect=target_dialect)
 
-        if limit is not None or offset is not None:
-            transformed_tree = exp.select(exp.Star()).from_(transformed_tree.copy().subquery("_sub"))
         if limit is not None:
             transformed_tree = transformed_tree.limit(limit)
-        if offset is not None:
+        if offset:
             transformed_tree = transformed_tree.offset(offset)
 
         data_sql = transformed_tree.sql(dialect=target_dialect)
