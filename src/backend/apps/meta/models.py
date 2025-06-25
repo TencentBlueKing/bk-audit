@@ -41,6 +41,7 @@ from apps.meta.constants import (
     ConfigLevelChoices,
     SystemAuditStatusEnum,
     SystemDiagnosisPushStatusEnum,
+    SystemPermissionTypeEnum,
     SystemSourceTypeEnum,
 )
 from apps.meta.exceptions import UniqueNameInValid
@@ -181,6 +182,12 @@ class System(OperateRecordModel):
     callback_url = models.CharField(gettext_lazy("回调地址"), max_length=255, null=True, blank=True)
     auth_token = models.CharField(gettext_lazy("系统鉴权 Token"), max_length=64, null=True, blank=True)
     managers = models.JSONField(gettext_lazy("系统管理员"), default=list, blank=True)
+    permission_type = models.CharField(
+        gettext_lazy("权限类型"),
+        max_length=16,
+        choices=SystemPermissionTypeEnum.choices,
+        default=SystemPermissionTypeEnum.COMPLEX.value,
+    )
     # paas 同步信息
     logo_url = models.CharField(gettext_lazy("应用图标"), max_length=255, null=True, blank=True)
     system_url = models.CharField(gettext_lazy("访问地址"), max_length=255, null=True, blank=True)
