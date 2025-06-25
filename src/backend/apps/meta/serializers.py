@@ -41,6 +41,7 @@ from apps.meta.constants import (
     SensitiveResourceTypeEnum,
     SpaceType,
     SystemAuditStatusEnum,
+    SystemPermissionTypeEnum,
     SystemSortFieldEnum,
     SystemStageEnum,
     SystemStatusEnum,
@@ -203,6 +204,9 @@ class SystemListAllRequestSerializer(serializers.ModelSerializer):
         required=False,
         help_text=SystemSourceTypeEnum.choices,
     )
+    permission_type__in = serializers.CharField(
+        label=gettext_lazy("权限类型"), required=False, help_text=SystemPermissionTypeEnum.choices
+    )
     with_favorite = serializers.BooleanField(label=gettext_lazy("携带收藏状态"), default=False)
     with_system_status = serializers.BooleanField(label=gettext_lazy("携带系统状态"), default=False)
     sort_keys = serializers.CharField(
@@ -212,7 +216,7 @@ class SystemListAllRequestSerializer(serializers.ModelSerializer):
         help_text=SystemSortFieldEnum.choices,
     )
     order_type = serializers.ChoiceField(
-        label=gettext_lazy("排序方式"), default=OrderTypeChoices.DESC.value, choices=OrderTypeChoices.choices
+        label=gettext_lazy("排序方式"), default=OrderTypeChoices.ASC.value, choices=OrderTypeChoices.choices
     )
 
     def validate_sort_keys(self, value: str) -> list:
@@ -230,6 +234,7 @@ class SystemListAllRequestSerializer(serializers.ModelSerializer):
             "action_ids",
             "audit_status__in",
             "source_type__in",
+            "permission_type__in",
             "with_favorite",
             "with_system_status",
             "sort_keys",
@@ -244,7 +249,7 @@ class SystemListAllResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = System
-        fields = ['id', 'name', 'source_type', 'audit_status', 'favorite', "system_id"]
+        fields = ['id', 'name', 'source_type', 'audit_status', 'favorite', "system_id", "permission_type"]
 
     def get_id(self, obj) -> str:
         """系统ID"""
@@ -824,6 +829,7 @@ class CreateSystemReqSerializer(serializers.ModelSerializer):
             "callback_url",
             "system_url",
             "managers",
+            "permission_type",
         ]
         extra_kwargs = {
             "instance_id": {
