@@ -142,6 +142,7 @@ from apps.permission.handlers.actions import ActionEnum, get_action_by_id
 from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.choices import list_registered_choices
+from core.constants import OrderTypeChoices
 from core.models import get_request_username
 from core.utils.cache import CacheMixin
 from core.utils.tools import get_app_info
@@ -173,7 +174,7 @@ class SystemListResource(SystemAbstractResource, CacheResource):
     获取系统列表
     1. 获取已接入审计中心的系统列表:
     ```json
-    ?audit_status=accessed
+    ?audit_status=accessed&order_field=created_at&order_type=desc
     ```
     """
 
@@ -270,7 +271,7 @@ class SystemListAllResource(SystemAbstractResource, CacheResource):
     获取系统列表(All)
     1. 待接入的系统
     ```json
-    输入：?with_favorite=false&with_system_status=false&sort_keys=audit_status
+    输入：?sort_keys=audit_status,name
     输出：
     {
         "data": [
@@ -286,7 +287,7 @@ class SystemListAllResource(SystemAbstractResource, CacheResource):
     ```
     2. 系统列表(快速切换)
     ```json
-    输入：?action_ids=view_system&audit_status__in=accessed&with_favorite=true&with_system_status=true&sort_keys=favorite,permission'
+    输入：?action_ids=view_system&audit_status__in=accessed&with_favorite=true&with_system_status=true&sort_keys=favorite,permission,name'
     输出：
     {
         "data": [
@@ -312,11 +313,7 @@ class SystemListAllResource(SystemAbstractResource, CacheResource):
     name = gettext_lazy("获取系统列表(All)")
     action = "list"
     many_response_data = True
-    filter_fields = {
-        "namespace": ["exact"],
-        "audit_status": ["in"],
-        "source_type": ["in"],
-    }
+    filter_fields = {"namespace": ["exact"], "audit_status": ["in"], "source_type": ["in"], "permission_type": ["in"]}
     filter_backends = [DjangoFilterBackend]
     RequestSerializer = SystemListAllRequestSerializer
     serializer_class = SystemListAllResponseSerializer
@@ -365,7 +362,8 @@ class SystemListAllResource(SystemAbstractResource, CacheResource):
 
         # 排序
         sort_keys = validated_request_data.get("sort_keys", [])
-        systems.sort(key=get_system_sort_key(sort_keys))
+        order_type = validated_request_data["order_type"]
+        systems.sort(key=get_system_sort_key(sort_keys), reverse=order_type == OrderTypeChoices.DESC.value)
         return systems
 
 

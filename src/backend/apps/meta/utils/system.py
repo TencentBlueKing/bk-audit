@@ -73,21 +73,27 @@ class BaseSystemSorter(abc.ABC):
     @classmethod
     @abc.abstractmethod
     def sort_key(cls, system: Dict) -> Tuple:
-        """返回排序key"""
+        """返回排序key，默认从小到大"""
         raise NotImplementedError()
 
 
 class PermissionSorter(BaseSystemSorter):
     @classmethod
     def sort_key(cls, system: dict) -> Tuple:
+        """
+        权限 > 无权限
+        """
         permission_obj = system.get("permission", {})
         priority_index = min(len([p for p in permission_obj.values() if p]), 1)
-        return -priority_index, system.get("system_id") or system.get("id")
+        return (-priority_index,)
 
 
 class FavoriteSorter(BaseSystemSorter):
     @classmethod
     def sort_key(cls, system: dict) -> Tuple:
+        """
+        收藏 > 未收藏
+        """
         return (-int(system.get("favorite", False)),)
 
 
@@ -98,11 +104,21 @@ class AuditStatusSorter(BaseSystemSorter):
         return (-SystemAuditStatusEnum.get_order_value(status_value),)
 
 
+class NameSorter(BaseSystemSorter):
+    @classmethod
+    def sort_key(cls, system: Dict) -> Tuple:
+        """
+        名称从小到大
+        """
+        return system.get("name"), system.get("name_en")
+
+
 # 排序规则注册表
 SYSTEM_SORT_REGISTRY = {
     SystemSortFieldEnum.PERMISSION: PermissionSorter,
     SystemSortFieldEnum.FAVORITE: FavoriteSorter,
     SystemSortFieldEnum.AUDIT_STATUS: AuditStatusSorter,
+    SystemSortFieldEnum.NAME: NameSorter,
 }
 
 
