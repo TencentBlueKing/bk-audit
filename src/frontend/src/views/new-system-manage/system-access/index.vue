@@ -15,7 +15,9 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div class="access">
+  <div
+    class="access"
+    @click="handleCloseSelect($event)">
     <img
       class="access-empty"
       src="@images/empty.svg">
@@ -46,8 +48,7 @@
       </div>
       <div
         class="btn-right"
-        @mouseenter="handleMouseenter"
-        @mouseleave="handleMouseleave">
+        @click.stop="handleIsShowSelect">
         <div class="btn">
           <div
             class="btn-icon"
@@ -58,11 +59,10 @@
           </div>
           <div class="access-text">
             <div class="access-text-top">
-              {{ t("待接入的系统") }}<span class="text-top-num">{{ dataList.length }}</span>
+              {{ t("待接入的系统") }}<span class="text-top-num">{{ pendingList.length }}</span>
             </div>
             <div
-              v-if="dataList.length > 0"
-              v-bk-tooltips="{ content: t('暂无待接入的系统')}"
+              v-if="pendingList.length > 0"
               class="access-text-bottom">
               {{
                 t(
@@ -72,7 +72,7 @@
             </div>
             <div
               v-else
-              v-bk-tooltips="{ content: t('暂无待接入的系统')}"
+              v-bk-tooltips="{ content: t('暂无待接入的系统') }"
               class="access-text-bottom">
               {{
                 t(
@@ -82,49 +82,72 @@
             </div>
           </div>
         </div>
-        <bk-select
+        <div
           v-if="isShowSelect"
-          v-model="systemId"
-          class="bk-select"
-          filterable
-          :popover-options="{
-            width: 'auto'
-          }"
-          @change="handleSelectChange">
-          <bk-option
-            v-for="item in dataList"
-            :id="item.id"
-            :key="item.id"
-            :disabled="item.audit_status === 'accessed'"
-            :name="item.name">
+          class="select-input">
+          <bk-input
+            v-model="selectInput"
+            behavior="simplicity"
+            style=" width: 98%;margin-left: 1%;background-color: #fff"
+            @click.stop="handleSearch"
+            @input="handleSearch">
+            <template #prefix>
+              <audit-icon
+                class="btn-icon-search1"
+                type="search1" />
+            </template>
+          </bk-input>
+
+          <div class="list">
             <div
-              v-if="item.audit_status === 'pending'"
-              style="display: flex;width: 100%;justify-content: space-between;">
-              <div>
-                <span>{{ item.name }}</span>
-                <span style="color: #c4c6cc;">({{ item.id }})</span>
-              </div>
-              <div style="margin-left: 10px;color: #c4c6cc;">
-                {{ t('来源') }}：{{ sourceType(item.source_type) }}
-              </div>
-            </div>
-            <bk-popover
-              v-if="item.audit_status === 'accessed'"
-              content="已接入审计中心"
-              placement="top"
-              theme="light">
-              <div style="display: flex;width: 100%;justify-content: space-between;">
-                <div>
-                  <span>{{ item.name }}</span>
-                  <span style="color: #c4c6cc;">({{ item.id }})</span>
+              v-for="item in dataList"
+              :key="item.id"
+              class="list-item"
+              text>
+              <div
+                v-if="item.audit_status === 'pending'"
+                class="list-btn"
+                :class="{ 'list-btn-active': activeItemId === item.id }"
+                @click.stop="handleItemClick(item.id)">
+                <div class="list-btn-name">
+                  <span
+                    v-bk-tooltips="{
+                      content: item.name,
+                      disabled: item.name.length <= 20,
+                      placement: 'top'
+                    }"
+                    class="list-btn-title">{{ item.name }}</span>
+                  <span class="list-btn-id">({{ item.id }})</span>
                 </div>
-                <div style="margin-left: 10px;color: #c4c6cc;">
+                <div class="list-btn-source">
                   {{ t('来源') }}：{{ sourceType(item.source_type) }}
                 </div>
               </div>
-            </bk-popover>
-          </bk-option>
-        </bk-select>
+
+              <bk-popover
+                v-if="item.audit_status === 'accessed'"
+                content="已接入审计中心"
+                placement="top"
+                theme="light">
+                <div class="list-btn list-btn-not-allowed">
+                  <div class="list-btn-name">
+                    <span
+                      v-bk-tooltips="{
+                        content: item.name,
+                        disabled: item.name.length <= 20,
+                        placement: 'top'
+                      }"
+                      class="list-btn-id">{{ item.name }}</span>
+                    <span class="list-btn-id">({{ item.id }})</span>
+                  </div>
+                  <div class="list-btn-source">
+                    {{ t('来源') }}：{{ sourceType(item.source_type) }}
+                  </div>
+                </div>
+              </bk-popover>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -157,20 +180,42 @@
     router.push({
       name,
       query: {
-        step: '1',  // 改为字符串类型
-        showModelType: 'false',  // 改为字符串类型
-        isNewSystem: isNewSystem.toString(),  // 转为字符串
+        step: '1',
+        showModelType: 'false',
+        isNewSystem: isNewSystem.toString(),
       },
     });
   };
-  const systemId = ref();
   const dataList = ref<SystemItem[]>([]);
+  const pendingList = ref<SystemItem[]>([]);
+  const selectInput = ref();
+  const originDataList = ref<SystemItem[]>([]); // 保存原始数据
+  const activeItemId = ref<string>(''); // 当前选中项的ID
 
-  const handleMouseenter = () => {
-    isShowSelect.value = true;
+  const handleItemClick = (id: string) => {
+    activeItemId.value = activeItemId.value === id ? '' : id;
+    router.push({
+      name: 'systemAccessSteps',
+      query: {
+        step: '1',  // 改为字符串类型
+        showModelType: 'false',  // 改为字符串类型
+        isNewSystem: 'false',  // 改为字符串类型
+        systemId: id,
+      },
+    });
   };
-  const handleMouseleave = () => {
-    // isShowSelect.value = false
+
+  const handleIsShowSelect = () => {
+    isShowSelect.value = !isShowSelect.value;
+  };
+
+  const handleCloseSelect = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    // 如果点击的是输入框或输入框的子元素，不关闭下拉框
+    if (target.closest('.bk-input') || target.closest('.select-input')) {
+      return;
+    }
+    isShowSelect.value = false;
   };
 
   const {
@@ -178,7 +223,9 @@
   } = useRequest(MetaManageService.fetchSystemWithAction, {
     defaultValue: [],
     onSuccess: (data) => {
+      originDataList.value = data;
       dataList.value = data;
+      pendingList.value = data.filter(item => item.audit_status === 'pending');
     },
   });
   // 全局数据
@@ -195,16 +242,17 @@
     return statusItem?.name || type; // 如果找不到对应状态，返回原值
   };
 
-  const handleSelectChange = (val: string) => {
-    router.push({
-      name: 'systemAccessSteps',
-      query: {
-        step: '1',  // 改为字符串类型
-        showModelType: 'false',  // 改为字符串类型
-        isNewSystem: 'false',  // 改为字符串类型
-        systemId: val,
-      },
-    });
+  // 搜索处理方法
+  const handleSearch = () => {
+    if (!selectInput.value.trim()) {
+      // 搜索值为空时显示全部数据
+      dataList.value = originDataList.value;
+    } else {
+      // 根据名称或ID进行搜索（不区分大小写）
+      const searchText = selectInput.value.toLowerCase();
+      dataList.value = originDataList.value.filter(item => item.name.toLowerCase().includes(searchText)
+        || item.id.toLowerCase().includes(searchText));
+    }
   };
   onMounted(() => {
     fetchSystemWithAction({
@@ -352,6 +400,80 @@
       .label {
         display: flex;
       }
+    }
+
+    .select-input {
+      width: 488px;
+      margin-top: 5px;
+      background-color: #fff;
+
+      .btn-icon-search1 {
+        margin-top: 8px;
+        font-size: 20px;
+        color: #979ba5;
+        background-color: #fff;
+      }
+
+      .list {
+        height: 20vh;
+        margin-top: 5px;
+        overflow: auto;
+
+        .list-btn {
+          display: flex;
+          width: 100%;
+          height: 32px;
+          font-size: 12px;
+          line-height: 32px;
+          letter-spacing: 0;
+          color: #63656e;
+          cursor: pointer;
+          justify-content: space-between;
+
+          &:hover {
+            background: #f5f7fa;
+          }
+
+          &.list-btn-active {
+            color: #3a84ff;
+            background: #e1ecff;
+          }
+
+          .list-btn-name {
+            display: flex;
+            width: 350px;
+            margin-left: 1%;
+
+            .list-btn-title {
+              display: inline-block;
+              max-width: 250px;
+              overflow: hidden;
+              font-family: monospace;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+
+            .list-btn-id {
+              display: inline-block;
+              margin-left: 5px;
+              color: #c4c6cc;
+            }
+          }
+
+          .list-btn-source {
+            margin-right: 1%;
+            color: #c4c6cc;
+          }
+
+        }
+
+        .list-btn-not-allowed {
+          &:hover {
+            cursor: not-allowed;
+          }
+        }
+      }
+
     }
   }
 }
