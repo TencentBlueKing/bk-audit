@@ -45,6 +45,7 @@
   const route = useRoute();
 
   const handleRouterChange = () => {
+    window.changeConfirm = false;
     router.push({
       name: 'nweSystemManage',
       params: {

@@ -533,4 +533,5 @@ export default {
   '2.在请输入的输入框内，直接填写字段名': '2.Directly enter the field name in the input box labeled .',
   '3.可通过多次添加来实现多级下钻，请严格注意字段级别': '3.Achieve multi-level drill-down by adding multiple times. ​Strictly adhere to field hierarchy.​​',
   以下是3级字段的实例: 'Example of a 3-level field',
+  请先配置权限模型: 'Configure the permission model first',
 };
