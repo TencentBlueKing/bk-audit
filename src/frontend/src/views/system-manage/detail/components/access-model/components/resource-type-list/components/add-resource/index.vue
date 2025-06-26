@@ -27,13 +27,13 @@
         v-model="addType"
         class="add-resource-type"
         type="capsule">
-        <bk-radio-button label="single">
-          {{ t('单个模式') }}
-        </bk-radio-button>
         <bk-radio-button
           :disabled="isEdit"
           label="batch">
           {{ t('批量模式') }}
+        </bk-radio-button>
+        <bk-radio-button label="single">
+          {{ t('单个模式') }}
         </bk-radio-button>
       </bk-radio-group>
     </template>
@@ -41,10 +41,12 @@
       v-if="addType === 'single'"
       :edit-data="editData"
       :is-edit="isEdit"
+      :resource-type-list="resourceTypeList"
       :sensitivity-list="sensitivityList"
       @update-resource="handleUpdateResource" />
     <add-batch-resource
       v-else
+      :resource-type-list="resourceTypeList"
       :sensitivity-list="sensitivityList"
       @update-resource="handleUpdateResource" />
   </audit-sideslider>
@@ -62,10 +64,15 @@
     (e: 'updateResource'): void;
   }
 
-  interface Exposes {
-    handleOpen: (isBatch?: boolean, resourceTypeData?: SystemResourceTypeModel) => void,
+  interface Props {
+    resourceTypeList: SystemResourceTypeModel[],
   }
 
+  interface Exposes {
+    handleOpen: (resourceTypeData?: SystemResourceTypeModel) => void,
+  }
+
+  defineProps<Props>();
   const emits = defineEmits<Emits>();
 
   const sensitivityList = [
@@ -89,7 +96,7 @@
 
   const { t } = useI18n();
   const isShowAdd = ref(false);
-  const addType = ref('single');
+  const addType = ref('batch');
   const editData = ref<SystemResourceTypeModel>(new SystemResourceTypeModel());
   const isEdit = ref(false);
 
@@ -98,9 +105,11 @@
   };
 
   defineExpose<Exposes>({
-    handleOpen(isBatch?: boolean, resourceTypeData?: SystemResourceTypeModel) {
+    handleOpen(resourceTypeData?: SystemResourceTypeModel) {
       // 设置资源类型模式（批量/单个）
-      addType.value = isBatch ? 'batch' : 'single';
+      if (resourceTypeData) {
+        addType.value = 'single';
+      }
 
       // 处理编辑/新增逻辑
       isEdit.value = !!resourceTypeData;
