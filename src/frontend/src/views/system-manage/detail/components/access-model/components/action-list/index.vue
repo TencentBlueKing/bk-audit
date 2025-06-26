@@ -31,9 +31,6 @@
               type="add" />
             {{ t('新建操作') }}
           </bk-button>
-          <bk-button @click="handleBatchCreate">
-            {{ t('批量新增') }}
-          </bk-button>
         </template>
       </div>
       <bk-search-select
@@ -58,6 +55,8 @@
   </div>
   <add-action
     ref="addActionRef"
+    :action-list="data"
+    @add-resource-type="handleAddResourceType"
     @update-action="handleUpdateAction" />
 </template>
 <script setup lang="tsx">
@@ -79,6 +78,7 @@
   interface Emits {
     (e: 'updateResource'): void;
     (e: 'updateListLength', listLength: number): void;
+    (e: 'addResourceType'): void;
   }
   interface Props {
     canEditSystem: boolean;
@@ -141,7 +141,7 @@
       ),
     },
     {
-      label: () => t('风险等级'),
+      label: () => t('敏感等级'),
       render: ({ data }: {data: SystemActionModel}) => (
         <render-sensitivity-level value={data.sensitivity} />
       ),
@@ -165,12 +165,17 @@
               text>
               {t('编辑')}
             </bk-button>
-            <bk-button
-              theme='primary'
-              onClick={() => handleDelete(data)}
-              text>
-              {t('删除')}
-            </bk-button>
+            <audit-popconfirm
+              title={t('确认删除？')}
+              content={t('删除后不可恢复')}
+              class="ml8"
+              confirmHandler={() => handleDelete(data)}>
+              <bk-button
+                theme='primary'
+                text>
+                {t('删除')}
+              </bk-button>
+            </audit-popconfirm>
           </div>
         </>,
     }] : []),
@@ -247,17 +252,13 @@
     // fetchActionByUniqueId({
     //   unique_id: data.unique_id,
     // });
-    addActionRef.value.handleOpen(false, data);
+    addActionRef.value.handleOpen(data);
   };
 
   const handleDelete = (data: SystemActionModel) => {
     deleteAction({
       unique_id: data.unique_id,
     });
-  };
-
-  const handleBatchCreate = () => {
-    addActionRef.value.handleOpen(true);
   };
 
   const handleCreate = () => {
@@ -269,6 +270,10 @@
       id: route.params.id,
     });
     emits('updateResource');
+  };
+
+  const handleAddResourceType = () => {
+    emits('addResourceType');
   };
 
   const handleSearch = (keyword: Array<any>) => {
@@ -290,11 +295,11 @@
         search[item.id] = list.join(',');
       } else {
         // 默认输入字段后匹配规则名称
-        const list = search.name.split(',').filter((item: string) => !!item);
+        const list = search.name__icontains.split(',').filter((item: string) => !!item);
         list.push(item.id);
         _.uniq(list);
-        search.name = list.join(',');
-        searchKey.value[index] = ({ id: 'name', name: t('资源名称'), values: [{ id: item.id, name: item.id }] });
+        search.name__icontains = list.join(',');
+        searchKey.value[index] = ({ id: 'name__icontains', name: t('操作事件名'), values: [{ id: item.id, name: item.id }] });
       }
     });
     fetchSystemActionList(search);

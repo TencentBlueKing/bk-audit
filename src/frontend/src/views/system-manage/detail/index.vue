@@ -52,6 +52,7 @@
                   {{ item.label }}
                 </h3>
                 <span
+                  v-if="item.name !== 'basicInfo'"
                   v-bk-tooltips="{
                     content: t(`资源数据: ${data.resource_type_count}，操作数据: ${data.action_count}`),
                     disabled: item.name !== 'accessModel'
@@ -113,7 +114,7 @@
     },
     {
       name: 'accessModel',
-      label: t('接入模型'),
+      label: t('权限模型'),
       describe: t('产品或研发注册资源与操作'),
     },
     {
