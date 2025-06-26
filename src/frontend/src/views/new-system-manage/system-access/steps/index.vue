@@ -18,27 +18,15 @@
   <div class="step">
     <div class="step-head">
       <div
-        class="head-left"
-        @click="handlerBack">
-        <audit-icon
-          class="back-icon"
-          type="back" />
+        class="head-left">
         <span class="back-icon-text">{{ t("接入新系统") }}</span>
       </div>
 
       <div class="cur-step">
-        <bk-steps
-          :cur-step="curStep"
-          size="small"
-          :steps="stepsTitle" />
+        <header-steps
+          :cur-step="Number(curStep)"
+          :steps-title="stepsTitle" />
       </div>
-
-      <!-- <div class="head-right">
-        <audit-icon
-          class="help-fill-icon"
-          type="help-fill" />
-        <span class="head-right-text">{{ t("系统接入指引") }}</span>
-      </div> -->
     </div>
 
     <div class="step-content">
@@ -46,6 +34,7 @@
         :is="stepComponents(curStep)"
         ref="stepRef"
         :can-edit-system="canEditSystem"
+        @get-is-disabled-btn="getIsDisabledBtn"
         @handler-validates="handlerValidates"
         @update-can-edit-system="handleUpdate" />
     </div>
@@ -67,10 +56,18 @@
       </div>
       <div
         v-if=" Number(curStep) === 1.5"
-        class="footer-btn">
+        class="footer-btn1-1">
         <bk-button
           @click="handlerStepSubmit">
           {{ t("上一步") }}
+        </bk-button>
+        <bk-button
+          v-bk-tooltips="t('请先配置权限模型')"
+          class="ml10"
+          disabled
+          theme="primary"
+          @click="handlerStep2Submit">
+          {{ t("提交并下一步") }}
         </bk-button>
       </div>
       <div
@@ -81,7 +78,12 @@
           {{ t("上一步") }}
         </bk-button>
         <bk-button
+          v-bk-tooltips="{
+            disabled: !isStep2Disabled,
+            content: t('请先配置权限模型')
+          }"
           class="ml10"
+          :disabled="isStep2Disabled"
           theme="primary"
           @click="handlerStep2Submit">
           {{ t("提交并下一步") }}
@@ -107,12 +109,13 @@
 
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
 
+  import HeaderSteps from './components/header-steps.vue';
   import Step1 from './step1/index.vue';
   import Step2 from './step2/index.vue';
   import Step3 from './step3/index.vue';
@@ -131,15 +134,13 @@
   const route = useRoute();
   const router = useRouter();
   const canEditSystem = ref(true);
-
   // 将 curStep 定义为计算属性，确保始终返回数字类型
   const curStep = computed<number>(() => {
     const step = Number(route.query.step);
     return isNaN(step) ? 1 : step;
   });
-
+  const isStep2Disabled = ref(false);
   const stepRef = ref();
-
   const stepsTitle = ref([
     {
       title: t('注册系统信息'),
@@ -158,7 +159,7 @@
   } = useRequest(MetaManageService.fetchSystemCreated, {
     defaultValue: [],
     onSuccess: (data) => {
-      router.replace({
+      router.push({
         query: {
           ...route.query,
           step: 1.5,
@@ -176,7 +177,7 @@
   } = useRequest(MetaManageService.fetchSystemUpdate, {
     defaultValue: [],
     onSuccess: (data) => {
-      router.replace({
+      router.push({
         query: {
           ...route.query,
           step: 1.5,
@@ -231,33 +232,40 @@
       cancelText: t('取消'),
       confirmText: t('确定接入'),
       onConfirm() {
+        window.changeConfirm = false;
         if ('systemId' in route.query) {
           fetchSystemAuditStatusUpdate({
             ...formData,
             system_id: formData.instance_id,
-          }).then(() => {
-            messageSuccess(t('系统新建成功'));
-            router.replace({
-              query: {
-                ...route.query,
-                step: 2,
-              },
-              params: {
-                id: formData.instance_id,
-              },
-            });
+          }).then((data) => {
+            if (data) {
+              messageSuccess(t('系统新建成功'));
+              router.push({
+                query: {
+                  ...route.query,
+                  step: 2,
+                },
+                params: {
+                  id: formData.instance_id,
+                },
+              });
+            }
           });
         } else {
           if ('fromStep' in route.query) {
             fetchSystemUpdate({
               ...formData,
               system_id: formData.instance_id,
-            }).then(() => {
-              messageSuccess(t('系统新建成功'));
+            }).then((data) => {
+              if (data) {
+                messageSuccess(t('系统新建成功'));
+              }
             });
           } else {
-            fetchSystemCreated(formData).then(() => {
-              messageSuccess(t('系统新建成功'));
+            fetchSystemCreated(formData).then((data) => {
+              if (data) {
+                messageSuccess(t('系统新建成功'));
+              }
             });
           }
         }
@@ -266,7 +274,7 @@
     });
   };
   const handlerStepSubmit = () => {
-    router.replace({
+    router.push({
       query: {
         ...route.query,
         step: 1,
@@ -275,7 +283,7 @@
     });
   };
   const handlerStep2Cancel = () => {
-    router.replace({
+    router.push({
       query: {
         ...route.query,
         step: 1.5,
@@ -285,16 +293,12 @@
   };
 
   const handlerStep2Submit = () => {
-    router.replace({
-      query: {
-        ...route.query,
-        step: 3,
-      },
-    });
+    window.changeConfirm = false;
+    stepRef.value.handlerSubmit();
   };
 
   const handlerStep3Cancel = () => {
-    router.replace({
+    router.push({
       query: {
         ...route.query,
         step: 2,
@@ -302,7 +306,8 @@
     });
   };
   const handlerStep3Submit = () => {
-    router.replace({
+    window.changeConfirm = false;
+    router.push({
       query: {
         ...route.query,
         step: 4,
@@ -325,11 +330,20 @@
   const handleUpdate = (value: any) => {
     canEditSystem.value = !value;
   };
-  const handlerBack = () => {
-    router.push({
-      name: 'systemAccess',
-    });
+
+  window.changeConfirm = true;
+  watch(() => route, () => {
+    window.changeConfirm = true;
+  }, {
+    deep: true,
+    immediate: true,
+  });
+  const getIsDisabledBtn: (...args: unknown[]) => void = (val: unknown) => {
+    if (typeof val === 'boolean') {
+      isStep2Disabled.value = val;
+    }
   };
+
 </script>
 
 <style scoped lang="postcss">
@@ -414,11 +428,18 @@
 
     }
 
+    .footer-btn1-1 {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%,-50%);
+    }
+
     .footer-btn2 {
       position: absolute;
       top: 50%;
-      left: 20px;
-      transform: translateY(-50%);
+      left: 50%;
+      transform: translate(-50%,-50%);
 
     }
 
@@ -427,4 +448,6 @@
     }
   }
 }
+
+
 </style>
