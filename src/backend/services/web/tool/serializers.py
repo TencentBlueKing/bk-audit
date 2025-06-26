@@ -17,7 +17,14 @@ to the current version of the project delivered to anyone in the future.
 """
 from rest_framework import serializers
 
+from services.web.tool.constants import ToolTypeEnum
+
 
 class ExecuteToolReqSerializer(serializers.Serializer):
     uid = serializers.CharField()
     params = serializers.JSONField()
+
+
+class ExecuteToolRespSerializer(serializers.Serializer):
+    data = serializers.DictField()
+    tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices)
