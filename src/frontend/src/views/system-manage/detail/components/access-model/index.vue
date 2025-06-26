@@ -20,15 +20,17 @@
       v-if="isShowreSource"
       ref="resourceTypeListRef"
       :can-edit-system="canEditSystem"
-      @update-action="handleUpdateAction" />
+      @update-action="handleUpdateAction"
+      @update-list-length="handleUpdateList" />
     <action-list
       ref="actionListRef"
       :can-edit-system="canEditSystem"
+      @update-list-length="handleUpdateListLength"
       @update-resource="handleUpdateResource" />
   </div>
 </template>
 <script setup lang="ts">
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useRoute } from 'vue-router';
 
   import ActionList from './components/action-list/index.vue';
@@ -37,12 +39,24 @@
   interface Props {
     canEditSystem: boolean;
   }
-
+  interface Emits {
+    (e: 'getIsDisabledBtn', val: Record<string, any>): void;
+  }
   defineProps<Props>();
-  const route = useRoute();
 
+  const emits = defineEmits<Emits>();
+
+  const route = useRoute();
   const resourceTypeListRef = ref();
   const actionListRef = ref();
+
+  const ListLength = ref<{
+    resourceTypeListLength: number | null;
+    actionListListLength: number | null;
+  }>({
+    resourceTypeListLength: null,
+    actionListListLength: null,
+  });
 
   const isShowreSource =  ref(computed(() => {
     if (route.name === 'systemAccessSteps') {
@@ -61,4 +75,19 @@
   const handleUpdateResource = () => {
     resourceTypeListRef.value?.updateResource();
   };
+
+  const handleUpdateList = (length: number) => {
+    ListLength.value.resourceTypeListLength = length;
+  };
+
+  const handleUpdateListLength = (length: number) => {
+    ListLength.value.actionListListLength = length;
+  };
+
+  watch(() => ListLength.value, (newData) => {
+    emits('getIsDisabledBtn', newData);
+  }, {
+    deep: true,
+  });
+
 </script>

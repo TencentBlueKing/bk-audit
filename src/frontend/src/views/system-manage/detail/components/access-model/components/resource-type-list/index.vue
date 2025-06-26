@@ -75,6 +75,7 @@
     computed,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -98,6 +99,7 @@
 
   interface Emits {
     (e: 'updateAction'): void;
+    (e: 'updateListLength', listLength: number): void;
   }
   interface Props {
     canEditSystem: boolean;
@@ -470,6 +472,12 @@
     emits('updateAction');
   };
 
+  watch(() => resourceTypeList.value, (newList) => {
+    emits('updateListLength', newList.length);
+  }, {
+    deep: true,
+    immediate: true,
+  });
   onMounted(() => {
     checkPermission();
   });
