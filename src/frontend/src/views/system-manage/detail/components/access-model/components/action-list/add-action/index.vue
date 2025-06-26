@@ -27,24 +27,27 @@
         v-model="addType"
         class="add-resource-type"
         type="capsule">
-        <bk-radio-button label="single">
-          {{ t('单个模式') }}
-        </bk-radio-button>
         <bk-radio-button
           :disabled="isEdit"
           label="batch">
           {{ t('批量模式') }}
         </bk-radio-button>
+        <bk-radio-button label="single">
+          {{ t('单个模式') }}
+        </bk-radio-button>
       </bk-radio-group>
     </template>
     <add-single-action
       v-if="addType === 'single'"
+      :action-list="actionList"
       :edit-data="editData"
       :is-edit="isEdit"
       :sensitivity-list="sensitivityList"
+      @add-resource-type="handleAddResourceType"
       @update-action="handleUpdateAction" />
     <add-batch-action
       v-else
+      :action-list="actionList"
       :sensitivity-list="sensitivityList"
       @update-action="handleUpdateAction" />
   </audit-sideslider>
@@ -60,12 +63,18 @@
 
   interface Emits {
     (e: 'updateAction'): void;
+    (e: 'addResourceType'): void;
+  }
+
+  interface Props {
+    actionList: SystemActionModel[],
   }
 
   interface Exposes {
-    handleOpen: (isBatch?: boolean, actionData?: SystemActionModel) => void,
+    handleOpen: (actionData?: SystemActionModel) => void,
   }
 
+  defineProps<Props>();
   const emits = defineEmits<Emits>();
 
   const sensitivityList = [
@@ -89,7 +98,7 @@
 
   const { t } = useI18n();
   const isShowAdd = ref(false);
-  const addType = ref('single');
+  const addType = ref('batch');
   const editData = ref<SystemActionModel>(new SystemActionModel());
   const isEdit = ref(false);
 
@@ -97,10 +106,16 @@
     emits('updateAction');
   };
 
+  const handleAddResourceType = () => {
+    emits('addResourceType');
+  };
+
   defineExpose<Exposes>({
-    handleOpen(isBatch?: boolean, actionData?: SystemActionModel) {
+    handleOpen(actionData?: SystemActionModel) {
       // 设置操作模式（批量/单个）
-      addType.value = isBatch ? 'batch' : 'single';
+      if (actionData) {
+        addType.value = 'single';
+      }
 
       // 处理编辑/新增状态
       isEdit.value = !!actionData;
