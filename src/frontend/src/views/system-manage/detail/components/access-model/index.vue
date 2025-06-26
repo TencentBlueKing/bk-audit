@@ -25,6 +25,7 @@
     <action-list
       ref="actionListRef"
       :can-edit-system="canEditSystem"
+      @add-resource-type="handleAddResourceType"
       @update-list-length="handleUpdateListLength"
       @update-resource="handleUpdateResource" />
   </div>
@@ -90,4 +91,7 @@
     deep: true,
   });
 
+  const handleAddResourceType = () => {
+    resourceTypeListRef.value?.addResourceType();
+  };
 </script>

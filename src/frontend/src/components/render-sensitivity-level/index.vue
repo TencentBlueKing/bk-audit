@@ -30,18 +30,14 @@
   const props = defineProps<Props>();
 
   const styles = computed(() => {
-    if (props.value >= 7) {
-      return {
-        background: '#EA3636',
-      };
-    }
-    if (props.value >= 3) {
-      return {
-        background: '#FF9C01',
-      };
-    }
+    const colorMap: Record<number, string> = {
+      1: '#979ba5', // 不敏感 - 灰色
+      2: '#52c41a', // 低敏感 - 绿色
+      3: '#faad14', // 中敏感 - 橙色
+      4: '#f5222d', // 高敏感 - 红色
+    };
     return {
-      background: '#DCDEE5',
+      backgroundColor: colorMap[props.value] || '#333',
     };
   });
 </script>
