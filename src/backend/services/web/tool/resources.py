@@ -421,7 +421,47 @@ class GetToolDetail(ToolBase):
 
 
 class SqlAnalyseResource(ToolBase, Resource):
-    """解析SQL，返回引用表、变量和结果字段信息"""
+    """SQL解析接口
+
+    接口功能:
+        解析SQL语句，返回引用的表、变量和结果字段的详细信息
+
+    请求示例:
+        {
+            "sql": "SELECT u.id, u.name FROM users u WHERE u.age > :min_age",
+            "dialect": "mysql"
+        }
+
+    响应示例:
+        {
+            "referenced_tables": [
+                {
+                    "table_name": "users",
+                    "alias": "u"
+                }
+            ],
+            "sql_variables": [
+                {
+                    "raw_name": ":min_age",
+                    "description": null,
+                    "required": true,
+                    "display_name": null
+                }
+            ],
+            "result_fields": [
+                {
+                    "display_name": "id",
+                    "raw_name": "id"
+                },
+                {
+                    "display_name": "name",
+                    "raw_name": "name"
+                }
+            ],
+            "original_sql": "SELECT u.id, u.name FROM users u WHERE u.age > :min_age",
+            "dialect": "mysql"
+        }
+    """
 
     name = gettext_lazy("SQL解析")
     RequestSerializer = SqlAnalyseRequestSerializer
