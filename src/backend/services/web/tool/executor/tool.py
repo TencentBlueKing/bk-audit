@@ -150,7 +150,7 @@ class SqlDataSearchExecutor(
         variable_values_for_rendering = {tv.raw_name: tv.value for tv in params.tool_variables}
         # 生成可执行的 SQL
         limit = params.page_size
-        offset = params.page * params.page_size
+        offset = (params.page - 1) * params.page_size
         sql_result = self.analyzer.generate_sql_with_values(
             params=variable_values_for_rendering, limit=limit, offset=offset, with_count=True
         )

@@ -35,7 +35,10 @@ from services.web.tool.serializer import (
     SqlAnalyseRequestSerializer,
     SqlAnalyseResponseSerializer,
 )
-from services.web.tool.serializers import ExecuteToolReqSerializer
+from services.web.tool.serializers import (
+    ExecuteToolReqSerializer,
+    ExecuteToolRespSerializer,
+)
 from services.web.tool.serlializers import (
     ListRequestSerializer,
     ToolCreateRequestSerializer,
@@ -145,8 +148,68 @@ class UpdateTool(ToolBase):
 
 
 class ExecuteTool(ToolBase):
+    """
+    工具执行
+    1. tool_type 为 data_search
+        params:
+            ```json
+            {
+                "uid": "sql_tool_123",
+                "params": {
+                    "tool_variables": [
+                        {
+                            "raw_name": "time_range",
+                            "value": "2023-01-01,2023-12-31"
+                        }
+                    ],
+                    "page": 1,
+                    "page_size": 100
+                }
+            }
+            ```
+        response:
+            ```json
+            {
+                "data": {
+                    "query_sql": "SELECT * FROM mocked_table",
+                    "count_sql": "SELECT COUNT(*) FROM mocked_table",
+                    "results": [
+                        {
+                            "field1": "value1"
+                        },
+                        {
+                            "field2": "value2"
+                        }
+                    ],
+                    "total": 2,
+                    "num_pages": 100,
+                    "page": 1
+                },
+                "tool_type": "data_search"
+            }
+            ```
+    2. tool_type 为 bk_vision
+        params:
+            ```json
+            {
+                "uid": "api_tool_123",
+                "params": {}
+            }
+            ```
+        response:
+            ```json
+            {
+                "data": {
+                    "panel_id": "panel_123"
+                },
+                "tool_type": "bk_vision"
+            }
+            ```
+    """
+
     name = gettext_lazy("工具执行")
     RequestSerializer = ExecuteToolReqSerializer
+    ResponseSerializer = ExecuteToolRespSerializer
 
     def perform_request(self, validated_request_data):
         """
@@ -160,7 +223,8 @@ class ExecuteTool(ToolBase):
         if not tool:
             raise Tool.DoesNotExist()
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
-        return executor.execute(params).model_dump()
+        data = executor.execute(params).model_dump()
+        return {"data": data, "tool_type": tool.tool_type}
 
 
 class ListToolAll(ToolBase):
