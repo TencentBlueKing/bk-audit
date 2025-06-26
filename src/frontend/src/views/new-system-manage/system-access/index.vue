@@ -52,10 +52,10 @@
         <div class="btn">
           <div
             class="btn-icon"
-            :style="dataList.length > 0 ? '' : 'background: #F5F7FA;'">
+            :style="pendingList.length > 0 ? '' : 'background: #F5F7FA;'">
             <img
               class="btn-icon-add"
-              :src="dataList.length > 0 ? ImportActiveSvg : ImportSvg">
+              :src="pendingList.length > 0 ? ImportActiveSvg : ImportSvg">
           </div>
           <div class="access-text">
             <div class="access-text-top">
@@ -206,7 +206,11 @@
   };
 
   const handleIsShowSelect = () => {
-    isShowSelect.value = !isShowSelect.value;
+    if (pendingList.value.length > 0) {
+      isShowSelect.value = !isShowSelect.value;
+    } else {
+      isShowSelect.value = false;
+    }
   };
 
   const handleCloseSelect = (event: MouseEvent) => {
@@ -256,7 +260,7 @@
   };
   onMounted(() => {
     fetchSystemWithAction({
-      sort_keys: 'audit_status',
+      sort_keys: 'audit_status,name',
       with_favorite: false,
       with_system_status: false,
       source_type__in: 'iam_v3,iam_v4',

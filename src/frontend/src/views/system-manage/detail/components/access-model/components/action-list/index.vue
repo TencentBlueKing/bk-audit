@@ -62,7 +62,7 @@
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
-  import { computed, ref } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -78,6 +78,7 @@
 
   interface Emits {
     (e: 'updateResource'): void;
+    (e: 'updateListLength', listLength: number): void;
   }
   interface Props {
     canEditSystem: boolean;
@@ -299,6 +300,11 @@
     fetchSystemActionList(search);
   };
 
+  watch(() => data.value, (newList) => {
+    emits('updateListLength', newList.length);
+  }, {
+    deep: true,
+  });
   defineExpose({
     updateAction() {
       fetchSystemActionList({
