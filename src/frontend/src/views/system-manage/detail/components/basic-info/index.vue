@@ -40,6 +40,7 @@
           <bk-input
             v-else
             v-model="formData.name"
+            autofocus
             @blur="handleBlur('name')" />
         </div>
       </div>
@@ -82,6 +83,7 @@
           <bk-input
             v-else
             v-model="formData.system_url"
+            autofocus
             @blur="handleBlur('system_url')" />
         </div>
       </div>
@@ -104,6 +106,7 @@
         <bk-input
           v-else
           v-model="formData.description"
+          autofocus
           @blur="handleBlur('description')" />
       </div>
     </div>
@@ -127,6 +130,7 @@
           <bk-input
             v-else
             v-model="formData.clients[index]"
+            autofocus
             @blur="handleClientBlur(index)" />
         </template>
       </div>
@@ -147,6 +151,7 @@
         <bk-input
           v-else
           v-model="formData.callback_url"
+          autofocus
           @blur="handleBlur('callback_url')" />
       </div>
     </div>

@@ -33,9 +33,6 @@
               type="add" />
             {{ t('新建资源类型') }}
           </bk-button>
-          <bk-button @click="handleBatchCreate">
-            {{ t('批量新增') }}
-          </bk-button>
         </template>
       </div>
       <bk-search-select
@@ -67,6 +64,7 @@
   </audit-sideslider>
   <add-resource
     ref="addResourceRef"
+    :resource-type-list="resourceTypeList"
     @update-resource="handleUpdateResource" />
 </template>
 <script setup lang="tsx">
@@ -131,12 +129,12 @@
 
   const baseTableColumn = [
     {
-      label: () => t('资源类型'),
+      label: () => t('资源类型ID'),
       field: () => 'resource_type_id',
-      width: '200px',
+      width: '180px',
     },
     {
-      label: () => t('资源名称'),
+      label: () => t('资源类型名称'),
       render: ({ data }: {data: SystemResourceTypeModel}) => (
         data.description ? (
         <span
@@ -161,8 +159,11 @@
                   content: item.description,
                   disabled: !item.description,
                 }}
-                style="border-bottom:1px dashed #C4C6CC;"
-                >
+                style={item.description
+                  ? { borderBottom: '1px dashed #C4C6CC' }
+                  : {}
+                }
+              >
                 {item.name}
               </span>
             </li>
@@ -296,11 +297,16 @@
                       )}
                       {props.canEditSystem && (
                         <bk-dropdown-item>
-                          <bk-button
-                            onClick={() => handleDelete(data)}
-                            text>
-                            {t('删除')}
-                          </bk-button>
+                          <audit-popconfirm
+                            title={t('确认删除？')}
+                            content={t('删除后不可恢复')}
+                            class="ml8"
+                            confirmHandler={() => handleDelete(data)}>
+                            <bk-button
+                              text>
+                              {t('删除')}
+                            </bk-button>
+                          </audit-popconfirm>
                         </bk-dropdown-item>
                       )}
                     </bk-dropdown-menu>
@@ -408,7 +414,7 @@
   } = useRequest(MetaManageService.fetchResourceTypeByUniqueId, {
     defaultValue: new SystemResourceTypeModel(),
     onSuccess: () => {
-      addResourceRef.value.handleOpen(false, resourceTypeData.value);
+      addResourceRef.value.handleOpen(resourceTypeData.value);
     },
   });
 
@@ -451,9 +457,6 @@
     });
   };
 
-  const handleBatchCreate = () => {
-    addResourceRef.value.handleOpen(true);
-  };
 
   const handleCreate = () => {
     addResourceRef.value.handleOpen();
@@ -485,6 +488,9 @@
   defineExpose({
     updateResource() {
       updateResource();
+    },
+    addResourceType() {
+      addResourceRef.value.handleOpen();
     },
   });
 </script>

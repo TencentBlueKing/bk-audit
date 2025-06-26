@@ -22,7 +22,7 @@
     <div class="system-base-box">
       <div class="system-name">
         {{ data.name }}
-        <bk-tag theme="warning">
+        <bk-tag :theme="data.system_status === 'normal' ? 'success' : 'warning'">
           {{ t(systemStatusText(data.system_status) || '') }}
         </bk-tag>
       </div>
