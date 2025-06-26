@@ -403,7 +403,7 @@
   const curNavName = ref('');
   const titleRef = ref<string>('');
   const menuData = ref<Array<MenuDataType>>([]);
-  const systemId = ref(null);
+  const systemId = ref<string | null>(null);
   // 项目列表
   interface SystemItem {
     id: string;
@@ -435,7 +435,11 @@
     defaultValue: [],
     onSuccess: (data: any[]) => {
       projectList.value = data;
-      systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
+      if (route.params.id) {
+        systemId.value = route.params.id as string;
+      } else {
+        systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
+      }
     },
   });
 

@@ -60,7 +60,7 @@
             class="form-item"
             :label="t('系统ID')"
             property="instance_id"
-            required>
+            :required="!(isDisabled || step1Disabled)">
             <template #label>
               <bk-popover
                 placement="top"
@@ -79,7 +79,7 @@
                 placement: 'top'
               }"
               clearable
-              :disabled="isDisabled"
+              :disabled="isDisabled || step1Disabled"
               :placeholder="t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成')" />
           </bk-form-item>
 
@@ -402,6 +402,7 @@
   ]);
   const { t } = useI18n();
   const isShowNameTip = ref(false);
+  const step1Disabled = ref(false);
   const callFormRef = ref();
   const baseFormRef = ref();
   const isDisabled = ref(false);
@@ -415,17 +416,19 @@
         message: t('系统ID不能为空'),
       },
       {
-        validator: (value: string) => isDisabled.value || /^[\u4e00-\u9fa5a-z0-9_]+$/.test(value),
+        validator: (value: string) => isDisabled.value || /^[\u4e00-\u9fa5a-z0-9_]+$/.test(value) || step1Disabled,
         trigger: 'blur',
         message: t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成'),
       },
       {
-        validator: (value: string) => isDisabled.value || value.length <= 20,
+        validator: (value: string) => isDisabled.value || value.length <= 20 || step1Disabled,
         trigger: 'blur',
         message: t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成'),
       },
       {
-        validator: (value: string) => isDisabled.value || !systemList.value.some(system => system.system_id === value),
+        validator: (value: string) => isDisabled.value
+          || !systemList.value.some(system => system.system_id === value)
+          || step1Disabled,
         trigger: 'blur',
         message: t('此id已接入审计中心，请前往系统列表确认'),
       },
@@ -539,6 +542,7 @@
   };
 
   const handlerRouteChange = (type: string) => {
+    window.changeConfirm = false;
     router.replace({
       query: {
         ...route.query,
@@ -625,6 +629,8 @@
 
   watch(() => route, () => {
     nextTick(() => {
+      step1Disabled.value = 'fromStep' in route.query;
+
       if (route.query.systemId) {
         fetchSystemDetail({
           id: route.query.systemId,
