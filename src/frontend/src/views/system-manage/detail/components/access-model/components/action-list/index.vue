@@ -21,17 +21,20 @@
     </h3>
     <div class="access-model-action-header">
       <div class="btns-wrap">
-        <template v-if="canEditSystem">
-          <bk-button
-            class="mr8"
-            theme="primary"
-            @click="handleCreate">
-            <audit-icon
-              style="margin-right: 8px;font-size: 14px;"
-              type="add" />
-            {{ t('新建操作') }}
-          </bk-button>
-        </template>
+        <bk-button
+          v-bk-tooltips="{
+            content: t('暂不支持变更，请前往权限中心变更'),
+            disabled: canEditSystem
+          }"
+          class="mr8"
+          :disabled="!canEditSystem"
+          theme="primary"
+          @click="handleCreate">
+          <audit-icon
+            style="margin-right: 8px;font-size: 14px;"
+            type="add" />
+          {{ t('新建操作') }}
+        </bk-button>
       </div>
       <bk-search-select
         v-model="searchKey"
@@ -151,34 +154,43 @@
       showOverflowTooltip: true,
       render: ({ data }: {data: SystemActionModel}) => data.type || '--',
     },
-    // 只有当 canEditSystem 为 true 时才显示操作列
-    ...(props.canEditSystem ? [{
+    {
       label: () => t('操作'),
       width: 120,
       fixed: 'right',
       render: ({ data }: {data: SystemActionModel}) => <>
-          <div style="display: flex">
+        <div style="display: flex">
+          <bk-button
+            theme='primary'
+            class='mr16'
+            disabled={!props.canEditSystem}
+            v-bk-tooltips={{
+              content: t('暂不支持变更，请前往权限中心变更'),
+              disabled: props.canEditSystem,
+            }}
+            onClick={() => handleEdit(data)}
+            text>
+            {t('编辑')}
+          </bk-button>
+          <audit-popconfirm
+            title={t('确认删除？')}
+            content={t('删除后不可恢复')}
+            class="ml8"
+            confirmHandler={() => handleDelete(data)}>
             <bk-button
+              disabled={!props.canEditSystem}
+              v-bk-tooltips={{
+                content: t('暂不支持变更，请前往权限中心变更'),
+                disabled: props.canEditSystem,
+              }}
               theme='primary'
-              class='mr16'
-              onClick={() => handleEdit(data)}
               text>
-              {t('编辑')}
+              {t('删除')}
             </bk-button>
-            <audit-popconfirm
-              title={t('确认删除？')}
-              content={t('删除后不可恢复')}
-              class="ml8"
-              confirmHandler={() => handleDelete(data)}>
-              <bk-button
-                theme='primary'
-                text>
-                {t('删除')}
-              </bk-button>
-            </audit-popconfirm>
-          </div>
-        </>,
-    }] : []),
+          </audit-popconfirm>
+        </div>
+      </>,
+    },
   ]);
 
   const searchData: SearchData[] = [

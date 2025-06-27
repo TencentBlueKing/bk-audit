@@ -168,13 +168,18 @@
             value: 'bk_audit',
           },
         ],
+        filterScope: SortScope.ALL,
+        match: FullEnum.FUZZY,
+        btnSave: t('确定'),
+        btnReset: t('重置'),
       },
+      field: () => 'source_type',
       render: ({ data }: {data: SyetemModel}) => (GlobalChoices.value.meta_system_source_type.find(item => item.id === data.source_type)?.name || '--'),
     },
     {
       label: () => t('权限模型'),
       render: ({ data }: {data: SyetemModel}) => <>{
-        data.audit_status !== 'accessed'
+        (!data.resource_type_count && !data.action_count)
           ? <bk-tag theme="warning">{t('未配置')}</bk-tag>
           : <div>
             <bk-tag
@@ -238,14 +243,14 @@
     {
       label: () => t('app code'),
       sort: 'custom',
-      field: () => 'app_code',
+      field: () => 'clients',
       width: '180px',
-      render: ({ data }: {data: SyetemModel}) => data.app_code || '--',
+      render: ({ data }: {data: SyetemModel}) => data.clients.join(',') || '--',
     },
     {
       label: () => t('系统域名'),
       sort: 'custom',
-      field: () => 'system_domain',
+      field: () => 'system_url',
       width: '180px',
     },
     {
