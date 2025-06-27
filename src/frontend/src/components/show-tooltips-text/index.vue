@@ -44,6 +44,7 @@
 
   interface Props {
     data: string | number,
+    theme?: string,
   }
 
   const props = defineProps<Props>();
@@ -61,7 +62,7 @@
           placement: 'top',
           allowHTML: true,
           appendTo: () => document.body,
-          theme: 'dark',
+          theme: props.theme || 'dark',
           maxWidth: 'none',
           interactive: true,
           arrow: true,

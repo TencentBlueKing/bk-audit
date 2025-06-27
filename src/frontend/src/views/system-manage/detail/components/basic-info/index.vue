@@ -115,24 +115,25 @@
       <div class="item-title">
         {{ t('可访问客户端') }}:
       </div>
-      <div>
-        <template
-          v-for="(item, index) in data.clients"
-          :key="item">
-          <div v-if="!edits.clients[index]">
-            <span>{{ item }}</span>
-            <audit-icon
-              v-if="canEditSystem"
-              class="edit-icon"
-              type="edit-fill"
-              @click="toggleClientEdit(index, item)" />
-          </div>
-          <bk-input
-            v-else
-            v-model="formData.clients[index]"
-            autofocus
-            @blur="handleClientBlur(index)" />
+      <div class="item-value">
+        <template v-if="!edits.clients">
+          <edit-tag
+            :data="data.clients || []"
+            :max="5" />
+          <audit-icon
+            v-if="canEditSystem"
+            class="edit-icon"
+            type="edit-fill"
+            @click="toggleEdit('clients')" />
         </template>
+        <bk-tag-input
+          v-else
+          v-model="formData.clients"
+          allow-create
+          collapse-tags
+          has-delete-icon
+          :list="[]"
+          @blur="handleBlur('clients')" />
       </div>
     </div>
     <div class="item">
@@ -220,7 +221,7 @@
     name: false,
     managers: false,
     description: false,
-    clients: [] as Array<boolean>,
+    clients: false,
     callback_url: false,
     system_url: false,
   });
@@ -233,6 +234,12 @@
     clients: [],
     callback_url: '',
     system_url: '',
+  });
+
+  watch(props.data, (val) => {
+    formData.value.clients = val.clients;
+  }, {
+    immediate: true,
   });
 
   // 更新系统
@@ -261,41 +268,21 @@
     };
   };
 
-  const toggleEdit = (key: Exclude<keyof typeof edits.value, 'clients'>) => {
+  const toggleEdit = (key: keyof typeof edits.value) => {
     edits.value[key] = !edits.value[key];
     if (edits.value[key]) {
       formData.value[key] = props.data[key] as any;
     }
   };
 
-  const toggleClientEdit = (index: number, value: string) => {
-    edits.value.clients[index] = !edits.value.clients[index];
-    if (edits.value.clients[index]) {
-      formData.value.clients[index] = value;
-    }
-  };
-
   // 更新系统字段
-  const handleBlur = (key: Exclude<keyof typeof edits.value, 'clients'>) => {
+  const handleBlur = (key: keyof typeof edits.value) => {
     toggleEdit(key);
     fetchSystemUpdate({
       system_id: props.data.system_id,
       [key]: formData.value[key],
     });
   };
-
-  const handleClientBlur = (index: number) => {
-    toggleClientEdit(index, '');
-    fetchSystemUpdate({
-      system_id: props.data.system_id,
-      clients: formData.value.clients,
-    });
-  };
-
-  // 监听props.data, clients有多少元素，edits中的clients就有多少个false元素的数组
-  watch(() => props.data.clients, () => {
-    edits.value.clients = Array(props.data.clients.length).fill(false);
-  });
 
 </script>
 <style scoped lang="postcss">
