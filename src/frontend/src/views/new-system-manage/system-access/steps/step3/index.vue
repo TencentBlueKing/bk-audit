@@ -21,7 +21,9 @@
         id="bk-audit"
         ref="appRef" />
     </div>
-    <data-report />
+    <data-report
+      ref="dataReportRef"
+      @data-enabled="handleGetDataEnabled" />
   </div>
 </template>
 <script setup lang="ts">
@@ -30,7 +32,15 @@
   import DataReport from '@views/system-manage/detail/components/data-report/index.vue';
   import SystemInfo from '@views/system-manage/detail/components/system-info/index.vue';
 
+  interface Emits {
+    (e: 'isDataEnabled', value: boolean): void
+  }
+  const emit = defineEmits<Emits>();
   const appRef = ref();
+
+  const handleGetDataEnabled  = (val: boolean) => {
+    emit('isDataEnabled', val);
+  };
 
 </script>
 <style lang="postcss">
