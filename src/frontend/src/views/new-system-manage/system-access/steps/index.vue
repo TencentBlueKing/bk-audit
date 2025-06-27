@@ -36,6 +36,7 @@
         :can-edit-system="canEditSystem"
         @get-is-disabled-btn="getIsDisabledBtn"
         @handler-validates="handlerValidates"
+        @is-data-enabled="isDataEnabled"
         @update-can-edit-system="handleUpdate" />
     </div>
 
@@ -98,6 +99,7 @@
         </bk-button>
         <bk-button
           class="ml10"
+          :disabled="isStep3Disabled"
           theme="primary"
           @click="handlerStep3Submit">
           {{ t("完成并下一步") }}
@@ -139,6 +141,7 @@
     const step = Number(route.query.step);
     return isNaN(step) ? 1 : step;
   });
+  const isStep3Disabled = ref(true);
   const isStep2Disabled = ref(false);
   const stepRef = ref();
   const stepsTitle = ref([
@@ -176,16 +179,8 @@
     run: fetchSystemUpdate,
   } = useRequest(MetaManageService.fetchSystemUpdate, {
     defaultValue: [],
-    onSuccess: (data) => {
-      router.push({
-        query: {
-          ...route.query,
-          step: 1.5,
-        },
-        params: {
-          id: data.system_id,
-        },
-      });
+    onSuccess: () => {
+      stepRef.value.previousStep();
     },
   });
 
@@ -194,7 +189,18 @@
     run: fetchSystemAuditStatusUpdate,
   } = useRequest(MetaManageService.fetchSystemAuditStatusUpdate, {
     defaultValue: [],
-    onSuccess: () => {},
+    onSuccess: () => {
+      messageSuccess(t('系统新建成功'));
+      router.push({
+        query: {
+          ...route.query,
+          step: 2,
+        },
+        params: {
+          id: route.query.systemId as string,
+        },
+      });
+    },
   });
 
   const stepComponents = (step: number | string) => {
@@ -237,19 +243,6 @@
           fetchSystemAuditStatusUpdate({
             ...formData,
             system_id: formData.instance_id,
-          }).then((data) => {
-            if (data) {
-              messageSuccess(t('系统新建成功'));
-              router.push({
-                query: {
-                  ...route.query,
-                  step: 2,
-                },
-                params: {
-                  id: formData.instance_id,
-                },
-              });
-            }
           });
         } else {
           if ('fromStep' in route.query) {
@@ -283,18 +276,24 @@
     });
   };
   const handlerStep2Cancel = () => {
-    router.push({
-      query: {
-        ...route.query,
-        step: 1.5,
-        fromStep: 2,
-      },
-    });
+    stepRef.value.previousStep();
   };
 
   const handlerStep2Submit = () => {
     window.changeConfirm = false;
-    stepRef.value.handlerSubmit();
+    if ('systemId' in route.query) {
+      router.push({
+        query: {
+          ...route.query,
+          step: 3,
+        },
+        params: {
+          ...route.params,
+        },
+      });
+    } else {
+      stepRef.value.handlerSubmit();
+    }
   };
 
   const handlerStep3Cancel = () => {
@@ -316,13 +315,20 @@
   };
   // 取消
   const handlerCancel = () => {
+    window.changeConfirm = false;
+
     InfoBox({
       title: t('确认取消当前操作?'),
       content: t('已填写的内容将会丢失，请谨慎操作！'),
       cancelText: t('留着当前页'),
       confirmText: t('确认取消'),
       onConfirm() {
-        router.go(-1);
+        router.push({
+          name: 'nweSystemManage',
+          params: {
+            id: route.params.id,
+          },
+        });
       },
       onCancel() {},
     });
@@ -343,7 +349,12 @@
       isStep2Disabled.value = val;
     }
   };
-
+  // 确定日志提交
+  const isDataEnabled: (...args: unknown[]) => void = (val: unknown) => {
+    if (typeof val === 'boolean') {
+      isStep3Disabled.value = !val;
+    }
+  };
 </script>
 
 <style scoped lang="postcss">

@@ -19,11 +19,16 @@
     <div class="step2-header">
       <div class="step2-header-box">
         <span class="step2-header-title"> {{ t('请设置权限模型') }}</span>
-        <bk-dropdown>
-          <div class="step2-popover">
+        <bk-dropdown
+          :disabled="isDropdown"
+          rigger="click">
+          <div
+            class="step2-popover"
+            :style="isDropdown ? 'background-color: #eaebf0;color: #4D4F56;' : ''">
             {{ popoverBtn }}
             <audit-icon
               class="angle-line-down"
+              :style="isDropdown ? 'color: #C4C6CC;' : ''"
               type="angle-line-down" />
           </div>
           <template #content>
@@ -54,7 +59,7 @@
 </template>
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';
-  import { onMounted, ref } from 'vue';
+  import { computed, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -69,6 +74,8 @@
   }
   interface Exposes {
     handlerSubmit: () => void,
+    previousStep: () => void,
+
   }
   interface Emits {
     (e: 'getIsDisabledBtn', val: boolean): void;
@@ -78,7 +85,7 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
-  const popoverBtn = ref('复杂权限类型');
+  const popoverBtn = computed(() => (route.query.type === 'simple' ? '简单权限类型' : '复杂权限类型'));
   const dropdownList = ref([{
                               title: '复杂权限类型',
                               id: 'complex',
@@ -88,18 +95,20 @@
                               id: 'simple',
                             }]);
   const isDisabledBtn = ref(false);
+  const isDropdown = ref(false);
   const systemDetail = ref();
   const step2Ref = ref();
   const getIsDisabledBtn = (val: Record<string, any>) => {
     if (val.actionListListLength > 0 || val.resourceTypeListLength > 0) {
       isDisabledBtn.value = false;
+      isDropdown.value = true;
     } else {
       isDisabledBtn.value = true;
+      isDropdown.value = false;
     }
     emits('getIsDisabledBtn', isDisabledBtn.value);
   };
   const handleDropdown = (item: Record<string, any>) => {
-    popoverBtn.value = item.title;
     router.replace({
       query: {
         ...route.query,
@@ -118,6 +127,12 @@
     defaultValue: null,
     onSuccess: (result) => {
       systemDetail.value = result;
+      if (result) {
+        isDropdown.value = (result.collector_count === 0 || result.resource_type_count === 0)
+          && result.system_stage !== 'permission_model';
+      } else {
+        isDropdown.value = false;
+      }
     },
   });
   // 更新系统
@@ -158,11 +173,19 @@
           window.changeConfirm = false;
           fetchSystemUpdate({
             ...systemDetail.value,
-            name_en: '1',
-            permission: route.query.type === 'complex' ? 'complex' : 'simple',
+            permission_type: route.query.type === 'complex' ? 'complex' : 'simple',
           });
         },
         onCancel() {},
+      });
+    },
+    previousStep() {
+      router.push({
+        query: {
+          ...route.query,
+          step: isDropdown.value ? 1 : 1.5,
+          fromStep: 2,
+        },
       });
     },
   });
