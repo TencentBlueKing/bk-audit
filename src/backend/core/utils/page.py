@@ -16,17 +16,22 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+from typing import Optional
+
 from django.db.models import QuerySet
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.settings import api_settings
 
 
-def paginate_queryset(queryset: QuerySet, request: Request) -> (QuerySet, PageNumberPagination):
+def paginate_queryset(
+    queryset: QuerySet, request: Request, base_queryset: Optional[QuerySet] = None
+) -> (QuerySet, PageNumberPagination):
     """
     分页 QuerySet
     """
 
     page: PageNumberPagination = api_settings.DEFAULT_PAGINATION_CLASS()
     paged_queryset = page.paginate_queryset(queryset=queryset, request=request)
-    return queryset.model.objects.filter(pk__in=[item.pk for item in paged_queryset]), page
+    base_queryset = base_queryset or queryset.model.objects.all()
+    return base_queryset.filter(pk__in=[item.pk for item in paged_queryset]), page
