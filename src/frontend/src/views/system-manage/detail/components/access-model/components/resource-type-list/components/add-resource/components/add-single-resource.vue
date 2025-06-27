@@ -141,88 +141,7 @@
               <span>{{ item.label }}</span>
             </bk-button>
             <template #content>
-              <div
-                v-if="item.value === 1"
-                style="display: flex; align-items: center;">
-                <h4> {{ t('一级：') }}</h4>
-                <span>{{ t('不敏感的信息，可完全开放查看') }}</span>
-              </div>
-              <div
-                v-if="item.value === 2"
-                style="display: flex; align-items: center;">
-                <h4> {{ t('二级：') }}</h4>
-                <span>{{ t('查询非敏感类数据，如日志记录查询') }}</span>
-              </div>
-              <div v-if="item.value === 3">
-                <h4> {{ t('三级：非核心操作功能') }}</h4>
-                <ul>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    <span>{{ t('相对没那么敏感的操作功能，或者不会马上造成严重影响的，如修改脚本计划排期、修改文件名、修改白名单等') }}</span>
-                  </li>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    {{ t('查询/修改 L2 级别数据的功能') }}
-                  </li>
-                </ul>
-              </div>
-              <div v-if="item.value === 4">
-                <h4> {{ t('四级：核心操作功能与官方认定的敏感功能') }}</h4>
-                <ul>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    <span>{{ t('比较敏感的操作，会直接影响用户或外网正式环境的，如现网 DB 增删改、服务器关停等') }}</span>
-                  </li>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    {{ t('查询/修改 L4、L3 级别数据的功能') }}
-                  </li>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    {{ t('各类收入及运营活动配置、经营分析、业务受理、封号解封、游戏生命周期、内容筛选投放等可直接或间接对游戏正式环境的用户数据进行修改的功能') }}
-                  </li>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    {{ t('可直接或间接对用户资料进行修改的功能（包括但不限于通过应用系统、GM 工具/指令、接口、脚本、DB 等方式进行修改）') }}
-                  </li>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    {{ t('能直接/间接（拿到配置后）登录到服务器的功能') }}
-                  </li>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    {{ t('能对直接/间接管理、变更、影响现网服务的系统功能，或包含命令执行、SQL 执行等功能的系统功能') }}
-                  </li>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    {{ t('涉及运维/安全类告警、处置、闭环的系统功能') }}
-                  </li>
-                  <li class="tips-li">
-                    <div>
-                      <span class="outside" />
-                    </div>
-                    {{ t('如业务收入数据查询、个人实名信息数据查询和处理等') }}
-                  </li>
-                </ul>
-              </div>
+              <sensitivity-tips-list :item="item" />
             </template>
           </bk-popover>
         </bk-button-group>
@@ -261,6 +180,8 @@
 
   import type SystemResourceTypeModel from '@model/meta/system-resource-type';
   import type SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
+
+  import SensitivityTipsList from '@views/system-manage/detail/components/access-model/components/sensitivity-tips/list.vue';
 
   interface Emits {
     (e: 'updateResource'): void;
@@ -500,21 +421,5 @@
 
 .ancestor-tooltips {
   max-width: 350px;
-}
-
-.sensitivity-tips-pop {
-  .tips-li {
-    display: flex;
-    margin: 10px 0;
-
-    .outside {
-      display: inline-block;
-      width: 5px;
-      height: 5px;
-      margin: 0 10px;
-      background: #979ba5;
-      border-radius: 50%;
-    }
-  }
 }
 </style>
