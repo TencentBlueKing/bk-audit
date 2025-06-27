@@ -23,17 +23,20 @@
     </div>
     <div class="resource-list-action-header">
       <div class="btns-wrap">
-        <template v-if="canEditSystem">
-          <bk-button
-            class="mr8"
-            theme="primary"
-            @click="handleCreate">
-            <audit-icon
-              style="margin-right: 8px;font-size: 14px;"
-              type="add" />
-            {{ t('新建资源类型') }}
-          </bk-button>
-        </template>
+        <bk-button
+          v-bk-tooltips="{
+            content: t('暂不支持变更，请前往权限中心变更'),
+            disabled: canEditSystem
+          }"
+          class="mr8"
+          :disabled="!canEditSystem"
+          theme="primary"
+          @click="handleCreate">
+          <audit-icon
+            style="margin-right: 8px;font-size: 14px;"
+            type="add" />
+          {{ t('新建资源类型') }}
+        </bk-button>
       </div>
       <bk-search-select
         v-model="searchKey"
@@ -262,57 +265,62 @@
         fixed: 'right',
         render: ({ data }: {data: SystemResourceTypeModel}) => <>
           <div style="display: flex">
-            {props.canEditSystem && (
-              <bk-button
-                theme='primary'
-                class='mr16'
-                onClick={() => handleEdit(data)}
-                text>
-                {t('编辑')}
-              </bk-button>
-            )}
+            <bk-button
+              theme='primary'
+              class='mr16'
+              disabled={!props.canEditSystem}
+              v-bk-tooltips={{
+                content: t('暂不支持变更，请前往权限中心变更'),
+                disabled: props.canEditSystem,
+              }}
+              onClick={() => handleEdit(data)}
+              text>
+              {t('编辑')}
+            </bk-button>
             <TaskSwitch
               data={data}
               status={snapShotStatusList.value[data.resource_type_id]?.status}
               onChangeStatus={() => handleDataStatus()}/>
-            {(snapShotStatusList.value[data.resource_type_id]?.bkbase_url || props.canEditSystem) && (
-              <bk-dropdown
-                trigger="click"
-                style="margin-left: 8px">
-                {{
-                  default: () => <bk-button text>
-                    <audit-icon type="more" />
-                  </bk-button>,
-                  content: () => (
-                    <bk-dropdown-menu>
-                      {snapShotStatusList.value[data.resource_type_id]?.bkbase_url && (
-                        <bk-dropdown-item>
-                          <a
-                            v-bk-tooltips={t('点击跳转到bkbase', { url: snapShotStatusList.value[data.resource_type_id]?.bkbase_url })}
-                            href={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
-                            target="_blank">
-                            {t('数据详情')}
-                          </a>
-                        </bk-dropdown-item>
-                      )}
-                      {props.canEditSystem && (
-                        <bk-dropdown-item>
-                          <audit-popconfirm
-                            title={t('确认删除？')}
-                            content={t('删除后不可恢复')}
-                            class="ml8"
-                            confirmHandler={() => handleDelete(data)}>
-                            <bk-button
-                              text>
-                              {t('删除')}
-                            </bk-button>
-                          </audit-popconfirm>
-                        </bk-dropdown-item>
-                      )}
-                    </bk-dropdown-menu>
-                  ),
-                }}
-              </bk-dropdown>)}
+            <bk-dropdown
+              trigger="click"
+              style="margin-left: 8px">
+              {{
+                default: () => <bk-button text>
+                  <audit-icon type="more" />
+                </bk-button>,
+                content: () => (
+                  <bk-dropdown-menu>
+                    {snapShotStatusList.value[data.resource_type_id]?.bkbase_url && (
+                      <bk-dropdown-item>
+                        <a
+                          v-bk-tooltips={t('点击跳转到bkbase', { url: snapShotStatusList.value[data.resource_type_id]?.bkbase_url })}
+                          href={snapShotStatusList.value[data.resource_type_id]?.bkbase_url}
+                          target="_blank">
+                          {t('数据详情')}
+                        </a>
+                      </bk-dropdown-item>
+                    )}
+                    <bk-dropdown-item>
+                      <audit-popconfirm
+                        title={t('确认删除？')}
+                        content={t('删除后不可恢复')}
+                        class="ml8"
+                        confirmHandler={() => handleDelete(data)}>
+                        <bk-button
+                          disabled={!props.canEditSystem}
+                          v-bk-tooltips={{
+                            content: t('暂不支持变更，请前往权限中心变更'),
+                            disabled: props.canEditSystem,
+                          }}
+                          text>
+                          {t('删除')}
+                        </bk-button>
+                      </audit-popconfirm>
+                    </bk-dropdown-item>
+                  </bk-dropdown-menu>
+                ),
+              }}
+            </bk-dropdown>
           </div>
         </>,
       },
