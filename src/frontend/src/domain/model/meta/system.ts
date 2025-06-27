@@ -34,6 +34,7 @@ export default class System {
   managers: Array<string>;
   name: string;
   name_en: string;
+  permission_type: string;
   namespace: string;
   provider_config: {
     healthz: string
@@ -43,6 +44,7 @@ export default class System {
   system_id: string;
   system_url: string;
   system_status: string;
+  system_stage: string;
   // 权限
   permission: {
     edit_system: boolean,
@@ -99,6 +101,8 @@ export default class System {
     this.created_by = payload.created_by;
     this.system_status = payload.system_status;
     this.auth_token = payload.auth_token;
+    this.system_stage = payload.system_stage;
+    this.permission_type = payload.permission_type;
   }
 
   initProviderConfig(providerConfig: System['provider_config']) {

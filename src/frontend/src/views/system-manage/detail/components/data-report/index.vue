@@ -21,7 +21,8 @@
         v-if="showApiPush.enabled"
         ref="apiRef"
         class="mb12"
-        @change-checked="handleApiChecked" />
+        @change-checked="handleApiChecked"
+        @get-data-enabled="handleGetDataEnabled" />
       <log-collection
         ref="listRef"
         @change-checked="handleChecked" />
@@ -46,9 +47,15 @@
     id: number|string;
     name: string;
   }
+  interface Emits {
+    (e: 'dataEnabled', value: boolean): void
+  }
+  const emit = defineEmits<Emits>();
 
   const listRef = ref();
   const apiRef = ref();
+  const apiRefDataEnabled = ref(false);
+
   const collectorData = ref < CollectorData >({ id: 0, name: '' });
 
   const { feature: showApiPush } = useFeature('bklog_otlp');
@@ -61,6 +68,11 @@
     collectorData.value = value;
     listRef.value.handleCancelCheck();
   };
+  const handleGetDataEnabled  = (val: boolean) => {
+    apiRefDataEnabled.value = val;
+    emit('dataEnabled', val);
+  };
+
 </script>
 <style lang="postcss">
   .data-report-box {

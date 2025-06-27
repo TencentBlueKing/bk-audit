@@ -264,7 +264,6 @@
       with_favorite: false,
       with_system_status: false,
       source_type__in: 'iam_v3,iam_v4',
-      order_type: 'desc',
     });
   });
 </script>
