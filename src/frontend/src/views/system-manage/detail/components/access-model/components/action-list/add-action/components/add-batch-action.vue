@@ -383,12 +383,14 @@
                   :search-placeholder="t('请输入关键字')">
                   <bk-option
                     v-for="(selectItem, selectIndex) in sensitivityList"
+                    :id="selectItem.value"
                     :key="selectIndex"
-                    :label="selectItem.label"
-                    :style="{
-                      color: getSensitivityColor(selectItem.value)
-                    }"
-                    :value="selectItem.value" />
+                    :name="selectItem.label">
+                    <span
+                      :style="{
+                        color: getSensitivityColor(selectItem.value)
+                      }">{{ selectItem.label }}</span>
+                  </bk-option>
                 </bk-select>
               </bk-form-item>
             </div>
