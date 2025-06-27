@@ -23,6 +23,7 @@
 
   import SystemDetail from '@views/system-manage/detail/index.vue';
 
+  window.changeConfirm = false;
   const route = useRoute();
   const componentKey = ref(0);
   watch(

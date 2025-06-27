@@ -232,8 +232,8 @@
                   :style="item.permission.view_system ? `color: #C4C6CC;` : `color: #70737A;`">
                   <span>{{ item.name }}({{ item.id }})
                     <bk-popover
-                      v-if="item.system_status !== 'normal'"
-                      :content="t('系统尚未完成日志数据上报，请继续上报')"
+                      v-if="item.system_stage === 'collector' || item.system_stage === 'permission_model' "
+                      :content="contentText(item.system_stage)"
                       placement="top"
                       theme="light">
                       <bk-tag
@@ -241,7 +241,7 @@
                         style="margin-left: 8px;"
                         theme="warning"
                         type="filled">
-                        {{ systemStatusText(item.system_status) }}
+                        {{ t('待完善') }}
                       </bk-tag>
                     </bk-popover>
                   </span>
@@ -412,11 +412,21 @@
       view_system: boolean;
     };
     system_status: 'pending' | 'completed' | 'abnormal' | 'normal';
+    system_stage?: 'pending' | 'permission_model' | 'collector' | 'completed';
     favorite: boolean;
   }
 
   const projectList = ref<SystemItem[]>([]);
   const permissionCreateSystem = ref(false);
+
+  const contentText = (stage: string) => {
+    if (stage === 'permission_model') {
+      return '系统尚未完成确实模型配置，请继续设置';
+    } if (stage === 'collector') {
+      return '系统尚未完成日志数据上报，请继续上报';
+    }
+    return '';
+  };
   // 获取新建权限
   useRequest(IamManageService.check, {
     defaultParams: {
@@ -486,25 +496,12 @@
     });
   };
 
-  // 全局数据
-  const {
-    data: GlobalChoices,
-  } = useRequest(MetaManageService.fetchGlobalChoices, {
-    defaultValue: {},
-    manual: true,
-  });
-
   // 更新系统收藏
   const {
     run: fetchSystemAuditFavoriteUpdate,
   } = useRequest(MetaManageService.fetchSystemAuditFavoriteUpdate, {
     defaultValue: {},
   });
-  const systemStatusText = (val: string) => {
-    if (!GlobalChoices.value?.meta_system_status) return val;
-    const statusItem = GlobalChoices.value.meta_system_status.find(item => item.id === val);
-    return statusItem?.name || val; // 如果找不到对应状态，返回原值
-  };
   const selfRouterChange = (item: SideMenuItem) => {
     router.push({
       name: item.pathName,
