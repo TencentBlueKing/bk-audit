@@ -116,7 +116,7 @@ class Risk(OperateRecordModel):
         获取有权限处理的风险
         """
 
-        queryset = Risk.objects.all()
+        queryset = Risk.annotated_queryset()
 
         q = Q(
             risk_id__in=TicketPermission.objects.filter(
@@ -133,10 +133,15 @@ class Risk(OperateRecordModel):
         from services.web.risk.provider import RiskResourceProvider
 
         q |= DjangoQuerySetConverter(key_mapping=RiskResourceProvider.key_mapping).convert(policies)
-        return (
-            queryset.filter(q)
-            .annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH))
-            .defer("event_content")
+        return queryset.filter(q)
+
+    @classmethod
+    def annotated_queryset(cls) -> QuerySet:
+        """
+        返回默认的 Risk 查询集，包含截断后的 event_content_short 字段
+        """
+        return cls.objects.annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH)).defer(
+            "event_content"
         )
 
     @cached_property
