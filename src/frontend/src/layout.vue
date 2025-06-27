@@ -214,13 +214,15 @@
               v-model="systemId"
               auto-focus
               class="bk-select"
+              :clearable="false"
               filterable
               :popover-options="{
                 extCls: 'system-select-popover',
-                width: 'auto'
+                width: '320px'
               }"
               :search-with-pinyin="false"
-              @change="handleSystemChange">
+              @change="handleSystemChange"
+              @toggle="handleSelectToggle">
               <bk-option
                 v-for="item in projectList"
                 :id="item.id"
@@ -230,7 +232,12 @@
                 <div
                   class="popover"
                   :style="item.permission.view_system ? `color: #C4C6CC;` : `color: #70737A;`">
-                  <span>{{ item.name }}({{ item.id }})
+                  <div style="display: flex;">
+                    <tooltips
+                      v-if="isSelectOpen"
+                      :data="`${item.name}(${item.id})`"
+                      style="max-width: 200px;"
+                      theme="light" />
                     <bk-popover
                       v-if="item.system_status !== 'normal'"
                       :content="t('系统尚未完成日志数据上报，请继续上报')"
@@ -244,8 +251,8 @@
                         {{ systemStatusText(item.system_status) }}
                       </bk-tag>
                     </bk-popover>
-                  </span>
-                  <span>
+                  </div>
+                  <div>
                     <span v-if="item.permission.view_system">
                       <img
                         v-if="item.favorite"
@@ -259,7 +266,6 @@
                         style="color: #4d4f56;"
                         @click.stop="handlerFavorite(item,true)">
                     </span>
-
                     <span v-else>
                       <auth-component
                         action-id="view_system"
@@ -272,9 +278,7 @@
                           src="@images/lock-1.svg">
                       </auth-component>
                     </span>
-
-
-                  </span>
+                  </div>
                 </div>
               </bk-option>
 
@@ -285,11 +289,11 @@
                   @click="handleRouterChange('systemAccess')">
                   <audit-icon
                     class="custom-extension-icon"
-                    type="add-fill" />
+                    type="add" />
                   <span
                     v-if="permissionCreateSystem"
                     class="extension-text"
-                    style="color: #4d4f56;">接入系统</span>
+                    style="color: #c4c6cc;">接入系统</span>
                   <bk-popover
                     v-else
                     :content="t('暂无权限')"
@@ -297,7 +301,7 @@
                     theme="light">
                     <span
                       class="extension-text"
-                      style="color: #4d4f56;">接入系统</span>
+                      style="color: #c4c6cc;">接入系统</span>
                   </bk-popover>
                 </bk-button>
               </template>
@@ -372,6 +376,7 @@
   import AuditMenuItem from '@components/audit-menu/item.vue';
   import AuditMenuItemGroup from '@components/audit-menu/item-group.vue';
   import AuditNavigation from '@components/audit-navigation/index.vue';
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import systemHeaderTips from '@views/new-system-manage/system-info/components/header-tips.vue';
 
@@ -417,6 +422,14 @@
 
   const projectList = ref<SystemItem[]>([]);
   const permissionCreateSystem = ref(false);
+
+  const isSelectOpen = ref(false);
+
+  const handleSelectToggle = (val: boolean) => {
+    console.log(val);
+    isSelectOpen.value = val;
+  };
+
   // 获取新建权限
   useRequest(IamManageService.check, {
     defaultParams: {
@@ -581,9 +594,14 @@
     margin-top: 10px;
     margin-left: 5%;
 
-    .bk-input--text {
-      color: #979ba5;
-      background-color: #40495e;
+    .bk-input {
+      border: none;
+      box-shadow: none;
+
+      .bk-input--text {
+        color: #979ba5;
+        background-color: #40495e;
+      }
     }
   }
 }
@@ -593,24 +611,6 @@
   background-color: #182233;
   border-color: #182233;
   box-shadow: none;
-
-  .custom-extension {
-    display: flex;
-    width: 100%;
-    height: 100%;
-    padding: 0 10px;
-    font-size: 12px;
-    background-color: #eaebf0;
-    align-items: center;  /* 垂直居中 */
-    justify-content: center;  /* 水平居中 */
-    gap: 4px;  /* 图标和文字间距 */
-  }
-
-  .custom-extension-icon {
-    margin-right: 10px;
-    font-size: 14px;
-    color: #4d4f56;
-  }
 
   .bk-select-content-wrapper {
     .bk-select-search-wrapper {
@@ -631,21 +631,48 @@
     .is-selected:not(.is-checkbox) {
       background-color: #294066 !important;
     }
-  }
 
-  .popover {
-    position: relative;
-    display: flex;
-    width: 100%;
-    align-items: center;  /* 垂直居中 */
-    justify-content: space-between;  /* 两端对齐 */
-  }
+    .popover {
+      position: relative;
+      display: flex;
+      width: 100%;
+      align-items: center;  /* 垂直居中 */
+      justify-content: space-between;  /* 两端对齐 */
 
-  .pentagram-fill {
-    width: 14px;
-    height: 14px;
-    margin-left: 8px;  /* 添加左边距 */
-    cursor: pointer;
+      .pentagram-fill {
+        width: 14px;
+        height: 14px;
+        margin-left: 8px;  /* 添加左边距 */
+        cursor: pointer;
+      }
+    }
+
+    .bk-select-extension {
+      border: none;
+
+      .custom-extension {
+        display: flex;
+        width: 100%;
+        height: 100%;
+        padding: 0 10px;
+        font-size: 12px;
+        background-color: #28354d;
+        align-items: center;  /* 垂直居中 */
+        justify-content: center;  /* 水平居中 */
+        gap: 4px;  /* 图标和文字间距 */
+        border: none;
+        border-radius: 0;
+
+        .custom-extension-icon {
+          padding: 2px;
+          margin-right: 10px;
+          font-size: 8px;
+          color: #c4c6cc;
+          border: 1px solid #c4c6cc;
+          border-radius: 50%;
+        }
+      }
+    }
   }
 }
 </style>
