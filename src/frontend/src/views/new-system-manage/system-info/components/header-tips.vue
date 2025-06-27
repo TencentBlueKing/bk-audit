@@ -22,14 +22,14 @@
       class="menu-item-icon"
       type="remind-fill" />
     <span class="tips-text">
-      {{ t('当前系统未完成配置') }}：1.<span>
+      {{ t('当前系统未完成配置') }}：1.<span :class="isPending ? 'tips-link' : ''">
         {{ t('注册系统信息') }}</span>
       -> 2.<span
-        :class="isCompleted ? 'tips-link' : ''"
-        @click="handleRouterChange('systemAccessSteps', false, 1.5)">{{ t('注册权限模型') }}
+        :class="isPermissionModel ? 'tips-link' : ''"
+        @click="handleRouterChange(isPermissionModel, 'permission_model')">{{ t('注册权限模型') }}
       </span>-> 3.<span
-        :class="isCompleted ? 'tips-link' : ''"
-        @click="handleRouterChange('systemAccessSteps', false, 3)">{{ t('上报日志数据') }}</span>
+        :class="isCollector ? 'tips-link' : ''"
+        @click="handleRouterChange(isCollector, 'collector')">{{ t('上报日志数据') }}</span>
     </span>
   </div>
 </template>
@@ -50,17 +50,30 @@
   const router = useRouter();
   const route = useRoute();
   const { on, off } = useEventBus();
-  const isCompleted = ref(false);
+  const isPending = ref(false);
+  const isPermissionModel = ref(false);
+  const isCollector = ref(false);
   const isShow = ref(false);
+  const systemInfo = ref();
 
-  const handleRouterChange = (name: string, isNewSystem: boolean, step: number) => {
-    if (isCompleted.value) {
+  const handleRouterChange = (isTo: boolean, step: string) => {
+    if (isTo) {
       router.push({
-        name,
+        name: 'systemAccessSteps',
         query: {
-          step: step.toString(),
+          step: (() => {
+            if (step === 'collector') {
+              return 3;
+            }
+            if (systemInfo.value.collector_count === 0 && systemInfo.value.resource_type_count === 0) {
+              return 1.5;
+            }
+            return 2;
+          })(),
           showModelType: 'false',
-          isNewSystem: isNewSystem.toString(),
+          isNewSystem: 'false',
+          stepStage: step,
+          type: systemInfo.value.permission_type,
         },
         params: {
           id: route.params.id,
@@ -71,10 +84,14 @@
   // 监听事件
   onMounted(() => {
     on('get-system-info', (data: unknown) => {
-      const systemInfo = data as SystemModel;
-      isCompleted.value = (systemInfo.system_status === 'completed');
-      isShow.value = !(systemInfo.system_status === 'normal' || systemInfo.system_status === 'abnormal');
-    // 处理数据...
+      if (data && typeof data === 'object' && 'system_stage' in data) {
+        const systemData = data as SystemModel;
+        systemInfo.value = systemData;
+        isShow.value = (systemData.system_stage !== 'completed');
+        isPending.value = (systemData.system_stage === 'pending');
+        isPermissionModel.value = (systemData.system_stage === 'permission_model');
+        isCollector.value = (systemData.system_stage === 'collector' || systemData.system_stage === 'permission_model');
+      }
     });
   });
 
