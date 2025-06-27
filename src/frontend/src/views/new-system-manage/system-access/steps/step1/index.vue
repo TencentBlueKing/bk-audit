@@ -369,6 +369,7 @@
 
   interface Exposes {
     handlerFormData: () => void,
+    previousStep: () => void,
   }
   interface Emits {
     (e: 'handlerValidates', val: Record<string, any>): void
@@ -591,13 +592,14 @@
       return false; // 返回验证失败状态
     }
   };
-
+  const systemDetail = ref();
   const {
     run: fetchSystemDetail,
   } = useRequest(MetaManageService.fetchSystemDetail, {
     defaultParams: [],
     defaultValue: new SystemModel(),
     onSuccess: (result) => {
+      systemDetail.value = result;
       isDisabled.value = !(result.source_type === 'bk_audit');
       emit('updateCanEditSystem', isDisabled.value);
       clientList.value = result.clients.map((item: string, index: number) => ({
@@ -652,6 +654,17 @@
 
   defineExpose<Exposes>({
     handlerFormData,
+    previousStep() {
+      router.replace({
+        query: {
+          ...route.query,
+          step: ((systemDetail.value.collector_count === 0 || systemDetail.value.resource_type_count === 0) && systemDetail.value.system_stage !== 'permission_model ') ? '2' :  '1.5',
+        },
+        params: {
+          id: systemDetail.value.system_id,
+        },
+      });
+    },
   });
 </script>
 

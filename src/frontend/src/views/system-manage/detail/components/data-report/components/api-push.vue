@@ -131,6 +131,7 @@
   import {
     onBeforeUnmount,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -145,9 +146,10 @@
 
   interface Emits {
     (e: 'changeChecked', value: {id: string, name: string}): void
+    (e: 'getDataEnabled', value: boolean): void
   }
   interface Exposes {
-    handleCancelCheck: ()=>void
+    handleCancelCheck: ()=>void,
   }
   interface Props {
     id: string
@@ -181,6 +183,9 @@
       system_id: route.params.id || props.id,
     },
     manual: true,
+    onSuccess(result) {
+      emit('getDataEnabled',   result.enabled);
+    },
   });
 
   // 获取token
@@ -259,7 +264,11 @@
     checked.value = true;
     emit('changeChecked',  { id: 'api', name: 'API' });
   };
-
+  watch(() => data.value, (newData) => {
+    emit('getDataEnabled', newData.enabled);
+  }, {
+    deep: true,
+  });
   onBeforeUnmount(() => {
     clearInterval(timer.value);
   });
@@ -268,6 +277,7 @@
     handleCancelCheck() {
       checked.value = false;
     },
+
   });
 </script>
 <style lang="postcss">
