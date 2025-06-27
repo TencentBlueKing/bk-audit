@@ -247,7 +247,7 @@
   });
 
   const handleCopy = (val: any) => {
-    execCopy(JSON.stringify(val), t('复制成功'));
+    execCopy(val, t('复制成功'));
   };
 
   const resetFormData = () => {
