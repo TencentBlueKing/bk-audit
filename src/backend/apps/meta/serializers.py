@@ -905,6 +905,11 @@ class UpdateSystemReqSerializer(serializers.Serializer):
         allow_blank=False,
         max_length=255,
     )
+    permission_type = serializers.ChoiceField(
+        label=_("权限类型"),
+        choices=SystemPermissionTypeEnum.choices,
+        required=False,
+    )
 
 
 class SystemFavoriteReqSerializer(serializers.Serializer):
