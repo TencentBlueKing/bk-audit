@@ -26,6 +26,7 @@ from services.web.databus.constants import (
     LogReportStatus,
     SnapshotReportStatus,
     SnapshotStatusDict,
+    SystemStatusDetailEnum,
     SystemStatusDict,
     TailLogStatusDict,
 )
@@ -70,22 +71,27 @@ def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, Syst
         tail_log_status: LogReportStatus = tail_log_item.get("status")
         has_permission_model = bool(system["action_count"] or system["resource_type_count"])
         snapshot_status: SnapshotReportStatus = snapshot_status_item.get("status")
+
+        # 系统审计状态为未接入: 未接入
         if system["audit_status"] == SystemAuditStatusEnum.PENDING:
-            # 系统审计状态为未接入: 未接入
-            system_status = SystemStatusEnum.PENDING.value
-        elif (
-            not has_permission_model
-            or tail_log_status in (LogReportStatus.UNSET, None)
-            or snapshot_status == SnapshotReportStatus.UNSET
-        ):
-            # 没有权限模型 or 没有日志上报 or 没有配置资产上报: 待完善
-            system_status = SystemStatusEnum.COMPLETED.value
-        elif tail_log_status == LogReportStatus.NODATA or snapshot_status == SnapshotReportStatus.ABNORMAL:
-            # 资产上报异常 or 日志上报无数据: 数据异常
-            system_status = SystemStatusEnum.ABNORMAL.value
+            status_detail = SystemStatusDetailEnum.PENDING
+        # 没有权限模型 or 没有日志上报 or 没有配置资产上报: 待完善
+        elif not has_permission_model:
+            status_detail = SystemStatusDetailEnum.NO_PERMISSION_MODEL
+        elif tail_log_status in (LogReportStatus.UNSET, None):
+            status_detail = SystemStatusDetailEnum.NO_LOG_REPORT
+        elif snapshot_status == SnapshotReportStatus.UNSET:
+            status_detail = SystemStatusDetailEnum.NO_ASSET_REPORT
+        # 资产上报异常 or 日志上报无数据: 数据异常
+        elif tail_log_status == LogReportStatus.NODATA:
+            status_detail = SystemStatusDetailEnum.LOG_NO_DATA
+        elif snapshot_status == SnapshotReportStatus.ABNORMAL:
+            status_detail = SystemStatusDetailEnum.ASSET_ABNORMAL
+        # 系统接入 & 有权限模型 & 日志上报正常 & 资产上报： 数据正常
         else:
-            # 系统接入 & 有权限模型 & 日志上报正常 & 资产上报： 数据正常
-            system_status = SystemStatusEnum.NORMAL.value
+            status_detail = SystemStatusDetailEnum.NORMAL
+        system_status = str(status_detail.system_status().value)
+        system_status_msg = str(status_detail.label)
         system_stage = fetch_system_stage(
             system_status=system_status,
             has_permission_model=has_permission_model,
@@ -93,6 +99,7 @@ def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, Syst
         )
         result[system["system_id"]] = SystemStatusDict(
             system_status=system_status,
+            system_status_msg=system_status_msg,
             tail_log_item=tail_log_item,
             snapshot_status_item=snapshot_status_item,
             has_permission_model=has_permission_model,
