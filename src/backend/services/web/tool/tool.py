@@ -1,6 +1,8 @@
 from typing import List, Type
 
+import redis
 from bk_resource import resource
+from django.conf import settings
 from django.db import models, transaction
 
 from core.utils.data import unique_id
@@ -106,3 +108,35 @@ def sync_resource_tags(
         # 批量创建关联
         objs = [relation_model(**{relation_resource_field: resource_uid, "tag_id": t["tag_id"]}) for t in tags]
         relation_model.objects.bulk_create(objs)
+
+
+class RecentToolUsageManager:
+    REDIS_KEY_TEMPLATE = "tool:recently_used:{username}"
+
+    def __init__(self):
+        self.redis_client = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=int(settings.REDIS_PORT),
+            db=int(settings.REDIS_DB),
+            password=settings.REDIS_PASSWORD,
+            decode_responses=True,
+        )
+
+    def _build_key(self, username: str) -> str:
+        return self.REDIS_KEY_TEMPLATE.format(username=username)
+
+    def record_usage(self, username: str, tool_uid: str):
+        if not username or not tool_uid:
+            return
+
+        key = self._build_key(username)
+        self.redis_client.lrem(key, 0, tool_uid)
+        self.redis_client.lpush(key, tool_uid)
+        self.redis_client.expire(key, int(settings.RECENT_USED_TTL))
+
+    def get_recent_uids(self, username: str):
+        key = self._build_key(username)
+        return self.redis_client.lrange(key, 0, -1)
+
+
+recent_tool_usage_manager = RecentToolUsageManager()

@@ -359,7 +359,7 @@ class UpdateTool(ToolBase):
                     "tool_type": tool.tool_type,
                     "name": validated_request_data["name"],
                     "description": validated_request_data["description"],
-                    "namespace": validated_request_data["namespace"],
+                    "namespace": tool.namespace,
                     "version": tool.version + 1,
                     "config": new_config,
                 }
