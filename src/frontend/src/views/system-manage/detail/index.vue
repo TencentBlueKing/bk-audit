@@ -54,10 +54,16 @@
                 <span
                   v-if="item.name !== 'basicInfo'"
                   v-bk-tooltips="{
-                    content: t(`资源数据: ${data.resource_type_count}，操作数据: ${data.action_count}`),
-                    disabled: item.name !== 'accessModel'
+                    content: item.name === 'accessModel'
+                      ? t('资源与操作数据', {
+                        resource_count: data.resource_type_count,
+                        action_count: data.action_count,
+                      })
+                      : t('日志采集配置', {count: data.collector_count}),
                   }"
-                  class="count">{{ item.name === 'accessModel' ? data.model_count : data.collector_count }}</span>
+                  class="count">
+                  {{ item.name === 'accessModel' ? data.model_count : data.collector_count }}
+                </span>
               </div>
               <span class="label-describe">{{ item.describe }}</span>
             </div>

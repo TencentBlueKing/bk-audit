@@ -112,6 +112,9 @@
           params: {
             id: data.system_id,
           },
+          query: {
+            type: data.permission_type,
+          },
         };
         return (isNew
           ? <div style='display: flex;align-items: center;'>
@@ -241,7 +244,7 @@
       render: ({ data }: {data: SyetemModel}) => data.last_time || '--',
     },
     {
-      label: () => t('app code'),
+      label: () => t('应用ID'),
       sort: 'custom',
       field: () => 'clients',
       width: '180px',
@@ -354,9 +357,10 @@
   };
 
   const handleCreate = () => {
-    router.push({
+    const route = router.resolve({
       name: 'systemAccess',
     });
+    window.open(route.href, '_blank');
   };
 
   // 判断是否是新建数据

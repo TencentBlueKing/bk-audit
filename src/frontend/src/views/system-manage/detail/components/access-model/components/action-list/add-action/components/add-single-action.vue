@@ -54,6 +54,7 @@
         </bk-form-item>
       </div>
       <bk-form-item
+        v-if="!isSimpleSystem"
         :label="t('依赖资源')"
         label-width="160"
         property="description">
@@ -114,7 +115,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { nextTick, ref } from 'vue';
+  import { computed, nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -161,6 +162,8 @@
   });
   const searchValue = ref('');
   const selected = ref<Array<string>>([]);
+
+  const isSimpleSystem = computed(() => route.query.type === 'simple');
 
   const rules = {
     action_id: [
