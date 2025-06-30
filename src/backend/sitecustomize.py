@@ -21,3 +21,8 @@ if "log_export" in sys.argv:  # 根据命令行参数判断
     from gevent import monkey
 
     monkey.patch_all()
+
+# 启用stackprinter
+import stackprinter
+
+stackprinter.set_excepthook()

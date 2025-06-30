@@ -18,10 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 import os
 import re
+from typing import List
 
 from django.utils.translation import gettext_lazy
 
-from core.choices import TextChoices, register_choices
+from core.choices import IntegerChoices, TextChoices, register_choices
 from core.constants import OrderTypeChoices as _OrderTypeChoices
 
 IAM_MANAGER_ROLE = "members"
@@ -160,3 +161,103 @@ class SystemSourceTypeEnum(TextChoices):
     IAM_V3 = "iam_v3", gettext_lazy("权限中心V3")
     IAM_V4 = "iam_v4", gettext_lazy("权限中心V4")
     AUDIT = "bk_audit", gettext_lazy("审计中心")
+
+    @classmethod
+    def get_editable_sources(cls) -> List[str]:
+        """
+        获取可编辑的来源
+        """
+
+        return [cls.AUDIT.value]
+
+
+@register_choices("meta_system_audit_status")
+class SystemAuditStatusEnum(TextChoices):
+    """
+    系统审计状态(判断系统是否已经接入审计中心)
+    """
+
+    PENDING = "pending", gettext_lazy("待接入")
+    ACCESSED = "accessed", gettext_lazy("已接入")
+
+    @classmethod
+    def get_order_value(cls, value) -> int:
+        """
+        获取排序优先级：值越大，优先级越高
+        """
+
+        return {
+            cls.PENDING.value: 1,
+            cls.ACCESSED.value: 0,
+        }.get(value, -1)
+
+
+@register_choices("meta_system_status")
+class SystemStatusEnum(TextChoices):
+    """
+    系统状态(前端展示系统数据状态信息)
+    """
+
+    PENDING = "pending", gettext_lazy("待接入")
+    COMPLETED = "completed", gettext_lazy("待完善")
+    ABNORMAL = "abnormal", gettext_lazy("数据异常")
+    NORMAL = "normal", gettext_lazy("正常")
+
+
+@register_choices("meta_system_stage")
+class SystemStageEnum(TextChoices):
+    """
+    系统阶段(前端展示系统接入阶段信息)
+    """
+
+    PENDING = "pending", gettext_lazy("待接入")
+    PERMISSION_MODEL = "permission_model", gettext_lazy("权限模型")
+    COLLECTOR = "collector", gettext_lazy("日志采集")
+    COMPLETED = "completed", gettext_lazy("已完成")
+
+
+class LogReportStatus(TextChoices):
+    NORMAL = "normal", gettext_lazy("正常")
+    NODATA = "nodata", gettext_lazy("无数据")
+    UNSET = "unset", gettext_lazy("未配置")
+
+
+class SystemSortFieldEnum(TextChoices):
+    """
+    系统排序字段
+    """
+
+    PERMISSION = "permission", gettext_lazy("权限")
+    FAVORITE = "favorite", gettext_lazy("收藏")
+    AUDIT_STATUS = "audit_status", gettext_lazy("审计状态")
+    NAME = "name", gettext_lazy("名称")
+
+
+# 系统授权token长度
+SYSTEM_AUTH_TOKEN_LENGTH = 32
+
+# 系统和具体实例的分隔符
+SYSTEM_INSTANCE_SEPARATOR = ":"
+
+
+@register_choices("meta_system_sensitivity")
+class SystemSensitivityEnum(IntegerChoices):
+    """
+    系统敏感级别(用于前端展示枚举值)
+    """
+
+    EMPTY = 0, gettext_lazy("无")
+    NONE = 1, gettext_lazy("不敏感")
+    LOW = 2, gettext_lazy("低")
+    MIDDLE = 3, gettext_lazy("中")
+    HIGH = 4, gettext_lazy("高")
+
+
+@register_choices("meta_system_permission_type")
+class SystemPermissionTypeEnum(TextChoices):
+    """
+    系统权限类型
+    """
+
+    SIMPLE = "simple", gettext_lazy("简单权限")
+    COMPLEX = "complex", gettext_lazy("复杂权限")

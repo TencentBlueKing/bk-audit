@@ -54,7 +54,7 @@ def sync_iam_objects(
     return: to_insert, to_update, to_delete
     to_insert: 待新建的DB实例列表
     to_update: 待更新的DB实例列表
-    to_delete: 待删除的DB实例PK列表
+    to_delete: 待删除的DB实例列表
     """
     bk_username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
     # 获取数据库存储实例
@@ -86,7 +86,7 @@ def sync_iam_objects(
                 **{field: iam_object[field] for field in fields},
             )
         )
-    to_delete = db_objects.filter(**{f"{db_id_field}__in": to_delete}).values_list("id", flat=True)
+    to_delete = list(db_objects.filter(**{f"{db_id_field}__in": to_delete}).only("pk"))
     return to_insert, to_update, to_delete
 
 
@@ -95,13 +95,15 @@ class IamSystemSyncer(abc.ABC):
     IAM系统同步器
     """
 
-    def __init__(self, cls_name: str, *args, **kwargs):
+    def __init__(self, cls_name: str = None, *args, **kwargs):
         self.bk_username = bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME
         self.default_ns = settings.DEFAULT_NAMESPACE
 
-    def __new__(cls, cls_name: str, *args, **kwargs) -> "IamSystemSyncer":
+    def __new__(cls, cls_name: str = None, *args, **kwargs) -> "IamSystemSyncer":
         if cls.__name__ != IamSystemSyncer.__name__:
             return super().__new__(cls)
+        if cls_name is None:
+            cls_name = cls.__name__
         sub_cls = {sub_cls.cls_name(): sub_cls for sub_cls in cls.__subclasses__()}
         return sub_cls[cls_name](cls_name, *args, **kwargs)
 
@@ -251,14 +253,17 @@ class IamSystemSyncer(abc.ABC):
 
         if to_delete:
             # 删除系统同时需要删除其下的资源
-            to_delete_systems = System.objects.filter(
-                source_type=self.source_type, instance_id__in=to_delete
-            ).values_list("system_id", flat=True)
-            System.bulk_delete_with_resources(to_delete_systems)
+            System.objects.filter(source_type=self.source_type, instance_id__in=to_delete).delete()
 
         logger.info(f"[{self.cls_name}] finished")
 
         return iam_systems
+
+    def _post_sync_resources_actions(self, system_map: Dict[str, dict]):
+        """
+        后置处理
+        """
+        pass
 
     @transaction.atomic
     def sync_resources_actions(self):
@@ -277,8 +282,10 @@ class IamSystemSyncer(abc.ABC):
         actions = defaultdict(list)
         resource_fields = self.resource_type_fields
         action_fields = self.action_fields
+        system_map: Dict[str, dict] = {}
         for instance_id, system_info in system_infos.items():
             system_id = System.build_system_id(source_type=self.source_type, instance_id=instance_id)
+            system_map[system_id] = system_info
             # 资源
             to_insert, to_update, to_delete = sync_iam_objects(
                 system_id, system_info.get("resource_types", []), ResourceType, "resource_type_id", resource_fields
@@ -313,13 +320,16 @@ class IamSystemSyncer(abc.ABC):
         ]
         for param in sync_db_params:
             instance_map, db_model, fields, batch_size = param
-            if instance_map["to_insert"]:
-                db_model.objects.bulk_create(instance_map["to_insert"])
-            if instance_map["to_update"]:
-                db_model.objects.bulk_update(instance_map["to_update"], fields=fields, batch_size=batch_size)
-            db_model.objects.filter(id__in=instance_map["to_delete"]).delete()
+            for item in instance_map["to_insert"]:
+                item.save(force_insert=True)
+            for item in instance_map["to_update"]:
+                item.save(force_update=True)
+            for item in instance_map["to_delete"]:
+                item.delete()
 
         logger.info(f"[{self.cls_name}] finished")
+
+        self._post_sync_resources_actions(system_map)
 
     def _update_system_info(self, db_system: System, base_info: dict) -> bool:
         """
@@ -425,7 +435,7 @@ class IAMV4SystemSyncer(IamSystemSyncer):
     source_type = SystemSourceTypeEnum.IAM_V4
     system_info_fields = ["name", "description", "clients", "callback_url", "auth_token", "managers"]
     resource_type_fields = ["name", "name_en", "ancestors"]
-    action_fields = ["name", "name_en", "resource_type_ids"]
+    action_fields = ["name", "name_en"]
 
     def get_iam_systems(self) -> Dict[str, dict]:
         return group_by(api.bk_iam_v4.list_system.fetch_all(), operator.itemgetter("id"))
@@ -477,6 +487,32 @@ class IAMV4SystemSyncer(IamSystemSyncer):
             }
 
         return data
+
+    def _post_sync_resources_actions(self, system_map: Dict[str, dict]):
+        """
+        同步操作对应的资源类型
+        """
+
+        action_obj_map: Dict[str, Dict[str, Action]] = {}
+
+        # 获取所有已有的 Action 对象
+        action_objs = list(Action.objects.filter(system_id__in=list(system_map.keys())))
+
+        # 将 Action 对象按 system_id 和 action_id 映射
+        for action_obj in action_objs:
+            action_obj_map.setdefault(action_obj.system_id, {})[action_obj.action_id] = action_obj
+
+        # 构建 action_data_map
+        action_data_map = {
+            system_id: {action["id"]: action for action in info["actions"] if action.get("id")}
+            for system_id, info in system_map.items()
+        }
+
+        for system_id, action_map in action_obj_map.items():
+            for action_id, action_obj in action_map.items():
+                action_obj.set_resource_type_ids(
+                    action_data_map.get(system_id, {}).get(action_id, {}).get("resource_type_ids", [])
+                )
 
 
 def sync_iam_v3_system_roles(iam_systems):
