@@ -63,7 +63,7 @@
     data: undefined,  // 默认值设为undefined
   });
 
-  const themeMap = {
+  const themeMap: Record<string, 'info' | 'warning' | 'success' | 'danger' | undefined> = {
     normal: 'success',
     completed: 'warning',
     abnormal: 'danger',
@@ -91,7 +91,7 @@
     manual: true,
   });
 
-  const systemStatusTheme = (val: string) => themeMap[val as keyof typeof themeMap] || 'default';
+  const systemStatusTheme = (val: string) => themeMap[val];
 
   const systemStatusText = (val: string) => {
     if (!GlobalChoices.value?.meta_system_status) return val;
