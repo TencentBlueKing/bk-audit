@@ -45,6 +45,7 @@ from apps.meta.constants import (
     SystemSourceTypeEnum,
 )
 from apps.meta.exceptions import UniqueNameInValid
+from core.choices import Unset
 from core.models import (
     OperateRecordModel,
     OperateRecordModelManager,
@@ -52,10 +53,6 @@ from core.models import (
     SoftDeleteModelManager,
 )
 from core.utils.data import generate_random_string
-
-
-class Unset:
-    ...
 
 
 class GlobalMetaConfig(OperateRecordModel):
@@ -187,6 +184,8 @@ class System(OperateRecordModel):
         max_length=16,
         choices=SystemPermissionTypeEnum.choices,
         default=SystemPermissionTypeEnum.COMPLEX.value,
+        null=True,
+        blank=True,
     )
     # paas 同步信息
     logo_url = models.CharField(gettext_lazy("应用图标"), max_length=255, null=True, blank=True)

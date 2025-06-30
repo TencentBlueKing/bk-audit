@@ -816,8 +816,8 @@ msgstr "Snapshot Preparing !"
 msgid "存储变更中"
 msgstr "Storage Changing"
 
-msgid "数据关联预检查失败，接入系统未实现对应方法"
-msgstr "Snapshot Pre Check Failed"
+msgid "资源同步预检查失败，请检查系统资源回调地址及接口是否正确"
+msgstr "Resource synchronization pre-check failed. Please verify the system resource callback address and interface are correct."
 
 msgid "未能匹配分隔符，请确认"
 msgstr "None delimiter found"
@@ -1087,7 +1087,7 @@ msgid "已接入"
 msgstr "Accessed"
 
 msgid "待完善"
-msgstr "completed"
+msgstr "incomplete"
 
 msgid "数据异常"
 msgstr "Abnormal"
@@ -1609,6 +1609,9 @@ msgstr "System Status"
 msgid "系统阶段"
 msgstr "System Stage"
 
+msgid "系统状态信息"
+msgstr "System Status Message"
+
 #, fuzzy
 #| msgid "资源类型"
 msgid "资源类型数量"
@@ -1655,6 +1658,9 @@ msgstr "Action Detail"
 
 msgid "操作的 system_id 和 resource_type_ids 会被自动填充"
 msgstr "The system_id and resource_type_ids will be auto-filled for the operation"
+
+msgid "资源类型已存在"
+msgstr "Resource Type ID Exists"
 
 msgid "资源类型名称"
 msgstr "Resource Type Name"
@@ -2137,9 +2143,6 @@ msgstr "Resource Not Exist"
 
 msgid "获取系统信息错误"
 msgstr "Getting system information error"
-
-msgid "资源类型已存在"
-msgstr "Resource Type ID Exists"
 
 msgid "资源属性名称已存在"
 msgstr "Resource Property Name Exists"
@@ -3175,6 +3178,29 @@ msgstr "Main Cluster"
 
 msgid "双写集群"
 msgstr "Replica CLuster"
+
+msgid "系统未接入审计中心"
+msgstr "System not connected to Audit Center"
+
+msgid "系统待完善: 没有权限模型"
+msgstr "System Incomplete: No permission model"
+
+msgid "系统待完善: 没有日志上报"
+msgstr "System Incomplete: No log reporting"
+
+msgid "系统待完善: 没有配置资产上报"
+msgstr "System Incomplete: No asset reporting configured"
+
+msgid "数据异常: 日志上报无数据"
+msgstr "Data Abnormal: No data in log reporting"
+
+msgid "数据异常: 资产上报异常"
+msgstr "Data Abnormal: Abnormal asset reporting"
+
+#, fuzzy
+#| msgid "系统状态"
+msgid "系统状态正常"
+msgstr "System Status"
 
 msgid "Field Type Not Match"
 msgstr "Field Type Not Match"
@@ -4903,10 +4929,3 @@ msgstr "[BKAudit] Process waiting for approve"
 msgid "%s 操作关单"
 msgstr "%s close risk"
 
-#, fuzzy
-#~| msgid "多个字段使用逗号分隔"
-#~ msgid "Action ID list, separated by commas"
-#~ msgstr "Action ID list, separated by commas"
-
-#~ msgid "应用负责人"
-#~ msgstr "App Manager"
