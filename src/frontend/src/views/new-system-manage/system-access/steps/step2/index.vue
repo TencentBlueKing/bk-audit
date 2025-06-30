@@ -67,6 +67,7 @@
 
   import Step2 from '@views/system-manage/detail/components/access-model/index.vue';
 
+  import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
   interface Props {
@@ -82,6 +83,9 @@
   }
   defineProps<Props>();
   const emits = defineEmits<Emits>();
+
+  const { messageSuccess } = useMessage();
+
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
@@ -141,6 +145,7 @@
   } = useRequest(MetaManageService.fetchSystemUpdate, {
     defaultValue: [],
     onSuccess: () => {
+      messageSuccess(t('权限模型设置成功'));
       router.push({
         query: {
           ...route.query,
@@ -192,12 +197,19 @@
 </script>
 <style scoped lang="postcss">
 .step2 {
+  max-height: 90vh;
+  padding-bottom: 60px;
+  overflow: auto;
+
   .step2-header {
-    top: 50px;
+    position: fixed;
+    top: 104px;
     left: 0;
+    z-index: 999;
     width: 100%;
     height: 48px;
     background: #fff;
+    border-top: 1px solid #eceef2;
     box-shadow: 0 2px 4px 0 #1919290d;
 
     .step2-header-box {
@@ -235,6 +247,7 @@
 
   .step2-list {
     padding: 20px 24px;
+    margin-top: 40px;
 
   }
 
