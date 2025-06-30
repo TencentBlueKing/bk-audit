@@ -162,6 +162,7 @@
   } = useRequest(MetaManageService.fetchSystemCreated, {
     defaultValue: [],
     onSuccess: (data) => {
+      messageSuccess(t('系统新建成功'));
       router.push({
         query: {
           ...route.query,
@@ -180,6 +181,7 @@
   } = useRequest(MetaManageService.fetchSystemUpdate, {
     defaultValue: [],
     onSuccess: () => {
+      messageSuccess(t('已更新系统信息'));
       stepRef.value.previousStep();
     },
   });
@@ -242,24 +244,16 @@
         if ('systemId' in route.query) {
           fetchSystemAuditStatusUpdate({
             ...formData,
-            system_id: formData.instance_id,
+            system_id: route.query.systemId,
           });
         } else {
           if ('fromStep' in route.query) {
             fetchSystemUpdate({
               ...formData,
-              system_id: formData.instance_id,
-            }).then((data) => {
-              if (data) {
-                messageSuccess(t('系统新建成功'));
-              }
+              system_id: route.params.id,
             });
           } else {
-            fetchSystemCreated(formData).then((data) => {
-              if (data) {
-                messageSuccess(t('系统新建成功'));
-              }
-            });
+            fetchSystemCreated(formData);
           }
         }
       },
@@ -316,7 +310,6 @@
   // 取消
   const handlerCancel = () => {
     window.changeConfirm = false;
-
     InfoBox({
       title: t('确认取消当前操作?'),
       content: t('已填写的内容将会丢失，请谨慎操作！'),
@@ -364,7 +357,8 @@
   height: 100vh;
 
   /* max-height: 85vh; */
-  overflow: auto;
+
+  /* overflow: auto; */
   background-color: #f5f7fa;
 
   .step-head {
