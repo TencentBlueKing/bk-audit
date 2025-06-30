@@ -22,6 +22,7 @@ from blueapps.utils.logger import logger
 
 from apps.meta.constants import SystemAuditStatusEnum, SystemSortFieldEnum
 from apps.meta.models import System
+from services.web.databus.constants import SystemStatusDict
 
 
 def wrapper_system_status(namespace: str, systems: List[dict]) -> List[dict]:
@@ -38,15 +39,17 @@ def wrapper_system_status(namespace: str, systems: List[dict]) -> List[dict]:
         system_status_map = {}
     for system in systems:
         # 日志上报状态
-        status_map = system_status_map.get(system["system_id"], {})
-        tail_log_item = status_map.get("tail_log_item", {})
-        system_status = status_map.get("system_status")
-        system["last_time"] = tail_log_item.get("last_time")
+        status_map: SystemStatusDict = system_status_map.get(system["system_id"])
+        if not status_map:
+            continue
+        tail_log_item = status_map["tail_log_item"]
+        system["last_time"] = tail_log_item["last_time"]
         system["status"] = tail_log_item.get("status")
         system["status_msg"] = tail_log_item.get("status_msg", "")
         system["collector_count"] = tail_log_item.get("collector_count", 0)
         # 系统状态
-        system["system_status"] = system_status
+        system["system_status"] = status_map["system_status"]
+        system["system_status_msg"] = status_map["system_status_msg"]
         # 系统阶段
         system["system_stage"] = status_map.get("system_stage")
     return systems
