@@ -60,7 +60,7 @@ class StorageChanging(CoreException):
 
 
 class JoinDataPreCheckFailed(CoreException):
-    MESSAGE = gettext_lazy("数据关联预检查失败，接入系统未实现对应方法")
+    MESSAGE = gettext_lazy("资源同步预检查失败，请检查系统资源回调地址及接口是否正确")
     ERROR_CODE = "006"
 
 

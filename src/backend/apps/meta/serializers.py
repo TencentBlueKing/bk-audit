@@ -99,6 +99,11 @@ class SystemSerializer(serializers.ModelSerializer):
         choices=SystemStageEnum.choices,
         allow_null=True,
     )
+    system_status_msg = serializers.CharField(
+        label=gettext_lazy("系统状态信息"),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = System
@@ -879,7 +884,7 @@ class UpdateSystemReqSerializer(serializers.Serializer):
     name_en = serializers.CharField(
         label=_("英文名称"),
         required=False,
-        allow_blank=False,
+        allow_blank=True,
         max_length=64,
     )
     description = serializers.CharField(
@@ -906,9 +911,7 @@ class UpdateSystemReqSerializer(serializers.Serializer):
         max_length=255,
     )
     permission_type = serializers.ChoiceField(
-        label=_("权限类型"),
-        choices=SystemPermissionTypeEnum.choices,
-        required=False,
+        label=_("权限类型"), choices=SystemPermissionTypeEnum.choices, required=False, allow_null=True, allow_blank=True
     )
 
 
