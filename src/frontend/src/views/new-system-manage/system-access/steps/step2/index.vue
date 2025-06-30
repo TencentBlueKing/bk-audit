@@ -81,6 +81,7 @@
   interface Emits {
     (e: 'getIsDisabledBtn', val: boolean): void;
   }
+
   defineProps<Props>();
   const emits = defineEmits<Emits>();
 
@@ -89,19 +90,24 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
-  const popoverBtn = computed(() => (route.query.type === 'simple' ? '简单权限类型' : '复杂权限类型'));
-  const dropdownList = ref([{
-                              title: '复杂权限类型',
-                              id: 'complex',
-                            },
-                            {
-                              title: '简单权限类型',
-                              id: 'simple',
-                            }]);
+
+  const dropdownList = ref([
+    {
+      title: '复杂权限类型',
+      id: 'complex',
+    },
+    {
+      title: '简单权限类型',
+      id: 'simple',
+    },
+  ]);
   const isDisabledBtn = ref(false);
   const isDropdown = ref(false);
   const systemDetail = ref();
   const step2Ref = ref();
+
+  const popoverBtn = computed(() => (route.query.type === 'simple' ? '简单权限类型' : '复杂权限类型'));
+
   const getIsDisabledBtn = (val: Record<string, any>) => {
     if (val.actionListListLength > 0 || val.resourceTypeListLength > 0) {
       isDisabledBtn.value = false;
@@ -112,6 +118,7 @@
     }
     emits('getIsDisabledBtn', isDisabledBtn.value);
   };
+
   const handleDropdown = (item: Record<string, any>) => {
     router.replace({
       query: {

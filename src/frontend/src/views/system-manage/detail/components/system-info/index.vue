@@ -22,7 +22,7 @@
     <div class="system-base-box">
       <div class="system-name">
         {{ data.name }}
-        <bk-tag :theme="data.system_status === 'normal' ? 'success' : 'warning'">
+        <bk-tag :theme="systemStatusTheme(data.system_status)">
           {{ t(systemStatusText(data.system_status) || '') }}
         </bk-tag>
       </div>
@@ -62,6 +62,13 @@
     id: '',
     data: undefined,  // 默认值设为undefined
   });
+
+  const themeMap = {
+    normal: 'success',
+    completed: 'warning',
+    abnormal: 'danger',
+  };
+
   const { t } = useI18n();
 
   const route = useRoute();
@@ -83,6 +90,8 @@
     defaultValue: {},
     manual: true,
   });
+
+  const systemStatusTheme = (val: string) => themeMap[val as keyof typeof themeMap] || 'default';
 
   const systemStatusText = (val: string) => {
     if (!GlobalChoices.value?.meta_system_status) return val;
