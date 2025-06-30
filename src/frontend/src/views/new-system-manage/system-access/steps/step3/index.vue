@@ -16,14 +16,16 @@
 -->
 <template>
   <div class="step3">
-    <div class="system-manage-detail-header">
-      <system-info
-        id="bk-audit"
-        ref="appRef" />
+    <div class="step3-box">
+      <div class="system-manage-detail-header">
+        <system-info
+          id="bk-audit"
+          ref="appRef" />
+      </div>
+      <data-report
+        ref="dataReportRef"
+        @data-enabled="handleGetDataEnabled" />
     </div>
-    <data-report
-      ref="dataReportRef"
-      @data-enabled="handleGetDataEnabled" />
   </div>
 </template>
 <script setup lang="ts">
@@ -43,12 +45,19 @@
   };
 
 </script>
-<style lang="postcss">
+<style scoped lang="postcss">
   .step3 {
-    position: absolute;
-    left: 50%;
-    width: 60%;
-    margin-top: 10px;
-    transform: translateX(-50%);
+    position: relative;
+    width: 100%;
+    height: calc(100vh - 120px);
+    overflow: auto;
+
+    .step3-box {
+      position: absolute;
+      left: 50%;
+      width: 60%;
+      margin-top: 10px;
+      transform: translateX(-50%);
+    }
   }
 </style>

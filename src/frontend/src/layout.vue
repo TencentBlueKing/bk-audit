@@ -530,12 +530,14 @@
       system_id: item.id,
       favorite: val,
     }).then(() => {
-      fetchSystemWithAction({
-        sort_keys: 'favorite,permission',
-        action_ids: 'view_system',
-        with_favorite: true,
-        with_system_status: true,
-        audit_status__in: 'accessed',
+      projectList.value = projectList.value.map((i) => {
+        if (i.id === item.id) {
+          return {
+            ...i,
+            favorite: val,
+          };
+        }
+        return i;
       });
     });
   };
