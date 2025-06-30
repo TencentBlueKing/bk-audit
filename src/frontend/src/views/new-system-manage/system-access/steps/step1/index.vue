@@ -152,19 +152,118 @@
           <bk-form-item
             class="form-item-line"
             :label="t('描述')">
-            <bk-input
-              v-model="formData.description"
+            <bk-form-item
+              class="form-item-line"
+              :label="t('系统域名')"
+              property="system_url"
+              :required="!isDisabled">
+              <bk-input
+                v-model="formData.system_url"
+                v-bk-tooltips="{
+                  content: t('当前不支持修改'),
+                  disabled: !isDisabled,
+                  placement: 'top'
+                }"
+                clearable
+                :disabled="isDisabled"
+                :placeholder="t('请输入可访问的域名')" />
+            </bk-form-item>
+
+            <bk-form-item
+              class="form-item-line"
+              :label="t('描述')">
+              <bk-input
+                v-model="formData.description"
+                v-bk-tooltips="{
+                  content: t('当前不支持修改'),
+                  disabled: !isDisabled,
+                  placement: 'top'
+                }"
+                clearable
+                :disabled="isDisabled"
+                :maxlength="255"
+                :placeholder="t('请输入')"
+                :rows="6"
+                type="textarea" />
+            </bk-form-item>
+          </bk-form-item>
+        </bk-form>
+      </bk-card>
+
+      <bk-card
+        ref="cardRefTwo"
+        class="step1-card"
+        is-collapse>
+        <template #icon>
+          <div
+            class="card-icon"
+            @click="handlerCardRef('cardRefTwo')">
+            <audit-icon
+              class="angle-fill-down"
+              type="angle-fill-down" />
+          </div>
+        </template>
+        <template #header>
+          <div class="card-header">
+            {{ t('调用信息') }}
+          </div>
+        </template>
+
+        <bk-form
+          ref="callFormRef"
+          class="example"
+          form-type="vertical"
+          :model="formData"
+          :rules="rules">
+          <bk-form-item
+            class="form-item-line form-item-top"
+            property="clients"
+            required>
+            <template #label>
+              <span>{{ t("可访问客户端") }}({{ t('应用ID') }})</span>
+              <bk-popover
+                placement="top"
+                theme="dark">
+                <span
+                  class="item-right-tips"
+                  @click="handlerJumpLink">
+                  <audit-icon
+                    class="jump-link"
+                    type="jump-link" />
+                  <span>{{ t('去新建') }}</span>
+                </span>
+                <template #content>
+                  <div>{{ t('有权限调用权限中心获取或操作到该系统权限数') }}</div>
+                  <div>{{ t('据的客户端列表，即 app_code 列表。例如某系') }}</div>
+                  <div>{{ t('统由一个客户端注册，但是需要多个客户端都可以') }}</div>
+                  <div>{{ t('调用鉴权接口进行该系统的鉴权。') }}</div>
+                </template>
+              </bk-popover>
+            </template>
+
+            <div
+              v-for="item in clientList"
+              :key="item.id"
               v-bk-tooltips="{
                 content: t('当前不支持修改'),
                 disabled: !isDisabled,
                 placement: 'top'
               }"
-              clearable
-              :disabled="isDisabled"
-              :maxlength="255"
-              :placeholder="t('请输入')"
-              :rows="6"
-              type="textarea" />
+              class="item-concent">
+              <bk-input
+                v-model="formData.description"
+                v-bk-tooltips="{
+                  content: t('当前不支持修改'),
+                  disabled: !isDisabled,
+                  placement: 'top'
+                }"
+                clearable
+                :disabled="isDisabled"
+                :maxlength="255"
+                :placeholder="t('请输入')"
+                :rows="6"
+                type="textarea" />
+            </div>
           </bk-form-item>
         </bk-form>
       </bk-card>
@@ -252,7 +351,6 @@
                 @click="deleteClient(item.id)" />
             </div>
           </bk-form-item>
-
 
           <bk-form-item
             class="form-item-line"
