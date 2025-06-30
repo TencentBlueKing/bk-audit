@@ -155,7 +155,9 @@
         <div class="field-value is-required">
           {{ t('操作名称') }}
         </div>
-        <div class="field-value">
+        <div
+          v-if="!isSimpleSystem"
+          class="field-value">
           {{ t('依赖资源') }}
           <bk-popover
             ref="batchPopover"
@@ -339,7 +341,9 @@
                   v-model="item.name" />
               </bk-form-item>
             </div>
-            <div class="field-value">
+            <div
+              v-if="!isSimpleSystem"
+              class="field-value">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
@@ -491,6 +495,22 @@
     }],
   });
 
+  const isSimpleSystem = computed(() => route.query.type === 'simple');
+
+  const batchList = computed(() => {
+    const list = [{
+      label: t('敏感等级'),
+      value: 'sensitivity',
+    }];
+    if (!isSimpleSystem.value) {
+      list.unshift({
+        label: t('依赖资源'),
+        value: 'resource_type_ids',
+      });
+    }
+    return list;
+  });
+
   // 根据敏感等级值获取对应颜色
   const getSensitivityColor = (value: number) => {
     const colorMap: Record<number, string> = {
@@ -501,14 +521,6 @@
     };
     return colorMap[value] || '#333'; // 默认颜色
   };
-
-  const batchList = ref([{
-    label: t('依赖资源'),
-    value: 'resource_type_ids',
-  }, {
-    label: t('敏感等级'),
-    value: 'sensitivity',
-  }]);
 
   const handleShow = () => {
     isShowBatch.value = !isShowBatch.value;
@@ -577,7 +589,7 @@
         : batchPopover.value.hide();
     } else {
       (hasSelected && batchSelectPopover.value)
-        ? batchSelectPopover.value[1].hide()
+        ? batchSelectPopover.value[isSimpleSystem.value ? 0 : 1].hide()
         : sensitivityPopover.value.hide();
     }
     // 清空value
@@ -588,15 +600,13 @@
 
   const handleCancelBatch = (type: 'resource_type_ids' | 'sensitivity') => {
     if (type === 'resource_type_ids') {
-      if (batchSelectPopover.value) {
-        batchSelectPopover.value[0].hide();
-      }
-      batchPopover.value.hide();
+      batchSelectPopover.value
+        ? batchSelectPopover.value[0].hide()
+        : batchPopover.value.hide();
     } else {
-      if (batchSelectPopover.value) {
-        batchSelectPopover.value[1].hide();
-      }
-      sensitivityPopover.value.hide();
+      batchSelectPopover.value
+        ? batchSelectPopover.value[isSimpleSystem.value ? 0 : 1].hide()
+        : sensitivityPopover.value.hide();
     }
     // 清空选中
     formData.value.renderData = formData.value.renderData.map(item => ({

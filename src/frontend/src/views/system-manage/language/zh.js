@@ -330,5 +330,7 @@ export default {
     已配置操作: '已配置{count}个操作',
     接入系统: '接入系统',
     点击跳转到bkbase: '点击跳转到bkbase，地址为：{url}',
+    日志采集配置: '{count}个日志采集配置',
+    资源与操作数据: '资源：{resource_count}，操作：{action_count}',
   },
 };
