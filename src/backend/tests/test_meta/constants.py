@@ -46,7 +46,7 @@ from apps.permission.constants import IAMSystems
 from apps.permission.handlers.actions import ActionEnum
 from core.choices import TextChoices
 from core.utils.data import choices_to_dict, trans_object_local
-from services.web.databus.constants import JoinDataPullType
+from services.web.databus.constants import JoinDataPullType, SystemStatusDetailEnum
 from tests.test_databus.collector.constants import (
     COLLECTOR_STATUS_RESULT as _COLLECTOR_STATUS_RESULT,
 )
@@ -278,6 +278,7 @@ SYSTEM_LIST_OF_NOT_SORT_DATA = [
         "resource_type_count": 0,
         "action_count": 0,
         "system_status": "pending",
+        "system_status_msg": str(SystemStatusDetailEnum.PENDING.label),
     },
 ]
 BULK_SYSTEM_COLLECTORS_STATUS_API_RESP = {
@@ -299,6 +300,7 @@ SYSTEM_LIST_DATA = [
         "resource_type_count": 0,
         "action_count": 0,
         "system_status": "pending",
+        "system_status_msg": str(SystemStatusDetailEnum.PENDING.label),
     },
     {
         **SYSTEM_DATA2,
@@ -309,6 +311,7 @@ SYSTEM_LIST_DATA = [
         "resource_type_count": 1,
         "action_count": 0,
         "system_status": "pending",
+        "system_status_msg": str(SystemStatusDetailEnum.PENDING.label),
     },
 ]
 SYSTEM_LIST_OF_NOT_SYSTEMS_PARAMS = {
@@ -329,6 +332,7 @@ SYSTEM_LIST_OF_SORT_EQ_DATA = [
         "resource_type_count": 1,
         "action_count": 0,
         "system_status": "pending",
+        "system_status_msg": str(SystemStatusDetailEnum.PENDING.label),
     },
     {
         **SYSTEM_DATA1,
@@ -339,6 +343,7 @@ SYSTEM_LIST_OF_SORT_EQ_DATA = [
         "resource_type_count": 0,
         "action_count": 0,
         "system_status": "pending",
+        "system_status_msg": str(SystemStatusDetailEnum.PENDING.label),
     },
 ]
 SYSTEM_LIST_OF_SORT_GT_PARAMS = {
@@ -395,6 +400,7 @@ SYSTEM_INFO_DATA = {
     "action_count": 0,
     "system_status": "pending",
     "system_stage": "pending",
+    "system_status_msg": str(SystemStatusDetailEnum.PENDING.label),
 }
 
 # Resource Type List
@@ -630,7 +636,7 @@ GLOBAL_CHOICES = {
     'meta_system_audit_status': [{'id': 'pending', 'name': '待接入'}, {'id': 'accessed', 'name': '已接入'}],
     'meta_system_status': [
         {'id': 'pending', 'name': '待接入'},
-        {'id': 'completed', 'name': '待完善'},
+        {'id': 'incomplete', 'name': '待完善'},
         {'id': 'abnormal', 'name': '数据异常'},
         {'id': 'normal', 'name': '正常'},
     ],

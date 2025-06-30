@@ -301,7 +301,7 @@ class SystemListAllResource(SystemAbstractResource, CacheResource):
               "last_time": "",
               "status": "unset",
               "status_msg": "未配置",
-              "system_status": "completed",
+              "system_status": "incomplete",
               "permission": {
                 "view_system": true
               }

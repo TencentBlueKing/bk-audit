@@ -24,12 +24,18 @@ from django.db.models import IntegerChoices as DjangoIntegerChoices
 from django.db.models import TextChoices as DjangoTextChoices
 
 
+class Unset:
+    ...
+
+
 class ChoiceGetLabelMixin(Choices):
     @classmethod
-    def get_label(cls, key: Union[int, str]) -> Union[int, str]:
+    def get_label(cls, key: Union[int, str], default=Unset) -> Union[int, str]:
         for val, label in cls.choices:
             if val == key:
                 return label
+        if default is not Unset:
+            return default
         return key
 
 

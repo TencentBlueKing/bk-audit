@@ -199,7 +199,7 @@ class SystemStatusEnum(TextChoices):
     """
 
     PENDING = "pending", gettext_lazy("待接入")
-    COMPLETED = "completed", gettext_lazy("待完善")
+    INCOMPLETE = "incomplete", gettext_lazy("待完善")
     ABNORMAL = "abnormal", gettext_lazy("数据异常")
     NORMAL = "normal", gettext_lazy("正常")
 
