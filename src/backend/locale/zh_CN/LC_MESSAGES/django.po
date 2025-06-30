@@ -828,8 +828,8 @@ msgstr "关联任务处理中，请勿重复操作"
 msgid "存储变更中"
 msgstr "存储变更中"
 
-msgid "数据关联预检查失败，接入系统未实现对应方法"
-msgstr "数据关联预检查失败，接入系统未实现对应方法"
+msgid "资源同步预检查失败，请检查系统资源回调地址及接口是否正确"
+msgstr "资源同步预检查失败，请检查系统资源回调地址及接口是否正确"
 
 msgid "未能匹配分隔符，请确认"
 msgstr "未能匹配分隔符，请确认"
@@ -1630,6 +1630,9 @@ msgstr "系统状态"
 msgid "系统阶段"
 msgstr "系统阶段"
 
+msgid "系统状态信息"
+msgstr "系统状态信息"
+
 msgid "资源类型数量"
 msgstr "资源类型数量"
 
@@ -1678,6 +1681,9 @@ msgstr "操作详情"
 
 msgid "操作的 system_id 和 resource_type_ids 会被自动填充"
 msgstr "操作的 system_id 和 resource_type_ids 会被自动填充"
+
+msgid "资源类型已存在"
+msgstr "资源类型已存在"
 
 msgid "资源类型名称"
 msgstr "资源类型名称"
@@ -2156,9 +2162,6 @@ msgstr "资源ID不存在"
 
 msgid "获取系统信息错误"
 msgstr "获取系统信息错误"
-
-msgid "资源类型已存在"
-msgstr "资源类型已存在"
 
 msgid "资源属性名称已存在"
 msgstr "资源属性名称已存在"
@@ -3214,6 +3217,27 @@ msgstr "主集群"
 
 msgid "双写集群"
 msgstr "双写集群"
+
+msgid "系统未接入审计中心"
+msgstr "系统未接入审计中心"
+
+msgid "系统待完善: 没有权限模型"
+msgstr "系统待完善: 没有权限模型"
+
+msgid "系统待完善: 没有日志上报"
+msgstr "系统待完善: 没有日志上报"
+
+msgid "系统待完善: 没有配置资产上报"
+msgstr "系统待完善: 没有配置资产上报"
+
+msgid "数据异常: 日志上报无数据"
+msgstr "数据异常: 日志上报无数据"
+
+msgid "数据异常: 资产上报异常"
+msgstr "数据异常: 资产上报异常"
+
+msgid "系统状态正常"
+msgstr "系统状态正常"
 
 msgid "Field Type Not Match"
 msgstr "字段类型不匹配"
@@ -5091,6 +5115,3 @@ msgstr "【审计中心】执行自动处理套餐审批"
 #, python-format
 msgid "%s 操作关单"
 msgstr "%s 操作关单"
-
-#~ msgid "应用负责人"
-#~ msgstr "应用负责人"
