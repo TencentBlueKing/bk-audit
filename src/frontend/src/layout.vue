@@ -251,6 +251,14 @@
                         {{ t('待完善') }}
                       </bk-tag>
                     </bk-popover>
+                    <bk-tag
+                      v-if="item.system_status === 'abnormal'"
+                      size="small"
+                      style="margin-left: 8px;"
+                      theme="danger"
+                      type="filled">
+                      {{ t('数据异常') }}
+                    </bk-tag>
                   </div>
                   <div>
                     <span v-if="item.permission.view_system">

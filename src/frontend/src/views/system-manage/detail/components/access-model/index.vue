@@ -60,11 +60,8 @@
   });
 
   const isShowreSource =  ref(computed(() => {
-    if (route.name === 'systemAccessSteps') {
-      if ('type' in route.query) {
-        return route.query.type !== 'simple';
-      }
-      return true;
+    if ('type' in route.query) {
+      return route.query.type !== 'simple';
     }
     return true;
   }));
@@ -85,6 +82,7 @@
     ListLength.value.actionListListLength = length;
   };
 
+  // 如果没有资源和操作，不能下一步
   watch(() => ListLength.value, (newData) => {
     emits('getIsDisabledBtn', newData);
   }, {

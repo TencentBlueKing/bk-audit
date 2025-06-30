@@ -327,5 +327,7 @@ export default {
     已配置操作: 'Configured {count} operations',
     接入系统: 'New',
     点击跳转到bkbase: 'Click to jump to bkbase, URL: {url}',
+    日志采集配置: '{count} log collection configurations',
+    资源与操作数据: 'Resources: {resource_count}, operations: {action_count}',
   },
 };
