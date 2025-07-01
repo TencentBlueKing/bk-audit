@@ -46,6 +46,7 @@
   import CreateCollectorStep2 from './components/create-collector-step2.vue';
   import CreateNoticeGroup from './components/create-notice-group.vue';
   import CreateStrategy from './components/create-strategy.vue';
+  import CreateTools from './components/create-tools.vue';
   import EventList from './components/event-list.vue';
   import NoticeGroup from './components/notice-group.vue';
   import StorageList from './components/storage-list.vue';
@@ -86,6 +87,7 @@
     createStrategy: CreateStrategy,
     chartTableList: ChartTableList,
     systemDetailApiPush: SystemDetailApiPush,
+    createTools: CreateTools,
   };
 
   const rootRef = ref();
