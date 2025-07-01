@@ -361,17 +361,21 @@ SYSTEM_LIST_ALL_DATA = [
     {
         "id": SYSTEM_DATA2["system_id"],
         "name": SYSTEM_DATA2["name"],
+        "name_en": SYSTEM_DATA2["name_en"],
         "source_type": SYSTEM_DATA2['source_type'],
         "audit_status": "pending",
         "system_id": SYSTEM_DATA2["system_id"],
+        "instance_id": SYSTEM_DATA2["instance_id"],
         "permission_type": "complex",
     },
     {
         "id": SYSTEM_DATA1["system_id"],
         "name": SYSTEM_DATA1["name"],
+        "name_en": SYSTEM_DATA1["name_en"],
         "source_type": SYSTEM_DATA1["source_type"],
         "audit_status": "pending",
         "system_id": SYSTEM_DATA1["system_id"],
+        "instance_id": SYSTEM_DATA1["instance_id"],
         "permission_type": "complex",
     },
 ]
@@ -380,9 +384,11 @@ SYSTEM_LIST_ALL_OF_ACTION_IDS_DATA = [
     {
         "id": settings.BK_IAM_SYSTEM_ID,
         "name": settings.BK_IAM_SYSTEM_ID,
+        "name_en": settings.BK_IAM_SYSTEM_ID,
         "source_type": SYSTEM_DATA2['source_type'],
         "audit_status": "pending",
         "system_id": SYSTEM_DATA2["system_id"],
+        "instance_id": SYSTEM_DATA2["instance_id"],
         "permission_type": "complex",
     }
 ]
