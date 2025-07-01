@@ -249,20 +249,25 @@ class SystemListAllRequestSerializer(serializers.ModelSerializer):
 
 class SystemListAllResponseSerializer(serializers.ModelSerializer):
     id = serializers.SerializerMethodField()
-    name = serializers.SerializerMethodField()
     favorite = serializers.BooleanField(required=False)
 
     class Meta:
         model = System
-        fields = ['id', 'name', 'source_type', 'audit_status', 'favorite', "system_id", "permission_type"]
+        fields = [
+            'id',
+            'name',
+            "name_en",
+            'source_type',
+            'audit_status',
+            'favorite',
+            "system_id",
+            "permission_type",
+            "instance_id",
+        ]
 
     def get_id(self, obj) -> str:
         """系统ID"""
         return obj.system_id
-
-    def get_name(self, obj) -> str:
-        """系统名称（优先使用中文名称）"""
-        return obj.name or obj.name_en
 
 
 class SystemRoleListRequestSerializer(serializers.ModelSerializer):
