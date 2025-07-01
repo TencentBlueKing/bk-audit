@@ -753,6 +753,16 @@ class AiopsPlanSyncHandler:
             control.control_name = control_name
             control.save(update_fields=["control_name"])
             return control
+        control = Control._objects.filter(
+            control_type_id=ControlTypeChoices.AIOPS.value,
+            control_name=control_name,
+        ).first()
+
+        if control:
+            if control.is_deleted:
+                control.is_deleted = False
+                control.save(update_fields=["is_deleted"])
+            return control
         return Control.objects.create(control_name=control_name, control_type_id=ControlTypeChoices.AIOPS.value)
 
     def create_control_version(self, control: Control, plan_detail: dict) -> None:
