@@ -663,23 +663,29 @@ class AiopsPlanSyncHandler:
         """
         同步
         """
+        logger.info("[AIOPS_SYNC] 开始同步 AIOPS 控件")
 
         # 获取数据库中已经存储的AIOPS控件列表以及其对应的最新版本
         control_versions: List[ControlVersion] = list(self.load_control_from_db())
         db_plans = {cv.extra_config["plan_id"]: cv for cv in control_versions}
         db_plan_ids = set(db_plans.keys())
+
         # 获取BKBASE的所有方案
         bkbase_plans = self.load_plan_from_bkbase()
         bkbase_plan_map = {plan["plan_id"]: plan for plan in bkbase_plans}
         bkbase_plan_ids = set(bkbase_plan_map.keys())
+
         # 删除不存在的
         self.delete_control(
             control_versions=self.filter_control_by_plan(
                 plan_control_map=db_plans, plan_ids=(db_plan_ids - bkbase_plan_ids)
             )
         )
+
         # 更新或创建
         self.update_or_create_control(bkbase_plans=bkbase_plans, control_versions=db_plans)
+
+        logger.info("[AIOPS_SYNC] 同步完成; 本地控件数 => %s; 远端方案数 => %s", len(db_plan_ids), len(bkbase_plan_ids))
 
     def load_control_from_db(self) -> QuerySet:
         """
@@ -720,18 +726,26 @@ class AiopsPlanSyncHandler:
         """
         创建或删除控件
         """
-
         for plan in bkbase_plans:
             plan_id = plan["plan_id"]
+
             plan_detail = api.bk_base.get_plan_detail(plan_id=plan_id)
+
             # 方案不存在则创建
             if not control_versions.get(plan_id):
+                logger.info("[AIOPS_SYNC] 创建新控件; PlanID => %s", plan_id)
                 self.create_control_and_control_version(plan_detail)
                 continue
             # 方案存在需要比较方案版本号，相同则跳过，不同则创建
             control_version = control_versions[plan_id]
             if control_version.extra_config["latest_plan_version_id"] == plan_detail["latest_plan_version_id"]:
                 continue
+            logger.info(
+                "[AIOPS_SYNC] 版本更新; PlanID => %s; 本地版本 => %s; 最新版本 => %s",
+                plan_id,
+                control_version.extra_config["latest_plan_version_id"],
+                plan_detail["latest_plan_version_id"],
+            )
             self.create_control_and_control_version(plan_detail, control_version)
 
     @transaction.atomic()
@@ -739,19 +753,34 @@ class AiopsPlanSyncHandler:
         """
         创建控件和控件版本
         """
-
         control = self.create_or_update_control(control_name=plan_detail["plan_alias"], control_version=control_version)
-        self.create_control_version(control=control, plan_detail=plan_detail)
+
+        restored_count = ControlVersion._objects.filter(control_id=control.control_id, is_deleted=True).update(
+            is_deleted=False
+        )
+        logger.info("[AIOPS_SYNC] 恢复软删除版本; 控件ID => %s; 恢复数量 => %s", control.control_id, restored_count)
+
+        if not ControlVersion._objects.filter(
+            control_id=control.control_id, control_version=plan_detail["version_no"][1:]
+        ).exists():
+            self.create_control_version(control=control, plan_detail=plan_detail)
+            logger.info("[AIOPS_SYNC] 创建新控件版本; 控件ID => %s; 版本号 => %s", control.control_id, plan_detail["version_no"])
 
     def create_or_update_control(self, control_name: str, control_version: ControlVersion = None) -> Control:
         """
         创建或更新控件信息
         """
-
         if control_version:
             control = Control.objects.get(control_id=control_version.control_id)
             control.control_name = control_name
             control.save(update_fields=["control_name"])
+            return control
+        if control := Control._objects.filter(
+            control_type_id=ControlTypeChoices.AIOPS.value,
+            control_name=control_name,
+        ).first():
+            control.is_deleted = False
+            control.save(update_fields=["is_deleted"])
             return control
         return Control.objects.create(control_name=control_name, control_type_id=ControlTypeChoices.AIOPS.value)
 
@@ -759,7 +788,6 @@ class AiopsPlanSyncHandler:
         """
         创建控件版本
         """
-
         ControlVersion.objects.create(
             control_id=control.control_id,
             control_version=plan_detail["version_no"][1:],
@@ -773,7 +801,6 @@ class AiopsPlanSyncHandler:
         """
         删除不存在的控件
         """
-
         for cv in control_versions:
             # 事务删除
             with transaction.atomic():
@@ -786,5 +813,4 @@ class AiopsPlanSyncHandler:
         """
         由方案ID获取对应的控件版本
         """
-
         return [control_version for plan_id, control_version in plan_control_map.items() if plan_id in plan_ids]

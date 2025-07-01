@@ -133,7 +133,11 @@ def sync_plan_from_bkbase():
     if not AiopsFeature(help_text="check_flow_status").available:
         return
 
-    AiopsPlanSyncHandler().sync()
+    try:
+        AiopsPlanSyncHandler().sync()
+    except Exception as e:
+        logger_celery.exception("[AIOPS_SYNC] 执行 AiopsPlanSyncHandler.sync() 时发生异常: %s", str(e))
+        raise
 
 
 @periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
