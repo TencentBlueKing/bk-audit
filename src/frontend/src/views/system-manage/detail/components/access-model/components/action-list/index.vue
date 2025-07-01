@@ -43,7 +43,7 @@
         :condition="[]"
         :data="searchData"
         :defaut-using-item="{ inputHtml: t('请选择') }"
-        :placeholder="t('搜索操作ID、操作事件名、关联资源类型、风险等级、操作事件类型')"
+        :placeholder="placeholder"
         style="width: 480px;"
         unique-select
         value-split-code=","
@@ -112,6 +112,12 @@
   const addActionRef = ref();
   const { messageSuccess } = useMessage();
 
+  const isSimpleSystem = computed(() => route.query.type === 'simple');
+
+  const placeholder = computed(() => (isSimpleSystem.value
+    ? t('搜索操作ID、操作事件名、风险等级、操作事件类型')
+    : t('搜索操作ID、操作事件名、关联资源类型、风险等级、操作事件类型')));
+
   const tableColumn = computed(() => [
     {
       label: () => t('操作 ID'),
@@ -120,16 +126,17 @@
     {
       label: () => t('操作事件名称'),
       render: ({ data }: {data: SystemActionModel}) => (
-        data.description ? (
-        <span
-          class="tips"
-          v-bk-tooltips={ t(data.description) }>
-          {data.name}
-        </span>)
+        data.description
+          ? (<span
+                class="tips"
+                v-bk-tooltips={ t(data.description) }>
+                {data.name}
+              </span>)
           : (<span>{data.name}</span>)
       ),
     },
-    {
+    // 根据 isSimpleSystem 决定是否添加关联资源类型列
+    ...(isSimpleSystem.value ? [] : [{
       label: () => t('关联资源类型'),
       render: ({ data }: {data: SystemActionModel}) => (
         <>
@@ -142,7 +149,7 @@
           }
         </>
       ),
-    },
+    }]),
     {
       label: () => t('敏感等级'),
       render: ({ data }: {data: SystemActionModel}) => (
@@ -193,7 +200,7 @@
     },
   ]);
 
-  const searchData: SearchData[] = [
+  const searchData = computed<SearchData[]>(() => [
     {
       name: t('操作ID'),
       id: 'action_id',
@@ -204,11 +211,12 @@
       id: 'name__icontains',
       placeholder: t('请输入资源名称'),
     },
-    {
+    // 根据 isSimpleSystem 动态决定是否添加该项
+    ...(isSimpleSystem.value ? [] : [{
       name: t('关联资源类型'),
       id: 'resource_type_ids',
       placeholder: t('请输入资源操作'),
-    },
+    }]),
     {
       name: t('风险等级'),
       id: 'sensitivity',
@@ -219,7 +227,7 @@
       id: 'type',
       placeholder: t('请输入资源状态'),
     },
-  ];
+  ]);
 
   const searchKey = ref<Array<SearchKey>>([]);
 
@@ -322,6 +330,7 @@
   }, {
     deep: true,
   });
+
   defineExpose({
     updateAction() {
       fetchSystemActionList({

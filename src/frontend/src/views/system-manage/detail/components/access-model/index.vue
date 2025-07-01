@@ -59,12 +59,12 @@
     actionListListLength: null,
   });
 
-  const isShowreSource =  ref(computed(() => {
+  const isShowreSource =  computed(() => {
     if ('type' in route.query) {
       return route.query.type !== 'simple';
     }
     return true;
-  }));
+  });
 
   const handleUpdateAction = () => {
     actionListRef.value?.updateAction();
