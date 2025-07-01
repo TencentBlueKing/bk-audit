@@ -146,7 +146,7 @@
     {
       label: () => t('系统 ID'),
       sort: 'custom',
-      field: () => 'system_id',
+      field: () => 'instance_id',
       width: '180px',
     },
     {

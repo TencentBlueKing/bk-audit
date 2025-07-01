@@ -383,8 +383,16 @@
     clients: string[];
     system_url: string;
   }
+  interface Props {
+    systemDetail: SystemModel;
+  }
 
+  const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
+  const route = useRoute();
+  const router = useRouter();
+  const { t } = useI18n();
+
   const formData = ref<FormData>({
     name: '',
     instance_id: '',
@@ -400,14 +408,42 @@
       value: '',
     },
   ]);
-  const { t } = useI18n();
   const isShowNameTip = ref(false);
   const step1Disabled = ref(false);
+  const isDisabled = ref(false);
   const callFormRef = ref();
   const baseFormRef = ref();
-  const isDisabled = ref(false);
   const cardRefOne = ref();
   const cardRefTwo = ref();
+  const popoverTable = ref([
+    {
+      type: '业务',
+      lv: '王者荣耀',
+      cz: '新增',
+      log: '新增 1 个叫“王者荣耀”的业务',
+    },
+    {
+      type: '业务',
+      lv: '王者荣耀',
+      cz: '新增',
+      log: '新增 1 个叫“王者荣耀”的业务',
+    },
+    {
+      type: '业务',
+      lv: '王者荣耀',
+      cz: '新增',
+      log: '新增 1 个叫“王者荣耀”的业务',
+    },
+  ]);
+
+  const isNewSystem = computed(() => route.query.isNewSystem === 'true');
+  const showModelType = computed(() => {
+    if (Number(route.query.step) === 1.5) {
+      return false;
+    }
+    return true;
+  });
+
   const rules = {
     instance_id: [
       {
@@ -466,9 +502,6 @@
       },
     ],
   };
-  const route = useRoute();
-  const router = useRouter();
-  const isNewSystem = ref(computed(() => route.query.isNewSystem === 'true'));
 
   const handlerBlur = async () => {
     try {
@@ -492,32 +525,6 @@
       window.open(link, '_blank');
     }
   };
-  const showModelType = ref(computed(() => {
-    if (Number(route.query.step) === 1.5) {
-      return false;
-    }
-    return true;
-  }));
-  const popoverTable = ref([
-    {
-      type: '业务',
-      lv: '王者荣耀',
-      cz: '新增',
-      log: '新增 1 个叫“王者荣耀”的业务',
-    },
-    {
-      type: '业务',
-      lv: '王者荣耀',
-      cz: '新增',
-      log: '新增 1 个叫“王者荣耀”的业务',
-    },
-    {
-      type: '业务',
-      lv: '王者荣耀',
-      cz: '新增',
-      log: '新增 1 个叫“王者荣耀”的业务',
-    },
-  ]);
 
   const {
     data: systemList,
@@ -554,6 +561,7 @@
       },
     });
   };
+
   // 添加客户端项
   const addClient = () => {
     // 生成新的唯一ID：当前最大ID+1
@@ -591,27 +599,21 @@
       return false; // 返回验证失败状态
     }
   };
-  const systemDetail = ref();
-  const {
-    run: fetchSystemDetail,
-  } = useRequest(MetaManageService.fetchSystemDetail, {
-    defaultParams: [],
-    defaultValue: new SystemModel(),
-    onSuccess: (result) => {
-      systemDetail.value = result;
-      isDisabled.value = !(result.source_type === 'bk_audit');
-      emit('updateCanEditSystem', isDisabled.value);
-      clientList.value = result.clients.map((item: string, index: number) => ({
+
+  watch(() => props.systemDetail, (newVal) => {
+    if (newVal) {
+      isDisabled.value = !(newVal.source_type === 'bk_audit');
+      clientList.value = newVal.clients.map((item: string, index: number) => ({
         id: index,
         value: item,
       }));
-      formData.value.instance_id = result.instance_id;
-      formData.value.name = result.name;
-      formData.value.managers = result.managers;
-      formData.value.callback_url = result.callback_url;
-      formData.value.system_url = result.system_url;
-      formData.value.description = result.description;
-    },
+      formData.value.instance_id = newVal.instance_id;
+      formData.value.name = newVal.name;
+      formData.value.managers = newVal.managers;
+      formData.value.callback_url = newVal.callback_url;
+      formData.value.system_url = newVal.system_url;
+      formData.value.description = newVal.description;
+    }
   });
 
   watch(() => clientList.value, (newData) => {
@@ -631,22 +633,12 @@
   watch(() => route, () => {
     nextTick(() => {
       step1Disabled.value = 'fromStep' in route.query;
-
-      if (route.query.systemId) {
-        fetchSystemDetail({
-          id: route.query.systemId,
-        });
-      }
-      if (route.query.fromStep) {
-        fetchSystemDetail({
-          id: route.params.id,
-        });
-      }
     });
   }, {
     deep: true,
     immediate: true,
   });
+
   onMounted(() => {
     fetchSystemWithAction();
   });
@@ -657,10 +649,13 @@
       router.replace({
         query: {
           ...route.query,
-          step: ((systemDetail.value.collector_count === 0 || systemDetail.value.resource_type_count === 0) && systemDetail.value.system_stage !== 'permission_model ') ? '2' :  '1.5',
+          step: ((props.systemDetail.collector_count === 0 || props.systemDetail.resource_type_count === 0)
+            && props.systemDetail.system_stage !== 'permission_model ')
+            ? '2'
+            : '1.5',
         },
         params: {
-          id: systemDetail.value.system_id,
+          id: props.systemDetail.system_id,
         },
       });
     },
