@@ -65,7 +65,7 @@
 
   const themeMap: Record<string, 'info' | 'warning' | 'success' | 'danger' | undefined> = {
     normal: 'success',
-    completed: 'warning',
+    incomplete: 'warning',
     abnormal: 'danger',
   };
 
