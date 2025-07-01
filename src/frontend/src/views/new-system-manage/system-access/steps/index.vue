@@ -34,10 +34,10 @@
         :is="stepComponents(curStep)"
         ref="stepRef"
         :can-edit-system="canEditSystem"
+        :system-detail="systemDetail"
         @get-is-disabled-btn="getIsDisabledBtn"
         @handler-validates="handlerValidates"
-        @is-data-enabled="isDataEnabled"
-        @update-can-edit-system="handleUpdate" />
+        @is-data-enabled="isDataEnabled" />
     </div>
 
     <div class="step-footer">
@@ -117,6 +117,8 @@
 
   import MetaManageService from '@service/meta-manage';
 
+  import SystemModel from '@model/meta/system';
+
   import HeaderSteps from './components/header-steps.vue';
   import Step1 from './step1/index.vue';
   import Step2 from './step2/index.vue';
@@ -135,12 +137,8 @@
   const { t } = useI18n();
   const route = useRoute();
   const router = useRouter();
-  const canEditSystem = ref(true);
-  // 将 curStep 定义为计算属性，确保始终返回数字类型
-  const curStep = computed<number>(() => {
-    const step = Number(route.query.step);
-    return isNaN(step) ? 1 : step;
-  });
+  const { messageSuccess } = useMessage();
+
   const isStep3Disabled = ref(true);
   const isStep2Disabled = ref(false);
   const stepRef = ref();
@@ -155,6 +153,15 @@
       title: t('上报日志数据'),
     },
   ]);
+
+  // 将 curStep 定义为计算属性，确保始终返回数字类型
+  const curStep = computed<number>(() => {
+    const step = Number(route.query.step);
+    return isNaN(step) ? 1 : step;
+  });
+
+  // 是否可以编辑系统
+  const canEditSystem = computed(() => systemDetail.value.source_type === 'audit');
 
   // 创建系统
   const {
@@ -205,6 +212,14 @@
     },
   });
 
+  const {
+    data: systemDetail,
+    run: fetchSystemDetail,
+  } = useRequest(MetaManageService.fetchSystemDetail, {
+    defaultParams: [],
+    defaultValue: new SystemModel(),
+  });
+
   const stepComponents = (step: number | string) => {
     const steps = [Step1, Step2, Step3, Step4];
     // 确保step在1-4范围内，超出则返回最后一个组件
@@ -217,7 +232,6 @@
   const handlerStep1Submit = () => {
     stepRef.value.handlerFormData();
   };
-  const { messageSuccess } = useMessage();
 
   const handlerValidates: (...args: unknown[]) => void = (data: unknown) => {
     if (typeof data !== 'object' || data === null) return;
@@ -260,6 +274,7 @@
       onCancel() {},
     });
   };
+
   const handlerStepSubmit = () => {
     router.push({
       query: {
@@ -269,6 +284,7 @@
       },
     });
   };
+
   const handlerStep2Cancel = () => {
     stepRef.value.previousStep();
   };
@@ -298,6 +314,7 @@
       },
     });
   };
+
   const handlerStep3Submit = () => {
     window.changeConfirm = false;
     router.push({
@@ -307,6 +324,7 @@
       },
     });
   };
+
   // 取消
   const handlerCancel = () => {
     window.changeConfirm = false;
@@ -326,17 +344,7 @@
       onCancel() {},
     });
   };
-  const handleUpdate = (value: any) => {
-    canEditSystem.value = !value;
-  };
 
-  window.changeConfirm = true;
-  watch(() => route, () => {
-    window.changeConfirm = true;
-  }, {
-    deep: true,
-    immediate: true,
-  });
   const getIsDisabledBtn: (...args: unknown[]) => void = (val: unknown) => {
     if (typeof val === 'boolean') {
       isStep2Disabled.value = val;
@@ -348,6 +356,25 @@
       isStep3Disabled.value = !val;
     }
   };
+
+  window.changeConfirm = true;
+  watch(() => route, () => {
+    window.changeConfirm = true;
+
+    if (route.query.systemId) {
+      fetchSystemDetail({
+        id: route.query.systemId,
+      });
+    }
+    if (route.query.fromStep) {
+      fetchSystemDetail({
+        id: route.params.id,
+      });
+    }
+  }, {
+    deep: true,
+    immediate: true,
+  });
 </script>
 
 <style scoped lang="postcss">

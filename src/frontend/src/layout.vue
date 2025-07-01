@@ -256,7 +256,7 @@
                       style="max-width: 200px;"
                       theme="light" />
                     <bk-popover
-                      v-if="item.system_stage === 'collector' || item.system_stage === 'permission_model' "
+                      v-if="item.system_status === 'incomplete'"
                       :content="contentText(item.system_stage)"
                       placement="top"
                       theme="light">
@@ -441,7 +441,8 @@
     permission: {
       view_system: boolean;
     };
-    system_status: 'pending' | 'completed' | 'abnormal' | 'normal';
+    permission_type: 'simple' | 'complex';
+    system_status: 'pending' | 'incomplete' | 'abnormal' | 'normal';
     system_stage?: 'pending' | 'permission_model' | 'collector' | 'completed';
     favorite: boolean;
   }
@@ -449,7 +450,7 @@
   const projectList = ref<SystemItem[]>([]);
   const permissionCreateSystem = ref(false);
 
-  const contentText = (stage: string) => {
+  const contentText = (stage: string | undefined) => {
     if (stage === 'permission_model') {
       return '系统尚未完成确实模型配置，请继续设置';
     } if (stage === 'collector') {
@@ -460,7 +461,6 @@
   const isSelectOpen = ref(false);
 
   const handleSelectToggle = (val: boolean) => {
-    console.log(val);
     isSelectOpen.value = val;
   };
   // 获取新建权限
@@ -522,12 +522,20 @@
 
   // 系统切换
   const handleSystemChange = (value: string) => {
+    // 找到对应选中item
+    const project = projectList.value.find(item => item.id === value);
+    if (!project) {
+      return;
+    }
     // 在route.meta中添加systemId
     sessionStorage.setItem('systemProjectId', value);
     router.push({
       name: 'systemInfo',
       params: {
         id: value,
+      },
+      query: {
+        type: project.permission_type,
       },
     });
   };
@@ -565,6 +573,9 @@
   };
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
+    if (route.params.id) {
+      systemId.value = route.params.id as string;
+    }
   }, {
     deep: true,
     immediate: true,
