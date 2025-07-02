@@ -10,6 +10,7 @@ from services.web.tool.constants import (
     SQLDataSearchConfig,
     ToolTypeEnum,
 )
+from services.web.tool.exceptions import DataSearchSimpleModeNotSupportedError
 from services.web.tool.models import (
     BkVisionToolConfig,
     DataSearchToolConfig,
@@ -27,10 +28,12 @@ def create_tool_with_config(validated_data: dict) -> Tool:
     """
     config_data = validated_data.get("config")
     tag_names = validated_data.pop("tags", [])
-
+    data_search_config_type = validated_data.pop("data_search_config_type", None)
     tool = Tool.objects.create(**validated_data)
     if tool.tool_type == ToolTypeEnum.DATA_SEARCH.value:
-        _create_sql_tool(tool, config_data)
+        if data_search_config_type == DataSearchConfigTypeEnum.SIMPLE:
+            raise DataSearchSimpleModeNotSupportedError()
+        _create_sql_tool(tool, config_data, data_search_config_type)
     elif tool.tool_type == ToolTypeEnum.BK_VISION.value:
         _create_bkvision_tool(tool, config_data)
     sync_resource_tags(
@@ -44,14 +47,14 @@ def create_tool_with_config(validated_data: dict) -> Tool:
 
 
 @transaction.atomic
-def _create_sql_tool(tool: Tool, config_data: dict):
+def _create_sql_tool(tool: Tool, config_data: dict, config_type: str):
     """
     创建sql类型工具的子表配置
     """
     config = SQLDataSearchConfig(**config_data)
     DataSearchToolConfig.objects.create(
         tool=tool,
-        data_search_config_type=DataSearchConfigTypeEnum.SQL,
+        data_search_config_type=config_type,
         sql=config.sql,
     )
 

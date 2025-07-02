@@ -114,6 +114,7 @@ class ToolResourceTestCase(TestCase):
             "name": "New SQL Tool",
             "namespace": "default_ns",
             "tool_type": ToolTypeEnum.DATA_SEARCH.value,
+            "data_search_config_type": DataSearchConfigTypeEnum.SQL.value,
             "config": {
                 "sql": "select * from test",
                 "referenced_tables": [],
