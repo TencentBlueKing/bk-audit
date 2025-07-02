@@ -17,6 +17,8 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import time
+from functools import reduce
+from operator import or_
 from typing import List
 
 from bk_resource import api
@@ -26,6 +28,7 @@ from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
 from celery.schedules import crontab
 from django.conf import settings
+from django.db.models import Q
 from django.utils.translation import gettext
 
 from apps.notice.constants import MsgType
@@ -44,6 +47,8 @@ from services.web.analyze.controls.auth import (
     AssetAuthHandler,
     CollectorPluginAuthHandler,
 )
+from services.web.analyze.controls.monitor import LostSceneDetectedEvent
+from services.web.analyze.models import ControlVersion
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.models import Strategy
 
@@ -192,3 +197,44 @@ def toggle_monitor(strategy_id: int, is_active: bool):
     alert_config["notify_config"] = notify_config
     api.bk_base.edit_alert_configs(**alert_config)
     logger_celery.info("[ToggleMonitorSuccess] %s %s", strategy_id, is_active)
+
+
+@periodic_task(
+    run_every=crontab(minute=settings.CHECK_LOST_SCENE_INTERVAL), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT
+)
+@lock(lock_name="celery:check_lost_scene")
+def check_lost_scene():
+    """
+    丢失场景检查任务：扫描策略中引用的控件版本是否已被删除
+    """
+    strategies = list(
+        Strategy.objects.filter(control_id__isnull=False, control_version__isnull=False).only(
+            "strategy_id", "control_id", "control_version", "strategy_name"
+        )
+    )
+
+    control_pairs = {(s.control_id, s.control_version) for s in strategies}
+
+    if not control_pairs:
+        logger_celery.info("没有策略引用控件版本，跳过丢失场景检查任务")
+        return
+    q = reduce(or_, [Q(control_id=cid, control_version=cv) for cid, cv in control_pairs], Q())
+    existing_pairs = set(ControlVersion.objects.filter(q).values_list("control_id", "control_version"))
+
+    for strategy in strategies:
+        if (strategy.control_id, strategy.control_version) not in existing_pairs:
+            event = LostSceneDetectedEvent(
+                target=f"strategy_{strategy.strategy_id}",
+                context={
+                    "strategy_id": str(strategy.strategy_id),
+                    "control_id": strategy.control_id,
+                    "control_version": str(strategy.control_version),
+                    "strategy_name": strategy.strategy_name,
+                },
+                extra={"control_id": strategy.control_id, "control_version": strategy.control_version},
+            )
+            try:
+                api.bk_monitor.report_event(event.to_json())
+                logger_celery.info(f"丢失控件版本事件上报成功，策略ID={strategy.strategy_id}")
+            except APIRequestError as e:
+                logger_celery.error(f"丢失控件版本事件上报失败，策略ID={strategy.strategy_id}，错误信息：{e}")

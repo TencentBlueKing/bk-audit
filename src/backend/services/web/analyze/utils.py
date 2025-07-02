@@ -16,10 +16,16 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import datetime
+import os
 
+from django.conf import settings
 from rest_framework.settings import api_settings
 
 from services.web.analyze.constants import OffsetUnit, ResultTableType
+
+__all__ = [
+    "get_service_name",
+]
 
 
 def calculate_offline_flow_start_time(schedule_period: OffsetUnit):
@@ -53,3 +59,14 @@ def is_asset(result_table: dict):
     processing_type = result_table.get("processing_type")
     result_table_type = result_table.get("result_table_type")
     return (processing_type == ResultTableType.CDC) or (result_table_type == ResultTableType.STATIC)
+
+
+def get_service_name() -> str:
+    """获得服务名称 ."""
+    app_module_name = getattr(settings, "APP_MODULE_NAME", "")
+    service_name = (
+        os.getenv("BKAPP_OTEL_SERVICE_NAME")
+        or getattr(settings, "BKAPP_OTEL_SERVICE_NAME", None)
+        or (settings.APP_CODE + f"-{app_module_name}" if app_module_name else "")
+    )
+    return service_name
