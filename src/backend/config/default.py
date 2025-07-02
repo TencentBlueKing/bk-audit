@@ -462,6 +462,9 @@ HIGH_RISK_PORTS = {
     )  # noqa
 }
 
+# 检查丢失场景的间隔时间
+CHECK_LOST_SCENE_INTERVAL = int(os.getenv("BKAPP_CHECK_LOST_SCENE_INTERVAL", 10))
+
 """
 以下为框架代码 请勿修改
 """
