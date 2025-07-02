@@ -44,6 +44,7 @@ class ReportMetricSerializer(serializers.Serializer):
 # 事件数据序列化器
 class EventDataSerializer(MetricDataSerializer):
     event_name = serializers.CharField(label=gettext_lazy("事件名称"))
+    event = serializers.DictField(label=gettext_lazy("事件内容"))
     metrics = None
 
 
