@@ -20,6 +20,7 @@ from rest_framework import serializers
 
 from services.web.tool.constants import (
     BkvisionConfig,
+    DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
     ToolTypeEnum,
 )
@@ -36,14 +37,23 @@ class ToolCreateRequestSerializer(serializers.Serializer):
     tags = serializers.ListField(
         child=serializers.CharField(), required=False, allow_empty=True, label=gettext_lazy("标签列表"), default=[]
     )
+    data_search_config_type = serializers.ChoiceField(
+        choices=DataSearchConfigTypeEnum.choices,
+        required=False,
+        label=gettext_lazy("数据查询配置类型"),
+        help_text=gettext_lazy("仅在 tool_type=data_search 时必须，支持 simple/sql"),
+    )
 
     def validate(self, attrs):
         tool_type = attrs["tool_type"]
         config = attrs["config"]
+        if tool_type == ToolTypeEnum.DATA_SEARCH:
+            data_search_config_type = attrs["data_search_config_type"]
 
         if tool_type == ToolTypeEnum.BK_VISION:
             BkvisionConfig(**config)
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
+            DataSearchConfigTypeEnum(data_search_config_type)
             SQLDataSearchConfig(**config)
         else:
             raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
@@ -55,6 +65,7 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     config = serializers.DictField(label=gettext_lazy("工具配置"))
     name = serializers.CharField(label=gettext_lazy("工具名称"))
+    namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     tags = serializers.ListField(
         child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")

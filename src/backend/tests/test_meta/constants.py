@@ -554,6 +554,19 @@ GLOBAL_CHOICES = {
         {"id": "iam_v4", "name": "权限中心V4"},
         {"id": "bk_audit", "name": "审计中心"},
     ],
+    "ToolType": [
+        {"id": "data_search", "name": "数据查询"},
+        {"id": "api", "name": "API"},
+        {"id": "bk_vision", "name": "BK Vision"},
+    ],
+    "DataSearchConfigType": [{"id": "simple", "name": "简易模式"}, {"id": "sql", "name": "SQL模式"}],
+    "FieldCategory": [
+        {"id": "input", "name": "输入框"},
+        {"id": "number_input", "name": "数字输入框"},
+        {"id": "time_range_select", "name": "时间范围选择器"},
+        {"id": "time_select", "name": "时间选择器"},
+        {"id": "person_select", "name": "人员选择器"},
+    ],
 }
 
 SYSTEM_DIAGNOSIS_PUSH_TEMPLATE = """{
