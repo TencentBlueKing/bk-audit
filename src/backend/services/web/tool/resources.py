@@ -33,6 +33,7 @@ from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
 from core.sql.parser.praser import SqlQueryAnalysis
+from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.executor.tool import ToolExecutorFactory
 from services.web.tool.models import Tool, ToolTag
 from services.web.tool.serializer import (
@@ -150,9 +151,9 @@ class CreateTool(ToolBase):
     {
       "tool_type": "data_search",
       "name": "xxx",
-      "namespace": "xxx",
       "description": "xxx",
       "tags": ["xxx", "xxx"],
+      "data_search_config_type": "sql"  # 仅data_search类型工具需要
       "config": {
         "referenced_tables": [
           {
@@ -180,14 +181,12 @@ class CreateTool(ToolBase):
           }
         ],
         "sql": "SELECT * FROM xxx WHERE $condition",
-        "prefer_storage": "doris"
       }
     }
     请求参数：bk_vision工具类型
     {
       "tool_type": "bk_vision",
       "name": "xxx",
-      "namespace": "xxx",
       "description": "xxx",
       "tags": ["xxx"],
       "config": {
@@ -244,7 +243,6 @@ class UpdateTool(ToolBase):
           }
         ],
         "sql": "SELECT * FROM xxx WHERE $condition",
-        "prefer_storage": "doris"
       }
     }
     请求参数：bk_vision工具类型
@@ -287,8 +285,9 @@ class UpdateTool(ToolBase):
                     "version": tool.version + 1,
                     "config": new_config,
                 }
+                if tool.tool_type == ToolTypeEnum.DATA_SEARCH:
+                    new_tool_data["data_search_config_type"] = tool.data_search_config.data_search_config_type
                 return create_tool_with_config(new_tool_data)
-
         for key, value in validated_request_data.items():
             setattr(tool, key, value)
         tool.save(update_fields=validated_request_data.keys())
