@@ -1,7 +1,7 @@
 from unittest import mock
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
-from services.web.tool.constants import ToolTypeEnum
+from services.web.tool.constants import DataSearchConfigTypeEnum, ToolTypeEnum
 from services.web.tool.models import Tool
 from tests.test_tool.constants import MOCK_API_RESPONSE
 
@@ -46,6 +46,7 @@ class TestToolFullFlow(TestCase):
                 "config": config,
                 "description": "desc",
                 "uid": uid,
+                "data_search_config_type": DataSearchConfigTypeEnum.SQL.value,
             }
         )
         uid = resp["uid"]

@@ -24,9 +24,10 @@ from pydantic import Field as PydanticField
 from pydantic.v1 import root_validator
 
 from api.bk_base.constants import StorageType
-from core.choices import TextChoices
+from core.choices import TextChoices, register_choices
 
 
+@register_choices("ToolType")
 class ToolTypeEnum(TextChoices):
     """
     工具类型
@@ -37,6 +38,7 @@ class ToolTypeEnum(TextChoices):
     BK_VISION = "bk_vision", gettext_lazy("BK Vision")
 
 
+@register_choices("DataSearchConfigType")
 class DataSearchConfigTypeEnum(TextChoices):
     """
     数据查询配置类型
@@ -46,6 +48,7 @@ class DataSearchConfigTypeEnum(TextChoices):
     SQL = "sql", gettext_lazy("SQL模式")
 
 
+@register_choices("FieldCategory")
 class FieldCategory(TextChoices):
     """
     字段类别(前端类型)
