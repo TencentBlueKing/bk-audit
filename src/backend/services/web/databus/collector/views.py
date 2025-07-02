@@ -53,11 +53,49 @@ class CollectorsViewSet(ResourceViewSet):
             ]
         if self.action in ["join_data"]:
             return [IAMPermission(actions=[ActionEnum.MANAGE_GLOBAL_SETTING])]
+        if self.action == "get_collector_info":
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.VIEW_SYSTEM],
+                    resource_meta=ResourceEnum.SYSTEM,
+                    get_instance_id=self.get_system_id,
+                ),
+                InstanceActionPermission(
+                    actions=[ActionEnum.VIEW_COLLECTION_BK_LOG],
+                    resource_meta=ResourceEnum.COLLECTION_BK_LOG,
+                    get_instance_id=self.get_collector_config_id,
+                ),
+            ]
+
+        if self.action in ["update_collector", "delete_collector"]:
+            return [
+                InstanceActionPermission(
+                    actions=[ActionEnum.VIEW_SYSTEM],
+                    resource_meta=ResourceEnum.SYSTEM,
+                    get_instance_id=self.get_system_id,
+                ),
+                InstanceActionPermission(
+                    actions=[
+                        ActionEnum.VIEW_COLLECTION_BK_LOG,
+                        ActionEnum.MANAGE_COLLECTION_BK_LOG,
+                    ],
+                    resource_meta=ResourceEnum.COLLECTION_BK_LOG,
+                    get_instance_id=self.get_collector_config_id,
+                ),
+            ]
+
         return [
             InstanceActionPermission(
                 actions=[ActionEnum.VIEW_SYSTEM], resource_meta=ResourceEnum.SYSTEM, get_instance_id=self.get_system_id
             )
         ]
+
+    def get_collector_config_id(self):
+        return (
+            self.kwargs.get("pk")
+            or self.request.query_params.get("collector_config_id")
+            or self.request.data.get("collector_config_id")
+        )
 
     def get_system_id(self):
         # step 1: 根据collector_id转换成实际的system_id
