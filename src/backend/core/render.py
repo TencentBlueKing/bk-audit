@@ -5,12 +5,12 @@ import re
 from typing import Dict, List, Union
 
 from django.utils import translation
-from jinja2 import Environment
+from jinja2.sandbox import SandboxedEnvironment
 
 
-def jinja2_environment(*args, **kwargs) -> Environment:
+def jinja2_environment(*args, **kwargs) -> SandboxedEnvironment:
     """创建jinja2的环境执行环境 ."""
-    env = Environment(extensions=["jinja2.ext.i18n"], *args, **kwargs)
+    env = SandboxedEnvironment(extensions=["jinja2.ext.i18n"], *args, **kwargs)
     env.install_gettext_translations(translation, newstyle=True)
     return env
 
