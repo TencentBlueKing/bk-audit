@@ -89,6 +89,39 @@ class ListToolTags(ToolBase):
 
 
 class ListTool(ToolBase):
+    """
+    keyword：模糊搜索关键词（创建人/工具名称/工具描述）
+    limit：分页大小
+    offset：分页偏移量
+    tags：默认[](id数组)
+    tool_type=data_search：响应结构
+        [
+      {
+        "uid": "xxx",
+        "name": "xxx",
+        "tool_type": "data_search",
+        "version": 1,
+        "description": "xxx",
+        "namespace": "xxx",
+        "permission": {
+          "use_tool": true
+        }
+      },
+    tool_type=bk_vision：响应结构
+      {
+        "uid": "xxx",
+        "name": "xxx",
+        "tool_type": "bk_vision",
+        "version": 1,
+        "description": "xxx",
+        "namespace": "xxx",
+        "permission": {
+          "use_tool": true
+        }
+      }
+    ]
+    """
+
     name = gettext_lazy("获取工具列表")
     RequestSerializer = ListRequestSerializer
     many_response_data = True
@@ -147,13 +180,13 @@ class DeleteTool(ToolBase):
 class CreateTool(ToolBase):
     """
     ```json
-    请求参数：data_search工具类型
+    请求参数：data_search 工具类型
     {
       "tool_type": "data_search",
       "name": "xxx",
       "description": "xxx",
       "tags": ["xxx", "xxx"],
-      "data_search_config_type": "sql"  # 仅data_search类型工具需要
+      "data_search_config_type": "sql",  // 仅 data_search 类型工具需要
       "config": {
         "referenced_tables": [
           {
@@ -177,13 +210,26 @@ class CreateTool(ToolBase):
           {
             "raw_name": "xxx",
             "display_name": "xxx",
-            "description": "xxx"
+            "description": "xxx",
+            "drill_config": {
+              "tool": {
+                "uid": "XXX",
+                "version": 1
+              },
+              "config": [
+                {
+                  "target_field": "XXX",
+                  "source_field": "XXX",
+                  "field_source": "XXX"
+                }
+              ]
+            }
           }
         ],
-        "sql": "SELECT * FROM xxx WHERE $condition",
+        "sql": "SELECT * FROM xxx WHERE $condition"
       }
     }
-    请求参数：bk_vision工具类型
+    请求参数：bk_vision 工具类型
     {
       "tool_type": "bk_vision",
       "name": "xxx",
@@ -194,10 +240,12 @@ class CreateTool(ToolBase):
       }
     }
     响应结构：
-     "data": {
-            "uid": "xxx",
-            "version": xxx
-        },
+    {
+      "data": {
+        "uid": "xxx",
+        "version": xxx
+      }
+    }
     """
 
     name = gettext_lazy("新增工具")
@@ -240,6 +288,19 @@ class UpdateTool(ToolBase):
             "raw_name": "xxx",
             "display_name": "xxx",
             "description": "xxx"
+            "drill_config": {
+              "tool": {
+                "uid": "XXX",
+                "version": 1
+              },
+              "config": [
+                {
+                  "target_field": "XXX",
+                  "source_field": "XXX",
+                  "field_source": "XXX"
+                }
+              ]
+            }
           }
         ],
         "sql": "SELECT * FROM xxx WHERE $condition",
