@@ -113,7 +113,6 @@ class ToolListResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(label=gettext_lazy("工具版本"))
     description = serializers.CharField(allow_blank=True, label=gettext_lazy("工具描述"))
     namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
-    config = serializers.DictField(label=gettext_lazy("工具配置"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
 
 
