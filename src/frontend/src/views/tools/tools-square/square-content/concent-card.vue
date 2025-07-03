@@ -128,7 +128,7 @@
           {{ item.desc }}
         </div>
         <div class="item-footer">
-          <span>@ ivonye(叶青)</span>
+          <span>@ xxxxx</span>
           <span>2015-3-20 15:22:00</span>
         </div>
       </div>

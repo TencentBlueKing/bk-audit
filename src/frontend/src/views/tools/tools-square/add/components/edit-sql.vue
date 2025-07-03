@@ -18,11 +18,12 @@
   <audit-sideslider
     ref="sidesliderRef"
     v-model:isShow="showEditSql"
-    :show-footer="false"
+    show-footer-slot
     :title="t('编辑sql')"
     width="996">
     <div class="edit-container">
       <bk-alert
+        v-if="isEditMode"
         closable
         theme="warning">
         {{ t('编辑后，已渲染的内容有可能会重新修改') }}
@@ -30,9 +31,21 @@
       <div class="sql-editor">
         <div class="title">
           <span style="margin-left: auto;">
+            <input
+              ref="uploadRef"
+              accept=".sql"
+              name="avatar"
+              style="display: none;"
+              type="file"
+              @change="handleChangSql">
+            <audit-icon
+              v-bk-tooltips="t('上传')"
+              class="icon"
+              type="upload"
+              @click="handleUpload" />
             <audit-icon
               v-bk-tooltips="t('复制')"
-              class="icon"
+              class="ml16 icon"
               type="copy" />
             <audit-icon
               v-bk-tooltips="t('全屏')"
@@ -54,6 +67,23 @@
         </div>
       </div>
     </div>
+    <template #footer>
+      <div style="padding-left: 16px;">
+        <bk-button
+          class="mr8"
+          :loading="btnLoading"
+          style="width: 102px;"
+          theme="primary"
+          @click="handleConfirm">
+          {{ t('保存并解析') }}
+        </bk-button>
+        <bk-button
+          style="min-width: 64px;"
+          @click="handleCancle">
+          {{ t('取消') }}
+        </bk-button>
+      </div>
+    </template>
   </audit-sideslider>
 </template>
 <script setup lang="ts">
@@ -61,28 +91,89 @@
   import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  let editor: monaco.editor.IStandaloneCodeEditor;
+  import ToolManageService from '@service/tool-manage';
 
-  const { t } = useI18n();
-  const rootRef = ref();
+  import ParseSqlModel from '@model/tool/parse-sql';
 
+  import useFullScreen from '@/hooks/use-full-screen';
+  import useRequest from '@/hooks/use-request';
+
+  interface Emits {
+    (e: 'UpdateParseSql', value: ParseSqlModel): void;
+  }
+
+  const emits = defineEmits<Emits>();
   const showEditSql = defineModel<boolean>('showEditSql', {
     required: true,
   });
 
-  const showExit = ref(false);
+  let editor: monaco.editor.IStandaloneCodeEditor;
+
+  const { t } = useI18n();
+  const rootRef = ref();
+  const uploadRef = ref();
+  const { showExit, handleScreenfull } = useFullScreen(
+    () => editor,
+    () => rootRef.value,
+  );
+
+  const isEditMode = ref(false);
+  const filename = ref('');
+  const formData = ref({
+    sql: '',
+    dialect: 'mysql',
+  });
+
+  // 解析sql
+  const {
+    loading: btnLoading,
+    run: parseSql,
+  } = useRequest(ToolManageService.parseSql, {
+    defaultValue: new ParseSqlModel(),
+    onSuccess: (data) => {
+      emits('UpdateParseSql', data);
+      handleCancle();
+    },
+  });
+
+  // 保存并解析
+  const handleConfirm = () => {
+    nextTick(() => {
+      parseSql(formData.value);
+    });
+  };
+
+  const handleCancle = () => {
+    formData.value.sql = '';
+    showEditSql.value = false;
+    isEditMode.value = false;
+  };
 
   // 实现全屏
   const handleToggleFullScreen = () => {
-    console.log('toggle full screen');
+    handleScreenfull();
   };
 
+  // 退出全屏
   const handleExitFullScreen = () => {
-    console.log('exit full screen');
+    handleScreenfull();
   };
 
-  const handleReize = () => {
-    editor.layout();
+  const handleUpload = () => {
+    uploadRef.value.click();
+  };
+
+  const handleChangSql = (e: any) => {
+    const reader = new FileReader();
+    filename.value = uploadRef.value.files[0].name;
+    reader.readAsText((uploadRef.value.files[0]));
+    reader.onload = (e: Event) => {
+      const target = e.target as FileReader;
+      formData.value.sql = target.result as string;
+      const model = monaco.editor.createModel(formData.value.sql, 'sql');
+      editor.setModel(model);
+    };
+    e.target.value = '';
   };
 
   const defineTheme = () => {
@@ -109,6 +200,7 @@
 
   const initEditor = () => {
     editor = monaco.editor.create(rootRef.value, {
+      value: formData.value.sql,
       language: 'sql',
       theme: 'vs-dark',
       minimap: {
@@ -118,7 +210,9 @@
       wordWrap: 'bounded',
     });
     editor.layout();
-    window.addEventListener('resize', handleReize);
+    editor.onDidBlurEditorText(() => {
+      formData.value.sql = editor.getValue();
+    });
   };
 
   watch(() => showEditSql.value, (val) => {
@@ -128,6 +222,13 @@
         defineTheme();
       });
     }
+  });
+
+  defineExpose({
+    setEditorValue(value: string) {
+      formData.value.sql = value;
+      isEditMode.value = true;
+    },
   });
 </script>
 <style scoped lang="postcss">
@@ -155,6 +256,16 @@
 
     .sql-container {
       position: relative;
+
+      .exit-icon {
+        position: absolute;
+        top: 10px;
+        right: 20px;
+        z-index: 11111;
+        font-size: 20px;
+        color: #c4c6cc;
+        cursor: pointer;
+      }
     }
   }
 }
