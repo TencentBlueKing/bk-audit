@@ -75,6 +75,6 @@ class TicketNodeAdmin(admin.ModelAdmin):
 
 @admin.register(TicketPermission)
 class TicketPermissionAdmin(admin.ModelAdmin):
-    list_display = ["id", "risk_id", "action", "operator"]
-    search_fields = ["risk_id", "operator"]
+    list_display = ["id", "risk_id", "action", "user"]
+    search_fields = ["risk_id", "user"]
     list_filter = ["action"]

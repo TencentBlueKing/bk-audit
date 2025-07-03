@@ -34,6 +34,7 @@ from services.web.risk.models import (
     Risk,
     RiskRule,
     TicketPermission,
+    UserType,
 )
 from services.web.risk.serializers import (
     CreateProcessApplicationsReqSerializer,
@@ -99,7 +100,7 @@ class ListAllProcessApplications(ProcessApplicationMeta):
                     ActionEnum.LIST_RULE,
                 ]
             ).has_permission(request=get_local_request(), view=self)
-            and not TicketPermission.objects.filter(operator=get_request_username()).exists()
+            and not TicketPermission.objects.filter(user=get_request_username(), user_type=UserType.OPERATOR).exists()
         ):
             return []
         return [
