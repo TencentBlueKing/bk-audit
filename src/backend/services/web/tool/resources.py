@@ -93,7 +93,7 @@ class ListTool(ToolBase):
     keyword：模糊搜索关键词（创建人/工具名称/工具描述）
     limit：分页大小
     offset：分页偏移量
-    tags：默认[](id数组)
+    tags：[xx.xx]
     tool_type=data_search：响应结构
         [
       {
@@ -103,6 +103,9 @@ class ListTool(ToolBase):
         "version": 1,
         "description": "xxx",
         "namespace": "xxx",
+        "tags: [{"tag_id": "xxx", "tag_name": "xxx"}],
+        "created_by": "xxx",
+        "created_at": "xxx",
         "permission": {
           "use_tool": true
         }
@@ -115,6 +118,9 @@ class ListTool(ToolBase):
         "version": 1,
         "description": "xxx",
         "namespace": "xxx",
+        "tags: [{"tag_id": "xxx", "tag_name": "xxx"}],
+        "created_by": "xxx",
+        "created_at": "xxx",
         "permission": {
           "use_tool": true
         }
@@ -147,9 +153,20 @@ class ListTool(ToolBase):
         paged_qs = tools_qs[offset : offset + limit]
 
         tool_uids = [tool.uid for tool in paged_qs]
+        tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
+        tag_ids = list({t.tag_id for t in tool_tags})
+        tag_dict = {tag.tag_id: tag.tag_name for tag in Tag.objects.filter(tag_id__in=tag_ids)}
+
         tag_map = defaultdict(list)
-        for t in ToolTag.objects.filter(tool_uid__in=tool_uids):
-            tag_map[t.tool_uid].append(t.tag_id)
+        for t in tool_tags:
+            tag_info = tag_dict.get(t.tag_id)
+            if tag_info:
+                tag_map[t.tool_uid].append(
+                    {
+                        "tag_id": str(t.tag_id),
+                        "tag_name": tag_info,
+                    }
+                )
 
         for tool in paged_qs:
             setattr(tool, "tags", tag_map.get(tool.uid, []))

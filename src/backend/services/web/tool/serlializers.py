@@ -27,6 +27,16 @@ from services.web.tool.constants import (
 from services.web.tool.models import Tool
 
 
+class ListToolTagsResponseSerializer(serializers.Serializer):
+    """
+    List Tool Tags
+    """
+
+    tag_id = serializers.CharField(label=gettext_lazy("Tag ID"))
+    tag_name = serializers.CharField(label=gettext_lazy("Tag Name"))
+    tool_count = serializers.IntegerField(label=gettext_lazy("Tool Count"), required=False)
+
+
 class ToolCreateRequestSerializer(serializers.Serializer):
     tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
     config = serializers.DictField(label=gettext_lazy("工具配置"))
@@ -113,6 +123,9 @@ class ToolListResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(label=gettext_lazy("工具版本"))
     description = serializers.CharField(allow_blank=True, label=gettext_lazy("工具描述"))
     namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
+    created_by = serializers.CharField(label=gettext_lazy("创建人"))
+    created_at = serializers.DateTimeField(label=gettext_lazy("创建时间"))
+    tags = serializers.ListField(child=ListToolTagsResponseSerializer(), label=gettext_lazy("标签列表"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
 
 
@@ -133,13 +146,3 @@ class ListRequestSerializer(serializers.Serializer):
     tags = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
     )
-
-
-class ListToolTagsResponseSerializer(serializers.Serializer):
-    """
-    List Tool Tags
-    """
-
-    tag_id = serializers.CharField(label=gettext_lazy("Tag ID"))
-    tag_name = serializers.CharField(label=gettext_lazy("Tag Name"))
-    tool_count = serializers.IntegerField(label=gettext_lazy("Tool Count"))
