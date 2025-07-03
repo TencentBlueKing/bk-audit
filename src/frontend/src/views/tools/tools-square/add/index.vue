@@ -33,12 +33,13 @@
               <div class="flex-center">
                 <bk-form-item
                   class="is-required mr16"
-                  :label="t('策略名称')"
+                  :label="t('工具名称')"
                   label-width="160"
-                  property="tool_name"
+                  property="name"
+                  required
                   style="flex: 1;">
                   <bk-input
-                    v-model.trim="formData.tool_name"
+                    v-model.trim="formData.name"
                     :maxlength="32"
                     :placeholder="t('请输入，20字符内，可由汉字、小写字母、数字、“_”组成')"
                     show-word-limit
@@ -65,8 +66,8 @@
                       <bk-option
                         v-for="(item, index) in tagData"
                         :key="index"
-                        :label="item.name"
-                        :value="item.id" />
+                        :label="item.tag_name"
+                        :value="item.tag_id" />
                     </bk-select>
                   </bk-loading>
                 </bk-form-item>
@@ -74,7 +75,8 @@
               <bk-form-item
                 :label="t('工具说明')"
                 label-width="160"
-                property="description">
+                property="description"
+                required>
                 <bk-input
                   v-model.trim="formData.description"
                   autosize
@@ -84,35 +86,18 @@
                   style="width: 50%;"
                   type="textarea" />
               </bk-form-item>
-              <bk-form-item
-                :label="t('敏感定义')"
-                label-width="160"
-                property="scoped">
-                <bk-button-group>
-                  <bk-button
-                    v-for="item in scopedList"
-                    :key="item.value"
-                    :selected="formData.scoped === item.value"
-                    @click="handleSelected(item.value)">
-                    {{ item.label }}
-                  </bk-button>
-                </bk-button-group>
-                <bk-tag style="display: block; width: 120px;">
-                  {{ t('可申请权限后使用') }}
-                </bk-tag>
-              </bk-form-item>
             </template>
           </card-part-vue>
+          <!-- 工具类型 -->
           <card-part-vue :title="t('工具类型')">
             <template #content>
               <bk-form-item
                 :label="t('工具类型')"
                 label-width="160"
-                property="toolType">
-                <bk-radio-group
-                  v-model="formData.toolType"
-                  @change="handleToolTypeChange">
-                  <bk-radio label="search_data">
+                property="tool_type"
+                required>
+                <bk-radio-group v-model="formData.tool_type">
+                  <bk-radio label="data_search">
                     <span>{{ t('数据查询') }}</span>
                   </bk-radio>
                   <bk-radio
@@ -126,23 +111,26 @@
                 </bk-radio-group>
               </bk-form-item>
               <bk-form-item
-                v-if="formData.toolType === 'search_data'"
+                v-if="formData.tool_type === 'data_search'"
                 :label="t('配置方式')"
                 label-width="160"
-                property="searchType">
+                property="search_type"
+                required>
                 <bk-button-group>
                   <bk-button
                     v-for="item in searchTypeList"
                     :key="item.value"
                     :disabled="item.disabled"
-                    :selected="formData.searchType === item.value"
-                    @click="handleSelectedSearchType(item.value)">
+                    :selected="formData.search_type === item.value"
+                    @click="() => formData.search_type = item.value">
                     {{ item.label }}
                   </bk-button>
                 </bk-button-group>
-                <bk-tag style="display: block; width: 460px;">
-                  {{ t('用于复杂的 SQL 查询，先编写 SQL，再根据 SQL 内的结果与变量配置前端样式') }}
-                </bk-tag>
+                <div>
+                  <bk-tag>
+                    {{ t('用于复杂的 SQL 查询，先编写 SQL，再根据 SQL 内的结果与变量配置前端样式') }}
+                  </bk-tag>
+                </div>
               </bk-form-item>
               <bk-form-item
                 v-else
@@ -157,7 +145,8 @@
               </bk-form-item>
             </template>
           </card-part-vue>
-          <template v-if="formData.toolType === 'search_data'">
+          <!-- 工具配置 -->
+          <template v-if="formData.tool_type === 'data_search'">
             <card-part-vue :title="t('工具配置页面')">
               <template #content>
                 <bk-form-item
@@ -169,7 +158,8 @@
                         <audit-icon
                           v-bk-tooltips="t('复制')"
                           class="icon"
-                          type="copy" />
+                          type="copy"
+                          @click.stop="handleCopy" />
                         <audit-icon
                           v-bk-tooltips="t('全屏')"
                           class="ml16 icon"
@@ -188,11 +178,11 @@
                         type="un-full-screen-2"
                         @click="handleExitFullScreen" />
                       <bk-button
-                        v-if="!showEditSql"
+                        v-if="!showEditSql && !showFieldReference"
                         class="edit-icon"
                         outline
                         theme="primary"
-                        @click="() => showEditSql = true">
+                        @click="handleEditSql">
                         {{ t('编辑sql') }}
                       </bk-button>
                     </div>
@@ -202,21 +192,24 @@
                   :label="t('可识别数据源')"
                   label-width="160">
                   <div
-                    v-for="(item, index) in identifiableDataSource"
+                    v-for="(item, index) in formData.config.referenced_tables"
                     :key="index"
                     class="data-source-item">
                     <div class="info">
                       <audit-icon
                         style="margin: 0 5px; color: #c4c6cc;"
-                        type="un-full-screen-2" />
-                      <a href="xxx">{{ item.label }}</a>
+                        type="lock" />
+                      <a href="xxx">{{ item.table_name }}</a>
                     </div>
-                    <bk-button
+                    <auth-button
                       v-if="!item.hasPermission"
+                      action-id="xxx"
+                      :permission="false"
+                      resource="xxx"
                       text
                       theme="primary">
                       {{ t('申请权限') }}
-                    </bk-button>
+                    </auth-button>
                   </div>
                 </bk-form-item>
                 <bk-form-item
@@ -238,16 +231,16 @@
                       <div class="field-value">
                         {{ t('是否必填') }}
                       </div>
-                      <div class="field-value">
+                      <div class="field-value is-required">
                         {{ t('前端类型') }}
                       </div>
                     </div>
                     <audit-form
-                      ref="tableFormRef"
+                      ref="tableInputFormRef"
                       form-type="vertical"
                       :model="formData">
                       <template
-                        v-for="(item, index) in formData.inputData"
+                        v-for="(item, index) in formData.config.input_variable"
                         :key="index">
                         <div class="field-row">
                           <div class="field-value">
@@ -257,7 +250,7 @@
                               label-width="0">
                               <bk-input
                                 ref="fieldItemRef"
-                                v-model="item.field_name" />
+                                v-model="item.raw_name" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -288,12 +281,12 @@
                               label=""
                               label-width="0">
                               <bk-radio-group
-                                v-model="item.required_choice"
+                                v-model="item.required"
                                 style="padding: 0 8px;">
-                                <bk-radio label="required ">
+                                <bk-radio label>
                                   <span>{{ t('是') }}</span>
                                 </bk-radio>
-                                <bk-radio label="optional ">
+                                <bk-radio :label="false ">
                                   <span>{{ t('否') }}</span>
                                 </bk-radio>
                               </bk-radio-group>
@@ -304,10 +297,10 @@
                               error-display-type="tooltips"
                               label=""
                               label-width="0"
-                              :property="`renderData[${index}].frontend_type`"
+                              :property="`config.input_variable[${index}].field_category`"
                               required>
                               <bk-select
-                                v-model="item.frontend_type"
+                                v-model="item.field_category"
                                 class="bk-select"
                                 filterable
                                 :input-search="false"
@@ -316,8 +309,8 @@
                                 <bk-option
                                   v-for="(selectItem, selectIndex) in frontendTypeList"
                                   :key="selectIndex"
-                                  :label="selectItem.label"
-                                  :value="selectItem.value" />
+                                  :label="selectItem.name"
+                                  :value="selectItem.id" />
                               </bk-select>
                             </bk-form-item>
                           </div>
@@ -347,11 +340,11 @@
                       </div>
                     </div>
                     <audit-form
-                      ref="tableFormRef"
+                      ref="tableOutputFormRef"
                       form-type="vertical"
                       :model="formData">
                       <template
-                        v-for="(item, index) in formData.outputData"
+                        v-for="(item, index) in formData.config.output_fields"
                         :key="index">
                         <div class="field-row">
                           <div class="field-value">
@@ -361,7 +354,7 @@
                               label-width="0">
                               <bk-input
                                 ref="fieldItemRef"
-                                v-model="item.field_name" />
+                                v-model="item.raw_name" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -391,19 +384,9 @@
                               error-display-type="tooltips"
                               label=""
                               label-width="0">
-                              <bk-select
+                              <bk-input
                                 v-model="item.field_down"
-                                class="bk-select"
-                                filterable
-                                :input-search="false"
-                                :placeholder="t('请选择')"
-                                :search-placeholder="t('请输入关键字')">
-                                <bk-option
-                                  v-for="(selectItem, selectIndex) in frontendTypeList"
-                                  :key="selectIndex"
-                                  :label="selectItem.label"
-                                  :value="selectItem.value" />
-                              </bk-select>
+                                @focus="handleFocus" />
                             </bk-form-item>
                           </div>
                         </div>
@@ -430,14 +413,15 @@
         </bk-button>
         <bk-button
           class="ml8"
-          style="margin-left: 48px;"
-          @click="handlePreview">
+          style="margin-left: 48px;">
           {{ t('预览测试') }}
         </bk-button>
       </template>
       <edit-sql
         ref="editSqlRef"
-        v-model:showEditSql="showEditSql" />
+        v-model:showEditSql="showEditSql"
+        @update-parse-sql="handleUpdateParseSql" />
+      <field-reference v-model:showFieldReference="showFieldReference" />
     </smart-action>
   </skeleton-loading>
   <!-- <creating /> -->
@@ -447,119 +431,217 @@
 
 <script setup lang='ts'>
   import * as monaco from 'monaco-editor';
-  import { onMounted, ref } from 'vue';
+  import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
+
+  import MetaManageService from '@service/meta-manage';
+  import ToolManageService from '@service/tool-manage';
+
+  import type ParseSqlModel from '@model/tool/parse-sql';
+
+  import { execCopy } from '@utils/assist';
 
   import CardPartVue from './components/card-part.vue';
   import EditSql from './components/edit-sql.vue';
+  import fieldReference from './components/field-reference.vue';
+
+  import useFullScreen from '@/hooks/use-full-screen';
+  import useRequest from '@/hooks/use-request';
   // import Creating from './components/tool-status/creating.vue';
   // import Failed from './components/tool-status/failed.vue';
   // import Successful from './components/tool-status/Successful.vue';
 
+  interface FormData {
+    name: string;
+    tags: string[];
+    description: string;
+    tool_type: string;
+    search_type: string;
+    chart_link: string;
+    config: {
+      referenced_tables: Array<{
+        table_name: string;
+        alias: string | null;
+        hasPermission: boolean;
+      }>;
+      input_variable: Array<{
+        raw_name: string;
+        display_name: string;
+        description: string;
+        required: string;
+        field_category: string;
+      }>
+      output_fields: Array<{
+        raw_name: string;
+        display_name: string;
+        description: string;
+        field_down: string;
+      }>
+      sql: string;
+    };
+  }
+
   let editor: monaco.editor.IStandaloneCodeEditor;
-
-  const { t } = useI18n();
-  const viewRootRef = ref();
-
-  const loading = ref(false);
-  const formData = ref({
-    tool_name: '',
-    tags: [],
-    description: '',
-    scoped: '',
-    toolType: 'search_data',
-    searchType: '',
-    chart_link: '',
-    inputData: [{
-      field_name: '',
-      display_name: '',
-      description: '',
-      required_choice: '',
-      frontend_type: '',
-    }],
-    outputData: [{
-      field_name: '',
-      display_name: '',
-      description: '',
-      field_down: '',
-    }],
-  });
-  const tagLoading = ref(false);
-  const tagData = ref([{
-    name: '标签1',
-    id: 1,
-  }]);
-  const scopedList = ref([{
-    label: '公开可申请',
-    value: 'not_sensitive',
-  }, {
-    label: '仅指定人可用',
-    value: 'sensitive',
-  }]);
-  const searchTypeList = ref([{
+  const searchTypeList = [{
     label: '简易模式',
     value: 'simple',
     disabled: true,
   }, {
     label: 'SQL模式',
     value: 'sql',
-  }]);
-  const identifiableDataSource = ref([{
-    label: '12131231',
-    value: '1',
-    hasPermission: true,
-  }, {
-    label: 'rw4e5tsedfae',
-    value: '2',
-    hasPermission: false,
-  }]);
-  const frontendTypeList = ref([{
-    label: '12131231',
-    value: '1',
-  }, {
-    label: 'rw4e5tsedfae',
-    value: '2',
-  }]);
-  const showExit = ref(false);
+  }];
+
+  const router = useRouter();
+  const { t } = useI18n();
+  const { showExit, handleScreenfull } = useFullScreen(
+    () => editor,
+    () => viewRootRef.value,
+  );
+
+  const viewRootRef = ref();
+  const editSqlRef = ref();
+  const formRef = ref();
+  const tableInputFormRef = ref();
+
+  const loading = ref(false);
   const showEditSql = ref(false);
+  const showFieldReference = ref(false);
+
+  const formData = ref<FormData>({
+    name: '',
+    tags: [],
+    description: '',
+    tool_type: 'data_search',
+    search_type: 'sql',
+    chart_link: '',
+    config: {
+      referenced_tables: [],
+      input_variable: [{
+        raw_name: '',
+        display_name: '',
+        description: '',
+        required: '',
+        field_category: '',
+      }],
+      output_fields: [{
+        raw_name: '',
+        display_name: '',
+        description: '',
+        field_down: '',
+      }],
+      sql: '',
+    },
+  });
+
+  const frontendTypeList = ref<Array<{
+    id: string;
+    name: string;
+  }>>([]);
 
   const getSmartActionOffsetTarget = () => document.querySelector('create-tools-page');
 
-  const handleSelected = (value: string) => {
-    formData.value.scoped = value;
-  };
+  // 获取前端类型
+  useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    manual: true,
+    onSuccess(result) {
+      frontendTypeList.value = result.frontend_type || [{
+        id: 'input',
+        name: 'input',
+      }];
+    },
+  });
 
-  const handleToolTypeChange = (value: string) => {
-    formData.value.toolType = value;
-  };
+  // 获取标签列表
+  const {
+    data: tagData,
+    loading: tagLoading,
+  } = useRequest(ToolManageService.fetchToolTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data) => {
+      tagData.value = data.reduce((res, item) => {
+        if (item.tag_id !== '-2') {
+          res.push({
+            tag_id: item.tag_id,
+            tag_name: item.tag_name,
+          });
+        }
+        return res;
+      }, [] as Array<{
+        tag_id: string;
+        tag_name: string
+      }>);
+    },
+  });
 
-  const handleSelectedSearchType = (value: string) => {
-    formData.value.searchType = value;
+  // 工具保存
+  const {
+    run: createTool,
+  } = useRequest(ToolManageService.createTool, {
+    defaultValue: {},
+    onSuccess: (data) => {
+      console.log(data);
+    },
+  });
+
+  const handleUpdateParseSql = (sqlData: ParseSqlModel) => {
+    formData.value.config.sql = sqlData.original_sql;
+    formData.value.config.referenced_tables = sqlData.referenced_tables;
+    formData.value.config.input_variable = sqlData.sql_variables.map(item => ({
+      ...item,
+      field_category: '',
+    }));
+    formData.value.config.output_fields = sqlData.result_fields.map(item => ({
+      ...item,
+      description: '',
+      field_down: '',
+    }));
+
+    defineTheme();
+    editor.setValue(sqlData.original_sql);
   };
 
   // 实现全屏
   const handleToggleFullScreen = () => {
-    console.log('toggle full screen');
+    handleScreenfull();
   };
 
+  // 退出全屏
   const handleExitFullScreen = () => {
-    console.log('exit full screen');
+    handleScreenfull();
   };
 
-  const handleReize = () => {
-    editor.layout();
+  const handleEditSql = () => {
+    showEditSql.value = true;
+    if (formData.value.config.sql) {
+      editSqlRef.value.setEditorValue(formData.value.config.sql);
+    }
   };
 
-  const handleSubmit = () => {
-    console.log('submit');
+  const handleCopy = () => {
+    execCopy(formData.value.config.sql, t('复制成功'));
+  };
+
+  const handleFocus = () => {
+    showFieldReference.value = true;
   };
 
   const handleCancel = () => {
-    console.log('cancel');
+    router.push({
+      name: 'toolsSquare',
+    });
   };
 
-  const handlePreview = () => {
-    console.log('preview');
+  // 提交
+  const handleSubmit = () => {
+    const tastQueue = [formRef.value.validate(), tableInputFormRef.value.validate()];
+
+    Promise.all(tastQueue).then(() => {
+      console.log(formData.value);
+      createTool(formData.value);
+    });
   };
 
   const defineTheme = () => {
@@ -586,6 +668,7 @@
 
   const initEditor = () => {
     editor = monaco.editor.create(viewRootRef.value, {
+      value: formData.value.config.sql,
       language: 'sql',
       theme: 'vs',
       minimap: {
@@ -596,12 +679,21 @@
       readOnly: true,
     });
     editor.layout();
-    window.addEventListener('resize', handleReize);
   };
+
+  watch(showEditSql, (val) => {
+    if (!val) {
+      defineTheme();
+    }
+  });
 
   onMounted(() => {
     initEditor();
     defineTheme();
+  });
+
+  onBeforeUnmount(() => {
+    editor.dispose();
   });
 </script>
 <style lang="postcss" scoped>
@@ -638,6 +730,16 @@
         left: 50%;
         z-index: 10000;
         transform: translate(-50%, -50%);
+      }
+
+      .exit-icon {
+        position: absolute;
+        top: 10px;
+        right: 20px;
+        z-index: 11111;
+        font-size: 20px;
+        color: #c4c6cc;
+        cursor: pointer;
       }
     }
   }
