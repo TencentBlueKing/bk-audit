@@ -47,7 +47,13 @@ from services.web.risk.constants import (
 )
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.rule import RiskRuleHandler
-from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
+from services.web.risk.models import (
+    ProcessApplication,
+    Risk,
+    RiskRule,
+    TicketNode,
+    UserType,
+)
 from services.web.risk.parser import RiskNoticeParser
 from services.web.strategy_v2.models import Strategy
 
@@ -141,6 +147,7 @@ class RiskFlowBaseHandler:
         self.record_history(process_result=process_result, *args, **kwargs)
         self.auth_current_operator()
         self.notice_current_operator()
+        self.auth_notice_user()
         self.post_process(process_result=process_result, *args, **kwargs)
 
     def pre_check(self, *args, **kwargs) -> None:
@@ -217,7 +224,21 @@ class RiskFlowBaseHandler:
         if not self.risk.current_operator or not isinstance(self.risk.current_operator, list):
             return
 
-        self.risk.auth_operators(action=ActionEnum.LIST_RISK.id, operators=self.risk.current_operator)
+        self.risk.auth_users(
+            action=ActionEnum.LIST_RISK.id, users=self.risk.current_operator, user_type=UserType.OPERATOR
+        )
+
+    def auth_notice_user(self) -> None:
+        """
+        向关注人授权
+        """
+
+        if not self.risk.notice_users or not isinstance(self.risk.notice_users, list):
+            return
+
+        self.risk.auth_users(
+            action=ActionEnum.LIST_RISK.id, users=self.risk.notice_users, user_type=UserType.NOTICE_USER
+        )
 
     def notice_current_operator(self) -> None:
         """
