@@ -54,6 +54,11 @@ def generate_risk_id() -> str:
     return risk_id
 
 
+class UserType(models.TextChoices):
+    OPERATOR = "operator"
+    NOTICE_USER = "notice_user"
+
+
 class Risk(OperateRecordModel):
     """
     Risk
@@ -120,7 +125,9 @@ class Risk(OperateRecordModel):
 
         q = Q(
             risk_id__in=TicketPermission.objects.filter(
-                operator=get_request_username(), action=ActionEnum.LIST_RISK.id
+                user_type__in=[UserType.NOTICE_USER, UserType.OPERATOR],
+                user=get_request_username(),
+                action=ActionEnum.LIST_RISK.id,
             ).values("risk_id")
         )
 
@@ -154,13 +161,14 @@ class Risk(OperateRecordModel):
                 return node
         return TicketNode()
 
-    def auth_operators(self, action: str, operators: List[str]) -> None:
+    def auth_users(self, action: str, users: List[str], user_type: str = UserType.OPERATOR) -> None:
         """
-        授权处理人查看权限
+        授权相关用户查询权限
         """
-
         TicketPermission.objects.bulk_create(
-            objs=[TicketPermission(risk_id=self.risk_id, action=action, operator=operator) for operator in operators],
+            objs=[
+                TicketPermission(risk_id=self.risk_id, action=action, user_type=user_type, user=user) for user in users
+            ],
             ignore_conflicts=True,
         )
 
@@ -346,11 +354,12 @@ class TicketPermission(models.Model):
 
     risk_id = models.CharField(gettext_lazy("Risk ID"), max_length=255, db_index=True)
     action = models.CharField(gettext_lazy("Action"), max_length=32, db_index=True)
-    operator = models.CharField(gettext_lazy("Operator"), max_length=255, db_index=True)
+    user = models.CharField(gettext_lazy("User"), max_length=255, db_index=True)
     authorized_at = models.DateTimeField(gettext_lazy("Authorized Time"), auto_now_add=True)
+    user_type = models.CharField(gettext_lazy("User Type"), choices=UserType.choices, max_length=32, db_index=True)
 
     class Meta:
         verbose_name = gettext_lazy("Ticket Permission")
         verbose_name_plural = verbose_name
         ordering = ["-id"]
-        unique_together = [["risk_id", "action", "operator"]]
+        unique_together = [["risk_id", "action", "user", "user_type"]]
