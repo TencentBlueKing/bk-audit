@@ -37,20 +37,42 @@
         v-for="(item, index) in dataList"
         :key="index"
         class="card-list-item"
+        @click="handleClick(item)"
         @mouseenter="handleMouseenter(item)"
-        @mouseleave="handleMouseleave(item)">
+        @mouseleave="handleMouseleave()">
         <div
-          v-show="itemMouseenter === item.id"
+          v-show="itemMouseenter === item.uid"
           class="item-top-right-icon">
           <audit-icon
             class="edit-fill"
-            type="edit-fill" />
+            type="edit-fill"
+            @click.stop="handleEdit(item)" />
 
           <bk-popover
-            content="Top Right 文字提示"
             placement="bottom"
             theme="light"
             trigger="click">
+            <template #content>
+              <div class="delete-title">
+                {{ t('确认删除该工具？') }}
+              </div>
+              <div class="delete-text">
+                {{ t('删除操作无法撤回，请谨慎操作！') }}
+              </div>
+
+              <div class="delete-btn">
+                <bk-button
+                  size="small"
+                  theme="primary">
+                  {{ t('确定') }}
+                </bk-button>
+                <bk-button
+                  class="ml8"
+                  size="small">
+                  {{ t('取消') }}
+                </bk-button>
+              </div>
+            </template>
             <audit-icon
               class="delete"
               type="delete"
@@ -69,14 +91,18 @@
             <div class="top-right-title">
               <span
                 v-bk-tooltips="{
-                  disabled: !isTextOverflow(item.name),
-                  content: t(item.name)
+                  disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
+                  content: t(item.name),
+                  placement: 'top',
+                  delay: [300, 0],
+                  extCls: 'name-tooltip'
                 }"
                 class="title-text"
-                :class="{ 'overflow-tooltip': isTextOverflow(item.name) }">
+                :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
                 {{ item.name }}
               </span>
               <bk-tag
+                v-if="!item.permission.use_tool"
                 v-bk-tooltips="{ content: t('申请权限可用') }"
                 class="title-tag"
                 size="small"
@@ -118,62 +144,104 @@
         </div>
         <div
           v-bk-tooltips="{
-            disabled: !isTextOverflow(item.desc, 44),
-            content: middleTtooltips(item.desc),
+            disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
+            content: middleTtooltips(item.description),
             width: '200px',
             allowHTML: true,
             extCls: 'tooltip-custom'
           }"
           class="item-middle">
-          {{ item.desc }}
+          {{ item.description }}
         </div>
         <div class="item-footer">
-          <span>@ xxxxx</span>
+          <span>@ ivonye(叶青)</span>
           <span>2015-3-20 15:22:00</span>
         </div>
+        <component
+          :is="DialogVue"
+          :ref="(el) => dialogRefs[item.uid] = el"
+          :dialog-cls="`dialogCls${item.uid}`" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
+
+  import ToolsSquare from '@service/tools-square';
+
+  import toolInfo from '@model/tools-square/tools-square';
+
+  import DialogVue from '../components/dialog.vue';
+
+  import useRequest from '@/hooks/use-request';
+  import type { IRequestResponsePaginationData } from '@/utils/request';
 
   const { t } = useI18n();
-  const searchValue = ref([]);
+  const router = useRouter();
+  const searchValue = ref<string>('');
   const descTag = ref(['场景', '场景12', '场景1', '9']);
   const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
-  const dataList = ref([
+  const dialogRefs = ref<Record<string, any>>({});
+  const dataList = ref<toolInfo[]>([
     {
-      name: '工v-bk-tooltipsv-bk-tooltipsv-bk-tooltipsv-bk-tooltipsv-bk-tooltipsv-bk-tooltips具1',
-      desc: '工具1，啊哒哒哒',
-      creator: '工具1',
-      id: 1,
+      uid: '3aa8a524564711f083bb0a97de54c4dd',
+      name: '具名称',
+      tool_type: 'data_search',
+      version: 1,
+      description: '工具描述',
+      namespace: '命名空间',
+      permission: {
+        use_tool: true,
+      },
     },
     {
-      name: '工具1',
-      desc: '工具1',
-      creator: '工具1',
-      id: 2,
+      uid: '3aa8a524564711f083bb0a97d',
+      name: '具33336奥观海干哈案件嘎嘎·观海干哈案件嘎观海干哈案件嘎观海干哈案件嘎观海干哈案件嘎观海干哈案件嘎',
+      tool_type: 'bk_vision',
+      version: 1,
+      description: '工具描述',
+      namespace: '命名空间',
+      permission: {
+        use_tool: false,
+      },
     }, {
-      name: '工具1',
-      desc: '用于查询一个用户在近90天的查询金额，单一数字查询工具很好用。'
-        + '用于查询一个用户在近90天的查询金额，单一数字查询工具很好用。'
-        + '用于查询一个用户在近90天的查询金额，单一数字查询工具很好用。'
-        + '用于查询一个用户在近90天的查询金额，单一数字查询工具很好用。'
-        + '用于查询一个用户在近90天的查询金额，单一数字查询工具很好用。'
-        + '用于查询一个用户在近90天的查询金额，单一数字查询工具很好用。',
-      creator: '工具1',
-      id: 3,
+      uid: '3aa8a52456d',
+      name: '阿嘎hi阿豪啊ak啊A大大',
+      tool_type: 'api',
+      version: 1,
+      description: '啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊',
+      namespace: '命名空间',
+      permission: {
+        use_tool: true,
+      },
     },
+
   ]);
+
+  const handleEdit = (item: Record<string, any>) => {
+    console.log('handleEdit', item);
+  };
+  // 工签列表
+  const {
+    run: fetchToolsList,
+  } = useRequest(ToolsSquare.fetchToolsList, {
+    defaultValue: {} as IRequestResponsePaginationData<toolInfo>,
+    onSuccess: (data) => {
+      dataList.value = data.results;
+    },
+  });
+
+
   const handleMouseenter = (item: Record<string, any>) => {
     if (isFixedDelete.value) {
       return;
     }
-    itemMouseenter.value = item.id;
+    itemMouseenter.value = item.uid;
   };
   const handleMouseleave = () => {
     if (isFixedDelete.value) {
@@ -182,56 +250,103 @@
     itemMouseenter.value = null;
   };
   const handleCreate = () => {
-    console.log('handleCreate');
+    router.push({
+      name: 'toolsAdd',
+    });
   };
   // 删除
   const handleDelete = (item: Record<string, any>) => {
     console.log('handleDelete', item);
     isFixedDelete.value = !isFixedDelete.value;
-    itemMouseenter.value = item.id;
+    itemMouseenter.value = item.uid;
   };
+  const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
+    isSingleLine?: boolean;
+    fontSize?: string;
+    fontWeight?: string;
+    lineHeight?: string;
+  } = {}) => {
+    if (!text) return false;
 
-  const isTextOverflow = (text: string, maxHeight = 0) => {
-    // 创建临时元素测量文本高度
+    const {
+      isSingleLine = maxHeight === 0, // 默认单行检测
+      fontSize = isSingleLine ? '16px' : '14px',
+      fontWeight = isSingleLine ? '700' : 'normal',
+      lineHeight = '22px',
+    } = options;
+
     const temp = document.createElement('div');
     temp.style.position = 'absolute';
     temp.style.visibility = 'hidden';
-    temp.style.width = '400px';
-    temp.style.fontSize = '14px';
-    temp.style.lineHeight = '22px';
-    temp.style.display = '-webkit-box';
-    temp.style.webkitLineClamp = '2';
-    temp.style.webkitBoxOrient = 'vertical';
-    temp.style.overflow = 'hidden';
-    temp.innerText = text;
+    temp.style.width = width;
+    temp.style.fontSize = fontSize;
+    temp.style.fontWeight = fontWeight;
+    temp.style.fontFamily = 'inherit';
+    temp.style.lineHeight = lineHeight;
+    temp.style.boxSizing = 'border-box';
+    temp.textContent = text;
+
+    if (isSingleLine) {
+      temp.style.whiteSpace = 'nowrap';
+      temp.style.overflow = 'visible';
+    } else {
+      temp.style.display = '-webkit-box';
+      temp.style.webkitLineClamp = '2';
+      temp.style.overflow = 'hidden';
+    }
+
     document.body.appendChild(temp);
 
     const isOverflow = maxHeight > 0
       ? temp.scrollHeight > maxHeight
-      : temp.scrollWidth > temp.clientWidth;
+      : temp.scrollWidth > temp.offsetWidth;
 
     document.body.removeChild(temp);
     return isOverflow;
   };
+
+
   const middleTtooltips = (text: string) => (
-    <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
-        {text}
-    </div>
+  <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
+    {text}
+  </div>
   );
-  const itemIcon = (item: Record<string, any>) => {
-    switch (item.id) {
-    case 1:
+
+  const itemIcon = (item: toolInfo) => {
+    switch (item.tool_type) {
+    case 'data_search':
       return 'sqlxiao';
-    case 2:
+    case 'bk_vision':
       return 'bkvisonxiao';
-    case 3:
+    case 'api':
       return 'apixiao';
     }
   };
+  const handleClick = async (item: toolInfo) => {
+    console.log('handleClick', item, dialogRefs.value[item.uid]);
+
+    if (dialogRefs.value[item.uid]) {
+      dialogRefs.value[item.uid].openDialog(item);
+    }
+  };
+
+  onMounted(() => {
+    fetchToolsList({
+      page: 1,
+      page_size: 10,
+      keyword: '',
+      limit: 10,
+      offset: 0,
+      tags: [],
+    });
+  });
+
 </script>
 
 <style scoped lang="postcss">
 .card {
+  background-color: #f5f7fa;
+
   .card-search {
     position: relative;
     display: flex;
@@ -258,8 +373,7 @@
       min-width: 400px;
       cursor: pointer;
       background: #fff;
-      border: 1px solid transparent;
-      box-shadow: 0 2px 4px 0 #0000001a, 0 2px 4px 0 #1919290d;
+      box-shadow: 0 2px 4px 0 #1919290d;
       transition: all .3s ease;
 
       &:hover {
@@ -267,11 +381,11 @@
         box-shadow: 0 4px 8px 0 rgb(0 0 0 / 10%), 0 6px 12px 0 rgb(25 25 41 / 10%);
       }
 
-      @media (width <= 1600px) {
+      @media (width <=1600px) {
         min-width: 400px;
       }
 
-      @media (width <= 1366px) {
+      @media (width <=1366px) {
         min-width: calc((100% - 20px) / 2);
       }
 
@@ -319,6 +433,7 @@
             .title-tag {
               margin-top: 0;
               line-height: 22px;
+              cursor: pointer;
             }
           }
 
@@ -370,7 +485,7 @@
         color: #979ba5;
 
         .edit-fill {
-          margin-right: 20px;
+          margin-right: 5px;
 
           &:hover {
             color: #3a84ff;
@@ -383,7 +498,30 @@
           }
         }
       }
+
     }
   }
+}
+
+.delete-title {
+  width: 250px;
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: 0;
+  color: #313238;
+}
+
+.delete-text {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: #4d4f56;
+}
+
+.delete-btn {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 5px;
 }
 </style>

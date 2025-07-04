@@ -54,6 +54,13 @@
   import ContentCard from './square-content/concent-card.vue';
   import Content from './square-content/index.vue';
 
+
+  interface TagItem {
+    tag_id: string
+    tag_name: string
+    tool_count: number
+  }
+
   const { t } = useI18n();
   const active = ref('all');
   const concentRef = ref<InstanceType<typeof Content>[]>([]);
@@ -63,11 +70,12 @@
     { name: 'my', label: '我创建的' },
     { name: 'history', label: '最近使用的' },
   ]);
-  const checkedTags = ref<string[]>([]);
+  const checkedTags = ref<Array<string>>([]);
 
-  const handleCheckedTags = (tags: string[]) => {
-    if (JSON.stringify(checkedTags.value) !== JSON.stringify(tags)) {
-      checkedTags.value = tags;
+  const handleCheckedTags = (tags: Array<TagItem>, tagsName: Array<string>) => {
+    if (JSON.stringify(checkedTags.value) !== JSON.stringify(tagsName)) {
+      checkedTags.value = tagsName;
+      console.log('checkedTags.value', tags, checkedTags.value);
     }
   };
 

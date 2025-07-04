@@ -25,6 +25,7 @@ declare module 'vue' {
     CreateCollectorStep2: typeof import('./src/components/skeleton-loading/components/create-collector-step2.vue')['default']
     CreateNoticeGroup: typeof import('./src/components/skeleton-loading/components/create-notice-group.vue')['default']
     CreateStrategy: typeof import('./src/components/skeleton-loading/components/create-strategy.vue')['default']
+    CreateTools: typeof import('./src/components/skeleton-loading/components/create-tools.vue')['default']
     Dialog: typeof import('./src/components/apply-permission/dialog.vue')['default']
     EventList: typeof import('./src/components/skeleton-loading/components/event-list.vue')['default']
     ExtendAction: typeof import('./src/components/ip-selector/selector-box/components/preview-result/collapse-box/extend-action.vue')['default']
