@@ -55,7 +55,12 @@ from services.web.tool.serializers import (
     ToolUpdateRequestSerializer,
     UserQueryTableAuthCheckReqSerializer,
 )
-from services.web.tool.tool import create_tool_with_config, sync_resource_tags
+from services.web.tool.tool import (
+    create_tool_with_config,
+    custom_sort_order,
+    recent_tool_usage_manager,
+    sync_resource_tags,
+)
 
 
 class ToolBase(AuditMixinResource, abc.ABC):
@@ -94,6 +99,8 @@ class ListTool(ToolBase):
     limit：分页大小
     offset：分页偏移量
     tags：[xx.xx]
+    my_created：是否只显示我创建的 布尔
+    recent_used：是否只显示最近使用 布尔
     tool_type=data_search：响应结构
         [
       {
@@ -103,7 +110,7 @@ class ListTool(ToolBase):
         "version": 1,
         "description": "xxx",
         "namespace": "xxx",
-        "tags: [{"tag_id": "xxx", "tag_name": "xxx"}],
+        "tags: [xx，xx],
         "created_by": "xxx",
         "created_at": "xxx",
         "permission": {
@@ -118,7 +125,7 @@ class ListTool(ToolBase):
         "version": 1,
         "description": "xxx",
         "namespace": "xxx",
-        "tags: [{"tag_id": "xxx", "tag_name": "xxx"}],
+        "tags: [xx，xx],
         "created_by": "xxx",
         "created_at": "xxx",
         "permission": {
@@ -138,42 +145,49 @@ class ListTool(ToolBase):
         keyword = validated_request_data.get("keyword", "").strip()
         limit = validated_request_data["limit"]
         offset = validated_request_data["offset"]
-        tools_qs = Tool.all_latest_tools().order_by("-updated_at")
+        my_created = validated_request_data["my_created"]
+        recent_used = validated_request_data["recent_used"]
+
+        current_user = get_request_username()
+
+        if recent_used:
+            recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
+            if not recent_tool_uids:
+                return []
+
+            queryset = Tool.all_latest_tools().filter(uid__in=recent_tool_uids)
+            # 保持recent_tool_uids的顺序
+            queryset = custom_sort_order(queryset, "uid", recent_tool_uids)
+            tools = queryset
+        else:
+            tools = Tool.all_latest_tools().order_by("-updated_at")
+            if my_created:
+                tools = tools.filter(created_by=current_user)
 
         if keyword:
-            tools_qs = tools_qs.filter(
+            keyword_filter = (
                 Q(name__icontains=keyword) | Q(description__icontains=keyword) | Q(created_by__icontains=keyword)
             )
+            tools = tools.filter(keyword_filter)
 
         if tags:
-            tool_uid_list = list(ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct())
+            tool_uid_list = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
+            tools = tools.filter(uid__in=tool_uid_list)
 
-            tools_qs = tools_qs.filter(uid__in=tool_uid_list)
+        paged_tools = tools[offset : offset + limit]
 
-        paged_qs = tools_qs[offset : offset + limit]
-
-        tool_uids = [tool.uid for tool in paged_qs]
+        tool_uids = [t.uid for t in paged_tools]
         tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
-        tag_ids = list({t.tag_id for t in tool_tags})
-        tag_dict = {tag.tag_id: tag.tag_name for tag in Tag.objects.filter(tag_id__in=tag_ids)}
 
         tag_map = defaultdict(list)
         for t in tool_tags:
-            tag_info = tag_dict.get(t.tag_id)
-            if tag_info:
-                tag_map[t.tool_uid].append(
-                    {
-                        "tag_id": str(t.tag_id),
-                        "tag_name": tag_info,
-                    }
-                )
+            tag_map[t.tool_uid].append(str(t.tag_id))
 
-        for tool in paged_qs:
+        for tool in paged_tools:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
 
-        serialized_data = self.ResponseSerializer(paged_qs, many=True).data
+        serialized_data = self.ResponseSerializer(paged_tools, many=True).data
 
-        current_user = get_request_username()
         data = wrapper_permission_field(
             result_list=serialized_data,
             actions=[ActionEnum.USE_TOOL],
@@ -185,7 +199,6 @@ class ListTool(ToolBase):
 
 class DeleteTool(ToolBase):
     name = gettext_lazy("删除工具")
-    audit_action = ActionEnum.USE_TOOL
     RequestSerializer = ToolDeleteRetrieveRequestSerializer
 
     @transaction.atomic
@@ -235,9 +248,8 @@ class CreateTool(ToolBase):
               },
               "config": [
                 {
-                  "target_field": "XXX",
-                  "source_field": "XXX",
-                  "field_source": "XXX"
+             "target_value_type": "field",
+             "target_value": "ip_address"
                 }
               ]
             }
@@ -312,9 +324,8 @@ class UpdateTool(ToolBase):
               },
               "config": [
                 {
-                  "target_field": "XXX",
-                  "source_field": "XXX",
-                  "field_source": "XXX"
+             "target_value_type": "field",
+             "target_value": "ip_address"
                 }
               ]
             }
@@ -340,7 +351,6 @@ class UpdateTool(ToolBase):
     """
 
     name = gettext_lazy("编辑工具")
-    audit_action = ActionEnum.USE_TOOL
     RequestSerializer = ToolUpdateRequestSerializer
     ResponseSerializer = ToolResponseSerializer
 
@@ -455,6 +465,7 @@ class ExecuteTool(ToolBase):
             raise Tool.DoesNotExist()
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
         data = executor.execute(params).model_dump()
+        recent_tool_usage_manager.record_usage(get_request_username(), uid)
         return {"data": data, "tool_type": tool.tool_type}
 
 
@@ -465,6 +476,15 @@ class ListToolAll(ToolBase):
 
     def perform_request(self, validated_request_data):
         tool_qs = Tool.all_latest_tools().order_by("-updated_at")
+        tool_uids = [tool.uid for tool in tool_qs]
+        tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
+
+        tag_map = defaultdict(list)
+        for t in tool_tags:
+            tag_map[t.tool_uid].append(str(t.tag_id))
+
+        for tool in tool_qs:
+            setattr(tool, "tags", tag_map.get(tool.uid, []))
         serialized_data = ToolListAllResponseSerializer(tool_qs, many=True).data
 
         current_user = get_request_username()
@@ -491,9 +511,12 @@ class GetToolDetail(ToolBase):
 
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
-        tool = Tool.last_version_tool(uid)
+        tool = Tool.last_version_tool(uid=uid)
         if not tool:
             raise Http404(gettext("Tool not found: %s") % uid)
+
+        tag_ids = list(ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True))
+        setattr(tool, "tags", [str(tid) for tid in tag_ids])
         return tool
 
 
