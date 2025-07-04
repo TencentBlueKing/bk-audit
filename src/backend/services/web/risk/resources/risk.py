@@ -139,21 +139,21 @@ class ListRisk(RiskMeta):
         order_field = validated_request_data.pop("order_field", "-last_operate_time")
         risks = self.load_risks(validated_request_data).order_by(order_field)
         # 分页
-        risks, page = paginate_queryset(queryset=risks, request=request)
+        paged_risks, page = paginate_queryset(queryset=risks, request=request)
         # 获取关联的经验
         experiences = {
             e["risk_id"]: e["count"]
-            for e in RiskExperience.objects.filter(risk_id__in=risks.values("risk_id"))
+            for e in RiskExperience.objects.filter(risk_id__in=[r.risk_id for r in paged_risks])
             .values("risk_id")
             .order_by("risk_id")
             .annotate(count=Count("risk_id"))
         }
-        for risk in risks:
+        for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
         # 响应
-        return page.get_paginated_response(data=ListRiskResponseSerializer(instance=risks, many=True).data)
+        return page.get_paginated_response(data=ListRiskResponseSerializer(instance=paged_risks, many=True).data)
 
-    def load_risks(self, validated_request_data: dict) -> QuerySet:
+    def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
         # 构造表达式
         q = Q()
         # 风险等级
@@ -199,7 +199,7 @@ class ListRiskFields(RiskMeta):
 class UpdateRiskLabel(RiskMeta):
     name = gettext_lazy("更新风险标记")
     RequestSerializer = UpdateRiskLabelReqSerializer
-    ResponseSerializer = ListRiskResponseSerializer
+    ResponseSerializer = RiskInfoSerializer
     audit_action = ActionEnum.EDIT_RISK
 
     @transaction.atomic()
