@@ -451,6 +451,9 @@ LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN
 # metric report
 METRIC_REPORT_TRACE_URL = os.getenv("BKAPP_METRIC_REPORT_TRACE_URL", "")
 
+# 1 年过期，单位秒
+RECENT_USED_TTL = int(os.getenv("BKAPP_RECENT_USED_TTL", 60 * 60 * 24 * 365))
+
 """
 以下为框架代码 请勿修改
 """

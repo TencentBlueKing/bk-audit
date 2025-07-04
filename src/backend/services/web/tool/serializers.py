@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 TencentBlueKing is pleased to support the open source community by making
 蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
@@ -117,6 +116,7 @@ class ToolListAllResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(label=gettext_lazy("工具版本"))
     namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
+    tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
 
 
 class ToolListResponseSerializer(serializers.Serializer):
@@ -128,7 +128,7 @@ class ToolListResponseSerializer(serializers.Serializer):
     namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
     created_by = serializers.CharField(label=gettext_lazy("创建人"))
     created_at = serializers.DateTimeField(label=gettext_lazy("创建时间"))
-    tags = serializers.ListField(child=ListToolTagsResponseSerializer(), label=gettext_lazy("标签列表"))
+    tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
 
 
@@ -139,7 +139,15 @@ class ToolRetrieveResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(label=gettext_lazy("工具版本"))
     description = serializers.CharField(allow_blank=True, label=gettext_lazy("工具描述"))
     namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
+
     config = serializers.DictField(label=gettext_lazy("工具配置"))
+    tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
+    data_search_config_type = serializers.SerializerMethodField()
+
+    def get_data_search_config_type(self, obj):
+        if hasattr(obj, "data_search_config") and obj.data_search_config:
+            return obj.data_search_config.data_search_config_type
+        return None
 
 
 class ListRequestSerializer(serializers.Serializer):
@@ -149,6 +157,8 @@ class ListRequestSerializer(serializers.Serializer):
     tags = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
     )
+    my_created = serializers.BooleanField(required=False, default=False, label="是否筛选我创建的")
+    recent_used = serializers.BooleanField(required=False, default=False, label="是否筛选最近使用")
 
 
 class SqlAnalyseRequestSerializer(serializers.Serializer):

@@ -1,5 +1,6 @@
 import uuid
 from unittest import mock
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -224,6 +225,43 @@ class ToolResourceTestCase(TestCase):
         tool = resource.perform_request(data)
         self.assertEqual(tool.uid, self.sql_tool.uid)
         self.assertEqual(tool.name, self.sql_tool.name)
+
+    def test_list_tool_filter_only_created_by_me(self):
+        resource = ListTool()
+
+        with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
+            data = {
+                "keyword": "",
+                "limit": 10,
+                "offset": 0,
+                "tags": [],
+                "my_created": True,
+                "recent_used": False,
+            }
+            result = resource(data)
+            self.assertTrue(all(tool["created_by"] == self.uid for tool in result))
+
+    def test_list_tool_filter_recent_uids_flag(self):
+        resource = ListTool()
+
+        recent_uids = [self.sql_tool.uid, self.bk_tool.uid]
+
+        with patch(
+            "services.web.tool.resources.recent_tool_usage_manager.get_recent_uids",
+            return_value=recent_uids,
+        ), patch("services.web.tool.resources.get_request_username", return_value=self.uid):
+            data = {
+                "keyword": "",
+                "limit": 10,
+                "offset": 0,
+                "tags": [],
+                "my_created": False,
+                "recent_used": True,
+            }
+            result = resource(data)
+
+            result_uids = [tool["uid"] for tool in result]
+            self.assertCountEqual(result_uids, recent_uids)
 
 
 class UserQueryTableAuthCheckTestCase(TestCase):
