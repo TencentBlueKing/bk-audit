@@ -146,3 +146,5 @@ class ListRequestSerializer(serializers.Serializer):
     tags = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
     )
+    my_created = serializers.BooleanField(required=False, default=False, label="是否筛选我创建的")
+    recent_used = serializers.BooleanField(required=False, default=False, label="是否筛选最近使用")
