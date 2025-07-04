@@ -154,8 +154,8 @@
           {{ item.description }}
         </div>
         <div class="item-footer">
-          <span>@ ivonye(叶青)</span>
-          <span>2015-3-20 15:22:00</span>
+          <span>名字</span>
+          <span>时间</span>
         </div>
         <component
           :is="DialogVue"
@@ -187,41 +187,7 @@
   const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
   const dialogRefs = ref<Record<string, any>>({});
-  const dataList = ref<toolInfo[]>([
-    {
-      uid: '3aa8a524564711f083bb0a97de54c4dd',
-      name: '具名称',
-      tool_type: 'data_search',
-      version: 1,
-      description: '工具描述',
-      namespace: '命名空间',
-      permission: {
-        use_tool: true,
-      },
-    },
-    {
-      uid: '3aa8a524564711f083bb0a97d',
-      name: '具33336奥观海干哈案件嘎嘎·观海干哈案件嘎观海干哈案件嘎观海干哈案件嘎观海干哈案件嘎观海干哈案件嘎',
-      tool_type: 'bk_vision',
-      version: 1,
-      description: '工具描述',
-      namespace: '命名空间',
-      permission: {
-        use_tool: false,
-      },
-    }, {
-      uid: '3aa8a52456d',
-      name: '阿嘎hi阿豪啊ak啊A大大',
-      tool_type: 'api',
-      version: 1,
-      description: '啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊啊发撒反反复复烦烦烦啊啊啊',
-      namespace: '命名空间',
-      permission: {
-        use_tool: true,
-      },
-    },
-
-  ]);
+  const dataList = ref<toolInfo[]>([]);
 
   const handleEdit = (item: Record<string, any>) => {
     console.log('handleEdit', item);
