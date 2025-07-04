@@ -15,7 +15,6 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-import uuid
 
 from blueapps.utils.request_provider import get_local_request
 from django.conf import settings
@@ -47,8 +46,3 @@ def is_product() -> bool:
     """
 
     return settings.RUN_MODE == "PRODUCT"
-
-
-def unique_id():
-    """生成32个字符的唯一ID ."""
-    return uuid.uuid3(uuid.uuid1(), uuid.uuid4().hex).hex

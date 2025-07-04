@@ -55,10 +55,14 @@ class OperateRecordQuerySet(models.query.QuerySet):
     批量更新时写入更新时间和更新者
     """
 
-    def update(self, **kwargs):
+    def update(self, _update_record=True, **kwargs):
         """
         重写ORM 更新方法
         """
+
+        if not _update_record:
+            # 不更新记录
+            return super().update(**kwargs)
 
         # 是否跳过更新时间或更新人，某些特殊场景下使用
         if kwargs.pop("skip_update_time", False):
@@ -108,8 +112,12 @@ class OperateRecordModelManager(models.Manager):
             obj.updated_by = obj.updated_by or get_request_username()
         return super().bulk_create(objs, *args, **kwargs)
 
-    def bulk_update(self, objs, *args, **kwargs):
+    def bulk_update(self, objs, update_record=True, *args, **kwargs):
         """更新数据 自动填写通用字段"""
+
+        if not update_record:
+            # 不更新记录
+            return super().bulk_update(objs, *args, **kwargs)
 
         for obj in objs:
             obj.created_at = obj.created_at or timezone.now()
@@ -148,8 +156,9 @@ class OperateRecordModel(models.Model):
         """
 
         if not update_record:
-            # 禁止更新
+            # 不更新记录
             return super().save(*args, **kwargs)
+
         operator = get_request_username()
         if not self.created_by:
             self.created_by = operator

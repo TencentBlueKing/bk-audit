@@ -20,6 +20,7 @@ from bk_resource import api, resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from django.utils.translation import gettext
 
+from apps.meta.permissions import SystemPermissionHandler
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
     IAMPermission,
@@ -53,11 +54,7 @@ class CollectorsViewSet(ResourceViewSet):
             ]
         if self.action in ["join_data"]:
             return [IAMPermission(actions=[ActionEnum.MANAGE_GLOBAL_SETTING])]
-        return [
-            InstanceActionPermission(
-                actions=[ActionEnum.VIEW_SYSTEM], resource_meta=ResourceEnum.SYSTEM, get_instance_id=self.get_system_id
-            )
-        ]
+        return SystemPermissionHandler.system_view_permissions(get_instance_id=self.get_system_id)
 
     def get_system_id(self):
         # step 1: 根据collector_id转换成实际的system_id
@@ -167,13 +164,7 @@ class DataIdBase:
 class DataIdsViewSet(DataIdBase, ResourceViewSet):
     def get_permissions(self):
         if self.action in ["list"]:
-            return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.VIEW_SYSTEM],
-                    resource_meta=ResourceEnum.SYSTEM,
-                    get_instance_id=self.get_system_id,
-                )
-            ]
+            return SystemPermissionHandler.system_view_permissions(get_instance_id=self.get_system_id)
         if self.action in ["tail", "destroy"]:
             return [
                 InstanceActionPermission(

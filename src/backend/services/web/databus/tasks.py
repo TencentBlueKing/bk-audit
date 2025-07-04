@@ -384,3 +384,29 @@ def check_join_data():
                 "result": result,
             },
         )
+
+
+@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(load_lock_name=lambda system_id: f"restart_resource_snapshots:{system_id}")
+def refresh_system_snapshots(system_id: int):
+    """
+    刷新当前系统下运行中的资源快照
+    """
+
+    logger.info("[restart_resource_types] system_id %s Start", system_id)
+
+    system = System.objects.filter(system_id=system_id).first()
+    if not system:
+        logger.info("[restart_resource_types] system_id %s Not Found", system_id)
+        return
+
+    # 仅修改当前系统下存在的资源类型的快照
+    resource_type_ids = ResourceType.objects.filter(system_id=system_id).values_list("resource_type_id", flat=True)
+
+    updated_count = Snapshot.objects.filter(
+        system_id=system_id,
+        resource_type_id__in=resource_type_ids,
+        status=SnapshotRunningStatus.RUNNING.value,
+    ).update(status=SnapshotRunningStatus.PREPARING.value)
+
+    logger.info("[restart_resource_types] system_id %s Updated %s", system_id, updated_count)
