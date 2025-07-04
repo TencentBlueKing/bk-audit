@@ -253,6 +253,10 @@
         "resource_type_chain": [
           {
             "system_id": "bk-audit",
+            "id": "strategy"
+          },
+          {
+            "system_id": "bk-audit",
             "id": "risk"
           }
         ]
