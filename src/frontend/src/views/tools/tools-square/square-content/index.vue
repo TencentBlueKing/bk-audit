@@ -21,13 +21,13 @@
         class="heard-left"
         :class="{ 'collapsed': isCollapsed }">
         <bk-tag
-          v-for="tag in tags"
-          :key="tag"
+          v-for="tagItem in tags"
+          :key="tagItem.tag_id"
           checkable
-          :checked="checkedTags.includes(tag)"
-          :style="checkedTags.includes(tag) ? tagStyle : checkedTagStyle"
-          @change="(checked: any) => handleCheckChange(checked, tag)">
-          {{ tag }}
+          :checked="checkedTags.includes(tagItem.tag_name)"
+          :style="checkedTags.includes(tagItem.tag_name) ? tagStyle : checkedTagStyle"
+          @change="(checked: any) => handleCheckChange(checked, tagItem)">
+          {{ tagItem.tag_name }}
         </bk-tag>
       </div>
       <div
@@ -41,11 +41,20 @@
 </template>
 
 <script setup lang='ts'>
-  import { ref, watch } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import ToolsSquare from '@service/tools-square';
+
+  import useRequest from '@/hooks/use-request';
+
+  interface TagItem {
+    tag_id: string
+    tag_name: string
+    tool_count: number
+  }
   interface Emits {
-    (e: 'handle-checked-tags', tags: Array<string>): void;
+    (e: 'handle-checked-tags', tags: Array<TagItem>, tagsName: Array<string>): void;
   }
   interface Exposes {
     checkedTags: Array<string>;
@@ -58,14 +67,11 @@
   const toggleCollapse = () => {
     isCollapsed.value = !isCollapsed.value;
   };
-  const tags = ref([
-    '企业邮箱', '腾讯视频', '蓝鲸智云', '企业微信', '场景1', '场景2', '场景3',
-    '场景4', '场景5', '场景6', '场景7', '场景8', '场景9', '场景10', '场景11', '场景12', '场景13',
-    '场景14', '场景15', '场景16', '场景17', '场景18', '场景19', '场景20', '场景21', '场景22',
-    '场景23', '场景24', '场景25', '场景26', '场景27', '场景28', '场景29', '场景30', '场景31', '场景32',
-    '场景33', '场景34', '场景35', '场景36',
-  ]);
+  const tags = ref<TagItem[]>([]);
+
   const checkedTags = ref<string[]>([]);
+  const checkedTagsList = ref<Array<TagItem>>([]);
+
   const tagStyle = ref({
     background: '#E1ECFF',
     color: '#1768EF',
@@ -75,20 +81,39 @@
     background: '#ffffff',
     color: '#4D4F56',
   });
+  // 工具标签列表
+  const {
+    run: fetchToolsTagsList,
+  } = useRequest(ToolsSquare.fetchToolsTagsList, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      console.log('工具标签列表', data);
+      tags.value = data;
+    },
+  });
 
-  const handleCheckChange = (checked: any, tag: string) => {
-    if (checked && !checkedTags.value.includes(tag)) {
-      checkedTags.value.push(tag);
+  const handleCheckChange = (checked: any, tag: TagItem) => {
+    console.log('checkedTags.value.includes(tag.tag_name)', checkedTags.value.includes(tag.tag_name));
+
+    if (checked && !checkedTags.value.includes(tag.tag_name)) {
+      checkedTags.value.push(tag.tag_name);
+      checkedTagsList.value.push(tag);
     } else {
-      checkedTags.value = checkedTags.value.filter(tagItem => tagItem !== tag);
+      checkedTags.value = checkedTags.value.filter(tagItem => tagItem !== tag.tag_name);
     }
   };
 
-  watch(() => checkedTags.value, (val) => {
-    emit('handle-checked-tags', val);
+  watch(() => checkedTags.value, (val: Array<string>) => {
+    console.log('checkedTags', val);
+
+    emit('handle-checked-tags', checkedTagsList.value, val);
   }, {
     deep: true,
     immediate: true,
+  });
+
+  onMounted(() => {
+    fetchToolsTagsList();
   });
 
   defineExpose<Exposes>({
@@ -97,7 +122,7 @@
     },
     clearCheckedTags() {
       checkedTags.value = [];
-      emit('handle-checked-tags', []); // 明确传递空数组
+      emit('handle-checked-tags', [], []); // 明确传递空数组
     },
   });
 </script>
