@@ -1,7 +1,11 @@
+import time
 from typing import List, Type
 
+import redis
 from bk_resource import resource
+from django.conf import settings
 from django.db import models, transaction
+from django.db.models import QuerySet
 
 from core.utils.data import unique_id
 from services.web.tool.constants import (
@@ -106,3 +110,70 @@ def sync_resource_tags(
         # 批量创建关联
         objs = [relation_model(**{relation_resource_field: resource_uid, "tag_id": t["tag_id"]}) for t in tags]
         relation_model.objects.bulk_create(objs)
+
+
+def custom_sort_order(
+    queryset: QuerySet,
+    ordering_field: str,
+    value_list: List,
+) -> QuerySet:
+    """
+    自定义排序 .
+
+    :param queryset: 查询集
+    :param ordering_field: 排序字段
+    :param value_list: 排序字段排序值列表,从小到大
+    """
+    if not ordering_field:
+        return queryset
+    desc = False
+    if ordering_field.startswith("-"):
+        desc = True
+        ordering_field = ordering_field[1:]
+
+    clauses = " ".join(
+        "WHEN {}='{}' THEN {} ".format(ordering_field, value if isinstance(value, int) else str(value), idx)
+        for idx, value in enumerate(value_list)
+    )
+    ordering = "CASE %s END " % clauses
+
+    if desc:
+        queryset = queryset.extra(select={"ordering": ordering}, order_by=("-ordering",))
+    else:
+        queryset = queryset.extra(select={"ordering": ordering}, order_by=("ordering",))
+
+    return queryset
+
+
+class RecentToolUsageManager:
+    REDIS_KEY_TEMPLATE = "tool:recently_used:{username}"
+
+    def __init__(self):
+        self.redis_client = redis.Redis(
+            host=settings.REDIS_HOST,
+            port=int(settings.REDIS_PORT),
+            db=int(settings.REDIS_DB),
+            password=settings.REDIS_PASSWORD,
+            decode_responses=True,
+        )
+
+    def _build_key(self, username: str) -> str:
+        return self.REDIS_KEY_TEMPLATE.format(username=username)
+
+    def record_usage(self, username: str, tool_uid: str):
+        if not username or not tool_uid:
+            return
+
+        key = self._build_key(username)
+        score = int(time.time())
+        cutoff = score - settings.RECENT_USED_TTL
+        self.redis_client.zremrangebyscore(key, '-inf', cutoff)
+        self.redis_client.zadd(key, {tool_uid: score})
+        self.redis_client.expire(key, settings.RECENT_USED_TTL)
+
+    def get_recent_uids(self, username: str):
+        key = self._build_key(username)
+        return self.redis_client.zrevrange(key, 0, -1)
+
+
+recent_tool_usage_manager = RecentToolUsageManager()

@@ -21,7 +21,6 @@ from typing import List, Optional
 from django.utils.translation import gettext_lazy
 from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
-from pydantic.v1 import root_validator
 
 from api.bk_base.constants import StorageType
 from core.choices import TextChoices, register_choices
@@ -61,6 +60,16 @@ class FieldCategory(TextChoices):
     PERSON_SELECT = "person_select", gettext_lazy("人员选择器")
 
 
+@register_choices("TargetValueType")
+class TargetValueTypeEnum(TextChoices):
+    """
+    下钻目标值类型枚举
+    """
+
+    FIXED_VALUE = "fixed_value", gettext_lazy("固定值")
+    FIELD = "field", gettext_lazy("字段")
+
+
 class DataSearchBaseField(BaseModel, abc.ABC):
     """
     数据查询基本字段
@@ -95,18 +104,9 @@ class ToolDrillConfig(BaseModel):
     工具下钻配置
     """
 
-    target_field: str  # 目标字段
-    source_field: Optional[str] = None  # 来源字段
-    target_value: Optional[str] = None  # 固定值
-    field_source: Optional[str] = None
-
-    @root_validator
-    def check_exclusive_fields(cls, values):
-        sf, tv = values.get('source_field'), values.get('target_value')
-        # 如果两个都为空，或两个都有值，都算校验失败
-        if (sf is None) == (tv is None):
-            raise ValueError('必须且只能提供 source_field 或 target_value 中的一个')
-        return values
+    target_value_type: TargetValueTypeEnum
+    target_value: str  # 字段名或固定值
+    field_source: Optional[str] = None  # 字段来源
 
 
 class DataSearchDrillConfig(BaseModel):

@@ -567,6 +567,7 @@ GLOBAL_CHOICES = {
         {"id": "time_select", "name": "时间选择器"},
         {"id": "person_select", "name": "人员选择器"},
     ],
+    "TargetValueType": [{"id": "fixed_value", "name": "固定值"}, {"id": "field", "name": "字段"}],
 }
 
 SYSTEM_DIAGNOSIS_PUSH_TEMPLATE = """{
