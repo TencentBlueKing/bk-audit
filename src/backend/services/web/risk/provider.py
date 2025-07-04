@@ -17,55 +17,135 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+from typing import Optional, Tuple
 
 from bk_resource.tools import get_serializer_fields
-from django.db.models import Q
-from iam import PathEqDjangoQuerySetConverter
+from blueapps.utils.logger import logger
+from blueapps.utils.request_provider import get_local_request
+from django.db.models import QuerySet
+from iam.collection import FancyDict
 from iam.resource.provider import ListResult, SchemaResult
+from iam.resource.utils import Page
 
+from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.provider.base import BaseResourceProvider
+from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.risk.models import Risk
 from services.web.risk.serializers import RiskInfoSerializer
 
 
-class RiskBaseProvider(BaseResourceProvider):
-    attrs = None
-    resource_type = None
+class RiskResourceProvider(BaseResourceProvider):
+    @staticmethod
+    def get_local_request():
+        return get_local_request()
 
-    key_mapping = {}
-
-    def list_instance(self, filters, page, **options):
-        queryset = Risk.objects.none()
-        with_path = False
-
-        if not (filters.parent or filters.search):
-            queryset = Risk.objects.all()
-        elif filters.search:
-            # 返回结果需要带上资源拓扑路径信息
-            with_path = True
-
-            keywords = filters.search.get(self.resource_type, [])
-
-            q_filter = Q()
-            for keyword in keywords:
-                q_filter |= Q(risk_id__icontains=keyword)
-            queryset = Risk.objects.filter(q_filter)
-
-        if not with_path:
-            results = [
-                {"id": item.risk_id, "display_name": item.risk_id} for item in queryset[page.slice_from : page.slice_to]
-            ]
+    def list_instance(self, filters: FancyDict, page: Page, **options: dict) -> ListResult:
+        """
+        根据过滤条件查询实例
+        """
+        logger.info(
+            "%s list_instance: headers= %s, filters = %s, page = %s, options = %s",
+            self.__class__.__name__,
+            dict(self.get_local_request().headers),
+            filters,
+            page.__dict__,
+            options,
+        )
+        # 获得父节点
+        parent = filters.parent
+        if parent:
+            # 获得父资源的ID
+            parent_id = parent["id"]
+            # 获得父资源的资源类型
+            resource_type = parent["type"]
         else:
-            results = [
-                {
-                    "id": item.risk_id,
-                    "display_name": item.risk_id,
-                    "_bk_iam_path_": [],
-                }
-                for item in queryset[page.slice_from : page.slice_to]
-            ]
+            parent_id = None
+            resource_type = None
 
-        return ListResult(results=results, count=queryset.count())
+        # 查询资源实例列表
+        try:
+            results, count = self.filter_list_instance_results(parent_id, resource_type, page)
+        except Exception as exc_info:  # pylint: disable=broad-except
+            logger.exception(exc_info)
+            raise
+        logger.info("%s list_instance response results = %s, count = %s", self.__class__.__name__, results, count)
+
+        return ListResult(results=results, count=count)
+
+    def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
+        """
+        根据过滤条件查询资源实例
+        """
+        """查询风险类型 ."""
+        if parent_id:
+            if resource_type == ResourceEnum.STRATEGY.id:
+                strategy_id = int(parent_id)
+                queryset: QuerySet[Risk] = Risk.objects.filter(strategy_id=strategy_id)
+            else:
+                queryset: QuerySet[Risk] = Risk.objects.none()
+        else:
+            queryset: QuerySet[Risk] = Risk.objects.all()
+        results = [
+            {"id": str(instance.risk_id), "display_name": instance.risk_id}
+            for instance in queryset[page.slice_from : page.slice_to]
+        ]
+        count = queryset.count()
+        return results, count
+
+    def search_instance(self, filters: FancyDict, page: Page, **options: dict) -> ListResult:
+        """
+        根据过滤条件和搜索关键字查询实例
+        """
+        logger.info(
+            "%s search_instance: headers= %s, filters = %s, page = %s, options = %s",
+            self.__class__.__name__,
+            dict(self.get_local_request().headers),
+            filters,
+            page.__dict__,
+            options,
+        )
+        # 获得父节点
+        parent = filters.parent
+        if parent:
+            # 搜索子资源
+            parent_id = parent["id"]
+            resource_type = parent["type"]
+        else:
+            # 搜索当前资源
+            parent_id = None
+            resource_type = None
+        # 获得搜索词
+        keyword = filters.keyword
+        # 查询资源实例
+        try:
+            results, count = self.filter_search_instance_results(parent_id, resource_type, keyword, page)
+        except Exception as exc_info:  # pylint: disable=broad-except
+            logger.exception(exc_info)
+            raise
+        logger.info("%s search_instance response results = %s, count = %s", self.__class__.__name__, results, count)
+
+        return ListResult(results=results, count=count)
+
+    def filter_search_instance_results(
+        self, parent_id: Optional[str], resource_type: Optional[str], keyword: str, page: Page
+    ) -> Tuple[list, int]:
+        """根据风险类型名称查询 ."""
+        if parent_id:
+            if resource_type == ResourceEnum.STRATEGY.id:
+                project_id = int(parent_id)
+                queryset: QuerySet[Risk] = Risk.objects.filter(project=project_id)
+            else:
+                queryset: QuerySet[Risk] = Risk.objects.none()
+        else:
+            queryset: QuerySet[Risk] = Risk.objects.all()
+
+        queryset = queryset.filter(risk_id__contains=keyword)
+        results = [
+            {"id": str(instance.risk_id), "display_name": instance.risk_id}
+            for instance in queryset[page.slice_from : page.slice_to]
+        ]
+        count = queryset.count()
+        return results, count
 
     def fetch_instance_info(self, filters, **options):
         ids = []
@@ -82,20 +162,13 @@ class RiskBaseProvider(BaseResourceProvider):
         if not expression:
             return ListResult(results=[], count=0)
 
-        converter = PathEqDjangoQuerySetConverter(self.key_mapping)
+        converter = RiskPathEqDjangoQuerySetConverter()
         filters = converter.convert(expression)
-        queryset = Risk.objects.filter(filters)
+        queryset: QuerySet[Risk] = Risk.objects.filter(filters)
         results = [
             {"id": item.risk_id, "display_name": item.risk_id} for item in queryset[page.slice_from : page.slice_to]
         ]
 
-        return ListResult(results=results, count=queryset.count())
-
-    def search_instance(self, filters, page, **options):
-        queryset = Risk.objects.filter(risk_id__contains=filters.keyword)
-        results = [
-            {"id": item.risk_id, "display_name": item.risk_id} for item in queryset[page.slice_from : page.slice_to]
-        ]
         return ListResult(results=results, count=queryset.count())
 
     def fetch_instance_list(self, filter, page, **options):
@@ -128,16 +201,3 @@ class RiskBaseProvider(BaseResourceProvider):
                 for item in data
             }
         )
-
-
-class RiskResourceProvider(RiskBaseProvider):
-    """
-    策略实例视图
-    """
-
-    resource_type = "risk"
-
-    key_mapping = {
-        "risk.id": "risk_id",
-        "risk.risk_id": "risk_id",
-    }
