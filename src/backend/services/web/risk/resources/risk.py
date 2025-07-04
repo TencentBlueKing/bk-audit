@@ -138,9 +138,8 @@ class ListRisk(RiskMeta):
         # 获取风险
         order_field = validated_request_data.pop("order_field", "-last_operate_time")
         risks = self.load_risks(validated_request_data).order_by(order_field)
-        base_qs = Risk.annotated_queryset().order_by(order_field)
         # 分页
-        risks, page = paginate_queryset(queryset=risks, request=request, base_queryset=base_qs)
+        risks, page = paginate_queryset(queryset=risks, request=request)
         # 获取关联的经验
         experiences = {
             e["risk_id"]: e["count"]
