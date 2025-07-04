@@ -55,7 +55,11 @@ from services.web.tool.serlializers import (
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
 )
-from services.web.tool.tool import create_tool_with_config, sync_resource_tags
+from services.web.tool.tool import (
+    create_tool_with_config,
+    recent_tool_usage_manager,
+    sync_resource_tags,
+)
 
 
 class ToolBase(AuditMixinResource, abc.ABC):
@@ -94,6 +98,8 @@ class ListTool(ToolBase):
     limit：分页大小
     offset：分页偏移量
     tags：[xx.xx]
+    my_created：是否只显示我创建的 布尔
+    recent_used：是否只显示最近使用 布尔
     tool_type=data_search：响应结构
         [
       {
@@ -138,19 +144,49 @@ class ListTool(ToolBase):
         keyword = validated_request_data.get("keyword", "").strip()
         limit = validated_request_data["limit"]
         offset = validated_request_data["offset"]
-        tools_qs = Tool.all_latest_tools().order_by("-updated_at")
+        my_created = validated_request_data["my_created"]
+        recent_used = validated_request_data["recent_used"]
 
-        if keyword:
-            tools_qs = tools_qs.filter(
-                Q(name__icontains=keyword) | Q(description__icontains=keyword) | Q(created_by__icontains=keyword)
-            )
+        current_user = get_request_username()
 
-        if tags:
-            tool_uid_list = list(ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct())
+        if recent_used:
+            recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
+            if not recent_tool_uids:
+                return []
 
-            tools_qs = tools_qs.filter(uid__in=tool_uid_list)
+            tool_map = {str(tool.uid): tool for tool in Tool.all_latest_tools().filter(uid__in=recent_tool_uids)}
 
-        paged_qs = tools_qs[offset : offset + limit]
+            ordered_tools = [tool_map[uid] for uid in recent_tool_uids if uid in tool_map]
+
+            if keyword:
+                ordered_tools = [
+                    t for t in ordered_tools if keyword in t.name or keyword in t.description or keyword in t.created_by
+                ]
+            if tags:
+                tool_tag_map = defaultdict(list)
+                for t in ToolTag.objects.filter(tool_uid__in=[tool.uid for tool in ordered_tools]):
+                    tool_tag_map[t.tool_uid].append(t.tag_id)
+                ordered_tools = [t for t in ordered_tools if set(tags) & set(tool_tag_map.get(t.uid, []))]
+
+            paged_qs = ordered_tools[offset : offset + limit]
+        else:
+            tools_qs = Tool.all_latest_tools().order_by("-updated_at")
+
+            if my_created:
+                tools_qs = tools_qs.filter(created_by=current_user)
+
+            if keyword:
+                tools_qs = tools_qs.filter(
+                    Q(name__icontains=keyword) | Q(description__icontains=keyword) | Q(created_by__icontains=keyword)
+                )
+
+            if tags:
+                tool_uid_list = list(
+                    ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
+                )
+                tools_qs = tools_qs.filter(uid__in=tool_uid_list)
+
+            paged_qs = tools_qs[offset : offset + limit]
 
         tool_uids = [tool.uid for tool in paged_qs]
         tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
@@ -161,19 +197,13 @@ class ListTool(ToolBase):
         for t in tool_tags:
             tag_info = tag_dict.get(t.tag_id)
             if tag_info:
-                tag_map[t.tool_uid].append(
-                    {
-                        "tag_id": str(t.tag_id),
-                        "tag_name": tag_info,
-                    }
-                )
+                tag_map[t.tool_uid].append({"tag_id": str(t.tag_id), "tag_name": tag_info})
 
         for tool in paged_qs:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
 
         serialized_data = self.ResponseSerializer(paged_qs, many=True).data
 
-        current_user = get_request_username()
         data = wrapper_permission_field(
             result_list=serialized_data,
             actions=[ActionEnum.USE_TOOL],
@@ -235,9 +265,8 @@ class CreateTool(ToolBase):
               },
               "config": [
                 {
-                  "target_field": "XXX",
-                  "source_field": "XXX",
-                  "field_source": "XXX"
+             "target_value_type": "field",
+             "target_value": "ip_address"
                 }
               ]
             }
@@ -312,9 +341,8 @@ class UpdateTool(ToolBase):
               },
               "config": [
                 {
-                  "target_field": "XXX",
-                  "source_field": "XXX",
-                  "field_source": "XXX"
+             "target_value_type": "field",
+             "target_value": "ip_address"
                 }
               ]
             }
@@ -455,6 +483,7 @@ class ExecuteTool(ToolBase):
             raise Tool.DoesNotExist()
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
         data = executor.execute(params).model_dump()
+        recent_tool_usage_manager.record_usage(get_request_username(), uid)
         return {"data": data, "tool_type": tool.tool_type}
 
 

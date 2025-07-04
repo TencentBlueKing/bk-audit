@@ -61,6 +61,16 @@ class FieldCategory(TextChoices):
     PERSON_SELECT = "person_select", gettext_lazy("人员选择器")
 
 
+@register_choices("TargetValueType")
+class TargetValueTypeEnum(TextChoices):
+    """
+    下钻目标值类型枚举
+    """
+
+    FIXED_VALUE = "fixed_value", gettext_lazy("固定值")
+    FIELD = "field", gettext_lazy("字段")
+
+
 class DataSearchBaseField(BaseModel, abc.ABC):
     """
     数据查询基本字段
@@ -95,17 +105,15 @@ class ToolDrillConfig(BaseModel):
     工具下钻配置
     """
 
-    target_field: str  # 目标字段
-    source_field: Optional[str] = None  # 来源字段
-    target_value: Optional[str] = None  # 固定值
-    field_source: Optional[str] = None
+    target_value_type: TargetValueTypeEnum
+    target_value: str  # 字段名或固定值
+    field_source: Optional[str] = None  # 字段来源
 
     @root_validator
-    def check_exclusive_fields(cls, values):
-        sf, tv = values.get('source_field'), values.get('target_value')
-        # 如果两个都为空，或两个都有值，都算校验失败
-        if (sf is None) == (tv is None):
-            raise ValueError('必须且只能提供 source_field 或 target_value 中的一个')
+    def check_target_value_not_empty(cls, values):
+        tv = values.get('target_value_type'), values.get('target_value')
+        if not tv:
+            raise ValueError("target_value 不能为空")
         return values
 
 
