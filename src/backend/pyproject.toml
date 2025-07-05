@@ -36,13 +36,13 @@ version = "1.15.0"
 description = "Default template for PDM package"
 dependencies = [
     "raven==6.10.0",
-    "sentry-sdk==1.28.1",
+    "sentry-sdk==1.45.1",
     "bkapi-component-open>=1.1.0",
     "bk-audit[opentelemetry]==1.2.2b0",
     "bk-resource==0.4.11",
     "blueapps[opentelemetry]==4.16rc1",
     "gunicorn==23.0.0",
-    "django==4.2.19",
+    "django==4.2.23",
     "django-filter==2.4.0",
     "django-cors-headers==4.7.0",
     "django-cors-middleware==1.3.1",
@@ -65,7 +65,7 @@ dependencies = [
     "pyinstrument==3.4.2",
     "JSON-log-formatter==0.4.0",
     "arrow==1.2.2",
-    "requests==2.31.0",
+    "requests==2.32.4",
     "mistune==2.0.3",
     "protobuf<6.0",
     "opentelemetry-api==1.30.0",
@@ -100,7 +100,8 @@ dependencies = [
     "opentelemetry-instrumentation-threading==0.51b0",
     "bkstorages==2.0.0",
     "gevent==25.4.1",
-    "pympler>=1.1"
+    "pympler>=1.1",
+    "xlsxwriter==3.2.3"
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
