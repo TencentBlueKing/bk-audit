@@ -20,11 +20,15 @@ export default function () {
   const searchParams = new URLSearchParams(window.location.search);
 
   const getSearchParams = () => {
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
     const curSearchParams = new URLSearchParams(window.location.search);
-    return Array.from(curSearchParams.keys()).reduce((result, key) => ({
-      ...result,
-      [key]: curSearchParams.get(key) || '',
-    }), {} as Record<string, string>);
+    return Array.from(curSearchParams.keys()).reduce((result, key) => {
+      if (dangerousKeys.includes(key)) return result;
+      return {
+        ...result,
+        [key]: curSearchParams.get(key) || '',
+      };
+    }, {} as Record<string, string>);
   };
 
   const appendSearchParams = (params: Record<string, any>) => {
