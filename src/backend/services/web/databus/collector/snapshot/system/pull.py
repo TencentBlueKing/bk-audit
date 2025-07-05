@@ -135,5 +135,4 @@ class HttpPullHandler:
 
     def create_data_id(self):
         params = self.build_params()
-        print(f"[HttpPull] Params => {params}")
         return self.raw_data_name, api.bk_base.create_deploy_plan(params)["raw_data_id"]
