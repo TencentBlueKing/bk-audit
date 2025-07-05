@@ -22,13 +22,12 @@ export default function () {
   const getSearchParams = () => {
     const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
     const curSearchParams = new URLSearchParams(window.location.search);
-    return Array.from(curSearchParams.keys()).reduce((result, key) => {
-      if (dangerousKeys.includes(key)) return result;
-      return {
-        ...result,
-        [key]: curSearchParams.get(key) || '',
-      };
-    }, {} as Record<string, string>);
+    const params = Object.create(null);
+    Array.from(curSearchParams.keys()).forEach((key) => {
+      if (dangerousKeys.includes(key)) return;
+      params[key] = curSearchParams.get(key) || '';
+    });
+    return params;
   };
 
   const appendSearchParams = (params: Record<string, any>) => {
