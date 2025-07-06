@@ -18,14 +18,17 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 from collections import defaultdict
+from typing import List
 
-from bk_resource import Resource
+from bk_resource import Resource, api
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404
 from django.utils.translation import gettext, gettext_lazy
 from pypinyin import lazy_pinyin
 
+from api.bk_base.constants import UserAuthActionEnum
+from api.bk_base.serializers import UserAuthCheckRespSerializer
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import Tag
@@ -36,17 +39,13 @@ from core.sql.parser.praser import SqlQueryAnalysis
 from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.executor.tool import ToolExecutorFactory
 from services.web.tool.models import Tool, ToolTag
-from services.web.tool.serializer import (
-    SqlAnalyseRequestSerializer,
-    SqlAnalyseResponseSerializer,
-)
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
     ExecuteToolRespSerializer,
-)
-from services.web.tool.serlializers import (
     ListRequestSerializer,
     ListToolTagsResponseSerializer,
+    SqlAnalyseRequestSerializer,
+    SqlAnalyseResponseSerializer,
     ToolCreateRequestSerializer,
     ToolDeleteRetrieveRequestSerializer,
     ToolListAllResponseSerializer,
@@ -54,6 +53,7 @@ from services.web.tool.serlializers import (
     ToolResponseSerializer,
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
+    UserQueryTableAuthCheckReqSerializer,
 )
 from services.web.tool.tool import create_tool_with_config, sync_resource_tags
 
@@ -552,3 +552,27 @@ class SqlAnalyseResource(ToolBase, Resource):
         analyser.parse_sql()
         parsed = analyser.get_parsed_def()
         return parsed.model_dump()
+
+
+class UserQueryTableAuthCheck(ToolBase):
+    """
+    用户查询权限校验
+    """
+
+    name = gettext_lazy("用户查询权限批量校验")
+    RequestSerializer = UserQueryTableAuthCheckReqSerializer
+    many_response_data = True
+    ResponseSerializer = UserAuthCheckRespSerializer
+
+    def perform_request(self, validated_request_data):
+        tables: List[str] = validated_request_data["tables"]
+        username = get_request_username()
+        permissions = [
+            {
+                "user_id": username,
+                "action_id": UserAuthActionEnum.RT_QUERY.value,
+                "object_id": table,
+            }
+            for table in tables
+        ]
+        return api.bk_base.user_auth_batch_check({"permissions": permissions})

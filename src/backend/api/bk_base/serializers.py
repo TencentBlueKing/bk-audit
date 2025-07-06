@@ -63,3 +63,9 @@ class UserAuthCheckReqSerializer(serializers.Serializer):
 
 class UserAuthBatchCheckReqSerializer(serializers.Serializer):
     permissions = serializers.ListField(child=UserAuthCheckReqSerializer())
+
+
+class UserAuthCheckRespSerializer(serializers.Serializer):
+    result = serializers.BooleanField(label=gettext_lazy("是否有权限"))
+    user_id = serializers.CharField(label=gettext_lazy("用户ID"))
+    object_id = serializers.CharField(label=gettext_lazy("对象ID"))
