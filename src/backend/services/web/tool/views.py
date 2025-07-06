@@ -39,4 +39,5 @@ class ToolViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.tool.list_tool_all, endpoint="all"),
         ResourceRoute("GET", resource.tool.get_tool_detail, pk_field="uid"),
         ResourceRoute("POST", resource.tool.sql_analyse, endpoint="sql_analyse"),
+        ResourceRoute("POST", resource.tool.user_query_table_auth_check, endpoint="user_query_table_auth_check"),
     ]

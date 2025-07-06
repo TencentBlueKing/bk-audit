@@ -32,6 +32,7 @@ from api.bk_base.serializers import (
     QuerySyncRequestSerializer,
     UserAuthBatchCheckReqSerializer,
     UserAuthCheckReqSerializer,
+    UserAuthCheckRespSerializer,
 )
 from api.domains import BK_BASE_API_URL
 
@@ -390,4 +391,6 @@ class UserAuthBatchCheck(BkBaseResource):
 
     action = "/v3/auth/users/batch_check/"
     method = "POST"
+    many_response_data = True
     RequestSerializer = UserAuthBatchCheckReqSerializer
+    ResponseSerializer = UserAuthCheckRespSerializer
