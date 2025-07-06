@@ -1,9 +1,12 @@
 import uuid
+from unittest import mock
 
 from django.test import TestCase
 from django.utils import timezone
 
+from api.bk_base.default import UserAuthBatchCheck
 from apps.meta.models import Tag
+from core.testing import assert_list_contains
 from services.web.tool.constants import DataSearchConfigTypeEnum, ToolTypeEnum
 from services.web.tool.models import (
     BkVisionToolConfig,
@@ -17,6 +20,7 @@ from services.web.tool.resources import (
     GetToolDetail,
     ListTool,
     UpdateTool,
+    UserQueryTableAuthCheck,
 )
 from services.web.vision.models import Scenario, VisionPanel
 
@@ -220,3 +224,29 @@ class ToolResourceTestCase(TestCase):
         tool = resource.perform_request(data)
         self.assertEqual(tool.uid, self.sql_tool.uid)
         self.assertEqual(tool.name, self.sql_tool.name)
+
+
+class UserQueryTableAuthCheckTestCase(TestCase):
+    def setUp(self):
+        self.patcher_auth = mock.patch.object(
+            UserAuthBatchCheck,
+            "perform_request",
+            return_value=[
+                {"result": True, "user_id": "test_user", "object_id": "mocked_table1"},
+                {"result": False, "user_id": "test_user", "object_id": "mocked_table2"},
+            ],
+        )
+        self.mock_auth_api = self.patcher_auth.start()
+
+    def tearDown(self):
+        mock.patch.stopall()
+
+    def test_user_query_table_auth_check(self):
+        req_data = {'tables': ['mocked_table1', 'mocked_table2']}
+        resource = UserQueryTableAuthCheck()
+        actual = resource(req_data)
+        expect = [
+            {"result": True, "user_id": "test_user", "object_id": "mocked_table1"},
+            {"result": False, "user_id": "test_user", "object_id": "mocked_table2"},
+        ]
+        assert_list_contains(actual, expect)
