@@ -52,4 +52,27 @@ export default {
       ...data,
     }));
   },
+  /**
+   * @desc 工具执行
+   * @param { Object } params
+   */
+  fetchToolsExecute(params: {
+    uid: string,
+    params: Record<string, any>,
+  }) {
+    return ToolsSquare.getToolsExecute(params).then(({ data }) =>  ({
+      ...data,
+    }));
+  },
+  /**
+   * @desc 工具删除
+   * @param { Object } params
+   */
+  fetchDeleteTool(params: {
+    uid: string,
+  }) {
+    return ToolsSquare.deleteTool(params).then(({ data }) =>  ({
+      ...data,
+    }));
+  },
 };

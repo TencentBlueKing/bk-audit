@@ -16,6 +16,7 @@
 */
 
 
+import type  ToolDetail from '@model/tool/tool-detail';
 import type toolInfo from '@model/tools-square/tools-square';
 
 import Request from '@utils/request';
@@ -38,14 +39,48 @@ class ToolsSquare extends ModuleBase {
     }>>(`${this.module}/tool/tags/`);
   }
   // 获取工具列表
-  getToolsList(params: Record<string, any>) {
-    return Request.get<IRequestResponsePaginationData<toolInfo>>(`${this.module}/tool/`, { params });
+  getToolsList(params: {
+  offset?: number
+  limit?: number
+  keyword?: string,
+  page: number,
+  page_size: number
+  tags?: string[],
+}) {
+  // 处理参数，将数组转换为重复的键值对
+    const processedParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+
+      if (Array.isArray(value)) {
+      // 数组参数特殊处理
+        value.forEach(item => processedParams.append(key, item.toString()));
+      } else {
+        processedParams.append(key, value.toString());
+      }
+    });
+
+    return Request.get<IRequestResponsePaginationData<toolInfo>>(`${this.module}/tool/?${processedParams.toString()}`);
   }
   // 获取工具详情
   getToolsDetail(params: {
     uid: string,
   }) {
-    return Request.get(`${this.module}/tool/${params.uid}/`);
+    return Request.get<ToolDetail>(`${this.module}/tool/${params.uid}/`);
+  }
+  // 工具执行
+  getToolsExecute(params: {
+    uid: string,
+    params: Record<string, any>,
+  }) {
+    return Request.post(`${this.module}/tool/${params.uid}/execute/`, { params });
+  }
+
+  // 工具删除
+  deleteTool(params: {
+    uid: string,
+  }) {
+    return Request.delete(`${this.module}/tool/${params.uid}/`, { params });
   }
 }
 

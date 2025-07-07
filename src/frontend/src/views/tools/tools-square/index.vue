@@ -37,11 +37,14 @@
         {{ t('已选场景') }}:
         <span>{{ checkedTags.join('、') }}</span>
         <span
+          v-show="checkedTags.length > 0"
           class="clear-tag"
           @click="handleClear">{{ t('清除已选') }}</span>
       </div>
       <div class="content-card">
-        <content-card ref="ContentCardRef" />
+        <content-card
+          ref="ContentCardRef"
+          :tags="tagsList" />
       </div>
     </div>
   </div>
@@ -71,11 +74,12 @@
     { name: 'history', label: '最近使用的' },
   ]);
   const checkedTags = ref<Array<string>>([]);
+  const tagsList = ref<Array<TagItem>>([]);
 
   const handleCheckedTags = (tags: Array<TagItem>, tagsName: Array<string>) => {
     if (JSON.stringify(checkedTags.value) !== JSON.stringify(tagsName)) {
       checkedTags.value = tagsName;
-      console.log('checkedTags.value', tags, checkedTags.value);
+      tagsList.value = tags;
     }
   };
 
@@ -91,11 +95,14 @@
   watch(() => active.value, (val) => {
     // 获取当前激活tab对应的组件实例
     const activeIndex = panels.value.findIndex(p => p.name === val);
+
     if (activeIndex >= 0 && concentRef.value[activeIndex]) {
       // 直接从子组件获取最新状态
       checkedTags.value = [...concentRef.value[activeIndex].checkedTags];
+      tagsList.value = [...concentRef.value[activeIndex].checkedTagsList];
     } else {
       checkedTags.value = []; // 如果没有找到组件实例，清空选中状态
+      tagsList.value = [];
     }
   }, { immediate: true });
 
