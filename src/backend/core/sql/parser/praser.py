@@ -26,7 +26,7 @@ class SqlQueryAnalysis:
 
     _parsed_expression: Optional[exp.Expression]  # Store the parsed AST
 
-    def __init__(self, sql: str, dialect: Optional[str] = None):
+    def __init__(self, sql: str, dialect: Optional[str] = 'hive'):
         """
         初始化SQL查询分析器。此时不进行解析。
         """
@@ -74,7 +74,7 @@ class SqlQueryAnalysis:
             if raw_name == "?":
                 raise SQLParseError("不支持匿名变量")
             elif raw_name not in extracted_var_raw_names:
-                self.sql_variables.append(SqlVariable(raw_name=raw_name))
+                self.sql_variables.append(SqlVariable(raw_name=raw_name, display_name=raw_name))
                 extracted_var_raw_names.add(raw_name)
 
         # 3. 提取查询结果字段 (Extract query result fields - SelectField)
@@ -93,7 +93,7 @@ class SqlQueryAnalysis:
             for projection in select_to_inspect.expressions:
                 display_name = projection.alias_or_name
 
-                raw_name = None
+                raw_name = display_name
                 core_expression = projection.this if isinstance(projection, exp.Alias) else projection
 
                 if isinstance(core_expression, exp.Column):

@@ -1,7 +1,8 @@
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from drf_pydantic import BaseModel as DRFBaseModel
 from pydantic import Field as PydanticField
+from rest_framework.fields import CharField
 
 from core.sql.model import Table
 
@@ -12,7 +13,9 @@ class SqlVariable(DRFBaseModel):
     """
 
     raw_name: str = PydanticField(..., description="SQL中原始变量名 (例如 :user_id, @status, ${department})")
-    description: Optional[str] = PydanticField(None, description="变量的详细描述")
+    description: Annotated[Optional[str], CharField(allow_blank=True, required=False)] = PydanticField(
+        "", description="变量的详细描述"
+    )
     required: bool = PydanticField(True, description="该变量是否为必填项")
     display_name: Optional[str] = PydanticField(None, description="用户定义的显示名称")
 
