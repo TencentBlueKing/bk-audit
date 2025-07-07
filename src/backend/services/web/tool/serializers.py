@@ -155,7 +155,7 @@ class SqlAnalyseRequestSerializer(serializers.Serializer):
     """SQL 分析请求参数"""
 
     sql = serializers.CharField(label=gettext_lazy("SQL"))
-    dialect = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+    dialect = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='hive')
 
 
 class SqlAnalyseResponseSerializer(serializers.Serializer):
