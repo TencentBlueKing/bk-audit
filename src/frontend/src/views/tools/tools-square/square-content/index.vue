@@ -58,6 +58,7 @@
   }
   interface Exposes {
     checkedTags: Array<string>;
+    checkedTagsList: Array<TagItem>;
     clearCheckedTags: () => void;
   }
   const emit = defineEmits<Emits>();
@@ -70,6 +71,7 @@
   const tags = ref<TagItem[]>([]);
 
   const checkedTags = ref<string[]>([]);
+  const checkedTagsId = ref<string[]>([]);
   const checkedTagsList = ref<Array<TagItem>>([]);
 
   const tagStyle = ref({
@@ -87,25 +89,23 @@
   } = useRequest(ToolsSquare.fetchToolsTagsList, {
     defaultValue: [],
     onSuccess: (data) => {
-      console.log('工具标签列表', data);
       tags.value = data;
     },
   });
 
   const handleCheckChange = (checked: any, tag: TagItem) => {
-    console.log('checkedTags.value.includes(tag.tag_name)', checkedTags.value.includes(tag.tag_name));
-
-    if (checked && !checkedTags.value.includes(tag.tag_name)) {
+    if (checked) {
       checkedTags.value.push(tag.tag_name);
       checkedTagsList.value.push(tag);
+      checkedTagsId.value.push(tag.tag_id);
     } else {
       checkedTags.value = checkedTags.value.filter(tagItem => tagItem !== tag.tag_name);
+      checkedTagsList.value = checkedTagsList.value.filter(tagItem => tagItem.tag_id !== tag.tag_id);
+      checkedTagsId.value = checkedTagsId.value.filter(tagItem => tagItem !== tag.tag_id);
     }
   };
 
   watch(() => checkedTags.value, (val: Array<string>) => {
-    console.log('checkedTags', val);
-
     emit('handle-checked-tags', checkedTagsList.value, val);
   }, {
     deep: true,
@@ -120,9 +120,14 @@
     get checkedTags() {
       return [...checkedTags.value]; // 返回副本避免直接修改
     },
+    get checkedTagsList() {
+      return [...checkedTagsList.value];
+    },
     clearCheckedTags() {
       checkedTags.value = [];
-      emit('handle-checked-tags', [], []); // 明确传递空数组
+      checkedTagsId.value = [];
+      checkedTagsList.value = [];
+      emit('handle-checked-tags', [], []);
     },
   });
 </script>

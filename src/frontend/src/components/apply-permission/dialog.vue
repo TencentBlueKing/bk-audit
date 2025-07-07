@@ -118,7 +118,6 @@
   };
 
   onMounted(() => {
-    console.log('from onMountedonMountedonMounted = ', props);
     isShow.value = true;
     if (props.checkParams && props.checkParams.action_ids) {
       run({

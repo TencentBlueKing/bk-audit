@@ -92,20 +92,20 @@
                 ref="formRef"
                 class="example"
                 form-type="vertical"
-                :model="configData.searchList"
+                :model="searchForm"
                 :rules="rules">
                 <div class="formref-item">
                   <bk-form-item
-                    v-for="(item, index) in configData.searchList"
+                    v-for="(item, index) in searchList"
                     :key="index"
                     class="formref-item-item"
-                    :label="item.label"
-                    :required="item.required">
-                    <bk-input
-                      v-model="item.value"
-                      clearable
-                      :placeholder="t('请输入')"
-                      style="width: 272px;" />
+                    :label="item?.display_name"
+                    :property="item?.raw_name"
+                    :required="item?.required">
+                    <form-item
+                      ref="formItemRef"
+                      :data-config="item"
+                      @change="(val) => handleFormItemChange(val, item)" />
                   </bk-form-item>
                 </div>
               </bk-form>
@@ -127,13 +127,17 @@
               <div class="top-search-title">
                 {{ t('查询结果') }}
               </div>
-              <!-- <render-list
-                ref="listRef"
-                class="list-data"
-                :columns="tableColumn"
-                :data-source="dataSource"
-                is-need-hide-clear-search-tip
-                @request-success="handleRequestSuccess" /> -->
+              <div class="top-search-result">
+                <bk-table
+                  :border="['outer', 'col', 'row']"
+                  :columns="columns"
+                  :data="tableData"
+                  min-height="300px"
+                  :pagination="pagination"
+                  width="100%"
+                  @page-change="handlePageChange"
+                  @page-limit-change="handlePageLimitChange" />
+              </div>
             </div>
           </div>
           <div
@@ -164,15 +168,25 @@
   </div>
 </template>
 <script setup lang='tsx'>
-  import { nextTick, ref } from 'vue';
+  import { nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolsSquare from '@service/tools-square';
 
+  import type ToolDetail from '@model/tool/tool-detail';
   import toolInfo from '@model/tools-square/tools-square';
 
   import useRequest from '@/hooks/use-request';
+  import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
+  interface SearchItem {
+    value: any;
+    raw_name: string;
+    required: boolean;
+    description: string;
+    display_name: string;
+    field_category: string;
+  }
   interface Props {
     dialogCls: string,
   }
@@ -187,10 +201,14 @@
   const dialogIndex = ref(2000);
   const { t } = useI18n();
   const isShow = ref(false);
+  const uid = ref('');
   const rules = {};
   const formRef = ref();
   const itemInfo = ref<toolInfo>();
   const dialogRef = ref();
+  const searchForm = ref();
+  const formItemRef = ref();
+  const searchList = ref<SearchItem[]>([]);
   const configData = ref({
     id: 1,
     descTag: ['查询', '用户', '转赠', '金额'],
@@ -220,40 +238,40 @@
         required: false,
       },
     ],
-
-    searchData: [
-      {
-        id: 1,
-        label: '用户名1',
-        value: '100',
-      },
-      {
-        id: 2,
-        label: '用户名2',
-        value: '200',
-      },
-      {
-        id: 3,
-        label: '用户名3',
-        value: '300',
-      },
-      {
-        id: 4,
-        label: '用户名4',
-        value: '400',
-      },
-    ],
   });
-  // const tableColumn = [
-  //   {
-  //     label: () => t('风险描述'),
-  //     render: () => ('666'),
-  //   },
-  // ];
+  interface Column {
+    label: string;
+    field: string;
+    width?: number;
+    minWidth?: number;
+    sortable?: boolean;
+    // 可以根据实际需要添加更多属性
+  }
 
-  // const handleRequestSuccess = (data: Record<string, any>) => {
-  //   console.log('data', data);
-  // };
+  const tableData = ref([]);
+  const columns = ref<Column[]>([]);
+  const pagination = ref({
+    count: 11, limit: 10, current: 1,
+  });
+
+  // 处理页码变化
+  const handlePageChange = (newPage: number) => {
+    pagination.value.current = newPage;
+    fetchTableData(); // 调用获取表格数据的方法
+  };
+
+  // 处理每页条数变化
+  const handlePageLimitChange = (newLimit: number) => {
+    pagination.value.limit = newLimit;
+    pagination.value.current = 1; // 重置到第一页
+    fetchTableData(); // 调用获取表格数据的方法
+  };
+
+  // 获取表格数据的方法（需要根据实际业务实现）
+  const fetchTableData = async () => {
+
+  };
+
   const handleClick = () => {
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -277,21 +295,86 @@
     }
   };
   const submit = () => {
-    console.log('submit');
+    formRef.value.validate().then(() => {
+      fetchToolsExecute({
+        uid: uid.value,
+        params: {
+          tool_variables: searchList.value.map(item => ({
+            raw_name: item.raw_name,
+            value: item.value,
+          })),
+        },
+      });
+    });
   };
   const handleReset = () => {
+    // 调用每个FormItem组件的resetValue方法
+    if (formItemRef.value) {
+      formItemRef.value.forEach((item:any) => {
+        item?.resetValue?.();
+      });
+    }
+    // 清空表单验证
     formRef.value.clearValidate();
+    // 重置searchForm中所有字段为空
+    Object.keys(searchForm.value).forEach((key) => {
+      searchForm.value[key] = '';
+    });
+
+    // 重置searchList中所有项的value为null
+    searchList.value = searchList.value.map(item => ({
+      ...item,
+      value: null,
+    }));
+  };
+
+
+  const handleFormItemChange = (val: any, item: SearchItem) => {
+    // 避免直接修改函数参数，改为更新searchList中的对应项
+    const index = searchList.value.findIndex(i => i.raw_name === item.raw_name);
+    if (index !== -1) {
+      searchList.value[index].value = val;
+    }
+    searchForm.value[item.raw_name] = val;
   };
   // 获取工具详情
   const {
     run: fetchToolsDetail,
   } = useRequest(ToolsSquare.fetchToolsDetail, {
-    defaultValue: {},
-    onSuccess: (data) => {
-      console.log('获取工具详情>>>>', data);
-      // dataList.value = data.results;
+    defaultValue: {} as ToolDetail,
+    onSuccess: (data: ToolDetail) => {
+      uid.value = data.uid;
+      searchForm.value = {};
+      searchList.value = data.config.input_variable.map(item => ({
+        ...item,
+        value: null,
+      }));
+      data.config.input_variable.forEach((item) => {
+        searchForm.value[item.raw_name] = '';
+      });
+
+      fetchToolsExecute({
+        uid: data.uid,
+        params: {
+          tool_variables: searchList.value.map(item => ({
+            raw_name: item.raw_name,
+            value: item.value,
+          })),
+        },
+      });
     },
   });
+
+  // 工具执行
+  const {
+    run: fetchToolsExecute,
+  } = useRequest(ToolsSquare.fetchToolsExecute, {
+    defaultValue: {},
+    onSuccess: (data) => {
+      console.log('工具执行>>>>', data);
+    },
+  });
+
   const handleOpenDialog = async (item: toolInfo) => {
     isShow.value = true;
     itemInfo.value = item;
@@ -301,7 +384,6 @@
     await nextTick();
 
     const modals = document.getElementsByClassName('bk-modal-wrapper');
-    console.log('modals', Array.from(modals));
 
     // 遍历所有弹窗，只调整未被拖动过的弹窗位置
     Array.from(modals).reverse()
@@ -309,9 +391,7 @@
         const htmlModal = modal as HTMLElement;
         // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
         if (index > 0 && !htmlModal.style.transform) {
-          // htmlModal.style.top = `${50 - (index + 1) * 5}%`;
           htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-          console.log('${50 - (index + 1) * 2}%', `${50 - (index + 1) * 2}%`);
         }
       });
   };
@@ -363,6 +443,12 @@
     document.body.removeChild(temp);
     return isOverflow;
   };
+
+  onMounted(() => {
+
+
+  });
+
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
@@ -467,6 +553,10 @@
       color: #313238;
     }
 
+    .top-search-result {
+      margin-top: 10px;
+    }
+
     .example {
       margin-top: 10px;
 
@@ -475,6 +565,7 @@
         flex-wrap: wrap;
 
         .formref-item-item {
+          width: 300px;
           margin-right: 15px;
         }
       }
