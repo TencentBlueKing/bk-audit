@@ -20,6 +20,7 @@ import type  ToolDetail from '@model/tool/tool-detail';
 import type toolInfo from '@model/tools-square/tools-square';
 
 import Request from '@utils/request';
+import { processedParams } from '@utils/request/lib/utils';
 
 import ModuleBase from './module-base';
 
@@ -47,20 +48,7 @@ class ToolsSquare extends ModuleBase {
   page_size: number
   tags?: string[],
 }) {
-  // 处理参数，将数组转换为重复的键值对
-    const processedParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value === undefined || value === null) return;
-
-      if (Array.isArray(value)) {
-      // 数组参数特殊处理
-        value.forEach(item => processedParams.append(key, item.toString()));
-      } else {
-        processedParams.append(key, value.toString());
-      }
-    });
-
-    return Request.get<IRequestResponsePaginationData<toolInfo>>(`${this.module}/tool/?${processedParams.toString()}`);
+    return Request.get<IRequestResponsePaginationData<toolInfo>>(`${this.module}/tool/?${processedParams(params).toString()}`);
   }
   // 获取工具详情
   getToolsDetail(params: {

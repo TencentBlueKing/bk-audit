@@ -118,3 +118,26 @@ export const paramsSerializer = (params: any) => {
 
   return parts.join('&')
 }
+
+/**
+ * 处理参数，将对象转换为URLSearchParams
+ * @param params 要处理的对象参数
+ * @returns 处理后的URLSearchParams对象
+ */
+export const processedParams = (params: Record<string, any>): URLSearchParams => {
+  const processedParams = new URLSearchParams();
+  
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+
+    if (Array.isArray(value)) {
+      // 数组参数特殊处理，转换为重复的键值对
+      value.forEach(item => processedParams.append(key, item.toString()));
+    } else {
+      processedParams.append(key, value.toString());
+    }
+  });
+
+  return processedParams;
+};
