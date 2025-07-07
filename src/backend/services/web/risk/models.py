@@ -27,7 +27,6 @@ from django.db import models
 from django.db.models import Max, Q, QuerySet
 from django.db.models.functions import Substr
 from django.utils.translation import gettext_lazy
-from iam import DjangoQuerySetConverter
 
 from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_by_id
 from apps.permission.handlers.permission import Permission
@@ -39,6 +38,7 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
+from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.strategy_v2.models import Strategy
 
 
@@ -108,15 +108,18 @@ class Risk(OperateRecordModel):
         verbose_name = gettext_lazy("Risk")
         verbose_name_plural = verbose_name
         ordering = ["-event_time"]
-        index_together = [["strategy", "raw_event_id", "status"], ["strategy", "event_time"]]
+        index_together = [
+            ["strategy", "raw_event_id", "status"],
+            ["strategy", "event_time"],
+            ["risk_id", "event_time"],
+            ["risk_id", "last_operate_time"],
+        ]
 
     @classmethod
-    def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet:
+    def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
         """
-        获取有权限处理的风险
+        获取有权限处理的风险筛选条件
         """
-
-        queryset = Risk.objects.all()
 
         q = Q(
             risk_id__in=TicketPermission.objects.filter(
@@ -127,17 +130,26 @@ class Risk(OperateRecordModel):
         permission = Permission(get_request_username())
         request = permission.make_request(action=get_action_by_id(action), resources=[])
         policies = permission.iam_client._do_policy_query(request)
-        if not policies:
-            return queryset.filter(q)
+        if policies:
+            q |= RiskPathEqDjangoQuerySetConverter().convert(policies)
+        return q
 
-        from services.web.risk.provider import RiskResourceProvider
-
-        q |= DjangoQuerySetConverter(key_mapping=RiskResourceProvider.key_mapping).convert(policies)
-        return (
-            queryset.filter(q)
-            .annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH))
-            .defer("event_content")
+    @classmethod
+    def annotated_queryset(cls) -> QuerySet["Risk"]:
+        """
+        返回默认的 Risk 查询集，包含截断后的 event_content_short 字段
+        """
+        return cls.objects.annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH)).defer(
+            "event_content"
         )
+
+    @classmethod
+    def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
+        """
+        获取有权限处理的风险
+        """
+
+        return cls.annotated_queryset().filter(cls.authed_risk_filter(action))
 
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
