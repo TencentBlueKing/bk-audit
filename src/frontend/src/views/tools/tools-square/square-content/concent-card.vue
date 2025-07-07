@@ -30,144 +30,158 @@
         v-model="searchValue"
         class="search-input"
         :placeholder="t('搜索 工具名称、工具说明、创建人等')"
-        type="search" />
+        type="search"
+        @enter="handleSearch" />
     </div>
-    <div class="card-list">
+    <bk-loading
+      :loading="loading"
+      :z-index="10000">
       <div
-        v-for="(item, index) in dataList"
-        :key="index"
-        class="card-list-item"
-        @click="handleClick(item)"
-        @mouseenter="handleMouseenter(item)"
-        @mouseleave="handleMouseleave()">
+        v-if="dataList.length > 0"
+        class="card-list">
         <div
-          v-show="itemMouseenter === item.uid"
-          class="item-top-right-icon">
-          <audit-icon
-            class="edit-fill"
-            type="edit-fill"
-            @click.stop="handleEdit(item)" />
+          v-for="(item, index) in dataList"
+          :key="index"
+          class="card-list-item"
+          @click="handleClick(item)"
+          @mouseenter="handleMouseenter(item)"
+          @mouseleave="handleMouseleave()">
+          <div
+            v-show="itemMouseenter === item.uid"
+            class="item-top-right-icon">
+            <audit-icon
+              class="edit-fill"
+              type="edit-fill"
+              @click.stop="handleEdit(item)" />
 
-          <bk-popover
-            placement="bottom"
-            theme="light"
-            trigger="click">
-            <template #content>
-              <div class="delete-title">
-                {{ t('确认删除该工具？') }}
-              </div>
-              <div class="delete-text">
-                {{ t('删除操作无法撤回，请谨慎操作！') }}
-              </div>
+            <bk-popover
+              :ref="(el: any) => popoverRefs.set(item.uid, el)"
+              placement="bottom"
+              theme="light"
+              trigger="click">
+              <template #content>
+                <div class="delete-title">
+                  {{ t('确认删除该工具？') }}
+                </div>
+                <div class="delete-text">
+                  {{ t('删除操作无法撤回，请谨慎操作！') }}
+                </div>
 
-              <div class="delete-btn">
-                <bk-button
+                <div class="delete-btn">
+                  <bk-button
+                    size="small"
+                    theme="primary"
+                    @click="handleDeleteItem(item)">
+                    {{ t('确定') }}
+                  </bk-button>
+                  <bk-button
+                    class="ml8"
+                    size="small"
+                    @click="handleCancel(item.uid)">
+                    {{ t('取消') }}
+                  </bk-button>
+                </div>
+              </template>
+              <audit-icon
+                class="delete"
+                type="delete"
+                @click.stop="handleDelete(item)" />
+            </bk-popover>
+          </div>
+
+          <div class="item-top">
+            <div class="item-top-left">
+              <audit-icon
+                class="top-left-icon"
+                svg
+                :type="itemIcon(item)" />
+            </div>
+            <div class="item-top-right">
+              <div class="top-right-title">
+                <span
+                  v-bk-tooltips="{
+                    disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
+                    content: t(item.name),
+                    placement: 'top',
+                    delay: [300, 0],
+                    extCls: 'name-tooltip'
+                  }"
+                  class="title-text"
+                  :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
+                  {{ item.name }}
+                </span>
+                <bk-tag
+                  v-if="!item.permission.use_tool"
+                  v-bk-tooltips="{ content: t('申请权限可用') }"
+                  class="title-tag"
                   size="small"
-                  theme="primary">
-                  {{ t('确定') }}
-                </bk-button>
-                <bk-button
-                  class="ml8"
-                  size="small">
-                  {{ t('取消') }}
-                </bk-button>
+                  theme="warning"
+                  type="filled">
+                  {{ t('申请可使用') }}
+                </bk-tag>
               </div>
-            </template>
-            <audit-icon
-              class="delete"
-              type="delete"
-              @click.stop="handleDelete(item)" />
-          </bk-popover>
-        </div>
-
-        <div class="item-top">
-          <div class="item-top-left">
-            <audit-icon
-              class="top-left-icon"
-              svg
-              :type="itemIcon(item)" />
-          </div>
-          <div class="item-top-right">
-            <div class="top-right-title">
-              <span
-                v-bk-tooltips="{
-                  disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
-                  content: t(item.name),
-                  placement: 'top',
-                  delay: [300, 0],
-                  extCls: 'name-tooltip'
-                }"
-                class="title-text"
-                :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
-                {{ item.name }}
-              </span>
-              <bk-tag
-                v-if="!item.permission.use_tool"
-                v-bk-tooltips="{ content: t('申请权限可用') }"
-                class="title-tag"
-                size="small"
-                theme="warning"
-                type="filled">
-                {{ t('申请可使用') }}
-              </bk-tag>
-              <!-- <bk-tag
-               theme="info"
-               size="small"
-               class="title-tag"
-               type="filled"
-               v-bk-tooltips="{ content: t('部分人可用') }">
-               {{ t('指定人使用') }} </bk-tag> -->
-            </div>
-            <div class="top-right-desc">
-              <bk-tag
-                v-for="(tag, tagIndex) in descTag.slice(0, 3)"
-                :key="tagIndex"
-                class="desc-tag"
-                size="small">
-                {{ tag }}
-              </bk-tag>
-              <bk-tag
-                v-if="descTag.length > 3"
-                class="desc-tag"
-                size="small">
-                + {{ descTag.length - 3
-                }}
-              </bk-tag>
-              <bk-tag
-                class="desc-tag"
-                size="small"
-                theme="info">
-                运用在 3 个策略中
-              </bk-tag>
+              <div class="top-right-desc">
+                <bk-tag
+                  v-for="(tag, tagIndex) in descTag.slice(0, 3)"
+                  :key="tagIndex"
+                  class="desc-tag"
+                  size="small">
+                  {{ tag }}
+                </bk-tag>
+                <bk-tag
+                  v-if="descTag.length > 3"
+                  class="desc-tag"
+                  size="small">
+                  + {{ descTag.length - 3
+                  }}
+                </bk-tag>
+                <bk-tag
+                  class="desc-tag"
+                  size="small"
+                  theme="info">
+                  运用在 3 个策略中
+                </bk-tag>
+              </div>
             </div>
           </div>
+          <div
+            v-bk-tooltips="{
+              disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
+              content: middleTtooltips(item.description),
+              width: '200px',
+              allowHTML: true,
+              extCls: 'tooltip-custom'
+            }"
+            class="item-middle">
+            {{ item.description }}
+          </div>
+          <div class="item-footer">
+            <span>名字</span>
+            <span>时间</span>
+          </div>
+          <component
+            :is="DialogVue"
+            :ref="(el) => dialogRefs[item.uid] = el"
+            :dialog-cls="`dialogCls${item.uid}`" />
         </div>
-        <div
-          v-bk-tooltips="{
-            disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
-            content: middleTtooltips(item.description),
-            width: '200px',
-            allowHTML: true,
-            extCls: 'tooltip-custom'
-          }"
-          class="item-middle">
-          {{ item.description }}
-        </div>
-        <div class="item-footer">
-          <span>名字</span>
-          <span>时间</span>
-        </div>
-        <component
-          :is="DialogVue"
-          :ref="(el) => dialogRefs[item.uid] = el"
-          :dialog-cls="`dialogCls${item.uid}`" />
       </div>
-    </div>
+
+      <div
+        v-else
+        class="card-emptyt">
+        <img
+          class="empty-img"
+          src="@images/empty.svg">
+        <div class="empty-text">
+          {{ t('暂无数据') }}
+        </div>
+      </div>
+    </bk-loading>
   </div>
 </template>
 
 <script setup lang='tsx'>
-  import { onMounted, ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -177,8 +191,21 @@
 
   import DialogVue from '../components/dialog.vue';
 
+  import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
   import type { IRequestResponsePaginationData } from '@/utils/request';
+
+  interface TagItem {
+    tag_id: string
+    tag_name: string
+    tool_count: number
+  }
+  interface Props {
+    tags: Array<TagItem>,
+  }
+  const props = defineProps<Props>();
+
+  const { messageSuccess } = useMessage();
 
   const { t } = useI18n();
   const router = useRouter();
@@ -188,20 +215,53 @@
   const itemMouseenter = ref(null);
   const dialogRefs = ref<Record<string, any>>({});
   const dataList = ref<toolInfo[]>([]);
+  const popoverRefs = ref<Map<string, any>>(new Map());
 
-  const handleEdit = (item: Record<string, any>) => {
-    console.log('handleEdit', item);
-  };
   // 工签列表
   const {
     run: fetchToolsList,
+    loading,
   } = useRequest(ToolsSquare.fetchToolsList, {
     defaultValue: {} as IRequestResponsePaginationData<toolInfo>,
     onSuccess: (data) => {
       dataList.value = data.results;
     },
   });
+  // 删除
+  const {
+    run: fetchDeleteTool,
+  } = useRequest(ToolsSquare.fetchDeleteTool, {
+    defaultValue: {},
+    onSuccess: () => {
+      messageSuccess(t('删除成功'));
+    },
+  });
 
+
+  const handleDeleteItem = (item: Record<string, any>) => {
+    fetchDeleteTool({
+      uid: item.uid,
+    }).then(() => {
+      handleCancel(item.uid);
+      fetchToolsList({
+        page: 1,
+        page_size: 10,
+        keyword: searchValue.value,
+        tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+      });
+    });
+  };
+
+  const handleCancel = (itemUid: string) => {
+    const popover = popoverRefs.value.get(itemUid);
+    popover?.hide();
+    isFixedDelete.value = false;
+    itemMouseenter.value = null;
+  };
+
+  const handleEdit = (item: Record<string, any>) => {
+    console.log('handleEdit', item);
+  };
 
   const handleMouseenter = (item: Record<string, any>) => {
     if (isFixedDelete.value) {
@@ -222,7 +282,6 @@
   };
   // 删除
   const handleDelete = (item: Record<string, any>) => {
-    console.log('handleDelete', item);
     isFixedDelete.value = !isFixedDelete.value;
     itemMouseenter.value = item.uid;
   };
@@ -289,21 +348,35 @@
     }
   };
   const handleClick = async (item: toolInfo) => {
-    console.log('handleClick', item, dialogRefs.value[item.uid]);
-
     if (dialogRefs.value[item.uid]) {
       dialogRefs.value[item.uid].openDialog(item);
     }
   };
 
-  onMounted(() => {
+  const handleSearch = () => {
     fetchToolsList({
       page: 1,
       page_size: 10,
-      keyword: '',
-      limit: 10,
-      offset: 0,
-      tags: [],
+      keyword: searchValue.value,
+      tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+    });
+  };
+
+  watch(() => props, (newTags) => {
+    fetchToolsList({
+      page: 1,
+      page_size: 10,
+      keyword: searchValue.value,
+      tags: newTags.tags.map((item: TagItem) => item.tag_id) || [],
+    });
+  }, {
+    deep: true,
+  });
+
+  onMounted(() => {
+    fetchToolsList({
+      page: 1,
+      page_size: 10, keyword: searchValue.value,
     });
   });
 
@@ -311,6 +384,7 @@
 
 <style scoped lang="postcss">
 .card {
+  position: relative;
   background-color: #f5f7fa;
 
   .card-search {
@@ -326,6 +400,7 @@
   }
 
   .card-list {
+    position: relative;
     display: grid;
     width: 100%;
     margin-top: 10px;
@@ -465,6 +540,29 @@
         }
       }
 
+    }
+
+  }
+
+  .card-emptyt {
+    position: relative;
+    height: calc(100vh - 300px);
+
+    .empty-img {
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      width: 500px;
+      transform: translate(-50%, -30%);
+    }
+
+    .empty-text {
+      position: absolute;
+      top: 45%;
+      left: 50%;
+      font-size: 18px;
+      color: #979ba5;
+      transform: translate(-50%, -45%);
     }
   }
 }
