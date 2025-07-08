@@ -397,11 +397,17 @@
                               error-display-type="tooltips"
                               label=""
                               label-width="0">
-                              <bk-input
-                                v-model="item.field_down"
-                                :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')"
-                                @focus="handleFocus" />
+                              <div
+                                v-if="!item.drill_config.tool.uid"
+                                style=" padding: 0 8px;color: #c4c6cc; cursor: pointer;"
+                                @click="() => handleClick(index)">
+                                {{ !formData.config.sql ? t('请先配置sql'):t('请配置') }}
+                              </div>
+                              <div
+                                v-else
+                                style="padding: 0 8px;">
+                                {{ getToolName(item.drill_config.tool.uid) }}
+                              </div>
                             </bk-form-item>
                           </div>
                         </div>
@@ -440,7 +446,10 @@
       <!-- 字段下钻 -->
       <field-reference
         v-model:showFieldReference="showFieldReference"
-        :output-fields="formData.config.output_fields" />
+        :new-tool-name="formData.name"
+        :output-fields="formData.config.output_fields"
+        @submit="handleFieldSubmit"
+        @update-all-tools-data="handleAllToolsData" />
     </smart-action>
   </skeleton-loading>
   <creating v-if="isCreating" />
@@ -504,7 +513,17 @@
         raw_name: string;
         display_name: string;
         description: string;
-        field_down: string;
+        drill_config: {
+          tool: {
+            uid: string;
+            version: number;
+          };
+          config: Array<{
+            source_field: string;
+            target_value_type: string;
+            target_value: string;
+          }>
+        };
       }>
       sql: string;
       uid: string;
@@ -564,12 +583,21 @@
         raw_name: '',
         display_name: '',
         description: '',
-        field_down: '',
+        drill_config: {
+          tool: {
+            uid: '',
+            version: 1,
+          },
+          config: [],
+        },
       }],
       sql: '',
       uid: '',
     },
   });
+
+  const outputIndex = ref(-1);
+  const allToolsData = ref<Array<ToolDetailModel>>([]);
 
   const frontendTypeList = ref<Array<{
     id: string;
@@ -642,7 +670,13 @@
     formData.value.config.output_fields = sqlData.result_fields.map(item => ({
       ...item,
       description: '',
-      field_down: '',
+      drill_config: {
+        tool: {
+          uid: '',
+          version: 1,
+        },
+        config: [],
+      },
     }));
 
     defineTheme();
@@ -670,8 +704,9 @@
     execCopy(formData.value.config.sql, t('复制成功'));
   };
 
-  const handleFocus = () => {
+  const handleClick = (index: number) => {
     showFieldReference.value = true;
+    outputIndex.value = index;
   };
 
   const handleCancel = () => {
@@ -682,6 +717,19 @@
 
   const handleModifyAgain = () => {
     isFailed.value = false;
+  };
+
+  const handleFieldSubmit = (drillConfig: FormData['config']['output_fields'][0]['drill_config']) => {
+    formData.value.config.output_fields[outputIndex.value].drill_config = drillConfig;
+  };
+
+  const handleAllToolsData = (data: Array<ToolDetailModel>) => {
+    allToolsData.value = data;
+  };
+
+  const getToolName = (uid: string) => {
+    const tool = allToolsData.value.find(item => item.uid === uid);
+    return tool ? tool.name : '';
   };
 
   // 提交

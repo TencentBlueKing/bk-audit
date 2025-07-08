@@ -40,7 +40,17 @@ export default class ToolDetail {
       raw_name: string;
       display_name: string;
       description: string;
-      field_down: string;
+      drill_config: {
+        tool: {
+          uid: string;
+          version: number;
+        };
+        config: Array<{
+          source_field: string;
+          target_value_type: string;
+          target_value: string;
+        }>
+      };
     }>
     sql: string;
     uid: string;
