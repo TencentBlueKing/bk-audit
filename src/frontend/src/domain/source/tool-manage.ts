@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 import type ParseSqlModel from '@model/tool/parse-sql';
+import type ToolDetailModel from '@model/tool/tool-detail';
 
 import Request from '@utils/request';
 
@@ -23,14 +24,14 @@ import ModuleBase from './module-base';
 class ToolManage extends ModuleBase {
   constructor() {
     super();
-    this.module = '/api/v1/tool';
+    this.module = '/api/v1';
   }
   // 获取工具tag列表
   getToolTags() {
     return Request.get<Array<{
       tag_id: string;
       tag_name: string;
-    }>>(`${this.module}/tags/`);
+    }>>(`${this.path}/tool/tags/`);
   }
   // 新建工具
   createTool(params: Record<string, any>) {
@@ -40,9 +41,25 @@ class ToolManage extends ModuleBase {
   }
   // 解析sql
   parseSql(params: Record<string, any>) {
-    return Request.post<ParseSqlModel>(`${this.module}/sql_analyse/`, {
+    return Request.post<ParseSqlModel>(`${this.path}/tool/sql_analyse/`, {
       params,
     });
+  }
+  // 获取工具详情
+  getToolsDetail(params: {
+    uid: string,
+  }) {
+    return Request.get<ToolDetailModel>(`${this.path}/tool/${params.uid}/`);
+  }
+  // 编辑工具
+  updateTool(params: Record<string, any>) {
+    return Request.put(`${this.path}/tool/${params.uid}/`, {
+      params,
+    });
+  }
+  // 获取全部工具
+  getAllTools() {
+    return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/`);
   }
 }
 
