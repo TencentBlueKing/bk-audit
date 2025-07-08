@@ -130,6 +130,7 @@ class ToolListResponseSerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(label=gettext_lazy("创建时间"))
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
+    strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
 
 
 class ToolRetrieveResponseSerializer(serializers.Serializer):
