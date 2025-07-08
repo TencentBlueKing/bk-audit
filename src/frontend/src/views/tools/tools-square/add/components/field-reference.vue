@@ -19,7 +19,7 @@
     ref="sidesliderRef"
     v-model:isShow="showEditSql"
     class="field-reference-sideslider"
-    show-header-slot
+    :show-footer="false"
     :title="t('配置数据下钻')"
     width="1100">
     <template #header>
@@ -31,119 +31,153 @@
         </span>
       </div>
     </template>
-    <audit-form
-      ref="formRef"
+    <smart-action
       class="field-reference-form"
-      form-type="vertical"
-      :model="formData">
-      <bk-form-item
-        error-display-type="tooltips"
-        :label="t('选择工具')"
-        label-width="160"
-        property="tool"
-        required>
-        <div style="display: flex;">
-          <bk-cascader
-            v-model="SelectTool"
-            filterable
-            :list="tagList"
-            :show-complete-name="false"
-            style="flex: 1;"
-            trigger="hover"
-            @change="handleSelectTool">
-            <template #extension>
-              <div class="view-mode">
-                <auth-router-link
-                  action-id="create_notice_group"
-                  class="create_notice_group"
-                  target="_blank"
-                  :to="{
-                    name: 'noticeGroupList',
-                    query: {
-                      create: true
-                    }
-                  }">
-                  <audit-icon
-                    style="font-size: 14px;color: #3a84ff;"
-                    type="plus-circle" />
-                  {{ t('新建工具') }}
-                </auth-router-link>
-                <span class="divider-wrapper">
-                  <span
-                    class="add-node"
-                    @click="handleRefresh">
-                    <plus class="icon-plus" />
-                    {{ t('刷新') }}
+      :offset-target="getSmartActionOffsetTarget">
+      <audit-form
+        ref="formRef"
+        form-type="vertical"
+        :model="formData">
+        <bk-form-item
+          error-display-type="tooltips"
+          :label="t('选择工具')"
+          label-width="160"
+          property="tool.uid"
+          required>
+          <div style="display: flex;">
+            <bk-cascader
+              v-model="SelectTool"
+              filterable
+              :list="tagList"
+              :show-complete-name="false"
+              style="flex: 1;"
+              trigger="hover"
+              @change="handleSelectTool">
+              <template #extension>
+                <div class="view-mode">
+                  <auth-router-link
+                    action-id="create_notice_group"
+                    class="create_notice_group"
+                    target="_blank"
+                    :to="{
+                      name: 'noticeGroupList',
+                      query: {
+                        create: true
+                      }
+                    }">
+                    <audit-icon
+                      style="font-size: 14px;color: #3a84ff;"
+                      type="plus-circle" />
+                    {{ t('新建工具') }}
+                  </auth-router-link>
+                  <span class="divider-wrapper">
+                    <span
+                      class="add-node"
+                      @click="handleRefresh">
+                      <plus class="icon-plus" />
+                      {{ t('刷新') }}
+                    </span>
                   </span>
-                </span>
+                </div>
+              </template>
+            </bk-cascader>
+            <bk-button
+              class="ml16"
+              text
+              theme="primary">
+              {{ t('去使用') }}
+            </bk-button>
+          </div>
+        </bk-form-item>
+        <bk-form-item
+          error-display-type="tooltips"
+          :label="t('字段值引用')"
+          label-width="160"
+          property="tool"
+          required>
+          <div style="display: flex;">
+            <div class="field-list">
+              <div class="field-title">
+                <div style="flex: 1">
+                  <span style="font-weight: 700;">{{ toolsDetailData.name }}</span>
+                  <span>{{ t('的输入字段') }}</span>
+                </div>
+                <div style="width: 38px;" />
+                <div style="flex: 1">
+                  <span style="font-weight: 700;">{{ newToolName }}</span>
+                  <span>{{ t('的结果字段') }}</span>
+                </div>
               </div>
-            </template>
-          </bk-cascader>
-          <bk-button
-            class="ml16"
-            text
-            theme="primary">
-            {{ t('去使用') }}
-          </bk-button>
-        </div>
-      </bk-form-item>
-      <bk-form-item
-        error-display-type="tooltips"
-        :label="t('字段值引用')"
-        label-width="160"
-        property="tool"
-        required>
-        <div style="display: flex;">
-          <div class="field-list">
-            <div
-              v-for="(item, index) in formData.config"
-              :key="index"
-              class="field-item">
-              <div class="field-key">
-                <bk-input
-                  v-model="item.field_source"
-                  disabled
-                  style="flex: 1;" />
-              </div>
-              <div class="field-reference-type">
-                <bk-dropdown trigger="click">
-                  <bk-button style="width: 100px;">
-                    {{ getDictName(item.target_value_type) }}
-                  </bk-button>
-                  <template #content>
-                    <bk-dropdown-menu>
-                      <bk-dropdown-item
-                        v-for="TypeItem in referenceTypeList"
-                        :key="TypeItem.id"
-                        @click="() => item.target_value_type = TypeItem.id">
-                        {{ TypeItem.name }}
-                      </bk-dropdown-item>
-                    </bk-dropdown-menu>
-                  </template>
-                </bk-dropdown>
-              </div>
-              <div class="field-value">
-                <select-map-value
-                  ref="selectMapValueRef"
-                  :alternative-field-list="outputFields"
-                  :data="item"
-                  :value="item.source_field"
-                  @change="value => handleSelectMapValueChange(index, value)" />
-              </div>
-              <div style="margin-left: 10px; color: #979ba5;">
-                {{ t('的值作为输入') }}
+              <div
+                v-for="(item, index) in formData.config"
+                :key="index"
+                class="field-item">
+                <div class="field-key">
+                  <bk-input
+                    v-model="item.source_field"
+                    disabled
+                    style="flex: 1;" />
+                </div>
+                <div class="field-reference-type">
+                  <bk-dropdown trigger="click">
+                    <bk-button style="width: 100px;">
+                      {{ getDictName(item.target_value_type) }}
+                    </bk-button>
+                    <template #content>
+                      <bk-dropdown-menu>
+                        <bk-dropdown-item
+                          v-for="TypeItem in referenceTypeList"
+                          :key="TypeItem.id"
+                          @click="() => item.target_value_type = TypeItem.id">
+                          {{ TypeItem.name }}
+                        </bk-dropdown-item>
+                      </bk-dropdown-menu>
+                    </template>
+                  </bk-dropdown>
+                </div>
+                <div
+                  v-if="item.target_value_type === 'field'"
+                  class="field-value">
+                  <select-map-value
+                    ref="selectMapValueRef"
+                    :alternative-field-list="localOutputFields"
+                    :value="item.target_value"
+                    @change="value => handleSelectMapValueChange(index, value)" />
+                </div>
+                <div
+                  v-else
+                  class="field-value"
+                  style="border: none;">
+                  <bk-input v-model="item.target_value" />
+                </div>
+                <div style="margin-left: 10px; color: #979ba5;">
+                  {{ t('的值作为输入') }}
+                </div>
               </div>
             </div>
+            <alternative-field
+              :data="localOutputFields" />
           </div>
-          <alternative-field
-            :data="outputFields" />
-        </div>
-      </bk-form-item>
-    </audit-form>
+        </bk-form-item>
+      </audit-form>
+      <template #action>
+        <bk-button
+          class="w88"
+          theme="primary"
+          @click="handleSubmit">
+          {{ t('确定') }}
+        </bk-button>
+        <bk-button
+          class="ml8"
+          @click="closeDialog">
+          {{ t('取消') }}
+        </bk-button>
+      </template>
+    </smart-action>
   </audit-sideslider>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -155,13 +189,20 @@
 
   import useRequest from '@/hooks/use-request';
 
+  interface LocalOutputFields {
+    raw_name: string;
+    display_name: string;
+    description: string;
+  }
+
+  interface Emits {
+    (e: 'submit', data: FormData): void;
+    (e: 'updateAllToolsData', allData: Array<ToolDetailModel>): void;
+  }
+
   interface Props {
-    outputFields: Array<{
-      raw_name: string;
-      display_name: string;
-      description: string;
-      field_down: string;
-    }>;
+    outputFields: Array<Record<string, any>>;
+    newToolName: string;
   }
 
   interface TagItem {
@@ -180,23 +221,26 @@
       version: number;
     };
     config: Array<{
-      field_source: string;
+      source_field: string;
       target_value_type: string;
-      source_field: Record<string, any>[];
+      target_value: string;
     }>;
   }
 
-  defineProps<Props>();
+  const props =  defineProps<Props>();
+  const emit = defineEmits<Emits>();
   const { t } = useI18n();
   const showEditSql = defineModel<boolean>('showFieldReference', {
     required: true,
   });
+  const formRef = ref();
+  const localOutputFields = ref<Array<LocalOutputFields>>([]);
 
   const referenceTypeList = ref([{
-    id: 'reference',
+    id: 'field',
     name: t('直接引用'),
   }, {
-    id: 'default',
+    id: 'fixed_value',
     name: t('使用默认值'),
   }]);
 
@@ -211,6 +255,8 @@
     config: [],
   });
 
+  const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
+
   const {
     data: toolsDetailData,
     run: fetchToolsDetail,
@@ -218,9 +264,9 @@
     defaultValue: new ToolDetailModel(),
     onSuccess: () => {
       formData.value.config = toolsDetailData.value.config.input_variable.map(item => ({
-        field_source: item.raw_name,
-        target_value_type: 'reference',
-        source_field: [],
+        source_field: item.raw_name,
+        target_value_type: 'field',
+        target_value: '',
       }));
     },
   });
@@ -238,30 +284,36 @@
 
   // 获取所有工具
   const {
-    data: AllToolsData,
+    data: allToolsData,
     run: fetchAllTools,
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
     onSuccess: () => {
+      emit('updateAllToolsData', allToolsData.value);
       tagList.value = tagData.value
         .map(item => ({
           id: item.tag_id,
           name: item.tag_name,
           children: item.tag_id === '-2'
-            ? AllToolsData.value
+            ? allToolsData.value
               .filter(tool => !tool.tags || tool.tags.length === 0)
               .map(({ uid, version, name }) => ({ id: uid, version, name }))
-            : AllToolsData.value
+            : allToolsData.value
               .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
               .map(({ uid, version, name }) => ({ id: uid, version, name })),
         }))
         .filter(item => item.children.length > 0);
-      console.log(tagList.value);
     },
   });
 
+  const resetFormData = () => {
+    formData.value.tool.uid = '';
+    formData.value.tool.version = 1;
+    formData.value.config = [];
+  };
+
   const handleSelectTool = (value: Array<string>) => {
-    const tool = AllToolsData.value.find(item => item.uid === value[1]);
+    const tool = allToolsData.value.find(item => item.uid === value[1]);
     if (tool) {
       formData.value.tool.uid = tool.uid;
       formData.value.tool.version = tool.version;
@@ -269,8 +321,7 @@
         uid: formData.value.tool.uid,
       });
     } else {
-      formData.value.tool.uid = '';
-      formData.value.tool.version = 1;
+      resetFormData();
     }
   };
 
@@ -283,11 +334,51 @@
     return selectItem ? selectItem.name : '';
   };
 
-  const handleSelectMapValueChange = (index: number, value: Array<Record<string, any>>) => {
+  const handleSelectMapValueChange = (index: number, value: Array<string>) => {
+    const originConfigItem = JSON.parse(JSON.stringify(formData.value.config[index]));
+    const [targetValue]  = value;
     const configItem = formData.value.config[index];
-    configItem.source_field = [...value];
-    console.log(configItem);
+    // 选择删除localOutputFields对应选项，清空添加对应选项
+    const outputField = value.length > 0
+      ? props.outputFields.find(item => item.raw_name === targetValue)
+      : props.outputFields.find(item => item.raw_name === originConfigItem.target_value);
+    if (outputField && value.length === 0) {
+      localOutputFields.value.unshift({
+        raw_name: outputField.raw_name,
+        display_name: outputField.display_name,
+        description: outputField.description,
+      });
+    } else if (outputField && value.length > 0) {
+      localOutputFields.value = localOutputFields.value.filter(item => item.raw_name !== outputField.raw_name);
+    }
+    // 赋值
+    configItem.target_value = targetValue || '';
   };
+
+  const handleSubmit = () => {
+    const tastQueue = [formRef.value.validate()];
+
+    Promise.all(tastQueue).then(() => {
+      emit('submit', formData.value);
+      closeDialog();
+    });
+  };
+
+  const closeDialog = () => {
+    resetFormData();
+    showEditSql.value = false;
+    SelectTool.value = [];
+  };
+
+  watch(() => props.outputFields, (val) => {
+    localOutputFields.value = val.map(item => ({
+      raw_name: item.raw_name,
+      display_name: item.display_name,
+      description: item.description,
+    }));
+  }, {
+    immediate: true,
+  });
 </script>
 <style scoped lang="postcss">
 .field-reference-sideslider {
@@ -312,6 +403,7 @@
       background: #f5f7fa;
       flex-direction: column;
 
+      .field-title,
       .field-item {
         display: flex;
         align-items: center;
