@@ -55,6 +55,7 @@
   }
   interface Emits {
     (e: 'handle-checked-tags', tags: Array<TagItem>, tagsName: Array<string>): void;
+    (e: 'handle-tags-enums', tags: Array<TagItem>): void;
   }
   interface Exposes {
     checkedTags: Array<string>;
@@ -90,6 +91,7 @@
     defaultValue: [],
     onSuccess: (data) => {
       tags.value = data;
+      emit('handle-tags-enums', data);
     },
   });
 

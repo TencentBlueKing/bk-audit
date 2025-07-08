@@ -122,24 +122,24 @@
               </div>
               <div class="top-right-desc">
                 <bk-tag
-                  v-for="(tag, tagIndex) in descTag.slice(0, 3)"
+                  v-for="(tag, tagIndex) in item.tags.slice(0, 3)"
                   :key="tagIndex"
                   class="desc-tag"
                   size="small">
-                  {{ tag }}
+                  {{ returnTagsName(tag) }}
                 </bk-tag>
                 <bk-tag
-                  v-if="descTag.length > 3"
+                  v-if=" item.tags.length > 3"
                   class="desc-tag"
                   size="small">
-                  + {{ descTag.length - 3
+                  + {{ item.tags.length - 3
                   }}
                 </bk-tag>
                 <bk-tag
                   class="desc-tag"
                   size="small"
                   theme="info">
-                  运用在 3 个策略中
+                  运用在 {{ item.tags.length }} 个策略中
                 </bk-tag>
               </div>
             </div>
@@ -156,13 +156,14 @@
             {{ item.description }}
           </div>
           <div class="item-footer">
-            <span>名字</span>
-            <span>时间</span>
+            <span>{{ item.created_by }}</span>
+            <span>{{ formatDate(item.created_at) }}</span>
           </div>
           <component
             :is="DialogVue"
             :ref="(el) => dialogRefs[item.uid] = el"
-            :dialog-cls="`dialogCls${item.uid}`" />
+            :dialog-cls="`dialogCls${item.uid}`"
+            :tags-enums="tagsEnums" />
         </div>
       </div>
 
@@ -189,6 +190,8 @@
 
   import toolInfo from '@model/tools-square/tools-square';
 
+  import { formatDate } from '@utils/assist/timestamp-conversion';
+
   import DialogVue from '../components/dialog.vue';
 
   import useMessage from '@/hooks/use-message';
@@ -202,6 +205,9 @@
   }
   interface Props {
     tags: Array<TagItem>,
+    tagsEnums: Array<TagItem>,
+    myCreated: boolean,
+    recentUsed: boolean,
   }
   const props = defineProps<Props>();
 
@@ -210,7 +216,6 @@
   const { t } = useI18n();
   const router = useRouter();
   const searchValue = ref<string>('');
-  const descTag = ref(['场景', '场景12', '场景1', '9']);
   const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
   const dialogRefs = ref<Record<string, any>>({});
@@ -236,7 +241,16 @@
       messageSuccess(t('删除成功'));
     },
   });
-
+  // 标签名称
+  const returnTagsName = (tags: string) => {
+    let tagName = '';
+    props.tagsEnums.forEach((item: TagItem) => {
+      if (item.tag_id === tags) {
+        tagName =  item.tag_name;
+      }
+    });
+    return tagName;
+  };
 
   const handleDeleteItem = (item: Record<string, any>) => {
     fetchDeleteTool({
@@ -246,6 +260,9 @@
       fetchToolsList({
         page: 1,
         page_size: 10,
+        my_created: props.myCreated,
+        recent_used: props.recentUsed,
+
         keyword: searchValue.value,
         tags: props.tags.map((item: TagItem) => item.tag_id) || [],
       });
@@ -257,6 +274,10 @@
     popover?.hide();
     isFixedDelete.value = false;
     itemMouseenter.value = null;
+  };
+
+  const handleEdit = (item: Record<string, any>) => {
+    console.log('handleEdit', item);
   };
 
   const handleMouseenter = (item: Record<string, any>) => {
@@ -274,14 +295,6 @@
   const handleCreate = () => {
     router.push({
       name: 'toolsAdd',
-    });
-  };
-  const handleEdit = (item: Record<string, any>) => {
-    router.push({
-      name: 'toolsEdit',
-      params: {
-        id: item.uid,
-      },
     });
   };
   // 删除
@@ -362,6 +375,9 @@
       page: 1,
       page_size: 10,
       keyword: searchValue.value,
+      my_created: props.myCreated,
+      recent_used: props.recentUsed,
+
       tags: props.tags.map((item: TagItem) => item.tag_id) || [],
     });
   };
@@ -371,6 +387,9 @@
       page: 1,
       page_size: 10,
       keyword: searchValue.value,
+      my_created: props.myCreated,
+      recent_used: props.recentUsed,
+
       tags: newTags.tags.map((item: TagItem) => item.tag_id) || [],
     });
   }, {
@@ -380,7 +399,10 @@
   onMounted(() => {
     fetchToolsList({
       page: 1,
-      page_size: 10, keyword: searchValue.value,
+      page_size: 10,
+      keyword: searchValue.value,
+      my_created: props.myCreated,
+      recent_used: props.recentUsed,
     });
   });
 

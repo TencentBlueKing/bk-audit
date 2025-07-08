@@ -28,13 +28,13 @@ export default class ToolDetail {
       table_name: string;
       alias: string | null;
       hasPermission: boolean;
-    }>;
-    input_variable: Array<{
-      raw_name: string;
-      display_name: string;
+        }>;
+        input_variable: Array<{
+            raw_name: string;
+            display_name: string;
       description: string;
       required: string;
-      field_category: string;
+            field_category: string;
     }>
     output_fields: Array<{
       raw_name: string;
@@ -44,7 +44,7 @@ export default class ToolDetail {
     }>
     sql: string;
     uid: string;
-  };
+    };
   permission: {
     use_tool: boolean;
   };
