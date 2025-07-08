@@ -106,7 +106,7 @@ class ToolDrillConfig(BaseModel):
 
     target_value_type: TargetValueTypeEnum
     target_value: str  # 字段名或固定值
-    field_source: Optional[str] = None  # 字段来源
+    source_field: Optional[str] = None
 
 
 class DataSearchDrillConfig(BaseModel):

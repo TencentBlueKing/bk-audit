@@ -36,6 +36,7 @@ from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
 from core.sql.parser.praser import SqlQueryAnalysis
+from services.web.strategy_v2.models import StrategyTool
 from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.executor.tool import ToolExecutorFactory
 from services.web.tool.models import Tool, ToolTag
@@ -175,16 +176,23 @@ class ListTool(ToolBase):
             tools = tools.filter(uid__in=tool_uid_list)
 
         paged_tools = tools[offset : offset + limit]
-
         tool_uids = [t.uid for t in paged_tools]
-        tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
 
+        # 查询 tags
+        tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
         tag_map = defaultdict(list)
         for t in tool_tags:
             tag_map[t.tool_uid].append(str(t.tag_id))
 
+        # 查询关联策略
+        strategy_map = defaultdict(list)
+        rows = StrategyTool.objects.filter(tool_uid__in=tool_uids).values("tool_uid", "strategy_id")
+        for row in rows:
+            strategy_map[row["tool_uid"]].append(row["strategy_id"])
+
         for tool in paged_tools:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
+            setattr(tool, "strategies", strategy_map.get(tool.uid, []))
 
         serialized_data = self.ResponseSerializer(paged_tools, many=True).data
 
@@ -324,6 +332,7 @@ class UpdateTool(ToolBase):
               },
               "config": [
                 {
+             "source_field": "xxx",
              "target_value_type": "field",
              "target_value": "ip_address"
                 }
