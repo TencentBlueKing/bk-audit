@@ -34,7 +34,7 @@
       @change="handelValueDragChange">
       <template #item="{element}">
         <div class="select-result-text">
-          <span>{{ element.raw_name }}</span>
+          <span>{{ element }}</span>
         </div>
       </template>
     </vuedraggable>
@@ -72,7 +72,7 @@
       <div class="field-list">
         <div
           v-for="fieldItem in renderFieldList"
-          :key="fieldItem.key"
+          :key="fieldItem.raw_name"
           class="field-item"
           @click="handleAlternativeFieldSelect(fieldItem)">
           <span>{{ fieldItem.raw_name }}</span>
@@ -103,15 +103,20 @@
 
   import useDebouncedRef from '@hooks/use-debounced-ref';
 
-  import { encodeRegexp } from '@utils/assist';
+  import { encodeRegexp } from '@/utils/assist';
+
+  interface LocalOutputField {
+    raw_name: string;
+    display_name: string;
+    description: string;
+  }
 
   interface Props {
-    data: Record<string, any>
-    value: Array<Record<string, any>>,
-    alternativeFieldList: Array<Record<string, any>>,
+    value: string,
+    alternativeFieldList: Array<LocalOutputField>,
   }
   interface Emits {
-    (e: 'change', value: Array<Record<string, any>>): void
+    (e: 'change', value: Array<string>): void
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -120,7 +125,7 @@
 
   let tippyIns: Instance;
 
-  const localValue = ref<Array<Record<string, any>>>([]);
+  const localValue = ref<Array<string>>([]);
   const isShowPop = ref(false);
   const isError = ref(false);
   const rootRef = ref();
@@ -130,14 +135,14 @@
 
   const renderFieldList = computed(() => props.alternativeFieldList.reduce((result, item) => {
     const reg = new RegExp(encodeRegexp(searchKey.value), 'i');
-    if (reg.test(item.key) || reg.test(item.path)) {
+    if (reg.test(item.raw_name) || reg.test(item.description)) {
       result.push(item);
     }
     return result;
-  }, [] as Array<Record<string, any>>));
+  }, [] as Array<LocalOutputField>));
 
   watch(() => props.value, (value) => {
-    localValue.value = [...value];
+    localValue.value = [value];
   }, {
     immediate: true,
   });
@@ -145,12 +150,12 @@
   const handelValueDragChange = (dragEvent: any) => {
     isError.value = false;
     if (dragEvent.added && dragEvent.added.element) {
-      emits('change', [dragEvent.added.element]);
+      emits('change', [dragEvent.added.element.raw_name]);
     }
   };
   // 用户选择
-  const handleAlternativeFieldSelect = (field: Record<string, any>) => {
-    emits('change', [field]);
+  const handleAlternativeFieldSelect = (field: LocalOutputField) => {
+    emits('change', [field.raw_name]);
     tippyIns.hide();
   };
   // 删除值
@@ -189,17 +194,6 @@
     tippyIns.unmount();
     tippyIns.destroy();
   });
-
-
-  defineExpose({
-    getValue() {
-      return Promise.resolve({
-        ...props.data,
-        option: localValue.value.length < 1 ? {} : localValue.value[0],
-      });
-    },
-  });
-
 </script>
 <style lang="postcss">
   .reference-select-map-value {
