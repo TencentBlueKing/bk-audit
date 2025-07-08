@@ -88,21 +88,22 @@ class ResourceTypeMeta(metaclass=abc.ABCMeta):
         return cls.create_simple_instance(instance_id, attribute)
 
     @classmethod
-    def batch_create_instance(cls, instance_ids, actions=None):
+    def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
         """
         批量创建实例
         """
-        return [[cls.create_instance(instance_id, actions=actions)] for instance_id in instance_ids]
+        return [[cls.create_simple_instance(instance_id, attribute=attribute)] for instance_id in instance_ids]
 
     @classmethod
-    def batch_create_by_instances(cls, instances, actions=None, cache_key=None):
+    def batch_create_by_instances(cls, instances, attribute=None, cache_key=None):
         """
         批量创建实例列表 用于鉴权实例数据量大的需求
         :param instances 实例列表
         :param cache_key 缓存key值
+        :param attribute 属性kv对
         """
         if not cache_key:
-            return cls.batch_create_instance([i.id for i in instances], actions=actions)
+            return cls.batch_create_instance([i.id for i in instances], attribute=attribute)
 
         mapping = group_by(instances, operator.attrgetter("id"))
         instance_ids = set(mapping.keys())
@@ -113,14 +114,14 @@ class ResourceTypeMeta(metaclass=abc.ABCMeta):
             res.extend([[resource[_id]] for _id in instance_ids.intersection(set(resource.keys()))])
             res.extend(
                 [
-                    [cls.create_instance(mapping[d][0], actions=actions)]
+                    [cls.create_instance(mapping[d][0], attribute=attribute)]
                     for d in instance_ids.difference(set(resource.keys()))
                 ]
             )
             return res
 
         cache_item = {}
-        res.extend([[cache_item.setdefault(p.id, cls.create_instance(p, actions=actions))] for p in instances])
+        res.extend([[cache_item.setdefault(p.id, cls.create_instance(p, attribute=attribute))] for p in instances])
         cache.set(cache_key, cache_item, PERMISSION_CACHE_EXPIRE)
 
         return res

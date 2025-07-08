@@ -23,23 +23,18 @@ from bk_resource.tools import get_serializer_fields
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request
 from django.db.models import QuerySet
-from iam import PathEqDjangoQuerySetConverter
 from iam.collection import FancyDict
 from iam.resource.provider import ListResult, SchemaResult
 from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.provider.base import BaseResourceProvider
+from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.risk.models import Risk
 from services.web.risk.serializers import RiskInfoSerializer
 
 
-class RiskBaseProvider(BaseResourceProvider):
-    attrs = None
-    resource_type = None
-
-    key_mapping = {}
-
+class RiskResourceProvider(BaseResourceProvider):
     @staticmethod
     def get_local_request():
         return get_local_request()
@@ -167,7 +162,7 @@ class RiskBaseProvider(BaseResourceProvider):
         if not expression:
             return ListResult(results=[], count=0)
 
-        converter = PathEqDjangoQuerySetConverter(self.key_mapping)
+        converter = RiskPathEqDjangoQuerySetConverter()
         filters = converter.convert(expression)
         queryset: QuerySet[Risk] = Risk.objects.filter(filters)
         results = [
@@ -206,16 +201,3 @@ class RiskBaseProvider(BaseResourceProvider):
                 for item in data
             }
         )
-
-
-class RiskResourceProvider(RiskBaseProvider):
-    """
-    策略实例视图
-    """
-
-    resource_type = "risk"
-
-    key_mapping = {
-        "risk.id": "risk_id",
-        "risk.risk_id": "risk_id",
-    }
