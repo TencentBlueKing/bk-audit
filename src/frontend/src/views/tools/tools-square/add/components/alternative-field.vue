@@ -41,7 +41,7 @@
                 class="list-item">
                 <audit-icon type="move" />
                 <span>{{ element.key }}</span>
-                <span class="value">（{{ element.raw_name }}）</span>
+                <span class="value">{{ element.raw_name }}</span>
               </div>
             </template>
           </vuedraggable>
@@ -66,7 +66,11 @@
   import Vuedraggable from 'vuedraggable';
 
   interface Props {
-    data: Array<Record<string, any>>,
+    data: Array<{
+      raw_name: string;
+      display_name: string;
+      description: string;
+    }>,
   }
 
   const props = defineProps<Props>();
