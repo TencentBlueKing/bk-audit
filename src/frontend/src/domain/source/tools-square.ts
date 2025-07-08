@@ -29,7 +29,7 @@ import type { IRequestResponsePaginationData } from '@/utils/request';
 class ToolsSquare extends ModuleBase {
   constructor() {
     super();
-    this.module = '/api/v1/default';
+    this.module = '/api/v1/namespace/default';
   }
   // 获取工具标签列表
   getToolsTagsList() {
@@ -37,7 +37,7 @@ class ToolsSquare extends ModuleBase {
       tag_id: string,
       tag_name: string,
       tool_count: number,
-    }>>(`${this.module}/tool/tags/`);
+    }>>(`${this.path}/tool/tags/`);
   }
   // 获取工具列表
   getToolsList(params: {
@@ -48,27 +48,27 @@ class ToolsSquare extends ModuleBase {
   page_size: number
   tags?: string[],
 }) {
-    return Request.get<IRequestResponsePaginationData<toolInfo>>(`${this.module}/tool/?${processedParams(params).toString()}`);
+    return Request.get<IRequestResponsePaginationData<toolInfo>>(`${this.path}/tool/?${processedParams(params).toString()}`);
   }
   // 获取工具详情
   getToolsDetail(params: {
     uid: string,
   }) {
-    return Request.get<ToolDetail>(`${this.module}/tool/${params.uid}/`);
+    return Request.get<ToolDetail>(`${this.path}/tool/${params.uid}/`);
   }
   // 工具执行
   getToolsExecute(params: {
     uid: string,
     params: Record<string, any>,
   }) {
-    return Request.post(`${this.module}/tool/${params.uid}/execute/`, { params });
+    return Request.post(`${this.path}/tool/${params.uid}/execute/`, { params });
   }
 
   // 工具删除
   deleteTool(params: {
     uid: string,
   }) {
-    return Request.delete(`${this.module}/tool/${params.uid}/`, { params });
+    return Request.delete(`${this.path}/tool/${params.uid}/`, { params });
   }
 }
 
