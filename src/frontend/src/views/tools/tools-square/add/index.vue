@@ -631,7 +631,8 @@
     },
   });
 
-  const handleUpdateParseSql = (sqlData: ParseSqlModel) => {
+  const handleUpdateParseSql = (sqlData?: ParseSqlModel) => {
+    if (!sqlData) return;
     formData.value.config.sql = sqlData.original_sql;
     formData.value.config.referenced_tables = sqlData.referenced_tables;
     formData.value.config.input_variable = sqlData.sql_variables.map(item => ({

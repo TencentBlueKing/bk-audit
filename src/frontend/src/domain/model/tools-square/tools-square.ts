@@ -51,8 +51,11 @@ export default class toolInfo {
     }>;
   };
   permission: {
-  use_tool: boolean;
-};
+    use_tool: boolean;
+  };
+  tags: Array<string>;
+  created_by: string;
+  created_at: string;
   constructor(payload: toolInfo) {
     this.name = payload.name;
     this.uid = payload.uid;
@@ -63,5 +66,8 @@ export default class toolInfo {
     this.config = payload.config;
     this.permission = payload.permission;
     this.config = payload.config;
+    this.tags = payload.tags;
+    this.created_by = payload.created_by;
+    this.created_at = payload.created_at;
   }
 }
