@@ -177,7 +177,9 @@ class ListMineRisk(ListRisk):
 
     def load_risks(self, validated_request_data):
         queryset = super().load_risks(validated_request_data)
-        queryset = queryset.filter(current_operator__contains=get_request_username())
+        queryset = queryset.filter(
+            Q(current_operator__contains=get_request_username()) | Q(notice_users__contains=get_request_username())
+        )
         return queryset
 
 
