@@ -43,7 +43,7 @@
             <audit-icon
               class="top-left-icon"
               svg
-              :type="itemIcon(configData)" />
+              :type="itemInfo ? itemIcon(itemInfo) : ''" />
             <div class="top-right-box">
               <div class="top-right-title">
                 <span
@@ -56,21 +56,21 @@
                   {{ itemInfo?.name }}
                 </span>
                 <bk-tag
-                  v-for="(tag, tagIndex) in configData.descTag.slice(0, 3)"
+                  v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
                   :key="tagIndex"
                   class="desc-tag">
-                  {{ tag }}
+                  {{ returnTagsName(tag) }}
                 </bk-tag>
                 <bk-tag
-                  v-if="configData.descTag.length > 3"
+                  v-if="itemInfo?.tags && itemInfo.tags.length > 3"
                   class="desc-tag">
-                  + {{ configData.descTag.length - 3
+                  + {{ itemInfo.tags.length - 3
                   }}
                 </bk-tag>
                 <bk-tag
                   class="desc-tag desc-tag-info"
                   theme="info">
-                  运用在 3 个策略中
+                  运用在 0 个策略中
                 </bk-tag>
               </div>
               <div class="top-right-desc">
@@ -132,11 +132,12 @@
                   :border="['outer', 'col', 'row']"
                   :columns="columns"
                   :data="tableData"
+                  max-height="50vh"
                   min-height="300px"
                   :pagination="pagination"
                   width="100%"
-                  @page-change="handlePageChange"
-                  @page-limit-change="handlePageLimitChange" />
+                  @page-limit-change="handlePageLimitChange"
+                  @page-value-change="handlePageChange" />
               </div>
             </div>
           </div>
@@ -179,6 +180,18 @@
   import useRequest from '@/hooks/use-request';
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
+  interface Column {
+    label: string;
+    field: string;
+    width?: number;
+    minWidth?: number;
+    sortable?: boolean;
+  }
+  interface TagItem {
+    tag_id: string
+    tag_name: string
+    tool_count: number
+  }
   interface SearchItem {
     value: any;
     raw_name: string;
@@ -189,15 +202,17 @@
   }
   interface Props {
     dialogCls: string,
+    tagsEnums: Array<TagItem>,
   }
 
-
+  interface TableDataItem {
+    [key: string]: any;
+  }
   interface Exposes {
     closeDialog: () => void,
     openDialog: (item: toolInfo) => void,
   }
-  defineProps<Props>();
-
+  const props = defineProps<Props>();
   const dialogIndex = ref(2000);
   const { t } = useI18n();
   const isShow = ref(false);
@@ -209,69 +224,77 @@
   const searchForm = ref();
   const formItemRef = ref();
   const searchList = ref<SearchItem[]>([]);
-  const configData = ref({
-    id: 1,
-    descTag: ['查询', '用户', '转赠', '金额'],
-    searchList: [
-      {
-        id: 1,
-        label: '用户名',
-        value: '',
-        required: true,
-      },
-      {
-        id: 2,
-        label: '用户名2',
-        value: '',
-        required: true,
-      },
-      {
-        id: 3,
-        label: '用户名3',
-        value: '',
-        required: true,
-      },
-      {
-        id: 4,
-        label: '用户名4',
-        value: '',
-        required: false,
-      },
-    ],
-  });
-  interface Column {
-    label: string;
-    field: string;
-    width?: number;
-    minWidth?: number;
-    sortable?: boolean;
-    // 可以根据实际需要添加更多属性
-  }
-
-  const tableData = ref([]);
+  const tableData = ref<TableDataItem[]>([]);
   const columns = ref<Column[]>([]);
   const pagination = ref({
-    count: 11, limit: 10, current: 1,
+    count: 0,
+    limit: 100,
+    current: 1,
+    limitList: [100, 200, 500, 1000],
   });
 
   // 处理页码变化
   const handlePageChange = (newPage: number) => {
+    console.log('处理页码变化');
     pagination.value.current = newPage;
     fetchTableData(); // 调用获取表格数据的方法
   };
-
   // 处理每页条数变化
   const handlePageLimitChange = (newLimit: number) => {
+    console.log('处理每页条数变化');
     pagination.value.limit = newLimit;
     pagination.value.current = 1; // 重置到第一页
     fetchTableData(); // 调用获取表格数据的方法
   };
 
   // 获取表格数据的方法（需要根据实际业务实现）
-  const fetchTableData = async () => {
-
+  const fetchTableData = () => {
+    // fetchToolsExecute({
+    //   uid: "3aa8a524564711f083bb0a97de54c4dd",
+    //   page: pagination.value.current,
+    //   page_size: pagination.value.limit,
+    //   params: {
+    //     tool_variables: [
+    //       {
+    //       raw_name: "thedate",
+    //       value: "20250707",
+    //     }
+    //     ],
+    //   },
+    // }).then((data) =>{
+    //   if(data === undefined){
+    //   columns.value = [{}  as Column];
+    //   tableData.value = []
+    //   }
+    // })
+    fetchToolsExecute({
+      uid: uid.value,
+      page: pagination.value.current,
+      page_size: pagination.value.limit,
+      params: {
+        tool_variables: searchList.value.map(item => ({
+          raw_name: item.raw_name,
+          value: item.value,
+        })),
+      },
+    }).then((data) => {
+      if (data === undefined) {
+        columns.value = [{}  as Column];
+        tableData.value = [];
+      }
+    });
   };
 
+  // 标签名称
+  const returnTagsName = (tags: string) => {
+    let tagName = '';
+    props.tagsEnums.forEach((item: TagItem) => {
+      if (item.tag_id === tags) {
+        tagName = item.tag_name;
+      }
+    });
+    return tagName;
+  };
   const handleClick = () => {
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -284,33 +307,25 @@
     });
   };
 
-  const itemIcon = (item: Record<string, any>) => {
-    switch (item.id) {
-    case 1:
+  const itemIcon = (item: toolInfo) => {
+    switch (item.tool_type) {
+    case 'data_search':
       return 'sqlxiao';
-    case 2:
+    case 'bk_vision':
       return 'bkvisonxiao';
-    case 3:
+    case 'api':
       return 'apixiao';
     }
   };
   const submit = () => {
     formRef.value.validate().then(() => {
-      fetchToolsExecute({
-        uid: uid.value,
-        params: {
-          tool_variables: searchList.value.map(item => ({
-            raw_name: item.raw_name,
-            value: item.value,
-          })),
-        },
-      });
+      fetchTableData();
     });
   };
   const handleReset = () => {
     // 调用每个FormItem组件的resetValue方法
     if (formItemRef.value) {
-      formItemRef.value.forEach((item:any) => {
+      formItemRef.value.forEach((item: any) => {
         item?.resetValue?.();
       });
     }
@@ -348,20 +363,12 @@
       searchList.value = data.config.input_variable.map(item => ({
         ...item,
         value: null,
+        required: item.required === 'true', // 将字符串类型的required转换为布尔值
       }));
       data.config.input_variable.forEach((item) => {
         searchForm.value[item.raw_name] = '';
       });
-
-      fetchToolsExecute({
-        uid: data.uid,
-        params: {
-          tool_variables: searchList.value.map(item => ({
-            raw_name: item.raw_name,
-            value: item.value,
-          })),
-        },
-      });
+      fetchTableData();
     },
   });
 
@@ -371,7 +378,21 @@
   } = useRequest(ToolsSquare.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      console.log('工具执行>>>>', data);
+      tableData.value = JSON.parse(JSON.stringify(data.data.results));
+      columns.value = data.data.results.reduce((acc: Column[], item: any) => {
+        Object.keys(item).forEach((key) => {
+          // 检查是否已存在该列的配置
+          if (!acc.some(col => col.field === key)) {
+            acc.push({
+              label: key,
+              field: key,
+              minWidth: 200,
+            });
+          }
+        });
+        return acc;
+      }, []);
+      pagination.value.count = data.data.total;
     },
   });
 

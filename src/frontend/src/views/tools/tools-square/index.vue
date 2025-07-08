@@ -28,7 +28,8 @@
           :name="item.name">
           <content
             ref="concentRef"
-            @handle-checked-tags="handleCheckedTags" />
+            @handle-checked-tags="handleCheckedTags"
+            @handle-tags-enums="handleTagsEnums" />
         </bk-tab-panel>
       </bk-tab>
     </div>
@@ -44,7 +45,10 @@
       <div class="content-card">
         <content-card
           ref="ContentCardRef"
-          :tags="tagsList" />
+          :my-created="active === 'my'"
+          :recent-used="active === 'history'"
+          :tags="tagsList"
+          :tags-enums="tagsEnums" />
       </div>
     </div>
   </div>
@@ -75,6 +79,7 @@
   ]);
   const checkedTags = ref<Array<string>>([]);
   const tagsList = ref<Array<TagItem>>([]);
+  const tagsEnums = ref<Array<TagItem>>([]);
 
   const handleCheckedTags = (tags: Array<TagItem>, tagsName: Array<string>) => {
     if (JSON.stringify(checkedTags.value) !== JSON.stringify(tagsName)) {
@@ -82,7 +87,12 @@
       tagsList.value = tags;
     }
   };
-
+  // 获取标签枚举
+  const handleTagsEnums = (tags: Array<TagItem>) => {
+    tagsEnums.value = tags;
+    console.log(tagsEnums.value, 'tagsEnums');
+  };
+  // 清除已选
   const handleClear = () => {
     const activeIndex = panels.value.findIndex(p => p.name === active.value);
     if (activeIndex >= 0 && concentRef.value[activeIndex]) {
