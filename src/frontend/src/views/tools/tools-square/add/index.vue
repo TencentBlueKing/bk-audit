@@ -249,7 +249,9 @@
                               label-width="0">
                               <bk-input
                                 ref="fieldItemRef"
-                                v-model="item.raw_name" />
+                                v-model="item.raw_name"
+                                :disabled="!formData.config.sql"
+                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -259,7 +261,9 @@
                               label-width="0">
                               <bk-input
                                 ref="fieldItemRef"
-                                v-model="item.display_name" />
+                                v-model="item.display_name"
+                                :disabled="!formData.config.sql"
+                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div
@@ -271,7 +275,9 @@
                               label-width="0">
                               <bk-input
                                 ref="fieldItemRef"
-                                v-model="item.description" />
+                                v-model="item.description"
+                                :disabled="!formData.config.sql"
+                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -281,6 +287,7 @@
                               label-width="0">
                               <bk-radio-group
                                 v-model="item.required"
+                                :disabled="!formData.config.sql"
                                 style="padding: 0 8px;">
                                 <bk-radio label>
                                   <span>{{ t('是') }}</span>
@@ -301,9 +308,10 @@
                               <bk-select
                                 v-model="item.field_category"
                                 class="bk-select"
+                                :disabled="!formData.config.sql"
                                 filterable
                                 :input-search="false"
-                                :placeholder="t('请选择')"
+                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请选择')"
                                 :search-placeholder="t('请输入关键字')">
                                 <bk-option
                                   v-for="(selectItem, selectIndex) in frontendTypeList"
@@ -353,7 +361,9 @@
                               label-width="0">
                               <bk-input
                                 ref="fieldItemRef"
-                                v-model="item.raw_name" />
+                                v-model="item.raw_name"
+                                :disabled="!formData.config.sql"
+                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -363,7 +373,9 @@
                               label-width="0">
                               <bk-input
                                 ref="fieldItemRef"
-                                v-model="item.display_name" />
+                                v-model="item.display_name"
+                                :disabled="!formData.config.sql"
+                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div
@@ -375,7 +387,9 @@
                               label-width="0">
                               <bk-input
                                 ref="fieldItemRef"
-                                v-model="item.description" />
+                                v-model="item.description"
+                                :disabled="!formData.config.sql"
+                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -385,6 +399,8 @@
                               label-width="0">
                               <bk-input
                                 v-model="item.field_down"
+                                :disabled="!formData.config.sql"
+                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')"
                                 @focus="handleFocus" />
                             </bk-form-item>
                           </div>
