@@ -6,7 +6,8 @@
     </div>
     <div class="tool-status-successful-text">
       <h1 style="margin-bottom: 16px;">
-        {{ t('工具创建成功') }}
+        {{ name }}
+        {{ isEditMode ? t('工具编辑成功') : t('工具创建成功') }}
       </h1>
       <span>{{ t('接下来你可以返回工具广场使用该工具，或前往策略中配置该工具') }}</span>
       <div style="margin-top: 16px;">
@@ -26,15 +27,29 @@
 </template>
 <script setup lang='ts'>
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
+  interface Props {
+    isEditMode: boolean;
+    name: string;
+  }
+
+  defineProps<Props>();
   const { t } = useI18n();
+  const router = useRouter();
 
   const handleStrategy = () => {
-    console.log('配置策略');
+    window.changeConfirm = false;
+    router.push({
+      name: 'strategyList',
+    });
   };
 
   const handleBack = () => {
-    console.log('返回工具广场');
+    window.changeConfirm = false;
+    router.push({
+      name: 'toolsSquare',
+    });
   };
 </script>
 <style lang="postcss" scoped>
