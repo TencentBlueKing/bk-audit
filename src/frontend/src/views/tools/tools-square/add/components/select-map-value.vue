@@ -34,7 +34,7 @@
       @change="handelValueDragChange">
       <template #item="{element}">
         <div class="select-result-text">
-          <span>{{ element.name }}</span>
+          <span>{{ element.raw_name }}</span>
         </div>
       </template>
     </vuedraggable>
@@ -75,8 +75,7 @@
           :key="fieldItem.key"
           class="field-item"
           @click="handleAlternativeFieldSelect(fieldItem)">
-          <span>{{ fieldItem.key }}</span>
-          <span class="field-item-value">({{ fieldItem.val }})</span>
+          <span>{{ fieldItem.raw_name }}</span>
         </div>
       </div>
       <div

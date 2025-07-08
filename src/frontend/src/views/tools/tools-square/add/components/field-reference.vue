@@ -43,19 +43,42 @@
         property="tool"
         required>
         <div style="display: flex;">
-          <bk-select
-            v-model="formData.tool"
+          <bk-cascader
+            v-model="SelectTool"
             filterable
-            :input-search="false"
-            :placeholder="t('请选择')"
-            :search-placeholder="t('请输入关键字')"
-            style="flex: 1;">
-            <bk-option
-              v-for="(item, index) in [{ id: '1', name: '工具1' }]"
-              :key="index"
-              :label="item.name"
-              :value="item.id" />
-          </bk-select>
+            :list="tagList"
+            :show-complete-name="false"
+            style="flex: 1;"
+            trigger="hover"
+            @change="handleSelectTool">
+            <template #extension>
+              <div class="view-mode">
+                <auth-router-link
+                  action-id="create_notice_group"
+                  class="create_notice_group"
+                  target="_blank"
+                  :to="{
+                    name: 'noticeGroupList',
+                    query: {
+                      create: true
+                    }
+                  }">
+                  <audit-icon
+                    style="font-size: 14px;color: #3a84ff;"
+                    type="plus-circle" />
+                  {{ t('新建工具') }}
+                </auth-router-link>
+                <span class="divider-wrapper">
+                  <span
+                    class="add-node"
+                    @click="handleRefresh">
+                    <plus class="icon-plus" />
+                    {{ t('刷新') }}
+                  </span>
+                </span>
+              </div>
+            </template>
+          </bk-cascader>
           <bk-button
             class="ml16"
             text
@@ -70,44 +93,50 @@
         label-width="160"
         property="tool"
         required>
-        <div class="field-list">
-          <div
-            v-for="(item, index) in formData.toolInputData"
-            :key="index"
-            class="field-item">
-            <div class="field-key">
-              <bk-input
-                v-model="item.raw_name"
-                disabled
-                style="flex: 1;" />
-            </div>
-            <div class="field-reference-type">
-              <bk-dropdown trigger="click">
-                <bk-button>{{ item.reference_type }}</bk-button>
-                <template #content>
-                  <bk-dropdown-menu>
-                    <bk-dropdown-item
-                      v-for="TypeItem in referenceTypeList"
-                      :key="TypeItem.id"
-                      @click="handleClick(TypeItem.id)">
-                      {{ TypeItem.name }}
-                    </bk-dropdown-item>
-                  </bk-dropdown-menu>
-                </template>
-              </bk-dropdown>
-            </div>
-            <div class="field-value">
-              <select-map-value
-                ref="selectMapValueRef"
-                :alternative-field-list="outputData"
-                :data="item"
-                :value="item.reference_value"
-                @change="value => handleSelectMapValueChange(value)" />
-            </div>
-            <div style="margin-left: 10px; color: #979ba5;">
-              {{ t('的值作为输入') }}
+        <div style="display: flex;">
+          <div class="field-list">
+            <div
+              v-for="(item, index) in formData.config"
+              :key="index"
+              class="field-item">
+              <div class="field-key">
+                <bk-input
+                  v-model="item.field_source"
+                  disabled
+                  style="flex: 1;" />
+              </div>
+              <div class="field-reference-type">
+                <bk-dropdown trigger="click">
+                  <bk-button style="width: 100px;">
+                    {{ getDictName(item.target_value_type) }}
+                  </bk-button>
+                  <template #content>
+                    <bk-dropdown-menu>
+                      <bk-dropdown-item
+                        v-for="TypeItem in referenceTypeList"
+                        :key="TypeItem.id"
+                        @click="() => item.target_value_type = TypeItem.id">
+                        {{ TypeItem.name }}
+                      </bk-dropdown-item>
+                    </bk-dropdown-menu>
+                  </template>
+                </bk-dropdown>
+              </div>
+              <div class="field-value">
+                <select-map-value
+                  ref="selectMapValueRef"
+                  :alternative-field-list="outputFields"
+                  :data="item"
+                  :value="item.source_field"
+                  @change="value => handleSelectMapValueChange(index, value)" />
+              </div>
+              <div style="margin-left: 10px; color: #979ba5;">
+                {{ t('的值作为输入') }}
+              </div>
             </div>
           </div>
+          <alternative-field
+            :data="outputFields" />
         </div>
       </bk-form-item>
     </audit-form>
@@ -117,8 +146,47 @@
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import SelectMapValue from '../components/select-map-value.vue';
+  import ToolManageService from '@service/tool-manage';
 
+  import ToolDetailModel from '@model/tool/tool-detail';
+
+  import AlternativeField from './alternative-field.vue';
+  import SelectMapValue from './select-map-value.vue';
+
+  import useRequest from '@/hooks/use-request';
+
+  interface Props {
+    outputFields: Array<{
+      raw_name: string;
+      display_name: string;
+      description: string;
+      field_down: string;
+    }>;
+  }
+
+  interface TagItem {
+    id: string;
+    name: string;
+    children: Array<{
+      id: string;
+      name: string;
+      version: number;
+    }>;
+  }
+
+  interface FormData {
+    tool: {
+      uid: string;
+      version: number;
+    };
+    config: Array<{
+      field_source: string;
+      target_value_type: string;
+      source_field: Record<string, any>[];
+    }>;
+  }
+
+  defineProps<Props>();
   const { t } = useI18n();
   const showEditSql = defineModel<boolean>('showFieldReference', {
     required: true,
@@ -132,36 +200,93 @@
     name: t('使用默认值'),
   }]);
 
-  const formData = ref({
-    tool: '',
-    toolInputData: [{
-      raw_name: 'username',
-      reference_type: 'reference',
-      reference_value: [{
-        value: '1',
-        name: '1',
-      }],
-    }, {
-      raw_name: 'user_age',
-      reference_type: 'reference',
-      reference_value: [{
-        value: '2',
-        name: '2',
-      }],
-    }],
+  const tagList = ref<Array<TagItem>>([]);
+  const SelectTool = ref<Array<string>>([]);
+
+  const formData = ref<FormData>({
+    tool: {
+      uid: '',
+      version: 1,
+    },
+    config: [],
   });
 
-  const outputData = ref([{
-    raw_name: 'username',
-    display_name: '用户名',
-  }]);
+  const {
+    data: toolsDetailData,
+    run: fetchToolsDetail,
+  } = useRequest(ToolManageService.fetchToolsDetail, {
+    defaultValue: new ToolDetailModel(),
+    onSuccess: () => {
+      formData.value.config = toolsDetailData.value.config.input_variable.map(item => ({
+        field_source: item.raw_name,
+        target_value_type: 'reference',
+        source_field: [],
+      }));
+    },
+  });
 
-  const handleClick = (item: string) => {
-    console.log(item);
+  // 获取标签列表
+  const {
+    data: tagData,
+  } = useRequest(ToolManageService.fetchToolTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: () => {
+      fetchAllTools();
+    },
+  });
+
+  // 获取所有工具
+  const {
+    data: AllToolsData,
+    run: fetchAllTools,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    onSuccess: () => {
+      tagList.value = tagData.value
+        .map(item => ({
+          id: item.tag_id,
+          name: item.tag_name,
+          children: item.tag_id === '-2'
+            ? AllToolsData.value
+              .filter(tool => !tool.tags || tool.tags.length === 0)
+              .map(({ uid, version, name }) => ({ id: uid, version, name }))
+            : AllToolsData.value
+              .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
+              .map(({ uid, version, name }) => ({ id: uid, version, name })),
+        }))
+        .filter(item => item.children.length > 0);
+      console.log(tagList.value);
+    },
+  });
+
+  const handleSelectTool = (value: Array<string>) => {
+    const tool = AllToolsData.value.find(item => item.uid === value[1]);
+    if (tool) {
+      formData.value.tool.uid = tool.uid;
+      formData.value.tool.version = tool.version;
+      fetchToolsDetail({
+        uid: formData.value.tool.uid,
+      });
+    } else {
+      formData.value.tool.uid = '';
+      formData.value.tool.version = 1;
+    }
   };
 
-  const handleSelectMapValueChange = (value: Record<string, any>) => {
-    console.log(value);
+  const handleRefresh = () => {
+    fetchAllTools();
+  };
+
+  const getDictName = (value: string) => {
+    const selectItem = referenceTypeList.value.find(item => item.id === value);
+    return selectItem ? selectItem.name : '';
+  };
+
+  const handleSelectMapValueChange = (index: number, value: Array<Record<string, any>>) => {
+    const configItem = formData.value.config[index];
+    configItem.source_field = [...value];
+    console.log(configItem);
   };
 </script>
 <style scoped lang="postcss">
@@ -181,6 +306,7 @@
     padding: 16px 40px;
 
     .field-list {
+      flex: 1;
       display: flex;
       padding: 16px;
       background: #f5f7fa;
@@ -202,6 +328,7 @@
         }
 
         .field-value {
+          color: #63656e;
           border: 1px solid #c4c6cc;
         }
       }

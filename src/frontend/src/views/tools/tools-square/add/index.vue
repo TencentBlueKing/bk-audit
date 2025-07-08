@@ -16,8 +16,9 @@
 -->
 <template>
   <skeleton-loading
+    v-if="!isCreating && !isFailed && !isSuccessful"
     fullscreen
-    :loading="loading"
+    :loading="loading || isEditDataLoading"
     name="createTools">
     <smart-action
       class="create-tools-page"
@@ -97,32 +98,30 @@
                 property="tool_type"
                 required>
                 <bk-radio-group v-model="formData.tool_type">
-                  <bk-radio label="data_search">
-                    <span>{{ t('数据查询') }}</span>
-                  </bk-radio>
-                  <bk-radio
-                    disabled
-                    label="API">
-                    <span>{{ t('API接口') }}</span>
-                  </bk-radio>
-                  <bk-radio label="bkvision">
-                    <span>{{ t('bkvision图表') }}</span>
-                  </bk-radio>
+                  <template
+                    v-for="(item, index) in toolTypeList"
+                    :key="index">
+                    <bk-radio
+                      :disabled="item.id === 'api'"
+                      :label="item.id">
+                      <span>{{ item.name }}</span>
+                    </bk-radio>
+                  </template>
                 </bk-radio-group>
               </bk-form-item>
               <bk-form-item
                 v-if="formData.tool_type === 'data_search'"
                 :label="t('配置方式')"
                 label-width="160"
-                property="search_type"
+                property="data_search_config_type"
                 required>
                 <bk-button-group>
                   <bk-button
                     v-for="item in searchTypeList"
                     :key="item.value"
                     :disabled="item.disabled"
-                    :selected="formData.search_type === item.value"
-                    @click="() => formData.search_type = item.value">
+                    :selected="formData.data_search_config_type === item.value"
+                    @click="() => formData.data_search_config_type = item.value">
                     {{ item.label }}
                   </bk-button>
                 </bk-button-group>
@@ -139,7 +138,7 @@
                 property="chart_link"
                 required>
                 <bk-input
-                  v-model.trim="formData.chart_link"
+                  v-model.trim="formData.config.uid"
                   :placeholder="t('请输入图表链接')"
                   style="width: 100%;" />
               </bk-form-item>
@@ -404,7 +403,7 @@
           class="w88"
           theme="primary"
           @click="handleSubmit">
-          {{ t('创建') }}
+          {{ isEditMode ? t('提交') : t('创建') }}
         </bk-button>
         <bk-button
           class="ml8"
@@ -417,48 +416,61 @@
           {{ t('预览测试') }}
         </bk-button>
       </template>
+      <!-- 编辑sql -->
       <edit-sql
         ref="editSqlRef"
         v-model:showEditSql="showEditSql"
         @update-parse-sql="handleUpdateParseSql" />
-      <field-reference v-model:showFieldReference="showFieldReference" />
+      <!-- 字段下钻 -->
+      <field-reference
+        v-model:showFieldReference="showFieldReference"
+        :output-fields="formData.config.output_fields" />
     </smart-action>
   </skeleton-loading>
-  <!-- <creating /> -->
-  <!-- <failed /> -->
-  <!-- <successful /> -->
+  <creating v-if="isCreating" />
+  <failed
+    v-if="isFailed"
+    :is-edit-mode="isEditMode"
+    :name="formData.name"
+    @modify-again="handleModifyAgain" />
+  <successful
+    v-if="isSuccessful"
+    :is-edit-mode="isEditMode"
+    :name="formData.name" />
 </template>
 
 <script setup lang='ts'>
+  import _ from 'lodash';
   import * as monaco from 'monaco-editor';
   import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
   import ToolManageService from '@service/tool-manage';
 
   import type ParseSqlModel from '@model/tool/parse-sql';
+  import ToolDetailModel from '@model/tool/tool-detail';
 
   import { execCopy } from '@utils/assist';
 
   import CardPartVue from './components/card-part.vue';
   import EditSql from './components/edit-sql.vue';
   import fieldReference from './components/field-reference.vue';
+  import Creating from './components/tool-status/creating.vue';
+  import Failed from './components/tool-status/failed.vue';
+  import Successful from './components/tool-status/Successful.vue';
 
   import useFullScreen from '@/hooks/use-full-screen';
+  // import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
-  // import Creating from './components/tool-status/creating.vue';
-  // import Failed from './components/tool-status/failed.vue';
-  // import Successful from './components/tool-status/Successful.vue';
 
   interface FormData {
     name: string;
     tags: string[];
     description: string;
     tool_type: string;
-    search_type: string;
-    chart_link: string;
+    data_search_config_type: string;
     config: {
       referenced_tables: Array<{
         table_name: string;
@@ -479,6 +491,7 @@
         field_down: string;
       }>
       sql: string;
+      uid: string;
     };
   }
 
@@ -492,12 +505,15 @@
     value: 'sql',
   }];
 
+  const route = useRoute();
   const router = useRouter();
+  // const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const { showExit, handleScreenfull } = useFullScreen(
     () => editor,
     () => viewRootRef.value,
   );
+  const isEditMode = route.name === 'toolsEdit';
 
   const viewRootRef = ref();
   const editSqlRef = ref();
@@ -508,13 +524,17 @@
   const showEditSql = ref(false);
   const showFieldReference = ref(false);
 
+  const isCreating = ref(false);
+  const isFailed = ref(false);
+  const isSuccessful = ref(false);
+
+  const strategyTagMap = ref<Record<string, string>>({});
   const formData = ref<FormData>({
     name: '',
     tags: [],
     description: '',
     tool_type: 'data_search',
-    search_type: 'sql',
-    chart_link: '',
+    data_search_config_type: 'sql',
     config: {
       referenced_tables: [],
       input_variable: [{
@@ -531,10 +551,16 @@
         field_down: '',
       }],
       sql: '',
+      uid: '',
     },
   });
 
   const frontendTypeList = ref<Array<{
+    id: string;
+    name: string;
+  }>>([]);
+
+  const toolTypeList = ref<Array<{
     id: string;
     name: string;
   }>>([]);
@@ -546,10 +572,8 @@
     defaultValue: {},
     manual: true,
     onSuccess(result) {
-      frontendTypeList.value = result.frontend_type || [{
-        id: 'input',
-        name: 'input',
-      }];
+      frontendTypeList.value = result.FieldCategory;
+      toolTypeList.value = result.ToolType;
     },
   });
 
@@ -573,16 +597,21 @@
         tag_id: string;
         tag_name: string
       }>);
+      data.forEach((item) => {
+        strategyTagMap.value[item.tag_id] = item.tag_name;
+      });
     },
   });
 
-  // 工具保存
+  // 编辑状态获取数据
   const {
-    run: createTool,
-  } = useRequest(ToolManageService.createTool, {
-    defaultValue: {},
+    run: fetchToolsDetail,
+    loading: isEditDataLoading,
+  } = useRequest(ToolManageService.fetchToolsDetail, {
+    defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
-      console.log(data);
+      formData.value = data;
+      editor.setValue(formData.value.config.sql);
     },
   });
 
@@ -634,13 +663,35 @@
     });
   };
 
+  const handleModifyAgain = () => {
+    isFailed.value = false;
+  };
+
   // 提交
   const handleSubmit = () => {
     const tastQueue = [formRef.value.validate(), tableInputFormRef.value.validate()];
 
     Promise.all(tastQueue).then(() => {
-      console.log(formData.value);
-      createTool(formData.value);
+      isCreating.value = true;
+
+      const data = _.cloneDeep(formData.value);
+      const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
+
+      if (data.tags) {
+        data.tags = data.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+      }
+      service(data)
+        .then(() => {
+          isFailed.value = false;
+          isSuccessful.value = true;
+        })
+        .catch(() => {
+          isSuccessful.value = false;
+          isFailed.value = true;
+        })
+        .finally(() => {
+          isCreating.value = false;
+        });
     });
   };
 
@@ -690,6 +741,11 @@
   onMounted(() => {
     initEditor();
     defineTheme();
+    if (isEditMode) {
+      fetchToolsDetail({
+        uid: route.params.id,
+      });
+    }
   });
 
   onBeforeUnmount(() => {
