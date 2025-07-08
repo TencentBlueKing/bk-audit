@@ -42,6 +42,15 @@ export default {
         title: '新增',
       },
     },
+    {
+      path: 'tools-edit/:id',
+      component: () => import('@views/tools/tools-square/add/index.vue'),
+      name: 'toolsEdit',
+      meta: {
+        title: '编辑策略',
+        skeleton: 'strategyEdit',
+      },
+    },
   ],
 };
 

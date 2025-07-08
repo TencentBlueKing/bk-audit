@@ -40,4 +40,28 @@ export default  {
     return ToolManageSources.parseSql(params)
       .then(({ data }) => data);
   },
+  /**
+     * @desc 工具详情
+     * @param { Object } params
+     */
+  fetchToolsDetail(params: {
+      uid: string,
+    }) {
+    return ToolManageSources.getToolsDetail(params).then(({ data }) =>  data);
+  },
+  /**
+   * @desc 编辑工具
+   * @param { Object } params
+   */
+  updateTool(params: Record<string, any>) {
+    return ToolManageSources.updateTool(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 获取全部工具
+   */
+  fetchAllTools() {
+    return ToolManageSources.getAllTools()
+      .then(({ data }) => data);
+  },
 };

@@ -259,10 +259,6 @@
     itemMouseenter.value = null;
   };
 
-  const handleEdit = (item: Record<string, any>) => {
-    console.log('handleEdit', item);
-  };
-
   const handleMouseenter = (item: Record<string, any>) => {
     if (isFixedDelete.value) {
       return;
@@ -278,6 +274,14 @@
   const handleCreate = () => {
     router.push({
       name: 'toolsAdd',
+    });
+  };
+  const handleEdit = (item: Record<string, any>) => {
+    router.push({
+      name: 'toolsEdit',
+      params: {
+        id: item.uid,
+      },
     });
   };
   // 删除
