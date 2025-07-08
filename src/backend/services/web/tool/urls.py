@@ -9,5 +9,5 @@ router = ResourceRouter()
 router.register_module(views)
 
 urlpatterns = [
-    re_path(r"namespace/(?P<namespace>[\w\-]+)/", include(router.urls)),
+    re_path(r"namespaces/(?P<namespace>[\w\-]+)/", include(router.urls)),
 ]
