@@ -241,6 +241,33 @@ class Permission(object):
 
         return data
 
+    def has_action_any_permission(self, action: Union[ActionMeta, str]) -> bool:
+        """
+        校验用户是否有动作的任意权限
+        :param action: 动作
+        """
+        action = get_action_by_id(action)
+        request = self.make_request(action)
+
+        try:
+            # 1. validate
+            self.iam_client._validate_request(request)
+
+            # 2. _client.policy_query
+            policies = self.iam_client._do_policy_query(request)
+
+            logger.debug("the return policies: %s", policies)
+            result = bool(policies)
+        except AuthAPIError as e:
+            logger.exception(
+                "[IAM AuthAPI Error] Action => %s; Err => %s",
+                action.to_dict(),
+                e,
+            )
+            result = False
+
+        return result
+
     def is_allowed(
         self, action: Union[ActionMeta, str], resources: List[Resource] = None, raise_exception: bool = False
     ):
