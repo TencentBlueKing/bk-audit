@@ -40,6 +40,7 @@ export default {
       name: 'toolsAdd',
       meta: {
         title: '新增',
+        isRouterBack: 'toolsSquare',
       },
     },
     {
@@ -49,6 +50,7 @@ export default {
       meta: {
         title: '编辑策略',
         skeleton: 'strategyEdit',
+        isRouterBack: 'toolsSquare',
       },
     },
   ],
