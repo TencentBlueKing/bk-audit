@@ -25,15 +25,15 @@ export default class ToolDetail {
   data_search_config_type: string;
   config: {
     referenced_tables: Array<{
-      table_name: string;
+      table_name: string | null;
       alias: string | null;
-      hasPermission: boolean;
+      hasPermission?: boolean;
         }>;
         input_variable: Array<{
             raw_name: string;
             display_name: string;
       description: string;
-      required: string;
+      required: boolean;
             field_category: string;
     }>
     output_fields: Array<{
@@ -55,7 +55,7 @@ export default class ToolDetail {
     sql: string;
     uid: string;
     };
-  permission: {
+  permission?: {
     use_tool: boolean;
   };
   constructor(payload = {} as ToolDetail) {

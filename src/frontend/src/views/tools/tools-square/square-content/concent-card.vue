@@ -163,7 +163,8 @@
             :is="DialogVue"
             :ref="(el) => dialogRefs[item.uid] = el"
             :dialog-cls="`dialogCls${item.uid}`"
-            :tags-enums="tagsEnums" />
+            :tags-enums="tagsEnums"
+            @open-field-down="openFieldDown" />
         </div>
       </div>
 
@@ -277,7 +278,12 @@
   };
 
   const handleEdit = (item: Record<string, any>) => {
-    console.log('handleEdit', item);
+    router.push({
+      name: 'toolsEdit',
+      params: {
+        id: item.uid,
+      },
+    });
   };
 
   const handleMouseenter = (item: Record<string, any>) => {
@@ -381,7 +387,13 @@
       tags: props.tags.map((item: TagItem) => item.tag_id) || [],
     });
   };
-
+  // 下转打开
+  const openFieldDown = (val: string) => {
+    const item = dataList.value.find((item: toolInfo) => item.uid === val);
+    if (dialogRefs.value[val]) {
+      dialogRefs.value[val].openDialog(item);
+    }
+  };
   watch(() => props, (newTags) => {
     fetchToolsList({
       page: 1,
