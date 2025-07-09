@@ -27,14 +27,14 @@ export default class ToolDetail {
     referenced_tables: Array<{
       table_name: string | null;
       alias: string | null;
-      hasPermission?: boolean;
-        }>;
-        input_variable: Array<{
-            raw_name: string;
-            display_name: string;
+      hasPermission: boolean;
+    }>;
+    input_variable: Array<{
+      raw_name: string;
+      display_name: string;
       description: string;
       required: boolean;
-            field_category: string;
+      field_category: string;
     }>
     output_fields: Array<{
       raw_name: string;
@@ -54,9 +54,6 @@ export default class ToolDetail {
     }>
     sql: string;
     uid: string;
-    };
-  permission?: {
-    use_tool: boolean;
   };
   constructor(payload = {} as ToolDetail) {
     this.name = payload.name;
@@ -66,7 +63,6 @@ export default class ToolDetail {
     this.description = payload.description;
     this.namespace = payload.namespace;
     this.config = payload.config;
-    this.permission = payload.permission;
     this.tags = payload.tags;
     this.data_search_config_type = payload.data_search_config_type;
     this.config = payload.config;

@@ -16,28 +16,19 @@
 -->
 <template>
   <div
-    v-if="routerBack || route.meta.isRouterBack"
+    v-if="routerBack"
     class="audit-router-back"
     @click="handleRouterBack">
     <audit-icon type="back" />
   </div>
 </template>
 <script setup lang="ts">
-  import { useRoute, useRouter } from 'vue-router';
-
   import useRouterBack from '@hooks/use-router-back';
 
   const routerBack = useRouterBack();
-  const route = useRoute();
-  const router = useRouter();
+
   const handleRouterBack = () => {
-    if (route.meta.isRouterBack) {
-      router.push({
-        name: route.meta.isRouterBack as string | undefined,
-      });
-    } else {
-      routerBack.value?.();
-    }
+    routerBack.value?.();
   };
 
 </script>
