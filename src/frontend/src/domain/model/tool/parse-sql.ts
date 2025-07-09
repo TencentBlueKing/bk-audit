@@ -21,14 +21,14 @@ export default class ParseSql {
     hasPermission: boolean;
   }>;
   sql_variables: Array<{
-    raw_name: '',
-    display_name: '',
-    description: '',
-    required: '',
+    raw_name: string,
+    display_name: string,
+    description: string,
+    required: boolean,
   }>;
   result_fields: Array<{
-    raw_name: '',
-    display_name: '',
+    raw_name: string,
+    display_name: string,
   }>;
   original_sql: string;
 
