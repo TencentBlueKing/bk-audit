@@ -133,15 +133,17 @@
                 {{ t('查询结果') }}
               </div>
               <div class="top-search-result">
-                <bk-table
-                  :border="['outer', 'col', 'row']"
-                  :columns="columns"
-                  :data="tableData"
-                  max-height="50vh"
-                  :pagination="pagination"
-                  width="100%"
-                  @page-limit-change="handlePageLimitChange"
-                  @page-value-change="handlePageChange" />
+                <bk-loading :loading="isLoading">
+                  <bk-table
+                    :border="['outer', 'col', 'row']"
+                    :columns="columns"
+                    :data="tableData"
+                    max-height="50vh"
+                    :pagination="pagination"
+                    width="100%"
+                    @page-limit-change="handlePageLimitChange"
+                    @page-value-change="handlePageChange" />
+                </bk-loading>
               </div>
             </div>
           </div>
@@ -246,6 +248,7 @@
   const dialogWidth = ref('40%');
   const isFullScreen = ref(false);
   const dialogHeight = ref('80vh');
+  const isLoading = ref(false);
   const { t } = useI18n();
   const isShow = ref(false);
   const uid = ref('');
@@ -280,6 +283,7 @@
 
   // 获取表格数据的方法（需要根据实际业务实现）
   const fetchTableData = () => {
+    isLoading.value = true;
     fetchToolsExecute({
       uid: uid.value,
       page: pagination.value.current,
@@ -294,7 +298,10 @@
       if (data === undefined) {
         tableData.value = [];
       }
-    });
+    })
+      .finally(() => {
+        isLoading.value = false;
+      });
   };
 
   // 标签名称
@@ -353,6 +360,7 @@
       ...item,
       value: null,
     }));
+    fetchTableData();
   };
 
 
@@ -599,6 +607,7 @@
         .top-right-name {
           display: inline-block;
           max-width: 300px;
+          margin-right: 5px;
           overflow: hidden;
           text-overflow: ellipsis;
           align-items: center;
