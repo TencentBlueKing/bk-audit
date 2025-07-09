@@ -135,7 +135,7 @@
                 v-else
                 :label="t('图表链接')"
                 label-width="160"
-                property="chart_link"
+                property="config.uid"
                 required>
                 <bk-input
                   v-model.trim="formData.config.uid"
@@ -399,13 +399,14 @@
                               label-width="0">
                               <div
                                 v-if="!item.drill_config.tool.uid"
-                                style=" padding: 0 8px;color: #c4c6cc; cursor: pointer;"
+                                style="padding: 0 8px; color: #c4c6cc; cursor: pointer;"
                                 @click="() => handleClick(index)">
                                 {{ !formData.config.sql ? t('请先配置sql'):t('请配置') }}
                               </div>
                               <div
                                 v-else
-                                style="padding: 0 8px;">
+                                style="padding: 0 8px; cursor: pointer;"
+                                @click="() => handleClick(index, item.drill_config)">
                                 {{ getToolName(item.drill_config.tool.uid) }}
                               </div>
                             </bk-form-item>
@@ -445,6 +446,7 @@
         @update-parse-sql="handleUpdateParseSql" />
       <!-- 字段下钻 -->
       <field-reference
+        ref="fieldReferenceRef"
         v-model:showFieldReference="showFieldReference"
         :new-tool-name="formData.name"
         :output-fields="formData.config.output_fields"
@@ -476,6 +478,8 @@
 
   import type ParseSqlModel from '@model/tool/parse-sql';
   import ToolDetailModel from '@model/tool/tool-detail';
+
+  import useRouterBack from '@hooks/use-router-back';
 
   import { execCopy } from '@utils/assist';
 
@@ -554,6 +558,7 @@
   const editSqlRef = ref();
   const formRef = ref();
   const tableInputFormRef = ref();
+  const fieldReferenceRef = ref();
 
   const loading = ref(false);
   const showEditSql = ref(false);
@@ -609,7 +614,7 @@
     name: string;
   }>>([]);
 
-  const getSmartActionOffsetTarget = () => document.querySelector('create-tools-page');
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
   // 获取前端类型
   useRequest(MetaManageService.fetchGlobalChoices, {
@@ -704,9 +709,13 @@
     execCopy(formData.value.config.sql, t('复制成功'));
   };
 
-  const handleClick = (index: number) => {
+  const handleClick = (index: number, drillConfig?: FormData['config']['output_fields'][0]['drill_config']) => {
     showFieldReference.value = true;
     outputIndex.value = index;
+    // 编辑
+    if (drillConfig) {
+      fieldReferenceRef.value.setFormData(drillConfig);
+    }
   };
 
   const handleCancel = () => {
@@ -734,7 +743,10 @@
 
   // 提交
   const handleSubmit = () => {
-    const tastQueue = [formRef.value.validate(), tableInputFormRef.value.validate()];
+    const tastQueue = [formRef.value.validate()];
+    if (tableInputFormRef.value) {
+      tastQueue.push(tableInputFormRef.value.validate());
+    }
 
     Promise.all(tastQueue).then(() => {
       isCreating.value = true;
@@ -815,6 +827,12 @@
 
   onBeforeUnmount(() => {
     editor.dispose();
+  });
+
+  useRouterBack(() => {
+    router.push({
+      name: 'toolsSquare',
+    });
   });
 </script>
 <style lang="postcss" scoped>

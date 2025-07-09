@@ -228,6 +228,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
+      background-color: #fff;
 
       .sortable-ghost {
         position: absolute;
@@ -239,8 +240,7 @@
 
     .select-result-text {
       display: flex;
-      padding-right: 16px;
-      padding-left: 16px;
+      padding: 0 10px;
     }
 
     .select-result-text-value {

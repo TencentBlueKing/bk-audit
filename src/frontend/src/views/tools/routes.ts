@@ -39,8 +39,7 @@ export default {
       component: () => import('@views/tools/tools-square/add/index.vue'),
       name: 'toolsAdd',
       meta: {
-        title: '新增',
-        isRouterBack: 'toolsSquare',
+        title: '创建工具',
       },
     },
     {
@@ -48,9 +47,8 @@ export default {
       component: () => import('@views/tools/tools-square/add/index.vue'),
       name: 'toolsEdit',
       meta: {
-        title: '编辑策略',
+        title: '编辑工具',
         skeleton: 'strategyEdit',
-        isRouterBack: 'toolsSquare',
       },
     },
   ],
