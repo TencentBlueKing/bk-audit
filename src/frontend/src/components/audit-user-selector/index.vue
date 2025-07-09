@@ -108,6 +108,7 @@
   const recordList = (val: string) => {
     if (!val) return;
     const userValue = data.value.results.find(item => item.username === val) as Option;
+    if (!userValue) return;
     const alreayExistUserValue = rememberList.value.find(item => item.username === val);
     if (!alreayExistUserValue) {
       if (rememberList.value.length >= 6) {
@@ -119,7 +120,7 @@
   const rememberResult = () => {
     const string = sessionStorage.getItem('audit-userlist');
     if (string) {
-      const ar = JSON.parse(string);
+      const ar = JSON.parse(string).filter((item: any) => item && typeof item === 'object' && !Array.isArray(item));
       data.value.results = ar;
       rememberList.value = ar;
     }
@@ -148,6 +149,8 @@
     if (props.multiple) {
       nextTick(() => {
         userSelectorRef.value.searchKey = '';
+        userSelectorRef.value.customOptionName = '';
+        userSelectorRef.value.curSearchValue = '';
       });
     }
   };
