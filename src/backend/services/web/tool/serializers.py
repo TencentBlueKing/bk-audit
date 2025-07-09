@@ -63,40 +63,41 @@ class ToolCreateRequestSerializer(serializers.Serializer):
             data_search_config_type = attrs["data_search_config_type"]
 
         if tool_type == ToolTypeEnum.BK_VISION:
-            BkvisionConfig(**config)
+            validated_config = BkvisionConfig(**config).dict()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
             DataSearchConfigTypeEnum(data_search_config_type)
-            SQLDataSearchConfig(**config)
+            validated_config = SQLDataSearchConfig(**config).dict()
         else:
             raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
-
+        attrs["config"] = validated_config
         return attrs
 
 
 class ToolUpdateRequestSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
-    config = serializers.DictField(label=gettext_lazy("工具配置"))
-    name = serializers.CharField(label=gettext_lazy("工具名称"))
-    namespace = serializers.CharField(label=gettext_lazy("命名空间"))
+    config = serializers.DictField(required=False, label=gettext_lazy("工具配置"))
+    name = serializers.CharField(required=False, label=gettext_lazy("工具名称"))
+    namespace = serializers.CharField(required=False, label=gettext_lazy("命名空间"))
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     tags = serializers.ListField(
         child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")
     )
 
     def validate(self, attrs):
-
         uid = attrs["uid"]
-        config = attrs["config"]
+        config = attrs.get("config")
 
         tool = Tool.last_version_tool(uid)
         tool_type = tool.tool_type
 
         if tool_type == ToolTypeEnum.BK_VISION:
-            BkvisionConfig(**config)
+            validated_config = BkvisionConfig(**config).dict()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
-            SQLDataSearchConfig(**config)
+            validated_config = SQLDataSearchConfig(**config).dict()
         else:
             raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
+
+        attrs["config"] = validated_config
         return attrs
 
 
