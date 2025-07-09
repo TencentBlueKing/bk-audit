@@ -501,16 +501,16 @@
     tool_type: string;
     data_search_config_type: string;
     config: {
-      referenced_tables?: Array<{
-        table_name?: string | null;
-        alias?: string | null;
-        hasPermission?: boolean;
+      referenced_tables: Array<{
+        table_name: string | null;
+        alias: string | null;
+        hasPermission: boolean;
       }>;
       input_variable: Array<{
         raw_name: string;
         display_name: string;
         description: string;
-        required: string;
+        required: boolean;
         field_category: string;
       }>
       output_fields: Array<{
@@ -581,7 +581,7 @@
         raw_name: '',
         display_name: '',
         description: '',
-        required: '',
+        required: false,
         field_category: '',
       }],
       output_fields: [{
@@ -658,7 +658,7 @@
     loading: isEditDataLoading,
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
-    onSuccess: (data:any) => {
+    onSuccess: (data) => {
       formData.value = data;
       editor.setValue(formData.value.config.sql);
     },
