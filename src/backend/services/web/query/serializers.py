@@ -172,11 +172,14 @@ class EsQuerySearchAttrSerializer(serializers.Serializer):
         validated_data = super().to_internal_value(data)
         validated_data["filter"] = []
         for key, val in data.items():
-            # 屏蔽内置字段 or 原始字段
-            if key in self.fields.fields.keys() or key in ES_SEARCH_ORIGIN_FIELDS:
+            # 屏蔽内置字段
+            if key in self.fields.fields.keys():
                 continue
-            # 提前解析
-            items = {item for item in val.split(",") if item}
+            # 提前解析(原始字段保留)
+            if key in ES_SEARCH_ORIGIN_FIELDS:
+                items = {val}
+            else:
+                items = {item for item in val.split(",") if item}
             # 兼容ResultCode
             if key == RESULT_CODE.field_name and ResultCodeChoices.FAILED.value in items:
                 validated_data["filter"] = self._build_reverse_filter(
