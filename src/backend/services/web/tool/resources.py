@@ -258,6 +258,8 @@ class CreateTool(ToolBase):
                 {
              "target_value_type": "field",
              "target_value": "ip_address"
+             "source_field": "username"
+
                 }
               ]
             }
@@ -296,62 +298,7 @@ class CreateTool(ToolBase):
 class UpdateTool(ToolBase):
     """
     ```json
-    请求参数：data_search工具类型
-    {
-      "name": "xxx",
-      "description": "xxx",
-      "tags": ["xxx", "xxx"],
-      "config": {
-        "referenced_tables": [
-          {
-            "table_name": "xxx"
-          },
-          {
-            "table_name": "xxx"
-          }
-        ],
-        "input_variable": [
-          {
-            "raw_name": "xxx",
-            "display_name": "xxx",
-            "description": "xxx",
-            "required": false,
-            "field_category": "input",
-            "choices": []
-          }
-        ],
-        "output_fields": [
-          {
-            "raw_name": "xxx",
-            "display_name": "xxx",
-            "description": "xxx"
-            "drill_config": {
-              "tool": {
-                "uid": "XXX",
-                "version": 1
-              },
-              "config": [
-                {
-             "source_field": "xxx",
-             "target_value_type": "field",
-             "target_value": "ip_address"
-                }
-              ]
-            }
-          }
-        ],
-        "sql": "SELECT * FROM xxx WHERE $condition",
-      }
-    }
-    请求参数：bk_vision工具类型
-    {
-      "name": "xxx",
-      "description": "xxx",
-      "tags": ["xxx"],
-      "config": {
-        "uid": "xxx"
-      }
-    }
+    除了tags必须传，其他可修改字段改什么传什么
     响应结构：
      "data": {
             "uid": "xxx",
@@ -376,9 +323,9 @@ class UpdateTool(ToolBase):
                 new_tool_data = {
                     "uid": tool.uid,
                     "tool_type": tool.tool_type,
-                    "name": validated_request_data["name"],
-                    "description": validated_request_data["description"],
-                    "namespace": validated_request_data["namespace"],
+                    "name": validated_request_data.get("name", tool.name),
+                    "description": validated_request_data.get("description", tool.description),
+                    "namespace": validated_request_data.get("namespace", tool.namespace),
                     "version": tool.version + 1,
                     "config": new_config,
                 }
