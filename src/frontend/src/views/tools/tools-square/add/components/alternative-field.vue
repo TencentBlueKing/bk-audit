@@ -22,8 +22,8 @@
       class="wrapper"
       :class="renderStrategyClass">
       <div class="title">
-        <span>{{ t('备选调试字段') }}</span>
-        <span style="color: #979ba5;">（{{ t('可拖动进映射选择框') }}）</span>
+        <span>{{ t('备选结果字段') }}</span>
+        <span style="color: #979ba5;">（{{ t('可拖动进结果字段框') }}）</span>
       </div>
       <div class="content-box">
         <scroll-faker>
