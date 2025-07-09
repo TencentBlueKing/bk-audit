@@ -28,16 +28,18 @@
         'z-index': dialogIndex,
         'position': 'absolute'
       }"
-      width="40%"
+      :width="dialogWidth"
       :z-index="dialogIndex"
       @click="handleClick"
       @closed="handleCloseDialog">
       <template #header>
         <div class="header">
           <div class="header-left">
-            <!-- <img
+            <audit-icon
               class="full-screen-img"
-              src="@images/fullScreen.png"> -->
+              svg
+              :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
+              @click="handleFullscreen()" />
           </div>
           <div class="top-right">
             <audit-icon
@@ -81,7 +83,10 @@
         </div>
       </template>
       <template #default>
-        <div class="default">
+        <div
+          v-if="itemInfo?.tool_type !== 'bk_vision'"
+          class="default"
+          :style="isFullScreen ? `height:${dialogHeight}` : ''">
           <div class="top-line" />
           <div v-if="itemInfo?.permission?.use_tool">
             <div class="top-search">
@@ -133,7 +138,6 @@
                   :columns="columns"
                   :data="tableData"
                   max-height="50vh"
-                  min-height="300px"
                   :pagination="pagination"
                   width="100%"
                   @page-limit-change="handlePageLimitChange"
@@ -162,30 +166,48 @@
             </div>
           </div>
         </div>
-      </template>
 
+        <div
+          v-else
+          class="default">
+          <div class="top-line" />
+          <div
+            id="panel"
+            class="panel" />
+        </div>
+      </template>
       <template #footer />
     </bk-dialog>
   </div>
 </template>
 <script setup lang='tsx'>
-  import { nextTick, onMounted, ref } from 'vue';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolsSquare from '@service/tools-square';
 
+  import IamApplyDataModel from '@model/iam/apply-data';
   import type ToolDetail from '@model/tool/tool-detail';
   import toolInfo from '@model/tools-square/tools-square';
 
+  import useMessage from '@hooks/use-message';
+
+  import useEventBus from '@/hooks/use-event-bus';
   import useRequest from '@/hooks/use-request';
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
+  interface Error {
+    data: Record<string, any>,
+    message: string,
+    status: number
+  }
   interface Column {
     label: string;
     field: string;
     width?: number;
     minWidth?: number;
     sortable?: boolean;
+    showOverflowTooltip?: boolean;
   }
   interface TagItem {
     tag_id: string
@@ -212,8 +234,18 @@
     closeDialog: () => void,
     openDialog: (item: toolInfo) => void,
   }
+  interface Emits {
+    (e: 'openFieldDown', val: string): void;
+  }
   const props = defineProps<Props>();
+  const emit = defineEmits<Emits>();
+  const   emitBus  = useEventBus().emit;
+  const { messageError } = useMessage();
+
   const dialogIndex = ref(2000);
+  const dialogWidth = ref('40%');
+  const isFullScreen = ref(false);
+  const dialogHeight = ref('80vh');
   const { t } = useI18n();
   const isShow = ref(false);
   const uid = ref('');
@@ -226,6 +258,7 @@
   const searchList = ref<SearchItem[]>([]);
   const tableData = ref<TableDataItem[]>([]);
   const columns = ref<Column[]>([]);
+  const panelId = ref('');
   const pagination = ref({
     count: 0,
     limit: 100,
@@ -235,13 +268,11 @@
 
   // 处理页码变化
   const handlePageChange = (newPage: number) => {
-    console.log('处理页码变化');
     pagination.value.current = newPage;
     fetchTableData(); // 调用获取表格数据的方法
   };
   // 处理每页条数变化
   const handlePageLimitChange = (newLimit: number) => {
-    console.log('处理每页条数变化');
     pagination.value.limit = newLimit;
     pagination.value.current = 1; // 重置到第一页
     fetchTableData(); // 调用获取表格数据的方法
@@ -249,37 +280,18 @@
 
   // 获取表格数据的方法（需要根据实际业务实现）
   const fetchTableData = () => {
-    // fetchToolsExecute({
-    //   uid: "3aa8a524564711f083bb0a97de54c4dd",
-    //   page: pagination.value.current,
-    //   page_size: pagination.value.limit,
-    //   params: {
-    //     tool_variables: [
-    //       {
-    //       raw_name: "thedate",
-    //       value: "20250707",
-    //     }
-    //     ],
-    //   },
-    // }).then((data) =>{
-    //   if(data === undefined){
-    //   columns.value = [{}  as Column];
-    //   tableData.value = []
-    //   }
-    // })
     fetchToolsExecute({
       uid: uid.value,
       page: pagination.value.current,
       page_size: pagination.value.limit,
-      params: {
+      params: itemInfo.value?.tool_type === 'data_search' ? {
         tool_variables: searchList.value.map(item => ({
           raw_name: item.raw_name,
-          value: item.value,
+          value: item.value || '',
         })),
-      },
+      } : {},
     }).then((data) => {
       if (data === undefined) {
-        columns.value = [{}  as Column];
         tableData.value = [];
       }
     });
@@ -363,36 +375,53 @@
       searchList.value = data.config.input_variable.map(item => ({
         ...item,
         value: null,
-        required: item.required === 'true', // 将字符串类型的required转换为布尔值
+        required: item.required, // 将字符串类型的required转换为布尔值
       }));
       data.config.input_variable.forEach((item) => {
         searchForm.value[item.raw_name] = '';
       });
+      columns.value = data.config.output_fields.map((item) => {
+        if (item.drill_config.tool.uid === '') {
+          return {
+            label: item.display_name,
+            field: item.raw_name,
+            minWidth: 200,
+            showOverflowTooltip: true,
+          };
+        }
+        return {
+          label: item.display_name,
+          field: item.raw_name,
+          minWidth: 200,
+          showOverflowTooltip: true,
+          render: ({ data }: {data: Record<any, string>}) => <bk-button  theme="primary" text
+           onClick={(e:any) => {
+            e.stopPropagation(); // 阻止事件冒泡
+            handleFieldDownClick(item.drill_config.tool.uid);
+          }}
+          >{data[item.raw_name]} </bk-button>,
+        };
+      });
       fetchTableData();
     },
   });
-
+  // 下转点击
+  const handleFieldDownClick = (data: string) => {
+    emit('openFieldDown', data);
+  };
   // 工具执行
   const {
     run: fetchToolsExecute,
   } = useRequest(ToolsSquare.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      tableData.value = JSON.parse(JSON.stringify(data.data.results));
-      columns.value = data.data.results.reduce((acc: Column[], item: any) => {
-        Object.keys(item).forEach((key) => {
-          // 检查是否已存在该列的配置
-          if (!acc.some(col => col.field === key)) {
-            acc.push({
-              label: key,
-              field: key,
-              minWidth: 200,
-            });
-          }
-        });
-        return acc;
-      }, []);
-      pagination.value.count = data.data.total;
+      if (itemInfo.value?.tool_type === 'data_search') {
+        tableData.value = JSON.parse(JSON.stringify(data.data.results));
+        pagination.value.count = data.data.total;
+      } else {
+        panelId.value = data.data.panel_id;
+        initBK(data.data.panel_id);
+      }
     },
   });
 
@@ -400,6 +429,13 @@
     isShow.value = true;
     itemInfo.value = item;
     fetchToolsDetail({ uid: item.uid });
+    const isNewIndex = sessionStorage.getItem('dialogIndex');
+    if (isNewIndex) {
+      dialogIndex.value = Number(isNewIndex) + 1;
+    }
+    nextTick(() => {
+      sessionStorage.setItem('dialogIndex', String(dialogIndex.value));
+    });
     // 等待两次nextTick确保DOM完全更新
     await nextTick();
     await nextTick();
@@ -465,11 +501,49 @@
     return isOverflow;
   };
 
-  onMounted(() => {
 
-
+  const loadScript = (src: string) => new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => resolve(script);
+    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    document.head.appendChild(script);
   });
 
+  const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
+    if (err.data.code === '9900403') {
+      const iamResult = new IamApplyDataModel(err.data.data || {});
+      // 页面展示没权限提示
+      emitBus('permission-page', iamResult);
+    } else {
+      messageError(err.message);
+    }
+  };
+  const initBK = async  (id: string) => {
+    try {
+      await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
+      window.BkVisionSDK.init(
+        '#panel',
+        id,
+        {
+          apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
+          chartToolMenu: [
+            { type: 'tool', id: 'fullscreen', build_in: true },
+            { type: 'tool', id: 'refresh', build_in: true },
+            { type: 'menu', id: 'excel', build_in: true },
+          ],
+          handleError,
+        },
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  // 放大
+  const handleFullscreen = () => {
+    isFullScreen.value = !isFullScreen.value;
+    dialogWidth.value = isFullScreen.value ? '90%' : '40%';
+  };
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
@@ -556,6 +630,10 @@
 }
 
 .default {
+  .panel {
+    min-height: 50vh;
+  }
+
   .top-line {
     width: 100%;
     height: 1px;

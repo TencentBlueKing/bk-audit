@@ -497,10 +497,10 @@
     tool_type: string;
     data_search_config_type: string;
     config: {
-      referenced_tables: Array<{
-        table_name: string;
-        alias: string | null;
-        hasPermission: boolean;
+      referenced_tables?: Array<{
+        table_name?: string | null;
+        alias?: string | null;
+        hasPermission?: boolean;
       }>;
       input_variable: Array<{
         raw_name: string;
@@ -653,7 +653,7 @@
     loading: isEditDataLoading,
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
-    onSuccess: (data) => {
+    onSuccess: (data:any) => {
       formData.value = data;
       editor.setValue(formData.value.config.sql);
     },
