@@ -36,7 +36,7 @@ class Migration(migrations.Migration):
     migration_json = "initial.json"
 
     dependencies = [
-        ("permission", "0009_update_action_resource_type"),
+        ("permission", "0008_update_action_resource_type"),
     ]
 
     operations = [migrations.RunPython(forward_func)]

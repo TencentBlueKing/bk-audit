@@ -127,25 +127,21 @@ class Permission(object):
                 for related_resource in related_resources_types:
                     instances = []
                     for r in resources:
+                        resource_nodes = []
                         if r.system == related_resource.system_id and r.type == related_resource.id:
                             if r.attribute.get("_bk_iam_path_"):
-                                instances.append(
-                                    ResourceInstance(
-                                        [
-                                            ResourceNode(type=_p, id=_id, name=_id)
-                                            for _p, _id in [
-                                                _p.split(",")
-                                                for _p in r.attribute["_bk_iam_path_"].strip("/").split("/")
-                                            ]
+                                resource_nodes.extend(
+                                    [
+                                        ResourceNode(type=_p, id=_id, name=_id)
+                                        for _p, _id in [
+                                            _p.split(",") for _p in r.attribute["_bk_iam_path_"].strip("/").split("/")
                                         ]
-                                    )
+                                    ]
                                 )
-                            else:
-                                instances.append(
-                                    ResourceInstance(
-                                        [ResourceNode(type=r.type, id=r.id, name=r.attribute.get("name", r.id))]
-                                    )
-                                )
+                            resource_nodes.append(
+                                ResourceNode(type=r.type, id=r.id, name=r.attribute.get("name", r.id))
+                            )
+                            instances.append(ResourceInstance(resource_nodes))
 
                     related_resources.append(
                         RelatedResourceType(
@@ -240,6 +236,33 @@ class Permission(object):
                             _item["name"] = gettext(_item["name"])
 
         return data
+
+    def has_action_any_permission(self, action: Union[ActionMeta, str]) -> bool:
+        """
+        校验用户是否有动作的任意权限
+        :param action: 动作
+        """
+        action = get_action_by_id(action)
+        request = self.make_request(action)
+
+        try:
+            # 1. validate
+            self.iam_client._validate_request(request)
+
+            # 2. _client.policy_query
+            policies = self.iam_client._do_policy_query(request)
+
+            logger.debug("the return policies: %s", policies)
+            result = bool(policies)
+        except AuthAPIError as e:
+            logger.exception(
+                "[IAM AuthAPI Error] Action => %s; Err => %s",
+                action.to_dict(),
+                e,
+            )
+            result = False
+
+        return result
 
     def is_allowed(
         self, action: Union[ActionMeta, str], resources: List[Resource] = None, raise_exception: bool = False
