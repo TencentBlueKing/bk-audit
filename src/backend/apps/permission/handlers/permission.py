@@ -140,12 +140,9 @@ class Permission(object):
                                         ]
                                     )
                                 )
-                            else:
-                                instances.append(
-                                    ResourceInstance(
-                                        [ResourceNode(type=r.type, id=r.id, name=r.attribute.get("name", r.id))]
-                                    )
-                                )
+                        instances.append(
+                            ResourceInstance([ResourceNode(type=r.type, id=r.id, name=r.attribute.get("name", r.id))])
+                        )
 
                     related_resources.append(
                         RelatedResourceType(
