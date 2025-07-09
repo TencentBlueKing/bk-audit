@@ -146,7 +146,10 @@ class ActionPermission(IAMPermission):
             return True
 
         client = Permission(request=request)
-        return any([client.is_allowed(action=action) for action in self.actions])
+        for action in self.actions:
+            if client.has_action_any_permission(action=action):
+                return True
+        return False
 
 
 def wrapper_permission_field(
