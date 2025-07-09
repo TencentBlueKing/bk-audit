@@ -20,6 +20,7 @@ from typing import List
 from django.conf import settings
 from django.utils.translation import gettext
 from iam import Resource
+from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
 from apps.permission.handlers.resource_types import ResourceTypeMeta
 
@@ -47,7 +48,7 @@ class Risk(ResourceTypeMeta):
         for instance_id in instance_ids:
             resource = cls.create_simple_instance(instance_id, attribute)
             instance_name = instance_id
-            strategy_id = None
+            strategy_id = 0
             risk = risk_map.get(instance_id)
             if risk:
                 instance_name = risk.risk_id
@@ -55,7 +56,7 @@ class Risk(ResourceTypeMeta):
             resource.attribute = {
                 "id": str(resource.id),
                 "name": instance_name,
-                "_bk_iam_path_": f"/{Strategy.id}/{strategy_id}/",
+                KEYWORD_BK_IAM_PATH: f"/{Strategy.id},{strategy_id}/",
             }
             resources.append([resource])
         return resources

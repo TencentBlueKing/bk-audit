@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from iam.contrib.converter.queryset import PathEqDjangoQuerySetConverter
+from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
 
 def risk_path_value_hook(value):
@@ -13,6 +14,6 @@ class RiskPathEqDjangoQuerySetConverter(PathEqDjangoQuerySetConverter):
         key_mapping = {
             "risk.id": "risk_id",
             "risk.risk_id": "risk_id",
-            "risk._bk_iam_path_": "strategy_id",
+            f"risk.{KEYWORD_BK_IAM_PATH}": "strategy_id",
         }
         super().__init__(key_mapping, {"strategy_id": risk_path_value_hook})
