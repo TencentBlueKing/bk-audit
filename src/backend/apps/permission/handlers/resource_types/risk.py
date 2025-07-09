@@ -15,12 +15,16 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import List
 
 from django.conf import settings
 from django.utils.translation import gettext
 from iam import Resource
+from iam.eval.constants import KEYWORD_BK_IAM_PATH
 
 from apps.permission.handlers.resource_types import ResourceTypeMeta
+
+from .strategy import Strategy
 
 
 class Risk(ResourceTypeMeta):
@@ -32,14 +36,27 @@ class Risk(ResourceTypeMeta):
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
+        return cls.batch_create_instance([instance_id], attribute)[0][0]
+
+    @classmethod
+    def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
         from services.web.risk.models import Risk
 
-        resource = cls.create_simple_instance(instance_id, attribute)
-
-        instance_name = str(instance_id)
-        risk = Risk.objects.filter(risk_id=instance_id).first()
-        if risk:
-            instance_name = risk.risk_id
-
-        resource.attribute = {"id": str(instance_id), "name": instance_name}
-        return resource
+        risks = Risk.objects.filter(risk_id__in=instance_ids).distinct().order_by().only("risk_id", "strategy_id")
+        risk_map = {risk.risk_id: risk for risk in risks}
+        resources = []
+        for instance_id in instance_ids:
+            resource = cls.create_simple_instance(instance_id, attribute)
+            instance_name = instance_id
+            strategy_id = 0
+            risk = risk_map.get(instance_id)
+            if risk:
+                instance_name = risk.risk_id
+                strategy_id = risk.strategy_id
+            resource.attribute = {
+                "id": str(resource.id),
+                "name": instance_name,
+                KEYWORD_BK_IAM_PATH: f"/{Strategy.id},{strategy_id}/",
+            }
+            resources.append([resource])
+        return resources
