@@ -145,7 +145,7 @@
               <audit-icon
                 class="menu-item-icon"
                 type="data-storage" />
-              {{ t('工具广场') }}
+              {{ t('工具') }}
             </audit-menu-item>
           </audit-menu-item-group>
           <audit-menu-item-group>
