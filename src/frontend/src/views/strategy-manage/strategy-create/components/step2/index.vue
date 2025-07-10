@@ -86,7 +86,13 @@
         </card-part-vue>
         <card-part-vue :title="t('事件信息')">
           <template #content>
-            <event-info-table
+            <!-- <event-info-table
+              ref="eventRef"
+              :data="editData"
+              :select="select"
+              :strategy-id="editData.strategy_id"
+              :strategy-type="strategyType" /> -->
+            <event-table
               ref="eventRef"
               :data="editData"
               :select="select"
@@ -132,7 +138,8 @@
 
   import CardPartVue from '../step1/components/card-part.vue';
 
-  import EventInfoTable from './components/event-info-table.vue';
+  // import EventInfoTable from './components/event-info-table.vue';
+  import EventTable from './components/event-table/index.vue';
   import VariableTable from './components/variable-table.vue';
 
   interface IFormData {
@@ -191,6 +198,30 @@
     ],
   };
 
+  const displayRiskTitle = computed(() => {
+    const riskTitleArr = formData.value.risk_title.match(/\{\{[^{}]*}}|./g);
+    if (!riskTitleArr) return [];
+    const resultArray = riskTitleArr.reduce<Array<{
+      value: string,
+      isVariable: boolean,
+    }>>((acc, item) => {
+      // 判断是否包含 {{}}
+      if (item.startsWith('{{') && item.endsWith('}}')) {
+        const variableParts = [
+          ...Array.from(item).map(char => ({
+            value: char,
+            isVariable: true,
+          })),
+        ];
+        return acc.concat(variableParts);
+      }
+      return acc.concat({ value: item, isVariable: false });
+    }, []);
+    return resultArray;
+  });
+
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
+
   const handlePreview = () => {
     // 预览前更新一次formData，用于查看重点信息
     const params: IFormData = Object.assign({}, formData.value, eventRef.value.getData());
@@ -208,6 +239,7 @@
     });
   };
 
+  // 下一步
   const handleNext = () => {
     Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
       const params: IFormData = _.cloneDeep(Object.assign({}, formData.value, eventRef.value.getData()));
@@ -317,30 +349,6 @@
     immediate: isEditMode || isCloneMode,
   });
 
-  const displayRiskTitle = computed(() => {
-    const riskTitleArr = formData.value.risk_title.match(/\{\{[^{}]*}}|./g);
-    if (!riskTitleArr) return [];
-    const resultArray = riskTitleArr.reduce<Array<{
-      value: string,
-      isVariable: boolean,
-    }>>((acc, item) => {
-      // 判断是否包含 {{}}
-      if (item.startsWith('{{') && item.endsWith('}}')) {
-        const variableParts = [
-          ...Array.from(item).map(char => ({
-            value: char,
-            isVariable: true,
-          })),
-        ];
-        return acc.concat(variableParts);
-      }
-      return acc.concat({ value: item, isVariable: false });
-    }, []);
-    return resultArray;
-  });
-
-  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
-
   onActivated(() => {
     window.addEventListener('click', handleClick);
   });
@@ -355,7 +363,6 @@
   onUnmounted(() => {
     window.removeEventListener('click', handleClick);
   });
-
 </script>
 <style lang="postcss" scoped>
 .create-strategy-page {
