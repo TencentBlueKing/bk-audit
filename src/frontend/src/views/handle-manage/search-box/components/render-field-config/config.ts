@@ -78,4 +78,9 @@ export default {
     valName: 'value',
     service: () => Promise.resolve(StrategyManageService.fetchStrategyCommon().then(data => data.risk_level)),
   },
+  title: {
+    label: '风险标题',
+    type: 'string',
+    required: false,
+  },
 } as Record<string, IFieldConfig>;
