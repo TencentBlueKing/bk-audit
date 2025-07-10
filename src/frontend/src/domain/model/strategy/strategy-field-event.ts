@@ -23,6 +23,17 @@ type EventItem = {
     target_value: string | undefined,
     source_field: string | undefined,
   };
+  drill_config?: {
+    tool: {
+      uid: string;
+      version: number;
+    };
+    config: Array<{
+      source_field: string;
+      target_value_type: string;
+      target_value: string;
+    }>
+  };
   prefix: string;
   example?: string
 }
@@ -46,6 +57,13 @@ export default class StrategyFieldEvent {
       map_config: {
         target_value: item.map_config?.target_value,
         source_field: item.map_config?.source_field,
+      },
+      drill_config: {
+        tool: {
+          uid: '',
+          version: 1,
+        },
+        config: [],
       },
       description: item.description,
       example: item.example,
