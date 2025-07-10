@@ -4,6 +4,8 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.request import Request
+from rest_framework.test import APIRequestFactory
 
 from api.bk_base.default import UserAuthBatchCheck
 from apps.meta.models import Tag
@@ -84,28 +86,41 @@ class ToolResourceTestCase(TestCase):
         BkVisionToolConfig.objects.create(tool=tool, panel=panel)
         return tool
 
-    def test_list_tool(self):
-        resource = ListTool()
+    def _call_resource_with_request(self, resource_cls, data):
+        factory = APIRequestFactory()
+        django_request = factory.post('/fake-url/', data, format='json')
 
-        data = {"keyword": "SQL", "limit": 10, "offset": 0}
-        result = resource(data)
+        drf_request = Request(django_request)
+
+        resource = resource_cls()
+
+        # 调用资源时传入 drf_request 作为 _request 参数
+        return resource(request_data=data, _request=drf_request)
+
+    def test_list_tool(self):
+        data = {"keyword": "SQL", "page": 1, "page_size": 10}
+        result = self._call_resource_with_request(ListTool, data)
         tool_names = [item["name"] for item in result]
         self.assertIn("SQL Tool", tool_names)
 
-        data_empty = {"keyword": "", "limit": 10, "offset": 0}
-        all_result = resource(data_empty)
+        data_empty = {"keyword": "", "page": 1, "page_size": 10}
+        all_result = self._call_resource_with_request(ListTool, data_empty)
         self.assertGreaterEqual(len(all_result), 2)
 
-        data_paged = {"keyword": "", "limit": 2, "offset": 0}
-        paged_result = resource(data_paged)
+        data_paged = {"keyword": "", "page": 1, "page_size": 2}
+        paged_result = self._call_resource_with_request(ListTool, data_paged)
         self.assertEqual(len(paged_result), 2)
 
-        tag_result = resource({"keyword": "", "limit": 10, "offset": 0, "tags": [self.tag1.tag_id]})
+        tag_result = self._call_resource_with_request(
+            ListTool, {"keyword": "", "page": 1, "page_size": 10, "tags": [self.tag1.tag_id]}
+        )
         tag_names = [item["name"] for item in tag_result]
         self.assertIn("SQL Tool", tag_names)
         self.assertNotIn("BK Vision Tool", tag_names)
 
-        tag_result_2 = resource({"keyword": "", "limit": 10, "offset": 0, "tags": [self.tag1.tag_id, self.tag2.tag_id]})
+        tag_result_2 = self._call_resource_with_request(
+            ListTool, {"keyword": "", "page": 1, "page_size": 10, "tags": [self.tag1.tag_id, self.tag2.tag_id]}
+        )
         tag_names_2 = [item["name"] for item in tag_result_2]
         self.assertIn("SQL Tool", tag_names_2)
         self.assertIn("BK Vision Tool", tag_names_2)
@@ -171,9 +186,7 @@ class ToolResourceTestCase(TestCase):
             "description": "updated desc",
             "tags": [],
         }
-
         updated_tool = resource.perform_request(data)
-
         self.assertEqual(updated_tool.name, "Updated SQL Tool")
         self.assertEqual(updated_tool.description, "updated desc")
         self.assertEqual(updated_tool.version, 1)
@@ -227,23 +240,19 @@ class ToolResourceTestCase(TestCase):
         self.assertEqual(tool.name, self.sql_tool.name)
 
     def test_list_tool_filter_only_created_by_me(self):
-        resource = ListTool()
-
         with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
             data = {
                 "keyword": "",
-                "limit": 10,
-                "offset": 0,
                 "tags": [],
                 "my_created": True,
                 "recent_used": False,
+                "page": 1,
+                "page_size": 10,
             }
-            result = resource(data)
+            result = self._call_resource_with_request(ListTool, data)
             self.assertTrue(all(tool["created_by"] == self.uid for tool in result))
 
     def test_list_tool_filter_recent_uids_flag(self):
-        resource = ListTool()
-
         recent_uids = [self.sql_tool.uid, self.bk_tool.uid]
 
         with patch(
@@ -252,14 +261,13 @@ class ToolResourceTestCase(TestCase):
         ), patch("services.web.tool.resources.get_request_username", return_value=self.uid):
             data = {
                 "keyword": "",
-                "limit": 10,
-                "offset": 0,
                 "tags": [],
                 "my_created": False,
                 "recent_used": True,
+                "page": 1,
+                "page_size": 10,
             }
-            result = resource(data)
-
+            result = self._call_resource_with_request(ListTool, data)
             result_uids = [tool["uid"] for tool in result]
             self.assertCountEqual(result_uids, recent_uids)
 
