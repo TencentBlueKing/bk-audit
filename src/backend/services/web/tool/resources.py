@@ -36,6 +36,7 @@ from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
 from core.sql.parser.praser import SqlQueryAnalysis
+from core.utils.page import paginate_queryset
 from services.web.strategy_v2.models import StrategyTool
 from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.executor.tool import ToolExecutorFactory
@@ -97,8 +98,6 @@ class ListToolTags(ToolBase):
 class ListTool(ToolBase):
     """
     keyword：模糊搜索关键词（创建人/工具名称/工具描述）
-    limit：分页大小
-    offset：分页偏移量
     tags：[xx.xx]
     my_created：是否只显示我创建的 布尔
     recent_used：是否只显示最近使用 布尔
@@ -140,12 +139,12 @@ class ListTool(ToolBase):
     RequestSerializer = ListRequestSerializer
     many_response_data = True
     ResponseSerializer = ToolListResponseSerializer
+    bind_request = True
 
     def perform_request(self, validated_request_data):
+        request = validated_request_data.pop("_request")
         tags = validated_request_data.pop("tags", [])
         keyword = validated_request_data.get("keyword", "").strip()
-        limit = validated_request_data["limit"]
-        offset = validated_request_data["offset"]
         my_created = validated_request_data["my_created"]
         recent_used = validated_request_data["recent_used"]
 
@@ -157,34 +156,31 @@ class ListTool(ToolBase):
                 return []
 
             queryset = Tool.all_latest_tools().filter(uid__in=recent_tool_uids)
-            # 保持recent_tool_uids的顺序
             queryset = custom_sort_order(queryset, "uid", recent_tool_uids)
-            tools = queryset
         else:
-            tools = Tool.all_latest_tools().order_by("-updated_at")
+            queryset = Tool.all_latest_tools().order_by("-updated_at")
             if my_created:
-                tools = tools.filter(created_by=current_user)
+                queryset = queryset.filter(created_by=current_user)
 
         if keyword:
             keyword_filter = (
                 Q(name__icontains=keyword) | Q(description__icontains=keyword) | Q(created_by__icontains=keyword)
             )
-            tools = tools.filter(keyword_filter)
+            queryset = queryset.filter(keyword_filter)
 
         if tags:
             tool_uid_list = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
-            tools = tools.filter(uid__in=tool_uid_list)
+            queryset = queryset.filter(uid__in=tool_uid_list)
 
-        paged_tools = tools[offset : offset + limit]
+        paged_tools, paginator = paginate_queryset(queryset, request)
+
         tool_uids = [t.uid for t in paged_tools]
 
-        # 查询 tags
         tool_tags = ToolTag.objects.filter(tool_uid__in=tool_uids)
         tag_map = defaultdict(list)
         for t in tool_tags:
             tag_map[t.tool_uid].append(str(t.tag_id))
 
-        # 查询关联策略
         strategy_map = defaultdict(list)
         rows = StrategyTool.objects.filter(tool_uid__in=tool_uids).values("tool_uid", "strategy_id")
         for row in rows:

@@ -154,8 +154,6 @@ class ToolRetrieveResponseSerializer(serializers.Serializer):
 
 class ListRequestSerializer(serializers.Serializer):
     keyword = serializers.CharField(required=False, allow_blank=True, label="搜索关键字")
-    limit = serializers.IntegerField(required=False, min_value=1, default=10, label="每页条数")
-    offset = serializers.IntegerField(required=False, min_value=0, default=0, label="偏移量")
     tags = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True, label="标签ID列表", default=[]
     )
