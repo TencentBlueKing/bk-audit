@@ -85,9 +85,7 @@ class EventFieldSerializer(serializers.Serializer):
     display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
     is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
     description = serializers.CharField(label=gettext_lazy("Field Description"), default="", allow_blank=True)
-    drill_config = DataSearchDrillConfig.drf_serializer(
-        label=gettext_lazy("下钻配置"), default=None, allow_null=True, many=True
-    )
+    drill_config = DataSearchDrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), default=None, allow_null=True)
 
 
 class EventBasicFieldSerializer(EventFieldSerializer):
