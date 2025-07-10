@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-21 22:10+0800\n"
+"POT-Creation-Date: 2025-07-10 17:24+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1775,10 +1775,6 @@ msgstr "构建器初始化失败: {err}"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【蓝鲸审计中心%s】"
-
 msgid "异常信息"
 msgstr "异常信息"
 
@@ -2363,12 +2359,6 @@ msgstr "条件表达式中字段 {field} 的值 {aggregation} {value} 无法转�
 msgid "数据拉取"
 msgstr "数据拉取"
 
-msgid "未实现方法"
-msgstr "未实现方法"
-
-msgid "未实现类型"
-msgstr "未实现类型"
-
 msgid "Control Name"
 msgstr "控件名称"
 
@@ -2792,6 +2782,15 @@ msgstr "JoinData 停止失败"
 msgid "CreateJoinDataStorageFailed"
 msgstr "创建 JoinData 存储失败"
 
+msgid "URL不能为空"
+msgstr "URL不能为空"
+
+msgid "URL必须使用http或https协议"
+msgstr "URL必须使用http或https协议"
+
+msgid "URL包含高危端口: {}"
+msgstr "URL包含高危端口: {}"
+
 msgid "无法获取系统ID"
 msgstr "无法获取系统ID"
 
@@ -2944,6 +2943,9 @@ msgstr "结构为空"
 
 msgid "Multi or None Raw Data Match"
 msgstr "识别到多个或零个数据源"
+
+msgid "Forbidden by security policy"
+msgstr "被安全策略拦截"
 
 msgid "BK-LOG 采集插件ID"
 msgstr "BK-LOG 采集插件ID"
@@ -4643,3 +4645,12 @@ msgstr "【审计中心】执行自动处理套餐审批"
 #, python-format
 msgid "%s 操作关单"
 msgstr "%s 操作关单"
+
+#~ msgid "【蓝鲸审计中心%s】"
+#~ msgstr "【蓝鲸审计中心%s】"
+
+#~ msgid "未实现方法"
+#~ msgstr "未实现方法"
+
+#~ msgid "未实现类型"
+#~ msgstr "未实现类型"

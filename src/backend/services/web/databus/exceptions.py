@@ -41,3 +41,9 @@ class MultiOrNoneRawDataError(DatabusException):
     STATUS_CODE = 500
     ERROR_CODE = "03"
     MESSAGE = gettext_lazy("Multi or None Raw Data Match")
+
+
+class SecurityForbiddenError(DatabusException):
+    STATUS_CODE = 500
+    ERROR_CODE = "04"
+    MESSAGE = gettext_lazy("Forbidden by security policy")

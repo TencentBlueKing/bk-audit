@@ -451,6 +451,17 @@ LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN
 # metric report
 METRIC_REPORT_TRACE_URL = os.getenv("BKAPP_METRIC_REPORT_TRACE_URL", "")
 
+# 反向拉取需要屏蔽的高危端口
+HIGH_RISK_PORTS = {
+    int(port)
+    for port in os.getenv(
+        "BKAPP_HIGH_RISK_PORTS",
+        "21,22,23,25,69,135,137,138,139,161,162,389,465,514,587,636,873,1099,2181,2375,2376,27017,3306,3389,36000,4848,50070,50075,5432,56000,5900,5901,6379,7001,7002,9200,9300,10050,10051,10250,10255,11211",  # noqa
+    ).split(
+        ","
+    )  # noqa
+}
+
 """
 以下为框架代码 请勿修改
 """

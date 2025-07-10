@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-06-21 22:10+0800\n"
+"POT-Creation-Date: 2025-07-10 17:24+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1775,11 +1775,6 @@ msgstr "Builder initialization failed: {err}"
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
 
-#, fuzzy, python-format
-#| msgid "审计中心"
-msgid "【蓝鲸审计中心%s】"
-msgstr "【蓝鲸审计中心%s】"
-
 msgid "异常信息"
 msgstr "Error Msg"
 
@@ -2364,12 +2359,6 @@ msgstr "The value {aggregation} {value} of the field {field} in the conditional 
 msgid "数据拉取"
 msgstr "Data Pull"
 
-msgid "未实现方法"
-msgstr "Method not implemented"
-
-msgid "未实现类型"
-msgstr "Type not implemented"
-
 msgid "Control Name"
 msgstr "Control Name"
 
@@ -2793,6 +2782,15 @@ msgstr "JoinDataStopFailed"
 msgid "CreateJoinDataStorageFailed"
 msgstr "CreateJoinDataStorageFailed"
 
+msgid "URL不能为空"
+msgstr "Url cannot be empty"
+
+msgid "URL必须使用http或https协议"
+msgstr "The URL must use the http or https protocol."
+
+msgid "URL包含高危端口: {}"
+msgstr "The URL contains high-risk ports: {}"
+
 msgid "无法获取系统ID"
 msgstr "Cannot get system id"
 
@@ -2945,6 +2943,9 @@ msgstr "Schema Empty"
 
 msgid "Multi or None Raw Data Match"
 msgstr "Multi or None Raw Data Match"
+
+msgid "Forbidden by security policy"
+msgstr "被安全策略拦截"
 
 msgid "BK-LOG 采集插件ID"
 msgstr "Collector Plugin ID"

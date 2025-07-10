@@ -20,6 +20,7 @@ from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.utils.logger import logger
 from django.conf import settings
+from django.utils.translation import gettext_lazy as _
 
 from apps.meta.models import ResourceType, System
 from services.web.databus.constants import (
@@ -30,6 +31,7 @@ from services.web.databus.constants import (
     JoinDataType,
     SensitivityChoice,
 )
+from services.web.databus.exceptions import SecurityForbiddenError
 from services.web.databus.models import Snapshot
 
 
@@ -59,9 +61,35 @@ class HttpPullHandler:
         result = api.bk_base.create_deploy_plan(params)
         return result["raw_data_id"]
 
+    def validate_url_security(self, url: str) -> None:
+        """
+        校验URL安全性
+        1. 检查URL是否为空
+        2. 检查URL是否以http://或https://开头
+        3. 检查URL是否包含高危端口
+        """
+        if not url:
+            raise SecurityForbiddenError(messages=_("URL不能为空"))
+
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+
+        if parsed.scheme not in ("http", "https"):
+            raise SecurityForbiddenError(message=_("URL必须使用http或https协议"))
+
+        if parsed.port and parsed.port in settings.HIGH_RISK_PORTS:
+            raise SecurityForbiddenError(message=_("URL包含高危端口: {}").format(parsed.port))
+
+    @property
+    def raw_url(self):
+        return self.resource_type.resource_request_url(system=self.system)
+
     @property
     def url(self):
-        return self.resource_type.resource_request_url(system=self.system)
+        url = self.raw_url
+        self.validate_url_security(url)
+        return url
 
     @property
     def authorization(self):

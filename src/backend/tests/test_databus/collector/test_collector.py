@@ -29,6 +29,7 @@ from services.web.databus.constants import (
     ContainerCollectorType,
     SnapshotRunningStatus,
 )
+from services.web.databus.exceptions import SecurityForbiddenError
 from services.web.databus.models import CollectorConfig, CollectorPlugin, Snapshot
 from services.web.databus.tasks import start_snapshot
 from tests.base import TestCase
@@ -289,3 +290,13 @@ class CollectorTest(TestCase):
         start_snapshot.__wrapped__.__wrapped__()
         s = Snapshot.objects.get(system_id=self.system_id, resource_type_id=RESOURCE_TYPE_ID)
         self.assertEqual(s.status, SnapshotRunningStatus.RUNNING)
+        s = System.objects.get(system_id=self.system_id)
+        s.callback_url = "ftp://example.com"
+        s.save()
+        with self.assertRaises(SecurityForbiddenError):
+            self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA, "is_enabled": True})
+        s = System.objects.get(system_id=self.system_id)
+        s.callback_url = "http://example.com:7001"
+        s.save()
+        with self.assertRaises(SecurityForbiddenError):
+            self.resource.databus.collector.toggle_join_data(**{**TOGGLE_JOIN_DATA, "is_enabled": True})
