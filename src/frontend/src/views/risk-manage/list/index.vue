@@ -131,6 +131,12 @@
       },
     },
     {
+      label: () => t('风险标题'),
+      field: () => 'title',
+      minWidth: 320,
+      render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.title} />,
+    },
+    {
       label: () => t('风险描述'),
       field: () => 'event_content',
       minWidth: 320,
