@@ -469,6 +469,8 @@ class ToggleJoinDataResource(CollectorMeta):
         system = System.objects.get(system_id=system_id)
         resource_type = ResourceType.objects.get(system_id=system_id, resource_type_id=resource_type_id)
         pull_handler = HttpPullHandler(system, resource_type, Snapshot(), join_data_type)
+        # 触发url校验
+        _ = pull_handler.url
         web = requests.session()
         try:
             resp = web.post(
