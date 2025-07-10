@@ -42,6 +42,7 @@
     useI18n,
   } from 'vue-i18n';
   import {
+    onBeforeRouteLeave,
     useRouter,
   } from 'vue-router';
 
@@ -468,6 +469,19 @@
   };
   onUnmounted(() => {
     clearTimeout(timeout);
+  });
+
+  onBeforeRouteLeave((to, from, next) => {
+    if (to.name === 'handleManageDetail') {
+      const params = getSearchParams();
+      // 保存当前查询参数到目标路由的 query 中
+      // eslint-disable-next-line no-param-reassign
+      to.query = {
+        ...to.query,
+        ...params,
+      };
+    }
+    next();
   });
 </script>
 <style lang='postcss'>
