@@ -195,20 +195,22 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
 
         for field_source, config_key in field_config_map:
             for field_cfg in validated_request_data.get(config_key):
-                drill_configs_raw = field_cfg.get("drill_config")
-                drill_configs = [DataSearchDrillConfig.model_validate(dc) for dc in drill_configs_raw]
+                drill_config_raw = field_cfg.get("drill_config")
+                if not drill_config_raw:
+                    continue
 
-                for drill in drill_configs:
-                    tool = drill.tool
-                    tools_to_create.append(
-                        StrategyTool(
-                            strategy=strategy,
-                            field_name=field_cfg.get("field_name"),
-                            tool_uid=tool.uid,
-                            tool_version=tool.version,
-                            field_source=field_source,
-                        )
+                drill = DataSearchDrillConfig.model_validate(drill_config_raw)
+
+                tool = drill.tool
+                tools_to_create.append(
+                    StrategyTool(
+                        strategy=strategy,
+                        field_name=field_cfg.get("field_name"),
+                        tool_uid=tool.uid,
+                        tool_version=tool.version,
+                        field_source=field_source,
                     )
+                )
 
         if tools_to_create:
             StrategyTool.objects.bulk_create(tools_to_create)
