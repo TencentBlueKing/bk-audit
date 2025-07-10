@@ -16,19 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from typing import List, Tuple
+import os
 
-from django.db.models import QuerySet
-from rest_framework.pagination import PageNumberPagination
-from rest_framework.request import Request
-from rest_framework.settings import api_settings
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
+
+from core.utils.distutils import strtobool
 
 
-def paginate_queryset(queryset: QuerySet, request: Request) -> Tuple[List, PageNumberPagination]:
-    """
-    分页 QuerySet
-    """
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
 
-    page: PageNumberPagination = api_settings.DEFAULT_PAGINATION_CLASS()
-    paged_queryset = page.paginate_queryset(queryset=queryset, request=request)
-    return paged_queryset, page
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
+
+
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0008_update_action_resource_type"),
+    ]
+
+    operations = [migrations.RunPython(forward_func)]

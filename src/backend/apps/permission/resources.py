@@ -109,13 +109,8 @@ class BatchIsAllowedResource(IAM):
         # 审计中心
         if auth_info.system_id == settings.BK_IAM_SYSTEM_ID:
             # 生成资源实例信息
-            resources = []
-            instance_ids = {}
-            for instance in auth_info.instances:
-                if instance.id in instance_ids:
-                    continue
-                resources.append([auth_info.resource_type_meta.create_simple_instance(instance_id=instance.id)])
-                instance_ids[instance.id] = True
+            instance_ids = list({instance.id for instance in auth_info.instances})
+            resources = auth_info.resource_type_meta.batch_create_instance(instance_ids)
             return Permission().batch_is_allowed(auth_info.actions, resources)
 
         # 日志平台
