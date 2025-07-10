@@ -27,11 +27,12 @@
       multiple
       multiple-mode="tag"
       :placeholder="`请选择${config.label}`"
+      :remote-method="handleSearch"
       :search-placeholder="t('请输入关键字')"
       @change="handleChange">
       <bk-option
         v-for="item in filterList"
-        :key="item.id"
+        :key="config.valName ? item[config.valName] : item.id"
         :label="item[config.labelName ? config.labelName : 'name']"
         :value="item[config.valName ? config.valName : 'id']" />
       <template
@@ -103,11 +104,13 @@
     }
     return list.value;
   });
+
   const {
     modelValue,
     selectedAll,
     handleChange,
   } = useMultiCommon(props, t('全部'));
+
   if (props.config.service)   {
     loading.value = true;
     useRequest(props.config.service, {
@@ -119,6 +122,19 @@
       },
     });
   }
+
+  const handleSearch = (keyword: string) => {
+    // 既可以通过labelName来搜索，也可以通过valName来搜索
+    const filtered = list.value.filter((item) => {
+      const labelName = props.config.labelName ? props.config.labelName : 'name';
+      const valName = props.config.valName ? props.config.valName : 'id';
+      if (item[labelName].includes(keyword) || String(item[valName]).includes(keyword)) {
+        return true;
+      }
+      return false;
+    });
+    list.value = [...filtered]; // 创建新数组引用
+  };
 
   const handleSubmit = () => {
     emits('submit');
