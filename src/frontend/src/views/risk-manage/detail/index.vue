@@ -157,10 +157,13 @@
   }));
 
   useRouterBack(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { tab, ...rest } = route.query;
     router.push({
       name: route.name === 'riskManageDetail'
         ? 'riskManageList'
         : 'handleManageList',
+      query: rest,
     });
   });
 
