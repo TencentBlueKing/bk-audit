@@ -53,6 +53,7 @@ export default class toolInfo {
   permission: {
     use_tool: boolean;
   };
+  strategies: Array<string>;
   tags: Array<string>;
   created_by: string;
   created_at: string;
@@ -69,5 +70,6 @@ export default class toolInfo {
     this.tags = payload.tags;
     this.created_by = payload.created_by;
     this.created_at = payload.created_at;
+    this.strategies = payload.strategies;
   }
 }
