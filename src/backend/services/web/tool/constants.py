@@ -22,7 +22,6 @@ from django.utils.translation import gettext_lazy
 from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
 
-from api.bk_base.constants import StorageType
 from core.choices import TextChoices, register_choices
 
 
@@ -139,7 +138,6 @@ class SQLDataSearchConfig(BaseModel):
     referenced_tables: List[Table]  # RT表
     input_variable: List[SQLDataSearchInputVariable]  # 输入变量
     output_fields: List[SQLDataSearchOutputField]  # 输出字段
-    prefer_storage: StorageType = PydanticField(default=StorageType.DORIS.value)
 
 
 class BkvisionConfig(BaseModel):

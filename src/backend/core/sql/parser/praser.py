@@ -60,10 +60,15 @@ class SqlQueryAnalysis:
         # 1. 提取引用的表 (Extract referenced tables)
         cte_names = {cte.alias_or_name for cte in self._parsed_expression.find_all(exp.CTE)}
         for table_exp in self._parsed_expression.find_all(exp.Table):
-            table_name = table_exp.name
+            if table_exp.db:
+                table_name = table_exp.db
+                storage = table_exp.name
+            else:
+                table_name = table_exp.name
+                storage = None
             if table_name in cte_names:
                 continue
-            self.referenced_tables.append(Table(table_name=table_name))
+            self.referenced_tables.append(Table(table_name=table_name, storage=storage))
 
         # 2. 提取SQL命名变量 (Extract SQL named variables)
         extracted_var_raw_names: Set[str] = set()
@@ -192,15 +197,3 @@ class SqlQueryAnalysis:
             sql_variables=self.sql_variables,
             result_fields=self.result_fields,
         )
-
-    def regenerate_sql_from_ast(self, dialect: Optional[str] = None) -> Optional[str]:
-        """
-        从内部存储的AST重新生成SQL语句。主要用于测试或规范化SQL。
-        确保在调用此方法前已调用 parse_sql。
-        """
-        if self._parsed_expression:
-            return self._parsed_expression.sql(dialect=dialect or self.dialect)
-        if self.original_sql and self.original_sql.strip():
-            temp_expr = sqlglot.parse_one(self.original_sql, read=self.dialect)
-            return temp_expr.sql(dialect=dialect or self.dialect)
-        return None
