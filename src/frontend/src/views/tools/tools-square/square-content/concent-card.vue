@@ -38,133 +38,149 @@
       :z-index="10000">
       <div
         v-if="dataList.length > 0"
-        class="card-list">
+        ref="cardListRef"
+        class="card-list"
+        @scroll="handleScroll">
+        <div class="card-list-box">
+          <div
+            v-for="(item, index) in dataList"
+            :key="index"
+            class="card-list-item"
+            @click="handleClick(item)"
+            @mouseenter="handleMouseenter(item)"
+            @mouseleave="handleMouseleave()">
+            <div
+              v-show="itemMouseenter === item.uid"
+              class="item-top-right-icon">
+              <audit-icon
+                class="edit-fill"
+                type="edit-fill"
+                @click.stop="handleEdit(item)" />
+
+              <bk-popover
+                :ref="(el: any) => popoverRefs.set(item.uid, el)"
+                placement="bottom"
+                theme="light"
+                trigger="click">
+                <template #content>
+                  <div class="delete-title">
+                    {{ t('确认删除该工具？') }}
+                  </div>
+                  <div class="delete-text">
+                    {{ t('删除操作无法撤回，请谨慎操作！') }}
+                  </div>
+
+                  <div class="delete-btn">
+                    <bk-button
+                      size="small"
+                      theme="primary"
+                      @click="handleDeleteItem(item)">
+                      {{ t('确定') }}
+                    </bk-button>
+                    <bk-button
+                      class="ml8"
+                      size="small"
+                      @click="handleCancel(item.uid)">
+                      {{ t('取消') }}
+                    </bk-button>
+                  </div>
+                </template>
+                <audit-icon
+                  class="delete"
+                  type="delete"
+                  @click.stop="handleDelete(item)" />
+              </bk-popover>
+            </div>
+
+            <div class="item-top">
+              <div class="item-top-left">
+                <audit-icon
+                  class="top-left-icon"
+                  svg
+                  :type="itemIcon(item)" />
+              </div>
+              <div class="item-top-right">
+                <div class="top-right-title">
+                  <span
+                    v-bk-tooltips="{
+                      disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
+                      content: t(item.name),
+                      placement: 'top',
+                      delay: [300, 0],
+                      extCls: 'name-tooltip'
+                    }"
+                    class="title-text"
+                    :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
+                    {{ item.name }}
+                  </span>
+                  <bk-tag
+                    v-if="!item.permission.use_tool"
+                    v-bk-tooltips="{ content: t('申请权限可用') }"
+                    class="title-tag"
+                    size="small"
+                    theme="warning"
+                    type="filled">
+                    {{ t('申请可使用') }}
+                  </bk-tag>
+                </div>
+                <div class="top-right-desc">
+                  <bk-tag
+                    v-for="(tag, tagIndex) in item.tags.slice(0, 3)"
+                    :key="tagIndex"
+                    class="desc-tag"
+                    size="small">
+                    {{ returnTagsName(tag) }}
+                  </bk-tag>
+                  <bk-tag
+                    v-if="item.tags.length > 3"
+                    class="desc-tag"
+                    size="small">
+                    + {{ item.tags.length - 3
+                    }}
+                  </bk-tag>
+                  <bk-tag
+                    class="desc-tag"
+                    size="small"
+                    theme="info">
+                    运用在 {{ item.strategies.length }} 个策略中
+                  </bk-tag>
+                </div>
+              </div>
+            </div>
+            <div
+              v-bk-tooltips="{
+                disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
+                content: middleTtooltips(item.description),
+                width: '200px',
+                allowHTML: true,
+                extCls: 'tooltip-custom'
+              }"
+              class="item-middle">
+              {{ item.description }}
+            </div>
+            <div class="item-footer">
+              <span>{{ item.created_by }}</span>
+              <span>{{ formatDate(item.created_at) }}</span>
+            </div>
+            <component
+              :is="DialogVue"
+              :ref="(el) => dialogRefs[item.uid] = el"
+              :dialog-cls="`dialogCls${item.uid}`"
+              :tags-enums="tagsEnums"
+              @open-field-down="openFieldDown" />
+          </div>
+        </div>
         <div
-          v-for="(item, index) in dataList"
-          :key="index"
-          class="card-list-item"
-          @click="handleClick(item)"
-          @mouseenter="handleMouseenter(item)"
-          @mouseleave="handleMouseleave()">
-          <div
-            v-show="itemMouseenter === item.uid"
-            class="item-top-right-icon">
-            <audit-icon
-              class="edit-fill"
-              type="edit-fill"
-              @click.stop="handleEdit(item)" />
-
-            <bk-popover
-              :ref="(el: any) => popoverRefs.set(item.uid, el)"
-              placement="bottom"
-              theme="light"
-              trigger="click">
-              <template #content>
-                <div class="delete-title">
-                  {{ t('确认删除该工具？') }}
-                </div>
-                <div class="delete-text">
-                  {{ t('删除操作无法撤回，请谨慎操作！') }}
-                </div>
-
-                <div class="delete-btn">
-                  <bk-button
-                    size="small"
-                    theme="primary"
-                    @click="handleDeleteItem(item)">
-                    {{ t('确定') }}
-                  </bk-button>
-                  <bk-button
-                    class="ml8"
-                    size="small"
-                    @click="handleCancel(item.uid)">
-                    {{ t('取消') }}
-                  </bk-button>
-                </div>
-              </template>
-              <audit-icon
-                class="delete"
-                type="delete"
-                @click.stop="handleDelete(item)" />
-            </bk-popover>
-          </div>
-
-          <div class="item-top">
-            <div class="item-top-left">
-              <audit-icon
-                class="top-left-icon"
-                svg
-                :type="itemIcon(item)" />
-            </div>
-            <div class="item-top-right">
-              <div class="top-right-title">
-                <span
-                  v-bk-tooltips="{
-                    disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
-                    content: t(item.name),
-                    placement: 'top',
-                    delay: [300, 0],
-                    extCls: 'name-tooltip'
-                  }"
-                  class="title-text"
-                  :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
-                  {{ item.name }}
-                </span>
-                <bk-tag
-                  v-if="!item.permission.use_tool"
-                  v-bk-tooltips="{ content: t('申请权限可用') }"
-                  class="title-tag"
-                  size="small"
-                  theme="warning"
-                  type="filled">
-                  {{ t('申请可使用') }}
-                </bk-tag>
-              </div>
-              <div class="top-right-desc">
-                <bk-tag
-                  v-for="(tag, tagIndex) in item.tags.slice(0, 3)"
-                  :key="tagIndex"
-                  class="desc-tag"
-                  size="small">
-                  {{ returnTagsName(tag) }}
-                </bk-tag>
-                <bk-tag
-                  v-if=" item.tags.length > 3"
-                  class="desc-tag"
-                  size="small">
-                  + {{ item.tags.length - 3
-                  }}
-                </bk-tag>
-                <bk-tag
-                  class="desc-tag"
-                  size="small"
-                  theme="info">
-                  运用在 {{ item.tags.length }} 个策略中
-                </bk-tag>
-              </div>
-            </div>
-          </div>
-          <div
-            v-bk-tooltips="{
-              disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
-              content: middleTtooltips(item.description),
-              width: '200px',
-              allowHTML: true,
-              extCls: 'tooltip-custom'
-            }"
-            class="item-middle">
-            {{ item.description }}
-          </div>
-          <div class="item-footer">
-            <span>{{ item.created_by }}</span>
-            <span>{{ formatDate(item.created_at) }}</span>
-          </div>
-          <component
-            :is="DialogVue"
-            :ref="(el) => dialogRefs[item.uid] = el"
-            :dialog-cls="`dialogCls${item.uid}`"
-            :tags-enums="tagsEnums"
-            @open-field-down="openFieldDown" />
+          v-show="hasMore"
+          class="has-more">
+          <bk-loading
+            :loading="hasMore"
+            mode="spin"
+            size="mini"
+            theme="primary" />
+          <span class="more-text">
+            {{ t('加载中...') }}
+          </span>
         </div>
       </div>
 
@@ -183,7 +199,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { onMounted, ref, watch } from 'vue';
+  import { nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -222,8 +238,12 @@
   const dialogRefs = ref<Record<string, any>>({});
   const dataList = ref<toolInfo[]>([]);
   const popoverRefs = ref<Map<string, any>>(new Map());
-
-  // 工签列表
+  const currentPage = ref(1);
+  const currentPagSize = ref(100);
+  const hasMore = ref(false);
+  const cardListRef = ref<HTMLElement | null>(null);
+  const total = ref(0);
+  // 工具列表
   const {
     run: fetchToolsList,
     loading,
@@ -231,6 +251,7 @@
     defaultValue: {} as IRequestResponsePaginationData<toolInfo>,
     onSuccess: (data) => {
       dataList.value = data.results;
+      total.value = data.total;
     },
   });
   // 删除
@@ -247,7 +268,7 @@
     let tagName = '';
     props.tagsEnums.forEach((item: TagItem) => {
       if (item.tag_id === tags) {
-        tagName =  item.tag_name;
+        tagName = item.tag_name;
       }
     });
     return tagName;
@@ -259,8 +280,10 @@
     }).then(() => {
       handleCancel(item.uid);
       fetchToolsList({
-        page: 1,
-        page_size: 10,
+        page: currentPage.value,
+        page_size: currentPagSize.value,
+        offset: currentPage.value,
+        limit: currentPagSize.value,
         my_created: props.myCreated,
         recent_used: props.recentUsed,
 
@@ -372,32 +395,67 @@
   };
   const handleClick = async (item: toolInfo) => {
     if (dialogRefs.value[item.uid]) {
-      dialogRefs.value[item.uid].openDialog(item);
+      dialogRefs.value[item.uid].openDialog(item, false, {});
     }
   };
 
   const handleSearch = () => {
     fetchToolsList({
-      page: 1,
-      page_size: 10,
+      page: currentPage.value,
+      page_size: currentPagSize.value,
+      offset: currentPage.value,
+      limit: currentPagSize.value,
       keyword: searchValue.value,
       my_created: props.myCreated,
       recent_used: props.recentUsed,
-
       tags: props.tags.map((item: TagItem) => item.tag_id) || [],
     });
   };
   // 下转打开
-  const openFieldDown = (val: string) => {
-    const item = dataList.value.find((item: toolInfo) => item.uid === val);
-    if (dialogRefs.value[val]) {
-      dialogRefs.value[val].openDialog(item);
+  const openFieldDown = (val: any, isDrillDown: boolean) => {
+    const { uid } = val.drill_config.tool;
+    const item = dataList.value.find((item: toolInfo) => item.uid === uid);
+    if (dialogRefs.value[uid]) {
+      dialogRefs.value[uid].openDialog(item, isDrillDown, val);
     }
   };
+  // 滚动处理函数
+  const handleScroll = () => {
+    if (total.value <= dataList.value.length) {
+      hasMore.value = false;
+      return;
+    }
+    if (cardListRef.value) {
+      hasMore.value = true;
+      const { scrollTop, scrollHeight, clientHeight } = cardListRef.value;
+      // 当滚动到底部时加载更多
+      // 判断是否向下滚动
+      // 当向下滚动到底部时加载更多
+      if (scrollTop + clientHeight >= scrollHeight - 100) {
+        currentPage.value += 1;
+        currentPagSize.value += 100;
+        fetchToolsList({
+          page: currentPage.value,
+          page_size: currentPagSize.value,
+          offset: currentPage.value,
+          limit: currentPagSize.value,
+          keyword: searchValue.value,
+          my_created: props.myCreated,
+          recent_used: props.recentUsed,
+          tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+        }).finally(() => {
+          hasMore.value = false;
+        });
+      }
+    }
+  };
+
   watch(() => props, (newTags) => {
     fetchToolsList({
-      page: 1,
-      page_size: 10,
+      page: currentPage.value,
+      page_size: currentPagSize.value,
+      offset: currentPage.value,
+      limit: currentPagSize.value,
       keyword: searchValue.value,
       my_created: props.myCreated,
       recent_used: props.recentUsed,
@@ -406,15 +464,15 @@
     });
   }, {
     deep: true,
+    immediate: false,
   });
 
   onMounted(() => {
-    fetchToolsList({
-      page: 1,
-      page_size: 10,
-      keyword: searchValue.value,
-      my_created: props.myCreated,
-      recent_used: props.recentUsed,
+    // 添加滚动监听
+    nextTick(() => {
+      if (cardListRef.value) {
+        cardListRef.value.addEventListener('scroll', handleScroll);
+      }
     });
   });
 
@@ -439,147 +497,182 @@
 
   .card-list {
     position: relative;
-    display: grid;
     width: 100%;
+    max-height: calc(100vh - 300px);
+
+    /* 改用最大高度 */
+    padding: 10px 0;
     margin-top: 10px;
-    overflow-x: auto;
-    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 10px;
 
-    .card-list-item {
-      position: relative;
-      height: 188px;
-      min-width: 400px;
-      cursor: pointer;
-      background: #fff;
-      box-shadow: 0 2px 4px 0 #1919290d;
-      transition: all .3s ease;
+    /* 上下内边距 */
+    overflow-y: auto;
+    align-content: flex-start;
 
-      &:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px 0 rgb(0 0 0 / 10%), 0 6px 12px 0 rgb(25 25 41 / 10%);
-      }
+    /* 顶部对齐 */
+    .card-list-box {
+      display: flex;
+      flex-wrap: wrap;
 
-      @media (width <=1600px) {
-        min-width: 400px;
-      }
+      .card-list-item {
+        position: relative;
+        width: 400px;
+        height: 188px;
+        margin-top: 10px;
+        margin-bottom: 0;
+        margin-left: 10px;
+        cursor: pointer;
+        background: #fff;
+        box-shadow: 0 2px 4px 0 #1919290d;
+        transition: all .3s ease;
 
-      @media (width <=1366px) {
-        min-width: calc((100% - 20px) / 2);
-      }
-
-      .item-top {
-        display: flex;
-        height: 85px;
-
-        .item-top-left {
-          .top-left-icon {
-            margin-top: 20px;
-            margin-left: 20px;
-            font-size: 48px;
-          }
+        &:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px 0 rgb(0 0 0 / 10%), 0 6px 12px 0 rgb(25 25 41 / 10%);
         }
 
-        .item-top-right {
-          width: 330px;
-          height: 48px;
-          margin-top: 20px;
-          margin-left: 12px;
+        @media (width <=2200px) {
+          width: 32%;
+        }
 
-          .top-right-title {
-            display: flex;
-            align-items: flex-start;
+        @media (width <=2000px) {
+          width: 32%;
+        }
 
-            .title-text {
-              display: inline-block;
-              max-width: 200px;
-              margin-right: 10px;
-              overflow: hidden;
-              font-size: 16px;
-              font-weight: 700;
-              line-height: 22px;
-              letter-spacing: 0;
-              color: #313238;
-              text-overflow: ellipsis;
-              white-space: nowrap;
-              vertical-align: middle;
+        @media (width <=1600px) {
+          min-width: 400px;
+        }
 
-              &.overflow-tooltip {
+        @media (width <=1366px) {
+          min-width: calc((100% - 20px) / 2);
+        }
+
+        .item-top {
+          display: flex;
+          height: 85px;
+
+          .item-top-left {
+            .top-left-icon {
+              margin-top: 20px;
+              margin-left: 20px;
+              font-size: 48px;
+            }
+          }
+
+          .item-top-right {
+            width: 330px;
+            height: 48px;
+            margin-top: 20px;
+            margin-left: 12px;
+
+            .top-right-title {
+              display: flex;
+              align-items: flex-start;
+
+              .title-text {
+                display: inline-block;
+                max-width: 200px;
+                margin-right: 10px;
+                overflow: hidden;
+                font-size: 16px;
+                font-weight: 700;
+                line-height: 22px;
+                letter-spacing: 0;
+                color: #313238;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                vertical-align: middle;
+
+                &.overflow-tooltip {
+                  cursor: pointer;
+                }
+              }
+
+              .title-tag {
+                margin-top: 0;
+                line-height: 22px;
                 cursor: pointer;
               }
             }
 
-            .title-tag {
-              margin-top: 0;
-              line-height: 22px;
-              cursor: pointer;
-            }
-          }
-
-          .top-right-desc {
-            .desc-tag {
-              margin-right: 5px;
+            .top-right-desc {
+              .desc-tag {
+                margin-right: 5px;
+              }
             }
           }
         }
-      }
 
-      .item-middle {
-        display: -webkit-box;
-        width: calc(100% - 40px);
-        height: 44px;
-        margin-left: 20px;
-        overflow: hidden;
-        font-size: 14px;
-        line-height: 22px;
-        letter-spacing: 0;
-        color: #313238;
-        text-align: justify;
-        text-overflow: ellipsis;
-        word-break: break-word;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-      }
+        .item-middle {
+          display: -webkit-box;
+          width: calc(100% - 40px);
+          height: 44px;
+          margin-left: 20px;
+          overflow: hidden;
+          font-size: 14px;
+          line-height: 22px;
+          letter-spacing: 0;
+          color: #313238;
+          text-align: justify;
+          text-overflow: ellipsis;
+          word-break: break-word;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+        }
 
-      .item-footer {
-        display: flex;
-        width: calc(100% - 40px);
-        margin-top: 20px;
-        margin-left: 20px;
-        font-size: 14px;
-        line-height: 22px;
-        letter-spacing: 0;
-        color: #979ba5;
-        align-items: center;
-        justify-content: space-between
-      }
+        .item-footer {
+          display: flex;
+          width: calc(100% - 40px);
+          margin-top: 20px;
+          margin-left: 20px;
+          font-size: 14px;
+          line-height: 22px;
+          letter-spacing: 0;
+          color: #979ba5;
+          align-items: center;
+          justify-content: space-between
+        }
 
-      .item-top-right-icon {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        font-size: 16px;
-        line-height: 22px;
-        letter-spacing: 0;
-        color: #979ba5;
+        .item-top-right-icon {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          font-size: 16px;
+          line-height: 22px;
+          letter-spacing: 0;
+          color: #979ba5;
 
-        .edit-fill {
-          margin-right: 5px;
+          .edit-fill {
+            margin-right: 5px;
 
-          &:hover {
-            color: #3a84ff;
+            &:hover {
+              color: #3a84ff;
+            }
+          }
+
+          .delete {
+            &:hover {
+              color: #3a84ff;
+            }
           }
         }
 
-        .delete {
-          &:hover {
-            color: #3a84ff;
-          }
-        }
       }
 
     }
 
+    .has-more {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 5px;
+      font-size: 14px;
+      color: #979ba5;
+
+      .more-text {
+        margin-left: 5px;
+        color: #3a84ff;
+      }
+    }
   }
 
   .card-emptyt {
@@ -603,6 +696,7 @@
       transform: translate(-50%, -45%);
     }
   }
+
 }
 
 .delete-title {
