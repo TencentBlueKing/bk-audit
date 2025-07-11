@@ -90,7 +90,6 @@
   // 获取标签枚举
   const handleTagsEnums = (tags: Array<TagItem>) => {
     tagsEnums.value = tags;
-    console.log(tagsEnums.value, 'tagsEnums');
   };
   // 清除已选
   const handleClear = () => {
