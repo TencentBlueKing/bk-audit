@@ -108,6 +108,9 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
       case 403:
         handlePermission(error);
         break;
+      case 409:
+        messageError(error.response.data.message);
+        break;
       case 'CANCEL':
         break;
         // 网络超时
@@ -117,6 +120,8 @@ export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
       default:
         if (error.response.data.code === '9900403') {
           handlePermission(error);
+        } else if (error.response.data.code === '2905003') {
+          console.log('error', error);
         } else {
           messageError(`${error.message} (${error.response.data.trace_id})`);
         }
