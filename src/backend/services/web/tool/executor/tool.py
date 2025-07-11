@@ -160,11 +160,9 @@ class SqlDataSearchExecutor(
         bulk_req_params = [
             {
                 "sql": executable_sql,
-                "prefer_storage": self.config.prefer_storage,
             },
             {
                 "sql": count_sql,
-                "prefer_storage": self.config.prefer_storage,
             },
         ]
         # 请求 BKBASE

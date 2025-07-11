@@ -38,6 +38,7 @@ class Table(DRFBaseModel):
 
     table_name: str  # 表名
     alias: Optional[str] = None  # 别名
+    storage: Optional[str] = None  # 存储
 
 
 class BaseField(BaseModel):

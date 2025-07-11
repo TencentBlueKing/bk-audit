@@ -87,10 +87,10 @@ class TestSqlQueryAnalysis(TestCase):
         """测试从AST重新生成SQL"""
         sql = "SELECT id, name FROM users"
         analyzer = SqlQueryAnalysis(sql)
-        analyzer.parse_sql()
+        def_ = analyzer.get_parsed_def()
 
-        regenerated = analyzer.regenerate_sql_from_ast()
-        assert "SELECT id, name FROM users" in regenerated
+        regenerated = analyzer.generate_sql_with_values({}, def_.original_sql)
+        assert "SELECT id, name FROM users" in regenerated["data"]
 
     def test_external_template_generation(self):
         """测试使用外部模板生成SQL"""
@@ -130,3 +130,28 @@ class TestSqlQueryAnalysis(TestCase):
         assert isinstance(generated, dict)
         assert generated["data"].endswith("LIMIT 10 OFFSET 5")
         assert "COUNT(*)" in generated["count"]
+
+    def test_regenerate_sql_with_storage(self):
+        """测试带存储标识的表名重新生成"""
+        sql = "SELECT id, name FROM users.hdfs"
+        analyzer = SqlQueryAnalysis(sql)
+        def_ = analyzer.get_parsed_def()
+
+        regenerated = analyzer.generate_sql_with_values({}, def_.original_sql)
+        assert "SELECT id, name FROM users.hdfs" in regenerated["data"]
+
+    def test_parse_and_regenerate_with_storage(self):
+        """测试带存储标识的表名完整解析和重新生成流程"""
+        sql = "SELECT id, name FROM users.hdfs WHERE age > 18"
+        analyzer = SqlQueryAnalysis(sql)
+        analyzer.parse_sql()
+
+        # 验证解析结果
+        result = analyzer.get_parsed_def()
+        assert len(result.referenced_tables) == 1
+        assert result.referenced_tables[0].table_name == "users"
+        assert result.referenced_tables[0].storage == "hdfs"
+
+        # 验证重新生成
+        regenerated = analyzer.generate_sql_with_values({}, result.original_sql)
+        assert "SELECT id, name FROM users.hdfs WHERE age > 18" in regenerated["data"]
