@@ -35,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
 
   import MetaManageService from '@service/meta-manage';
 
@@ -62,7 +62,7 @@
   interface Exposes {
     resetValue: () => void,
   }
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const inputData = ref();
   const numberInputData = ref();
@@ -80,6 +80,7 @@
       },
     },
   );
+
   const handleNumberInputDataChange = (value: any) => {
     numberInputData.value = value;
     emits('change', value);
@@ -100,6 +101,29 @@
     pickerValue.value = value;
     emits('change', value);
   };
+
+  // 优化为switch语句，提高代码可读性和执行效率
+  watch(() => props.dataConfig, () => {
+    switch (props.dataConfig.field_category) {
+    case 'input':
+      handleInputDataChange(props.dataConfig.value);
+      break;
+    case 'number_input':
+      handleNumberInputDataChange(props.dataConfig.value);
+      break;
+    case 'person_select':
+      handleUserChange(props.dataConfig.value);
+      break;
+    case 'time_range_select':
+      handleRangeChange(props.dataConfig.value);
+      break;
+    case 'time_select':
+      handleChange(props.dataConfig.value);
+      break;
+    }
+  }, {
+    deep: true,
+  });
 
   onMounted(() => {
     fetchGlobalChoices();
