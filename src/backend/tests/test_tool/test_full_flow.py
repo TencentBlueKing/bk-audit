@@ -1,7 +1,11 @@
 from unittest import mock
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
-from services.web.tool.constants import DataSearchConfigTypeEnum, ToolTypeEnum
+from services.web.tool.constants import (
+    DataSearchConfigTypeEnum,
+    FieldCategory,
+    ToolTypeEnum,
+)
 from services.web.tool.models import Tool
 from tests.test_tool.constants import MOCK_API_RESPONSE
 
@@ -21,7 +25,7 @@ class TestToolFullFlow(TestCase):
                     "display_name": v.get("display_name") or v["raw_name"],
                     "description": v.get("description") or "",
                     "required": v.get("required", True),
-                    "field_category": "input",
+                    "field_category": FieldCategory.INPUT.value,
                     "choices": [],
                 }
                 for v in resp["sql_variables"]
