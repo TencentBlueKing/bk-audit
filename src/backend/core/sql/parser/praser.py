@@ -118,6 +118,8 @@ class SqlQueryAnalysis:
             return exp.Literal.number(int(value))
         if isinstance(value, numbers.Real):
             return exp.Literal.number(float(value))
+        if isinstance(value, list):
+            return exp.Tuple(expressions=[self._create_sqlglot_literal(item) for item in value])
         if value is None:
             return exp.Null()
         raise TypeError(f"不支持将 Python 类型 '{type(value).__name__}' 自动转换为 SQL 字面量。值为: {value!r}")
