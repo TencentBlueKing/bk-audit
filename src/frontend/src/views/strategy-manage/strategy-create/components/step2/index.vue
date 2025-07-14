@@ -97,6 +97,7 @@
               :data="editData"
               :select="select"
               :strategy-id="editData.strategy_id"
+              :strategy-name="strategyName"
               :strategy-type="strategyType" />
           </template>
         </card-part-vue>
@@ -157,7 +158,8 @@
   interface Props {
     editData: StrategyModel,
     select: Array<DatabaseTableFieldModel>,
-    strategyType: string
+    strategyType: string,
+    strategyName: string
   }
 
   const props = defineProps<Props>();
