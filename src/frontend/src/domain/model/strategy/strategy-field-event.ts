@@ -60,10 +60,10 @@ export default class StrategyFieldEvent {
       },
       drill_config: {
         tool: {
-          uid: '',
-          version: 1,
+          uid: item.drill_config?.tool?.uid || '',
+          version: item.drill_config?.tool?.version || 1,
         },
-        config: [],
+        config: item.drill_config?.config || [],
       },
       description: item.description,
       example: item.example,

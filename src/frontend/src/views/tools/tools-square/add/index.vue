@@ -639,12 +639,14 @@
           res.push({
             tag_id: item.tag_id,
             tag_name: item.tag_name,
+            tool_count: item.tool_count,
           });
         }
         return res;
       }, [] as Array<{
         tag_id: string;
         tag_name: string
+        tool_count: number
       }>);
       data.forEach((item) => {
         strategyTagMap.value[item.tag_id] = item.tag_name;

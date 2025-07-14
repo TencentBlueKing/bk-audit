@@ -18,7 +18,24 @@ import ToolManageSources from '../source/tool-manage';
 
 export default  {
   /**
-   * @desc 版本列表
+   * @desc 工具列表
+   * @param { Object } params
+   */
+  fetchToolsList(params: {
+      offset?: number
+      limit?: number
+      keyword?: string,
+      page: number,
+      page_size: number
+      tags?: string[],
+    }) {
+    return ToolManageSources.getToolsList(params).then(({ data }) =>  ({
+      ...data,
+      results: data.results,
+    }));
+  },
+  /**
+   * @desc tag列表
    */
   fetchToolTags() {
     return ToolManageSources.getToolTags()
@@ -41,9 +58,9 @@ export default  {
       .then(({ data }) => data);
   },
   /**
-     * @desc 工具详情
-     * @param { Object } params
-     */
+   * @desc 工具详情
+   * @param { Object } params
+   */
   fetchToolsDetail(params: {
       uid: string,
     }) {
@@ -63,5 +80,28 @@ export default  {
   fetchAllTools() {
     return ToolManageSources.getAllTools()
       .then(({ data }) => data);
+  },
+  /**
+     * @desc 工具执行
+     * @param { Object } params
+     */
+  fetchToolsExecute(params: {
+      uid: string,
+      params: Record<string, any>,
+    }) {
+    return ToolManageSources.getToolsExecute(params).then(({ data }) =>  ({
+      ...data,
+    }));
+  },
+  /**
+     * @desc 工具删除
+     * @param { Object } params
+     */
+  fetchDeleteTool(params: {
+      uid: string,
+    }) {
+    return ToolManageSources.deleteTool(params).then(({ data }) =>  ({
+      ...data,
+    }));
   },
 };
