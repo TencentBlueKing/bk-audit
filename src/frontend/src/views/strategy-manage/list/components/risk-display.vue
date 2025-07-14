@@ -35,9 +35,10 @@
           <div class="event-table">
             <div class="head">
               <div
-                v-for="(item, index) in column"
+                v-for="(item, index) in columns"
                 :key="index"
-                class="item"
+                class="header-cell"
+                :class="getHeaderClass(index)"
                 :style="{
                   minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
                   borderRight: index === 0 ? '1px solid #dcdee5' : ''
@@ -48,20 +49,19 @@
             <template
               v-for="(item, key) in tableData"
               :key="key">
+              <!-- strategyType === 'rule'时不显示 event_evidence_field_configs -->
+              <template v-if="data.strategy_type === 'rule' && key === 'event_evidence_field_configs'" />
               <div
-                v-if="!(key === 'event_evidence_field_configs' && data.strategy_type !== 'model')"
-                class="body">
+                v-else
+                class="table-section">
                 <div
-                  class="group"
+                  class="group-cell"
                   :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
-                  <span> {{
-                    data.strategy_type === 'model' && key === 'event_evidence_field_configs'
-                      ? (groupMap as GroupMapModel).event_evidence_field_configs
-                      : groupMap[key as keyof GroupMapBase]
-                  }} </span>
+                  <span>{{ groupMap[key] }}</span>
                 </div>
-                <div class="value-row">
+                <div class="rows-container">
                   <value-item
+                    :all-tools-data="allToolsData"
                     :data="data"
                     :item="item" />
                 </div>
@@ -77,6 +77,8 @@
   import { computed } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import ToolManageService from '@service/tool-manage';
+
   import type StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
@@ -85,14 +87,7 @@
   import RenderInfoItem from './render-info-item.vue';
   import ValueItem from './valueItem.vue';
 
-  type GroupMapBase = {
-    event_basic_field_configs: string;
-    event_data_field_configs: string;
-  };
-
-  type GroupMapModel = GroupMapBase & {
-    event_evidence_field_configs: string;
-  };
+  import useRequest from '@/hooks/use-request';
 
   interface Props {
     data: StrategyModel,
@@ -101,27 +96,33 @@
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
 
-  const column = computed(() => {
-    const initColumn = [t('事件分组'), t('字段名称'), t('字段显示名'), t('重点展示'), t('字段映射'), t('字段说明')];
-    props.data.strategy_type === 'rule' ? initColumn : initColumn.splice(4, 1);
-    return initColumn;
+  //  strategyType === 'rule'时显示全部列，否则排除 “字段映射”
+  const columns = computed(() => {
+    const initColumns = [
+      t('事件分组'),
+      t('字段名称'),
+      t('字段显示名'),
+      t('重点展示'),
+      t('字段映射'),
+      t('字段下钻'),
+      t('字段说明'),
+    ];
+
+    return props.data.strategy_type === 'rule'
+      ? initColumns
+      : initColumns.filter((_, index) => index !== 4);
   });
 
-  const groupMap = computed<GroupMapBase | GroupMapModel>(() => {
-    const baseMap: GroupMapBase = {
+  //  strategyType === 'rule'时不显示 event_evidence_field_configs
+  const groupMap = computed(() => (props.data.strategy_type === 'rule'
+    ? {
       event_basic_field_configs: t('基本信息'),
       event_data_field_configs: t('事件结果'),
-    };
-
-    if (props.data.strategy_type === 'model') {
-      const modelMap: GroupMapModel = {
-        ...baseMap,
-        event_evidence_field_configs: t('事件证据'),
-      };
-      return modelMap;
-    }
-    return baseMap;
-  });
+    } : {
+      event_basic_field_configs: t('基本信息'),
+      event_data_field_configs: t('事件结果'),
+      event_evidence_field_configs: t('事件证据'),
+    }));
 
   const tableData = computed(() => {
     const data = {
@@ -129,15 +130,37 @@
       event_data_field_configs: props.data.event_data_field_configs,
       event_evidence_field_configs: props.data.event_evidence_field_configs,
     };
+    console.log(new StrategyFieldEvent(data));
     return new StrategyFieldEvent(data);
   });
+
+  const getHeaderClass = (index: number) => {
+    const classes = ['group'];
+    if (index === 1) classes.push('field-name');
+    if (index === 2) classes.push('display-name');
+    if (index === 3) classes.push('is-priority');
+    if (index === 4) classes.push('map-config');
+    if (index === 5) classes.push('drill-config');
+    if (index === columns.value.length - 1) classes.push('last');
+    return classes;
+  };
+
+  const {
+    data: allToolsData,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    manual: true,
+  });
 </script>
-<style lang="postcss">
+<style lang="postcss" scoped>
 .risk-display {
   .event-table {
-    @mixin item-styles {
+    @mixin cell-base {
+      display: flex;
       padding: 0 12px;
+      border-right: 1px solid #dcdee5;
       border-bottom: 1px solid #dcdee5;
+      align-items: center;
     }
 
     display: flex;
@@ -151,45 +174,55 @@
     .head {
       display: flex;
       height: 42px;
-      line-height: 42px;
       background-color: #f5f7fa;
 
-      .item {
-        @include  item-styles;
+      .header-cell {
+        @include cell-base;
 
-        &:nth-child(2),
-        &:nth-child(3) {
-          width: 150px;
+        background-color: #f5f7fa;
+
+        &.field-name {
+          width: 120px;
+          background-color: #f5f7fa;
         }
 
-        &:nth-child(4) {
-          width: 100px;
+        &.display-name {
+          width: 120px;
+          background-color: #f5f7fa;
         }
 
-        &:nth-child(5) {
-          width: 150px;
+        &.is-priority {
+          width: 80px;
         }
 
-        &:last-child {
+        &.map-config {
+          width: 140px;
+        }
+
+        &.drill-config {
+          width: 140px;
+        }
+
+        &.last {
           flex: 1;
         }
       }
     }
 
-    .body {
+    .table-section {
       display: flex;
       min-height: 42px;
 
-      .group {
-        @include  item-styles;
+      .group-cell {
+        @include cell-base;
 
         display: flex;
-        border-right: 1px solid #dcdee5;
+        background-color: #f5f7fa;
         align-items: center;
         justify-content: center;
       }
 
-      .value-row {
+      .rows-container {
         width: calc(100% - 80px);
       }
     }

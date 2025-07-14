@@ -94,11 +94,11 @@
   //  strategyType === 'rule'时显示全部列，否则排除 “字段映射”
   const columns = computed(() => {
     const initColumns = [
-      { label: t('事件分组'), width: locale.value === 'en-US' ? 140 : 80 },
-      { label: t('字段名称'), width: 190 },
-      { label: t('字段显示名'), width: 240 },
-      { label: t('重点展示'), tips: t('开启后将在单据里优先展示'), width: 120 },
-      { label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改'), width: 240 },
+      { label: t('事件分组') },
+      { label: t('字段名称') },
+      { label: t('字段显示名') },
+      { label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
+      { label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
       { label: t('字段下钻') },
       { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
     ];
@@ -146,7 +146,7 @@
     if (index === 2) classes.push('display-name');
     if (index === 3) classes.push('is-priority');
     if (index === 4) classes.push('map-config');
-    if (index === 5) classes.push('drill_config');
+    if (index === 5) classes.push('drill-config');
     if (index === columns.value.length - 1) classes.push('last');
     return classes;
   };
@@ -325,7 +325,7 @@
         width: 220px;
       }
 
-      &.drill_config {
+      &.drill-config {
         width: 240px;
       }
 
