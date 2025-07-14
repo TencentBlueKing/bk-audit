@@ -3,23 +3,36 @@
     <div
       v-for="(config, configIndex) in item"
       :key="configIndex"
-      class="value-item">
+      class="table-row">
       <template
         v-for="(value, valueKey) in config"
         :key="valueKey">
         <div
           v-if="!excludeKey.includes(valueKey)"
-          class="item">
+          class="cell"
+          :class="getCellClass(valueKey)">
           <div v-if="typeof value === 'boolean'">
             {{ value ? t('是') : t('否') }}
           </div>
-          <div v-else-if="typeof value === 'object'">
+          <div
+            v-else-if="typeof value === 'object' &&
+              value !== null &&
+              'source_field' in value &&
+              'target_value' in value">
             <tooltips
               v-if="value.source_field"
               :data="value.source_field" />
             <tooltips
               v-if="value.target_value"
               :data="value.target_value" />
+          </div>
+          <div
+            v-else-if="typeof value === 'object' &&
+              value !== null &&
+              'tool' in value &&
+              'config' in value">
+            <tooltips
+              :data="getToolName(value.tool.uid)" />
           </div>
           <div v-else>
             <tooltips
@@ -47,12 +60,14 @@
 
   import type StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+  import type ToolDetailModel from '@model/tool/tool-detail';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   interface Props {
     item: StrategyFieldEvent['event_basic_field_configs'],
     data: StrategyModel,
+    allToolsData: Array<ToolDetailModel>;
   }
 
   const props = defineProps<Props>();
@@ -67,28 +82,48 @@
     return initKey;
   });
 
+  const getToolName = (uid: string) => {
+    const tool = props.allToolsData.find(item => item.uid === uid);
+    return tool ? tool.name : '';
+  };
+
+  const getCellClass = (valueKey: string) => ({
+    'field-name': valueKey === 'field_name',
+    'display-name': valueKey === 'display_name',
+    'is-priority': valueKey === 'is_priority',
+    'map-config': valueKey === 'map_config',
+    'drill-config': valueKey === 'drill_config',
+    description: valueKey === 'description',
+  });
 </script>
 <style lang="postcss" scoped>
-  .value-item {
+  .table-row {
     display: flex;
     height: 42px;
     line-height: 42px;
 
-    .item {
+    .cell {
       padding-left: 12px;
       border-bottom: 1px solid #dcdee5;
 
-      &:nth-child(1),
-      &:nth-child(2) {
-        width: 150px;
+      &.field-name {
+        width: 120px;
       }
 
-      &:nth-child(3) {
-        width: 100px;
+      &.display-name {
+        width: 120px;
       }
 
-      &:nth-child(4) {
-        width: 150px;
+      &.is-priority {
+        width: 80px;
+      }
+
+      &.map-config {
+        width: 140px;
+      }
+
+      &.drill-config {
+        width: 140px;
       }
 
       &:last-child {
