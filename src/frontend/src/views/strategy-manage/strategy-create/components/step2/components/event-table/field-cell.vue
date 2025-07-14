@@ -18,13 +18,6 @@
       @add-custom-constant="addCustomConstant"
       @select="handleFieldSelect" />
 
-    <!-- 字段下钻 -->
-    <bk-input
-      v-else-if="fieldKey === 'drill_config' && localEventItem.drill_config"
-      v-model="localEventItem.drill_config.tool.uid"
-      behavior="simplicity"
-      class="description-input" />
-
     <!-- 描述 -->
     <bk-input
       v-else-if="fieldKey === 'description'"
@@ -33,6 +26,31 @@
       class="description-input"
       :maxlength="100"
       type="textarea" />
+
+    <!-- 字段下钻 -->
+    <template v-else-if="fieldKey === 'drill_config' && localEventItem.drill_config">
+      <div
+        v-if="!localEventItem.drill_config.tool.uid"
+        class="field-cell-div"
+        style="color: #c4c6cc;"
+        @click="handleClick">
+        {{ t('请配置') }}
+      </div>
+      <div
+        v-else
+        class="field-cell-div"
+        @click="handleClick">
+        {{ getToolName(localEventItem.drill_config.tool.uid) }}
+      </div>
+      <!-- 字段下钻 -->
+      <field-reference
+        ref="fieldReferenceRef"
+        v-model:showFieldReference="showFieldReference"
+        :new-tool-name="strategyName"
+        :output-fields="outputFields"
+        @submit="handleFieldSubmit"
+        @update-all-tools-data="handleAllToolsData" />
+    </template>
 
     <!-- 仅查看 -->
     <template v-else>
@@ -43,9 +61,13 @@
 
 <script setup lang="ts">
   import { ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+  import ToolDetailModel from '@model/tool/tool-detail';
+
+  import fieldReference from '@views/tools/tools-square/add/components/field-reference.vue';
 
   import FieldMapping from './field-mapping.vue';
 
@@ -54,6 +76,12 @@
     eventItemKey: keyof StrategyFieldEvent;
     fieldKey: keyof StrategyFieldEvent['event_basic_field_configs'][0];
     selectOptions: Array<DatabaseTableFieldModel>;
+    strategyName: string;
+    outputFields: Array<{
+      raw_name: string;
+      display_name: string;
+      description: string;
+    }>
   }
 
   interface Emits {
@@ -64,13 +92,15 @@
 
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
-
-  const fieldMappingRef = ref();
+  const { t } = useI18n();
 
   const requiredFields = ['raw_event_id', 'event_source', 'operator'];
   const optionalFields = ['event_content', 'event_type'];
 
   const localEventItem = ref(props.eventItem);
+  const fieldMappingRef = ref();
+  const showFieldReference = ref(false);
+  const allToolsData = ref<Array<ToolDetailModel>>([]);
 
   const handleFieldSelect = (value: string) => {
     emit('select', value, props.eventItem);
@@ -78,6 +108,23 @@
 
   const addCustomConstant = (value: string) => {
     emit('add-custom-constant', value);
+  };
+
+  const handleClick = () => {
+    showFieldReference.value = true;
+  };
+
+  const handleFieldSubmit = (drillConfig: any) => {
+    localEventItem.value.drill_config = drillConfig;
+  };
+
+  const handleAllToolsData = (data: Array<ToolDetailModel>) => {
+    allToolsData.value = data;
+  };
+
+  const getToolName = (uid: string) => {
+    const tool = allToolsData.value.find(item => item.uid === uid);
+    return tool ? tool.name : '';
   };
 
   watch(props.eventItem, (value) => {
@@ -109,6 +156,13 @@
     height: 45px;
     border: none;
   }
-}
 
+  .field-cell-div {
+    width: 100%;
+    height: 100%;
+    padding: 0 8px;
+    line-height: 33px;
+    cursor: pointer;
+  }
+}
 </style>

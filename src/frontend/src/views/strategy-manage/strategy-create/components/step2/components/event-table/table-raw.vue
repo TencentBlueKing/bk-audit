@@ -16,7 +16,9 @@
             :event-item="eventItem"
             :event-item-key="eventItemKey"
             :field-key="valueKey"
+            :output-fields="outputFields"
             :select-options="localSelect"
+            :strategy-name="strategyName"
             @add-custom-constant="addCustomConstant"
             @select="handleSelect"
             @update:field-value="updateFieldValue(eventItem, valueKey, $event)" />
@@ -48,6 +50,12 @@
     eventItemKey: keyof StrategyFieldEvent;
     select: Array<DatabaseTableFieldModel>;
     strategyType: string;
+    strategyName: string;
+    outputFields: Array<{
+      raw_name: string;
+      display_name: string;
+      description: string;
+    }>
   }
 
   const props = defineProps<Props>();

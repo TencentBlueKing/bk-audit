@@ -38,7 +38,9 @@
             ref="tableRowRef"
             :event-item-arr="item"
             :event-item-key="key"
+            :output-fields="outputFields"
             :select="select"
+            :strategy-name="strategyName"
             :strategy-type="strategyType" />
         </div>
       </div>
@@ -70,7 +72,8 @@
     strategyId: number,
     data: StrategyModel,
     select: Array<DatabaseTableFieldModel>,
-    strategyType: string
+    strategyType: string,
+    strategyName: string
   }
 
   const props = defineProps<Props>();
@@ -115,6 +118,27 @@
       event_data_field_configs: t('事件结果'),
       event_evidence_field_configs: t('事件证据'),
     }));
+
+  const outputFields = computed(() => {
+    const basicFields = tableData.value.event_basic_field_configs.map(item => ({
+      raw_name: item.field_name,
+      display_name: item.display_name,
+      description: item.description,
+    }));
+    const dataFields = tableData.value.event_data_field_configs.map(item => ({
+      raw_name: item.field_name,
+      display_name: item.display_name,
+      description: item.description,
+    }));
+    const evidenceFields = props.strategyType === 'rule'
+      ? tableData.value.event_evidence_field_configs.map(item => ({
+        raw_name: item.field_name,
+        display_name: item.display_name,
+        description: item.description,
+      }))
+      : [];
+    return basicFields.concat(dataFields, evidenceFields);
+  });
 
   const getHeaderClass = (index: number) => {
     const classes = ['group'];
