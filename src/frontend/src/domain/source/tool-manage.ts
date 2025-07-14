@@ -16,21 +16,37 @@
 */
 import type ParseSqlModel from '@model/tool/parse-sql';
 import type ToolDetailModel from '@model/tool/tool-detail';
+import type ToolInfoModel from '@model/tool/tool-info';
 
 import Request from '@utils/request';
+import { processedParams } from '@utils/request/lib/utils';
 
 import ModuleBase from './module-base';
+
+import type { IRequestResponsePaginationData } from '@/utils/request';
 
 class ToolManage extends ModuleBase {
   constructor() {
     super();
     this.module = '/api/v1';
   }
+  // 获取工具列表
+  getToolsList(params: {
+    offset?: number
+    limit?: number
+    keyword?: string,
+    page: number,
+    page_size: number
+    tags?: string[],
+  }) {
+    return Request.get<IRequestResponsePaginationData<ToolInfoModel>>(`${this.path}/tool/?${processedParams(params).toString()}`);
+  }
   // 获取工具tag列表
   getToolTags() {
     return Request.get<Array<{
       tag_id: string;
       tag_name: string;
+      tool_count: number,
     }>>(`${this.path}/tool/tags/`);
   }
   // 新建工具
@@ -60,6 +76,19 @@ class ToolManage extends ModuleBase {
   // 获取全部工具
   getAllTools() {
     return Request.get<Array<ToolDetailModel>>(`${this.path}/tool/all/`);
+  }
+  // 工具执行
+  getToolsExecute(params: {
+    uid: string,
+    params: Record<string, any>,
+  }) {
+    return Request.post(`${this.path}/tool/${params.uid}/execute/`, { params });
+  }
+  // 工具删除
+  deleteTool(params: {
+    uid: string,
+  }) {
+    return Request.delete(`${this.path}/tool/${params.uid}/`, { params });
   }
 }
 

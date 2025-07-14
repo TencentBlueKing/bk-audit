@@ -186,9 +186,9 @@
         { token: 'keyword', foreground: '#05a4d5' },
       ],
       colors: {
-        'scrollbarSlider.background': '#373a44', // 滚动条背景
+        'scrollbarSlider.background': '#eeeff2', // 滚动条背景
         'editor.foreground': '#0d0b09', // 基础字体颜色
-        'editor.background': '#00090B', // 背景颜色
+        'editor.background': '#fbfbfc', // 背景颜色
         'editorCursor.foreground': '#d4b886', // 焦点颜色
         'editor.lineHighlightBackground': '#6492a520', // 焦点所在的一行的背景颜色
         'editorLineNumber.foreground': '#008800', // 行号字体颜色
@@ -246,7 +246,7 @@
       padding: 0 25px;
       font-size: 14px;
       color: #c4c6cc;
-      background: #1e1e1e;
+      background: #fbfbfc;
 
       .icon {
         font-size: 16px;

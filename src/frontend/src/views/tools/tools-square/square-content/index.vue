@@ -44,7 +44,7 @@
   import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import ToolsSquare from '@service/tools-square';
+  import ToolManageService from '@service/tool-manage';
 
   import useRequest from '@/hooks/use-request';
 
@@ -84,10 +84,11 @@
     background: '#ffffff',
     color: '#4D4F56',
   });
+
   // 工具标签列表
   const {
     run: fetchToolsTagsList,
-  } = useRequest(ToolsSquare.fetchToolsTagsList, {
+  } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
       tags.value = data;

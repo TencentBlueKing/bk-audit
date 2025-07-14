@@ -186,11 +186,11 @@
   import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import ToolsSquare from '@service/tools-square';
+  import ToolManageService from '@service/tool-manage';
 
   import IamApplyDataModel from '@model/iam/apply-data';
-  import type ToolDetail from '@model/tool/tool-detail';
-  import toolInfo from '@model/tools-square/tools-square';
+  import ToolDetailModel from '@model/tool/tool-detail';
+  import ToolInfo from '@model/tool/tool-info';
 
   import useMessage from '@hooks/use-message';
 
@@ -234,7 +234,7 @@
   }
   interface Exposes {
     closeDialog: () => void,
-    openDialog: (item: toolInfo, isDrillDown: boolean, drillDownItem: any) => void,
+    openDialog: (item: ToolInfo, isDrillDown: boolean, drillDownItem: any) => void,
   }
   interface Emits {
     (e: 'openFieldDown', val: string, isDrillDown: boolean): void;
@@ -254,7 +254,7 @@
   const uid = ref('');
   const rules = {};
   const formRef = ref();
-  const itemInfo = ref<toolInfo>();
+  const itemInfo = ref<ToolInfo>();
   const dialogRef = ref();
   const searchForm = ref();
   const formItemRef = ref();
@@ -326,7 +326,7 @@
     });
   };
 
-  const itemIcon = (item: toolInfo) => {
+  const itemIcon = (item: ToolInfo) => {
     switch (item.tool_type) {
     case 'data_search':
       return 'sqlxiao';
@@ -381,9 +381,9 @@
   // 获取工具详情
   const {
     run: fetchToolsDetail,
-  } = useRequest(ToolsSquare.fetchToolsDetail, {
-    defaultValue: {} as ToolDetail,
-    onSuccess: (data: ToolDetail) => {
+  } = useRequest(ToolManageService.fetchToolsDetail, {
+    defaultValue: new ToolDetailModel(),
+    onSuccess: (data) => {
       uid.value = data.uid;
       searchForm.value = {};
       searchList.value = data.config.input_variable.map(item => ({
@@ -428,7 +428,7 @@
   // 工具执行
   const {
     run: fetchToolsExecute,
-  } = useRequest(ToolsSquare.fetchToolsExecute, {
+  } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
       if (itemInfo.value?.tool_type === 'data_search') {
@@ -441,7 +441,7 @@
     },
   });
   // 打开弹窗
-  const handleOpenDialog = async (item: toolInfo, isDrillDown: boolean, drillDownItem: any) => {
+  const handleOpenDialog = async (item: ToolInfo, isDrillDown: boolean, drillDownItem: any) => {
     isShow.value = true;
     itemInfo.value = item;
     const isNewIndex = sessionStorage.getItem('dialogIndex');

@@ -144,7 +144,7 @@
             <audit-menu-item index="tools">
               <audit-icon
                 class="menu-item-icon"
-                type="data-storage" />
+                type="gongju" />
               {{ t('工具') }}
             </audit-menu-item>
           </audit-menu-item-group>
