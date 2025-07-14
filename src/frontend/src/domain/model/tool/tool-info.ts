@@ -14,42 +14,13 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
-export default class toolInfo {
+export default class ToolInfo {
   uid: string;
   name: string;
   version: number;
   tool_type: string;
   description: string;
   namespace: string;
-  config?: {
-    sql: string;
-    output_fields: Array<{
-      raw_name: string;
-      description: string;
-      display_name: string;
-      drill_config: {
-        tool: {
-          uid: string;
-          version: number;
-        };
-        config: Array<{
-          source_field: string;
-          target_field: string;
-        }>;
-      };
-    }>;
-    input_variable: Array<{
-      choices: Array<string>;
-      raw_name: string;
-      required: boolean;
-      description: string;
-      display_name: string;
-      field_category: string;
-    }>;
-    referenced_tables: Array<{
-      table_name: string;
-    }>;
-  };
   permission: {
     use_tool: boolean;
   };
@@ -57,16 +28,14 @@ export default class toolInfo {
   tags: Array<string>;
   created_by: string;
   created_at: string;
-  constructor(payload: toolInfo) {
+  constructor(payload = {} as ToolInfo) {
     this.name = payload.name;
     this.uid = payload.uid;
     this.version = payload.version;
     this.tool_type = payload.tool_type;
     this.description = payload.description;
     this.namespace = payload.namespace;
-    this.config = payload.config;
     this.permission = payload.permission;
-    this.config = payload.config;
     this.tags = payload.tags;
     this.created_by = payload.created_by;
     this.created_at = payload.created_at;

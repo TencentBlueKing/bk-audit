@@ -203,9 +203,9 @@
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
-  import ToolsSquare from '@service/tools-square';
+  import ToolManageService from '@service/tool-manage';
 
-  import toolInfo from '@model/tools-square/tools-square';
+  import ToolInfo from '@model/tool/tool-info';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
@@ -236,7 +236,7 @@
   const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
   const dialogRefs = ref<Record<string, any>>({});
-  const dataList = ref<toolInfo[]>([]);
+  const dataList = ref<ToolInfo[]>([]);
   const popoverRefs = ref<Map<string, any>>(new Map());
   const currentPage = ref(1);
   const currentPagSize = ref(100);
@@ -247,8 +247,8 @@
   const {
     run: fetchToolsList,
     loading,
-  } = useRequest(ToolsSquare.fetchToolsList, {
-    defaultValue: {} as IRequestResponsePaginationData<toolInfo>,
+  } = useRequest(ToolManageService.fetchToolsList, {
+    defaultValue: {} as IRequestResponsePaginationData<ToolInfo>,
     onSuccess: (data) => {
       dataList.value = data.results;
       total.value = data.total;
@@ -257,7 +257,7 @@
   // 删除
   const {
     run: fetchDeleteTool,
-  } = useRequest(ToolsSquare.fetchDeleteTool, {
+  } = useRequest(ToolManageService.fetchDeleteTool, {
     defaultValue: {},
     onSuccess: () => {
       messageSuccess(t('删除成功'));
@@ -383,7 +383,7 @@
   </div>
   );
 
-  const itemIcon = (item: toolInfo) => {
+  const itemIcon = (item: ToolInfo) => {
     switch (item.tool_type) {
     case 'data_search':
       return 'sqlxiao';
@@ -393,7 +393,7 @@
       return 'apixiao';
     }
   };
-  const handleClick = async (item: toolInfo) => {
+  const handleClick = async (item: ToolInfo) => {
     if (dialogRefs.value[item.uid]) {
       dialogRefs.value[item.uid].openDialog(item, false, {});
     }
@@ -414,7 +414,7 @@
   // 下转打开
   const openFieldDown = (val: any, isDrillDown: boolean) => {
     const { uid } = val.drill_config.tool;
-    const item = dataList.value.find((item: toolInfo) => item.uid === uid);
+    const item = dataList.value.find((item: ToolInfo) => item.uid === uid);
     if (dialogRefs.value[uid]) {
       dialogRefs.value[uid].openDialog(item, isDrillDown, val);
     }
