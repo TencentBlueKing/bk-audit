@@ -155,3 +155,46 @@ class TestSqlQueryAnalysis(TestCase):
         # 验证重新生成
         regenerated = analyzer.generate_sql_with_values({}, result.original_sql)
         assert "SELECT id, name FROM users.hdfs WHERE age > 18" in regenerated["data"]
+
+    def test_generate_sql_with_range_dict(self):
+        """
+        `{"type": "range", "start": x, "end": y}` 应自动改写为 BETWEEN
+        """
+        sql = "SELECT * FROM sales WHERE amount = :a"
+        analyzer = SqlQueryAnalysis(sql)
+
+        params = {"a": {"type": "range", "start": 1, "end": 100}}
+        generated = analyzer.generate_sql_with_values(params)
+
+        assert "amount BETWEEN 1 AND 100" in generated["data"]
+
+    def test_generate_sql_with_range_dict_and_extra_conditions(self):
+        """
+        区间改写应与其他条件共存
+        """
+        sql = "SELECT * FROM sales WHERE amount = :a AND status = :s"
+        analyzer = SqlQueryAnalysis(sql)
+
+        params = {
+            "a": {"type": "range", "start": 10, "end": 20},
+            "s": "PAID",
+        }
+        generated = analyzer.generate_sql_with_values(params)
+
+        data_sql = generated["data"]
+        assert "amount BETWEEN 10 AND 20" in data_sql
+        assert "status = 'PAID'" in data_sql
+
+    def test_generate_sql_tuple_not_converted(self):
+        """
+        普通 2 元 tuple/list 不应被误判为 BETWEEN
+        """
+        sql = "SELECT * FROM sales WHERE amount = :a"
+        analyzer = SqlQueryAnalysis(sql)
+
+        params = {"a": [1, 10]}  # 无 'type': 'range' 标签
+        generated = analyzer.generate_sql_with_values(params)
+
+        # sqlglot 默认会保留空格，“(1, 100)” 或 “(1,100)” 都算通过
+        assert "amount = (" in generated["data"]
+        assert "BETWEEN" not in generated["data"]
