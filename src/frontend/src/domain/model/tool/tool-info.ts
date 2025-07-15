@@ -21,6 +21,35 @@ export default class ToolInfo {
   tool_type: string;
   description: string;
   namespace: string;
+  config?: {  // 预览携带的配置
+    sql: string;
+    output_fields: Array<{
+      raw_name: string;
+      description: string;
+      display_name: string;
+      drill_config: {
+        tool: {
+          uid: string;
+          version: number;
+        };
+        config: Array<{
+          source_field: string;
+          target_field: string;
+        }>;
+      };
+    }>;
+    input_variable: Array<{
+      choices: Array<string>;
+      raw_name: string;
+      required: boolean;
+      description: string;
+      display_name: string;
+      field_category: string;
+    }>;
+    referenced_tables: Array<{
+      table_name: string;
+    }>;
+  };
   permission: {
     use_tool: boolean;
   };
