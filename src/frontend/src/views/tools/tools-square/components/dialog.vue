@@ -20,7 +20,6 @@
       ref="dialogRef"
       draggable
       :esc-close="false"
-      :ext-cls="dialogCls"
       :is-show="isShow"
       render-directive="show"
       :show-mask="false"
@@ -225,7 +224,6 @@
     field_category: string;
   }
   interface Props {
-    dialogCls: string,
     tagsEnums: Array<TagItem>,
   }
 
@@ -238,42 +236,48 @@
   }
   interface Emits {
     (e: 'openFieldDown', val: string, isDrillDown: boolean): void;
+    (e: 'close'): void;
   }
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const   emitBus  = useEventBus().emit;
   const { messageError } = useMessage();
+  const { t } = useI18n();
 
   const dialogIndex = ref(2000);
   const dialogWidth = ref('1000px');
-  const isFullScreen = ref(false);
   const dialogHeight = ref('80vh');
+
+  const isFullScreen = ref(false);
   const isLoading = ref(false);
-  const { t } = useI18n();
   const isShow = ref(false);
-  const uid = ref('');
-  const rules = {};
-  const formRef = ref();
-  const itemInfo = ref<ToolInfo>();
+  const isPreview = ref<boolean | undefined>(false);
+
   const dialogRef = ref();
-  const searchForm = ref();
   const formItemRef = ref();
+
+  const itemInfo = ref<ToolInfo>();
   const searchList = ref<SearchItem[]>([]);
   const tableData = ref<TableDataItem[]>([]);
   const columns = ref<Column[]>([]);
-  const panelId = ref('');
   const pagination = ref({
     count: 0,
     limit: 100,
     current: 1,
     limitList: [100, 200, 500, 1000],
   });
+  const uid = ref('');
+  const panelId = ref('');
+  const rules = {};
+  const formRef = ref();
+  const searchForm = ref();
 
   // 处理页码变化
   const handlePageChange = (newPage: number) => {
     pagination.value.current = newPage;
     fetchTableData(); // 调用获取表格数据的方法
   };
+
   // 处理每页条数变化
   const handlePageLimitChange = (newLimit: number) => {
     pagination.value.limit = newLimit;
@@ -314,6 +318,7 @@
     });
     return tagName;
   };
+
   const handleClick = () => {
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -336,11 +341,13 @@
       return 'apixiao';
     }
   };
+
   const submit = () => {
     formRef.value.validate().then(() => {
       fetchTableData();
     });
   };
+
   // 清空表单验证
   const handleReset = () => {
     formRef.value.clearValidate();
@@ -362,7 +369,6 @@
     }
   };
 
-
   const handleFormItemChange = (val: any, item: SearchItem) => {
     // 完全避免修改函数参数item
     const index = searchList.value.findIndex(i => i.raw_name === item.raw_name);
@@ -378,6 +384,42 @@
     }
     searchForm.value[item.raw_name] = val;
   };
+
+  // 创建弹窗内容
+  const createDialogContent = (data: ToolDetailModel) => {
+    searchForm.value = {};
+    searchList.value = data.config.input_variable.map(item => ({
+      ...item,
+      value: null,
+      required: item.required, // 将字符串类型的required转换为布尔值
+    }));
+    data.config.input_variable.forEach((item) => {
+      searchForm.value[item.raw_name] = '';
+    });
+    columns.value = data.config.output_fields.map((item) => {
+      if (item.drill_config === null || item.drill_config?.tool.uid === '') {
+        return {
+          label: item.display_name,
+          field: item.raw_name,
+          minWidth: 200,
+          showOverflowTooltip: true,
+        };
+      }
+      return {
+        label: item.display_name,
+        field: item.raw_name,
+        minWidth: 200,
+        showOverflowTooltip: true,
+        render: ({ data }: {data: Record<any, string>}) => <bk-button  theme="primary" text
+           onClick={(e:any) => {
+            e.stopPropagation(); // 阻止事件冒泡
+            handleFieldDownClick(item);
+          }}
+          >{data[item.raw_name]} </bk-button>,
+      };
+    });
+  };
+
   // 获取工具详情
   const {
     run: fetchToolsDetail,
@@ -385,46 +427,20 @@
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
       uid.value = data.uid;
-      searchForm.value = {};
-      searchList.value = data.config.input_variable.map(item => ({
-        ...item,
-        value: null,
-        required: item.required, // 将字符串类型的required转换为布尔值
-      }));
-      data.config.input_variable.forEach((item) => {
-        searchForm.value[item.raw_name] = '';
-      });
-      columns.value = data.config.output_fields.map((item) => {
-        if (item.drill_config === null || item.drill_config?.tool.uid === '') {
-          return {
-            label: item.display_name,
-            field: item.raw_name,
-            minWidth: 200,
-            showOverflowTooltip: true,
-          };
-        }
-        return {
-          label: item.display_name,
-          field: item.raw_name,
-          minWidth: 200,
-          showOverflowTooltip: true,
-          render: ({ data }: {data: Record<any, string>}) => <bk-button  theme="primary" text
-           onClick={(e:any) => {
-            e.stopPropagation(); // 阻止事件冒泡
-            handleFieldDownClick(item);
-          }}
-          >{data[item.raw_name]} </bk-button>,
-        };
-      });
+      // 创建弹框form、table
+      createDialogContent(data);
+      // 查询弹框内容
       if (data.tool_type !== 'data_search') {
         fetchTableData();
       }
     },
   });
+
   // 下钻点击
   const handleFieldDownClick = (data: any) => {
     emit('openFieldDown', data, true);
   };
+
   // 工具执行
   const {
     run: fetchToolsExecute,
@@ -440,10 +456,13 @@
       }
     },
   });
+
   // 打开弹窗
-  const handleOpenDialog = async (item: ToolInfo, isDrillDown: boolean, drillDownItem: any) => {
+  const handleOpenDialog = async (item: ToolInfo, isDrillDown: boolean, drillDownItem: any, Preview?: boolean) => {
     isShow.value = true;
     itemInfo.value = item;
+    isPreview.value = Preview;
+
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
       dialogIndex.value = Number(isNewIndex) + 1;
@@ -465,28 +484,41 @@
           htmlModal.style.left = `${50 - (index + 1) * 2}%`;
         }
       });
-    fetchToolsDetail({ uid: item.uid }).then(() => {
-      // 下钻打开传递参数
-      if (isDrillDown) {
-        drillDownItem.drill_config.config.forEach((el:any) => {
-          searchList.value = searchList.value.map((searchItem: any) => {
-            if (searchItem.raw_name === el.source_field) {
-              return {
-                ...searchItem,
-                value: el.target_value,
-              };
-            }
-            return searchItem;
+
+    if (isPreview.value) {
+      const detail = new ToolDetailModel();
+      createDialogContent({
+        ...detail,
+        ...item,
+      } as ToolDetailModel);
+      return;
+    }
+
+    fetchToolsDetail({ uid: item.uid })
+      .then(() => {
+        // 下钻打开传递参数
+        if (isDrillDown) {
+          drillDownItem.drill_config.config.forEach((el:any) => {
+            searchList.value = searchList.value.map((searchItem: any) => {
+              if (searchItem.raw_name === el.source_field) {
+                return {
+                  ...searchItem,
+                  value: el.target_value,
+                };
+              }
+              return searchItem;
+            });
           });
-        });
-      }
-    });
+        }
+      });
   };
 
   const handleCloseDialog = () => {
+    emit('close');
     isShow.value = false;
     handleReset();
   };
+
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
     isSingleLine?: boolean;
     fontSize?: string;
@@ -531,6 +563,7 @@
     document.body.removeChild(temp);
     return isOverflow;
   };
+
   // 图表
   const loadScript = (src: string) => new Promise((resolve, reject) => {
     const script = document.createElement('script');
@@ -549,6 +582,7 @@
       messageError(err.message);
     }
   };
+
   const initBK = async  (id: string) => {
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
@@ -569,11 +603,13 @@
       console.error(error);
     }
   };
+
   // 放大
   const handleFullscreen = () => {
     isFullScreen.value = !isFullScreen.value;
     dialogWidth.value = isFullScreen.value ? '90%' : '1000px';
   };
+
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
