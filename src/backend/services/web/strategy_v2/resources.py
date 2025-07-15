@@ -169,7 +169,6 @@ from services.web.strategy_v2.utils.table import (
     TableHandler,
     enhance_rt_fields,
 )
-from services.web.tool.constants import DataSearchDrillConfig
 
 
 class StrategyV2Base(AuditMixinResource, abc.ABC):
@@ -194,20 +193,20 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         ]
 
         for field_source, config_key in field_config_map:
-            for field_cfg in validated_request_data.get(config_key):
-                drill_config_raw = field_cfg.get("drill_config")
-                if not drill_config_raw:
+            for field_cfg in validated_request_data.get(config_key, []):
+                drill_config = field_cfg.get("drill_config") or {}
+                tool = drill_config.get("tool") or {}
+
+                # 如果未配置 drill_config 或 tool.uid 为空，就跳过
+                if not tool.get("uid"):
                     continue
 
-                drill = DataSearchDrillConfig.model_validate(drill_config_raw)
-
-                tool = drill.tool
                 tools_to_create.append(
                     StrategyTool(
                         strategy=strategy,
                         field_name=field_cfg.get("field_name"),
-                        tool_uid=tool.uid,
-                        tool_version=tool.version,
+                        tool_uid=tool["uid"],
+                        tool_version=tool.get("version"),
                         field_source=field_source,
                     )
                 )
