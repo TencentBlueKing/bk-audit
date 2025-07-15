@@ -55,6 +55,7 @@
   </bk-loading>
 </template>
 <script setup lang="ts">
+  import _ from 'lodash';
   import {
     computed,
     ref,
@@ -94,6 +95,8 @@
   const list = ref([] as Array<Record<string, string>>);
   const loading = ref(false);
 
+  let originList = [] as Array<Record<string, string>>;
+
   const filterList = computed(() => {
     if (props.config.filterList) {
       return list.value.filter((item) => {
@@ -101,6 +104,9 @@
         if (props.config.filterList?.includes(item[valName])) return false;
         return true;
       });
+    }
+    if (originList.length === 0) {
+      originList = _.cloneDeep(list.value);
     }
     return list.value;
   });
@@ -125,7 +131,7 @@
 
   const handleSearch = (keyword: string) => {
     // 既可以通过labelName来搜索，也可以通过valName来搜索
-    const filtered = list.value.filter((item) => {
+    const filtered = originList.filter((item) => {
       const labelName = props.config.labelName ? props.config.labelName : 'name';
       const valName = props.config.valName ? props.config.valName : 'id';
       if (item[labelName].includes(keyword) || String(item[valName]).includes(keyword)) {
