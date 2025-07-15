@@ -1,4 +1,5 @@
 import numbers
+from enum import Enum
 from itertools import chain
 from typing import Any, List, Optional, Set
 
@@ -8,6 +9,10 @@ from sqlglot import exp
 from core.sql.exceptions import SQLParseError
 from core.sql.model import Table
 from core.sql.parser.model import ParsedSQLInfo, SelectField, SqlVariable
+
+
+class VariableType(Enum):
+    RANGE = "range"
 
 
 class SqlQueryAnalysis:
@@ -115,6 +120,20 @@ class SqlQueryAnalysis:
         """
         将Python值转换为sqlglot的Literal表达式。
         """
+        if (
+            isinstance(value, dict)
+            and value.get("type") == VariableType.RANGE.value
+            and "start" in value
+            and "end" in value
+        ):
+            t = exp.Tuple(
+                expressions=[
+                    self._create_sqlglot_literal(value["start"]),
+                    self._create_sqlglot_literal(value["end"]),
+                ]
+            )
+            t.set("is_range", True)
+            return t
         if isinstance(value, str):
             return exp.Literal.string(value)
         if isinstance(value, bool):
@@ -123,9 +142,31 @@ class SqlQueryAnalysis:
             return exp.Literal.number(int(value))
         if isinstance(value, numbers.Real):
             return exp.Literal.number(float(value))
+        if isinstance(value, list):
+            return exp.Tuple(expressions=[self._create_sqlglot_literal(item) for item in value])
         if value is None:
             return exp.Null()
         raise TypeError(f"不支持将 Python 类型 '{type(value).__name__}' 自动转换为 SQL 字面量。值为: {value!r}")
+
+    def _tuple_eq_to_between_visitor(self, node: exp.Expression, *_):
+        """
+        把 `col = (lo, hi)` 且该 Tuple 带 is_range 标记的改写成 BETWEEN。
+        """
+        if isinstance(node, exp.EQ):
+            left, right = node.left, node.right
+
+            # 形如 `col = (lo, hi)`
+            if isinstance(right, exp.Tuple) and right.args.get("is_range") and len(right.expressions) == 2:
+                lo, hi = right.expressions
+                return exp.Between(this=left, low=lo, high=hi)
+
+            # 万一写成 `(lo, hi) = col`
+            if isinstance(left, exp.Tuple) and left.args.get("is_range") and len(left.expressions) == 2:
+                lo, hi = left.expressions
+                return exp.Between(this=right, low=lo, high=hi)
+
+        # 其他节点不变
+        return node
 
     def _parameter_replacer_visitor(
         self, node: exp.Expression, named_params_dict: dict, dialect_str: Optional[str]
@@ -166,6 +207,7 @@ class SqlQueryAnalysis:
             raise SQLParseError(f"SQL 模板解析失败 (SQL template parsing failed): {target_sql} - {e}") from e
 
         transformed_tree = parsed_tree.transform(self._parameter_replacer_visitor, params, target_dialect, copy=True)
+        transformed_tree = transformed_tree.transform(self._tuple_eq_to_between_visitor, copy=True)
 
         count_sql = None
         if with_count:
