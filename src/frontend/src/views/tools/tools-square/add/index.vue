@@ -177,7 +177,7 @@
                         type="un-full-screen-2"
                         @click="handleExitFullScreen" />
                       <bk-button
-                        v-if="!showEditSql && !showFieldReference"
+                        v-if="!showEditSql && !showFieldReference && !showPreview"
                         class="edit-icon"
                         outline
                         theme="primary"
@@ -435,7 +435,9 @@
         </bk-button>
         <bk-button
           class="ml8"
-          style="margin-left: 48px;">
+          :disabled="!formData.config.sql"
+          style="margin-left: 48px;"
+          @click="handlePreview">
           {{ t('预览测试') }}
         </bk-button>
       </template>
@@ -454,6 +456,10 @@
         @update-all-tools-data="handleAllToolsData" />
     </smart-action>
   </skeleton-loading>
+  <dialog-vue
+    ref="dialogVueRef"
+    :tags-enums="tagData"
+    @close="handleClose" />
   <creating v-if="isCreating" />
   <failed
     v-if="isFailed"
@@ -482,6 +488,8 @@
   import useRouterBack from '@hooks/use-router-back';
 
   import { execCopy } from '@utils/assist';
+
+  import DialogVue from '../components/dialog.vue';
 
   import CardPartVue from './components/card-part.vue';
   import EditSql from './components/edit-sql.vue';
@@ -559,10 +567,12 @@
   const formRef = ref();
   const tableInputFormRef = ref();
   const fieldReferenceRef = ref();
+  const dialogVueRef = ref();
 
   const loading = ref(false);
   const showEditSql = ref(false);
   const showFieldReference = ref(false);
+  const showPreview = ref(false);
 
   const isCreating = ref(false);
   const isFailed = ref(false);
@@ -718,6 +728,21 @@
     if (drillConfig) {
       fieldReferenceRef.value.setFormData(drillConfig);
     }
+  };
+
+  const handlePreview = () => {
+    showPreview.value = true;
+    dialogVueRef.value.openDialog({
+      ...formData.value,
+      permission: {
+        use_tool: true,
+      },
+    }, false, {}, true);
+  };
+
+  const handleClose = () => {
+    console.log(111);
+    showPreview.value = false;
   };
 
   const handleCancel = () => {
