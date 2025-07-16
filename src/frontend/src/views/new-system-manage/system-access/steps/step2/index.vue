@@ -93,11 +93,11 @@
 
   const dropdownList = ref([
     {
-      title: '复杂权限类型',
+      title: t('复杂权限类型'),
       id: 'complex',
     },
     {
-      title: '简单权限类型',
+      title: t('简单权限类型'),
       id: 'simple',
     },
   ]);
