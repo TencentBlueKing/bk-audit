@@ -14,6 +14,8 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import dayjs from 'dayjs';
+
 import RiskManageService from '@service/risk-manage';
 import StrategyManageService from '@service/strategy-manage';
 
@@ -44,6 +46,8 @@ export default {
     valName: 'value',
     defaultParams: {
       risk_view_type: 'all',
+      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
   },
   tags: {
@@ -53,6 +57,8 @@ export default {
     service: RiskManageService.fetchRiskTags,
     defaultParams: {
       risk_view_type: 'all',
+      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
   },
   datetime: {
