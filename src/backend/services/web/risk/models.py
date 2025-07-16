@@ -28,6 +28,7 @@ from django.db.models import Max, Q, QuerySet
 from django.db.models.functions import Substr
 from django.utils.translation import gettext_lazy
 
+from apps.meta.models import Tag
 from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
@@ -97,7 +98,7 @@ class Risk(OperateRecordModel):
         gettext_lazy("Current Operator"), max_length=64, null=True, blank=True, default=list
     )
     notice_users = models.JSONField(gettext_lazy("Notice Users"), default=list, null=True, blank=True)
-    tags = models.JSONField(gettext_lazy("Tags"), default=list, null=True, blank=True)
+    tag_objs = models.ManyToManyField(Tag, verbose_name=gettext_lazy("Tags"), blank=True, related_name="risks")
     risk_label = models.CharField(
         gettext_lazy("Risk Label"),
         max_length=32,
