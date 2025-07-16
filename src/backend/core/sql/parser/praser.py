@@ -1,5 +1,4 @@
 import numbers
-from enum import Enum
 from itertools import chain
 from typing import Any, List, Optional, Set
 
@@ -8,11 +7,12 @@ from sqlglot import exp
 
 from core.sql.exceptions import SQLParseError
 from core.sql.model import Table
-from core.sql.parser.model import ParsedSQLInfo, SelectField, SqlVariable
-
-
-class VariableType(Enum):
-    RANGE = "range"
+from core.sql.parser.model import (
+    ParsedSQLInfo,
+    RangeVariableData,
+    SelectField,
+    SqlVariable,
+)
 
 
 class SqlQueryAnalysis:
@@ -120,16 +120,11 @@ class SqlQueryAnalysis:
         """
         将Python值转换为sqlglot的Literal表达式。
         """
-        if (
-            isinstance(value, dict)
-            and value.get("type") == VariableType.RANGE.value
-            and "start" in value
-            and "end" in value
-        ):
+        if isinstance(value, RangeVariableData):
             t = exp.Tuple(
                 expressions=[
-                    self._create_sqlglot_literal(value["start"]),
-                    self._create_sqlglot_literal(value["end"]),
+                    self._create_sqlglot_literal(value.start),
+                    self._create_sqlglot_literal(value.end),
                 ]
             )
             t.set("is_range", True)

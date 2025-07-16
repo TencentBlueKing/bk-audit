@@ -1,7 +1,7 @@
 from django.test import TestCase
 
 from core.sql.exceptions import SQLParseError
-from core.sql.parser.model import ParsedSQLInfo
+from core.sql.parser.model import ParsedSQLInfo, RangeVariableData
 from core.sql.parser.praser import SqlQueryAnalysis
 
 
@@ -163,7 +163,7 @@ class TestSqlQueryAnalysis(TestCase):
         sql = "SELECT * FROM sales WHERE amount = :a"
         analyzer = SqlQueryAnalysis(sql)
 
-        params = {"a": {"type": "range", "start": 1, "end": 100}}
+        params = {"a": RangeVariableData(start=1, end=100)}
         generated = analyzer.generate_sql_with_values(params)
 
         assert "amount BETWEEN 1 AND 100" in generated["data"]
@@ -176,7 +176,7 @@ class TestSqlQueryAnalysis(TestCase):
         analyzer = SqlQueryAnalysis(sql)
 
         params = {
-            "a": {"type": "range", "start": 10, "end": 20},
+            "a": RangeVariableData(start=10, end=20),
             "s": "PAID",
         }
         generated = analyzer.generate_sql_with_values(params)
