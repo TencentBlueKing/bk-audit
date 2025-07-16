@@ -82,7 +82,7 @@ class SqlQueryAnalysis:
         ):
             raw_name = var_node.name
             if raw_name == "?":
-                raise SQLParseError("不支持匿名变量")
+                raise SQLParseError(message="不支持匿名变量")
             elif raw_name not in extracted_var_raw_names:
                 self.sql_variables.append(SqlVariable(raw_name=raw_name, display_name=raw_name))
                 extracted_var_raw_names.add(raw_name)
@@ -91,7 +91,7 @@ class SqlQueryAnalysis:
         # 主要针对顶层的 SELECT 语句 (Mainly for top-level SELECT statements)
         current_expr = self._parsed_expression
         if isinstance(current_expr, exp.Union):
-            raise SQLParseError("暂不支持Union查询。")
+            raise SQLParseError(message="暂不支持Union查询。")
         if isinstance(current_expr, exp.Query) and current_expr.this:
             current_expr = current_expr.this
 
@@ -102,6 +102,10 @@ class SqlQueryAnalysis:
         if select_to_inspect:
             for projection in select_to_inspect.expressions:
                 display_name = projection.alias_or_name
+                if not display_name:
+                    raise SQLParseError(message=f"查询结果字段 {projection} 缺少别名")
+                if display_name == "*":
+                    raise SQLParseError(message="不支持查询结果字段为 *")
 
                 raw_name = display_name
                 core_expression = projection.this if isinstance(projection, exp.Alias) else projection
