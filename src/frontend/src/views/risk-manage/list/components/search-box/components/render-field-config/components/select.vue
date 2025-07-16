@@ -58,8 +58,10 @@
   import _ from 'lodash';
   import {
     computed,
+    onUnmounted,
     ref,
-    // watch,
+    watch,
+    watchEffect,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -67,6 +69,8 @@
   import type FieldMapModel from '@model/es-query/field-map';
 
   import useRequest from '@hooks/use-request';
+
+  import { DateRange } from '@blueking/date-picker';
 
   import  type {  IFieldConfig } from '../config';
   import useMultiCommon from '../hooks/use-multi-common';
@@ -118,18 +122,54 @@
     handleChange,
   } = useMultiCommon(props, t('全部'));
 
-  if (props.config.service)   {
-    loading.value = true;
-    useRequest(props.config.service, {
-      manual: true,
-      defaultParams: props.config.defaultParams || {},
-      defaultValue: [],
-      onSuccess(data) {
-        list.value = data;
-        loading.value = false;
-      },
-    });
-  }
+  // eslint-disable-next-line max-len
+  const fetchListRef = ref<(params: Record<string, any>) => Promise<Array<Record<string, string>>>>(() => Promise.resolve([]));
+
+  watchEffect(() => {
+    if (props.config.service) {
+      loading.value = true;
+      const { run } = useRequest(props.config.service, {
+        defaultParams: props.config.defaultParams || {},
+        manual: true,
+        defaultValue: [],
+        onSuccess(data) {
+          list.value = data;
+          loading.value = false;
+        },
+      });
+
+      fetchListRef.value = run;
+
+      // 1.只有特定字段才需要设置监听时间，
+      // 2.获取时间后，根据时间重新获取list，
+      if (props.name === 'tags' as keyof FieldMapModel
+        || props.name === 'strategy_id' as keyof FieldMapModel) {
+        const stopWatch = watch(
+          () => props.model.datetime_origin,
+          (val) => {
+            if (!val) return;
+            // 获取最新的、正确的时间格式
+            const date = new DateRange(val, 'YYYY-MM-DD HH:mm:ss', window.timezone);
+
+            if (date.startDisplayText && date.endDisplayText) {
+              // 使用最新的 defaultParams
+              fetchListRef.value({
+                ...(props.config.defaultParams || {}),
+                start_time: date.startDisplayText,
+                end_time: date.endDisplayText,
+              });
+            }
+          },
+          {
+            deep: true,
+          },
+        );
+
+        // 组件卸载时清除监听
+        onUnmounted(stopWatch);
+      }
+    }
+  });
 
   const handleSearch = (keyword: string) => {
     // 既可以通过labelName来搜索，也可以通过valName来搜索
@@ -151,15 +191,6 @@
   const handleCancel = () => {
     emits('cancel');
   };
-
-  // if (props.name === 'tags' as keyof FieldMapModel) {
-  //   watch(() => props.model.datetime, (val) => {
-  //     console.log(val);
-  //   }, {
-  //     immediate: true,
-  //     deep: true,
-  //   });
-  // }
 
   defineExpose<Exposes>({
     getValue() {
