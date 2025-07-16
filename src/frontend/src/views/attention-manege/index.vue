@@ -284,6 +284,7 @@
       'current_operator',
       'risk_label',
       'event_time',
+      'title',
     ],
     showLineHeight: false,
   });
@@ -425,6 +426,7 @@
       status: '',
       event_content: '',
       risk_level: '',
+      title: '',
     };
     listRef.value.fetchData({
       ...params,
