@@ -26,7 +26,7 @@ export interface IFieldConfig {
   service?: (params?: Record<string, any>) => Promise<Array<any>>,
   labelName?: string,
   valName?: string,
-  filterList?: string[], // 要过滤的数据列表
+  filterList?: string[]// 要过滤的数据列表
   defaultParams?: Record<string, any>,
 }
 export default {
@@ -43,7 +43,7 @@ export default {
     labelName: 'label',
     valName: 'value',
     defaultParams: {
-      risk_view_type: 'todo',
+      risk_view_type: 'watch',
     },
   },
   tags: {
@@ -52,7 +52,7 @@ export default {
     required: false,
     service: RiskManageService.fetchRiskTags,
     defaultParams: {
-      risk_view_type: 'todo',
+      risk_view_type: 'watch',
     },
   },
   datetime: {

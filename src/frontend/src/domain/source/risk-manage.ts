@@ -39,6 +39,25 @@ class RiskManage extends ModuleBase {
       payload,
     });
   }
+  // 获取待我处理的风险列表
+  getTodoRiskList(params: {
+      page: number,
+      page_size: number
+    }) {
+    return Request.get<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/`, {
+      params,
+    });
+  }
+  // 我关注的获取风险列表
+  getWatchRiskList(params: {
+    page: number,
+    page_size: number
+  }, payload = {} as IRequestPayload) {
+    return Request.get<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/`, {
+      params,
+      payload,
+    });
+  }
   // 获取风险可用字段
   getFields() {
     return Request.get<Array<{
@@ -54,18 +73,11 @@ class RiskManage extends ModuleBase {
     }>>(`${this.module}/status_common/`);
   }
   // 获取风险标签
-  getRiskTags() {
+  getRiskTags(params: Record<string, any>) {
     return Request.get<Array<{
       id: string,
       name: string,
-    }>>(`${this.module}/tags/`);
-  }
-  // 获取待我处理的风险列表
-  getTodoRiskList(params: {
-    page: number,
-    page_size: number
-  }) {
-    return Request.get<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/`, {
+    }>>(`${this.module}/tags/`, {
       params,
     });
   }

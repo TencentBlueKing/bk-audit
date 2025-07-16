@@ -33,7 +33,7 @@
       <bk-option
         v-for="item in filterList"
         :key="config.valName ? item[config.valName] : item.id"
-        :label="t(item[config.labelName ? config.labelName : 'name'])"
+        :label="item[config.labelName ? config.labelName : 'name']"
         :value="item[config.valName ? config.valName : 'id']" />
       <template
         v-if="simple"
@@ -59,6 +59,7 @@
   import {
     computed,
     ref,
+    // watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -121,6 +122,7 @@
     loading.value = true;
     useRequest(props.config.service, {
       manual: true,
+      defaultParams: props.config.defaultParams || {},
       defaultValue: [],
       onSuccess(data) {
         list.value = data;
@@ -149,6 +151,15 @@
   const handleCancel = () => {
     emits('cancel');
   };
+
+  // if (props.name === 'tags' as keyof FieldMapModel) {
+  //   watch(() => props.model.datetime, (val) => {
+  //     console.log(val);
+  //   }, {
+  //     immediate: true,
+  //     deep: true,
+  //   });
+  // }
 
   defineExpose<Exposes>({
     getValue() {

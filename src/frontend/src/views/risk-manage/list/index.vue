@@ -125,7 +125,7 @@
             riskId: data.risk_id,
           },
         };
-        return <router-link to={to} target='_blank'>
+        return <router-link to={to}>
           <Tooltips data={data.risk_id} />
         </router-link>;
       },
@@ -163,7 +163,7 @@
       label: () => t('责任人'),
       field: () => 'operator',
       minWidth: 148,
-      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.operator} />,
+      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.operator || []} />,
     },
     {
       label: () => t('处理状态'),
@@ -239,7 +239,7 @@
       },
     },
     {
-      label: () => t('通知人员'),
+      label: () => t('关注人'),
       field: () => 'notice_users',
       minWidth: 160,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
