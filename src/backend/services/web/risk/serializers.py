@@ -26,9 +26,15 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
+from apps.meta.models import Tag
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
-from services.web.risk.constants import EventMappingFields, RiskLabel, RiskRuleOperator
+from services.web.risk.constants import (
+    EventMappingFields,
+    RiskLabel,
+    RiskRuleOperator,
+    RiskViewType,
+)
 from services.web.risk.models import (
     ProcessApplication,
     Risk,
@@ -179,6 +185,10 @@ class ListEventResponseSerializer(serializers.Serializer):
 
 class RiskInfoSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    tags = serializers.SerializerMethodField()
+
+    def get_tags(self, obj: Risk):
+        return list(obj.tag_objs.values_list("tag_id", flat=True))
 
     class Meta:
         model = Risk
@@ -203,7 +213,11 @@ class ListRiskRequestSerializer(serializers.Serializer):
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), required=False)
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
-        label=gettext_lazy("排序方式"), required=False, allow_null=True, allow_blank=True, choices=OrderTypeChoices.choices
+        label=gettext_lazy("排序方式"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        choices=OrderTypeChoices.choices,
     )
     risk_level = serializers.CharField(
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
@@ -233,7 +247,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
         if data.get("current_operator"):
             data["current_operator__contains"] = data.pop("current_operator")
         if data.get("tags"):
-            data["tags__contains"] = data.pop("tags")
+            data["tag_objs__in"] = data.pop("tags")
         if data.get("event_content"):
             data["event_content__contains"] = data.pop("event_content")
         if data.get("title"):
@@ -242,11 +256,47 @@ class ListRiskRequestSerializer(serializers.Serializer):
         for key, val in attrs.items():
             if key in ["event_time__gte", "event_time__lt", "order_type", "order_field"]:
                 continue
-            if key in ["tags__contains"]:
+            if key in ["tag_objs__in"]:
                 data[key] = [int(i) for i in val.split(",") if i]
                 continue
             data[key] = [i for i in val.split(",") if i]
         return data
+
+
+class ListRiskMetaRequestSerializer(serializers.Serializer):
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices
+    )
+    start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False)
+    end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False)
+
+    def validate(self, attrs):
+        # 校验
+        data = super().validate(attrs)
+        # 时间转换
+        if data.get("start_time"):
+            data["event_time__gte"] = [data.pop("start_time")]
+        if data.get("end_time"):
+            data["event_time__lt"] = [data.pop("end_time")]
+        return data
+
+
+class ListRiskTagsRespSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(label=gettext_lazy("Tag ID"), source="tag_id")
+    name = serializers.CharField(label=gettext_lazy("Tag Name"), source="tag_name")
+
+    class Meta:
+        model = Tag
+        fields = ["id", "name"]
+
+
+class ListRiskStrategyRespSerializer(serializers.ModelSerializer):
+    label = serializers.CharField(label=gettext_lazy("Label"), source="strategy_name")
+    value = serializers.IntegerField(label=gettext_lazy("Value"), source="strategy_id")
+
+    class Meta:
+        model = Strategy
+        fields = ["label", "value"]
 
 
 class ListRiskResponseSerializer(serializers.ModelSerializer):
@@ -256,9 +306,14 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
 
     experiences = serializers.IntegerField(required=False)
     event_content = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
 
     def get_event_content(self, obj):
         return getattr(obj, "event_content_short")
+
+    def get_tags(self, obj: Risk):
+        # 这里 obj.tag_objs.all() 会复用 prefetch 的缓存，不会产生额外 SQL
+        return [tag.tag_id for tag in obj.tag_objs.all()]
 
     class Meta:
         model = Risk
@@ -416,7 +471,11 @@ class ListRiskRuleReqSerializer(serializers.Serializer):
     is_enabled = serializers.CharField(label=gettext_lazy("Is Enabled"), required=False)
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
-        label=gettext_lazy("排序方式"), required=False, allow_null=True, allow_blank=True, choices=OrderTypeChoices.choices
+        label=gettext_lazy("排序方式"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        choices=OrderTypeChoices.choices,
     )
 
     def to_internal_value(self, data):
@@ -504,7 +563,11 @@ class ListProcessApplicationsReqSerializer(serializers.Serializer):
     is_enabled = serializers.CharField(required=False)
     order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_type = serializers.ChoiceField(
-        label=gettext_lazy("排序方式"), required=False, allow_null=True, allow_blank=True, choices=OrderTypeChoices.choices
+        label=gettext_lazy("排序方式"),
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        choices=OrderTypeChoices.choices,
     )
 
     def validate(self, attrs: dict) -> dict:
