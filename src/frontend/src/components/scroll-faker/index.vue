@@ -86,7 +86,7 @@
     },
   });
 
-  const emit = defineEmits(['scroll']);
+  const emit = defineEmits(['scroll', 'reach-bottom']);
 
   const scrollBox = ref();
   const scrollContent = ref();
@@ -122,12 +122,19 @@
     const {
       scrollTop,
       scrollLeft,
+      scrollHeight,
+      clientHeight,
     } = event.target;
     if (isContentScroll.value && verticalScroll.value) {
       verticalScroll.value.scrollTo(0, scrollTop);
     }
     if (isContentScroll.value && horizontalScrollbar.value) {
       horizontalScrollbar.value.scrollLeft = scrollLeft;
+    }
+    // 触底判断
+    const isBottom = scrollHeight - scrollTop <= clientHeight + 5; // 5px容差
+    if (isBottom) {
+      emit('reach-bottom'); // 触发自定义事件
     }
     emit('scroll', event);
   }, 30);
