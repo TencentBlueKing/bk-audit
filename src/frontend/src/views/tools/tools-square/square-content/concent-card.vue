@@ -33,173 +33,180 @@
         type="search"
         @enter="handleSearch" />
     </div>
-    <bk-loading
-      :loading="loading"
-      :z-index="10000">
-      <div
-        v-if="dataList.length > 0"
-        ref="cardListRef"
-        class="card-list"
-        @scroll="handleScroll">
-        <div class="card-list-box">
+    <scroll-faker
+      :style="scrollStyle"
+      @reach-bottom="handleScroll">
+      <bk-loading
+        :loading="loading"
+        :z-index="10000">
+        <div
+          v-if="dataList.length > 0"
+          ref="cardListRef"
+          class="card-list"
+          @scroll="handleScroll">
+          <!-- <div class="card-list" v-if="dataList.length > 0"> -->
+          <div class="card-list-box">
+            <div
+              v-for="(item, index) in dataList"
+              :key="index"
+              class="card-list-item"
+              @click="handleClick(item)"
+              @mouseenter="handleMouseenter(item)"
+              @mouseleave="handleMouseleave()">
+              <div
+                v-show="itemMouseenter === item.uid"
+                class="item-top-right-icon">
+                <audit-icon
+                  class="edit-fill"
+                  type="edit-fill"
+                  @click.stop="handleEdit(item)" />
+
+                <bk-popover
+                  :ref="(el: any) => popoverRefs.set(item.uid, el)"
+                  placement="bottom"
+                  theme="light"
+                  trigger="click">
+                  <template #content>
+                    <div class="delete-title">
+                      {{ t('确认删除该工具？') }}
+                    </div>
+                    <div class="delete-text">
+                      {{ t('删除操作无法撤回，请谨慎操作！') }}
+                    </div>
+
+                    <div class="delete-btn">
+                      <bk-button
+                        size="small"
+                        theme="primary"
+                        @click="handleDeleteItem(item)">
+                        {{ t('确定') }}
+                      </bk-button>
+                      <bk-button
+                        class="ml8"
+                        size="small"
+                        @click="handleCancel(item.uid)">
+                        {{ t('取消') }}
+                      </bk-button>
+                    </div>
+                  </template>
+                  <audit-icon
+                    class="delete"
+                    type="delete"
+                    @click.stop="handleDelete(item)" />
+                </bk-popover>
+              </div>
+
+              <div class="item-top">
+                <div class="item-top-left">
+                  <audit-icon
+                    class="top-left-icon"
+                    svg
+                    :type="itemIcon(item)" />
+                </div>
+                <div class="item-top-right">
+                  <div class="top-right-title">
+                    <span
+                      v-bk-tooltips="{
+                        disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
+                        content: t(item.name),
+                        placement: 'top',
+                        delay: [300, 0],
+                        extCls: 'name-tooltip'
+                      }"
+                      class="title-text"
+                      :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
+                      {{ item.name }}
+                    </span>
+                    <bk-tag
+                      v-if="!item.permission.use_tool"
+                      v-bk-tooltips="{ content: t('申请权限可用') }"
+                      class="title-tag"
+                      size="small"
+                      theme="warning"
+                      type="filled">
+                      {{ t('申请可使用') }}
+                    </bk-tag>
+                  </div>
+                  <div class="top-right-desc">
+                    <bk-tag
+                      v-for="(tag, tagIndex) in item.tags.slice(0, 3)"
+                      :key="tagIndex"
+                      class="desc-tag"
+                      size="small">
+                      {{ returnTagsName(tag) }}
+                    </bk-tag>
+                    <bk-tag
+                      v-if="item.tags.length > 3"
+                      class="desc-tag"
+                      size="small">
+                      + {{ item.tags.length - 3
+                      }}
+                    </bk-tag>
+                    <bk-tag
+                      class="desc-tag"
+                      size="small"
+                      theme="info">
+                      运用在 {{ item.strategies.length }} 个策略中
+                    </bk-tag>
+                  </div>
+                </div>
+              </div>
+              <div
+                v-bk-tooltips="{
+                  disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
+                  content: middleTtooltips(item.description),
+                  width: '200px',
+                  allowHTML: true,
+                  extCls: 'tooltip-custom'
+                }"
+                class="item-middle">
+                {{ item.description }}
+              </div>
+              <div class="item-footer">
+                <span>{{ item.created_by }}</span>
+                <span>{{ formatDate(item.created_at) }}</span>
+              </div>
+              <component
+                :is="DialogVue"
+                :ref="(el) => dialogRefs[item.uid] = el"
+                :dialog-cls="`dialogCls${item.uid}`"
+                :tags-enums="tagsEnums"
+                @open-field-down="openFieldDown" />
+            </div>
+          </div>
           <div
-            v-for="(item, index) in dataList"
-            :key="index"
-            class="card-list-item"
-            @click="handleClick(item)"
-            @mouseenter="handleMouseenter(item)"
-            @mouseleave="handleMouseleave()">
-            <div
-              v-show="itemMouseenter === item.uid"
-              class="item-top-right-icon">
-              <audit-icon
-                class="edit-fill"
-                type="edit-fill"
-                @click.stop="handleEdit(item)" />
+            v-show="hasMore"
+            class="has-more">
+            <bk-loading
+              :loading="hasMore"
+              mode="spin"
+              size="mini"
+              theme="primary" />
+            <span class="more-text">
+              {{ t('加载中...') }}
+            </span>
+          </div>
 
-              <bk-popover
-                :ref="(el: any) => popoverRefs.set(item.uid, el)"
-                placement="bottom"
-                theme="light"
-                trigger="click">
-                <template #content>
-                  <div class="delete-title">
-                    {{ t('确认删除该工具？') }}
-                  </div>
-                  <div class="delete-text">
-                    {{ t('删除操作无法撤回，请谨慎操作！') }}
-                  </div>
+          <!-- </div> -->
+        </div>
 
-                  <div class="delete-btn">
-                    <bk-button
-                      size="small"
-                      theme="primary"
-                      @click="handleDeleteItem(item)">
-                      {{ t('确定') }}
-                    </bk-button>
-                    <bk-button
-                      class="ml8"
-                      size="small"
-                      @click="handleCancel(item.uid)">
-                      {{ t('取消') }}
-                    </bk-button>
-                  </div>
-                </template>
-                <audit-icon
-                  class="delete"
-                  type="delete"
-                  @click.stop="handleDelete(item)" />
-              </bk-popover>
-            </div>
-
-            <div class="item-top">
-              <div class="item-top-left">
-                <audit-icon
-                  class="top-left-icon"
-                  svg
-                  :type="itemIcon(item)" />
-              </div>
-              <div class="item-top-right">
-                <div class="top-right-title">
-                  <span
-                    v-bk-tooltips="{
-                      disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
-                      content: t(item.name),
-                      placement: 'top',
-                      delay: [300, 0],
-                      extCls: 'name-tooltip'
-                    }"
-                    class="title-text"
-                    :class="{ 'overflow-tooltip': isTextOverflow(item.name, 0, '200px', { isSingleLine: true }) }">
-                    {{ item.name }}
-                  </span>
-                  <bk-tag
-                    v-if="!item.permission.use_tool"
-                    v-bk-tooltips="{ content: t('申请权限可用') }"
-                    class="title-tag"
-                    size="small"
-                    theme="warning"
-                    type="filled">
-                    {{ t('申请可使用') }}
-                  </bk-tag>
-                </div>
-                <div class="top-right-desc">
-                  <bk-tag
-                    v-for="(tag, tagIndex) in item.tags.slice(0, 3)"
-                    :key="tagIndex"
-                    class="desc-tag"
-                    size="small">
-                    {{ returnTagsName(tag) }}
-                  </bk-tag>
-                  <bk-tag
-                    v-if="item.tags.length > 3"
-                    class="desc-tag"
-                    size="small">
-                    + {{ item.tags.length - 3
-                    }}
-                  </bk-tag>
-                  <bk-tag
-                    class="desc-tag"
-                    size="small"
-                    theme="info">
-                    运用在 {{ item.strategies.length }} 个策略中
-                  </bk-tag>
-                </div>
-              </div>
-            </div>
-            <div
-              v-bk-tooltips="{
-                disabled: !isTextOverflow(item.description, 44, '400px', { isSingleLine: false }),
-                content: middleTtooltips(item.description),
-                width: '200px',
-                allowHTML: true,
-                extCls: 'tooltip-custom'
-              }"
-              class="item-middle">
-              {{ item.description }}
-            </div>
-            <div class="item-footer">
-              <span>{{ item.created_by }}</span>
-              <span>{{ formatDate(item.created_at) }}</span>
-            </div>
-            <component
-              :is="DialogVue"
-              :ref="(el) => dialogRefs[item.uid] = el"
-              :dialog-cls="`dialogCls${item.uid}`"
-              :tags-enums="tagsEnums"
-              @open-field-down="openFieldDown" />
+        <div
+          v-else
+          class="card-emptyt">
+          <img
+            class="empty-img"
+            src="@images/empty.svg">
+          <div class="empty-text">
+            {{ t('暂无数据') }}
           </div>
         </div>
-        <div
-          v-show="hasMore"
-          class="has-more">
-          <bk-loading
-            :loading="hasMore"
-            mode="spin"
-            size="mini"
-            theme="primary" />
-          <span class="more-text">
-            {{ t('加载中...') }}
-          </span>
-        </div>
-      </div>
-
-      <div
-        v-else
-        class="card-emptyt">
-        <img
-          class="empty-img"
-          src="@images/empty.svg">
-        <div class="empty-text">
-          {{ t('暂无数据') }}
-        </div>
-      </div>
-    </bk-loading>
+      </bk-loading>
+    </scroll-faker>
   </div>
 </template>
 
 <script setup lang='tsx'>
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -215,6 +222,12 @@
   import useRequest from '@/hooks/use-request';
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
+  const props = defineProps<Props>();
+  declare global {
+    interface Window {
+      scrollDebounceTimer: number | undefined;
+    }
+  }
   interface TagItem {
     tag_id: string
     tag_name: string
@@ -226,8 +239,6 @@
     myCreated: boolean,
     recentUsed: boolean,
   }
-  const props = defineProps<Props>();
-
   const { messageSuccess } = useMessage();
 
   const { t } = useI18n();
@@ -239,14 +250,19 @@
   const dataList = ref<ToolInfo[]>([]);
   const popoverRefs = ref<Map<string, any>>(new Map());
   const currentPage = ref(1);
-  const currentPagSize = ref(100);
+  const currentPagSize = ref(50);
   const hasMore = ref(false);
   const cardListRef = ref<HTMLElement | null>(null);
   const total = ref(0);
+  const loading = ref(false);
+  const scrollStyle = {
+    width: '98%',
+    'margin-top': '10px',
+    height: 'calc(100vh - 300px)',
+  };
   // 工具列表
   const {
     run: fetchToolsList,
-    loading,
   } = useRequest(ToolManageService.fetchToolsList, {
     defaultValue: {} as IRequestResponsePaginationData<ToolInfo>,
     onSuccess: (data) => {
@@ -279,16 +295,16 @@
       uid: item.uid,
     }).then(() => {
       handleCancel(item.uid);
+      loading.value = true;
       fetchToolsList({
         page: currentPage.value,
         page_size: currentPagSize.value,
-        offset: currentPage.value,
-        limit: currentPagSize.value,
         my_created: props.myCreated,
         recent_used: props.recentUsed,
-
         keyword: searchValue.value,
         tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+      }).finally(() => {
+        loading.value = false;
       });
     });
   };
@@ -400,15 +416,16 @@
   };
 
   const handleSearch = () => {
+    loading.value = true;
     fetchToolsList({
       page: currentPage.value,
       page_size: currentPagSize.value,
-      offset: currentPage.value,
-      limit: currentPagSize.value,
       keyword: searchValue.value,
       my_created: props.myCreated,
       recent_used: props.recentUsed,
       tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+    }).finally(() => {
+      loading.value;
     });
   };
   // 下转打开
@@ -419,61 +436,57 @@
       dialogRefs.value[uid].openDialog(item, isDrillDown, val);
     }
   };
-  // 滚动处理函数
+  const isMoreLoading = ref(false);
+
+  // 下拉加载
   const handleScroll = () => {
-    if (total.value <= dataList.value.length) {
+    if (total.value <= dataList.value.length || isMoreLoading.value) {
       hasMore.value = false;
       return;
     }
-    if (cardListRef.value) {
+
+    // 防抖逻辑
+    clearTimeout(window.scrollDebounceTimer);
+    window.scrollDebounceTimer = window.setTimeout(() => {
+      loading.value = false;
+      isMoreLoading.value = true;
       hasMore.value = true;
-      const { scrollTop, scrollHeight, clientHeight } = cardListRef.value;
-      // 当滚动到底部时加载更多
-      // 判断是否向下滚动
-      // 当向下滚动到底部时加载更多
-      if (scrollTop + clientHeight >= scrollHeight - 100) {
-        currentPage.value += 1;
-        currentPagSize.value += 100;
-        fetchToolsList({
-          page: currentPage.value,
-          page_size: currentPagSize.value,
-          offset: currentPage.value,
-          limit: currentPagSize.value,
-          keyword: searchValue.value,
-          my_created: props.myCreated,
-          recent_used: props.recentUsed,
-          tags: props.tags.map((item: TagItem) => item.tag_id) || [],
-        }).finally(() => {
+
+      fetchToolsList({
+        page: currentPage.value === 1 ? 2 : currentPage.value,
+        page_size: currentPagSize.value === 50 ? 100 : currentPagSize.value,
+        keyword: searchValue.value,
+        my_created: props.myCreated,
+        recent_used: props.recentUsed,
+        tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+      }).then((res) => {
+        if (res) {
+          currentPage.value += 1;
+          currentPagSize.value += 50;
+        }
+      })
+        .finally(() => {
           hasMore.value = false;
+          isMoreLoading.value = false;
         });
-      }
-    }
+    }, 1000);
   };
 
   watch(() => props, (newTags) => {
+    loading.value = true;
     fetchToolsList({
       page: currentPage.value,
       page_size: currentPagSize.value,
-      offset: currentPage.value,
-      limit: currentPagSize.value,
       keyword: searchValue.value,
       my_created: props.myCreated,
       recent_used: props.recentUsed,
-
       tags: newTags.tags.map((item: TagItem) => item.tag_id) || [],
+    }).finally(() => {
+      loading.value = false;
     });
   }, {
     deep: true,
     immediate: false,
-  });
-
-  onMounted(() => {
-    // 添加滚动监听
-    nextTick(() => {
-      if (cardListRef.value) {
-        cardListRef.value.addEventListener('scroll', handleScroll);
-      }
-    });
   });
 
 </script>
@@ -498,14 +511,16 @@
   .card-list {
     position: relative;
     width: 100%;
-    max-height: calc(100vh - 300px);
+
+    /* max-height: calc(100vh - 300px); */
 
     /* 改用最大高度 */
     padding: 10px 0;
     margin-top: 10px;
 
     /* 上下内边距 */
-    overflow-y: auto;
+
+    /* overflow-y: auto; */
     align-content: flex-start;
 
     /* 顶部对齐 */
@@ -515,14 +530,13 @@
 
       .card-list-item {
         position: relative;
-        width: 400px;
+        width: 430px;
         height: 188px;
         margin-top: 10px;
         margin-bottom: 0;
         margin-left: 10px;
         cursor: pointer;
         background: #fff;
-        box-shadow: 0 2px 4px 0 #1919290d;
         transition: all .3s ease;
 
         &:hover {
