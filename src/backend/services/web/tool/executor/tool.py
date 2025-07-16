@@ -16,8 +16,9 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
-from typing import Generic, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, Union
 
+from arrow import ParserError
 from bk_resource import api
 from blueapps.utils.logger import logger
 from pydantic import BaseModel
@@ -27,14 +28,25 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.models import get_request_username
+from core.sql.parser.model import RangeVariableData
 from core.sql.parser.praser import SqlQueryAnalysis
+from core.utils.time import parse_datetime
 from services.web.tool.constants import (
     BkvisionConfig,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
+    SQLDataSearchInputVariable,
     ToolTypeEnum,
 )
-from services.web.tool.exceptions import DataSearchTablePermission
+from services.web.tool.exceptions import (
+    DataSearchTablePermission,
+    InputVariableMissingError,
+    InputVariableValueError,
+    InvalidVariableFormatError,
+    InvalidVariableStructureError,
+    ParseVariableError,
+    VariableHasNoParseFunction,
+)
 from services.web.tool.executor.model import (
     BkVisionExecuteResult,
     DataSearchToolExecuteParams,
@@ -105,6 +117,86 @@ class BaseToolExecutor(abc.ABC, Generic[TConfig, TParams, TResult]):
         return self._execute(params)
 
 
+class VariableValueParser:
+    """
+    变量值解析器
+    """
+
+    def __init__(self, variable: SQLDataSearchInputVariable):
+        self.variable = variable
+
+    def _format_time_range_select(self, value: Any) -> RangeVariableData:
+        """
+        格式化时间范围选择器
+        """
+
+        if not isinstance(value, list) or len(value) != 2:
+            raise InvalidVariableStructureError(
+                var_type=self.variable.field_category, expected_structure="一个包含2个元素的列表", value=value
+            )
+        # 来自 _format_time_select 的更具体的 InvalidVariableFormatError 将会被传递上来
+        start_time = self._format_time_select(value[0])
+        end_time = self._format_time_select(value[1])
+        return RangeVariableData(
+            start=start_time,
+            end=end_time,
+        )
+
+    def _format_time_select(self, value: Any) -> int:
+        """
+        格式化时间选择器
+        """
+
+        try:
+            return int(parse_datetime(value).timestamp()) * 1000
+        except (ParserError, TypeError, ValueError):
+            raise InvalidVariableFormatError(var_type=self.variable.field_category, value=value)
+
+    def _format_input(self, value: Any) -> str:
+        """
+        格式化输入
+        """
+
+        return str(value)
+
+    def _format_number_input(self, value: Any) -> int:
+        """
+        格式化数字输入
+        """
+
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            raise InvalidVariableFormatError(var_type=self.variable.field_category, value=value)
+
+    def _format_person_select(self, value: Any) -> list | str:
+        """
+        格式化人员选择器为 sql 中的 in
+        """
+
+        if not isinstance(value, list):
+            return str(value)
+        return [str(v) for v in value]
+
+    def parse(self, value: Any) -> Any:
+        """
+        解析变量值
+        """
+
+        func: Callable[[Any], Any] = getattr(self, f"_format_{self.variable.field_category.value}", None)
+        if not func:
+            raise VariableHasNoParseFunction(var_type=self.variable.field_category)
+        try:
+            return func(value)
+        # 捕获任何用户输入错误 (结构、格式等) 并重新抛出它。这允许具体的异常冒泡到上层。
+        except InputVariableValueError:
+            raise
+        # 捕获任何其他意外错误并将其包装为通用的内部错误。
+        except Exception as e:
+            logger.error(f"VariableValueParser 解析错误: {e}", exc_info=True)
+            raise ParseVariableError(var_type=self.variable.field_category, value=value)
+
+
 class SqlDataSearchExecutor(
     BaseToolExecutor[SQLDataSearchConfig, DataSearchToolExecuteParams, DataSearchToolExecuteResult]
 ):
@@ -141,13 +233,36 @@ class SqlDataSearchExecutor(
                 continue
             raise DataSearchTablePermission(rt.get("user_id"), rt.get("object_id"))
 
-    def _execute(self, params: TParams):
+    def render_value(self, var: SQLDataSearchInputVariable, value: Any) -> Any:
+        """
+        渲染变量值
+        """
+
+        return VariableValueParser(var).parse(value)
+
+    def render_variables(self, params: DataSearchToolExecuteParams) -> Dict[str, Any]:
+        """
+        渲染变量
+        """
+
+        variable_values_for_rendering = {tv.raw_name: tv.value for tv in params.tool_variables}
+        for var in self.config.input_variable:
+            if var.raw_name not in variable_values_for_rendering:
+                if not var.required:
+                    # 非必填变量
+                    continue
+                raise InputVariableMissingError(var.display_name)
+            value = self.render_value(var, variable_values_for_rendering[var.raw_name])
+            variable_values_for_rendering[var.raw_name] = value
+        return variable_values_for_rendering
+
+    def _execute(self, params: DataSearchToolExecuteParams):
         """
         执行 SQL 数据查询
         """
 
         # 渲染变量
-        variable_values_for_rendering = {tv.raw_name: tv.value for tv in params.tool_variables}
+        variable_values_for_rendering = self.render_variables(params)
         # 生成可执行的 SQL
         limit = params.page_size
         offset = (params.page - 1) * params.page_size

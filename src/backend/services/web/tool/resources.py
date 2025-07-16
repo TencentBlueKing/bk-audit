@@ -356,14 +356,49 @@ class ExecuteTool(ToolBase):
                 "params": {
                     "tool_variables": [
                         {
-                            "raw_name": "time_range",
-                            "value": "2023-01-01,2023-12-31"
+                            "raw_name": "username",
+                            "value": "admin"
                         }
                     ],
                     "page": 1,
                     "page_size": 100
                 }
             }
+            ```
+        不同的变量下的输入格式:
+        1. input（输入框）
+            ```json
+                {
+                    "raw_name": "string",
+                    "value": "admin"
+                }
+            ```
+        2. number_input（数字输入框）
+            ```json
+                {
+                    "raw_name": "number",
+                    "value": 123
+                }
+            ```
+        3. time_select（时间选择器）
+            ```json
+                {
+                    "raw_name": "datetime",
+                    "value": "2023-01-01 12:00:00" // 默认+8时间，实际 SQL 中会转为毫秒时间戳
+                }
+            ```
+        4. person_select（人员选择器）
+            ```json
+                {
+                    "raw_name": "usernames",
+                    "value": ["user1", "user2"]
+                }
+        5. time_range_select（时间范围选择器）
+            ```json
+                {
+                    "raw_name": "datetime_range",
+                    "value": ["2023-01-01 12:00:00", "2023-01-31 12:00:00"]
+                }
             ```
         response:
             ```json
