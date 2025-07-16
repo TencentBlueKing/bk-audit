@@ -164,7 +164,7 @@
 
   const props = defineProps<Props>();
 
-  const emits = defineEmits<Emits>();
+  const emits = defineEmits<Emits>() ;
 
   const router = useRouter();
   const route = useRoute();
@@ -241,25 +241,43 @@
     });
   };
 
-  // 下一步
   const handleNext = () => {
     Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
       const params: IFormData = _.cloneDeep(Object.assign({}, formData.value, eventRef.value.getData()));
-      // 处理event_basic_field_configs
+      // 统一处理配置字段
       params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
-        if (item.map_config) {
-          if (!item.map_config.source_field && !item.map_config.target_value) {
-            // eslint-disable-next-line no-param-reassign
-            delete item.map_config;
-          } else if (item.map_config.source_field && item.map_config.target_value) {
-            // eslint-disable-next-line no-param-reassign
-            item.map_config.source_field = undefined;
-          }
-        }
+        cleanMapConfig(item);
+        cleanDrillConfig(item);
         return item;
       });
+
+      params.event_data_field_configs = params.event_data_field_configs.map(cleanDrillConfig);
+      params.event_evidence_field_configs = params.event_evidence_field_configs.map(cleanDrillConfig);
+
       emits('nextStep', 3, params);
     });
+  };
+  // 公共函数：清理配置中的无效drill_config
+  const cleanDrillConfig = (item: any) => {
+    if (item.drill_config && !item.drill_config.tool?.uid) {
+      // eslint-disable-next-line no-param-reassign
+      delete item.drill_config;
+    }
+    return item;
+  };
+
+  // 公共函数：清理配置中的无效map_config
+  const cleanMapConfig = (item:any) => {
+    if (item.map_config) {
+      if (!item.map_config.source_field && !item.map_config.target_value) {
+        // eslint-disable-next-line no-param-reassign
+        delete item.map_config;
+      } else if (item.map_config.source_field && item.map_config.target_value) {
+        // eslint-disable-next-line no-param-reassign
+        item.map_config.source_field = undefined;
+      }
+    }
+    return item;
   };
 
   const handleClick = (e: Event, origin?: 'origin') => {
