@@ -286,6 +286,8 @@
     status: 'status',
     last_time: 'last_time',
   };
+  console.log('tableColumn', tableColumn);
+
   const initSettings = () => ({
     fields: tableColumn.value.reduce((res, item) => {
       if (item.field) {
