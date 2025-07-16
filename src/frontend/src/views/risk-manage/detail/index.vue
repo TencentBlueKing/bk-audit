@@ -17,7 +17,11 @@
 <template>
   <bk-loading :loading="loading || strategyLoading || statusLoading">
     <div class="risk-manage-detail-wrap mb12">
-      <div class="left">
+      <div
+        class="left"
+        :style="{
+          width: route.name === 'attentionManageDetail' ? '100%' : 'calc(100% - 368px)'
+        }">
         <base-info
           :data="detailData"
           :risk-status-common="riskStatusCommon"
@@ -30,7 +34,9 @@
         </div>
       </div>
       <!-- 事件处理 -->
-      <scroll-faker style="width: 368px;">
+      <scroll-faker
+        v-if="route.name !== 'attentionManageDetail'"
+        style="width: 368px;">
         <div class="right">
           <risk-handle
             :data="riskData"
@@ -157,10 +163,16 @@
   }));
 
   useRouterBack(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { tab, ...rest } = route.query;
+    const listNameMap = {
+      riskManageDetail: 'riskManageList',
+      handleManageDetail: 'handleManageList',
+      attentionManageDetail: 'attentionManageList',
+    };
     router.push({
-      name: route.name === 'riskManageDetail'
-        ? 'riskManageList'
-        : 'handleManageList',
+      name: listNameMap[route.name as keyof typeof listNameMap],
+      query: rest,
     });
   });
 

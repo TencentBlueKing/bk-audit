@@ -119,5 +119,8 @@ export default {
     中: 'Middle',
     低: 'Low',
     转单给: 'Transfer order to',
+    风险标题: 'Risk title',
+    我的关注: 'My focus',
+    请输入风险标题: 'Please enter the risk title',
   },
 };

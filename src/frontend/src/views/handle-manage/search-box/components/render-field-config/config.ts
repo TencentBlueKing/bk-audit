@@ -14,6 +14,8 @@
   We undertake not to change the open source license (MIT license) applicable
   to the current version of the project delivered to anyone in the future.
 */
+import dayjs from 'dayjs';
+
 import RiskManageService from '@service/risk-manage';
 import StrategyManageService from '@service/strategy-manage';
 
@@ -26,7 +28,8 @@ export interface IFieldConfig {
   service?: (params?: Record<string, any>) => Promise<Array<any>>,
   labelName?: string,
   valName?: string,
-  filterList?: string[]// 要过滤的数据列表
+  filterList?: string[], // 要过滤的数据列表
+  defaultParams?: Record<string, any>,
 }
 export default {
   risk_id: {
@@ -38,15 +41,25 @@ export default {
     label: '风险命中策略',
     type: 'select',
     required: false,
-    service: StrategyManageService.fetchAllStrategyList,
+    service: StrategyManageService.fetchScopedStrategyList,
     labelName: 'label',
     valName: 'value',
+    defaultParams: {
+      risk_view_type: 'todo',
+      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    },
   },
   tags: {
     label: '风险标签',
     type: 'select',
     required: false,
     service: RiskManageService.fetchRiskTags,
+    defaultParams: {
+      risk_view_type: 'todo',
+      start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+      end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+    },
   },
   datetime: {
     label: '首次发现时间',
@@ -77,5 +90,10 @@ export default {
     labelName: 'label',
     valName: 'value',
     service: () => Promise.resolve(StrategyManageService.fetchStrategyCommon().then(data => data.risk_level)),
+  },
+  title: {
+    label: '风险标题',
+    type: 'string',
+    required: false,
   },
 } as Record<string, IFieldConfig>;

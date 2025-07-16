@@ -63,7 +63,7 @@ from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
 from core.utils.data import choices_to_dict
-from core.utils.page import paginate_queryset
+from core.utils.page import paginate_data
 from services.web.analyze.constants import (
     BaseControlTypeChoices,
     FilterOperator,
@@ -1215,10 +1215,8 @@ class ListLinkTable(LinkTableBase):
         if sort:
             link_tables = link_tables.order_by(*sort)
         # 分页
-        link_tables, page = paginate_queryset(queryset=link_tables, request=request)
-        if sort:
-            link_tables = link_tables.order_by(*sort)
-        link_table_uids = link_tables.values("uid")
+        paged_link_tables, page = paginate_data(queryset=link_tables, request=request)
+        link_table_uids = [link_table.uid for link_table in paged_link_tables]
         # 填充标签
         all_tags = LinkTableTag.objects.filter(link_table_uid__in=link_table_uids)
         tag_map = defaultdict(list)
@@ -1235,7 +1233,7 @@ class ListLinkTable(LinkTableBase):
             strategy["link_table_uid"]: strategy["version"]
             for strategy in strategies.values("link_table_uid").annotate(version=Min("link_table_version")).order_by()
         }
-        for link_table in link_tables:
+        for link_table in paged_link_tables:
             # 填充关联的策略数
             setattr(link_table, "strategy_count", strategy_cnt_map.get(link_table.uid, 0))
             # 填充标签
@@ -1247,7 +1245,7 @@ class ListLinkTable(LinkTableBase):
                 strategy_version_map.get(link_table.uid, link_table.version) < link_table.version,
             )
         # 响应
-        return link_tables
+        return paged_link_tables
 
 
 class ListLinkTableAll(LinkTableBase):

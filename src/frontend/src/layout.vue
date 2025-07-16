@@ -166,7 +166,13 @@
         <template v-else-if="curNavName === 'auditRiskManage'">
           <audit-menu-item
             class="mt8"
-            index="handleManage">
+            index="attentionManage">
+            <audit-icon
+              class="menu-item-icon"
+              type="wodeguanzhu" />
+            {{ t('我的关注') }}
+          </audit-menu-item>
+          <audit-menu-item index="handleManage">
             <audit-icon
               class="menu-item-icon"
               type="daiwochuli" />

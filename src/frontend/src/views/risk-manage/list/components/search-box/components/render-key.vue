@@ -130,10 +130,8 @@
   };
   // 搜索项值改变
   const handleChange = (fieldName: string, value: any) => {
-    localSearchModel.value = {
-      ...localSearchModel.value,
-      [fieldName]: value,
-    };
+    // 精准更新特定键值
+    localSearchModel.value[fieldName] = value;
   };
   // 提交搜索
   const handleSubmit = () => {

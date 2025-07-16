@@ -1,11 +1,11 @@
 @font-face {
-  font-family: "audit";
-  src: url("fonts/iconcool.svg#iconcool") format("svg"),
-    url("fonts/iconcool.ttf") format("truetype"),
-    url("fonts/iconcool.woff") format("woff"),
-    url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
-  font-weight: normal;
-  font-style: normal;
+	font-family: "audit";
+	src: url("fonts/iconcool.svg#iconcool") format("svg"),
+url("fonts/iconcool.ttf") format("truetype"),
+url("fonts/iconcool.woff") format("woff"),
+url("fonts/iconcool.eot?#iefix") format("embedded-opentype");
+    font-weight: normal;
+    font-style: normal;
 }
 
 .audit-icon {
@@ -24,356 +24,419 @@
 }
 
 .audit-icon-plus-circle:before {
-  content: "\e169";
+	content: "\e169";
 }
 .audit-icon-link:before {
-  content: "\e16c";
+	content: "\e16c";
 }
 .audit-icon-info-fill:before {
-  content: "\e16f";
+	content: "\e16f";
 }
 .audit-icon-loading-circle:before {
-  content: "\e16d";
+	content: "\e16d";
 }
 .audit-icon-search1:before {
-  content: "\e145";
+	content: "\e145";
 }
 .audit-icon-auto:before {
-  content: "\e179";
+	content: "\e179";
 }
 .audit-icon-lang-en:before {
-  content: "\e16a";
+	content: "\e16a";
 }
 .audit-icon-lang-zh:before {
-  content: "\e16b";
+	content: "\e16b";
 }
 .audit-icon-shujuku:before {
-  content: "\e182";
+	content: "\e182";
 }
 .audit-icon-analysis:before {
-  content: "\e101";
+	content: "\e101";
 }
 .audit-icon-angle-double-down:before {
-  content: "\e102";
+	content: "\e102";
 }
 .audit-icon-angle-double-up:before {
-  content: "\e103";
+	content: "\e103";
 }
 .audit-icon-angle-fill-rignt:before {
-  content: "\e105";
+	content: "\e105";
 }
 .audit-icon-angle-fill-down:before {
-  content: "\e104";
+	content: "\e104";
 }
 .audit-icon-attention:before {
-  content: "\e106";
+	content: "\e106";
 }
 .audit-icon-chart:before {
-  content: "\e107";
+	content: "\e107";
 }
 .audit-icon-close:before {
-  content: "\e109";
+	content: "\e109";
 }
 .audit-icon-diff:before {
-  content: "\e10a";
+	content: "\e10a";
 }
 .audit-icon-audit:before {
-  content: "\e108";
+	content: "\e108";
 }
 .audit-icon-filter:before {
-  content: "\e10b";
+	content: "\e10b";
 }
 .audit-icon-fullscreen:before {
-  content: "\e10c";
+	content: "\e10c";
 }
 .audit-icon-homepage:before {
-  content: "\e10d";
+	content: "\e10d";
 }
 .audit-icon-insert:before {
-  content: "\e10e";
+	content: "\e10e";
 }
 .audit-icon-right:before {
-  content: "\e10f";
+	content: "\e10f";
 }
 .audit-icon-setting:before {
-  content: "\e110";
+	content: "\e110";
 }
 .audit-icon-table:before {
-  content: "\e111";
+	content: "\e111";
 }
 .audit-icon-trace:before {
-  content: "\e112";
+	content: "\e112";
 }
 .audit-icon-angle-line-down:before {
-  content: "\e113";
+	content: "\e113";
 }
 .audit-icon-angle-line-up:before {
-  content: "\e114";
+	content: "\e114";
 }
 .audit-icon-refresh:before {
-  content: "\e118";
+	content: "\e118";
 }
 .audit-icon-alert:before {
-  content: "\e11a";
+	content: "\e11a";
 }
 .audit-icon-edit-fill:before {
-  content: "\e11b";
+	content: "\e11b";
 }
 .audit-icon-redo:before {
-  content: "\e11c";
+	content: "\e11c";
 }
 .audit-icon-more:before {
-  content: "\e11e";
+	content: "\e11e";
 }
 .audit-icon-abnormal:before {
-  content: "\e125";
+	content: "\e125";
 }
 .audit-icon-default:before {
-  content: "\e126";
+	content: "\e126";
 }
 .audit-icon-failed:before {
-  content: "\e127";
+	content: "\e127";
 }
 .audit-icon-loading:before {
-  content: "\e128";
+	content: "\e128";
 }
 .audit-icon-normal:before {
-  content: "\e12b";
+	content: "\e12b";
 }
 .audit-icon-success:before {
-  content: "\e129";
+	content: "\e129";
 }
 .audit-icon-unknown:before {
-  content: "\e12a";
+	content: "\e12a";
 }
 .audit-icon-move:before {
-  content: "\e12c";
+	content: "\e12c";
 }
 .audit-icon-completed:before {
-  content: "\e12e";
+	content: "\e12e";
 }
 .audit-icon-esstorage:before {
-  content: "\e12f";
+	content: "\e12f";
 }
 .audit-icon-view:before {
-  content: "\e130";
+	content: "\e130";
 }
 .audit-icon-corret-fill:before {
-  content: "\e132";
+	content: "\e132";
 }
 .audit-icon-delete-fill:before {
-  content: "\e131";
+	content: "\e131";
 }
 .audit-icon-data-storage:before {
-  content: "\e133";
+	content: "\e133";
 }
 .audit-icon-search:before {
-  content: "\e134";
+	content: "\e134";
 }
 .audit-icon-back:before {
-  content: "\e135";
+	content: "\e135";
 }
 .audit-icon-delete:before {
-  content: "\e138";
+	content: "\e138";
 }
 .audit-icon-copy:before {
-  content: "\e139";
+	content: "\e139";
 }
 .audit-icon-add:before {
-  content: "\e13a";
+	content: "\e13a";
 }
 .audit-icon-add-fill:before {
-  content: "\e13c";
+	content: "\e13c";
 }
 .audit-icon-reduce-fill:before {
-  content: "\e13b";
+	content: "\e13b";
 }
 .audit-icon-help-fill:before {
-  content: "\e13d";
+	content: "\e13d";
 }
 .audit-icon-jump-link:before {
-  content: "\e13e";
+	content: "\e13e";
 }
 .audit-icon-un-full-screen:before {
-  content: "\e13f";
+	content: "\e13f";
 }
 .audit-icon-api:before {
-  content: "\e142";
+	content: "\e142";
 }
 .audit-icon-paas:before {
-  content: "\e141";
+	content: "\e141";
 }
 .audit-icon-blueking:before {
-  content: "\e140";
+	content: "\e140";
 }
 .audit-icon-unview:before {
-  content: "\e143";
+	content: "\e143";
 }
 .audit-icon-remind-fill:before {
-  content: "\e144";
+	content: "\e144";
 }
 .audit-icon-schema:before {
-  content: "\e146";
+	content: "\e146";
 }
 .audit-icon-help-document-fill:before {
-  content: "\e149";
+	content: "\e149";
 }
 .audit-icon-ip-result:before {
-  content: "\e14b";
+	content: "\e14b";
 }
 .audit-icon-warning:before {
-  content: "\e150";
+	content: "\e150";
 }
 .audit-icon-navi-expand:before {
-  content: "\e151";
+	content: "\e151";
 }
 .audit-icon-download:before {
-  content: "\e152";
+	content: "\e152";
 }
 .audit-icon-full-screen:before {
-  content: "\e154";
+	content: "\e154";
 }
 .audit-icon-un-full-screen-2:before {
-  content: "\e153";
+	content: "\e153";
 }
 .audit-icon-upload:before {
-  content: "\e155";
+	content: "\e155";
 }
 .audit-icon-gaojingshijian:before {
-  content: "\e157";
+	content: "\e157";
 }
 .audit-icon-tongzhizu:before {
-  content: "\e156";
+	content: "\e156";
 }
 .audit-icon-celve:before {
-  content: "\e158";
+	content: "\e158";
 }
 .audit-icon-quanbu:before {
-  content: "\e15b";
+	content: "\e15b";
 }
 .audit-icon-weifenpei:before {
-  content: "\e159";
+	content: "\e159";
 }
 .audit-icon-yonghuzu:before {
-  content: "\e15c";
+	content: "\e15c";
 }
 .audit-icon-tag:before {
-  content: "\e15a";
+	content: "\e15a";
 }
 .audit-icon-duanxin:before {
-  content: "\e15e";
+	content: "\e15e";
 }
 .audit-icon-weixin:before {
-  content: "\e15d";
+	content: "\e15d";
 }
 .audit-icon-qw:before {
-  content: "\e15f";
+	content: "\e15f";
 }
 .audit-icon-youjian:before {
-  content: "\e160";
+	content: "\e160";
 }
 .audit-icon-yuyin:before {
-  content: "\e163";
+	content: "\e163";
 }
 .audit-icon-check-line:before {
-  content: "\e164";
+	content: "\e164";
 }
 .audit-icon-sort:before {
-  content: "\e165";
+	content: "\e165";
 }
 .audit-icon-sort2:before {
-  content: "\e166";
+	content: "\e166";
 }
 .audit-icon-hide:before {
-  content: "\e167";
+	content: "\e167";
 }
 .audit-icon-view-2:before {
-  content: "\e168";
+	content: "\e168";
 }
 .audit-icon-bkbase:before {
-  content: "\e16e";
+	content: "\e16e";
 }
 .audit-icon-new:before {
-  content: "\e170";
+	content: "\e170";
 }
 .audit-icon-biaojiwubao:before {
-  content: "\e178";
+	content: "\e178";
 }
 .audit-icon-daichuli:before {
-  content: "\e173";
+	content: "\e173";
 }
 .audit-icon-daiwochuli:before {
-  content: "\e174";
+	content: "\e174";
 }
 .audit-icon-jieshu:before {
-  content: "\e171";
+	content: "\e171";
 }
 .audit-icon-jiechuwubao:before {
-  content: "\e172";
+	content: "\e172";
 }
 .audit-icon-taocanchulizhong:before {
-  content: "\e175";
+	content: "\e175";
 }
 .audit-icon-down-2:before {
-  content: "\e176";
+	content: "\e176";
 }
 .audit-icon-up-2:before {
-  content: "\e177";
+	content: "\e177";
 }
 .audit-icon-rule:before {
-  content: "\e17a";
+	content: "\e17a";
 }
 .audit-icon-report:before {
-  content: "\e17c";
+	content: "\e17c";
 }
 .audit-icon-user:before {
-  content: "\e17d";
+	content: "\e17d";
 }
 .audit-icon-reopen:before {
-  content: "\e17e";
+	content: "\e17e";
 }
 .audit-icon-stop:before {
-  content: "\e17f";
+	content: "\e17f";
 }
 .audit-icon-stop-2:before {
-  content: "\e180";
+	content: "\e180";
 }
 .audit-icon-baobiao:before {
-  content: "\e181";
+	content: "\e181";
 }
 .audit-icon-lianbiao:before {
-  content: "\e183";
+	content: "\e183";
 }
 .audit-icon-buer:before {
-  content: "\e190";
+	content: "\e190";
 }
 .audit-icon-double:before {
-  content: "\e18e";
+	content: "\e18e";
 }
 .audit-icon-long:before {
-  content: "\e193";
+	content: "\e193";
 }
 .audit-icon-int:before {
-  content: "\e18c";
+	content: "\e18c";
 }
 .audit-icon-string:before {
-  content: "\e18d";
+	content: "\e18d";
 }
 .audit-icon-text:before {
-  content: "\e18f";
+	content: "\e18f";
 }
 .audit-icon-timestamp:before {
-  content: "\e191";
+	content: "\e191";
 }
 .audit-icon-float:before {
-  content: "\e194";
+	content: "\e194";
 }
 .audit-icon-yunxingjilu:before {
-  content: "\e196";
+	content: "\e196";
 }
-.audit-icon-object:before {
-  content: "\e197";
+.audit-icon-obj:before {
+	content: "\e197";
 }
 .audit-icon-shujutongji:before {
-  content: "\e198";
+	content: "\e198";
+}
+.audit-icon-sousuo-2:before {
+	content: "\e199";
+}
+.audit-icon-object:before {
+	content: "\e19a";
+}
+.audit-icon-yuan-qiyong-quanliang:before {
+	content: "\e19b";
+}
+.audit-icon-yuan-qiyong-zengliang:before {
+	content: "\e19c";
+}
+.audit-icon-shitu-lianglan:before {
+	content: "\e19d";
+}
+.audit-icon-dangemoshi:before {
+	content: "\e19e";
+}
+.audit-icon-jieru:before {
+	content: "\e19f";
+}
+.audit-icon-app:before {
+	content: "\e1a0";
+}
+.audit-icon-daochu:before {
+	content: "\e1a1";
+}
+.audit-icon-api-2:before {
+	content: "\e1a2";
+}
+.audit-icon-bkvison:before {
+	content: "\e1a3";
+}
+.audit-icon-sql:before {
+	content: "\e1a4";
+}
+.audit-icon-apixiao:before {
+	content: "\e1a5";
+}
+.audit-icon-sqlxiao:before {
+	content: "\e1a6";
+}
+.audit-icon-bkvisonxiao:before {
+	content: "\e1a7";
+}
+.audit-icon-lock:before {
+	content: "\e1a8";
+}
+.audit-icon-unlock:before {
+	content: "\e1a9";
+}
+.audit-icon-fuzhi:before {
+	content: "\e1aa";
+}
+.audit-icon-piliangbianji:before {
+	content: "\e1ab";
+}
+.audit-icon-gongju:before {
+	content: "\e1ac";
+}
+.audit-icon-wodeguanzhu:before {
+	content: "\e1ad";
 }

@@ -31,7 +31,7 @@ from django.utils.translation import gettext
 from jinja2 import UndefinedError
 from rest_framework.settings import api_settings
 
-from apps.meta.models import GlobalMetaConfig
+from apps.meta.models import GlobalMetaConfig, Tag
 from apps.meta.utils.format import preprocess_data
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
@@ -143,6 +143,7 @@ class RiskHandler:
             return strategy.risk_title
 
     def gen_risk_create_params(self, event: dict) -> dict:
+        tag_ids = StrategyTag.objects.filter(strategy_id=event["strategy_id"]).values_list("tag_id", flat=True)
         create_params = {
             "event_content": event.get("event_content"),
             "raw_event_id": event["raw_event_id"],
@@ -154,7 +155,7 @@ class RiskHandler:
             "event_end_time": datetime.datetime.fromtimestamp(event["event_time"] / 1000),
             "event_source": event.get("event_source"),
             "operator": self.parse_operator(event.get("operator")),
-            "tags": list(StrategyTag.objects.filter(strategy_id=event["strategy_id"]).values_list("tag_id", flat=True)),
+            "_tags": Tag.objects.filter(tag_id__in=tag_ids),
         }
         create_params["title"] = self.render_risk_title(create_params)
         return create_params
@@ -203,7 +204,11 @@ class RiskHandler:
             return False, None
 
         # 不存在则创建
-        return True, Risk.objects.create(**self.gen_risk_create_params(event))
+        create_params = self.gen_risk_create_params(event)
+        tags: List[Tag] = create_params.pop("_tags", [])
+        risk: Risk = Risk.objects.create(**create_params)
+        risk.tag_objs.set(tags)
+        return True, risk
 
     def parse_operator(self, operator: str) -> List[str]:
         operator = operator or ""

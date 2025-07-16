@@ -347,6 +347,16 @@ class RiskLabel(TextChoices):
     MISREPORT = "misreport", gettext_lazy("误报")
 
 
+class RiskViewType(TextChoices):
+    """
+    风险视图类型
+    """
+
+    ALL = "all", gettext_lazy("全部")
+    TODO = "todo", gettext_lazy("待处理")
+    WATCH = "watch", gettext_lazy("待关注")
+
+
 class RiskFields:
     """
     工单字段

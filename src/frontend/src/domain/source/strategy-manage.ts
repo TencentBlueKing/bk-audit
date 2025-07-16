@@ -63,6 +63,13 @@ class Strategy extends ModuleBase {
       value: number
     }>>(`${this.path}/strategy/all/`);
   }
+  // 获取权限下所有策略下拉列表
+  getScopedStrategyList(params: Record<string, any>) {
+    return Request.get<Array<{
+      label: string,
+      value: number
+    }>>(`${this.module}risks/strategies/`, { params });
+  }
   // 获取告警常量
   getStrategyCommon(payload = {} as IRequestPayload) {
     return Request.get<CommonDataModel>(`${this.path}/strategy/common/`, {

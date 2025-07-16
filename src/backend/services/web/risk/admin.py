@@ -32,17 +32,38 @@ from services.web.risk.models import (
 class RiskAdmin(admin.ModelAdmin):
     list_display = [
         "risk_id",
-        "event_content",
+        "title",
+        "event_content_short",
         "operator",
         "event_time",
         "status",
         "current_operator",
         "notice_users",
-        "tags",
         "risk_label",
+        "display_tags",
     ]
-    search_fields = ["risk_id", "event_content"]
-    list_filter = ["status", "risk_label"]
+    search_fields = ["risk_id", "title", "tag_objs__tag_name"]
+    list_filter = ["status", "risk_label", "tag_objs__tag_name"]
+    list_prefetch_related = ["tag_objs"]
+
+    def get_queryset(self, request):
+        qs = Risk.annotated_queryset()
+        ordering = self.get_ordering(request)
+        if ordering:
+            qs = qs.order_by(*ordering)
+        if self.list_prefetch_related:
+            qs = qs.prefetch_related(*self.list_prefetch_related)
+        return qs
+
+    def event_content_short(self, obj: Risk):
+        return getattr(obj, "event_content_short", "")
+
+    event_content_short.short_description = "Event Content Short"
+
+    def display_tags(self, obj: Risk):
+        return ", ".join([t.tag_name for t in obj.tag_objs.all()])
+
+    display_tags.short_description = "Tags"
 
 
 @admin.register(ProcessApplication)
@@ -75,6 +96,6 @@ class TicketNodeAdmin(admin.ModelAdmin):
 
 @admin.register(TicketPermission)
 class TicketPermissionAdmin(admin.ModelAdmin):
-    list_display = ["id", "risk_id", "action", "operator"]
-    search_fields = ["risk_id", "operator"]
+    list_display = ["id", "risk_id", "action", "user"]
+    search_fields = ["risk_id", "user"]
     list_filter = ["action"]

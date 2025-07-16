@@ -24,6 +24,7 @@ import type ConfigModel from '@model/root/config';
 
 import NotFound from '@views/404.vue';
 import AnalysisManage from '@views/analysis-manage/routes';
+import AttentionManage from '@views/attention-manege/routes';
 import EventManage from '@views/event-manage/routes';
 import HandleManage from '@views/handle-manage/routes';
 import LinkDataManage from '@views/link-data-manage/routes';
@@ -49,6 +50,7 @@ export default (config: ConfigModel) => {
         name: 'handleManage',
       },
       children: [
+        AttentionManage,
         AnalysisManage,
         SystemManage,
         StrategyManage,

@@ -27,8 +27,8 @@ from django.db import models
 from django.db.models import Max, Q, QuerySet
 from django.db.models.functions import Substr
 from django.utils.translation import gettext_lazy
-from iam import DjangoQuerySetConverter
 
+from apps.meta.models import Tag
 from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
@@ -39,6 +39,7 @@ from services.web.risk.constants import (
     RiskStatus,
     TicketNodeStatus,
 )
+from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.strategy_v2.models import Strategy
 
 
@@ -52,6 +53,11 @@ def generate_risk_id() -> str:
     if Risk.objects.filter(risk_id=risk_id).exists():
         return generate_risk_id()
     return risk_id
+
+
+class UserType(models.TextChoices):
+    OPERATOR = "operator"
+    NOTICE_USER = "notice_user"
 
 
 class Risk(OperateRecordModel):
@@ -92,7 +98,7 @@ class Risk(OperateRecordModel):
         gettext_lazy("Current Operator"), max_length=64, null=True, blank=True, default=list
     )
     notice_users = models.JSONField(gettext_lazy("Notice Users"), default=list, null=True, blank=True)
-    tags = models.JSONField(gettext_lazy("Tags"), default=list, null=True, blank=True)
+    tag_objs = models.ManyToManyField(Tag, verbose_name=gettext_lazy("Tags"), blank=True, related_name="risks")
     risk_label = models.CharField(
         gettext_lazy("Risk Label"),
         max_length=32,
@@ -108,36 +114,50 @@ class Risk(OperateRecordModel):
         verbose_name = gettext_lazy("Risk")
         verbose_name_plural = verbose_name
         ordering = ["-event_time"]
-        index_together = [["strategy", "raw_event_id", "status"], ["strategy", "event_time"]]
+        index_together = [
+            ["strategy", "raw_event_id", "status"],
+            ["strategy", "event_time"],
+            ["risk_id", "event_time"],
+            ["risk_id", "last_operate_time"],
+        ]
 
     @classmethod
-    def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet:
+    def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
         """
-        获取有权限处理的风险
+        获取有权限处理的风险筛选条件
         """
-
-        queryset = Risk.objects.all()
 
         q = Q(
             risk_id__in=TicketPermission.objects.filter(
-                operator=get_request_username(), action=ActionEnum.LIST_RISK.id
+                user_type__in=[UserType.NOTICE_USER, UserType.OPERATOR],
+                user=get_request_username(),
+                action=ActionEnum.LIST_RISK.id,
             ).values("risk_id")
         )
 
         permission = Permission(get_request_username())
         request = permission.make_request(action=get_action_by_id(action), resources=[])
         policies = permission.iam_client._do_policy_query(request)
-        if not policies:
-            return queryset.filter(q)
+        if policies:
+            q |= RiskPathEqDjangoQuerySetConverter().convert(policies)
+        return q
 
-        from services.web.risk.provider import RiskResourceProvider
-
-        q |= DjangoQuerySetConverter(key_mapping=RiskResourceProvider.key_mapping).convert(policies)
-        return (
-            queryset.filter(q)
-            .annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH))
-            .defer("event_content")
+    @classmethod
+    def annotated_queryset(cls) -> QuerySet["Risk"]:
+        """
+        返回默认的 Risk 查询集，包含截断后的 event_content_short 字段
+        """
+        return cls.objects.annotate(event_content_short=Substr("event_content", 1, LIST_RISK_FIELD_MAX_LENGTH)).defer(
+            "event_content"
         )
+
+    @classmethod
+    def load_authed_risks(cls, action: Union[ActionMeta, str]) -> QuerySet["Risk"]:
+        """
+        获取有权限处理的风险
+        """
+
+        return cls.annotated_queryset().filter(cls.authed_risk_filter(action))
 
     @cached_property
     def last_history(self) -> Union["TicketNode", None]:
@@ -149,13 +169,14 @@ class Risk(OperateRecordModel):
                 return node
         return TicketNode()
 
-    def auth_operators(self, action: str, operators: List[str]) -> None:
+    def auth_users(self, action: str, users: List[str], user_type: str = UserType.OPERATOR) -> None:
         """
-        授权处理人查看权限
+        授权相关用户查询权限
         """
-
         TicketPermission.objects.bulk_create(
-            objs=[TicketPermission(risk_id=self.risk_id, action=action, operator=operator) for operator in operators],
+            objs=[
+                TicketPermission(risk_id=self.risk_id, action=action, user_type=user_type, user=user) for user in users
+            ],
             ignore_conflicts=True,
         )
 
@@ -341,11 +362,12 @@ class TicketPermission(models.Model):
 
     risk_id = models.CharField(gettext_lazy("Risk ID"), max_length=255, db_index=True)
     action = models.CharField(gettext_lazy("Action"), max_length=32, db_index=True)
-    operator = models.CharField(gettext_lazy("Operator"), max_length=255, db_index=True)
+    user = models.CharField(gettext_lazy("User"), max_length=255, db_index=True)
     authorized_at = models.DateTimeField(gettext_lazy("Authorized Time"), auto_now_add=True)
+    user_type = models.CharField(gettext_lazy("User Type"), choices=UserType.choices, max_length=32, db_index=True)
 
     class Meta:
         verbose_name = gettext_lazy("Ticket Permission")
         verbose_name_plural = verbose_name
         ordering = ["-id"]
-        unique_together = [["risk_id", "action", "operator"]]
+        unique_together = [["risk_id", "action", "user", "user_type"]]

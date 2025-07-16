@@ -35,6 +35,34 @@ export default {
       }));
   },
   /**
+   * @desc 获取待我处理风险列表
+   */
+  fetchTodoRiskList(params: {
+      page: number,
+      page_size: number
+    }) {
+    return RiskManageSource.getTodoRiskList(params)
+      .then(({ data }) => ({
+        ...data,
+        results: data.results.map(item => new RiskManageModel(item)),
+      }));
+  },
+  /**
+   * @desc 我关注的获取风险列表
+   */
+  fetchWatchRiskList(params: {
+    page: number,
+    page_size: number
+  }) {
+    return RiskManageSource.getWatchRiskList(params, {
+      permission: 'page',
+    })
+      .then(({ data }) => ({
+        ...data,
+        results: data.results.map(item => new RiskManageModel(item)),
+      }));
+  },
+  /**
    * @desc 获取风险可用字段
    */
   fetchFields() {
@@ -51,22 +79,9 @@ export default {
   /**
    * @desc 获取风险标签
    */
-  fetchRiskTags() {
-    return RiskManageSource.getRiskTags()
+  fetchRiskTags(params: Record<string, any>) {
+    return RiskManageSource.getRiskTags(params)
       .then(({ data }) => data);
-  },
-  /**
-   * @desc 获取风险列表
-   */
-  fetchTodoRiskList(params: {
-    page: number,
-    page_size: number
-  }) {
-    return RiskManageSource.getTodoRiskList(params)
-      .then(({ data }) => ({
-        ...data,
-        results: data.results.map(item => new RiskManageModel(item)),
-      }));
   },
   /**
    * @desc 获取风险列表

@@ -116,10 +116,23 @@ class RisksViewSet(ResourceViewSet):
                 )
             ],
         ),
+        ResourceRoute(
+            "GET",
+            resource.risk.list_noticing_risk,
+            endpoint="watch",
+            decorators=[
+                insert_permission_field(
+                    actions=[ActionEnum.EDIT_RISK],
+                    data_field=lambda data: data["results"],
+                    id_field=lambda risk: risk["risk_id"],
+                )
+            ],
+        ),
         ResourceRoute("GET", resource.risk.list_risk_fields, endpoint="fields"),
         ResourceRoute("PUT", resource.risk.update_risk_label, pk_field="risk_id", endpoint="risk_label"),
         ResourceRoute("GET", resource.risk.risk_status_common, endpoint="status_common"),
         ResourceRoute("GET", resource.risk.list_risk_tags, endpoint="tags"),
+        ResourceRoute("GET", resource.risk.list_risk_strategy, endpoint="strategies"),
         ResourceRoute("POST", resource.risk.custom_close_risk, endpoint="close", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.custom_trans_risk, endpoint="trans", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.custom_auto_process, endpoint="auto_process", pk_field="risk_id"),

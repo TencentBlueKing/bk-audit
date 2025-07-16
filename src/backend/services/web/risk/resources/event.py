@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import uuid
+from typing import List
 
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
@@ -47,8 +48,7 @@ class CreateEvent(EventMeta):
 
     ADMIN_SOURCE = "ADMIN"  # 常量定义超级管理员来源标识
 
-    def _create_events(self, events, source):
-        #
+    def _create_events(self, events: List[dict], source: str):
         event_ids = []
         for event in events:
             event["event_id"] = "{}{}".format(
@@ -58,27 +58,23 @@ class CreateEvent(EventMeta):
             event_ids.append(event["event_id"])
         return event_ids
 
-    def perform_request(self, validated_request_data):
+    def perform_request(self, validated_request_data: dict):
         gen_risk = validated_request_data.get("gen_risk", False)
+        events = validated_request_data["events"]
         # 检查超级管理员权限
         req = validated_request_data.get("_request")
         if req and req.user.is_superuser:
-            # 超级管理员创建事件
-            event_ids = self._create_events(validated_request_data["events"], self.ADMIN_SOURCE)
-            if gen_risk:
-                for event in validated_request_data["events"]:
-                    RiskHandler().generate_risk(event)
-            add_event(validated_request_data)
-            return {"event_ids": event_ids}
+            source = self.ADMIN_SOURCE
         # 校验调用身份
-        app = get_app_info()
-        if app:
-            # 应用创建事件
-            event_ids = self._create_events(validated_request_data["events"], app.bk_app_code)
-            add_event(validated_request_data)
-            return {"event_ids": event_ids}
-
-        raise PermissionError("无权限创建事件，需要应用身份或超级管理员权限")
+        else:
+            app = get_app_info()
+            source = app.bk_app_code
+        event_ids = self._create_events(events, source)
+        if gen_risk:
+            for event in events:
+                RiskHandler().generate_risk(event)
+        add_event(events)
+        return {"event_ids": event_ids}
 
 
 class ListEvent(EventMeta):

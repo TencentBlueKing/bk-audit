@@ -42,6 +42,7 @@
     useI18n,
   } from 'vue-i18n';
   import {
+    onBeforeRouteLeave,
     useRouter,
   } from 'vue-router';
 
@@ -118,10 +119,16 @@
             riskId: data.risk_id,
           },
         };
-        return <router-link to={to} target='_blank'>
+        return <router-link to={to}>
           <Tooltips data={data.risk_id} />
         </router-link>;
       },
+    },
+    {
+      label: () => t('风险标题'),
+      field: () => 'title',
+      minWidth: 320,
+      render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.title} />,
     },
     {
       label: () => t('风险描述'),
@@ -231,7 +238,7 @@
       },
     },
     {
-      label: () => t('通知人员'),
+      label: () => t('关注人'),
       field: () => 'notice_users',
       minWidth: 160,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
@@ -313,6 +320,7 @@
       'current_operator',
       'risk_label',
       'event_time',
+      'title',
     ],
     showLineHeight: false,
   });
@@ -460,6 +468,7 @@
       status: '',
       event_content: '',
       risk_level: '',
+      title: '',
     };
     listRef.value.fetchData({
       ...params,
@@ -468,6 +477,19 @@
   };
   onUnmounted(() => {
     clearTimeout(timeout);
+  });
+
+  onBeforeRouteLeave((to, from, next) => {
+    if (to.name === 'handleManageDetail') {
+      const params = getSearchParams();
+      // 保存当前查询参数到目标路由的 query 中
+      // eslint-disable-next-line no-param-reassign
+      to.query = {
+        ...to.query,
+        ...params,
+      };
+    }
+    next();
   });
 </script>
 <style lang='postcss'>
