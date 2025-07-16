@@ -165,7 +165,7 @@
       </render-info-block>
       <render-info-block>
         <render-info-item
-          :label="t('通知人员')"
+          :label="t('关注人')"
           :label-width="labelWidth"
           style="width: 100%;">
           <edit-tag :data="data.notice_users || ''" />

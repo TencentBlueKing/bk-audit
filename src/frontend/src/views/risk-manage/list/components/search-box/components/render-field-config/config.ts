@@ -26,7 +26,8 @@ export interface IFieldConfig {
   service?: (params?: Record<string, any>) => Promise<Array<any>>,
   labelName?: string,
   valName?: string,
-  filterList?: string[]// 要过滤的数据列表
+  filterList?: string[], // 要过滤的数据列表
+  defaultParams?: Record<string, any>,
 }
 export default {
   risk_id: {
@@ -38,15 +39,21 @@ export default {
     label: '风险命中策略',
     type: 'select',
     required: false,
-    service: StrategyManageService.fetchAllStrategyList,
+    service: StrategyManageService.fetchScopedStrategyList,
     labelName: 'label',
     valName: 'value',
+    defaultParams: {
+      risk_view_type: 'all',
+    },
   },
   tags: {
     label: '风险标签',
     type: 'select',
     required: false,
     service: RiskManageService.fetchRiskTags,
+    defaultParams: {
+      risk_view_type: 'all',
+    },
   },
   datetime: {
     label: '首次发现时间',

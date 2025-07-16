@@ -46,11 +46,9 @@
     useRouter,
   } from 'vue-router';
 
-  import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
   import StrategyManageService from '@service/strategy-manage';
 
-  import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
 
   import useRequest from '@hooks/use-request';
@@ -59,11 +57,11 @@
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
-  import MarkRiskLabel from './components/mark-risk-label.vue';
-  import RiskLevel from './components/risk-level.vue';
+  import RiskLevel from '@views/handle-manage/components/risk-level.vue';
+
   import SearchBox from './search-box/index.vue';
 
-  const dataSource = RiskManageService.fetchTodoRiskList;
+  const dataSource = RiskManageService.fetchWatchRiskList;
   interface ISettings{
     checked: Array<string>,
     fields: Record<string, any>[],
@@ -114,7 +112,7 @@
       minWidth: 180,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
-          name: 'handleManageDetail',
+          name: 'attentionManageDetail',
           params: {
             riskId: data.risk_id,
           },
@@ -229,7 +227,7 @@
           .find(item => item.value === data.strategy_id)?.label;
         return strategyName
           ? (
-            <router-link to={to} target='_blank'>
+            <router-link to={to}>
               <Tooltips data={`${strategyName}(${data.strategy_id})`} />
             </router-link>
           ) : (
@@ -249,40 +247,6 @@
       // sort: 'custom',
       minWidth: 168,
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
-    },
-    {
-      label: () => t('操作'),
-      width: 148,
-      fixed: 'right',
-      render: ({ data }: { data: RiskManageModel }) => <p>
-        <auth-button
-          text
-          theme='primary'
-          class='mr16'
-          permission={data.permission.edit_risk_v2 || data.current_operator.includes(userInfo.value.username)}
-          action-id='edit_risk_v2'
-          resource={data.risk_id}
-          onClick={() => handleToDetail(data)}>
-          {t('处理')}
-        </auth-button>
-        {
-          data.status === 'auto_process'
-            ? <bk-button text theme='primary'
-              class="is-disabled"
-              v-bk-tooltips={{
-                content: data.risk_label === 'normal'
-                  ? t('“套餐处理中”的风险单暂时不支持直接标记误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。')
-                  : t('“套餐处理中”的风险单暂时不支持直接解除误报；请点开风险单详情，终止套餐或等套餐执行完毕后再标记误报。'),
-              }}>
-                {data.risk_label === 'normal' ? t('标记误报') : t('解除误报')}
-              </bk-button>
-              : <MarkRiskLabel
-                onUpdate={() => fetchList()}
-                userInfo={userInfo.value}
-                data={data} />
-          }
-
-          </p>,
     },
   ];
   let timeout: number| undefined = undefined;
@@ -358,13 +322,7 @@
     manual: true,
     defaultValue: [],
   });
-  // 获取userinfo
-  const {
-    data: userInfo,
-  } = useRequest(AccountManageService.fetchUserInfo, {
-    defaultValue: new AccountModel(),
-    manual: true,
-  });
+
   const {
     run: fetchRiskList,
   } = useRequest(RiskManageService.fetchTodoRiskList, {
@@ -478,7 +436,7 @@
   });
 
   onBeforeRouteLeave((to, from, next) => {
-    if (to.name === 'handleManageDetail') {
+    if (to.name === 'attentionManageDetail') {
       const params = getSearchParams();
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
