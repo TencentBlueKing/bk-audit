@@ -58,6 +58,13 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 获取所有策略下拉列表(用于查询，区分all、watch、todo)
+   */
+  fetchScopedStrategyList(params: Record<string, any>) {
+    return StrategySource.getScopedStrategyList(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 告警常量
    */
   fetchStrategyCommon() {

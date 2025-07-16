@@ -146,7 +146,7 @@
       </render-info-block>
       <render-info-block>
         <render-info-item
-          :label="t('通知人员')"
+          :label="t('关注人')"
           :label-width="labelWidth"
           style="width: 100%;">
           {{ t('以实际内容为准') }}
@@ -255,7 +255,7 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import RiskManageService from '@service/risk-manage';
+  import MetaManageService from '@service/meta-manage';
 
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
@@ -353,7 +353,7 @@
   }));
 
   // 获取标签列表
-  useRequest(RiskManageService.fetchRiskTags, {
+  useRequest(MetaManageService.fetchTags, {
     defaultParams: {
       page: 1,
       page_size: 1,
@@ -362,7 +362,7 @@
     manual: true,
     onSuccess: (data) => {
       data.forEach((item) => {
-        strategyTagMap.value[item.id] = item.name;
+        strategyTagMap.value[item.tag_id] = item.tag_name;
       });
     },
   });
