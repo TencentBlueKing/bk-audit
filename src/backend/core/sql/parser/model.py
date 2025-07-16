@@ -1,7 +1,8 @@
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, List, Optional
 
 from drf_pydantic import BaseModel as DRFBaseModel
 from pydantic import Field as PydanticField
+from pydantic.v1 import BaseModel
 from rest_framework.fields import CharField
 
 from core.sql.model import Table
@@ -39,3 +40,12 @@ class ParsedSQLInfo(DRFBaseModel):
     referenced_tables: List[Table]
     sql_variables: List[SqlVariable]
     result_fields: List[SelectField]
+
+
+class RangeVariableData(BaseModel):
+    """
+    范围变量数据
+    """
+
+    start: Any
+    end: Any
