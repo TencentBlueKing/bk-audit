@@ -304,7 +304,7 @@
                   <span
                     v-if="permissionCreateSystem"
                     class="extension-text"
-                    style="color: #c4c6cc;">接入系统</span>
+                    style="color: #c4c6cc;">{{ t('接入系统') }}</span>
                   <bk-popover
                     v-else
                     :content="t('暂无权限')"
@@ -312,7 +312,7 @@
                     theme="light">
                     <span
                       class="extension-text"
-                      style="color: #c4c6cc;">接入系统</span>
+                      style="color: #c4c6cc;">{{ t('接入系统') }}</span>
                   </bk-popover>
                 </bk-button>
               </template>
