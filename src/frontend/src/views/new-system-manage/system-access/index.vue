@@ -126,7 +126,7 @@
 
               <bk-popover
                 v-if="item.audit_status === 'accessed'"
-                content="已接入审计中心"
+                :content="t('已接入审计中心')"
                 placement="top"
                 theme="light">
                 <div class="list-btn list-btn-not-allowed">

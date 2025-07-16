@@ -329,5 +329,10 @@ export default {
     点击跳转到bkbase: 'Click to jump to bkbase, URL: {url}',
     日志采集配置: '{count} log collection configurations',
     资源与操作数据: 'Resources: {resource_count}, operations: {action_count}',
+    应用ID: 'Application ID',
+    产品创建审计中心的系统信息: 'Product creation audit Center system information',
+    产品或研发注册资源与操作: 'Product or R&D registration resources and operations',
+    研发通过SDK上报日志数据: 'Development reports log data through the SDK',
+    暂无权限: 'No permission',
   },
 };
