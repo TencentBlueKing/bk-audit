@@ -18,9 +18,11 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import json
+from typing import Dict, Type
 
-from bk_resource import api
+from bk_resource import CacheResource, api
 from bk_resource.settings import bk_resource_settings
+from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
 from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
@@ -45,6 +47,7 @@ from services.web.risk.constants import (
     RiskFields,
     RiskLabel,
     RiskStatus,
+    RiskViewType,
     TicketNodeStatus,
 )
 from services.web.risk.handlers.ticket import (
@@ -72,8 +75,11 @@ from services.web.risk.serializers import (
     ForceRevokeAutoProcessReqSerializer,
     GetRiskFieldsByStrategyRequestSerializer,
     GetRiskFieldsByStrategyResponseSerializer,
+    ListRiskMetaRequestSerializer,
     ListRiskRequestSerializer,
     ListRiskResponseSerializer,
+    ListRiskStrategyRespSerializer,
+    ListRiskTagsRespSerializer,
     ReopenRiskReqSerializer,
     RetrieveRiskStrategyInfoResponseSerializer,
     RetryAutoProcessReqSerializer,
@@ -137,13 +143,15 @@ class ListRisk(RiskMeta):
         request = validated_request_data.pop("_request")
         # 获取风险
         order_field = validated_request_data.pop("order_field", "-last_operate_time")
-        risks = self.load_risks(validated_request_data).order_by(order_field)
+        risks = self.load_risks(validated_request_data).order_by(order_field).only("pk")
         # 分页
-        paged_risks, page = paginate_queryset(queryset=risks, request=request)
+        paged_risks, page = paginate_queryset(queryset=risks, request=request, base_queryset=Risk.annotated_queryset())
+        # 预加载 tag
+        paged_risks: QuerySet[Risk] = paged_risks.prefetch_related("tag_objs").order_by(order_field)
         # 获取关联的经验
         experiences = {
             e["risk_id"]: e["count"]
-            for e in RiskExperience.objects.filter(risk_id__in=[r.risk_id for r in paged_risks])
+            for e in RiskExperience.objects.filter(risk_id__in=paged_risks.values("risk_id"))
             .values("risk_id")
             .order_by("risk_id")
             .annotate(count=Count("risk_id"))
@@ -163,12 +171,17 @@ class ListRisk(RiskMeta):
         for key, val in validated_request_data.items():
             if not val:
                 continue
+            # 特殊处理list匹配
+            if key in ["tag_objs__in"]:
+                q &= Q(**{key: val})
+                continue
+            # 普通匹配，针对单值匹配
             _q = Q()
             for i in val:
                 _q |= Q(**{key: i})
             q &= _q
         # 获取有权限且符合表达式的
-        return Risk.load_authed_risks(action=ActionEnum.LIST_RISK).filter(q)
+        return Risk.load_authed_risks(action=ActionEnum.LIST_RISK).filter(q).distinct()
 
 
 class ListMineRisk(ListRisk):
@@ -233,11 +246,76 @@ class RiskStatusCommon(RiskMeta):
         return choices_to_dict(RiskStatus)
 
 
-class ListRiskTags(RiskMeta):
+class ListRiskBase(RiskMeta, CacheResource, abc.ABC):
+    RequestSerializer = ListRiskMetaRequestSerializer
+    many_response_data = True
+    # 风险视图类型与风险类的映射
+    risk_cls_map: Dict[str, Type[ListRisk]] = {
+        RiskViewType.ALL.value: ListRisk,
+        RiskViewType.TODO.value: ListMineRisk,
+        RiskViewType.WATCH.value: ListNoticingRisk,
+    }
+
+    @classmethod
+    def load_risk_view_type_risks(cls, risk_view_type: str, filter_dict: dict) -> QuerySet[Risk]:
+        """
+        加载指定风险视图下有权限的风险
+        """
+
+        risk_cls = cls.risk_cls_map.get(risk_view_type)
+        if not risk_cls:
+            return Risk.objects.none()
+        return risk_cls().load_risks(filter_dict)
+
+
+class ListRiskTags(ListRiskBase):
+    """
+    获取用户的风险标签列表，支持用户在不同风险视图下的数据展示
+    注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询
+    """
+
     name = gettext_lazy("获取风险的标签")
+    ResponseSerializer = ListRiskTagsRespSerializer
+    cache_type = CacheTypeItem(key="ListRiskTags", timeout=60, user_related=True)
 
     def perform_request(self, validated_request_data):
-        return [{"id": t.tag_id, "name": t.tag_name} for t in Tag.objects.all()]
+        tags = Tag.objects.all().only("tag_id", "tag_name")
+        risk_view_type: str = validated_request_data.pop("risk_view_type", None)
+        if not risk_view_type:
+            return tags
+        risk_ids = set(
+            self.load_risk_view_type_risks(risk_view_type, validated_request_data).values_list("risk_id", flat=True)
+        )
+        if not risk_ids:
+            return []
+        # 查询风险所关联的标签
+        tag_ids = set(Risk.tag_objs.through.objects.filter(risk_id__in=risk_ids).values_list("tag_id", flat=True))
+        return tags.filter(tag_id__in=tag_ids)
+
+
+class ListRiskStrategy(ListRiskBase):
+    """
+    获取风险的策略，支持不同风险视图下的数据展示
+    注意：该接口的筛选条件主要需要风险列表的事件发生时间，当该参数变化时需要重新查询
+    """
+
+    name = gettext_lazy("获取风险的策略")
+    ResponseSerializer = ListRiskStrategyRespSerializer
+    cache_type = CacheTypeItem(key="ListRiskStrategy", timeout=60, user_related=True)
+
+    def perform_request(self, validated_request_data):
+        strategies: QuerySet[Strategy] = Strategy.objects.all().only("strategy_id", "strategy_name")
+        risk_view_type: str = validated_request_data.pop("risk_view_type", None)
+        if not risk_view_type:
+            return strategies
+        strategy_ids = set(
+            self.load_risk_view_type_risks(risk_view_type, validated_request_data)
+            .values_list("strategy_id", flat=True)
+            .distinct()
+        )
+        if not strategy_ids:
+            return []
+        return strategies.filter(strategy_id__in=strategy_ids)
 
 
 class CustomCloseRisk(RiskMeta):

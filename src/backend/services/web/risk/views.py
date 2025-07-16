@@ -132,6 +132,7 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("PUT", resource.risk.update_risk_label, pk_field="risk_id", endpoint="risk_label"),
         ResourceRoute("GET", resource.risk.risk_status_common, endpoint="status_common"),
         ResourceRoute("GET", resource.risk.list_risk_tags, endpoint="tags"),
+        ResourceRoute("GET", resource.risk.list_risk_strategy, endpoint="strategies"),
         ResourceRoute("POST", resource.risk.custom_close_risk, endpoint="close", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.custom_trans_risk, endpoint="trans", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.custom_auto_process, endpoint="auto_process", pk_field="risk_id"),
