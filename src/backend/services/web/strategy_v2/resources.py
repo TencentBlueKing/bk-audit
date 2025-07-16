@@ -63,7 +63,7 @@ from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
 from core.utils.data import choices_to_dict
-from core.utils.page import paginate_queryset
+from core.utils.page import paginate_data
 from services.web.analyze.constants import (
     BaseControlTypeChoices,
     FilterOperator,
@@ -1215,7 +1215,7 @@ class ListLinkTable(LinkTableBase):
         if sort:
             link_tables = link_tables.order_by(*sort)
         # 分页
-        paged_link_tables, page = paginate_queryset(queryset=link_tables, request=request)
+        paged_link_tables, page = paginate_data(queryset=link_tables, request=request)
         link_table_uids = [link_table.uid for link_table in paged_link_tables]
         # 填充标签
         all_tags = LinkTableTag.objects.filter(link_table_uid__in=link_table_uids)

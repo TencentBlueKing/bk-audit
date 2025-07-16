@@ -30,7 +30,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 
 from apps.itsm.constants import TicketStatus
-from apps.meta.models import GlobalMetaConfig, Tag
+from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.saas import get_saas_url
 from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
@@ -369,7 +369,7 @@ class ForApprove(RiskFlowBaseHandler):
                 continue
             # 标签
             if field["key"] == ApproveTicketFields.TAGS.key:
-                tags = list(Tag.objects.filter(tag_id__in=self.risk.tags).values_list("tag_name", flat=True))
+                tags = list(self.risk.tag_objs.values_list("tag_name", flat=True))
                 field["value"] = ";".join(tags)
                 fields.append(field)
                 continue
@@ -686,7 +686,8 @@ class ReOpenMisReport(RiskFlowBaseHandler):
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
         if self.risk.status == RiskStatus.CLOSED:
             ReOpen(risk_id=self.risk.risk_id, operator=self.operator).run(
-                new_operators=kwargs["new_operators"], description=gettext("%s 解除误报，系统自动重开单据") % self.operator
+                new_operators=kwargs["new_operators"],
+                description=gettext("%s 解除误报，系统自动重开单据") % self.operator,
             )
 
 
