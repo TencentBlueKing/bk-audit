@@ -263,8 +263,8 @@
                 theme="light">
                 <span class="dashed-underline">{{ t("资源实例回调地址") }}</span>
                 <template #content>
-                  <div>资源，指资源类型，如果系统要对某些操作实现数据级（资源）的权限控制，则需引入资源。同</div>
-                  <div>时，审计中心会记录到数据级的操作。以下是资源、资源实例和日志的示例：</div>
+                  <div>{{ t('资源，指资源类型，如果系统要对某些操作实现数据级（资源）的权限控制，则需引入资源。同') }}</div>
+                  <div>{{ t('时，审计中心会记录到数据级的操作。以下是资源、资源实例和日志的示例：') }}</div>
                   <div
                     stripe
                     style="width: 520px;margin-top: 10px;">
@@ -273,28 +273,28 @@
                       :data="popoverTable"
                       height="auto">
                       <bk-table-column
-                        label="资源类型"
+                        :label="t('资源类型')"
                         prop="type" />
                       <bk-table-column
-                        label="资源实例"
+                        :label="t('资源实例')"
                         prop="lv" />
                       <bk-table-column
-                        label="操作"
+                        :label="t('操作')"
                         prop="cz" />
                       <bk-table-column
-                        label="记录日志描述"
+                        :label="t('记录日志描述')"
                         prop="log"
                         width="250" />
                     </bk-table>
                   </div>
 
                   <div style=" padding-top: 10px;padding-bottom: 10px;">
-                    如果无资源实例或不准确，则无法实现数据级的审计，只能进行操作审计。
+                    {{ t('如果无资源实例或不准确，则无法实现数据级的审计，只能进行操作审计。') }}
                   </div>
-                  <h3>资源实例回调地址填写说明：</h3>
-                  <div>1、应用说明：审计中心会通过“回调地址”获取详细的资源实例</div>
-                  <div>2、此处填写是回调地址，格式要求是 HOST格式：scheme://netloc</div>
-                  <div>3、例如：我的系统是cmdb，可获取到资源实例的url为  http://cmdb.consul</div>
+                  <h3>{{ t('资源实例回调地址填写说明：') }}</h3>
+                  <div>{{ t('1、应用说明：审计中心会通过“回调地址”获取详细的资源实例') }}</div>
+                  <div>{{ t('2、此处填写是回调地址，格式要求是 HOST格式：scheme://netloc') }}</div>
+                  <div>{{ t('3、例如：我的系统是cmdb，可获取到资源实例的url为  http://cmdb.consul') }}</div>
                 </template>
               </bk-popover>
             </template>
@@ -417,22 +417,22 @@
   const cardRefTwo = ref();
   const popoverTable = ref([
     {
-      type: '业务',
-      lv: '王者荣耀',
-      cz: '新增',
-      log: '新增 1 个叫“王者荣耀”的业务',
+      type: t('业务'),
+      lv: t('王者荣耀'),
+      cz: t('新增'),
+      log: t('新增 1 个叫“王者荣耀”的业务'),
     },
     {
-      type: '业务',
-      lv: '王者荣耀',
-      cz: '新增',
-      log: '新增 1 个叫“王者荣耀”的业务',
+      type: t('业务'),
+      lv: t('王者荣耀'),
+      cz: t('新增'),
+      log: t('新增 1 个叫“王者荣耀”的业务'),
     },
     {
-      type: '业务',
-      lv: '王者荣耀',
-      cz: '新增',
-      log: '新增 1 个叫“王者荣耀”的业务',
+      type: t('业务'),
+      lv: t('王者荣耀'),
+      cz: t('新增'),
+      log: t('新增 1 个叫“王者荣耀”的业务'),
     },
   ]);
 
