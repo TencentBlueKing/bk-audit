@@ -37,7 +37,7 @@ export default function (props: Props, allText: string) {
 
   const selectedAll = computed(() => modelValue.value.includes(allText));
 
-  const handleChange = (value: Array<string>) => {
+  const handleChange = (value: Array<string | number>) => {
     const result = [...value];
     _.remove(result, item => item === allText);
     currentInstance.emit('change', props.name, result);

@@ -125,14 +125,29 @@
   // eslint-disable-next-line max-len
   const fetchListRef = ref<(params: Record<string, any>) => Promise<Array<Record<string, string>>>>(() => Promise.resolve([]));
 
+  // 判断是否为特殊字段
+  const isSpecialField = (fieldName: keyof FieldMapModel): boolean => fieldName === 'tags' as keyof FieldMapModel
+    || fieldName === 'strategy_id' as keyof FieldMapModel;
+
   watchEffect(() => {
     if (props.config.service) {
       loading.value = true;
       const { run } = useRequest(props.config.service, {
         defaultParams: props.config.defaultParams || {},
-        manual: true,
+        manual: !isSpecialField(props.name),  // 特定字段 watch中 immediate为true，会初始化
         defaultValue: [],
         onSuccess(data) {
+          // modelValue.value清除不在data中的, '全部'这个值不用清除
+          const filterArr = modelValue.value.filter((modelValueItem) => {
+            const valName = props.config.valName ? props.config.valName : 'id';
+            if (modelValueItem === '全部') return true;
+            if (data.some(listItem => listItem[valName] === modelValueItem)) {
+              return true;
+            }
+            return false;
+          });
+          // 更新
+          handleChange(filterArr);
           list.value = data;
           loading.value = false;
         },
@@ -142,8 +157,7 @@
 
       // 1.只有特定字段才需要设置监听时间，
       // 2.获取时间后，根据时间重新获取list，
-      if (props.name === 'tags' as keyof FieldMapModel
-        || props.name === 'strategy_id' as keyof FieldMapModel) {
+      if (isSpecialField(props.name)) {
         const stopWatch = watch(
           () => props.model.datetime_origin,
           (val) => {
@@ -162,6 +176,7 @@
           },
           {
             deep: true,
+            immediate: true,
           },
         );
 
