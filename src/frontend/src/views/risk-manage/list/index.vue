@@ -325,7 +325,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['risk_id', 'event_content', 'tags', 'operator', 'status', 'current_operator', 'risk_label', 'event_time'],
+    checked: ['risk_id', 'event_content', 'tags', 'operator', 'status', 'current_operator', 'risk_label', 'event_time', 'title'],
     showLineHeight: false,
   });
   const settings = computed(() => {
@@ -476,6 +476,7 @@
       risk_label: '',
       event_content: '',
       risk_level: '',
+      title: '',
     };
     listRef.value.fetchData({
       ...params,
