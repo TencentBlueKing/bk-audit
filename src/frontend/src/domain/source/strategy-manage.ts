@@ -68,7 +68,7 @@ class Strategy extends ModuleBase {
     return Request.get<Array<{
       label: string,
       value: number
-    }>>(`${this.path}/risks/strategies/`, { params });
+    }>>(`${this.module}risks/strategies/`, { params });
   }
   // 获取告警常量
   getStrategyCommon(payload = {} as IRequestPayload) {
