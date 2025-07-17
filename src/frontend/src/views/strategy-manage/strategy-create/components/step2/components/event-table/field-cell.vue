@@ -49,14 +49,20 @@
         v-if="!localEventItem.drill_config.tool.uid"
         class="field-cell-div"
         style="color: #c4c6cc;"
-        @click="handleClick">
+        @click="() => handleClick()">
         {{ t('请配置') }}
       </div>
       <div
         v-else
         class="field-cell-div"
-        @click="handleClick">
-        {{ getToolName(localEventItem.drill_config.tool.uid) }}
+        @click="() => handleClick(localEventItem.drill_config)">
+        <audit-icon
+          style=" margin-right: 5px;font-size: 16px;"
+          svg
+          :type="iconMap[
+            getToolNameAndType(localEventItem.drill_config.tool.uid).type as keyof typeof iconMap
+          ]" />
+        {{ getToolNameAndType(localEventItem.drill_config.tool.uid).name }}
       </div>
       <!-- 字段下钻 -->
       <field-reference
@@ -115,8 +121,15 @@
 
   const localEventItem = ref(props.eventItem);
   const fieldMappingRef = ref();
+  const fieldReferenceRef = ref();
   const showFieldReference = ref(false);
   const allToolsData = ref<Array<ToolDetailModel>>([]);
+
+  const iconMap = {
+    data_search: 'sqlxiao',
+    api: 'apixiao',
+    bk_vision: 'bkvisonxiao',
+  };
 
   const handleFieldSelect = (value: string) => {
     emit('select', value, props.eventItem);
@@ -126,8 +139,11 @@
     emit('add-custom-constant', value);
   };
 
-  const handleClick = () => {
+  const handleClick = (drillConfig?: StrategyFieldEvent['event_basic_field_configs'][0]['drill_config']) => {
     showFieldReference.value = true;
+    if (drillConfig) {
+      fieldReferenceRef.value.setFormData(drillConfig);
+    }
   };
 
   const handleFieldSubmit = (drillConfig: any) => {
@@ -138,9 +154,15 @@
     allToolsData.value = data;
   };
 
-  const getToolName = (uid: string) => {
+  const getToolNameAndType = (uid: string) => {
     const tool = allToolsData.value.find(item => item.uid === uid);
-    return tool ? tool.name : '';
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
+    };
   };
 
   watch(props.eventItem, (value) => {
@@ -174,6 +196,8 @@
   }
 
   .field-cell-div {
+    display: flex;
+    align-items: center;
     width: 100%;
     height: 100%;
     padding: 0 8px;
