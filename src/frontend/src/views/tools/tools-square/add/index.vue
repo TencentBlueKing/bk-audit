@@ -47,7 +47,7 @@
                     style="width: 100%;" />
                 </bk-form-item>
                 <bk-form-item
-                  :label="t('标签')"
+                  :label="t('工具标签')"
                   label-width="160"
                   property="tags"
                   style="flex: 1;">
@@ -104,7 +104,18 @@
                     <bk-radio
                       :disabled="item.id === 'api'"
                       :label="item.id">
-                      <span>{{ item.name }}</span>
+                      <div style="display: flex; align-items: center; line-height: 16px;">
+                        <audit-icon
+                          style=" margin-right: 5px;font-size: 16px;"
+                          svg
+                          :type="iconMap[item.id as keyof typeof iconMap]" />
+                        <span
+                          v-bk-tooltips="{
+                            disabled: !item.tips,
+                            content: item.tips || '',
+                          }"
+                          :style="item.tips ? { 'border-bottom': '1px dashed #979ba5' } : {}">{{ item.name }}</span>
+                      </div>
                     </bk-radio>
                   </template>
                 </bk-radio-group>
@@ -229,6 +240,31 @@
                       </div>
                       <div class="field-value">
                         {{ t('是否必填') }}
+                        <bk-popover
+                          ref="requiredListRef"
+                          allow-html
+                          boundary="parent"
+                          content="#hidden_pop_content"
+                          ext-cls="field-required-pop"
+                          placement="top"
+                          theme="light"
+                          trigger="click"
+                          width="100">
+                          <audit-icon
+                            style="margin-left: 4px; font-size: 16px;color: #3a84ff; cursor: pointer;"
+                            type="piliangbianji" />
+                        </bk-popover>
+                        <div style="display: none">
+                          <div id="hidden_pop_content">
+                            <div
+                              v-for="(item, index) in requiredList"
+                              :key="index"
+                              class="field-required-item"
+                              @click="handleRequiredClick(item.id)">
+                              {{ item.label }}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       <div class="field-value is-required">
                         {{ t('前端类型') }}
@@ -397,17 +433,28 @@
                               error-display-type="tooltips"
                               label=""
                               label-width="0">
-                              <div
-                                v-if="!item.drill_config.tool.uid"
-                                style="padding: 0 8px; color: #c4c6cc; cursor: pointer;"
-                                @click="() => handleClick(index)">
-                                {{ !formData.config.sql ? t('请先配置sql'):t('请配置') }}
-                              </div>
+                              <bk-input
+                                v-if="!formData.config.sql"
+                                disabled
+                                :placeholder="t('请先配置sql')" />
                               <div
                                 v-else
-                                style="padding: 0 8px; cursor: pointer;"
+                                style=" display: flex;padding: 0 8px; cursor: pointer; align-items: center;"
                                 @click="() => handleClick(index, item.drill_config)">
-                                {{ getToolName(item.drill_config.tool.uid) }}
+                                <template v-if="item.drill_config.tool.uid">
+                                  <audit-icon
+                                    style=" margin-right: 5px;font-size: 16px;"
+                                    svg
+                                    :type="iconMap[
+                                      getToolNameAndType(item.drill_config.tool.uid).type as keyof typeof iconMap
+                                    ]" />
+                                  {{ getToolNameAndType(item.drill_config.tool.uid).name }}
+                                </template>
+                                <span
+                                  v-else
+                                  style="color: #c4c6cc;">
+                                  {{ t('请配置') }}
+                                </span>
                               </div>
                             </bk-form-item>
                           </div>
@@ -568,6 +615,7 @@
   const tableInputFormRef = ref();
   const fieldReferenceRef = ref();
   const dialogVueRef = ref();
+  const requiredListRef = ref();
 
   const loading = ref(false);
   const showEditSql = ref(false);
@@ -622,7 +670,33 @@
   const toolTypeList = ref<Array<{
     id: string;
     name: string;
-  }>>([]);
+    tips?: string;
+  }>>([{
+    id: 'data_search',
+    name: t('数据查询'),
+    tips: t('根据输入条件，使用 SQL 查询数据库以获得结果；可定义输入与输出'),
+  }, {
+    id: 'api',
+    name: t('API接口'),
+    tips: t('暂未开放，敬请期待'),
+  }, {
+    id: 'bk_vision',
+    name: t('bkvision图表'),
+  }]);
+
+  const iconMap = {
+    data_search: 'sqlxiao',
+    api: 'apixiao',
+    bk_vision: 'bkvisonxiao',
+  };
+
+  const requiredList = ref([{
+    id: true,
+    label: t('是'),
+  }, {
+    id: false,
+    label: t('否'),
+  }]);
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
@@ -632,7 +706,6 @@
     manual: true,
     onSuccess(result) {
       frontendTypeList.value = result.FieldCategory;
-      toolTypeList.value = result.ToolType;
     },
   });
 
@@ -721,6 +794,17 @@
     execCopy(formData.value.config.sql, t('复制成功'));
   };
 
+  const handleRequiredClick = (value: boolean) => {
+    if (formData.value.config.input_variable.length === 0) {
+      return;
+    }
+    formData.value.config.input_variable = formData.value.config.input_variable.map(item => ({
+      ...item,
+      required: value,
+    }));
+    requiredListRef.value?.hide();
+  };
+
   const handleClick = (index: number, drillConfig?: FormData['config']['output_fields'][0]['drill_config']) => {
     showFieldReference.value = true;
     outputIndex.value = index;
@@ -769,9 +853,15 @@
     allToolsData.value = data;
   };
 
-  const getToolName = (uid: string) => {
+  const getToolNameAndType = (uid: string) => {
     const tool = allToolsData.value.find(item => item.uid === uid);
-    return tool ? tool.name : '';
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
+    };
   };
 
   // 提交
@@ -1022,6 +1112,30 @@
       line-height: 42px;
       color: #63656e;
       border-top: 1px solid #dcdee5;
+    }
+  }
+}
+</style>
+<style lang="postcss">
+.field-required-pop {
+  padding: 5px 0 !important;
+
+  .field-required-item {
+    position: relative;
+    display: flex;
+    min-height: 32px;
+    padding: 0 12px;
+    overflow: hidden;
+    color: #63656e;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    align-items: center;
+
+    &:hover {
+      background-color: #f5f7fa;
     }
   }
 }
