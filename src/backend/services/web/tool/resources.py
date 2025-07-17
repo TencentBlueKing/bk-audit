@@ -20,7 +20,7 @@ import abc
 from collections import defaultdict
 from typing import List
 
-from bk_resource import Resource, api
+from bk_resource import Resource, api, resource
 from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404
@@ -566,7 +566,17 @@ class SqlAnalyseResource(ToolBase, Resource):
         )
         analyser.parse_sql()
         parsed = analyser.get_parsed_def()
-        return parsed.model_dump()
+        result = parsed.model_dump()
+
+        # 检查用户对引用表的查询权限
+        if validated_request_data["with_permission"] and result['referenced_tables']:
+            tables = [table['table_name'] for table in result['referenced_tables']]
+            auth_results = {
+                item["object_id"]: item for item in resource.tool.user_query_table_auth_check({"tables": tables})
+            }
+            for table in result['referenced_tables']:
+                table['permission'] = auth_results[table['table_name']]
+        return result
 
 
 class UserQueryTableAuthCheck(ToolBase):

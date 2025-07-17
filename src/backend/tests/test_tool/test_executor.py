@@ -47,7 +47,7 @@ class TestSqlDataSearchExecutor(TestCase):
             version=1,
             tool_type=ToolTypeEnum.DATA_SEARCH.value,
             config={
-                "sql": "SELECT * FROM table",
+                "sql": "SELECT a FROM table",
                 "referenced_tables": [{"table_name": "table"}],
                 "input_variable": [],
                 "output_fields": [],
@@ -58,16 +58,20 @@ class TestSqlDataSearchExecutor(TestCase):
 
         # 创建执行参数
         self.sql_params = DataSearchToolExecuteParams(
-            tool_variables=[{"raw_name": "time_range", "value": "2023-01-01,2023-12-31"}], page=1, page_size=100
+            tool_variables=[{"raw_name": "time_range", "value": "2023-01-01,2023-12-31"}],
+            page=1,
+            page_size=100,
         )
 
-        # Mock API
+        # Mock BKBase 查询接口
         self.mock_bkbase_api = mock.patch.object(
             QuerySyncResource,
-            'bulk_request',
+            "bulk_request",
             return_value=[{"list": [{"field1": "value1"}, {"field2": "value2"}]}, {"list": [{"count": 2}]}],
         )
         self.mock_bkbase_api = self.mock_bkbase_api.start()
+
+        # Mock 权限校验
         self.patcher_auth = mock.patch.object(
             UserAuthBatchCheck,
             "perform_request",
@@ -85,19 +89,19 @@ class TestSqlDataSearchExecutor(TestCase):
         self.assertDictEqual(
             result,
             {
-                'count_sql': 'SELECT COUNT(*) AS count FROM (SELECT * FROM table) AS _sub',
-                'num_pages': 100,
-                'page': 1,
-                'query_sql': 'SELECT * FROM table LIMIT 100',
-                'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-                'total': 2,
+                "count_sql": "SELECT COUNT(*) AS count FROM (SELECT a FROM table) AS _sub",
+                "num_pages": 100,
+                "page": 1,
+                "query_sql": "SELECT a FROM table LIMIT 100",
+                "results": [{"field1": "value1"}, {"field2": "value2"}],
+                "total": 2,
             },
         )
 
     def test_execute_with_config_object(self):
         """测试通过配置对象直接初始化执行SQL查询"""
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM config_table",
+            sql="SELECT a FROM config_table",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[],
             output_fields=[],
@@ -107,12 +111,12 @@ class TestSqlDataSearchExecutor(TestCase):
         self.assertDictEqual(
             result,
             {
-                'count_sql': 'SELECT COUNT(*) AS count FROM (SELECT * FROM config_table) AS _sub',
-                'num_pages': 100,
-                'page': 1,
-                'query_sql': 'SELECT * FROM config_table LIMIT 100',
-                'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-                'total': 2,
+                "count_sql": "SELECT COUNT(*) AS count FROM (SELECT a FROM config_table) AS _sub",
+                "num_pages": 100,
+                "page": 1,
+                "query_sql": "SELECT a FROM config_table LIMIT 100",
+                "results": [{"field1": "value1"}, {"field2": "value2"}],
+                "total": 2,
             },
         )
 
@@ -130,7 +134,7 @@ class TestSqlDataSearchExecutor(TestCase):
     def test_variable_missing(self):
         """测试必填变量缺失时抛出 InputVariableMissingError"""
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = :a",
+            sql="SELECT a FROM table WHERE a = :a",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -147,9 +151,9 @@ class TestSqlDataSearchExecutor(TestCase):
 
     def test_variable_format_error(self):
         """测试变量格式错误时抛出 InvalidVariableFormatError"""
-        # 测试数字输入
+        # 数字输入
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = {{a}}",
+            sql="SELECT a FROM table WHERE a = {{a}}",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -170,9 +174,9 @@ class TestSqlDataSearchExecutor(TestCase):
             executor.execute(params)
         self.assertEqual("变量类型“数字输入框”的值“not_a_number”格式无效", cm.exception.message)
 
-        # 测试时间选择器
+        # 时间选择器
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = {{a}}",
+            sql="SELECT a FROM table WHERE a = {{a}}",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -195,9 +199,8 @@ class TestSqlDataSearchExecutor(TestCase):
 
     def test_variable_structure_error(self):
         """测试变量结构错误时抛出 InvalidVariableStructureError"""
-        # 测试时间范围选择器
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = {{a}}",
+            sql="SELECT a FROM table WHERE a = {{a}}",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -211,7 +214,6 @@ class TestSqlDataSearchExecutor(TestCase):
             output_fields=[],
         )
         executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
-        # 传入非长度为2的list
         params = DataSearchToolExecuteParams(tool_variables=[{"raw_name": "a", "value": [1]}], page=1, page_size=10)
         with self.assertRaises(InvalidVariableStructureError) as cm:
             executor.execute(params)
@@ -221,7 +223,7 @@ class TestSqlDataSearchExecutor(TestCase):
     def test_variable_parse_fallback_error(self, _):
         """测试变量解析兜底异常 ParseVariableError"""
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = {{a}}",
+            sql="SELECT a FROM table WHERE a = {{a}}",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -239,7 +241,7 @@ class TestSqlDataSearchExecutor(TestCase):
     def test_sql_execute_input_type(self):
         """测试 input 类型变量的 SQL 执行"""
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = :a",
+            sql="SELECT a FROM table WHERE a = :a",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -252,19 +254,19 @@ class TestSqlDataSearchExecutor(TestCase):
         params = DataSearchToolExecuteParams(tool_variables=[{"raw_name": "a", "value": "test"}], page=1, page_size=10)
         result = executor.execute(params).model_dump()
         expected = {
-            'count_sql': "SELECT COUNT(*) AS count FROM (SELECT * FROM table WHERE a = 'test') AS _sub",
-            'num_pages': 10,
-            'page': 1,
-            'query_sql': "SELECT * FROM table WHERE a = 'test' LIMIT 10",
-            'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-            'total': 2,
+            "count_sql": "SELECT COUNT(*) AS count FROM (SELECT a FROM table WHERE a = 'test') AS _sub",
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": "SELECT a FROM table WHERE a = 'test' LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
         }
         self.assertDictEqual(expected, result)
 
     def test_sql_execute_number_input_type(self):
         """测试 number_input 类型变量的 SQL 执行"""
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = :a",
+            sql="SELECT a FROM table WHERE a = :a",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -281,12 +283,12 @@ class TestSqlDataSearchExecutor(TestCase):
         params = DataSearchToolExecuteParams(tool_variables=[{"raw_name": "a", "value": 123}], page=1, page_size=10)
         result = executor.execute(params).model_dump()
         expected = {
-            'count_sql': "SELECT COUNT(*) AS count FROM (SELECT * FROM table WHERE a = 123) AS _sub",
-            'num_pages': 10,
-            'page': 1,
-            'query_sql': "SELECT * FROM table WHERE a = 123 LIMIT 10",
-            'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-            'total': 2,
+            "count_sql": "SELECT COUNT(*) AS count FROM (SELECT a FROM table WHERE a = 123) AS _sub",
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": "SELECT a FROM table WHERE a = 123 LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
         }
         self.assertDictEqual(expected, result)
 
@@ -294,9 +296,10 @@ class TestSqlDataSearchExecutor(TestCase):
         """测试 time_select 类型变量的 SQL 执行"""
         import arrow
 
-        now = arrow.get('2023-01-01 12:00:00+08:00')
+        now = arrow.get("2023-01-01 12:00:00+08:00")
+        ts = int(now.timestamp()) * 1000
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = :a",
+            sql="SELECT a FROM table WHERE a = :a",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -311,17 +314,18 @@ class TestSqlDataSearchExecutor(TestCase):
         )
         executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
         params = DataSearchToolExecuteParams(
-            tool_variables=[{"raw_name": "a", "value": now.format('YYYY-MM-DD HH:mm:ss')}], page=1, page_size=10
+            tool_variables=[{"raw_name": "a", "value": now.format('YYYY-MM-DD HH:mm:ss')}],
+            page=1,
+            page_size=10,
         )
         result = executor.execute(params).model_dump()
-        ts = int(now.timestamp()) * 1000
         expected = {
-            'count_sql': f"SELECT COUNT(*) AS count FROM (SELECT * FROM table WHERE a = {ts}) AS _sub",
-            'num_pages': 10,
-            'page': 1,
-            'query_sql': f"SELECT * FROM table WHERE a = {ts} LIMIT 10",
-            'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-            'total': 2,
+            "count_sql": f"SELECT COUNT(*) AS count FROM (SELECT a FROM table WHERE a = {ts}) AS _sub",
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": f"SELECT a FROM table WHERE a = {ts} LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
         }
         self.assertDictEqual(expected, result)
 
@@ -329,12 +333,12 @@ class TestSqlDataSearchExecutor(TestCase):
         """测试 time_range_select 类型变量的 SQL 执行"""
         import arrow
 
-        start = arrow.get('2023-01-01 00:00:00+08:00')
-        end = arrow.get('2023-01-02 00:00:00+08:00')
+        start = arrow.get("2023-01-01 00:00:00+08:00")
+        end = arrow.get("2023-01-02 00:00:00+08:00")
         ts_start = int(start.timestamp()) * 1000
         ts_end = int(end.timestamp()) * 1000
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a = :a",
+            sql="SELECT a FROM table WHERE a = :a",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -357,20 +361,22 @@ class TestSqlDataSearchExecutor(TestCase):
         )
         result = executor.execute(params).model_dump()
         expected = {
-            'count_sql': f"SELECT COUNT(*) AS count FROM "
-            f"(SELECT * FROM table WHERE a BETWEEN {ts_start} AND {ts_end}) AS _sub",
-            'num_pages': 10,
-            'page': 1,
-            'query_sql': f"SELECT * FROM table WHERE a BETWEEN {ts_start} AND {ts_end} LIMIT 10",
-            'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-            'total': 2,
+            "count_sql": (
+                "SELECT COUNT(*) AS count FROM "
+                f"(SELECT a FROM table WHERE a BETWEEN {ts_start} AND {ts_end}) AS _sub"
+            ),
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": f"SELECT a FROM table WHERE a BETWEEN {ts_start} AND {ts_end} LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
         }
         self.assertDictEqual(expected, result)
 
     def test_sql_execute_person_select_type(self):
         """测试 person_select 类型变量的 SQL 执行"""
         config = SQLDataSearchConfig(
-            sql="SELECT * FROM table WHERE a IN :a",
+            sql="SELECT a FROM table WHERE a IN :a",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -385,18 +391,19 @@ class TestSqlDataSearchExecutor(TestCase):
         )
         executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
         params = DataSearchToolExecuteParams(
-            tool_variables=[{"raw_name": "a", "value": ["user1", "user2"]}], page=1, page_size=10
+            tool_variables=[{"raw_name": "a", "value": ["user1", "user2"]}],
+            page=1,
+            page_size=10,
         )
         result = executor.execute(params).model_dump()
-        # 假设渲染后SQL为 IN ('user1','user2')
-        in_str = "('user1', 'user2')"
+        in_str = "('user1', 'user2')"  # 渲染后 IN 列表
         expected = {
-            'count_sql': f"SELECT COUNT(*) AS count FROM (SELECT * FROM table WHERE a IN {in_str}) AS _sub",
-            'num_pages': 10,
-            'page': 1,
-            'query_sql': f"SELECT * FROM table WHERE a IN {in_str} LIMIT 10",
-            'results': [{'field1': 'value1'}, {'field2': 'value2'}],
-            'total': 2,
+            "count_sql": f"SELECT COUNT(*) AS count FROM (SELECT a FROM table WHERE a IN {in_str}) AS _sub",
+            "num_pages": 10,
+            "page": 1,
+            "query_sql": f"SELECT a FROM table WHERE a IN {in_str} LIMIT 10",
+            "results": [{"field1": "value1"}, {"field2": "value2"}],
+            "total": 2,
         }
         self.assertDictEqual(expected, result)
 
@@ -404,7 +411,6 @@ class TestSqlDataSearchExecutor(TestCase):
 class TestBkVisionExecutor(TestCase):
     def setUp(self):
         """设置BK Vision执行器的测试环境"""
-        # 创建测试Tool对象
         self.vision_tool = Tool.objects.create(
             namespace="test",
             name="vision_tool",
@@ -452,24 +458,30 @@ class TestToolExecutorFactory(TestCase):
     def setUp(self):
         self.analyzer_cls = SqlQueryAnalysis
 
-        # 创建测试Tool对象
+        # SQL 工具（去掉 *）
         self.sql_tool = Tool.objects.create(
             tool_type=ToolTypeEnum.DATA_SEARCH.value,
             name="vision_tool",
             version=1,
             config=SQLDataSearchConfig(
-                sql="SELECT * FROM table",
+                sql="SELECT a FROM table",
                 referenced_tables=[{"table_name": "table"}],
                 input_variable=[],
                 output_fields=[],
             ).model_dump(),
         )
         DataSearchToolConfig.objects.create(
-            tool=self.sql_tool, data_search_config_type="sql", sql="SELECT * FROM table"
+            tool=self.sql_tool,
+            data_search_config_type="sql",
+            sql="SELECT a FROM table",
         )
 
+        # Vision 工具
         self.vision_tool = Tool.objects.create(
-            tool_type=ToolTypeEnum.BK_VISION.value, name="vision_tool", version=1, config={"uid": "vision_panel_123"}
+            tool_type=ToolTypeEnum.BK_VISION.value,
+            name="vision_tool",
+            version=1,
+            config={"uid": "vision_panel_123"},
         )
 
     def test_create_sql_executor(self):
@@ -478,7 +490,7 @@ class TestToolExecutorFactory(TestCase):
         executor = factory.create_from_tool(self.sql_tool)
 
         self.assertIsInstance(executor, SqlDataSearchExecutor)
-        self.assertEqual(executor.config.sql, "SELECT * FROM table")
+        self.assertEqual(executor.config.sql, "SELECT a FROM table")
 
     def test_create_vision_executor(self):
         """测试工厂创建BK Vision执行器"""
