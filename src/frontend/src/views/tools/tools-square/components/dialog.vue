@@ -423,11 +423,12 @@
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
       uid.value = data.uid;
-      // 创建弹框form、table
-      createDialogContent(data);
-      // 查询弹框内容
+      // bkVision直接请求
       if (data.tool_type !== 'data_search') {
         fetchTableData();
+      } else {
+        // 创建弹框form、table
+        createDialogContent(data);
       }
     },
   });
