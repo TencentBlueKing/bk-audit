@@ -393,3 +393,8 @@ EVENT_BASIC_MAP_FIELDS = [
 ES_SEARCH_ORIGIN_FIELDS = [
     EventMappingFields.RAW_EVENT_ID.field_name,
 ]
+
+# 启用 events mock
+ENABLE_EVENTS_MOCK_KEY = "ENABLE_EVENTS_MOCK"
+# events 接口 mock 数据
+EVENTS_MOCK_DATA_KEY = "EVENTS_MOCK_DATA"
