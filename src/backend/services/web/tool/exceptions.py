@@ -126,3 +126,17 @@ class ParseVariableError(ToolException):
     def __init__(self, var_type: FieldCategory, value: str, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(var_type=var_type.label, value=value)
         super().__init__(*args, **kwargs)
+
+
+class BkbaseApiRequestError(ToolException):
+    """
+    bkbase api 请求异常
+    """
+
+    STATUS_CODE = 500
+    ERROR_CODE = "010"
+    MESSAGE = gettext_lazy("bkbase 查询异常;执行 SQL：{sql}")
+
+    def __init__(self, sql: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(sql=sql)
+        super().__init__(*args, **kwargs)
