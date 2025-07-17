@@ -232,7 +232,7 @@
   }
   interface Exposes {
     closeDialog: () => void,
-    openDialog: (item: ToolInfo, isDrillDown: boolean, drillDownItem: any) => void,
+    openDialog: (item: ToolInfo, isDrillDown: boolean, drillDownItem: any, preview?: boolean) => void,
   }
   interface Emits {
     (e: 'openFieldDown', val: string, isDrillDown: boolean): void;
@@ -298,10 +298,6 @@
           value: item.value || '',
         })),
       } : {},
-    }).then((data) => {
-      if (data === undefined) {
-        tableData.value = [];
-      }
     })
       .finally(() => {
         isLoading.value = false;
@@ -447,6 +443,9 @@
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
+      if (data === undefined) {
+        tableData.value = [];
+      }
       if (itemInfo.value?.tool_type === 'data_search') {
         tableData.value = JSON.parse(JSON.stringify(data.data.results));
         pagination.value.count = data.data.total;
@@ -458,10 +457,10 @@
   });
 
   // 打开弹窗
-  const handleOpenDialog = async (item: ToolInfo, isDrillDown: boolean, drillDownItem: any, Preview?: boolean) => {
+  const handleOpenDialog = async (item: ToolInfo, isDrillDown: boolean, drillDownItem: any, preview?: boolean) => {
     isShow.value = true;
     itemInfo.value = item;
-    isPreview.value = Preview;
+    isPreview.value = preview;
 
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -614,8 +613,8 @@
     closeDialog() {
       handleCloseDialog();
     },
-    openDialog(item, isDrillDown, drillDownItem) {
-      handleOpenDialog(item, isDrillDown, drillDownItem);
+    openDialog(item, isDrillDown, drillDownItem, preview) {
+      handleOpenDialog(item, isDrillDown, drillDownItem, preview);
     },
   });
 </script>
