@@ -433,13 +433,13 @@
           @click="handleCancel">
           {{ t('取消') }}
         </bk-button>
-        <bk-button
+        <!-- <bk-button
           class="ml8"
           :disabled="!formData.config.sql"
           style="margin-left: 48px;"
           @click="handlePreview">
           {{ t('预览测试') }}
-        </bk-button>
+        </bk-button> -->
       </template>
       <!-- 编辑sql -->
       <edit-sql
@@ -730,18 +730,24 @@
     }
   };
 
-  const handlePreview = () => {
-    showPreview.value = true;
-    dialogVueRef.value.openDialog({
-      ...formData.value,
-      permission: {
-        use_tool: true,
-      },
-    }, false, {}, true);
-  };
+  // const handlePreview = () => {
+  //   const tastQueue = [formRef.value.validate()];
+  //   if (tableInputFormRef.value) {
+  //     tastQueue.push(tableInputFormRef.value.validate());
+  //   }
+  //   // 校验后再预览
+  //   Promise.all(tastQueue).then(() => {
+  //     showPreview.value = true;
+  //     dialogVueRef.value.openDialog({
+  //       ...formData.value,
+  //       permission: {
+  //         use_tool: true,
+  //       },
+  //     }, false, {}, true);
+  //   });
+  // };
 
   const handleClose = () => {
-    console.log(111);
     showPreview.value = false;
   };
 
