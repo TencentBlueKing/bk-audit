@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, ref, watch } from 'vue';
+  import { onMounted, ref } from 'vue';
 
   import MetaManageService from '@service/meta-manage';
 
@@ -77,9 +77,11 @@
   }
   interface Exposes {
     resetValue: () => void,
+    change: () => void,
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+
   const inputData = ref();
   const numberInputData = ref();
   const pickerRangeValue = ref();
@@ -118,31 +120,27 @@
     emits('change', value);
   };
 
-  // 优化为switch语句，提高代码可读性和执行效率
-  watch(() => props.dataConfig, (newVal) => {
-    if (!newVal.value) return; // 避免空值触发更新
-    switch (newVal.field_category) {
+  const change = () => {
+    const newVal = props.dataConfig.value;
+    if (!newVal) return; // 避免空值触发更新
+    switch (props.dataConfig.field_category) {
     case 'input':
-      inputData.value = newVal.value;
+      handleInputDataChange(newVal);
       break;
     case 'number_input':
-      numberInputData.value = newVal.value;
+      handleNumberInputDataChange(newVal);
       break;
     case 'person_select':
-      user.value = newVal.value;
+      handleUserChange(newVal);
       break;
     case 'time_range_select':
-      pickerRangeValue.value = newVal.value;
+      handleRangeChange(newVal);
       break;
     case 'time_select':
-      pickerValue.value = newVal.value;
+      handleChange(newVal);
       break;
     }
-  }, {
-    deep: true,
-    immediate: true, // 确保初始化时也能触发
-  });
-
+  };
   onMounted(() => {
     fetchGlobalChoices();
   });
@@ -155,6 +153,8 @@
       pickerValue.value = '';
       user.value = '';
     },
-
+    change() {
+      change();
+    },
   });
 </script>

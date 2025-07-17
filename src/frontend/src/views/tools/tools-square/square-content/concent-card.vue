@@ -137,6 +137,10 @@
                     </bk-tag>
                     <bk-tag
                       v-if="item.tags.length > 3"
+                      v-bk-tooltips="{
+                        content: tagContent(item.tags),
+                        placement: 'top',
+                      }"
                       class="desc-tag"
                       size="small">
                       + {{ item.tags.length - 3
@@ -289,7 +293,16 @@
     });
     return tagName;
   };
-
+  // +n显示
+  const tagContent = (tags: Array<string>) => {
+    const tagNameList = props.tagsEnums.map((i:TagItem) => {
+      if (tags.slice(3, tags.length).includes(i.tag_id)) {
+        return i.tag_name;
+      }
+      return null;
+    }).filter(e => e !== null);
+    return tagNameList.join(',');
+  };
   const handleDeleteItem = (item: Record<string, any>) => {
     fetchDeleteTool({
       uid: item.uid,
@@ -411,7 +424,7 @@
   };
   const handleClick = async (item: ToolInfo) => {
     if (dialogRefs.value[item.uid]) {
-      dialogRefs.value[item.uid].openDialog(item, false, {});
+      dialogRefs.value[item.uid].openDialog(item, false, {}, {});
     }
   };
 
@@ -425,15 +438,15 @@
       recent_used: props.recentUsed,
       tags: props.tags.map((item: TagItem) => item.tag_id) || [],
     }).finally(() => {
-      loading.value;
+      loading.value = false;
     });
   };
   // 下转打开
-  const openFieldDown = (val: any, isDrillDown: boolean) => {
+  const openFieldDown = (val: any, isDrillDown: boolean, itemData: Record<any, string>) => {
     const { uid } = val.drill_config.tool;
     const item = dataList.value.find((item: ToolInfo) => item.uid === uid);
     if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(item, isDrillDown, val);
+      dialogRefs.value[uid].openDialog(item, isDrillDown, val, itemData);
     }
   };
   const isMoreLoading = ref(false);
