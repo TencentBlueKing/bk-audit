@@ -14,11 +14,14 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import Annotated, Optional
 
 from django.utils.translation import gettext_lazy
+from pydantic import Field as PydanticField
 from rest_framework import serializers
+from rest_framework.fields import DictField
 
-from core.sql.model import Table
+from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
 from services.web.tool.constants import (
     BkvisionConfig,
@@ -166,6 +169,17 @@ class SqlAnalyseRequestSerializer(serializers.Serializer):
 
     sql = serializers.CharField(label=gettext_lazy("SQL"))
     dialect = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='hive')
+    with_permission = serializers.BooleanField(required=False, default=False)
+
+
+class Table(RawTable):
+    """
+    带业务逻辑的表
+    """
+
+    permission: Annotated[Optional[dict], DictField(allow_empty=True, allow_null=True, default=dict)] = PydanticField(
+        default_factory=dict, description="权限信息"
+    )
 
 
 class SqlAnalyseResponseSerializer(serializers.Serializer):
