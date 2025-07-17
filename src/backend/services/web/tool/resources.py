@@ -168,9 +168,12 @@ class ListTool(ToolBase):
             )
             queryset = queryset.filter(keyword_filter)
 
-        if tags:
-            tool_uid_list = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
-            queryset = queryset.filter(uid__in=tool_uid_list)
+        if int(NO_TAG_ID) in tags:
+            tagged_tool_uids = ToolTag.objects.values_list("tool_uid", flat=True).distinct()
+            queryset = queryset.exclude(uid__in=tagged_tool_uids)
+        elif tags:
+            tagged_tool_uids = ToolTag.objects.filter(tag_id__in=tags).values_list("tool_uid", flat=True).distinct()
+            queryset = queryset.filter(uid__in=tagged_tool_uids)
 
         if recent_used and recent_tool_uids:
             queryset = custom_sort_order(queryset, "uid", recent_tool_uids)
