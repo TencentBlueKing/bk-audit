@@ -23,7 +23,9 @@ from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy
 
 from apps.audit.resources import AuditMixinResource
+from apps.meta.models import GlobalMetaConfig
 from core.utils.tools import get_app_info
+from services.web.risk.constants import ENABLE_EVENTS_MOCK_KEY, EVENTS_MOCK_DATA_KEY
 from services.web.risk.handlers import EventHandler
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.models import Risk
@@ -85,4 +87,13 @@ class ListEvent(EventMeta):
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data.pop("risk_id"))
         validated_request_data.update({"raw_event_id": risk.raw_event_id, "strategy_id": str(risk.strategy_id)})
+        if GlobalMetaConfig.get(ENABLE_EVENTS_MOCK_KEY, default=False) and GlobalMetaConfig.get(
+            EVENTS_MOCK_DATA_KEY, default=[]
+        ):
+            return {
+                "page": 1,
+                "num_pages": 50,
+                "total": 1,
+                "results": GlobalMetaConfig.get(EVENTS_MOCK_DATA_KEY),
+            }
         return EventHandler.search_event(**validated_request_data)
