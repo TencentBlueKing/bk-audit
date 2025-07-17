@@ -119,26 +119,28 @@
   };
 
   // 优化为switch语句，提高代码可读性和执行效率
-  watch(() => props.dataConfig, () => {
-    switch (props.dataConfig.field_category) {
+  watch(() => props.dataConfig, (newVal) => {
+    if (!newVal.value) return; // 避免空值触发更新
+    switch (newVal.field_category) {
     case 'input':
-      handleInputDataChange(props.dataConfig.value);
+      inputData.value = newVal.value;
       break;
     case 'number_input':
-      handleNumberInputDataChange(props.dataConfig.value);
+      numberInputData.value = newVal.value;
       break;
     case 'person_select':
-      handleUserChange(props.dataConfig.value);
+      user.value = newVal.value;
       break;
     case 'time_range_select':
-      handleRangeChange(props.dataConfig.value);
+      pickerRangeValue.value = newVal.value;
       break;
     case 'time_select':
-      handleChange(props.dataConfig.value);
+      pickerValue.value = newVal.value;
       break;
     }
   }, {
     deep: true,
+    immediate: true, // 确保初始化时也能触发
   });
 
   onMounted(() => {
