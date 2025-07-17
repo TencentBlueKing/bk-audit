@@ -67,8 +67,9 @@ BK_ITSM_API_URL = get_endpoint("bk-itsm", APIProvider.APIGW) if APIGW_ENABLED el
 
 # BK Vision
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
+BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 if not BK_VISION_API_URL:
-    BK_VISION_API_URL = get_endpoint("bk-vision", APIProvider.APIGW, stag="stag-new")
+    BK_VISION_API_URL = get_endpoint(BK_VISION_API_NAME, APIProvider.APIGW, stag="stag-new")
 
 # BK IAM V4
 BK_IAM_V4_API_URL = get_endpoint("bkiam", APIProvider.APIGW, stag="dev")
