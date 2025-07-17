@@ -20,6 +20,7 @@ from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, Union
 
 from arrow import ParserError
 from bk_resource import api
+from bk_resource.exceptions import APIRequestError
 from blueapps.utils.logger import logger
 from pydantic import BaseModel
 
@@ -39,6 +40,7 @@ from services.web.tool.constants import (
     ToolTypeEnum,
 )
 from services.web.tool.exceptions import (
+    BkbaseApiRequestError,
     DataSearchTablePermission,
     InputVariableMissingError,
     InputVariableValueError,
@@ -281,7 +283,11 @@ class SqlDataSearchExecutor(
             },
         ]
         # 请求 BKBASE
-        bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+        try:
+            bulk_resp = api.bk_base.query_sync.bulk_request(bulk_req_params)
+        except APIRequestError as e:
+            logger.error(f"{[self.__class__.__name__]} Request BKBASE Error: {e}")
+            raise BkbaseApiRequestError(sql=executable_sql)
         data_resp, count_resp = bulk_resp
         total = count_resp.get("list", [{}])[0].get("count", 0)
         return DataSearchToolExecuteResult(
