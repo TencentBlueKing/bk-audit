@@ -64,6 +64,10 @@
                 </bk-tag>
                 <bk-tag
                   v-if="itemInfo?.tags && itemInfo.tags.length > 3"
+                  v-bk-tooltips="{
+                    content: tagContent(itemInfo.tags),
+                    placement: 'top',
+                  }"
                   class="desc-tag">
                   + {{ itemInfo.tags.length - 3
                   }}
@@ -71,7 +75,7 @@
                 <bk-tag
                   class="desc-tag desc-tag-info"
                   theme="info">
-                  运用在 0 个策略中
+                  运用在 {{ itemInfo?.strategies.length }} 个策略中
                 </bk-tag>
               </div>
               <div class="top-right-desc">
@@ -117,12 +121,12 @@
                 <bk-button
                   class="mr8"
                   theme="primary"
-                  @click="submit">
+                  @click.stop="submit">
                   查询
                 </bk-button>
                 <bk-button
                   class="mr8"
-                  @click="handleReset">
+                  @click.stop="handleReset">
                   重置
                 </bk-button>
               </div>
@@ -232,10 +236,10 @@
   }
   interface Exposes {
     closeDialog: () => void,
-    openDialog: (item: ToolInfo, isDrillDown: boolean, drillDownItem: any, preview?: boolean) => void,
+    openDialog: (item: ToolInfo, isDrillDown: boolean, drillDownItem: any, itemData: any, preview?: boolean) => void,
   }
   interface Emits {
-    (e: 'openFieldDown', val: string, isDrillDown: boolean): void;
+    (e: 'openFieldDown', val: string, isDrillDown: boolean, itemData: any): void;
     (e: 'close'): void;
   }
   const props = defineProps<Props>();
@@ -268,7 +272,7 @@
   });
   const uid = ref('');
   const panelId = ref('');
-  const rules = {};
+  const rules = ref({});
   const formRef = ref();
   const searchForm = ref();
 
@@ -315,6 +319,16 @@
     return tagName;
   };
 
+  const tagContent = (tags: Array<string>) => {
+    const tagNameList = props.tagsEnums.map((i:TagItem) => {
+      if (tags.slice(3, tags.length).includes(i.tag_id)) {
+        return i.tag_name;
+      }
+      return null;
+    }).filter(e => e !== null);
+    return tagNameList.join(',');
+  };
+
   const handleClick = () => {
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -352,7 +366,7 @@
     });
     searchList.value = searchList.value.map(item => ({
       ...item,
-      value: null,
+      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
     }));
     pagination.value.current = 1;
     pagination.value.count = 0;
@@ -384,14 +398,38 @@
   // 创建弹窗内容
   const createDialogContent = (data: ToolDetailModel) => {
     searchForm.value = {};
-    searchList.value = data.config.input_variable.map(item => ({
-      ...item,
-      value: null,
-      required: item.required, // 将字符串类型的required转换为布尔值
-    }));
     data.config.input_variable.forEach((item) => {
       searchForm.value[item.raw_name] = '';
     });
+    const searchListAr = data.config.input_variable.map(item => ({
+      ...item,
+      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] :  null,
+      required: item.required,
+    }));
+    if (!(isDrillDownOpen.value)) {
+      searchList.value = searchListAr;
+    } else {
+      drillDownItemConfig.value.forEach((el:any) => {
+        searchList.value = searchListAr.map((searchItem: any) => {
+          if (searchItem.raw_name === el.source_field) {
+            return {
+              ...searchItem,
+              value: el.target_value_type === 'fixed_value' ? el.target_value : drillDownItemData.value[el.target_value],
+            };
+          }
+          return searchItem;
+        });
+      });
+      nextTick(() => {
+        if (formItemRef.value) {
+          formItemRef.value.forEach((item: any) => {
+            item?.change();
+          });
+        }
+      });
+    }
+
+
     columns.value = data.config.output_fields.map((item) => {
       if (item.drill_config === null || item.drill_config?.tool.uid === '') {
         return {
@@ -409,7 +447,7 @@
         render: ({ data }: {data: Record<any, string>}) => <bk-button  theme="primary" text
            onClick={(e:any) => {
             e.stopPropagation(); // 阻止事件冒泡
-            handleFieldDownClick(item);
+            handleFieldDownClick(item, data);
           }}
           >{data[item.raw_name]} </bk-button>,
       };
@@ -434,8 +472,8 @@
   });
 
   // 下钻点击
-  const handleFieldDownClick = (data: any) => {
-    emit('openFieldDown', data, true);
+  const handleFieldDownClick = (data: any, itemData: any) => {
+    emit('openFieldDown', data, true, itemData);
   };
 
   // 工具执行
@@ -456,9 +494,18 @@
       }
     },
   });
-
+  const isDrillDownOpen = ref(false);
+  const drillDownItemConfig = ref();
+  const drillDownItemData = ref();
   // 打开弹窗
-  const handleOpenDialog = async (item: ToolInfo, isDrillDown: boolean, drillDownItem: any, preview?: boolean) => {
+  const handleOpenDialog = async (
+    item: ToolInfo, isDrillDown: boolean, drillDownItem: any,
+    itemData: any, preview?: boolean,
+  ) => {
+    isDrillDownOpen.value = isDrillDown;
+    drillDownItemData.value = itemData;
+    drillDownItemConfig.value = drillDownItem?.drill_config?.config;
+
     isShow.value = true;
     itemInfo.value = item;
     isPreview.value = preview;
@@ -494,23 +541,7 @@
       return;
     }
 
-    fetchToolsDetail({ uid: item.uid })
-      .then(() => {
-        // 下钻打开传递参数
-        if (isDrillDown) {
-          drillDownItem.drill_config.config.forEach((el:any) => {
-            searchList.value = searchList.value.map((searchItem: any) => {
-              if (searchItem.raw_name === el.source_field) {
-                return {
-                  ...searchItem,
-                  value: el.target_value,
-                };
-              }
-              return searchItem;
-            });
-          });
-        }
-      });
+    fetchToolsDetail({ uid: item.uid });
   };
 
   const handleCloseDialog = () => {
@@ -614,8 +645,8 @@
     closeDialog() {
       handleCloseDialog();
     },
-    openDialog(item, isDrillDown, drillDownItem, preview) {
-      handleOpenDialog(item, isDrillDown, drillDownItem, preview);
+    openDialog(item, isDrillDown, drillDownItem, itemData, preview) {
+      handleOpenDialog(item, isDrillDown, drillDownItem, itemData, preview);
     },
   });
 </script>
@@ -665,6 +696,7 @@
         .top-right-name {
           display: inline-block;
           max-width: 300px;
+          min-width: 180px;
           margin-right: 5px;
           overflow: hidden;
           text-overflow: ellipsis;
