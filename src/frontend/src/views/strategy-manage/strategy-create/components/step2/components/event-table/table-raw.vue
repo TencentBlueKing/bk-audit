@@ -71,6 +71,7 @@
       raw_name: string;
       display_name: string;
       description: string;
+      target_field_type: string;
     }>
   }
 

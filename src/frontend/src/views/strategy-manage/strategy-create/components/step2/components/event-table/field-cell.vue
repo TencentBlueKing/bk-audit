@@ -103,6 +103,7 @@
       raw_name: string;
       display_name: string;
       description: string;
+      target_field_type: string;
     }>
   }
 
@@ -165,7 +166,7 @@
     };
   };
 
-  watch(props.eventItem, (value) => {
+  watch(() => props.eventItem, (value) => {
     localEventItem.value = value;
   });
 

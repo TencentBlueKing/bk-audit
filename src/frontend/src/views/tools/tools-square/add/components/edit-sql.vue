@@ -158,6 +158,7 @@ SQL 变量占位符使用指引
   const formData = ref({
     sql: '',
     dialect: 'mysql',
+    with_permission: true,
   });
 
   const updateIsShow = () => {

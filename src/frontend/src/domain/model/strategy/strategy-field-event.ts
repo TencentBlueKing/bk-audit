@@ -32,6 +32,7 @@ type EventItem = {
       source_field: string;
       target_value_type: string;
       target_value: string;
+      target_field_type: string;
     }>
   };
   prefix: string;
