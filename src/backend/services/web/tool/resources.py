@@ -51,6 +51,7 @@ from services.web.tool.serializers import (
     ToolCreateRequestSerializer,
     ToolDeleteRetrieveRequestSerializer,
     ToolListAllResponseSerializer,
+    ToolListResponseSerializer,
     ToolResponseSerializer,
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
@@ -195,7 +196,7 @@ class ListTool(ToolBase):
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
 
-        serialized_data = ToolListAllResponseSerializer(instance=paged_tools, many=True).data
+        serialized_data = ToolListResponseSerializer(instance=paged_tools, many=True).data
 
         data = wrapper_permission_field(
             result_list=serialized_data,
