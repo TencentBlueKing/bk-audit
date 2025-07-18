@@ -360,13 +360,13 @@
     isLoading.value = true;
     fetchToolsExecute({
       uid: uid.value,
-      page: pagination.value.current,
-      page_size: pagination.value.limit,
       params: itemInfo.value?.tool_type === 'data_search' ? {
         tool_variables: searchList.value.map(item => ({
           raw_name: item.raw_name,
           value: item.value || '',
         })),
+        page: pagination.value.current,
+        page_size: pagination.value.limit,
       } : {},
     })
       .finally(() => {
