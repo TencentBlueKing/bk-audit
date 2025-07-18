@@ -143,6 +143,7 @@
                     :data="tableData"
                     max-height="50vh"
                     :pagination="pagination"
+                    remote-pagination
                     width="100%"
                     @page-limit-change="handlePageLimitChange"
                     @page-value-change="handlePageChange" />

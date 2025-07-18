@@ -63,6 +63,11 @@
             getToolNameAndType(localEventItem.drill_config.tool.uid).type as keyof typeof iconMap
           ]" />
         {{ getToolNameAndType(localEventItem.drill_config.tool.uid).name }}
+        <audit-icon
+          v-if="localEventItem.drill_config.tool.uid"
+          class="remove-btn"
+          type="delete-fill"
+          @click.stop="handleRemove" />
       </div>
       <!-- 字段下钻 -->
       <field-reference
@@ -151,6 +156,17 @@
     localEventItem.value.drill_config = drillConfig;
   };
 
+  // 删除值
+  const handleRemove = () => {
+    localEventItem.value.drill_config =  {
+      tool: {
+        uid: '',
+        version: 1,
+      },
+      config: [],
+    };
+  };
+
   const handleAllToolsData = (data: Array<ToolDetailModel>) => {
     allToolsData.value = data;
   };
@@ -197,6 +213,7 @@
   }
 
   .field-cell-div {
+    position: relative;
     display: flex;
     align-items: center;
     width: 100%;
@@ -204,6 +221,26 @@
     padding: 0 8px;
     line-height: 33px;
     cursor: pointer;
+
+    &:hover {
+      .remove-btn {
+        display: block;
+      }
+    }
+
+    .remove-btn {
+      position: absolute;
+      right: 8px;
+      z-index: 1;
+      display: none;
+      font-size: 12px;
+      color: #c4c6cc;
+      transition: all .15s;
+
+      &:hover {
+        color: #979ba5;
+      }
+    }
   }
 }
 </style>
