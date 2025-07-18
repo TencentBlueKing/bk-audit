@@ -170,12 +170,6 @@
                 <span>{{ item.created_by }}</span>
                 <span>{{ formatDate(item.created_at) }}</span>
               </div>
-              <component
-                :is="DialogVue"
-                :ref="(el) => dialogRefs[item.uid] = el"
-                :dialog-cls="`dialogCls${item.uid}`"
-                :tags-enums="tagsEnums"
-                @open-field-down="openFieldDown" />
             </div>
           </div>
           <div
@@ -206,6 +200,16 @@
         </div>
       </bk-loading>
     </scroll-faker>
+  </div>
+  <!-- 循环所有工具 -->
+  <div
+    v-for="item in allToolsData"
+    :key="item.uid">
+    <component
+      :is="DialogVue"
+      :ref="(el) => dialogRefs[item.uid] = el"
+      :tags-enums="tagsEnums"
+      @open-field-down="openFieldDown" />
   </div>
 </template>
 
@@ -293,6 +297,15 @@
       total.value = data.total;
     },
   });
+
+  // 获取所有工具
+  const {
+    data: allToolsData,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    manual: true,
+  });
+
   // 删除
   const {
     run: fetchDeleteTool,
@@ -302,6 +315,7 @@
       messageSuccess(t('删除成功'));
     },
   });
+
   // 标签名称
   const returnTagsName = (tags: string) => {
     let tagName = '';
@@ -312,6 +326,7 @@
     });
     return tagName;
   };
+
   // +n显示
   const tagContent = (tags: Array<string>) => {
     const tagNameList = props.tagsEnums.map((i:TagItem) => {
@@ -322,6 +337,7 @@
     }).filter(e => e !== null);
     return tagNameList.join(',');
   };
+
   const handleDeleteItem = (item: Record<string, any>) => {
     fetchDeleteTool({
       uid: item.uid,
@@ -363,22 +379,26 @@
     }
     itemMouseenter.value = item.uid;
   };
+
   const handleMouseleave = () => {
     if (isFixedDelete.value) {
       return;
     }
     itemMouseenter.value = null;
   };
+
   const handleCreate = () => {
     router.push({
       name: 'toolsAdd',
     });
   };
+
   // 删除
   const handleDelete = (item: Record<string, any>) => {
     isFixedDelete.value = !isFixedDelete.value;
     itemMouseenter.value = item.uid;
   };
+
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
     isSingleLine?: boolean;
     fontSize?: string;
@@ -426,9 +446,9 @@
 
 
   const middleTtooltips = (text: string) => (
-  <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
-    {text}
-  </div>
+    <div style="max-width: 400px; word-break: break-word; white-space: normal;" >
+      {text}
+    </div>
   );
 
   const itemIcon = (item: ToolInfo) => {
@@ -441,9 +461,25 @@
       return 'apixiao';
     }
   };
-  const handleClick = async (item: ToolInfo) => {
-    if (dialogRefs.value[item.uid]) {
-      dialogRefs.value[item.uid].openDialog(item);
+
+  // 下转打开
+  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
+    const { uid } = drillDownItem.drill_config.tool;
+    const toolItem = allToolsData.value.find(item => item.uid === uid);
+    if (!toolItem) {
+      return;
+    }
+
+    const toolInfo = new ToolInfo(toolItem as any);
+    if (dialogRefs.value[uid]) {
+      dialogRefs.value[uid].openDialog(toolInfo, drillDownItem, drillDownItemRowData);
+    }
+  };
+
+  // 打开工具
+  const handleClick = async (toolInfo: ToolInfo) => {
+    if (dialogRefs.value[toolInfo.uid]) {
+      dialogRefs.value[toolInfo.uid].openDialog(toolInfo);
     }
   };
 
@@ -459,15 +495,6 @@
     }).finally(() => {
       loading.value = false;
     });
-  };
-
-  // 下转打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
-    const item = dataList.value.find((item: ToolInfo) => item.uid === uid);
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(item, drillDownItem, drillDownItemRowData);
-    }
   };
 
   // 下拉加载

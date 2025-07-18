@@ -69,16 +69,10 @@
                     theme="primary"
                     @click="handleClick(
                       subItem,
-                      `${drillMap.get(subItem.field_name).drill_config.tool.uid}_${subItem.field_name}_information`
+                      drillMap.get(subItem.field_name).drill_config.tool.uid
                     )">
                     {{ t('查看') }}
                   </bk-button>
-                  <component
-                    :is="DialogVue"
-                    :ref="(el) => dialogRefs[
-                      `${drillMap.get(subItem.field_name).drill_config.tool.uid}_${subItem.field_name}_information`
-                    ] = el"
-                    :tags-enums="tagData" />
                 </template>
               </render-info-item>
             </render-info-block>
@@ -106,16 +100,10 @@
                       theme="primary"
                       @click="handleClick(
                         drillMap.get('event_id'),
-                        `${drillMap.get('event_id').drill_config.tool.uid}_event_id_basic`
+                        drillMap.get('event_id').drill_config.tool.uid
                       )">
                       {{ t('查看') }}
                     </bk-button>
-                    <component
-                      :is="DialogVue"
-                      :ref="(el) => dialogRefs[
-                        `${drillMap.get('event_id').drill_config.tool.uid}_event_id_basic`
-                      ] = el"
-                      :tags-enums="tagData" />
                   </template>
                 </render-info-item>
                 <render-info-item
@@ -129,16 +117,10 @@
                       theme="primary"
                       @click="handleClick(
                         drillMap.get('operator'),
-                        `${drillMap.get('operator').drill_config.tool.uid}_operator_basic`
+                        drillMap.get('operator').drill_config.tool.uid
                       )">
                       {{ t('查看') }}
                     </bk-button>
-                    <component
-                      :is="DialogVue"
-                      :ref="(el) => dialogRefs[
-                        `${drillMap.get('operator').drill_config.tool.uid}_operator_basic`
-                      ] = el"
-                      :tags-enums="tagData" />
                   </template>
                 </render-info-item>
               </render-info-block>
@@ -163,16 +145,10 @@
                       theme="primary"
                       @click="handleClick(
                         drillMap.get('strategy_id'),
-                        `${drillMap.get('strategy_id').drill_config.tool.uid}_strategy_id_basic`
+                        drillMap.get('strategy_id').drill_config.tool.uid
                       )">
                       {{ t('查看') }}
                     </bk-button>
-                    <component
-                      :is="DialogVue"
-                      :ref="(el) => dialogRefs[
-                        `${drillMap.get('strategy_id').drill_config.tool.uid}_strategy_id_basic`
-                      ] = el"
-                      :tags-enums="tagData" />
                   </template>
                 </render-info-item>
                 <render-info-item
@@ -186,16 +162,10 @@
                       theme="primary"
                       @click="handleClick(
                         drillMap.get('event_content'),
-                        `${drillMap.get('event_content').drill_config.tool.uid}_event_content_basic`
+                        drillMap.get('event_content').drill_config.tool.uid
                       )">
                       {{ t('查看') }}
                     </bk-button>
-                    <component
-                      :is="DialogVue"
-                      :ref="(el) => dialogRefs[
-                        `${drillMap.get('event_content').drill_config.tool.uid}_event_content_basic`
-                      ] = el"
-                      :tags-enums="tagData" />
                   </template>
                 </render-info-item>
               </render-info-block>
@@ -248,16 +218,10 @@
                           theme="primary"
                           @click="handleClick(
                             drillMap.get(key),
-                            `${drillMap.get(key).drill_config.tool.uid}_${key}_event`
+                            drillMap.get(key).drill_config.tool.uid
                           )">
                           {{ t('查看') }}
                         </bk-button>
-                        <component
-                          :is="DialogVue"
-                          :ref="(el) => dialogRefs[
-                            `${drillMap.get(key).drill_config.tool.uid}_${key}_event`
-                          ] = el"
-                          :tags-enums="tagData" />
                       </template>
                     </div>
                   </div>
@@ -282,6 +246,16 @@
         {{ t('暂无数据') }}
       </bk-exception>
     </div>
+  </div>
+  <!-- 循环所有工具 -->
+  <div
+    v-for="item in allToolsData"
+    :key="item.uid">
+    <component
+      :is="DialogVue"
+      :ref="(el) => dialogRefs[item.uid] = el"
+      :tags-enums="tagData"
+      @open-field-down="openFieldDown" />
   </div>
 </template>
 
@@ -316,11 +290,11 @@
   import ToolInfo from '@/domain/model/tool/tool-info';
   import useRequest from '@/hooks/use-request';
 
-  interface DrillDownItem {
-    field_name: string,
+  interface DrillItem {
+    field_name: string;
+    is_priority: boolean;
     description: string
     display_name: string;
-    is_priority: boolean;
     map_config?: {
       target_value: string | undefined,
       source_field: string | undefined,
@@ -335,6 +309,23 @@
         target_value_type: string;
         target_value: string;
         target_field_type: string;
+      }>
+    };
+  }
+
+  interface DrillDownItem {
+    raw_name: string;
+    display_name: string;
+    description: string;
+    drill_config: {
+      tool: {
+        uid: string;
+        version: number;
+      };
+      config: Array<{
+        source_field: string;
+        target_value_type: string;
+        target_value: string;
       }>
     };
   }
@@ -473,7 +464,22 @@
     window.open(to.href, '_blank');
   };
 
-  const handleClick = (item: DrillDownItem, id: string) => {
+  // 下转打开
+  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
+    const { uid } = drillDownItem.drill_config.tool;
+    const toolItem = allToolsData.value.find(item => item.uid === uid);
+    if (!toolItem) {
+      return;
+    }
+
+    const toolInfo = new ToolInfo(toolItem as any);
+    if (dialogRefs.value[uid]) {
+      dialogRefs.value[uid].openDialog(toolInfo, drillDownItem, drillDownItemRowData);
+    }
+  };
+
+  // 打开工具
+  const handleClick = (item: DrillItem, id: string) => {
     const { uid } = item.drill_config.tool;
     const toolItem = allToolsData.value.find(tool => tool.uid === uid);
     if (!toolItem) {
