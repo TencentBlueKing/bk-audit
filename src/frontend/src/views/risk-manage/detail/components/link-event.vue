@@ -43,6 +43,7 @@
           <div
             v-if="importantInformation.length"
             class="important-information">
+            <!-- 重点信息 -->
             <div class="title">
               {{ t('重点信息') }}
             </div>
@@ -61,10 +62,30 @@
                   eventItem[subItem.field_name as keyof typeof eventItem] ||
                     eventItem.event_data[subItem.field_name]
                 }}
+                <template v-if="drillMap.get(subItem.field_name)">
+                  <bk-button
+                    class="ml8"
+                    text
+                    theme="primary"
+                    @click="handleClick(
+                      subItem,
+                      `${drillMap.get(subItem.field_name).drill_config.tool.uid}_${subItem.field_name}_information`
+                    )">
+                    {{ t('查看') }}
+                  </bk-button>
+                  <component
+                    :is="DialogVue"
+                    :ref="(el) => dialogRefs[
+                      `${drillMap.get(subItem.field_name).drill_config.tool.uid}_${subItem.field_name}_information`
+                    ] = el"
+                    :tags-enums="tagData" />
+                </template>
               </render-info-item>
             </render-info-block>
           </div>
+
           <div style="padding-left: 12px">
+            <!-- 基本信息 -->
             <div class="title mt16">
               {{ t('基本信息') }}
             </div>
@@ -78,11 +99,47 @@
                   :label="t('事件ID')"
                   :label-width="labelWidth">
                   {{ eventItem.event_id }}
+                  <template v-if="drillMap.get('event_id')">
+                    <bk-button
+                      class="ml8"
+                      text
+                      theme="primary"
+                      @click="handleClick(
+                        drillMap.get('event_id'),
+                        `${drillMap.get('event_id').drill_config.tool.uid}_event_id_basic`
+                      )">
+                      {{ t('查看') }}
+                    </bk-button>
+                    <component
+                      :is="DialogVue"
+                      :ref="(el) => dialogRefs[
+                        `${drillMap.get('event_id').drill_config.tool.uid}_event_id_basic`
+                      ] = el"
+                      :tags-enums="tagData" />
+                  </template>
                 </render-info-item>
                 <render-info-item
                   :label="t('责任人')"
                   :label-width="labelWidth">
                   {{ eventItem.operator }}
+                  <template v-if="drillMap.get('operator')">
+                    <bk-button
+                      class="ml8"
+                      text
+                      theme="primary"
+                      @click="handleClick(
+                        drillMap.get('operator'),
+                        `${drillMap.get('operator').drill_config.tool.uid}_operator_basic`
+                      )">
+                      {{ t('查看') }}
+                    </bk-button>
+                    <component
+                      :is="DialogVue"
+                      :ref="(el) => dialogRefs[
+                        `${drillMap.get('operator').drill_config.tool.uid}_operator_basic`
+                      ] = el"
+                      :tags-enums="tagData" />
+                  </template>
                 </render-info-item>
               </render-info-block>
               <render-info-block
@@ -99,11 +156,47 @@
                     {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
                   </bk-button>
                   <span v-else> -- </span>
+                  <template v-if="drillMap.get('strategy_id')">
+                    <bk-button
+                      class="ml8"
+                      text
+                      theme="primary"
+                      @click="handleClick(
+                        drillMap.get('strategy_id'),
+                        `${drillMap.get('strategy_id').drill_config.tool.uid}_strategy_id_basic`
+                      )">
+                      {{ t('查看') }}
+                    </bk-button>
+                    <component
+                      :is="DialogVue"
+                      :ref="(el) => dialogRefs[
+                        `${drillMap.get('strategy_id').drill_config.tool.uid}_strategy_id_basic`
+                      ] = el"
+                      :tags-enums="tagData" />
+                  </template>
                 </render-info-item>
                 <render-info-item
                   :label="t('事件描述')"
                   :label-width="labelWidth">
                   {{ eventItem.event_content }}
+                  <template v-if="drillMap.get('event_content')">
+                    <bk-button
+                      class="ml8"
+                      text
+                      theme="primary"
+                      @click="handleClick(
+                        drillMap.get('event_content'),
+                        `${drillMap.get('event_content').drill_config.tool.uid}_event_content_basic`
+                      )">
+                      {{ t('查看') }}
+                    </bk-button>
+                    <component
+                      :is="DialogVue"
+                      :ref="(el) => dialogRefs[
+                        `${drillMap.get('event_content').drill_config.tool.uid}_event_content_basic`
+                      ] = el"
+                      :tags-enums="tagData" />
+                  </template>
                 </render-info-item>
               </render-info-block>
             </div>
@@ -114,6 +207,8 @@
               type="empty">
               {{ t('暂无数据') }}
             </bk-exception>
+
+            <!-- 事件数据 -->
             <div class="title">
               {{ t('事件数据') }}
             </div>
@@ -146,6 +241,24 @@
                       }"
                       @mouseenter="handlerEnter($event)">
                       <span>{{ eventItem.event_data[key] }}</span>
+                      <template v-if="drillMap.get(key)">
+                        <bk-button
+                          class="ml8"
+                          text
+                          theme="primary"
+                          @click="handleClick(
+                            drillMap.get(key),
+                            `${drillMap.get(key).drill_config.tool.uid}_${key}_event`
+                          )">
+                          {{ t('查看') }}
+                        </bk-button>
+                        <component
+                          :is="DialogVue"
+                          :ref="(el) => dialogRefs[
+                            `${drillMap.get(key).drill_config.tool.uid}_${key}_event`
+                          ] = el"
+                          :tags-enums="tagData" />
+                      </template>
                     </div>
                   </div>
                 </div>
@@ -187,6 +300,7 @@
   import { useRouter } from 'vue-router';
 
   import EventManageService from '@service/event-manage';
+  import ToolManageService from '@service/tool-manage';
 
   import EventModel from '@model/event/event';
   import type RiskManageModel from '@model/risk/risk';
@@ -195,10 +309,35 @@
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
+  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
   import RenderInfoItem from './render-info-item.vue';
 
+  import ToolInfo from '@/domain/model/tool/tool-info';
   import useRequest from '@/hooks/use-request';
+
+  interface DrillDownItem {
+    field_name: string,
+    description: string
+    display_name: string;
+    is_priority: boolean;
+    map_config?: {
+      target_value: string | undefined,
+      source_field: string | undefined,
+    };
+    drill_config: {
+      tool: {
+        uid: string;
+        version: number;
+      };
+      config: Array<{
+        source_field: string;
+        target_value_type: string;
+        target_value: string;
+        target_field_type: string;
+      }>
+    };
+  }
 
   interface Props{
     strategyList: Array<{
@@ -217,6 +356,51 @@
   const eventItem = ref(new EventModel()); // 当前选中事件
   const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
   const showTooltips = ref(false); // 是否显示tooltips
+
+  const dialogRefs = ref<Record<string, any>>({});
+
+  // 获取标签列表
+  const {
+    data: tagData,
+  } = useRequest(ToolManageService.fetchToolTags, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  // 获取所有工具
+  const {
+    data: allToolsData,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    manual: true,
+  });
+
+  const {
+    data: linkEventData,
+    run: fetchLinkEvent,
+  } = useRequest(EventManageService.fetchEventList, {
+    defaultValue: {
+      results: [],
+      page: 1,
+      num_pages: 1,
+      total: 1,
+    },
+    onSuccess() {
+      if (linkEventData.value.results.length) {
+        // 触底加载，拼接
+        linkEventList.value = [...linkEventList.value, ...linkEventData.value.results].
+          filter((item, index, self) => index === self.findIndex(t => t.event_id === item.event_id));
+
+        // 默认获取第一个
+        // eslint-disable-next-line prefer-destructuring
+        eventItem.value = linkEventList.value[0];
+        console.log(linkEventList.value[0]);
+        // 事件数据
+        const eventDataKey = getEventDataKey(eventItem.value.event_data);
+        eventItemDataKeyArr.value = group(eventDataKey);
+      }
+    },
+  });
 
   const handleScroll = (event: Event) => {
     const target = event.target as HTMLDivElement;
@@ -289,31 +473,18 @@
     window.open(to.href, '_blank');
   };
 
-  const {
-    data: linkEventData,
-    run: fetchLinkEvent,
-  } = useRequest(EventManageService.fetchEventList, {
-    defaultValue: {
-      results: [],
-      page: 1,
-      num_pages: 1,
-      total: 1,
-    },
-    onSuccess() {
-      if (linkEventData.value.results.length) {
-        // 触底加载，拼接
-        linkEventList.value = [...linkEventList.value, ...linkEventData.value.results].
-          filter((item, index, self) => index === self.findIndex(t => t.event_id === item.event_id));
+  const handleClick = (item: DrillDownItem, id: string) => {
+    const { uid } = item.drill_config.tool;
+    const toolItem = allToolsData.value.find(tool => tool.uid === uid);
+    if (!toolItem) {
+      return;
+    }
 
-        // 默认获取第一个
-        // eslint-disable-next-line prefer-destructuring
-        eventItem.value = linkEventList.value[0];
-        // 事件数据
-        const eventDataKey = getEventDataKey(eventItem.value.event_data);
-        eventItemDataKeyArr.value = group(eventDataKey);
-      }
-    },
-  });
+    const toolInfo = new ToolInfo(toolItem as any);
+    if (dialogRefs.value[id]) {
+      dialogRefs.value[id].openDialog(toolInfo, item, eventItem.value);
+    }
+  };
 
   watch(() => props.data, (data) => {
     if (data.risk_id) {
@@ -334,6 +505,22 @@
     ...props.data.event_basic_field_configs.filter(item => item.is_priority),
     ...props.data.event_data_field_configs.filter(item => item.is_priority),
   ]));
+
+  // 显示字段下钻的字段
+  const drillMap = computed(() => {
+    const map = new Map();
+    props.data.event_basic_field_configs.forEach((item) => {
+      if (item.drill_config?.tool.uid) {
+        map.set(item.field_name, item);
+      }
+    });
+    props.data.event_data_field_configs.forEach((item) => {
+      if (item.drill_config?.tool.uid) {
+        map.set(item.field_name, item);
+      }
+    });
+    return map;
+  });
 
   onMounted(() => {
     const observer = new MutationObserver(() => {

@@ -89,12 +89,28 @@
               :label-width="labelWidth">
               {{ data.event_basic_field_configs.
                 find(field => field.field_name === 'raw_event_id')?.map_config?.target_value || ('以实际内容为准') }}
+              <bk-button
+                v-if="data.event_basic_field_configs.
+                  find(field => field.field_name === 'raw_event_id')?.drill_config?.tool.uid"
+                class="ml8"
+                text
+                theme="primary">
+                {{ t('查看') }}
+              </bk-button>
             </render-info-item>
             <render-info-item
               :label="t('责任人')"
               :label-width="labelWidth">
               {{ data.event_basic_field_configs.
                 find(field => field.field_name === 'operator')?.map_config?.target_value || ('以实际内容为准') }}
+              <bk-button
+                v-if="data.event_basic_field_configs.
+                  find(field => field.field_name === 'operator')?.drill_config?.tool.uid"
+                class="ml8"
+                text
+                theme="primary">
+                {{ t('查看') }}
+              </bk-button>
             </render-info-item>
           </render-info-block>
           <render-info-block
@@ -104,12 +120,28 @@
               :label="t('命中策略')"
               :label-width="labelWidth">
               {{ data.strategy_name }}
+              <bk-button
+                v-if="data.event_basic_field_configs.
+                  find(field => field.field_name === 'strategy_name')?.drill_config?.tool.uid"
+                class="ml8"
+                text
+                theme="primary">
+                {{ t('查看') }}
+              </bk-button>
             </render-info-item>
             <render-info-item
               :label="t('事件描述')"
               :label-width="labelWidth">
               {{ data.event_basic_field_configs.
                 find(field => field.field_name === 'event_content')?.map_config?.target_value || ('以实际内容为准') }}
+              <bk-button
+                v-if="data.event_basic_field_configs.
+                  find(field => field.field_name === 'event_content')?.drill_config?.tool.uid"
+                class="ml8"
+                text
+                theme="primary">
+                {{ t('查看') }}
+              </bk-button>
             </render-info-item>
           </render-info-block>
         </div>
@@ -140,6 +172,13 @@
                 </div>
                 <div class="data-info-item-value">
                   <span>{{ t('以实际内容为准') }}</span>
+                  <bk-button
+                    v-if="subItem.drill_config?.tool.uid"
+                    class="ml8"
+                    text
+                    theme="primary">
+                    {{ t('查看') }}
+                  </bk-button>
                 </div>
               </div>
             </div>
