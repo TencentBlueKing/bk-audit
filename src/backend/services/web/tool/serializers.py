@@ -116,11 +116,13 @@ class ToolDeleteRetrieveRequestSerializer(serializers.Serializer):
 class ToolListAllResponseSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
     name = serializers.CharField(label=gettext_lazy("工具名称"))
+    description = serializers.CharField(allow_blank=True, label=gettext_lazy("工具描述"))
     tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
     version = serializers.IntegerField(label=gettext_lazy("工具版本"))
     namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
+    strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
 
 
 class ToolListResponseSerializer(serializers.Serializer):
