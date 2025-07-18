@@ -104,9 +104,9 @@ class ToolDrillConfig(BaseModel):
     """
 
     target_value_type: TargetValueTypeEnum
-    target_value: str  # 引用字段名或固定值
+    target_field_type: Optional[str] = None  # 引用字段类型用于前端区分字段
+    target_value: Optional[str]  # 引用字段名或固定值
     source_field: str  # 工具变量
-    source_field_type: Optional[str] = None
 
 
 class DataSearchDrillConfig(BaseModel):
