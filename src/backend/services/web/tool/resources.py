@@ -51,6 +51,7 @@ from services.web.tool.serializers import (
     ToolCreateRequestSerializer,
     ToolDeleteRetrieveRequestSerializer,
     ToolListAllResponseSerializer,
+    ToolListResponseSerializer,
     ToolResponseSerializer,
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
@@ -195,7 +196,7 @@ class ListTool(ToolBase):
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
 
-        serialized_data = ToolListAllResponseSerializer(instance=paged_tools, many=True).data
+        serialized_data = ToolListResponseSerializer(instance=paged_tools, many=True).data
 
         data = wrapper_permission_field(
             result_list=serialized_data,
@@ -514,6 +515,16 @@ class GetToolDetail(ToolBase):
 
         tag_ids = list(ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True))
         setattr(tool, "tags", [str(tid) for tid in tag_ids])
+
+        # 如果是SQL工具且有引用表，检查表权限
+        if tool.tool_type == ToolTypeEnum.DATA_SEARCH and tool.config.get("referenced_tables"):
+            tables = [table["table_name"] for table in tool.config["referenced_tables"]]
+            auth_results = {
+                item["object_id"]: item for item in resource.tool.user_query_table_auth_check({"tables": tables})
+            }
+            # 将权限信息添加到每个表
+            for table in tool.config["referenced_tables"]:
+                table["permission"] = auth_results.get(table["table_name"], {})
         return tool
 
 
