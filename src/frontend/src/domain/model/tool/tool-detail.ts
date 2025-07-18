@@ -27,7 +27,9 @@ export default class ToolDetail {
     referenced_tables: Array<{
       table_name: string | null;
       alias: string | null;
-      hasPermission: boolean;
+      permission: {
+        result: boolean;
+      };
     }>;
     input_variable: Array<{
       raw_name: string;

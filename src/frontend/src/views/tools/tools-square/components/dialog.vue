@@ -233,18 +233,40 @@
   interface Props {
     tagsEnums: Array<TagItem>,
   }
-
+  interface DrillDownItem {
+    raw_name: string;
+    display_name: string;
+    description: string;
+    drill_config: {
+      tool: {
+        uid: string;
+        version: number;
+      };
+      config: Array<{
+        source_field: string;
+        target_value_type: string;
+        target_value: string;
+        target_field_type?: string;
+      }>
+    };
+  }
   interface TableDataItem {
     [key: string]: any;
   }
   interface Exposes {
     closeDialog: () => void,
-    openDialog: (item: ToolInfo, isDrillDown: boolean, drillDownItem: any, itemData: any, preview?: boolean) => void,
+    openDialog: (
+      item: ToolInfo,  // 工具信息
+      drillDownItem?: DrillDownItem, // 下钻信息
+      drillDownItemRowData?: Record<string, string>, // 下钻table所在行信息
+      preview?: boolean // 是否预览
+    ) => void,
   }
   interface Emits {
-    (e: 'openFieldDown', val: string, isDrillDown: boolean, itemData: any): void;
+    (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>): void;
     (e: 'close'): void;
   }
+
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const   emitBus  = useEventBus().emit;
@@ -259,6 +281,7 @@
   const isLoading = ref(false);
   const isShow = ref(false);
   const isPreview = ref<boolean | undefined>(false);
+  const isDrillDownOpen = ref(false);
 
   const dialogRef = ref();
   const formItemRef = ref();
@@ -278,9 +301,45 @@
   const rules = ref({});
   const formRef = ref();
   const searchForm = ref();
-  const isDrillDownOpen = ref(false);
-  const drillDownItemConfig = ref();
-  const drillDownItemData = ref();
+
+  const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>();
+  const drillDownItemRowData = ref<Record<string, any>>();
+
+  // 工具执行
+  const {
+    run: fetchToolsExecute,
+  } = useRequest(ToolManageService.fetchToolsExecute, {
+    defaultValue: {},
+    onSuccess: (data) => {
+      if (data === undefined) {
+        tableData.value = [];
+      }
+      if (itemInfo.value?.tool_type === 'data_search') {
+        tableData.value = JSON.parse(JSON.stringify(data.data.results));
+        pagination.value.count = data.data.total;
+      } else {
+        panelId.value = data.data.panel_id;
+        initBK(data.data.panel_id);
+      }
+    },
+  });
+
+  // 获取工具详情
+  const {
+    run: fetchToolsDetail,
+  } = useRequest(ToolManageService.fetchToolsDetail, {
+    defaultValue: new ToolDetailModel(),
+    onSuccess: (data) => {
+      uid.value = data.uid;
+      // bkVision直接请求
+      if (data.tool_type !== 'data_search') {
+        fetchTableData();
+      } else {
+        // 创建弹框form、table
+        createDialogContent(data);
+      }
+    },
+  });
 
   // 处理页码变化
   const handlePageChange = (newPage: number) => {
@@ -404,6 +463,7 @@
   // 创建弹窗内容
   const createDialogContent = (data: ToolDetailModel) => {
     searchForm.value = {};
+
     columns.value = data.config.output_fields.map((item) => {
       if (item.drill_config === null || item.drill_config?.tool.uid === '') {
         return {
@@ -435,20 +495,49 @@
       value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] :  null,
       required: item.required,
     }));
-    if (!(isDrillDownOpen.value)) {
+
+    // 非下钻
+    if (!isDrillDownOpen.value) {
       searchList.value = searchListAr;
     } else {
-      drillDownItemConfig.value.forEach((el:any) => {
-        searchList.value = searchListAr.map((searchItem: any) => {
-          if (searchItem.raw_name === el.source_field) {
-            return {
-              ...searchItem,
-              value: el.target_value_type === 'fixed_value' ? el.target_value : drillDownItemData.value[el.target_value],
-            };
-          }
-          return searchItem;
-        });
+      // 下钻
+      // 下钻填充值
+      if (!drillDownItemConfig.value
+        || drillDownItemConfig.value.length === 0) {
+        return;
+      }
+
+      // 创建配置项的映射表
+      const configMap = new Map();
+      drillDownItemConfig.value.forEach((configItem) => {
+        configMap.set(configItem.source_field, configItem);
       });
+
+      // 一次性完成映射
+      searchList.value = searchListAr.map((searchItem: any) => {
+        const configItem = configMap.get(searchItem.raw_name);
+        if (!configItem) return searchItem;
+
+        // 动态值处理逻辑
+        let dynamicValue = '';
+        if (configItem.target_value_type !== 'fixed_value') {
+          if (configItem.target_field_type === 'basic' || configItem.target_field_type === null) {
+            // 从根对象取值
+            dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? '';
+          } else {
+            // 从event_data对象取值
+            dynamicValue = drillDownItemRowData.value?.event_data?.[configItem.target_value] ?? '';
+          }
+        }
+
+        return {
+          ...searchItem,
+          value: configItem.target_value_type === 'fixed_value'
+            ? configItem.target_value
+            : dynamicValue,
+        };
+      });
+
       nextTick(() => {
         if (formItemRef.value) {
           formItemRef.value.forEach((item: any) => {
@@ -467,6 +556,7 @@
       });
     }
   };
+
   // 权限
   const urlIamApply = ref('');
   const handleIamApply = () => {
@@ -482,104 +572,10 @@
     },
   });
 
-  // 获取工具详情
-  const {
-    run: fetchToolsDetail,
-  } = useRequest(ToolManageService.fetchToolsDetail, {
-    defaultValue: new ToolDetailModel(),
-    onSuccess: (data) => {
-      uid.value = data.uid;
-      // bkVision直接请求
-      if (data.tool_type !== 'data_search') {
-        fetchTableData();
-      } else {
-        // 创建弹框form、table
-        createDialogContent(data);
-      }
-    },
-  });
-
-  // 下钻点击
-  const handleFieldDownClick = (data: any, itemData: any) => {
-    emit('openFieldDown', data, true, itemData);
-  };
-
-  // 工具执行
-  const {
-    run: fetchToolsExecute,
-  } = useRequest(ToolManageService.fetchToolsExecute, {
-    defaultValue: {},
-    onSuccess: (data) => {
-      if (data === undefined) {
-        tableData.value = [];
-      }
-      if (itemInfo.value?.tool_type === 'data_search') {
-        tableData.value = JSON.parse(JSON.stringify(data.data.results));
-        pagination.value.count = data.data.total;
-      } else {
-        panelId.value = data.data.panel_id;
-        initBK(data.data.panel_id);
-      }
-    },
-  });
-  // 打开弹窗
-  const handleOpenDialog = async (
-    item: ToolInfo, isDrillDown: boolean, drillDownItem: any,
-    itemData: any, preview?: boolean,
-  ) => {
-    isDrillDownOpen.value = isDrillDown;
-    drillDownItemData.value = itemData;
-    drillDownItemConfig.value = drillDownItem?.drill_config?.config;
-
-    isShow.value = true;
-    itemInfo.value = item;
-    isPreview.value = preview;
-
-    const isNewIndex = sessionStorage.getItem('dialogIndex');
-    if (isNewIndex) {
-      dialogIndex.value = Number(isNewIndex) + 1;
-    }
-    nextTick(() => {
-      sessionStorage.setItem('dialogIndex', String(dialogIndex.value));
-    });
-    // 等待两次nextTick确保DOM完全更新
-    await nextTick();
-    await nextTick();
-    const modals = document.getElementsByClassName('bk-modal-wrapper');
-
-    // 遍历所有弹窗，只调整未被拖动过的弹窗位置
-    Array.from(modals).reverse()
-      .forEach((modal, index) => {
-        const htmlModal = modal as HTMLElement;
-        // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
-        if (index > 0 && !htmlModal.style.transform) {
-          htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-        }
-      });
-    // 无权限时请求链接
-    if (!item.permission.use_tool) {
-      getApplyData({
-        action_ids: 'use_tool',
-        resources: item.uid,
-      });
-    }
-
-    if (isPreview.value) {
-      const detail = new ToolDetailModel();
-      createDialogContent({
-        ...detail,
-        ...item,
-      } as ToolDetailModel);
-      return;
-    }
-
-    fetchToolsDetail({ uid: item.uid });
-  };
-
-  const handleCloseDialog = () => {
-    emit('close');
-    isShow.value = false;
-    handleReset();
+  // 放大
+  const handleFullscreen = () => {
+    isFullScreen.value = !isFullScreen.value;
+    dialogWidth.value = isFullScreen.value ? '90%' : '1000px';
   };
 
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
@@ -667,18 +663,91 @@
     }
   };
 
-  // 放大
-  const handleFullscreen = () => {
-    isFullScreen.value = !isFullScreen.value;
-    dialogWidth.value = isFullScreen.value ? '90%' : '1000px';
+  // 下钻点击
+  const handleFieldDownClick = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>) => {
+    emit('openFieldDown', drillDownItem, drillDownItemRowData);
+  };
+
+  // 打开弹窗
+  const handleOpenDialog = async (
+    item: ToolInfo,
+    drillDownItem?: DrillDownItem,
+    isDrillDownItemRowData?: Record<string, any>,
+    preview?: boolean,
+  ) => {
+    if (drillDownItem && isDrillDownItemRowData) {
+      // 是否下钻
+      isDrillDownOpen.value = true;
+      // 下选父节点drill_config的config
+      drillDownItemConfig.value = drillDownItem?.drill_config?.config;
+      // 下钻父节点所在行数据
+      drillDownItemRowData.value = isDrillDownItemRowData;
+    }
+    // 是否预览 （暂时用不上）
+    isPreview.value = preview;
+
+    isShow.value = true;
+    itemInfo.value = item;
+
+    const isNewIndex = sessionStorage.getItem('dialogIndex');
+    if (isNewIndex) {
+      dialogIndex.value = Number(isNewIndex) + 1;
+    }
+    nextTick(() => {
+      sessionStorage.setItem('dialogIndex', String(dialogIndex.value));
+    });
+    // 等待两次nextTick确保DOM完全更新
+    await nextTick();
+    await nextTick();
+    const modals = document.getElementsByClassName('bk-modal-wrapper');
+
+    // 遍历所有弹窗，只调整未被拖动过的弹窗位置
+    Array.from(modals).reverse()
+      .forEach((modal, index) => {
+        const htmlModal = modal as HTMLElement;
+        // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
+        if (index > 0 && !htmlModal.style.transform) {
+          htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+        }
+      });
+
+    if (!item.permission.use_tool) {
+      getApplyData({
+        action_ids: 'use_tool',
+        resources: item.uid,
+      });
+    }
+
+    // 预览 （暂时用不上）
+    if (isPreview.value) {
+      const detail = new ToolDetailModel();
+      createDialogContent({
+        ...detail,
+        ...item,
+      } as ToolDetailModel);
+      return;
+    }
+
+    fetchToolsDetail({ uid: item.uid });
+  };
+
+  const handleCloseDialog = () => {
+    emit('close');
+    isShow.value = false;
+    handleReset();
   };
 
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
     },
-    openDialog(item, isDrillDown, drillDownItem, itemData, preview) {
-      handleOpenDialog(item, isDrillDown, drillDownItem, itemData, preview);
+    openDialog(item, drillDownItem, drillDownItemRowData, preview) {
+      // console.log(item);
+      // console.log(drillDownItem);
+      // console.log(drillDownItemRowData);
+      // console.log(preview);
+
+      handleOpenDialog(item, drillDownItem, drillDownItemRowData, preview);
     },
   });
 </script>

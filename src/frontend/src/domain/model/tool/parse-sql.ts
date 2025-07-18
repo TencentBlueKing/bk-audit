@@ -18,7 +18,9 @@ export default class ParseSql {
   referenced_tables: Array<{
     table_name: string;
     alias: string | null;
-    hasPermission: boolean;
+    permission: {
+      result: boolean
+    };
   }>;
   sql_variables: Array<{
     raw_name: string,

@@ -121,7 +121,7 @@
       }
     },
   });
-  // 获取策略信息
+  // 获取策略事件信息
   const {
     data: strategyInfoData,
   } = useRequest(RiskManageService.fetchRiskInfo, {
@@ -150,7 +150,7 @@
     execCopy(route, t('复制成功'));
   };
 
-  // 合并数据
+  // 合并数据（包含事件信息配置）
   const detailData = computed(() => ({
     ...riskData.value,
     ...strategyInfoData.value,
