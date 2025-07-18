@@ -89,6 +89,7 @@
         </div>
       </bk-form-item>
       <bk-form-item
+        v-if="currenToolType !== 'bk_vision'"
         error-display-type="tooltips"
         :label="t('字段值引用')"
         label-width="160"
@@ -238,6 +239,7 @@
   });
   const formRef = ref();
   const localOutputFields = ref<Array<LocalOutputFields>>([]);
+  const currenToolType = ref('');
 
   const referenceTypeList = ref([{
     id: 'field',
@@ -315,7 +317,9 @@
 
   const handleSelectTool = (value: Array<string>) => {
     const tool = allToolsData.value.find(item => item.uid === value[1]);
+    formData.value.config = [];
     if (tool) {
+      currenToolType.value = tool.tool_type;
       formData.value.tool.uid = tool.uid;
       formData.value.tool.version = tool.version;
       fetchToolsDetail({
@@ -324,6 +328,7 @@
       formRef.value.validate();
     } else {
       resetFormData();
+      currenToolType.value = '';
     }
   };
 
