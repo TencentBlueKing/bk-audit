@@ -66,10 +66,10 @@ class ToolCreateRequestSerializer(serializers.Serializer):
             data_search_config_type = attrs["data_search_config_type"]
 
         if tool_type == ToolTypeEnum.BK_VISION:
-            validated_config = BkvisionConfig(**config).dict()
+            validated_config = BkvisionConfig(**config).model_dump()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
             DataSearchConfigTypeEnum(data_search_config_type)
-            validated_config = SQLDataSearchConfig(**config).dict()
+            validated_config = SQLDataSearchConfig(**config).model_dump()
         else:
             raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
         attrs["config"] = validated_config
@@ -94,9 +94,9 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
         tool_type = tool.tool_type
 
         if tool_type == ToolTypeEnum.BK_VISION:
-            validated_config = BkvisionConfig(**config).dict()
+            validated_config = BkvisionConfig(**config).model_dump()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
-            validated_config = SQLDataSearchConfig(**config).dict()
+            validated_config = SQLDataSearchConfig(**config).model_dump()
         else:
             raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
 
