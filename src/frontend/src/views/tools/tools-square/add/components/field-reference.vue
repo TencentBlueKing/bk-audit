@@ -297,10 +297,10 @@
           name: item.tag_name,
           children: item.tag_id === '-2'
             ? allToolsData.value
-              .filter(tool => (!tool.tags || tool.tags.length === 0) && tool.tool_type !== 'bk_vision')
+              .filter(tool => !tool.tags || tool.tags.length === 0)
               .map(({ uid, version, name }) => ({ id: uid, version, name }))
             : allToolsData.value
-              .filter(tool => tool.tags && tool.tags.includes(item.tag_id) && tool.tool_type !== 'bk_vision')
+              .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
               .map(({ uid, version, name }) => ({ id: uid, version, name })),
         }))
         .filter(item => item.children.length > 0);
