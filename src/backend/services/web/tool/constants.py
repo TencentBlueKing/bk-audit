@@ -16,11 +16,12 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from django.utils.translation import gettext_lazy
 from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
+from rest_framework.fields import CharField
 
 from core.choices import TextChoices, register_choices
 
@@ -105,7 +106,9 @@ class ToolDrillConfig(BaseModel):
 
     target_value_type: TargetValueTypeEnum
     target_field_type: Optional[str] = None  # 引用字段类型用于前端区分字段
-    target_value: Optional[str]  # 引用字段名或固定值
+    target_value: Annotated[Optional[str], CharField(allow_blank=True, required=False, default='')] = PydanticField(
+        "", description="变量的详细描述"
+    )
     source_field: str  # 工具变量
 
 
