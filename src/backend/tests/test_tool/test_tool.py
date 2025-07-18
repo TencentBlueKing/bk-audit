@@ -89,13 +89,13 @@ class ToolResourceTestCase(TestCase):
     def _call_resource_with_request(self, resource_cls, data):
         factory = APIRequestFactory()
         django_request = factory.post('/fake-url/', data, format='json')
-
         drf_request = Request(django_request)
 
         resource = resource_cls()
-
-        # 调用资源时传入 drf_request 作为 _request 参数
-        return resource(request_data=data, _request=drf_request)
+        validated_data = resource.validate_request_data(data)
+        validated_data['_request'] = drf_request
+        response = resource.perform_request(validated_data)
+        return response.data.get("results", [])
 
     def test_list_tool(self):
         data = {"keyword": "SQL", "page": 1, "page_size": 10}
