@@ -51,7 +51,6 @@ from services.web.tool.serializers import (
     ToolCreateRequestSerializer,
     ToolDeleteRetrieveRequestSerializer,
     ToolListAllResponseSerializer,
-    ToolListResponseSerializer,
     ToolResponseSerializer,
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
@@ -137,8 +136,6 @@ class ListTool(ToolBase):
 
     name = gettext_lazy("获取工具列表")
     RequestSerializer = ListRequestSerializer
-    many_response_data = True
-    ResponseSerializer = ToolListResponseSerializer
     bind_request = True
 
     def perform_request(self, validated_request_data):
@@ -179,7 +176,7 @@ class ListTool(ToolBase):
             queryset = custom_sort_order(queryset, "uid", recent_tool_uids)
         else:
             queryset = queryset.order_by("-updated_at")
-        paged_tools, page_info = paginate_queryset(queryset, request)
+        paged_tools, page = paginate_queryset(queryset=queryset, request=request)
         tool_uids = [t.uid for t in paged_tools]
 
         # 查询 tags
@@ -198,7 +195,7 @@ class ListTool(ToolBase):
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
 
-        serialized_data = self.ResponseSerializer(paged_tools, many=True).data
+        serialized_data = ToolListAllResponseSerializer(instance=paged_tools, many=True).data
 
         data = wrapper_permission_field(
             result_list=serialized_data,
@@ -206,7 +203,7 @@ class ListTool(ToolBase):
             id_field=lambda item: item["uid"],
             always_allowed=lambda item: item.get("created_by") == current_user,
         )
-        return data
+        return page.get_paginated_response(data=data)
 
 
 class DeleteTool(ToolBase):
@@ -477,9 +474,14 @@ class ListToolAll(ToolBase):
         tag_map = defaultdict(list)
         for t in tool_tags:
             tag_map[t.tool_uid].append(str(t.tag_id))
+        strategy_map = defaultdict(list)
+        rows = StrategyTool.objects.filter(tool_uid__in=tool_uids).values("tool_uid", "strategy_id")
+        for row in rows:
+            strategy_map[row["tool_uid"]].append(row["strategy_id"])
 
         for tool in tool_qs:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
+            setattr(tool, "strategies", strategy_map.get(tool.uid, []))
         serialized_data = ToolListAllResponseSerializer(tool_qs, many=True).data
 
         current_user = get_request_username()
