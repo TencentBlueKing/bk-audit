@@ -243,8 +243,25 @@
     myCreated: boolean,
     recentUsed: boolean,
   }
-  const { messageSuccess } = useMessage();
 
+  interface DrillDownItem {
+    raw_name: string;
+    display_name: string;
+    description: string;
+    drill_config: {
+      tool: {
+        uid: string;
+        version: number;
+      };
+      config: Array<{
+        source_field: string;
+        target_value_type: string;
+        target_value: string;
+      }>
+    };
+  }
+
+  const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
   const searchValue = ref<string>('');
@@ -259,11 +276,13 @@
   const cardListRef = ref<HTMLElement | null>(null);
   const total = ref(0);
   const loading = ref(false);
+  const isMoreLoading = ref(false);
   const scrollStyle = {
     width: '98%',
     'margin-top': '10px',
     height: 'calc(100vh - 300px)',
   };
+
   // 工具列表
   const {
     run: fetchToolsList,
@@ -424,7 +443,7 @@
   };
   const handleClick = async (item: ToolInfo) => {
     if (dialogRefs.value[item.uid]) {
-      dialogRefs.value[item.uid].openDialog(item, false, {}, {});
+      dialogRefs.value[item.uid].openDialog(item);
     }
   };
 
@@ -441,15 +460,15 @@
       loading.value = false;
     });
   };
+
   // 下转打开
-  const openFieldDown = (val: any, isDrillDown: boolean, itemData: Record<any, string>) => {
-    const { uid } = val.drill_config.tool;
+  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
+    const { uid } = drillDownItem.drill_config.tool;
     const item = dataList.value.find((item: ToolInfo) => item.uid === uid);
     if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(item, isDrillDown, val, itemData);
+      dialogRefs.value[uid].openDialog(item, drillDownItem, drillDownItemRowData);
     }
   };
-  const isMoreLoading = ref(false);
 
   // 下拉加载
   const handleScroll = () => {

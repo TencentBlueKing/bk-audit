@@ -194,6 +194,7 @@
     raw_name: string;
     display_name: string;
     description: string;
+    [key: string]: string;
   }
 
   interface Emits {
@@ -225,6 +226,7 @@
       source_field: string;
       target_value_type: string;
       target_value: string;
+      [key: string]: string;
     }>;
   }
 
@@ -338,10 +340,22 @@
     formData.value.config[index].target_value = '';
   };
 
-  const handleSelectMapValueChange = (index: number, value: Array<string>) => {
-    const [targetValue]  = value;
+  const handleSelectMapValueChange = (index: number, value: Array<LocalOutputFields>) => {
+    // 清空选择
+    if (!value.length) {
+      formData.value.config[index].target_value = '';
+      if (formData.value.config[index].target_field_type) {
+        formData.value.config[index].target_field_type = '';
+      }
+      return;
+    }
+    const [localOutputField]  = value;
     const configItem = formData.value.config[index];
-    configItem.target_value = targetValue || '';
+    configItem.target_value = localOutputField.raw_name || '';
+    // 策略工具下钻独有
+    if (localOutputField.target_field_type) {
+      configItem.target_field_type = localOutputField.target_field_type;
+    }
   };
 
   const handleSubmit = () => {
@@ -370,6 +384,7 @@
 
   const initLocalOutputFields = (val: Array<Record<string, any>>) => {
     localOutputFields.value = val.map(item => ({
+      ...item,
       raw_name: item.raw_name,
       display_name: item.display_name,
       description: item.description,

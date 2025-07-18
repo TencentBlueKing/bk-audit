@@ -70,6 +70,7 @@
       raw_name: string;
       display_name: string;
       description: string;
+      [key: string]: string;
     }>,
   }
 

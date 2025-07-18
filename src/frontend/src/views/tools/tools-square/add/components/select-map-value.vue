@@ -109,6 +109,7 @@
     raw_name: string;
     display_name: string;
     description: string;
+    [key: string]: string;
   }
 
   interface Props {
@@ -116,7 +117,7 @@
     alternativeFieldList: Array<LocalOutputField>,
   }
   interface Emits {
-    (e: 'change', value: Array<string>): void
+    (e: 'change', value: Array<LocalOutputField>): void
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -150,12 +151,12 @@
   const handelValueDragChange = (dragEvent: any) => {
     isError.value = false;
     if (dragEvent.added && dragEvent.added.element) {
-      emits('change', [dragEvent.added.element.raw_name]);
+      emits('change', [dragEvent.added.element]);
     }
   };
   // 用户选择
   const handleAlternativeFieldSelect = (field: LocalOutputField) => {
-    emits('change', [field.raw_name]);
+    emits('change', [field]);
     tippyIns.hide();
   };
   // 删除值

@@ -140,17 +140,20 @@
       raw_name: item.field_name,
       display_name: item.display_name,
       description: item.description,
+      target_field_type: 'basic',
     }));
     const dataFields = tableData.value.event_data_field_configs.map(item => ({
       raw_name: item.field_name,
       display_name: item.display_name,
       description: item.description,
+      target_field_type: 'data',
     }));
     const evidenceFields = props.strategyType === 'rule'
       ? tableData.value.event_evidence_field_configs.map(item => ({
         raw_name: item.field_name,
         display_name: item.display_name,
         description: item.description,
+        target_field_type: 'evidence',
       }))
       : [];
     return basicFields.concat(dataFields, evidenceFields);

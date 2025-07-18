@@ -209,17 +209,18 @@
                       <audit-icon
                         style="margin: 0 5px; color: #c4c6cc;"
                         type="lock" />
-                      <a href="xxx">{{ item.table_name }}</a>
+                      <span
+                        :style="!item.permission.result ? {
+                          color: '#c4c6cc',
+                        } : {}">{{ item.table_name }}</span>
                     </div>
-                    <auth-button
-                      v-if="!item.hasPermission"
-                      action-id="xxx"
-                      :permission="false"
-                      resource="xxx"
+                    <bk-button
+                      v-if="!item.permission.result"
                       text
-                      theme="primary">
+                      theme="primary"
+                      @click="handleApply">
                       {{ t('申请权限') }}
-                    </auth-button>
+                    </bk-button>
                   </div>
                 </bk-form-item>
                 <bk-form-item
@@ -527,8 +528,10 @@
   import { useRoute, useRouter } from 'vue-router';
 
   import MetaManageService from '@service/meta-manage';
+  import RootManageService from '@service/root-manage';
   import ToolManageService from '@service/tool-manage';
 
+  import ConfigModel from '@model/root/config';
   import type ParseSqlModel from '@model/tool/parse-sql';
   import ToolDetailModel from '@model/tool/tool-detail';
 
@@ -559,7 +562,9 @@
       referenced_tables: Array<{
         table_name: string | null;
         alias: string | null;
-        hasPermission: boolean;
+        permission: {
+          result: boolean;
+        };
       }>;
       input_variable: Array<{
         raw_name: string;
@@ -700,6 +705,13 @@
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
   // 获取前端类型
   useRequest(MetaManageService.fetchGlobalChoices, {
     defaultValue: {},
@@ -771,6 +783,10 @@
 
     defineTheme();
     editor.setValue(sqlData.original_sql);
+  };
+
+  const handleApply = () => {
+    window.open(`${configData.value.third_party_system.bkbase_web_url}#/auth-center/permissions`);
   };
 
   // 实现全屏
