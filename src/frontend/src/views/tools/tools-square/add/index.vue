@@ -210,9 +210,17 @@
                         style="margin: 0 5px; color: #c4c6cc;"
                         type="lock" />
                       <span
+                        v-if="!item.permission.result"
                         :style="!item.permission.result ? {
                           color: '#c4c6cc',
                         } : {}">{{ item.table_name }}</span>
+                      <bk-button
+                        v-else
+                        text
+                        theme="primary"
+                        @click="handleViewMore(item.table_name || '')">
+                        {{ item.table_name }}
+                      </bk-button>
                     </div>
                     <bk-button
                       v-if="!item.permission.result"
@@ -789,6 +797,12 @@
     window.open(`${configData.value.third_party_system.bkbase_web_url}#/auth-center/permissions`);
   };
 
+  const handleViewMore = (rtId: string) => {
+    const prefix = rtId.split('_')[0];
+
+    window.open(`${configData.value.third_party_system.bkbase_web_url}#/data-mart/data-dictionary/detail?dataType=result_table&result_table_id=${rtId}&bk_biz_id=${prefix}`);
+  };
+
   // 实现全屏
   const handleToggleFullScreen = () => {
     handleScreenfull();
@@ -1023,8 +1037,9 @@
   }
 
   .data-source-item {
-    display: grid;
-    grid-template-columns: 1fr 50px;
+    display: flex;
+
+    /* grid-template-columns: 1fr 50px; */
     align-items: center;
     gap: 10px;
     margin-bottom: 10px;
