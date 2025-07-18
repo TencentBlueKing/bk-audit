@@ -105,7 +105,9 @@ class ToolDrillConfig(BaseModel):
     """
 
     target_value_type: TargetValueTypeEnum
-    target_field_type: Optional[str] = None  # 引用字段类型用于前端区分字段
+    target_field_type: Annotated[
+        Optional[str], CharField(allow_blank=True, allow_null=True, default=None)
+    ] = PydanticField("", description="引用字段类型用于前端区分字段")
     target_value: Annotated[Optional[str], CharField(allow_blank=True, required=False, default='')] = PydanticField(
         "", description="变量的详细描述"
     )

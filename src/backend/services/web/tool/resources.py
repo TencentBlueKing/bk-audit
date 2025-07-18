@@ -36,7 +36,7 @@ from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
 from core.sql.parser.praser import SqlQueryAnalysis
-from core.utils.page import paginate_queryset
+from core.utils.page import paginate_data
 from services.web.strategy_v2.models import StrategyTool
 from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.executor.tool import ToolExecutorFactory
@@ -177,7 +177,7 @@ class ListTool(ToolBase):
             queryset = custom_sort_order(queryset, "uid", recent_tool_uids)
         else:
             queryset = queryset.order_by("-updated_at")
-        paged_tools, page = paginate_queryset(queryset=queryset, request=request)
+        paged_tools, page = paginate_data(queryset=queryset, request=request)
         tool_uids = [t.uid for t in paged_tools]
 
         # 查询 tags
