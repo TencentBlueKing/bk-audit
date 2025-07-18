@@ -524,16 +524,8 @@
   .card-list {
     position: relative;
     width: 100%;
-
-    /* max-height: calc(100vh - 300px); */
-
-    /* 改用最大高度 */
     padding: 10px 0;
     margin-top: 10px;
-
-    /* 上下内边距 */
-
-    /* overflow-y: auto; */
     align-content: flex-start;
 
     /* 顶部对齐 */

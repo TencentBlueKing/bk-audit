@@ -32,7 +32,7 @@
     },
   });
 </script>
-<style lang="postcss">
+<style scoped lang="postcss">
   .card {
     padding: 17px 24px;
     background: #fff;

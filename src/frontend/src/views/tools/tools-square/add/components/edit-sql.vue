@@ -20,7 +20,8 @@
     v-model:isShow="showEditSql"
     show-footer-slot
     :title="t('编辑sql')"
-    width="996">
+    width="820"
+    @update:is-show="updateIsShow">
     <div class="edit-container">
       <bk-alert
         v-if="isEditMode"
@@ -57,7 +58,7 @@
         <div
           ref="rootRef"
           class="sql-container"
-          :style="{height: '680px', width: '100%'}">
+          :style="{height: '100%', width: '100%'}">
           <audit-icon
             v-if="showExit"
             v-bk-tooltips="t('退出全屏')"
@@ -119,11 +120,49 @@
 
   const isEditMode = ref(false);
   const filename = ref('');
+  const sqlDec = ref(`/*
+──────────────────────────────────────────────────────────────────────────────
+SQL 变量占位符使用指引
+──────────────────────────────────────────────────────────────────────────────
+1. 在SQL 模式中，如需让终端用户自行填写某字段，请使用 :key 形式
+   声明变量。执行时系统会弹出输入框并安全绑定，杜绝 SQL 注入风险。
+2. 同一变量可在多处复用，只需保持变量名一致（如 :thedate）。
+──────────────────────────────────────────────────────────────────────────────
+不同前端类型变量的渲染指引
+
+- 输入框/字符串：
+    SQL写法：WHERE username = :username
+    用户输入：字符串，最终渲染为 WHERE username = 'xxx'
+
+- 数字输入框：
+    SQL写法：WHERE age = :age
+    用户输入：数字，最终渲染为 WHERE age = 18
+
+- 时间选择器：
+    SQL写法：WHERE created_at = :created_at
+    用户输入：'2023-01-01 12:00:00'，最终渲染为 WHERE created_at = 1672545600000
+    （系统自动转为毫秒时间戳）
+
+- 时间范围选择器：
+    SQL写法：WHERE event_time = :time_range
+    用户输入：['2023-01-01 00:00:00', '2023-01-02 00:00:00']
+    最终渲染为 WHERE event_time BETWEEN 1672502400000 AND 1672588800000
+
+- 人员选择器：
+    SQL写法：WHERE operator IN :user_list
+    用户输入：['user1', 'user2']
+    最终渲染为 WHERE operator IN ('user1','user2')
+──────────────────────────────────────────────────────────────────────────────
+*/
+ `);
   const formData = ref({
     sql: '',
     dialect: 'mysql',
   });
 
+  const updateIsShow = () => {
+    formData.value.sql = '';
+  };
   // 解析sql
   const {
     loading: btnLoading,
@@ -197,10 +236,18 @@
 
     monaco.editor.setTheme('sqlEdit');
   };
-
+  // 删除注释
+  const removeComments = (inputSql: string) => {
+    let result = inputSql;
+    // 删除单行注释 (-- 或 #)
+    result = result.replace(/--.*$|#.*$/gm, '');
+    // 删除多行注释 (/* */)
+    result = result.replace(/\/\*[\s\S]*?\*\//g, '');
+    return result.trim();
+  };
   const initEditor = () => {
     editor = monaco.editor.create(rootRef.value, {
-      value: formData.value.sql,
+      value: formData.value.sql || sqlDec.value,
       language: 'sql',
       theme: 'vs-dark',
       minimap: {
@@ -211,7 +258,7 @@
     });
     editor.layout();
     editor.onDidBlurEditorText(() => {
-      formData.value.sql = editor.getValue();
+      formData.value.sql = removeComments(editor.getValue());
     });
   };
 
@@ -236,9 +283,12 @@
   padding: 16px 40px;
 
   .sql-editor {
-    min-width: 800px;
+    height: 75vh;
+    min-width: 550px;
+    padding-bottom: 5px;
     margin-top: 16px;
     line-height: 40px;
+    background-color: aqua;
 
     .title {
       display: flex;

@@ -164,7 +164,9 @@
                 <p class="no-permission-text">
                   {{ t('你没有该工具的使用权限，请前往申请权限') }}
                 </p>
-                <p class="no-permission-btn">
+                <p
+                  class="no-permission-btn"
+                  @click.stop="handleIamApply">
                   {{ t('申请权限') }}
                 </p>
               </div>
@@ -189,6 +191,7 @@
   import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import IamManageService from '@service/iam-manage';
   import ToolManageService from '@service/tool-manage';
 
   import IamApplyDataModel from '@model/iam/apply-data';
@@ -275,6 +278,9 @@
   const rules = ref({});
   const formRef = ref();
   const searchForm = ref();
+  const isDrillDownOpen = ref(false);
+  const drillDownItemConfig = ref();
+  const drillDownItemData = ref();
 
   // 处理页码变化
   const handlePageChange = (newPage: number) => {
@@ -398,6 +404,29 @@
   // 创建弹窗内容
   const createDialogContent = (data: ToolDetailModel) => {
     searchForm.value = {};
+    columns.value = data.config.output_fields.map((item) => {
+      if (item.drill_config === null || item.drill_config?.tool.uid === '') {
+        return {
+          label: item.display_name,
+          field: item.raw_name,
+          minWidth: 200,
+          showOverflowTooltip: true,
+        };
+      }
+      return {
+        label: item.display_name,
+        field: item.raw_name,
+        minWidth: 200,
+        showOverflowTooltip: true,
+        render: ({ data }: {data: Record<any, string>}) => <bk-button  theme="primary" text
+           onClick={(e:any) => {
+            e.stopPropagation(); // 阻止事件冒泡
+            handleFieldDownClick(item, data);
+          }}
+          >{data[item.raw_name]} </bk-button>,
+      };
+    });
+
     data.config.input_variable.forEach((item) => {
       searchForm.value[item.raw_name] = '';
     });
@@ -425,34 +454,33 @@
           formItemRef.value.forEach((item: any) => {
             item?.change();
           });
+          const isValid = searchList.value.every((e) => {
+            if (e.field_category === 'person_select' || e.field_category === 'time_range_select') {
+              return Array.isArray(e.value) && e.value.length > 0;
+            }
+            return e.value !== null && e.value !== '';
+          });
+          if (isValid) {
+            submit();
+          }
         }
       });
     }
-
-
-    columns.value = data.config.output_fields.map((item) => {
-      if (item.drill_config === null || item.drill_config?.tool.uid === '') {
-        return {
-          label: item.display_name,
-          field: item.raw_name,
-          minWidth: 200,
-          showOverflowTooltip: true,
-        };
-      }
-      return {
-        label: item.display_name,
-        field: item.raw_name,
-        minWidth: 200,
-        showOverflowTooltip: true,
-        render: ({ data }: {data: Record<any, string>}) => <bk-button  theme="primary" text
-           onClick={(e:any) => {
-            e.stopPropagation(); // 阻止事件冒泡
-            handleFieldDownClick(item, data);
-          }}
-          >{data[item.raw_name]} </bk-button>,
-      };
-    });
   };
+  // 权限
+  const urlIamApply = ref('');
+  const handleIamApply = () => {
+    window.open(urlIamApply.value, '_blank');
+  };
+
+  const {
+    run: getApplyData,
+  } = useRequest(IamManageService.getApplyData, {
+    defaultValue: new IamApplyDataModel(),
+    onSuccess(result) {
+      urlIamApply.value = result.apply_url;
+    },
+  });
 
   // 获取工具详情
   const {
@@ -494,9 +522,6 @@
       }
     },
   });
-  const isDrillDownOpen = ref(false);
-  const drillDownItemConfig = ref();
-  const drillDownItemData = ref();
   // 打开弹窗
   const handleOpenDialog = async (
     item: ToolInfo, isDrillDown: boolean, drillDownItem: any,
@@ -531,6 +556,13 @@
           htmlModal.style.left = `${50 - (index + 1) * 2}%`;
         }
       });
+    // 无权限时请求链接
+    if (!item.permission.use_tool) {
+      getApplyData({
+        action_ids: 'use_tool',
+        resources: item.uid,
+      });
+    }
 
     if (isPreview.value) {
       const detail = new ToolDetailModel();
@@ -677,7 +709,6 @@
     display: flex;
 
     .top-right-box {
-      width: 90%;
       margin-left: 5px;
 
       .top-right-title {
@@ -696,7 +727,6 @@
         .top-right-name {
           display: inline-block;
           max-width: 300px;
-          min-width: 180px;
           margin-right: 5px;
           overflow: hidden;
           text-overflow: ellipsis;
