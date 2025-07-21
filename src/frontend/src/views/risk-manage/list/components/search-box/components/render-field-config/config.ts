@@ -116,4 +116,9 @@ export default {
     type: 'string',
     required: false,
   },
+  // notice_users: {
+  //   label: '关注人',
+  //   type: 'user-selector',
+  //   required: false,
+  // },
 } as Record<string, IFieldConfig>;
