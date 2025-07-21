@@ -15,7 +15,7 @@ class MemberVariableParserBase(abc.ABC):
         return MemberVariable.match(member) is not None
 
     @abc.abstractmethod
-    def parse_member(self, member: Union[str, MemberVariable]) -> str:
+    def parse_member(self, member: Union[str, MemberVariable]) -> List[str]:
         """解析成员"""
         raise NotImplementedError()
 
@@ -28,9 +28,8 @@ class MemberVariableParserBase(abc.ABC):
         for member in group.group_member:
             if self.is_skip(member):
                 continue
-            member = self.parse_member(member)
-            if member:
-                parsed_members.add(member)
+            members = {_member for _member in self.parse_member(member) if _member}
+            parsed_members.update(members)
         return list(parsed_members)
 
     def parse_groups(self, groups: Union[QuerySet["NoticeGroup"], List["NoticeGroup"]]) -> List[str]:
@@ -46,20 +45,20 @@ class MemberVariableParser(MemberVariableParserBase):
     成员变量解析器
     """
 
-    def __init__(self, operator: str):
+    def __init__(self, operators: List[str]):
         """
-        :param operator: 责任人
+        :param operators: 责任人
         """
 
-        self.operator = operator
+        self.operators = operators
 
-    def parse_member(self, member: Union[str, MemberVariable]) -> str:
+    def parse_member(self, member: Union[str, MemberVariable]) -> List[str]:
         match member:
             case MemberVariable.OPERATOR:
-                return self.operator
+                return self.operators
             case MemberVariable.OPERATOR_LEADER:
-                return resource.user_manage.retrieve_leader(id=self.operator)
-        return member
+                return [resource.user_manage.retrieve_leader(id=operator) for operator in self.operators]
+        return [member]
 
 
 class IgnoreMemberVariableParser(MemberVariableParserBase):
@@ -67,5 +66,5 @@ class IgnoreMemberVariableParser(MemberVariableParserBase):
     忽略成员变量解析器
     """
 
-    def parse_member(self, member: Union[str, MemberVariable]) -> str:
-        return member
+    def parse_member(self, member: Union[str, MemberVariable]) -> List[str]:
+        return [member]
