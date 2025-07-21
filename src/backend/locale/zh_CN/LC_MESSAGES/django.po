@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-10 17:24+0800\n"
+"POT-Creation-Date: 2025-07-21 21:41+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -719,6 +719,9 @@ msgstr "指标数据"
 
 msgid "事件名称"
 msgstr "事件名称"
+
+msgid "事件内容"
+msgstr "事件内容"
 
 msgid "事件数据"
 msgstr "事件数据"
@@ -1775,6 +1778,10 @@ msgstr "构建器初始化失败: {err}"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
+#, python-format
+msgid "【蓝鲸审计中心%s】"
+msgstr "【蓝鲸审计中心%s】"
+
 msgid "异常信息"
 msgstr "异常信息"
 
@@ -2358,6 +2365,12 @@ msgstr "条件表达式中字段 {field} 的值 {aggregation} {value} 无法转�
 
 msgid "数据拉取"
 msgstr "数据拉取"
+
+msgid "未实现方法"
+msgstr "未实现方法"
+
+msgid "未实现类型"
+msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -3469,6 +3482,12 @@ msgstr "已完成"
 msgid "误报"
 msgstr "误报"
 
+msgid "全部"
+msgstr "全部"
+
+msgid "待关注"
+msgstr "待关注"
+
 msgid "策略ID"
 msgstr "策略ID"
 
@@ -3633,8 +3652,14 @@ msgstr "状态"
 msgid "Ticket History"
 msgstr "风险流转历史"
 
+msgid "User"
+msgstr "用户"
+
 msgid "Authorized Time"
 msgstr "授权时间"
+
+msgid "User Type"
+msgstr "用户类型"
 
 msgid "Ticket Permission"
 msgstr "单据权限"
@@ -3688,6 +3713,9 @@ msgstr "获取风险列表"
 msgid "获取待我处理的风险列表"
 msgstr "获取待我处理的风险列表"
 
+msgid "获取我关注的风险列表"
+msgstr "获取我关注的风险列表"
+
 msgid "获取风险字段"
 msgstr "获取风险字段"
 
@@ -3699,6 +3727,9 @@ msgstr "获取风险状态类型"
 
 msgid "获取风险的标签"
 msgstr "获取风险的标签"
+
+msgid "获取风险的策略"
+msgstr "获取风险的策略"
 
 msgid "人工关单"
 msgstr "人工关单"
@@ -3805,6 +3836,9 @@ msgstr "事件详情"
 
 msgid "Risk Level"
 msgstr "风险等级"
+
+msgid "Risk View Type"
+msgstr "风险视图类型"
 
 msgid "未配置审批流"
 msgstr "未配置审批流"
@@ -4645,12 +4679,3 @@ msgstr "【审计中心】执行自动处理套餐审批"
 #, python-format
 msgid "%s 操作关单"
 msgstr "%s 操作关单"
-
-#~ msgid "【蓝鲸审计中心%s】"
-#~ msgstr "【蓝鲸审计中心%s】"
-
-#~ msgid "未实现方法"
-#~ msgstr "未实现方法"
-
-#~ msgid "未实现类型"
-#~ msgstr "未实现类型"
