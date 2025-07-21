@@ -42,7 +42,7 @@
     "tippy.js": "6.3.7",
     "vue": "3.3.6",
     "vue-content-loader": "2.0.1",
-    "vue-i18n": "11.1.2",
+    "vue-i18n": "11.1.10",
     "vue-router": "4.2.5",
     "vuedraggable": "4.1.0",
     "yamljs": "0.3.0"
