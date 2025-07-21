@@ -208,6 +208,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
     end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False)
     event_type = serializers.CharField(label=gettext_lazy("Risk Type"), required=False)
     current_operator = serializers.CharField(label=gettext_lazy("Current Operator"), required=False)
+    notice_users = serializers.CharField(label=gettext_lazy("Notice Users"), required=False)
     tags = serializers.CharField(label=gettext_lazy("Tags"), required=False)
     event_content = serializers.CharField(label=gettext_lazy("Event Content"), required=False)
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), required=False)
@@ -246,6 +247,8 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["event_type__contains"] = data.pop("event_type")
         if data.get("current_operator"):
             data["current_operator__contains"] = data.pop("current_operator")
+        if data.get("notice_users"):
+            data["notice_users__contains"] = data.pop("notice_users")
         if data.get("tags"):
             data["tag_objs__in"] = data.pop("tags")
         if data.get("event_content"):

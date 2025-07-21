@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-10 17:24+0800\n"
+"POT-Creation-Date: 2025-07-21 21:41+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -719,6 +719,9 @@ msgstr "Metric Data"
 
 msgid "事件名称"
 msgstr "Event Name"
+
+msgid "事件内容"
+msgstr "Event Content"
 
 msgid "事件数据"
 msgstr "Event Data"
@@ -1775,6 +1778,10 @@ msgstr "Builder initialization failed: {err}"
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
 
+#, fuzzy, python-format
+msgid "【蓝鲸审计中心%s】"
+msgstr "【BK Audit%s】"
+
 msgid "异常信息"
 msgstr "Error Msg"
 
@@ -2358,6 +2365,12 @@ msgstr "The value {aggregation} {value} of the field {field} in the conditional 
 
 msgid "数据拉取"
 msgstr "Data Pull"
+
+msgid "未实现方法"
+msgstr "Unimplemented method"
+
+msgid "未实现类型"
+msgstr "Unimplemented type"
 
 msgid "Control Name"
 msgstr "Control Name"
@@ -3472,6 +3485,12 @@ msgstr "Finished"
 msgid "误报"
 msgstr "False positive"
 
+msgid "全部"
+msgstr "ALL"
+
+msgid "待关注"
+msgstr "Watch"
+
 msgid "策略ID"
 msgstr "Strategy ID"
 
@@ -3636,8 +3655,14 @@ msgstr "Status"
 msgid "Ticket History"
 msgstr "Ticket History"
 
+msgid "User"
+msgstr "User"
+
 msgid "Authorized Time"
 msgstr "Authorized Time"
+
+msgid "User Type"
+msgstr "User Type"
 
 msgid "Ticket Permission"
 msgstr "Ticket Permission"
@@ -3691,6 +3716,9 @@ msgstr "List Risk"
 msgid "获取待我处理的风险列表"
 msgstr "List Risk to Deal"
 
+msgid "获取我关注的风险列表"
+msgstr "List Risk to Watch"
+
 msgid "获取风险字段"
 msgstr "List Risk Fields"
 
@@ -3702,6 +3730,9 @@ msgstr "List Risk Status Constants"
 
 msgid "获取风险的标签"
 msgstr "List Risk Tags"
+
+msgid "获取风险的策略"
+msgstr "List Risk Strategies"
 
 msgid "人工关单"
 msgstr "Close Risk"
@@ -3808,6 +3839,9 @@ msgstr "Event Content"
 
 msgid "Risk Level"
 msgstr "Risk Level"
+
+msgid "Risk View Type"
+msgstr "Risk View Type"
 
 msgid "未配置审批流"
 msgstr "Approve Service Not Set"
