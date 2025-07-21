@@ -9,4 +9,4 @@ class RiskNoticeParser(MemberVariableParser):
         return False
 
     def __init__(self, risk: Risk):
-        super().__init__(operator=risk.operator[0] if risk.operator else "")
+        super().__init__(operators=risk.operator)

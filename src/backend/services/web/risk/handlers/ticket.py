@@ -23,6 +23,7 @@ from typing import List
 
 from bk_resource import api, resource
 from bk_resource.settings import bk_resource_settings
+from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -30,7 +31,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 
 from apps.itsm.constants import TicketStatus
-from apps.meta.models import GlobalMetaConfig
+from apps.meta.models import GlobalMetaConfig, Tag
 from apps.meta.utils.saas import get_saas_url
 from apps.notice.models import NoticeGroup
 from apps.permission.handlers.actions import ActionEnum
@@ -46,13 +47,8 @@ from services.web.risk.constants import (
 )
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.rule import RiskRuleHandler
-from services.web.risk.models import (
-    ProcessApplication,
-    Risk,
-    RiskRule,
-    TicketNode,
-    UserType,
-)
+from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
+from services.web.risk.parser import RiskNoticeParser
 from services.web.strategy_v2.models import Strategy
 
 
@@ -110,7 +106,14 @@ class RiskFlowBaseHandler:
         processor_groups: List[NoticeGroup] = list(
             NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or [])
         )
-        return NoticeGroup.parse_members(groups=processor_groups) or self.load_security_person()
+        origin_members = NoticeGroup.parse_members(processor_groups)
+        # 解析处理组(变量)
+        parsed_members = RiskNoticeParser(risk=self.risk).parse_groups(processor_groups)
+        logger.info(
+            f"[{self.__class__.__name__}]Risk:{self.risk.risk_id};"
+            f"Notice Groups Members:{origin_members};Parsed Members:{parsed_members}"
+        )
+        return parsed_members or self.load_security_person()
 
     def load_last_operator(self) -> List[str]:
         """
@@ -138,7 +141,6 @@ class RiskFlowBaseHandler:
         self.record_history(process_result=process_result, *args, **kwargs)
         self.auth_current_operator()
         self.notice_current_operator()
-        self.auth_notice_user()
         self.post_process(process_result=process_result, *args, **kwargs)
 
     def pre_check(self, *args, **kwargs) -> None:
@@ -215,21 +217,7 @@ class RiskFlowBaseHandler:
         if not self.risk.current_operator or not isinstance(self.risk.current_operator, list):
             return
 
-        self.risk.auth_users(
-            action=ActionEnum.LIST_RISK.id, users=self.risk.current_operator, user_type=UserType.OPERATOR
-        )
-
-    def auth_notice_user(self) -> None:
-        """
-        向关注人授权
-        """
-
-        if not self.risk.notice_users or not isinstance(self.risk.notice_users, list):
-            return
-
-        self.risk.auth_users(
-            action=ActionEnum.LIST_RISK.id, users=self.risk.notice_users, user_type=UserType.NOTICE_USER
-        )
+        self.risk.auth_operators(action=ActionEnum.LIST_RISK.id, operators=self.risk.current_operator)
 
     def notice_current_operator(self) -> None:
         """
@@ -369,7 +357,7 @@ class ForApprove(RiskFlowBaseHandler):
                 continue
             # 标签
             if field["key"] == ApproveTicketFields.TAGS.key:
-                tags = list(self.risk.tag_objs.values_list("tag_name", flat=True))
+                tags = list(Tag.objects.filter(tag_id__in=self.risk.tags).values_list("tag_name", flat=True))
                 field["value"] = ";".join(tags)
                 fields.append(field)
                 continue
@@ -686,8 +674,7 @@ class ReOpenMisReport(RiskFlowBaseHandler):
     def post_process(self, process_result: dict, *args, **kwargs) -> None:
         if self.risk.status == RiskStatus.CLOSED:
             ReOpen(risk_id=self.risk.risk_id, operator=self.operator).run(
-                new_operators=kwargs["new_operators"],
-                description=gettext("%s 解除误报，系统自动重开单据") % self.operator,
+                new_operators=kwargs["new_operators"], description=gettext("%s 解除误报，系统自动重开单据") % self.operator
             )
 
 
