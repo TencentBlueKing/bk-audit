@@ -23,6 +23,7 @@ from typing import List
 
 from bk_resource import api, resource
 from bk_resource.settings import bk_resource_settings
+from blueapps.utils.logger import logger
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -47,6 +48,7 @@ from services.web.risk.constants import (
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.handlers.rule import RiskRuleHandler
 from services.web.risk.models import ProcessApplication, Risk, RiskRule, TicketNode
+from services.web.risk.parser import RiskNoticeParser
 from services.web.strategy_v2.models import Strategy
 
 
@@ -104,7 +106,14 @@ class RiskFlowBaseHandler:
         processor_groups: List[NoticeGroup] = list(
             NoticeGroup.objects.filter(group_id__in=self.strategy.processor_groups or [])
         )
-        return NoticeGroup.parse_members(groups=processor_groups) or self.load_security_person()
+        origin_members = NoticeGroup.parse_members(processor_groups)
+        # 解析处理组(变量)
+        parsed_members = RiskNoticeParser(risk=self.risk).parse_groups(processor_groups)
+        logger.info(
+            f"[{self.__class__.__name__}]Risk:{self.risk.risk_id};"
+            f"Notice Groups Members:{origin_members};Parsed Members:{parsed_members}"
+        )
+        return parsed_members or self.load_security_person()
 
     def load_last_operator(self) -> List[str]:
         """
