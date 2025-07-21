@@ -164,6 +164,12 @@
           </audit-menu-item-group>
         </template>
         <template v-else-if="curNavName === 'auditRiskManage'">
+          <audit-menu-item index="handleManage">
+            <audit-icon
+              class="menu-item-icon"
+              type="daiwochuli" />
+            {{ t('待我处理') }}
+          </audit-menu-item>
           <audit-menu-item
             class="mt8"
             index="attentionManage">
@@ -171,12 +177,6 @@
               class="menu-item-icon"
               type="wodeguanzhu" />
             {{ t('我的关注') }}
-          </audit-menu-item>
-          <audit-menu-item index="handleManage">
-            <audit-icon
-              class="menu-item-icon"
-              type="daiwochuli" />
-            {{ t('待我处理') }}
           </audit-menu-item>
           <audit-menu-item index="riskManage">
             <audit-icon
