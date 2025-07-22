@@ -47,6 +47,7 @@
         :settings="settings"
         @clear-search="handleClearSearch"
         @column-filter="handleColumnFilter"
+        @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess"
         @row-click="handleRowClick" />
     </div>
@@ -81,6 +82,12 @@
     results: Array<SyetemModel>
   }
 
+  interface ISettings{
+    checked: Array<string>,
+    fields: Record<string, any>[],
+    size: string
+  }
+
   enum FullEnum {
     FULL = 'full',
     FUZZY = 'fuzzy'
@@ -91,7 +98,8 @@
   }
   const { t } = useI18n();
   const router = useRouter();
-  const tableColumn = ref([
+
+  const tableColumn = [
     {
       label: () => '',
       width: '65px',
@@ -151,6 +159,7 @@
     },
     {
       label: () => t('系统负责人'),
+      field: () => 'managers',
       render: ({ data }: {data: SyetemModel}) => <EditTag data={data.managers} key={data.id}/>,
     },
     {
@@ -181,6 +190,7 @@
     },
     {
       label: () => t('权限模型'),
+      field: () => 'resource_type_count',
       render: ({ data }: {data: SyetemModel}) => <>{
         (!data.resource_type_count && !data.action_count)
           ? <bk-tag theme="warning">{t('未配置')}</bk-tag>
@@ -268,7 +278,7 @@
       width: 140,
       render: ({ data }: {data: SyetemModel}) => data.created_by || '--',
     },
-  ] as any[]);
+  ];
 
   const listRef = ref();
   const dataSource = MetaManageService.fetchSystemList;
@@ -280,16 +290,17 @@
 
   const disabledMap: Record<string, string> = {
     name: 'name',
-    system_id: 'system_id',
+    instance_id: 'instance_id',
     managers: 'managers',
-    id: 'id', // 权限模型
+    resource_type_count: 'resource_type_count',
     status: 'status',
     last_time: 'last_time',
   };
-  console.log('tableColumn', tableColumn);
-
   const initSettings = () => ({
-    fields: tableColumn.value.reduce((res, item) => {
+    fields: tableColumn.reduce((
+      res: Array<{ label: string; field: string; disabled: boolean }>,
+      item: { field?: () => string; label: () => string },
+    ) => {
       if (item.field) {
         res.push({
           label: item.label(),
@@ -301,17 +312,46 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['name', 'system_id', 'managers', 'id', 'status', 'status', 'last_time'],
+    checked: ['name', 'instance_id', 'managers', 'resource_type_count', 'status', 'last_time'],
     showLineHeight: false,
+    trigger: 'manual' as const,  // 添加 as const 类型断言
   });
   const settings = computed(() => {
-    const jsonStr = localStorage.getItem('audit-strategy-manage-list-setting');
-    if (jsonStr) {
-      const jsonSetting = JSON.parse(jsonStr);
-      jsonSetting.showLineHeight = false;
-      return jsonSetting;
+    const defaultSettings = initSettings(); // 获取最新的默认配置
+    const jsonStr = localStorage.getItem('audit-system-list-setting');
+
+    if (!jsonStr) return defaultSettings;
+
+    try {
+      const savedSettings = JSON.parse(jsonStr);
+
+      // 字段合并：以默认配置为基础，合并用户保存的字段状态
+      const mergedFields = defaultSettings.fields.map((defaultField) => {
+        const savedField = savedSettings.fields?.find((f: any) => f.field === defaultField.field);
+        // 保留新字段配置，仅继承用户设置的disabled状态
+        return savedField
+          ? { ...defaultField, disabled: savedField.disabled }
+          : defaultField;
+      });
+
+      // 选中的字段合并：保留用户选择 + 新增的默认选中字段
+      const savedCheckedSet = new Set(savedSettings.checked || []);
+      const newDefaultChecked = defaultSettings.checked
+        .filter(field => !savedCheckedSet.has(field)); // 找出新增的默认选中字段
+      const mergedChecked = [...(savedSettings.checked || []), ...newDefaultChecked]
+        .filter(field => mergedFields.some(f => f.field === field)); // 过滤无效字段
+
+      return {
+        ...defaultSettings,       // 保留最新默认配置的其他属性
+        fields: mergedFields,     // 合并后的字段配置
+        checked: mergedChecked,   // 合并后的选中字段
+        showLineHeight: false,    // 强制重置行高设置
+        trigger: 'manual' as const,  // 添加 as const 类型断言
+      };
+    } catch (e) {
+      console.error('本地设置解析失败，使用默认配置', e);
+      return defaultSettings;
     }
-    return initSettings();
   });
 
   // 获取策略新建权限
@@ -332,6 +372,10 @@
     defaultValue: {},
     manual: true,
   });
+
+  const handleSettingChange = (setting: ISettings) => {
+    localStorage.setItem('audit-system-list-setting', JSON.stringify(setting));
+  };
 
   // 搜索
   const handleSearch = (keyword: string|number) => {
