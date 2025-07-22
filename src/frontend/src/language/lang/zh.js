@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 export default {
+  '': ' ',
   蓝鲸审计中心: '蓝鲸审计中心',
   全部策略: '全部策略',
   审计策略: '审计策略',
@@ -589,4 +590,5 @@ export default {
   批量编辑依赖资源: '批量编辑依赖资源',
   'ID重复，请修改': 'ID重复，请修改',
   新增成功: '新增成功',
+  接入新系统: '接入新系统',
 };

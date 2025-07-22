@@ -76,6 +76,7 @@
 
   defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const { t } = useI18n();
 
   const sensitivityList = [
     {
@@ -96,7 +97,6 @@
     },
   ];
 
-  const { t } = useI18n();
   const isShowAdd = ref(false);
   const addType = ref('batch');
   const editData = ref<SystemActionModel>(new SystemActionModel());

@@ -38,7 +38,7 @@
         <slot name="footer" />
       </template>
       <template v-else>
-        <div style="padding-left: 40px;">
+        <div>
           <bk-button
             class="mr8"
             :loading="isLoading"
