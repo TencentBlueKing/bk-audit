@@ -505,7 +505,7 @@
       event_content: '',
       risk_level: '',
       title: '',
-      // notice_users: '',
+      notice_users: '',
     };
     listRef.value.fetchData({
       ...params,
