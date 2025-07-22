@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 export default {
+  '': ' ',
   蓝鲸审计中心: 'BK Audit Center',
   'BK Audit': 'BK Audit',
   审计策略: 'Strategies',
@@ -601,4 +602,5 @@ export default {
   批量编辑依赖资源: 'Edit dependent assets in bulk',
   'ID重复，请修改': 'ID duplicate, please modify',
   新增成功: 'Added success',
+  接入新系统: 'New',
 };

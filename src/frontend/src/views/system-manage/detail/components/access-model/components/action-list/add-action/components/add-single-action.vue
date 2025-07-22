@@ -302,13 +302,13 @@
 
           &:first-child.is-selected {
             color: #fff;
-            background-color: #979ba5;
+            background-color: #979ba5 ;
             border-color: #979ba5;
           }
 
           &:nth-child(2):hover:not(.is-disabled, .is-selected) {
             color: #2caf5e;
-            border-color: #2caf5e;
+            border-color: #2caf5e ;
           }
 
           &:nth-child(2).is-selected {
@@ -317,24 +317,56 @@
             border-color: #2caf5e;
           }
 
-
           &:nth-child(3):hover:not(.is-disabled, .is-selected) {
+            color: #2caf5e;
+            border-color: #2caf5e ;
+          }
+
+          &:nth-child(3).is-selected {
+            color: #fff;
+            background-color: #2caf5e;
+            border-color: #2caf5e;
+          }
+
+          &:nth-child(4):hover:not(.is-disabled, .is-selected) {
             color: #ff9c01;
             border-color: #ff9c01;
           }
 
-          &:nth-child(3).is-selected {
+          &:nth-child(4).is-selected {
             color: #fff;
             background-color: #ff9c01;
             border-color: #ff9c01;
           }
 
-          &:hover:not(.is-disabled, .is-selected) {
+          &:nth-child(5):hover:not(.is-disabled, .is-selected) {
+            color: #ff9c01;
+            border-color: #ff9c01;
+          }
+
+          &:nth-child(5).is-selected {
+            color: #fff;
+            background-color: #ff9c01;
+            border-color: #ff9c01;
+          }
+
+          &:nth-child(6):hover:not(.is-disabled, .is-selected) {
             color: #ea3636;
             border-color: #ea3636;
           }
 
-          &.is-selected {
+          &:nth-child(6).is-selected {
+            color: #fff;
+            background-color: #ea3636;
+            border-color: #ea3636;
+          }
+
+          &:nth-child(7):hover:not(.is-disabled, .is-selected) {
+            color: #ea3636;
+            border-color: #ea3636;
+          }
+
+          &:nth-child(7).is-selected {
             color: #fff;
             background-color: #ea3636;
             border-color: #ea3636;
