@@ -21,7 +21,8 @@
     <template v-if="data && data.length">
       <bk-tag
         v-for="(item) in renderData"
-        :key="item">
+        :key="item"
+        style="width: auto;">
         <tool-tip-text :data="item " />
       </bk-tag>
       <bk-tag
@@ -224,7 +225,7 @@
     resizeObserver?.disconnect();
   });
 </script>
-<style lang="postcss">
+<style scoped lang="postcss">
   .audit-edit-tag {
     position: relative;
     display: block;
@@ -262,5 +263,10 @@
         color: #3a84ff;
       }
     }
+  }
+
+  :deep(.bk-tag) {
+    width: auto !important;
+    margin-right: 0;
   }
 </style>
