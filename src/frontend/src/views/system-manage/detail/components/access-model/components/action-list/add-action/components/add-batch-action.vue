@@ -166,7 +166,7 @@
             trigger="click"
             width="380">
             <audit-icon
-              style="margin-left: 4px;color: #3a84ff;"
+              style="margin-left: 4px;color: #3a84ff;cursor: pointer;"
               type="piliangbianji" />
             <template #content>
               <h3>{{ t('批量编辑依赖资源') }}</h3>
@@ -186,6 +186,7 @@
                     :auto-height="false"
                     custom-content
                     display-key="name"
+                    :empty-text="t('数据搜索为空')"
                     id-key="resource_type_id"
                     :popover-options="{ boundary: 'parent' }"
                     @search-change="handleSearch">
@@ -231,7 +232,7 @@
             trigger="click"
             width="380">
             <audit-icon
-              style="margin-left: 4px;color: #3a84ff;"
+              style="margin-left: 4px;color: #3a84ff;cursor: pointer;"
               type="piliangbianji" />
             <template #content>
               <h3>{{ t('批量编辑敏感等级') }}</h3>
@@ -431,6 +432,7 @@
   import {
     computed,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -650,7 +652,12 @@
       isSelected: false,
     });
   };
-
+  watch(() => isSelectedAll.value, (newValue) => {
+    formData.value.renderData = formData.value.renderData.map(item => ({
+      ...item,
+      isSelected: newValue,
+    }));
+  });
   defineExpose({
     submit() {
       return tableFormRef.value.validate().then(() => {
