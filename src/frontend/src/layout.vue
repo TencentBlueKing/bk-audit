@@ -170,9 +170,7 @@
               type="daiwochuli" />
             {{ t('待我处理') }}
           </audit-menu-item>
-          <audit-menu-item
-            class="mt8"
-            index="attentionManage">
+          <audit-menu-item index="attentionManage">
             <audit-icon
               class="menu-item-icon"
               type="wodeguanzhu" />
@@ -189,7 +187,6 @@
           <audit-menu-item
             v-for="item in menuData"
             :key="item.id"
-            class="mt8"
             :class="[item.id === route.params.id ? 'active' : '']"
             :index="item.id">
             <audit-icon
