@@ -170,6 +170,10 @@
         </template>
         <span v-else>
           {{ data.auth_token || '--' }}
+          <audit-icon
+            style="margin-left: 5px; cursor: pointer;"
+            type="unview"
+            @click="() => viewAuthToken = !viewAuthToken" />
         </span>
         <span
           v-bk-tooltips="t('复制')"
@@ -310,7 +314,12 @@
 
       .edit-icon {
         margin-left: 10px;
+        color: #63656e;
         cursor: pointer;
+
+        &:hover {
+          color: #3a84ff;
+        }
       }
     }
   }

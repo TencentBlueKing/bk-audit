@@ -180,8 +180,8 @@
             {t('编辑')}
           </bk-button>
           <audit-popconfirm
-            title={t('确认删除？')}
-            content={t('删除后不可恢复')}
+            title={t('确认删除该操作？')}
+            content={t('删除操作无法撤回，请谨慎操作！')}
             class="ml8"
             confirmHandler={() => handleDelete(data)}>
             <bk-button
