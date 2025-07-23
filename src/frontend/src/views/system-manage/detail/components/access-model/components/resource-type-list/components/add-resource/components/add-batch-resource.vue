@@ -45,7 +45,14 @@
             </bk-dropdown-item>
             <template #content>
               <template v-if="batchItem.value === 'sensitivity'">
-                <h3>{{ t('批量编辑敏感等级') }}</h3>
+                <div style="display: flex;">
+                  <h3>{{ t('批量编辑敏感等级') }}</h3>
+                  <span style=" margin-left: 5px;font-size: 12px; line-height: 20px; color: #979ba5;">
+                    ({{ selectedItem.length === formData.renderData.length
+                      ? t('全部资源')
+                      : t('已选择资源', { count: selectedItem.length }) }})
+                  </span>
+                </div>
                 <audit-form
                   ref="formRef"
                   form-type="vertical"
@@ -59,7 +66,7 @@
                       class="batch-sensitivity"
                       filterable
                       :input-search="false"
-                      :placeholder="t('请选择')"
+                      :placeholder="t('请选择敏感等级')"
                       :popover-options="{ boundary: 'parent' }"
                       :search-placeholder="t('请输入关键字')">
                       <bk-option
@@ -87,7 +94,14 @@
                 </div>
               </template>
               <template v-if="batchItem.value === 'ancestor'">
-                <h3>{{ t('批量编辑所属父级资源') }}</h3>
+                <div style="display: flex;">
+                  <h3>{{ t('批量编辑所属父级资源') }}</h3>
+                  <span style=" margin-left: 5px;font-size: 12px; line-height: 20px; color: #979ba5;">
+                    ({{ selectedItem.length === formData.renderData.length
+                      ? t('全部资源')
+                      : t('已选择资源', { count: selectedItem.length }) }})
+                  </span>
+                </div>
                 <audit-form
                   ref="formRef"
                   form-type="vertical"
@@ -103,6 +117,7 @@
                       custom-content
                       display-key="name"
                       id-key="resource_type_id"
+                      :placeholder="t('请选择所属父级资源')"
                       :popover-options="{ boundary: 'parent' }"
                       @search-change="handleSearch">
                       <bk-tree

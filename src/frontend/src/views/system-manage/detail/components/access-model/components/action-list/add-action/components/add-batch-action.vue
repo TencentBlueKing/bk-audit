@@ -45,7 +45,14 @@
             </bk-dropdown-item>
             <template #content>
               <template v-if="batchItem.value === 'sensitivity'">
-                <h3>{{ t('批量编辑敏感等级') }}</h3>
+                <div style="display: flex;">
+                  <h3>{{ t('批量编辑敏感等级') }}</h3>
+                  <span style="font-size: 12px; color: #979ba5;">
+                    {{ selectedItem.length === formData.renderData.length
+                      ? t('全部操作')
+                      : t('已选择操作', { count: selectedItem.length }) }}
+                  </span>
+                </div>
                 <audit-form
                   ref="formRef"
                   form-type="vertical"
@@ -59,7 +66,7 @@
                       class="batch-sensitivity"
                       filterable
                       :input-search="false"
-                      :placeholder="t('请选择')"
+                      :placeholder="t('请选择敏感等级')"
                       :popover-options="{ boundary: 'parent' }"
                       :search-placeholder="t('请输入关键字')">
                       <bk-option
@@ -87,7 +94,14 @@
                 </div>
               </template>
               <template v-if="batchItem.value === 'resource_type_ids'">
-                <h3>{{ t('批量编辑依赖资源') }}</h3>
+                <div style="display: flex;">
+                  <h3>{{ t('批量编辑依赖资源') }}</h3>
+                  <span style="font-size: 12px; color: #979ba5;">
+                    {{ selectedItem.length === formData.renderData.length
+                      ? t('全部操作')
+                      : t('已选择操作', { count: selectedItem.length }) }}
+                  </span>
+                </div>
                 <audit-form
                   ref="formRef"
                   class="customize-form"
@@ -105,6 +119,7 @@
                       custom-content
                       display-key="name"
                       id-key="resource_type_id"
+                      :placeholder="t('请选择依赖资源')"
                       :popover-options="{ boundary: 'parent' }"
                       @search-change="handleSearch">
                       <bk-tree
