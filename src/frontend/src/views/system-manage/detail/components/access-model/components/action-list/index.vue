@@ -53,7 +53,30 @@
       <bk-table
         :border="['outer']"
         :columns="tableColumn"
-        :data="data" />
+        :data="data">
+        <template #empty>
+          <bk-exception
+            scene="part"
+            style="height: 280px;padding-top: 40px;"
+            type="search-empty">
+            <div>
+              <div style="color: #63656e;">
+                {{ t('搜索结果为空') }}
+              </div>
+              <div
+                style="margin-top: 8px; color: #979ba5;">
+                {{ t('可以尝试调整关键词') }} {{ t('或') }}
+                <bk-button
+                  text
+                  theme="primary"
+                  @click="handleClearSearch">
+                  {{ t('清空搜索条件') }}
+                </bk-button>
+              </div>
+            </div>
+          </bk-exception>
+        </template>
+      </bk-table>
     </bk-loading>
   </div>
   <add-action
@@ -107,16 +130,18 @@
 
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  const { t } = useI18n();
   const route = useRoute();
-  const addActionRef = ref();
+  const { t } = useI18n();
   const { messageSuccess } = useMessage();
+
+  const addActionRef = ref();
+  const searchKey = ref<Array<SearchKey>>([]);
 
   const isSimpleSystem = computed(() => route.query.type === 'simple');
 
   const placeholder = computed(() => (isSimpleSystem.value
-    ? t('搜索操作ID、操作事件名、风险等级、操作事件类型')
-    : t('搜索操作ID、操作事件名、关联资源类型、风险等级、操作事件类型')));
+    ? t('搜索操作ID、操作事件名、敏感等级、操作事件类型')
+    : t('搜索操作ID、操作事件名、关联资源类型、敏感等级、操作事件类型')));
 
   const tableColumn = computed(() => [
     {
@@ -229,8 +254,6 @@
     },
   ]);
 
-  const searchKey = ref<Array<SearchKey>>([]);
-
   const {
     run: fetchSystemActionList,
     loading,
@@ -294,6 +317,13 @@
 
   const handleAddResourceType = () => {
     emits('addResourceType');
+  };
+
+  const handleClearSearch = () => {
+    searchKey.value = [];
+    fetchSystemActionList({
+      id: route.params.id,
+    });
   };
 
   const handleSearch = (keyword: Array<any>) => {

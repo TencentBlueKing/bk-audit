@@ -55,7 +55,30 @@
       <bk-table
         :border="['outer']"
         :columns="renderTableColumn"
-        :data="resourceTypeList" />
+        :data="resourceTypeList">
+        <template #empty>
+          <bk-exception
+            scene="part"
+            style="height: 280px;padding-top: 40px;"
+            type="search-empty">
+            <div>
+              <div style="color: #63656e;">
+                {{ t('搜索结果为空') }}
+              </div>
+              <div
+                style="margin-top: 8px; color: #979ba5;">
+                {{ t('可以尝试调整关键词') }} {{ t('或') }}
+                <bk-button
+                  text
+                  theme="primary"
+                  @click="handleClearSearch">
+                  {{ t('清空搜索条件') }}
+                </bk-button>
+              </div>
+            </div>
+          </bk-exception>
+        </template>
+      </bk-table>
     </bk-loading>
   </div>
   <audit-sideslider
@@ -327,47 +350,6 @@
     ];
   });
 
-  const handleSearch = (keyword: Array<any>) => {
-    const search = {
-      resource_type_id: '',
-      name: '',
-      action: '',
-      sensitivity: '',
-      status: '',
-      id: route.params.id,
-    } as Record<string, any>;
-
-    keyword.forEach((item: SearchKey, index) => {
-      if (item.values) {
-        const value = item.values.map(item => item.id).join(',');
-        const list = search[item.id].split(',').filter((item: string) => !!item);
-        list.push(value);
-        _.uniq(list);
-        search[item.id] = list.join(',');
-      } else {
-        // 默认输入字段后匹配规则名称
-        const list = search.name.split(',').filter((item: string) => !!item);
-        list.push(item.id);
-        _.uniq(list);
-        search.name = list.join(',');
-        searchKey.value[index] = ({ id: 'name', name: t('资源名称'), values: [{ id: item.id, name: item.id }] });
-      }
-    });
-    fetchSysetemResourceTypeList(search);
-  };
-
-  /* 有相关权限才显示操作列
-    1. 拥有 manage_global_setting 权限
-    2. 拥有特性开关enabled为true
-  */
-  const checkPermission = async () => {
-    const { manage_global_setting: manageGlobalSetting = false } = await IamManageService.check({ action_ids: 'manage_global_setting' });
-    const { enabled = false } = await MetaManageService.fetchFeature({
-      feature_id: 'bkbase_aiops',
-    });
-    controlsPermission.value =  manageGlobalSetting && enabled;
-  };
-
   // 获取系统详情
   const {
     loading: isSystemDataLoading,
@@ -426,6 +408,54 @@
     },
   });
 
+  const handleClearSearch = () => {
+    searchKey.value = [];
+    fetchSysetemResourceTypeList({
+      id: route.params.id,
+    });
+  };
+
+  const handleSearch = (keyword: Array<any>) => {
+    const search = {
+      resource_type_id: '',
+      name: '',
+      action: '',
+      sensitivity: '',
+      status: '',
+      id: route.params.id,
+    } as Record<string, any>;
+
+    keyword.forEach((item: SearchKey, index) => {
+      if (item.values) {
+        const value = item.values.map(item => item.id).join(',');
+        const list = search[item.id].split(',').filter((item: string) => !!item);
+        list.push(value);
+        _.uniq(list);
+        search[item.id] = list.join(',');
+      } else {
+        // 默认输入字段后匹配规则名称
+        const list = search.name.split(',').filter((item: string) => !!item);
+        list.push(item.id);
+        _.uniq(list);
+        search.name = list.join(',');
+        searchKey.value[index] = ({ id: 'name', name: t('资源名称'), values: [{ id: item.id, name: item.id }] });
+      }
+    });
+    fetchSysetemResourceTypeList(search);
+  };
+
+  /* 有相关权限才显示操作列
+    1. 拥有 manage_global_setting 权限
+    2. 拥有特性开关enabled为true
+  */
+  const checkPermission = async () => {
+    const { manage_global_setting: manageGlobalSetting = false } = await IamManageService.check({ action_ids: 'manage_global_setting' });
+    const { enabled = false } = await MetaManageService.fetchFeature({
+      feature_id: 'bkbase_aiops',
+    });
+    controlsPermission.value =  manageGlobalSetting && enabled;
+  };
+
   const getSnapShotStatus = () => {
     const resourceIds = resourceTypeList.value.map(item => item.resource_type_id).join(',');
     fetchSnapShotStatus({
@@ -464,7 +494,6 @@
       unique_id: data.unique_id,
     });
   };
-
 
   const handleCreate = () => {
     addResourceRef.value.handleOpen();
