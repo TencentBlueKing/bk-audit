@@ -55,9 +55,25 @@
       </div>
       <bk-form-item
         v-if="!isSimpleSystem"
-        :label="t('依赖资源')"
+        label=""
         label-width="160"
         property="description">
+        <template #label>
+          <span
+            v-bk-tooltips="{
+              content: t(`“操作”仅为控制了系统内的功能权限。若想要进一步实现数据（资源）级的权限控制，则需要关联“依赖资源，如：
+                业务（依赖资源）：删除业务，编辑业务（操作）
+                在申请资源时，即可以对不同的业务资源（业务1，业务2），进行权限申请`),
+              placement: 'top-start',
+            }"
+            style="
+                color: #63656e;
+                cursor: pointer;
+                border-bottom: 1px dashed #979ba5;
+              ">
+            {{ t('依赖资源') }}
+          </span>
+        </template>
         <bk-select
           ref="selectRef"
           v-model="formData.resource_type_ids"
