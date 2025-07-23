@@ -243,7 +243,7 @@
       placeholder: t('请输入资源操作'),
     }]),
     {
-      name: t('风险等级'),
+      name: t('敏感等级'),
       id: 'sensitivity',
       placeholder: t('请输入敏感等级'),
     },
