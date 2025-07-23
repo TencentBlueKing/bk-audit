@@ -354,5 +354,9 @@ export default {
     '未完成权限模型配置，请尽快配置': 'Permission model configuration is not completed, please configure as soon as possible',
     '未完成日志数据上报，请尽快配置，避免影响后续策略使用': 'The log data report has not been completed, please configure as soon as possible to avoid affecting the subsequent use of the policy',
     鉴权token: 'Authentication token',
+    全部操作: 'All operations',
+    已选择操作: 'Selected {count} operations',
+    全部资源: 'All resources',
+    已选择资源: 'Selected {count} resources',
   },
 };
