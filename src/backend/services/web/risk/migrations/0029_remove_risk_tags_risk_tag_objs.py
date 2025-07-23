@@ -27,7 +27,7 @@ def migrate_risk_tags_to_tag_objs(apps, schema_editor):
 
     # 批量插入
     if relations:
-        through_model.objects.using(db_alias).bulk_create(relations, batch_size=1000)
+        through_model.objects.using(db_alias).bulk_create(relations, batch_size=1000, ignore_conflicts=True)
 
 
 class Migration(migrations.Migration):
