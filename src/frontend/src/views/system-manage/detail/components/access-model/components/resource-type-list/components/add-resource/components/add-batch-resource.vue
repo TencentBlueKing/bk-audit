@@ -47,7 +47,7 @@
               <template v-if="batchItem.value === 'sensitivity'">
                 <div style="display: flex;">
                   <h3>{{ t('批量编辑敏感等级') }}</h3>
-                  <span style=" margin-left: 5px;font-size: 12px; line-height: 20px; color: #979ba5;">
+                  <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
                     ({{ selectedItem.length === formData.renderData.length
                       ? t('全部资源')
                       : t('已选择资源', { count: selectedItem.length }) }})
@@ -96,7 +96,7 @@
               <template v-if="batchItem.value === 'ancestor'">
                 <div style="display: flex;">
                   <h3>{{ t('批量编辑所属父级资源') }}</h3>
-                  <span style=" margin-left: 5px;font-size: 12px; line-height: 20px; color: #979ba5;">
+                  <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
                     ({{ selectedItem.length === formData.renderData.length
                       ? t('全部资源')
                       : t('已选择资源', { count: selectedItem.length }) }})
@@ -196,7 +196,12 @@
               style="margin-left: 4px;color: #3a84ff; cursor: pointer;"
               type="piliangbianji" />
             <template #content>
-              <h3>{{ t('批量编辑所属父级资源') }}</h3>
+              <div style="display: flex;">
+                <h3>{{ t('批量编辑所属父级资源') }}</h3>
+                <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
+                  ({{ t('全部资源') }})
+                </span>
+              </div>
               <audit-form
                 ref="formRef"
                 form-type="vertical"
@@ -248,37 +253,16 @@
           </bk-popover>
         </div>
         <div class="field-value  is-required">
-          <!-- <bk-popover
+          <bk-popover
             placement="bottom"
-            theme="light"> -->
-          <!-- <span class="tips">
-            {{ t('敏感等级') }}
-          </span> -->
-          <span>
-            {{ t('敏感等级') }}
-          </span>
-          <!-- <template #content>
-              <div
-                stripe
-                style="width: 520px;margin-top: 10px;">
-                <bk-table
-                  ref="refTable"
-                  :border="['row', 'col', 'outer']"
-                  :data="popoverTable"
-                  height="auto">
-                  <bk-table-column
-                    label="敏感等级"
-                    prop="sensitivity" />
-                  <bk-table-column
-                    label="实现效果说明"
-                    prop="sx" />
-                  <bk-table-column
-                    label="举例"
-                    prop="jl" />
-                </bk-table>
-              </div>
+            theme="light">
+            <span class="tips">
+              {{ t('敏感等级') }}
+            </span>
+            <template #content>
+              <sensitivity-tips-table />
             </template>
-          </bk-popover> -->
+          </bk-popover>
           <bk-popover
             ref="sensitivityPopover"
             placement="bottom"
@@ -289,7 +273,12 @@
               style="margin-left: 4px;color: #3a84ff;"
               type="piliangbianji" />
             <template #content>
-              <h3>{{ t('批量编辑敏感等级') }}</h3>
+              <div style="display: flex;">
+                <h3>{{ t('批量编辑敏感等级') }}</h3>
+                <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
+                  ({{ t('全部资源') }})
+                </span>
+              </div>
               <audit-form
                 ref="formRef"
                 form-type="vertical"
@@ -494,6 +483,8 @@
   import type SystemResourceTypeModel from '@model/meta/system-resource-type';
   import type SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
 
+  import SensitivityTipsTable from '@views/system-manage/detail/components/access-model/components/sensitivity-tips/table.vue';
+
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
@@ -569,24 +560,6 @@
     label: t('敏感等级'),
     value: 'sensitivity',
   }]);
-
-  // const popoverTable = ref([{
-  //   sensitivity: t('一级(不敏感)'),
-  //   sx: '1',
-  //   jl: '-',
-  // }, {
-  //   sensitivity: t('二级(低)'),
-  //   sx: '1',
-  //   jl: '-',
-  // }, {
-  //   sensitivity: t('三级(中)'),
-  //   sx: '1',
-  //   jl: '-',
-  // }, {
-  //   sensitivity: t('四级(高)'),
-  //   sx: '1',
-  //   jl: '-',
-  // }]);
 
   const handleShow = () => {
     isShowBatch.value = !isShowBatch.value;
