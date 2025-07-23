@@ -18,21 +18,13 @@ to the current version of the project delivered to anyone in the future.
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
-from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import InstanceActionPermission
-from apps.permission.handlers.resource_types import ResourceEnum
+from apps.meta.permissions import SystemPermissionHandler
 
 
 class SystemDiagnosisViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["change_diagnosis_push", "delete_diagnosis_push"]:
-            return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.EDIT_SYSTEM],
-                    resource_meta=ResourceEnum.SYSTEM,
-                    lookup_field="pk",
-                )
-            ]
+            return SystemPermissionHandler.system_edit_permissions(lookup_field="pk")
         return []
 
     resource_routes = [

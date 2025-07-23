@@ -21,7 +21,7 @@ import pytest
 from blueapps.core.celery import celery_app
 
 from apps.meta.constants import SystemSourceTypeEnum
-from apps.meta.models import System
+from apps.meta.models import Action, ResourceType, System
 from apps.meta.tasks import sync_iam_systems, sync_system_paas_info
 from core.testing import assert_list_contains
 from tests.base import TestCase
@@ -97,8 +97,20 @@ class TestSyncIamSystems(TestCase):
         actual = self._get_system_data()
         assert_list_contains(actual, EXPECT_IAM_SYSTEMS)
         # 4. 新增系统后同步后正常
-        System.objects.create(
+        new_system: System = System.objects.create(
             instance_id="new_system", source_type=SystemSourceTypeEnum.IAM_V3.value, name="New System"
+        )
+        ResourceType.objects.create(
+            system_id=new_system.system_id,
+            resource_type_id="new_resource_type",
+            name="New Resource Type",
+            description="New Resource Type Description",
+        )
+        Action.objects.create(
+            system_id=new_system.system_id,
+            action_id="new_action",
+            name="New Action",
+            description="New Action Description",
         )
         self.sync_system()
         actual = self._get_system_data()

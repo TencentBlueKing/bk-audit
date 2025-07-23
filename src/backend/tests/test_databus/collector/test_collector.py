@@ -27,6 +27,7 @@ from services.web.databus.constants import (
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     DEFAULT_STORAGE_CONFIG_KEY,
     ContainerCollectorType,
+    SnapshotReportStatus,
     SnapshotRunningStatus,
 )
 from services.web.databus.exceptions import SecurityForbiddenError
@@ -267,6 +268,37 @@ class CollectorTest(TestCase):
         """EtlFieldHistory"""
         result = self.resource.databus.collector.etl_field_history(collector_config_id=COLLECTOR_ID)
         self.assertEqual(result, ETL_FIELD_HISTORY_RESULT)
+
+    def test_bulk_system_snapshots_status_no_snapshot(self):
+        """Test BulkSystemSnapshotsStatusResource with no snapshot"""
+        result = self.resource.databus.collector.bulk_system_snapshots_status(
+            namespace=self.namespace, system_ids=str(self.system_id)
+        )
+        self.assertEqual(result[self.system_id]["status"], SnapshotReportStatus.UNSET.value)
+
+    def test_bulk_system_snapshots_status_normal(self):
+        """Test BulkSystemSnapshotsStatusResource with normal snapshot"""
+        Snapshot.objects.create(
+            system_id=self.system_id,
+            resource_type_id=RESOURCE_TYPE_ID,
+            status=SnapshotRunningStatus.RUNNING.value,
+        )
+        result = self.resource.databus.collector.bulk_system_snapshots_status(
+            namespace=self.namespace, system_ids=str(self.system_id)
+        )
+        self.assertEqual(result[self.system_id]["status"], SnapshotReportStatus.NORMAL.value)
+
+    def test_bulk_system_snapshots_status_abnormal(self):
+        """Test BulkSystemSnapshotsStatusResource with failed snapshot"""
+        Snapshot.objects.create(
+            system_id=self.system_id,
+            resource_type_id=RESOURCE_TYPE_ID,
+            status=SnapshotRunningStatus.FAILED.value,
+        )
+        result = self.resource.databus.collector.bulk_system_snapshots_status(
+            namespace=self.namespace, system_ids=str(self.system_id)
+        )
+        self.assertEqual(result[self.system_id]["status"], SnapshotReportStatus.ABNORMAL.value)
 
     @mock.patch("databus.collector.resources.requests.session", SessionMock())
     @mock.patch(

@@ -19,6 +19,9 @@ to the current version of the project delivered to anyone in the future.
 import copy
 import itertools
 import json
+import secrets
+import string
+import uuid
 from collections import OrderedDict
 from functools import wraps
 from json import JSONDecodeError
@@ -206,3 +209,24 @@ def extract_nested_value(data: Any, keys: List[str]) -> Any:
         else:
             return Empty()
     return current
+
+
+def unique_id():
+    """生成32个字符的唯一ID ."""
+    return uuid.uuid3(uuid.uuid1(), uuid.uuid4().hex).hex
+
+
+def generate_random_string(length=32, alphabet=None):
+    """
+    生成一个指定长度的随机字符串。
+
+    :param length: 随机字符串的长度，默认为 32
+    :param alphabet: 字符集，默认为字母和数字的组合，如果需要自定义字符集可以传入
+    :return: 生成的随机字符串
+    """
+
+    # 默认字符集：字母（小写和大写）和数字
+    if alphabet is None:
+        alphabet = string.ascii_letters + string.digits
+
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
