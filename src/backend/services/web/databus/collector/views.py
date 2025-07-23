@@ -56,11 +56,7 @@ class CollectorsViewSet(ResourceViewSet):
             return [IAMPermission(actions=[ActionEnum.MANAGE_GLOBAL_SETTING])]
         if self.action == "get_collector_info":
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.VIEW_SYSTEM],
-                    resource_meta=ResourceEnum.SYSTEM,
-                    get_instance_id=self.get_system_id,
-                ),
+                SystemPermissionHandler.system_view_permissions(get_instance_id=self.get_system_id),
                 InstanceActionPermission(
                     actions=[ActionEnum.VIEW_COLLECTION_BK_LOG],
                     resource_meta=ResourceEnum.COLLECTION_BK_LOG,
@@ -70,11 +66,7 @@ class CollectorsViewSet(ResourceViewSet):
 
         if self.action in ["update_collector", "delete_collector"]:
             return [
-                InstanceActionPermission(
-                    actions=[ActionEnum.VIEW_SYSTEM],
-                    resource_meta=ResourceEnum.SYSTEM,
-                    get_instance_id=self.get_system_id,
-                ),
+                SystemPermissionHandler.system_edit_permissions(get_instance_id=self.get_system_id),
                 InstanceActionPermission(
                     actions=[
                         ActionEnum.VIEW_COLLECTION_BK_LOG,
