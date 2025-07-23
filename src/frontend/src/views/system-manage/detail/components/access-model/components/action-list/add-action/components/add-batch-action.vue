@@ -47,7 +47,7 @@
               <template v-if="batchItem.value === 'sensitivity'">
                 <div style="display: flex;">
                   <h3>{{ t('批量编辑敏感等级') }}</h3>
-                  <span style="font-size: 12px; color: #979ba5;">
+                  <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
                     {{ selectedItem.length === formData.renderData.length
                       ? t('全部操作')
                       : t('已选择操作', { count: selectedItem.length }) }}
@@ -96,7 +96,7 @@
               <template v-if="batchItem.value === 'resource_type_ids'">
                 <div style="display: flex;">
                   <h3>{{ t('批量编辑依赖资源') }}</h3>
-                  <span style="font-size: 12px; color: #979ba5;">
+                  <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
                     {{ selectedItem.length === formData.renderData.length
                       ? t('全部操作')
                       : t('已选择操作', { count: selectedItem.length }) }}
@@ -173,7 +173,15 @@
         <div
           v-if="!isSimpleSystem"
           class="field-value">
-          {{ t('依赖资源') }}
+          <span
+            v-bk-tooltips="{
+              content: t('在实现资源反向拉取协议时，审计中心会基于资源类型ID，向接入方提供的回调地址请求资源实例。并用于操作日志上报中。'),
+              placement: 'top-start',
+              extCls: 'resource-type-id-tooltips'
+            }"
+            class="tips">
+            {{ t('依赖资源') }}
+          </span>
           <bk-popover
             ref="batchPopover"
             placement="bottom"
@@ -184,7 +192,12 @@
               style="margin-left: 4px;color: #3a84ff;cursor: pointer;"
               type="piliangbianji" />
             <template #content>
-              <h3>{{ t('批量编辑依赖资源') }}</h3>
+              <div style="display: flex;">
+                <h3>{{ t('批量编辑依赖资源') }}</h3>
+                <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
+                  ({{ t('全部操作') }})
+                </span>
+              </div>
               <audit-form
                 ref="formRef"
                 class="customize-form"
@@ -203,6 +216,7 @@
                     display-key="name"
                     :empty-text="t('数据搜索为空')"
                     id-key="resource_type_id"
+                    :placeholder="t('请选择依赖资源')"
                     :popover-options="{ boundary: 'parent' }"
                     @search-change="handleSearch">
                     <bk-tree
@@ -239,7 +253,16 @@
           </bk-popover>
         </div>
         <div class="field-value  is-required">
-          {{ t('敏感等级') }}
+          <bk-popover
+            placement="bottom"
+            theme="light">
+            <span class="tips">
+              {{ t('敏感等级') }}
+            </span>
+            <template #content>
+              <sensitivity-tips-table />
+            </template>
+          </bk-popover>
           <bk-popover
             ref="sensitivityPopover"
             placement="bottom"
@@ -250,7 +273,12 @@
               style="margin-left: 4px;color: #3a84ff;cursor: pointer;"
               type="piliangbianji" />
             <template #content>
-              <h3>{{ t('批量编辑敏感等级') }}</h3>
+              <div style="display: flex;">
+                <h3>{{ t('批量编辑敏感等级') }}</h3>
+                <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
+                  ({{ t('全部操作') }})
+                </span>
+              </div>
               <audit-form
                 ref="formRef"
                 form-type="vertical"
@@ -264,7 +292,7 @@
                     class="batch-sensitivity"
                     filterable
                     :input-search="false"
-                    :placeholder="t('请选择')"
+                    :placeholder="t('请选择敏感等级')"
                     :popover-options="{ boundary: 'parent' }"
                     :search-placeholder="t('请输入关键字')">
                     <bk-option
@@ -456,6 +484,8 @@
 
   import SystemActionModel from '@model/meta/system-action';
   import type SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
+
+  import SensitivityTipsTable from '@views/system-manage/detail/components/access-model/components/sensitivity-tips/table.vue';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -741,6 +771,12 @@
     overflow: hidden;
     border-left: 1px solid #dcdee5;
     align-items: center;
+
+    .tips {
+      line-height: 16px;
+      cursor: pointer;
+      border-bottom: 1px dashed #979ba5;
+    }
 
     .bk-form-item.is-error {
       .bk-input--text {
