@@ -438,9 +438,9 @@
 
   const contentText = (stage: string | undefined) => {
     if (stage === 'permission_model') {
-      return '系统尚未完成确实模型配置，请继续设置';
+      return t('系统尚未完成确实模型配置，请继续设置');
     } if (stage === 'collector') {
-      return '系统尚未完成日志数据上报，请继续上报';
+      return t('系统尚未完成日志数据上报，请继续上报');
     }
     return '';
   };
@@ -497,6 +497,7 @@
       return;
     }
     if (routerName === 'systemAccess') {
+      sessionStorage.setItem('systemProjectId', systemId.value || '');
       const routePath = router.resolve({ name: routerName }).href;
       window.open(routePath, '_blank');
       return;
@@ -559,9 +560,6 @@
   };
   watch(route, () => {
     curNavName.value = route.meta.navName as string;
-    if (route.params.id) {
-      systemId.value = route.params.id as string;
-    }
   }, {
     deep: true,
     immediate: true,
