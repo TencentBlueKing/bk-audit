@@ -106,7 +106,7 @@
   const systemDetail = ref();
   const step2Ref = ref();
 
-  const popoverBtn = computed(() => (route.query.type === 'simple' ? '简单权限类型' : '复杂权限类型'));
+  const popoverBtn = computed(() => (route.query.type === 'simple' ? t('简单权限类型') : t('复杂权限类型')));
 
   const getIsDisabledBtn = (val: Record<string, any>) => {
     if (val.actionListListLength > 0 || val.resourceTypeListLength > 0) {
