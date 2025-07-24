@@ -34,7 +34,7 @@
         </auth-button>
         <bk-input
           v-model="searckKey"
-          :placeholder="t('请输入 应用名称、应用 ID 进行搜索')"
+          :placeholder="t('请输入 系统名称、系统ID 进行搜索')"
           style="width: 480px;"
           @change="handleSearch" />
       </div>
