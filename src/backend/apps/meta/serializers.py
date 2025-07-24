@@ -502,6 +502,7 @@ class ResourceTypeListSerializer(serializers.Serializer):
     name_en = serializers.CharField(label=gettext_lazy("资源类型英文名称"), required=False)
     sensitivity = serializers.IntegerField(required=False)
     actions = serializers.CharField(required=False, label=gettext_lazy("操作ID列表，多个用逗号分隔"))
+    resource_type_id = serializers.CharField(required=False, label=gettext_lazy("资源类型ID"))
 
 
 class DeleteResourceTypeRequestSerializer(serializers.Serializer):
