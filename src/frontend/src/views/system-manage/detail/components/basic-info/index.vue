@@ -96,7 +96,7 @@
       </div>
       <div class="item-value">
         <template v-if="!edits.description">
-          <span>{{ data.description || '--' }}</span>
+          <tool-tip-text :data="data.description || '--' " />
           <audit-icon
             v-if="canEditSystem"
             class="edit-icon"
@@ -107,6 +107,8 @@
           v-else
           v-model="formData.description"
           autofocus
+          :maxlength="255"
+          type="textarea"
           @blur="handleBlur('description')" />
       </div>
     </div>
@@ -130,8 +132,10 @@
           v-else
           v-model="formData.clients"
           allow-create
+          autofocus
+          :clearable="false"
           collapse-tags
-          has-delete-icon
+          :has-delete-icon="formData.clients.length > 1"
           :list="[]"
           @blur="handleBlur('clients')" />
       </div>
@@ -197,6 +201,7 @@
 
   import { execCopy } from '@utils/assist';
 
+  import ToolTipText from '@/components/show-tooltips-text/index.vue';
   import useRequest from '@/hooks/use-request';
 
   interface Emits {
