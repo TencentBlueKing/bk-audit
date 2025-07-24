@@ -236,11 +236,22 @@
   const handlerValidates: (...args: unknown[]) => void = (data: unknown) => {
     if (typeof data !== 'object' || data === null) return;
     const formData = data as FormData;
-    InfoBox({
-      type: 'warning',
-      title: t('确认接入该系统?'),
-      contentAlign: 'left',
-      content: (
+    if (route.query.isNewSystem === 'true') {
+      window.changeConfirm = false;
+      if ('fromStep' in route.query) {
+        fetchSystemUpdate({
+          ...formData,
+          system_id: route.params.id,
+        });
+      } else {
+        fetchSystemCreated(formData);
+      }
+    } else {
+      InfoBox({
+        type: 'warning',
+        title: t('确认接入该系统?'),
+        contentAlign: 'left',
+        content: (
         <div>
           <div>
             <span>{t('系统')}：</span>
@@ -251,28 +262,29 @@
           </div>
         </div>
       ),
-      cancelText: t('取消'),
-      confirmText: t('确定接入'),
-      onConfirm() {
-        window.changeConfirm = false;
-        if ('systemId' in route.query) {
-          fetchSystemAuditStatusUpdate({
-            ...formData,
-            system_id: route.query.systemId,
-          });
-        } else {
-          if ('fromStep' in route.query) {
-            fetchSystemUpdate({
+        cancelText: t('取消'),
+        confirmText: t('确定接入'),
+        onConfirm() {
+          window.changeConfirm = false;
+          if ('systemId' in route.query) {
+            fetchSystemAuditStatusUpdate({
               ...formData,
-              system_id: route.params.id,
+              system_id: route.query.systemId,
             });
           } else {
-            fetchSystemCreated(formData);
+            if ('fromStep' in route.query) {
+              fetchSystemUpdate({
+                ...formData,
+                system_id: route.params.id,
+              });
+            } else {
+              fetchSystemCreated(formData);
+            }
           }
-        }
-      },
-      onCancel() {},
-    });
+        },
+        onCancel() {},
+      });
+    }
   };
 
   const handlerStepSubmit = () => {
@@ -337,7 +349,7 @@
         router.push({
           name: 'nweSystemManage',
           params: {
-            id: route.params.id,
+            id: route.params.id || sessionStorage.getItem('systemProjectId'),
           },
         });
       },
