@@ -98,7 +98,9 @@
             </template>
           </bk-input>
 
-          <div class="list">
+          <div
+            v-if="dataList.length > 0"
+            class="list">
             <div
               v-for="item in dataList"
               :key="item.id"
@@ -128,8 +130,11 @@
                 v-if="item.audit_status === 'accessed'"
                 :content="t('已接入审计中心')"
                 placement="top"
+
                 theme="light">
-                <div class="list-btn list-btn-not-allowed">
+                <div
+                  class="list-btn list-btn-not-allowed"
+                  @click.stop="()=>{}">
                   <div class="list-btn-name">
                     <span
                       v-bk-tooltips="{
@@ -145,6 +150,13 @@
                   </div>
                 </div>
               </bk-popover>
+            </div>
+          </div>
+          <div
+            v-else
+            class="list-empty">
+            <div class="empty">
+              {{ t('搜索结果为空') }}
             </div>
           </div>
         </div>
@@ -204,7 +216,6 @@
       },
     });
   };
-
   const handleIsShowSelect = () => {
     if (pendingList.value.length > 0) {
       isShowSelect.value = !isShowSelect.value;
@@ -475,8 +486,23 @@
             cursor: not-allowed;
           }
         }
+
       }
 
+      .list-empty {
+        position: relative;
+        height: 20vh;
+        margin-top: 5px;
+        overflow: auto;
+
+        .empty {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          color: #979ba5;
+          transform: translate(-50%,-50%);
+        }
+      }
     }
   }
 }

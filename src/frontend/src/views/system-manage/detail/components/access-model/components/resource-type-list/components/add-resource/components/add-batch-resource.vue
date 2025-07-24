@@ -484,6 +484,7 @@
   import {
     computed,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
@@ -717,7 +718,12 @@
       isSelected: false,
     });
   };
-
+  watch(() => isSelectedAll.value, (newValue) => {
+    formData.value.renderData = formData.value.renderData.map(item => ({
+      ...item,
+      isSelected: newValue,
+    }));
+  });
   defineExpose({
     submit() {
       return tableFormRef.value.validate().then(() => {
