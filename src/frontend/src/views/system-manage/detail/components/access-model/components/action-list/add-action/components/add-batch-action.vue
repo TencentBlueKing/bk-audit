@@ -44,114 +44,34 @@
               <span>{{ batchItem.label }}</span>
             </bk-dropdown-item>
             <template #content>
-              <template v-if="batchItem.value === 'sensitivity'">
-                <div style="display: flex;">
-                  <h3>{{ t('批量编辑敏感等级') }}</h3>
-                  <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
-                    {{ selectedItem.length === formData.renderData.length
-                      ? t('全部操作')
-                      : t('已选择操作', { count: selectedItem.length }) }}
-                  </span>
-                </div>
-                <audit-form
-                  ref="formRef"
-                  form-type="vertical"
-                  :model="formData">
-                  <bk-form-item
-                    :label="t('敏感等级')"
-                    label-width="160"
-                    property="sensitivity">
-                    <bk-select
-                      v-model="formData.sensitivity"
-                      class="batch-sensitivity"
-                      filterable
-                      :input-search="false"
-                      :placeholder="t('请选择敏感等级')"
-                      :popover-options="{ boundary: 'parent' }"
-                      :search-placeholder="t('请输入关键字')">
-                      <bk-option
-                        v-for="(item, index) in sensitivityList"
-                        :key="index"
-                        :label="item.label"
-                        :value="item.value" />
-                    </bk-select>
-                  </bk-form-item>
-                </audit-form>
-                <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #3a84ff; text-align: right;">
-                  <bk-button
-                    class="mr8"
-                    :disabled="!formData.sensitivity"
-                    size="small"
-                    theme="primary"
-                    @click="handleSubmitBatch('sensitivity')">
-                    {{ t('确定') }}
-                  </bk-button>
-                  <bk-button
-                    size="small"
-                    @click="handleCancelBatch('sensitivity')">
-                    {{ t('取消') }}
-                  </bk-button>
-                </div>
-              </template>
               <template v-if="batchItem.value === 'resource_type_ids'">
-                <div style="display: flex;">
-                  <h3>{{ t('批量编辑依赖资源') }}</h3>
-                  <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
-                    {{ selectedItem.length === formData.renderData.length
+                <!-- 批量编辑选择依赖资源 -->
+                <batch-ancestor
+                  :label="t('依赖资源')"
+                  :parent-resource-list="parentResourceList"
+                  :placeholder="t('请选择依赖资源')"
+                  :title="t('批量编辑依赖资源')"
+                  @cancel="handleCancelPopover"
+                  @update-ancestor="handleUpdateSelectedResourceTypeIds">
+                  <template #subTitle>
+                    <span>({{ selectedItem.length === formData.renderData.length
                       ? t('全部操作')
-                      : t('已选择操作', { count: selectedItem.length }) }}
-                  </span>
-                </div>
-                <audit-form
-                  ref="formRef"
-                  class="customize-form"
-                  form-type="vertical"
-                  :model="formData">
-                  <bk-form-item
-                    :label="t('依赖资源')"
-                    label-width="160"
-                    property="resource_type_ids"
-                    required>
-                    <bk-select
-                      ref="batchSelectRef"
-                      v-model="formData.resource_type_ids"
-                      :auto-height="false"
-                      custom-content
-                      display-key="name"
-                      id-key="resource_type_id"
-                      :placeholder="t('请选择依赖资源')"
-                      :popover-options="{ boundary: 'parent' }"
-                      @search-change="handleSearch">
-                      <bk-tree
-                        ref="treeRef"
-                        children="children"
-                        :data="parentResourceList"
-                        :empty-text="t('数据搜索为空')"
-                        :search="searchValue"
-                        :show-node-type-icon="false"
-                        @node-click="(data: SystemResourceTypeTree) => handleNodeClick(data, 'batch')">
-                        <template #default="{ data }: { data: SystemResourceTypeTree }">
-                          <span> {{ data.name }}</span>
-                        </template>
-                      </bk-tree>
-                    </bk-select>
-                  </bk-form-item>
-                </audit-form>
-                <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #3a84ff; text-align: right;">
-                  <bk-button
-                    class="mr8"
-                    :disabled="!formData.resource_type_ids"
-                    size="small"
-                    theme="primary"
-                    @click="handleSubmitBatch('resource_type_ids')">
-                    {{ t('确定') }}
-                  </bk-button>
-                  <bk-button
-                    size="small"
-                    @click="handleCancelBatch('resource_type_ids')">
-                    {{ t('取消') }}
-                  </bk-button>
-                </div>
+                      : t('已选择操作', { count: selectedItem.length }) }})</span>
+                  </template>
+                </batch-ancestor>
+              </template>
+              <template v-if="batchItem.value === 'sensitivity'">
+                <!-- 批量编辑选择敏感等级 -->
+                <batch-sensitivity
+                  :sensitivity-list="sensitivityList"
+                  @cancel="handleCancelPopover"
+                  @update-sensitivity="handleUpdateSelectedSensitivity">
+                  <template #subTitle>
+                    <span>({{ selectedItem.length === formData.renderData.length
+                      ? t('全部操作')
+                      : t('已选择操作', { count: selectedItem.length }) }})</span>
+                  </template>
+                </batch-sensitivity>
               </template>
             </template>
           </bk-popover>
@@ -183,7 +103,7 @@
             {{ t('依赖资源') }}
           </span>
           <bk-popover
-            ref="batchPopover"
+            ref="resourceTypeIdsRef"
             placement="bottom"
             theme="light"
             trigger="click"
@@ -192,63 +112,18 @@
               style="margin-left: 4px;color: #3a84ff;cursor: pointer;"
               type="piliangbianji" />
             <template #content>
-              <div style="display: flex;">
-                <h3>{{ t('批量编辑依赖资源') }}</h3>
-                <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
-                  ({{ t('全部操作') }})
-                </span>
-              </div>
-              <audit-form
-                ref="formRef"
-                class="customize-form"
-                form-type="vertical"
-                :model="formData">
-                <bk-form-item
-                  :label="t('依赖资源')"
-                  label-width="160"
-                  property="resource_type_ids"
-                  required>
-                  <bk-select
-                    ref="batchSelectRef"
-                    v-model="formData.resource_type_ids"
-                    :auto-height="false"
-                    custom-content
-                    display-key="name"
-                    :empty-text="t('数据搜索为空')"
-                    id-key="resource_type_id"
-                    :placeholder="t('请选择依赖资源')"
-                    :popover-options="{ boundary: 'parent' }"
-                    @search-change="handleSearch">
-                    <bk-tree
-                      ref="treeRef"
-                      children="children"
-                      :data="parentResourceList"
-                      :empty-text="t('数据搜索为空')"
-                      :search="searchValue"
-                      :show-node-type-icon="false"
-                      @node-click="(data: SystemResourceTypeTree) => handleNodeClick(data, 'batch')">
-                      <template #default="{ data }: { data: SystemResourceTypeTree }">
-                        <span> {{ data.name }}</span>
-                      </template>
-                    </bk-tree>
-                  </bk-select>
-                </bk-form-item>
-              </audit-form>
-              <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #3a84ff; text-align: right;">
-                <bk-button
-                  class="mr8"
-                  :disabled="!formData.resource_type_ids"
-                  size="small"
-                  theme="primary"
-                  @click="handleSubmitBatch('resource_type_ids')">
-                  {{ t('确定') }}
-                </bk-button>
-                <bk-button
-                  size="small"
-                  @click="handleCancelBatch('resource_type_ids')">
-                  {{ t('取消') }}
-                </bk-button>
-              </div>
+              <!-- 批量编辑所有依赖资源 -->
+              <batch-ancestor
+                :label="t('依赖资源')"
+                :parent-resource-list="parentResourceList"
+                :placeholder="t('请选择依赖资源')"
+                :title="t('批量编辑依赖资源')"
+                @cancel="handleCancelPopover"
+                @update-ancestor="handleUpdateAllResourceTypeIds">
+                <template #subTitle>
+                  <span>({{ t('全部操作') }})</span>
+                </template>
+              </batch-ancestor>
             </template>
           </bk-popover>
         </div>
@@ -273,51 +148,15 @@
               style="margin-left: 4px;color: #3a84ff;cursor: pointer;"
               type="piliangbianji" />
             <template #content>
-              <div style="display: flex;">
-                <h3>{{ t('批量编辑敏感等级') }}</h3>
-                <span style="margin-left: 5px; font-size: 12px; line-height: 20px; color: #979ba5;">
-                  ({{ t('全部操作') }})
-                </span>
-              </div>
-              <audit-form
-                ref="formRef"
-                form-type="vertical"
-                :model="formData">
-                <bk-form-item
-                  :label="t('敏感等级')"
-                  label-width="160"
-                  property="sensitivity">
-                  <bk-select
-                    v-model="formData.sensitivity"
-                    class="batch-sensitivity"
-                    filterable
-                    :input-search="false"
-                    :placeholder="t('请选择敏感等级')"
-                    :popover-options="{ boundary: 'parent' }"
-                    :search-placeholder="t('请输入关键字')">
-                    <bk-option
-                      v-for="(item, index) in sensitivityList"
-                      :key="index"
-                      :label="item.label"
-                      :value="item.value" />
-                  </bk-select>
-                </bk-form-item>
-              </audit-form>
-              <div style="margin-top: 8px; font-size: 14px; line-height: 22px; color: #3a84ff; text-align: right;">
-                <bk-button
-                  class="mr8"
-                  :disabled="!formData.sensitivity"
-                  size="small"
-                  theme="primary"
-                  @click="handleSubmitBatch('sensitivity')">
-                  {{ t('确定') }}
-                </bk-button>
-                <bk-button
-                  size="small"
-                  @click="handleCancelBatch('sensitivity')">
-                  {{ t('取消') }}
-                </bk-button>
-              </div>
+              <!-- 批量编辑所有敏感等级 -->
+              <batch-sensitivity
+                :sensitivity-list="sensitivityList"
+                @cancel="handleCancelPopover"
+                @update-sensitivity="handleUpdateAllSensitivity">
+                <template #subTitle>
+                  <span>({{ t('全部资源') }})</span>
+                </template>
+              </batch-sensitivity>
             </template>
           </bk-popover>
         </div>
@@ -393,7 +232,7 @@
                 label=""
                 label-width="0">
                 <bk-select
-                  ref="singleSelectRef"
+                  ref="rowSelectRef"
                   v-model="item.resource_type_ids"
                   :auto-height="false"
                   custom-content
@@ -407,7 +246,7 @@
                     :empty-text="t('数据搜索为空')"
                     :search="searchValue"
                     :show-node-type-icon="false"
-                    @node-click="(data: SystemResourceTypeTree) => handleNodeClick(data, index)">
+                    @node-click="(data: SystemResourceTypeTree) => handleRowNodeClick(data, index)">
                     <template #default="{ data }: { data: SystemResourceTypeTree }">
                       <span> {{ data.name }}</span>
                     </template>
@@ -474,6 +313,7 @@
 <script setup lang="ts">
   import {
     computed,
+    nextTick,
     ref,
     watch,
   } from 'vue';
@@ -486,6 +326,9 @@
   import type SystemResourceTypeTree from '@model/meta/system-resource-type-tree';
 
   import SensitivityTipsTable from '@views/system-manage/detail/components/access-model/components/sensitivity-tips/table.vue';
+
+  import BatchAncestor from '../../../resource-type-list/components/add-resource/components/batch-ancestor.vue';
+  import BatchSensitivity from '../../../resource-type-list/components/add-resource/components/batch-sensitivity.vue';
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -515,12 +358,11 @@
   const route = useRoute();
   const { messageSuccess } = useMessage();
 
-  const singleSelectRef = ref();
-  const batchSelectRef = ref();
+  const rowSelectRef = ref();
   const sensitivityPopover = ref();
-  const batchPopover = ref();
   const tableFormRef = ref();
   const batchSelectPopover = ref();
+  const resourceTypeIdsRef = ref();
 
   const isSelectedAll = ref(false);
   const searchValue = ref('');
@@ -597,73 +439,110 @@
     searchValue.value = keyword;
   };
 
-  const handleNodeClick = (data: SystemResourceTypeTree, typeOrIndex: string | number) => {
-    // 根据类型选择对应的select引用
-    const currentSelectRef = typeOrIndex === 'batch' ? batchSelectRef.value : singleSelectRef.value[typeOrIndex];
+  const handleUpdateSelectedResourceTypeIds = (value: string, selectedItems: Array<{
+    label: string;
+    value: string;
+  }>) => {
+    // 只更新选中部分
+    formData.value.renderData = formData.value.renderData.map((item) => {
+      // 批量操作且该项被选中 -> 更新该属性
+      if (item.isSelected) {
+        return {
+          ...item,
+          resource_type_ids: value,
+          isSelected: false,
+        };
+      }
+      return item;
+    });
+    nextTick(() => {
+      rowSelectRef.value.forEach((item: any) => {
+        if (item.selected[0] && item.selected[0].value === value) {
+          // eslint-disable-next-line no-param-reassign
+          item.selected = selectedItems;
+        }
+      });
+    });
 
-    // 设置选中项并关闭弹窗
-    currentSelectRef.selected = [{
-      value: data.resource_type_id,
-      label: data.name,
-    }];
-
-    // 更新表单数据
-    if (typeOrIndex === 'batch') {
-      formData.value.resource_type_ids = data.resource_type_id;
-    } else {
-      currentSelectRef.hidePopover();
-      formData.value.renderData[typeOrIndex as number].resource_type_ids = data.resource_type_id;
-    }
-  };
-
-  const handleSubmitBatch = (type: 'resource_type_ids' | 'sensitivity') => {
-    // 获取当前类型的配置
-    const prop = type;
-    const value = formData.value[prop];
-    const hasSelected = formData.value.renderData.some(item => item.isSelected);
-
-    // 合并属性更新和清空选中操作为单次遍历
-    formData.value.renderData = formData.value.renderData.map(item => ({
-      ...item,
-      ...((!hasSelected || item.isSelected) ? { [prop]: value } : {}),
-      isSelected: false,  // 清空选中状态
-    }));
-
-    // 根据类型关闭对应弹窗
-    if (type === 'resource_type_ids') {
-      (hasSelected && batchSelectPopover.value)
-        ? batchSelectPopover.value[0].hide()
-        : batchPopover.value.hide();
-    } else {
-      (hasSelected && batchSelectPopover.value)
-        ? batchSelectPopover.value[isSimpleSystem.value ? 0 : 1].hide()
-        : sensitivityPopover.value.hide();
-    }
-    // 清空value
-    formData.value[prop] = '';
-    // 关闭下拉项
+    // 关闭批量操作下拉菜单
     isShowBatch.value = false;
   };
 
-  const handleCancelBatch = (type: 'resource_type_ids' | 'sensitivity') => {
-    if (type === 'resource_type_ids') {
-      batchSelectPopover.value
-        ? batchSelectPopover.value[0].hide()
-        : batchPopover.value.hide();
-    } else {
-      batchSelectPopover.value
-        ? batchSelectPopover.value[isSimpleSystem.value ? 0 : 1].hide()
-        : sensitivityPopover.value.hide();
-    }
-    // 清空选中
+  const handleUpdateSelectedSensitivity = (value: string) => {
+    // 只更新选中部分
+    formData.value.renderData = formData.value.renderData.map((item) => {
+      // 批量操作且该项被选中 -> 更新该属性
+      if (item.isSelected) {
+        return {
+          ...item,
+          sensitivity: value,
+          isSelected: false,
+        };
+      }
+      return item;
+    });
+
+    // 关闭批量操作下拉菜单
+    isShowBatch.value = false;
+  };
+
+  const handleUpdateAllResourceTypeIds = (value: string, selectedItems: Array<{
+    label: string;
+    value: string;
+  }>) => {
+    // 更新所有项
+    formData.value.renderData = formData.value.renderData.map(item => ({
+      ...item,
+      resource_type_ids: value,
+    }));
+
+    nextTick(() => {
+      rowSelectRef.value.forEach((item: any) => {
+        // eslint-disable-next-line no-param-reassign
+        item.selected = selectedItems;
+      });
+    });
+
+    // 关闭表头pop
+    resourceTypeIdsRef.value.hide();
+  };
+
+  const handleUpdateAllSensitivity = (value: string) => {
+    // 更新所有项
+    formData.value.renderData = formData.value.renderData.map(item => ({
+      ...item,
+      sensitivity: value,
+    }));
+
+    // 关闭表头pop
+    sensitivityPopover.value.hide();
+  };
+
+  const handleCancelPopover = () => {
+    // 清空选择项
     formData.value.renderData = formData.value.renderData.map(item => ({
       ...item,
       isSelected: false,
     }));
-    // 清空value
-    formData.value[type] = '';
-    // 关闭下拉项
+
+    // 关闭批量操作下拉菜单或表头pop
+    if (resourceTypeIdsRef.value) {
+      resourceTypeIdsRef.value.hide();
+    }
+    if (sensitivityPopover.value) {
+      sensitivityPopover.value.hide();
+    }
     isShowBatch.value = false;
+  };
+
+  // 单个节点(row)点击处理函数
+  const handleRowNodeClick = (data: SystemResourceTypeTree, index: number) => {
+    rowSelectRef.value[index].selected = [{
+      value: data.resource_type_id,
+      label: data.name,
+    }];
+    formData.value.renderData[index].resource_type_ids = data.resource_type_id;
+    rowSelectRef.value[index].hidePopover();
   };
 
   const handleAdd = (index: number) => {
@@ -697,12 +576,14 @@
       isSelected: false,
     });
   };
+
   watch(() => isSelectedAll.value, (newValue) => {
     formData.value.renderData = formData.value.renderData.map(item => ({
       ...item,
       isSelected: newValue,
     }));
   });
+
   defineExpose({
     submit() {
       return tableFormRef.value.validate().then(() => {
