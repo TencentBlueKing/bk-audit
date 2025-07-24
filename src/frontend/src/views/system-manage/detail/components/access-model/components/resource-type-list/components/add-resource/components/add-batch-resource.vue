@@ -282,13 +282,15 @@
             <div class="field-operation">
               <div class="icon-group">
                 <audit-icon
+                  v-bk-tooltips="{
+                    content: t('新增'),
+                  }"
                   style="margin-right: 10px; cursor: pointer;"
                   type="add-fill"
                   @click="handleAdd(index)" />
                 <audit-icon
                   v-bk-tooltips="{
-                    content: t('至少保留一个'),
-                    disabled: formData.renderData.length > 1,
+                    content: formData.renderData.length > 1 ? t('删除') : t('至少保留一个'),
                   }"
                   :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : 'delete-icon']"
                   type="reduce-fill"
