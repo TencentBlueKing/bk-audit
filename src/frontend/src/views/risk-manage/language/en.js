@@ -127,5 +127,9 @@ export default {
     请选择关注人: 'Please select the focus person',
     请选择要操作的数据: 'Please select the data to operate',
     请选择要导出的数据: 'Please select the data to export',
+    待完善: 'To be perfected',
+    数据异常: 'Data anomaly',
+    '系统尚未完成确实模型配置，请继续设置': 'The system has not completed the actual model configuration, please continue to set up',
+    '系统尚未完成日志数据上报，请继续上报': 'The system has not completed the log data report, please continue to report',
   },
 };

@@ -74,27 +74,27 @@
 
   defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const { t } = useI18n();
 
   const sensitivityList = [
     {
       value: 1,
-      label: '一级(不敏感)',
+      label: t('一级(不敏感)'),
     },
     {
       value: 2,
-      label: '二级(低)',
+      label: t('二级(低)'),
     },
     {
       value: 3,
-      label: '三级(中)',
+      label: t('三级(中)'),
     },
     {
       value: 4,
-      label: '四级(高)',
+      label: t('四级(高)'),
     },
   ];
 
-  const { t } = useI18n();
   const isShowAdd = ref(false);
   const addType = ref('batch');
   const editData = ref<SystemResourceTypeModel>(new SystemResourceTypeModel());
