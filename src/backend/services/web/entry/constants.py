@@ -70,3 +70,5 @@ BKBASE_WEB_URL_KEY = "bkbase_web_url"
 SEARCH_RULE_IWIKI_URL_KEY = "search_rule_iwiki_url"
 # V3 系统新建地址
 V3_SYSTEM_CREATE_URL_KEY = "v3_system_create_url"
+# 检索规则 iwiki 地址
+PERMISSION_MODEL_IWIKI_URL_KEY = "permission_model_iwiki_url"
