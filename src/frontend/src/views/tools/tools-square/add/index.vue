@@ -42,7 +42,7 @@
                   <bk-input
                     v-model.trim="formData.name"
                     :maxlength="32"
-                    :placeholder="t('请输入，20字符内，可由汉字、小写字母、数字、“_”组成')"
+                    :placeholder="t('请输入，32字符内，可由汉字、小写字母、数字、“_”组成')"
                     show-word-limit
                     style="width: 100%;" />
                 </bk-form-item>
@@ -102,7 +102,7 @@
                     v-for="(item, index) in toolTypeList"
                     :key="index">
                     <bk-radio
-                      :disabled="item.id === 'api'"
+                      :disabled="item.id === 'api' || route.name === 'toolsEdit'"
                       :label="item.id">
                       <div style="display: flex; align-items: center; line-height: 16px;">
                         <audit-icon
@@ -208,7 +208,7 @@
                     <div class="info">
                       <audit-icon
                         style="margin: 0 5px; color: #c4c6cc;"
-                        type="lock" />
+                        :type="item.permission.result ? 'unlock' : 'lock'" />
                       <span
                         v-if="!item.permission.result"
                         :style="!item.permission.result ? {
@@ -237,7 +237,7 @@
                   <div class="render-field">
                     <div class="field-header-row">
                       <div class="field-value">
-                        {{ t('字段名') }}
+                        {{ t('变量名') }}
                       </div>
                       <div class="field-value">
                         {{ t('显示名') }}
@@ -245,7 +245,7 @@
                       <div
                         class="field-value"
                         style="flex: 0 0 380px;">
-                        {{ t('字段说明') }}
+                        {{ t('变量名说明') }}
                       </div>
                       <div class="field-value">
                         {{ t('是否必填') }}
@@ -295,7 +295,7 @@
                               <bk-input
                                 ref="fieldItemRef"
                                 v-model="item.raw_name"
-                                :disabled="!formData.config.sql"
+                                disabled
                                 :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
@@ -407,7 +407,7 @@
                               <bk-input
                                 ref="fieldItemRef"
                                 v-model="item.raw_name"
-                                :disabled="!formData.config.sql"
+                                disabled
                                 :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
