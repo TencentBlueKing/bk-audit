@@ -77,7 +77,7 @@
   }
   interface Exposes {
     resetValue: () => void,
-    change: () => void,
+    change: (isDrillDown: boolean, val?: any) => void,
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -120,26 +120,48 @@
     emits('change', value);
   };
 
-  const change = () => {
-    const newVal = props.dataConfig.value;
-    if (!newVal) return; // 避免空值触发更新
-    switch (props.dataConfig.field_category) {
-    case 'input':
-      handleInputDataChange(newVal);
-      break;
-    case 'number_input':
-      handleNumberInputDataChange(newVal);
-      break;
-    case 'person_select':
-      handleUserChange(newVal);
-      break;
-    case 'time_range_select':
-      handleRangeChange(newVal);
-      break;
-    case 'time_select':
-      handleChange(newVal);
-      break;
-    }
+  const change = (isDrillDown: boolean, val: any) => {
+    const newVal = isDrillDown ? props.dataConfig.value : val?.value;
+    const type: keyof typeof handlers = isDrillDown ? props.dataConfig.field_category : val.field_category;
+
+    const handlers = {
+      input: () => {
+        const value = newVal || '';
+        if (!isDrillDown) inputData.value = value;
+        else handleInputDataChange(value);
+      },
+      number_input: () => {
+        const value = newVal || null;
+        if (!isDrillDown) numberInputData.value = value;
+        else handleNumberInputDataChange(value);
+      },
+      person_select: () => {
+        const value = newVal || [];
+        if (!isDrillDown) user.value = value;
+        else handleUserChange(value);
+      },
+      time_range_select: () => {
+        const value = newVal || [];
+        if (!isDrillDown) pickerRangeValue.value = value;
+        else handleRangeChange(value);
+      },
+      time_select: () => {
+        if (!isDrillDown) {
+          pickerValue.value = newVal;
+        } else {
+          const timestamp = Number(newVal);
+          if (!isNaN(timestamp) && timestamp > 0) {
+            const date = new Date(timestamp);
+            const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+            handleChange(formattedDate);
+          } else {
+            handleChange(newVal);
+          }
+        }
+      },
+    };
+
+    if (handlers[type]) handlers[type]();
   };
   onMounted(() => {
     fetchGlobalChoices();
@@ -153,8 +175,8 @@
       pickerValue.value = '';
       user.value = '';
     },
-    change() {
-      change();
+    change(isDrillDown: boolean, val?: any) {
+      change(isDrillDown, val);
     },
   });
 </script>
