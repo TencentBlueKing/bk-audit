@@ -113,7 +113,7 @@
                     <form-item
                       ref="formItemRef"
                       :data-config="item"
-                      @change="(val) => handleFormItemChange(val, item)" />
+                      @change="(val:any) => handleFormItemChange(val, item)" />
                   </bk-form-item>
                 </div>
               </bk-form>
@@ -137,14 +137,16 @@
               </div>
               <div class="top-search-result">
                 <bk-loading :loading="isLoading">
+                  <!-- <div style="overflow-x: auto; width: 100%;"> -->
                   <bk-table
-                    :border="['outer', 'col', 'row']"
+                    :border="['row','outer','col']"
                     :columns="columns"
                     :data="tableData"
+                    header-align="center"
                     max-height="50vh"
+                    min-height="200px"
                     :pagination="pagination"
-                    remote-pagination
-                    width="100%"
+                    show-overflow-tooltip
                     @page-limit-change="handlePageLimitChange"
                     @page-value-change="handlePageChange" />
                 </bk-loading>
@@ -304,7 +306,7 @@
   const searchForm = ref();
 
   const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>();
-  const drillDownItemRowData = ref<Record<string, any>>();
+  const drillDownItemRowData = ref<Record<string, any>>({});
 
   // 工具执行
   const {
@@ -419,6 +421,9 @@
   };
 
   const submit = () => {
+    searchList.value.forEach((item) => {
+      searchForm.value[item.raw_name] = item.value;
+    });
     formRef.value.validate().then(() => {
       fetchTableData();
     });
@@ -426,23 +431,20 @@
 
   // 清空表单验证
   const handleReset = () => {
-    formRef.value.clearValidate();
-    Object.keys(searchForm.value).forEach((key) => {
-      searchForm.value[key] = '';
-    });
-    searchList.value = searchList.value.map(item => ({
-      ...item,
-      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
-    }));
     pagination.value.current = 1;
     pagination.value.count = 0;
     pagination.value.limit = 100;
     tableData.value = [];
+    searchList.value = searchList.value.map(item => ({
+      ...item,
+      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
+    }));
     if (formItemRef.value) {
-      formItemRef.value.forEach((item: any) => {
-        item?.resetValue();
+      formItemRef.value.forEach((item: any, index: number) => {
+        item?.change(false, searchList.value[index]);
       });
     }
+    formRef.value.clearValidate();
   };
 
   const handleFormItemChange = (val: any, item: SearchItem) => {
@@ -522,7 +524,7 @@
         // 动态值处理逻辑
         let dynamicValue = '';
         if (configItem.target_value_type !== 'fixed_value') {
-          if (configItem.target_field_type === 'basic' || configItem.target_field_type === null) {
+          if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
             // 从根对象取值
             dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? '';
           } else {
@@ -542,7 +544,7 @@
       nextTick(() => {
         if (formItemRef.value) {
           formItemRef.value.forEach((item: any) => {
-            item?.change();
+            item?.change(true, {});
           });
           const isValid = searchList.value.every((e) => {
             if (e.field_category === 'person_select' || e.field_category === 'time_range_select') {
@@ -735,6 +737,8 @@
   const handleCloseDialog = () => {
     emit('close');
     isShow.value = false;
+    dialogWidth.value = '1000px';
+    isFullScreen.value = false;
     handleReset();
   };
 
@@ -743,11 +747,6 @@
       handleCloseDialog();
     },
     openDialog(item, drillDownItem, drillDownItemRowData, preview) {
-      // console.log(item);
-      // console.log(drillDownItem);
-      // console.log(drillDownItemRowData);
-      // console.log(preview);
-
       handleOpenDialog(item, drillDownItem, drillDownItemRowData, preview);
     },
   });
@@ -916,5 +915,9 @@
     }
   }
 
+}
+
+:deep(.bk-table .bk-table-head .col-resize-drag) {
+  background-color: #fafbfd;
 }
 </style>

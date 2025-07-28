@@ -207,7 +207,7 @@
     :key="item.uid">
     <component
       :is="DialogVue"
-      :ref="(el) => dialogRefs[item.uid] = el"
+      :ref="(el:any) => dialogRefs[item.uid] = el"
       :tags-enums="tagsEnums"
       @open-field-down="openFieldDown" />
   </div>
@@ -462,7 +462,7 @@
     }
   };
 
-  // 下转打开
+  // 下钻打开
   const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
     const { uid } = drillDownItem.drill_config.tool;
     const toolItem = allToolsData.value.find(item => item.uid === uid);
