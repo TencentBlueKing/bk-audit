@@ -356,7 +356,7 @@
 
   const validateValues = async (item: Record<string, any>, value: Array<Arrays>) => {
     if (item && item.id === 'strategy_id') {
-      return /^[0-9]*$/.test(`${value[0].id}`) ? true : t('策略ID只允许输入整数');
+      return /^(?:\d+,)*\d+$/.test(`${value[0].id}`) ? true : t('策略ID只允许输入整数或以,分隔的整数列表');
     }
     if (item && item.id === 'tag') {
       const tag = value[0].id;
@@ -1288,7 +1288,7 @@
     total.value = data.total > total.value ? data.total : total.value;
 
     const { strategy_id: strategyId } = getSearchParams();
-    if (strategyId && isNeedShowDetail.value) {
+    if (strategyId.split(',').length === 1  && isNeedShowDetail.value) {
       handleDetail(data.results[0]);
       isNeedShowDetail.value = false;
       strategyLabelList.value = [];

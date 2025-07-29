@@ -44,7 +44,6 @@
           ref="cardListRef"
           class="card-list"
           @scroll="handleScroll">
-          <!-- <div class="card-list" v-if="dataList.length > 0"> -->
           <div class="card-list-box">
             <div
               v-for="(item, index) in dataList"
@@ -76,6 +75,11 @@
 
                     <div class="delete-btn">
                       <bk-button
+                        v-bk-tooltips="{
+                          disabled: !(item.strategies.length > 0),
+                          content: t('该工具正在被策略使用，无法删除'),
+                        }"
+                        :disabled="item.strategies.length > 0"
                         size="small"
                         theme="primary"
                         @click="handleDeleteItem(item)">
@@ -147,9 +151,10 @@
                       }}
                     </bk-tag>
                     <bk-tag
-                      class="desc-tag"
+                      class="desc-tag tag-cursor"
                       size="small"
-                      theme="info">
+                      theme="info"
+                      @click="handlesStrategiesClick(item)">
                       运用在 {{ item.strategies.length }} 个策略中
                     </bk-tag>
                   </div>
@@ -184,8 +189,6 @@
               {{ t('加载中...') }}
             </span>
           </div>
-
-          <!-- </div> -->
         </div>
 
         <div
@@ -399,6 +402,17 @@
     itemMouseenter.value = item.uid;
   };
 
+  // 策略跳转
+  const handlesStrategiesClick = (item: ToolInfo) => {
+    const url = router.resolve({
+      name: 'strategyList',
+      query: {
+        strategy_id: item.strategies.join(','),
+      },
+    }).href;
+    window.open(url, '_blank');
+  };
+
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
     isSingleLine?: boolean;
     fontSize?: string;
@@ -478,6 +492,7 @@
 
   // 打开工具
   const handleClick = async (toolInfo: ToolInfo) => {
+    handleCancel(toolInfo.uid);
     if (dialogRefs.value[toolInfo.uid]) {
       dialogRefs.value[toolInfo.uid].openDialog(toolInfo);
     }
@@ -662,6 +677,10 @@
             .top-right-desc {
               .desc-tag {
                 margin-right: 5px;
+              }
+
+              .tag-cursor {
+                cursor: pointer;
               }
             }
           }
