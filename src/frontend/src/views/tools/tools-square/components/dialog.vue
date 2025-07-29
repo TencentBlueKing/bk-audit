@@ -20,6 +20,7 @@
       ref="dialogRef"
       draggable
       :esc-close="false"
+      :fullscreen="isFullScreen"
       :is-show="isShow"
       render-directive="show"
       :show-mask="false"
@@ -74,7 +75,8 @@
                 </bk-tag>
                 <bk-tag
                   class="desc-tag desc-tag-info"
-                  theme="info">
+                  theme="info"
+                  @click="handlesStrategiesClick(itemInfo)">
                   运用在 {{ itemInfo?.strategies.length }} 个策略中
                 </bk-tag>
               </div>
@@ -137,15 +139,15 @@
               </div>
               <div class="top-search-result">
                 <bk-loading :loading="isLoading">
-                  <!-- <div style="overflow-x: auto; width: 100%;"> -->
                   <bk-table
                     :border="['row','outer','col']"
                     :columns="columns"
                     :data="tableData"
                     header-align="center"
-                    max-height="50vh"
+                    max-height="48vh"
                     min-height="200px"
                     :pagination="pagination"
+                    remote-pagination
                     show-overflow-tooltip
                     @page-limit-change="handlePageLimitChange"
                     @page-value-change="handlePageChange" />
@@ -193,6 +195,7 @@
 <script setup lang='tsx'>
   import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRouter } from 'vue-router';
 
   import IamManageService from '@service/iam-manage';
   import ToolManageService from '@service/tool-manage';
@@ -277,8 +280,8 @@
   const { t } = useI18n();
 
   const dialogIndex = ref(2000);
-  const dialogWidth = ref('1000px');
-  const dialogHeight = ref('80vh');
+  const dialogWidth = ref('50%');
+  const dialogHeight = ref('80%');
 
   const isFullScreen = ref(false);
   const isLoading = ref(false);
@@ -304,6 +307,7 @@
   const rules = ref({});
   const formRef = ref();
   const searchForm = ref();
+  const router = useRouter();
 
   const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>();
   const drillDownItemRowData = ref<Record<string, any>>({});
@@ -326,6 +330,17 @@
       }
     },
   });
+
+  // 策略跳转
+  const handlesStrategiesClick = (item: any) => {
+    const url = router.resolve({
+      name: 'strategyList',
+      query: {
+        strategy_id: item?.strategies.join(','),
+      },
+    }).href;
+    window.open(url, '_blank');
+  };
 
   // 获取工具详情
   const {
@@ -357,7 +372,7 @@
     fetchTableData(); // 调用获取表格数据的方法
   };
 
-  // 获取表格数据的方法（需要根据实际业务实现）
+  // 获取表格数据的方法
   const fetchTableData = () => {
     isLoading.value = true;
     fetchToolsExecute({
@@ -365,7 +380,7 @@
       params: itemInfo.value?.tool_type === 'data_search' ? {
         tool_variables: searchList.value.map(item => ({
           raw_name: item.raw_name,
-          value: item.value || '',
+          value: item.value,
         })),
         page: pagination.value.current,
         page_size: pagination.value.limit,
@@ -431,6 +446,12 @@
 
   // 清空表单验证
   const handleReset = () => {
+    // 检查 searchList.value 中的所有 value 是否为空
+    const allValuesEmpty = searchList.value.every(item => item.value === null
+      || (Array.isArray(item.value) && item.value.length === 0));
+    if (allValuesEmpty) {
+      return;
+    }
     pagination.value.current = 1;
     pagination.value.count = 0;
     pagination.value.limit = 100;
@@ -439,12 +460,12 @@
       ...item,
       value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
     }));
+    formRef.value.clearValidate();
     if (formItemRef.value) {
       formItemRef.value.forEach((item: any, index: number) => {
         item?.change(false, searchList.value[index]);
       });
     }
-    formRef.value.clearValidate();
   };
 
   const handleFormItemChange = (val: any, item: SearchItem) => {
@@ -578,7 +599,6 @@
   // 放大
   const handleFullscreen = () => {
     isFullScreen.value = !isFullScreen.value;
-    dialogWidth.value = isFullScreen.value ? '90%' : '1000px';
   };
 
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
@@ -737,7 +757,7 @@
   const handleCloseDialog = () => {
     emit('close');
     isShow.value = false;
-    dialogWidth.value = '1000px';
+    dialogWidth.value = '50%';
     isFullScreen.value = false;
     handleReset();
   };
@@ -813,6 +833,7 @@
 
         .desc-tag-info {
           color: #1768ef;
+          cursor: pointer;
         }
       }
 
