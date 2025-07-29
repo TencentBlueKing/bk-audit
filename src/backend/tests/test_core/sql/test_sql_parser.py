@@ -117,23 +117,23 @@ class TestSqlQueryAnalysis(TestCase):
         assert "users.hdfs WHERE age > 18" in regenerated
 
     def test_generate_sql_with_range_dict(self):
-        sql = "SELECT id FROM sales WHERE amount = :a"
+        sql = "SELECT id FROM sales WHERE TIME_RANGE(amount, :time_range, '%Y-%m-%d %H:%M:%S')"
         analyzer = SqlQueryAnalysis(sql)
 
-        params = {"a": RangeVariableData(start=1, end=100)}
+        params = {"time_range": RangeVariableData(start=1753770785000, end=1753770785000)}
         generated = analyzer.generate_sql_with_values(params)["data"]
-        assert "amount BETWEEN 1 AND 100" in generated
+        assert "amount >" in generated and "amount <" in generated
 
     def test_generate_sql_with_range_dict_and_extra_conditions(self):
-        sql = "SELECT id FROM sales WHERE amount = :a AND status = :s"
+        sql = "SELECT id FROM sales WHERE TIME_RANGE(amount, :time_range) AND status = :s"
         analyzer = SqlQueryAnalysis(sql)
 
         params = {
-            "a": RangeVariableData(start=10, end=20),
+            "time_range": RangeVariableData(start=10, end=20),
             "s": "PAID",
         }
         data_sql = analyzer.generate_sql_with_values(params)["data"]
-        assert "BETWEEN 10 AND 20" in data_sql and "status = 'PAID'" in data_sql
+        assert "amount >" in data_sql and "amount <" in data_sql and "status = 'PAID'" in data_sql
 
     def test_generate_sql_tuple_not_converted(self):
         sql = "SELECT id FROM sales WHERE amount = :a"
@@ -184,3 +184,53 @@ class TestSqlQueryAnalysis(TestCase):
         analyzer = SqlQueryAnalysis(sql)
         with self.assertRaises(SQLParseError):
             analyzer.parse_sql()
+
+    def test_time_range_function(self):
+        sql = "SELECT id FROM logs WHERE TIME_RANGE(ts,:time_range,'Timestamp(us)')"
+        analyzer = SqlQueryAnalysis(sql)
+        params = {"time_range": RangeVariableData(start=1, end=100)}
+        data_sql = analyzer.generate_sql_with_values(params)["data"]
+        assert "ts >= 1000" in data_sql and "ts < 100000" in data_sql
+
+    def test_skip_null_clause_removed(self):
+        sql = "SELECT id FROM events WHERE SKIP_NULL_CLAUSE(status, 'eq', :st)"
+        analyzer = SqlQueryAnalysis(sql)
+        params = {"st": None}
+        data_sql = analyzer.generate_sql_with_values(params)["data"]
+        assert "WHERE TRUE" in data_sql
+
+    def test_skip_null_clause_with_value(self):
+        sql = "SELECT id FROM events WHERE SKIP_NULL_CLAUSE(status, 'eq', :st)"
+        analyzer = SqlQueryAnalysis(sql)
+        params = {"st": "OK"}
+        data_sql = analyzer.generate_sql_with_values(params)["data"]
+        assert "status = 'OK'" in data_sql
+
+    def test_skip_null_clause_in_list(self):
+        sql = "SELECT id FROM events WHERE SKIP_NULL_CLAUSE(type, 'in', :t)"
+        analyzer = SqlQueryAnalysis(sql)
+        params = {"t": [1, 2]}
+        data_sql = analyzer.generate_sql_with_values(params)["data"]
+        assert "type IN (1, 2)" in data_sql
+
+    def test_skip_null_clause_in_list_removed(self):
+        sql = "SELECT id FROM events WHERE SKIP_NULL_CLAUSE(type, 'in', :t)"
+        analyzer = SqlQueryAnalysis(sql)
+        params = {"t": []}
+        data_sql = analyzer.generate_sql_with_values(params)["data"]
+        assert "WHERE TRUE" in data_sql
+
+    def test_skip_null_clause_negate(self):
+        sql = "SELECT id FROM events WHERE SKIP_NULL_CLAUSE(status, 'eq', :st, true)"
+        analyzer = SqlQueryAnalysis(sql)
+        params = {"st": 'OK'}
+        data_sql = analyzer.generate_sql_with_values(params)["data"]
+        assert "NOT" in data_sql and "status" in data_sql
+
+    def test_skip_null_clause_variable_optional(self):
+        sql = "SELECT id FROM events WHERE SKIP_NULL_CLAUSE(status, 'eq', :st) AND type = :t"
+        analyzer = SqlQueryAnalysis(sql)
+        analyzer.parse_sql()
+        vars_ = analyzer.get_parsed_def().sql_variables
+        assert vars_[0].raw_name == "st" and vars_[0].required is False
+        assert vars_[1].raw_name == "t" and vars_[1].required is True
