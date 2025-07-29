@@ -105,7 +105,7 @@
   };
   const handleInputDataChange = (value: any) => {
     inputData.value = value;
-    emits('change', value);
+    emits('change', value === '' ?  null : value);
   };
   const handleUserChange = (value: any) => {
     user.value = value;
@@ -126,7 +126,7 @@
 
     const handlers = {
       input: () => {
-        const value = newVal || '';
+        const value = newVal === '' ?  null : newVal;
         if (!isDrillDown) inputData.value = value;
         else handleInputDataChange(value);
       },
@@ -169,8 +169,8 @@
 
   defineExpose<Exposes>({
     resetValue() {
-      inputData.value = '';
-      numberInputData.value = '';
+      inputData.value = null;
+      numberInputData.value = null;
       pickerRangeValue.value = '';
       pickerValue.value = '';
       user.value = '';
