@@ -68,15 +68,25 @@
           class="remove-btn"
           type="delete-fill"
           @click.stop="handleRemove" />
+        <audit-icon
+          v-if="!(localEventItem.drill_config.tool.version
+            >= (toolMaxVersionMap[localEventItem.drill_config.tool.uid] || 1))"
+          v-bk-tooltips="{
+            content: t('该工具已更新，请确认'),
+          }"
+          class="renew-tips"
+          type="info-fill" />
       </div>
       <!-- 字段下钻 -->
       <field-reference
         ref="fieldReferenceRef"
         v-model:showFieldReference="showFieldReference"
+        :all-tools-data="allToolsData"
         :new-tool-name="strategyName"
         :output-fields="outputFields"
-        @submit="handleFieldSubmit"
-        @update-all-tools-data="handleAllToolsData" />
+        :tag-data="tagData"
+        @open-tool="handleOpenTool"
+        @submit="handleFieldSubmit" />
     </template>
 
     <!-- 仅查看 -->
@@ -87,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
@@ -109,13 +119,20 @@
       display_name: string;
       description: string;
       target_field_type: string;
-    }>
+    }>;
+    allToolsData: Array<ToolDetailModel>;
+    tagData: Array<{
+      tag_id: string
+      tag_name: string;
+      tool_count: number;
+    }>;
   }
 
   interface Emits {
     (e: 'update:fieldValue', value: any): void;
     (e: 'select', value: string, config: StrategyFieldEvent['event_basic_field_configs'][0]): void;
     (e: 'add-custom-constant', value: string): void;
+    (e: 'openTool', value: ToolDetailModel): void;
   }
 
   const props = defineProps<Props>();
@@ -129,13 +146,17 @@
   const fieldMappingRef = ref();
   const fieldReferenceRef = ref();
   const showFieldReference = ref(false);
-  const allToolsData = ref<Array<ToolDetailModel>>([]);
 
   const iconMap = {
     data_search: 'sqlxiao',
     api: 'apixiao',
     bk_vision: 'bkvisonxiao',
   };
+
+  const toolMaxVersionMap = computed(() => props.allToolsData.reduce((res, item) => {
+    res[item.uid] = item.version;
+    return res;
+  }, {} as Record<string, number>));
 
   const handleFieldSelect = (value: string) => {
     emit('select', value, props.eventItem);
@@ -167,12 +188,13 @@
     };
   };
 
-  const handleAllToolsData = (data: Array<ToolDetailModel>) => {
-    allToolsData.value = data;
+  // 打开工具
+  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
+    emit('openTool', toolInfo);
   };
 
   const getToolNameAndType = (uid: string) => {
-    const tool = allToolsData.value.find(item => item.uid === uid);
+    const tool = props.allToolsData.find(item => item.uid === uid);
     return tool ? {
       name: tool.name,
       type: tool.tool_type,
@@ -230,7 +252,7 @@
 
     .remove-btn {
       position: absolute;
-      right: 8px;
+      right: 28px;
       z-index: 1;
       display: none;
       font-size: 12px;
@@ -240,6 +262,13 @@
       &:hover {
         color: #979ba5;
       }
+    }
+
+    .renew-tips {
+      position: absolute;
+      right: 8px;
+      font-size: 14px;
+      color: #3a84ff;
     }
   }
 }

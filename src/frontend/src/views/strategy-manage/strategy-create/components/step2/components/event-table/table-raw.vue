@@ -29,13 +29,16 @@
           :class="getCellClass(valueKey)">
           <field-cell
             ref="fieldCellRef"
+            :all-tools-data="allToolsData"
             :event-item="eventItem"
             :event-item-key="eventItemKey"
             :field-key="valueKey"
             :output-fields="outputFields"
             :select-options="localSelect"
             :strategy-name="strategyName"
+            :tag-data="tagData"
             @add-custom-constant="addCustomConstant"
+            @open-tool="handleOpenTool"
             @select="handleSelect"
             @update:field-value="updateFieldValue(eventItem, valueKey, $event)" />
         </div>
@@ -58,6 +61,7 @@
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+  import ToolDetailModel from '@model/tool/tool-detail';
 
   import FieldCell from './field-cell.vue';
 
@@ -72,10 +76,21 @@
       display_name: string;
       description: string;
       target_field_type: string;
-    }>
+    }>;
+    allToolsData: Array<ToolDetailModel>;
+    tagData: Array<{
+      tag_id: string
+      tag_name: string;
+      tool_count: number;
+    }>;
+  }
+
+  interface Emits {
+    (e: 'openTool', value: ToolDetailModel): void;
   }
 
   const props = defineProps<Props>();
+  const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
   const fieldCellRef = ref();
@@ -125,6 +140,11 @@
       remark: '',
       property: {},
     });
+  };
+
+  // 打开工具
+  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
+    emit('openTool', toolInfo);
   };
 
   watch(() => props.select, (data) => {

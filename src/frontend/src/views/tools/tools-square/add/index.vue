@@ -448,7 +448,7 @@
                                 :placeholder="t('请先配置sql')" />
                               <div
                                 v-else
-                                style=" display: flex;padding: 0 8px; cursor: pointer; align-items: center;"
+                                class="field-value-div"
                                 @click="() => handleClick(index, item.drill_config)">
                                 <template v-if="item.drill_config.tool.uid">
                                   <audit-icon
@@ -458,6 +458,18 @@
                                       getToolNameAndType(item.drill_config.tool.uid).type as keyof typeof iconMap
                                     ]" />
                                   {{ getToolNameAndType(item.drill_config.tool.uid).name }}
+                                  <audit-icon
+                                    class="remove-btn"
+                                    type="delete-fill"
+                                    @click.stop="handleRemove(index)" />
+                                  <audit-icon
+                                    v-if="!(item.drill_config.tool.version
+                                      >= (toolMaxVersionMap[item.drill_config.tool.uid] || 1))"
+                                    v-bk-tooltips="{
+                                      content: t('该工具已更新，请确认'),
+                                    }"
+                                    class="renew-tips"
+                                    type="info-fill" />
                                 </template>
                                 <span
                                   v-else
@@ -506,10 +518,12 @@
       <field-reference
         ref="fieldReferenceRef"
         v-model:showFieldReference="showFieldReference"
+        :all-tools-data="allToolsData"
         :new-tool-name="formData.name"
         :output-fields="formData.config.output_fields"
-        @submit="handleFieldSubmit"
-        @update-all-tools-data="handleAllToolsData" />
+        :tag-data="originalTagData"
+        @open-tool="handleOpenTool"
+        @submit="handleFieldSubmit" />
     </smart-action>
   </skeleton-loading>
   <dialog-vue
@@ -526,12 +540,22 @@
     v-if="isSuccessful"
     :is-edit-mode="isEditMode"
     :name="formData.name" />
+  <!-- 循环所有工具 -->
+  <div
+    v-for="item in allToolsData"
+    :key="item.uid">
+    <component
+      :is="DialogVue"
+      :ref="(el:any) => dialogRefs[item.uid] = el"
+      :tags-enums="originalTagData"
+      @open-field-down="openFieldDown" />
+  </div>
 </template>
 
 <script setup lang='ts'>
   import _ from 'lodash';
   import * as monaco from 'monaco-editor';
-  import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+  import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -556,6 +580,7 @@
   import Failed from './components/tool-status/failed.vue';
   import Successful from './components/tool-status/Successful.vue';
 
+  import ToolInfo from '@/domain/model/tool/tool-info';
   import useFullScreen from '@/hooks/use-full-screen';
   // import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
@@ -602,6 +627,23 @@
     };
   }
 
+  interface DrillDownItem {
+    raw_name: string;
+    display_name: string;
+    description: string;
+    drill_config: {
+      tool: {
+        uid: string;
+        version: number;
+      };
+      config: Array<{
+        source_field: string;
+        target_value_type: string;
+        target_value: string;
+      }>
+    };
+  }
+
   let editor: monaco.editor.IStandaloneCodeEditor;
   const searchTypeList = [{
     label: '简易模式',
@@ -629,6 +671,7 @@
   const fieldReferenceRef = ref();
   const dialogVueRef = ref();
   const requiredListRef = ref();
+  const dialogRefs = ref<Record<string, any>>({});
 
   const loading = ref(false);
   const showEditSql = ref(false);
@@ -640,6 +683,7 @@
   const isSuccessful = ref(false);
 
   const strategyTagMap = ref<Record<string, string>>({});
+  const toolMaxVersionMap = ref<Record<string, number>>({});
   const formData = ref<FormData>({
     name: '',
     tags: [],
@@ -673,7 +717,11 @@
   });
 
   const outputIndex = ref(-1);
-  const allToolsData = ref<Array<ToolDetailModel>>([]);
+  const originalTagData = ref<Array<{
+    tag_id: string
+    tag_name: string;
+    tool_count: number;
+  }>>([]);
 
   const frontendTypeList = ref<Array<{
     id: string;
@@ -729,6 +777,20 @@
     },
   });
 
+  // 获取所有工具
+  const {
+    data: allToolsData,
+    run: fetchAllTools,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      toolMaxVersionMap.value = data.reduce((res, item) => {
+        res[item.uid] = item.version;
+        return res;
+      }, {} as Record<string, number>);
+    },
+  });
+
   // 获取标签列表
   const {
     data: tagData,
@@ -737,6 +799,10 @@
     defaultValue: [],
     manual: true,
     onSuccess: (data) => {
+      // 字段下钻使用
+      originalTagData.value = data;
+      fetchAllTools();
+
       tagData.value = data.reduce((res, item) => {
         if (item.tag_id !== '-2') {
           res.push({
@@ -866,6 +932,38 @@
     }
   };
 
+  // 下钻打开
+  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
+    const { uid } = drillDownItem.drill_config.tool;
+    const toolItem = allToolsData.value.find(item => item.uid === uid);
+    if (!toolItem) {
+      return;
+    }
+
+    const toolInfo = new ToolInfo(toolItem as any);
+    if (dialogRefs.value[uid]) {
+      dialogRefs.value[uid].openDialog(toolInfo, drillDownItem, drillDownItemRowData);
+    }
+  };
+
+  // 打开工具
+  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
+    if (dialogRefs.value[toolInfo.uid]) {
+      dialogRefs.value[toolInfo.uid].openDialog(toolInfo);
+    }
+  };
+
+  // 删除值
+  const handleRemove = (index: number) => {
+    formData.value.config.output_fields[index] = {
+      ...formData.value.config.output_fields[index],
+      drill_config: {
+        tool: { uid: '', version: 1 },
+        config: [],
+      },
+    };
+  };
+
   // const handlePreview = () => {
   //   const tastQueue = [formRef.value.validate()];
   //   if (tableInputFormRef.value) {
@@ -899,10 +997,6 @@
 
   const handleFieldSubmit = (drillConfig: FormData['config']['output_fields'][0]['drill_config']) => {
     formData.value.config.output_fields[outputIndex.value].drill_config = drillConfig;
-  };
-
-  const handleAllToolsData = (data: Array<ToolDetailModel>) => {
-    allToolsData.value = data;
   };
 
   const getToolNameAndType = (uid: string) => {
@@ -1103,6 +1197,40 @@
       overflow: hidden;
       border-left: 1px solid #dcdee5;
       align-items: center;
+
+      .field-value-div {
+        display: flex;
+        padding: 0 8px;
+        cursor: pointer;
+        align-items: center;
+
+        &:hover {
+          .remove-btn {
+            display: block;
+          }
+        }
+
+        .remove-btn {
+          position: absolute;
+          right: 28px;
+          z-index: 1;
+          display: none;
+          font-size: 12px;
+          color: #c4c6cc;
+          transition: all .15s;
+
+          &:hover {
+            color: #979ba5;
+          }
+        }
+
+        .renew-tips {
+          position: absolute;
+          right: 8px;
+          font-size: 14px;
+          color: #3a84ff;
+        }
+      }
 
       .bk-form-item.is-error {
         .bk-input--text {

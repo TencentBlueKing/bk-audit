@@ -52,15 +52,28 @@
         <div class="rows-container">
           <table-row
             ref="tableRowRef"
+            :all-tools-data="allToolsData"
             :event-item-arr="item"
             :event-item-key="key"
             :output-fields="outputFields"
             :select="select"
             :strategy-name="strategyName"
-            :strategy-type="strategyType" />
+            :strategy-type="strategyType"
+            :tag-data="tagData"
+            @open-tool="handleOpenTool" />
         </div>
       </div>
     </template>
+  </div>
+  <!-- 循环所有工具 -->
+  <div
+    v-for="item in allToolsData"
+    :key="item.uid">
+    <component
+      :is="DialogVue"
+      :ref="(el:any) => dialogRefs[item.uid] = el"
+      :tags-enums="tagData"
+      @open-field-down="openFieldDown" />
   </div>
 </template>
 
@@ -70,13 +83,18 @@
   import { useRoute } from 'vue-router';
 
   import StrategyManageService from '@service/strategy-manage';
+  import ToolManageService from '@service/tool-manage';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
+  import ToolDetailModel from '@model/tool/tool-detail';
+
+  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
   import TableRow from './table-raw.vue';
 
+  import ToolInfo from '@/domain/model/tool/tool-info';
   import useRequest from '@/hooks/use-request';
 
   interface Exposes{
@@ -92,11 +110,29 @@
     strategyName: string
   }
 
+  interface DrillDownItem {
+    raw_name: string;
+    display_name: string;
+    description: string;
+    drill_config: {
+      tool: {
+        uid: string;
+        version: number;
+      };
+      config: Array<{
+        source_field: string;
+        target_value_type: string;
+        target_value: string;
+      }>
+    };
+  }
+
   const props = defineProps<Props>();
   const route = useRoute();
 
   const { t, locale } = useI18n();
   const tableRowRef = ref();
+  const dialogRefs = ref<Record<string, any>>({});
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
@@ -158,6 +194,46 @@
       : [];
     return basicFields.concat(dataFields, evidenceFields);
   });
+
+  // 获取所有工具
+  const {
+    data: allToolsData,
+    run: fetchAllTools,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+  });
+
+  // 获取标签列表
+  const {
+    data: tagData,
+  } = useRequest(ToolManageService.fetchToolTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: () => {
+      fetchAllTools();
+    },
+  });
+
+  // 下钻打开
+  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
+    const { uid } = drillDownItem.drill_config.tool;
+    const toolItem = allToolsData.value.find(item => item.uid === uid);
+    if (!toolItem) {
+      return;
+    }
+
+    const toolInfo = new ToolInfo(toolItem as any);
+    if (dialogRefs.value[uid]) {
+      dialogRefs.value[uid].openDialog(toolInfo, drillDownItem, drillDownItemRowData);
+    }
+  };
+
+  // 打开工具
+  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
+    if (dialogRefs.value[toolInfo.uid]) {
+      dialogRefs.value[toolInfo.uid].openDialog(toolInfo);
+    }
+  };
 
   const getHeaderClass = (index: number) => {
     const classes = ['group'];
