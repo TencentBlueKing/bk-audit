@@ -47,7 +47,7 @@
           <bk-cascader
             v-model="SelectTool"
             filterable
-            :list="tagList"
+            :list="toolCascaderList"
             :show-complete-name="false"
             style="flex: 1;"
             trigger="hover"
@@ -82,8 +82,10 @@
           </bk-cascader>
           <bk-button
             class="ml16"
+            :disabled="SelectTool.length === 0"
             text
-            theme="primary">
+            theme="primary"
+            @click="handleOpenTool">
             {{ t('去使用') }}
           </bk-button>
         </div>
@@ -152,8 +154,8 @@
                 style="border: none;">
                 <bk-input v-model="item.target_value" />
               </div>
-              <div style="margin-left: 10px; color: #979ba5;">
-                {{ t('的值作为输入') }}
+              <div style=" width: 75px;margin-left: 10px; color: #979ba5;">
+                <span v-if="item.target_value_type==='field'"> {{ t('的值作为输入') }}</span>
               </div>
             </div>
           </div>
@@ -200,15 +202,21 @@
 
   interface Emits {
     (e: 'submit', data: FormData): void;
-    (e: 'updateAllToolsData', allData: Array<ToolDetailModel>): void;
+    (e: 'openTool', value: ToolDetailModel): void;
   }
 
   interface Props {
     outputFields: Array<Record<string, any>>;
     newToolName: string;
+    allToolsData: Array<ToolDetailModel>;
+    tagData: Array<{
+      tag_id: string
+      tag_name: string;
+      tool_count: number;
+    }>;
   }
 
-  interface TagItem {
+  interface ToolCascaderItem {
     id: string;
     name: string;
     children: Array<{
@@ -249,7 +257,7 @@
     name: t('使用默认值'),
   }]);
 
-  const tagList = ref<Array<TagItem>>([]);
+  const toolCascaderList = ref<Array<ToolCascaderItem>>([]);
   const SelectTool = ref<Array<string>>([]);
 
   const formData = ref<FormData>({
@@ -266,46 +274,28 @@
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
     onSuccess: () => {
-      formData.value.config = toolsDetailData.value.config.input_variable.map(item => ({
-        source_field: item.raw_name,
-        target_value_type: 'field',
-        target_value: '',
-      }));
-    },
-  });
+      if (!formData.value.config) {
+        formData.value.config = [];
+      }
 
-  // 获取标签列表
-  const {
-    data: tagData,
-  } = useRequest(ToolManageService.fetchToolTags, {
-    defaultValue: [],
-    manual: true,
-    onSuccess: () => {
-      fetchAllTools();
-    },
-  });
+      // 获取当前配置中已存在的 source_field 集合
+      const existingFields = new Set(formData.value.config.map(item => item.source_field));
 
-  // 获取所有工具
-  const {
-    data: allToolsData,
-    run: fetchAllTools,
-  } = useRequest(ToolManageService.fetchAllTools, {
-    defaultValue: [],
-    onSuccess: () => {
-      emit('updateAllToolsData', allToolsData.value);
-      tagList.value  = tagData.value
-        .map(item => ({
-          id: item.tag_id,
-          name: item.tag_name,
-          children: item.tag_id === '-2'
-            ? allToolsData.value
-              .filter(tool => !tool.tags || tool.tags.length === 0)
-              .map(({ uid, version, name }) => ({ id: uid, version, name }))
-            : allToolsData.value
-              .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
-              .map(({ uid, version, name }) => ({ id: uid, version, name })),
-        }))
-        .filter(item => item.children.length > 0);
+      // 遍历工具详情数据中的输入变量
+      toolsDetailData.value.config.input_variable.forEach((item) => {
+        // 如果当前字段尚未存在于配置中，则添加新配置项
+        if (!existingFields.has(item.raw_name)) {
+          formData.value.config.push({
+            source_field: item.raw_name,
+            target_value_type: 'field',
+            target_value: '',  // 初始化为空值
+          });
+        }
+      });
+      // 更新
+      if (toolsDetailData.value.version !== formData.value.tool.version) {
+        formData.value.tool.version = toolsDetailData.value.version;
+      }
     },
   });
 
@@ -316,7 +306,7 @@
   };
 
   const handleSelectTool = (value: Array<string>) => {
-    const tool = allToolsData.value.find(item => item.uid === value[1]);
+    const tool = props.allToolsData.find(item => item.uid === value[1]);
     formData.value.config = [];
     if (tool) {
       currenToolType.value = tool.tool_type;
@@ -333,7 +323,14 @@
   };
 
   const handleRefresh = () => {
-    fetchAllTools();
+    // fetchAllTools();
+  };
+
+  const handleOpenTool = () => {
+    const tool = props.allToolsData.find(item => item.uid ===  formData.value.tool.uid);
+    if (tool) {
+      emit('openTool', tool);
+    }
   };
 
   const getDictName = (value: string) => {
@@ -380,11 +377,14 @@
 
   const setFormData = (data: FormData) => {
     formData.value = _.cloneDeep(data);
-    // 根据formData.value.uid.uid，在tagList中反查对应的级联数据id: [xxx, uid], xxx为父级id
-    const tagItem = tagList.value.find(item => item.children.some(child => child.id === data.tool.uid));
+    // 根据formData.value.uid.uid，在toolCascaderList中反查对应的级联数据id: [xxx, uid], xxx为父级id
+    const tagItem = toolCascaderList.value.find(item => item.children.some(child => child.id === data.tool.uid));
     if (tagItem) {
       SelectTool.value = [tagItem.id, data.tool.uid];
     }
+    fetchToolsDetail({
+      uid: formData.value.tool.uid,
+    });
   };
 
   const initLocalOutputFields = (val: Array<Record<string, any>>) => {
@@ -420,6 +420,22 @@
     });
   }, {
     deep: true,
+  });
+
+  watch(() => props.allToolsData, (data) => {
+    toolCascaderList.value  = props.tagData
+      .map(item => ({
+        id: item.tag_id,
+        name: item.tag_name,
+        children: item.tag_id === '-2'
+          ? data
+            .filter(tool => !tool.tags || tool.tags.length === 0)
+            .map(({ uid, version, name }) => ({ id: uid, version, name }))
+          : data
+            .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
+            .map(({ uid, version, name }) => ({ id: uid, version, name })),
+      }))
+      .filter(item => item.children.length > 0);
   });
 
   defineExpose({
