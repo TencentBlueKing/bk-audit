@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
+import numbers
 from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, Union
 
 from arrow import ParserError
@@ -148,7 +149,8 @@ class VariableValueParser:
         """
         格式化时间选择器
         """
-
+        if isinstance(value, numbers.Number):
+            return int(value)
         try:
             return int(parse_datetime(value).timestamp()) * 1000
         except (ParserError, TypeError, ValueError):

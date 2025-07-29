@@ -338,7 +338,7 @@ class TestSqlDataSearchExecutor(TestCase):
         ts_start = int(start.timestamp()) * 1000
         ts_end = int(end.timestamp()) * 1000
         config = SQLDataSearchConfig(
-            sql="SELECT a FROM table WHERE a = :a",
+            sql="SELECT a FROM table WHERE time_range(x, :a,)",
             referenced_tables=[{"table_name": "table"}],
             input_variable=[
                 SQLDataSearchInputVariable(
@@ -353,21 +353,18 @@ class TestSqlDataSearchExecutor(TestCase):
         )
         executor = SqlDataSearchExecutor(source=config, analyzer_cls=self.analyzer_cls)
         params = DataSearchToolExecuteParams(
-            tool_variables=[
-                {"raw_name": "a", "value": [start.format('YYYY-MM-DD HH:mm:ss'), end.format('YYYY-MM-DD HH:mm:ss')]}
-            ],
+            tool_variables=[{"raw_name": "a", "value": [ts_start, ts_end]}],
             page=1,
             page_size=10,
         )
         result = executor.execute(params).model_dump()
         expected = {
             "count_sql": (
-                "SELECT COUNT(*) AS count FROM "
-                f"(SELECT a FROM table WHERE a BETWEEN {ts_start} AND {ts_end}) AS _sub"
+                "SELECT COUNT(*) AS count FROM " f"(SELECT a FROM table WHERE x >= {ts_start} AND x < {ts_end}) AS _sub"
             ),
             "num_pages": 10,
             "page": 1,
-            "query_sql": f"SELECT a FROM table WHERE a BETWEEN {ts_start} AND {ts_end} LIMIT 10",
+            "query_sql": f"SELECT a FROM table WHERE x >= {ts_start} AND x < {ts_end} LIMIT 10",
             "results": [{"field1": "value1"}, {"field2": "value2"}],
             "total": 2,
         }
