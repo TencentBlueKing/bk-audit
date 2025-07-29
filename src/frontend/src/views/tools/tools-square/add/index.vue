@@ -773,24 +773,46 @@
     if (!sqlData) return;
     formData.value.config.sql = sqlData.original_sql;
     formData.value.config.referenced_tables = sqlData.referenced_tables;
-    formData.value.config.input_variable = sqlData.sql_variables.map(item => ({
-      ...item,
-      field_category: '',
-    }));
-    formData.value.config.output_fields = sqlData.result_fields.map(item => ({
-      ...item,
-      description: '',
-      drill_config: {
-        tool: {
-          uid: '',
-          version: 1,
+
+    // 更新 input_variable
+    const oldInputMap = new Map(formData.value.config.input_variable.map(item => [item.raw_name, item]));
+    formData.value.config.input_variable = sqlData.sql_variables.map((newItem) => {
+      const existing = oldInputMap.get(newItem.raw_name);
+      return {
+        ...newItem,
+        required: existing?.required || newItem.required,
+        field_category: existing?.field_category || '',
+      };
+    });
+
+    // 更新 output_fields
+    const oldOutputMap = new Map(formData.value.config.output_fields.map(item => [item.raw_name, item]));
+    formData.value.config.output_fields = sqlData.result_fields.map((newItem) => {
+      const existing = oldOutputMap.get(newItem.raw_name);
+
+      // 如果已有记录，保留用户填写的额外字段
+      if (existing) {
+        return {
+          ...newItem,
+          description: existing.description,   // 保留已有描述
+          drill_config: existing.drill_config,  // 保留已有钻取配置
+        };
+      }
+      // 新记录则初始化额外字段
+      return {
+        ...newItem,
+        description: '',
+        drill_config: {
+          tool: { uid: '', version: 1 },
+          config: [],
         },
-        config: [],
-      },
-    }));
+      };
+    });
 
     defineTheme();
-    editor.setValue(sqlData.original_sql);
+    nextTick(() => {
+      editor.setValue(sqlData.original_sql);
+    });
   };
 
   const handleApply = () => {
