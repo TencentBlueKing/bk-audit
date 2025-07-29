@@ -28,6 +28,7 @@ from apps.notice.constants import (
 )
 from apps.notice.exceptions import BuilderInitError
 from apps.notice.models import NoticeButton, NoticeContent, NoticeContentConfig
+from core.sanitiers import HtmlEscapeSanitizer
 from core.utils.time import mstimestamp_to_date_string
 from services.web.query.models import LogExportTask
 
@@ -53,6 +54,7 @@ class LogExportBuilder(Builder):
                 key="search_params",
                 name=str(gettext("检索条件")),
                 value=json.dumps(self.task.query_params) if self.task.query_params else "",
+                sanitizer=HtmlEscapeSanitizer(),
             ),
             NoticeContentConfig(
                 key="security_statement",

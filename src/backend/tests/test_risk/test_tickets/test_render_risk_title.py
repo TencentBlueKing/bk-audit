@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from services.web.risk.handlers.risk import RiskHandler, RiskTitleUndefined
+from services.web.risk.handlers.risk import RiskHandler, VariableUndefined
 from services.web.strategy_v2.models import Strategy
 
 
@@ -43,7 +43,7 @@ class TestListRenderingInRiskTitle(TestCase):
             "event_evidence": json.dumps([{"nested_list": [[1], [2, 3]]}]),
         }
         result = RiskHandler.render_risk_title(test_data)  # noqa: F841
-        self.assertEqual(result, "Risk: ['a', 'b'], ['c'] | [1], [2, 3]")
+        self.assertEqual(result, "Risk: [&#39;a&#39;, &#39;b&#39;], [&#39;c&#39;] | [1], [2, 3]")
 
     def test_mixed_data_types(self):
         """测试混合数据类型列表渲染（自动转换为字符串拼接）"""
@@ -69,7 +69,7 @@ class TestListRenderingInRiskTitle(TestCase):
         result = RiskHandler.render_risk_title(test_data)  # noqa: F841
 
         # 验证 Jinja2Renderer 的初始化参数是否包含 RiskTitleUndefined
-        mock_renderer_class.assert_called_once_with(undefined=RiskTitleUndefined)
+        mock_renderer_class.assert_called_once_with(undefined=VariableUndefined, autoescape=True)
         mock_renderer_instance.jinja_render.assert_called_once_with(
             self.strategy.risk_title, {"event_data": {"numbers": "10, 20, 30"}, "event_evidence": {}, "strategy_id": 1}
         )

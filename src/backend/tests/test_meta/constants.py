@@ -559,7 +559,7 @@ GLOBAL_CHOICES = {
 SYSTEM_DIAGNOSIS_PUSH_TEMPLATE = """{
         "title": "【BKAudit】{{ system_name }}系统审计巡检报告",
         "status": "push",
-        "recipient": {{ recipient|tojson|safe }},
+        "recipient": {{ recipient|tojson }},
         "wechat_receivers": [],
         "cycle_type": "period",
         "crontab": "0 8 * * *",

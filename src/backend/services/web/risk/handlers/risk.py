@@ -28,7 +28,6 @@ from django.conf import settings
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.translation import gettext
-from jinja2 import UndefinedError
 from rest_framework.settings import api_settings
 
 from apps.meta.models import GlobalMetaConfig, Tag
@@ -36,7 +35,7 @@ from apps.meta.utils.format import preprocess_data
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
-from core.render import Jinja2Renderer
+from core.render import Jinja2Renderer, VariableUndefined
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
     EVENT_TYPE_SPLIT_REGEX,
@@ -47,7 +46,6 @@ from services.web.risk.constants import (
 from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
 from services.web.risk.parser import RiskNoticeParser
-from services.web.risk.render import RiskTitleUndefined
 from services.web.risk.serializers import CreateRiskSerializer
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -129,11 +127,12 @@ class RiskHandler:
         processed_params = preprocess_data(create_params)
 
         try:
-            risk_title = Jinja2Renderer(undefined=RiskTitleUndefined).jinja_render(
-                strategy.risk_title, processed_params  # 使用预处理后的参数
+            risk_title = Jinja2Renderer(undefined=VariableUndefined, autoescape=True).jinja_render(
+                strategy.risk_title,
+                processed_params,  # 使用预处理后的参数
             )
             return risk_title
-        except UndefinedError as err:
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception(
                 "[RenderRiskTitleFailed] risk_title: %s; risk_content: %s; err: %s",
                 strategy.risk_title,
