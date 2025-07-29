@@ -1,17 +1,51 @@
 # -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+"""
 
-import json
-import re
 from typing import Dict, List, Union
 
 from django.utils import translation
+from django.utils.translation import gettext
+from jinja2 import Undefined
 from jinja2.sandbox import SandboxedEnvironment
 
 
-def jinja2_environment(*args, **kwargs) -> SandboxedEnvironment:
-    """创建jinja2的环境执行环境 ."""
+class VariableUndefined(Undefined):
+    def __str__(self) -> str:
+        """
+        未定义字段返回指定字符串
+        """
+
+        return gettext("(未获取到变量值:%s)") % self._undefined_name
+
+
+def jinja2_environment(allow_safe: bool = False, *args, **kwargs) -> SandboxedEnvironment:
+    """
+    创建一个Jinja2沙箱环境
+    :param allow_safe: 是否允许使用 |safe 过滤器, 关闭后强制使用会抛出 TemplateAssertionError
+    """
+
     env = SandboxedEnvironment(extensions=["jinja2.ext.i18n"], *args, **kwargs)
     env.install_gettext_translations(translation, newstyle=True)
+
+    # 从过滤器列表中移除 safe，彻底禁止其使用
+    if not allow_safe and 'safe' in env.filters:
+        del env.filters['safe']
+
     return env
 
 
@@ -27,7 +61,7 @@ class Jinja2Renderer:
         """
         只支持json和re函数
         """
-        return self.env.from_string(template_value).render({"json": json, "re": re, **context})
+        return self.env.from_string(template_value).render(context)
 
     def jinja_render(self, template_value: Union[str, dict, list], context: dict) -> Union[str, Dict, List]:
         """使用jinja渲染对象 ."""

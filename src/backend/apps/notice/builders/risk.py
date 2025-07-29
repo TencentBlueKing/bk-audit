@@ -24,9 +24,13 @@ from rest_framework.settings import api_settings
 from apps.meta.utils.saas import get_saas_url
 from apps.notice.builders.base import BUILD_RESPONSE_TYPE, Builder
 from apps.notice.models import NoticeButton, NoticeContent, NoticeContentConfig
+from core.sanitiers import HtmlEscapeSanitizer
 
 try:
-    from services.web.risk.constants import EventMappingFields
+    from services.web.risk.constants import (
+        LIST_RISK_FIELD_MAX_LENGTH,
+        EventMappingFields,
+    )
     from services.web.risk.models import Risk
     from services.web.strategy_v2.models import Strategy
 except ImportError:
@@ -86,7 +90,8 @@ class RiskBuilder(Builder):
                 NoticeContentConfig(
                     key=EventMappingFields.EVENT_CONTENT.field_name,
                     name=gettext("风险描述"),
-                    value=self.risk.event_content or "- -",
+                    value=self.risk.event_content[:LIST_RISK_FIELD_MAX_LENGTH] or "- -",
+                    sanitizer=HtmlEscapeSanitizer(),
                 ),
                 NoticeContentConfig(
                     key="strategy",

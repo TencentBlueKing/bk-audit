@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import List, Union
+from typing import List, Optional, Union
 
 from bk_audit.log.models import AuditInstance
 from bk_resource.utils.common_utils import get_md5
@@ -25,6 +25,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.notice.constants import RelateType
 from core.models import OperateRecordModel, SoftDeleteModel
+from core.sanitiers import BaseSanitizer
 
 
 class NoticeContentConfig:
@@ -32,10 +33,22 @@ class NoticeContentConfig:
     通知内容配置
     """
 
-    def __init__(self, key: str, name: str, value: str):
+    def __init__(self, key: str, name: str, value: str, sanitizer: Optional[BaseSanitizer] = None):
+        """
+        初始化
+        :param key: 配置键
+        :param key: 渲染值
+        :param name: 显示名称
+        :param sanitizer: 渲染值过滤器
+        """
         self.key = key
         self.display_name = name
-        self.value = value
+        self._value = value
+        self.sanitizer = sanitizer
+
+    @property
+    def value(self):
+        return self.sanitizer.sanitize(self._value) if self.sanitizer else self._value
 
 
 class NoticeContent:
