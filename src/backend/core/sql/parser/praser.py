@@ -1,4 +1,5 @@
 import numbers
+from datetime import datetime
 from itertools import chain
 from typing import Any, List, Optional, Set
 
@@ -13,6 +14,17 @@ from core.sql.parser.model import (
     SelectField,
     SqlVariable,
 )
+
+_SKIP_NULL_OPERATORS = {
+    "eq": exp.EQ,
+    "exact": exp.EQ,
+    "gt": exp.GT,
+    "gte": exp.GTE,
+    "lt": exp.LT,
+    "lte": exp.LTE,
+    "like": exp.Like,
+    "in": exp.In,
+}
 
 
 class SqlQueryAnalysis:
@@ -75,6 +87,9 @@ class SqlQueryAnalysis:
                 continue
             self.referenced_tables.append(Table(table_name=table_name, storage=storage))
 
+        # 出现在 SKIP_NULL_CLAUSE 中的变量默认视为非必填
+        skip_null_var_names = self.get_skip_null_var_names(self._parsed_expression)
+
         # 2. 提取SQL命名变量 (Extract SQL named variables)
         extracted_var_raw_names: Set[str] = set()
         for var_node in chain(
@@ -84,7 +99,9 @@ class SqlQueryAnalysis:
             if raw_name == "?":
                 raise SQLParseError(message="不支持匿名变量")
             elif raw_name not in extracted_var_raw_names:
-                self.sql_variables.append(SqlVariable(raw_name=raw_name, display_name=raw_name))
+                self.sql_variables.append(
+                    SqlVariable(raw_name=raw_name, display_name=raw_name, required=raw_name not in skip_null_var_names)
+                )
                 extracted_var_raw_names.add(raw_name)
 
         # 3. 提取查询结果字段 (Extract query result fields - SelectField)
@@ -101,24 +118,29 @@ class SqlQueryAnalysis:
 
         if select_to_inspect:
             for projection in select_to_inspect.expressions:
-                display_name = projection.alias_or_name
-                if not display_name:
-                    raise SQLParseError(message=f"查询结果字段 {projection} 缺少别名")
-                if display_name == "*":
+                raw_name = projection.alias_or_name
+                if not raw_name:
+                    raise SQLParseError(message=f"查询结果字段 {projection} 缺少名称")
+                if raw_name == "*":
                     raise SQLParseError(message="不支持查询结果字段为 *")
-
-                raw_name = display_name
-                core_expression = projection.this if isinstance(projection, exp.Alias) else projection
-
-                if isinstance(core_expression, exp.Column):
-                    raw_name = core_expression.name
 
                 self.result_fields.append(
                     SelectField(
-                        display_name=display_name,
+                        display_name=raw_name,
                         raw_name=raw_name,
                     )
                 )
+
+    def get_skip_null_var_names(self, parsed_expression: exp.Expression):
+        """获取 SKIP_NULL_CLAUSE 中的变量名"""
+        skip_null_var_names: Set[str] = set()
+        for func in parsed_expression.find_all(exp.Func):
+            if func.name.upper() == "SKIP_NULL_CLAUSE" and len(func.expressions) >= 3:
+                value_expr = func.expressions[2]
+                for var_node in chain(value_expr.find_all(exp.Var), value_expr.find_all(exp.Placeholder)):
+                    if var_node.name != "?":
+                        skip_null_var_names.add(var_node.name)
+        return skip_null_var_names
 
     def _create_sqlglot_literal(self, value: Any) -> exp.Expression:
         """
@@ -147,28 +169,8 @@ class SqlQueryAnalysis:
             return exp.Null()
         raise TypeError(f"不支持将 Python 类型 '{type(value).__name__}' 自动转换为 SQL 字面量。值为: {value!r}")
 
-    def _tuple_eq_to_between_visitor(self, node: exp.Expression, *_):
-        """
-        把 `col = (lo, hi)` 且该 Tuple 带 is_range 标记的改写成 BETWEEN。
-        """
-        if isinstance(node, exp.EQ):
-            left, right = node.left, node.right
-
-            # 形如 `col = (lo, hi)`
-            if isinstance(right, exp.Tuple) and right.args.get("is_range") and len(right.expressions) == 2:
-                lo, hi = right.expressions
-                return exp.Between(this=left, low=lo, high=hi)
-
-            # 万一写成 `(lo, hi) = col`
-            if isinstance(left, exp.Tuple) and left.args.get("is_range") and len(left.expressions) == 2:
-                lo, hi = left.expressions
-                return exp.Between(this=right, low=lo, high=hi)
-
-        # 其他节点不变
-        return node
-
     def _parameter_replacer_visitor(
-        self, node: exp.Expression, named_params_dict: dict, dialect_str: Optional[str]
+        self, node: exp.Expression, named_params_dict: dict, dialect_str: Optional[str], skip_null_var_names: Set[str]
     ) -> exp.Expression:
         """
         用于sqlglot的transform方法的访问者函数。
@@ -180,8 +182,85 @@ class SqlQueryAnalysis:
                 raise SQLParseError("不支持匿名变量")
             if param_key in named_params_dict:
                 return self._create_sqlglot_literal(named_params_dict[param_key])
+            elif param_key in skip_null_var_names:
+                return self._create_sqlglot_literal(None)
             raise SQLParseError(f"参数 '{param_key}' 的值未在 params 字典中提供.")
         return node
+
+    def _custom_function_visitor(
+        self, node: exp.Expression, named_params_dict: dict, dialect_str: Optional[str]
+    ) -> exp.Expression:
+        """处理自定义函数，如 TIME_RANGE 和 SKIP_NULL_CLAUSE"""
+        if isinstance(node, exp.Func):
+            func_name = node.name.upper()
+            if func_name == "TIME_RANGE":
+                return self._replace_time_range(node)
+            if func_name == "SKIP_NULL_CLAUSE":
+                return self._replace_skip_null_clause(node)
+        return node
+
+    def _replace_time_range(self, node: exp.Func) -> exp.Expression:
+        """将 TIME_RANGE 函数替换为实际的时间范围比较语句"""
+        field, range_data, *extra = node.expressions
+        if not (isinstance(range_data, exp.Tuple) and range_data.args.get('is_range', False)):
+            raise SQLParseError("TIME_RANGE 函数的第二个参数类型必须是范围数组")
+        fmt = None
+        if extra and isinstance(extra[0], exp.Literal):
+            fmt = extra[0].this
+
+        start_val, end_val = range_data.expressions[0].this, range_data.expressions[1].this
+        if fmt:
+            if fmt == 'Timestamp(s)':  # 秒级时间戳
+                start_val = int(start_val) // 1000
+                end_val = int(end_val) // 1000
+            elif fmt == 'Timestamp(ms)':  # 毫秒级时间戳(保持原样)
+                start_val = int(start_val)
+                end_val = int(end_val)
+            elif fmt == 'Timestamp(us)':  # 微秒级时间戳
+                start_val = int(start_val) * 1000
+                end_val = int(end_val) * 1000
+            else:  # 其他格式按原样处理
+                start_val = datetime.fromtimestamp(int(start_val) / 1000).strftime(fmt)
+                end_val = datetime.fromtimestamp(int(end_val) / 1000).strftime(fmt)
+        else:
+            start_val = int(start_val)
+            end_val = int(end_val)
+        low = self._create_sqlglot_literal(start_val)
+        high = self._create_sqlglot_literal(end_val)
+        return exp.And(
+            this=exp.GTE(this=field.copy(), expression=low),
+            expression=exp.LT(this=field.copy(), expression=high),
+        )
+
+    def _replace_skip_null_clause(self, node: exp.Func) -> exp.Expression:
+        """将 SKIP_NULL_CLAUSE 函数替换为实际的条件语句"""
+        if len(node.expressions) < 3:
+            raise SQLParseError("SKIP_NULL_CLAUSE 参数不足")
+
+        field_expr, op_expr, value_expr, *extra = node.expressions
+
+        if isinstance(value_expr, exp.Null) or (isinstance(value_expr, exp.Tuple) and not value_expr.expressions):
+            return exp.true()
+
+        invert = False
+        if extra:
+            flag_expr = extra[0]
+            if isinstance(flag_expr, exp.Boolean):
+                invert = flag_expr.this
+
+        op_name = op_expr.this if isinstance(op_expr, exp.Literal) else op_expr.name
+        op_name = op_name.lower()
+
+        op_cls = _SKIP_NULL_OPERATORS.get(op_name)
+        if op_cls is None:
+            raise SQLParseError(f"不支持的操作符: {op_name}")
+        elif op_cls is exp.In:
+            values = value_expr.expressions if isinstance(value_expr, exp.Tuple) else [value_expr]
+            base_expr = op_cls(this=field_expr, expressions=values)
+        else:
+            base_expr = op_cls(this=field_expr, expression=value_expr)
+
+        return exp.Not(this=base_expr) if invert else base_expr
 
     def generate_sql_with_values(
         self,
@@ -205,8 +284,12 @@ class SqlQueryAnalysis:
         except sqlglot.errors.ParseError as e:
             raise SQLParseError(f"SQL 模板解析失败 (SQL template parsing failed): {target_sql} - {e}") from e
 
-        transformed_tree = parsed_tree.transform(self._parameter_replacer_visitor, params, target_dialect, copy=True)
-        transformed_tree = transformed_tree.transform(self._tuple_eq_to_between_visitor, copy=True)
+        skip_null_var_names = self.get_skip_null_var_names(parsed_tree)
+
+        transformed_tree = parsed_tree.transform(
+            self._parameter_replacer_visitor, params, target_dialect, skip_null_var_names, copy=True
+        )
+        transformed_tree = transformed_tree.transform(self._custom_function_visitor, params, target_dialect, copy=True)
 
         count_sql = None
         if with_count:
