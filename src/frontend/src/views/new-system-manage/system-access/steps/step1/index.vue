@@ -319,7 +319,7 @@
         {{ t('接入系统需要通过「权限模型」来描述自身系统下的资源和操作，并定义他们之间的关系。后续接入系统在审计中心的操作日志上传将依赖权限模型的定义。') }}
         <a
           class="link-icon"
-          href=""
+          :href="hrefLink?.third_doc_url?.permission_model_iwiki_url"
           target="_blank">
           <audit-icon
             svg
@@ -392,7 +392,7 @@
   const route = useRoute();
   const router = useRouter();
   const { t } = useI18n();
-
+  const hrefLink = JSON.parse(sessionStorage.getItem('BK_AUDIT_CONFIG') || '{}');
   const formData = ref<FormData>({
     name: '',
     instance_id: '',
