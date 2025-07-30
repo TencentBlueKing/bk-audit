@@ -216,3 +216,11 @@ def unique_id():
 
 def get_value_by_request(request, key: str):
     return request.query_params.get(key, request.data.get(key))
+
+
+def compare_dict_specific_keys(d1: dict, d2: dict, keys: list):
+    """
+    使用 all() 和生成器表达式比较字典中的指定键值
+    """
+
+    return all(d1.get(key) == d2.get(key) for key in keys)

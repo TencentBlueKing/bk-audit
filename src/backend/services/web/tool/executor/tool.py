@@ -247,16 +247,21 @@ class SqlDataSearchExecutor(
         渲染变量
         """
 
-        variable_values_for_rendering = {tv.raw_name: tv.value for tv in params.tool_variables}
+        origin_variable_values = {tv.raw_name: tv.value for tv in params.tool_variables}
+        rendered_variable_values = {}
         for var in self.config.input_variable:
-            if var.raw_name not in variable_values_for_rendering:
-                if not var.required:
-                    # 非必填变量
-                    continue
+            origin_value = origin_variable_values.get(var.raw_name, None)
+            # 变量值存在进行渲染
+            if origin_value is not None:
+                rendered_value = self.render_value(var, origin_value)
+            # 变量值不存在 or 为空校验是否必填
+            elif var.required:
                 raise InputVariableMissingError(var.display_name)
-            value = self.render_value(var, variable_values_for_rendering[var.raw_name])
-            variable_values_for_rendering[var.raw_name] = value
-        return variable_values_for_rendering
+            # 变量值非必填且不存在默认给 None
+            else:
+                rendered_value = None
+            rendered_variable_values[var.raw_name] = rendered_value
+        return rendered_variable_values
 
     def _execute(self, params: DataSearchToolExecuteParams):
         """
