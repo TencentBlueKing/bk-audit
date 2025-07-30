@@ -145,6 +145,7 @@ class ListTool(ToolBase):
         keyword = validated_request_data.get("keyword", "").strip()
         my_created = validated_request_data["my_created"]
         recent_used = validated_request_data["recent_used"]
+        recent_tool_uids = []
 
         current_user = get_request_username()
 
