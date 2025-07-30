@@ -35,7 +35,6 @@ BKMONITOR_AGG_INTERVAL_MIN = 60  # s
 HAS_UPDATE_TAG_ID = "-1"
 HAS_UPDATE_TAG_NAME = gettext_lazy("Upgradable")
 
-
 # 本地更新字段，这些字段不会传递给后端策略，不会导致策略输出变化
 LOCAL_UPDATE_FIELDS = [
     "strategy_name",
@@ -50,6 +49,15 @@ LOCAL_UPDATE_FIELDS = [
     "event_data_field_configs",
     "event_evidence_field_configs",
 ]
+
+# 事件基本配置字段
+EVENT_BASIC_CONFIG_FIELD = "event_basic_field_configs"
+
+# 事件基本配置排序字段
+EVENT_BASIC_CONFIG_SORT_FIELD = "field_name"
+
+# 事件基本配置字段和远程服务相关字段，这些字段变更会导致策略输出变化
+EVENT_BASIC_CONFIG_REMOTE_FIELDS = ["map_config"]
 
 # 策略可用的调度时间依赖于事件的查询周期
 STRATEGY_SCHEDULE_TIME = max(1, RISK_EVENTS_SYNC_TIME - 1)  # day
