@@ -212,18 +212,21 @@
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item.uid] = el"
       :tags-enums="tagsEnums"
+      @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
 </template>
 
 <script setup lang='tsx'>
-  import { ref, watch } from 'vue';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
-  import { useRouter } from 'vue-router';
+  import { useRoute, useRouter } from 'vue-router';
 
   import ToolManageService from '@service/tool-manage';
 
   import ToolInfo from '@model/tool/tool-info';
+
+  import useUrlSearch from '@hooks/use-url-search';
 
   import { formatDate } from '@utils/assist/timestamp-conversion';
 
@@ -271,6 +274,7 @@
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
+  const route = useRoute();
   const searchValue = ref<string>('');
   const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
@@ -289,7 +293,10 @@
     'margin-top': '10px',
     height: 'calc(100vh - 300px)',
   };
-
+  const urlToolsIds = ref<string[]>([]);
+  const {
+    appendSearchParams,
+  } = useUrlSearch();
   // 工具列表
   const {
     run: fetchToolsList,
@@ -307,6 +314,33 @@
   } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
     manual: true,
+    onSuccess: () => {
+      if (route.query.tool_id) {
+        urlToolsIds.value = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
+        if (urlToolsIds.value.length > 0) {
+          urlToolsIds.value.forEach((item: string) => {
+            const tool = allToolsData.value.find(toolItem => toolItem.uid === item);
+            if (tool) {
+              nextTick(() => {
+                if (dialogRefs.value[tool.uid]) {
+                  dialogRefs.value[tool.uid].openDialog(tool);
+                  setTimeout(() => {
+                    const modals = document.getElementsByClassName('bk-modal-wrapper');
+                    Array.from(modals).reverse()
+                      .forEach((modal, index) => {
+                        const htmlModal = modal as HTMLElement;
+                        if (index > 0 && !htmlModal.style.transform) {
+                          htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+                        }
+                      });
+                  }, 10);
+                }
+              });
+            }
+          });
+        }
+      }
+    },
   });
 
   // 删除
@@ -492,12 +526,26 @@
 
   // 打开工具
   const handleClick = async (toolInfo: ToolInfo) => {
+    urlToolsIds.value.push(toolInfo.uid);
+    // 在游览器地址增加参数单不刷新页面
+    appendSearchParams({
+      tool_id: urlToolsIds.value.join(','),
+    });
+
     handleCancel(toolInfo.uid);
     if (dialogRefs.value[toolInfo.uid]) {
       dialogRefs.value[toolInfo.uid].openDialog(toolInfo);
     }
   };
-
+  // 关闭弹窗
+  const handleClose = (ToolInfo: ToolInfo | undefined) => {
+    if (ToolInfo) {
+      urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolInfo.uid);
+      appendSearchParams({
+        tool_id: urlToolsIds.value.join(','),
+      });
+    }
+  };
   const handleSearch = () => {
     loading.value = true;
     fetchToolsList({
