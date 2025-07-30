@@ -47,7 +47,8 @@
             <audit-icon
               v-bk-tooltips="t('复制')"
               class="ml16 icon"
-              type="copy" />
+              type="copy"
+              @click.stop="handleCopy" />
             <audit-icon
               v-bk-tooltips="t('全屏')"
               class="ml16 icon"
@@ -95,6 +96,8 @@
   import ToolManageService from '@service/tool-manage';
 
   import ParseSqlModel from '@model/tool/parse-sql';
+
+  import { execCopy } from '@utils/assist';
 
   import useFullScreen from '@/hooks/use-full-screen';
   import useRequest from '@/hooks/use-request';
@@ -201,6 +204,10 @@ SQL 变量占位符使用指引
 
   const handleUpload = () => {
     uploadRef.value.click();
+  };
+
+  const handleCopy = () => {
+    execCopy(formData.value.sql, t('复制成功'));
   };
 
   const handleChangSql = (e: any) => {

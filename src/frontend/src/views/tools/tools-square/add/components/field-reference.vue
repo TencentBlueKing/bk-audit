@@ -303,6 +303,7 @@
     formData.value.tool.uid = '';
     formData.value.tool.version = 1;
     formData.value.config = [];
+    toolsDetailData.value = new ToolDetailModel();
   };
 
   const handleSelectTool = (value: Array<string>) => {
@@ -382,9 +383,11 @@
     if (tagItem) {
       SelectTool.value = [tagItem.id, data.tool.uid];
     }
-    fetchToolsDetail({
-      uid: formData.value.tool.uid,
-    });
+    if (formData.value.tool.uid) {
+      fetchToolsDetail({
+        uid: formData.value.tool.uid,
+      });
+    }
   };
 
   const initLocalOutputFields = (val: Array<Record<string, any>>) => {
