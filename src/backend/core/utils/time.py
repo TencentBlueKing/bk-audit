@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import datetime
+from typing import Union
 
 import arrow
 from arrow import Arrow
@@ -34,12 +35,15 @@ def mstimestamp_to_date_string(timestamp: int) -> str:
     )
 
 
-def parse_datetime(date_string: str) -> Arrow:
+def parse_datetime(date_value: Union[str, int, float]) -> Arrow:
     """
     解析时间:若无时区则默认为本地时区
     """
 
-    date = arrow.get(date_string)
+    date = arrow.get(date_value)
+    # 如果是时间戳，则直接返回，无需转换时区
+    if isinstance(date_value, Union[int, float]):
+        return date
     if isinstance(date.tzinfo, tzutc):
         date = date.replace(tzinfo=timezone.get_default_timezone())
     return date

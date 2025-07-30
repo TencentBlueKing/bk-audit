@@ -63,7 +63,7 @@ from apps.permission.handlers.drf import ActionPermission
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
-from core.utils.data import choices_to_dict
+from core.utils.data import choices_to_dict, compare_dict_specific_keys
 from core.utils.page import paginate_queryset
 from services.web.analyze.constants import (
     BaseControlTypeChoices,
@@ -78,6 +78,9 @@ from services.web.risk.constants import EventMappingFields
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.constants import (
+    EVENT_BASIC_CONFIG_FIELD,
+    EVENT_BASIC_CONFIG_REMOTE_FIELDS,
+    EVENT_BASIC_CONFIG_SORT_FIELD,
     HAS_UPDATE_TAG_ID,
     HAS_UPDATE_TAG_NAME,
     LOCAL_UPDATE_FIELDS,
@@ -337,6 +340,28 @@ class UpdateStrategy(StrategyV2Base):
         # response
         return strategy
 
+    def check_need_update_remote(self, key: str, origin_value: any, new_value: any) -> bool:
+        """
+        检查当前 key 的值是否需要更新远程服务
+        :param key: 字段名
+        :param origin_value: 原始值
+        :param new_value: 新值
+        :return: 是否需要更新远程
+        """
+
+        # 事件基本配置字段需要对指定字段检查
+        if key == EVENT_BASIC_CONFIG_FIELD and isinstance(origin_value, list) and isinstance(new_value, list):
+            return not all(
+                compare_dict_specific_keys(d1, d2, EVENT_BASIC_CONFIG_REMOTE_FIELDS)
+                for d1, d2 in zip(
+                    sorted(origin_value, key=lambda x: x.get(EVENT_BASIC_CONFIG_SORT_FIELD)),
+                    sorted(new_value, key=lambda x: x.get(EVENT_BASIC_CONFIG_SORT_FIELD)),
+                )
+            )
+        if origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
+            return True
+        return False
+
     @transaction.atomic()
     def update_db(self, strategy: Strategy, validated_request_data: dict) -> bool:
         # 用于控制是否更新真实的监控策略或计算平台Flow
@@ -356,7 +381,7 @@ class UpdateStrategy(StrategyV2Base):
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
             # 不同且不在本地更新清单中的字段才触发远程flow更新
-            if inst_val != val and key not in LOCAL_UPDATE_FIELDS:
+            if self.check_need_update_remote(key, inst_val, val):
                 need_update_remote = True
             setattr(strategy, key, val)
         strategy.save(update_fields=validated_request_data.keys())
