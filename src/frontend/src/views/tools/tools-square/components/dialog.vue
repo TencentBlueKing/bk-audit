@@ -270,7 +270,7 @@
   }
   interface Emits {
     (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>): void;
-    (e: 'close'): void;
+    (e: 'close', val?: ToolInfo): void;
   }
 
   const props = defineProps<Props>();
@@ -755,7 +755,7 @@
   };
 
   const handleCloseDialog = () => {
-    emit('close');
+    emit('close', itemInfo.value);
     isShow.value = false;
     dialogWidth.value = '50%';
     isFullScreen.value = false;
