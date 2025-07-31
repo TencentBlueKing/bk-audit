@@ -117,7 +117,10 @@ def _replace_skip_null_clause(node: exp.Func, **kwargs) -> exp.Expression:
     )
 
     if isinstance(value_expr, exp.Null) or (isinstance(value_expr, exp.Tuple) and not value_expr.expressions):
-        return exp.true()
+        if isinstance(node.parent, exp.Or):
+            return exp.false()  # 在 OR 中，空值条件视为 False
+        else:
+            return exp.true()  # 默认视为 True
 
     invert = invert.this if invert else False
 
@@ -141,4 +144,5 @@ function_visitors = {
     SkipNullClause: _replace_skip_null_clause,
 }
 
-register_functions('hive')
+for dialect_name in ('hive', 'mysql'):
+    register_functions(dialect_name)

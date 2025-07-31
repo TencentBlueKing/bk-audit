@@ -199,6 +199,13 @@ class TestSqlQueryAnalysis(TestCase):
         data_sql = analyzer.generate_sql_with_values(params)["data"]
         assert "WHERE TRUE" in data_sql
 
+    def test_skip_null_clause_removed_or(self):
+        sql = "SELECT id FROM events WHERE :ok = 100 or SKIP_NULL_CLAUSE(status, 'eq', :st)"
+        analyzer = SqlQueryAnalysis(sql)
+        params = {"st": None, "ok": 100}
+        data_sql = analyzer.generate_sql_with_values(params)["data"]
+        assert "OR FALSE" in data_sql
+
     def test_skip_null_clause_with_value(self):
         sql = "SELECT id FROM events WHERE SKIP_NULL_CLAUSE(status, 'eq', :st)"
         analyzer = SqlQueryAnalysis(sql)
