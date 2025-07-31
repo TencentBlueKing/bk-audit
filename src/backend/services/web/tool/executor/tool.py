@@ -182,6 +182,14 @@ class VariableValueParser:
             return str(value)
         return [str(v) for v in value]
 
+    def _format_multiselect(self, value: Any) -> list:
+        """
+        格式化多选下拉框
+        """
+        if isinstance(value, list):
+            return value
+        return [value]
+
     def parse(self, value: Any) -> Any:
         """
         解析变量值
