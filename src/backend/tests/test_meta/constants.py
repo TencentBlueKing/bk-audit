@@ -566,6 +566,7 @@ GLOBAL_CHOICES = {
         {"id": "time_range_select", "name": "时间范围选择器"},
         {"id": "time_select", "name": "时间选择器"},
         {"id": "person_select", "name": "人员选择器"},
+        {"id": "select", "name": "下拉选择器"},
     ],
     "TargetValueType": [{"id": "fixed_value", "name": "固定值"}, {"id": "field", "name": "字段"}],
 }
