@@ -37,6 +37,11 @@ export default class ToolDetail {
       description: string;
       required: boolean;
       field_category: string;
+      default_value: string | Array<string>;
+      choices: Array<{
+        key: string,
+        name: string
+      }>
     }>
     output_fields: Array<{
       raw_name: string;

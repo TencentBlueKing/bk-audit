@@ -152,7 +152,13 @@
                 v-else
                 class="field-value"
                 style="border: none;">
-                <bk-input v-model="item.target_value" />
+                <!-- <bk-input v-model="item.target_value" /> -->
+                <!-- 不同前端类型 -->
+                <form-item
+                  ref="formItemRefs"
+                  :data-config="toolsDetailData.config.input_variable.
+                    find(i => i.raw_name === item.source_field) as SearchItem"
+                  @change="(val:any) => handleFormItemChange(val, item)" />
               </div>
               <div style=" width: 75px;margin-left: 10px; color: #979ba5;">
                 <span v-if="item.target_value_type==='field'"> {{ t('的值作为输入') }}</span>
@@ -192,6 +198,20 @@
   import SelectMapValue from './select-map-value.vue';
 
   import useRequest from '@/hooks/use-request';
+  import FormItem from '@/views/tools/tools-square/components/form-item.vue';
+
+  interface SearchItem {
+    // value: string;
+    raw_name: string;
+    required: boolean;
+    description: string;
+    display_name: string;
+    field_category: string;
+    choices:Array<{
+      key: string,
+      name: string
+    }>;
+  }
 
   interface LocalOutputFields {
     raw_name: string;
@@ -235,16 +255,18 @@
       source_field: string;
       target_value_type: string;
       target_value: string;
-      [key: string]: string;
+      target_field_type: string
     }>;
   }
 
   const props =  defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+
   const showEditSql = defineModel<boolean>('showFieldReference', {
     required: true,
   });
+
   const formRef = ref();
   const localOutputFields = ref<Array<LocalOutputFields>>([]);
   const currenToolType = ref('');
@@ -254,7 +276,7 @@
     name: t('直接引用'),
   }, {
     id: 'fixed_value',
-    name: t('使用默认值'),
+    name: t('固定值填充'),
   }]);
 
   const toolCascaderList = ref<Array<ToolCascaderItem>>([]);
@@ -289,10 +311,12 @@
             source_field: item.raw_name,
             target_value_type: 'field',
             target_value: '',  // 初始化为空值
+            target_field_type: '', // 初始化为空值
           });
         }
       });
-      // 更新
+
+      // 编辑时更新version
       if (toolsDetailData.value.version !== formData.value.tool.version) {
         formData.value.tool.version = toolsDetailData.value.version;
       }
@@ -352,13 +376,22 @@
       }
       return;
     }
+
     const [localOutputField]  = value;
     const configItem = formData.value.config[index];
+
+    // 赋值结果字段
     configItem.target_value = localOutputField.raw_name || '';
-    // 策略工具下钻独有
+
+    // 结果字段来源（策略配置中添加）
     if (localOutputField.target_field_type) {
       configItem.target_field_type = localOutputField.target_field_type;
     }
+  };
+
+  const handleFormItemChange = (val: any, item: FormData['config'][0]) => {
+    // eslint-disable-next-line no-param-reassign
+    item.target_value = val;
   };
 
   const handleSubmit = () => {
@@ -376,20 +409,6 @@
     SelectTool.value = [];
   };
 
-  const setFormData = (data: FormData) => {
-    formData.value = _.cloneDeep(data);
-    // 根据formData.value.uid.uid，在toolCascaderList中反查对应的级联数据id: [xxx, uid], xxx为父级id
-    const tagItem = toolCascaderList.value.find(item => item.children.some(child => child.id === data.tool.uid));
-    if (tagItem) {
-      SelectTool.value = [tagItem.id, data.tool.uid];
-    }
-    if (formData.value.tool.uid) {
-      fetchToolsDetail({
-        uid: formData.value.tool.uid,
-      });
-    }
-  };
-
   const initLocalOutputFields = (val: Array<Record<string, any>>) => {
     localOutputFields.value = val.map(item => ({
       ...item,
@@ -397,6 +416,21 @@
       display_name: item.display_name,
       description: item.description,
     }));
+  };
+
+  const setFormData = (data: FormData) => {
+    formData.value = _.cloneDeep(data);
+    // 根据formData.value.uid.uid，在toolCascaderList中反查对应的级联数据id: [xxx, uid], xxx为父级id
+    const tagItem = toolCascaderList.value.find(item => item.children.some(child => child.id === data.tool.uid));
+    if (tagItem) {
+      SelectTool.value = [tagItem.id, data.tool.uid];
+    }
+    // 编辑时重新获取详情
+    if (formData.value.tool.uid) {
+      fetchToolsDetail({
+        uid: formData.value.tool.uid,
+      });
+    }
   };
 
   watch(() => props.outputFields, (val) => {
