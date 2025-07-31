@@ -16,12 +16,14 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
-from typing import Annotated, List, Optional
+from typing import Annotated, Any, List, Optional, Union
 
 from django.utils.translation import gettext_lazy
 from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
-from rest_framework.fields import CharField
+from pydantic import validator
+from rest_framework.fields import CharField, JSONField
+from typing_extensions import TypedDict
 
 from core.choices import TextChoices, register_choices
 
@@ -58,6 +60,7 @@ class FieldCategory(TextChoices):
     TIME_RANGE_SELECT = "time_range_select", gettext_lazy("时间范围选择器")
     TIME_SELECT = "time_select", gettext_lazy("时间选择器")
     PERSON_SELECT = "person_select", gettext_lazy("人员选择器")
+    MULTISELECT = "multiselect", gettext_lazy("多选下拉框")
 
 
 @register_choices("TargetValueType")
@@ -80,6 +83,11 @@ class DataSearchBaseField(BaseModel, abc.ABC):
     description: str = PydanticField(default_factory=str)  # 字段描述
 
 
+class ChoiceItem(TypedDict):
+    key: str
+    name: Any
+
+
 class SQLDataSearchInputVariable(DataSearchBaseField):
     """
     SQL数据查询输入变量
@@ -87,7 +95,22 @@ class SQLDataSearchInputVariable(DataSearchBaseField):
 
     required: bool  # 是否必填
     field_category: FieldCategory  # 字段类别(前端类型)
-    choices: list = PydanticField(default_factory=list)  # 字段选项(用于不同字段类别下前端展示配置)
+    choices: List[ChoiceItem] = PydanticField(default_factory=list)  # 字段选项(用于不同字段类别下前端展示配置)
+    default_value: Annotated[
+        Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
+    ] = PydanticField(None, description="字段默认值")
+
+    @validator('choices')
+    def validate_choices_keys(cls, v):
+        """确保每个choice中的key值唯一"""
+        seen_keys = set()
+
+        for item in v:
+            key = item['key']
+            if key in seen_keys:
+                raise ValueError(f"发现重复的key: {key}")
+            seen_keys.add(key)
+        return v
 
 
 class Tool(BaseModel):
@@ -108,8 +131,8 @@ class ToolDrillConfig(BaseModel):
     target_field_type: Annotated[
         Optional[str], CharField(allow_blank=True, allow_null=True, default=None)
     ] = PydanticField("", description="引用字段类型用于前端区分字段")
-    target_value: Annotated[Optional[str], CharField(allow_blank=True, required=False, default='')] = PydanticField(
-        "", description="变量的详细描述"
+    target_value: Annotated[Union[str, int, float, bool, dict, list], JSONField(allow_null=True)] = PydanticField(
+        None, description="变量的详细描述"
     )
     source_field: str  # 工具变量
 

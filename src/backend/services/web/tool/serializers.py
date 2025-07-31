@@ -146,7 +146,12 @@ class ToolRetrieveResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(label=gettext_lazy("工具版本"))
     description = serializers.CharField(allow_blank=True, label=gettext_lazy("工具描述"))
     namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
-
+    created_by = serializers.CharField(label=gettext_lazy("创建人"))
+    created_at = serializers.DateTimeField(label=gettext_lazy("创建时间"))
+    updated_by = serializers.CharField(label=gettext_lazy("更新人"))
+    updated_at = serializers.DateTimeField(label=gettext_lazy("更新时间"))
+    permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
+    strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
     config = serializers.DictField(label=gettext_lazy("工具配置"))
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     data_search_config_type = serializers.SerializerMethodField()
