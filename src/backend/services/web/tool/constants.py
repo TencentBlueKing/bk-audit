@@ -60,7 +60,7 @@ class FieldCategory(TextChoices):
     TIME_RANGE_SELECT = "time_range_select", gettext_lazy("时间范围选择器")
     TIME_SELECT = "time_select", gettext_lazy("时间选择器")
     PERSON_SELECT = "person_select", gettext_lazy("人员选择器")
-    MULTISELECT = "multiselect", gettext_lazy("多选下拉框")
+    MULTISELECT = "multiselect", gettext_lazy("下拉列表")
 
 
 @register_choices("TargetValueType")
