@@ -519,25 +519,15 @@ class GetToolDetail(ToolBase):
         strategies_ids = list(StrategyTool.objects.filter(tool_uid=tool.uid).values_list("strategy_id", flat=True))
         setattr(tool, "tags", [str(tid) for tid in tag_ids])
         setattr(tool, "strategies", [str(sid) for sid in strategies_ids])
-        serialized_data = ToolRetrieveResponseSerializer(tool).data
-        current_user = get_request_username()
-        tool = wrapper_permission_field(
-            result_list=serialized_data,
-            actions=[ActionEnum.USE_TOOL],
-            id_field=lambda item: item["uid"],
-            always_allowed=lambda item: item.get("created_by") == current_user,
-            many=False,
-        )
         # 如果是SQL工具且有引用表，检查表权限
-        for tool in tool:
-            if tool.get("tool_type") == ToolTypeEnum.DATA_SEARCH and tool.get("config")["referenced_tables"]:
-                tables = [table["table_name"] for table in tool.get("config")["referenced_tables"]]
-                auth_results = {
-                    item["object_id"]: item for item in resource.tool.user_query_table_auth_check({"tables": tables})
-                }
-                # 将权限信息添加到每个表
-                for table in tool.get("config")["referenced_tables"]:
-                    table["permission"] = auth_results.get(table["table_name"], {})
+        if tool.tool_type == ToolTypeEnum.DATA_SEARCH and tool.config.get("referenced_tables"):
+            tables = [table["table_name"] for table in tool.config["referenced_tables"]]
+            auth_results = {
+                item["object_id"]: item for item in resource.tool.user_query_table_auth_check({"tables": tables})
+            }
+            # 将权限信息添加到每个表
+            for table in tool.config["referenced_tables"]:
+                table["permission"] = auth_results.get(table["table_name"], {})
         return tool
 
 
