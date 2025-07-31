@@ -104,9 +104,9 @@
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
   import ToolDetailModel from '@model/tool/tool-detail';
 
-  import fieldReference from '@views/tools/tools-square/add/components/field-reference.vue';
-
   import FieldMapping from './field-mapping.vue';
+
+  import fieldReference from '@/views/tools/tools-square/add/components/field-reference/index.vue';
 
   interface Props {
     eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
