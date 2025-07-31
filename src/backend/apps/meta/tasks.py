@@ -19,7 +19,6 @@ from collections import defaultdict
 from typing import Dict, List, Set, Type
 
 from bk_resource import api
-from bk_resource.utils.common_utils import ignored
 from blueapps.contrib.celery_tools.periodic import periodic_task
 from blueapps.core.celery import celery_app
 from blueapps.utils.logger import logger_celery
@@ -28,7 +27,11 @@ from celery.schedules import crontab
 from django.conf import settings
 from django.db import transaction
 
-from apps.meta.constants import PAAS_APP_BATCH_SIZE, SystemDiagnosisPushStatusEnum
+from apps.meta.constants import (
+    PAAS_APP_BATCH_SIZE,
+    SystemDiagnosisPushStatusEnum,
+    SystemSourceTypeEnum,
+)
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.handlers.system_sync import (
     IamSystemSyncer,
@@ -42,7 +45,6 @@ from core.utils.data import group_by
 
 @periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @transaction.atomic
-@ignored(Exception)
 def sync_system_paas_info():
     """
     同步系统与PAAS应用关系
@@ -102,15 +104,17 @@ def sync_system_paas_info():
                 or deploy_info.get("stag", {}).get("url")
                 or market_addres.get("market_address")
             )
-            if any(
-                [
-                    db_system.logo_url != paas_system["logo_url"],
-                    db_system.system_url != paas_system_url,
-                ]
-            ):
-                db_system.logo_url = paas_system["logo_url"]
-                db_system.system_url = paas_system_url
+            # 更新 logo
+            if db_system.logo_url != paas_system["logo_url"]:
                 need_update = True
+                db_system.logo_url = paas_system["logo_url"]
+            # 更新系统 URL
+            if (
+                db_system.source_type not in SystemSourceTypeEnum.get_editable_sources()
+                and db_system.system_url != paas_system_url
+            ):
+                need_update = True
+                db_system.system_url = paas_system_url
             break
         if need_update:
             to_update.append(db_system)
@@ -140,7 +144,7 @@ def call_sync(cls_name: str, func_name: str, *args, **kwargs):
 
 
 @periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-@ignored(Exception)
+@lock(lock_name="sync_iam_systems")
 def sync_iam_systems():
     """
     同步 IAM 系统
@@ -148,15 +152,13 @@ def sync_iam_systems():
 
     syncers: List[Type[IamSystemSyncer]] = [IAMV3SystemSyncer, IAMV4SystemSyncer]
     for syncer in syncers:
-        cls_name = syncer.cls_name()
-        call_sync.delay(cls_name=cls_name, func_name=IamSystemSyncer.sync_systems.__name__)
-        call_sync.delay(cls_name=cls_name, func_name=IamSystemSyncer.sync_system_infos.__name__)
-        call_sync.delay(cls_name=cls_name, func_name=IamSystemSyncer.sync_resources_actions.__name__)
+        syncer().sync_systems()
+        syncer().sync_system_infos()
+        syncer().sync_resources_actions()
 
 
 @periodic_task(run_every=crontab(minute="*/30"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @transaction.atomic
-@ignored(Exception)
 def update_system_diagnosis_push():
     """
     定期更新系统诊断推送

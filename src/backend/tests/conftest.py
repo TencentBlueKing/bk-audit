@@ -195,8 +195,8 @@ def mock_iam_v4_retrieve_system():
                 {'id': 'task_edit', 'name': '编辑任务', 'resource_type_id': 'task'},
             ],
             'resource_types': [
-                {'ancestors': ['project'], 'id': 'task', 'name': '任务'},
                 {'ancestors': [], 'id': 'project', 'name': '项目'},
+                {'ancestors': ['project'], 'id': 'task', 'name': '任务'},
             ],
             'system_info': {
                 'auth_token': 'xxx',

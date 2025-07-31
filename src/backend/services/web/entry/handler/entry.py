@@ -35,7 +35,9 @@ from services.web.entry.constants import (
     DEFAULT_SCHEMA_HELP_KEY,
     IAM_WEB_URL_KEY,
     IEG_STD_OP_DOC_URL_KEY,
+    PERMISSION_MODEL_IWIKI_URL_KEY,
     SEARCH_RULE_IWIKI_URL_KEY,
+    V3_SYSTEM_CREATE_URL_KEY,
 )
 
 
@@ -101,10 +103,12 @@ class EntryHandler(object):
             # 三方系统地址
             "third_party_system": {
                 "bkbase_web_url": GlobalMetaConfig.get(BKBASE_WEB_URL_KEY, default=""),
+                "v3_system_create_url": GlobalMetaConfig.get(V3_SYSTEM_CREATE_URL_KEY, default=""),
             },
             # 三方文档地址
             "third_doc_url": {
                 "search_rule_iwiki_url": GlobalMetaConfig.get(SEARCH_RULE_IWIKI_URL_KEY, default=""),
+                "permission_model_iwiki_url": GlobalMetaConfig.get(PERMISSION_MODEL_IWIKI_URL_KEY, default=""),
             },
             # metric
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},

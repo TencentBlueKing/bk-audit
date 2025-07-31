@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import os
+from typing import TypedDict
 
 from django.utils.translation import gettext_lazy
 
@@ -29,13 +30,15 @@ from apps.meta.constants import (
 )
 from apps.meta.constants import ContainerCollectorType as _ContainerCollectorType
 from apps.meta.constants import EtlConfigEnum as _EtlConfigEnum
+from apps.meta.constants import LogReportStatus as _LogReportStatus
+from apps.meta.constants import SystemStageEnum, SystemStatusEnum
 from apps.meta.utils.fields import (
     FIELD_TYPE_DOUBLE,
     FIELD_TYPE_LONG,
     FIELD_TYPE_STRING,
     FIELD_TYPE_TEXT,
 )
-from core.choices import TextChoices
+from core.choices import IntegerChoices, TextChoices
 from services.web.databus.exceptions import FieldTypeNotMatchError
 
 COLLECTOR_CONFIG_NAME_REGEX = r"^[\w\u4e00-\u9fa5]+$"
@@ -153,9 +156,12 @@ class TargetNodeTypeChoices(TextChoices):
     INSTANCE = "INSTANCE", gettext_lazy("静态拓扑")
 
 
-class LogReportStatus(TextChoices):
+LogReportStatus = _LogReportStatus
+
+
+class SnapshotReportStatus(TextChoices):
     NORMAL = "normal", gettext_lazy("正常")
-    NODATA = "nodata", gettext_lazy("无数据")
+    ABNORMAL = "abnormal", gettext_lazy("异常")
     UNSET = "unset", gettext_lazy("未配置")
 
 
@@ -228,3 +234,68 @@ class JoinDataType(TextChoices):
 class ClusterMode(TextChoices):
     MAIN = "main", gettext_lazy("主集群")
     REPLICA = "replica", gettext_lazy("双写集群")
+
+
+class SnapshotStatusDict(TypedDict):
+    """
+    snapshot status map
+    """
+
+    status: SnapshotReportStatus
+
+
+class TailLogStatusDict(TypedDict):
+    """
+    tail log map
+    """
+
+    system_id: str
+    status: LogReportStatus
+    status_msg: str
+    last_time: str
+    collector_count: int
+
+
+class SystemStatusDict(TypedDict):
+    """
+    system status dict
+    """
+
+    system_status: SystemStatusEnum
+    tail_log_item: TailLogStatusDict
+    snapshot_status_item: SnapshotStatusDict
+    has_permission_model: bool
+    system_stage: SystemStageEnum
+    system_status_msg: str
+
+
+class SystemStatusDetailEnum(IntegerChoices):
+    """
+    系统状态详细枚举
+    """
+
+    # 未接入状态
+    PENDING = 1, gettext_lazy("系统未接入审计中心")
+    # 待完善状态
+    NO_PERMISSION_MODEL = 2, gettext_lazy("系统待完善: 没有权限模型")
+    NO_LOG_REPORT = 3, gettext_lazy("系统待完善: 没有日志上报")
+    NO_ASSET_REPORT = 4, gettext_lazy("系统待完善: 没有配置资产上报")
+    # 数据异常状态
+    LOG_NO_DATA = 5, gettext_lazy("数据异常: 日志上报无数据")
+    ASSET_ABNORMAL = 6, gettext_lazy("数据异常: 资产上报异常")
+    # 正常状态
+    NORMAL = 7, gettext_lazy("系统状态正常")
+
+    def system_status(self) -> SystemStatusEnum:
+        """
+        获取系统状态
+        """
+        return {
+            self.PENDING.value: SystemStatusEnum.PENDING,
+            self.NO_PERMISSION_MODEL.value: SystemStatusEnum.INCOMPLETE,
+            self.NO_LOG_REPORT.value: SystemStatusEnum.INCOMPLETE,
+            self.NO_ASSET_REPORT.value: SystemStatusEnum.INCOMPLETE,
+            self.LOG_NO_DATA.value: SystemStatusEnum.ABNORMAL,
+            self.ASSET_ABNORMAL.value: SystemStatusEnum.ABNORMAL,
+            self.NORMAL.value: SystemStatusEnum.NORMAL,
+        }[self.value]
