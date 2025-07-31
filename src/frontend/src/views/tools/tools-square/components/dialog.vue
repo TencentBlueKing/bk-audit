@@ -235,6 +235,10 @@
     description: string;
     display_name: string;
     field_category: string;
+    choices:Array<{
+      key: string,
+      name: string
+    }>;
   }
   interface Props {
     tagsEnums: Array<TagItem>,
@@ -446,26 +450,27 @@
 
   // 清空表单验证
   const handleReset = () => {
+    pagination.value.current = 1;
+    pagination.value.count = 0;
+    pagination.value.limit = 100;
+    tableData.value = [];
+
     // 检查 searchList.value 中的所有 value 是否为空
     const allValuesEmpty = searchList.value.every(item => item.value === null
       || (Array.isArray(item.value) && item.value.length === 0));
     if (allValuesEmpty) {
       return;
     }
-    pagination.value.current = 1;
-    pagination.value.count = 0;
-    pagination.value.limit = 100;
-    tableData.value = [];
     searchList.value = searchList.value.map(item => ({
       ...item,
       value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
     }));
-    formRef.value.clearValidate();
     if (formItemRef.value) {
-      formItemRef.value.forEach((item: any, index: number) => {
-        item?.change(false, searchList.value[index]);
+      formItemRef.value.forEach((item: any) => {
+        item?.resetValue();
       });
     }
+    formRef.value.clearValidate();
   };
 
   const handleFormItemChange = (val: any, item: SearchItem) => {
@@ -488,6 +493,7 @@
   const createDialogContent = (data: ToolDetailModel) => {
     searchForm.value = {};
 
+    // 创建table
     columns.value = data.config.output_fields.map((item) => {
       if (item.drill_config === null || item.drill_config?.tool.uid === '') {
         return {
@@ -511,12 +517,20 @@
       };
     });
 
+    // 构造formData
     data.config.input_variable.forEach((item) => {
       searchForm.value[item.raw_name] = '';
     });
+
+    // 构造form-item
+    console.log(data.config.input_variable);
     const searchListAr = data.config.input_variable.map(item => ({
       ...item,
-      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] :  null,
+      // eslint-disable-next-line no-nested-ternary
+      value: item.default_value
+        ? item.default_value
+        : (item.field_category === 'person_select' || item.field_category === 'time_range_select')
+          ? [] :  null,
       required: item.required,
     }));
 
@@ -561,24 +575,24 @@
             : dynamicValue,
         };
       });
-
-      nextTick(() => {
-        if (formItemRef.value) {
-          formItemRef.value.forEach((item: any) => {
-            item?.change(true, {});
-          });
-          const isValid = searchList.value.every((e) => {
-            if (e.field_category === 'person_select' || e.field_category === 'time_range_select') {
-              return Array.isArray(e.value) && e.value.length > 0;
-            }
-            return e.value !== null && e.value !== '';
-          });
-          if (isValid) {
-            submit();
-          }
-        }
-      });
     }
+
+    nextTick(() => {
+      if (formItemRef.value) {
+        formItemRef.value.forEach((item: any, index: number) => {
+          item?.setData(searchList.value[index].value);
+        });
+        const isValid = searchList.value.every((e) => {
+          if (e.field_category === 'person_select' || e.field_category === 'time_range_select') {
+            return Array.isArray(e.value) && e.value.length > 0;
+          }
+          return e.value !== null && e.value !== '';
+        });
+        if (isValid) {
+          submit();
+        }
+      }
+    });
   };
 
   // 权限
