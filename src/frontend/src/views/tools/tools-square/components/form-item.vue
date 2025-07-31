@@ -108,10 +108,10 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const inputData = ref<string | null>('');
-  const numberInputData = ref<number | null>(NaN);
-  const pickerRangeValue = ref<Array<string>>([]);
-  const pickerValue = ref<string | null>('');
+  const inputData = ref<string>('');
+  const numberInputData = ref<number>(NaN);
+  const pickerRangeValue = ref();
+  const pickerValue = ref<string>('');
   const user = ref<Array<string>>([]);
   const enumValue = ref<Array<string>>([]);
 
@@ -128,29 +128,29 @@
     },
   );
 
-  const handleNumberInputDataChange = (value: number | null) => {
-    numberInputData.value = value;
-    emits('change', value);
-  };
-  const handleInputDataChange = (value: string | null) => {
+  const handleInputDataChange = (value: string) => {
     inputData.value = value;
-    emits('change', value === '' ?  null : value);
+    emits('change', value || null);
+  };
+  const handleNumberInputDataChange = (value: number) => {
+    numberInputData.value = value;
+    emits('change', value || null);
   };
   const handleUserChange = (value: Array<string>) => {
     user.value = value;
-    emits('change', value);
+    emits('change', value || []);
   };
-  const handleRangeChange = (value: Array<string>) => {
+  const handleRangeChange = (value: any) => {
     pickerRangeValue.value = value;
-    emits('change', value);
+    emits('change', value || []);
   };
-  const handleTimeChange = (value: string | null) => {
+  const handleTimeChange = (value: string) => {
     pickerValue.value = value;
-    emits('change', value);
+    emits('change', value || null);
   };
   const handleEnumChange = (value: Array<string>) => {
     enumValue.value = value;
-    emits('change', value);
+    emits('change', value || []);
   };
 
   const change = (val: any) => {
@@ -158,19 +158,19 @@
 
     const handlers = {
       input: () => {
-        const value =  val || null;
+        const value =  val;
         handleInputDataChange(value);
       },
       number_input: () => {
-        const value = val || null;
+        const value = val;
         handleNumberInputDataChange(value);
       },
       person_select: () => {
-        const value = val || [];
+        const value = val;
         handleUserChange(value);
       },
       time_range_select: () => {
-        const value = val || [];
+        const value = val;
         handleRangeChange(value);
       },
       time_select: () => {
@@ -184,8 +184,6 @@
           const date = new Date(timestamp);
           const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
           handleTimeChange(formattedDate);
-        } else {
-          handleTimeChange(null);
         }
       },
       multiselect: () => {
