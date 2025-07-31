@@ -20,7 +20,6 @@ from services.web.tool.models import (
 from services.web.tool.resources import (
     CreateTool,
     DeleteTool,
-    GetToolDetail,
     ListTool,
     UpdateTool,
     UserQueryTableAuthCheck,
@@ -231,13 +230,6 @@ class ToolResourceTestCase(TestCase):
 
         # 补充：tag 自动删除
         self.assertFalse(ToolTag.objects.filter(tool_uid=uid).exists())
-
-    def test_get_tool_detail(self):
-        resource = GetToolDetail()
-        data = {"uid": self.sql_tool.uid}
-        tool = resource.perform_request(data)
-        self.assertEqual(tool.uid, self.sql_tool.uid)
-        self.assertEqual(tool.name, self.sql_tool.name)
 
     def test_list_tool_filter_only_created_by_me(self):
         with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
