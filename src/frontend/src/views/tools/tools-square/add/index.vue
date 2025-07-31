@@ -244,10 +244,12 @@
                       </div>
                       <div
                         class="field-value"
-                        style="flex: 0 0 380px;">
+                        style="flex: 0 0 350px;">
                         {{ t('变量名说明') }}
                       </div>
-                      <div class="field-value">
+                      <div
+                        class="field-value"
+                        style="flex: 0 0 200px;">
                         {{ t('是否必填') }}
                         <bk-popover
                           ref="requiredListRef"
@@ -275,8 +277,13 @@
                           </div>
                         </div>
                       </div>
-                      <div class="field-value is-required">
+                      <div
+                        class="field-value is-required"
+                        style="flex: 0 0 200px;">
                         {{ t('前端类型') }}
+                      </div>
+                      <div class="field-value">
+                        {{ t('默认值') }}
                       </div>
                     </div>
                     <audit-form
@@ -313,7 +320,7 @@
                           </div>
                           <div
                             class="field-value"
-                            style="flex: 0 0 380px;">
+                            style="flex: 0 0 350px;">
                             <bk-form-item
                               error-display-type="tooltips"
                               label=""
@@ -325,7 +332,9 @@
                                 :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
                             </bk-form-item>
                           </div>
-                          <div class="field-value">
+                          <div
+                            class="field-value"
+                            style="flex: 0 0 200px;">
                             <bk-form-item
                               error-display-type="tooltips"
                               label=""
@@ -343,7 +352,9 @@
                               </bk-radio-group>
                             </bk-form-item>
                           </div>
-                          <div class="field-value">
+                          <div
+                            class="field-value"
+                            style="flex: 0 0 200px;">
                             <bk-form-item
                               error-display-type="tooltips"
                               label=""
@@ -357,13 +368,49 @@
                                 filterable
                                 :input-search="false"
                                 :placeholder="!formData.config.sql ? t('请先配置sql'):t('请选择')"
-                                :search-placeholder="t('请输入关键字')">
+                                :search-placeholder="t('请输入关键字')"
+                                @change="(value: string) => handleFieldCategoryChange(value, index)">
                                 <bk-option
                                   v-for="(selectItem, selectIndex) in frontendTypeList"
                                   :key="selectIndex"
                                   :label="selectItem.name"
                                   :value="selectItem.id" />
                               </bk-select>
+                              <template v-if="item.field_category === 'multiselect'">
+                                <bk-button
+                                  class="add-enum"
+                                  text
+                                  theme="primary"
+                                  @click="handleAddEnum(index)">
+                                  {{ t('配置选项') }}
+                                </bk-button>
+                              </template>
+                              <add-enum
+                                ref="addEnumRefs"
+                                @update-choices="(value: Array<{
+                                  key: string,
+                                  name: string
+                                }>) => handleUpdateChoices(value, index)" />
+                            </bk-form-item>
+                          </div>
+                          <div class="field-value">
+                            <bk-form-item
+                              error-display-type="tooltips"
+                              label=""
+                              label-width="0"
+                              :property="`config.input_variable[${index}].target_value`">
+                              <template v-if="!item.field_category">
+                                <bk-input
+                                  disabled
+                                  :placeholder="t('请先配置前端类型')" />
+                              </template>
+                              <template v-else>
+                                <!-- 不同前端类型 -->
+                                <form-item
+                                  ref="formItemRefs"
+                                  :data-config="item"
+                                  @change="(val:any) => handleFormItemChange(val, item)" />
+                              </template>
                             </bk-form-item>
                           </div>
                         </div>
@@ -573,9 +620,10 @@
 
   import DialogVue from '../components/dialog.vue';
 
+  import AddEnum from './components/add-enum.vue';
   import CardPartVue from './components/card-part.vue';
   import EditSql from './components/edit-sql.vue';
-  import fieldReference from './components/field-reference.vue';
+  import fieldReference from './components/field-reference/index.vue';
   import Creating from './components/tool-status/creating.vue';
   import Failed from './components/tool-status/failed.vue';
   import Successful from './components/tool-status/Successful.vue';
@@ -584,6 +632,7 @@
   import useFullScreen from '@/hooks/use-full-screen';
   // import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
   interface FormData {
     name: string;
@@ -605,6 +654,11 @@
         description: string;
         required: boolean;
         field_category: string;
+        default_value: string | Array<string>;
+        choices: Array<{
+          key: string,
+          name: string
+        }>
       }>
       output_fields: Array<{
         raw_name: string;
@@ -671,6 +725,8 @@
   const fieldReferenceRef = ref();
   const dialogVueRef = ref();
   const requiredListRef = ref();
+  const addEnumRefs = ref();
+  const formItemRefs = ref();
   const dialogRefs = ref<Record<string, any>>({});
 
   const loading = ref(false);
@@ -698,6 +754,8 @@
         description: '',
         required: false,
         field_category: '',
+        default_value: '',
+        choices: [],
       }],
       output_fields: [{
         raw_name: '',
@@ -831,7 +889,12 @@
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
       formData.value = data;
-      editor.setValue(formData.value.config.sql);
+      nextTick(() => {
+        editor.setValue(formData.value.config.sql);
+        formItemRefs.value.forEach((item: any, index: number) => {
+          item?.setData(formData.value.config.input_variable[index].default_value);
+        });
+      });
     },
   });
 
@@ -848,6 +911,8 @@
         ...newItem,
         required: existing?.required || newItem.required,
         field_category: existing?.field_category || '',
+        default_value: existing?.default_value || '',
+        choices: existing?.choices || [],
       };
     });
 
@@ -921,6 +986,32 @@
       required: value,
     }));
     requiredListRef.value?.hide();
+  };
+
+  const handleFormItemChange = (val: any, item: FormData['config']['input_variable'][0]) => {
+    const index = formData.value.config.input_variable.findIndex(i => i.raw_name === item.raw_name);
+    if (index !== -1) {
+      formData.value.config.input_variable[index].default_value = val;
+    }
+  };
+
+  const handleFieldCategoryChange = (value: string, index: number) => {
+    if (value !== 'enum') {
+      formData.value.config.input_variable[index].choices = [];
+    }
+  };
+
+  const handleAddEnum = (index: number) => {
+    // 编辑带上值
+    const currentChoices = formData.value.config.input_variable[index].choices;
+    addEnumRefs.value[index].show(currentChoices);
+  };
+
+  const handleUpdateChoices = (value: Array<{
+    key: string
+    name: string
+  }>, index: number) => {
+    formData.value.config.input_variable[index].choices = value;
   };
 
   const handleClick = (index: number, drillConfig?: FormData['config']['output_fields'][0]['drill_config']) => {
@@ -1136,7 +1227,7 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        z-index: 10000;
+        z-index: 2;
         transform: translate(-50%, -50%);
       }
 
@@ -1242,9 +1333,16 @@
         width: 100%;
         margin-bottom: 0;
 
-        .bk-input {
-          height: 42px;
+        .bk-input,
+        .bk-date-picker-editor,
+        .bk-select-trigger,
+        .bk-select-tag {
+          height: 42px !important;
           border: none;
+        }
+
+        .icon-wrapper {
+          top: 6px;
         }
 
         .bk-input.is-focused:not(.is-readonly) {
@@ -1256,6 +1354,13 @@
         .bk-form-error-tips {
           top: 12px
         }
+      }
+
+      .add-enum {
+        position: absolute;
+        top: 14px;
+        right: 28px;
+        cursor: pointer;
       }
     }
 
