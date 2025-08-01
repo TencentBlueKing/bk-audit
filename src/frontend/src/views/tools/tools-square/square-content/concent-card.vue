@@ -204,13 +204,12 @@
       </bk-loading>
     </scroll-faker>
   </div>
-  <!-- 循环所有工具 -->
   <div
     v-for="item in allToolsData"
-    :key="item.uid">
+    :key="item">
     <component
       :is="DialogVue"
-      :ref="(el:any) => dialogRefs[item.uid] = el"
+      :ref="(el:any) => dialogRefs[item] = el"
       :tags-enums="tagsEnums"
       @close="handleClose"
       @open-field-down="openFieldDown" />
@@ -224,6 +223,7 @@
 
   import ToolManageService from '@service/tool-manage';
 
+  import ToolDetailModel from '@model/tool/tool-detail';
   import ToolInfo from '@model/tool/tool-info';
 
   import useUrlSearch from '@hooks/use-url-search';
@@ -275,6 +275,8 @@
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
+  const allToolsData = ref<string[]>([]);
+
   const searchValue = ref<string>('');
   const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
@@ -305,38 +307,27 @@
     onSuccess: (data) => {
       dataList.value = data.results;
       total.value = data.total;
-    },
-  });
-
-  // 获取所有工具
-  const {
-    data: allToolsData,
-  } = useRequest(ToolManageService.fetchAllTools, {
-    defaultValue: [],
-    manual: true,
-    onSuccess: () => {
+      // 自动打开弹窗
       if (route.query.tool_id) {
         urlToolsIds.value = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
+        allToolsData.value = urlToolsIds.value;
         if (urlToolsIds.value.length > 0) {
           urlToolsIds.value.forEach((item: string) => {
-            const tool = allToolsData.value.find(toolItem => toolItem.uid === item);
-            if (tool) {
-              nextTick(() => {
-                if (dialogRefs.value[tool.uid]) {
-                  dialogRefs.value[tool.uid].openDialog(tool);
-                  setTimeout(() => {
-                    const modals = document.getElementsByClassName('bk-modal-wrapper');
-                    Array.from(modals).reverse()
-                      .forEach((modal, index) => {
-                        const htmlModal = modal as HTMLElement;
-                        if (index > 0 && !htmlModal.style.transform) {
-                          htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-                        }
-                      });
-                  }, 10);
-                }
-              });
-            }
+            nextTick(() => {
+              if (dialogRefs.value[item]) {
+                dialogRefs.value[item].openDialog(item);
+                setTimeout(() => {
+                  const modals = document.getElementsByClassName('bk-modal-wrapper');
+                  Array.from(modals).reverse()
+                    .forEach((modal, index) => {
+                      const htmlModal = modal as HTMLElement;
+                      if (index > 0 && !htmlModal.style.transform) {
+                        htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+                      }
+                    });
+                }, 0);
+              }
+            });
           });
         }
       }
@@ -513,15 +504,15 @@
   // 下钻打开
   const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
     const { uid } = drillDownItem.drill_config.tool;
-    const toolItem = allToolsData.value.find(item => item.uid === uid);
-    if (!toolItem) {
-      return;
+    if (!(allToolsData.value.find(item => item === uid))) {
+      allToolsData.value.push(uid);
     }
 
-    const toolInfo = new ToolInfo(toolItem as any);
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(toolInfo, drillDownItem, drillDownItemRowData);
-    }
+    nextTick(() => {
+      if (dialogRefs.value[uid]) {
+        dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
+      }
+    });
   };
 
   // 打开工具
@@ -533,13 +524,21 @@
     });
 
     handleCancel(toolInfo.uid);
-    if (dialogRefs.value[toolInfo.uid]) {
-      dialogRefs.value[toolInfo.uid].openDialog(toolInfo);
+
+    if (!(allToolsData.value.find(item => item === toolInfo.uid))) {
+      allToolsData.value.push(toolInfo.uid);
     }
+    nextTick(() => {
+      if (dialogRefs.value[toolInfo.uid]) {
+        dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
+      }
+    });
   };
   // 关闭弹窗
-  const handleClose = (ToolInfo: ToolInfo | undefined) => {
+  const handleClose = (ToolInfo: ToolDetailModel | undefined) => {
     if (ToolInfo) {
+      allToolsData.value = allToolsData.value.filter(item => item !== ToolInfo.uid);
+
       urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolInfo.uid);
       appendSearchParams({
         tool_id: urlToolsIds.value.join(','),
