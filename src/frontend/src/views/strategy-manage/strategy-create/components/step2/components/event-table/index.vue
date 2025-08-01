@@ -231,7 +231,7 @@
   // 打开工具
   const handleOpenTool = async (toolInfo: ToolDetailModel) => {
     if (dialogRefs.value[toolInfo.uid]) {
-      dialogRefs.value[toolInfo.uid].openDialog(toolInfo);
+      dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
     }
   };
 

@@ -250,11 +250,12 @@
   <!-- 循环所有工具 -->
   <div
     v-for="item in allToolsData"
-    :key="item.uid">
+    :key="item">
     <component
       :is="DialogVue"
-      :ref="(el) => dialogRefs[item.uid] = el"
+      :ref="(el:any) => dialogRefs[item] = el"
       :tags-enums="tagData"
+      @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
 </template>
@@ -263,11 +264,11 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     onBeforeUnmount,
     onMounted,
     ref,
-    watch,
-  } from 'vue';
+    watch  } from 'vue';
   import {
     useI18n,
   } from 'vue-i18n';
@@ -279,6 +280,7 @@
   import EventModel from '@model/event/event';
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
+  import ToolDetailModel from '@model/tool/tool-detail';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
@@ -287,7 +289,6 @@
 
   import RenderInfoItem from './render-info-item.vue';
 
-  import ToolInfo from '@/domain/model/tool/tool-info';
   import useRequest from '@/hooks/use-request';
 
   interface DrillItem {
@@ -347,6 +348,7 @@
   const eventItem = ref(new EventModel()); // 当前选中事件
   const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
   const showTooltips = ref(false); // 是否显示tooltips
+  const allToolsData = ref<string[]>([]);
 
   const dialogRefs = ref<Record<string, any>>({});
 
@@ -354,14 +356,6 @@
   const {
     data: tagData,
   } = useRequest(ToolManageService.fetchToolTags, {
-    defaultValue: [],
-    manual: true,
-  });
-
-  // 获取所有工具
-  const {
-    data: allToolsData,
-  } = useRequest(ToolManageService.fetchAllTools, {
     defaultValue: [],
     manual: true,
   });
@@ -385,7 +379,6 @@
         // 默认获取第一个
         // eslint-disable-next-line prefer-destructuring
         eventItem.value = linkEventList.value[0];
-        console.log(linkEventList.value[0]);
         // 事件数据
         const eventDataKey = getEventDataKey(eventItem.value.event_data);
         eventItemDataKeyArr.value = group(eventDataKey);
@@ -467,31 +460,34 @@
   // 下转打开
   const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
     const { uid } = drillDownItem.drill_config.tool;
-    const toolItem = allToolsData.value.find(item => item.uid === uid);
-    if (!toolItem) {
-      return;
+    if (!(allToolsData.value.find(item => item === uid))) {
+      allToolsData.value.push(uid);
     }
 
-    const toolInfo = new ToolInfo(toolItem as any);
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(toolInfo, drillDownItem, drillDownItemRowData);
-    }
+    nextTick(() => {
+      if (dialogRefs.value[uid]) {
+        dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
+      }
+    });
   };
 
   // 打开工具
   const handleClick = (item: DrillItem, id: string) => {
-    const { uid } = item.drill_config.tool;
-    const toolItem = allToolsData.value.find(tool => tool.uid === uid);
-    if (!toolItem) {
-      return;
+    if (!(allToolsData.value.find(tool => tool === id))) {
+      allToolsData.value.push(id);
     }
-
-    const toolInfo = new ToolInfo(toolItem as any);
-    if (dialogRefs.value[id]) {
-      dialogRefs.value[id].openDialog(toolInfo, item, eventItem.value);
+    nextTick(() => {
+      if (dialogRefs.value[id]) {
+        dialogRefs.value[id].openDialog(id, item, eventItem.value);
+      }
+    });
+  };
+  // 关闭弹窗
+  const handleClose = (ToolInfo: ToolDetailModel | undefined) => {
+    if (ToolInfo) {
+      allToolsData.value = allToolsData.value.filter(item => item !== ToolInfo.uid);
     }
   };
-
   watch(() => props.data, (data) => {
     if (data.risk_id) {
       fetchLinkEvent({

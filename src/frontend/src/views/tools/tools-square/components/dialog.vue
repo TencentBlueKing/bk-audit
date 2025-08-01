@@ -91,9 +91,9 @@
         <div
           v-if="itemInfo?.tool_type !== 'bk_vision'"
           class="default"
-          :style="isFullScreen ? `height:${dialogHeight}` : ''">
+          :style="`height:${dialogHeight}`">
           <div class="top-line" />
-          <div v-if="itemInfo?.permission?.use_tool">
+          <div v-if="permission">
             <div class="top-search">
               <div class="top-search-title">
                 {{ t('查询输入') }}
@@ -144,7 +144,7 @@
                     :columns="columns"
                     :data="tableData"
                     header-align="center"
-                    max-height="48vh"
+                    :height="dialogTableHeight"
                     min-height="200px"
                     :pagination="pagination"
                     remote-pagination
@@ -187,8 +187,22 @@
             id="panel"
             class="panel" />
         </div>
+
+        <div
+          v-if="!isFullScreen"
+          class="resize-handle"
+          @mousedown="startResize" />
+        <div
+          v-if="!isFullScreen"
+          class="resize-handle-left"
+          @mousedown="startResizeLeft" />
       </template>
-      <template #footer />
+      <template #footer>
+        <div
+          v-if="!isFullScreen"
+          class="resize-handle-top"
+          @mousedown="startResizeBottom" />
+      </template>
     </bk-dialog>
   </div>
 </template>
@@ -202,7 +216,6 @@
 
   import IamApplyDataModel from '@model/iam/apply-data';
   import ToolDetailModel from '@model/tool/tool-detail';
-  import ToolInfo from '@model/tool/tool-info';
 
   import useMessage from '@hooks/use-message';
 
@@ -266,7 +279,7 @@
   interface Exposes {
     closeDialog: () => void,
     openDialog: (
-      item: ToolInfo,  // 工具信息
+      itemUid: string,  // 工具信息
       drillDownItem?: DrillDownItem, // 下钻信息
       drillDownItemRowData?: Record<string, string>, // 下钻table所在行信息
       preview?: boolean // 是否预览
@@ -274,7 +287,7 @@
   }
   interface Emits {
     (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>): void;
-    (e: 'close', val?: ToolInfo): void;
+    (e: 'close', val?: ToolDetailModel): void;
   }
 
   const props = defineProps<Props>();
@@ -285,18 +298,18 @@
 
   const dialogIndex = ref(2000);
   const dialogWidth = ref('50%');
-  const dialogHeight = ref('80%');
-
+  const dialogHeight = ref('50vh');
+  const dialogTableHeight = ref('300px');
   const isFullScreen = ref(false);
   const isLoading = ref(false);
   const isShow = ref(false);
   const isPreview = ref<boolean | undefined>(false);
   const isDrillDownOpen = ref(false);
-
+  const permission = ref(true);
   const dialogRef = ref();
   const formItemRef = ref();
 
-  const itemInfo = ref<ToolInfo>();
+  const itemInfo = ref<ToolDetailModel>();
   const searchList = ref<SearchItem[]>([]);
   const tableData = ref<TableDataItem[]>([]);
   const columns = ref<Column[]>([]);
@@ -353,13 +366,7 @@
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
       uid.value = data.uid;
-      // bkVision直接请求
-      if (data.tool_type !== 'data_search') {
-        fetchTableData();
-      } else {
-        // 创建弹框form、table
-        createDialogContent(data);
-      }
+      permission.value = data.permission.use_tool;
     },
   });
 
@@ -428,7 +435,7 @@
     });
   };
 
-  const itemIcon = (item: ToolInfo) => {
+  const itemIcon = (item: ToolDetailModel) => {
     switch (item.tool_type) {
     case 'data_search':
       return 'sqlxiao';
@@ -523,7 +530,6 @@
     });
 
     // 构造form-item
-    console.log(data.config.input_variable);
     const searchListAr = data.config.input_variable.map(item => ({
       ...item,
       // eslint-disable-next-line no-nested-ternary
@@ -707,7 +713,7 @@
 
   // 打开弹窗
   const handleOpenDialog = async (
-    item: ToolInfo,
+    itemUid: string,
     drillDownItem?: DrillDownItem,
     isDrillDownItemRowData?: Record<string, any>,
     preview?: boolean,
@@ -724,7 +730,7 @@
     isPreview.value = preview;
 
     isShow.value = true;
-    itemInfo.value = item;
+    // itemInfo.value = item;
 
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -733,39 +739,50 @@
     nextTick(() => {
       sessionStorage.setItem('dialogIndex', String(dialogIndex.value));
     });
-    // 等待两次nextTick确保DOM完全更新
-    await nextTick();
-    await nextTick();
-    const modals = document.getElementsByClassName('bk-modal-wrapper');
 
-    // 遍历所有弹窗，只调整未被拖动过的弹窗位置
-    Array.from(modals).reverse()
-      .forEach((modal, index) => {
-        const htmlModal = modal as HTMLElement;
-        // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
-        if (index > 0 && !htmlModal.style.transform) {
-          htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-        }
-      });
 
-    if (!item.permission.use_tool) {
-      getApplyData({
-        action_ids: 'use_tool',
-        resources: item.uid,
-      });
-    }
+    // 获取工具详情
+    fetchToolsDetail({ uid: itemUid }).then((res: ToolDetailModel) => {
+      isShow.value = true;
+      itemInfo.value = res;
 
-    // 预览 （暂时用不上）
-    if (isPreview.value) {
-      const detail = new ToolDetailModel();
-      createDialogContent({
-        ...detail,
-        ...item,
-      } as ToolDetailModel);
-      return;
-    }
+      // 权限
+      if (!res?.permission.use_tool) {
+        getApplyData({
+          action_ids: 'use_tool',
+          resources: res.uid,
+        });
+      }
+      // 预览 （暂时用不上）
+      if (isPreview.value) {
+        const detail = new ToolDetailModel();
+        createDialogContent({
+          ...detail,
+          ...res,
+        } as ToolDetailModel);
+        return;
+      }
+      // bkVision直接请求
+      if (res.tool_type !== 'data_search') {
+        fetchTableData();
+      } else {
+        // 创建弹框form、table
+        createDialogContent(res);
+      }
+      setTimeout(() => {
+        const modals = document.getElementsByClassName('bk-modal-wrapper');
 
-    fetchToolsDetail({ uid: item.uid });
+        // 遍历所有弹窗，只调整未被拖动过的弹窗位置
+        Array.from(modals).reverse()
+          .forEach((modal, index) => {
+            const htmlModal = modal as HTMLElement;
+            // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
+            if (index > 0 && !htmlModal.style.transform) {
+              htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+            }
+          });
+      }, 0);
+    });
   };
 
   const handleCloseDialog = () => {
@@ -775,18 +792,124 @@
     isFullScreen.value = false;
     handleReset();
   };
+  // 添加边框拖动逻辑
+  const startResize = (e: MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = parseInt(dialogWidth.value, 10);
+    const startHeight = parseInt(dialogHeight.value, 10);
+    const minWidth = window.innerWidth * 0.5; // 最小宽度为屏幕宽度的50%
 
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const newWidth = Math.max(minWidth, startWidth + dx); // 确保宽度不小于minWidth
+      dialogWidth.value = `${newWidth}px`;
+      dialogHeight.value = `${startHeight + dy}px`;
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  // 添加左边框拖动逻辑
+  const startResizeLeft = (e: MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = parseInt(dialogWidth.value, 10);
+    const minWidth = window.innerWidth * 0.5; // 最小宽度为屏幕宽度的50%
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const dx = startX - moveEvent.clientX; // 向左拖动时dx为正
+      const newWidth = Math.max(minWidth, startWidth + dx); // 确保宽度不小于minWidth
+      dialogWidth.value = `${newWidth}px`;
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  // 添加底部边框拖动逻辑
+  const startResizeBottom = (e: MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = parseInt(dialogHeight.value, 10);
+    const startTableHeight = parseInt(dialogTableHeight.value, 10);
+    const minHeight = window.innerHeight * 0.5; // 对话框最小高度为屏幕高度的50%
+    const minTableHeight = 300; // 表格最小高度为300px
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const dy = moveEvent.clientY - startY;
+      const newHeight = Math.max(minHeight, startHeight + dy); // 确保对话框高度不小于minHeight
+      dialogHeight.value = `${newHeight}px`;
+      // 同步更新表格高度，确保不小于minTableHeight
+      const newTableHeight = Math.max(minTableHeight, startTableHeight + dy);
+      dialogTableHeight.value = `${newTableHeight}px`;
+    };
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
     },
-    openDialog(item, drillDownItem, drillDownItemRowData, preview) {
-      handleOpenDialog(item, drillDownItem, drillDownItemRowData, preview);
+    openDialog(itemUid, drillDownItem, drillDownItemRowData, preview) {
+      handleOpenDialog(itemUid, drillDownItem, drillDownItemRowData, preview);
     },
   });
 </script>
 
 <style scoped lang="postcss">
+/* 添加边框拖动样式 */
+.resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 20001;
+  width: 10px;
+  height: 100%;
+  cursor: ew-resize;
+  opacity: 50%;
+}
+
+.resize-handle-left {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 20001;
+  width: 10px;
+  height: 100%;
+  cursor: ew-resize;
+  opacity: 50%;
+}
+
+.resize-handle-top {
+  position: absolute;
+  bottom: 0;
+  z-index: 20001;
+  width: 100%;
+  height: 10px;
+  cursor: ns-resize;
+  opacity: 50%;
+}
+
 .header {
   display: flex;
 
@@ -886,6 +1009,11 @@
     }
 
     .top-search-result {
+      position: relative;
+
+      /* background-color: blueviolet; */
+      height: auto;
+      padding: 10px;
       margin-top: 10px;
     }
 
