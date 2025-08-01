@@ -20,6 +20,7 @@ from services.web.tool.models import (
 from services.web.tool.resources import (
     CreateTool,
     DeleteTool,
+    GetToolDetail,
     ListTool,
     UpdateTool,
     UserQueryTableAuthCheck,
@@ -41,9 +42,9 @@ class ToolResourceTestCase(TestCase):
             tool_type=ToolTypeEnum.DATA_SEARCH.value,
             config={
                 "sql": "select 1",
-                "referenced_tables": [],
-                "input_variable": [],
-                "output_fields": [],
+                "referenced_tables": [{"table_name": "test_table"}],
+                "input_variable": [{"raw_name": "date_range", "required": True}],
+                "output_fields": [{"raw_name": "thedate", "display_name": "日期"}],
             },
             is_deleted=False,
             description="SQL Tool Desc",
@@ -62,6 +63,15 @@ class ToolResourceTestCase(TestCase):
         self.tag2 = Tag.objects.create(tag_name="tag2")
         ToolTag.objects.create(tool_uid=self.sql_tool.uid, tag_id=self.tag1.tag_id)
         ToolTag.objects.create(tool_uid=self.bk_tool.uid, tag_id=self.tag2.tag_id)
+        self.auth_patcher = patch('api.bk_base.default.UserAuthBatchCheck.perform_request')
+        self.mock_auth_check = self.auth_patcher.start()
+        self.mock_auth_check.return_value = [
+            {"object_id": "test_table", "result": True, "user_id": "test_user", "permission": {"read": True}}
+        ]
+
+    def tearDown(self):
+        self.auth_patcher.stop()  # 清理Mock
+        super().tearDown()
 
     def _create_bkvision_tool(self, tool_uid, vision_uid, namespace):
         tool = Tool.objects.create(
@@ -262,6 +272,20 @@ class ToolResourceTestCase(TestCase):
             result = self._call_resource_with_request(ListTool, data)
             result_uids = [tool["uid"] for tool in result]
             self.assertCountEqual(result_uids, recent_uids)
+
+    def test_tool_detail(self):
+        tool_detail_resource = GetToolDetail()
+        result = tool_detail_resource.perform_request({"uid": self.sql_tool.uid})
+
+        self.assertEqual(result.uid, self.sql_tool.uid)  # 使用 . 访问属性
+        self.assertEqual(result.name, "SQL Tool")
+
+        self.assertIsNotNone(getattr(result, "tags", None))
+        self.assertIsNotNone(getattr(result, "strategies", None))
+
+        if result.tool_type == ToolTypeEnum.DATA_SEARCH.value:
+            for table in result.config["referenced_tables"]:
+                self.assertIn("permission", table)
 
 
 class UserQueryTableAuthCheckTestCase(TestCase):
