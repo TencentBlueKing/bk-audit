@@ -335,7 +335,7 @@
   const searchForm = ref();
   const router = useRouter();
 
-  const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>();
+  const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>([]);
   const drillDownItemRowData = ref<Record<string, any>>({});
 
   // 工具执行
@@ -473,17 +473,11 @@
     pagination.value.count = 0;
     pagination.value.limit = 100;
     tableData.value = [];
+    searchList.value = [];
+    isDrillDownOpen.value = false;
+    drillDownItemConfig.value = [];
+    drillDownItemRowData.value = {};
 
-    // 检查 searchList.value 中的所有 value 是否为空
-    const allValuesEmpty = searchList.value.every(item => item.value === null
-      || (Array.isArray(item.value) && item.value.length === 0));
-    if (allValuesEmpty) {
-      return;
-    }
-    searchList.value = searchList.value.map(item => ({
-      ...item,
-      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
-    }));
     if (formItemRef.value) {
       formItemRef.value.forEach((item: any) => {
         item?.resetValue();
@@ -556,7 +550,6 @@
     if (!isDrillDownOpen.value) {
       searchList.value = searchListAr;
     } else {
-      // 下钻
       // 下钻填充值
       if (!drillDownItemConfig.value
         || drillDownItemConfig.value.length === 0) {
@@ -579,10 +572,10 @@
         if (configItem.target_value_type !== 'fixed_value') {
           if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
             // 从根对象取值
-            dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? '';
+            dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? searchItem.value;
           } else {
             // 从event_data对象取值
-            dynamicValue = drillDownItemRowData.value?.event_data?.[configItem.target_value] ?? '';
+            dynamicValue = drillDownItemRowData.value?.event_data?.[configItem.target_value] ?? searchItem.value;
           }
         }
 
@@ -799,10 +792,10 @@
 
   const handleCloseDialog = () => {
     emit('close', itemInfo.value);
+    handleReset();
     isShow.value = false;
     dialogWidth.value = '50%';
     isFullScreen.value = false;
-    handleReset();
   };
   // 添加边框拖动逻辑
   const startResize = (e: MouseEvent) => {
