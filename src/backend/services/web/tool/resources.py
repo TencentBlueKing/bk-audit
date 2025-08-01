@@ -402,6 +402,13 @@ class ExecuteTool(ToolBase):
                     "raw_name": "datetime_range",
                     "value": ["2023-01-01 12:00:00", "2023-01-31 12:00:00"]
                 }
+        6. multiselect（下拉列表）
+            ```json
+                {
+                    "raw_name": "multiselect",
+                    "value": ["option1", "option2"]
+                }
+            ```
             ```
         response:
             ```json
