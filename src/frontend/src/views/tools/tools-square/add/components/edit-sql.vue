@@ -18,15 +18,25 @@
   <audit-sideslider
     ref="sidesliderRef"
     v-model:isShow="showEditSql"
+    :quick-close="false"
     show-footer-slot
     :title="t('编辑sql')"
     width="820"
     @update:is-show="updateIsShow">
+    <div
+      v-if="!isEditMode"
+      class="tip-button"
+      @click="openSqlTip">
+      {{ t('SQL 变量占位符使用指引 >>') }}
+    </div>
     <div class="edit-container">
       <bk-alert
         v-if="isEditMode"
         closable
-        theme="warning">
+        theme="warning"
+        @close="isEditMode = false"
+        @mouseenter="clearAutoHideTimeout"
+        @mouseleave="startAutoHideTimeout">
         {{ t('编辑后，已渲染的内容有可能会重新修改') }}
       </bk-alert>
       <div class="sql-editor">
@@ -87,9 +97,11 @@
       </div>
     </template>
   </audit-sideslider>
+  <sql-tip ref="sqlTipRef" />
 </template>
 <script setup lang="ts">
   import * as monaco from 'monaco-editor';
+  import type { Ref } from 'vue';
   import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -98,6 +110,8 @@
   import ParseSqlModel from '@model/tool/parse-sql';
 
   import { execCopy } from '@utils/assist';
+
+  import SqlTip from './edit-sql-tip.vue';
 
   import useFullScreen from '@/hooks/use-full-screen';
   import useRequest from '@/hooks/use-request';
@@ -108,7 +122,7 @@
 
   const emits = defineEmits<Emits>();
   const showEditSql = defineModel<boolean>('showEditSql', {
-    required: true,
+    required: !true,
   });
 
   let editor: monaco.editor.IStandaloneCodeEditor;
@@ -120,44 +134,9 @@
     () => editor,
     () => rootRef.value,
   );
-
+  const sqlTipRef = ref();
   const isEditMode = ref(false);
   const filename = ref('');
-  const sqlDec = ref(`/*
-──────────────────────────────────────────────────────────────────────────────
-SQL 变量占位符使用指引
-──────────────────────────────────────────────────────────────────────────────
-1. 在SQL 模式中，如需让终端用户自行填写某字段，请使用 :key 形式
-   声明变量。执行时系统会弹出输入框并安全绑定，杜绝 SQL 注入风险。
-2. 同一变量可在多处复用，只需保持变量名一致（如 :thedate）。
-──────────────────────────────────────────────────────────────────────────────
-不同前端类型变量的渲染指引
-
-- 输入框/字符串：
-    SQL写法：WHERE username = :username
-    用户输入：字符串，最终渲染为 WHERE username = 'xxx'
-
-- 数字输入框：
-    SQL写法：WHERE age = :age
-    用户输入：数字，最终渲染为 WHERE age = 18
-
-- 时间选择器：
-    SQL写法：WHERE created_at = :created_at
-    用户输入：'2023-01-01 12:00:00'，最终渲染为 WHERE created_at = 1672545600000
-    （系统自动转为毫秒时间戳）
-
-- 时间范围选择器：
-    SQL写法：WHERE event_time = :time_range
-    用户输入：['2023-01-01 00:00:00', '2023-01-02 00:00:00']
-    最终渲染为 WHERE event_time BETWEEN 1672502400000 AND 1672588800000
-
-- 人员选择器：
-    SQL写法：WHERE operator IN :user_list
-    用户输入：['user1', 'user2']
-    最终渲染为 WHERE operator IN ('user1','user2')
-──────────────────────────────────────────────────────────────────────────────
-*/
- `);
   const formData = ref({
     sql: '',
     dialect: 'mysql',
@@ -166,6 +145,12 @@ SQL 变量占位符使用指引
 
   const updateIsShow = () => {
     formData.value.sql = '';
+  };
+
+  const openSqlTip = () => {
+    if (sqlTipRef.value) {
+      sqlTipRef.value.openDialog();
+    }
   };
   // 解析sql
   const {
@@ -255,7 +240,7 @@ SQL 变量占位符使用指引
   };
   const initEditor = () => {
     editor = monaco.editor.create(rootRef.value, {
-      value: formData.value.sql || sqlDec.value,
+      value: formData.value.sql,
       language: 'sql',
       theme: 'vs-dark',
       minimap: {
@@ -269,6 +254,32 @@ SQL 变量占位符使用指引
       formData.value.sql = removeComments(editor.getValue());
     });
   };
+
+  declare type Timeout = ReturnType<typeof setTimeout>;
+
+  const autoHideTimeout: Ref<Timeout | null> = ref(null);
+
+  const clearAutoHideTimeout = () => {
+    if (autoHideTimeout.value) {
+      clearTimeout(autoHideTimeout.value);
+      autoHideTimeout.value = null;
+    }
+  };
+
+  const startAutoHideTimeout = () => {
+    clearAutoHideTimeout();
+    autoHideTimeout.value = setTimeout(() => {
+      isEditMode.value = false;
+    }, 3000);
+  };
+
+  watch(() => isEditMode.value, (val) => {
+    if (val) {
+      startAutoHideTimeout();
+    } else {
+      clearAutoHideTimeout();
+    }
+  });
 
   watch(() => showEditSql.value, (val) => {
     if (val) {
@@ -287,6 +298,21 @@ SQL 变量占位符使用指引
   });
 </script>
 <style scoped lang="postcss">
+.tip-button {
+  width: 211px;
+  padding: 5px;
+  margin-top: 10px;
+  margin-left: 32px;
+  font-size: 14px;
+  letter-spacing: 0;
+  color: #3a84ff;
+  text-align: center;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #3a84ff;
+  border-radius: 2px;
+}
+
 .edit-container {
   padding: 16px 40px;
 
@@ -296,7 +322,6 @@ SQL 变量占位符使用指引
     padding-bottom: 5px;
     margin-top: 16px;
     line-height: 40px;
-    background-color: aqua;
 
     .title {
       display: flex;
