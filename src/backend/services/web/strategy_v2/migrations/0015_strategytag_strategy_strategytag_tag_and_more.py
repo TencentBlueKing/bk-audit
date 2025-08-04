@@ -7,7 +7,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('meta', '0019_alter_generalconfig_id'),
         ('strategy_v2', '0014_strategytool'),
     ]
 

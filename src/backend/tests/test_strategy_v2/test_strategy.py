@@ -250,3 +250,187 @@ class TestRuleAuditSourceTypeCheck(TestCase):
                 ]
             }
             self.assertEqual(actual, expect)
+
+
+class StrategyEnumMappingTest(StrategyTest):
+    def _create_bkm_strategy_with_enum(self, enum_mappings: dict) -> dict:
+        params = copy.deepcopy(BKM_STRATEGY_DATA)
+        params.update(
+            {
+                "control_id": self.c_version.control_id,
+                "control_version": self.c_version.control_version,
+                "risk_level": RiskLevel.HIGH.value,
+                "risk_hazard": "",
+                "risk_guidance": "",
+                "risk_title": "risk title",
+                "processor_groups": ["123"],
+                "event_basic_field_configs": [
+                    {
+                        "field_name": "username",
+                        "display_name": "username",
+                        "is_priority": True,
+                        "description": "",
+                        "enum_mappings": enum_mappings,
+                    }
+                ],
+            }
+        )
+        return resource.strategy_v2.create_strategy(**params)
+
+    @mock.patch(
+        "services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy",
+        mock.Mock(return_value={}),
+    )
+    def test_create_strategy_enum_mappings(self) -> None:
+        enum_mappings = {
+            "collection_id": "test_collection",
+            "mappings": [{"key": "1", "name": "one"}],
+        }
+        data = self._create_bkm_strategy_with_enum(enum_mappings)
+        strategy_id = data["strategy_id"]
+        result = resource.meta.get_enum_mapping_by_collection(
+            collection_id=enum_mappings["collection_id"],
+            related_type="strategy",
+            related_object_id=strategy_id,
+        )
+        expected = [
+            {
+                "collection_id": enum_mappings["collection_id"],
+                "key": enum_mappings["mappings"][0]["key"],
+                "name": enum_mappings["mappings"][0]["name"],
+            }
+        ]
+        self.assertEqual(result, expected)
+        relation = resource.meta.get_enum_mappings_relation(related_type="strategy", related_object_id=strategy_id)
+        self.assertEqual(relation, [enum_mappings["collection_id"]])
+
+    @mock.patch(
+        "services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy",
+        mock.Mock(return_value={}),
+    )
+    def test_update_strategy_enum_mappings_delete(self) -> None:
+        enum_mappings = {
+            "collection_id": "test_collection",
+            "mappings": [{"key": "1", "name": "one"}],
+        }
+        data = self._create_bkm_strategy_with_enum(enum_mappings)
+        strategy_id = data["strategy_id"]
+        params = copy.deepcopy(BKM_STRATEGY_DATA)
+        params.update(
+            {
+                "strategy_id": strategy_id,
+                "control_id": self.c_version.control_id,
+                "control_version": self.c_version.control_version,
+                "risk_level": RiskLevel.HIGH.value,
+                "risk_hazard": "",
+                "risk_guidance": "",
+                "risk_title": "risk_title",
+                "processor_groups": ["123"],
+                "event_basic_field_configs": [
+                    {
+                        "field_name": "username",
+                        "display_name": "username",
+                        "is_priority": True,
+                        "description": "",
+                        "enum_mappings": {
+                            "collection_id": enum_mappings["collection_id"],
+                            "mappings": [],
+                        },
+                    }
+                ],
+            }
+        )
+        resource.strategy_v2.update_strategy(**params)
+        relation = resource.meta.get_enum_mappings_relation(related_type="strategy", related_object_id=strategy_id)
+        self.assertEqual(relation, [])
+
+
+class StrategyEnumMappingResourceTest(TestCase):
+    def setUp(self) -> None:  # NOCC:invalid-name(单元测试)
+        CollectorPluginTest().setUp()
+        GlobalMetaConfig.set(
+            INDEX_SET_ID,
+            config_value=MOCK_INDEX_SET_ID,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.namespace,
+        )
+        self.c = Control.objects.create(**BKM_CONTROL_DATA)
+        self.c_version = ControlVersion.objects.create(**{**BKM_CONTROL_VERSION_DATA, "control_id": self.c.control_id})
+
+    def _create_bkm_strategy_with_enum(self, enum_mappings: dict) -> dict:
+        params = copy.deepcopy(BKM_STRATEGY_DATA)
+        params.update(
+            {
+                "control_id": self.c_version.control_id,
+                "control_version": self.c_version.control_version,
+                "risk_level": RiskLevel.HIGH.value,
+                "risk_hazard": "",
+                "risk_guidance": "",
+                "risk_title": "risk title",
+                "processor_groups": ["123"],
+                "event_basic_field_configs": [
+                    {
+                        "field_name": "username",
+                        "display_name": "username",
+                        "is_priority": True,
+                        "description": "",
+                        "enum_mappings": enum_mappings,
+                    }
+                ],
+            }
+        )
+        return resource.strategy_v2.create_strategy(**params)
+
+    def test_get_strategy_enum_mapping_by_collection_keys(self) -> None:
+        resource.meta.batch_update_enum_mappings(
+            collection_id="test",
+            mappings=[{"key": "1", "name": "one"}],
+            related_type="strategy",
+            related_object_id=1,
+        )
+        resource.meta.batch_update_enum_mappings(
+            collection_id="test2",
+            mappings=[{"key": "2", "name": "two"}],
+            related_type="strategy",
+            related_object_id=1,
+        )
+        params = {
+            "collection_keys": [
+                {"collection_id": "test", "key": "1"},
+                {"collection_id": "test2", "key": "2"},
+            ],
+            "related_type": "strategy",
+            "related_object_id": 1,
+        }
+        result = resource.strategy_v2.get_strategy_enum_mapping_by_collection_keys(**params)
+        result = sorted(result, key=lambda x: x["collection_id"])
+        expected = [
+            {"collection_id": "test", "key": "1", "name": "one"},
+            {"collection_id": "test2", "key": "2", "name": "two"},
+        ]
+        self.assertEqual(result, expected)
+
+    @mock.patch(
+        "services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy",
+        mock.Mock(return_value={}),
+    )
+    def test_get_strategy_enum_mapping_by_collection(self) -> None:
+        enum_mappings = {
+            "collection_id": "test",
+            "mappings": [{"key": "1", "name": "one"}],
+        }
+        data = self._create_bkm_strategy_with_enum(enum_mappings)
+        params = {
+            "collection_id": enum_mappings["collection_id"],
+            "related_type": "strategy",
+            "related_object_id": data["strategy_id"],
+        }
+        result = resource.strategy_v2.get_strategy_enum_mapping_by_collection(**params)
+        expected = [
+            {
+                "collection_id": enum_mappings["collection_id"],
+                "key": enum_mappings["mappings"][0]["key"],
+                "name": enum_mappings["mappings"][0]["name"],
+            }
+        ]
+        self.assertEqual(result, expected)

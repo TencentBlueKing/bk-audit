@@ -39,6 +39,7 @@ from rest_framework import serializers
 
 from apps.audit.resources import AuditMixinResource
 from apps.meta import models
+from apps.meta.comopents import DBEnumMappingAdapter
 from apps.meta.constants import (
     FETCH_INSTANCE_SCHEMA_CACHE_TIMEOUT,
     FETCH_INSTANCE_SCHEMA_METHOD,
@@ -47,12 +48,13 @@ from apps.meta.constants import (
     RETRIEVE_USER_TIMEOUT,
     SpaceType,
 )
-from apps.meta.exceptions import BKAppNotExists
+from apps.meta.exceptions import BKAppNotExists, EnumMappingRelationInvalid
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.models import (
     Action,
     CustomField,
     DataMap,
+    EnumMappingCollectionRelation,
     Field,
     GeneralConfig,
     GlobalMetaConfig,
@@ -65,10 +67,15 @@ from apps.meta.models import (
 from apps.meta.permissions import SearchLogPermission
 from apps.meta.serializers import (
     ActionSerializer,
+    BatchUpdateEnumMappingSerializer,
     ChangeSystemDiagnosisPushReqSerializer,
     ChangeSystemDiagnosisPushRespSerializer,
     DeleteGeneralConfigReqSerializer,
     DeleteSystemDiagnosisPushReqSerializer,
+    EnumMappingByCollectionKeysSerializer,
+    EnumMappingByCollectionSerializer,
+    EnumMappingRelation,
+    EnumMappingSerializer,
     FieldListRequestSerializer,
     FieldListSerializer,
     GeneralConfigSerializer,
@@ -748,3 +755,129 @@ class ListGeneralConfigResource(Meta, ModelResource):
     action = "list"
     serializer_class = GeneralConfigSerializer
     RequestSerializer = ListGeneralConfigReqSerializer
+
+
+class BatchUpdateEnumMappings(Meta, Resource):
+    """
+    批量更新枚举映射，并在提供 related_type 和 related_object_id 时创建关联关系
+    """
+
+    name = gettext_lazy("批量更新枚举映射")
+    RequestSerializer = BatchUpdateEnumMappingSerializer
+
+    adapter_cls = DBEnumMappingAdapter
+
+    def perform_request(self, validated_request_data):
+        mappings = validated_request_data['mappings']
+        collection_id = validated_request_data['collection_id']
+        related_type = validated_request_data.get('related_type')
+        related_object_id = validated_request_data.get('related_object_id')
+
+        adapter = self.adapter_cls()
+        adapter.batch_update_enum_mappings(collection_id, mappings)
+        if related_type and related_object_id:
+            if mappings:
+                adapter.add_relation(related_type, collection_id, related_object_id)
+            else:
+                adapter.delete_relation(related_type, collection_id, related_object_id)
+        return 'success'
+
+
+class GetEnumMappingsRelation(Meta, Resource):
+    name = gettext_lazy("获取枚举映射关联关系")
+    RequestSerializer = EnumMappingRelation
+
+    def perform_request(self, validated_request_data):
+        related_type = validated_request_data['related_type']
+        related_object_id = validated_request_data['related_object_id']
+        result = list(
+            item["collection_id"]
+            for item in EnumMappingCollectionRelation.objects.filter(
+                related_type=related_type, related_object_id=related_object_id
+            ).values('collection_id')
+        )
+        return result
+
+
+class GetEnumMappingByCollectionKeys(Meta, Resource):
+    """
+    根据多个 collection_id 和 key 获取对应的 name
+    """
+
+    name = gettext_lazy("根据多个 collection_id 和 key 获取对应的 name")
+    RequestSerializer = EnumMappingByCollectionKeysSerializer
+    ResponseSerializer = EnumMappingSerializer
+    many_response_data = True
+
+    adapter_cls = DBEnumMappingAdapter
+
+    def perform_request(self, validated_request_data):
+        collection_keys = validated_request_data['collection_keys']
+        related_type = validated_request_data.get('related_type')
+        related_object_id = validated_request_data.get('related_object_id')
+
+        # 如果提供了 related_type 或 related_object_id，先检查所有 collection_id 是否有对应的关联关系
+        if related_type or related_object_id:
+            collection_ids = {collection_key['collection_id'] for collection_key in collection_keys}
+            if not self.check_relations_exists(collection_ids, related_type, related_object_id):
+                raise EnumMappingRelationInvalid()
+        # 后续adapter_cls会根据validated_request_data定
+        adapter = self.adapter_cls()
+        mappings = adapter.get_enum_mappings_by_collection_keys(collection_keys)
+        return mappings
+
+    def check_relations_exists(self, collection_ids, related_type, related_object_id):
+        """
+        检查是否所有的 collection_ids 都有对应的关联关系
+        如果提供了 related_type 和 related_object_id，检查这两个字段。
+        """
+        filter_conditions = {'collection_id__in': collection_ids}
+
+        if related_type:
+            filter_conditions['related_type'] = related_type
+        if related_object_id:
+            filter_conditions['related_object_id'] = related_object_id
+
+        # 批量查询关联关系
+        relations = EnumMappingCollectionRelation.objects.filter(**filter_conditions)
+        # 返回存在的集合关系数量是否与传入的集合数量一致
+        return relations.count() == len(collection_ids)
+
+
+class GetEnumMappingByCollection(Meta, Resource):
+    """
+    通过 collection_id 获取所有的枚举映射，并检查关联关系
+    """
+
+    name = gettext_lazy("通过 collection_id 获取所有的枚举映射")
+    RequestSerializer = EnumMappingByCollectionSerializer
+    ResponseSerializer = EnumMappingSerializer
+    many_response_data = True
+
+    adapter_cls = DBEnumMappingAdapter
+
+    def perform_request(self, validated_request_data):
+        collection_id = validated_request_data['collection_id']
+        related_type = validated_request_data.get('related_type')
+        related_object_id = validated_request_data.get('related_object_id')
+
+        # 如果提供了 related_type 和 related_object_id，检查是否存在关联关系
+        if related_type and related_object_id:
+            if not self.check_relation(collection_id, related_type, related_object_id):
+                raise EnumMappingRelationInvalid()
+
+        # 获取枚举映射
+        adapter = self.adapter_cls()
+        mappings = adapter.get_all_enum_mappings(collection_id)
+        return mappings
+
+    def check_relation(self, collection_id, related_type, related_object_id):
+        """
+        检查是否存在有效的关联关系
+        """
+        # 查询关联关系是否存在
+        relation_exists = EnumMappingCollectionRelation.objects.filter(
+            collection_id=collection_id, related_type=related_type, related_object_id=related_object_id
+        ).exists()
+
+        return relation_exists
