@@ -76,9 +76,7 @@ class SqlQueryAnalysis:
 
         # 2. 提取SQL命名变量 (Extract SQL named variables)
         extracted_var_raw_names: Set[str] = set()
-        for var_node in chain(
-            self._parsed_expression.find_all(exp.Var), self._parsed_expression.find_all(exp.Placeholder)
-        ):
+        for var_node in chain(self._parsed_expression.find_all(exp.Var, exp.Placeholder, bfs=False)):
             raw_name = var_node.name
             if raw_name == "?":
                 raise SQLParseError(message="不支持匿名变量")
