@@ -29,6 +29,7 @@ from django.db.models.aggregates import Count
 from django.db.models.functions import Coalesce
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext_lazy as _
 from treebeard.exceptions import InvalidPosition, NodeAlreadySaved
 from treebeard.ns_tree import NS_Node
 
@@ -949,3 +950,60 @@ class SystemFavorite(OperateRecordModel):
         verbose_name = gettext_lazy("System Favorite")
         verbose_name_plural = verbose_name
         unique_together = [["system_id", "username"]]
+
+
+class EnumMappingCollection(models.Model):
+    """
+    存储一个枚举映射集合的信息。
+    """
+
+    collection_id = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        verbose_name = "Enum Mapping Collection"
+        verbose_name_plural = "Enum Mapping Collections"
+
+
+class EnumMappingEntity(models.Model):
+    """
+    存储一个枚举值的映射关系，包括 key 和 name。
+    """
+
+    collection = models.ForeignKey(EnumMappingCollection, related_name='entities', on_delete=models.CASCADE)
+    key = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
+
+    def __str__(self):
+        return f"{self.key}: {self.name}"
+
+    class Meta:
+        unique_together = ('collection', 'key')  # 确保同一个 collection 中，key 是唯一的
+        verbose_name = "Enum Mapping Entity"
+        verbose_name_plural = "Enum Mapping Entities"
+
+
+class EnumMappingRelatedType(models.TextChoices):
+    """枚举映射关联类型"""
+
+    STRATEGY = "strategy", _("策略")
+
+
+class EnumMappingCollectionRelation(models.Model):
+    """
+    存储 EnumMappingCollection 和 外部引用对象 之间的关系
+    """
+
+    collection_id = models.CharField(max_length=255)
+    related_object_id = models.CharField(max_length=255)
+    related_type = models.CharField(
+        max_length=64,
+        choices=EnumMappingRelatedType.choices,
+    )
+
+    def __str__(self):
+        return f"{self.collection_id} -> {self.related_type} {self.related_object_id}"
+
+    class Meta:
+        unique_together = ('collection_id', 'related_object_id', 'related_type')
+        verbose_name = "Collection to Strategy Relation"
+        verbose_name_plural = "Collection to Strategy Relations"

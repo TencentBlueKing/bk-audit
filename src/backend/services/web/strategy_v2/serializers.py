@@ -23,6 +23,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
+from apps.meta.serializers import BatchUpdateEnumMappingSerializer
 from core.serializers import ChoiceListSerializer, OrderSerializer
 from services.web.analyze.constants import (
     ControlTypeChoices,
@@ -82,11 +83,21 @@ class MapFieldSerializer(serializers.Serializer):
         return attrs
 
 
+class EnumMappingConfigSerializer(BatchUpdateEnumMappingSerializer):
+    related_type = serializers.CharField(max_length=255, read_only=True, default="strategy")
+    related_object_id = serializers.CharField(max_length=255, read_only=True, default="strategy_id")
+
+
 class EventFieldSerializer(serializers.Serializer):
     field_name = serializers.CharField(label=gettext_lazy("Field Name"))
     display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
     is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
     description = serializers.CharField(label=gettext_lazy("Field Description"), default="", allow_blank=True)
+    enum_mappings = EnumMappingConfigSerializer(
+        label=gettext_lazy("Enum Mappings"),
+        required=False,
+        allow_null=True,
+    )
     drill_config = DataSearchDrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), default=None, allow_null=True)
     is_show = serializers.BooleanField(label=gettext_lazy("是否展示"), default=True)
 

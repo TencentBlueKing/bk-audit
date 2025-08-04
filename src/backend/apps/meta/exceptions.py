@@ -87,3 +87,9 @@ class ActionHasExist(MetaException):
     def __init__(self, system_id: str, action_id: str, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(system_id=system_id, action_id=action_id)
         super().__init__(*args, **kwargs)
+
+
+class EnumMappingRelationInvalid(MetaException):
+    ERROR_CODE = "006"
+    STATUS_CODE = 500
+    MESSAGE = gettext_lazy("枚举映射集合和关联对象没有从属关系")

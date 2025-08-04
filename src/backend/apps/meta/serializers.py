@@ -50,6 +50,7 @@ from apps.meta.exceptions import TagNameInValid, UniqueNameInValid
 from apps.meta.models import (
     Action,
     DataMap,
+    EnumMappingRelatedType,
     Field,
     GeneralConfig,
     GeneralConfigScene,
@@ -972,3 +973,37 @@ class BulkActionCreateSerializer(serializers.Serializer):
             for action in data["actions"]:
                 action["system_id"] = data.get("system_id")
         return super().run_validation(data)
+
+
+class EnumMappingRelation(serializers.Serializer):
+    related_type = serializers.ChoiceField(required=False, allow_null=True, choices=EnumMappingRelatedType.choices)
+    related_object_id = serializers.CharField(max_length=256, required=False, allow_null=True)
+
+
+class CollectionKeySerializer(serializers.Serializer):
+    collection_id = serializers.CharField(max_length=255)
+    key = serializers.CharField(max_length=255)
+
+
+class EnumMappingByCollectionKeysSerializer(EnumMappingRelation, serializers.Serializer):
+    collection_keys = serializers.ListField(child=CollectionKeySerializer())
+
+
+class EnumMappingByCollectionSerializer(EnumMappingRelation, serializers.Serializer):
+    collection_id = serializers.CharField(max_length=255)
+
+
+class EnumMappingSerializer(serializers.Serializer):
+    collection_id = serializers.CharField(max_length=255)
+    key = serializers.CharField(max_length=255)
+    name = serializers.CharField(max_length=255)
+
+
+class InnerEnumMappingSerializer(serializers.Serializer):
+    key = serializers.CharField(max_length=255)
+    name = serializers.CharField(max_length=255)
+
+
+class BatchUpdateEnumMappingSerializer(EnumMappingRelation, serializers.Serializer):
+    collection_id = serializers.CharField(max_length=255)
+    mappings = serializers.ListField(child=InnerEnumMappingSerializer(), allow_empty=True)
