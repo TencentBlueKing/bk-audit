@@ -45,7 +45,12 @@ from apps.audit.resources import AuditMixinResource
 from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
-from apps.meta.models import DataMap, Tag
+from apps.meta.models import DataMap, EnumMappingRelatedType, Tag
+from apps.meta.serializers import (
+    EnumMappingByCollectionKeysSerializer,
+    EnumMappingByCollectionSerializer,
+    EnumMappingSerializer,
+)
 from apps.meta.utils.fields import (
     ACTION_ID,
     DIMENSION_FIELD_TYPES,
@@ -265,8 +270,49 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         if source_type not in support_source_types:
             raise NotSupportSourceType(source_type=source_type, support_source_types=support_source_types)
 
+    def update_enum_mappings(self, enum_mapping: dict, strategy_id: int):
+        enum_mapping['related_object_id'] = str(strategy_id)
+        enum_mapping['related_type'] = EnumMappingRelatedType.STRATEGY.value
+        resource.meta.batch_update_enum_mappings(**enum_mapping)
+
+    def delete_enum_mappings(self, strategy_id: int):
+        collection_ids = resource.meta.get_enum_mappings_relation(
+            related_object_id=str(strategy_id), related_type=EnumMappingRelatedType.STRATEGY.value
+        )
+        for collection_id in collection_ids:
+            resource.meta.batch_update_enum_mappings(
+                collection_id=collection_id,
+                related_type=EnumMappingRelatedType.STRATEGY.value,
+                related_object_id=str(strategy_id),
+                mappings=[],
+            )
+
 
 class CreateStrategy(StrategyV2Base):
+    """
+    创建策略时附带枚举映射示例。
+    ```
+    {
+            "strategy_name": "demo",
+            "strategy_type": "model",
+            "event_basic_field_configs": [
+                {
+                    "field_name": "status",
+                    "display_name": "Status",
+                    "is_priority": false,
+                    "enum_mappings": {
+                        "collection_id": "status_collection_112233", # 枚举名字全局唯一，建议生成随机值
+                        "mappings": [
+                            {"key": "1", "name": "Running"},
+                            {"key": "0", "name": "Stopped"}
+                        ]
+                    }
+                }
+            ]
+        }
+    ```
+    """
+
     name = gettext_lazy("Create Strategy")
     RequestSerializer = CreateStrategyRequestSerializer
     ResponseSerializer = CreateStrategyResponseSerializer
@@ -286,6 +332,16 @@ class CreateStrategy(StrategyV2Base):
             if strategy_type == StrategyType.RULE:
                 strategy.sql = self.build_rule_audit_sql(strategy)
                 strategy.save(update_fields=["sql"])
+            # 更新enum
+            for field_category in [
+                'event_basic_field_configs',
+                'event_data_field_configs',
+                'event_evidence_field_configs',
+            ]:
+                for field_config in validated_request_data.get(field_category, []):
+                    enum_mappings = field_config.get('enum_mappings')
+                    if enum_mappings:
+                        self.update_enum_mappings(enum_mappings, strategy.strategy_id)
         # create
         try:
             call_controller(
@@ -392,6 +448,12 @@ class UpdateStrategy(StrategyV2Base):
         if need_update_remote and strategy.strategy_type == StrategyType.RULE:
             strategy.sql = self.build_rule_audit_sql(strategy)
             strategy.save(update_fields=["sql"])
+        # 更新enum
+        for field_category in ['event_basic_field_configs', 'event_data_field_configs', 'event_evidence_field_configs']:
+            for field_config in validated_request_data.get(field_category, []):
+                enum_mappings = field_config.get('enum_mappings')
+                if enum_mappings:
+                    self.update_enum_mappings(enum_mappings, strategy.strategy_id)
         # return
         return need_update_remote
 
@@ -435,6 +497,7 @@ class DeleteStrategy(StrategyV2Base):
         # delete strategy
         self.add_audit_instance_to_context(instance=StrategyAuditInstance(strategy))
         strategy.delete()
+        self.delete_enum_mappings(strategy_id=strategy.strategy_id)
 
 
 class ListStrategy(StrategyV2Base):
@@ -518,6 +581,65 @@ class ListStrategyAll(StrategyV2Base):
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
         data.sort(key=lambda s: s["label"])
         return data
+
+
+class GetStrategyEnumMappingByCollectionKeys(StrategyV2Base):
+    """
+    获取某个策略的某个集合中的某个枚举值的信息。可以一次性获取多个不同集合中的多个枚举值的信息。
+    请求：
+    ```
+        {
+            "collection_keys": [
+                {"collection_id": "status_collection_112233", "key": "1"},
+                {"collection_id": "user_collection_112233", "key": "2"},
+            ],
+            "related_type": "strategy",
+            "related_object_id": 1 # 策略ID
+        }
+    ```
+    响应：
+    ```
+    [{"collection_id":"status_collection_112233","key": "1", "name": "未处理"},
+    {"collection_id":"user_collection_112233","key": "2", "name": "张三"}]
+    ```
+    """
+
+    name = gettext_lazy("获取某个策略的某个集合中的某个枚举值的信息")
+    RequestSerializer = EnumMappingByCollectionKeysSerializer
+    ResponseSerializer = EnumMappingSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        validated_request_data["related_type"] = "strategy"
+        return resource.meta.get_enum_mapping_by_collection_keys(**validated_request_data)
+
+
+class GetStrategyEnumMappingByCollection(StrategyV2Base):
+    """
+    获取某个策略的某个集合中的所有枚举值的信息。
+    请求：
+    ```
+    {
+        "collection_id": "status_collection_112233",
+        "related_type": "strategy",
+        "related_object_id": 1
+    }
+    ```
+    响应：
+    ```
+    [{"collection_id":"status_collection_112233","key": "1", "name": "未处理"},
+    {"collection_id":"status_collection_112233","key": "2", "name": "已处理"}]
+    ```
+    """
+
+    name = gettext_lazy("获取某个策略的某个集合中的所有枚举值的信息")
+    RequestSerializer = EnumMappingByCollectionSerializer
+    ResponseSerializer = EnumMappingSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        validated_request_data["related_type"] = "strategy"
+        return resource.meta.get_enum_mapping_by_collection(**validated_request_data)
 
 
 class ToggleStrategy(StrategyV2Base):
