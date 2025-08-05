@@ -154,6 +154,10 @@
   };
 
   const change = (val: any) => {
+    // 如果是空值，直接返回 防止第一次报错
+    if (val === null || (Array.isArray(val) && val.length === 0) || val === '') {
+      return;
+    }
     const type: keyof typeof handlers = props.dataConfig.field_category as keyof typeof handlers;
 
     const handlers = {

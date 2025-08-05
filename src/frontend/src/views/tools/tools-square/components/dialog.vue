@@ -112,6 +112,15 @@
                     :label="item?.display_name"
                     :property="item?.raw_name"
                     :required="item?.required">
+                    <template #label>
+                      <span
+                        v-bk-tooltips="{
+                          disabled: item?.description === '',
+                          content: item?.description,
+                        }">
+                        {{ item?.display_name }}
+                      </span>
+                    </template>
                     <form-item
                       ref="formItemRef"
                       :data-config="item"
@@ -350,6 +359,9 @@
 
   // 策略跳转
   const handlesStrategiesClick = (item: any) => {
+    if (item?.strategies.length === 0) {
+      return;
+    }
     const url = router.resolve({
       name: 'strategyList',
       query: {
@@ -855,7 +867,7 @@
       dialogHeight.value = `${newHeight}px`;
       // 同步更新表格高度，确保不小于minTableHeight
       const newTableHeight = Math.max(minTableHeight, startTableHeight + dy);
-      dialogTableHeight.value = `${newTableHeight}px`;
+      dialogTableHeight.value = `${newTableHeight - 20}px`;
     };
 
     const onMouseUp = () => {
