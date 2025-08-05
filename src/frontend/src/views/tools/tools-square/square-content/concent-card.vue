@@ -429,6 +429,9 @@
 
   // 策略跳转
   const handlesStrategiesClick = (item: ToolInfo) => {
+    if (item?.strategies.length === 0) {
+      return;
+    }
     const url = router.resolve({
       name: 'strategyList',
       query: {
@@ -643,7 +646,7 @@
 
       .card-list-item {
         position: relative;
-        width: 430px;
+        width: 19.5%;
         height: 188px;
         margin-top: 10px;
         margin-bottom: 0;
