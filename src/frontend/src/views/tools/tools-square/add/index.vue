@@ -409,6 +409,7 @@
                                 <form-item
                                   ref="formItemRefs"
                                   :data-config="item"
+                                  origin-model
                                   @change="(val:any) => handleFormItemChange(val, item)" />
                               </template>
                             </bk-form-item>
@@ -907,12 +908,14 @@
     const oldInputMap = new Map(formData.value.config.input_variable.map(item => [item.raw_name, item]));
     formData.value.config.input_variable = sqlData.sql_variables.map((newItem) => {
       const existing = oldInputMap.get(newItem.raw_name);
+      if (existing) {
+        return existing;
+      }
       return {
         ...newItem,
-        required: existing?.required || newItem.required,
-        field_category: existing?.field_category || '',
-        default_value: existing?.default_value || '',
-        choices: existing?.choices || [],
+        field_category: '',
+        default_value: '',
+        choices: [],
       };
     });
 
@@ -923,11 +926,7 @@
 
       // 如果已有记录，保留用户填写的额外字段
       if (existing) {
-        return {
-          ...newItem,
-          description: existing.description,   // 保留已有描述
-          drill_config: existing.drill_config,  // 保留已有钻取配置
-        };
+        return existing;
       }
       // 新记录则初始化额外字段
       return {
@@ -943,6 +942,9 @@
     defineTheme();
     nextTick(() => {
       editor.setValue(sqlData.original_sql);
+      formItemRefs.value.forEach((item: any, index: number) => {
+        item?.setData(formData.value.config.input_variable[index].default_value);
+      });
     });
   };
 
@@ -1336,7 +1338,8 @@
         .bk-input,
         .bk-date-picker-editor,
         .bk-select-trigger,
-        .bk-select-tag {
+        .bk-select-tag,
+        .date-picker {
           height: 42px !important;
           border: none;
         }

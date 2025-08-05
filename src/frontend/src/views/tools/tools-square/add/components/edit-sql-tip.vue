@@ -115,7 +115,7 @@
                 <span class="desc-tag"> WHERE username IN :userlist </span>
               </div>
               <div class="table-cell">
-                {{ t('变量自动转换为数组格式（如') }}<span class="desc-tag">{{ t('（$ 张三 $，李四 $ ）') }}</span>)
+                {{ t('变量自动转换为数组格式（如') }}<span class="desc-tag">{{ t("'张三'，'李四'") }}</span>)
               </div>
             </div>
 
@@ -206,23 +206,23 @@
               <span>
                 <audit-icon
                   style="margin-left: 55px;font-size: 13px;color: #c4c6cc;"
-                  type="right" /> {{
-                    t('转换结果：') }}
+                  type="right" />
+                <span class="desc">{{ t('转换结果：') }}</span>
                 <span class="desc-tag div-margin"> {{ t(`dtEventTime >='2025-07-30 00:00:00'AND dtEventTime
                   <'2025-07-30 23:59:59'`) }} </span>
               </span>
               <p />
               <span style="display: inline-block;margin-top: 10px;">
                 <span class="dot-samll " />
-                <span class="desc  div-margin">{{ t('时间戳当前支持三种精度的时间戳，') }}</span> <span
-                  class="desc-tag">'Timestamp(s)'/'Timestamp(ms)'/'Timestamp(us)'</span>
-                {{ t('请根据当前时间字段的精度选用') }}
+                <span class="desc  div-margin">{{ t('时间戳当前支持三种精度的时间戳，') }}</span>
+                <span class="desc-tag">'Timestamp(s)'/'Timestamp(ms)'/'Timestamp(us)'</span>
+                <span class="desc">{{ t('请根据当前时间字段的精度选用') }}</span>
                 <p />
                 <span>
                   <audit-icon
                     style="margin-left: 55px;font-size: 13px;color: #c4c6cc;"
-                    type="right" /> {{ t('转换结果：')
-                    }}
+                    type="right" />
+                  <span class="desc">{{ t('转换结果：') }}</span>
                   <span class="desc-tag div-margin"> {{ t(`dtEventTimestamp >= 1672502400008 AND
                       dtEventTimeStamp < 1672588800000`) }} </span>
                 </span>
