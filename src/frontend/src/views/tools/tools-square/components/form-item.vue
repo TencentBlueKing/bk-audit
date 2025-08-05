@@ -32,7 +32,7 @@
       v-model="user"
       @change="handleUserChange" />
 
-    <bk-date-picker
+    <!-- <bk-date-picker
       v-if="dataConfig.field_category === 'time_range_select'"
       append-to-body
       clearable
@@ -40,7 +40,13 @@
       style="width: 100%"
       :time-picker-options="{ allowCrossDay: true }"
       type="datetimerange"
-      @change="handleRangeChange" />
+      @change="handleRangeChange" /> -->
+
+    <date-picker
+      v-if="dataConfig.field_category === 'time_range_select'"
+      v-model="pickerRangeValue"
+      class="date-picker"
+      @update:model-value="handleRangeChange" />
 
     <bk-date-picker
       v-if="dataConfig.field_category === 'time_select'"
@@ -77,6 +83,8 @@
 
   import useRequest from '@hooks/use-request';
 
+  import { DateRange } from '@blueking/date-picker';
+
   interface SearchItem {
     // value: string;
     raw_name: string;
@@ -95,6 +103,7 @@
   }
   interface Props {
     dataConfig: SearchItem,
+    originModel?: boolean
   }
   interface Emits {
     (e: 'change', value: any): void
@@ -102,6 +111,7 @@
   interface Exposes {
     resetValue: () => void,
     setData: (val: any) => void,
+    getData: () => void,
   }
 
   const props = defineProps<Props>();
@@ -110,7 +120,7 @@
 
   const inputData = ref<string>('');
   const numberInputData = ref<number>(NaN);
-  const pickerRangeValue = ref();
+  const pickerRangeValue = ref<Array<string>>();
   const pickerValue = ref<string>('');
   const user = ref<Array<string>>([]);
   const enumValue = ref<Array<string>>([]);
@@ -140,9 +150,17 @@
     user.value = value;
     emits('change', value || []);
   };
-  const handleRangeChange = (value: any) => {
+  const handleRangeChange = (value: Array<string>) => {
+    // 新增工具配置默认值，只用原始值
+    if (props.originModel) {
+      pickerRangeValue.value = value;
+      emits('change', value || []);
+      return;
+    }
+    // 工具使用查询，使用format值
+    const date = new DateRange(value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
     pickerRangeValue.value = value;
-    emits('change', value || []);
+    emits('change', [date.startDisplayText, date.endDisplayText]);
   };
   const handleTimeChange = (value: string) => {
     pickerValue.value = value;
@@ -153,29 +171,21 @@
     emits('change', value || []);
   };
 
-  const change = (val: any) => {
-    // 如果是空值，直接返回 防止第一次报错
-    if (val === null || (Array.isArray(val) && val.length === 0) || val === '') {
-      return;
-    }
+  const setData = (val: any) => {
     const type: keyof typeof handlers = props.dataConfig.field_category as keyof typeof handlers;
 
     const handlers = {
       input: () => {
-        const value =  val;
-        handleInputDataChange(value);
+        handleInputDataChange(val);
       },
       number_input: () => {
-        const value = val;
-        handleNumberInputDataChange(value);
+        handleNumberInputDataChange(val);
       },
       person_select: () => {
-        const value = val;
-        handleUserChange(value);
+        handleUserChange(val);
       },
       time_range_select: () => {
-        const value = val;
-        handleRangeChange(value);
+        handleRangeChange(val);
       },
       time_select: () => {
         // 如果已经是正确的格式字符串，直接使用
@@ -191,8 +201,7 @@
         }
       },
       multiselect: () => {
-        const value = val || [];
-        handleEnumChange(value);
+        handleEnumChange(val);
       },
     };
 
@@ -212,7 +221,31 @@
       user.value = [];
     },
     setData(val: any) {
-      change(val);
+      setData(val);
+    },
+    getData() {
+      // 工具使用使用now语法， 每次查询获取最新值
+      if (props.dataConfig.field_category === 'time_range_select') {
+        const date = new DateRange(pickerRangeValue.value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
+        emits('change', [date.startDisplayText, date.endDisplayText]);
+      }
     },
   });
 </script>
+<style lang="postcss" scoped>
+  :deep(.date-picker) {
+    display: flex;
+    width: 100%;
+
+    .date-content {
+      flex: 1;
+
+      span {
+        width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+</style>

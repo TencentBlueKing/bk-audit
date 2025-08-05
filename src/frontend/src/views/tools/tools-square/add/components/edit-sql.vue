@@ -24,13 +24,12 @@
     width="820"
     @update:is-show="updateIsShow">
     <div
-      v-if="!isEditMode"
       class="tip-button"
       @click="openSqlTip">
       {{ t('SQL 变量占位符使用指引 >>') }}
     </div>
     <div class="edit-container">
-      <bk-alert
+      <!-- <bk-alert
         v-if="isEditMode"
         closable
         theme="warning"
@@ -38,7 +37,7 @@
         @mouseenter="clearAutoHideTimeout"
         @mouseleave="startAutoHideTimeout">
         {{ t('编辑后，已渲染的内容有可能会重新修改') }}
-      </bk-alert>
+      </bk-alert> -->
       <div class="sql-editor">
         <div class="title">
           <span style="margin-left: auto;">

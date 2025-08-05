@@ -463,6 +463,9 @@
       searchForm.value[item.raw_name] = item.value;
     });
     formRef.value.validate().then(() => {
+      formItemRef.value.forEach((item: any) => {
+        item?.getData();
+      });
       fetchTableData();
     });
   };
@@ -473,32 +476,37 @@
     pagination.value.count = 0;
     pagination.value.limit = 100;
     tableData.value = [];
-    searchList.value = [];
     isDrillDownOpen.value = false;
     drillDownItemConfig.value = [];
     drillDownItemRowData.value = {};
+
+    // 检查 searchList.value 中的所有 value 是否为空
+    const allValuesEmpty = searchList.value.every(item => item.value === null
+      || (Array.isArray(item.value) && item.value.length === 0));
+    if (allValuesEmpty) {
+      return;
+    }
+
+    searchList.value = searchList.value.map(item => ({
+      ...item,
+      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
+    }));
 
     if (formItemRef.value) {
       formItemRef.value.forEach((item: any) => {
         item?.resetValue();
       });
     }
+
     formRef.value.clearValidate();
   };
 
   const handleFormItemChange = (val: any, item: SearchItem) => {
-    // 完全避免修改函数参数item
-    const index = searchList.value.findIndex(i => i.raw_name === item.raw_name);
-    if (index !== -1) {
-      searchList.value = [
-        ...searchList.value.slice(0, index),
-        {
-          ...searchList.value[index],
-          value: val,
-        },
-        ...searchList.value.slice(index + 1),
-      ];
+    const target = searchList.value.find(i => i.raw_name === item.raw_name);
+    if (target) {
+      target.value = val;
     }
+
     searchForm.value[item.raw_name] = val;
   };
 
@@ -590,8 +598,12 @@
 
     nextTick(() => {
       if (formItemRef.value) {
+        // form-item赋值
         formItemRef.value.forEach((item: any, index: number) => {
           item?.setData(searchList.value[index].value);
+        });
+        nextTick(() => {
+          formRef.value.clearValidate();
         });
         const isValid = searchList.value.every((e) => {
           if (e.field_category === 'person_select' || e.field_category === 'time_range_select') {
