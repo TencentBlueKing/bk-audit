@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-21 21:41+0800\n"
+"POT-Creation-Date: 2025-08-05 11:10+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -29,6 +29,9 @@ msgstr "HDFS"
 
 msgid "Doris"
 msgstr "Doris"
+
+msgid "结果表查询"
+msgstr ""
 
 msgid "创建入库"
 msgstr "Create Storage"
@@ -188,6 +191,18 @@ msgstr "Limit"
 
 msgid "偏移量"
 msgstr "Offset"
+
+msgid "用户ID"
+msgstr "User ID"
+
+msgid "动作ID"
+msgstr "Action ID"
+
+msgid "对象ID"
+msgstr "Object ID"
+
+msgid "是否有权限"
+msgstr "Has Permission"
 
 msgid "获取消息类型"
 msgstr "Get Msg Type"
@@ -482,9 +497,6 @@ msgstr "Instance ID"
 
 msgid "实例名"
 msgstr "Instance Name"
-
-msgid "对象ID"
-msgstr "Object ID"
 
 msgid "对象名"
 msgstr "Object Name"
@@ -1079,6 +1091,9 @@ msgstr "IAM V4"
 
 msgid "审计中心"
 msgstr "BK Audit"
+
+msgid "No Tag"
+msgstr "No Tag"
 
 msgid "Namespace不存在"
 msgstr "Namespace does not exist"
@@ -2058,6 +2073,9 @@ msgstr "View System Diagnosis Report"
 msgid "查看场景视图"
 msgstr "View Scene Vision"
 
+msgid "使用工具"
+msgstr "Use Tool"
+
 msgid "采集新建"
 msgstr "Create Collection"
 
@@ -2070,6 +2088,9 @@ msgstr "Manage Collection"
 msgid "业务访问"
 msgstr "View Business"
 
+msgid "查看嵌入分享"
+msgstr "View Embedded Sharing"
+
 #, python-format
 msgid "获取系统信息错误：%(message)s"
 msgstr "Getting system information error：%(message)s"
@@ -2080,6 +2101,9 @@ msgstr "Resource Not Exist：%(resource_id)s"
 
 msgid "空间"
 msgstr "Space"
+
+msgid "嵌入分享"
+msgstr "Embedded Sharing"
 
 msgid "采集项"
 msgstr "Collector"
@@ -2101,6 +2125,9 @@ msgstr "Audit Strategy"
 
 msgid "联表"
 msgstr "Link Table"
+
+msgid "工具"
+msgstr "Tool"
 
 msgid "获取IAM系统配置"
 msgstr "Get IAM System COnfig"
@@ -2225,6 +2252,10 @@ msgstr "Admin Required"
 msgid "Token Invalid"
 msgstr "Token Invalid"
 
+#, python-format
+msgid "(未获取到变量值:%s)"
+msgstr "(Variable value not obtained:%s)"
+
 msgid "Label"
 msgstr "Label"
 
@@ -2261,6 +2292,18 @@ msgstr "Timestamp"
 msgid "浮点数"
 msgstr "Float"
 
+msgid "inner_join"
+msgstr "inner_join"
+
+msgid "left_join"
+msgstr "left_join"
+
+msgid "right_join"
+msgstr "right_join"
+
+msgid "full_join"
+msgstr "full_join"
+
 msgid "计数"
 msgstr "Count"
 
@@ -2278,18 +2321,6 @@ msgstr "Minimum"
 
 msgid "去重计数"
 msgstr "Distinct Count"
-
-msgid "inner_join"
-msgstr "inner_join"
-
-msgid "left_join"
-msgstr "left_join"
-
-msgid "right_join"
-msgstr "right_join"
-
-msgid "full_join"
-msgstr "full_join"
 
 msgid "="
 msgstr "="
@@ -2335,6 +2366,9 @@ msgstr "match any"
 
 msgid "between"
 msgstr "between"
+
+msgid "SQL解析失败。"
+msgstr "SQL parsing failed."
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
@@ -2801,6 +2835,7 @@ msgstr "Url cannot be empty"
 msgid "URL必须使用http或https协议"
 msgstr "The URL must use the http or https protocol."
 
+#, python-brace-format
 msgid "URL包含高危端口: {}"
 msgstr "The URL contains high-risk ports: {}"
 
@@ -3667,10 +3702,6 @@ msgstr "User Type"
 msgid "Ticket Permission"
 msgstr "Ticket Permission"
 
-#, python-format
-msgid "(未获取到变量值:%s)"
-msgstr "(Variable value not obtained:%s)"
-
 msgid "创建事件"
 msgstr "Create Event"
 
@@ -3913,9 +3944,6 @@ msgstr "Strategy V2"
 msgid "Upgradable"
 msgstr "Upgradable"
 
-msgid "No Tag"
-msgstr "No Tag"
-
 msgid "Disabled"
 msgstr "Disabled"
 
@@ -4023,6 +4051,12 @@ msgstr "Kafka"
 msgid "Link Table Data"
 msgstr "Link Table Data"
 
+msgid "基本字段"
+msgstr "Basic Fields"
+
+msgid "证据字段"
+msgstr "Evidence Fields"
+
 msgid "Control Changed"
 msgstr "Control Changed"
 
@@ -4129,6 +4163,18 @@ msgstr "Link Table"
 
 msgid "Link Table Tag"
 msgstr "Link Table Tag"
+
+msgid "工具UID"
+msgstr "Tool UID"
+
+msgid "工具版本"
+msgstr "Tool Version"
+
+msgid "字段来源"
+msgstr "Field Source"
+
+msgid "Strategy Tool"
+msgstr "Strategy Tool"
 
 msgid "Create Strategy"
 msgstr "Create Strategy"
@@ -4241,6 +4287,9 @@ msgstr "Is Priority"
 
 msgid "Field Description"
 msgstr "Field Description"
+
+msgid "下钻配置"
+msgstr "Drill-down Config"
 
 msgid "Map Field"
 msgstr "Map Field"
@@ -4564,6 +4613,159 @@ msgstr "Risk Count"
 
 msgid "数据时间"
 msgstr "Data Time"
+
+msgid "数据查询"
+msgstr "Data Query"
+
+#, fuzzy
+#| msgid "BKVision"
+msgid "BK Vision"
+msgstr "BKVision"
+
+msgid "简易模式"
+msgstr "Simple Mode"
+
+msgid "SQL模式"
+msgstr "SQL Mode"
+
+msgid "输入框"
+msgstr "Input Box"
+
+msgid "数字输入框"
+msgstr "Number Input Box"
+
+#, fuzzy
+#| msgid "时间范围"
+msgid "时间范围选择器"
+msgstr "Time Range Selector"
+
+msgid "时间选择器"
+msgstr "Time Selector"
+
+msgid "人员选择器"
+msgstr "User Selector"
+
+msgid "下拉列表"
+msgstr "Dropdown List"
+
+msgid "当前暂不支持 '简易模式'(simple) 的数据查询工具"
+msgstr "Simple mode data query tools are not currently supported"
+
+#, python-brace-format
+msgid "用户{user}没有权限访问数据源{data_source}"
+msgstr "User {user} has no permission to access data source {data_source}"
+
+#, python-brace-format
+msgid "输入变量“{var_name}”必填"
+msgstr "Input variable “{var_name}” is required"
+
+msgid "用户输入变量值无效"
+msgstr "User input variable value is invalid"
+
+#, python-brace-format
+msgid "变量类型“{var_type}”的值“{value}”格式无效"
+msgstr "Invalid format for variable type “{var_type}” value “{value}”"
+
+#, python-brace-format
+msgid "变量类型“{var_type}”的值结构无效: 期望“{expected_structure}”,但收到的是“{actual_type}”"
+msgstr "Invalid structure for variable type “{var_type}” value: expected “{expected_structure}”, but received “{actual_type}”"
+
+#, python-brace-format
+msgid "变量类型“{var_type}”没有解析函数"
+msgstr "Variable type “{var_type}” has no parsing function"
+
+#, python-brace-format
+msgid "解析变量类型“{var_type}”的值“{value}”异常,请联系系统管理员"
+msgstr "Exception parsing variable type “{var_type}” value “{value}”, please contact system administrator"
+
+#, python-brace-format
+msgid "bkbase 查询异常;执行 SQL：{sql}"
+msgstr "BKBase query exception; executing SQL: {sql}"
+
+msgid "工具名称"
+msgstr "Tool Name"
+
+msgid "工具描述"
+msgstr "Tool Description"
+
+msgid "工具类型"
+msgstr "Tool Type"
+
+msgid "工具配置"
+msgstr "Tool Config"
+
+msgid "Tool"
+msgstr "Tool"
+
+msgid "数据检索类型"
+msgstr "Data Search Type"
+
+msgid "检索SQL"
+msgstr "Search SQL"
+
+msgid "Data Search Tool Config"
+msgstr "Data Search Tool Config"
+
+msgid "Bkvision Tool Config"
+msgstr "BKVision Tool Config"
+
+msgid "Tool Tag"
+msgstr "Tool Tag"
+
+msgid "列出工具标签"
+msgstr "List Tool Tags"
+
+msgid "获取工具列表"
+msgstr "Get Tool List"
+
+msgid "删除工具"
+msgstr "Delete Tool"
+
+msgid "新增工具"
+msgstr "Create Tool"
+
+msgid "编辑工具"
+msgstr "Edit Tool"
+
+#, python-format
+msgid "Tool not found: %s"
+msgstr "Tool not found: %s"
+
+msgid "工具执行"
+msgstr "Tool Execution"
+
+msgid "工具列表(all)"
+msgstr "Tool List (All)"
+
+msgid "工具执行数据导出"
+msgstr "Tool Execution Data Export"
+
+msgid "获取工具详情"
+msgstr "Get Tool Details"
+
+msgid "SQL解析"
+msgstr "SQL Parsing"
+
+msgid "用户查询权限批量校验"
+msgstr "Batch User Query Permission Validation"
+
+msgid "Tool Count"
+msgstr "Tool Count"
+
+msgid "标签列表"
+msgstr "Tag List"
+
+msgid "数据查询配置类型"
+msgstr "Data Query Config Type"
+
+msgid "仅在 tool_type=data_search 时必须，支持 simple/sql"
+msgstr "Required only when tool_type=data_search, supports simple/sql"
+
+msgid "工具 UID"
+msgstr "Tool UID"
+
+msgid "表名列表"
+msgstr "Table Name List"
 
 msgid "版本日志"
 msgstr "Version Log"

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-07-21 21:41+0800\n"
+"POT-Creation-Date: 2025-08-05 11:53+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -29,6 +29,9 @@ msgstr "HDFS"
 
 msgid "Doris"
 msgstr "Doris"
+
+msgid "结果表查询"
+msgstr "结果表查询"
 
 msgid "创建入库"
 msgstr "创建入库"
@@ -189,6 +192,18 @@ msgstr "限制条数"
 msgid "偏移量"
 msgstr "偏移量"
 
+msgid "用户ID"
+msgstr "用户ID"
+
+msgid "动作ID"
+msgstr "动作ID"
+
+msgid "对象ID"
+msgstr "对象ID"
+
+msgid "是否有权限"
+msgstr "是否有权限"
+
 msgid "获取消息类型"
 msgstr "获取消息类型"
 
@@ -196,7 +211,7 @@ msgid "发送邮件"
 msgstr "发送邮件"
 
 msgid "发送企业微信"
-msgstr "企业微信群ID"
+msgstr "发送企业微信"
 
 msgid "发送语音"
 msgstr "发送语音"
@@ -482,9 +497,6 @@ msgstr "实例ID"
 
 msgid "实例名"
 msgstr "实例名"
-
-msgid "对象ID"
-msgstr "对象ID"
 
 msgid "对象名"
 msgstr "对象名"
@@ -1079,6 +1091,9 @@ msgstr "权限中心V4"
 
 msgid "审计中心"
 msgstr "审计中心"
+
+msgid "No Tag"
+msgstr "无标签"
 
 msgid "Namespace不存在"
 msgstr "Namespace不存在"
@@ -2058,6 +2073,9 @@ msgstr "系统诊断报表查看"
 msgid "查看场景视图"
 msgstr "查看场景视图"
 
+msgid "使用工具"
+msgstr "使用工具"
+
 msgid "采集新建"
 msgstr "采集新建"
 
@@ -2070,6 +2088,9 @@ msgstr "采集管理"
 msgid "业务访问"
 msgstr "业务访问"
 
+msgid "查看嵌入分享"
+msgstr "查看嵌入分享"
+
 #, python-format
 msgid "获取系统信息错误：%(message)s"
 msgstr "获取系统信息错误：%(message)s"
@@ -2080,6 +2101,9 @@ msgstr "资源ID不存在：%(resource_id)s"
 
 msgid "空间"
 msgstr "空间"
+
+msgid "嵌入分享"
+msgstr "嵌入分享"
 
 msgid "采集项"
 msgstr "采集项"
@@ -2101,6 +2125,9 @@ msgstr "审计策略"
 
 msgid "联表"
 msgstr "联表"
+
+msgid "工具"
+msgstr "工具"
 
 msgid "获取IAM系统配置"
 msgstr "获取IAM系统配置"
@@ -2225,6 +2252,10 @@ msgstr "管理员请求"
 msgid "Token Invalid"
 msgstr "Token验证失败"
 
+#, python-format
+msgid "(未获取到变量值:%s)"
+msgstr "(未获取到变量值:%s)"
+
 msgid "Label"
 msgstr "标签"
 
@@ -2261,6 +2292,18 @@ msgstr "时间戳"
 msgid "浮点数"
 msgstr "浮点数"
 
+msgid "inner_join"
+msgstr "内连接"
+
+msgid "left_join"
+msgstr "左连接"
+
+msgid "right_join"
+msgstr "右连接"
+
+msgid "full_join"
+msgstr "全连接"
+
 msgid "计数"
 msgstr "计数"
 
@@ -2278,18 +2321,6 @@ msgstr "最小值"
 
 msgid "去重计数"
 msgstr "去重计数"
-
-msgid "inner_join"
-msgstr "inner_join"
-
-msgid "left_join"
-msgstr "left_join"
-
-msgid "right_join"
-msgstr "right_join"
-
-msgid "full_join"
-msgstr "full_join"
 
 msgid "="
 msgstr "=  等于"
@@ -2335,6 +2366,9 @@ msgstr "匹配任意"
 
 msgid "between"
 msgstr "在之间"
+
+msgid "SQL解析失败。"
+msgstr "SQL解析失败。"
 
 #, python-brace-format
 msgid "表 '{table_name}' 未在配置中声明。"
@@ -2801,6 +2835,7 @@ msgstr "URL不能为空"
 msgid "URL必须使用http或https协议"
 msgstr "URL必须使用http或https协议"
 
+#, python-brace-format
 msgid "URL包含高危端口: {}"
 msgstr "URL包含高危端口: {}"
 
@@ -3664,10 +3699,6 @@ msgstr "用户类型"
 msgid "Ticket Permission"
 msgstr "单据权限"
 
-#, python-format
-msgid "(未获取到变量值:%s)"
-msgstr "(未获取到变量值:%s)"
-
 msgid "创建事件"
 msgstr "创建事件"
 
@@ -3910,9 +3941,6 @@ msgstr "策略 (V2)"
 msgid "Upgradable"
 msgstr "可升级"
 
-msgid "No Tag"
-msgstr "无标签"
-
 msgid "Disabled"
 msgstr "已停用"
 
@@ -4020,6 +4048,12 @@ msgstr "Kafka"
 msgid "Link Table Data"
 msgstr "联表数据"
 
+msgid "基本字段"
+msgstr "基本字段"
+
+msgid "证据字段"
+msgstr "证据字段"
+
 msgid "Control Changed"
 msgstr "控件切换"
 
@@ -4126,6 +4160,18 @@ msgstr "联表"
 
 msgid "Link Table Tag"
 msgstr "联表标签"
+
+msgid "工具UID"
+msgstr "工具UID"
+
+msgid "工具版本"
+msgstr "工具版本"
+
+msgid "字段来源"
+msgstr "字段来源"
+
+msgid "Strategy Tool"
+msgstr "策略工具"
 
 msgid "Create Strategy"
 msgstr "创建策略"
@@ -4238,6 +4284,9 @@ msgstr "是否优先"
 
 msgid "Field Description"
 msgstr "字段描述"
+
+msgid "下钻配置"
+msgstr "下钻配置"
 
 msgid "Map Field"
 msgstr "映射字段"
@@ -4545,6 +4594,161 @@ msgstr "风险数量"
 
 msgid "数据时间"
 msgstr "数据时间"
+
+msgid "数据查询"
+msgstr "数据查询"
+
+msgid "BK Vision"
+msgstr "BK Vision"
+
+msgid "简易模式"
+msgstr "简易模式"
+
+msgid "SQL模式"
+msgstr "SQL模式"
+
+msgid "输入框"
+msgstr "输入框"
+
+msgid "数字输入框"
+msgstr "数字输入框"
+
+msgid "时间范围选择器"
+msgstr "时间范围选择器"
+
+msgid "时间选择器"
+msgstr "时间选择器"
+
+msgid "人员选择器"
+msgstr "人员选择器"
+
+msgid "下拉列表"
+msgstr "下拉列表"
+
+msgid "当前暂不支持 '简易模式'(simple) 的数据查询工具"
+msgstr "当前暂不支持 '简易模式'(simple) 的数据查询工具"
+
+#, python-brace-format
+msgid "用户{user}没有权限访问数据源{data_source}"
+msgstr "用户{user}没有权限访问数据源{data_source}"
+
+#, python-brace-format
+msgid "输入变量“{var_name}”必填"
+msgstr "输入变量“{var_name}”必填"
+
+msgid "用户输入变量值无效"
+msgstr "用户输入变量值无效"
+
+#, python-brace-format
+msgid "变量类型“{var_type}”的值“{value}”格式无效"
+msgstr "变量类型“{var_type}”的值“{value}”格式无效"
+
+#, python-brace-format
+msgid "变量类型“{var_type}”的值结构无效: 期望“{expected_structure}”,但收到的是“{actual_type}”"
+msgstr "变量类型“{var_type}”的值结构无效: 期望“{expected_structure}”,但收到的是“{actual_type}”"
+
+#, python-brace-format
+msgid "变量类型“{var_type}”没有解析函数"
+msgstr "变量类型“{var_type}”没有解析函数"
+
+#, python-brace-format
+msgid "解析变量类型“{var_type}”的值“{value}”异常,请联系系统管理员"
+msgstr "解析变量类型“{var_type}”的值“{value}”异常,请联系系统管理员"
+
+#, python-brace-format
+msgid "bkbase 查询异常;执行 SQL：{sql}"
+msgstr "bkbase 查询异常;执行 SQL：{sql}"
+
+msgid "工具名称"
+msgstr "工具名称"
+
+msgid "工具描述"
+msgstr "工具描述"
+
+msgid "工具类型"
+msgstr "工具类型"
+
+msgid "工具配置"
+msgstr "工具配置"
+
+msgid "Tool"
+msgstr "工具"
+
+msgid "数据检索类型"
+msgstr "数据检索类型"
+
+msgid "检索SQL"
+msgstr "检索SQL"
+
+msgid "Data Search Tool Config"
+msgstr "数据检索工具配置"
+
+msgid "Bkvision Tool Config"
+msgstr "Bkvision 工具配置"
+
+msgid "Tool Tag"
+msgstr "工具标签"
+
+msgid "列出工具标签"
+msgstr "列出工具标签"
+
+msgid "获取工具列表"
+msgstr "获取工具列表"
+
+msgid "删除工具"
+msgstr "删除工具"
+
+msgid "新增工具"
+msgstr "新增工具"
+
+msgid "编辑工具"
+msgstr "编辑工具"
+
+#, python-format
+msgid "Tool not found: %s"
+msgstr "工具未找到：%s"
+
+msgid "工具执行"
+msgstr "工具执行"
+
+msgid "工具列表(all)"
+msgstr "工具列表(all)"
+
+msgid "工具执行数据导出"
+msgstr "工具执行数据导出"
+
+msgid "获取工具详情"
+msgstr "获取工具详情"
+
+msgid "SQL解析"
+msgstr "SQL解析"
+
+msgid "用户查询权限批量校验"
+msgstr "用户查询权限批量校验"
+
+#, fuzzy
+#| msgid "Count"
+msgid "Tool Count"
+msgstr "工具数量"
+
+#, fuzzy
+#| msgid "查询联表标签列表"
+msgid "标签列表"
+msgstr "标签列表"
+
+#, fuzzy
+#| msgid "配置类型"
+msgid "数据查询配置类型"
+msgstr "数据查询配置类型"
+
+msgid "仅在 tool_type=data_search 时必须，支持 simple/sql"
+msgstr "仅在 tool_type=data_search 时必须，支持 simple/sql"
+
+msgid "工具 UID"
+msgstr "工具 UID"
+
+msgid "表名列表"
+msgstr "表名列表"
 
 msgid "版本日志"
 msgstr "版本日志"
