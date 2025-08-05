@@ -378,7 +378,7 @@ class ForApprove(RiskFlowBaseHandler):
                 continue
             # 标签
             if field["key"] == ApproveTicketFields.TAGS.key:
-                tags = list(self.risk.tag_objs.values_list("tag_name", flat=True))
+                tags = self.risk.get_tag_names()
                 field["value"] = ";".join(tags)
                 fields.append(field)
                 continue

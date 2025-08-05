@@ -40,30 +40,19 @@ class RiskAdmin(admin.ModelAdmin):
         "current_operator",
         "notice_users",
         "risk_label",
-        "display_tags",
     ]
-    search_fields = ["risk_id", "title", "tag_objs__tag_name"]
-    list_filter = ["status", "risk_label", "tag_objs__tag_name"]
-    list_prefetch_related = ["tag_objs"]
+    search_fields = ["risk_id", "title"]
+    list_filter = ["status", "risk_label"]
+    list_per_page = 100  # 设置每页显示100条记录
 
     def get_queryset(self, request):
         qs = Risk.annotated_queryset()
-        ordering = self.get_ordering(request)
-        if ordering:
-            qs = qs.order_by(*ordering)
-        if self.list_prefetch_related:
-            qs = qs.prefetch_related(*self.list_prefetch_related)
         return qs
 
     def event_content_short(self, obj: Risk):
         return getattr(obj, "event_content_short", "")
 
     event_content_short.short_description = "Event Content Short"
-
-    def display_tags(self, obj: Risk):
-        return ", ".join([t.tag_name for t in obj.tag_objs.all()])
-
-    display_tags.short_description = "Tags"
 
 
 @admin.register(ProcessApplication)

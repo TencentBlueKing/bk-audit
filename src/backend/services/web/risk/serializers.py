@@ -188,7 +188,11 @@ class RiskInfoSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
 
     def get_tags(self, obj: Risk):
-        return list(obj.tag_objs.values_list("tag_id", flat=True))
+        """
+        获取风险标签ID列表,从策略获取
+        """
+
+        return obj.get_tag_ids()
 
     class Meta:
         model = Risk
@@ -315,8 +319,16 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
         return getattr(obj, "event_content_short")
 
     def get_tags(self, obj: Risk):
-        # 这里 obj.tag_objs.all() 会复用 prefetch 的缓存，不会产生额外 SQL
-        return [tag.tag_id for tag in obj.tag_objs.all()]
+        """
+        获取风险标签ID列表
+        支持从策略获取或快照获取，并优化查询性能
+        """
+        if hasattr(obj.strategy, 'prefetched_tags'):
+            # 使用预加载的数据，避免N+1查询
+            return [tag_rel.tag.tag_id for tag_rel in obj.strategy.prefetched_tags]
+        else:
+            # 回退到实时查询
+            return obj.get_tag_ids()
 
     class Meta:
         model = Risk
