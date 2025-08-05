@@ -219,6 +219,7 @@
       pickerRangeValue.value = [];
       pickerValue.value = '';
       user.value = [];
+      enumValue.value = [];
     },
     setData(val: any) {
       setData(val);

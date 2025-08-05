@@ -813,17 +813,13 @@
   const startResize = (e: MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startY = e.clientY;
     const startWidth = parseInt(dialogWidth.value, 10);
-    const startHeight = parseInt(dialogHeight.value, 10);
     const minWidth = window.innerWidth * 0.5; // 最小宽度为屏幕宽度的50%
 
     const onMouseMove = (moveEvent: MouseEvent) => {
       const dx = moveEvent.clientX - startX;
-      const dy = moveEvent.clientY - startY;
       const newWidth = Math.max(minWidth, startWidth + dx); // 确保宽度不小于minWidth
       dialogWidth.value = `${newWidth}px`;
-      dialogHeight.value = `${startHeight + dy}px`;
     };
 
     const onMouseUp = () => {
