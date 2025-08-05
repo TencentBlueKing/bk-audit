@@ -30,7 +30,7 @@ from django.utils import timezone
 from django.utils.translation import gettext
 from rest_framework.settings import api_settings
 
-from apps.meta.models import GlobalMetaConfig, Tag
+from apps.meta.models import GlobalMetaConfig
 from apps.meta.utils.format import preprocess_data
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
@@ -47,7 +47,7 @@ from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
 from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.serializers import CreateRiskSerializer
-from services.web.strategy_v2.models import Strategy, StrategyTag
+from services.web.strategy_v2.models import Strategy
 
 
 class RiskHandler:
@@ -142,7 +142,6 @@ class RiskHandler:
             return strategy.risk_title
 
     def gen_risk_create_params(self, event: dict) -> dict:
-        tag_ids = StrategyTag.objects.filter(strategy_id=event["strategy_id"]).values_list("tag_id", flat=True)
         create_params = {
             "event_content": event.get("event_content"),
             "raw_event_id": event["raw_event_id"],
@@ -154,7 +153,6 @@ class RiskHandler:
             "event_end_time": datetime.datetime.fromtimestamp(event["event_time"] / 1000),
             "event_source": event.get("event_source"),
             "operator": self.parse_operator(event.get("operator")),
-            "_tags": Tag.objects.filter(tag_id__in=tag_ids),
         }
         create_params["title"] = self.render_risk_title(create_params)
         return create_params
@@ -204,9 +202,7 @@ class RiskHandler:
 
         # 不存在则创建
         create_params = self.gen_risk_create_params(event)
-        tags: List[Tag] = create_params.pop("_tags", [])
         risk: Risk = Risk.objects.create(**create_params)
-        risk.tag_objs.set(tags)
         return True, risk
 
     def parse_operator(self, operator: str) -> List[str]:

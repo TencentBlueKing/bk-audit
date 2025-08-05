@@ -31,7 +31,7 @@ from bk_resource.utils.cache import CacheTypeItem
 from blueapps.utils.logger import logger
 from blueapps.utils.request_provider import get_local_request, get_request_username
 from django.conf import settings
-from django.db import transaction
+from django.db import models, transaction
 from django.db.models import Count, IntegerField, OuterRef, Q, QuerySet, Subquery
 from django.db.models.aggregates import Min
 from django.http import Http404
@@ -457,7 +457,7 @@ class ListStrategy(StrategyV2Base):
             .values('count')
         )
 
-        queryset = (
+        queryset: QuerySet[Strategy] = (
             Strategy.objects.filter(
                 namespace=validated_request_data["namespace"],
             )
@@ -492,13 +492,16 @@ class ListStrategy(StrategyV2Base):
                 for item in validated_request_data[key]:
                     q |= Q(**{f"{key}__contains": item})
                 queryset = queryset.filter(q)
-        # add tags
-        all_tags = StrategyTag.objects.filter(strategy_id__in=queryset.values("strategy_id"))
-        tag_map = defaultdict(list)
-        for t in all_tags:
-            tag_map[t.strategy_id].append(t.tag_id)
-        for item in queryset:
-            setattr(item, "tags", tag_map.get(item.strategy_id, []))
+
+        # 预加载策略标签，避免N+1查询
+        queryset = queryset.prefetch_related(
+            models.Prefetch(
+                'tags',  # 使用StrategyTag的related_name
+                queryset=StrategyTag.objects.select_related('tag'),
+                to_attr='prefetched_tags',
+            )
+        )
+
         # response
         return queryset
 
