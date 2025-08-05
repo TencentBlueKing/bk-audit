@@ -417,11 +417,11 @@
       }
 
       &.map-config {
-        width: 220px;
+        width: 230px;
       }
 
       &.drill-config {
-        width: 240px;
+        width: 230px;
       }
 
       &.last {
