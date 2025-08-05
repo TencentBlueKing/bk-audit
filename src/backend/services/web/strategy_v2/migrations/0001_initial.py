@@ -55,8 +55,28 @@ class Migration(migrations.Migration):
                 ("created_by", models.CharField(default="", max_length=32, verbose_name="创建者")),
                 ("updated_at", models.DateTimeField(blank=True, null=True, verbose_name="更新时间")),
                 ("updated_by", models.CharField(blank=True, default="", max_length=32, verbose_name="修改者")),
-                ("strategy_id", models.BigIntegerField(verbose_name="Strategy ID")),
-                ("tag_id", models.BigIntegerField(verbose_name="Tag ID")),
+                (
+                    "strategy",
+                    models.ForeignKey(
+                        db_column='strategy_id',
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='tags',
+                        to='strategy_v2.strategy',
+                        verbose_name='Strategy',
+                    ),
+                ),
+                (
+                    "tag",
+                    models.ForeignKey(
+                        db_column='tag_id',
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='strategy_tags',
+                        to='meta.tag',
+                        verbose_name='Tag',
+                    ),
+                ),
             ],
             options={
                 "verbose_name": "Strategy Tag",

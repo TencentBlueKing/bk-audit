@@ -40,7 +40,7 @@ from services.web.risk.constants import (
     TicketNodeStatus,
 )
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
-from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.models import Strategy, StrategyTag
 
 
 def generate_risk_id() -> str:
@@ -120,6 +120,52 @@ class Risk(OperateRecordModel):
             ["risk_id", "event_time"],
             ["risk_id", "last_operate_time"],
         ]
+
+    @cached_property
+    def strategy_tags(self) -> QuerySet[Tag]:
+        """
+        返回策略关联的所有Tag对象的QuerySet
+        """
+        return Tag.objects.filter(strategy_tags__strategy_id=self.strategy_id)
+
+    def get_tag_ids(self):
+        """
+        获取风险的标签ID列表
+
+        Returns:
+            List[int]: 标签ID列表
+        """
+        return list(self.strategy_tags.values_list("tag_id", flat=True))
+
+    def get_tag_names(self):
+        """
+        获取风险的标签名称列表
+
+        Returns:
+            List[str]: 标签名称列表
+        """
+        return list(self.strategy_tags.values_list("tag_name", flat=True))
+
+    @classmethod
+    def prefetch_strategy_tags(cls, queryset: QuerySet["Risk"]):
+        """
+        预加载策略标签，避免N+1查询
+
+        Args:
+            queryset: Risk的QuerySet
+
+        Returns:
+            QuerySet: 预加载了策略标签的QuerySet
+        """
+
+        # 预加载策略和策略标签
+        return queryset.select_related('strategy').prefetch_related(
+            models.Prefetch(
+                'strategy__tags',  # 使用StrategyTag的related_name
+                queryset=StrategyTag.objects.select_related('tag'),
+                to_attr='prefetched_tags',
+            )
+        )
 
     @classmethod
     def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:

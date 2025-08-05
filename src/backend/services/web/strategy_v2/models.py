@@ -24,6 +24,7 @@ from django.db.models import Max, Q, QuerySet
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy
 
+from apps.meta.models import Tag
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
 from services.web.analyze.constants import FlowDataSourceNodeType, FlowSQLNodeType
 from services.web.analyze.models import Control, ControlVersion
@@ -136,13 +137,26 @@ class StrategyTag(OperateRecordModel):
     Tag of Strategy, only used for left side panel
     """
 
-    strategy_id = models.BigIntegerField(gettext_lazy("Strategy ID"))
-    tag_id = models.BigIntegerField(gettext_lazy("Tag ID"))
+    strategy = models.ForeignKey(
+        Strategy,
+        db_column='strategy_id',
+        on_delete=models.CASCADE,
+        related_name="tags",
+        verbose_name=gettext_lazy("Strategy"),
+    )
+    tag = models.ForeignKey(
+        Tag,
+        db_column='tag_id',
+        on_delete=models.CASCADE,
+        related_name="strategy_tags",
+        verbose_name=gettext_lazy("Tag"),
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Strategy Tag")
         verbose_name_plural = verbose_name
         ordering = ["-id"]
+        unique_together = [("strategy", "tag")]  # 防止重复关联
 
 
 class LinkTable(OperateRecordModel):
