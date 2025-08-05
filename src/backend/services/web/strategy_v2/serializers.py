@@ -66,7 +66,9 @@ from services.web.tool.constants import DataSearchDrillConfig
 
 class MapFieldSerializer(serializers.Serializer):
     source_field = serializers.CharField(
-        label=gettext_lazy("Source Field"), required=False, help_text=gettext_lazy("来源字段的display_name，在查询中唯一")
+        label=gettext_lazy("Source Field"),
+        required=False,
+        help_text=gettext_lazy("来源字段的display_name，在查询中唯一"),
     )
     target_value = serializers.CharField(
         label=gettext_lazy("Target Value"), required=False, help_text=gettext_lazy("固定值")
@@ -376,11 +378,20 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     List Strategy
     """
 
-    tags = serializers.ListField(
-        label=gettext_lazy("Tags"), child=serializers.IntegerField(label=gettext_lazy("Tag ID"))
-    )
+    tags = serializers.SerializerMethodField()
     risk_count = serializers.IntegerField(label=gettext_lazy("Risk Count"))
     tools = StrategyToolSerializer(many=True, read_only=True)
+
+    def get_tags(self, obj):
+        """
+        从预加载的策略标签关系中获取tag_id列表
+        """
+        if hasattr(obj, 'prefetched_tags'):
+            # 使用预加载的数据
+            return [tag_rel.tag_id for tag_rel in obj.prefetched_tags]
+        else:
+            # 回退方案：直接使用关系查询
+            return list(obj.tags.values_list('tag_id', flat=True))
 
     class Meta:
         model = Strategy

@@ -88,7 +88,7 @@ from services.web.risk.serializers import (
     UpdateRiskLabelReqSerializer,
 )
 from services.web.risk.tasks import process_one_risk, sync_auto_result
-from services.web.strategy_v2.models import Strategy
+from services.web.strategy_v2.models import Strategy, StrategyTag
 
 
 class RiskMeta(AuditMixinResource, abc.ABC):
@@ -146,8 +146,8 @@ class ListRisk(RiskMeta):
         risks = self.load_risks(validated_request_data).order_by(order_field).only("pk")
         # 分页
         paged_risks, page = paginate_queryset(queryset=risks, request=request, base_queryset=Risk.annotated_queryset())
-        # 预加载 tag
-        paged_risks: QuerySet[Risk] = paged_risks.prefetch_related("tag_objs").order_by(order_field)
+        # 预加载策略标签
+        paged_risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(paged_risks).order_by(order_field)
         # 获取关联的经验
         experiences = {
             e["risk_id"]: e["count"]
@@ -168,12 +168,14 @@ class ListRisk(RiskMeta):
         risk_level = validated_request_data.pop("risk_level", None)
         if risk_level:
             q &= Q(strategy_id__in=Strategy.objects.filter(risk_level__in=risk_level).values("strategy_id"))
+
+        # 标签筛选条件
+        if tag_filter := validated_request_data.pop("tag_objs__in", None):
+            strategy_ids = StrategyTag.objects.filter(tag_id__in=tag_filter).values_list('strategy_id', flat=True)
+            q &= Q(strategy_id__in=strategy_ids)
+
         for key, val in validated_request_data.items():
             if not val:
-                continue
-            # 特殊处理list匹配
-            if key in ["tag_objs__in"]:
-                q &= Q(**{key: val})
                 continue
             # 普通匹配，针对单值匹配
             _q = Q()
@@ -288,8 +290,14 @@ class ListRiskTags(ListRiskBase):
         )
         if not risk_ids:
             return []
-        # 查询风险所关联的标签
-        tag_ids = set(Risk.tag_objs.through.objects.filter(risk_id__in=risk_ids).values_list("tag_id", flat=True))
+
+        # 1. 获取这些风险对应的策略ID
+        strategy_ids = set(Risk.objects.filter(risk_id__in=risk_ids).values_list("strategy_id", flat=True))
+
+        # 2. 查询这些策略关联的标签ID
+        tag_ids = set(StrategyTag.objects.filter(strategy_id__in=strategy_ids).values_list("tag_id", flat=True))
+
+        # 3. 返回对应的标签
         return tags.filter(tag_id__in=tag_ids)
 
 
