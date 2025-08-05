@@ -22,7 +22,7 @@ import json
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import cached_property
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from bk_resource import CacheResource, api, resource
 from bk_resource.base import Empty
@@ -996,6 +996,7 @@ class GetEventFieldsConfig(StrategyV2Base):
                 display_name=str(field.description),
                 description="",
                 example=preprocess_data(getattr(risk, field.field_name, "")) if risk and has_permission else "",
+                is_show=True,
             )
             for field in [
                 EventMappingFields.RAW_EVENT_ID,
@@ -1019,35 +1020,34 @@ class GetEventFieldsConfig(StrategyV2Base):
             return []
 
         # 收集所有的字段
-        field_dict = {}
+        field_dict: Dict[str, EventInfoField] = {}
 
         # 1. 从策略配置中获取字段
         for field in strategy.event_data_field_configs:
-            field_dict[field["field_name"]] = {
-                "display_name": field.get("display_name", field["field_name"]),
-                "example": "",
-                "description": "",
-            }
+            field_dict[field["field_name"]] = EventInfoField(
+                field_name=field["field_name"],
+                display_name=field.get("display_name", field["field_name"]),
+                example="",
+                description="",
+                is_show=field.get("is_show", True),
+            )
 
         # 2. 从风险数据中获取字段
         if risk:
             risk_data = risk.event_data or {}
             for key, value in risk_data.items():
                 if key not in field_dict:
-                    field_dict[key] = {"display_name": key, "example": "", "description": ""}
+                    field_dict[key] = EventInfoField(
+                        field_name=key,
+                        display_name=key,
+                        example="",
+                        description="",
+                        is_show=True,
+                    )
                 if has_permission:
                     field_dict[key]["example"] = preprocess_data(value)
 
-        # 转换为EventInfoField列表
-        return [
-            EventInfoField(
-                field_name=key,
-                display_name=info["display_name"],
-                description=info["description"],
-                example=info["example"],
-            )
-            for key, info in field_dict.items()
-        ]
+        return list(field_dict.values())
 
     def get_event_evidence_field_configs(
         self, strategy: Optional[Strategy], risk: Optional[Risk], has_permission: bool
@@ -1060,15 +1060,17 @@ class GetEventFieldsConfig(StrategyV2Base):
             return []
 
         # 收集所有的字段
-        field_dict = {}
+        field_dict: Dict[str, EventInfoField] = {}
 
         # 1. 从策略配置中获取字段
         for field in strategy.event_evidence_field_configs or []:
-            field_dict[field["field_name"]] = {
-                "display_name": field.get("display_name", field["field_name"]),
-                "example": "",
-                "description": field.get("description", ""),
-            }
+            field_dict[field["field_name"]] = EventInfoField(
+                field_name=field["field_name"],
+                display_name=field.get("display_name", field["field_name"]),
+                example="",
+                description=field.get("description", ""),
+                is_show=field.get("is_show", True),
+            )
 
         # 2. 从风险数据中获取字段
         if risk:
@@ -1079,20 +1081,17 @@ class GetEventFieldsConfig(StrategyV2Base):
 
             for key, value in event_evidence.items():
                 if key not in field_dict:
-                    field_dict[key] = {"display_name": key, "example": "", "description": ""}
+                    field_dict[key] = EventInfoField(
+                        field_name=key,
+                        display_name=key,
+                        example="",
+                        description="",
+                        is_show=True,
+                    )
                 if has_permission:
                     field_dict[key]["example"] = preprocess_data(value)
 
-        # 转换为EventInfoField列表
-        return [
-            EventInfoField(
-                field_name=key,
-                display_name=info["display_name"],
-                description=info["description"],
-                example=info["example"],
-            )
-            for key, info in field_dict.items()
-        ]
+        return list(field_dict.values())
 
     def perform_request(self, validated_request_data):
         """

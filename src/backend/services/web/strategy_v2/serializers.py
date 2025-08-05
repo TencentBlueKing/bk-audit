@@ -88,6 +88,7 @@ class EventFieldSerializer(serializers.Serializer):
     is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
     description = serializers.CharField(label=gettext_lazy("Field Description"), default="", allow_blank=True)
     drill_config = DataSearchDrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), default=None, allow_null=True)
+    is_show = serializers.BooleanField(label=gettext_lazy("是否展示"), default=True)
 
 
 class EventBasicFieldSerializer(EventFieldSerializer):
@@ -728,6 +729,7 @@ class EventInfoFieldSerializer(serializers.Serializer):
     display_name = serializers.CharField(label=gettext_lazy("Display Name"))
     description = serializers.CharField(label=gettext_lazy("Description"), allow_blank=True)
     example = serializers.CharField(label=gettext_lazy("Example"), allow_blank=True, allow_null=True)
+    is_show = serializers.BooleanField(label=gettext_lazy("是否展示"), default=True)
 
     def to_internal_value(self, data):
         # example 可能是 list 或 bool，均转换为字符串进行展示
