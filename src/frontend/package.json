@@ -1,6 +1,6 @@
 {
   "name": "bk-audit",
-  "version": "1.17.4",
+  "version": "1.17.5",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
