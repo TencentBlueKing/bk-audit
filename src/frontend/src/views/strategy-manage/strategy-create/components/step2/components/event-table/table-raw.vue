@@ -166,7 +166,10 @@
 
   defineExpose({
     getValue() {
-      return Promise.all((fieldCellRef.value as { getValue: () => any }[])?.map(item => item.getValue()));
+      if (!fieldCellRef.value) {
+        return Promise.resolve();
+      }
+      return Promise.all((fieldCellRef.value as { getValue: () => any }[])?.map(item => item?.getValue()));
     },
   });
 </script>
@@ -197,11 +200,11 @@
     }
 
     &.map-config {
-      width: 220px;
+      width: 230px;
     }
 
     &.drill-config {
-      width: 240px;
+      width: 230px;
     }
 
     &:last-child {
