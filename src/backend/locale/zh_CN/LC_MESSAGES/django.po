@@ -4289,7 +4289,7 @@ msgid "下钻配置"
 msgstr "下钻配置"
 
 msgid "Map Field"
-msgstr "映射字段"
+msgstr "字段关联"
 
 msgid "Storage Type"
 msgstr "存储类型"

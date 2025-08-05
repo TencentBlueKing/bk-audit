@@ -86,6 +86,7 @@ class EventFieldSerializer(serializers.Serializer):
     is_priority = serializers.BooleanField(label=gettext_lazy("Is Priority"))
     description = serializers.CharField(label=gettext_lazy("Field Description"), default="", allow_blank=True)
     drill_config = DataSearchDrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), default=None, allow_null=True)
+    is_show = serializers.BooleanField(label=gettext_lazy("是否展示"), default=True)
 
 
 class EventBasicFieldSerializer(EventFieldSerializer):
