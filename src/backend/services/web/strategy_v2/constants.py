@@ -187,6 +187,7 @@ class EventInfoField(TypedDict):
     display_name: str
     description: str
     example: str
+    is_show: bool
 
 
 class StrategyType(TextChoices):
