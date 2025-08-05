@@ -998,6 +998,7 @@
   };
 
   const handleFieldCategoryChange = (value: string, index: number) => {
+    formData.value.config.input_variable[index].default_value = '';
     if (value !== 'enum') {
       formData.value.config.input_variable[index].choices = [];
     }
