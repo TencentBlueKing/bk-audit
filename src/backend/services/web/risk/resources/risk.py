@@ -24,7 +24,6 @@ from bk_resource import CacheResource, api
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
-from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q, QuerySet
@@ -39,6 +38,7 @@ from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
+from core.models import get_request_username
 from core.utils.data import choices_to_dict
 from core.utils.page import paginate_queryset
 from core.utils.tools import get_app_info
@@ -68,6 +68,7 @@ from services.web.risk.models import (
     TicketNode,
 )
 from services.web.risk.serializers import (
+    BulkCustomTransRiskReqSerializer,
     CustomAutoProcessReqSerializer,
     CustomCloseRiskRequestSerializer,
     CustomTransRiskReqSerializer,
@@ -352,12 +353,32 @@ class CustomTransRisk(RiskMeta):
     @transaction.atomic()
     def perform_request(self, validated_request_data):
         risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+        if risk.status != RiskStatus.AWAIT_PROCESS.value:
+            raise RiskStatusInvalid(message=RiskStatusInvalid.MESSAGE % risk.status)
         origin_data = RiskInfoSerializer(risk).data
-        TransOperator(risk_id=risk.risk_id, operator=get_request_username()).run(
+        # 使用当前用户 or 并发请求时透传的用户
+        operator = get_request_username(validated_request_data.get("_request", None))
+        TransOperator(risk_id=risk.risk_id, operator=operator).run(
             new_operators=validated_request_data["new_operators"], description=validated_request_data["description"]
         )
         setattr(risk, "instance_origin_data", origin_data)
         self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
+
+
+class BulkCustomTransRisk(RiskMeta):
+    name = gettext_lazy("批量人工转单")
+    RequestSerializer = BulkCustomTransRiskReqSerializer
+
+    def perform_request(self, validated_request_data):
+        bulk_req_params = [
+            {
+                "risk_id": risk_id,
+                "new_operators": validated_request_data["new_operators"],
+                "description": validated_request_data["description"],
+            }
+            for risk_id in validated_request_data["risk_ids"]
+        ]
+        CustomTransRisk().bulk_request(bulk_req_params, ignore_exceptions=True)
 
 
 class CustomAutoProcess(RiskMeta):
