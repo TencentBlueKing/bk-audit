@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import List
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
@@ -22,7 +23,11 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission, insert_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
-from services.web.risk.permissions import RiskTicketPermission, RiskViewPermission
+from services.web.risk.permissions import (
+    BatchRiskTicketPermission,
+    RiskTicketPermission,
+    RiskViewPermission,
+)
 
 
 class EventsViewSet(ResourceViewSet):
@@ -88,7 +93,12 @@ class RisksViewSet(ResourceViewSet):
             return [
                 RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK, lookup_field="pk")
             ]
+        if self.action in ["bulk_trans"]:
+            return [BatchRiskTicketPermission(get_risk_ids=self.get_bulk_risk_ids)]
         return []
+
+    def get_bulk_risk_ids(self) -> List[str]:
+        return self.request.data.get("risk_ids", [])
 
     resource_routes = [
         ResourceRoute("GET", resource.risk.retrieve_risk, pk_field="risk_id"),
@@ -135,6 +145,7 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.list_risk_strategy, endpoint="strategies"),
         ResourceRoute("POST", resource.risk.custom_close_risk, endpoint="close", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.custom_trans_risk, endpoint="trans", pk_field="risk_id"),
+        ResourceRoute("POST", resource.risk.bulk_custom_trans_risk, endpoint="bulk_trans"),
         ResourceRoute("POST", resource.risk.custom_auto_process, endpoint="auto_process", pk_field="risk_id"),
         ResourceRoute(
             "POST", resource.risk.force_revoke_auto_process, endpoint="force_revoke_auto_process", pk_field="risk_id"
