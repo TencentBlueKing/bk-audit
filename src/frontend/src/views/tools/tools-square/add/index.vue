@@ -28,7 +28,8 @@
           ref="formRef"
           class="tools-form"
           form-type="vertical"
-          :model="formData">
+          :model="formData"
+          :rules="rules">
           <card-part-vue :title="t('基础信息')">
             <template #content>
               <div class="flex-center">
@@ -65,7 +66,7 @@
                       :placeholder="t('请选择')"
                       :search-placeholder="t('请输入关键字')">
                       <bk-option
-                        v-for="(item, index) in tagData"
+                        v-for="(item, index) in allTagData"
                         :key="index"
                         :label="item.tag_name"
                         :value="item.tag_id" />
@@ -569,14 +570,14 @@
         :all-tools-data="allToolsData"
         :new-tool-name="formData.name"
         :output-fields="formData.config.output_fields"
-        :tag-data="originalTagData"
+        :tag-data="toolTagData"
         @open-tool="handleOpenTool"
         @submit="handleFieldSubmit" />
     </smart-action>
   </skeleton-loading>
   <dialog-vue
     ref="dialogVueRef"
-    :tags-enums="tagData"
+    :tags-enums="toolTagData"
     @close="handleClose" />
   <creating v-if="isCreating" />
   <failed
@@ -595,7 +596,7 @@
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item.uid] = el"
-      :tags-enums="originalTagData"
+      :tags-enums="toolTagData"
       @open-field-down="openFieldDown" />
   </div>
 </template>
@@ -776,10 +777,9 @@
   });
 
   const outputIndex = ref(-1);
-  const originalTagData = ref<Array<{
+  const allTagData = ref<Array<{
     tag_id: string
     tag_name: string;
-    tool_count: number;
   }>>([]);
 
   const frontendTypeList = ref<Array<{
@@ -818,6 +818,28 @@
     label: t('否'),
   }]);
 
+  const rules = {
+    tags: [
+      // 因为校验的是name，但value是id的数组；将item转为name，自定义输入id = name，直接使用item即可
+      {
+        validator: (value: Array<string>) => {
+          const reg = /^[\w\u4e00-\u9fa5-_]+$/;
+          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+        },
+        message: t('标签只允许中文、字母、数字、中划线或下划线组成'),
+        trigger: 'change',
+      },
+      {
+        validator: (value: Array<string>) => {
+          const reg = /\D+/;
+          return value.every(item => reg.test(strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+        },
+        message: t('标签不能为纯数字'),
+        trigger: 'change',
+      },
+    ],
+  };
+
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
   const {
@@ -852,29 +874,30 @@
 
   // 获取标签列表
   const {
-    data: tagData,
-    loading: tagLoading,
+    data: toolTagData,
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     manual: true,
-    onSuccess: (data) => {
-      // 字段下钻使用
-      originalTagData.value = data;
-      fetchAllTools();
+  });
 
-      tagData.value = data.reduce((res, item) => {
+  // 获取所有标签列表
+  const {
+    loading: tagLoading,
+  } = useRequest(MetaManageService.fetchTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: (data) => {
+      allTagData.value = data.reduce((res, item) => {
         if (item.tag_id !== '-2') {
           res.push({
             tag_id: item.tag_id,
             tag_name: item.tag_name,
-            tool_count: item.tool_count,
           });
         }
         return res;
       }, [] as Array<{
         tag_id: string;
         tag_name: string
-        tool_count: number
       }>);
       data.forEach((item) => {
         strategyTagMap.value[item.tag_id] = item.tag_name;
@@ -1181,6 +1204,8 @@
   onMounted(() => {
     initEditor();
     defineTheme();
+    fetchAllTools();
+
     if (isEditMode) {
       fetchToolsDetail({
         uid: route.params.id,
