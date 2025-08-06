@@ -20,10 +20,13 @@ import abc
 
 from bk_audit.contrib.django.resources import AuditEvent
 from bk_audit.contrib.django.resources import AuditMixinResource as _AuditMixinResource
+from bk_audit.log.models import AuditContext
 
 
 class AuditMixinResource(_AuditMixinResource, abc.ABC):
     def _init_audit_event(self, request_data=None, **kwargs) -> AuditEvent:
         event = super()._init_audit_event(request_data=request_data, **kwargs)
         event["extend_data"]["request_data"] = request_data
+        # 兼容并发时携带 request
+        event["audit_context"] = AuditContext(request=kwargs.get("_request"))
         return event
