@@ -15,6 +15,8 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from typing import Callable
+
 from django.shortcuts import get_object_or_404
 
 from apps.permission.handlers.actions import ActionEnum
@@ -79,4 +81,27 @@ class RiskTicketPermission(IAMPermission):
                 return True
         # 校验IAM权限
         self.resources = [ResourceEnum.RISK.create_instance(risk_id)]
+        return super().has_permission(request, view)
+
+
+class BatchRiskTicketPermission(IAMPermission):
+    """
+    批量风险处理权限
+    """
+
+    def __init__(self, get_risk_ids: Callable):
+        super().__init__(actions=[ActionEnum.EDIT_RISK])
+        self.get_risk_ids = get_risk_ids
+
+    def has_permission(self, request, view):
+        # 校验风险处理人
+        risk_ids = self.get_risk_ids()
+        risks = Risk.objects.filter(risk_id__in=risk_ids).only("current_operator")
+        no_permission_risk_ids = [
+            risk.risk_id
+            for risk in risks
+            if not (risk.current_operator and request.user.username in risk.current_operator)
+        ]
+        # 校验IAM权限
+        self.resources = [risk_objs[0] for risk_objs in ResourceEnum.RISK.batch_create_instance(no_permission_risk_ids)]
         return super().has_permission(request, view)
