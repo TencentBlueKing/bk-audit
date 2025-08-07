@@ -90,7 +90,7 @@
   const getCellClass = (valueKey: string) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
-    'is-priority': valueKey === 'is_priority',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show',
     'map-config': valueKey === 'map_config',
     'drill-config': valueKey === 'drill_config',
     description: valueKey === 'description',
@@ -107,11 +107,11 @@
       border-bottom: 1px solid #dcdee5;
 
       &.field-name {
-        width: 120px;
+        width: 110px;
       }
 
       &.display-name {
-        width: 120px;
+        width: 110px;
       }
 
       &.is-priority {
@@ -119,11 +119,11 @@
       }
 
       &.map-config {
-        width: 140px;
+        width: 120px;
       }
 
       &.drill-config {
-        width: 140px;
+        width: 120px;
       }
 
       &:last-child {

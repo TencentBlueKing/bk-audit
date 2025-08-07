@@ -16,10 +16,26 @@
 -->
 <template>
   <div class="field-cell">
+    <!-- 字段显示名 -->
+    <field-input
+      v-if="fieldKey === 'display_name'"
+      ref="displayNameRef"
+      v-model="localEventItem.display_name"
+      required
+      theme="background" />
+
+    <!-- 是否展示 -->
+    <bk-switcher
+      v-else-if="fieldKey === 'is_show'"
+      v-model="localEventItem.is_show"
+      theme="primary"
+      @change="handleUpdateIsShow" />
+
     <!-- 是否重点展示 -->
     <bk-switcher
-      v-if="fieldKey === 'is_priority'"
+      v-else-if="fieldKey === 'is_priority'"
       v-model="localEventItem.is_priority"
+      :disabled="!localEventItem.is_show"
       theme="primary" />
 
     <!-- 字段映射 -->
@@ -104,6 +120,7 @@
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
   import ToolDetailModel from '@model/tool/tool-detail';
 
+  import FieldInput from './field-input.vue';
   import FieldMapping from './field-mapping.vue';
 
   import fieldReference from '@/views/tools/tools-square/add/components/field-reference/index.vue';
@@ -143,9 +160,11 @@
   const optionalFields = ['event_content', 'event_type'];
 
   const localEventItem = ref(props.eventItem);
+  const showFieldReference = ref(false);
+
   const fieldMappingRef = ref();
   const fieldReferenceRef = ref();
-  const showFieldReference = ref(false);
+  const displayNameRef = ref();
 
   const iconMap = {
     data_search: 'sqlxiao',
@@ -164,6 +183,12 @@
 
   const addCustomConstant = (value: string) => {
     emit('add-custom-constant', value);
+  };
+
+  const handleUpdateIsShow = (value: boolean) => {
+    if (!value && localEventItem.value.is_priority) {
+      localEventItem.value.is_priority = false;
+    }
   };
 
   const handleClick = (drillConfig?: StrategyFieldEvent['event_basic_field_configs'][0]['drill_config']) => {
@@ -210,10 +235,15 @@
 
   defineExpose({
     getValue() {
-      if (!fieldMappingRef.value) {
+      if (!fieldMappingRef.value && !displayNameRef.value) {
         return Promise.resolve();
       }
-      return fieldMappingRef.value.getValue();
+      if (displayNameRef.value) {
+        return displayNameRef.value.getValue();
+      }
+      if (fieldMappingRef.value) {
+        return fieldMappingRef.value.getValue();
+      }
     },
   });
 </script>
