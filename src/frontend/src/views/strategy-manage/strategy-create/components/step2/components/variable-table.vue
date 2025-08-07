@@ -81,6 +81,7 @@
   const createField = (item: DatabaseTableFieldModel) => ({
     field_name: item.display_name,
     display_name: item.display_name,
+    is_show: true,
     is_priority: false,
     map_config: {
       target_value: '',

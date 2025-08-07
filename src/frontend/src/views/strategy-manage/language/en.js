@@ -304,5 +304,6 @@ export default {
     预览当前字段格式与最新值: 'Preview current field format and latest value',
     数据预览: 'Data preview',
     重复: 'repeat',
+    在单据中展示: 'display in a ticket',
   },
 };

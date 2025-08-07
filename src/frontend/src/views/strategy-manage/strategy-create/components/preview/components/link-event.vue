@@ -85,6 +85,7 @@
             class="flex mt16"
             style="margin-bottom: 12px;">
             <render-info-item
+              v-if="!notDisplay.includes('event_id')"
               :label="t('事件ID')"
               :label-width="labelWidth">
               {{ data.event_basic_field_configs.
@@ -99,6 +100,7 @@
               </bk-button>
             </render-info-item>
             <render-info-item
+              v-if="!notDisplay.includes('operator')"
               :label="t('责任人')"
               :label-width="labelWidth">
               {{ data.event_basic_field_configs.
@@ -117,6 +119,7 @@
             class="flex mt16"
             style="margin-bottom: 12px;">
             <render-info-item
+              v-if="!notDisplay.includes('strategy_id')"
               :label="t('命中策略')"
               :label-width="labelWidth">
               {{ data.strategy_name }}
@@ -130,6 +133,7 @@
               </bk-button>
             </render-info-item>
             <render-info-item
+              v-if="!notDisplay.includes('event_content')"
               :label="t('事件描述')"
               :label-width="labelWidth">
               {{ data.event_basic_field_configs.
@@ -239,6 +243,7 @@
     risk_title: string,
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
+    event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'],
     processor_groups: [],
     notice_groups: []
   }
@@ -254,19 +259,29 @@
 
   // 转为二维数组
   const group = (array: Array<any>, subGroupLength: number = 2) => {
+    // 过滤掉is_show为false的数据
+    const filterArray = array.filter(item => item.is_show);
+
     let index = 0;
     const newArray = [];
-    while (index < array.length) {
-      newArray.push(array.slice(index, index += subGroupLength));
+    while (index < filterArray.length) {
+      newArray.push(filterArray.slice(index, index += subGroupLength));
     }
     return newArray;
   };
 
-  // 重点信息
+  // 重点信息（如果is_show为false, 则is_priority也一定为false）
   const importantInformation = computed(() => group([
     ...props.data.event_basic_field_configs.filter(item => item.is_priority),
     ...props.data.event_data_field_configs.filter(item => item.is_priority),
   ]));
+
+  // 不显示的字段
+  const notDisplay = computed(() => [
+    ...props.data.event_basic_field_configs.filter(item => !item.is_show).map(item => item.field_name),
+    ...props.data.event_data_field_configs.filter(item => !item.is_show).map(item => item.field_name),
+    ...props.data.event_evidence_field_configs.filter(item => !item.is_show).map(item => item.field_name),
+  ]);
 
   // 事件数据
   const eventData = computed(() => group(props.data.event_data_field_configs));
