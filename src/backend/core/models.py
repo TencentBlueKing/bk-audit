@@ -39,10 +39,12 @@ def get_non_request_username():
     return "admin"
 
 
-def get_request_username():
+def get_request_username(request=None):
+    if not request:
+        request = get_local_request()
     operator = None
     try:
-        operator = get_local_request().user.username
+        operator = request.user.username
     except (IndexError, AttributeError):
         if is_backend():
             operator = get_non_request_username()

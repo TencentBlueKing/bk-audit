@@ -15,12 +15,10 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
 import datetime
 import json
 from typing import List, Union
 
-from blueapps.utils.request_provider import get_request_username
 from django.conf import settings
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
@@ -527,15 +525,20 @@ class CustomCloseRiskRequestSerializer(serializers.Serializer):
     description = serializers.CharField(label=gettext_lazy("处理说明"))
 
 
-class CustomTransRiskReqSerializer(serializers.Serializer):
-    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"))
+class CustomTransBaseReqSerializer(serializers.Serializer):
     new_operators = serializers.ListField(label=gettext_lazy("新处理人"), child=serializers.CharField(), min_length=1)
     description = serializers.CharField(label=gettext_lazy("处理说明"))
 
-    def validate_new_operators(self, new_operators: List[str]) -> List[str]:
-        if len(new_operators) == 1 and new_operators[0] == get_request_username():
-            raise serializers.ValidationError(gettext("不能转单给自己"))
-        return new_operators
+
+class CustomTransRiskReqSerializer(CustomTransBaseReqSerializer):
+    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"))
+
+
+class BulkCustomTransRiskReqSerializer(CustomTransBaseReqSerializer):
+    risk_ids = serializers.ListField(label=gettext_lazy("Risk IDs"), child=serializers.CharField(), min_length=1)
+
+    def validate_risk_ids(self, risk_ids: List[str]) -> List[str]:
+        return list(set(risk_ids))
 
 
 class RiskExperienceInfoSerializer(serializers.ModelSerializer):

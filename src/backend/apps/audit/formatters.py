@@ -70,7 +70,8 @@ class AuditFormatter(DjangoFormatter):
             except TypeError:
                 extend_data[key] = str(val)
 
-        request = get_local_request()
+        # 获取请求信息，兼容上下文中携带 request
+        request = get_local_request() or getattr(audit_context, "request", None)
         if request:
             setattr(request, "request_id", get_local_request_id())
             extend_data.update(
