@@ -22,7 +22,7 @@
         v-for="(item, index) in columns"
         :key="index"
         class="header-cell"
-        :class="getHeaderClass(index)"
+        :class="getHeaderClass(item.key)"
         :style="{minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px'}">
         <span
           v-bk-tooltips="{
@@ -147,12 +147,13 @@
   const columns = computed(() => {
     const initColumns = [
       { label: t('事件分组') },
-      { label: t('字段名称') },
-      { label: t('字段显示名') },
-      { label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
-      { label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
-      { label: t('字段下钻') },
-      { label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
+      { key: 'field_name', label: t('字段名称') },
+      { key: 'display_name', label: t('字段显示名') },
+      { key: 'is_show', label: t('在单据中展示') },
+      { key: 'is_priority', label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
+      { key: 'map_config', label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
+      { key: 'drill_config', label: t('字段下钻') },
+      { key: 'description', label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
     ];
 
     return props.strategyType === 'rule'
@@ -235,20 +236,19 @@
     }
   };
 
-  const getHeaderClass = (index: number) => {
-    const classes = ['group'];
-    if (index === 1) classes.push('field-name');
-    if (index === 2) classes.push('display-name');
-    if (index === 3) classes.push('is-priority');
-    if (index === 4) classes.push('map-config');
-    if (index === 5) classes.push('drill-config');
-    if (index === columns.value.length - 1) classes.push('last');
-    return classes;
-  };
+  const getHeaderClass = (valueKey: string | undefined) => ({
+    'field-name': valueKey === 'field_name',
+    'display-name': valueKey === 'display_name',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show',
+    'map-config': valueKey === 'map_config',
+    'drill-config': valueKey === 'drill_config',
+    description: valueKey === 'description',
+  });
 
   const createField = (item: DatabaseTableFieldModel) => ({
     field_name: item.display_name,
     display_name: item.display_name,
+    is_show: true,
     is_priority: false,
     map_config: {
       target_value: '',
@@ -334,6 +334,7 @@
                 return {
                   field_name: item.field_name,
                   display_name: item.display_name,
+                  is_show: editItem.is_show ?? true,
                   is_priority: editItem.is_priority,
                   map_config: {
                     target_value: editItem.map_config?.target_value,
@@ -424,7 +425,7 @@
         width: 230px;
       }
 
-      &.last {
+      &:last-child {
         flex: 1;
       }
     }

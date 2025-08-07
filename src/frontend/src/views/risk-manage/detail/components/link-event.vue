@@ -90,6 +90,7 @@
                 class="flex mt16"
                 style="margin-bottom: 12px;">
                 <render-info-item
+                  v-if="!notDisplay.includes('event_id')"
                   :label="t('事件ID')"
                   :label-width="labelWidth">
                   {{ eventItem.event_id }}
@@ -107,6 +108,7 @@
                   </template>
                 </render-info-item>
                 <render-info-item
+                  v-if="!notDisplay.includes('operator')"
                   :label="t('责任人')"
                   :label-width="labelWidth">
                   {{ eventItem.operator }}
@@ -128,6 +130,7 @@
                 class="flex mt16"
                 style="margin-bottom: 12px;">
                 <render-info-item
+                  v-if="!notDisplay.includes('strategy_id')"
                   :label="t('命中策略')"
                   :label-width="labelWidth">
                   <bk-button
@@ -152,6 +155,7 @@
                   </template>
                 </render-info-item>
                 <render-info-item
+                  v-if="!notDisplay.includes('event_content')"
                   :label="t('事件描述')"
                   :label-width="labelWidth">
                   {{ eventItem.event_content }}
@@ -377,9 +381,9 @@
           filter((item, index, self) => index === self.findIndex(t => t.event_id === item.event_id));
 
         // 默认获取第一个
-        // eslint-disable-next-line prefer-destructuring
-        eventItem.value = linkEventList.value[0];
-        // 事件数据
+        [eventItem.value] = linkEventList.value;
+
+        // 事件event_data数据处理
         const eventDataKey = getEventDataKey(eventItem.value.event_data);
         eventItemDataKeyArr.value = group(eventDataKey);
       }
@@ -413,10 +417,15 @@
     showTooltips.value = spanWidth > parentWidth;
   };
 
-  // 过滤事件数据，只保留有数据的key
-  const getEventDataKey = (eventDataKey: Record<string, any>) => {
-    const eventDataKeys = Object.keys(eventDataKey);
+  // 过滤事件event_data数据，只保留有数据的key和策略配置is_show为true的数据
+  const getEventDataKey = (eventData: Record<string, any>) => {
+    const eventDataKeys = Object.keys(eventData);
     return eventDataKeys.filter((key) => {
+      // 排除 notDisplay 中的键
+      if (notDisplay.value.includes(key)) {
+        return false;
+      }
+
       const value = eventItem.value.event_data[key];
       if (typeof value !== 'object' && value !== null && value !== '') {
         return true;
@@ -441,7 +450,8 @@
   const handlerSelect = (item: EventModel, index: number) => {
     eventItem.value = item;
     active.value = index;
-    // 事件数据
+
+    // 事件event_data数据处理
     const eventDataKey = getEventDataKey(eventItem.value.event_data);
     eventItemDataKeyArr.value = group(eventDataKey);
   };
@@ -502,11 +512,18 @@
     immediate: true,
   });
 
-  // 重点信息
+  // 重点信息（如果is_show为false, 则is_priority也一定为false）
   const importantInformation = computed(() => group([
     ...props.data.event_basic_field_configs.filter(item => item.is_priority),
     ...props.data.event_data_field_configs.filter(item => item.is_priority),
   ]));
+
+  // 不显示的字段
+  const notDisplay = computed(() => [
+    ...props.data.event_basic_field_configs.filter(item => !item.is_show).map(item => item.field_name),
+    ...props.data.event_data_field_configs.filter(item => !item.is_show).map(item => item.field_name),
+    ...props.data.event_evidence_field_configs.filter(item => !item.is_show).map(item => item.field_name),
+  ]);
 
   // 显示字段下钻的字段
   const drillMap = computed(() => {

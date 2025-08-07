@@ -109,7 +109,7 @@
   const getCellClass = (valueKey: string) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
-    'is-priority': valueKey === 'is_priority',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show',
     'map-config': valueKey === 'map_config',
     'drill-config': valueKey === 'drill_config',
     description: valueKey === 'description',
@@ -192,7 +192,6 @@
 
     &.display-name {
       width: 200px;
-      background-color: #f5f7fa;
     }
 
     &.is-priority {

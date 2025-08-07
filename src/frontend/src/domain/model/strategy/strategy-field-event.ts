@@ -18,6 +18,7 @@ type EventItem = {
   field_name: string,
   description: string
   display_name: string;
+  is_show: boolean;
   is_priority: boolean;
   map_config?: {
     target_value: string | undefined,
@@ -54,6 +55,7 @@ export default class StrategyFieldEvent {
     return (data && data.map(item => ({
       field_name: item.field_name,
       display_name: item.display_name,
+      is_show: item.is_show ?? true,
       is_priority: item.is_priority || false,
       map_config: {
         target_value: item.map_config?.target_value,
