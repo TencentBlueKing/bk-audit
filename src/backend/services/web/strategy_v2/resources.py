@@ -270,7 +270,20 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         if source_type not in support_source_types:
             raise NotSupportSourceType(source_type=source_type, support_source_types=support_source_types)
 
-    def update_enum_mappings(self, enum_mapping: dict, strategy_id: int):
+    def update_enum_mappings(
+        self,
+        enum_mapping: dict,
+        strategy_id: int,
+        field_name: str,
+        field_category: str,
+    ):
+        """
+        Generate immutable collection_id based on strategy_id, field_category, and field_name,
+        then batch update enum mappings.
+        """
+        # override collection_id to ensure uniqueness and immutability
+        field_type = field_category.replace('event_', '').replace('_field_configs', '')
+        enum_mapping['collection_id'] = f"{strategy_id}_{field_type}_{field_name}"
         enum_mapping['related_object_id'] = str(strategy_id)
         enum_mapping['related_type'] = EnumMappingRelatedType.STRATEGY.value
         resource.meta.batch_update_enum_mappings(**enum_mapping)
@@ -341,7 +354,12 @@ class CreateStrategy(StrategyV2Base):
                 for field_config in validated_request_data.get(field_category, []):
                     enum_mappings = field_config.get('enum_mappings')
                     if enum_mappings:
-                        self.update_enum_mappings(enum_mappings, strategy.strategy_id)
+                        self.update_enum_mappings(
+                            enum_mappings,
+                            strategy.strategy_id,
+                            field_config.get('field_name'),
+                            field_category,
+                        )
         # create
         try:
             call_controller(
@@ -453,7 +471,12 @@ class UpdateStrategy(StrategyV2Base):
             for field_config in validated_request_data.get(field_category, []):
                 enum_mappings = field_config.get('enum_mappings')
                 if enum_mappings:
-                    self.update_enum_mappings(enum_mappings, strategy.strategy_id)
+                    self.update_enum_mappings(
+                        enum_mappings,
+                        strategy.strategy_id,
+                        field_config.get('field_name'),
+                        field_category,
+                    )
         # return
         return need_update_remote
 
