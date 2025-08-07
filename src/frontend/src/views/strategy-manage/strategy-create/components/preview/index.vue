@@ -57,6 +57,7 @@
     risk_title: string,
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
+    event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'],
     processor_groups: [],
     notice_groups: []
   }

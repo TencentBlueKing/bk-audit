@@ -38,12 +38,12 @@
                 v-for="(item, index) in columns"
                 :key="index"
                 class="header-cell"
-                :class="getHeaderClass(index)"
+                :class="getHeaderClass(item.key)"
                 :style="{
                   minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
                   borderRight: index === 0 ? '1px solid #dcdee5' : ''
                 }">
-                {{ item }}
+                {{ item.label }}
               </div>
             </div>
             <template
@@ -99,13 +99,14 @@
   //  strategyType === 'rule'时显示全部列，否则排除 “字段映射”
   const columns = computed(() => {
     const initColumns = [
-      t('事件分组'),
-      t('字段名称'),
-      t('字段显示名'),
-      t('重点展示'),
-      t('字段映射'),
-      t('字段下钻'),
-      t('字段说明'),
+      { label: t('事件分组') },
+      { key: 'field_name', label: t('字段名称') },
+      { key: 'display_name', label: t('字段显示名') },
+      { key: 'is_show', label: t('在单据中展示') },
+      { key: 'is_priority', label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
+      { key: 'map_config', label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
+      { key: 'drill_config', label: t('字段下钻') },
+      { key: 'description', label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
     ];
 
     return props.data.strategy_type === 'rule'
@@ -134,16 +135,14 @@
     return new StrategyFieldEvent(data);
   });
 
-  const getHeaderClass = (index: number) => {
-    const classes = ['group'];
-    if (index === 1) classes.push('field-name');
-    if (index === 2) classes.push('display-name');
-    if (index === 3) classes.push('is-priority');
-    if (index === 4) classes.push('map-config');
-    if (index === 5) classes.push('drill-config');
-    if (index === columns.value.length - 1) classes.push('last');
-    return classes;
-  };
+  const getHeaderClass = (valueKey: string | undefined) => ({
+    'field-name': valueKey === 'field_name',
+    'display-name': valueKey === 'display_name',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show',
+    'map-config': valueKey === 'map_config',
+    'drill-config': valueKey === 'drill_config',
+    description: valueKey === 'description',
+  });
 
   const {
     data: allToolsData,
@@ -182,12 +181,12 @@
         background-color: #f5f7fa;
 
         &.field-name {
-          width: 120px;
+          width: 110px;
           background-color: #f5f7fa;
         }
 
         &.display-name {
-          width: 120px;
+          width: 110px;
           background-color: #f5f7fa;
         }
 
@@ -196,14 +195,14 @@
         }
 
         &.map-config {
-          width: 140px;
+          width: 120px;
         }
 
         &.drill-config {
-          width: 140px;
+          width: 120px;
         }
 
-        &.last {
+        &:last-child {
           flex: 1;
         }
       }
