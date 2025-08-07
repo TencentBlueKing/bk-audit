@@ -86,6 +86,8 @@ class MapFieldSerializer(serializers.Serializer):
 class EnumMappingConfigSerializer(BatchUpdateEnumMappingSerializer):
     related_type = serializers.CharField(max_length=255, read_only=True, default="strategy")
     related_object_id = serializers.CharField(max_length=255, read_only=True, default="strategy_id")
+    # Ensure collection_id is not user-modifiable and auto-generated key
+    collection_id = serializers.CharField(read_only=True, default='auto-generate')
 
 
 class EventFieldSerializer(serializers.Serializer):

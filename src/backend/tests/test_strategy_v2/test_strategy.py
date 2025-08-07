@@ -282,37 +282,36 @@ class StrategyEnumMappingTest(StrategyTest):
         mock.Mock(return_value={}),
     )
     def test_create_strategy_enum_mappings(self) -> None:
+        # omit collection_id, it will be auto-generated as strategy_id_basic_username
         enum_mappings = {
-            "collection_id": "test_collection",
             "mappings": [{"key": "1", "name": "one"}],
         }
         data = self._create_bkm_strategy_with_enum(enum_mappings)
         strategy_id = data["strategy_id"]
+        expected_collection = f"{strategy_id}_basic_username"
         result = resource.meta.get_enum_mapping_by_collection(
-            collection_id=enum_mappings["collection_id"],
+            collection_id=expected_collection,
             related_type="strategy",
             related_object_id=strategy_id,
         )
         expected = [
             {
-                "collection_id": enum_mappings["collection_id"],
+                "collection_id": expected_collection,
                 "key": enum_mappings["mappings"][0]["key"],
                 "name": enum_mappings["mappings"][0]["name"],
             }
         ]
         self.assertEqual(result, expected)
         relation = resource.meta.get_enum_mappings_relation(related_type="strategy", related_object_id=strategy_id)
-        self.assertEqual(relation, [enum_mappings["collection_id"]])
+        self.assertEqual(relation, [expected_collection])
 
     @mock.patch(
         "services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy",
         mock.Mock(return_value={}),
     )
     def test_update_strategy_enum_mappings_delete(self) -> None:
-        enum_mappings = {
-            "collection_id": "test_collection",
-            "mappings": [{"key": "1", "name": "one"}],
-        }
+        # omit collection_id, it will be auto-generated on create
+        enum_mappings = {"mappings": [{"key": "1", "name": "one"}]}
         data = self._create_bkm_strategy_with_enum(enum_mappings)
         strategy_id = data["strategy_id"]
         params = copy.deepcopy(BKM_STRATEGY_DATA)
@@ -332,10 +331,7 @@ class StrategyEnumMappingTest(StrategyTest):
                         "display_name": "username",
                         "is_priority": True,
                         "description": "",
-                        "enum_mappings": {
-                            "collection_id": enum_mappings["collection_id"],
-                            "mappings": [],
-                        },
+                        "enum_mappings": {"mappings": []},
                     }
                 ],
             }
@@ -415,20 +411,20 @@ class StrategyEnumMappingResourceTest(TestCase):
         mock.Mock(return_value={}),
     )
     def test_get_strategy_enum_mapping_by_collection(self) -> None:
-        enum_mappings = {
-            "collection_id": "test",
-            "mappings": [{"key": "1", "name": "one"}],
-        }
+        # omit collection_id, it will be auto-generated as strategy_id_basic_username
+        enum_mappings = {"mappings": [{"key": "1", "name": "one"}]}
         data = self._create_bkm_strategy_with_enum(enum_mappings)
+        strategy_id = data["strategy_id"]
+        expected_collection = f"{strategy_id}_basic_username"
         params = {
-            "collection_id": enum_mappings["collection_id"],
+            "collection_id": expected_collection,
             "related_type": "strategy",
-            "related_object_id": data["strategy_id"],
+            "related_object_id": strategy_id,
         }
         result = resource.strategy_v2.get_strategy_enum_mapping_by_collection(**params)
         expected = [
             {
-                "collection_id": enum_mappings["collection_id"],
+                "collection_id": expected_collection,
                 "key": enum_mappings["mappings"][0]["key"],
                 "name": enum_mappings["mappings"][0]["name"],
             }
