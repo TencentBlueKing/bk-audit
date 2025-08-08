@@ -164,5 +164,14 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  batchTransRisk(params: {
+    risk_ids: string[],
+    new_operators: string[],
+    description: string
+  }) {
+    return Request.post(`${this.module}/bulk_trans/`, {
+      params,
+    });
+  }
 }
 export default new RiskManage();

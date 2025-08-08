@@ -122,5 +122,10 @@ export default {
     风险标题: 'Risk title',
     我的关注: 'My focus',
     请输入风险标题: 'Please enter the risk title',
+    导出数据: 'Export data',
+    批量转单: 'Batch transfer',
+    请选择关注人: 'Please select the focus person',
+    请选择要操作的数据: 'Please select the data to operate',
+    请选择要导出的数据: 'Please select the data to export',
   },
 };
