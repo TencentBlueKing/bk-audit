@@ -51,6 +51,11 @@ try:
 except (RuntimeError, ImportError):
     PanelResourceProvider = None
 
+try:
+    from services.web.tool.providers import ToolResourceProvider
+except (RuntimeError, ImportError):
+    ToolResourceProvider = None
+
 resources_dispatcher = BkAuditResourceApiDispatcher(Permission.get_iam_client(), settings.BK_IAM_SYSTEM_ID)
 resources_dispatcher.register("system", SystemResourceProvider())
 resources_dispatcher.register("tag", TagResourceProvider())
@@ -71,6 +76,9 @@ if RiskResourceProvider is not None:
 
 if PanelResourceProvider is not None:
     resources_dispatcher.register("panel", PanelResourceProvider())
+
+if ToolResourceProvider is not None:
+    resources_dispatcher.register("tool", ToolResourceProvider())
 
 if LinkTableProvider is not None:
     resources_dispatcher.register("link_table", LinkTableProvider())
