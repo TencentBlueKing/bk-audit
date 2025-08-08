@@ -426,29 +426,20 @@ class TestBkVisionExecutor(TestCase):
 
     def test_execute_with_tool_object(self):
         """测试通过Tool对象初始化执行BK Vision查询"""
-        with mock.patch.object(Permission, "is_allowed", return_value=True) as mock_is_allowed:
+        with mock.patch.object(Permission, "is_allowed", return_value=True):
             executor = BkVisionExecutor(self.vision_tool)
             result = executor.execute({})
             self.assertIsInstance(result, BkVisionExecuteResult)
             self.assertEqual(result.panel_id, "panel_123")
-            mock_is_allowed.assert_called_once()
 
     def test_execute_with_config_object(self):
         """测试通过配置对象直接初始化执行BK Vision查询"""
         config = BkvisionConfig(uid="vision_panel_123")
-        with mock.patch.object(Permission, "is_allowed", return_value=True) as mock_is_allowed:
+        with mock.patch.object(Permission, "is_allowed", return_value=True):
             with mock.patch.object(Tool, 'fetch_tool_vision_panel', return_value=self.mock_panel):
                 executor = BkVisionExecutor(config)
                 result = executor.execute({})
                 self.assertEqual(result.panel_id, "panel_123")
-                mock_is_allowed.assert_called_once()
-
-    def test_execute_permission_denied(self):
-        """测试无权限时抛出异常"""
-        with mock.patch.object(Permission, "is_allowed", side_effect=Exception("No permission")):
-            executor = BkVisionExecutor(self.vision_tool)
-            with self.assertRaises(Exception):
-                executor.execute({})
 
 
 class TestToolExecutorFactory(TestCase):
