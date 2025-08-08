@@ -99,3 +99,10 @@ class VariableViewSet(API200ViewSet, BKVisionInstanceViewSet):
     resource_routes = [
         ResourceRoute("POST", resource.vision.query_variable_data, endpoint="query"),
     ]
+
+
+class QueryShareVisionViewSet(API200ViewSet, BKVisionViewSet):
+    resource_routes = [
+        ResourceRoute("GET", resource.vision.query_share_list, endpoint="query_share_vision"),
+        ResourceRoute("GET", resource.vision.query_share_detail, endpoint="query_share_vision_detail"),
+    ]
