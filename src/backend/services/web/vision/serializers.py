@@ -42,3 +42,7 @@ class QueryDataReqSerializer(serializers.Serializer):
     panel_uid = serializers.CharField()
     queries = serializers.ListField(child=serializers.JSONField())
     option = serializers.JSONField()
+
+
+class QueryShareDetailSerializer(ExtraDataSerializerMixin):
+    share_uid = serializers.CharField()
