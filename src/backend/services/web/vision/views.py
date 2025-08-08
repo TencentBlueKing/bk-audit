@@ -36,7 +36,7 @@ class API200ViewSet(ResourceViewSet, abc.ABC):
 
 
 class BKVisionViewSet(ResourceViewSet, abc.ABC):
-    escape_scenario = [Scenario.PER_APP.value]  # 单系统报表去除接口鉴权，直接采用 filter 鉴权
+    escape_scenario = [Scenario.PER_APP.value, Scenario.TOOL.value]  # 去除接口鉴权
 
     def get_permissions(self):
         return [IAMPermission(actions=[ActionEnum.LIST_BASE_PANEL])]
