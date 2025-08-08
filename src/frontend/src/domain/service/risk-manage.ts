@@ -177,4 +177,16 @@ export default {
     return RiskManageSource.transRisk(params)
       .then(({ data }) => data);
   },
+
+  /**
+   * @desc 批量转单
+   */
+  batchTransRisk(params: {
+    risk_ids: string[],
+    new_operators: string[],
+    description: string
+  }) {
+    return RiskManageSource.batchTransRisk(params)
+      .then(({ data }) => data);
+  },
 };

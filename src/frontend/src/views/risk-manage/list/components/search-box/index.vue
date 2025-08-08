@@ -21,6 +21,7 @@
         :is="renderComponent"
         v-model="searchModel"
         @clear="handleClear"
+        @export="handleExport"
         @submit="handleSubmit" />
     </keep-alive>
     <div
@@ -51,7 +52,8 @@
 
   interface Emits {
     (e: 'change', value: Record<string, any>): void;
-    (e: 'changeTableHeight'): void
+    (e: 'changeTableHeight'): void;
+    (e: 'export'): void;
   }
   interface Exposes {
     clearValue: () => void;
@@ -77,7 +79,9 @@
   }
 
   const renderComponent = computed(() => comMap[renderType.value]);
-
+  const handleExport = () => {
+    emit('export');
+  };
   const searchModel = ref<Record<string, any>>({
     datetime: [
       dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),

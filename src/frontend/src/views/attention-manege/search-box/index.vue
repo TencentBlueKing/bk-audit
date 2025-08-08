@@ -21,6 +21,7 @@
         :is="renderComponent"
         v-model="searchModel"
         @clear="handleClear"
+        @export="handleExport"
         @submit="handleSubmit" />
     </keep-alive>
     <div
@@ -51,7 +52,8 @@
 
   interface Emits {
     (e: 'change', value: Record<string, any>): void;
-    (e: 'changeTableHeight'): void
+    (e: 'changeTableHeight'): void;
+    (e: 'export'): void;
   }
   interface Exposes {
     clearValue: () => void;
@@ -71,6 +73,9 @@
   } = useUrlSearch();
   const urlSearchParams = getSearchParams();
 
+  const handleExport = () => {
+    emit('export');
+  };
   const renderType = ref<keyof typeof comMap>('key');
   if (comMap[urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap]) {
     renderType.value = urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap;

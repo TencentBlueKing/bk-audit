@@ -20,6 +20,7 @@
     class="audit-render-list">
     <bk-loading :loading="isLoading">
       <bk-table
+        ref="tableRef"
         :border="border"
         v-bind="$attrs"
         :columns="columns"
@@ -136,7 +137,8 @@
     fetchData: (params: Record<string, any>) => void,
     loading: Ref<boolean>,
     refreshList: () => void,
-    getListData:()=>Array<Record<string, any>>
+    getListData:()=> Array<Record<string, any>>,
+    getSelection:()=> void
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -150,14 +152,14 @@
   const { getRecordPageParams, removePageParams } = useRecordPage;
   const { on, off } = useEventBus();
   const slot = useSlots();
-
+  const tableRef = ref();
   const rootRef = ref();
   const { t } = useI18n();
   const pagination = reactive<IPagination>({
     count: 0,
     current: 1,
     limit: 10,
-    limitList: [10, 20, 50, 100],
+    limitList: [10, 20, 50, 100, 500],
     align: 'right',
     layout: ['total', 'limit', 'list'],
   });
@@ -274,7 +276,6 @@
   const handleClearSearch  = () => {
     emits('clearSearch');
   };
-
   onMounted(() => {
     parseURL();
     calcTableHeight();
@@ -339,6 +340,9 @@
     },
     getListData() {
       return listData.value.results;
+    },
+    getSelection() {
+      return tableRef.value?.getSelection();
     },
   });
 </script>
