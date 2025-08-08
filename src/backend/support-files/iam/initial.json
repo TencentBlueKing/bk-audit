@@ -1410,6 +1410,63 @@
           }
         ]
       }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "tool",
+        "name": "工具",
+        "name_en": "Tool",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "tool_list",
+        "name": "工具列表",
+        "name_en": "Tool List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "tool"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "use_tool",
+        "name": "使用工具",
+        "name_en": "Use Tool",
+        "type": "view",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "tool",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "tool_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+        ],
+        "description": "",
+        "description_en": ""
+      }
     }
   ]
 }
