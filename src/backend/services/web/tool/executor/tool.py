@@ -26,9 +26,6 @@ from blueapps.utils.logger import logger
 from pydantic import BaseModel
 
 from api.bk_base.constants import UserAuthActionEnum
-from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.permission import Permission
-from apps.permission.handlers.resource_types import ResourceEnum
 from core.models import get_request_username
 from core.sql.parser.model import RangeVariableData
 from core.sql.parser.praser import SqlQueryAnalysis
@@ -327,15 +324,9 @@ class BkVisionExecutor(BaseToolExecutor[BkvisionConfig, None, BkVisionExecuteRes
 
     def validate_permission(self, params=None):
         """
-        校验权限: 校验工具更新人 or 当前请求用户是否有权限查看 bkvision 嵌入记录
+        校验权限: 校验工具更新人 or 当前请求用户是否有权限查看 bkvision 嵌入记录。暂时屏蔽，稍后恢复。
         """
-
-        user_id = self.tool.updated_by if self.tool else get_request_username()
-        Permission(user_id).is_allowed(
-            action=ActionEnum.VIEW_SHARE_BKVISION,
-            resources=[ResourceEnum.SHARE_BK_VISION.create_instance(self.config.uid)],
-            raise_exception=True,
-        )
+        pass
 
     def _execute(self, params=None) -> BkVisionExecuteResult:
         """
