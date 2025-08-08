@@ -18,15 +18,18 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 
+from bk_resource import api
 from django.utils.translation import gettext_lazy
 from rest_framework.generics import get_object_or_404
 
 from apps.audit.resources import AuditMixinResource
 from apps.permission.handlers.actions import ActionEnum
 from services.web.vision.constants import PANEL
+from services.web.vision.handlers.query import VisionHandler
 from services.web.vision.models import VisionPanel, VisionPanelInstance
 from services.web.vision.serializers import (
     QueryMetaReqSerializer,
+    QueryShareDetailSerializer,
     VisionPanelInfoQuerySerializer,
     VisionPanelInfoSerializer,
 )
@@ -88,3 +91,18 @@ class QueryVariableData(QueryMixIn, BKVision):
     audit_action = ActionEnum.VIEW_BASE_PANEL
     audit_resource_type = PANEL
     query_method = 'query_variable_data'
+
+
+class QueryShareList(BKVision):
+    name = gettext_lazy("获取有权限的图表列表")
+
+    def perform_request(self, validated_request_data):
+        return api.bk_vision.get_share_list(**validated_request_data)
+
+
+class QueryShareDetail(BKVision):
+    name = gettext_lazy("获取图表元数据")
+    RequestSerializer = QueryShareDetailSerializer
+
+    def perform_request(self, validated_request_data):
+        return VisionHandler().query_meta(params=validated_request_data)
