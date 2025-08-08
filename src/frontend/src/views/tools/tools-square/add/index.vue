@@ -853,7 +853,15 @@
     () => viewRootRef.value,
   );
   const isEditMode = route.name === 'toolsEdit';
-
+  const radioGroup = ref([
+    {
+      id: '1',
+      label: t('公开可申请'),
+    },
+    {
+      id: '2',
+      label: t('仅指定人可用'),
+    }]);
   const viewRootRef = ref();
   const editSqlRef = ref();
   const formRef = ref();
