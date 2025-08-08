@@ -247,6 +247,19 @@
               </div>
             </template>
           </card-part-vue>
+          <card-part-vue
+            :title="t('参数配置')"
+            :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
+            <template #content>
+              <div style="display: flex;width: 100%; justify-content: space-between;">
+                <bk-vision-component
+                  v-for="comItem in componentList"
+                  :key="comItem.id"
+                  :config="comItem"
+                  style="width: 49.5%" />
+              </div>
+            </template>
+          </card-part-vue>
           <!-- 工具配置 -->
           <template v-if="formData.tool_type === 'data_search'">
             <card-part-vue :title="t('工具配置页面')">
@@ -904,7 +917,7 @@
     name: '',
     tags: [],
     description: '',
-    tool_type: 'data_search',
+    tool_type: 'bk_vision',
     data_search_config_type: 'sql',
     config: {
       referenced_tables: [],
