@@ -22,6 +22,9 @@
       <slot name="title">
         <span>
           {{ title }}
+          <span class="card-part-title-description">
+            {{ titleDescription }}
+          </span>
         </span>
       </slot>
       <audit-icon
@@ -46,11 +49,13 @@
     title?: string,
     showContent?:boolean,
     showIcon?:boolean,
+    titleDescription?:string,
   }
   withDefaults(defineProps<Props>(), {
     showContent: true,
     showIcon: true,
     title: '',
+    titleDescription: '',
   });
 
   const isCollapse = ref(false);
@@ -62,6 +67,8 @@
 
 <style scoped lang="postcss">
 .strategy-create-card-part {
+  padding-bottom: 10px;
+
   /* width: 82%; */
   margin-bottom: 16px;
   background: #fff;
@@ -82,6 +89,14 @@
 
     >.audit-icon {
       cursor: pointer;
+    }
+
+    .card-part-title-description {
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 20px;
+      letter-spacing: 0;
+      color: #979ba5;
     }
   }
 

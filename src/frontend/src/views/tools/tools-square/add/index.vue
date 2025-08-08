@@ -97,7 +97,8 @@
                 <template #label>
                   <span
                     v-bk-tooltips="t('影响工具是否可公开申请或公开使用')"
-                    style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义') }}</span>
+                    style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义')
+                    }}</span>
                 </template>
                 <bk-radio-group v-model="formData.radioGroupValue">
                   <bk-radio-button
@@ -201,27 +202,58 @@
                     :placeholder="t('请输入图表链接')"
                     style="width: 100%;" />
                 </bk-form-item>
-                <div style=" display: flex;width: 100%;  align-items: center;  ">
+                <div style=" display: flex;align-items: center; width: 100%; justify-content: space-between; ">
                   <bk-form-item
                     :label="t('选择报表')"
                     label-width="160"
-                    property="config.uid"
+                    property="area"
                     required
-                    style="flex: 1;">
-                    <div style="width: 50%;">
-                      11
-                    </div>
+                    style="width: 49.5%;">
+                    <bk-cascader
+                      v-model="formData.area"
+                      :list="cascaderList"
+                      :show-complete-name="false"
+                      trigger="click" />
                   </bk-form-item>
 
                   <bk-form-item
                     :label="t('选择版本')"
                     label-width="160"
-                    property="config.uid"
+                    property="version"
                     required
-                    style="flex: 1;">
-                    222
+                    style="width: 49.5%;">
+                    <div style="display: flex;">
+                      <bk-select
+                        v-model="formData.bkVersion"
+                        auto-focus
+                        class="bk-select"
+                        filterable
+                        style="width: calc(100% - 50px)">
+                        <bk-option
+                          v-for="(item, index) in versionList"
+                          :id="item.value"
+                          :key="index"
+                          :disabled="item.disabled"
+                          :name="item.label" />
+                      </bk-select>
+                      <span style="width: 50px; color: #3a84ff; text-align: center; cursor: pointer;"> {{ t('查看')
+                      }}</span>
+                    </div>
                   </bk-form-item>
                 </div>
+              </div>
+            </template>
+          </card-part-vue>
+          <card-part-vue
+            :title="t('参数配置')"
+            :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
+            <template #content>
+              <div style="display: flex;width: 100%; justify-content: space-between;">
+                <bk-vision-component
+                  v-for="comItem in componentList"
+                  :key="comItem.id"
+                  :config="comItem"
+                  style="width: 49.5%" />
               </div>
             </template>
           </card-part-vue>
@@ -250,7 +282,7 @@
                     <div
                       ref="viewRootRef"
                       class="sql-container"
-                      :style="{height: '320px', width: '100%'}">
+                      :style="{ height: '320px', width: '100%' }">
                       <audit-icon
                         v-if="showExit"
                         v-bk-tooltips="t('退出全屏')"
@@ -373,7 +405,7 @@
                                 ref="fieldItemRef"
                                 v-model="item.raw_name"
                                 disabled
-                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
+                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -385,7 +417,7 @@
                                 ref="fieldItemRef"
                                 v-model="item.display_name"
                                 :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
+                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div
@@ -399,7 +431,7 @@
                                 ref="fieldItemRef"
                                 v-model="item.description"
                                 :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
+                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div
@@ -416,7 +448,7 @@
                                 <bk-radio label>
                                   <span>{{ t('是') }}</span>
                                 </bk-radio>
-                                <bk-radio :label="false ">
+                                <bk-radio :label="false">
                                   <span>{{ t('否') }}</span>
                                 </bk-radio>
                               </bk-radio-group>
@@ -437,7 +469,7 @@
                                 :disabled="!formData.config.sql"
                                 filterable
                                 :input-search="false"
-                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请选择')"
+                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请选择')"
                                 :search-placeholder="t('请输入关键字')"
                                 @change="(value: string) => handleFieldCategoryChange(value, index)">
                                 <bk-option
@@ -458,8 +490,8 @@
                               <add-enum
                                 ref="addEnumRefs"
                                 @update-choices="(value: Array<{
-                                  key: string,
-                                  name: string
+                                key: string,
+                                name: string
                                 }>) => handleUpdateChoices(value, index)" />
                             </bk-form-item>
                           </div>
@@ -480,7 +512,7 @@
                                   ref="formItemRefs"
                                   :data-config="item"
                                   origin-model
-                                  @change="(val:any) => handleFormItemChange(val, item)" />
+                                  @change="(val: any) => handleFormItemChange(val, item)" />
                               </template>
                             </bk-form-item>
                           </div>
@@ -526,7 +558,7 @@
                                 ref="fieldItemRef"
                                 v-model="item.raw_name"
                                 disabled
-                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
+                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -538,7 +570,7 @@
                                 ref="fieldItemRef"
                                 v-model="item.display_name"
                                 :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
+                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div
@@ -552,7 +584,7 @@
                                 ref="fieldItemRef"
                                 v-model="item.description"
                                 :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql'):t('请输入')" />
+                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
                             </bk-form-item>
                           </div>
                           <div class="field-value">
@@ -692,6 +724,7 @@
   import DialogVue from '../components/dialog.vue';
 
   import AddEnum from './components/add-enum.vue';
+  import BkVisionComponent from './components/bk-vision-components.vue';
   import CardPartVue from './components/card-part.vue';
   import EditSql from './components/edit-sql.vue';
   import fieldReference from './components/field-reference/index.vue';
@@ -706,6 +739,8 @@
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
   interface FormData {
+    area?: string;
+    bkVersion?: string;
     radioGroupValue?: string;
     users?: string[];
     name: string;
@@ -821,13 +856,92 @@
 
   const strategyTagMap = ref<Record<string, string>>({});
   const toolMaxVersionMap = ref<Record<string, number>>({});
+  const componentList = ref([
+    {
+      id: '1',
+      type: 'userSelect',
+      label: '用户选择',
+    },
+    {
+      id: '2',
+      type: 'input',
+      label: '输入',
+    },
+  ]);
+  const cascaderList = ref([
+    {
+      id: '1',
+      name: '安全项目',
+      disabled: true,
+      children: [
+        {
+          id: '1-1-1',
+          name: '旧业务',
+        },
+        {
+          id: '1-1-2',
+          name: '新业受运营报表',
+          disabled: true,
+        },
+      ],
+    },
+    {
+      id: '2',
+      name: '数据调取工具',
+    },
+    {
+      id: '3',
+      name: '业受货币化相关',
+      children: [
+        {
+          id: '3-1-1',
+          name: '新业受运营报表',
+          children: [
+            {
+              id: '3-1-1-1',
+              name: '数据调取工具',
+            },
+            {
+              id: '3-1-1-2',
+              name: '光谱',
+            },
+            {
+              id: '3-1-1-3',
+              name: 'GBSS 单据汇总查询',
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+  const versionList = ref([
+    {
+      value: 'v11',
+      label: 'v11',
+    },
+    {
+      value: 'v12',
+      label: 'v1.2',
+    },
+    {
+      value: 'v1',
+      label: 'v1',
+    },
+    {
+      value: 'v19',
+      label: 'v11',
+      disabled: true,
+    },
+  ]);
   const formData = ref<FormData>({
     radioGroupValue: '',
+    bkVersion: '1.0.0',
+    area: '',
     users: [],
     name: '',
     tags: [],
     description: '',
-    tool_type: 'data_search',
+    tool_type: 'bk_vision',
     data_search_config_type: 'sql',
     config: {
       referenced_tables: [],
@@ -926,7 +1040,7 @@
 
   const {
     data: configData,
-  } =  useRequest(RootManageService.config, {
+  } = useRequest(RootManageService.config, {
     defaultValue: new ConfigModel(),
     manual: true,
   });
@@ -1537,4 +1651,3 @@
   }
 }
 </style>
-

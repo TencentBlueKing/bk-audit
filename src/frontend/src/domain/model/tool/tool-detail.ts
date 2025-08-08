@@ -18,6 +18,10 @@ export default class ToolDetail {
   uid: string;
   name: string;
   version: number;
+  area?: string;
+  bkVersion?: string;
+  radioGroupValue?: string;
+  users?: string[];
   tool_type: string;
   description: string;
   namespace: string;
