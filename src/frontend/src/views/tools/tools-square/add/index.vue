@@ -88,6 +88,41 @@
                   style="width: 50%;"
                   type="textarea" />
               </bk-form-item>
+
+              <bk-form-item
+                :label="t('敏感定义')"
+                label-width="160"
+                property="radioGroupValue"
+                required>
+                <template #label>
+                  <span
+                    v-bk-tooltips="t('影响工具是否可公开申请或公开使用')"
+                    style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义') }}</span>
+                </template>
+                <bk-radio-group v-model="formData.radioGroupValue">
+                  <bk-radio-button
+                    v-for="radio in radioGroup"
+                    :key="radio.id"
+                    :label="radio.label" />
+                </bk-radio-group>
+                <div v-if="formData.radioGroupValue !== ''">
+                  <bk-tag>
+                    {{ formData.radioGroupValue === t('公开可申请') ? t('可申请权限后使用') : t('指定部分人可使用，不可被申请，指定人可看到并可使用') }}
+                  </bk-tag>
+                </div>
+              </bk-form-item>
+
+              <bk-form-item
+                v-if="formData.radioGroupValue === t('仅指定人可用')"
+                :label="t('可用人')"
+                label-width="160"
+                property="users"
+                required>
+                <audit-user-selector
+                  v-model="formData.users"
+                  :placeholder="t('请输入可用人')"
+                  style="width: 50%;" />
+              </bk-form-item>
             </template>
           </card-part-vue>
           <!-- 工具类型 -->
@@ -143,17 +178,51 @@
                   </bk-tag>
                 </div>
               </bk-form-item>
-              <bk-form-item
-                v-else
-                :label="t('图表链接')"
-                label-width="160"
-                property="config.uid"
-                required>
-                <bk-input
-                  v-model.trim="formData.config.uid"
-                  :placeholder="t('请输入图表链接')"
-                  style="width: 100%;" />
-              </bk-form-item>
+              <!-- bkvision 图表 -->
+              <div v-else>
+                <bk-form-item
+                  :label="t('图表链接')"
+                  label-width="160"
+                  property="config.uid"
+                  required>
+                  <bk-input
+                    v-model.trim="formData.config.uid"
+                    :placeholder="t('请输入图表链接')"
+                    style="width: 100%;" />
+                </bk-form-item>
+
+                <bk-form-item
+                  :label="t('选择报表所在空间')"
+                  label-width="160"
+                  property="config.uid"
+                  required>
+                  <bk-input
+                    v-model.trim="formData.config.uid"
+                    :placeholder="t('请输入图表链接')"
+                    style="width: 100%;" />
+                </bk-form-item>
+                <div style=" display: flex;width: 100%;  align-items: center;  ">
+                  <bk-form-item
+                    :label="t('选择报表')"
+                    label-width="160"
+                    property="config.uid"
+                    required
+                    style="flex: 1;">
+                    <div style="width: 50%;">
+                      11
+                    </div>
+                  </bk-form-item>
+
+                  <bk-form-item
+                    :label="t('选择版本')"
+                    label-width="160"
+                    property="config.uid"
+                    required
+                    style="flex: 1;">
+                    222
+                  </bk-form-item>
+                </div>
+              </div>
             </template>
           </card-part-vue>
           <!-- 工具配置 -->
@@ -637,6 +706,8 @@
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
   interface FormData {
+    radioGroupValue?: string;
+    users?: string[];
     name: string;
     tags: string[];
     description: string;
@@ -719,7 +790,15 @@
     () => viewRootRef.value,
   );
   const isEditMode = route.name === 'toolsEdit';
-
+  const radioGroup = ref([
+    {
+      id: '1',
+      label: t('公开可申请'),
+    },
+    {
+      id: '2',
+      label: t('仅指定人可用'),
+    }]);
   const viewRootRef = ref();
   const editSqlRef = ref();
   const formRef = ref();
@@ -743,6 +822,8 @@
   const strategyTagMap = ref<Record<string, string>>({});
   const toolMaxVersionMap = ref<Record<string, number>>({});
   const formData = ref<FormData>({
+    radioGroupValue: '',
+    users: [],
     name: '',
     tags: [],
     description: '',
@@ -841,6 +922,7 @@
   };
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
+
 
   const {
     data: configData,
