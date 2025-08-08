@@ -98,6 +98,8 @@
                     v-bk-tooltips="t('影响工具是否可公开申请或公开使用')"
                     style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义')
                     }}</span>
+                    style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义')
+                    }}</span>
                 </template>
                 <bk-radio-group v-model="formData.radioGroupValue">
                   <bk-radio-button
@@ -203,76 +205,59 @@
                     v-model.trim="formData.config.uid"
                     :placeholder="t('请输入图表链接')"
                     style="width: 100%;" />
-                </bk-form-item> -->
-
-                <bk-form-item
-                  :label="t('选择报表')"
-                  label-width="160"
-                  property="config.uid"
-                  required>
-                  <bk-cascader
-                    v-model="configUid"
-                    children-key="share"
-                    id-key="uid"
-                    :list="chartLists"
-                    :multiple="false"
-                    :show-complete-name="false"
-                    :style="spacePermission ? `width: 50%;border: 1px solid #e71818;` : `width: 50%;`"
-                    trigger="click"
-                    @change="handleSpaceChange" />
-                  <div
-                    v-if="spacePermission"
-                    class="permission">
-                    {{ t('该报表无权限，请') }} <span
-                      class="permission-link"
-                      @click="handleApplyPermission">{{ t('申请权限') }}</span>
-                  </div>
                 </bk-form-item>
+                <div style=" display: flex;align-items: center; width: 100%; justify-content: space-between; ">
+                  <bk-form-item
+                    :label="t('选择报表')"
+                    label-width="160"
+                    property="area"
+                    required
+                    style="width: 49.5%;">
+                    <bk-cascader
+                      v-model="formData.area"
+                      :list="cascaderList"
+                      :show-complete-name="false"
+                      trigger="click" />
+                  </bk-form-item>
+
+                  <bk-form-item
+                    :label="t('选择版本')"
+                    label-width="160"
+                    property="version"
+                    required
+                    style="width: 49.5%;">
+                    <div style="display: flex;">
+                      <bk-select
+                        v-model="formData.bkVersion"
+                        auto-focus
+                        class="bk-select"
+                        filterable
+                        style="width: calc(100% - 50px)">
+                        <bk-option
+                          v-for="(item, index) in versionList"
+                          :id="item.value"
+                          :key="index"
+                          :disabled="item.disabled"
+                          :name="item.label" />
+                      </bk-select>
+                      <span style="width: 50px; color: #3a84ff; text-align: center; cursor: pointer;"> {{ t('查看')
+                      }}</span>
+                    </div>
+                  </bk-form-item>
+                </div>
               </div>
             </template>
           </card-part-vue>
           <card-part-vue
-            v-if="formData.tool_type === 'bk_vision' && viewInfo.filters.length > 0"
             :title="t('参数配置')"
             :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
             <template #content>
-              <div style="display: flex;width: 100%;">
+              <div style="display: flex;width: 100%; justify-content: space-between;">
                 <bk-vision-component
-                  v-for="comItem in viewInfo.componentLists"
-                  :key="comItem.uid"
+                  v-for="comItem in componentList"
+                  :key="comItem.id"
                   :config="comItem"
-                  style="width: 30%;margin-left: 20px;"
-                  @change="(val: any) => handleVisionChange(val, comItem.uid)" />
-              </div>
-            </template>
-          </card-part-vue>
-          <card-part-vue
-            v-if="formData.tool_type === 'bk_vision' && viewInfo.filters.length > 0"
-            :title="t('参数配置')"
-            :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
-            <template #content>
-              <div style="display: flex;width: 100%;">
-                <bk-vision-component
-                  v-for="comItem in viewInfo.componentLists"
-                  :key="comItem.uid"
-                  :config="comItem"
-                  style="width: 30%;margin-left: 20px;"
-                  @change="(val: any) => handleVisionChange(val, comItem.uid)" />
-              </div>
-            </template>
-          </card-part-vue>
-          <card-part-vue
-            v-if="formData.tool_type === 'bk_vision' && viewInfo.filters.length > 0"
-            :title="t('参数配置')"
-            :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
-            <template #content>
-              <div style="display: flex;width: 100%;">
-                <bk-vision-component
-                  v-for="comItem in viewInfo.componentLists"
-                  :key="comItem.uid"
-                  :config="comItem"
-                  style="width: 30%;margin-left: 20px;"
-                  @change="(val: any) => handleVisionChange(val, comItem.uid)" />
+                  style="width: 49.5%" />
               </div>
             </template>
           </card-part-vue>
@@ -932,7 +917,7 @@
     name: '',
     tags: [],
     description: '',
-    tool_type: 'data_search',
+    tool_type: 'bk_vision',
     data_search_config_type: 'sql',
     config: {
       referenced_tables: [],
