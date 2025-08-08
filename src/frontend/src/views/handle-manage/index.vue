@@ -18,7 +18,9 @@
   <div class="risk-manage-list-page-wrap">
     <search-box
       ref="searchBoxRef"
-      @change="handleSearchChange" />
+      @batch="handleBatch"
+      @change="handleSearchChange"
+      @export="handleExport" />
     <div class="risk-manage-list">
       <render-list
         ref="listRef"
@@ -29,12 +31,47 @@
         @on-setting-change="handleSettingChange"
         @request-success="handleRequestSuccess" />
     </div>
+
+    <bk-dialog
+      v-model:is-show="isShow"
+      theme="primary"
+      :title="t('批量转单')"
+      @closed="handleClosed"
+      @confirm="handleConfirm">
+      <audit-form
+        ref="formRef"
+        form-type="vertical"
+        :model="formData"
+        :rules="rules">
+        <bk-form-item
+          :label="t('转单人员')"
+          property="new_operators"
+          required>
+          <audit-user-selector
+            v-model="formData.new_operators"
+            :placeholder="t('请输入人员')" />
+        </bk-form-item>
+        <bk-form-item
+          :label="t('处理说明')"
+          property="description"
+          required>
+          <bk-input
+            v-model.trim="formData.description"
+            :maxlength="1000"
+            :placeholder="t('请输入')"
+            show-word-limit
+            style="resize: none;"
+            type="textarea" />
+        </bk-form-item>
+      </audit-form>
+    </bk-dialog>
   </div>
 </template>
 
 <script setup lang='tsx'>
   import {
     computed,
+    nextTick,
     onUnmounted,
     ref,
   } from 'vue';
@@ -45,6 +82,7 @@
     onBeforeRouteLeave,
     useRouter,
   } from 'vue-router';
+  import * as XLSX from 'xlsx';
 
   import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
@@ -53,6 +91,8 @@
   import AccountModel from '@model/account/account';
   import type RiskManageModel from '@model/risk/risk';
 
+  import useExport from '@hooks/use_export_excel';
+  import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
@@ -69,6 +109,9 @@
     fields: Record<string, any>[],
     size: string
   }
+
+  const { messageWarn, messageSuccess } = useMessage();
+
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
@@ -104,8 +147,13 @@
       color: '#0CA668',
     },
   };
-
+  const isShow = ref(false);
   const tableColumn = [
+    {
+      type: 'selection',
+      label: '',
+      width: 20,
+    },
     {
       label: () => t('风险ID'),
       field: () => 'risk_id',
@@ -286,7 +334,7 @@
     },
   ];
   let timeout: number| undefined = undefined;
-
+  const { exportExcelSheet } = useExport;
 
   const listRef = ref();
   const searchBoxRef = ref();
@@ -366,6 +414,56 @@
     }
   });
 
+  // 批量操作
+  const {
+    run: batchTransRisk,
+  } = useRequest(RiskManageService.batchTransRisk, {
+    defaultValue: [],
+    onSuccess() {
+      messageSuccess(t('转单成功'));
+    },
+  });
+
+  const formData = ref<Record<string, any>>({
+    new_operators: [],
+    description: '',
+  });
+
+  const formRef = ref();
+  const rules = ref<Record<string, any>>({});
+  const handleConfirm = () => {
+    formRef.value.validate().then(() => {
+      const selectedData = listRef.value.getSelection();
+      batchTransRisk({
+        risk_ids: selectedData.map((item: RiskManageModel) => item.risk_id),
+        new_operators: formData.value.new_operators,
+        description: formData.value.description,
+      }).then(() => {
+        isShow.value = false;
+        handleClosed();
+        fetchList();
+      });
+    });
+  };
+  const handleClosed = () => {
+    formRef.value?.clearValidate();
+    formData.value = {
+      new_operators: [],
+      description: '',
+    };
+  };
+  // 批量操作
+  const handleBatch = () => {
+    const selectedData = listRef.value.getSelection();
+    if (!selectedData.length) {
+      messageWarn(t('请选择要操作的数据'));
+      return;
+    }
+    isShow.value = true;
+    nextTick(() => {
+      formRef.value.clearValidate();
+    });
+  };
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {
     defaultParams: {
@@ -508,6 +606,68 @@
       ...params,
       ...searchModel.value,
     });
+  };
+
+  // 导出数据
+  const handleExport = () => {
+    const selectedData = listRef.value.getSelection();
+    if (!selectedData.length) {
+      messageWarn('请选择要导出的数据');
+      return;
+    }
+    const data = selectedData.map((item: any) => {
+      const processedItem = {} as Record<string, any>;
+      Object.keys(item).forEach((key) => {
+        const value = item[key];
+        processedItem[key] = (value === undefined || value === null || value === '') ? '--' : value;
+      });
+      let riskLevelText = '';
+      if (levelData.value[item.strategy_id].risk_level === 'HIGH') {
+        riskLevelText = '高';
+      } else if (levelData.value[item.strategy_id].risk_level === 'MIDDLE') {
+        riskLevelText = '中';
+      } else if (levelData.value[item.strategy_id].risk_level === 'LOW') {
+        riskLevelText = '低';
+      }
+      const strategyName = strategyList.value.find(strategyItem => strategyItem.value === item.strategy_id)?.label;
+
+      return {
+        ...processedItem,
+        risk_level: riskLevelText,
+        tags: item.tags.length > 0 ? item.tags.join(',') : '--',
+        operator: item.operator.length > 0 ? item.operator.join(',') : '--',
+        current_operator: item.current_operator.length > 0 ? item.current_operator.join(',') : '--',
+        status: riskStatusCommon.value.find(e => e.id === item.status)?.name || '--',
+        notice_users: item.notice_users.length > 0 ? item.notice_users.join(',') : '--',
+        risk_label: item.risk_label === 'normal' ? t('正常') : t('误报'),
+        strategy_id: strategyName ? `${strategyName}(${item.strategy_id})` : '--',
+      };
+    });
+    const time = new Date();
+    // 新建xlsworkbook
+    const wb = XLSX.utils.book_new();
+    // 新建sheet
+    const name = `审计风险-待我处理-${time.getFullYear()}-${(time.getMonth() + 1)
+      .toString()
+      .padStart(2, '0')}-${time.getDate()}`;
+
+    const settingsFields = settings.value.fields.map((item) => {
+      if (item.label === '风险等级') {
+        return {
+          ...item,
+          field: 'risk_level',
+        };
+      }
+      return item;
+    });
+
+    const titleAr = settingsFields.map(item => item.label);
+    const exportAllTitleKey = settingsFields.map(item => item.field);
+
+    // 导出所有工单的sheet
+    exportExcelSheet(wb, data, name, titleAr as [], exportAllTitleKey);
+    // 导出xls
+    XLSX.writeFile(wb, `${name}.xlsx`);
   };
   onUnmounted(() => {
     clearTimeout(timeout);

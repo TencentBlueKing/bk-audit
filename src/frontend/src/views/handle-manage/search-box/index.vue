@@ -20,7 +20,9 @@
       <component
         :is="renderComponent"
         v-model="searchModel"
+        @batch="handleBatch"
         @clear="handleClear"
+        @export="handleExport"
         @submit="handleSubmit" />
     </keep-alive>
     <div
@@ -51,7 +53,9 @@
 
   interface Emits {
     (e: 'change', value: Record<string, any>): void;
-    (e: 'changeTableHeight'): void
+    (e: 'changeTableHeight'): void;
+    (e: 'export'): void;
+    (e: 'batch'): void;
   }
   interface Exposes {
     clearValue: () => void;
@@ -76,6 +80,12 @@
     renderType.value = urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap;
   }
 
+  const handleBatch = () => {
+    emit('batch');
+  };
+  const handleExport = () => {
+    emit('export');
+  };
   const renderComponent = computed(() => comMap[renderType.value]);
 
   const searchModel = ref<Record<string, any>>({
