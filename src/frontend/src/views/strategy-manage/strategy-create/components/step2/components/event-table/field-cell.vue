@@ -17,17 +17,25 @@
 <template>
   <div class="field-cell">
     <!-- 字段显示名 -->
-    <field-input
-      v-if="fieldKey === 'display_name'"
-      ref="displayNameRef"
-      v-model="localEventItem.display_name"
-      required
-      theme="background" />
+    <template v-if="fieldKey === 'display_name'">
+      <field-input
+        v-if="localEventItem.prefix"
+        ref="displayNameRef"
+        v-model="localEventItem.display_name"
+        required
+        theme="background" />
+      <span
+        v-else
+        class="ml8">
+        {{ localEventItem.display_name }}
+      </span>
+    </template>
 
     <!-- 是否展示 -->
     <bk-switcher
       v-else-if="fieldKey === 'is_show'"
       v-model="localEventItem.is_show"
+      :disabled="!localEventItem.prefix"
       theme="primary"
       @change="handleUpdateIsShow" />
 
