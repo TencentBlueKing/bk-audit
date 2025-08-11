@@ -200,11 +200,7 @@
                   <div
                     class="data-info-item-key"
                     style="display: flex; flex-direction: column; justify-content: center;">
-                    <div>{{ key.substring(0, key.indexOf('(')) }}</div>
-                    <tooltips
-                      v-if="key.substring(key.indexOf('('))"
-                      :data="key.substring(key.indexOf('('))"
-                      style="width: 100%; text-align: center;" />
+                    <div>{{ strategyInfo.find(item => item.field_name === key)?.display_name || key }}</div>
                   </div>
                   <div class="data-info-item-value">
                     <div
@@ -286,8 +282,7 @@
   import type StrategyInfo from '@model/risk/strategy-info';
   import ToolDetailModel from '@model/tool/tool-detail';
 
-  import Tooltips from '@components/show-tooltips-text/index.vue';
-
+  // import Tooltips from '@components/show-tooltips-text/index.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
@@ -511,6 +506,12 @@
   }, {
     immediate: true,
   });
+
+  const strategyInfo = computed(() => [
+    ...props.data.event_basic_field_configs,
+    ...props.data.event_data_field_configs,
+    ...props.data.event_evidence_field_configs,
+  ]);
 
   // 重点信息（如果is_show为false, 则is_priority也一定为false）
   const importantInformation = computed(() => group([
