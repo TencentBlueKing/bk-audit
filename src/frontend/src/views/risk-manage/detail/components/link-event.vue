@@ -200,7 +200,9 @@
                   <div
                     class="data-info-item-key"
                     style="display: flex; flex-direction: column; justify-content: center;">
-                    <div>{{ strategyInfo.find(item => item.field_name === key)?.display_name || key }}</div>
+                    <tooltips
+                      :data="strategyInfo.find(item => item.field_name === key)?.display_name || key"
+                      style="width: 100%;" />
                   </div>
                   <div class="data-info-item-value">
                     <div
@@ -282,7 +284,8 @@
   import type StrategyInfo from '@model/risk/strategy-info';
   import ToolDetailModel from '@model/tool/tool-detail';
 
-  // import Tooltips from '@components/show-tooltips-text/index.vue';
+  import Tooltips from '@components/show-tooltips-text/index.vue';
+
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
