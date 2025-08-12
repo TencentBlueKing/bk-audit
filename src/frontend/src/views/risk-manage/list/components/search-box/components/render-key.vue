@@ -70,12 +70,12 @@
         @click="handleReset">
         {{ t('重置') }}
       </bk-button>
-      <bk-button
+      <!-- <bk-button
         class="mr8"
         :loading="isExportLoading"
         @click="handleExport">
         {{ t('导出数据') }}
-      </bk-button>
+      </bk-button> -->
     </div>
   </div>
 </template>
@@ -107,7 +107,7 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const isExportLoading = ref(false);
+  // const isExportLoading = ref(false);
 
   const localSearchModel = ref<Record<string, any>>({
     datetime: ['', ''],
@@ -131,13 +131,13 @@
   }, {
     immediate: true,
   });
-  const handleExport = () => {
-    isExportLoading.value = true;
-    emits('export');
-    setTimeout(() => {
-      isExportLoading.value = false;
-    }, 500);
-  };
+  // const handleExport = () => {
+  //   isExportLoading.value = true;
+  //   emits('export');
+  //   setTimeout(() => {
+  //     isExportLoading.value = false;
+  //   }, 500);
+  // };
   // 显示更多搜索条件
   const handleShowMore = () => {
     isShowMore.value = !isShowMore.value;
