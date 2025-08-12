@@ -9,7 +9,7 @@ from django.db.models import QuerySet
 
 from core.utils.data import unique_id
 from services.web.tool.constants import (
-    BkvisionConfig,
+    BkVisionConfig,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
     ToolTypeEnum,
@@ -68,7 +68,7 @@ def _create_bkvision_tool(tool: Tool, config_data: dict):
     """
     创建 bkvision 类型工具的子表配置
     """
-    config = BkvisionConfig(**config_data)
+    config = BkVisionConfig(**config_data)
     uid = config.uid
     panel, created = VisionPanel.objects.get_or_create(
         vision_id=uid,

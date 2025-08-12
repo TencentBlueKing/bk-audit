@@ -143,8 +143,8 @@ class VariableViewSet(API200ViewSet, BKVisionInstanceViewSet):
     ]
 
 
-class QueryShareVisionViewSet(API200ViewSet, BKVisionViewSet):
+class ShareViewSet(BKVisionViewSet):
     resource_routes = [
-        ResourceRoute("GET", resource.vision.query_share_list, endpoint="query_share_vision"),
-        ResourceRoute("GET", resource.vision.query_share_detail, endpoint="query_share_vision_detail"),
+        ResourceRoute("GET", resource.vision.query_share_list, endpoint="share_list"),
+        ResourceRoute("GET", resource.vision.query_share_detail, endpoint="share_detail"),
     ]

@@ -74,13 +74,29 @@ class ToolResourceTestCase(TestCase):
         super().tearDown()
 
     def _create_bkvision_tool(self, tool_uid, vision_uid, namespace):
+        example_var = {
+            "raw_name": "test_field",
+            "display_name": "测试字段",
+            "description": "字段描述",
+            "field_category": "button",
+            "required": True,
+            "default_value": "default_val",
+        }
+        example_var2 = {
+            "raw_name": "list_field",
+            "display_name": "列表字段",
+            "description": "列表默认值",
+            "field_category": "selector",
+            "required": False,
+            "default_value": [1, 2, 3],
+        }
         tool = Tool.objects.create(
             uid=tool_uid,
             version=1,
             name="BK Vision Tool",
             namespace=namespace,
             tool_type=ToolTypeEnum.BK_VISION.value,
-            config={"uid": vision_uid},
+            config={"uid": vision_uid, "input_variable": [example_var, example_var2]},
             is_deleted=False,
             description="BK Vision Tool Desc",
             updated_at=timezone.now(),
@@ -167,13 +183,29 @@ class ToolResourceTestCase(TestCase):
         resource = CreateTool()
         new_uid = str(uuid.uuid4())
         vision_uid = str(uuid.uuid4())
+        example_var = {
+            "raw_name": "test_field",
+            "display_name": "测试字段",
+            "description": "字段描述",
+            "field_category": "button",
+            "required": True,
+            "default_value": "default_val",
+        }
+        example_var2 = {
+            "raw_name": "list_field",
+            "display_name": "列表字段",
+            "description": "列表默认值",
+            "field_category": "selector",
+            "required": False,
+            "default_value": [1, 2, 3],
+        }
         data = {
             "uid": new_uid,
             "version": 1,
             "name": "New BK Vision Tool",
             "namespace": "default_ns",
             "tool_type": ToolTypeEnum.BK_VISION.value,
-            "config": {"uid": vision_uid},
+            "config": {"uid": vision_uid, "input_variable": [example_var, example_var2]},
             "description": "desc",
         }
         tool = resource.perform_request(data)
@@ -183,6 +215,8 @@ class ToolResourceTestCase(TestCase):
         bk_config = BkVisionToolConfig.objects.filter(tool=tool).first()
         self.assertIsNotNone(bk_config)
         self.assertEqual(bk_config.panel.id, panel.id)
+        # bkvision config should include the example input_variable
+        self.assertEqual(tool.config.get("input_variable"), [example_var, example_var2])
 
     def test_update_tool_no_config_change(self):
         resource = UpdateTool()

@@ -31,7 +31,7 @@ from core.sql.parser.model import RangeVariableData
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.time import parse_datetime
 from services.web.tool.constants import (
-    BkvisionConfig,
+    BkVisionConfig,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
     SQLDataSearchInputVariable,
@@ -313,12 +313,12 @@ class SqlDataSearchExecutor(
         )
 
 
-class BkVisionExecutor(BaseToolExecutor[BkvisionConfig, None, BkVisionExecuteResult]):
+class BkVisionExecutor(BaseToolExecutor[BkVisionConfig, None, BkVisionExecuteResult]):
     """BK Vision执行器"""
 
     @classmethod
     def _parse_config(cls, tool: Tool) -> TConfig:
-        return BkvisionConfig.model_validate(tool.config)
+        return BkVisionConfig.model_validate(tool.config)
 
     def _parse_params(self, params: dict) -> TParams:
         pass
