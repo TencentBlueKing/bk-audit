@@ -217,7 +217,7 @@ class EventMappingFields:
     OPERATOR = Field(
         field_name="operator",
         alias_name="operator",
-        description=gettext_lazy("负责人"),
+        description=gettext_lazy("责任人"),
         field_type=FIELD_TYPE_TEXT,
         is_text=True,
         is_analyzed=True,
