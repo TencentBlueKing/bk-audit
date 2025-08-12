@@ -36,6 +36,7 @@
       v-else-if="fieldKey === 'is_show'"
       v-model="localEventItem.is_show"
       :disabled="!localEventItem.prefix"
+      style="margin-left: 8px;"
       theme="primary"
       @change="handleUpdateIsShow" />
 
@@ -44,9 +45,10 @@
       v-else-if="fieldKey === 'is_priority'"
       v-model="localEventItem.is_priority"
       :disabled="!localEventItem.is_show"
+      style="margin-left: 8px;"
       theme="primary" />
 
-    <!-- 字段映射 -->
+    <!-- 字段关联 -->
     <field-mapping
       v-else-if="fieldKey === 'map_config' && localEventItem.map_config"
       ref="fieldMappingRef"
@@ -58,14 +60,22 @@
       @add-custom-constant="addCustomConstant"
       @select="handleFieldSelect" />
 
-    <!-- 描述 -->
-    <bk-input
-      v-else-if="fieldKey === 'description'"
-      v-model="localEventItem.description"
-      behavior="simplicity"
-      class="description-input"
-      :maxlength="100"
-      type="textarea" />
+    <div
+      v-else-if="fieldKey === 'enum_mappings' && localEventItem.enum_mappings"
+      v-bk-tooltips="t('点击配置字段值映射')"
+      class="ml8"
+      style="width: 100%;cursor: pointer;"
+      @click="handleFiledDict">
+      <span
+        :style="{
+          color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
+        }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : '请配置' }}</span>
+      <field-dict
+        ref="fieldDictRef"
+        v-model:showFieldDict="showFieldDict"
+        :edit-data="localEventItem.enum_mappings.mappings"
+        @submit="handleDictSubmit" />
+    </div>
 
     <!-- 字段下钻 -->
     <template v-else-if="fieldKey === 'drill_config' && localEventItem.drill_config">
@@ -113,10 +123,20 @@
         @submit="handleFieldSubmit" />
     </template>
 
+    <!-- 描述 -->
+    <bk-input
+      v-else-if="fieldKey === 'description'"
+      v-model="localEventItem.description"
+      class="description-input"
+      :maxlength="100"
+      :show-word-limit="false" />
+
     <!-- 仅查看 -->
-    <template v-else>
+    <span
+      v-else
+      class="ml8">
       {{ localEventItem[fieldKey] }}
-    </template>
+    </span>
   </div>
 </template>
 
@@ -128,10 +148,11 @@
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
   import ToolDetailModel from '@model/tool/tool-detail';
 
+  import FieldDict from './field-dict.vue';
   import FieldInput from './field-input.vue';
   import FieldMapping from './field-mapping.vue';
 
-  import fieldReference from '@/views/tools/tools-square/add/components/field-reference/index.vue';
+  import FieldReference from '@/views/tools/tools-square/add/components/field-reference/index.vue';
 
   interface Props {
     eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
@@ -169,10 +190,12 @@
 
   const localEventItem = ref(props.eventItem);
   const showFieldReference = ref(false);
+  const showFieldDict = ref(false);
 
   const fieldMappingRef = ref();
   const fieldReferenceRef = ref();
   const displayNameRef = ref();
+  const fieldDictRef = ref();
 
   const iconMap = {
     data_search: 'sqlxiao',
@@ -187,6 +210,19 @@
 
   const handleFieldSelect = (value: string) => {
     emit('select', value, props.eventItem);
+  };
+
+  const handleFiledDict = () => {
+    showFieldDict.value = true;
+  };
+
+  const handleDictSubmit = (data: Array<{
+    key: string;
+    name: string;
+  }>) => {
+    if (localEventItem.value.enum_mappings) {
+      localEventItem.value.enum_mappings.mappings = data;
+    }
   };
 
   const addCustomConstant = (value: string) => {
@@ -264,11 +300,11 @@
   align-items: center;
 
   :deep(.bk-input) {
+    height: 40px;
     border: none;
   }
 
   .description-input {
-    height: 45px;
     border: none;
   }
 

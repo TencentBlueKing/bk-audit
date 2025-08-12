@@ -34,6 +34,13 @@
             <tooltips
               :data="getToolName(value.tool.uid)" />
           </div>
+          <div
+            v-else-if="typeof value === 'object' &&
+              value !== null &&
+              'collection_id' in value &&
+              'mappings' in value">
+            {{ value.mappings.length ? t('已配置') : t('未配置') }}
+          </div>
           <div v-else>
             <tooltips
               v-if="value"
@@ -90,7 +97,7 @@
   const getCellClass = (valueKey: string) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
-    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show'  || valueKey === 'enum_mappings',
     'map-config': valueKey === 'map_config',
     'drill-config': valueKey === 'drill_config',
     description: valueKey === 'description',
@@ -107,11 +114,11 @@
       border-bottom: 1px solid #dcdee5;
 
       &.field-name {
-        width: 110px;
+        width: 100px;
       }
 
       &.display-name {
-        width: 110px;
+        width: 100px;
       }
 
       &.is-priority {
@@ -119,11 +126,11 @@
       }
 
       &.map-config {
-        width: 120px;
+        width: 110px;
       }
 
       &.drill-config {
-        width: 120px;
+        width: 110px;
       }
 
       &:last-child {
