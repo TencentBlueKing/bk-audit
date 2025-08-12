@@ -1,6 +1,6 @@
 import uuid
 from unittest import mock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -21,6 +21,8 @@ from services.web.tool.resources import (
     CreateTool,
     DeleteTool,
     GetToolDetail,
+    GetToolEnumMappingByCollection,
+    GetToolEnumMappingByCollectionKeys,
     ListTool,
     UpdateTool,
     UserQueryTableAuthCheck,
@@ -346,3 +348,165 @@ class UserQueryTableAuthCheckTestCase(TestCase):
             {"result": False, "user_id": "test_user", "object_id": "mocked_table2"},
         ]
         assert_list_contains(actual, expect)
+
+
+class ToolEnumMappingTests(TestCase):
+    """工具枚举映射功能测试"""
+
+    def setUp(self):
+        self.tool_uid = "test_tool_123"
+        self.field_name = "status"
+        self.collection_id = f"tool_{self.tool_uid}_output_fields_{self.field_name}"
+
+        self.tool = Tool.objects.create(
+            uid=self.tool_uid,
+            version=1,
+            name="Test Tool",
+            tool_type=ToolTypeEnum.DATA_SEARCH.value,
+            config={
+                "sql": "SELECT 1",
+                "referenced_tables": [{"table_name": "test"}],
+                "input_variable": [{"raw_name": "param", "display_name": "Parameter", "required": False}],
+                "output_fields": [
+                    {
+                        "raw_name": self.field_name,
+                        "display_name": "Status",
+                        "enum_mappings": {"mappings": [{"key": "1", "name": "Active"}]},
+                    }
+                ],
+            },
+        )
+
+        # 创建关联的DataSearchToolConfig
+        DataSearchToolConfig.objects.create(
+            tool=self.tool, data_search_config_type=DataSearchConfigTypeEnum.SQL.value, sql="SELECT 1"
+        )
+
+        # Mock配置
+        self.mock_meta = MagicMock()
+        self.mock_meta.batch_update_enum_mappings.return_value = None
+        self.mock_meta.get_enum_mapping_by_collection_keys.return_value = [
+            {"collection_id": self.collection_id, "key": "1", "name": "Active"},
+            {"collection_id": "invalid", "key": "99", "name": None},
+        ]
+        self.mock_meta.get_enum_mapping_by_collection.return_value = [
+            {"key": "1", "name": "Active"},
+            {"key": "0", "name": "Inactive"},
+        ]
+
+        # 手动替换资源中的meta引用
+        from services.web.tool import resources
+
+        self.original_meta = resources.resource.meta
+        resources.resource.meta = self.mock_meta
+
+    def tearDown(self):
+        # 恢复原始meta引用
+        from services.web.tool import resources
+
+        resources.resource.meta = self.original_meta
+
+    def test_create_tool_generates_enum_mapping(self):
+        """测试创建工具时自动生成枚举映射"""
+        test_data = {
+            "uid": "new_tool_456",
+            "version": 1,  # 必须包含version
+            "name": "New SQL Tool",
+            "namespace": "default",
+            "tool_type": ToolTypeEnum.DATA_SEARCH.value,
+            "data_search_config_type": DataSearchConfigTypeEnum.SQL.value,
+            "config": {
+                "sql": "SELECT * FROM test",
+                "referenced_tables": [{"table_name": "test_table"}],
+                "input_variable": [{"raw_name": "param", "display_name": "Parameter", "required": False}],
+                "output_fields": [
+                    {
+                        "raw_name": "status",
+                        "display_name": "Status",
+                        "enum_mappings": {"mappings": [{"key": "1", "name": "Active"}]},
+                    }
+                ],
+            },
+        }
+
+        # 使用patch避免实际数据库操作
+        with patch('services.web.tool.tool._create_sql_tool') as mock_create_sql:
+            mock_create_sql.return_value = MagicMock(uid="new_tool_456")
+            CreateTool().perform_request(test_data)
+
+            # 验证枚举映射参数
+            self.mock_meta.batch_update_enum_mappings.assert_called_once_with(
+                collection_id="tool_new_tool_456_output_fields_status",
+                mappings=[{"key": "1", "name": "Active"}],
+                related_object_id="new_tool_456",
+                related_type="tool",
+            )
+
+    def test_update_tool_syncs_enum_mapping(self):
+        """测试更新工具配置时同步枚举映射"""
+        new_mappings = [{"key": "2", "name": "Pending"}]
+
+        # 使用patch模拟工具查询
+        with patch('services.web.tool.models.Tool.last_version_tool', return_value=self.tool):
+            UpdateTool().perform_request(
+                {
+                    "uid": self.tool_uid,
+                    "version": 2,  # 更新版本号
+                    "config": {
+                        "sql": "SELECT 2",
+                        "referenced_tables": [],
+                        "input_variable": [],
+                        "output_fields": [
+                            {
+                                "raw_name": self.field_name,
+                                "display_name": "Status",
+                                "enum_mappings": {"mappings": new_mappings},
+                            }
+                        ],
+                    },
+                    "tags": [],
+                }
+            )
+
+        # 验证枚举更新
+        self.mock_meta.batch_update_enum_mappings.assert_called_with(
+            collection_id=self.collection_id,
+            mappings=new_mappings,
+            related_object_id=self.tool_uid,
+            related_type="tool",
+        )
+
+    def test_delete_tool_cleans_enum_mapping(self):
+        """测试删除工具时清理关联枚举映射"""
+        # 模拟存在关联枚举
+        self.mock_meta.get_enum_mappings_relation.return_value = [self.collection_id]
+
+        DeleteTool().perform_request({"uid": self.tool_uid})
+
+        # 验证枚举集合被清空
+        self.mock_meta.batch_update_enum_mappings.assert_called_with(
+            collection_id=self.collection_id, mappings=[], related_object_id=self.tool_uid, related_type="tool"
+        )
+
+    def test_query_enum_by_keys(self):
+        """测试按Key查询枚举值"""
+        test_keys = [{"collection_id": self.collection_id, "key": "1"}, {"collection_id": "invalid", "key": "99"}]
+
+        results = GetToolEnumMappingByCollectionKeys().perform_request(
+            {"collection_keys": test_keys, "related_object_id": self.tool_uid}
+        )
+
+        # 验证返回结构
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["name"], "Active")
+        self.assertIsNone(results[1]["name"])
+
+    def test_query_all_enum_in_collection(self):
+        """测试获取集合内所有枚举值"""
+        results = GetToolEnumMappingByCollection().perform_request(
+            {"collection_id": self.collection_id, "related_object_id": self.tool_uid}
+        )
+
+        # 验证返回数据完整性
+        self.assertEqual(len(results), 2)
+        self.assertEqual({r["key"] for r in results}, {"0", "1"})
