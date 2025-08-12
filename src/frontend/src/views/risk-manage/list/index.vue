@@ -119,11 +119,11 @@
     },
   };
   const tableColumn = [
-    {
-      type: 'selection',
-      label: '',
-      width: 20,
-    },
+    // {
+    //   type: 'selection',
+    //   label: '',
+    //   width: 20,
+    // },
     {
       label: () => t('风险ID'),
       field: () => 'risk_id',
