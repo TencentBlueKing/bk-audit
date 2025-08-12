@@ -31,7 +31,12 @@ from api.bk_base.constants import UserAuthActionEnum
 from api.bk_base.serializers import UserAuthCheckRespSerializer
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
-from apps.meta.models import Tag
+from apps.meta.models import EnumMappingRelatedType, Tag
+from apps.meta.serializers import (
+    EnumMappingByCollectionKeysSerializer,
+    EnumMappingByCollectionSerializer,
+    EnumMappingSerializer,
+)
 from apps.permission.handlers.actions.action import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
@@ -67,6 +72,34 @@ from services.web.tool.tool import (
 
 class ToolBase(AuditMixinResource, abc.ABC):
     tags = ["Tool"]
+
+    def updatel_enum_mappings(
+        self,
+        enum_mapping: dict,
+        tool_uid: str,
+        field_name: str,
+    ):
+        """
+        Generate immutable collection_id based on tool_id, field_category, and field_name,
+        then batch update enum mappings.
+        """
+        # override collection_id to ensure uniqueness and immutability
+        enum_mapping['collection_id'] = f"tool_{tool_uid}_output_fields_{field_name}"
+        enum_mapping['related_object_id'] = tool_uid
+        enum_mapping['related_type'] = EnumMappingRelatedType.TOOL.value
+        resource.meta.batch_update_enum_mappings(**enum_mapping)
+
+    def deletel_enum_mappings(self, tool_uid: str):
+        collection_ids = resource.meta.get_enum_mappings_relation(
+            related_object_id=tool_uid, related_type=EnumMappingRelatedType.TOOL.value
+        )
+        for collection_id in collection_ids:
+            resource.meta.batch_update_enum_mappings(
+                collection_id=collection_id,
+                related_type=EnumMappingRelatedType.TOOL.value,
+                related_object_id=tool_uid,
+                mappings=[],
+            )
 
 
 class ListToolTags(ToolBase):
@@ -215,7 +248,67 @@ class DeleteTool(ToolBase):
     @transaction.atomic
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
+        self.deletel_enum_mappings(tool_uid=uid)
         Tool.delete_by_uid(uid)
+
+
+class GetToolEnumMappingByCollectionKeys(ToolBase):
+    """
+    获取某个工具的某个集合中的某个枚举值的信息。可以一次性获取多个不同集合中的多个枚举值的信息。
+    请求：
+    ```
+        {
+            "collection_keys": [
+                {"collection_id": "status_collection_112233", "key": "1"},
+                {"collection_id": "user_collection_112233", "key": "2"},
+            ],
+            "related_type": "tool",
+            "related_object_id": 1 # 工具UID
+        }
+    ```
+    响应：
+    ```
+    [{"collection_id":"status_collection_112233","key": "1", "name": "未处理"},
+    {"collection_id":"user_collection_112233","key": "2", "name": "张三"}]
+    ```
+    """
+
+    name = gettext_lazy("获取某个策略的某个集合中的某个枚举值的信息")
+    RequestSerializer = EnumMappingByCollectionKeysSerializer
+    ResponseSerializer = EnumMappingSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        validated_request_data["related_type"] = "tool"
+        return resource.meta.get_enum_mapping_by_collection_keys(**validated_request_data)
+
+
+class GetToolEnumMappingByCollection(ToolBase):
+    """
+    获取某个工具的某个集合中的所有枚举值的信息。
+    请求：
+    ```
+    {
+        "collection_id": "status_collection_112233",
+        "related_type": "tool",
+        "related_object_id": 1 工具UID
+    }
+    ```
+    响应：
+    ```
+    [{"collection_id":"status_collection_112233","key": "1", "name": "未处理"},
+    {"collection_id":"status_collection_112233","key": "2", "name": "已处理"}]
+    ```
+    """
+
+    name = gettext_lazy("获取某个策略的某个集合中的所有枚举值的信息")
+    RequestSerializer = EnumMappingByCollectionSerializer
+    ResponseSerializer = EnumMappingSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        validated_request_data["related_type"] = "tool"
+        return resource.meta.get_enum_mapping_by_collection(**validated_request_data)
 
 
 class CreateTool(ToolBase):
@@ -253,6 +346,12 @@ class CreateTool(ToolBase):
             "raw_name": "xxx",
             "display_name": "xxx",
             "description": "xxx",
+             "enum_mappings": {
+                "mappings": [
+                    {"key": "1", "name": "Running"},
+                    {"key": "0", "name": "Stopped"}
+                 ]
+             }
             "drill_config": {
               "tool": {
                 "uid": "XXX",
@@ -306,7 +405,18 @@ class CreateTool(ToolBase):
     ResponseSerializer = ToolResponseSerializer
 
     def perform_request(self, validated_request_data):
-        return create_tool_with_config(validated_request_data)
+        tool = create_tool_with_config(validated_request_data)
+        if tool.tool_type == ToolTypeEnum.DATA_SEARCH.value:
+            config = validated_request_data.get("config", {})
+            for output_field in config.get("output_fields", []):
+                enum_mappings = output_field.get("enum_mappings")
+                if enum_mappings:
+                    self.updatel_enum_mappings(
+                        enum_mapping=enum_mappings,
+                        tool_uid=tool.uid,
+                        field_name=output_field["raw_name"],
+                    )
+        return tool
 
 
 class UpdateTool(ToolBase):
@@ -345,6 +455,14 @@ class UpdateTool(ToolBase):
                 }
                 if tool.tool_type == ToolTypeEnum.DATA_SEARCH:
                     new_tool_data["data_search_config_type"] = tool.data_search_config.data_search_config_type
+                    for output_field in new_config.get("output_fields", []):
+                        enum_mappings = output_field.get("enum_mappings")
+                        if enum_mappings:
+                            self.updatel_enum_mappings(
+                                enum_mapping=enum_mappings,
+                                tool_uid=tool.uid,
+                                field_name=output_field["raw_name"],
+                            )
                 return create_tool_with_config(new_tool_data)
         for key, value in validated_request_data.items():
             setattr(tool, key, value)

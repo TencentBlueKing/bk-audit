@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
-from typing import Annotated, Any, List, Optional, Union
+from typing import Annotated, Any, Dict, List, Optional, Union
 
 from django.utils.translation import gettext_lazy
 from drf_pydantic import BaseModel
@@ -25,6 +25,7 @@ from pydantic import validator
 from rest_framework.fields import CharField, JSONField
 from typing_extensions import TypedDict
 
+from apps.meta.models import EnumMappingRelatedType
 from core.choices import TextChoices, register_choices
 
 
@@ -86,6 +87,23 @@ class DataSearchBaseField(BaseModel, abc.ABC):
 class ChoiceItem(TypedDict):
     key: str
     name: Any
+
+
+class EnumMappingConfig(BaseModel):
+    """工具枚举映射配置"""
+
+    collection_id: Optional[str] = PydanticField(
+        default="auto-generate", description="枚举集合ID（自动生成，无需手动指定）", max_length=255, allow_mutation=False
+    )
+    mappings: List[Dict[str, str]] = PydanticField(
+        default_factory=list, description="枚举键值对列表，格式：[{'key': '1', 'name': 'Active'}]"
+    )
+    related_type: EnumMappingRelatedType = PydanticField(
+        EnumMappingRelatedType.TOOL, description="关联类型（固定为'tool'）", allow_mutation=False
+    )
+    related_object_id: Optional[str] = PydanticField(
+        default="uid", description="关联工具UID", max_length=255, allow_mutation=False
+    )
 
 
 class SQLDataSearchInputVariable(DataSearchBaseField):
@@ -179,6 +197,7 @@ class SQLDataSearchOutputField(DataSearchBaseField):
     """
 
     drill_config: Optional[DataSearchDrillConfig] = None  # 下钻配置
+    enum_mappings: Optional[EnumMappingConfig] = None
 
 
 class Table(BaseModel):

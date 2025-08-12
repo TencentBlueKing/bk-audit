@@ -21,7 +21,7 @@ class ToolViewSet(ResourceViewSet):
             return [CreatorBasePermissionPermission()]
         if self.action == "destroy":
             return [CreatorBasePermissionPermission()]
-        if self.action in ["execute"]:
+        if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
             return [
                 UseToolPermission(
                     actions=[ActionEnum.USE_TOOL],
@@ -34,6 +34,12 @@ class ToolViewSet(ResourceViewSet):
         return get_value_by_request(self.request, "uid")
 
     resource_routes = [
+        ResourceRoute(
+            "POST",
+            resource.tool.get_tool_enum_mapping_by_collection_keys,
+            endpoint="enum_mapping_by_collection_keys",
+        ),
+        ResourceRoute("POST", resource.tool.get_tool_enum_mapping_by_collection, endpoint="enum_mapping_by_collection"),
         ResourceRoute("GET", resource.tool.list_tool_tags, endpoint="tags"),
         ResourceRoute("GET", resource.tool.list_tool, enable_paginate=True),
         ResourceRoute("DELETE", resource.tool.delete_tool, pk_field="uid"),
