@@ -332,8 +332,24 @@
               const editItem = props.data[key] && props.data[key].find(edItem => edItem.field_name === item.field_name);
               if (editItem) {
                 return {
-                  ...item,
-                  ...editItem,
+                  field_name: item.field_name,
+                  display_name: item.display_name,
+                  is_show: editItem.is_show ?? true,
+                  is_priority: editItem.is_priority,
+                  map_config: {
+                    target_value: editItem.map_config?.target_value,
+                    source_field: editItem.map_config?.source_field || editItem.map_config?.target_value, // 固定值赋值，用于反显
+                  },
+                  drill_config: {
+                    tool: {
+                      uid: editItem.drill_config?.tool?.uid || '',
+                      version: editItem.drill_config?.tool?.version || 1,
+                    },
+                    config: editItem.drill_config?.config || [],
+                  },
+                  description: editItem.description,
+                  example: item.example,
+                  prefix: item.example || '',
                 };
               }
               return {
