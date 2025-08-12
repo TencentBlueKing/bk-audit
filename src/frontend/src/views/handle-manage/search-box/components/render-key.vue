@@ -42,7 +42,7 @@
         @click="handleReset">
         {{ t('重置') }}
       </bk-button>
-      <bk-button
+      <!-- <bk-button
         class="mr8"
         @click="handleBatch">
         {{ t('批量转单') }}
@@ -52,7 +52,7 @@
         :loading="isExportLoading"
         @click="handleExport">
         {{ t('导出数据') }}
-      </bk-button>
+      </bk-button> -->
     </div>
   </div>
 </template>
@@ -90,7 +90,7 @@
     datetime: ['', ''],
   });
   const fieldConfigRef = ref();
-  const isExportLoading = ref(false);
+  // const isExportLoading = ref(false);
 
   const allFieldNameList = Object.keys(filedConfig) as Array<keyof typeof filedConfig>;
   const defaultFieldList = allFieldNameList.slice(0).reduce((result, fieldName) => ({
@@ -99,16 +99,16 @@
   }), {});
 
   // 批量处理
-  const handleBatch = () => {
-    emits('batch');
-  };
-  const handleExport = () => {
-    isExportLoading.value = true;
-    emits('export');
-    setTimeout(() => {
-      isExportLoading.value = false;
-    }, 500);
-  };
+  // const handleBatch = () => {
+  //   emits('batch');
+  // };
+  // const handleExport = () => {
+  //   isExportLoading.value = true;
+  //   emits('export');
+  //   setTimeout(() => {
+  //     isExportLoading.value = false;
+  //   }, 500);
+  // };
   // 同步外部值的改动
   watch(() => props.modelValue, () => {
     localSearchModel.value = props.modelValue;
