@@ -24,6 +24,13 @@ type EventItem = {
     target_value: string | undefined,
     source_field: string | undefined,
   };
+  enum_mappings?: {
+    collection_id: string;
+    mappings: Array<{
+      key: string;
+      name: string;
+    }>
+  }
   drill_config?: {
     tool: {
       uid: string;
@@ -60,6 +67,10 @@ export default class StrategyFieldEvent {
       map_config: {
         target_value: item.map_config?.target_value,
         source_field: item.map_config?.source_field,
+      },
+      enum_mappings: {
+        collection_id: item.enum_mappings?.collection_id || '',
+        mappings: item.enum_mappings?.mappings || [],
       },
       drill_config: {
         tool: {
