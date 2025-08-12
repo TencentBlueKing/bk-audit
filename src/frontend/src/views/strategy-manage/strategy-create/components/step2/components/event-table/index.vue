@@ -334,6 +334,17 @@
                 return {
                   ...item,
                   ...editItem,
+                  map_config: editItem.map_config || {
+                    source_field: undefined,
+                    target_value: undefined,
+                  },
+                  drill_config: editItem.drill_config || {
+                    tool: {
+                      uid: '',
+                      version: 1,
+                    },
+                    config: [],
+                  },
                 };
               }
               return {
