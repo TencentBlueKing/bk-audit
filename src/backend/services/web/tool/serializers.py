@@ -24,7 +24,7 @@ from rest_framework.fields import DictField
 from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
 from services.web.tool.constants import (
-    BkvisionConfig,
+    BkVisionConfig,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
     ToolTypeEnum,
@@ -66,7 +66,7 @@ class ToolCreateRequestSerializer(serializers.Serializer):
             data_search_config_type = attrs["data_search_config_type"]
 
         if tool_type == ToolTypeEnum.BK_VISION:
-            validated_config = BkvisionConfig(**config).model_dump()
+            validated_config = BkVisionConfig(**config).model_dump()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
             DataSearchConfigTypeEnum(data_search_config_type)
             validated_config = SQLDataSearchConfig(**config).model_dump()
@@ -94,7 +94,7 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
         tool_type = tool.tool_type
 
         if tool_type == ToolTypeEnum.BK_VISION:
-            validated_config = BkvisionConfig(**config).model_dump()
+            validated_config = BkVisionConfig(**config).model_dump()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
             validated_config = SQLDataSearchConfig(**config).model_dump()
         else:

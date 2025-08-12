@@ -6,7 +6,7 @@ from django.test import TestCase
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
 from core.sql.parser.praser import SqlQueryAnalysis
 from services.web.tool.constants import (
-    BkvisionConfig,
+    BkVisionConfig,
     FieldCategory,
     SQLDataSearchConfig,
     SQLDataSearchInputVariable,
@@ -407,13 +407,29 @@ class TestSqlDataSearchExecutor(TestCase):
 class TestBkVisionExecutor(TestCase):
     def setUp(self):
         """设置BK Vision执行器的测试环境"""
+        example_var = {
+            "raw_name": "test_field",
+            "display_name": "测试字段",
+            "description": "字段描述",
+            "field_category": "button",
+            "required": True,
+            "default_value": "default_val",
+        }
+        example_var2 = {
+            "raw_name": "list_field",
+            "display_name": "列表字段",
+            "description": "列表默认值",
+            "field_category": "selector",
+            "required": False,
+            "default_value": [1, 2, 3],
+        }
         self.vision_tool = Tool.objects.create(
             namespace="test",
             name="vision_tool",
             uid="vision_tool_123",
             version=1,
             tool_type=ToolTypeEnum.BK_VISION.value,
-            config={"uid": "vision_panel_123"},
+            config={"uid": "vision_panel_123", "input_variable": [example_var, example_var2]},
             updated_by="test_user",
         )
 
@@ -433,7 +449,23 @@ class TestBkVisionExecutor(TestCase):
 
     def test_execute_with_config_object(self):
         """测试通过配置对象直接初始化执行BK Vision查询"""
-        config = BkvisionConfig(uid="vision_panel_123")
+        example_var = {
+            "raw_name": "test_field",
+            "display_name": "测试字段",
+            "description": "字段描述",
+            "field_category": "button",
+            "required": True,
+            "default_value": "default_val",
+        }
+        example_var2 = {
+            "raw_name": "list_field",
+            "display_name": "列表字段",
+            "description": "列表默认值",
+            "field_category": "selector",
+            "required": False,
+            "default_value": [1, 2, 3],
+        }
+        config = BkVisionConfig(uid="vision_panel_123", input_variable=[example_var, example_var2])
         with mock.patch("services.web.tool.executor.tool.check_bkvision_share_permission", return_value=True):
             with mock.patch.object(Tool, 'fetch_tool_vision_panel', return_value=self.mock_panel):
                 executor = BkVisionExecutor(config)
@@ -468,7 +500,7 @@ class TestToolExecutorFactory(TestCase):
             tool_type=ToolTypeEnum.BK_VISION.value,
             name="vision_tool",
             version=1,
-            config={"uid": "vision_panel_123"},
+            config={"uid": "vision_panel_123", "input_variable": []},
         )
 
     def test_create_sql_executor(self):

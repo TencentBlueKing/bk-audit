@@ -279,7 +279,17 @@ class CreateTool(ToolBase):
       "description": "xxx",
       "tags": ["xxx"],
       "config": {
-        "uid": "xxx"
+        "uid": "xxx",
+        "input_variable": [
+          {
+            "raw_name": "test_field",
+            "display_name": "测试字段",
+            "description": "字段描述",
+            "field_category": "button",
+            "required": true,
+            "default_value": "default_val"
+          }
+        ]
       }
     }
     响应结构：

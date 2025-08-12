@@ -113,6 +113,33 @@ class SQLDataSearchInputVariable(DataSearchBaseField):
         return v
 
 
+@register_choices("BKVisionFieldCategory")
+class BKVisionFieldCategory(TextChoices):
+    """
+    BK Vision字段类别(前端类型)
+    """
+
+    BUTTON = "button", gettext_lazy("按钮")
+    CASCADER = "cascader", gettext_lazy("级联选择器")
+    INPUTER = "inputer", gettext_lazy("输入框")
+    RADIOS = "radios", gettext_lazy("单选按钮组")
+    SELECTOR = "selector", gettext_lazy("选择器")
+    TIME_PICKER = "time-picker", gettext_lazy("时间选择器")
+    TIME_RANGER = "time-ranger", gettext_lazy("时间范围选择器")
+
+
+class BKVisionInputVariable(DataSearchBaseField):
+    """
+    BK Vision输入变量
+    """
+
+    field_category: BKVisionFieldCategory  # 字段类别(前端类型)
+    required: bool = PydanticField(True, description="是否必填")
+    default_value: Annotated[
+        Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
+    ] = PydanticField(None, description="字段默认值")
+
+
 class Tool(BaseModel):
     """
     工具
@@ -169,9 +196,10 @@ class SQLDataSearchConfig(BaseModel):
     output_fields: List[SQLDataSearchOutputField]  # 输出字段
 
 
-class BkvisionConfig(BaseModel):
+class BkVisionConfig(BaseModel):
     """
     BK Vision配置 -- 当工具为 BK Vision时使用
     """
 
     uid: str  # BK Vision 图表ID
+    input_variable: List[BKVisionInputVariable] = PydanticField(default_factory=list)  # 输入变量
