@@ -39,6 +39,7 @@
             </transition>
           </scroll-faker>
         </div>
+        <!-- detail -->
         <div class="list-item-detail">
           <div
             v-if="importantInformation.length"
@@ -58,10 +59,8 @@
                 :description="subItem.description"
                 :label="subItem.display_name"
                 :label-width="labelWidth">
-                {{
-                  eventItem[subItem.field_name as keyof typeof eventItem] ||
-                    eventItem.event_data[subItem.field_name]
-                }}
+                {{ getDisplayValue(subItem.field_name, eventItem[subItem.field_name as keyof typeof eventItem] ||
+                  eventItem.event_data[subItem.field_name]) }}
                 <template v-if="drillMap.get(subItem.field_name)">
                   <bk-button
                     class="ml8"
@@ -93,7 +92,7 @@
                   v-if="!notDisplay.includes('event_id')"
                   :label="t('事件ID')"
                   :label-width="labelWidth">
-                  {{ eventItem.event_id }}
+                  {{ getDisplayValue('event_id', eventItem.event_id) }}
                   <template v-if="drillMap.get('event_id')">
                     <bk-button
                       class="ml8"
@@ -111,7 +110,7 @@
                   v-if="!notDisplay.includes('operator')"
                   :label="t('责任人')"
                   :label-width="labelWidth">
-                  {{ eventItem.operator }}
+                  {{ getDisplayValue('operator', eventItem.operator) }}
                   <template v-if="drillMap.get('operator')">
                     <bk-button
                       class="ml8"
@@ -158,7 +157,7 @@
                   v-if="!notDisplay.includes('event_content')"
                   :label="t('事件描述')"
                   :label-width="labelWidth">
-                  {{ eventItem.event_content }}
+                  {{ getDisplayValue('event_content', eventItem.event_content) }}
                   <template v-if="drillMap.get('event_content')">
                     <bk-button
                       class="ml8"
@@ -212,7 +211,7 @@
                         extCls:'evidence-info-value-tooltips',
                       }"
                       @mouseenter="handlerEnter($event)">
-                      <span>{{ eventItem.event_data[key] }}</span>
+                      <span>{{ getDisplayValue(key, eventItem.event_data[key]) }}</span>
                       <template v-if="drillMap.get(key)">
                         <bk-button
                           class="ml8"
@@ -454,7 +453,6 @@
     eventItemDataKeyArr.value = group(eventDataKey);
   };
 
-
   const handlerStrategy = () => {
     const to = router.resolve({
       name: 'strategyList',
@@ -490,6 +488,19 @@
       }
     });
   };
+
+  // 如果有字段从字典取name
+  const getDisplayValue = (key: string, value: unknown) => {
+    if (dictDataMap.value.has(key)) {
+      const dictValue = dictDataMap.value.get(key)?.find(item => item.key === value);
+      if (dictValue) {
+        return dictValue.name;
+      }
+      return value;
+    }
+    return value;
+  };
+
   // 关闭弹窗
   const handleClose = (ToolInfo: ToolDetailModel | undefined) => {
     if (ToolInfo) {
@@ -516,30 +527,29 @@
     ...props.data.event_evidence_field_configs,
   ]);
 
-  // 重点信息（如果is_show为false, 则is_priority也一定为false）
-  const importantInformation = computed(() => group([
-    ...props.data.event_basic_field_configs.filter(item => item.is_priority),
-    ...props.data.event_data_field_configs.filter(item => item.is_priority),
-  ]));
-
   // 不显示的字段
-  const notDisplay = computed(() => [
-    ...props.data.event_basic_field_configs.filter(item => !item.is_show).map(item => item.field_name),
-    ...props.data.event_data_field_configs.filter(item => !item.is_show).map(item => item.field_name),
-    ...props.data.event_evidence_field_configs.filter(item => !item.is_show).map(item => item.field_name),
-  ]);
+  const notDisplay = computed(() => strategyInfo.value.filter(item => !item.is_show).map(item => item.field_name));
+
+  // 重点信息（如果is_show为false, 则is_priority也一定为false）
+  const importantInformation = computed(() => group(strategyInfo.value.filter(item => item.is_priority)));
 
   // 显示字段下钻的字段
   const drillMap = computed(() => {
     const map = new Map();
-    props.data.event_basic_field_configs.forEach((item) => {
+    strategyInfo.value.forEach((item) => {
       if (item.drill_config?.tool.uid) {
         map.set(item.field_name, item);
       }
     });
-    props.data.event_data_field_configs.forEach((item) => {
-      if (item.drill_config?.tool.uid) {
-        map.set(item.field_name, item);
+    return map;
+  });
+
+  // 有字典翻译的字段
+  const dictDataMap = computed(() => {
+    const map: Map<string, { name: string; key: string }[]> = new Map();
+    strategyInfo.value.forEach((item) => {
+      if (item.enum_mappings?.mappings.length) {
+        map.set(item.field_name, item.enum_mappings.mappings);
       }
     });
     return map;

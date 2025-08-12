@@ -104,7 +104,8 @@
       { key: 'display_name', label: t('字段显示名') },
       { key: 'is_show', label: t('在单据中展示') },
       { key: 'is_priority', label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
-      { key: 'map_config', label: t('字段映射'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
+      { key: 'map_config', label: t('字段关联'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
+      { key: 'enum_mappings', label: t('字段值映射'), tips: t('为储存值配置可读的展示文本') },
       { key: 'drill_config', label: t('字段下钻') },
       { key: 'description', label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
     ];
@@ -138,7 +139,7 @@
   const getHeaderClass = (valueKey: string | undefined) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
-    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show'  || valueKey === 'enum_mappings',
     'map-config': valueKey === 'map_config',
     'drill-config': valueKey === 'drill_config',
     description: valueKey === 'description',
@@ -181,12 +182,12 @@
         background-color: #f5f7fa;
 
         &.field-name {
-          width: 110px;
+          width: 100px;
           background-color: #f5f7fa;
         }
 
         &.display-name {
-          width: 110px;
+          width: 100px;
           background-color: #f5f7fa;
         }
 
@@ -195,11 +196,11 @@
         }
 
         &.map-config {
-          width: 120px;
+          width: 110px;
         }
 
         &.drill-config {
-          width: 120px;
+          width: 110px;
         }
 
         &:last-child {
