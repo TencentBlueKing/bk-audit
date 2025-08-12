@@ -109,7 +109,7 @@
   const getCellClass = (valueKey: string) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
-    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show' || valueKey === 'enum_mappings',
     'map-config': valueKey === 'map_config',
     'drill-config': valueKey === 'drill_config',
     description: valueKey === 'description',
@@ -180,8 +180,7 @@
 
   .cell {
     display: flex;
-    height: 58px;
-    padding: 12px;
+    height: 42px;
     border-right: 1px solid #dcdee5;
     border-bottom: 1px solid #dcdee5;
     align-items: center;

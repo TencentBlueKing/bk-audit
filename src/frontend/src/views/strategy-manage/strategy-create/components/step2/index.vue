@@ -86,12 +86,6 @@
         </card-part-vue>
         <card-part-vue :title="t('事件信息')">
           <template #content>
-            <!-- <event-info-table
-              ref="eventRef"
-              :data="editData"
-              :select="select"
-              :strategy-id="editData.strategy_id"
-              :strategy-type="strategyType" /> -->
             <event-table
               ref="eventRef"
               :data="editData"
