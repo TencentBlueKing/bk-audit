@@ -551,6 +551,7 @@ class EnumMappingRelatedType(models.TextChoices):
     """枚举映射关联类型"""
 
     STRATEGY = "strategy", _("策略")
+    TOOL = "tool", _("工具")
 
 
 class EnumMappingCollectionRelation(models.Model):

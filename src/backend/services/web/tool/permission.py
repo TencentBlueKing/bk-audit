@@ -23,7 +23,7 @@ from services.web.tool.models import Tool
 
 class UseToolPermission(InstanceActionPermission):
     def has_permission(self, request, view):
-        tool_uid = self._get_instance_id(request, view)
+        tool_uid = request.data.get("related_object_id") or self._get_instance_id(request, view)
         tool: Tool = Tool.last_version_tool(uid=tool_uid)
         username = get_request_username()
         if username == tool.updated_by:
