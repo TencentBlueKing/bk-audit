@@ -143,7 +143,7 @@
     start_timeaccess_source_ip: 'event_source',
   };
 
-  //  strategyType === 'rule'时显示全部列，否则排除 “字段映射”
+  //  strategyType === 'rule'时显示全部列，否则排除 map_config
   const columns = computed(() => {
     const initColumns = [
       { label: t('事件分组') },
@@ -158,7 +158,7 @@
 
     return props.strategyType === 'rule'
       ? initColumns
-      : initColumns.filter((_, index) => index !== 4);
+      : initColumns.filter(item => item.key !== 'map_config');
   });
 
   //  strategyType === 'rule'时不显示 event_evidence_field_configs
@@ -349,7 +349,7 @@
                   },
                   description: editItem.description,
                   example: item.example,
-                  prefix: item.example || '',
+                  prefix: item.prefix || '',
                 };
               }
               return {
