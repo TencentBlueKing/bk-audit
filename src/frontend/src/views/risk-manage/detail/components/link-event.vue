@@ -85,7 +85,7 @@
             <div
               v-if="eventItem.event_id || eventItem.strategy_id"
               class="base-info">
-              <render-info-block
+              <!-- <render-info-block
                 class="flex mt16"
                 style="margin-bottom: 12px;">
                 <render-info-item
@@ -166,6 +166,45 @@
                       @click="handleClick(
                         drillMap.get('event_content'),
                         drillMap.get('event_content').drill_config.tool.uid
+                      )">
+                      {{ t('查看') }}
+                    </bk-button>
+                  </template>
+                </render-info-item>
+              </render-info-block> -->
+              <render-info-block
+                v-for="(basicArr, basicIndex) in basicInfo"
+                :key="basicIndex"
+                class="flex mt16"
+                style="margin-bottom: 12px;">
+                <render-info-item
+                  v-for="(basicItem, itemIndex) in basicArr"
+                  :key="itemIndex"
+                  :label="basicItem.display_name"
+                  :label-width="labelWidth">
+                  <template v-if="basicItem.field_name === 'strategy_id'">
+                    <bk-button
+                      v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
+                      text
+                      theme="primary"
+                      @click="handlerStrategy()">
+                      {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
+                    </bk-button>
+                    <span v-else> -- </span>
+                  </template>
+                  <template v-else>
+                    {{
+                      getDisplayValue(basicItem.field_name, eventItem[basicItem.field_name as keyof typeof eventItem])
+                    }}
+                  </template>
+                  <template v-if="drillMap.get(basicItem.field_name)">
+                    <bk-button
+                      class="ml8"
+                      text
+                      theme="primary"
+                      @click="handleClick(
+                        drillMap.get(basicItem.field_name),
+                        drillMap.get(basicItem.field_name).drill_config.tool.uid
                       )">
                       {{ t('查看') }}
                     </bk-button>
@@ -526,6 +565,9 @@
     ...props.data.event_data_field_configs,
     ...props.data.event_evidence_field_configs,
   ]);
+
+  // 基本信息
+  const basicInfo = computed(() => group(props.data.event_basic_field_configs));
 
   // 不显示的字段
   const notDisplay = computed(() => strategyInfo.value.filter(item => !item.is_show).map(item => item.field_name));
