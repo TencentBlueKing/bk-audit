@@ -84,6 +84,7 @@
 <script setup lang="ts">
   import _ from 'lodash';
   import {
+    computed,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -118,16 +119,18 @@
   });
   const fieldConfigRef = ref();
   const isShowMore = ref(false);
+  const sliceNumber = ref(7);
 
   const allFieldNameList = Object.keys(props.fieldConfig);
-  const defaultFieldList = allFieldNameList.slice(0, 7).reduce((result, fieldName) => ({
+
+  const defaultFieldList = computed(() => allFieldNameList.slice(0, sliceNumber.value).reduce((result, fieldName) => ({
     ...result,
     [fieldName]: props.fieldConfig[fieldName],
-  }), {});
-  const moreFieldList = allFieldNameList.slice(7).reduce((result, fieldName) => ({
+  }), {}));
+  const moreFieldList = computed(() => allFieldNameList.slice(sliceNumber.value).reduce((result, fieldName) => ({
     ...result,
     [fieldName]: props.fieldConfig[fieldName],
-  }), {});
+  }), {}));
 
   // 同步外部值的改动
   watch(() => props.modelValue, () => {
@@ -175,6 +178,7 @@
 
   const init = () => {
     const windowInnerWidth = window.innerWidth;
+    sliceNumber.value = windowInnerWidth < 1720 ? 5 : 7;
     boxRowStyle.value = windowInnerWidth < 1720 ? {
       'grid-template-columns': 'repeat(3, 1fr)',
     } : {
