@@ -342,6 +342,10 @@
                     target_value: editItem.map_config?.target_value,
                     source_field: editItem.map_config?.source_field || editItem.map_config?.target_value, // 固定值赋值，用于反显
                   },
+                  enum_mappings: {
+                    collection_id: editItem.enum_mappings?.collection_id || '',
+                    mappings: editItem.enum_mappings?.mappings || [],
+                  },
                   drill_config: {
                     tool: {
                       uid: editItem.drill_config?.tool?.uid || '',
@@ -361,7 +365,6 @@
           }
         });
       }
-      console.log(2222);
       process();
     },
   });
