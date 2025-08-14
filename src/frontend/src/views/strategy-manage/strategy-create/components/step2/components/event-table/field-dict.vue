@@ -114,7 +114,7 @@
         <template v-if="renderList.length">
           <template
             v-for="(item, index) in renderList"
-            :key="item.key">
+            :key="item.id || `row_${index}`">
             <div class="field-row">
               <div class="field-value">
                 <bk-form-item
