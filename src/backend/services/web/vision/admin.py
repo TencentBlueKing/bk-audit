@@ -23,4 +23,4 @@ from services.web.vision.models import VisionPanel
 
 @admin.register(VisionPanel)
 class VisionPanelAdmin(admin.ModelAdmin):
-    list_display = ["id", "name", "priority_index"]
+    list_display = ["id", "name", "priority_index", "vision_id"]
