@@ -28,7 +28,8 @@
           ref="formRef"
           class="tools-form"
           form-type="vertical"
-          :model="formData">
+          :model="formData"
+          :rules="rules">
           <card-part-vue :title="t('基础信息')">
             <template #content>
               <div class="flex-center">
@@ -88,6 +89,7 @@
                   type="textarea" />
               </bk-form-item>
 
+              <!-- <bk-form-item
               <!-- <bk-form-item
                 :label="t('敏感定义')"
                 label-width="160"
@@ -205,59 +207,39 @@
                     v-model.trim="formData.config.uid"
                     :placeholder="t('请输入图表链接')"
                     style="width: 100%;" />
-                </bk-form-item>
-                <div style=" display: flex;align-items: center; width: 100%; justify-content: space-between; ">
-                  <bk-form-item
-                    :label="t('选择报表')"
-                    label-width="160"
-                    property="area"
-                    required
-                    style="width: 49.5%;">
-                    <bk-cascader
-                      v-model="formData.area"
-                      :list="cascaderList"
-                      :show-complete-name="false"
-                      trigger="click" />
-                  </bk-form-item>
+                </bk-form-item> -->
 
-                  <bk-form-item
-                    :label="t('选择版本')"
-                    label-width="160"
-                    property="version"
-                    required
-                    style="width: 49.5%;">
-                    <div style="display: flex;">
-                      <bk-select
-                        v-model="formData.bkVersion"
-                        auto-focus
-                        class="bk-select"
-                        filterable
-                        style="width: calc(100% - 50px)">
-                        <bk-option
-                          v-for="(item, index) in versionList"
-                          :id="item.value"
-                          :key="index"
-                          :disabled="item.disabled"
-                          :name="item.label" />
-                      </bk-select>
-                      <span style="width: 50px; color: #3a84ff; text-align: center; cursor: pointer;"> {{ t('查看')
-                      }}</span>
-                    </div>
-                  </bk-form-item>
-                </div>
+                <bk-form-item
+                  :label="t('选择报表')"
+                  label-width="160"
+                  property="config.uid"
+                  required>
+                  <bk-cascader
+                    v-model="configUid"
+                    children-key="share"
+                    id-key="uid"
+                    :list="chartLists"
+                    :multiple="false"
+                    :show-complete-name="false"
+                    style="width: 50%"
+                    trigger="click"
+                    @change="handleSpaceChange" />
+                </bk-form-item>
               </div>
             </template>
           </card-part-vue>
           <card-part-vue
+            v-if="formData.tool_type === 'bk_vision' && viewInfo.filters.length > 0"
             :title="t('参数配置')"
             :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
             <template #content>
-              <div style="display: flex;width: 100%; justify-content: space-between;">
+              <div style="display: flex;width: 100%;">
                 <bk-vision-component
-                  v-for="comItem in componentList"
-                  :key="comItem.id"
+                  v-for="comItem in viewInfo.componentLists"
+                  :key="comItem.uid"
                   :config="comItem"
-                  style="width: 49.5%" />
+                  style="width: 30%;margin-left: 20px;"
+                  @change="(val: any) => handleVisionChange(val, comItem.uid)" />
               </div>
             </template>
           </card-part-vue>
@@ -867,15 +849,15 @@
     () => viewRootRef.value,
   );
   const isEditMode = route.name === 'toolsEdit';
-  const radioGroup = ref([
-    {
-      id: '1',
-      label: t('公开可申请'),
-    },
-    {
-      id: '2',
-      label: t('仅指定人可用'),
-    }]);
+  // const radioGroup = ref([
+  //   {
+  //     id: '1',
+  //     label: t('公开可申请'),
+  //   },
+  //   {
+  //     id: '2',
+  //     label: t('仅指定人可用'),
+  //   }]);
   const viewRootRef = ref();
   const editSqlRef = ref();
   const formRef = ref();
@@ -917,7 +899,7 @@
     name: '',
     tags: [],
     description: '',
-    tool_type: 'bk_vision',
+    tool_type: 'data_search',
     data_search_config_type: 'sql',
     config: {
       referenced_tables: [],
