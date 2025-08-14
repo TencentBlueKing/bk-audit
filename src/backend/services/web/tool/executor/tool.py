@@ -53,6 +53,7 @@ from services.web.tool.executor.model import (
     DataSearchToolExecuteResult,
 )
 from services.web.tool.models import Tool
+from services.web.tool.permissions import check_bkvision_share_permission
 from services.web.vision.handlers.query import VisionHandler
 
 TConfig = TypeVar('TConfig', bound=BaseModel)
@@ -324,9 +325,11 @@ class BkVisionExecutor(BaseToolExecutor[BkvisionConfig, None, BkVisionExecuteRes
 
     def validate_permission(self, params=None):
         """
-        校验权限: 校验工具更新人 or 当前请求用户是否有权限查看 bkvision 嵌入记录。暂时屏蔽，稍后恢复。
+        校验权限: 校验工具更新人 or 当前请求用户是否有 bkvision 嵌入记录权限。
         """
-        pass
+        user_id = self.tool.updated_by if self.tool else get_request_username()
+        share_uid = self.config.uid
+        check_bkvision_share_permission(user_id, share_uid)
 
     def _execute(self, params=None) -> BkVisionExecuteResult:
         """

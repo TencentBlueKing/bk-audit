@@ -74,9 +74,7 @@ def _create_bkvision_tool(tool: Tool, config_data: dict):
         vision_id=uid,
         scenario=Scenario.TOOL,
         handler=VisionHandler.__name__,
-        defaults={
-            "id": unique_id(),
-        },
+        defaults={"id": unique_id(), "name": f"Tool-{tool.uid}"},
     )
     BkVisionToolConfig.objects.create(tool=tool, panel=panel)
 

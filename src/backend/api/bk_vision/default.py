@@ -86,3 +86,15 @@ class DeleteReportStrategy(BKVision):
     method = "DELETE"
     action = "/api/v1/report/delete_report_strategy/{uid}/"
     url_keys = ["uid"]
+
+
+class GetShareList(BKVision):
+    name = gettext_lazy("获取有权限的图表列表")
+    method = "GET"
+    action = "/api/v1/share/get_share_list/"
+
+
+class CheckShareAuth(BKVision):
+    name = gettext_lazy("检查分享权限")
+    method = "GET"
+    action = "/api/v1/share/check_share_auth/"
