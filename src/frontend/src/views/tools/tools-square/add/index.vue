@@ -218,9 +218,14 @@
                     :list="chartLists"
                     :multiple="false"
                     :show-complete-name="false"
-                    style="width: 50%"
+                    :style="spacePermission ? `width: 50%;border: 1px solid #e71818;` : `width: 50%;`"
                     trigger="click"
                     @change="handleSpaceChange" />
+                  <div
+                    v-if="spacePermission"
+                    class="permission">
+                    该报表无权限，请 <span class="permission-link">申请权限{{ }}</span>
+                  </div>
                 </bk-form-item>
               </div>
             </template>
@@ -888,8 +893,10 @@
     componentLists: [],
   });
   const rules = {};
+  const spacePermission = ref(false);
   // 选择报表
   const handleSpaceChange = (val: string) => {
+    spacePermission.value = false;
     if (val.length === 0) {
       return;
     }
@@ -927,6 +934,8 @@
             });
           }
         }, 0);
+      } else {
+        spacePermission.value = true;
       }
     });
   };
@@ -1647,7 +1656,18 @@
       border-top: 1px solid #dcdee5;
     }
   }
+
+  .permission {
+    font-size: 12px;
+    color: #e71818;
+
+    .permission-link {
+      color: #3a84ff;
+      cursor: pointer;
+    }
+  }
 }
+
 </style>
 <style lang="postcss">
 .field-required-pop {
