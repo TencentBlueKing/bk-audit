@@ -17,7 +17,7 @@
 <template>
   <div class="form-item">
     <bk-input
-      v-if="dataConfig.field_category === 'input'"
+      v-if="dataConfig.field_category === 'input' || dataConfig.field_category === 'inputer'"
       v-model="inputData"
       @update:model-value="handleInputDataChange" />
 
@@ -43,13 +43,13 @@
       @change="handleRangeChange" /> -->
 
     <date-picker
-      v-if="dataConfig.field_category === 'time_range_select'"
+      v-if="dataConfig.field_category === 'time_range_select' || dataConfig.field_category === 'time-ranger'"
       v-model="pickerRangeValue"
       class="date-picker"
       @update:model-value="handleRangeChange" />
 
     <bk-date-picker
-      v-if="dataConfig.field_category === 'time_select'"
+      v-if="dataConfig.field_category === 'time_select' || dataConfig.field_category === 'time-picker'"
       v-model="pickerValue"
       append-to-body
       clearable

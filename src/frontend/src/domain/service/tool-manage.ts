@@ -104,4 +104,21 @@ export default  {
       ...data,
     }));
   },
+  /**
+     * @desc 获取图表列表
+     * @param { Object }
+     */
+  fetchChartLists() {
+    return ToolManageSources.getChartLists().then(({ data }) => data);
+  },
+  /**
+     * @desc 获取报表列表
+     * @param { Object } params
+     */
+  fetchReportLists(params: {
+      share_uid: string,
+    }) {
+    return ToolManageSources.getReportLists(params).then(({ data }) => data);
+  },
+
 };
