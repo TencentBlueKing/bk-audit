@@ -28,8 +28,7 @@
           ref="formRef"
           class="tools-form"
           form-type="vertical"
-          :model="formData"
-          :rules="rules">
+          :model="formData">
           <card-part-vue :title="t('基础信息')">
             <template #content>
               <div class="flex-center">
@@ -263,15 +262,17 @@
             </template>
           </card-part-vue>
           <card-part-vue
+            v-if="formData.tool_type === 'bk_vision' && viewInfo.filters.length > 0"
             :title="t('参数配置')"
             :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
             <template #content>
-              <div style="display: flex;width: 100%; justify-content: space-between;">
+              <div style="display: flex;width: 100%;">
                 <bk-vision-component
-                  v-for="comItem in componentList"
-                  :key="comItem.id"
+                  v-for="comItem in viewInfo.componentLists"
+                  :key="comItem.uid"
                   :config="comItem"
-                  style="width: 49.5%" />
+                  style="width: 30%;margin-left: 20px;"
+                  @change="(val: any) => handleVisionChange(val, comItem.uid)" />
               </div>
             </template>
           </card-part-vue>
@@ -881,15 +882,15 @@
     () => viewRootRef.value,
   );
   const isEditMode = route.name === 'toolsEdit';
-  const radioGroup = ref([
-    {
-      id: '1',
-      label: t('公开可申请'),
-    },
-    {
-      id: '2',
-      label: t('仅指定人可用'),
-    }]);
+  // const radioGroup = ref([
+  //   {
+  //     id: '1',
+  //     label: t('公开可申请'),
+  //   },
+  //   {
+  //     id: '2',
+  //     label: t('仅指定人可用'),
+  //   }]);
   const viewRootRef = ref();
   const editSqlRef = ref();
   const formRef = ref();
@@ -931,7 +932,7 @@
     name: '',
     tags: [],
     description: '',
-    tool_type: 'bk_vision',
+    tool_type: 'data_search',
     data_search_config_type: 'sql',
     config: {
       referenced_tables: [],
