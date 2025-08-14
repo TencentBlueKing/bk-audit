@@ -193,7 +193,8 @@
           class="default">
           <div class="top-line" />
           <div
-            id="panel"
+            :id="`panel-${uid}`"
+            ref="panelRef"
             class="panel" />
         </div>
 
@@ -330,6 +331,7 @@
   });
   const uid = ref('');
   const panelId = ref('');
+  const panelRef = ref();
   const rules = ref({});
   const formRef = ref();
   const searchForm = ref();
@@ -370,7 +372,7 @@
     }).href;
     window.open(url, '_blank');
   };
-
+  const toolDetails = ref<ToolDetailModel>();
   // 获取工具详情
   const {
     run: fetchToolsDetail,
@@ -379,6 +381,7 @@
     onSuccess: (data) => {
       uid.value = data.uid;
       permission.value = data.permission.use_tool;
+      toolDetails.value = data;
     },
   });
 
@@ -513,7 +516,6 @@
   // 创建弹窗内容
   const createDialogContent = (data: ToolDetailModel) => {
     searchForm.value = {};
-
     // 创建table
     columns.value = data.config.output_fields.map((item) => {
       if (item.drill_config === null || item.drill_config?.tool.uid === '') {
@@ -703,10 +705,14 @@
   };
 
   const initBK = async  (id: string) => {
+    const filters: Record<string, any> = {};
+    toolDetails.value?.config.input_variable.forEach((item: any) => {
+      filters[item.raw_name] = item.default_value;
+    });
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(
-        '#panel',
+        `#panel-${uid.value}`,
         id,
         {
           apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
@@ -715,6 +721,7 @@
             { type: 'tool', id: 'refresh', build_in: true },
             { type: 'menu', id: 'excel', build_in: true },
           ],
+          filters: isDrillDownOpen.value ? drillDownBkVisionVConfig.value : filters,
           handleError,
         },
       );
@@ -727,7 +734,8 @@
   const handleFieldDownClick = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>) => {
     emit('openFieldDown', drillDownItem, drillDownItemRowData);
   };
-
+  // bkVision下钻
+  const drillDownBkVisionVConfig = ref<Record<string, any>>({});
   // 打开弹窗
   const handleOpenDialog = async (
     itemUid: string,
@@ -735,6 +743,7 @@
     isDrillDownItemRowData?: Record<string, any>,
     preview?: boolean,
   ) => {
+    // 下钻
     if (drillDownItem && isDrillDownItemRowData) {
       // 是否下钻
       isDrillDownOpen.value = true;
@@ -742,6 +751,14 @@
       drillDownItemConfig.value = drillDownItem?.drill_config?.config;
       // 下钻父节点所在行数据
       drillDownItemRowData.value = isDrillDownItemRowData;
+
+      drillDownItem?.drill_config.config.forEach((e: any) => {
+        if (e.target_value_type === 'field') { // 直接应用值
+          drillDownBkVisionVConfig.value[e.source_field]  = isDrillDownItemRowData?.[e.target_value];
+        } else { // 使用默认值
+          drillDownBkVisionVConfig.value[e.source_field] = e.target_value;
+        }
+      });
     }
     // 是否预览 （暂时用不上）
     isPreview.value = preview;
