@@ -89,7 +89,7 @@
                   type="textarea" />
               </bk-form-item>
 
-              <bk-form-item
+              <!-- <bk-form-item
                 :label="t('敏感定义')"
                 label-width="160"
                 property="radioGroupValue"
@@ -111,9 +111,9 @@
                     {{ formData.radioGroupValue === t('公开可申请') ? t('可申请权限后使用') : t('指定部分人可使用，不可被申请，指定人可看到并可使用') }}
                   </bk-tag>
                 </div>
-              </bk-form-item>
+              </bk-form-item> -->
 
-              <bk-form-item
+              <!-- <bk-form-item
                 v-if="formData.radioGroupValue === t('仅指定人可用')"
                 :label="t('可用人')"
                 label-width="160"
@@ -123,7 +123,7 @@
                   v-model="formData.users"
                   :placeholder="t('请输入可用人')"
                   style="width: 50%;" />
-              </bk-form-item>
+              </bk-form-item> -->
             </template>
           </card-part-vue>
           <!-- 工具类型 -->
@@ -174,14 +174,28 @@
                   </bk-button>
                 </bk-button-group>
                 <div>
-                  <bk-tag>
+                  <bk-tag v-if="formData.data_search_config_type === 'simple'">
                     {{ t('用于复杂的 SQL 查询，先编写 SQL，再根据 SQL 内的结果与变量配置前端样式') }}
+                  </bk-tag>
+                  <bk-tag v-else>
+                    {{ t('用于单一数据表，先配置的输入与输出字段，默认生成查询语句') }}
                   </bk-tag>
                 </div>
               </bk-form-item>
+
+              <bk-form-item
+                v-if="formData.data_search_config_type === 'simple' && formData.tool_type === 'data_search'"
+                :label="t('选择数据源')"
+                label-width="160"
+                property="source"
+                required>
+                <bk-input
+                  v-model="formData.source"
+                  :placeholder="t('请输入数据源名称、表名、ID 等，或可直接按分类筛选')" />
+              </bk-form-item>
               <!-- bkvision 图表 -->
-              <div v-else>
-                <bk-form-item
+              <div v-if="formData.tool_type === 'bk_vision'">
+                <!-- <bk-form-item
                   :label="t('图表链接')"
                   label-width="160"
                   property="config.uid"
@@ -190,70 +204,39 @@
                     v-model.trim="formData.config.uid"
                     :placeholder="t('请输入图表链接')"
                     style="width: 100%;" />
-                </bk-form-item>
+                </bk-form-item> -->
 
                 <bk-form-item
-                  :label="t('选择报表所在空间')"
+                  :label="t('选择报表')"
                   label-width="160"
                   property="config.uid"
                   required>
-                  <bk-input
-                    v-model.trim="formData.config.uid"
-                    :placeholder="t('请输入图表链接')"
-                    style="width: 100%;" />
+                  <bk-cascader
+                    v-model="configUid"
+                    children-key="share"
+                    id-key="uid"
+                    :list="chartLists"
+                    :multiple="false"
+                    :show-complete-name="false"
+                    style="width: 50%"
+                    trigger="click"
+                    @change="handleSpaceChange" />
                 </bk-form-item>
-                <div style=" display: flex;align-items: center; width: 100%; justify-content: space-between; ">
-                  <bk-form-item
-                    :label="t('选择报表')"
-                    label-width="160"
-                    property="area"
-                    required
-                    style="width: 49.5%;">
-                    <bk-cascader
-                      v-model="formData.area"
-                      :list="cascaderList"
-                      :show-complete-name="false"
-                      trigger="click" />
-                  </bk-form-item>
-
-                  <bk-form-item
-                    :label="t('选择版本')"
-                    label-width="160"
-                    property="version"
-                    required
-                    style="width: 49.5%;">
-                    <div style="display: flex;">
-                      <bk-select
-                        v-model="formData.bkVersion"
-                        auto-focus
-                        class="bk-select"
-                        filterable
-                        style="width: calc(100% - 50px)">
-                        <bk-option
-                          v-for="(item, index) in versionList"
-                          :id="item.value"
-                          :key="index"
-                          :disabled="item.disabled"
-                          :name="item.label" />
-                      </bk-select>
-                      <span style="width: 50px; color: #3a84ff; text-align: center; cursor: pointer;"> {{ t('查看')
-                      }}</span>
-                    </div>
-                  </bk-form-item>
-                </div>
               </div>
             </template>
           </card-part-vue>
           <card-part-vue
+            v-if="formData.tool_type === 'bk_vision' && viewInfo.filters.length > 0"
             :title="t('参数配置')"
             :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
             <template #content>
-              <div style="display: flex;width: 100%; justify-content: space-between;">
+              <div style="display: flex;width: 100%;">
                 <bk-vision-component
-                  v-for="comItem in componentList"
-                  :key="comItem.id"
+                  v-for="comItem in viewInfo.componentLists"
+                  :key="comItem.uid"
                   :config="comItem"
-                  style="width: 49.5%" />
+                  style="width: 30%;margin-left: 20px;"
+                  @change="(val: any) => handleVisionChange(val, comItem.uid)" />
               </div>
             </template>
           </card-part-vue>
@@ -261,379 +244,407 @@
           <template v-if="formData.tool_type === 'data_search'">
             <card-part-vue :title="t('工具配置页面')">
               <template #content>
-                <bk-form-item
-                  :label="t('配置SQL')"
-                  label-width="160">
-                  <div class="sql-editor">
-                    <div class="title">
-                      <span style="margin-left: auto;">
-                        <audit-icon
-                          v-bk-tooltips="t('复制')"
-                          class="icon"
-                          type="copy"
-                          @click.stop="handleCopy" />
-                        <audit-icon
-                          v-bk-tooltips="t('全屏')"
-                          class="ml16 icon"
-                          type="full-screen"
-                          @click.stop="handleToggleFullScreen" />
-                      </span>
-                    </div>
-                    <div
-                      ref="viewRootRef"
-                      class="sql-container"
-                      :style="{ height: '320px', width: '100%' }">
-                      <audit-icon
-                        v-if="showExit"
-                        v-bk-tooltips="t('退出全屏')"
-                        class="ml16 exit-icon"
-                        type="un-full-screen-2"
-                        @click="handleExitFullScreen" />
-                      <bk-button
-                        v-if="!showEditSql && !showFieldReference && !showPreview"
-                        class="edit-icon"
-                        outline
-                        theme="primary"
-                        @click="handleEditSql">
-                        {{ t('编辑sql') }}
-                      </bk-button>
-                    </div>
-                  </div>
-                </bk-form-item>
-                <bk-form-item
-                  :label="t('可识别数据源')"
-                  label-width="160">
-                  <div
-                    v-for="(item, index) in formData.config.referenced_tables"
-                    :key="index"
-                    class="data-source-item">
-                    <div class="info">
-                      <audit-icon
-                        style="margin: 0 5px; color: #c4c6cc;"
-                        :type="item.permission.result ? 'unlock' : 'lock'" />
+                <div v-if="formData.data_search_config_type === 'simple'">
+                  <bk-form-item
+                    label-width="160">
+                    <template #label>
                       <span
-                        v-if="!item.permission.result"
-                        :style="!item.permission.result ? {
-                          color: '#c4c6cc',
-                        } : {}">{{ item.table_name }}</span>
+                        v-bk-tooltips="t('配置工具中，用户可输入的变量及其前端组件类型等')"
+                        style="cursor: pointer;border-bottom: 1px dashed #979ba5;">{{ t('查询输入设置')
+                        }}</span>
+                    </template>
+                    <simple-model />
+                  </bk-form-item>
+
+                  <bk-form-item
+                    label-width="160">
+                    <template #label>
+                      <span
+                        v-bk-tooltips="t('配置工具中，可查询结果字段的展示与字段下钻')"
+                        style="cursor: pointer;border-bottom: 1px dashed #979ba5;">{{ t('查询结果设置')
+                        }}</span>
+                    </template>
+                    <output-com />
+                  </bk-form-item>
+                </div>
+
+
+                <div v-else>
+                  <bk-form-item
+                    :label="t('配置SQL')"
+                    label-width="160">
+                    <div class="sql-editor">
+                      <div class="title">
+                        <span style="margin-left: auto;">
+                          <audit-icon
+                            v-bk-tooltips="t('复制')"
+                            class="icon"
+                            type="copy"
+                            @click.stop="handleCopy" />
+                          <audit-icon
+                            v-bk-tooltips="t('全屏')"
+                            class="ml16 icon"
+                            type="full-screen"
+                            @click.stop="handleToggleFullScreen" />
+                        </span>
+                      </div>
+                      <div
+                        ref="viewRootRef"
+                        class="sql-container"
+                        :style="{ height: '320px', width: '100%' }">
+                        <audit-icon
+                          v-if="showExit"
+                          v-bk-tooltips="t('退出全屏')"
+                          class="ml16 exit-icon"
+                          type="un-full-screen-2"
+                          @click="handleExitFullScreen" />
+                        <bk-button
+                          v-if="!showEditSql && !showFieldReference && !showPreview"
+                          class="edit-icon"
+                          outline
+                          theme="primary"
+                          @click="handleEditSql">
+                          {{ t('编辑sql') }}
+                        </bk-button>
+                      </div>
+                    </div>
+                  </bk-form-item>
+                  <bk-form-item
+                    :label="t('可识别数据源')"
+                    label-width="160">
+                    <div
+                      v-for="(item, index) in formData.config.referenced_tables"
+                      :key="index"
+                      class="data-source-item">
+                      <div class="info">
+                        <audit-icon
+                          style="margin: 0 5px; color: #c4c6cc;"
+                          :type="item.permission.result ? 'unlock' : 'lock'" />
+                        <span
+                          v-if="!item.permission.result"
+                          :style="!item.permission.result ? {
+                            color: '#c4c6cc',
+                          } : {}">{{ item.table_name }}</span>
+                        <bk-button
+                          v-else
+                          text
+                          theme="primary"
+                          @click="handleViewMore(item.table_name || '')">
+                          {{ item.table_name }}
+                        </bk-button>
+                      </div>
                       <bk-button
-                        v-else
+                        v-if="!item.permission.result"
                         text
                         theme="primary"
-                        @click="handleViewMore(item.table_name || '')">
-                        {{ item.table_name }}
+                        @click="handleApply">
+                        {{ t('申请权限') }}
                       </bk-button>
                     </div>
-                    <bk-button
-                      v-if="!item.permission.result"
-                      text
-                      theme="primary"
-                      @click="handleApply">
-                      {{ t('申请权限') }}
-                    </bk-button>
-                  </div>
-                </bk-form-item>
-                <bk-form-item
-                  :label="t('查询输入设置')"
-                  label-width="160">
-                  <div class="render-field">
-                    <div class="field-header-row">
-                      <div class="field-value">
-                        {{ t('变量名') }}
-                      </div>
-                      <div class="field-value">
-                        {{ t('显示名') }}
-                      </div>
-                      <div
-                        class="field-value"
-                        style="flex: 0 0 350px;">
-                        {{ t('变量名说明') }}
-                      </div>
-                      <div
-                        class="field-value"
-                        style="flex: 0 0 200px;">
-                        {{ t('是否必填') }}
-                        <bk-popover
-                          ref="requiredListRef"
-                          allow-html
-                          boundary="parent"
-                          content="#hidden_pop_content"
-                          ext-cls="field-required-pop"
-                          placement="top"
-                          theme="light"
-                          trigger="click"
-                          width="100">
-                          <audit-icon
-                            style="margin-left: 4px; font-size: 16px;color: #3a84ff; cursor: pointer;"
-                            type="piliangbianji" />
-                        </bk-popover>
-                        <div style="display: none">
-                          <div id="hidden_pop_content">
-                            <div
-                              v-for="(item, index) in requiredList"
-                              :key="index"
-                              class="field-required-item"
-                              @click="handleRequiredClick(item.id)">
-                              {{ item.label }}
+                  </bk-form-item>
+
+                  <bk-form-item
+                    :label="t('查询输入设置')"
+                    label-width="160">
+                    <div class="render-field">
+                      <div class="field-header-row">
+                        <div class="field-value">
+                          {{ t('变量名') }}
+                        </div>
+                        <div class="field-value">
+                          {{ t('显示名') }}
+                        </div>
+                        <div
+                          class="field-value"
+                          style="flex: 0 0 350px;">
+                          {{ t('变量名说明') }}
+                        </div>
+                        <div
+                          class="field-value"
+                          style="flex: 0 0 200px;">
+                          {{ t('是否必填') }}
+                          <bk-popover
+                            ref="requiredListRef"
+                            allow-html
+                            boundary="parent"
+                            content="#hidden_pop_content"
+                            ext-cls="field-required-pop"
+                            placement="top"
+                            theme="light"
+                            trigger="click"
+                            width="100">
+                            <audit-icon
+                              style="margin-left: 4px; font-size: 16px;color: #3a84ff; cursor: pointer;"
+                              type="piliangbianji" />
+                          </bk-popover>
+                          <div style="display: none">
+                            <div id="hidden_pop_content">
+                              <div
+                                v-for="(item, index) in requiredList"
+                                :key="index"
+                                class="field-required-item"
+                                @click="handleRequiredClick(item.id)">
+                                {{ item.label }}
+                              </div>
                             </div>
                           </div>
                         </div>
+                        <div
+                          class="field-value is-required"
+                          style="flex: 0 0 200px;">
+                          {{ t('前端类型') }}
+                        </div>
+                        <div class="field-value">
+                          {{ t('默认值') }}
+                        </div>
                       </div>
-                      <div
-                        class="field-value is-required"
-                        style="flex: 0 0 200px;">
-                        {{ t('前端类型') }}
-                      </div>
-                      <div class="field-value">
-                        {{ t('默认值') }}
-                      </div>
-                    </div>
-                    <audit-form
-                      ref="tableInputFormRef"
-                      form-type="vertical"
-                      :model="formData">
-                      <template
-                        v-for="(item, index) in formData.config.input_variable"
-                        :key="index">
-                        <div class="field-row">
-                          <div class="field-value">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0">
-                              <bk-input
-                                ref="fieldItemRef"
-                                v-model="item.raw_name"
-                                disabled
-                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
-                            </bk-form-item>
-                          </div>
-                          <div class="field-value">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0">
-                              <bk-input
-                                ref="fieldItemRef"
-                                v-model="item.display_name"
-                                :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
-                            </bk-form-item>
-                          </div>
-                          <div
-                            class="field-value"
-                            style="flex: 0 0 350px;">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0">
-                              <bk-input
-                                ref="fieldItemRef"
-                                v-model="item.description"
-                                :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
-                            </bk-form-item>
-                          </div>
-                          <div
-                            class="field-value"
-                            style="flex: 0 0 200px;">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0">
-                              <bk-radio-group
-                                v-model="item.required"
-                                :disabled="!formData.config.sql"
-                                style="padding: 0 8px;">
-                                <bk-radio label>
-                                  <span>{{ t('是') }}</span>
-                                </bk-radio>
-                                <bk-radio :label="false">
-                                  <span>{{ t('否') }}</span>
-                                </bk-radio>
-                              </bk-radio-group>
-                            </bk-form-item>
-                          </div>
-                          <div
-                            class="field-value"
-                            style="flex: 0 0 200px;">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0"
-                              :property="`config.input_variable[${index}].field_category`"
-                              required>
-                              <bk-select
-                                v-model="item.field_category"
-                                class="bk-select"
-                                :disabled="!formData.config.sql"
-                                filterable
-                                :input-search="false"
-                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请选择')"
-                                :search-placeholder="t('请输入关键字')"
-                                @change="(value: string) => handleFieldCategoryChange(value, index)">
-                                <bk-option
-                                  v-for="(selectItem, selectIndex) in frontendTypeList"
-                                  :key="selectIndex"
-                                  :label="selectItem.name"
-                                  :value="selectItem.id" />
-                              </bk-select>
-                              <template v-if="item.field_category === 'multiselect'">
-                                <bk-button
-                                  class="add-enum"
-                                  text
-                                  theme="primary"
-                                  @click="handleAddEnum(index)">
-                                  {{ t('配置选项') }}
-                                </bk-button>
-                              </template>
-                              <add-enum
-                                ref="addEnumRefs"
-                                @update-choices="(value: Array<{
+                      <audit-form
+                        ref="tableInputFormRef"
+                        form-type="vertical"
+                        :model="formData">
+                        <template
+                          v-for="(item, index) in formData.config.input_variable"
+                          :key="index">
+                          <div class="field-row">
+                            <div class="field-value">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-input
+                                  ref="fieldItemRef"
+                                  v-model="item.raw_name"
+                                  disabled
+                                  :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
+                              </bk-form-item>
+                            </div>
+                            <div class="field-value">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-input
+                                  ref="fieldItemRef"
+                                  v-model="item.display_name"
+                                  :disabled="!formData.config.sql"
+                                  :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
+                              </bk-form-item>
+                            </div>
+                            <div
+                              class="field-value"
+                              style="flex: 0 0 350px;">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-input
+                                  ref="fieldItemRef"
+                                  v-model="item.description"
+                                  :disabled="!formData.config.sql"
+                                  :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
+                              </bk-form-item>
+                            </div>
+                            <div
+                              class="field-value"
+                              style="flex: 0 0 200px;">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-radio-group
+                                  v-model="item.required"
+                                  :disabled="!formData.config.sql"
+                                  style="padding: 0 8px;">
+                                  <bk-radio label>
+                                    <span>{{ t('是') }}</span>
+                                  </bk-radio>
+                                  <bk-radio :label="false">
+                                    <span>{{ t('否') }}</span>
+                                  </bk-radio>
+                                </bk-radio-group>
+                              </bk-form-item>
+                            </div>
+                            <div
+                              class="field-value"
+                              style="flex: 0 0 200px;">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0"
+                                :property="`config.input_variable[${index}].field_category`"
+                                required>
+                                <bk-select
+                                  v-model="item.field_category"
+                                  class="bk-select"
+                                  :disabled="!formData.config.sql"
+                                  filterable
+                                  :input-search="false"
+                                  :placeholder="!formData.config.sql ? t('请先配置sql') : t('请选择')"
+                                  :search-placeholder="t('请输入关键字')"
+                                  @change="(value: string) => handleFieldCategoryChange(value, index)">
+                                  <bk-option
+                                    v-for="(selectItem, selectIndex) in frontendTypeList"
+                                    :key="selectIndex"
+                                    :label="selectItem.name"
+                                    :value="selectItem.id" />
+                                </bk-select>
+                                <template v-if="item.field_category === 'multiselect'">
+                                  <bk-button
+                                    class="add-enum"
+                                    text
+                                    theme="primary"
+                                    @click="handleAddEnum(index)">
+                                    {{ t('配置选项') }}
+                                  </bk-button>
+                                </template>
+                                <add-enum
+                                  ref="addEnumRefs"
+                                  @update-choices="(value: Array<{
                                 key: string,
                                 name: string
-                                }>) => handleUpdateChoices(value, index)" />
-                            </bk-form-item>
-                          </div>
-                          <div class="field-value">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0"
-                              :property="`config.input_variable[${index}].target_value`">
-                              <template v-if="!item.field_category">
-                                <bk-input
-                                  disabled
-                                  :placeholder="t('请先配置前端类型')" />
-                              </template>
-                              <template v-else>
-                                <!-- 不同前端类型 -->
-                                <form-item
-                                  ref="formItemRefs"
-                                  :data-config="item"
-                                  origin-model
-                                  @change="(val: any) => handleFormItemChange(val, item)" />
-                              </template>
-                            </bk-form-item>
-                          </div>
-                        </div>
-                      </template>
-                    </audit-form>
-                  </div>
-                </bk-form-item>
-                <bk-form-item
-                  :label="t('查询结果设置')"
-                  label-width="160">
-                  <div class="render-field">
-                    <div class="field-header-row">
-                      <div class="field-value">
-                        {{ t('字段名') }}
-                      </div>
-                      <div class="field-value">
-                        {{ t('显示名') }}
-                      </div>
-                      <div
-                        class="field-value"
-                        style="flex: 0 0 380px;">
-                        {{ t('字段说明') }}
-                      </div>
-                      <div class="field-value">
-                        {{ t('字段下钻') }}
-                      </div>
-                    </div>
-                    <audit-form
-                      ref="tableOutputFormRef"
-                      form-type="vertical"
-                      :model="formData">
-                      <template
-                        v-for="(item, index) in formData.config.output_fields"
-                        :key="index">
-                        <div class="field-row">
-                          <div class="field-value">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0">
-                              <bk-input
-                                ref="fieldItemRef"
-                                v-model="item.raw_name"
-                                disabled
-                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
-                            </bk-form-item>
-                          </div>
-                          <div class="field-value">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0">
-                              <bk-input
-                                ref="fieldItemRef"
-                                v-model="item.display_name"
-                                :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
-                            </bk-form-item>
-                          </div>
-                          <div
-                            class="field-value"
-                            style="flex: 0 0 380px;">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0">
-                              <bk-input
-                                ref="fieldItemRef"
-                                v-model="item.description"
-                                :disabled="!formData.config.sql"
-                                :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
-                            </bk-form-item>
-                          </div>
-                          <div class="field-value">
-                            <bk-form-item
-                              error-display-type="tooltips"
-                              label=""
-                              label-width="0">
-                              <bk-input
-                                v-if="!formData.config.sql"
-                                disabled
-                                :placeholder="t('请先配置sql')" />
-                              <div
-                                v-else
-                                class="field-value-div"
-                                @click="() => handleClick(index, item.drill_config)">
-                                <template v-if="item.drill_config.tool.uid">
-                                  <audit-icon
-                                    style=" margin-right: 5px;font-size: 16px;"
-                                    svg
-                                    :type="iconMap[
-                                      getToolNameAndType(item.drill_config.tool.uid).type as keyof typeof iconMap
-                                    ]" />
-                                  {{ getToolNameAndType(item.drill_config.tool.uid).name }}
-                                  <audit-icon
-                                    class="remove-btn"
-                                    type="delete-fill"
-                                    @click.stop="handleRemove(index)" />
-                                  <audit-icon
-                                    v-if="!(item.drill_config.tool.version
-                                      >= (toolMaxVersionMap[item.drill_config.tool.uid] || 1))"
-                                    v-bk-tooltips="{
-                                      content: t('该工具已更新，请确认'),
-                                    }"
-                                    class="renew-tips"
-                                    type="info-fill" />
+                                  }>) => handleUpdateChoices(value, index)" />
+                              </bk-form-item>
+                            </div>
+                            <div class="field-value">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0"
+                                :property="`config.input_variable[${index}].target_value`">
+                                <template v-if="!item.field_category">
+                                  <bk-input
+                                    disabled
+                                    :placeholder="t('请先配置前端类型')" />
                                 </template>
-                                <span
-                                  v-else
-                                  style="color: #c4c6cc;">
-                                  {{ t('请配置') }}
-                                </span>
-                              </div>
-                            </bk-form-item>
+                                <template v-else>
+                                  <!-- 不同前端类型 -->
+                                  <form-item
+                                    ref="formItemRefs"
+                                    :data-config="item"
+                                    origin-model
+                                    @change="(val: any) => handleFormItemChange(val, item)" />
+                                </template>
+                              </bk-form-item>
+                            </div>
                           </div>
+                        </template>
+                      </audit-form>
+                    </div>
+                  </bk-form-item>
+                  <bk-form-item
+                    :label="t('查询结果设置')"
+                    label-width="160">
+                    <div class="render-field">
+                      <div class="field-header-row">
+                        <div class="field-value">
+                          {{ t('字段名') }}
                         </div>
-                      </template>
-                    </audit-form>
-                  </div>
-                </bk-form-item>
+                        <div class="field-value">
+                          {{ t('显示名') }}
+                        </div>
+                        <div
+                          class="field-value"
+                          style="flex: 0 0 380px;">
+                          {{ t('字段说明') }}
+                        </div>
+                        <div class="field-value">
+                          {{ t('字段下钻') }}
+                        </div>
+                      </div>
+                      <audit-form
+                        ref="tableOutputFormRef"
+                        form-type="vertical"
+                        :model="formData">
+                        <template
+                          v-for="(item, index) in formData.config.output_fields"
+                          :key="index">
+                          <div class="field-row">
+                            <div class="field-value">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-input
+                                  ref="fieldItemRef"
+                                  v-model="item.raw_name"
+                                  disabled
+                                  :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
+                              </bk-form-item>
+                            </div>
+                            <div class="field-value">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-input
+                                  ref="fieldItemRef"
+                                  v-model="item.display_name"
+                                  :disabled="!formData.config.sql"
+                                  :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
+                              </bk-form-item>
+                            </div>
+                            <div
+                              class="field-value"
+                              style="flex: 0 0 380px;">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-input
+                                  ref="fieldItemRef"
+                                  v-model="item.description"
+                                  :disabled="!formData.config.sql"
+                                  :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
+                              </bk-form-item>
+                            </div>
+                            <div class="field-value">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-input
+                                  v-if="!formData.config.sql"
+                                  disabled
+                                  :placeholder="t('请先配置sql')" />
+                                <div
+                                  v-else
+                                  class="field-value-div"
+                                  @click="() => handleClick(index, item.drill_config)">
+                                  <template v-if="item.drill_config.tool.uid">
+                                    <audit-icon
+                                      style=" margin-right: 5px;font-size: 16px;"
+                                      svg
+                                      :type="iconMap[
+                                        getToolNameAndType(item.drill_config.tool.uid).type as keyof typeof iconMap
+                                      ]" />
+                                    {{ getToolNameAndType(item.drill_config.tool.uid).name }}
+                                    <audit-icon
+                                      class="remove-btn"
+                                      type="delete-fill"
+                                      @click.stop="handleRemove(index)" />
+                                    <audit-icon
+                                      v-if="!(item.drill_config.tool.version
+                                        >= (toolMaxVersionMap[item.drill_config.tool.uid] || 1))"
+                                      v-bk-tooltips="{
+                                        content: t('该工具已更新，请确认'),
+                                      }"
+                                      class="renew-tips"
+                                      type="info-fill" />
+                                  </template>
+                                  <span
+                                    v-else
+                                    style="color: #c4c6cc;">
+                                    {{ t('请配置') }}
+                                  </span>
+                                </div>
+                              </bk-form-item>
+                            </div>
+                          </div>
+                        </template>
+                      </audit-form>
+                    </div>
+                  </bk-form-item>
+                </div>
               </template>
             </card-part-vue>
           </template>
@@ -702,7 +713,7 @@
   </div>
 </template>
 
-<script setup lang='ts'>
+<script setup lang='tsx'>
   import _ from 'lodash';
   import * as monaco from 'monaco-editor';
   import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -728,6 +739,8 @@
   import CardPartVue from './components/card-part.vue';
   import EditSql from './components/edit-sql.vue';
   import fieldReference from './components/field-reference/index.vue';
+  import SimpleModel from './components/simple-model/index.vue';
+  import OutputCom from './components/simple-model/output.vue';
   import Creating from './components/tool-status/creating.vue';
   import Failed from './components/tool-status/failed.vue';
   import Successful from './components/tool-status/Successful.vue';
@@ -738,10 +751,9 @@
   import useRequest from '@/hooks/use-request';
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
+
   interface FormData {
-    area?: string;
-    bkVersion?: string;
-    radioGroupValue?: string;
+    source?:string;
     users?: string[];
     name: string;
     tags: string[];
@@ -806,6 +818,14 @@
     };
   }
 
+  interface ChartListModel {
+    uid: string;
+    name: string;
+    share: Array<{
+      uid: string;
+      name: string;
+    }>;
+  }
   let editor: monaco.editor.IStandaloneCodeEditor;
   const searchTypeList = [{
     label: '简易模式',
@@ -818,6 +838,7 @@
 
   const route = useRoute();
   const router = useRouter();
+  const configUid = ref<string[]>([]);
   // const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const { showExit, handleScreenfull } = useFullScreen(
@@ -825,15 +846,15 @@
     () => viewRootRef.value,
   );
   const isEditMode = route.name === 'toolsEdit';
-  const radioGroup = ref([
-    {
-      id: '1',
-      label: t('公开可申请'),
-    },
-    {
-      id: '2',
-      label: t('仅指定人可用'),
-    }]);
+  // const radioGroup = ref([
+  //   {
+  //     id: '1',
+  //     label: t('公开可申请'),
+  //   },
+  //   {
+  //     id: '2',
+  //     label: t('仅指定人可用'),
+  //   }]);
   const viewRootRef = ref();
   const editSqlRef = ref();
   const formRef = ref();
@@ -856,92 +877,67 @@
 
   const strategyTagMap = ref<Record<string, string>>({});
   const toolMaxVersionMap = ref<Record<string, number>>({});
-  const componentList = ref([
-    {
-      id: '1',
-      type: 'userSelect',
-      label: '用户选择',
-    },
-    {
-      id: '2',
-      type: 'input',
-      label: '输入',
-    },
-  ]);
-  const cascaderList = ref([
-    {
-      id: '1',
-      name: '安全项目',
-      disabled: true,
-      children: [
-        {
-          id: '1-1-1',
-          name: '旧业务',
-        },
-        {
-          id: '1-1-2',
-          name: '新业受运营报表',
-          disabled: true,
-        },
-      ],
-    },
-    {
-      id: '2',
-      name: '数据调取工具',
-    },
-    {
-      id: '3',
-      name: '业受货币化相关',
-      children: [
-        {
-          id: '3-1-1',
-          name: '新业受运营报表',
-          children: [
-            {
-              id: '3-1-1-1',
-              name: '数据调取工具',
-            },
-            {
-              id: '3-1-1-2',
-              name: '光谱',
-            },
-            {
-              id: '3-1-1-3',
-              name: 'GBSS 单据汇总查询',
-            },
-          ],
-        },
-      ],
-    },
-  ]);
-  const versionList = ref([
-    {
-      value: 'v11',
-      label: 'v11',
-    },
-    {
-      value: 'v12',
-      label: 'v1.2',
-    },
-    {
-      value: 'v1',
-      label: 'v1',
-    },
-    {
-      value: 'v19',
-      label: 'v11',
-      disabled: true,
-    },
-  ]);
+
+  const viewInfo = ref<{
+    panels: any,
+    filters: string[],
+    componentLists: any,
+  }>({
+    panels: [],
+    filters: [],
+    componentLists: [],
+  });
+  const rules = {};
+  // 选择报表
+  const handleSpaceChange = (val: string) => {
+    if (val.length === 0) {
+      return;
+    }
+    formData.value.config.uid = val[val.length - 1];
+    fetchReportLists({
+      share_uid: val[val.length - 1],
+    }).then((res) => {
+      if (res) {
+        viewInfo.value.panels = res.data.panels;
+        viewInfo.value.filters =  [...new Set(Object.keys(res.filters))];
+        viewInfo.value.componentLists = [...new Set(Object.keys(res.filters))].map((e) => {
+          let com = null;
+          res.data.panels.forEach((p:any) => {
+            if (p.uid === e) {
+              com = {
+                ...p,
+                value: null,
+              };
+            }
+          });
+          return com;
+        });
+
+        setTimeout(() => {
+          // 编辑状态
+          if (isEditMode) {
+            viewInfo.value.componentLists =  viewInfo.value.componentLists.map((com:any) => {
+              const reItem = com ;
+              editorConfig.value.input_variable.forEach((e:any) => {
+                if (e.description === com.uid) {
+                  reItem.value = e.default_value;
+                }
+              });
+              return reItem;
+            });
+          }
+        }, 0);
+      }
+    });
+  };
+
   const formData = ref<FormData>({
-    radioGroupValue: '',
-    bkVersion: '1.0.0',
-    area: '',
+    source: '',
     users: [],
     name: '',
     tags: [],
     description: '',
-    tool_type: 'bk_vision',
+    tool_type: 'data_search',
     data_search_config_type: 'sql',
     config: {
       referenced_tables: [],
@@ -1100,7 +1096,7 @@
       });
     },
   });
-
+  const editorConfig = ref();
   // 编辑状态获取数据
   const {
     run: fetchToolsDetail,
@@ -1115,6 +1111,9 @@
           item?.setData(formData.value.config.input_variable[index].default_value);
         });
       });
+      if (isEditMode) {
+        editorConfig.value = data.config;
+      }
     },
   });
 
@@ -1322,7 +1321,16 @@
       type: '',
     };
   };
-
+  // bk_vision 组件值改动
+  const handleVisionChange = (value: any, uid: string) => {
+    viewInfo.value.componentLists = viewInfo.value.componentLists.map((item: any) => {
+      const  reItem = item;
+      if (item.uid === uid) {
+        reItem.value = value;
+      }
+      return reItem;
+    });
+  };
   // 提交
   const handleSubmit = () => {
     const tastQueue = [formRef.value.validate()];
@@ -1338,6 +1346,19 @@
 
       if (data.tags) {
         data.tags = data.tags.map(item => (strategyTagMap.value[item] ? strategyTagMap.value[item] : item));
+      }
+      // bk_vision 添加
+      if (data.tool_type === 'bk_vision') {
+        const info  =  viewInfo.value.componentLists.map((item: any) => ({
+          raw_name: item.chartConfig.flag, // 用于记录chartConfig.flag 来透传值
+          display_name: item.title,
+          description: item.uid, // 用于记录uid
+          field_category: item.type,
+          required: true,
+          default_value: item.value,
+        }));
+
+        data.config.input_variable = info;
       }
       service(data)
         .then(() => {
@@ -1390,6 +1411,32 @@
     });
     editor.layout();
   };
+  // 获取图表列表
+  const {
+    data: chartLists,
+  } = useRequest(ToolManageService.fetchChartLists, {
+    defaultValue: new Array<ChartListModel>(),
+    manual: true,
+    onSuccess: (data) => {
+      if (isEditMode) {
+        configUid.value = data.map((item) => {
+          let ids = '';
+          item.share.forEach((sh) => {
+            if (sh.uid === editorConfig.value.uid) {
+              ids = `${item.uid},${sh.uid}`;
+            }
+          });
+          return ids;
+        }).filter(item => item !== '')[0].split(',');
+      }
+    },
+  });
+
+  const {
+    run: fetchReportLists,
+  } = useRequest(ToolManageService.fetchReportLists, {
+    defaultValue: {},
+  });
 
   watch(showEditSql, (val) => {
     if (!val) {
@@ -1407,6 +1454,8 @@
         uid: route.params.id,
       });
     }
+    initEditor();
+    defineTheme();
   });
 
   onBeforeUnmount(() => {
