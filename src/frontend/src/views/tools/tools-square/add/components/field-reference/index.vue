@@ -90,8 +90,9 @@
           </bk-button>
         </div>
       </bk-form-item>
+      <!--         v-if="currenToolType !== 'bk_vision'"
+ -->
       <bk-form-item
-        v-if="currenToolType !== 'bk_vision'"
         error-display-type="tooltips"
         :label="t('字段值引用')"
         label-width="160"

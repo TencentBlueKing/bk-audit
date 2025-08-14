@@ -18,35 +18,105 @@
   <div class="bk-vision-component">
     <div class="component">
       <div class="lable">
-        {{ props.config?.label }}
+        {{ props.config?.title }}
       </div>
       <div class="content">
-        <audit-user-selector
-          v-if="props.config?.type === 'userSelect'"
-          v-model="newOperators"
-          :placeholder="t('请输入人员')" />
+        <bk-date-picker
+          v-if="props.config?.type === 'time-picker'"
+          v-model="dateValue"
+          format="yyyy-MM-dd HH:mm:ss"
+          :shortcuts="dateShortCut"
+          type="datetime"
+          use-shortcut-text
+          @change="handlePickerChange" />
+        <date-picker
+          v-if="props.config?.type === 'time-ranger'"
+          v-model="pickerValue"
+          style="width: 100%;"
+          @update:model-value="handleRangeChange" />
+
         <bk-input
-          v-if="props.config?.type === 'input'"
-          v-model="inputVal" />
+          v-if="props.config?.type === 'inputer'"
+          v-model="inputVal"
+          @change="handleInputChange" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang='ts'>
-  import { ref } from 'vue';
-  import { useI18n } from 'vue-i18n';
+  import { ref, watch } from 'vue';
+
 
   interface Props {
     config: any;
   }
+  interface Emits {
+    (e: 'change', value: any): void
+  }
   const props = defineProps<Props>();
-  const { t } = useI18n();
-  console.log(props.config);
+  const emits = defineEmits<Emits>();
+  const now = new Date();
+  const dateValue = ref(props.config.value || new Date());
+  const pickerValue = ref<Array<string>>(props.config.value || []);
+  const inputVal = ref(props.config.value || []);
 
-  const newOperators = ref([]);
-  const inputVal = ref();
+  const dateShortCut: any = [
+    {
+      text: '今天',
+      value: () => getLastMillisecondOfDate(now.getTime()),
+      short: 'now/d',
+    },
+    {
+      text: '昨天',
+      value: () => getLastMillisecondOfDate(now.getTime() - 1 * 24 * 60 * 60 * 1000),
+      short: 'now-1d/d',
+    },
+    {
+      text: '前天',
+      value: () => getLastMillisecondOfDate(now.getTime() - 2 * 24 * 60 * 60 * 1000),
+      short: 'now-2d/d',
+    },
+    {
+      text: '一星期前',
+      value: () => getLastMillisecondOfDate(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+      short: 'now-7d/d',
+    },
+    {
+      text: '一个月前',
+      value: () => getLastMillisecondOfDate(now.getTime() - 30 * 24 * 60 * 60 * 1000),
+      short: 'now-1M/d',
+    },
+    {
+      text: '一年前',
+      value: () => getLastMillisecondOfDate(now.getTime() - 365 * 24 * 60 * 60 * 1000),
+      short: 'now-1y/d',
+    },
+  ];
+  const getLastMillisecondOfDate = (ts: any) => {
+    const date = new Date(ts);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
 
+  const handlePickerChange = (val: Date) => {
+    dateValue.value = val;
+    emits('change', val || '');
+  };
+  const handleRangeChange = (val: Array<string>) => {
+    pickerValue.value = val;
+    emits('change', val || []);
+  };
+  const handleInputChange = (val: string) => {
+    inputVal.value = val;
+    emits('change', val || '');
+  };
+  // 监听 props.config.value 的变化
+  watch(() => props.config?.value, (newValue) => {
+    dateValue.value = newValue || new Date();
+    pickerValue.value = newValue || [];
+    inputVal.value = newValue || [];
+  });
 </script>
 
 <style scoped lang="postcss">

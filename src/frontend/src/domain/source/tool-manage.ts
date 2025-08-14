@@ -25,6 +25,7 @@ import ModuleBase from './module-base';
 
 import type { IRequestResponsePaginationData } from '@/utils/request';
 
+
 class ToolManage extends ModuleBase {
   constructor() {
     super();
@@ -89,6 +90,23 @@ class ToolManage extends ModuleBase {
     uid: string,
   }) {
     return Request.delete(`${this.path}/tool/${params.uid}/`, { params });
+  }
+  // 获取图表列表
+  getChartLists() {
+    return Request.get<Array<{
+      uid: string;
+      name: string;
+      share: Array<{
+        uid: string;
+        name: string;
+      }>,
+    }>>(`bkvision${this.module}/share/share_list/`);
+  }
+  // 获取报表列表
+  getReportLists(params: {
+    share_uid: string,
+  }) {
+    return Request.get(`bkvision${this.module}/share/share_detail/?share_uid=${params.share_uid}`);
   }
 }
 
