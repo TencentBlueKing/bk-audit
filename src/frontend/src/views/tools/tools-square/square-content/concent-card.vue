@@ -17,15 +17,14 @@
 <template>
   <div class="card">
     <div class="card-search">
-      <auth-button
-        action-id="create_notice_group"
+      <bk-button
         theme="primary"
         @click="handleCreate">
         <audit-icon
           style="margin-right: 6px;"
           type="add" />
         {{ t('创建工具') }}
-      </auth-button>
+      </bk-button>
       <bk-input
         v-model="searchValue"
         class="search-input"

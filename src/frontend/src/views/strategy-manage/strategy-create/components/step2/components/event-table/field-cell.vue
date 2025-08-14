@@ -63,13 +63,18 @@
     <div
       v-else-if="fieldKey === 'enum_mappings' && localEventItem.enum_mappings"
       v-bk-tooltips="t('点击配置字段值映射')"
-      class="ml8"
+      class="field-cell-div"
       style="width: 100%;cursor: pointer;"
       @click="handleFiledDict">
       <span
         :style="{
           color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
         }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : '请配置' }}</span>
+      <audit-icon
+        v-if="localEventItem.enum_mappings.mappings.length"
+        class="remove-mappings-btn remove-btn"
+        type="delete-fill"
+        @click.stop="handleRemoveMappings" />
       <field-dict
         ref="fieldDictRef"
         v-model:showFieldDict="showFieldDict"
@@ -257,6 +262,13 @@
     };
   };
 
+  const handleRemoveMappings = () => {
+    localEventItem.value.enum_mappings =  {
+      collection_id: '',
+      mappings: [],
+    };
+  };
+
   // 打开工具
   const handleOpenTool = async (toolInfo: ToolDetailModel) => {
     emit('openTool', toolInfo);
@@ -336,6 +348,10 @@
       &:hover {
         color: #979ba5;
       }
+    }
+
+    .remove-mappings-btn {
+      right: 8px;
     }
 
     .renew-tips {
