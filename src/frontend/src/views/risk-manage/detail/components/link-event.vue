@@ -85,93 +85,6 @@
             <div
               v-if="eventItem.event_id || eventItem.strategy_id"
               class="base-info">
-              <!-- <render-info-block
-                class="flex mt16"
-                style="margin-bottom: 12px;">
-                <render-info-item
-                  v-if="!notDisplay.includes('event_id')"
-                  :label="t('事件ID')"
-                  :label-width="labelWidth">
-                  {{ getDisplayValue('event_id', eventItem.event_id) }}
-                  <template v-if="drillMap.get('event_id')">
-                    <bk-button
-                      class="ml8"
-                      text
-                      theme="primary"
-                      @click="handleClick(
-                        drillMap.get('event_id'),
-                        drillMap.get('event_id').drill_config.tool.uid
-                      )">
-                      {{ t('查看') }}
-                    </bk-button>
-                  </template>
-                </render-info-item>
-                <render-info-item
-                  v-if="!notDisplay.includes('operator')"
-                  :label="t('责任人')"
-                  :label-width="labelWidth">
-                  {{ getDisplayValue('operator', eventItem.operator) }}
-                  <template v-if="drillMap.get('operator')">
-                    <bk-button
-                      class="ml8"
-                      text
-                      theme="primary"
-                      @click="handleClick(
-                        drillMap.get('operator'),
-                        drillMap.get('operator').drill_config.tool.uid
-                      )">
-                      {{ t('查看') }}
-                    </bk-button>
-                  </template>
-                </render-info-item>
-              </render-info-block>
-              <render-info-block
-                class="flex mt16"
-                style="margin-bottom: 12px;">
-                <render-info-item
-                  v-if="!notDisplay.includes('strategy_id')"
-                  :label="t('命中策略')"
-                  :label-width="labelWidth">
-                  <bk-button
-                    v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
-                    text
-                    theme="primary"
-                    @click="handlerStrategy()">
-                    {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
-                  </bk-button>
-                  <span v-else> -- </span>
-                  <template v-if="drillMap.get('strategy_id')">
-                    <bk-button
-                      class="ml8"
-                      text
-                      theme="primary"
-                      @click="handleClick(
-                        drillMap.get('strategy_id'),
-                        drillMap.get('strategy_id').drill_config.tool.uid
-                      )">
-                      {{ t('查看') }}
-                    </bk-button>
-                  </template>
-                </render-info-item>
-                <render-info-item
-                  v-if="!notDisplay.includes('event_content')"
-                  :label="t('事件描述')"
-                  :label-width="labelWidth">
-                  {{ getDisplayValue('event_content', eventItem.event_content) }}
-                  <template v-if="drillMap.get('event_content')">
-                    <bk-button
-                      class="ml8"
-                      text
-                      theme="primary"
-                      @click="handleClick(
-                        drillMap.get('event_content'),
-                        drillMap.get('event_content').drill_config.tool.uid
-                      )">
-                      {{ t('查看') }}
-                    </bk-button>
-                  </template>
-                </render-info-item>
-              </render-info-block> -->
               <render-info-block
                 v-for="(basicArr, basicIndex) in basicInfo"
                 :key="basicIndex"
@@ -531,7 +444,7 @@
   // 如果有字段从字典取name
   const getDisplayValue = (key: string, value: unknown) => {
     if (dictDataMap.value.has(key)) {
-      const dictValue = dictDataMap.value.get(key)?.find(item => item.key === value);
+      const dictValue = dictDataMap.value.get(key)?.find(item => item.key === String(value));
       if (dictValue) {
         return dictValue.name;
       }
