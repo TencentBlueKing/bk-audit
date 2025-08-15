@@ -55,7 +55,7 @@
       <bk-table
         :border="['outer']"
         :columns="renderTableColumn"
-        :data="resourceTypeList">
+        :data="renderResourceTypeList">
         <template #empty>
           <bk-exception
             scene="part"
@@ -265,6 +265,28 @@
       name: t('资源状态'),
       id: 'status',
       placeholder: t('请输入资源状态'),
+      children: [
+        {
+          name: t('停用'),
+          id: 'closed',
+          multiple: true,
+        },
+        {
+          name: t('启用'),
+          id: 'running',
+          multiple: true,
+        },
+        {
+          name: t('启用中'),
+          id: 'preparing',
+          multiple: true,
+        },
+        {
+          name: t('启用失败'),
+          id: 'failed',
+          multiple: true,
+        },
+      ],
     },
   ];
 
@@ -348,6 +370,22 @@
         </>,
       },
     ];
+  });
+
+  const renderResourceTypeList = computed(() => {
+    // 1. 在 search 中查找 id 为 "status" 的项
+    const statusItem = searchKey.value.find(item => item.id === 'status');
+
+    // 2. 如果没找到，返回原数组
+    if (!statusItem) return resourceTypeList.value;
+
+    // 3. 提取筛选值（如 ["closed"]）
+    const statusIds = statusItem.values.map(v => v.id);
+    console.log(resourceTypeList.value);
+    console.log(statusIds);
+
+    return resourceTypeList.value.filter(item => statusIds.
+      includes(snapShotStatusList.value[item.resource_type_id]?.status));
   });
 
   // 获取系统详情
