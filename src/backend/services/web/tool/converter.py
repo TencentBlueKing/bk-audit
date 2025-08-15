@@ -15,18 +15,24 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
-import abc
-
-from bk_audit.contrib.django.resources import AuditEvent
-from bk_audit.contrib.django.resources import AuditMixinResource as _AuditMixinResource
-from bk_audit.log.models import AuditContext
+from iam import DjangoQuerySetConverter
 
 
-class AuditMixinResource(_AuditMixinResource, abc.ABC):
-    def _init_audit_event(self, request_data=None, **kwargs) -> AuditEvent:
-        event = super()._init_audit_event(request_data=request_data, **kwargs)
-        event["extend_data"]["request_data"] = request_data
-        # 兼容并发时携带 request
-        event["audit_context"] = AuditContext(request=kwargs.get("_request"))
-        return event
+class ToolDjangoQuerySetConverter(DjangoQuerySetConverter):
+    """
+    工具DjangoQuerySet转换器
+    """
+
+    def __init__(self):
+        key_mapping = {"tool.id": "uid"}
+        super().__init__(key_mapping)
+
+
+class ToolTagDjangoQuerySetConverter(DjangoQuerySetConverter):
+    """
+    工具标签DjangoQuerySet转换器
+    """
+
+    def __init__(self):
+        key_mapping = {"tag.id": "tag_id"}
+        super().__init__(key_mapping)

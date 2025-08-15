@@ -332,7 +332,7 @@ class UpdateStrategy(StrategyV2Base):
         # update db
         need_update_remote = self.update_db(strategy=strategy, validated_request_data=validated_request_data)
         # update remote
-        if need_update_remote or strategy.status != StrategyStatusChoices.RUNNING:
+        if need_update_remote:
             self.update_remote(strategy)
         # audit
         setattr(strategy, "instance_origin_data", instance_origin_data)

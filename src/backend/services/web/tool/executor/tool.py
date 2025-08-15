@@ -226,7 +226,7 @@ class SqlDataSearchExecutor(
         """
         校验权限: 校验工具更新人 or 当前请求用户有表查询条件
         """
-        user_id = self.tool.updated_by if self.tool else get_request_username()
+        user_id = self.tool.get_permission_owner() if self.tool else get_request_username()
         parsed_def = self.analyzer.get_parsed_def()
         permissions = [
             {

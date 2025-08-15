@@ -16,16 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from apps.permission.handlers.drf import InstanceActionPermission
-from core.models import get_request_username
-from services.web.tool.models import Tool
+import os
+
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
+
+from core.utils.distutils import strtobool
 
 
-class UseToolPermission(InstanceActionPermission):
-    def has_permission(self, request, view):
-        tool_uid = self._get_instance_id(request, view)
-        tool: Tool = Tool.last_version_tool(uid=tool_uid)
-        username = get_request_username()
-        if username == tool.updated_by:
-            return True
-        return super().has_permission(request, view)
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
+
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
+
+
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0010_update_action_resource_type_20250808"),
+    ]
+
+    operations = [migrations.RunPython(forward_func)]
