@@ -228,8 +228,8 @@
 
   const rules = {
     resource_type_id: [
-      { message: '不能为空', trigger: 'change', validator: (value: string) => !!value },
-      { message: 'ID重复，请修改', trigger: 'change', validator: (value: string) => {
+      { message: t('不能为空'), trigger: 'change', validator: (value: string) => !!value },
+      { message: t('ID重复，请修改'), trigger: 'change', validator: (value: string) => {
         const duplicates = props.resourceTypeList.filter(item => item.resource_type_id === value);
         // 编辑模式且只有一个重复项（即当前编辑的资源本身）时允许通过
         if (duplicates.length > 0 && (!props.isEdit || duplicates.length > 1)) {
@@ -239,8 +239,8 @@
       } },
     ],
     name: [
-      { message: '不能为空', trigger: 'change', validator: (value: string) => !!value },
-      { message: '仅可由汉字、小写英文字母、数字、“-”组成', trigger: 'change', validator: (value: string) => {
+      { message: t('不能为空'), trigger: 'change', validator: (value: string) => !!value },
+      { message: t('仅可由汉字、小写英文字母、数字、“-”组成'), trigger: 'change', validator: (value: string) => {
         if (/^[\u4e00-\u9fa5a-z0-9-]+$/.test(value)) {
           return true;
         }
@@ -337,7 +337,7 @@
         }
         // 新增
         return MetaManageService.createResourceType(params).then(() => {
-          messageSuccess(t('创建成功'));
+          messageSuccess(t('新建成功'));
           emits('updateResource');
         });
       });

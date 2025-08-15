@@ -211,8 +211,8 @@
                 :property="`renderData[${index}].name`"
                 required
                 :rules="[
-                  { message: '不能为空', trigger: 'change', validator: (value: string) => !!value },
-                  { message: '仅可由汉字、小写英文字母、数字、“-”组成', trigger: 'change', validator: (value: string) => {
+                  { message: t('不能为空'), trigger: 'change', validator: (value: string) => !!value },
+                  { message: t('仅可由汉字、小写英文字母、数字、“-”组成'), trigger: 'change', validator: (value: string) => {
                     if (/^[\u4e00-\u9fa5a-z0-9-]+$/.test(value)) {
                       return true;
                     }
@@ -285,7 +285,7 @@
               <div class="icon-group">
                 <audit-icon
                   v-bk-tooltips="{
-                    content: t('新增'),
+                    content: t('添加'),
                   }"
                   style="margin-right: 10px; cursor: pointer;"
                   type="add-fill"
