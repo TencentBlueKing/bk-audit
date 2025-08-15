@@ -182,8 +182,8 @@
                 :property="`renderData[${index}].resource_type_id`"
                 required
                 :rules="[
-                  { message: '不能为空', trigger: 'change', validator: (value: string) => !!value},
-                  { message: 'ID重复，请修改', trigger: 'change', validator: (value: string) => {
+                  { message: t('不能为空'), trigger: 'change', validator: (value: string) => !!value},
+                  { message: t('ID重复，请修改'), trigger: 'change', validator: (value: string) => {
                     // 检查当前表单中是否有重复
                     const duplicatesInForm = formData.renderData.filter(
                       (item, idx) => item.resource_type_id === value && idx !== index
@@ -283,7 +283,7 @@
               <div class="icon-group">
                 <audit-icon
                   v-bk-tooltips="{
-                    content: t('新增'),
+                    content: t('添加'),
                   }"
                   style="margin-right: 10px; cursor: pointer;"
                   type="add-fill"
