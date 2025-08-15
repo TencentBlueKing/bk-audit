@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from functools import wraps
-from typing import Callable, List
+from typing import Callable, List, Union
 
 from bk_resource import resource
 from bk_resource.utils.common_utils import is_backend
@@ -150,10 +150,10 @@ class ActionPermission(IAMPermission):
 
 
 def wrapper_permission_field(
-    result_list: List[dict],
+    result_list: Union[List[dict], dict],
     actions: List[ActionMeta],
-    id_field: Callable = lambda item: item["id"],
-    always_allowed: Callable = lambda item: False,
+    id_field: Callable[[dict], str] = lambda item: item["id"],
+    always_allowed: Callable[[dict, str], bool] = lambda item, action_id: False,
     many: bool = True,
 ):
     """
@@ -187,19 +187,18 @@ def wrapper_permission_field(
         item.setdefault("permission", {})
         item["permission"].update(permission_result[instance_id])
 
-        if always_allowed(item):
-            # 权限豁免
-            for action_id in item["permission"]:
+        # 权限豁免
+        for action_id in item["permission"]:
+            if always_allowed(item, action_id):
                 item["permission"][action_id] = True
-
     return result_list
 
 
 def insert_permission_field(
     actions: List[ActionMeta],
-    id_field: Callable = lambda item: item["id"],
-    data_field: Callable = lambda data_list: data_list,
-    always_allowed: Callable = lambda item: False,
+    id_field: Callable[[dict], str] = lambda item: item["id"],
+    data_field: Callable[[dict], List[dict]] = lambda data_list: data_list,
+    always_allowed: Callable[[dict, str], bool] = lambda item, action_id: False,
     many: bool = True,
 ):
     """

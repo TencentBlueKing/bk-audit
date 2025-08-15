@@ -32,7 +32,7 @@ def create_tool_with_config(validated_data: dict) -> Tool:
     """
     config_data = validated_data.get("config")
     tag_names = validated_data.pop("tags", [])
-    data_search_config_type = validated_data.pop("data_search_config_type", None)
+    data_search_config_type = validated_data.pop("data_search_config_type", "")
     tool = Tool.objects.create(**validated_data)
     if tool.tool_type == ToolTypeEnum.DATA_SEARCH.value:
         if data_search_config_type == DataSearchConfigTypeEnum.SIMPLE:
