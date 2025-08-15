@@ -86,7 +86,7 @@ class BkVisionToolConfig(OperateRecordModel):
     """
 
     tool = models.OneToOneField(Tool, on_delete=models.CASCADE, related_name="bkvision_config")
-    panel = models.ForeignKey(VisionPanel, on_delete=models.DO_NOTHING)
+    panel = models.ForeignKey(VisionPanel, on_delete=models.DO_NOTHING, related_name="tools")
 
     class Meta:
         verbose_name = gettext_lazy("Bkvision Tool Config")

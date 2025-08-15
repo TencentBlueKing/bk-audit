@@ -17,18 +17,56 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+from typing import Tuple
 
 from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext
+from rest_framework.permissions import BasePermission
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
 from core.utils.renderers import API200Renderer
+from services.web.tool.models import Tool
+from services.web.tool.permissions import (
+    UseToolPermission,
+    check_bkvision_share_permission,
+)
 from services.web.vision.models import Scenario, VisionPanel
+
+
+class ToolVisionPermission(BasePermission):
+    def has_permission(self, request, view):
+        panel_id, tool_uid = self.get_tool_and_panel_id(request)
+        perm = UseToolPermission(
+            actions=[ActionEnum.USE_TOOL],
+            resource_meta=ResourceEnum.TOOL,
+            get_instance_id=lambda: tool_uid,
+        )
+        # 工具使用权限校验（返回布尔值）
+        if not perm.has_permission(request, view):
+            return False
+        # 图表分享权限校验（失败抛异常，成功继续）
+        check_bkvision_share_permission(Tool.last_version_tool(tool_uid).updated_by, panel_id)
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        return True
+
+    def get_tool_and_panel_id(self, request) -> Tuple[str, str]:
+        instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
+        panel = get_object_or_404(VisionPanel, id=instance_id)
+        tool_uid = None
+        tool_relation = panel.tools.first()
+        if tool_relation:
+            tool_uid = tool_relation.tool.uid
+
+        if instance_id and tool_uid:
+            return instance_id, tool_uid
+        raise ValidationError(message=gettext("无法获取报表ID"))
 
 
 class API200ViewSet(ResourceViewSet, abc.ABC):
@@ -36,7 +74,7 @@ class API200ViewSet(ResourceViewSet, abc.ABC):
 
 
 class BKVisionViewSet(ResourceViewSet, abc.ABC):
-    escape_scenario = [Scenario.PER_APP.value, Scenario.TOOL.value]  # 去除接口鉴权
+    escape_scenario = [Scenario.PER_APP.value]  # 去除接口鉴权
 
     def get_permissions(self):
         return [IAMPermission(actions=[ActionEnum.LIST_BASE_PANEL])]
@@ -62,6 +100,9 @@ class BKVisionInstanceViewSet(BKVisionViewSet):
         # 部分场景无需鉴权
         if panel.scenario in self.escape_scenario:
             return []
+        elif panel.scenario == Scenario.TOOL.value:
+            # 工具场景：启用工具权限 + 分享权限综合校验
+            return [ToolVisionPermission()]
         return [
             InstanceActionPermission(
                 actions=[ActionEnum.VIEW_BASE_PANEL],

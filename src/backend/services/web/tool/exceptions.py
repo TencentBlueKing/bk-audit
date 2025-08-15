@@ -97,7 +97,7 @@ class InvalidVariableStructureError(InputVariableValueError):
         self.MESSAGE = self.MESSAGE.format(
             var_type=var_type.label, expected_structure=expected_structure, actual_type=actual_type
         )
-        super().__init__(*args, *kwargs)
+        super().__init__(*args, **kwargs)
 
 
 class VariableHasNoParseFunction(ToolException):
@@ -139,4 +139,14 @@ class BkbaseApiRequestError(ToolException):
 
     def __init__(self, sql: str, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(sql=sql)
+        super().__init__(*args, **kwargs)
+
+
+class BkVisionSearchPermissionProhibited(ToolException):
+    STATUS_CODE = 409
+    ERROR_CODE = "011"
+    MESSAGE = gettext_lazy("用户{user}没有权限访问嵌入图表{share_uid}")
+
+    def __init__(self, user, share_uid, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(user=user, share_uid=share_uid)
         super().__init__(*args, **kwargs)

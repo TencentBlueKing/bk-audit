@@ -4,7 +4,6 @@ from unittest import mock
 from django.test import TestCase
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
-from apps.permission.handlers.permission import Permission
 from core.sql.parser.praser import SqlQueryAnalysis
 from services.web.tool.constants import (
     BkvisionConfig,
@@ -426,7 +425,7 @@ class TestBkVisionExecutor(TestCase):
 
     def test_execute_with_tool_object(self):
         """测试通过Tool对象初始化执行BK Vision查询"""
-        with mock.patch.object(Permission, "is_allowed", return_value=True):
+        with mock.patch("services.web.tool.executor.tool.check_bkvision_share_permission", return_value=True):
             executor = BkVisionExecutor(self.vision_tool)
             result = executor.execute({})
             self.assertIsInstance(result, BkVisionExecuteResult)
@@ -435,7 +434,7 @@ class TestBkVisionExecutor(TestCase):
     def test_execute_with_config_object(self):
         """测试通过配置对象直接初始化执行BK Vision查询"""
         config = BkvisionConfig(uid="vision_panel_123")
-        with mock.patch.object(Permission, "is_allowed", return_value=True):
+        with mock.patch("services.web.tool.executor.tool.check_bkvision_share_permission", return_value=True):
             with mock.patch.object(Tool, 'fetch_tool_vision_panel', return_value=self.mock_panel):
                 executor = BkVisionExecutor(config)
                 result = executor.execute({})
