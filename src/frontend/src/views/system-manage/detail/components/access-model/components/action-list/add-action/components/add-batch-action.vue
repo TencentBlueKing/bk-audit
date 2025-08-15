@@ -82,7 +82,8 @@
       <div class="field-header-row">
         <div class="field-select">
           <bk-checkbox
-            v-model="isSelectedAll" />
+            v-model="isSelectedAll"
+            :indeterminate="isIndeterminate" />
         </div>
         <div class="field-value is-required">
           {{ t('操作ID') }}
@@ -182,8 +183,8 @@
                 :property="`renderData[${index}].action_id`"
                 required
                 :rules="[
-                  { message: '不能为空', trigger: 'change', validator: (value: string) => !!value},
-                  { message: 'ID重复，请修改', trigger: 'change', validator: (value: string) => {
+                  { message: t('不能为空'), trigger: 'change', validator: (value: string) => !!value},
+                  { message: t('ID重复，请修改'), trigger: 'change', validator: (value: string) => {
                     // 检查当前表单中是否有重复
                     const duplicatesInForm = formData.renderData.filter(
                       (item, idx) => item.action_id === value && idx !== index
@@ -386,6 +387,15 @@
     }],
   });
 
+  const isIndeterminate = computed(() => {
+    const selectedCount = formData.value.renderData.filter(item => item.isSelected).length;
+    if (selectedCount > 0 && selectedCount === formData.value.renderData.length) {
+      // eslint-disable-next-line vue/no-side-effects-in-computed-properties
+      isSelectedAll.value = true;
+    }
+    return selectedCount > 0 && selectedCount < formData.value.renderData.length;
+  });
+
   const isSimpleSystem = computed(() => route.query.type === 'simple');
 
   const batchList = computed(() => {
@@ -421,6 +431,7 @@
         ...item,
         isSelected: false,
       }));
+      isSelectedAll.value = false;
     }
   };
 
@@ -507,6 +518,8 @@
 
     // 关闭表头pop
     resourceTypeIdsRef.value.hide();
+    // 重置全选状态
+    isSelectedAll.value = false;
   };
 
   const handleUpdateAllSensitivity = (value: string) => {
@@ -518,6 +531,8 @@
 
     // 关闭表头pop
     sensitivityPopover.value.hide();
+    // 重置全选状态
+    isSelectedAll.value = false;
   };
 
   const handleCancelPopover = () => {
@@ -535,6 +550,7 @@
       sensitivityPopover.value.hide();
     }
     isShowBatch.value = false;
+    isSelectedAll.value = false;
   };
 
   // 单个节点(row)点击处理函数
