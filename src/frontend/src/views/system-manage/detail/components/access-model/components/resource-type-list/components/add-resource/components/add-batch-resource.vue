@@ -79,7 +79,8 @@
       <div class="field-header-row">
         <div class="field-select">
           <bk-checkbox
-            v-model="isSelectedAll" />
+            v-model="isSelectedAll"
+            :indeterminate="isIndeterminate" />
         </div>
         <div class="field-value is-required">
           <span
@@ -386,6 +387,15 @@
     }],
   });
 
+  const isIndeterminate = computed(() => {
+    const selectedCount = formData.value.renderData.filter(item => item.isSelected).length;
+    if (selectedCount > 0 && selectedCount === formData.value.renderData.length) {
+      // eslint-disable-next-line vue/no-side-effects-in-computed-properties
+      isSelectedAll.value = true;
+    }
+    return selectedCount > 0 && selectedCount < formData.value.renderData.length;
+  });
+
   // 根据敏感等级值获取对应颜色
   const getSensitivityColor = (value: number) => {
     const colorMap: Record<number, string> = {
@@ -413,6 +423,7 @@
         ...item,
         isSelected: false,
       }));
+      isSelectedAll.value = false;
     }
   };
 
@@ -499,6 +510,8 @@
 
     // 关闭表头pop
     ancestorPopover.value.hide();
+    // 重置全选状态
+    isSelectedAll.value = false;
   };
 
   const handleUpdateAllSensitivity = (value: string) => {
@@ -510,6 +523,8 @@
 
     // 关闭表头pop
     sensitivityPopover.value.hide();
+    // 重置全选状态
+    isSelectedAll.value = false;
   };
 
   const handleCancelPopover = () => {
@@ -527,6 +542,7 @@
       sensitivityPopover.value.hide();
     }
     isShowBatch.value = false;
+    isSelectedAll.value = false;
   };
 
   // 单个节点(row)点击处理函数

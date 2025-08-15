@@ -56,6 +56,7 @@
         :data="data">
         <template #empty>
           <bk-exception
+            v-if="searchKey.length"
             scene="part"
             style="height: 280px;padding-top: 40px;"
             type="search-empty">
@@ -74,6 +75,13 @@
                 </bk-button>
               </div>
             </div>
+          </bk-exception>
+          <bk-exception
+            v-else
+            scene="part"
+            style="height: 280px;padding-top: 40px;color: #63656e;"
+            type="empty">
+            {{ t('暂无数据') }}
           </bk-exception>
         </template>
       </bk-table>
