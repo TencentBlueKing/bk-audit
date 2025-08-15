@@ -278,7 +278,14 @@
   };
 
   const toggleEdit = (key: keyof typeof edits.value) => {
-    edits.value[key] = !edits.value[key];
+    // 当前key为编辑态，其他取消
+    Object.keys(edits.value).forEach((k) => {
+      if (k !== key) {
+        edits.value[k as keyof typeof edits.value] = false;
+      } else {
+        edits.value[k as keyof typeof edits.value] = !edits.value[k as keyof typeof edits.value];
+      }
+    });
     if (edits.value[key]) {
       formData.value[key] = props.data[key] as any;
     }
@@ -312,7 +319,7 @@
       text-align: right;
     }
 
-    .item-value {
+    :deep(.item-value) {
       display: flex;
       align-items: center;
       flex: 1;
@@ -325,6 +332,14 @@
         &:hover {
           color: #3a84ff;
         }
+      }
+
+      .tag-list {
+        padding-right: 30px;
+      }
+
+      .bk-select-tag--default {
+        padding-right: 50px;
       }
     }
   }
