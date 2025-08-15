@@ -82,6 +82,12 @@
           display-key="name"
           id-key="resource_type_id"
           @search-change="handleSearch">
+          <template #trigger="{ selected: selectedList }">
+            <bk-input
+              :clearable="Boolean(formData.resource_type_ids)"
+              :model-value="selectedList[0]?.value || t('不依赖资源')"
+              @clear="() => formData.resource_type_ids = ''" />
+          </template>
           <bk-tree
             ref="treeRef"
             children="children"
