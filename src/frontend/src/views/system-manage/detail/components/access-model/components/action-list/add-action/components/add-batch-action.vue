@@ -463,7 +463,6 @@
         return {
           ...item,
           resource_type_ids: value,
-          isSelected: false,
         };
       }
       return item;
@@ -489,7 +488,6 @@
         return {
           ...item,
           sensitivity: value,
-          isSelected: false,
         };
       }
       return item;
@@ -518,8 +516,6 @@
 
     // 关闭表头pop
     resourceTypeIdsRef.value.hide();
-    // 重置全选状态
-    isSelectedAll.value = false;
   };
 
   const handleUpdateAllSensitivity = (value: string) => {
@@ -531,17 +527,9 @@
 
     // 关闭表头pop
     sensitivityPopover.value.hide();
-    // 重置全选状态
-    isSelectedAll.value = false;
   };
 
   const handleCancelPopover = () => {
-    // 清空选择项
-    formData.value.renderData = formData.value.renderData.map(item => ({
-      ...item,
-      isSelected: false,
-    }));
-
     // 关闭批量操作下拉菜单或表头pop
     if (resourceTypeIdsRef.value) {
       resourceTypeIdsRef.value.hide();
@@ -550,7 +538,6 @@
       sensitivityPopover.value.hide();
     }
     isShowBatch.value = false;
-    isSelectedAll.value = false;
   };
 
   // 单个节点(row)点击处理函数
@@ -601,6 +588,13 @@
       isSelected: newValue,
     }));
   });
+
+  // formData.value.renderData所有项的isSelected都为false时，isSelectedAll为false
+  watch(() => formData.value.renderData, (newValue) => {
+    if (newValue.every(item => !item.isSelected)) {
+      isSelectedAll.value = false;
+    }
+  }, { deep: true });
 
   defineExpose({
     submit() {
