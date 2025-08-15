@@ -107,6 +107,12 @@
           display-key="name"
           id-key="resource_type_id"
           @search-change="handleSearch">
+          <template #trigger="{ selected: selectedList }">
+            <bk-input
+              :clearable="Boolean(formData.ancestor)"
+              :model-value="selectedList[0]?.value || t('不依赖资源')"
+              @clear="() => formData.ancestor = ''" />
+          </template>
           <bk-tree
             ref="treeRef"
             children="children"
@@ -156,15 +162,19 @@
       <bk-checkbox-group v-model="actionArr">
         <bk-checkbox label="create">
           {{ t('新建') }}{{ formData.name }}
+          <span>{{ `(create_${formData.resource_type_id})` }}</span>
         </bk-checkbox>
         <bk-checkbox label="edit">
           {{ t('编辑') }}{{ formData.name }}
+          <span>{{ `(edit_${formData.resource_type_id})` }}</span>
         </bk-checkbox>
         <bk-checkbox label="view">
           {{ t('查看') }}{{ formData.name }}
+          <span>{{ `(view_${formData.resource_type_id})` }}</span>
         </bk-checkbox>
         <bk-checkbox label="delete">
           {{ t('删除') }}{{ formData.name }}
+          <span>{{ `(delete_${formData.resource_type_id})` }}</span>
         </bk-checkbox>
       </bk-checkbox-group>
     </div>
