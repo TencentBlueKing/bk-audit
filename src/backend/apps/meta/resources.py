@@ -53,8 +53,12 @@ from apps.meta.constants import (
     SpaceType,
     SystemAuditStatusEnum,
 )
-from apps.meta.exceptions import ActionHasExist, BKAppNotExists, SystemHasExist
-from apps.meta.exceptions import BKAppNotExists, EnumMappingRelationInvalid
+from apps.meta.exceptions import (
+    ActionHasExist,
+    BKAppNotExists,
+    EnumMappingRelationInvalid,
+    SystemHasExist,
+)
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.models import (
     Action,
@@ -78,8 +82,8 @@ from apps.meta.serializers import (
     ActionCreateSerializer,
     ActionListReqSerializer,
     ActionSerializer,
-    BatchUpdateEnumMappingSerializer,
     ActionUpdateSerializer,
+    BatchUpdateEnumMappingSerializer,
     BulkActionCreateSerializer,
     BulkCreateResourceTypeSerializer,
     ChangeSystemDiagnosisPushReqSerializer,
@@ -257,7 +261,7 @@ class SystemListResource(SystemAbstractResource, CacheResource):
             systems,
             actions,
             id_field=lambda x: x["system_id"],
-            always_allowed=lambda sys: username in system_managers.get(sys["system_id"]),
+            always_allowed=lambda sys, action_id: username in system_managers.get(sys["system_id"]),
         )
         systems.sort(key=PermissionSorter.sort_key)
         if not systems:
@@ -365,7 +369,7 @@ class SystemListAllResource(SystemAbstractResource, CacheResource):
             is_system_manager = is_system_manager_func(system_ids, username)
             actions = [get_action_by_id(action) for action in validated_request_data["action_ids"]]
             systems = wrapper_permission_field(
-                systems, actions, always_allowed=lambda sys: is_system_manager(sys["system_id"])
+                systems, actions, always_allowed=lambda sys, action_id: is_system_manager(sys["system_id"])
             )
 
         # 排序

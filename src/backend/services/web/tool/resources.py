@@ -23,8 +23,7 @@ from typing import List
 from bk_resource import Resource, api, resource
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import Http404
-from django.utils.translation import gettext, gettext_lazy
+from django.utils.translation import gettext_lazy
 from pypinyin import lazy_pinyin
 
 from api.bk_base.constants import UserAuthActionEnum
@@ -37,15 +36,20 @@ from apps.meta.serializers import (
     EnumMappingByCollectionSerializer,
     EnumMappingSerializer,
 )
-from apps.permission.handlers.actions.action import ActionEnum
-from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
+from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.page import paginate_data
 from services.web.strategy_v2.models import StrategyTool
-from services.web.tool.constants import ToolTypeEnum
+from services.web.tool.constants import (
+    DataSearchConfigTypeEnum,
+    SQLDataSearchConfig,
+    ToolTypeEnum,
+)
+from services.web.tool.exceptions import ToolDoesNotExist, ToolTypeNotSupport
 from services.web.tool.executor.tool import ToolExecutorFactory
 from services.web.tool.models import Tool, ToolTag
+from services.web.tool.permissions import ToolPermission
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
     ExecuteToolRespSerializer,
@@ -53,11 +57,12 @@ from services.web.tool.serializers import (
     ListToolTagsResponseSerializer,
     SqlAnalyseRequestSerializer,
     SqlAnalyseResponseSerializer,
+    SqlAnalyseWithToolRequestSerializer,
     ToolCreateRequestSerializer,
-    ToolDeleteRetrieveRequestSerializer,
     ToolListAllResponseSerializer,
     ToolListResponseSerializer,
     ToolResponseSerializer,
+    ToolRetrieveRequestSerializer,
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
     UserQueryTableAuthCheckReqSerializer,
@@ -135,7 +140,8 @@ class ListTool(ToolBase):
     my_created：是否只显示我创建的 布尔
     recent_used：是否只显示最近使用 布尔
     tool_type=data_search：响应结构
-        [
+    ```json
+    [
       {
         "uid": "xxx",
         "name": "xxx",
@@ -143,14 +149,19 @@ class ListTool(ToolBase):
         "version": 1,
         "description": "xxx",
         "namespace": "xxx",
-        "tags: [xx，xx],
+        "tags": ["xx", "xx"],
         "created_by": "xxx",
         "created_at": "xxx",
         "permission": {
-          "use_tool": true
+          "use_tool": true, // 是否有使用权限
+          "manage_tool": true // 是否有管理权限
         }
-      },
+      }
+    ]
+    ```
     tool_type=bk_vision：响应结构
+    ```
+    [
       {
         "uid": "xxx",
         "name": "xxx",
@@ -158,14 +169,16 @@ class ListTool(ToolBase):
         "version": 1,
         "description": "xxx",
         "namespace": "xxx",
-        "tags: [xx，xx],
+        "tags": ["xx", "xx"],
         "created_by": "xxx",
         "created_at": "xxx",
         "permission": {
-          "use_tool": true
+          "use_tool": true, // 是否有使用权限
+          "manage_tool": true // 是否有管理权限
         }
       }
     ]
+    ```
     """
 
     name = gettext_lazy("获取工具列表")
@@ -181,8 +194,9 @@ class ListTool(ToolBase):
         recent_tool_uids = []
 
         current_user = get_request_username()
-
-        queryset = Tool.all_latest_tools()
+        permission = ToolPermission(username=current_user)
+        authed_tool_filter = permission.authed_tool_filter
+        queryset = Tool.all_latest_tools().filter(authed_tool_filter)
 
         if recent_used:
             recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
@@ -231,19 +245,15 @@ class ListTool(ToolBase):
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
 
         serialized_data = ToolListResponseSerializer(instance=paged_tools, many=True).data
-
-        data = wrapper_permission_field(
-            result_list=serialized_data,
-            actions=[ActionEnum.USE_TOOL],
-            id_field=lambda item: item["uid"],
-            always_allowed=lambda item: item.get("created_by") == current_user,
-        )
-        return page.get_paginated_response(data=data)
+        # 权限字段注入
+        tool_tag_ids = list(tool_tags.values_list("tag_id", flat=True).distinct())
+        serialized_data = permission.wrapper_tool_permission_field(tool_list=serialized_data, tool_tag_ids=tool_tag_ids)
+        return page.get_paginated_response(data=serialized_data)
 
 
 class DeleteTool(ToolBase):
     name = gettext_lazy("删除工具")
-    RequestSerializer = ToolDeleteRetrieveRequestSerializer
+    RequestSerializer = ToolRetrieveRequestSerializer
 
     @transaction.atomic
     def perform_request(self, validated_request_data):
@@ -401,10 +411,11 @@ class CreateTool(ToolBase):
     """
 
     name = gettext_lazy("新增工具")
-    RequestSerializer = ToolCreateRequestSerializer  # 统一使
+    RequestSerializer = ToolCreateRequestSerializer
     ResponseSerializer = ToolResponseSerializer
 
     def perform_request(self, validated_request_data):
+        validated_request_data["permission_owner"] = get_request_username()
         tool = create_tool_with_config(validated_request_data)
         if tool.tool_type == ToolTypeEnum.DATA_SEARCH.value:
             config = validated_request_data.get("config", {})
@@ -434,36 +445,48 @@ class UpdateTool(ToolBase):
     RequestSerializer = ToolUpdateRequestSerializer
     ResponseSerializer = ToolResponseSerializer
 
+    def create_tool_new_version(self, old_tool: Tool, validated_request_data: dict):
+        """
+        创建工具新版本
+        """
+
+        new_config = SQLDataSearchConfig.model_validate(validated_request_data["config"])
+        new_tool_data = {
+            "uid": old_tool.uid,
+            "tool_type": old_tool.tool_type,
+            "name": validated_request_data.get("name", old_tool.name),
+            "description": validated_request_data.get("description", old_tool.description),
+            "namespace": validated_request_data.get("namespace", old_tool.namespace),
+            "version": old_tool.version + 1,
+            "config": new_config.model_dump(),
+        }
+        change_permission_owner = old_tool.has_change_permission_owner(new_config)
+        new_tool_data["permission_owner"] = (
+            get_request_username() if change_permission_owner else old_tool.get_permission_owner()
+        )
+        if old_tool.tool_type == ToolTypeEnum.DATA_SEARCH:
+            new_tool_data["data_search_config_type"] = old_tool.data_search_config.data_search_config_type
+            for output_field in new_config.output_fields:
+                enum_mappings = output_field.enum_mappings
+                if enum_mappings:
+                    self.updatel_enum_mappings(
+                        enum_mapping=enum_mappings.model_dump(),
+                        tool_uid=old_tool.uid,
+                        field_name=output_field.raw_name,
+                    )
+        return create_tool_with_config(new_tool_data)
+
     @transaction.atomic
-    def perform_request(self, validated_request_data):
+    def perform_request(self, validated_request_data: dict):
         uid = validated_request_data["uid"]
         tag_names = validated_request_data.pop("tags")
         tool = Tool.last_version_tool(uid)
         if not tool:
-            raise Http404(gettext("Tool not found: %s") % uid)
-        if "config" in validated_request_data:
-            new_config = validated_request_data["config"]
-            if tool.config != new_config:
-                new_tool_data = {
-                    "uid": tool.uid,
-                    "tool_type": tool.tool_type,
-                    "name": validated_request_data.get("name", tool.name),
-                    "description": validated_request_data.get("description", tool.description),
-                    "namespace": validated_request_data.get("namespace", tool.namespace),
-                    "version": tool.version + 1,
-                    "config": new_config,
-                }
-                if tool.tool_type == ToolTypeEnum.DATA_SEARCH:
-                    new_tool_data["data_search_config_type"] = tool.data_search_config.data_search_config_type
-                    for output_field in new_config.get("output_fields", []):
-                        enum_mappings = output_field.get("enum_mappings")
-                        if enum_mappings:
-                            self.updatel_enum_mappings(
-                                enum_mapping=enum_mappings,
-                                tool_uid=tool.uid,
-                                field_name=output_field["raw_name"],
-                            )
-                return create_tool_with_config(new_tool_data)
+            raise ToolDoesNotExist()
+        # 如果配置有变更则创建新版本
+        if validated_request_data.get("config") and validated_request_data.get("config") != tool.config:
+            return self.create_tool_new_version(old_tool=tool, validated_request_data=validated_request_data)
+        # 配置未变更则更新原版本
         for key, value in validated_request_data.items():
             setattr(tool, key, value)
         tool.save(update_fields=validated_request_data.keys())
@@ -592,7 +615,7 @@ class ExecuteTool(ToolBase):
         params = validated_request_data["params"]
         tool: Tool = Tool.last_version_tool(uid=uid)
         if not tool:
-            raise Tool.DoesNotExist()
+            raise ToolDoesNotExist()
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
         data = executor.execute(params).model_dump()
         recent_tool_usage_manager.record_usage(get_request_username(), uid)
@@ -603,6 +626,9 @@ class ListToolAll(ToolBase):
     name = gettext_lazy("工具列表(all)")
     many_response_data = True
     ResponseSerializer = ToolListAllResponseSerializer
+
+    def validate_response_data(self, response_data):
+        return response_data
 
     def perform_request(self, validated_request_data):
         tool_qs = Tool.all_latest_tools().order_by("-updated_at")
@@ -620,15 +646,12 @@ class ListToolAll(ToolBase):
         for tool in tool_qs:
             setattr(tool, "tags", tag_map.get(tool.uid, []))
             setattr(tool, "strategies", strategy_map.get(tool.uid, []))
-        serialized_data = ToolListAllResponseSerializer(tool_qs, many=True).data
+        serialized_data = self.ResponseSerializer(tool_qs, many=True).data
 
         current_user = get_request_username()
-        data = wrapper_permission_field(
-            result_list=serialized_data,
-            actions=[ActionEnum.USE_TOOL],
-            id_field=lambda item: item["uid"],
-            always_allowed=lambda item: item.get("created_by") == current_user,
-        )
+        permission = ToolPermission(username=current_user)
+        tool_tag_ids = list(tool_tags.values_list("tag_id", flat=True).distinct())
+        data = permission.wrapper_tool_permission_field(tool_list=serialized_data, tool_tag_ids=tool_tag_ids)
         return data
 
 
@@ -641,14 +664,17 @@ class ExportToolData(ToolBase):
 
 class GetToolDetail(ToolBase):
     name = gettext_lazy("获取工具详情")
-    RequestSerializer = ToolDeleteRetrieveRequestSerializer
+    RequestSerializer = ToolRetrieveRequestSerializer
     ResponseSerializer = ToolRetrieveResponseSerializer
+
+    def validate_response_data(self, response_data):
+        return response_data
 
     def perform_request(self, validated_request_data):
         uid = validated_request_data["uid"]
         tool = Tool.last_version_tool(uid=uid)
         if not tool:
-            raise Http404(gettext("Tool not found: %s") % uid)
+            raise ToolDoesNotExist()
 
         tag_ids = list(ToolTag.objects.filter(tool_uid=tool.uid).values_list("tag_id", flat=True))
         strategies_ids = list(StrategyTool.objects.filter(tool_uid=tool.uid).values_list("strategy_id", flat=True))
@@ -658,12 +684,19 @@ class GetToolDetail(ToolBase):
         if tool.tool_type == ToolTypeEnum.DATA_SEARCH and tool.config.get("referenced_tables"):
             tables = [table["table_name"] for table in tool.config["referenced_tables"]]
             auth_results = {
-                item["object_id"]: item for item in resource.tool.user_query_table_auth_check({"tables": tables})
+                item["object_id"]: item
+                for item in resource.tool.user_query_table_auth_check(
+                    {"tables": tables, "username": tool.get_permission_owner()}
+                )
             }
             # 将权限信息添加到每个表
             for table in tool.config["referenced_tables"]:
                 table["permission"] = auth_results.get(table["table_name"], {})
-        return tool
+        data = self.ResponseSerializer(instance=tool).data
+        current_user = get_request_username()
+        permission = ToolPermission(username=current_user)
+        data = permission.wrapper_tool_permission_field(tool_list=[data], tool_tag_ids=tag_ids)[0]
+        return data
 
 
 class SqlAnalyseResource(ToolBase, Resource):
@@ -713,24 +746,51 @@ class SqlAnalyseResource(ToolBase, Resource):
     RequestSerializer = SqlAnalyseRequestSerializer
     ResponseSerializer = SqlAnalyseResponseSerializer
 
+    def get_permission_owner(self, validated_request_data: dict, parsed_def: ParsedSQLInfo) -> str:
+        return get_request_username()
+
     def perform_request(self, validated_request_data):
         analyser = SqlQueryAnalysis(
             validated_request_data["sql"],
             dialect=validated_request_data.get("dialect") or None,
         )
         analyser.parse_sql()
-        parsed = analyser.get_parsed_def()
-        result = parsed.model_dump()
+        parsed_def = analyser.get_parsed_def()
+        result = parsed_def.model_dump()
 
         # 检查用户对引用表的查询权限
         if validated_request_data["with_permission"] and result['referenced_tables']:
             tables = [table['table_name'] for table in result['referenced_tables']]
             auth_results = {
-                item["object_id"]: item for item in resource.tool.user_query_table_auth_check({"tables": tables})
+                item["object_id"]: item
+                for item in resource.tool.user_query_table_auth_check(
+                    {"tables": tables, "username": self.get_permission_owner(validated_request_data, parsed_def)}
+                )
             }
             for table in result['referenced_tables']:
                 table['permission'] = auth_results[table['table_name']]
         return result
+
+
+class SqlAnalyseWithToolResource(SqlAnalyseResource):
+    name = gettext_lazy("SQL解析(编辑工具)")
+    RequestSerializer = SqlAnalyseWithToolRequestSerializer
+
+    def get_permission_owner(self, validated_request_data: dict, parsed_def: ParsedSQLInfo) -> str:
+        tool = Tool.last_version_tool(uid=validated_request_data["uid"])
+        if not tool:
+            raise ToolDoesNotExist()
+        if (
+            tool.tool_type != ToolTypeEnum.DATA_SEARCH
+            and tool.data_search_config.data_search_config_type != DataSearchConfigTypeEnum.SQL.value
+        ):
+            raise ToolTypeNotSupport()
+        old_sql_parsed_def = SqlQueryAnalysis(sql=tool.data_search_config.sql).get_parsed_def()
+        old_sql_tables = {table.table_name for table in old_sql_parsed_def.referenced_tables}
+        new_sql_tables = {table.table_name for table in parsed_def.referenced_tables}
+        if new_sql_tables - old_sql_tables:
+            return get_request_username()
+        return tool.get_permission_owner()
 
 
 class UserQueryTableAuthCheck(ToolBase):
@@ -745,7 +805,7 @@ class UserQueryTableAuthCheck(ToolBase):
 
     def perform_request(self, validated_request_data):
         tables: List[str] = validated_request_data["tables"]
-        username = get_request_username()
+        username = validated_request_data.get("username") or get_request_username()
         permissions = [
             {
                 "user_id": username,
