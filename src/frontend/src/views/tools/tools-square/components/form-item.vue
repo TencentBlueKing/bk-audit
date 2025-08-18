@@ -22,13 +22,13 @@
       @update:model-value="handleInputDataChange" />
 
     <bk-input
-      v-if="dataConfig.field_category === 'number_input'"
+      v-else-if="dataConfig.field_category === 'number_input'"
       v-model="numberInputData"
       type="number"
       @update:model-value="handleNumberInputDataChange" />
 
     <audit-user-selector
-      v-if="dataConfig.field_category === 'person_select'"
+      v-else-if="dataConfig.field_category === 'person_select'"
       v-model="user"
       @change="handleUserChange" />
 
@@ -43,13 +43,13 @@
       @change="handleRangeChange" /> -->
 
     <date-picker
-      v-if="dataConfig.field_category === 'time_range_select' || dataConfig.field_category === 'time-ranger'"
+      v-else-if="dataConfig.field_category === 'time_range_select' || dataConfig.field_category === 'time-ranger'"
       v-model="pickerRangeValue"
       class="date-picker"
       @update:model-value="handleRangeChange" />
 
     <bk-date-picker
-      v-if="dataConfig.field_category === 'time_select' || dataConfig.field_category === 'time-picker'"
+      v-else-if="dataConfig.field_category === 'time_select' || dataConfig.field_category === 'time-picker'"
       v-model="pickerValue"
       append-to-body
       clearable
@@ -58,7 +58,7 @@
       @change="handleTimeChange" />
 
     <bk-select
-      v-if="dataConfig.field_category === 'multiselect'"
+      v-else-if="dataConfig.field_category === 'multiselect'"
       v-model="enumValue"
       class="bk-select"
       filterable
@@ -72,11 +72,20 @@
         :label="selectItem.name"
         :value="selectItem.key" />
     </bk-select>
+
+    <bk-tag-input
+      v-else
+      v-model="selectorValue"
+      allow-create
+      collapse-tags
+      has-delete-icon
+      :list="[]"
+      @change="handleSelectorChange" />
   </div>
 </template>
 
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -88,6 +97,7 @@
   interface SearchItem {
     // value: string;
     raw_name: string;
+    default_value?: any;
     required: boolean;
     description: string;
     display_name: string;
@@ -104,6 +114,7 @@
   interface Props {
     dataConfig: SearchItem,
     originModel?: boolean
+    isBackfillData?: boolean;
   }
   interface Emits {
     (e: 'change', value: any): void
@@ -114,7 +125,9 @@
     getData: () => void,
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    isBackfillData: false,
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
@@ -124,7 +137,7 @@
   const pickerValue = ref<string>('');
   const user = ref<Array<string>>([]);
   const enumValue = ref<Array<string>>([]);
-
+  const selectorValue = ref<Array<string>>([]);
   const FieldCategory = ref<FieldCategoryItem[]>([]);
 
   // 获取字段类型
@@ -170,11 +183,17 @@
     enumValue.value = value;
     emits('change', value || []);
   };
+  const handleSelectorChange = (value: Array<string>) => {
+    selectorValue.value = value;
+    emits('change', value || []);
+  };
 
   const setData = (val: any) => {
     const type: keyof typeof handlers = props.dataConfig.field_category as keyof typeof handlers;
-
     const handlers = {
+      inputer: () => {
+        handleInputDataChange(val);
+      },
       input: () => {
         handleInputDataChange(val);
       },
@@ -186,6 +205,22 @@
       },
       time_range_select: () => {
         handleRangeChange(val);
+      },
+      'time-ranger': () => {
+        handleRangeChange(val);
+      },
+      'time-picker': () => {
+        // 如果已经是正确的格式字符串，直接使用
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) {
+          handleTimeChange(val);
+          return;
+        }
+        const timestamp = Number(val);
+        if (!isNaN(timestamp) && timestamp > 0) {
+          const date = new Date(timestamp);
+          const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+          handleTimeChange(formattedDate);
+        }
       },
       time_select: () => {
         // 如果已经是正确的格式字符串，直接使用
@@ -205,9 +240,21 @@
       },
     };
 
-    if (handlers[type]) handlers[type]();
+    if (handlers[type]) {
+      handlers[type]();
+    } else {
+      handleSelectorChange(val);
+    }
   };
 
+  watch(() => props, (newVal) => {
+    if (newVal?.isBackfillData) {
+      setData(newVal.dataConfig?.default_value);
+    }
+  }, {
+    deep: true,
+    immediate: true,
+  });
   onMounted(() => {
     fetchGlobalChoices();
   });
