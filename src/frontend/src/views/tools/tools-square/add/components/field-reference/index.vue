@@ -153,7 +153,6 @@
                 v-else
                 class="field-value"
                 style="border: none;">
-                <!-- <bk-input v-model="item.target_value" /> -->
                 <!-- 不同前端类型 -->
                 <form-item
                   ref="formItemRefs"
@@ -256,13 +255,15 @@
       source_field: string;
       target_value_type: string;
       target_value: string;
-      target_field_type: string
+      target_field_type: string;
+      description: string;
     }>;
   }
 
   const props =  defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
+  const formItemRefs = ref();
 
   const showEditSql = defineModel<boolean>('showFieldReference', {
     required: true,
@@ -313,6 +314,7 @@
             target_value_type: 'field',
             target_value: '',  // 初始化为空值
             target_field_type: '', // 初始化为空值
+            description: item.description,
           });
         }
       });
