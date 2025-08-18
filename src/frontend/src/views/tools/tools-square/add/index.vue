@@ -851,15 +851,7 @@
     () => viewRootRef.value,
   );
   const isEditMode = route.name === 'toolsEdit';
-  // const radioGroup = ref([
-  //   {
-  //     id: '1',
-  //     label: t('公开可申请'),
-  //   },
-  //   {
-  //     id: '2',
-  //     label: t('仅指定人可用'),
-  //   }]);
+
   const viewRootRef = ref();
   const editSqlRef = ref();
   const formRef = ref();
@@ -894,51 +886,7 @@
   });
   const rules = {};
   const spacePermission = ref(false);
-  // 选择报表
-  const handleSpaceChange = (val: string) => {
-    spacePermission.value = false;
-    if (val.length === 0) {
-      return;
-    }
-    formData.value.config.uid = val[val.length - 1];
-    fetchReportLists({
-      share_uid: val[val.length - 1],
-    }).then((res) => {
-      if (res) {
-        viewInfo.value.panels = res.data.panels;
-        viewInfo.value.filters =  [...new Set(Object.keys(res.filters))];
-        viewInfo.value.componentLists = [...new Set(Object.keys(res.filters))].map((e) => {
-          let com = null;
-          res.data.panels.forEach((p:any) => {
-            if (p.uid === e) {
-              com = {
-                ...p,
-                value: null,
-              };
-            }
-          });
-          return com;
-        });
 
-        setTimeout(() => {
-          // 编辑状态
-          if (isEditMode) {
-            viewInfo.value.componentLists =  viewInfo.value.componentLists.map((com:any) => {
-              const reItem = com ;
-              editorConfig.value.input_variable.forEach((e:any) => {
-                if (e.description === com.uid) {
-                  reItem.value = e.default_value;
-                }
-              });
-              return reItem;
-            });
-          }
-        }, 0);
-      } else {
-        spacePermission.value = true;
-      }
-    });
-  };
 
   const formData = ref<FormData>({
     source: '',
@@ -1041,7 +989,51 @@
   };
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
+  // 选择报表
+  const handleSpaceChange = (val: string) => {
+    spacePermission.value = false;
+    if (val.length === 0) {
+      return;
+    }
+    formData.value.config.uid = val[val.length - 1];
+    fetchReportLists({
+      share_uid: val[val.length - 1],
+    }).then((res) => {
+      if (res) {
+        viewInfo.value.panels = res.data.panels;
+        viewInfo.value.filters =  [...new Set(Object.keys(res.filters))];
+        viewInfo.value.componentLists = [...new Set(Object.keys(res.filters))].map((e) => {
+          let com = null;
+          res.data.panels.forEach((p:any) => {
+            if (p.uid === e) {
+              com = {
+                ...p,
+                value: null,
+              };
+            }
+          });
+          return com;
+        });
 
+        setTimeout(() => {
+          // 编辑状态
+          if (isEditMode) {
+            viewInfo.value.componentLists =  viewInfo.value.componentLists.map((com:any) => {
+              const reItem = com ;
+              editorConfig.value.input_variable.forEach((e:any) => {
+                if (e.description === com.uid) {
+                  reItem.value = e.default_value;
+                }
+              });
+              return reItem;
+            });
+          }
+        }, 0);
+      } else {
+        spacePermission.value = true;
+      }
+    });
+  };
 
   const {
     data: configData,
@@ -1361,7 +1353,7 @@
         const info  =  viewInfo.value.componentLists.map((item: any) => ({
           raw_name: item.chartConfig.flag, // 用于记录chartConfig.flag 来透传值
           display_name: item.title,
-          description: item.uid, // 用于记录uid
+          description: item.uid, // 用于记录 uid
           field_category: item.type,
           required: true,
           default_value: item.value,

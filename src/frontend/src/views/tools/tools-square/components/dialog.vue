@@ -754,7 +754,19 @@
 
       drillDownItem?.drill_config.config.forEach((e: any) => {
         if (e.target_value_type === 'field') { // 直接应用值
-          drillDownBkVisionVConfig.value[e.source_field]  = isDrillDownItemRowData?.[e.target_value];
+          // 判断 isDrillDownItemRowData?.[e.target_value]是不是时间戳
+          const value = isDrillDownItemRowData?.[e.target_value];
+          if (typeof value === 'number' && value > 1e12) {
+            // 毫秒级时间戳转换
+            const date = new Date(value);
+            drillDownBkVisionVConfig.value[e.source_field] = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+          } else if (typeof value === 'number' && value > 1e8) {
+            // 秒级时间戳转换
+            const date = new Date(value * 1000);
+            drillDownBkVisionVConfig.value[e.source_field] = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+          } else {
+            drillDownBkVisionVConfig.value[e.source_field] = value;
+          }
         } else { // 使用默认值
           drillDownBkVisionVConfig.value[e.source_field] = e.target_value;
         }

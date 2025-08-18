@@ -30,15 +30,23 @@
           use-shortcut-text
           @change="handlePickerChange" />
         <date-picker
-          v-if="props.config?.type === 'time-ranger'"
+          v-else-if="props.config?.type === 'time-ranger'"
           v-model="pickerValue"
           style="width: 100%;"
           @update:model-value="handleRangeChange" />
 
         <bk-input
-          v-if="props.config?.type === 'inputer'"
+          v-else-if="props.config?.type === 'inputer' "
           v-model="inputVal"
           @change="handleInputChange" />
+        <bk-tag-input
+          v-else
+          v-model="selectorValue"
+          allow-create
+          collapse-tags
+          has-delete-icon
+          :list="[]"
+          @change="handleSelectorChange" />
       </div>
     </div>
   </div>
@@ -60,7 +68,7 @@
   const dateValue = ref(props.config.value || new Date());
   const pickerValue = ref<Array<string>>(props.config.value || []);
   const inputVal = ref(props.config.value || []);
-
+  const selectorValue = ref(props.config.value || []);
   const dateShortCut: any = [
     {
       text: '今天',
@@ -111,11 +119,16 @@
     inputVal.value = val;
     emits('change', val || '');
   };
+  const handleSelectorChange = (val: string) => {
+    selectorValue.value = val;
+    emits('change', val || []);
+  };
   // 监听 props.config.value 的变化
   watch(() => props.config?.value, (newValue) => {
     dateValue.value = newValue || new Date();
     pickerValue.value = newValue || [];
     inputVal.value = newValue || [];
+    selectorValue.value = newValue || [];
   });
 </script>
 
