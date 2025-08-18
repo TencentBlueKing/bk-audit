@@ -227,7 +227,7 @@ class SqlDataSearchExecutor(
         """
         校验权限: 校验工具更新人 or 当前请求用户有表查询条件
         """
-        user_id = self.tool.updated_by if self.tool else get_request_username()
+        user_id = self.tool.get_permission_owner() if self.tool else get_request_username()
         parsed_def = self.analyzer.get_parsed_def()
         permissions = [
             {
@@ -327,7 +327,7 @@ class BkVisionExecutor(BaseToolExecutor[BkVisionConfig, None, BkVisionExecuteRes
         """
         校验权限: 校验工具更新人 or 当前请求用户是否有 bkvision 嵌入记录权限。
         """
-        user_id = self.tool.updated_by if self.tool else get_request_username()
+        user_id = self.tool.get_permission_owner() if self.tool else get_request_username()
         share_uid = self.config.uid
         check_bkvision_share_permission(user_id, share_uid)
 

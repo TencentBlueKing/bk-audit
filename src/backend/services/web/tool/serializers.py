@@ -62,14 +62,13 @@ class ToolCreateRequestSerializer(serializers.Serializer):
     def validate(self, attrs):
         tool_type = attrs["tool_type"]
         config = attrs["config"]
-        if tool_type == ToolTypeEnum.DATA_SEARCH:
-            data_search_config_type = attrs["data_search_config_type"]
+        if tool_type == ToolTypeEnum.DATA_SEARCH and "data_search_config_type" not in attrs:
+            raise serializers.ValidationError({"data_search_config_type": gettext_lazy("数据查询配置类型不能为空")})
 
         if tool_type == ToolTypeEnum.BK_VISION:
-            validated_config = BkVisionConfig(**config).model_dump()
+            validated_config = BkVisionConfig.model_validate(config).model_dump()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
-            DataSearchConfigTypeEnum(data_search_config_type)
-            validated_config = SQLDataSearchConfig(**config).model_dump()
+            validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
         else:
             raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
         attrs["config"] = validated_config
@@ -94,9 +93,9 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
         tool_type = tool.tool_type
 
         if tool_type == ToolTypeEnum.BK_VISION:
-            validated_config = BkVisionConfig(**config).model_dump()
+            validated_config = BkVisionConfig.model_validate(config).model_dump()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
-            validated_config = SQLDataSearchConfig(**config).model_dump()
+            validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
         else:
             raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
 
@@ -109,57 +108,87 @@ class ToolResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(label=gettext_lazy("工具版本"))
 
 
-class ToolDeleteRetrieveRequestSerializer(serializers.Serializer):
+class ToolRetrieveRequestSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
 
 
-class ToolListAllResponseSerializer(serializers.Serializer):
-    uid = serializers.CharField(label=gettext_lazy("工具 UID"))
-    name = serializers.CharField(label=gettext_lazy("工具名称"))
-    description = serializers.CharField(allow_blank=True, label=gettext_lazy("工具描述"))
-    tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
-    version = serializers.IntegerField(label=gettext_lazy("工具版本"))
-    namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
+class ToolListAllResponseSerializer(serializers.ModelSerializer):
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
 
+    class Meta:
+        model = Tool
+        fields = [
+            "uid",
+            "name",
+            "description",
+            "tool_type",
+            "version",
+            "namespace",
+            "permission",
+            "tags",
+            "strategies",
+        ]
 
-class ToolListResponseSerializer(serializers.Serializer):
-    uid = serializers.CharField(label=gettext_lazy("工具 UID"))
-    name = serializers.CharField(label=gettext_lazy("工具名称"))
-    tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
-    version = serializers.IntegerField(label=gettext_lazy("工具版本"))
-    description = serializers.CharField(allow_blank=True, label=gettext_lazy("工具描述"))
-    namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
-    created_by = serializers.CharField(label=gettext_lazy("创建人"))
-    created_at = serializers.DateTimeField(label=gettext_lazy("创建时间"))
+
+class ToolListResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
 
+    class Meta:
+        model = Tool
+        fields = [
+            "uid",
+            "name",
+            "tool_type",
+            "version",
+            "description",
+            "namespace",
+            "created_by",
+            "created_at",
+            "tags",
+            "permission",
+            "strategies",
+        ]
 
-class ToolRetrieveResponseSerializer(serializers.Serializer):
-    uid = serializers.CharField(label=gettext_lazy("工具 UID"))
-    name = serializers.CharField(label=gettext_lazy("工具名称"))
-    tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
-    version = serializers.IntegerField(label=gettext_lazy("工具版本"))
-    description = serializers.CharField(allow_blank=True, label=gettext_lazy("工具描述"))
-    namespace = serializers.CharField(allow_blank=True, label=gettext_lazy("命名空间"))
-    created_by = serializers.CharField(label=gettext_lazy("创建人"))
-    created_at = serializers.DateTimeField(label=gettext_lazy("创建时间"))
-    updated_by = serializers.CharField(label=gettext_lazy("更新人"))
-    updated_at = serializers.DateTimeField(label=gettext_lazy("更新时间"))
+
+class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
-    config = serializers.DictField(label=gettext_lazy("工具配置"))
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     data_search_config_type = serializers.SerializerMethodField()
+    permission_owner = serializers.SerializerMethodField()
 
     def get_data_search_config_type(self, obj):
         if hasattr(obj, "data_search_config") and obj.data_search_config:
             return obj.data_search_config.data_search_config_type
         return None
+
+    def get_permission_owner(self, obj: Tool):
+        return obj.get_permission_owner()
+
+    class Meta:
+        model = Tool
+        fields = [
+            "uid",
+            "name",
+            "tool_type",
+            "version",
+            "description",
+            "namespace",
+            "created_by",
+            "created_at",
+            "updated_by",
+            "updated_at",
+            "permission",
+            "strategies",
+            "config",
+            "tags",
+            "data_search_config_type",
+            "permission_owner",
+        ]
 
 
 class ListRequestSerializer(serializers.Serializer):
@@ -177,6 +206,12 @@ class SqlAnalyseRequestSerializer(serializers.Serializer):
     sql = serializers.CharField(label=gettext_lazy("SQL"))
     dialect = serializers.CharField(required=False, allow_blank=True, allow_null=True, default='hive')
     with_permission = serializers.BooleanField(required=False, default=False)
+
+
+class SqlAnalyseWithToolRequestSerializer(SqlAnalyseRequestSerializer):
+    """SQL 分析(带工具)请求参数"""
+
+    uid = serializers.CharField(label=gettext_lazy("工具 UID"))
 
 
 class Table(RawTable):
@@ -209,6 +244,9 @@ class ExecuteToolRespSerializer(serializers.Serializer):
 
 class UserQueryTableAuthCheckReqSerializer(serializers.Serializer):
     tables = serializers.ListField(label=gettext_lazy("表名列表"), child=serializers.CharField())
+    username = serializers.CharField(
+        label=gettext_lazy("用户名"), required=False, allow_blank=True, help_text="默认使用当前登录用户，也可指定其他用户"
+    )
 
 
 class UserQueryTableAuthCheckRespSerializer(serializers.Serializer):

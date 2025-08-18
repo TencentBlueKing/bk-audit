@@ -16,27 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-# Mock 数据
-MOCK_TOOL_CONFIG = {
-    "sql": "SELECT * FROM table WHERE time = ${time_range}",
-    "referenced_tables": [{"table_name": "table"}],
-    "input_variable": [],
-    "output_fields": [],
-    "prefer_storage": "doris",
-}
+import os
 
-MOCK_EXECUTE_PARAMS = {
-    "tool_variables": [{"raw_name": "time_range", "value": "2023-01-01,2023-12-31"}],
-    "page": 1,
-    "page_size": 100,
-}
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
 
-MOCK_API_RESPONSE = [
-    {"list": [{"field1": "value1"}, {"field2": "value2"}]},  # 数据查询结果
-    {"list": [{"count": 2}]},  # 计数查询结果
-]
+from core.utils.distutils import strtobool
 
-MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY = {
-    "use_tool_permission_tags": set(),
-    "manage_tool_permission_tags": set(),
-}
+
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
+
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
+
+
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0010_update_action_resource_type_20250808"),
+    ]
+
+    operations = [migrations.RunPython(forward_func)]
