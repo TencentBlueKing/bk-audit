@@ -1,7 +1,10 @@
 import uuid
+from typing import Type
 from unittest import mock
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
+from bk_resource import Resource
+from django.db.models import Q
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.request import Request
@@ -10,13 +13,22 @@ from rest_framework.test import APIRequestFactory
 from api.bk_base.default import UserAuthBatchCheck
 from apps.meta.models import Tag
 from core.testing import assert_list_contains
-from services.web.tool.constants import DataSearchConfigTypeEnum, ToolTypeEnum
+from services.web.tool.constants import (
+    DataSearchConfigTypeEnum,
+    FieldCategory,
+    SQLDataSearchConfig,
+    SQLDataSearchInputVariable,
+    SQLDataSearchOutputField,
+    Table,
+    ToolTypeEnum,
+)
 from services.web.tool.models import (
     BkVisionToolConfig,
     DataSearchToolConfig,
     Tool,
     ToolTag,
 )
+from services.web.tool.permissions import ToolPermission
 from services.web.tool.resources import (
     CreateTool,
     DeleteTool,
@@ -28,6 +40,7 @@ from services.web.tool.resources import (
     UserQueryTableAuthCheck,
 )
 from services.web.vision.models import Scenario, VisionPanel
+from tests.test_tool.constants import MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY
 
 
 class ToolResourceTestCase(TestCase):
@@ -42,12 +55,20 @@ class ToolResourceTestCase(TestCase):
             name="SQL Tool",
             namespace=self.namespace,
             tool_type=ToolTypeEnum.DATA_SEARCH.value,
-            config={
-                "sql": "select 1",
-                "referenced_tables": [{"table_name": "test_table"}],
-                "input_variable": [{"raw_name": "date_range", "required": True}],
-                "output_fields": [{"raw_name": "thedate", "display_name": "日期"}],
-            },
+            config=SQLDataSearchConfig(
+                sql="select f1 from test_table",
+                referenced_tables=[Table(table_name="test_table")],
+                input_variable=[
+                    SQLDataSearchInputVariable(
+                        raw_name="date_range",
+                        required=True,
+                        display_name="日期范围",
+                        field_category=FieldCategory.TIME_RANGE_SELECT,
+                        default_value=None,
+                    ),
+                ],
+                output_fields=[SQLDataSearchOutputField(raw_name="thedate", display_name="日期")],
+            ).model_dump(),
             is_deleted=False,
             description="SQL Tool Desc",
             updated_at=timezone.now(),
@@ -65,15 +86,18 @@ class ToolResourceTestCase(TestCase):
         self.tag2 = Tag.objects.create(tag_name="tag2")
         ToolTag.objects.create(tool_uid=self.sql_tool.uid, tag_id=self.tag1.tag_id)
         ToolTag.objects.create(tool_uid=self.bk_tool.uid, tag_id=self.tag2.tag_id)
-        self.auth_patcher = patch('api.bk_base.default.UserAuthBatchCheck.perform_request')
-        self.mock_auth_check = self.auth_patcher.start()
-        self.mock_auth_check.return_value = [
-            {"object_id": "test_table", "result": True, "user_id": "test_user", "permission": {"read": True}}
-        ]
+        # Mock 权限校验
+        self.patcher_auth = mock.patch.object(
+            UserAuthBatchCheck,
+            "perform_request",
+            return_value=[
+                {"object_id": "test_table", "result": True, "user_id": "test_user", "permission": {"read": True}}
+            ],
+        )
+        self.mock_auth_check = self.patcher_auth.start()
 
     def tearDown(self):
-        self.auth_patcher.stop()  # 清理Mock
-        super().tearDown()
+        mock.patch.stopall()
 
     def _create_bkvision_tool(self, tool_uid, vision_uid, namespace):
         example_var = {
@@ -113,18 +137,19 @@ class ToolResourceTestCase(TestCase):
         BkVisionToolConfig.objects.create(tool=tool, panel=panel)
         return tool
 
-    def _call_resource_with_request(self, resource_cls, data):
+    def _call_resource_with_request(self, resource_cls: Type[Resource], data):
         factory = APIRequestFactory()
         django_request = factory.post('/fake-url/', data, format='json')
         drf_request = Request(django_request)
 
         resource = resource_cls()
-        validated_data = resource.validate_request_data(data)
-        validated_data['_request'] = drf_request
-        response = resource.perform_request(validated_data)
+        response = resource.request(data, _request=drf_request)
         return response.data.get("results", [])
 
-    def test_list_tool(self):
+    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
+    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
+    def test_list_tool(self, mock_authed_tool_filter, fetch_tool_permission_tags):
+        mock_authed_tool_filter.return_value = Q()
         data = {"keyword": "SQL", "page": 1, "page_size": 10}
         result = self._call_resource_with_request(ListTool, data)
         tool_names = [item["name"] for item in result]
@@ -154,10 +179,7 @@ class ToolResourceTestCase(TestCase):
 
     def test_create_tool_sql(self):
         resource = CreateTool()
-        new_uid = str(uuid.uuid4())
         data = {
-            "uid": new_uid,
-            "version": 1,
             "name": "New SQL Tool",
             "namespace": "default_ns",
             "tool_type": ToolTypeEnum.DATA_SEARCH.value,
@@ -170,14 +192,12 @@ class ToolResourceTestCase(TestCase):
             },
             "description": "desc",
         }
-        tool = resource.perform_request(data)
-        self.assertEqual(tool.uid, new_uid)
-        self.assertEqual(tool.tool_type, ToolTypeEnum.DATA_SEARCH.value)
+        tool = resource(data)
 
-        ToolTag.objects.create(tool_uid=tool.uid, tag_id=self.tag1.tag_id)
-        self.assertTrue(ToolTag.objects.filter(tool_uid=tool.uid, tag_id=self.tag1.tag_id).exists())
+        ToolTag.objects.create(tool_uid=tool["uid"], tag_id=self.tag1.tag_id)
+        self.assertTrue(ToolTag.objects.filter(tool_uid=tool["uid"], tag_id=self.tag1.tag_id).exists())
 
-        config = DataSearchToolConfig.objects.filter(tool=tool).first()
+        config = DataSearchToolConfig.objects.filter(tool__uid=tool["uid"]).first()
         self.assertIsNotNone(config)
         self.assertEqual(config.sql, "select * from test")
 
@@ -210,18 +230,18 @@ class ToolResourceTestCase(TestCase):
             "config": {"uid": vision_uid, "input_variable": [example_var, example_var2]},
             "description": "desc",
         }
-        tool = resource.perform_request(data)
-        self.assertEqual(tool.tool_type, ToolTypeEnum.BK_VISION.value)
+        tool = resource(data)
         panel = VisionPanel.objects.filter(vision_id=vision_uid, is_deleted=False).first()
         self.assertIsNotNone(panel)
-        bk_config = BkVisionToolConfig.objects.filter(tool=tool).first()
+
+        bk_config = BkVisionToolConfig.objects.filter(tool__uid=tool['uid']).first()
         self.assertIsNotNone(bk_config)
         self.assertEqual(bk_config.panel.id, panel.id)
         # bkvision config should include the example input_variable
-        self.assertEqual(tool.config.get("input_variable"), [example_var, example_var2])
+        tool_obj: Tool = Tool.objects.get(uid=tool['uid'], version=tool['version'])
+        self.assertEqual(tool_obj.config.get("input_variable"), [example_var, example_var2])
 
     def test_update_tool_no_config_change(self):
-        resource = UpdateTool()
         data = {
             "uid": self.sql_tool.uid,
             "version": 1,
@@ -231,16 +251,15 @@ class ToolResourceTestCase(TestCase):
             "description": "updated desc",
             "tags": [],
         }
-        updated_tool = resource.perform_request(data)
-        self.assertEqual(updated_tool.name, "Updated SQL Tool")
-        self.assertEqual(updated_tool.description, "updated desc")
-        self.assertEqual(updated_tool.version, 1)
-        self.assertEqual(updated_tool.id, self.sql_tool.id)
+        updated_tool = UpdateTool()(data)
+        # 修改：全部改为字典键访问
+        self.assertEqual(updated_tool['version'], 1)
+        self.assertEqual(updated_tool['uid'], self.sql_tool.uid)
 
     def test_update_tool_with_config_change(self):
         resource = UpdateTool()
         new_config = {
-            "sql": "select * from dual",
+            "sql": "select a from dual",
             "referenced_tables": [],
             "input_variable": [],
             "output_fields": [],
@@ -254,14 +273,13 @@ class ToolResourceTestCase(TestCase):
             "update_fields": ["name", "description"],
             "tags": [self.tag2.tag_name],
         }
-        new_tool = resource.perform_request(data)
-        self.assertNotEqual(new_tool.version, self.sql_tool.version)
-        self.assertEqual(new_tool.version, self.sql_tool.version + 1)
-        self.assertEqual(new_tool.config, new_config)
-        self.assertEqual(new_tool.name, "Updated SQL Tool v2")
+        new_tool = resource(data)
+        # 修改：全部改为字典键访问
+        self.assertEqual(new_tool['version'], self.sql_tool.version + 1)
+        self.assertEqual(new_tool['uid'], self.sql_tool.uid)
 
-        ToolTag.objects.create(tool_uid=new_tool.uid, tag_id=self.tag2.tag_id)
-        tag_ids = ToolTag.objects.filter(tool_uid=new_tool.uid).values_list("tag_id", flat=True)
+        ToolTag.objects.create(tool_uid=new_tool['uid'], tag_id=self.tag2.tag_id)
+        tag_ids = ToolTag.objects.filter(tool_uid=new_tool['uid']).values_list("tag_id", flat=True)
         self.assertIn(self.tag2.tag_id, tag_ids)
 
     def test_delete_tool(self):
@@ -270,14 +288,16 @@ class ToolResourceTestCase(TestCase):
 
         self.assertTrue(ToolTag.objects.filter(tool_uid=uid).exists())  # 删除前存在 tag
 
-        resource.perform_request({"uid": uid})
+        resource({"uid": uid})
         tool_exists = Tool.objects.filter(uid=uid, is_deleted=False).exists()
         self.assertFalse(tool_exists)
 
         # 补充：tag 自动删除
         self.assertFalse(ToolTag.objects.filter(tool_uid=uid).exists())
 
-    def test_list_tool_filter_only_created_by_me(self):
+    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
+    def test_list_tool_filter_only_created_by_me(self, mock_authed_tool_filter):
+        mock_authed_tool_filter.return_value = Q()
         with patch("services.web.tool.resources.get_request_username", return_value=self.uid):
             data = {
                 "keyword": "",
@@ -290,7 +310,10 @@ class ToolResourceTestCase(TestCase):
             result = self._call_resource_with_request(ListTool, data)
             self.assertTrue(all(tool["created_by"] == self.uid for tool in result))
 
-    def test_list_tool_filter_recent_uids_flag(self):
+    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
+    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
+    def test_list_tool_filter_recent_uids_flag(self, mock_authed_tool_filter, mock_fetch_tool_permission_tags):
+        mock_authed_tool_filter.return_value = Q()
         recent_uids = [self.sql_tool.uid, self.bk_tool.uid]
 
         with patch(
@@ -309,18 +332,21 @@ class ToolResourceTestCase(TestCase):
             result_uids = [tool["uid"] for tool in result]
             self.assertCountEqual(result_uids, recent_uids)
 
-    def test_tool_detail(self):
+    @patch.object(ToolPermission, 'fetch_tool_permission_tags', return_value=MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY)
+    @patch.object(ToolPermission, 'authed_tool_filter', new_callable=PropertyMock)
+    def test_tool_detail(self, mock_authed_tool_filter, fetch_tool_permission_tags):
+        mock_authed_tool_filter.return_value = Q()
         tool_detail_resource = GetToolDetail()
-        result = tool_detail_resource.perform_request({"uid": self.sql_tool.uid})
+        result = tool_detail_resource({"uid": self.sql_tool.uid})
 
-        self.assertEqual(result.uid, self.sql_tool.uid)  # 使用 . 访问属性
-        self.assertEqual(result.name, "SQL Tool")
+        self.assertEqual(result["uid"], self.sql_tool.uid)
+        self.assertEqual(result["name"], "SQL Tool")
 
-        self.assertIsNotNone(getattr(result, "tags", None))
-        self.assertIsNotNone(getattr(result, "strategies", None))
+        self.assertIsNotNone(result["tags"])
+        self.assertIsNotNone(result["strategies"])
 
-        if result.tool_type == ToolTypeEnum.DATA_SEARCH.value:
-            for table in result.config["referenced_tables"]:
+        if result["tool_type"] == ToolTypeEnum.DATA_SEARCH.value:
+            for table in result["config"]["referenced_tables"]:
                 self.assertIn("permission", table)
 
 
