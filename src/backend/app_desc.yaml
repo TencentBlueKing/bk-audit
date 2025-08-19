@@ -56,6 +56,6 @@ modules:
     language: Python
     processes:
       web:
-        command: celery -A blueapps.core flower --port=$PORT --basic-auth=$BKAPP_FLOWER_USERNAME:$BKAPP_FLOWER_PASSWARD
-        plan: 1C1G1R
-        replicas: 5
+        command: celery -A blueapps.core flower --port=$PORT --basic-auth=$BKAPP_FLOWER_USERNAME:$BKAPP_FLOWER_PASSWARD --persistent=True --db=/app/flower.db --state_save_interval=15000
+        plan: 1C2G1R
+        replicas: 1
