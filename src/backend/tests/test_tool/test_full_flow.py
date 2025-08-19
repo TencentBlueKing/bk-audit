@@ -1,7 +1,6 @@
 from unittest import mock
 
 from api.bk_base.default import QuerySyncResource, UserAuthBatchCheck
-from apps.permission.handlers.permission import Permission
 from services.web.tool.constants import (
     DataSearchConfigTypeEnum,
     FieldCategory,
@@ -118,7 +117,7 @@ class TestToolFullFlow(TestCase):
         self.assertTrue(Tool.objects.filter(uid=uid).exists())
 
         # 执行工具（CreateTool 已自动创建 VisionPanel 及 BkVisionToolConfig）
-        with mock.patch.object(Permission, "is_allowed", return_value=True):
+        with mock.patch("services.web.tool.executor.tool.check_bkvision_share_permission", return_value=True):
             result = self.resource.tool.execute_tool({"uid": uid, "params": {}})
         # 校验执行结果包含 panel_id 且工具类型正确
         panel_id = result["data"]["panel_id"]

@@ -21,7 +21,7 @@ class ToolViewSet(ResourceViewSet):
             return [CreatorBasePermissionPermission()]
         if self.action == "destroy":
             return [CreatorBasePermissionPermission()]
-        if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
+        if self.action in ["execute"]:
             return [
                 UseToolPermission(
                     actions=[ActionEnum.USE_TOOL],
