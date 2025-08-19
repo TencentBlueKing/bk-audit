@@ -40,11 +40,13 @@
             {{ t('手动录入') }}
           </bk-radio>
           <bk-radio
+            v-bk-tooltips="t('功能开发中')"
             disabled
             label="http">
             {{ t('HTTP(S)接口') }}
           </bk-radio>
           <bk-radio
+            v-bk-tooltips="t('功能开发中')"
             disabled
             label="data_sheet">
             {{ t('使用数据表') }}
@@ -77,23 +79,44 @@
               style="display: none;"
               type="file"
               @change="handleFileChange">
-            <bk-button
-              :loading="loading"
-              style="width: 88px; margin-right: 8px;"
-              @click="handleUpload">
-              <audit-icon
-                style="margin-right: 4px;"
-                type="upload" />
-              {{ t('导入数据') }}
-            </bk-button>
-            <bk-button
-              style="width: 88px;"
-              @click="handleClear">
-              <audit-icon
-                style="margin-right: 4px;"
-                type="delete" />
-              {{ t('清空数据') }}
-            </bk-button>
+            <template v-if="renderList.length <= 1 && renderList[0].key === '' && renderList[0].name === ''">
+              <bk-button
+                :loading="loading"
+                style="width: 88px; margin-right: 8px;"
+                @click="handleUpload">
+                <audit-icon
+                  style="margin-right: 4px;"
+                  type="upload" />
+                {{ t('导入数据') }}
+              </bk-button>
+            </template>
+            <audit-popconfirm
+              v-else
+              :confirm-handler="() => handleUpload()"
+              :content="t('已有配置数据，导入数据前将清空配置数据，请确认！')"
+              :title="t('确认导入数据？')">
+              <bk-button
+                :loading="loading"
+                style="width: 88px; margin-right: 8px;">
+                <audit-icon
+                  style="margin-right: 4px;"
+                  type="upload" />
+                {{ t('导入数据') }}
+              </bk-button>
+            </audit-popconfirm>
+            <audit-popconfirm
+              :confirm-handler="() => handleClear()"
+              :content="t('清空操作无法撤回，请谨慎操作！')"
+              :title="t('确认清空数据？')">
+              <bk-button
+                :disabled="renderList.length <= 1 && renderList[0].key === '' && renderList[0].name === ''"
+                style="width: 88px;">
+                <audit-icon
+                  style="margin-right: 4px;"
+                  type="delete" />
+                {{ t('清空数据') }}
+              </bk-button>
+            </audit-popconfirm>
           </div>
           <bk-input
             v-model="searchKey"
@@ -114,7 +137,7 @@
         <template v-if="renderList.length">
           <template
             v-for="(item, index) in renderList"
-            :key="item.id || `row_${index}`">
+            :key="`row_${index}`">
             <div class="field-row">
               <div class="field-value">
                 <bk-form-item
@@ -164,14 +187,14 @@
                     }"
                     style="margin-right: 10px; cursor: pointer;"
                     type="add-fill"
-                    @click="handleAdd(item.key)" />
+                    @click="handleAdd(index)" />
                   <audit-icon
                     v-bk-tooltips="{
                       content: formData.renderData.length > 1 ? t('删除') : t('至少保留一个'),
                     }"
                     :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : 'delete-icon']"
                     type="reduce-fill"
-                    @click="handleDelete(item.key)" />
+                    @click="handleDelete(index)" />
                 </div>
               </div>
             </div>
@@ -218,7 +241,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import * as XLSX from 'xlsx';
 
@@ -285,21 +308,22 @@
     searchKey.value = '';
   };
 
-  const handleAdd = (key: string) => {
+  const handleAdd = (index: number) => {
     // 在对应index后添加新字段
-    const index = formData.value.renderData.findIndex(item => item.key === key);
     formData.value.renderData.splice(index + 1, 0, {
       key: '',
       name: '',
     });
+    nextTick(() => {
+      tableFormRef.value.clearValidate();
+    });
   };
 
-  const handleDelete = (key: string) => {
+  const handleDelete = (index: number) => {
     // 只有一个不能再删除
     if (formData.value.renderData.length === 1) {
       return;
     }
-    const index = formData.value.renderData.findIndex(item => item.key === key);
     // 在对应index后删除字段
     formData.value.renderData.splice(index, 1);
   };
@@ -386,15 +410,17 @@
     }
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     uploadRef.value.click();
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     formData.value.renderData = [{
       key: '',
       name: '',
     }];
+    await nextTick();
+    tableFormRef.value.clearValidate();
   };
 
   const handleSubmit = () => {
