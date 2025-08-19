@@ -37,14 +37,15 @@ import AuthOption from '@components/auth/option.vue';
 import AuthRouterLink from '@components/auth/router-link.vue';
 import AuthSwitch from '@components/auth/switch.vue';
 import AuthCollapsePanel from '@components/audit-collapse-panel/index.vue';
+import DatePicker from '@blueking/date-picker';
 import RelationShip from '@components/relation-ship/index.vue';
 import RenderList from '@components/render-list/index.vue';
 import RenderSensitivityLevel from '@components/render-sensitivity-level/index.vue';
 import ScrollFaker from '@components/scroll-faker/index.vue';
 import SkeletonLoading from '@components/skeleton-loading/index.vue';
 import SmartAction from '@components/smart-action/index.vue';
-import DatePicker from '@blueking/date-picker';
 import SelectVerify from '@components/select-verify/index.vue';
+import SearchBox from '@components/search-box/index.vue';
 
 import WaterMark from '@utils/assist/water-mark';
 
@@ -100,6 +101,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     BKApp.component('SmartAction', SmartAction);
     BKApp.component('DatePicker', DatePicker);
     BKApp.component('SelectVerify', SelectVerify);
+    BKApp.component('SearchBox', SearchBox);
 
     BKApp.directive('bk-tooltips', bkTooltips);
     BKApp.directive('cursor', cursor);

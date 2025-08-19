@@ -55,11 +55,11 @@
   import RenderInput from './components/input.vue';
   import RenderSelect from './components/select.vue';
   import RenderUserSelector from './components/user-selector.vue';
-  import BaseConfig from './config';
 
   interface Props {
     name: string,
     model: Record<string, any>
+    fieldConfig: Record<string, any>;
   }
   interface Exposes {
     getValue: (fieldValue?: string)=> Promise<Record<string, any>|string>
@@ -72,7 +72,7 @@
   const inhertProps = useProps();
   const listeners = useListeners();
 
-  const config = BaseConfig[props.name as keyof typeof BaseConfig];
+  const config = props.fieldConfig[props.name];
 
   const comMap = {
     datetimerange: RenderDatetimerang,

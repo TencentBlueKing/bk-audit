@@ -44,6 +44,7 @@
         style="width: 368px; padding: 9px 15px;">
         <render-field-config
           ref="fieldConfigRef"
+          :field-config="fieldConfig"
           :model="model"
           :name="name"
           simple
@@ -94,7 +95,8 @@
 
   import useRequest from '@hooks/use-request';
 
-  import fieldConfig from '../render-field-config/config';
+  import type { IFieldConfig } from '../render-field-config/config';
+  // import fieldConfig from '../render-field-config/config';
   import RenderFieldConfig from '../render-field-config/index.vue';
 
   import { makeMap } from '@/utils/assist';
@@ -103,6 +105,7 @@
     name: string,
     value: any,
     model: Record<string, any>
+    fieldConfig: Record<string, IFieldConfig>;
   }
   interface Emits {
     (e: 'remove', name: string): void
@@ -117,7 +120,7 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const config = fieldConfig[props.name as keyof typeof fieldConfig];
+  const config = props.fieldConfig[props.name];
 
   const rootRef = ref();
   const popRef = ref();
@@ -125,8 +128,8 @@
   const isRemoteOriginLoading = ref(false);
   const remoteOriginalList = shallowRef<Array<any>>([]);
 
-  const allSelectTypeKeyList = Object.keys(fieldConfig).reduce((result, key) => {
-    if (fieldConfig[key].type === 'select') {
+  const allSelectTypeKeyList = Object.keys(props.fieldConfig).reduce((result, key) => {
+    if (props.fieldConfig[key].type === 'select') {
       result.push(key);
     }
     return result;

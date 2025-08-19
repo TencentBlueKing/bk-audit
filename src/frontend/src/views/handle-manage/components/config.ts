@@ -19,18 +19,8 @@ import dayjs from 'dayjs';
 import RiskManageService from '@service/risk-manage';
 import StrategyManageService from '@service/strategy-manage';
 
-export interface IFieldConfig {
-  label: string,
-  type: string,
-  required: boolean,
-  validator?: (value: any) => boolean,
-  message?: string,
-  service?: (params?: Record<string, any>) => Promise<Array<any>>,
-  labelName?: string,
-  valName?: string,
-  filterList?: string[], // 要过滤的数据列表
-  defaultParams?: Record<string, any>,
-}
+import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
+
 export default {
   risk_id: {
     label: '风险ID',
@@ -45,7 +35,7 @@ export default {
     labelName: 'label',
     valName: 'value',
     defaultParams: {
-      risk_view_type: 'all',
+      risk_view_type: 'todo',
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
@@ -56,7 +46,7 @@ export default {
     required: false,
     service: RiskManageService.fetchRiskTags,
     defaultParams: {
-      risk_view_type: 'all',
+      risk_view_type: 'todo',
       start_time: dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
       end_time: dayjs().format('YYYY-MM-DD HH:mm:ss'),
     },
@@ -71,32 +61,12 @@ export default {
     type: 'user-selector',
     required: false,
   },
-  current_operator: {
-    label: '当前处理人',
-    type: 'user-selector',
-    required: false,
-  },
   status: {
     label: '处理状态',
     type: 'select',
     required: false,
     service: RiskManageService.fetchRiskStatusCommon,
     filterList: ['new'],
-  },
-  risk_label: {
-    label: '风险标记',
-    type: 'select',
-    required: false,
-    service: () => Promise.resolve([
-      {
-        id: 'normal',
-        name: '正常',
-      },
-      {
-        id: 'misreport',
-        name: '误报',
-      },
-    ]),
   },
   event_content: {
     label: '风险描述',
