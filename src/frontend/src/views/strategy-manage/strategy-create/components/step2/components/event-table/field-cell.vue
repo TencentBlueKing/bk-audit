@@ -70,11 +70,15 @@
         :style="{
           color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
         }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : '请配置' }}</span>
-      <audit-icon
+      <audit-popconfirm
         v-if="localEventItem.enum_mappings.mappings.length"
-        class="remove-mappings-btn remove-btn"
-        type="delete-fill"
-        @click.stop="handleRemoveMappings" />
+        :confirm-handler="() => handleRemoveMappings()"
+        :content="t('删除操作无法撤回，请谨慎操作！')"
+        :title="t('确认删除该配置？')">
+        <audit-icon
+          class="remove-mappings-btn remove-btn"
+          type="delete-fill" />
+      </audit-popconfirm>
       <field-dict
         ref="fieldDictRef"
         v-model:showFieldDict="showFieldDict"
@@ -262,7 +266,7 @@
     };
   };
 
-  const handleRemoveMappings = () => {
+  const handleRemoveMappings = async () => {
     localEventItem.value.enum_mappings =  {
       collection_id: '',
       mappings: [],
@@ -351,6 +355,7 @@
     }
 
     .remove-mappings-btn {
+      top: 40%;
       right: 8px;
     }
 
