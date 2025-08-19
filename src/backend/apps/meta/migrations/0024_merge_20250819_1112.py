@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('meta', '0019_alter_generalconfig_id'),
+        ('meta', '0019_enummappingcollection_alter_generalconfig_id_and_more'),
         ('meta', '0023_alter_system_permission_type'),
     ]
 

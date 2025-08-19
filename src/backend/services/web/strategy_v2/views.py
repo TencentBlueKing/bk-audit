@@ -31,12 +31,7 @@ from apps.permission.handlers.resource_types import ResourceEnum
 
 class StrategyViewSet(ResourceViewSet):
     def get_permissions(self):
-        if self.action in [
-            "list",
-            "strategy_running_status_list",
-            "enum_mapping_by_collection_keys",
-            "enum_mapping_by_collection",
-        ]:
+        if self.action in ["list", "strategy_running_status_list"]:
             return [IAMPermission(actions=[ActionEnum.LIST_STRATEGY])]
         if self.action in ["create"]:
             return [IAMPermission(actions=[ActionEnum.CREATE_STRATEGY])]

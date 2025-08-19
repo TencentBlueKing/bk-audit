@@ -633,7 +633,7 @@ class GetStrategyEnumMappingByCollectionKeys(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        validated_request_data["related_type"] = "strategy"
+        validated_request_data["related_type"] = EnumMappingRelatedType.STRATEGY.value
         return resource.meta.get_enum_mapping_by_collection_keys(**validated_request_data)
 
 
@@ -661,7 +661,7 @@ class GetStrategyEnumMappingByCollection(StrategyV2Base):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        validated_request_data["related_type"] = "strategy"
+        validated_request_data["related_type"] = EnumMappingRelatedType.STRATEGY.value
         return resource.meta.get_enum_mapping_by_collection(**validated_request_data)
 
 

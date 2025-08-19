@@ -279,7 +279,7 @@ class GetToolEnumMappingByCollectionKeys(ToolBase):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        validated_request_data["related_type"] = "tool"
+        validated_request_data["related_type"] = EnumMappingRelatedType.TOOL.value
         return resource.meta.get_enum_mapping_by_collection_keys(**validated_request_data)
 
 
@@ -307,7 +307,7 @@ class GetToolEnumMappingByCollection(ToolBase):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        validated_request_data["related_type"] = "tool"
+        validated_request_data["related_type"] = EnumMappingRelatedType.TOOL.value
         return resource.meta.get_enum_mapping_by_collection(**validated_request_data)
 
 

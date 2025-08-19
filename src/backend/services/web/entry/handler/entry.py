@@ -37,6 +37,7 @@ from services.web.entry.constants import (
     IEG_STD_OP_DOC_URL_KEY,
     PERMISSION_MODEL_IWIKI_URL_KEY,
     SEARCH_RULE_IWIKI_URL_KEY,
+    VISION_SHARE_PERMISSION_URL_KEY,
     V3_SYSTEM_CREATE_URL_KEY,
 )
 
@@ -100,6 +101,8 @@ class EntryHandler(object):
                 "iam_web_url": GlobalMetaConfig.get(IAM_WEB_URL_KEY, default=""),
                 "ieg_std_op_doc_url": GlobalMetaConfig.get(IEG_STD_OP_DOC_URL_KEY, default=""),
             },
+            # 工具
+            "tool": {"vision_share_permission_url": GlobalMetaConfig.get(VISION_SHARE_PERMISSION_URL_KEY, default="")},
             # 三方系统地址
             "third_party_system": {
                 "bkbase_web_url": GlobalMetaConfig.get(BKBASE_WEB_URL_KEY, default=""),
