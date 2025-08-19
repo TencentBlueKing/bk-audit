@@ -85,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, ref, watch } from 'vue';
+  import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -114,7 +114,6 @@
   interface Props {
     dataConfig: SearchItem,
     originModel?: boolean
-    isBackfillData?: boolean;
   }
   interface Emits {
     (e: 'change', value: any): void
