@@ -18,6 +18,7 @@
   <div class="risk-manage-list-page-wrap">
     <search-box
       ref="searchBoxRef"
+      :field-config="FieldConfig"
       @change="handleSearchChange"
       @export="handleExport" />
     <div class="risk-manage-list">
@@ -61,9 +62,10 @@
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
-  import RiskLevel from '@views/handle-manage/components/risk-level.vue';
+  import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
 
-  import SearchBox from './search-box/index.vue';
+  // import SearchBox from './search-box/index.vue';
+  import FieldConfig from './components/config';
 
   const dataSource = RiskManageService.fetchWatchRiskList;
   interface ISettings{

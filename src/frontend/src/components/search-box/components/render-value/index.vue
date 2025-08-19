@@ -24,6 +24,7 @@
       v-for="(value, name) in modelValue"
       :key="name"
       ref="valueTagRef"
+      :field-config="fieldConfig"
       :model="modelValue"
       :name="name"
       :value="value"
@@ -45,10 +46,13 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import type { IFieldConfig } from '../render-field-config/config';
+
   import ValueTag from './value-tag.vue';
 
   interface Props {
     modelValue: Record<string, any>
+    fieldConfig: Record<string, IFieldConfig>;
   }
 
   interface Emits {
