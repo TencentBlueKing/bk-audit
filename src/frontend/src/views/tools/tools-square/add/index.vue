@@ -227,7 +227,9 @@
                   <div
                     v-if="spacePermission"
                     class="permission">
-                    该报表无权限，请 <span class="permission-link">申请权限{{ }}</span>
+                    {{ t('该报表无权限，请') }} <span
+                      class="permission-link"
+                      @click="handleApplyPermission">{{ t('申请权限') }}</span>
                   </div>
                 </bk-form-item>
               </div>
