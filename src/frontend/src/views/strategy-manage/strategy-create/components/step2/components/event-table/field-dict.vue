@@ -266,7 +266,7 @@
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageError } = useMessage();
 
   const showFieldDict = defineModel<boolean>('showFieldDict', {
     required: true,
@@ -380,6 +380,10 @@
           blankrows: true,  // 保留空行
         });
 
+        if (jsonData.length === 0) {
+          throw new Error('Excel文件中没有数据');
+        }
+
         const result = convertExcelData(jsonData as any[][]);
         resolve(result);
       } catch (error) {
@@ -401,7 +405,7 @@
       formData.value.renderData = await parseExcel(file);
       messageSuccess(t('导入成功'));
     } catch (error) {
-      console.error('Excel解析失败:', error);
+      messageError(`Excel解析失败: ${error}`);
     } finally {
       loading.value = false;
       if (e.target) {
