@@ -18,6 +18,7 @@
   <div class="risk-manage-list-page-wrap">
     <search-box
       ref="searchBoxRef"
+      :field-config="FieldConfig"
       @batch="handleBatch"
       @change="handleSearchChange"
       @export="handleExport" />
@@ -99,9 +100,11 @@
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
-  import MarkRiskLabel from './components/mark-risk-label.vue';
-  import RiskLevel from './components/risk-level.vue';
-  import SearchBox from './search-box/index.vue';
+  import MarkRiskLabel from '@views/risk-manage/list/components/mark-risk-label.vue';
+  import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
+
+  // import SearchBox from './search-box/index.vue';
+  import FieldConfig from './components/config';
 
   const dataSource = RiskManageService.fetchTodoRiskList;
   interface ISettings{

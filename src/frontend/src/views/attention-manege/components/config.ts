@@ -19,18 +19,8 @@ import dayjs from 'dayjs';
 import RiskManageService from '@service/risk-manage';
 import StrategyManageService from '@service/strategy-manage';
 
-export interface IFieldConfig {
-  label: string,
-  type: string,
-  required: boolean,
-  validator?: (value: any) => boolean,
-  message?: string,
-  service?: (params?: Record<string, any>) => Promise<Array<any>>,
-  labelName?: string,
-  valName?: string,
-  filterList?: string[]// 要过滤的数据列表
-  defaultParams?: Record<string, any>,
-}
+import type { IFieldConfig } from '@components/search-box/components/render-field-config/config';
+
 export default {
   risk_id: {
     label: '风险ID',
