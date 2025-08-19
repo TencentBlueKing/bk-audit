@@ -709,6 +709,7 @@
     toolDetails.value?.config.input_variable.forEach((item: any) => {
       filters[item.raw_name] = item.default_value;
     });
+
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(
