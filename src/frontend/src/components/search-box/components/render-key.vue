@@ -25,6 +25,7 @@
         <render-field-config
           ref="fieldConfigRef"
           class="box-column"
+          :field-config="fieldConfig"
           :model="localSearchModel"
           :name="fieldName"
           @change="handleChange" />
@@ -52,6 +53,7 @@
           <render-field-config
             ref="fieldConfigRef"
             class="box-column"
+            :field-config="fieldConfig"
             :model="localSearchModel"
             :name="fieldName"
             @change="handleChange" />
@@ -83,11 +85,13 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import filedConfig from './render-field-config/config';
+  import type { IFieldConfig } from './render-field-config/config';
+  // import filedConfig from './render-field-config/config';
   import RenderFieldConfig from './render-field-config/index.vue';
 
   interface Props {
     modelValue: Record<string, any>
+    fieldConfig: Record<string, IFieldConfig>;
   }
 
   interface Emits {
@@ -107,14 +111,14 @@
   const fieldConfigRef = ref();
   const isShowMore = ref(false);
 
-  const allFieldNameList = Object.keys(filedConfig) as Array<keyof typeof filedConfig>;
+  const allFieldNameList = Object.keys(props.fieldConfig);
   const defaultFieldList = allFieldNameList.slice(0, 7).reduce((result, fieldName) => ({
     ...result,
-    [fieldName]: filedConfig[fieldName],
+    [fieldName]: props.fieldConfig[fieldName],
   }), {});
   const moreFieldList = allFieldNameList.slice(7).reduce((result, fieldName) => ({
     ...result,
-    [fieldName]: filedConfig[fieldName],
+    [fieldName]: props.fieldConfig[fieldName],
   }), {});
 
   // 同步外部值的改动

@@ -20,6 +20,7 @@
       <component
         :is="renderComponent"
         v-model="searchModel"
+        :field-config="fieldConfig"
         @clear="handleClear"
         @submit="handleSubmit" />
     </keep-alive>
@@ -44,7 +45,8 @@
 
   import useUrlSearch from '@hooks/use-url-search';
 
-  import FieldConfig from './components/render-field-config/config';
+  import type { IFieldConfig } from './components/render-field-config/config';
+  // import FieldConfig from './components/render-field-config/config';
   import RenderKey from './components/render-key.vue';
   import RenderValue from './components/render-value/index.vue';
 
@@ -53,11 +55,14 @@
     (e: 'change', value: Record<string, any>): void;
     (e: 'changeTableHeight'): void
   }
+  interface Props {
+    fieldConfig: Record<string, IFieldConfig>;
+  }
   interface Exposes {
     clearValue: () => void;
   }
+  const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
-
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
 
   const comMap = {
@@ -91,7 +96,7 @@
 
   // 解析 url 上面附带的查询参数
   Object.keys(urlSearchParams).forEach((searchFieldName) => {
-    const config = FieldConfig[searchFieldName as keyof typeof FieldConfig];
+    const config = props.fieldConfig[searchFieldName];
     if (!config) {
       return;
     }
