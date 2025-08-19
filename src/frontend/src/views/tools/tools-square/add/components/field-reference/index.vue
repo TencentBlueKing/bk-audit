@@ -158,6 +158,7 @@
                   ref="formItemRefs"
                   :data-config="toolsDetailData.config.input_variable.
                     find(i => i.raw_name === item.source_field) as SearchItem"
+                  :target-val="item.target_value"
                   @change="(val:any) => handleFormItemChange(val, item)" />
               </div>
               <div style=" width: 75px;margin-left: 10px; color: #979ba5;">
@@ -187,7 +188,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { ref, watch } from 'vue';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -323,6 +324,15 @@
       if (toolsDetailData.value.version !== formData.value.tool.version) {
         formData.value.tool.version = toolsDetailData.value.version;
       }
+
+      nextTick(() => {
+        if (formItemRefs.value) {
+          const targetValue = formData.value.config.filter(item => item.target_value_type === 'fixed_value');
+          targetValue.forEach((item, index) => {
+            formItemRefs.value[index].setData(item.target_value);
+          });
+        }
+      });
     },
   });
 

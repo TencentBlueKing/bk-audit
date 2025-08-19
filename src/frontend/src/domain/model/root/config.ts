@@ -65,6 +65,9 @@ export default class Config {
   metric: {
     metric_report_trace_url: string;
   };
+  tool: {
+    vision_share_permission_url: string;
+  };
 
   constructor(payload = {} as Config) {
     this.aegis_id = payload.aegis_id;
@@ -92,6 +95,7 @@ export default class Config {
     this.third_doc_url = payload.third_doc_url;
     this.metric = payload.metric;
     this.help_info = this.initHelpInfo(payload.help_info);
+    this.tool = payload.tool;
   }
 
   initHelpInfo(params: Config['help_info']) {
