@@ -6,7 +6,7 @@ from django.db.models import F, OuterRef, Subquery
 from django.utils.translation import gettext_lazy
 
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
-from core.utils.tools import unique_id
+from core.utils.data import unique_id
 from services.web.tool.constants import DataSearchConfigTypeEnum, ToolTypeEnum
 from services.web.vision.models import Scenario, VisionPanel
 

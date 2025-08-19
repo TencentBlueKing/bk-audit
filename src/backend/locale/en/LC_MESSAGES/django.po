@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-05 11:10+0800\n"
+"POT-Creation-Date: 2025-08-19 11:11+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -789,6 +789,14 @@ msgstr "Update Report Strategy"
 msgid "删除订阅推送"
 msgstr "Delete Report Strategy"
 
+#, fuzzy
+#| msgid "获取我有权限的源数据列表"
+msgid "获取有权限的图表列表"
+msgstr "Get Authorized DataID List"
+
+msgid "检查分享权限"
+msgstr "Check sharing permissions"
+
 msgid "获取用户列表"
 msgstr "Get User List"
 
@@ -1146,14 +1154,14 @@ msgstr "Middle"
 msgid "高"
 msgstr "High"
 
-msgid "No Tag"
-msgstr "No Tag"
-
 msgid "简单权限"
 msgstr "Simple Permission"
 
 msgid "复杂权限"
 msgstr "Complex Permission"
+
+msgid "No Tag"
+msgstr "No Tag"
 
 msgid "Namespace不存在"
 msgstr "Namespace does not exist"
@@ -4912,6 +4920,10 @@ msgstr "Exception parsing variable type “{var_type}” value “{value}”, pl
 msgid "bkbase 查询异常;执行 SQL：{sql}"
 msgstr "BKBase query exception; executing SQL: {sql}"
 
+#, python-brace-format
+msgid "用户{user}没有权限访问嵌入图表{share_uid}"
+msgstr "The user {user} has no permission to access the embedded chart {share_uid}."
+
 msgid "工具名称"
 msgstr "Tool Name"
 
@@ -5130,4 +5142,3 @@ msgstr "[BKAudit] Process waiting for approve"
 #, python-format
 msgid "%s 操作关单"
 msgstr "%s close risk"
-

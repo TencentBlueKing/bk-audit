@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-05 11:53+0800\n"
+"POT-Creation-Date: 2025-08-19 11:11+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -789,6 +789,12 @@ msgstr "更新订阅推送"
 msgid "删除订阅推送"
 msgstr "删除订阅推送"
 
+msgid "获取有权限的图表列表"
+msgstr "获取有权限的图表列表"
+
+msgid "检查分享权限"
+msgstr "检查分享权限"
+
 msgid "获取用户列表"
 msgstr "获取用户列表"
 
@@ -1092,9 +1098,6 @@ msgstr "权限中心V4"
 msgid "审计中心"
 msgstr "审计中心"
 
-msgid "No Tag"
-msgstr "无标签"
-
 #, fuzzy
 #| msgid "接入ID"
 msgid "待接入"
@@ -1160,6 +1163,9 @@ msgstr "简单权限"
 
 msgid "复杂权限"
 msgstr "复杂权限"
+
+msgid "No Tag"
+msgstr "无标签"
 
 msgid "Namespace不存在"
 msgstr "Namespace不存在"
@@ -4890,6 +4896,10 @@ msgstr "解析变量类型“{var_type}”的值“{value}”异常,请联系系
 #, python-brace-format
 msgid "bkbase 查询异常;执行 SQL：{sql}"
 msgstr "bkbase 查询异常;执行 SQL：{sql}"
+
+#, python-brace-format
+msgid "用户{user}没有权限访问嵌入图表{share_uid}"
+msgstr "用户{user}没有权限访问嵌入图表{share_uid}"
 
 msgid "工具名称"
 msgstr "工具名称"
