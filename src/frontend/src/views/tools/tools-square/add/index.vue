@@ -224,7 +224,9 @@
                   <div
                     v-if="spacePermission"
                     class="permission">
-                    该报表无权限，请 <span class="permission-link">申请权限{{ }}</span>
+                    {{ t('该报表无权限，请') }} <span
+                      class="permission-link"
+                      @click="handleApplyPermission">{{ t('申请权限') }}</span>
                   </div>
                 </bk-form-item>
               </div>
@@ -1170,7 +1172,9 @@
   const handleApply = () => {
     window.open(`${configData.value.third_party_system.bkbase_web_url}#/auth-center/permissions`);
   };
-
+  const handleApplyPermission = () => {
+    window.open(`${configData.value.tool.vision_share_permission_url}`);
+  };
   const handleViewMore = (rtId: string) => {
     const prefix = rtId.split('_')[0];
 
