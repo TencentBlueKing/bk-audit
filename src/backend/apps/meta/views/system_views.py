@@ -37,7 +37,7 @@ class SystemsViewSet(ResourceViewSet):
             return [IAMPermission(actions=[ActionEnum.CREATE_SYSTEM])]
         if self.action in ["update"]:
             return SystemPermissionHandler.system_edit_permissions()
-        # all,favorite,actions
+        # all,favorite,actions,resource_type_search,action_search
         return []
 
     resource_routes = [
@@ -59,6 +59,8 @@ class SystemsViewSet(ResourceViewSet):
         ResourceRoute("PUT", resource.meta.update_system, pk_field="system_id"),
         ResourceRoute("PUT", resource.meta.favorite_system, pk_field="system_id", endpoint="favorite"),
         ResourceRoute("PUT", resource.meta.update_system_audit_status, pk_field="system_id", endpoint="audit_status"),
+        ResourceRoute("GET", resource.meta.action_search_list, endpoint="action_search"),
+        ResourceRoute("GET", resource.meta.resource_type_search_list, endpoint="resource_type_search"),
     ]
 
 
