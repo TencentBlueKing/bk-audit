@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 import sys
 
-if "log_export" in sys.argv:  # 根据命令行参数判断
+if "celery" in sys.argv and "worker" in sys.argv:  # 根据命令行参数判断
     from gevent import monkey
 
     monkey.patch_all()
