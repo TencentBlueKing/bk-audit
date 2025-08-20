@@ -90,8 +90,7 @@
           </bk-button>
         </div>
       </bk-form-item>
-      <!--         v-if="currenToolType !== 'bk_vision'"
- -->
+
       <bk-form-item
         error-display-type="tooltips"
         :label="t('字段值引用')"
@@ -117,7 +116,7 @@
               class="field-item">
               <div class="field-key">
                 <bk-input
-                  v-model="item.source_field"
+                  v-model="item.inputVal"
                   disabled
                   style="flex: 1;" />
               </div>
@@ -158,6 +157,7 @@
                   ref="formItemRefs"
                   :data-config="toolsDetailData.config.input_variable.
                     find(i => i.raw_name === item.source_field) as SearchItem"
+                  origin-model
                   :target-val="item.target_value"
                   @change="(val:any) => handleFormItemChange(val, item)" />
               </div>
@@ -316,6 +316,7 @@
             target_value: '',  // 初始化为空值
             target_field_type: '', // 初始化为空值
             description: item.description,
+            inputVal: '',
           });
         }
       });
@@ -330,6 +331,17 @@
           const targetValue = formData.value.config.filter(item => item.target_value_type === 'fixed_value');
           targetValue.forEach((item, index) => {
             formItemRefs.value[index].setData(item.target_value);
+          });
+
+          // inputVal的值
+          formData.value.config = formData.value.config.map((i: any) => {
+            const updatedItem = { ...i };
+            toolsDetailData.value.config.input_variable.forEach((e: any) => {
+              if (updatedItem.source_field === e.raw_name) {
+                updatedItem.inputVal = `${e.raw_name}(${e.display_name})`;
+              }
+            });
+            return updatedItem;
           });
         }
       });
@@ -383,10 +395,12 @@
   const handleSelectMapValueChange = (index: number, value: Array<LocalOutputFields>) => {
     // 清空选择
     if (!value.length) {
-      formData.value.config[index].target_value = '';
-      if (formData.value.config[index].target_field_type) {
-        formData.value.config[index].target_field_type = '';
+      const configItem = { ...formData.value.config[index] };
+      configItem.target_value = '';
+      if (configItem.target_field_type) {
+        configItem.target_field_type = '';
       }
+      formData.value.config[index] = configItem;
       return;
     }
 
@@ -402,9 +416,10 @@
     }
   };
 
-  const handleFormItemChange = (val: any, item: FormData['config'][0]) => {
-    // eslint-disable-next-line no-param-reassign
-    item.target_value = val;
+  const handleFormItemChange = (val: any, configItem: FormData['config'][0]) => {
+    const updatedItem = { ...configItem };
+    updatedItem.target_value = val;
+    formData.value.config = formData.value.config.map(item => (item === configItem ? updatedItem : item));
   };
 
   const handleSubmit = () => {
@@ -433,6 +448,9 @@
 
   const setFormData = (data: FormData) => {
     formData.value = _.cloneDeep(data);
+    if (formData.value.config.length > 0) {
+      formData.value.config = formData.value.config.map(i => ({ ...i, inputVal: '' }));
+    }
     // 根据formData.value.uid.uid，在toolCascaderList中反查对应的级联数据id: [xxx, uid], xxx为父级id
     const tagItem = toolCascaderList.value.find(item => item.children.some(child => child.id === data.tool.uid));
     if (tagItem) {

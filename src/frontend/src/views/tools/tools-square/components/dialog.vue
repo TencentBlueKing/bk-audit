@@ -707,7 +707,9 @@
   const initBK = async  (id: string) => {
     const filters: Record<string, any> = {};
     toolDetails.value?.config.input_variable.forEach((item: any) => {
-      filters[item.raw_name] = item.default_value;
+      if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
+        filters[item.raw_name] = item.default_value;
+      }
     });
 
     try {
