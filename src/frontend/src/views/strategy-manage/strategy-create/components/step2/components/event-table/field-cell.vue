@@ -62,14 +62,13 @@
 
     <div
       v-else-if="fieldKey === 'enum_mappings' && localEventItem.enum_mappings"
-      v-bk-tooltips="t('点击配置字段值映射')"
       class="field-cell-div"
       style="width: 100%;cursor: pointer;"
       @click="handleFiledDict">
       <span
         :style="{
           color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
-        }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : '请配置' }}</span>
+        }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : '请点击配置' }}</span>
       <audit-popconfirm
         v-if="localEventItem.enum_mappings.mappings.length"
         :confirm-handler="() => handleRemoveMappings()"
@@ -93,7 +92,7 @@
         class="field-cell-div"
         style="color: #c4c6cc;"
         @click="() => handleClick()">
-        {{ t('请配置') }}
+        {{ t('请点击配置') }}
       </div>
       <div
         v-else

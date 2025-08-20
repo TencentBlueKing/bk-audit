@@ -59,8 +59,25 @@
                 :description="subItem.description"
                 :label="subItem.display_name"
                 :label-width="labelWidth">
-                {{ getDisplayValue(subItem.field_name, eventItem[subItem.field_name as keyof typeof eventItem] ||
-                  eventItem.event_data[subItem.field_name]) }}
+                <span
+                  v-bk-tooltips="{
+                    content: t('映射对象', {
+                      key: displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.key ||
+                        displayValueDict.eventData[subItem.field_name]?.dict?.key ,
+                      name: displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.name ||
+                        displayValueDict.eventData[subItem.field_name]?.dict?.name ,
+                    }),
+                    disabled: !displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings &&
+                      !displayValueDict.eventData[subItem.field_name]?.isMappings,
+                  }"
+                  :class="[
+                    displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings ||
+                      displayValueDict.eventData[subItem.field_name]?.isMappings ?
+                        'tips' : '',
+                  ]">
+                  {{ displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.value ||
+                    displayValueDict.eventData[subItem.field_name]?.value }}
+                </span>
                 <template v-if="drillMap.get(subItem.field_name)">
                   <bk-button
                     class="ml8"
@@ -106,9 +123,21 @@
                     <span v-else> -- </span>
                   </template>
                   <template v-else>
-                    {{
-                      getDisplayValue(basicItem.field_name, eventItem[basicItem.field_name as keyof typeof eventItem])
-                    }}
+                    <span
+                      v-bk-tooltips="{
+                        content: t('映射对象', {
+                          key: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.key,
+                          name: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.name,
+                        }),
+                        // eslint-disable-next-line max-len
+                        disabled: !displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings,
+                      }"
+                      :class="[
+                        // eslint-disable-next-line max-len
+                        displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings ? 'tips':''
+                      ]">
+                      {{ displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value }}
+                    </span>
                   </template>
                   <template v-if="drillMap.get(basicItem.field_name)">
                     <bk-button
@@ -163,7 +192,17 @@
                         extCls:'evidence-info-value-tooltips',
                       }"
                       @mouseenter="handlerEnter($event)">
-                      <span>{{ getDisplayValue(key, eventItem.event_data[key]) }}</span>
+                      <span
+                        v-bk-tooltips="{
+                          content: t('映射对象', {
+                            key: displayValueDict.eventData[key]?.dict?.key,
+                            name: displayValueDict.eventData[key]?.dict?.name,
+                          }),
+                          disabled: !displayValueDict.eventData[key]?.isMappings,
+                        }"
+                        :class="[
+                          displayValueDict.eventData[key]?.isMappings ? 'tips' : '',
+                        ]">{{ displayValueDict.eventData[key]?.value }}</span>
                       <template v-if="drillMap.get(key)">
                         <bk-button
                           class="ml8"
@@ -291,6 +330,23 @@
     }>,
     data: RiskManageModel & StrategyInfo
   }
+
+  interface DisplayValue {
+    value: any;
+    isMappings: boolean;
+    dict?: { name: string; key: string };
+  }
+
+  type DisplayValueDict = {
+    [K in keyof Omit<typeof eventItem.value, 'event_data'>]: DisplayValue;
+  } & {
+    eventData: Record<string, DisplayValue>;
+  };
+
+  type DisplayValueKeys = keyof typeof displayValueDict.value;
+
+  type DisplayValueKeysWithoutEventData = Exclude<DisplayValueKeys, 'eventData'>;
+
   const props = defineProps<Props>();
   const router = useRouter();
   const { t, locale } = useI18n();
@@ -446,11 +502,21 @@
     if (dictDataMap.value.has(key)) {
       const dictValue = dictDataMap.value.get(key)?.find(item => item.key === String(value));
       if (dictValue) {
-        return dictValue.name;
+        return {
+          isMappings: true,
+          value: dictValue.name,
+          dict: dictValue,
+        };
       }
-      return value;
+      return {
+        isMappings: false,
+        value,
+      };
     }
-    return value;
+    return {
+      isMappings: false,
+      value,
+    };
   };
 
   // 关闭弹窗
@@ -508,6 +574,25 @@
       }
     });
     return map;
+  });
+
+  // 预处理所有展示值
+  const displayValueDict = computed<DisplayValueDict>(() => {
+    const baseKeys = Object.keys(eventItem.value).filter(key => key !== 'event_data');
+    const baseResult = baseKeys.reduce((acc, key) => {
+      acc[key as keyof typeof acc] = getDisplayValue(key, eventItem.value[key as keyof typeof eventItem.value]);
+      return acc;
+    }, {} as any);
+
+    const eventDataResult = Object.keys(eventItem.value.event_data || {}).reduce((acc, key) => {
+      acc[key] = getDisplayValue(key, eventItem.value.event_data[key]);
+      return acc;
+    }, {} as Record<string, DisplayValue>);
+
+    return {
+      ...baseResult,
+      eventData: eventDataResult,
+    };
   });
 
   onMounted(() => {
