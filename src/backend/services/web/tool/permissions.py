@@ -37,7 +37,7 @@ def check_bkvision_share_permission(user_id, share_uid) -> bool:
         username=user_id,
         share_uid=share_uid,
     )
-    check_result = result.get("result")
+    check_result = result.get("check_result")
     if not check_result:
         raise BkVisionSearchPermissionProhibited(user_id, share_uid)
     return True
