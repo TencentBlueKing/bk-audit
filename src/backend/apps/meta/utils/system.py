@@ -16,11 +16,17 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
+from collections import defaultdict
 from typing import Callable, Dict, List, Tuple
 
+from bk_resource import resource
 from blueapps.utils.logger import logger
 
-from apps.meta.constants import SystemAuditStatusEnum, SystemSortFieldEnum
+from apps.meta.constants import (
+    IAM_MANAGER_ROLE,
+    SystemAuditStatusEnum,
+    SystemSortFieldEnum,
+)
 from apps.meta.models import System
 from services.web.databus.constants import SystemStatusDict
 
@@ -63,8 +69,14 @@ def is_system_manager_func(system_ids: List[str], username: str) -> Callable[[st
     systems = System.objects.filter(system_id__in=system_ids).values("system_id", "managers")
     sys_dict = {system["system_id"]: system for system in systems}
 
+    all_managers = resource.meta.system_role_list(role=IAM_MANAGER_ROLE)
+    system_manager_map = defaultdict(list)
+    for manager in all_managers:
+        system_manager_map[manager["system_id"]].append(manager["username"])
+
     def _is_system_manager(system_id: str) -> bool:
-        managers = sys_dict.get(system_id).get("managers", [])
+        # 兼容 IAM V3 管理员
+        managers = sys_dict.get(system_id).get("managers", []) or system_manager_map.get(system_id, [])
         return username in managers
 
     return _is_system_manager
