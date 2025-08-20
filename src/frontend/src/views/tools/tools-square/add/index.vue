@@ -901,7 +901,6 @@
     filters: [],
     componentLists: [],
   });
-  const rules = {};
   const spacePermission = ref(false);
 
 
@@ -1017,6 +1016,8 @@
       share_uid: val[val.length - 1],
     }).then((res) => {
       if (res) {
+        console.log('res.data.panels', res);
+
         viewInfo.value.panels = res.data.panels;
         viewInfo.value.filters =  [...new Set(Object.keys(res.filters))];
         viewInfo.value.componentLists = [...new Set(Object.keys(res.filters))].map((e) => {
