@@ -101,8 +101,8 @@ dependencies = [
     "flower==2.0.1",
     "pympler>=1.1",
     "drf-pydantic==2.7.1",
-    "setuptools<81",
     "sqlglot==26.26.0",
+    "django-db-connection-pool==1.2.6"
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
