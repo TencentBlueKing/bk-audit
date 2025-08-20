@@ -258,6 +258,7 @@
       target_value: string;
       target_field_type: string;
       description: string;
+      inputVal?:string;
     }>;
   }
 
