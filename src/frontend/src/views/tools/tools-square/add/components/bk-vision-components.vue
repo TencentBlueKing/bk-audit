@@ -18,7 +18,7 @@
   <div class="bk-vision-component">
     <div class="component">
       <div class="lable">
-        {{ props.config?.title }}
+        {{ props.config?.title }}({{ props.config?.chartConfig.flag }})
       </div>
       <div class="content">
         <bk-date-picker
@@ -29,12 +29,17 @@
           type="datetime"
           use-shortcut-text
           @change="handlePickerChange" />
-        <date-picker
+        <div
           v-else-if="props.config?.type === 'time-ranger'"
-          v-model="pickerValue"
-          style="width: 100%;"
-          @update:model-value="handleRangeChange" />
-
+          style="position: relative;">
+          <date-picker
+            v-model="pickerValue"
+            style="width: 100%;"
+            @update:model-value="handleRangeChange" />
+          <audit-icon
+            style="position: absolute; top: 8px; right: 10px;font-size: 14px; color: #c4c6cc;"
+            type="delete-fill" />
+        </div>
         <bk-input
           v-else-if="props.config?.type === 'inputer' "
           v-model="inputVal"
@@ -64,6 +69,9 @@
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+
+  console.log(props.config?.chartConfig.flag);
+
   const now = new Date();
   const dateValue = ref(props.config.value || new Date());
   const pickerValue = ref<Array<string>>(props.config.value || []);
