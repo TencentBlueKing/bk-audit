@@ -99,6 +99,8 @@
                     v-bk-tooltips="t('影响工具是否可公开申请或公开使用')"
                     style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义')
                     }}</span>
+                    style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义')
+                    }}</span>
                 </template>
                 <bk-radio-group v-model="formData.radioGroupValue">
                   <bk-radio-button
@@ -229,21 +231,6 @@
                       @click="handleApplyPermission">{{ t('申请权限') }}</span>
                   </div>
                 </bk-form-item>
-              </div>
-            </template>
-          </card-part-vue>
-          <card-part-vue
-            v-if="formData.tool_type === 'bk_vision' && viewInfo.filters.length > 0"
-            :title="t('参数配置')"
-            :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
-            <template #content>
-              <div style="display: flex;width: 100%;">
-                <bk-vision-component
-                  v-for="comItem in viewInfo.componentLists"
-                  :key="comItem.uid"
-                  :config="comItem"
-                  style="width: 30%;margin-left: 20px;"
-                  @change="(val: any) => handleVisionChange(val, comItem.uid)" />
               </div>
             </template>
           </card-part-vue>
