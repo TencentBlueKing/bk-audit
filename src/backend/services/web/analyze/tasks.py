@@ -53,7 +53,7 @@ from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.models import Strategy
 
 
-@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def call_controller(
     func_name: str, strategy_id: int, base_control_type: BaseControlTypeChoices = None, *args, **kwargs
 ):
@@ -72,7 +72,7 @@ def call_controller(
     controller_func(*args, **kwargs)
 
 
-@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def check_flow_status(strategy_id: int, success_status: str, failed_status: str, other_status: str):
     """
     check flow status
@@ -121,7 +121,7 @@ def check_flow_status(strategy_id: int, success_status: str, failed_status: str,
         ErrorMsgHandler(title=gettext("Flow Status Abnormal"), content=gettext("Strategy ID:\t%s") % strategy_id).send()
 
 
-@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:sync_plan_from_bkbase")
 def sync_plan_from_bkbase():
     """
@@ -140,7 +140,7 @@ def sync_plan_from_bkbase():
         raise
 
 
-@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:auth_rt")
 def auth_rt():
     """Auth Result Table For BkBase"""
@@ -161,7 +161,7 @@ def auth_rt():
         AssetAuthHandler(asset).auth()
 
 
-@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def toggle_monitor(strategy_id: int, is_active: bool):
     """
     切换BKBASE数据监控开关状态

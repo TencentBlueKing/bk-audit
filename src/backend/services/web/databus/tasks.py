@@ -22,7 +22,6 @@ import time
 import traceback
 
 import requests
-from billiard.exceptions import SoftTimeLimitExceeded
 from bk_resource import api, resource
 from bk_resource.exceptions import APIRequestError
 from blueapps.contrib.celery_tools.periodic import periodic_task
@@ -64,7 +63,7 @@ from services.web.databus.models import (
 )
 
 
-@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:start_snapshot")
 def start_snapshot():
     # 获取所有的启动中快照并逐个运行 (Redis)
@@ -108,7 +107,7 @@ def start_snapshot():
             snapshot.save()
 
 
-@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:sync_tail_log_time")
 def sync_tail_log_time():
     collectors = CollectorConfig.objects.all()
@@ -116,7 +115,7 @@ def sync_tail_log_time():
         TailLogHandler.get_instance(collector).sync()
 
 
-@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:change_storage_cluster")
 def change_storage_cluster():
     def change_plugin_storage():
@@ -147,8 +146,6 @@ def change_storage_cluster():
                     collector_plugin.collector_plugin_id,
                     err,
                 )
-                if isinstance(err, SoftTimeLimitExceeded):
-                    raise err
 
     def change_config_storage():
         collectors = CollectorConfig.objects.filter(storage_changed=True, is_deleted=False)
@@ -175,7 +172,7 @@ def change_storage_cluster():
     change_config_storage()
 
 
-@periodic_task(run_every=crontab(minute="0", hour="0"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="0", hour="0"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:refresh_snapshot")
 def refresh_snapshot():
     # 获取所有的运行中快照
@@ -196,7 +193,7 @@ def refresh_snapshot():
     Snapshot.objects.filter(id__in=snapshot_ids).update(status=SnapshotRunningStatus.PREPARING.value)
 
 
-@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 def create_api_push_etl(collector_config_id: int):
     """
     创建 API PUSH 对应的数据清洗入库链路
@@ -277,11 +274,9 @@ def check_report_continues(end_time: datetime.datetime = None, time_period: int 
                 time_range,
                 err,
             )
-            if isinstance(err, SoftTimeLimitExceeded):
-                raise err
 
 
-@periodic_task(run_every=crontab(minute="*/1"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/1"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:create_or_update_plugin_etl")
 def create_or_update_plugin_etl(collector_plugin_id: int = None):
     """创建或更新采集插件清洗入库"""
@@ -298,7 +293,7 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
         PluginEtlHandler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
 
 
-@periodic_task(run_every=crontab(minute="0", hour="5"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="0", hour="5"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:check_join_data")
 def check_join_data():
     # 获取所有状态为 'running' 的快照记录
