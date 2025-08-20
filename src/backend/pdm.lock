@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:d2f31e2ba658dae1dbb6e8fcba93fcc80573ee58457ae879ae5132a34924cb5e"
+content_hash = "sha256:88ca81d44780bc7724b4dc9a5af741c7f827e7e5bb39a7e78a05c2b884f42ffd"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -377,23 +377,23 @@ files = [
 
 [[package]]
 name = "boto3"
-version = "1.40.30"
+version = "1.40.31"
 requires_python = ">=3.9"
 summary = "The AWS SDK for Python"
 groups = ["default"]
 dependencies = [
-    "botocore<1.41.0,>=1.40.30",
+    "botocore<1.41.0,>=1.40.31",
     "jmespath<2.0.0,>=0.7.1",
     "s3transfer<0.15.0,>=0.14.0",
 ]
 files = [
-    {file = "boto3-1.40.30-py3-none-any.whl", hash = "sha256:04e89abf61240857bf7dec160e22f097eec68c502509b2bb3c5010a22cb91052"},
-    {file = "boto3-1.40.30.tar.gz", hash = "sha256:e95db539c938710917f4cb4fc5915f71b27f2c836d949a1a95df7895d2e9ec8b"},
+    {file = "boto3-1.40.31-py3-none-any.whl", hash = "sha256:61d5f9975c54ff919a24ff9d472c6c09c8a443a083fe56d30c04fc22d22ac42b"},
+    {file = "boto3-1.40.31.tar.gz", hash = "sha256:8c5f1270f09431694412f326cfb5ac9786d41ea3bc6ac54cbb7161d40afc660d"},
 ]
 
 [[package]]
 name = "botocore"
-version = "1.40.30"
+version = "1.40.31"
 requires_python = ">=3.9"
 summary = "Low-level, data-driven core of boto 3."
 groups = ["default"]
@@ -404,8 +404,8 @@ dependencies = [
     "urllib3<1.27,>=1.25.4; python_version < \"3.10\"",
 ]
 files = [
-    {file = "botocore-1.40.30-py3-none-any.whl", hash = "sha256:1d87874ad81234bec3e83f9de13618f67ccdfefd08d6b8babc041cd45007447e"},
-    {file = "botocore-1.40.30.tar.gz", hash = "sha256:8a74f77cfe5c519826d22f7613f89544cbb8491a1a49d965031bd997f89a8e3f"},
+    {file = "botocore-1.40.31-py3-none-any.whl", hash = "sha256:4033a00f8c6a4b5c3acb30af9283963123917227a437e5fc165189d07bd3cf8a"},
+    {file = "botocore-1.40.31.tar.gz", hash = "sha256:9496b91bbe40ed01d341dc8f6ff0492d7f546e80f1a862b00ec5bc9045fa3324"},
 ]
 
 [[package]]
@@ -837,6 +837,36 @@ files = [
 ]
 
 [[package]]
+name = "django-db-connection-pool"
+version = "1.2.6"
+requires_python = ">=3.0"
+summary = "Database connection pool component library for Django"
+groups = ["default"]
+dependencies = [
+    "Django",
+    "SQLAlchemy",
+    "sqlparams",
+]
+files = [
+    {file = "django_db_connection_pool-1.2.6-py3-none-any.whl", hash = "sha256:80436d8228dfcbad02b75b5f65b328968105ef204672e7d84156407a82dbc5f4"},
+]
+
+[[package]]
+name = "django-db-connection-pool"
+version = "1.2.6"
+extras = ["mysql"]
+requires_python = ">=3.0"
+summary = "Database connection pool component library for Django"
+groups = ["default"]
+dependencies = [
+    "django-db-connection-pool==1.2.6",
+    "mysqlclient",
+]
+files = [
+    {file = "django_db_connection_pool-1.2.6-py3-none-any.whl", hash = "sha256:80436d8228dfcbad02b75b5f65b328968105ef204672e7d84156407a82dbc5f4"},
+]
+
+[[package]]
 name = "django-environ"
 version = "0.10.0"
 requires_python = ">=3.5,<4"
@@ -1217,7 +1247,7 @@ version = "3.2.4"
 requires_python = ">=3.9"
 summary = "Lightweight in-process concurrent programming"
 groups = ["default"]
-marker = "platform_python_implementation == \"CPython\""
+marker = "(platform_machine == \"win32\" or platform_machine == \"WIN32\" or platform_machine == \"AMD64\" or platform_machine == \"amd64\" or platform_machine == \"x86_64\" or platform_machine == \"ppc64le\" or platform_machine == \"aarch64\") and python_version < \"3.14\" or platform_python_implementation == \"CPython\""
 files = [
     {file = "greenlet-3.2.4-cp311-cp311-macosx_11_0_universal2.whl", hash = "sha256:96378df1de302bc38e99c3a9aa311967b7dc80ced1dcc6f171e99842987882a2"},
     {file = "greenlet-3.2.4-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:1ee8fae0519a337f2329cb78bd7a8e128ec0f881073d43f023c7b8d4831d5246"},
@@ -1534,6 +1564,17 @@ groups = ["default"]
 files = [
     {file = "mistune-2.0.3-py2.py3-none-any.whl", hash = "sha256:e3964140c0775535fba50bd616fe180920044a64bc21850253267b07bff89924"},
     {file = "mistune-2.0.3.tar.gz", hash = "sha256:d7605b46b6156b53b7d52a465202b29a6f00f4ea4130ad5d25e9d5547d6b7e50"},
+]
+
+[[package]]
+name = "mysqlclient"
+version = "2.2.7"
+requires_python = ">=3.8"
+summary = "Python interface to MySQL"
+groups = ["default"]
+files = [
+    {file = "mysqlclient-2.2.7-cp311-cp311-win_amd64.whl", hash = "sha256:a22d99d26baf4af68ebef430e3131bb5a9b722b79a9fcfac6d9bbf8a88800687"},
+    {file = "mysqlclient-2.2.7.tar.gz", hash = "sha256:24ae22b59416d5fcce7e99c9d37548350b4565baac82f95e149cac6ce4163845"},
 ]
 
 [[package]]
@@ -2757,6 +2798,30 @@ files = [
 ]
 
 [[package]]
+name = "sqlalchemy"
+version = "2.0.43"
+requires_python = ">=3.7"
+summary = "Database Abstraction Library"
+groups = ["default"]
+dependencies = [
+    "greenlet>=1; (platform_machine == \"win32\" or platform_machine == \"WIN32\" or platform_machine == \"AMD64\" or platform_machine == \"amd64\" or platform_machine == \"x86_64\" or platform_machine == \"ppc64le\" or platform_machine == \"aarch64\") and python_version < \"3.14\"",
+    "importlib-metadata; python_version < \"3.8\"",
+    "typing-extensions>=4.6.0",
+]
+files = [
+    {file = "sqlalchemy-2.0.43-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:52d9b73b8fb3e9da34c2b31e6d99d60f5f99fd8c1225c9dad24aeb74a91e1d29"},
+    {file = "sqlalchemy-2.0.43-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:f42f23e152e4545157fa367b2435a1ace7571cab016ca26038867eb7df2c3631"},
+    {file = "sqlalchemy-2.0.43-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4fb1a8c5438e0c5ea51afe9c6564f951525795cf432bed0c028c1cb081276685"},
+    {file = "sqlalchemy-2.0.43-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:db691fa174e8f7036afefe3061bc40ac2b770718be2862bfb03aabae09051aca"},
+    {file = "sqlalchemy-2.0.43-cp311-cp311-musllinux_1_2_aarch64.whl", hash = "sha256:fe2b3b4927d0bc03d02ad883f402d5de201dbc8894ac87d2e981e7d87430e60d"},
+    {file = "sqlalchemy-2.0.43-cp311-cp311-musllinux_1_2_x86_64.whl", hash = "sha256:4d3d9b904ad4a6b175a2de0738248822f5ac410f52c2fd389ada0b5262d6a1e3"},
+    {file = "sqlalchemy-2.0.43-cp311-cp311-win32.whl", hash = "sha256:5cda6b51faff2639296e276591808c1726c4a77929cfaa0f514f30a5f6156921"},
+    {file = "sqlalchemy-2.0.43-cp311-cp311-win_amd64.whl", hash = "sha256:c5d1730b25d9a07727d20ad74bc1039bbbb0a6ca24e6769861c1aa5bf2c4c4a8"},
+    {file = "sqlalchemy-2.0.43-py3-none-any.whl", hash = "sha256:1681c21dd2ccee222c2fe0bef671d1aef7c504087c9c4e800371cfcc8ac966fc"},
+    {file = "sqlalchemy-2.0.43.tar.gz", hash = "sha256:788bfcef6787a7764169cfe9859fe425bf44559619e1d9f56f5bddf2ebf6f417"},
+]
+
+[[package]]
 name = "sqlglot"
 version = "26.26.0"
 requires_python = ">=3.8"
@@ -2765,6 +2830,17 @@ groups = ["default"]
 files = [
     {file = "sqlglot-26.26.0-py3-none-any.whl", hash = "sha256:efd2682bc32bea72a54f55de987e9fb69f4a451e883c101d7a832388911a3f6c"},
     {file = "sqlglot-26.26.0.tar.gz", hash = "sha256:f86a9de8afd4bdc4e2b2fc0258cfc735108ef8381c7ef3edd10d9610e663dd74"},
+]
+
+[[package]]
+name = "sqlparams"
+version = "6.2.0"
+requires_python = ">=3.8"
+summary = "Convert between various DB API 2.0 parameter styles."
+groups = ["default"]
+files = [
+    {file = "sqlparams-6.2.0-py3-none-any.whl", hash = "sha256:63b32ed9051bdc52e7e8b38bc4f78aed51796cdd9135e730f4c6a7db1048dedf"},
+    {file = "sqlparams-6.2.0.tar.gz", hash = "sha256:3744a2ad16f71293db6505b21fd5229b4757489a9b09f3553656a1ae97ba7ca5"},
 ]
 
 [[package]]
