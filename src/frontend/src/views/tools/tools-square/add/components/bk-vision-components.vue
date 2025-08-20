@@ -31,14 +31,18 @@
           @change="handlePickerChange" />
         <div
           v-else-if="props.config?.type === 'time-ranger'"
-          style="position: relative;">
+          style="position: relative;"
+          @mouseenter="showDeleteIcon = true"
+          @mouseleave="showDeleteIcon = false">
           <date-picker
             v-model="pickerValue"
             style="width: 100%;"
             @update:model-value="handleRangeChange" />
           <audit-icon
-            style="position: absolute; top: 8px; right: 10px;font-size: 14px; color: #c4c6cc;"
-            type="delete-fill" />
+            v-if="showDeleteIcon"
+            class="delete"
+            type="delete-fill"
+            @click="initPickerValue" />
         </div>
         <bk-input
           v-else-if="props.config?.type === 'inputer' "
@@ -69,14 +73,12 @@
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-
-  console.log(props.config?.chartConfig.flag);
-
   const now = new Date();
   const dateValue = ref(props.config.value || new Date());
   const pickerValue = ref<Array<string>>(props.config.value || []);
   const inputVal = ref(props.config.value || []);
   const selectorValue = ref(props.config.value || []);
+  const showDeleteIcon = ref(false);
   const dateShortCut: any = [
     {
       text: '今天',
@@ -115,6 +117,10 @@
     return date;
   };
 
+  const initPickerValue = () => {
+    pickerValue.value = [];
+    emits('change', []);
+  };
   const handlePickerChange = (val: Date) => {
     dateValue.value = val;
     emits('change', val || '');
@@ -153,6 +159,15 @@
       letter-spacing: 0;
       color: #4d4f56;
     }
+  }
+
+  .delete {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: 14px;
+    color: #c4c6cc;
+    cursor: pointer;
   }
 }
 </style>
