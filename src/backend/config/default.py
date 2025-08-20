@@ -197,6 +197,9 @@ APPEND_SLASH = False
 
 FETCH_INSTANCE_USERNAME = os.getenv("BKAPP_FETCH_INSTANCE_USERNAME", "bk_iam")
 
+DATABASES["default"]["ENGINE"] = "dj_db_conn_pool.backends.mysql"
+DATABASES["default"]['POOL_OPTIONS'] = {'POOL_SIZE': 10, 'MAX_OVERFLOW': 20, 'RECYCLE': 24 * 60 * 60}
+
 REDIS_HOST = get_env_or_raise("REDIS_HOST")
 REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
