@@ -79,7 +79,7 @@
               style="display: none;"
               type="file"
               @change="handleFileChange">
-            <template v-if="renderList.length <= 1 && renderList[0].key === '' && renderList[0].name === ''">
+            <template v-if="renderList.length <= 1 && renderList[0]?.key === '' && renderList[0]?.name === ''">
               <bk-button
                 :loading="loading"
                 style="width: 88px; margin-right: 8px;"
@@ -109,7 +109,7 @@
               :content="t('清空操作无法撤回，请谨慎操作！')"
               :title="t('确认清空数据？')">
               <bk-button
-                :disabled="renderList.length <= 1 && renderList[0].key === '' && renderList[0].name === ''"
+                :disabled="renderList.length <= 1 && renderList[0]?.key === '' && renderList[0]?.name === ''"
                 style="width: 88px;">
                 <audit-icon
                   style="margin-right: 4px;"
