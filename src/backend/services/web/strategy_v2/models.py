@@ -85,6 +85,10 @@ class Strategy(SoftDeleteModel):
         verbose_name_plural = verbose_name
         ordering = ["control_id", "-strategy_id"]
 
+    def __str__(self):
+        # 便于 Django Admin 过滤器中展示清晰可读的策略名称
+        return self.strategy_name or str(self.strategy_id)
+
     @property
     def control_type_id(self):
         return Control.objects.get(control_id=self.control_id).control_type_id

@@ -59,13 +59,14 @@ class ToolVisionPermission(BasePermission):
     def get_tool_and_panel_id(self, request) -> Tuple[str, str]:
         instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
         panel = get_object_or_404(VisionPanel, id=instance_id)
+        actual_instance_id = panel.vision_id
         tool_uid = None
         tool_relation = panel.tools.first()
         if tool_relation:
             tool_uid = tool_relation.tool.uid
 
-        if instance_id and tool_uid:
-            return instance_id, tool_uid
+        if actual_instance_id and tool_uid:
+            return actual_instance_id, tool_uid
         raise ValidationError(message=gettext("无法获取报表ID"))
 
 

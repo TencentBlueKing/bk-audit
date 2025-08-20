@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from django.contrib import admin
+from django.utils.translation import gettext_lazy as _
 
 from services.web.risk.models import (
     ProcessApplication,
@@ -28,11 +29,31 @@ from services.web.risk.models import (
 )
 
 
+class StrategyFilter(admin.SimpleListFilter):
+    title = _("命中策略")
+    parameter_name = "strategy"
+
+    def lookups(self, request, model_admin):
+        # 仅展示当前风险单中实际命中的策略，避免全量策略过多
+        strategy_ids = list(Risk.objects.values_list("strategy_id", flat=True).distinct().order_by())
+        from services.web.strategy_v2.models import Strategy
+
+        strategies = Strategy.objects.filter(strategy_id__in=strategy_ids).only("strategy_id", "strategy_name")
+        return [(str(s.strategy_id), s.strategy_name or str(s.strategy_id)) for s in strategies]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value:
+            return queryset.filter(strategy_id=value)
+        return queryset
+
+
 @admin.register(Risk)
 class RiskAdmin(admin.ModelAdmin):
     list_display = [
         "risk_id",
         "title",
+        "strategy",
         "event_content_short",
         "operator",
         "event_time",
@@ -41,12 +62,14 @@ class RiskAdmin(admin.ModelAdmin):
         "notice_users",
         "risk_label",
     ]
-    search_fields = ["risk_id", "title"]
-    list_filter = ["status", "risk_label"]
+    # 支持按策略名搜索
+    search_fields = ["risk_id", "title", "strategy__strategy_name"]
+    # 支持基于命中策略过滤
+    list_filter = ["status", "risk_label", StrategyFilter]
     list_per_page = 100  # 设置每页显示100条记录
 
     def get_queryset(self, request):
-        qs = Risk.annotated_queryset()
+        qs = Risk.annotated_queryset().select_related("strategy")
         return qs
 
     def event_content_short(self, obj: Risk):
