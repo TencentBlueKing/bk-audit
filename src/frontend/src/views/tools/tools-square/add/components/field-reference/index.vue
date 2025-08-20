@@ -333,18 +333,17 @@
           targetValue.forEach((item, index) => {
             formItemRefs.value[index].setData(item.target_value);
           });
-
-          // inputVal的值
-          formData.value.config = formData.value.config.map((i: any) => {
-            const updatedItem = { ...i };
-            toolsDetailData.value.config.input_variable.forEach((e: any) => {
-              if (updatedItem.source_field === e.raw_name) {
-                updatedItem.inputVal = `${e.raw_name}(${e.display_name})`;
-              }
-            });
-            return updatedItem;
-          });
         }
+        // inputVal的值
+        formData.value.config = formData.value.config.map((i: any) => {
+          const updatedItem = { ...i };
+          toolsDetailData.value.config.input_variable.forEach((e: any) => {
+            if (updatedItem.source_field === e.raw_name) {
+              updatedItem.inputVal = `${e.raw_name}(${e.display_name})`;
+            }
+          });
+          return updatedItem;
+        });
       });
     },
   });
