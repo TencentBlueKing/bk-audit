@@ -26,6 +26,7 @@ from django.utils.translation import gettext_lazy
 from apps.meta.models import Field
 from apps.meta.utils.fields import FIELD_TYPE_LONG, FIELD_TYPE_STRING, FIELD_TYPE_TEXT
 from core.choices import TextChoices
+from core.exporter.constants import ExportField
 from services.web.databus.constants import DEFAULT_TIME_ZONE, TRANSFER_TIME_FORMAT
 
 BKM_ALERT_SYNC_HOURS = int(os.getenv("BKAPP_BKM_ALERT_SYNC_HOURS", 3))
@@ -352,9 +353,9 @@ class RiskViewType(TextChoices):
     风险视图类型
     """
 
-    ALL = "all", gettext_lazy("全部")
-    TODO = "todo", gettext_lazy("待处理")
-    WATCH = "watch", gettext_lazy("待关注")
+    ALL = "all", gettext_lazy("全部风险")
+    TODO = "todo", gettext_lazy("待我处理")
+    WATCH = "watch", gettext_lazy("我的关注")
 
 
 class RiskFields:
@@ -394,7 +395,37 @@ ES_SEARCH_ORIGIN_FIELDS = [
     EventMappingFields.RAW_EVENT_ID.field_name,
 ]
 
-# 启用 events mock
-ENABLE_EVENTS_MOCK_KEY = "ENABLE_EVENTS_MOCK"
-# events 接口 mock 数据
-EVENTS_MOCK_DATA_KEY = "EVENTS_MOCK_DATA"
+
+class RiskExportField(TextChoices):
+    """
+    定义风险基础信息字段及其对应的显示名称
+    """
+
+    RISK_ID = "risk_id", gettext_lazy("风险ID")
+    RISK_TITLE = "risk_title", gettext_lazy("风险标题")
+    EVENT_CONTENT = "event_content", gettext_lazy("风险描述")
+    RISK_TAGS = "risk_tags", gettext_lazy("风险标签")
+    EVENT_TYPE = "event_type", gettext_lazy("风险类型")
+    RISK_LEVEL = "risk_level", gettext_lazy("风险等级")
+    STRATEGY_NAME = "strategy_name", gettext_lazy("风险命中策略")
+    STRATEGY_ID = "strategy_id", gettext_lazy("风险命中策略ID")
+    RAW_EVENT_ID = "raw_event_id", gettext_lazy("原始事件ID")  # 注意：这个翻译是根据 key 推断的，请确认
+    EVENT_END_TIME = "event_end_time", gettext_lazy("最后发现时间")
+    EVENT_TIME = "event_time", gettext_lazy("首次发现时间")
+    RISK_HAZARD = "risk_hazard", gettext_lazy("风险危害")
+    RISK_GUIDANCE = "risk_guidance", gettext_lazy("处理指引")
+    STATUS = "status", gettext_lazy("处理状态")
+    RULE_ID = "rule_id", gettext_lazy("处理规则")
+    OPERATOR = "operator", gettext_lazy("责任人")
+    CURRENT_OPERATOR = "current_operator", gettext_lazy("当前处理人")
+    NOTICE_USERS = "notice_users", gettext_lazy("关注人")
+
+    @classmethod
+    def export_fields(cls) -> List[ExportField]:
+        return [ExportField(raw_name=field.value, display_name=str(field.label)) for field in cls]
+
+
+# 事件导出字段前缀
+EVENT_EXPORT_FIELD_PREFIX = "event."
+# 风险导出文件名模板
+RISK_EXPORT_FILE_NAME_TMP = gettext_lazy("审计风险_{risk_view_type}_{datetime}.xlsx")

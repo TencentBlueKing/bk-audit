@@ -468,6 +468,9 @@ CHECK_LOST_SCENE_INTERVAL = int(os.getenv("BKAPP_CHECK_LOST_SCENE_INTERVAL", 10)
 # 1 年过期，单位秒
 RECENT_USED_TTL = int(os.getenv("BKAPP_RECENT_USED_TTL", 60 * 60 * 24 * 365))
 
+# CORS 允许的 header
+CORS_EXPOSE_HEADERS = ['Content-Disposition']
+
 """
 以下为框架代码 请勿修改
 """

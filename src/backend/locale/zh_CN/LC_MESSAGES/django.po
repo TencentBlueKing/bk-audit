@@ -945,8 +945,8 @@ msgstr "云区域"
 msgid "特性ID"
 msgstr "特性ID"
 
-msgid "待处理"
-msgstr "待处理"
+msgid "待我处理"
+msgstr "待我处理"
 
 msgid "审批中"
 msgstr "审批中"
@@ -3767,11 +3767,11 @@ msgstr "已关单"
 msgid "误报"
 msgstr "误报"
 
-msgid "全部"
-msgstr "全部"
+msgid "全部风险"
+msgstr "全部风险"
 
-msgid "待关注"
-msgstr "待关注"
+msgid "我的关注"
+msgstr "我的关注"
 
 msgid "策略ID"
 msgstr "策略ID"

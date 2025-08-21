@@ -18,17 +18,21 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import json
-from typing import Dict, Type
+from collections import defaultdict
+from datetime import datetime
+from typing import Dict, List, Type
 
-from bk_resource import CacheResource, api
+from bk_resource import CacheResource, api, resource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q, QuerySet
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
+from rest_framework.settings import api_settings
 
 from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketOperate, TicketStatus
@@ -38,18 +42,25 @@ from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
+from core.exporter.constants import ExportField
 from core.models import get_request_username
-from core.utils.data import choices_to_dict
+from core.utils.data import choices_to_dict, data2string
 from core.utils.page import paginate_queryset
+from core.utils.time import mstimestamp_to_date_string
 from core.utils.tools import get_app_info
 from services.web.risk.constants import (
+    EVENT_EXPORT_FIELD_PREFIX,
+    RISK_EXPORT_FILE_NAME_TMP,
     RISK_SHOW_FIELDS,
+    RiskExportField,
     RiskFields,
     RiskLabel,
     RiskStatus,
     RiskViewType,
     TicketNodeStatus,
 )
+from services.web.risk.exceptions import ExportRiskNoPermission
+from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
 from services.web.risk.handlers.ticket import (
     AutoProcess,
     CloseRisk,
@@ -84,11 +95,13 @@ from services.web.risk.serializers import (
     ReopenRiskReqSerializer,
     RetrieveRiskStrategyInfoResponseSerializer,
     RetryAutoProcessReqSerializer,
+    RiskExportReqSerializer,
     RiskInfoSerializer,
     TicketNodeSerializer,
     UpdateRiskLabelReqSerializer,
 )
 from services.web.risk.tasks import process_one_risk, sync_auto_result
+from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
 
@@ -572,3 +585,104 @@ class ProcessRiskTicket(RiskMeta):
     def perform_request(self, validated_request_data):
         process_one_risk(risk_id=validated_request_data["risk_id"])
         return
+
+
+class RiskExport(RiskMeta):
+    name = gettext_lazy("风险导出")
+    RequestSerializer = RiskExportReqSerializer
+
+    def perform_request(self, validated_request_data):
+        risk_view_type: str = validated_request_data.get("risk_view_type", "")
+        risk_ids: str = validated_request_data["risk_ids"]
+
+        # 1. 获取有权限的风险列表
+        risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(Risk.load_authed_risks(action=ActionEnum.LIST_RISK)).filter(
+            risk_id__in=risk_ids
+        )
+
+        authed_risk_ids = list(risks.values_list("risk_id", flat=True))
+        no_authed_risk_ids = set(risk_ids) - set(authed_risk_ids)
+        if no_authed_risk_ids:
+            raise ExportRiskNoPermission(risk_ids=",".join(no_authed_risk_ids))
+
+        # 2. 按策略分组风险
+        strategies = list(Strategy.objects.filter(strategy_id__in=risks.values("strategy_id")).order_by("strategy_id"))
+
+        # 3. 获取策略的导出字段
+        strategy_export_fields: Dict[str, List[ExportField]] = defaultdict(list)
+        for strategy in strategies:
+            risk_basic_fields = RiskExportField.export_fields()
+            event_fields = [
+                ExportField(
+                    raw_name=f"{EVENT_EXPORT_FIELD_PREFIX}{field['field_name']}",
+                    display_name=field["display_name"] or field["field_name"],
+                )
+                for field in strategy.event_data_field_configs
+            ]
+            strategy_export_fields[strategy.build_sheet_name()] = risk_basic_fields + event_fields
+
+        # 4. 获取风险关联的事件,按策略分组并格式化数据
+        bulk_events_params = []
+        formatted_risks_by_strategy = defaultdict(list)
+        risk_map = {risk.risk_id: risk for risk in risks}
+        for risk_id in risk_ids:
+            risk = risk_map[risk_id]
+            # 时间转为 +8 时间字符串
+            start_time = mstimestamp_to_date_string(int(risk.event_time.timestamp() * 1000))
+            end_time = mstimestamp_to_date_string(int(datetime.now().timestamp() * 1000))
+            risk_id = risk.risk_id
+            bulk_events_params.append(
+                {"risk_id": risk_id, "start_time": start_time, "end_time": end_time, "page": 1, "page_size": 10}
+            )
+        bulk_resp = resource.risk.list_event.bulk_request(bulk_events_params)
+        for risk_id, resp in zip(risk_ids, bulk_resp):
+            risk = risk_map[risk_id]
+            events = resp["results"]
+            risk_basic_data = {
+                RiskExportField.RISK_ID: risk_id,
+                RiskExportField.RISK_TITLE: risk.title,
+                RiskExportField.EVENT_CONTENT: risk.event_content,
+                RiskExportField.RISK_TAGS: data2string(
+                    [tag_rel.tag.tag_name for tag_rel in risk.strategy.prefetched_tags]
+                ),
+                RiskExportField.EVENT_TYPE: data2string(risk.event_type),
+                RiskExportField.RISK_LEVEL: str(RiskLevel.get_label(risk.strategy.risk_level)),
+                RiskExportField.STRATEGY_NAME: risk.strategy.strategy_name,
+                RiskExportField.STRATEGY_ID: risk.strategy.strategy_id,
+                RiskExportField.RAW_EVENT_ID: risk.raw_event_id,
+                RiskExportField.EVENT_END_TIME: risk.event_end_time.strftime(api_settings.DATETIME_FORMAT),
+                RiskExportField.EVENT_TIME: risk.event_time.strftime(api_settings.DATETIME_FORMAT),
+                RiskExportField.RISK_HAZARD: risk.strategy.risk_hazard,
+                RiskExportField.RISK_GUIDANCE: risk.strategy.risk_guidance,
+                RiskExportField.STATUS: str(RiskStatus.get_label(risk.status)),
+                RiskExportField.RULE_ID: risk.rule_id,
+                RiskExportField.OPERATOR: data2string(risk.operator),
+                RiskExportField.CURRENT_OPERATOR: data2string(risk.current_operator),
+                RiskExportField.NOTICE_USERS: data2string(risk.notice_users),
+            }
+            if not events:
+                formatted_risks_by_strategy[risk.strategy.build_sheet_name()].append(risk_basic_data)
+                continue
+            for event in events:
+                event_data = {
+                    field["field_name"]: event.get("event_data", {}).get(field["field_name"], "")
+                    for field in risk.strategy.event_data_field_configs
+                }
+                # 合并风险和事件字段，事件字段增加前缀
+                formatted_risk = {
+                    **risk_basic_data,
+                    **{f"{EVENT_EXPORT_FIELD_PREFIX}{k}": v for k, v in event_data.items()},
+                }
+                formatted_risks_by_strategy[risk.strategy.build_sheet_name()].append(formatted_risk)
+
+        # 5. 导出 excel
+        exporter = MultiSheetRiskExporterXlsx()
+        exporter.write(sheets_data=formatted_risks_by_strategy, sheets_headers=strategy_export_fields)
+        excel_file = exporter.save()
+        filename = RISK_EXPORT_FILE_NAME_TMP.format(
+            risk_view_type=str(RiskViewType.get_label(risk_view_type)),
+            datetime=datetime.now().strftime('%Y%m%d_%H%M%S'),
+        )
+        stream_response = FileResponse(excel_file, as_attachment=True, filename=filename)
+        stream_response["Content-Type"] = "application/octet-stream"
+        return stream_response

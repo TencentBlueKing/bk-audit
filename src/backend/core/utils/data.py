@@ -29,7 +29,9 @@ from typing import Any, Iterator, List, Union
 
 from bk_resource.base import Empty
 from blueapps.utils.logger import logger
+from django.db.models.enums import ChoicesMeta
 
+from core.choices import Unset
 from core.constants import DEFAULT_JSON_EXPAND_SEPARATOR
 
 
@@ -48,6 +50,19 @@ def choices_to_select_list(choice_class) -> list:
 
 def choices_to_items(choice_class) -> dict:
     return {key: val for key, val in choice_class.choices}
+
+
+def value_to_label(choice: ChoicesMeta, value, default=Unset):
+    """
+    将值转换为标签
+    :param choice: 选择类
+    :param value: 值
+    :param default: 默认值, 默认为 value
+    """
+
+    if default is Unset:
+        default = value
+    return str(dict(choice.choices).get(value, default))
 
 
 def group_by(iter_list, key, sorted_key=None):
@@ -242,3 +257,13 @@ def compare_dict_specific_keys(d1: dict, d2: dict, keys: list):
     """
 
     return all(d1.get(key) == d2.get(key) for key in keys)
+
+
+def data2string(data: Any, char: str = ",") -> str:
+    """
+    将数据转换为字符串
+    """
+
+    if not isinstance(data, list):
+        return str(data)
+    return char.join([str(d) for d in data])
