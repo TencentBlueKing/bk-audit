@@ -153,6 +153,7 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.risk.retry_auto_process, endpoint="retry_auto_process", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.reopen_risk, endpoint="reopen", pk_field="risk_id"),
         ResourceRoute("POST", resource.risk.process_risk_ticket, endpoint="process_risk_ticket", pk_field="risk_id"),
+        ResourceRoute("POST", resource.risk.risk_export, endpoint="export"),
     ]
 
 

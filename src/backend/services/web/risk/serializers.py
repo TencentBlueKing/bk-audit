@@ -151,7 +151,7 @@ class ListEventRequestSerializer(serializers.Serializer):
     def to_internal_value(self, data: dict) -> dict:
         new_data = super().to_internal_value(data)
         for key, val in data.items():
-            if key not in new_data.keys():
+            if key not in new_data.keys() and key not in ["_request"]:
                 new_data[key] = val
         return new_data
 
@@ -680,3 +680,16 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
         for config in event_basic_field_configs:
             config["display_name"] = gettext(config["display_name"])
         return data
+
+
+class RiskExportReqSerializer(serializers.Serializer):
+    """
+    Risk Export Request Serializer
+    """
+
+    risk_ids = serializers.ListField(
+        label=gettext_lazy("Risk IDs"), child=serializers.CharField(), min_length=1, max_length=300
+    )
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices
+    )
