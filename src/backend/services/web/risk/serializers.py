@@ -680,3 +680,16 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
         for config in event_basic_field_configs:
             config["display_name"] = gettext(config["display_name"])
         return data
+
+
+class RiskExportReqSerializer(serializers.Serializer):
+    """
+    Risk Export Request Serializer
+    """
+
+    risk_ids = serializers.ListField(
+        label=gettext_lazy("Risk IDs"), child=serializers.CharField(), min_length=1, max_length=500
+    )
+    risk_view_type = serializers.ChoiceField(
+        label=gettext_lazy("Risk View Type"), required=False, choices=RiskViewType.choices
+    )
