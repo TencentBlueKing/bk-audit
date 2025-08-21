@@ -89,6 +89,7 @@ class DeleteReportStrategy(BKVision):
 
 
 class GetShareList(BKVision):
+    platform_authorization = False
     name = gettext_lazy("获取有权限的图表列表")
     method = "GET"
     action = "/api/v1/share/get_share_list/"
