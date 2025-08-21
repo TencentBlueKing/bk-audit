@@ -31,6 +31,7 @@ class CoreException(BlueException):
         STRATEGY_V2 = "03"
         ANALYZE = "04"
         TOOL = "05"
+        RISK = "06"
         IAM = "99"
 
 
