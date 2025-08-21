@@ -66,7 +66,7 @@ from services.web.tool.tool import (
 
 
 class ToolBase(AuditMixinResource, abc.ABC):
-    tags = ["Tool"]
+    tags = ["Tool 管理"]
 
 
 class ListToolTags(ToolBase):
