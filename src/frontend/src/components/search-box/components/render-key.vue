@@ -72,19 +72,13 @@
         @click="handleReset">
         {{ t('重置') }}
       </bk-button>
-      <!-- <bk-button
-        class="mr8"
-        :loading="isExportLoading"
-        @click="handleExport">
-        {{ t('导出数据') }}
-      </bk-button> -->
+      <slot name="button" />
     </div>
   </div>
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
   import {
-    computed,
     onBeforeUnmount,
     onMounted,
     ref,
@@ -105,7 +99,6 @@
     (e: 'update:modelValue', value: Record<string, any>): void,
     (e: 'submit'): void,
     (e: 'clear'): void,
-    (e: 'export'): void,
   }
 
   const props = defineProps<Props>();
@@ -119,18 +112,16 @@
   });
   const fieldConfigRef = ref();
   const isShowMore = ref(false);
-  const sliceNumber = ref(7);
 
   const allFieldNameList = Object.keys(props.fieldConfig);
-
-  const defaultFieldList = computed(() => allFieldNameList.slice(0, sliceNumber.value).reduce((result, fieldName) => ({
+  const defaultFieldList = allFieldNameList.slice(0, 7).reduce((result, fieldName) => ({
     ...result,
     [fieldName]: props.fieldConfig[fieldName],
-  }), {}));
-  const moreFieldList = computed(() => allFieldNameList.slice(sliceNumber.value).reduce((result, fieldName) => ({
+  }), {});
+  const moreFieldList = allFieldNameList.slice(7).reduce((result, fieldName) => ({
     ...result,
     [fieldName]: props.fieldConfig[fieldName],
-  }), {}));
+  }), {});
 
   // 同步外部值的改动
   watch(() => props.modelValue, () => {
@@ -138,13 +129,7 @@
   }, {
     immediate: true,
   });
-  // const handleExport = () => {
-  //   isExportLoading.value = true;
-  //   emits('export');
-  //   setTimeout(() => {
-  //     isExportLoading.value = false;
-  //   }, 500);
-  // };
+
   // 显示更多搜索条件
   const handleShowMore = () => {
     isShowMore.value = !isShowMore.value;
@@ -178,7 +163,6 @@
 
   const init = () => {
     const windowInnerWidth = window.innerWidth;
-    sliceNumber.value = windowInnerWidth < 1720 ? 5 : 7;
     boxRowStyle.value = windowInnerWidth < 1720 ? {
       'grid-template-columns': 'repeat(3, 1fr)',
     } : {
