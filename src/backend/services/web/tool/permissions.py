@@ -30,6 +30,9 @@ from apps.permission.handlers.drf import (
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.models import get_request_username
+from services.web.common.caller_permission import should_skip_permission_from
+from services.web.tool.exceptions import BkVisionSearchPermissionProhibited
+from services.web.tool.models import Tool
 from services.web.tool.converter import (
     ToolDjangoQuerySetConverter,
     ToolTagDjangoQuerySetConverter,
@@ -232,6 +235,14 @@ class ToolActionPermission(InstanceActionPermission):
 
         # 3. 回退到父类，检查用户是否拥有直接操作工具实例的权限
         return super().has_permission(request, view)
+
+
+class CallerContextPermission(BasePermission):
+    """调用方资源上下文权限：命中且有权限则整体放行"""
+
+    def has_permission(self, request, view):
+        username = get_request_username()
+        return should_skip_permission_from(request, username)
 
 
 class UseToolPermission(ToolActionPermission):
