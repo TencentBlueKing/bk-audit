@@ -24,7 +24,6 @@
         ref="searchBoxRef"
         @change="handleSearchChange" />
       <div class="search-result-action">
-        <!-- <BkButton>导出</BkButton> -->
         <render-type-tab
           v-if="false"
           v-model="renderType" />
