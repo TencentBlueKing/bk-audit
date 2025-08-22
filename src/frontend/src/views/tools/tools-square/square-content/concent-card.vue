@@ -56,7 +56,11 @@
                 v-show="itemMouseenter === item.uid"
                 class="item-top-right-icon">
                 <audit-icon
-                  class="edit-fill"
+                  v-bk-tooltips="{
+                    disabled: (item.permission.use_tool),
+                    content: t('无编辑权限'),
+                  }"
+                  :class="item.permission.use_tool ? 'edit-fill': 'edit-fill-disabled'"
                   type="edit-fill"
                   @click.stop="handleEdit(item)" />
 
@@ -420,12 +424,14 @@
   };
 
   const handleEdit = (item: Record<string, any>) => {
-    router.push({
-      name: 'toolsEdit',
-      params: {
-        id: item.uid,
-      },
-    });
+    if (item.permission.use_tool) {
+      router.push({
+        name: 'toolsEdit',
+        params: {
+          id: item.uid,
+        },
+      });
+    }
   };
 
   const handleMouseenter = (item: Record<string, any>) => {
@@ -820,6 +826,11 @@
             &:hover {
               color: #3a84ff;
             }
+          }
+
+          .edit-fill-disabled {
+            margin-right: 5px;
+            cursor: not-allowed;
           }
 
           .delete {
