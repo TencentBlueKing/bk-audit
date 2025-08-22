@@ -109,7 +109,8 @@ export default  {
      * @param { Object }
      */
   fetchChartLists() {
-    return ToolManageSources.getChartLists().then(({ data }) => data);
+    return ToolManageSources.getChartLists().then(({ data }) => data)
+      .catch(() => 'error');
   },
   /**
      * @desc 获取报表列表

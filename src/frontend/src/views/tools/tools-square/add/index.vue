@@ -88,44 +88,6 @@
                   style="width: 50%;"
                   type="textarea" />
               </bk-form-item>
-
-              <!-- <bk-form-item
-                :label="t('敏感定义')"
-                label-width="160"
-                property="radioGroupValue"
-                required>
-                <template #label>
-                  <span
-                    v-bk-tooltips="t('影响工具是否可公开申请或公开使用')"
-                    style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义')
-                    }}</span>
-                    style="border-bottom: 1px dashed #979ba5;">{{ t('敏感定义')
-                    }}</span>
-                </template>
-                <bk-radio-group v-model="formData.radioGroupValue">
-                  <bk-radio-button
-                    v-for="radio in radioGroup"
-                    :key="radio.id"
-                    :label="radio.label" />
-                </bk-radio-group>
-                <div v-if="formData.radioGroupValue !== ''">
-                  <bk-tag>
-                    {{ formData.radioGroupValue === t('公开可申请') ? t('可申请权限后使用') : t('指定部分人可使用，不可被申请，指定人可看到并可使用') }}
-                  </bk-tag>
-                </div>
-              </bk-form-item> -->
-
-              <!-- <bk-form-item
-                v-if="formData.radioGroupValue === t('仅指定人可用')"
-                :label="t('可用人')"
-                label-width="160"
-                property="users"
-                required>
-                <audit-user-selector
-                  v-model="formData.users"
-                  :placeholder="t('请输入可用人')"
-                  style="width: 50%;" />
-              </bk-form-item> -->
             </template>
           </card-part-vue>
           <!-- 工具类型 -->
@@ -197,38 +159,34 @@
               </bk-form-item>
               <!-- bkvision 图表 -->
               <div v-if="formData.tool_type === 'bk_vision'">
-                <!-- <bk-form-item
-                  :label="t('图表链接')"
-                  label-width="160"
-                  property="config.uid"
-                  required>
-                  <bk-input
-                    v-model.trim="formData.config.uid"
-                    :placeholder="t('请输入图表链接')"
-                    style="width: 100%;" />
-                </bk-form-item> -->
-
                 <bk-form-item
                   :label="t('选择报表')"
                   label-width="160"
                   property="config.uid"
                   required>
-                  <bk-cascader
-                    v-model="configUid"
-                    children-key="share"
-                    id-key="uid"
-                    :list="chartLists"
-                    :multiple="false"
-                    :show-complete-name="false"
-                    :style="spacePermission ? `width: 50%;border: 1px solid #e71818;` : `width: 50%;`"
-                    trigger="click"
-                    @change="handleSpaceChange" />
-                  <div
-                    v-if="spacePermission"
-                    class="permission">
-                    {{ t('该报表无权限，请') }} <span
-                      class="permission-link"
-                      @click="handleApplyPermission">{{ t('申请权限') }}</span>
+                  <div v-if="isEditView">
+                    <bk-cascader
+                      v-model="configUid"
+                      children-key="share"
+                      id-key="uid"
+                      :list="Array.isArray(chartLists) ? chartLists : []"
+                      :multiple="false"
+                      :show-complete-name="false"
+                      :style="spacePermission ? `width: 50%;border: 1px solid #e71818;` : `width: 50%;`"
+                      trigger="click"
+                      @change="handleSpaceChange" />
+                    <div
+                      v-if="spacePermission"
+                      class="permission">
+                      {{ t('该报表无权限，请') }} <span
+                        class="permission-link"
+                        @click="handleApplyPermission">{{ t('申请权限') }}</span>
+                    </div>
+                  </div>
+                  <div v-else>
+                    <bk-input
+                      v-model="isEditViewText"
+                      disabled />
                   </div>
                 </bk-form-item>
               </div>
@@ -855,7 +813,8 @@
     () => viewRootRef.value,
   );
   const isEditMode = route.name === 'toolsEdit';
-
+  const isEditView = ref(true);
+  const isEditViewText = ref(t('当前图表你没有权限，请申请权限后再操作'));
   const viewRootRef = ref();
   const editSqlRef = ref();
   const formRef = ref();
@@ -1282,23 +1241,6 @@
     };
   };
 
-  // const handlePreview = () => {
-  //   const tastQueue = [formRef.value.validate()];
-  //   if (tableInputFormRef.value) {
-  //     tastQueue.push(tableInputFormRef.value.validate());
-  //   }
-  //   // 校验后再预览
-  //   Promise.all(tastQueue).then(() => {
-  //     showPreview.value = true;
-  //     dialogVueRef.value.openDialog({
-  //       ...formData.value,
-  //       permission: {
-  //         use_tool: true,
-  //       },
-  //     }, false, {}, true);
-  //   });
-  // };
-
   const handleClose = () => {
     showPreview.value = false;
   };
@@ -1424,16 +1366,24 @@
     defaultValue: new Array<ChartListModel>(),
     manual: true,
     onSuccess: (data) => {
+      if (data === 'error') {
+        isEditView.value = false;
+        chartLists.value = [];
+        return;
+      }
       if (isEditMode) {
-        configUid.value = data.map((item) => {
-          let ids = '';
-          item.share.forEach((sh) => {
-            if (sh.uid === editorConfig.value.uid) {
-              ids = `${item.uid},${sh.uid}`;
-            }
-          });
-          return ids;
-        }).filter(item => item !== '')[0].split(',');
+        if (Array.isArray(data)) {
+          isEditView.value = true;
+          configUid.value = data.map((item: any) => {
+            let ids = '';
+            item.share.forEach((sh: any) => {
+              if (sh.uid === editorConfig.value.uid) {
+                ids = `${item.uid},${sh.uid}`;
+              }
+            });
+            return ids;
+          }).filter(item => item !== '')[0].split(',');
+        }
       }
     },
   });
