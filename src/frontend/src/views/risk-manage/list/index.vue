@@ -121,7 +121,8 @@
     {
       type: 'selection',
       label: '',
-      width: 20,
+      width: 80,
+      fixed: 'left',
     },
     {
       label: () => t('风险ID'),
