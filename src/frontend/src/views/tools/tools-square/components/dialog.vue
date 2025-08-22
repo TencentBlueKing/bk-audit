@@ -518,25 +518,57 @@
     searchForm.value = {};
     // 创建table
     columns.value = data.config.output_fields.map((item) => {
-      if (item.drill_config === null || item.drill_config?.tool.uid === '') {
-        return {
-          label: item.display_name,
-          field: item.raw_name,
-          minWidth: 200,
-          showOverflowTooltip: true,
-        };
-      }
+      const renderCell = ({ data }: { data: Record<any, any> }) => {
+        const rawVal = data[item.raw_name];
+        // 如果有enum映射，优先用映射的name
+        const mappings = item.enum_mappings?.mappings;
+        const mapped = Array.isArray(mappings) && mappings.length
+          ? mappings.find((m: any) => String(m.key) === String(rawVal))
+          : undefined;
+        const display = mapped ? mapped.name : rawVal;
+        if (item.drill_config === null || item.drill_config?.tool.uid === '') {
+          // 普通单元格
+          return <span
+            v-bk-tooltips={{
+              content: t('映射对象', {
+                key: mapped?.key,
+                name: mapped?.name,
+              }),
+              disabled: !mapped,
+            }}
+            class={{ tips: mapped }}
+          >
+            {display}
+          </span>;
+        }
+        // 可下钻的列，显示按钮
+        return (
+          <bk-button
+            v-bk-tooltips={{
+              content: t('映射对象', {
+                key: mapped?.key,
+                name: mapped?.name,
+              }),
+              disabled: !mapped,
+            }}
+            class={{ tips: mapped }}
+            theme="primary"
+            text
+            onClick={(e: any) => {
+              e.stopPropagation(); // 阻止事件冒泡
+              handleFieldDownClick(item, data);
+            }}>
+            {display}
+          </bk-button>
+        );
+      };
+
       return {
         label: item.display_name,
         field: item.raw_name,
         minWidth: 200,
         showOverflowTooltip: true,
-        render: ({ data }: {data: Record<any, string>}) => <bk-button  theme="primary" text
-           onClick={(e:any) => {
-            e.stopPropagation(); // 阻止事件冒泡
-            handleFieldDownClick(item, data);
-          }}
-          >{data[item.raw_name]} </bk-button>,
+        render: renderCell,
       };
     });
 

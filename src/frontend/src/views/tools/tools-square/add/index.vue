@@ -551,6 +551,14 @@
                         <div class="field-value">
                           {{ t('显示名') }}
                         </div>
+                        <div class="field-value">
+                          <span
+                            v-bk-tooltips="t('为储存值配置可读的展示文本')"
+                            class="tips"
+                            style="line-height: 16px;">
+                            {{ t('字段值映射') }}
+                          </span>
+                        </div>
                         <div
                           class="field-value"
                           style="flex: 0 0 380px;">
@@ -590,6 +598,37 @@
                                   v-model="item.display_name"
                                   :disabled="!formData.config.sql"
                                   :placeholder="!formData.config.sql ? t('请先配置sql') : t('请输入')" />
+                              </bk-form-item>
+                            </div>
+                            <div class="field-value">
+                              <bk-form-item
+                                error-display-type="tooltips"
+                                label=""
+                                label-width="0">
+                                <bk-input
+                                  v-if="!formData.config.sql"
+                                  disabled
+                                  :placeholder="t('请先配置sql')" />
+                                <div
+                                  v-else
+                                  class="field-value-div"
+                                  @click="() => handleFiledDict(index, item.enum_mappings)">
+                                  <span
+                                    :style="{
+                                      color: item.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
+                                      cursor: 'pointer',
+                                      marginLeft: '8px',
+                                    }">{{ item.enum_mappings.mappings.length ? t('已配置') : t('请点击配置') }}</span>
+                                  <audit-popconfirm
+                                    v-if="item.enum_mappings.mappings.length"
+                                    :confirm-handler="() => handleRemoveMappings(index)"
+                                    :content="t('删除操作无法撤回，请谨慎操作！')"
+                                    :title="t('确认删除该配置？')">
+                                    <audit-icon
+                                      class="remove-mappings-btn remove-btn"
+                                      type="delete-fill" />
+                                  </audit-popconfirm>
+                                </div>
                               </bk-form-item>
                             </div>
                             <div
@@ -643,7 +682,7 @@
                                   <span
                                     v-else
                                     style="color: #c4c6cc;">
-                                    {{ t('请配置') }}
+                                    {{ t('请点击配置') }}
                                   </span>
                                 </div>
                               </bk-form-item>
@@ -694,6 +733,12 @@
         :tag-data="toolTagData"
         @open-tool="handleOpenTool"
         @submit="handleFieldSubmit" />
+      <!-- 字段映射 -->
+      <field-dict
+        ref="fieldDictRef"
+        v-model:showFieldDict="showFieldDict"
+        :edit-data="enumMappingsData"
+        @submit="handleDictSubmit" />
     </smart-action>
   </skeleton-loading>
   <dialog-vue
@@ -739,6 +784,9 @@
 
   import useRouterBack from '@hooks/use-router-back';
 
+  import FieldDict from '@views/strategy-manage/strategy-create/components/step2/components/event-table/field-dict.vue';
+  import FormItem from '@views/tools/tools-square/components/form-item.vue';
+
   import { execCopy } from '@utils/assist';
 
   import DialogVue from '../components/dialog.vue';
@@ -758,7 +806,6 @@
   import useFullScreen from '@/hooks/use-full-screen';
   // import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
-  import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
 
   interface FormData {
@@ -803,6 +850,13 @@
             target_value_type: string;
             target_value: string;
           }>
+        };
+        enum_mappings: {
+          collection_id: string;
+          mappings: Array<{
+            key: string;
+            name: string;
+          }>;
         };
       }>
       sql: string;
@@ -870,6 +924,7 @@
   const loading = ref(false);
   const showEditSql = ref(false);
   const showFieldReference = ref(false);
+  const showFieldDict = ref(false);
   const showPreview = ref(false);
 
   const isCreating = ref(false);
@@ -921,13 +976,25 @@
           },
           config: [],
         },
+        enum_mappings: {
+          collection_id: '',
+          mappings: [],
+        },
       }],
       sql: '',
       uid: '',
     },
   });
 
+  // 字段下钻使用index
   const outputIndex = ref(-1);
+  // 字段映射使用index
+  const enumIndex = ref(-1);
+  const enumMappingsData = ref<Array<{
+    key: string;
+    name: string;
+  }>>([]);
+
   const allTagData = ref<Array<{
     tag_id: string
     tag_name: string;
@@ -968,6 +1035,8 @@
     id: false,
     label: t('否'),
   }]);
+
+  const editorConfig = ref();
 
   const rules = {
     tags: [
@@ -1100,7 +1169,7 @@
       });
     },
   });
-  const editorConfig = ref();
+
   // 编辑状态获取数据
   const {
     run: fetchToolsDetail,
@@ -1113,6 +1182,15 @@
         editor.setValue(formData.value.config.sql);
         formItemRefs.value.forEach((item: any, index: number) => {
           item?.setData(formData.value.config.input_variable[index].default_value);
+        });
+        formData.value.config.output_fields.forEach((item) => {
+          if (!item.enum_mappings) {
+            // eslint-disable-next-line no-param-reassign
+            item.enum_mappings = {
+              collection_id: '',
+              mappings: [],
+            };
+          }
         });
       });
       if (isEditMode) {
@@ -1145,7 +1223,6 @@
     const oldOutputMap = new Map(formData.value.config.output_fields.map(item => [item.raw_name, item]));
     formData.value.config.output_fields = sqlData.result_fields.map((newItem) => {
       const existing = oldOutputMap.get(newItem.raw_name);
-
       // 如果已有记录，保留用户填写的额外字段
       if (existing) {
         return existing;
@@ -1157,6 +1234,10 @@
         drill_config: {
           tool: { uid: '', version: 1 },
           config: [],
+        },
+        enum_mappings: {
+          collection_id: '',
+          mappings: [],
         },
       };
     });
@@ -1269,6 +1350,25 @@
     if (dialogRefs.value[toolInfo.uid]) {
       dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
     }
+  };
+
+  const handleFiledDict = (index: number, enumMappings?: FormData['config']['output_fields'][0]['enum_mappings']) => {
+    enumIndex.value = index;
+    showFieldDict.value = true;
+    if (enumMappings) {
+      enumMappingsData.value = enumMappings.mappings;
+    }
+  };
+
+  const handleDictSubmit = (data: FormData['config']['output_fields'][0]['enum_mappings']['mappings']) => {
+    formData.value.config.output_fields[enumIndex.value].enum_mappings.mappings = data;
+  };
+
+  const handleRemoveMappings = async (index: number) => {
+    formData.value.config.output_fields[index].enum_mappings = {
+      collection_id: '',
+      mappings: [],
+    };
   };
 
   // 删除值
@@ -1590,6 +1690,11 @@
           &:hover {
             color: #979ba5;
           }
+        }
+
+        .remove-mappings-btn {
+          top: 40%;
+          right: 8px;
         }
 
         .renew-tips {
