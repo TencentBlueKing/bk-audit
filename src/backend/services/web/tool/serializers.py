@@ -23,6 +23,7 @@ from rest_framework.fields import DictField
 
 from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
+from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.tool.constants import (
     BkVisionConfig,
     DataSearchConfigTypeEnum,
@@ -200,6 +201,11 @@ class SqlAnalyseResponseSerializer(serializers.Serializer):
 class ExecuteToolReqSerializer(serializers.Serializer):
     uid = serializers.CharField()
     params = serializers.JSONField()
+    caller_resource_type = serializers.ChoiceField(required=False, choices=CALLER_RESOURCE_TYPE_CHOICES)
+    caller_resource_id = serializers.CharField(required=False, allow_blank=True)
+    drill_field = serializers.CharField(required=False, allow_blank=True)
+    event_start_time = serializers.CharField(required=False, allow_blank=True)
+    event_end_time = serializers.CharField(required=False, allow_blank=True)
 
 
 class ExecuteToolRespSerializer(serializers.Serializer):

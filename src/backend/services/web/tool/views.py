@@ -3,11 +3,12 @@ from bk_resource import resource
 from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import insert_permission_field
+from apps.permission.handlers.drf import AnyOfPermissions, insert_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.models import get_request_username
 from core.utils.data import get_value_by_request
 from services.web.tool.permissions import (
+    CallerContextPermission,
     CreatorBasePermissionPermission,
     UseToolPermission,
 )
@@ -23,9 +24,12 @@ class ToolViewSet(ResourceViewSet):
             return [CreatorBasePermissionPermission()]
         if self.action in ["execute"]:
             return [
-                UseToolPermission(
-                    actions=[ActionEnum.USE_TOOL],
-                    resource_meta=ResourceEnum.TOOL,
+                AnyOfPermissions(
+                    CallerContextPermission(),
+                    UseToolPermission(
+                        actions=[ActionEnum.USE_TOOL],
+                        resource_meta=ResourceEnum.TOOL,
+                    ),
                 )
             ]
         return []

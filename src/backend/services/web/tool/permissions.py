@@ -3,6 +3,7 @@ from rest_framework.permissions import BasePermission
 
 from apps.permission.handlers.drf import InstanceActionPermission
 from core.models import get_request_username
+from services.web.common.caller_permission import should_skip_permission_from
 from services.web.tool.exceptions import BkVisionSearchPermissionProhibited
 from services.web.tool.models import Tool
 
@@ -30,6 +31,14 @@ class UseToolPermission(InstanceActionPermission):
         if username == tool.updated_by:
             return True
         return super().has_permission(request, view)
+
+
+class CallerContextPermission(BasePermission):
+    """调用方资源上下文权限：命中且有权限则整体放行"""
+
+    def has_permission(self, request, view):
+        username = get_request_username()
+        return should_skip_permission_from(request, username)
 
 
 def check_bkvision_share_permission(user_id, share_uid) -> bool:
