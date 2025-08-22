@@ -1016,7 +1016,7 @@
             }
           });
           return com;
-        });
+        }).filter((e:any) => e !== null);
 
         setTimeout(() => {
           // 编辑状态
