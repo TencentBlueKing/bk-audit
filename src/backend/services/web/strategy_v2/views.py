@@ -22,11 +22,13 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import (
     ActionPermission,
+    AnyOfPermissions,
     IAMPermission,
     InstanceActionPermission,
     insert_permission_field,
 )
 from apps.permission.handlers.resource_types import ResourceEnum
+from services.web.tool.permissions import CallerContextPermission
 
 
 class StrategyViewSet(ResourceViewSet):
@@ -39,6 +41,8 @@ class StrategyViewSet(ResourceViewSet):
             return [InstanceActionPermission(actions=[ActionEnum.EDIT_STRATEGY], resource_meta=ResourceEnum.STRATEGY)]
         if self.action in ["destroy"]:
             return [InstanceActionPermission(actions=[ActionEnum.DELETE_STRATEGY], resource_meta=ResourceEnum.STRATEGY)]
+        if self.action in ["enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
+            return [AnyOfPermissions(CallerContextPermission(), IAMPermission(actions=[ActionEnum.LIST_STRATEGY]))]
         return []
 
     resource_routes = [
