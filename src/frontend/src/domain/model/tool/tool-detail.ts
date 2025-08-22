@@ -68,6 +68,13 @@ export default class ToolDetail {
           target_value: string;
         }>
       };
+      enum_mappings: {
+        collection_id: string;
+        mappings: Array<{
+          key: string;
+          name: string;
+        }>;
+      };
     }>
     sql: string;
     uid: string;
