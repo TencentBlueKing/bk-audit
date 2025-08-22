@@ -164,6 +164,7 @@ class RiskManage extends ModuleBase {
       params,
     });
   }
+  // 批量转单
   batchTransRisk(params: {
     risk_ids: string[],
     new_operators: string[],
@@ -171,6 +172,16 @@ class RiskManage extends ModuleBase {
   }) {
     return Request.post(`${this.module}/bulk_trans/`, {
       params,
+    });
+  }
+  // 批量导出
+  batchExport(params: {
+      risk_ids: string[],
+      risk_view_type: string,
+    }) {
+    return Request.post(`${this.module}/export/`, {
+      params,
+      responseType: 'blob',
     });
   }
 }

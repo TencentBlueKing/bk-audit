@@ -22,8 +22,23 @@
         v-model="searchModel"
         :field-config="fieldConfig"
         @clear="handleClear"
-        @export="handleExport"
-        @submit="handleSubmit" />
+        @submit="handleSubmit">
+        <template #button>
+          <bk-button
+            v-if="isReassignment"
+            class="mr8"
+            @click="handleBatch">
+            {{ t('批量转单') }}
+          </bk-button>
+          <bk-button
+            v-if="isExport"
+            class="mr8"
+            :loading="isLoading"
+            @click="handleExport">
+            {{ t('批量导出') }}
+          </bk-button>
+        </template>
+      </component>
     </keep-alive>
     <div
       class="panel-toggle-btn"
@@ -43,7 +58,12 @@
     onMounted,
     ref,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
+  import RiskManageService from '@service/risk-manage';
+
+  import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
   import type { IFieldConfig } from './components/render-field-config/config';
@@ -51,26 +71,36 @@
   import RenderKey from './components/render-key.vue';
   import RenderValue from './components/render-value/index.vue';
 
+  const props = withDefaults(defineProps<Props>(), {
+    isReassignment: false,
+    isExport: false,
+  });
+
+  const emit = defineEmits<Emits>();
 
   interface Emits {
     (e: 'change', value: Record<string, any>): void;
     (e: 'changeTableHeight'): void;
     (e: 'export'): void;
+    (e: 'batch'): void;
   }
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
+    isReassignment?: boolean,
+    isExport?: boolean,
   }
   interface Exposes {
     clearValue: () => void;
+    exportData: (val: string[], type: string) => void;
   }
-  const props = defineProps<Props>();
-  const emit = defineEmits<Emits>();
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
-
+  const { t } = useI18n();
+  const isLoading = ref(false);
   const comMap = {
     key: RenderKey,
     value: RenderValue,
   };
+  const { messageSuccess } = useMessage();
 
   const {
     getSearchParams,
@@ -84,9 +114,31 @@
   }
 
   const renderComponent = computed(() => comMap[renderType.value]);
+  // 转单
+  const handleBatch = () => {
+    emit('batch');
+  };
+  // 批量导出
+  const {
+    run: batchExport,
+  } = useRequest(RiskManageService.batchExport, {
+    defaultValue: [],
+    onSuccess() {
+      messageSuccess(t('导出成功'));
+    },
+  });
+
   const handleExport = () => {
     emit('export');
   };
+  const handleExportData = (val: string[], type: string) => {
+    isLoading.value = true;
+    batchExport({ risk_ids: val, risk_view_type: type }).finally(() => {
+      isLoading.value = false;
+    });
+  };
+
+
   const searchModel = ref<Record<string, any>>({
     datetime: [
       dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
@@ -160,6 +212,9 @@
   defineExpose<Exposes>({
     clearValue() {
       handleClear();
+    },
+    exportData(val, type) {
+      handleExportData(val, type);
     },
   });
 

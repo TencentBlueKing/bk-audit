@@ -37,6 +37,7 @@ export interface Config {
   url: string,
   method: Method,
   params?: Record<string, any>,
+  responseType?: string,
   payload?: {
     timeout?: number,
     cache?: string | number | boolean,
@@ -113,6 +114,7 @@ export default class Request {
       baseURL: window.PROJECT_CONFIG.AJAX_URL_PREFIX,
       url: this.config.url,
       method: this.config.method,
+      responseType: this.config.responseType,
       data: {},
       params: {},
       payload: this.config.payload || {},
@@ -132,7 +134,6 @@ export default class Request {
         config[configExtend] = configPayload[configExtend as keyof Config['payload']];
       });
     }
-
     return config;
   }
 
