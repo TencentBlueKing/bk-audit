@@ -43,7 +43,7 @@ from core.lock import lock
 from core.utils.data import group_by
 
 
-@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @transaction.atomic
 def sync_system_paas_info():
     """
@@ -131,7 +131,7 @@ def sync_system_paas_info():
     logger.info("[sync_system_paas_info] finished")
 
 
-@celery_app.task(soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(load_lock_name=lambda cls_name, func_name, *args, **kwargs: f"celery:call_sync:{cls_name}:{func_name}")
 def call_sync(cls_name: str, func_name: str, *args, **kwargs):
     """
@@ -143,7 +143,7 @@ def call_sync(cls_name: str, func_name: str, *args, **kwargs):
     func(*args, **kwargs)
 
 
-@periodic_task(run_every=crontab(minute="*/10"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="sync_iam_systems")
 def sync_iam_systems():
     """
@@ -157,7 +157,7 @@ def sync_iam_systems():
         syncer().sync_resources_actions()
 
 
-@periodic_task(run_every=crontab(minute="*/30"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/30"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @transaction.atomic
 def update_system_diagnosis_push():
     """

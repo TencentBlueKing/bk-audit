@@ -19,7 +19,6 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import os
 
-from billiard.exceptions import SoftTimeLimitExceeded
 from bk_resource import api
 from bk_resource.settings import bk_resource_settings
 from blueapps.contrib.celery_tools.periodic import periodic_task
@@ -56,7 +55,7 @@ from services.web.risk.models import Risk, TicketNode
 cache: DefaultClient = _cache
 
 
-@periodic_task(run_every=crontab(minute="*/10"), queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute="*/10"), queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:sync_bkm_alert")
 def sync_bkm_alert():
     """同步监控告警为审计事件"""
@@ -68,7 +67,7 @@ def sync_bkm_alert():
         ErrorMsgHandler(gettext("Sync BKM Alert Failed"), str(err)).send()
 
 
-@celery_app.task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(lock_name="celery:add_event")
 def add_event(data: list):
     """创建审计事件"""
@@ -79,7 +78,7 @@ def add_event(data: list):
 @periodic_task(
     run_every=crontab(minute="0", hour=os.getenv("BKAPP_GENERATE_RISK_FROM_EVENT_SCHEDULE", "*")),
     queue="risk",
-    soft_time_limit=int(os.getenv("BKAPP_GENERATE_RISK_FROM_EVENT_TIMEOUT", settings.DEFAULT_CACHE_LOCK_TIMEOUT)),
+    time_limit=int(os.getenv("BKAPP_GENERATE_RISK_FROM_EVENT_TIMEOUT", settings.DEFAULT_CACHE_LOCK_TIMEOUT)),
 )
 @lock(
     lock_name="celery:generate_risk_from_event",
@@ -110,7 +109,7 @@ def generate_risk_from_event():
 @periodic_task(
     run_every=crontab(minute=settings.PROCESS_ONE_RISK_PERIODIC_TASK_MINUTE),
     queue="risk",
-    soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )
 @lock(
     lock_name="celery:process_risk_ticket",
@@ -142,7 +141,7 @@ def process_risk_ticket(*, risk_id: str = None):
             process_one_risk(risk_id=risk.risk_id)
 
 
-@celery_app.task(queue="risk", soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@celery_app.task(queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @lock(
     lock_name="celery:process_one_risk",
     load_lock_name=lambda **kwargs: f"celery:process_one_risk:{kwargs['risk_id']}",
@@ -188,9 +187,6 @@ def process_one_risk(*, risk_id: str):
             err,
         )
         ErrorMsgHandler(title, content).send()
-        # 不捕获超时的异常
-        if isinstance(err, SoftTimeLimitExceeded):
-            raise err
         # 失败达到最大次数转人工
         if retry_times >= settings.PROCESS_RISK_MAX_RETRY:
             cache.delete(key=cache_key)
@@ -210,7 +206,7 @@ def process_one_risk(*, risk_id: str):
 @periodic_task(
     run_every=crontab(minute=settings.SYNC_AUTO_RESULT_PERIODIC_TASK_MINUTE),
     queue="risk",
-    soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )
 @lock(lock_name="celery:sync_auto_result")
 def sync_auto_result(node_id: str = None):
