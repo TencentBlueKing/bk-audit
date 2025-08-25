@@ -16,17 +16,20 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import abc
+from django.utils.translation.trans_null import gettext_lazy
 
-from bk_audit.contrib.django.resources import AuditEvent
-from bk_audit.contrib.django.resources import AuditMixinResource as _AuditMixinResource
-from bk_audit.log.models import AuditContext
+from apps.exceptions import CoreException
 
 
-class AuditMixinResource(_AuditMixinResource, abc.ABC):
-    def _init_audit_event(self, request_data=None, **kwargs) -> AuditEvent:
-        event = super()._init_audit_event(request_data=request_data, **kwargs)
-        event["extend_data"]["request_data"] = request_data
-        # 兼容并发时携带 request
-        event["audit_context"] = AuditContext(request=kwargs.get("_request"))
-        return event
+class RiskException(CoreException):
+    MODULE_CODE = CoreException.Modules.RISK
+
+
+class ExportRiskNoPermission(RiskException):
+    MESSAGE = gettext_lazy("您没有权限导出风险:{risk_ids}")
+    STATUS_CODE = 400
+    ERROR_CODE = "001"
+
+    def __init__(self, risk_ids: str, *args, **kwargs):
+        self.MESSAGE = self.MESSAGE.format(risk_ids=risk_ids)
+        super().__init__(*args, **kwargs)

@@ -103,6 +103,12 @@ class Strategy(SoftDeleteModel):
         source_type = data_source.get("source_type", FlowDataSourceNodeType.BATCH_REAL)
         return FlowSQLNodeType.get_sql_node_type(source_type)
 
+    def build_sheet_name(self) -> str:
+        """
+        构建策略 sheet 页名称
+        """
+        return f"{self.strategy_name}_{self.strategy_id}"
+
 
 class StrategyAuditInstance(AuditInstance):
     """

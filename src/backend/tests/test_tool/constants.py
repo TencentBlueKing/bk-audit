@@ -35,3 +35,8 @@ MOCK_API_RESPONSE = [
     {"list": [{"field1": "value1"}, {"field2": "value2"}]},  # 数据查询结果
     {"list": [{"count": 2}]},  # 计数查询结果
 ]
+
+MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY = {
+    "use_tool_permission_tags": set(),
+    "manage_tool_permission_tags": set(),
+}

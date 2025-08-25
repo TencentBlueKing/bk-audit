@@ -58,8 +58,46 @@ const redirectLogin = (loginUrl:string) => {
   }
 };
 
+const downloadFile = (blob: Blob, fileName: string) => {
+  // 如果 fileName 未定义或为空，使用默认文件名
+  const defaultFileName = 'file.xlsx';
+  let finalFileName = fileName || defaultFileName;
+
+  // 解析 content-disposition 中的文件名
+  if (fileName.includes('filename')) {
+    const matches = fileName.match(/filename\*?=([^;]+)/i);
+    if (matches && matches[1]) {
+      const encodedFileName = matches[1];
+      // 处理 filename*=utf-8'' 格式
+      if (encodedFileName.startsWith('utf-8\'\'')) {
+        finalFileName = decodeURIComponent(encodedFileName.substring(7));
+      } else {
+        // 处理普通 filename="..." 格式
+        const quotedMatches = encodedFileName.match(/"([^"]+)"/i);
+        if (quotedMatches && quotedMatches[1]) {
+          // eslint-disable-next-line prefer-destructuring
+          finalFileName = quotedMatches[1];
+        }
+      }
+    }
+  }
+
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = finalFileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+};
+
 export default (interceptors: AxiosInterceptorManager<AxiosResponse>) => {
   interceptors.use((response: AxiosResponse) => {
+    if (response.data instanceof Blob) {
+      downloadFile(response.data, response?.headers['content-disposition']);
+      return response;
+    }
     // 处理http响应成功，后端返回逻辑
     switch (response.data.code) {
       // 后端业务逻辑处理成功

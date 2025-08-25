@@ -16,17 +16,27 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-import abc
+import os
 
-from bk_audit.contrib.django.resources import AuditEvent
-from bk_audit.contrib.django.resources import AuditMixinResource as _AuditMixinResource
-from bk_audit.log.models import AuditContext
+from django.db import migrations
+from iam.contrib.iam_migration.migrator import IAMMigrator
+
+from core.utils.distutils import strtobool
 
 
-class AuditMixinResource(_AuditMixinResource, abc.ABC):
-    def _init_audit_event(self, request_data=None, **kwargs) -> AuditEvent:
-        event = super()._init_audit_event(request_data=request_data, **kwargs)
-        event["extend_data"]["request_data"] = request_data
-        # 兼容并发时携带 request
-        event["audit_context"] = AuditContext(request=kwargs.get("_request"))
-        return event
+def forward_func(apps, schema_editor):
+    if strtobool(os.getenv("BKAPP_SKIP_IAM_MIGRATION", "False")):
+        return
+
+    migrator = IAMMigrator(Migration.migration_json)
+    migrator.migrate()
+
+
+class Migration(migrations.Migration):
+    migration_json = "initial.json"
+
+    dependencies = [
+        ("permission", "0010_update_action_resource_type_20250808"),
+    ]
+
+    operations = [migrations.RunPython(forward_func)]

@@ -189,4 +189,15 @@ export default {
     return RiskManageSource.batchTransRisk(params)
       .then(({ data }) => data);
   },
+
+  /**
+   * @desc 批量导出
+   */
+  batchExport(params: {
+    risk_ids: string[],
+    risk_view_type: string,
+  }) {
+    return RiskManageSource.batchExport(params)
+      .then(({ data }) => data);
+  },
 };

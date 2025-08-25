@@ -19,8 +19,10 @@
     <search-box
       ref="searchBoxRef"
       :field-config="FieldConfig"
+      is-export
       @change="handleSearchChange"
       @export="handleExport" />
+
     <div class="risk-manage-list">
       <render-list
         ref="listRef"
@@ -47,14 +49,12 @@
     onBeforeRouteLeave,
     useRouter,
   } from 'vue-router';
-  import * as XLSX from 'xlsx';
 
   import RiskManageService from '@service/risk-manage';
   import StrategyManageService from '@service/strategy-manage';
 
   import type RiskManageModel from '@model/risk/risk';
 
-  import useExport from '@hooks/use_export_excel';
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -64,7 +64,6 @@
 
   import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
 
-  // import SearchBox from './search-box/index.vue';
   import FieldConfig from './components/config';
 
   const dataSource = RiskManageService.fetchWatchRiskList;
@@ -110,11 +109,12 @@
   };
 
   const tableColumn = [
-    // {
-    //   type: 'selection',
-    //   label: '',
-    //   width: 20,
-    // },
+    {
+      type: 'selection',
+      label: '',
+      width: 80,
+      fixed: 'left',
+    },
     {
       label: () => t('风险ID'),
       field: () => 'risk_id',
@@ -263,11 +263,18 @@
   let timeout: number| undefined = undefined;
 
   const { messageWarn } = useMessage();
-
   const listRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
-
+  // 导出数据
+  const handleExport = () => {
+    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id);
+    if (!selectedData.length) {
+      messageWarn(t('请选择要操作的数据'));
+      return;
+    }
+    searchBoxRef.value.exportData(selectedData, 'watch');
+  };
   const disabledMap: Record<string, string> = {
     risk_id: 'risk_id',
     event_content: 'event_content',
@@ -341,70 +348,7 @@
       return defaultSettings;
     }
   });
-  const { exportExcelSheet } = useExport;
 
-  const handleExport = () => {
-    const selectedData = listRef.value.getSelection();
-
-    if (!selectedData.length) {
-      messageWarn('请选择要导出的数据');
-      return;
-    }
-    const data = selectedData.map((item: any) => {
-      const processedItem = {} as Record<string, any>;
-      Object.keys(item).forEach((key) => {
-        const value = item[key];
-        processedItem[key] = (value === undefined || value === null || value === '') ? '--' : value;
-      });
-      let riskLevelText = '';
-      if (levelData.value[item.strategy_id].risk_level === 'HIGH') {
-        riskLevelText = '高';
-      } else if (levelData.value[item.strategy_id].risk_level === 'MIDDLE') {
-        riskLevelText = '中';
-      } else if (levelData.value[item.strategy_id].risk_level === 'LOW') {
-        riskLevelText = '低';
-      }
-      const strategyName = strategyList.value.find(strategyItem => strategyItem.value === item.strategy_id)?.label;
-
-      return {
-        ...processedItem,
-        risk_level: riskLevelText,
-        tags: item.tags.length > 0 ? item.tags.join(',') : '--',
-        operator: item.operator.length > 0 ? item.operator.join(',') : '--',
-        current_operator: item.current_operator.length > 0 ? item.current_operator.join(',') : '--',
-        status: riskStatusCommon.value.find(e => e.id === item.status)?.name || '--',
-        notice_users: item.notice_users.length > 0 ? item.notice_users.join(',') : '--',
-        risk_label: item.risk_label === 'normal' ? t('正常') : t('误报'),
-        strategy_id: strategyName ? `${strategyName}(${item.strategy_id})` : '--',
-      };
-    });
-
-    const time = new Date();
-    // 新建xlsworkbook
-    const wb = XLSX.utils.book_new();
-    // 新建sheet
-    const name = `审计风险-我的关注-${time.getFullYear()}-${(time.getMonth() + 1)
-      .toString()
-      .padStart(2, '0')}-${time.getDate()}`;
-
-    const settingsFields = settings.value.fields.map((item) => {
-      if (item.label === '风险等级') {
-        return {
-          ...item,
-          field: 'risk_level',
-        };
-      }
-      return item;
-    });
-
-    const titleAr = settingsFields.map(item => item.label);
-    const exportAllTitleKey = settingsFields.map(item => item.field);
-
-    // 导出所有工单的sheet
-    exportExcelSheet(wb, data, name, titleAr as [], exportAllTitleKey);
-    // 导出xls
-    XLSX.writeFile(wb, `${name}.xlsx`);
-  };
 
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {

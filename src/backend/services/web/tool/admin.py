@@ -16,13 +16,3 @@ class ToolAdmin(admin.ModelAdmin):
         if obj:
             return self.readonly_fields + ["uid", "tool_type", "version"]
         return self.readonly_fields
-
-    fieldsets = (
-        (None, {"fields": ("uid", "namespace", "name", "description", "tool_type", "version", "config")}),
-        (
-            "时间信息",
-            {
-                "fields": ("created_at", "updated_at"),
-            },
-        ),
-    )

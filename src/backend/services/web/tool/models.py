@@ -2,12 +2,18 @@
 from typing import Optional
 
 from django.db import models
-from django.db.models import F, OuterRef, Subquery
+from django.db.models import F, OuterRef, QuerySet, Subquery
 from django.utils.translation import gettext_lazy
 
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
+from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.data import unique_id
-from services.web.tool.constants import DataSearchConfigTypeEnum, ToolTypeEnum
+from services.web.tool.constants import (
+    BkVisionConfig,
+    DataSearchConfigTypeEnum,
+    SQLDataSearchConfig,
+    ToolTypeEnum,
+)
 from services.web.vision.models import Scenario, VisionPanel
 
 
@@ -23,6 +29,7 @@ class Tool(SoftDeleteModel):
     description = models.TextField(gettext_lazy("工具描述"), null=True, blank=True, db_index=True)
     tool_type = models.CharField(gettext_lazy("工具类型"), choices=ToolTypeEnum.choices, max_length=16)
     config = models.JSONField(gettext_lazy("工具配置"), default=dict, blank=True)
+    permission_owner = models.CharField(gettext_lazy("权限负责人"), max_length=255, help_text="用于工具的权限认证")
 
     class Meta:
         verbose_name = gettext_lazy("Tool")
@@ -62,6 +69,51 @@ class Tool(SoftDeleteModel):
     def delete_by_uid(cls, uid: str):
         Tool.objects.filter(uid=uid, is_deleted=False).delete()
         ToolTag.objects.filter(tool_uid=uid).delete()
+
+    def get_tags(self) -> QuerySet["ToolTag"]:
+        """
+        获取工具的标签
+        """
+
+        return ToolTag.objects.filter(tool_uid=self.uid)
+
+    def is_created_by(self, username: str) -> bool:
+        """
+        是否由指定用户创建
+        """
+
+        return self.created_by == username
+
+    def get_permission_owner(self) -> str:
+        """
+        获取权限负责人
+        """
+
+        return self.permission_owner or self.created_by
+
+    def has_change_permission_owner(self, new_config: dict) -> bool:
+        """
+        是否需要变更权限人
+        """
+
+        if (
+            self.tool_type == ToolTypeEnum.DATA_SEARCH
+            and self.data_search_config.data_search_config_type == DataSearchConfigTypeEnum.SQL
+        ):
+            # 如果新 SQL 解析后新增表则变更权限人
+            new_config = SQLDataSearchConfig.model_validate(new_config)
+            old_sql_parsed_def = SqlQueryAnalysis(sql=self.data_search_config.sql).get_parsed_def()
+            new_parsed_def = SqlQueryAnalysis(sql=new_config.sql).get_parsed_def()
+            new_sql_tables = {table.table_name for table in new_parsed_def.referenced_tables}
+            old_sql_tables = {table.table_name for table in old_sql_parsed_def.referenced_tables}
+            return bool(new_sql_tables - old_sql_tables)
+        elif self.tool_type == ToolTypeEnum.BK_VISION:
+            old_vision_config = BkVisionConfig.model_validate(self.config)
+            new_vision_config = BkVisionConfig.model_validate(new_config)
+            # 如果新 bkvision uid 变更则变更权限人
+            return old_vision_config.uid != new_vision_config.uid
+
+        return False
 
 
 class DataSearchToolConfig(OperateRecordModel):

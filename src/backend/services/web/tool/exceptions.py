@@ -150,3 +150,23 @@ class BkVisionSearchPermissionProhibited(ToolException):
     def __init__(self, user, share_uid, *args, **kwargs):
         self.MESSAGE = self.MESSAGE.format(user=user, share_uid=share_uid)
         super().__init__(*args, **kwargs)
+
+
+class ToolDoesNotExist(ToolException):
+    """
+    工具不存在
+    """
+
+    STATUS_CODE = 404
+    ERROR_CODE = "012"
+    MESSAGE = gettext_lazy("工具不存在")
+
+
+class ToolTypeNotSupport(ToolException):
+    """
+    工具类型不支持
+    """
+
+    STATUS_CODE = 400
+    ERROR_CODE = "013"
+    MESSAGE = gettext_lazy("工具类型不支持")

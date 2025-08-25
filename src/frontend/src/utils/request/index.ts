@@ -31,7 +31,9 @@ import Request, {
 
 export type IRequestPayload = Config['payload']
 
-type IRequestConfig = Pick<Config, 'params' | 'payload'>
+type IRequestConfig = Pick<Config, 'params' | 'payload'> & {
+  responseType?: string;
+}
 interface IRequestResponseResult<T>{
   readonly 'result': boolean,
   readonly 'code': number,

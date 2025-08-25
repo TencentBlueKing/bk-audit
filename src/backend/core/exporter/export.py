@@ -17,16 +17,32 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import tempfile
 
-from bk_audit.contrib.django.resources import AuditEvent
-from bk_audit.contrib.django.resources import AuditMixinResource as _AuditMixinResource
-from bk_audit.log.models import AuditContext
+import xlsxwriter
+from django.core.files import File
 
 
-class AuditMixinResource(_AuditMixinResource, abc.ABC):
-    def _init_audit_event(self, request_data=None, **kwargs) -> AuditEvent:
-        event = super()._init_audit_event(request_data=request_data, **kwargs)
-        event["extend_data"]["request_data"] = request_data
-        # 兼容并发时携带 request
-        event["audit_context"] = AuditContext(request=kwargs.get("_request"))
-        return event
+class BaseXlsxFileExporter(abc.ABC):
+    """文件导出器基类"""
+
+    def __init__(self, *args, **kwargs):
+        self.tmp_file = tempfile.NamedTemporaryFile(delete=True, suffix=self.suffix)
+        self.workbook = xlsxwriter.Workbook(self.tmp_file.name, {'constant_memory': True})
+
+    @property
+    @abc.abstractmethod
+    def suffix(self) -> str:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def write(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def save(self) -> File:
+        self.workbook.close()
+        self.tmp_file.seek(0)  # 确保文件指针在开头
+        return File(self.tmp_file)
+
+    def close(self):
+        self.tmp_file.close()

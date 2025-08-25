@@ -427,6 +427,37 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
+    USE_TOOL_BY_TAG = ActionMeta(
+        id="use_tool_by_tag",
+        name=gettext("使用工具(标签)"),
+        name_en="Use Tool by Tag",
+        type="view",
+        related_resource_types=[ResourceEnum.TAG],
+        related_actions=[],
+        version=1,
+    )
+    MANAGE_TOOL = ActionMeta(
+        id="manage_tool",
+        name=gettext("管理工具"),
+        name_en="Manage Tool",
+        type="edit",
+        related_resource_types=[ResourceEnum.TOOL],
+        related_actions=[],
+        version=1,
+        description="管理工具,包含工具的编辑、删除操作",
+        description_en="Manage Tool,including tool editing and deletion",
+    )
+    MANAGE_TOOL_BY_TAG = ActionMeta(
+        id="manage_tool_by_tag",
+        name=gettext("管理工具(标签)"),
+        name_en="Manage Tool by Tag",
+        type="edit",
+        related_resource_types=[ResourceEnum.TAG],
+        related_actions=[],
+        version=1,
+        description="管理工具(标签),包含工具的编辑、删除操作",
+        description_en="Manage Tool(Tag),including tool editing and deletion",
+    )
 
     # 日志平台
     CREATE_COLLECTION_BK_LOG = ActionMeta(
