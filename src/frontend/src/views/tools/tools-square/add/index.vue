@@ -868,7 +868,7 @@
   );
   const isEditMode = route.name === 'toolsEdit';
   const isEditView = ref(true);
-  const isEditViewText = ref(t('当前图表你没有权限，请申请权限后再操作'));
+  const isEditViewText = ref('');
   const viewRootRef = ref();
   const editSqlRef = ref();
   const formRef = ref();
@@ -1138,11 +1138,15 @@
     onSuccess: (data) => {
       formData.value = data;
       nextTick(() => {
-        editor.setValue(formData.value.config.sql);
-        formItemRefs.value.forEach((item: any, index: number) => {
-          item?.setData(formData.value.config.input_variable[index].default_value);
-        });
-        formData.value.config.output_fields.forEach((item) => {
+        if (editor && typeof formData.value.config.sql === 'string') {
+          editor.setValue(formData.value.config.sql);
+        }
+        if (formItemRefs.value) {
+          formItemRefs.value?.forEach((item: any, index: number) => {
+            item?.setData(formData.value.config.input_variable[index].default_value);
+          });
+        }
+        formData.value.config.output_fields?.forEach((item) => {
           if (!item.enum_mappings) {
             // eslint-disable-next-line no-param-reassign
             item.enum_mappings = {
@@ -1203,7 +1207,9 @@
 
     defineTheme();
     nextTick(() => {
-      editor.setValue(sqlData.original_sql);
+      if (editor && typeof sqlData.original_sql === 'string') {
+        editor.setValue(sqlData.original_sql);
+      }
       formItemRefs.value.forEach((item: any, index: number) => {
         item?.setData(formData.value.config.input_variable[index].default_value);
       });
@@ -1468,21 +1474,30 @@
     onSuccess: (data) => {
       if (data === 'error') {
         isEditView.value = false;
+        isEditViewText.value = t('当前图表你没有权限，请申请权限后再操作');
         chartLists.value = [];
         return;
       }
       if (isEditMode) {
         if (Array.isArray(data)) {
-          isEditView.value = true;
-          configUid.value = data.map((item: any) => {
-            let ids = '';
-            item.share.forEach((sh: any) => {
-              if (sh.uid === editorConfig.value.uid) {
-                ids = `${item.uid},${sh.uid}`;
-              }
-            });
-            return ids;
-          }).filter(item => item !== '')[0].split(',');
+          // 检查 formData.value.config.uid 是否存在于 data 的 share 属性中
+          const matchedItem = data.find(item => item.share.some(sh => sh.uid === formData.value.config.uid));
+
+          if (matchedItem) {
+            isEditView.value = true;
+            configUid.value = data.map((item: any) => {
+              let ids = '';
+              item.share.forEach((sh: any) => {
+                if (sh.uid === editorConfig.value.uid) {
+                  ids = `${item.uid},${sh.uid}`;
+                }
+              });
+              return ids;
+            }).filter(item => item !== '')[0].split(',');
+          } else {
+            isEditView.value = false;
+            isEditViewText.value = formData.value.config.uid;
+          }
         }
       }
     },
