@@ -593,7 +593,7 @@ class RiskExport(RiskMeta):
 
     def perform_request(self, validated_request_data):
         risk_view_type: str = validated_request_data.get("risk_view_type", "")
-        risk_ids: str = validated_request_data["risk_ids"]
+        risk_ids: List[str] = validated_request_data["risk_ids"]
 
         # 1. 获取有权限的风险列表
         risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(Risk.load_authed_risks(action=ActionEnum.LIST_RISK)).filter(
@@ -606,7 +606,9 @@ class RiskExport(RiskMeta):
             raise ExportRiskNoPermission(risk_ids=",".join(no_authed_risk_ids))
 
         # 2. 按策略分组风险
-        strategies = list(Strategy.objects.filter(strategy_id__in=risks.values("strategy_id")).order_by("strategy_id"))
+        strategies = list(
+            Strategy.objects.filter(strategy_id__in=risks.values_list("strategy_id", flat=True)).order_by("strategy_id")
+        )
 
         # 3. 获取策略的导出字段
         strategy_export_fields: Dict[str, List[ExportField]] = defaultdict(list)
@@ -684,5 +686,5 @@ class RiskExport(RiskMeta):
             datetime=datetime.now().strftime('%Y%m%d_%H%M%S'),
         )
         stream_response = FileResponse(excel_file, as_attachment=True, filename=filename)
-        stream_response["Content-Type"] = "application/octet-stream"
+        stream_response["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         return stream_response

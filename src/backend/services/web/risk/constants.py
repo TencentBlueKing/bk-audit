@@ -409,7 +409,7 @@ class RiskExportField(TextChoices):
     RISK_LEVEL = "risk_level", gettext_lazy("风险等级")
     STRATEGY_NAME = "strategy_name", gettext_lazy("风险命中策略")
     STRATEGY_ID = "strategy_id", gettext_lazy("风险命中策略ID")
-    RAW_EVENT_ID = "raw_event_id", gettext_lazy("原始事件ID")  # 注意：这个翻译是根据 key 推断的，请确认
+    RAW_EVENT_ID = "raw_event_id", gettext_lazy("原始事件ID")
     EVENT_END_TIME = "event_end_time", gettext_lazy("最后发现时间")
     EVENT_TIME = "event_time", gettext_lazy("首次发现时间")
     RISK_HAZARD = "risk_hazard", gettext_lazy("风险危害")
