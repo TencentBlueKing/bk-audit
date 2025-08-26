@@ -15,7 +15,6 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-import gc
 from typing import Any, Dict, List
 
 from core.exporter.constants import ExportField
@@ -78,4 +77,3 @@ class MultiSheetRiskExporterXlsx(BaseXlsxFileExporter):
                 # 按表头顺序提取数据
                 row_values = [str(row_data.get(raw_name, "")) for raw_name in raw_field_names]
                 worksheet.write_row(row_num, 0, row_values, self.text_fmt)
-            gc.collect()
