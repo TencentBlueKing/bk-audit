@@ -340,6 +340,10 @@
   const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>([]);
   const drillDownItemRowData = ref<Record<string, any>>({});
 
+  const toolDetails = ref<ToolDetailModel>();
+  // 权限
+  const urlIamApply = ref('');
+
   // 工具执行
   const {
     run: fetchToolsExecute,
@@ -359,45 +363,6 @@
     },
   });
 
-  // 策略跳转
-  const handlesStrategiesClick = (item: any) => {
-    if (item?.strategies.length === 0) {
-      return;
-    }
-    const url = router.resolve({
-      name: 'strategyList',
-      query: {
-        strategy_id: item?.strategies.join(','),
-      },
-    }).href;
-    window.open(url, '_blank');
-  };
-  const toolDetails = ref<ToolDetailModel>();
-  // 获取工具详情
-  const {
-    run: fetchToolsDetail,
-  } = useRequest(ToolManageService.fetchToolsDetail, {
-    defaultValue: new ToolDetailModel(),
-    onSuccess: (data) => {
-      uid.value = data.uid;
-      permission.value = data.permission.use_tool;
-      toolDetails.value = data;
-    },
-  });
-
-  // 处理页码变化
-  const handlePageChange = (newPage: number) => {
-    pagination.value.current = newPage;
-    fetchTableData(); // 调用获取表格数据的方法
-  };
-
-  // 处理每页条数变化
-  const handlePageLimitChange = (newLimit: number) => {
-    pagination.value.limit = newLimit;
-    pagination.value.current = 1; // 重置到第一页
-    fetchTableData(); // 调用获取表格数据的方法
-  };
-
   // 获取表格数据的方法
   const fetchTableData = () => {
     isLoading.value = true;
@@ -416,6 +381,56 @@
         isLoading.value = false;
       });
   };
+
+
+  // 获取工具详情
+  const {
+    run: fetchToolsDetail,
+  } = useRequest(ToolManageService.fetchToolsDetail, {
+    defaultValue: new ToolDetailModel(),
+    onSuccess: (data) => {
+      uid.value = data.uid;
+      permission.value = data.permission.use_tool;
+      toolDetails.value = data;
+    },
+  });
+
+  // 策略跳转
+  const handlesStrategiesClick = (item: any) => {
+    if (item?.strategies.length === 0) {
+      return;
+    }
+    const url = router.resolve({
+      name: 'strategyList',
+      query: {
+        strategy_id: item?.strategies.join(','),
+      },
+    }).href;
+    window.open(url, '_blank');
+  };
+
+  const {
+    run: getApplyData,
+  } = useRequest(IamManageService.getApplyData, {
+    defaultValue: new IamApplyDataModel(),
+    onSuccess(result) {
+      urlIamApply.value = result.apply_url;
+    },
+  });
+
+  // 处理页码变化
+  const handlePageChange = (newPage: number) => {
+    pagination.value.current = newPage;
+    fetchTableData(); // 调用获取表格数据的方法
+  };
+
+  // 处理每页条数变化
+  const handlePageLimitChange = (newLimit: number) => {
+    pagination.value.limit = newLimit;
+    pagination.value.current = 1; // 重置到第一页
+    fetchTableData(); // 调用获取表格数据的方法
+  };
+
 
   // 标签名称
   const returnTagsName = (tags: string) => {
@@ -459,6 +474,10 @@
     case 'api':
       return 'apixiao';
     }
+  };
+
+  const handleIamApply = () => {
+    window.open(urlIamApply.value, '_blank');
   };
 
   const submit = () => {
@@ -652,26 +671,168 @@
     });
   };
 
-  // 权限
-  const urlIamApply = ref('');
-  const handleIamApply = () => {
-    window.open(urlIamApply.value, '_blank');
+  // 图表
+  const loadScript = (src: string) => new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = () => resolve(script);
+    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    document.head.appendChild(script);
+  });
+
+  const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
+    if (err.data.code === '9900403') {
+      const iamResult = new IamApplyDataModel(err.data.data || {});
+      // 页面展示没权限提示
+      emitBus('permission-page', iamResult);
+    } else {
+      messageError(err.message);
+    }
   };
 
-  const {
-    run: getApplyData,
-  } = useRequest(IamManageService.getApplyData, {
-    defaultValue: new IamApplyDataModel(),
-    onSuccess(result) {
-      urlIamApply.value = result.apply_url;
-    },
-  });
+  const initBK = async  (id: string) => {
+    const filters: Record<string, any> = {};
+    const drillDownFilters: Record<string, any> = {};
+
+    if (isDrillDownOpen.value) {
+      drillDownItemConfig.value.forEach((item) => {
+        if (item.target_value_type === 'field') { // 直接应用值
+          if (item.target_field_type === 'basic' || !item.target_field_type) {
+            // 从根对象取值
+            drillDownFilters[item.source_field] = drillDownItemRowData.value?.[item.target_value] ?? '';
+          } else {
+            // 从event_data对象取值
+            drillDownFilters[item.source_field] = drillDownItemRowData.value?.event_data?.[item.target_value] ?? '';
+          }
+        } else { // 固定值
+          drillDownFilters[item.source_field] = item.target_value;
+        }
+      });
+    }
+
+    toolDetails.value?.config.input_variable.forEach((item: any) => {
+      if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
+        filters[item.raw_name] = item.default_value;
+      }
+    });
+
+    try {
+      await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
+      window.BkVisionSDK.init(
+        `#panel-${uid.value}`,
+        id,
+        {
+          apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
+          chartToolMenu: [
+            { type: 'tool', id: 'fullscreen', build_in: true },
+            { type: 'tool', id: 'refresh', build_in: true },
+            { type: 'menu', id: 'excel', build_in: true },
+          ],
+          filters: isDrillDownOpen.value ? drillDownFilters : filters,
+          handleError,
+        },
+      );
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // 下钻点击
+  const handleFieldDownClick = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>) => {
+    emit('openFieldDown', drillDownItem, drillDownItemRowData);
+  };
+
+  // 打开弹窗
+  const handleOpenDialog = async (
+    itemUid: string,
+    drillDownItem?: DrillDownItem,
+    isDrillDownItemRowData?: Record<string, any>,
+    preview?: boolean,
+  ) => {
+    // 是否预览 （暂时用不上）
+    isPreview.value = preview;
+    isShow.value = true;
+
+    // dialog层级
+    const isNewIndex = sessionStorage.getItem('dialogIndex');
+    if (isNewIndex) {
+      dialogIndex.value = Number(isNewIndex) + 1;
+    }
+    nextTick(() => {
+      sessionStorage.setItem('dialogIndex', String(dialogIndex.value));
+    });
+
+    // 下钻
+    if (drillDownItem && isDrillDownItemRowData) {
+      // 是否下钻
+      isDrillDownOpen.value = true;
+      // 下选父节点drill_config的config
+      drillDownItemConfig.value = drillDownItem?.drill_config?.config;
+      // 下钻父节点所在行数据
+      drillDownItemRowData.value = isDrillDownItemRowData;
+    }
+
+    // 获取工具详情
+    fetchToolsDetail({ uid: itemUid }).then((res: ToolDetailModel) => {
+      itemInfo.value = res;
+
+      // 权限
+      if (!res?.permission.use_tool) {
+        getApplyData({
+          action_ids: 'use_tool',
+          resources: res.uid,
+        });
+      }
+
+      // 预览 （暂时用不上）
+      // if (isPreview.value) {
+      //   const detail = new ToolDetailModel();
+      //   createDialogContent({
+      //     ...detail,
+      //     ...res,
+      //   } as ToolDetailModel);
+      //   return;
+      // }
+
+      if (res.tool_type !== 'data_search') {
+        // bkVision直接请求
+        fetchTableData();
+      } else {
+        // 创建弹框form、table
+        createDialogContent(res);
+      }
+
+      setTimeout(() => {
+        const modals = document.getElementsByClassName('bk-modal-wrapper');
+
+        // 遍历所有弹窗，只调整未被拖动过的弹窗位置
+        Array.from(modals).reverse()
+          .forEach((modal, index) => {
+            const htmlModal = modal as HTMLElement;
+            // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
+            if (index > 0 && !htmlModal.style.transform) {
+              htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+            }
+          });
+      }, 0);
+    });
+  };
+
+  // 关闭弹窗
+  const handleCloseDialog = () => {
+    emit('close', itemInfo.value);
+    handleReset();
+    isShow.value = false;
+    dialogWidth.value = '50%';
+    isFullScreen.value = false;
+  };
 
   // 放大
   const handleFullscreen = () => {
     isFullScreen.value = !isFullScreen.value;
   };
 
+  // 文本溢出检测
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
     isSingleLine?: boolean;
     fontSize?: string;
@@ -717,162 +878,6 @@
     return isOverflow;
   };
 
-  // 图表
-  const loadScript = (src: string) => new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = () => resolve(script);
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-    document.head.appendChild(script);
-  });
-
-  const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
-    if (err.data.code === '9900403') {
-      const iamResult = new IamApplyDataModel(err.data.data || {});
-      // 页面展示没权限提示
-      emitBus('permission-page', iamResult);
-    } else {
-      messageError(err.message);
-    }
-  };
-
-  const initBK = async  (id: string) => {
-    const filters: Record<string, any> = {};
-    toolDetails.value?.config.input_variable.forEach((item: any) => {
-      if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
-        filters[item.raw_name] = item.default_value;
-      }
-    });
-
-    try {
-      await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
-      window.BkVisionSDK.init(
-        `#panel-${uid.value}`,
-        id,
-        {
-          apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
-          chartToolMenu: [
-            { type: 'tool', id: 'fullscreen', build_in: true },
-            { type: 'tool', id: 'refresh', build_in: true },
-            { type: 'menu', id: 'excel', build_in: true },
-          ],
-          filters: isDrillDownOpen.value ? drillDownBkVisionVConfig.value : filters,
-          handleError,
-        },
-      );
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  // 下钻点击
-  const handleFieldDownClick = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>) => {
-    emit('openFieldDown', drillDownItem, drillDownItemRowData);
-  };
-  // bkVision下钻
-  const drillDownBkVisionVConfig = ref<Record<string, any>>({});
-  // 打开弹窗
-  const handleOpenDialog = async (
-    itemUid: string,
-    drillDownItem?: DrillDownItem,
-    isDrillDownItemRowData?: Record<string, any>,
-    preview?: boolean,
-  ) => {
-    // 下钻
-    if (drillDownItem && isDrillDownItemRowData) {
-      // 是否下钻
-      isDrillDownOpen.value = true;
-      // 下选父节点drill_config的config
-      drillDownItemConfig.value = drillDownItem?.drill_config?.config;
-      // 下钻父节点所在行数据
-      drillDownItemRowData.value = isDrillDownItemRowData;
-
-      drillDownItem?.drill_config.config.forEach((e: any) => {
-        if (e.target_value_type === 'field') { // 直接应用值
-          // 判断 isDrillDownItemRowData?.[e.target_value]是不是时间戳
-          const value = isDrillDownItemRowData?.[e.target_value];
-          if (typeof value === 'number' && value > 1e12) {
-            // 毫秒级时间戳转换
-            const date = new Date(value);
-            drillDownBkVisionVConfig.value[e.source_field] = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-          } else if (typeof value === 'number' && value > 1e8) {
-            // 秒级时间戳转换
-            const date = new Date(value * 1000);
-            drillDownBkVisionVConfig.value[e.source_field] = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-          } else {
-            drillDownBkVisionVConfig.value[e.source_field] = value;
-          }
-        } else { // 使用默认值
-          drillDownBkVisionVConfig.value[e.source_field] = e.target_value;
-        }
-      });
-    }
-    // 是否预览 （暂时用不上）
-    isPreview.value = preview;
-
-    isShow.value = true;
-    // itemInfo.value = item;
-
-    const isNewIndex = sessionStorage.getItem('dialogIndex');
-    if (isNewIndex) {
-      dialogIndex.value = Number(isNewIndex) + 1;
-    }
-    nextTick(() => {
-      sessionStorage.setItem('dialogIndex', String(dialogIndex.value));
-    });
-
-
-    // 获取工具详情
-    fetchToolsDetail({ uid: itemUid }).then((res: ToolDetailModel) => {
-      isShow.value = true;
-      itemInfo.value = res;
-
-      // 权限
-      if (!res?.permission.use_tool) {
-        getApplyData({
-          action_ids: 'use_tool',
-          resources: res.uid,
-        });
-      }
-      // 预览 （暂时用不上）
-      if (isPreview.value) {
-        const detail = new ToolDetailModel();
-        createDialogContent({
-          ...detail,
-          ...res,
-        } as ToolDetailModel);
-        return;
-      }
-      // bkVision直接请求
-      if (res.tool_type !== 'data_search') {
-        fetchTableData();
-      } else {
-        // 创建弹框form、table
-        createDialogContent(res);
-      }
-      setTimeout(() => {
-        const modals = document.getElementsByClassName('bk-modal-wrapper');
-
-        // 遍历所有弹窗，只调整未被拖动过的弹窗位置
-        Array.from(modals).reverse()
-          .forEach((modal, index) => {
-            const htmlModal = modal as HTMLElement;
-            // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
-            if (index > 0 && !htmlModal.style.transform) {
-              htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-            }
-          });
-      }, 0);
-    });
-  };
-
-  const handleCloseDialog = () => {
-    emit('close', itemInfo.value);
-    handleReset();
-    isShow.value = false;
-    dialogWidth.value = '50%';
-    isFullScreen.value = false;
-  };
   // 添加边框拖动逻辑
   const startResize = (e: MouseEvent) => {
     e.preventDefault();
@@ -943,6 +948,7 @@
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   };
+
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
