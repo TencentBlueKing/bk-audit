@@ -52,6 +52,7 @@ export default class ToolInfo {
   };
   permission: {
     use_tool: boolean;
+    manage_tool: boolean;
   };
   strategies: Array<string>;
   tags: Array<string>;

@@ -62,6 +62,12 @@ class ToolManage extends ModuleBase {
       params,
     });
   }
+  // 编辑模式解析sql
+  editModelParseSql(params: Record<string, any>) {
+    return Request.post<ParseSqlModel>(`${this.path}/tool/${params.uid}/sql_analyse_with_tool/`, {
+      params,
+    });
+  }
   // 获取工具详情
   getToolsDetail(params: {
     uid: string,

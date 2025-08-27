@@ -30,6 +30,7 @@ export default class ToolDetail {
   created_by: string;
   permission:{
     use_tool: boolean;
+    manage_tool: boolean;
   };
   strategies: Array<string>;
   data_search_config_type: string;
