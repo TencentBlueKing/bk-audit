@@ -58,6 +58,14 @@ export default  {
       .then(({ data }) => data);
   },
   /**
+   * @desc 编辑模式解析sql
+   * @param { Object } params
+   */
+  editModelParseSql(params: Record<string, any>) {
+    return ToolManageSources.editModelParseSql(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 工具详情
    * @param { Object } params
    */

@@ -491,15 +491,17 @@
   });
 
   watch(() => props.allToolsData, (data) => {
+    // 先过滤出有权限数据
+    const filteredData = data.filter(tool => tool.permission.use_tool || tool.permission.manage_tool);
     toolCascaderList.value  = props.tagData
       .map(item => ({
         id: item.tag_id,
         name: item.tag_name,
         children: item.tag_id === '-2'
-          ? data
+          ? filteredData
             .filter(tool => !tool.tags || tool.tags.length === 0)
             .map(({ uid, version, name }) => ({ id: uid, version, name }))
-          : data
+          : filteredData
             .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
             .map(({ uid, version, name }) => ({ id: uid, version, name })),
       }))

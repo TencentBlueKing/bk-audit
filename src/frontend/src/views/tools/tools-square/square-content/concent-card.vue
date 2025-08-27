@@ -39,13 +39,13 @@
         :loading="loading"
         :z-index="10000">
         <div
-          v-if="dataList.length > 0"
+          v-if="dataList.filter(item => item.permission.manage_tool || item.permission.use_tool).length > 0"
           ref="cardListRef"
           class="card-list"
           @scroll="handleScroll">
           <div class="card-list-box">
             <div
-              v-for="(item, index) in dataList"
+              v-for="(item, index) in dataList.filter(item => item.permission.manage_tool || item.permission.use_tool)"
               :key="index"
               class="card-list-item"
               @click="handleClick(item)"
@@ -54,12 +54,21 @@
               <div
                 v-show="itemMouseenter === item.uid"
                 class="item-top-right-icon">
+                <auth-button
+                  v-if="!item.permission.manage_tool"
+                  v-bk-tooltips="t('暂无编辑权限')"
+                  action-id="manage_tool"
+                  :permission="false"
+                  :resource="item.uid"
+                  text
+                  theme="primary">
+                  <audit-icon
+                    class="edit-fill"
+                    type="edit-fill" />
+                </auth-button>
                 <audit-icon
-                  v-bk-tooltips="{
-                    disabled: (item.permission.use_tool),
-                    content: t('无编辑权限'),
-                  }"
-                  :class="item.permission.use_tool ? 'edit-fill': 'edit-fill-disabled'"
+                  v-else
+                  class="edit-fill"
                   type="edit-fill"
                   @click.stop="handleEdit(item)" />
 
@@ -96,7 +105,21 @@
                       </bk-button>
                     </div>
                   </template>
+
+                  <auth-button
+                    v-if="!item.permission.manage_tool"
+                    v-bk-tooltips="t('暂无删除权限')"
+                    action-id="manage_tool"
+                    :permission="false"
+                    :resource="item.uid"
+                    text
+                    theme="primary">
+                    <audit-icon
+                      class="delete"
+                      type="delete" />
+                  </auth-button>
                   <audit-icon
+                    v-else
                     class="delete"
                     type="delete"
                     @click.stop="handleDelete(item)" />
@@ -302,6 +325,7 @@
   const {
     appendSearchParams,
   } = useUrlSearch();
+
   // 工具列表
   const {
     run: fetchToolsList,
@@ -396,6 +420,9 @@
   };
 
   const handleEdit = (item: Record<string, any>) => {
+    if (!item.permission.manage_tool) {
+      return;
+    }
     if (item.permission.use_tool) {
       router.push({
         name: 'toolsEdit',
@@ -428,8 +455,10 @@
 
   // 删除
   const handleDelete = (item: Record<string, any>) => {
-    isFixedDelete.value = !isFixedDelete.value;
-    itemMouseenter.value = item.uid;
+    if (item.permission.manage_tool) {
+      isFixedDelete.value = !isFixedDelete.value;
+      itemMouseenter.value = item.uid;
+    }
   };
 
   // 策略跳转
@@ -786,11 +815,6 @@
             &:hover {
               color: #3a84ff;
             }
-          }
-
-          .edit-fill-disabled {
-            margin-right: 5px;
-            cursor: not-allowed;
           }
 
           .delete {
