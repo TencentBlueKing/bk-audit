@@ -767,6 +767,7 @@
 
 
   interface FormData {
+    uid?: string;
     source?:string;
     users?: string[];
     name: string;
@@ -1240,7 +1241,7 @@
   const handleEditSql = () => {
     showEditSql.value = true;
     if (formData.value.config.sql) {
-      editSqlRef.value.setEditorValue(formData.value.config.sql);
+      editSqlRef.value.setEditorValue(formData.value.config.sql, formData.value.uid);
     }
   };
 

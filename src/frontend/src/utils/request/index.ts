@@ -62,9 +62,7 @@ export const getCancelTokenSource = () => cancelTokenSource;
 
 const handler = {} as {
   [n in Method]: <T = any>(url: string, config?: IRequestConfig)=>
-  Promise<IRequestResponseResult<
-  T extends IRequestResponsePaginationData<any>
-  ? T : T extends IRequestResponseData<any> ? T : IRequestResponseData<T>>>
+  Promise<IRequestResponseResult<T>>
 };
 
 methodList.forEach((method) => {
