@@ -154,7 +154,7 @@
                     :data="tableData"
                     header-align="center"
                     :height="dialogTableHeight"
-                    min-height="200px"
+                    :min-height="dialogTableMinHeight"
                     :pagination="pagination"
                     remote-pagination
                     show-overflow-tooltip
@@ -217,7 +217,7 @@
   </div>
 </template>
 <script setup lang='tsx'>
-  import { nextTick, ref } from 'vue';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -310,6 +310,7 @@
   const dialogWidth = ref('50%');
   const dialogHeight = ref('50vh');
   const dialogTableHeight = ref('300px');
+  const dialogTableMinHeight = ref('200px');
   const isFullScreen = ref(false);
   const isLoading = ref(false);
   const isShow = ref(false);
@@ -825,13 +826,20 @@
     isShow.value = false;
     dialogWidth.value = '50%';
     isFullScreen.value = false;
+    dialogTableMinHeight.value = '200px';
   };
 
   // 放大
   const handleFullscreen = () => {
     isFullScreen.value = !isFullScreen.value;
   };
-
+  watch(() => isFullScreen.value, (val) => {
+    nextTick(() => {
+      dialogTableHeight.value = val ? '60vh' : '300px';
+      dialogHeight.value = isFullScreen.value ? '70vh' : '50vh';
+      dialogTableMinHeight.value = isFullScreen.value ? '70vh' : '200px';
+    });
+  });
   // 文本溢出检测
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
     isSingleLine?: boolean;
@@ -1093,8 +1101,6 @@
 
     .top-search-result {
       position: relative;
-
-      /* background-color: blueviolet; */
       height: auto;
       padding: 10px;
       margin-top: 10px;
