@@ -29,15 +29,6 @@
       {{ t('SQL 变量占位符使用指引 >>') }}
     </div>
     <div class="edit-container">
-      <!-- <bk-alert
-        v-if="isEditMode"
-        closable
-        theme="warning"
-        @close="isEditMode = false"
-        @mouseenter="clearAutoHideTimeout"
-        @mouseleave="startAutoHideTimeout">
-        {{ t('编辑后，已渲染的内容有可能会重新修改') }}
-      </bk-alert> -->
       <div class="sql-editor">
         <div class="title">
           <span style="margin-left: auto;">
@@ -82,7 +73,7 @@
       <div style="padding-left: 16px;">
         <bk-button
           class="mr8"
-          :loading="btnLoading"
+          :loading="btnLoading || editBtnLoading"
           style="width: 102px;"
           theme="primary"
           @click="handleConfirm">
@@ -100,7 +91,6 @@
 </template>
 <script setup lang="ts">
   import * as monaco from 'monaco-editor';
-  import type { Ref } from 'vue';
   import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -136,6 +126,7 @@
   const sqlTipRef = ref();
   const isEditMode = ref(false);
   const filename = ref('');
+  const uid = ref('');
   const formData = ref({
     sql: '',
     dialect: 'mysql',
@@ -151,6 +142,7 @@
       sqlTipRef.value.openDialog();
     }
   };
+
   // 解析sql
   const {
     loading: btnLoading,
@@ -163,10 +155,29 @@
     },
   });
 
+  // 解析sql
+  const {
+    loading: editBtnLoading,
+    run: editModelParseSql,
+  } = useRequest(ToolManageService.editModelParseSql, {
+    defaultValue: new ParseSqlModel(),
+    onSuccess: (data) => {
+      emits('UpdateParseSql', data);
+      handleCancle();
+    },
+  });
+
   // 保存并解析
   const handleConfirm = () => {
     nextTick(() => {
-      parseSql(formData.value);
+      if (isEditMode.value) {
+        editModelParseSql({
+          ...formData.value,
+          uid: uid.value,
+        });
+      } else {
+        parseSql(formData.value);
+      }
     });
   };
 
@@ -254,32 +265,6 @@
     });
   };
 
-  declare type Timeout = ReturnType<typeof setTimeout>;
-
-  const autoHideTimeout: Ref<Timeout | null> = ref(null);
-
-  const clearAutoHideTimeout = () => {
-    if (autoHideTimeout.value) {
-      clearTimeout(autoHideTimeout.value);
-      autoHideTimeout.value = null;
-    }
-  };
-
-  const startAutoHideTimeout = () => {
-    clearAutoHideTimeout();
-    autoHideTimeout.value = setTimeout(() => {
-      isEditMode.value = false;
-    }, 3000);
-  };
-
-  watch(() => isEditMode.value, (val) => {
-    if (val) {
-      startAutoHideTimeout();
-    } else {
-      clearAutoHideTimeout();
-    }
-  });
-
   watch(() => showEditSql.value, (val) => {
     if (val) {
       nextTick(() => {
@@ -290,8 +275,9 @@
   });
 
   defineExpose({
-    setEditorValue(value: string) {
+    setEditorValue(value: string, id: string) {
       formData.value.sql = value;
+      uid.value = id;
       isEditMode.value = true;
     },
   });
