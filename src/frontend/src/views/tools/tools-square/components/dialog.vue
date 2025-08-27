@@ -835,9 +835,13 @@
   };
   watch(() => isFullScreen.value, (val) => {
     nextTick(() => {
-      dialogTableHeight.value = val ? '60vh' : '300px';
-      dialogHeight.value = isFullScreen.value ? '70vh' : '50vh';
-      dialogTableMinHeight.value = isFullScreen.value ? '70vh' : '200px';
+      // 判断可视高度大于1200px
+      // eslint-disable-next-line no-nested-ternary
+      dialogTableHeight.value = val ? (window.innerHeight >= 1200 ? '60vh' : '40%') : '300px';
+      // eslint-disable-next-line no-nested-ternary
+      dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 1200 ? '70vh' : '60%') : '50vh';
+      // eslint-disable-next-line no-nested-ternary
+      dialogTableMinHeight.value = isFullScreen.value ? (window.innerHeight >= 1200 ? '70vh' : '60%')  : '200px';
     });
   });
   // 文本溢出检测
