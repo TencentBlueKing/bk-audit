@@ -56,7 +56,7 @@ class ToolVisionPermission(BasePermission):
         if not perm.has_permission(request, view):
             return False
         # 图表分享权限校验（失败抛异常，成功继续）
-        check_bkvision_share_permission(Tool.last_version_tool(tool_uid).updated_by, panel_id)
+        check_bkvision_share_permission(Tool.last_version_tool(tool_uid).get_permission_owner(), panel_id)
         return True
 
     def has_object_permission(self, request, view, obj):
