@@ -146,6 +146,8 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
             "version",
             "description",
             "namespace",
+            "updated_by",
+            "updated_at",
             "created_by",
             "created_at",
             "tags",
