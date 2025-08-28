@@ -436,6 +436,15 @@ class Permission(object):
             request=request, bk_token=self.bk_token, bk_username=self.username
         )
 
+    def get_policies_for_action(self, action: Union[ActionMeta, str]) -> dict:
+        """
+        获取用户对某个动作的策略
+        """
+
+        action = get_action_by_id(action)
+        request = self.make_request(action=action, resources=[])
+        return self.iam_client._do_policy_query(request)
+
 
 class FetchInstancePermission(BasePermission):
     @classmethod
