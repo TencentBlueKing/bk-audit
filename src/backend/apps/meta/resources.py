@@ -53,8 +53,12 @@ from apps.meta.constants import (
     SpaceType,
     SystemAuditStatusEnum,
 )
-from apps.meta.exceptions import ActionHasExist, BKAppNotExists, SystemHasExist
-from apps.meta.exceptions import BKAppNotExists, EnumMappingRelationInvalid
+from apps.meta.exceptions import (
+    ActionHasExist,
+    BKAppNotExists,
+    EnumMappingRelationInvalid,
+    SystemHasExist,
+)
 from apps.meta.handlers.system_diagnosis import SystemDiagnosisPushHandler
 from apps.meta.models import (
     Action,
@@ -78,8 +82,8 @@ from apps.meta.serializers import (
     ActionCreateSerializer,
     ActionListReqSerializer,
     ActionSerializer,
-    BatchUpdateEnumMappingSerializer,
     ActionUpdateSerializer,
+    BatchUpdateEnumMappingSerializer,
     BulkActionCreateSerializer,
     BulkCreateResourceTypeSerializer,
     ChangeSystemDiagnosisPushReqSerializer,

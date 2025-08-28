@@ -20,7 +20,7 @@ import datetime
 import json
 import math
 import re
-from typing import List, Optional, Union
+from typing import List, Optional, Set, Tuple, Union
 
 from bk_resource import resource
 from blueapps.utils.logger import logger
@@ -47,6 +47,7 @@ from services.web.risk.handlers import EventHandler
 from services.web.risk.models import Risk
 from services.web.risk.parser import RiskNoticeParser
 from services.web.risk.serializers import CreateRiskSerializer
+from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
 
 
@@ -55,9 +56,23 @@ class RiskHandler:
     Deal with Risk
     """
 
-    def generate_risk(self, event: dict):
+    @classmethod
+    def fetch_eligible_strategy_ids(cls) -> Set[str]:
+        """
+        获取可用策略ID集合
+        """
+        return set(
+            Strategy.objects.exclude(status=StrategyStatusChoices.DISABLED.value).values_list("strategy_id", flat=True)
+        )
+
+    def generate_risk(self, event: dict, eligible_strategy_ids: Set[str]):
+        """
+        生成风险
+        :param event: 事件
+        :param eligible_strategy_ids: 可用策略ID集合
+        """
         try:
-            is_create, risk = self.create_risk(event)
+            is_create, risk = self.create_risk(event, eligible_strategy_ids)
             if is_create:
                 self.send_risk_notice(risk)
 
@@ -79,10 +94,10 @@ class RiskHandler:
         """
         从事件生成风险
         """
-
+        eligible_strategy_ids = self.fetch_eligible_strategy_ids()
         events = self.load_events(start_time, end_time)
         for event in events:
-            self.generate_risk(event)
+            self.generate_risk(event, eligible_strategy_ids)
 
     def load_events(self, start_time: datetime.datetime, end_time: datetime.datetime) -> List[dict]:
         """
@@ -157,7 +172,7 @@ class RiskHandler:
         create_params["title"] = self.render_risk_title(create_params)
         return create_params
 
-    def create_risk(self, event: dict) -> (bool, Risk):
+    def create_risk(self, event: dict, eligible_strategy_ids: Set[str]) -> Tuple[bool, Optional[Risk]]:
         """
         创建或更新风险
         """
@@ -168,6 +183,16 @@ class RiskHandler:
             logger.error("[CreateRiskFailed] Event Invalid: %s", json.dumps(event))
             return False, None
         event = serializer.validated_data
+
+        # 若关联策略已停用，则不生成风险
+        event_strategy_id = event["strategy_id"]
+        if event_strategy_id not in eligible_strategy_ids:
+            logger.info(
+                "[SkipCreateRisk] Strategy not found. strategy_id=%s, raw_event_id=%s",
+                event["strategy_id"],
+                event.get("raw_event_id"),
+            )
+            return False, None
 
         # 检查是否有已存在的
         # 策略ID相同，原始事件ID相同，不为关单状态或事件时间小于最后发现时间

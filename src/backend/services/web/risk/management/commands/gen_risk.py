@@ -30,8 +30,16 @@ from services.web.risk.handlers.risk import RiskHandler
 
 
 class AuditEventKafkaRecordConsumer(KafkaRecordConsumer):
+    def __init__(self, consumer: KafkaConsumer, timeout_ms: int, max_records: int, sleep_time: float, sleep_wait=True):
+        super().__init__(consumer, timeout_ms, max_records, sleep_time, sleep_wait)
+        self.eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()
+
+    def process_records(self, records: list):
+        self.eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()  # 更新 eligible_strategy_ids
+        super().process_records(records)
+
     def process_record(self, record):
-        RiskHandler().generate_risk(record.value)
+        RiskHandler().generate_risk(record.value, self.eligible_strategy_ids)
 
 
 class Command(BaseCommand):
