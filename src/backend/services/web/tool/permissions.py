@@ -1,8 +1,11 @@
 from bk_resource import api
 from rest_framework.permissions import BasePermission
 
+from apps.feature.constants import FeatureTypeChoices
+from apps.feature.handlers import FeatureHandler
 from apps.permission.handlers.drf import InstanceActionPermission
 from core.models import get_request_username
+from services.web.common.caller_permission import should_skip_permission_from
 from services.web.tool.exceptions import BkVisionSearchPermissionProhibited
 from services.web.tool.models import Tool
 
@@ -32,7 +35,18 @@ class UseToolPermission(InstanceActionPermission):
         return super().has_permission(request, view)
 
 
+class CallerContextPermission(BasePermission):
+    """调用方资源上下文权限：命中且有权限则整体放行"""
+
+    def has_permission(self, request, view):
+        username = get_request_username()
+        return should_skip_permission_from(request, username)
+
+
 def check_bkvision_share_permission(user_id, share_uid) -> bool:
+    """检查bkvision分享权限（受特性开关控制）"""
+    if not FeatureHandler(FeatureTypeChoices.CHECK_BKVISION_SHARE_PERMISSION).check():
+        return True
     result = api.bk_vision.check_share_auth(
         username=user_id,
         share_uid=share_uid,

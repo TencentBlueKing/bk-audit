@@ -718,6 +718,7 @@ GLOBAL_CHOICES = {
         {"id": "selector", "name": "选择器"},
         {"id": "time-picker", "name": "时间选择器"},
         {"id": "time-ranger", "name": "时间范围选择器"},
+        {"id": "variable", "name": "变量"},
     ],
 }
 

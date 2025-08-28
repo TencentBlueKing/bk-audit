@@ -144,6 +144,7 @@ class BKVisionFieldCategory(TextChoices):
     SELECTOR = "selector", gettext_lazy("选择器")
     TIME_PICKER = "time-picker", gettext_lazy("时间选择器")
     TIME_RANGER = "time-ranger", gettext_lazy("时间范围选择器")
+    VARIABLE = "variable", gettext_lazy("变量")
 
 
 class BKVisionInputVariable(DataSearchBaseField):
@@ -182,7 +183,7 @@ class ToolDrillConfig(BaseModel):
     source_field: str  # 工具变量
 
 
-class DataSearchDrillConfig(BaseModel):
+class DrillConfig(BaseModel):
     """
     数据查询下钻配置
     """
@@ -196,7 +197,7 @@ class SQLDataSearchOutputField(DataSearchBaseField):
     SQL数据查询输出字段
     """
 
-    drill_config: Optional[DataSearchDrillConfig] = None  # 下钻配置
+    drill_config: Optional[DrillConfig] = None  # 下钻配置
     enum_mappings: Optional[EnumMappingConfig] = None
 
 

@@ -65,6 +65,14 @@ class QueryMixIn(AuditMixinResource, abc.ABC):
 
 
 class QueryMeta(QueryMixIn, BKVision):
+    """查询视图配置（Meta）
+
+    可选权限上下文（调用方透传，用于统一鉴权并可在通过时跳过原有权限校验）：
+    - caller_resource_type：调用方资源类型（当前支持：risk）
+    - caller_resource_id：调用方资源ID（如风险ID）
+    行为：若提供且鉴权通过，则放行；若鉴权失败，返回标准权限异常。
+    """
+
     name = gettext_lazy("查询视图配置")
     RequestSerializer = QueryMetaReqSerializer
     audit_action = ActionEnum.VIEW_BASE_PANEL

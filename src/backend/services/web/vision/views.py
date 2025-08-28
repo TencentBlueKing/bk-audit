@@ -29,7 +29,9 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
+from core.models import get_request_username
 from core.utils.renderers import API200Renderer
+from services.web.common.caller_permission import should_skip_permission_from
 from services.web.tool.models import Tool
 from services.web.tool.permissions import (
     UseToolPermission,
@@ -40,6 +42,10 @@ from services.web.vision.models import Scenario, VisionPanel
 
 class ToolVisionPermission(BasePermission):
     def has_permission(self, request, view):
+        # 下文透传：若 caller 参数命中并有权限，跳过原有校验
+        if should_skip_permission_from(request, request.user.username):
+            return True
+
         panel_id, tool_uid = self.get_tool_and_panel_id(request)
         perm = UseToolPermission(
             actions=[ActionEnum.USE_TOOL],
@@ -54,7 +60,7 @@ class ToolVisionPermission(BasePermission):
         return True
 
     def has_object_permission(self, request, view, obj):
-        return True
+        return self.has_permission(request, view)
 
     def get_tool_and_panel_id(self, request) -> Tuple[str, str]:
         instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
@@ -68,6 +74,15 @@ class ToolVisionPermission(BasePermission):
         if actual_instance_id and tool_uid:
             return actual_instance_id, tool_uid
         raise ValidationError(message=gettext("无法获取报表ID"))
+
+
+class ShareDetailPermission(ToolVisionPermission):
+    def has_permission(self, request, view):
+        instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
+        return check_bkvision_share_permission(get_request_username(), instance_id)
+
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view)
 
 
 class API200ViewSet(ResourceViewSet, abc.ABC):
@@ -148,3 +163,10 @@ class ShareViewSet(BKVisionViewSet):
         ResourceRoute("GET", resource.vision.query_share_list, endpoint="share_list"),
         ResourceRoute("GET", resource.vision.query_share_detail, endpoint="share_detail"),
     ]
+
+    def get_permissions(self):
+        if self.action in ["share_list"]:
+            return []
+        if self.action in ["share_detail"]:
+            return [ShareDetailPermission()]
+        return super().get_permissions()
