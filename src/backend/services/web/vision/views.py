@@ -47,16 +47,12 @@ class ToolVisionPermission(BasePermission):
             return True
 
         panel_id, tool_uid = self.get_tool_and_panel_id(request)
-        perm = UseToolPermission(
-            actions=[ActionEnum.USE_TOOL],
-            resource_meta=ResourceEnum.TOOL,
-            get_instance_id=lambda: tool_uid,
-        )
+        perm = UseToolPermission()
         # 工具使用权限校验（返回布尔值）
         if not perm.has_permission(request, view):
             return False
         # 图表分享权限校验（失败抛异常，成功继续）
-        check_bkvision_share_permission(Tool.last_version_tool(tool_uid).updated_by, panel_id)
+        check_bkvision_share_permission(Tool.last_version_tool(tool_uid).get_permission_owner(), panel_id)
         return True
 
     def has_object_permission(self, request, view, obj):
