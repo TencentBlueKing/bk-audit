@@ -438,7 +438,7 @@
   };
 
   const initLocalOutputFields = (val: Array<Record<string, any>>) => {
-    localOutputFields.value = val.map(item => ({
+    localOutputFields.value = val?.map(item => ({
       ...item,
       raw_name: item.raw_name,
       display_name: item.display_name,
