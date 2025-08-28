@@ -147,6 +147,16 @@ class BKVisionFieldCategory(TextChoices):
     VARIABLE = "variable", gettext_lazy("变量")
 
 
+class ToolTagsEnum(TextChoices):
+    """
+    工具特殊展示标签
+    """
+
+    ALL_TOOLS = "全部工具", gettext_lazy("全部工具")
+    MY_CREATED_TOOLS = "我创建的", gettext_lazy("我创建的")
+    RECENTLY_USED_TOOLS = "最近使用", gettext_lazy("最近使用")
+
+
 class BKVisionInputVariable(DataSearchBaseField):
     """
     BK Vision输入变量
@@ -223,3 +233,8 @@ class BkVisionConfig(BaseModel):
 
     uid: str  # BK Vision 图表ID
     input_variable: List[BKVisionInputVariable] = PydanticField(default_factory=list)  # 输入变量
+
+
+All_TOOLS_ID = "-3"
+MY_CREATED_TOOLS_ID = "-4"
+RECENTLY_USED_TOOLS_ID = "-5"

@@ -47,8 +47,12 @@ from services.web.strategy_v2.serializers import (
     EnumMappingByCollectionWithCallerSerializer,
 )
 from services.web.tool.constants import (
+    MY_CREATED_TOOLS_ID,
+    RECENTLY_USED_TOOLS_ID,
+    All_TOOLS_ID,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
+    ToolTagsEnum,
     ToolTypeEnum,
 )
 from services.web.tool.exceptions import ToolDoesNotExist, ToolTypeNotSupport
@@ -127,14 +131,30 @@ class ListToolTags(ToolBase):
 
         tag_count = [
             {
+                "tag_name": ToolTagsEnum.ALL_TOOLS.value,
+                "tag_id": All_TOOLS_ID,
+                "tool_count": Tool.all_latest_tools().count(),
+            },
+            {
+                "tag_name": ToolTagsEnum.MY_CREATED_TOOLS.value,
+                "tag_id": MY_CREATED_TOOLS_ID,
+                "tool_count": Tool.all_latest_tools().filter(created_by=get_request_username()).count(),
+            },
+            {
+                "tag_name": ToolTagsEnum.RECENTLY_USED_TOOLS.value,
+                "tag_id": RECENTLY_USED_TOOLS_ID,
+                "tool_count": Tool.objects.filter(
+                    uid__in=recent_tool_usage_manager.get_recent_uids(get_request_username())
+                ).count(),
+            },
+            {
                 "tag_name": str(NO_TAG_NAME),
                 "tag_id": NO_TAG_ID,
                 "tool_count": Tool.all_latest_tools()
                 .exclude(uid__in=ToolTag.objects.values_list("tool_uid", flat=True).distinct())
                 .count(),
-            }
+            },
         ] + tag_count
-
         return tag_count
 
 
@@ -202,7 +222,8 @@ class ListTool(ToolBase):
         permission = ToolPermission(username=current_user)
         authed_tool_filter = permission.authed_tool_filter
         queryset = Tool.all_latest_tools().filter(authed_tool_filter)
-
+        if (int(All_TOOLS_ID) or int(RECENTLY_USED_TOOLS_ID) or int(MY_CREATED_TOOLS_ID)) in tags:
+            tags = []
         if recent_used:
             recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
             if not recent_tool_uids:
@@ -218,7 +239,6 @@ class ListTool(ToolBase):
                 Q(name__icontains=keyword) | Q(description__icontains=keyword) | Q(created_by__icontains=keyword)
             )
             queryset = queryset.filter(keyword_filter)
-
         if int(NO_TAG_ID) in tags:
             tagged_tool_uids = ToolTag.objects.values_list("tool_uid", flat=True).distinct()
             queryset = queryset.exclude(uid__in=tagged_tool_uids)
@@ -482,6 +502,7 @@ class UpdateTool(ToolBase):
             "namespace": validated_request_data.get("namespace", old_tool.namespace),
             "version": old_tool.version + 1,
             "config": new_config,
+            "tags": validated_request_data.get("tags"),
         }
         change_permission_owner = old_tool.has_change_permission_owner(new_config)
         new_tool_data["permission_owner"] = (
@@ -503,7 +524,6 @@ class UpdateTool(ToolBase):
     @transaction.atomic
     def perform_request(self, validated_request_data: dict):
         uid = validated_request_data["uid"]
-        tag_names = validated_request_data.pop("tags")
         tool = Tool.last_version_tool(uid)
         if not tool:
             raise ToolDoesNotExist()
@@ -511,9 +531,11 @@ class UpdateTool(ToolBase):
         if validated_request_data.get("config") and validated_request_data.get("config") != tool.config:
             return self.create_tool_new_version(old_tool=tool, validated_request_data=validated_request_data)
         # 配置未变更则更新原版本
+        tag_names = validated_request_data.pop("tags")
         for key, value in validated_request_data.items():
             setattr(tool, key, value)
         tool.save(update_fields=validated_request_data.keys())
+
         sync_resource_tags(
             resource_uid=tool.uid,
             tag_names=tag_names,
