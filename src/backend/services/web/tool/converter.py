@@ -15,28 +15,24 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+from iam import DjangoQuerySetConverter
 
-# Mock 数据
-MOCK_TOOL_CONFIG = {
-    "sql": "SELECT * FROM table WHERE time = ${time_range}",
-    "referenced_tables": [{"table_name": "table"}],
-    "input_variable": [],
-    "output_fields": [],
-    "prefer_storage": "doris",
-}
 
-MOCK_EXECUTE_PARAMS = {
-    "tool_variables": [{"raw_name": "time_range", "value": "2023-01-01,2023-12-31"}],
-    "page": 1,
-    "page_size": 100,
-}
+class ToolDjangoQuerySetConverter(DjangoQuerySetConverter):
+    """
+    工具DjangoQuerySet转换器
+    """
 
-MOCK_API_RESPONSE = [
-    {"list": [{"field1": "value1"}, {"field2": "value2"}]},  # 数据查询结果
-    {"list": [{"count": 2}]},  # 计数查询结果
-]
+    def __init__(self):
+        key_mapping = {"tool.id": "uid"}
+        super().__init__(key_mapping)
 
-MOCK_FETCH_TOOL_PERMISSION_TAGS_EMPTY = {
-    "use_tool_permission_tags": set(),
-    "manage_tool_permission_tags": set(),
-}
+
+class ToolTagDjangoQuerySetConverter(DjangoQuerySetConverter):
+    """
+    工具标签DjangoQuerySet转换器
+    """
+
+    def __init__(self):
+        key_mapping = {"tag.id": "tag_id"}
+        super().__init__(key_mapping)
