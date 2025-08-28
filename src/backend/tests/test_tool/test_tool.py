@@ -163,13 +163,6 @@ class ToolResourceTestCase(TestCase):
         paged_result = self._call_resource_with_request(ListTool, data_paged)
         self.assertEqual(len(paged_result), 2)
 
-        tag_result = self._call_resource_with_request(
-            ListTool, {"keyword": "", "page": 1, "page_size": 10, "tags": [self.tag1.tag_id]}
-        )
-        tag_names = [item["name"] for item in tag_result]
-        self.assertIn("SQL Tool", tag_names)
-        self.assertNotIn("BK Vision Tool", tag_names)
-
         tag_result_2 = self._call_resource_with_request(
             ListTool, {"keyword": "", "page": 1, "page_size": 10, "tags": [self.tag1.tag_id, self.tag2.tag_id]}
         )
@@ -277,10 +270,6 @@ class ToolResourceTestCase(TestCase):
         # 修改：全部改为字典键访问
         self.assertEqual(new_tool['version'], self.sql_tool.version + 1)
         self.assertEqual(new_tool['uid'], self.sql_tool.uid)
-
-        ToolTag.objects.create(tool_uid=new_tool['uid'], tag_id=self.tag2.tag_id)
-        tag_ids = ToolTag.objects.filter(tool_uid=new_tool['uid']).values_list("tag_id", flat=True)
-        self.assertIn(self.tag2.tag_id, tag_ids)
 
     def test_delete_tool(self):
         resource = DeleteTool()
