@@ -17,19 +17,24 @@
 <template>
   <div class="form-item">
     <bk-input
-      v-if="dataConfig.field_category === 'input' || dataConfig.field_category === 'inputer'"
+      v-if="dataConfig.field_category === 'input' ||
+        dataConfig.field_category === 'inputer' ||
+        dataConfig.field_category === 'variable'"
       v-model="inputData"
+      :disabled="dataConfig.disabled"
       @update:model-value="handleInputDataChange" />
 
     <bk-input
       v-else-if="dataConfig.field_category === 'number_input'"
       v-model="numberInputData"
+      :disabled="dataConfig.disabled"
       type="number"
       @update:model-value="handleNumberInputDataChange" />
 
     <audit-user-selector
       v-else-if="dataConfig.field_category === 'person_select'"
       v-model="user"
+      :disabled="dataConfig.disabled"
       @change="handleUserChange" />
 
     <!-- <bk-date-picker
@@ -46,6 +51,7 @@
       v-else-if="dataConfig.field_category === 'time_range_select' || dataConfig.field_category === 'time-ranger'"
       v-model="pickerRangeValue"
       class="date-picker"
+      :disabled="dataConfig.disabled"
       @update:model-value="handleRangeChange" />
 
     <bk-date-picker
@@ -53,6 +59,7 @@
       v-model="pickerValue"
       append-to-body
       clearable
+      :disabled="dataConfig.disabled"
       style="width: 100%"
       type="datetime"
       @change="handleTimeChange" />
@@ -61,6 +68,7 @@
       v-else-if="dataConfig.field_category === 'multiselect'"
       v-model="enumValue"
       class="bk-select"
+      :disabled="dataConfig.disabled"
       filterable
       :input-search="false"
       multiple
@@ -78,6 +86,7 @@
       v-model="selectorValue"
       allow-create
       collapse-tags
+      :disabled="dataConfig.disabled"
       has-delete-icon
       :list="[]"
       @change="handleSelectorChange" />
@@ -106,6 +115,7 @@
       key: string,
       name: string
     }>;
+    disabled?: boolean;
   }
   interface FieldCategoryItem {
     id: string;

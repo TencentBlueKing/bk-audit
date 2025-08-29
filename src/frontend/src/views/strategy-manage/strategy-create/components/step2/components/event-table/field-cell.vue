@@ -160,7 +160,7 @@
   import FieldInput from './field-input.vue';
   import FieldMapping from './field-mapping.vue';
 
-  import FieldReference from '@/views/tools/tools-square/add/components/field-reference/index.vue';
+  import FieldReference from '@/views/tools/tools-square/add/components/data-search/components/field-reference/index.vue';
 
   interface Props {
     eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
