@@ -20,6 +20,8 @@ from typing import Callable, Dict, List, Set, Union
 from bk_resource import api, resource
 from django.db.models import Q, QuerySet
 
+from apps.feature.constants import FeatureTypeChoices
+from apps.feature.handlers import FeatureHandler
 from apps.permission.handlers.actions import ActionEnum, ActionMeta
 from apps.permission.handlers.drf import (
     InstanceActionPermission,
@@ -251,6 +253,9 @@ class ManageToolPermission(ToolActionPermission):
 
 
 def check_bkvision_share_permission(user_id, share_uid) -> bool:
+    """检查bkvision分享权限（受特性开关控制）"""
+    if not FeatureHandler(FeatureTypeChoices.CHECK_BKVISION_SHARE_PERMISSION).check():
+        return True
     result = api.bk_vision.check_share_auth(
         username=user_id,
         share_uid=share_uid,
