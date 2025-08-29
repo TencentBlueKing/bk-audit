@@ -102,7 +102,7 @@
                 ref="formRef"
                 class="example"
                 form-type="vertical"
-                :model="searchForm"
+                :model="searchFormData"
                 :rules="rules">
                 <div class="formref-item">
                   <bk-form-item
@@ -262,9 +262,11 @@
       key: string,
       name: string
     }>;
+    disabled: boolean;
   }
   interface Props {
     tagsEnums: Array<TagItem>,
+    source?: string,
   }
   interface DrillDownItem {
     raw_name: string;
@@ -292,6 +294,7 @@
       itemUid: string,  // 工具信息
       drillDownItem?: DrillDownItem, // 下钻信息
       drillDownItemRowData?: Record<string, string>, // 下钻table所在行信息
+      isRiskToolParams?: Record<string, any>, // 风险工具参数
       preview?: boolean // 是否预览
     ) => void,
   }
@@ -334,7 +337,7 @@
   const panelRef = ref();
   const rules = ref({});
   const formRef = ref();
-  const searchForm = ref();
+  const searchFormData = ref();
   const router = useRouter();
 
   const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>([]);
@@ -343,6 +346,8 @@
   const toolDetails = ref<ToolDetailModel>();
   // 权限
   const urlIamApply = ref('');
+
+  const riskToolParams = ref<Record<string, any> | undefined>(undefined);
 
   // 工具执行
   const {
@@ -368,14 +373,17 @@
     isLoading.value = true;
     fetchToolsExecute({
       uid: uid.value,
-      params: itemInfo.value?.tool_type === 'data_search' ? {
-        tool_variables: searchList.value.map(item => ({
-          raw_name: item.raw_name,
-          value: item.value,
-        })),
-        page: pagination.value.current,
-        page_size: pagination.value.limit,
-      } : {},
+      params: {
+        ...(itemInfo.value?.tool_type === 'data_search' ? {
+          tool_variables: searchList.value.map(item => ({
+            raw_name: item.raw_name,
+            value: item.value,
+          })),
+          page: pagination.value.current,
+          page_size: pagination.value.limit,
+        } : {}),
+        ...(riskToolParams.value && Object.keys(riskToolParams.value).length > 0 ? riskToolParams.value : {}),
+      },
     })
       .finally(() => {
         isLoading.value = false;
@@ -482,7 +490,7 @@
 
   const submit = () => {
     searchList.value.forEach((item) => {
-      searchForm.value[item.raw_name] = item.value;
+      searchFormData.value[item.raw_name] = item.value;
     });
     formRef.value.validate().then(() => {
       formItemRef.value.forEach((item: any) => {
@@ -529,12 +537,12 @@
       target.value = val;
     }
 
-    searchForm.value[item.raw_name] = val;
+    searchFormData.value[item.raw_name] = val;
   };
 
   // 创建弹窗内容
   const createDialogContent = (data: ToolDetailModel) => {
-    searchForm.value = {};
+    searchFormData.value = {};
     // 创建table
     columns.value = data.config.output_fields.map((item) => {
       const renderCell = ({ data }: { data: Record<any, any> }) => {
@@ -593,7 +601,7 @@
 
     // 构造formData
     data.config.input_variable.forEach((item) => {
-      searchForm.value[item.raw_name] = '';
+      searchFormData.value[item.raw_name] = '';
     });
 
     // 构造form-item
@@ -605,6 +613,7 @@
         : (item.field_category === 'person_select' || item.field_category === 'time_range_select')
           ? [] :  null,
       required: item.required,
+      disabled: props.source === 'risk' && toolDetails.value?.tool_type === 'data_search',
     }));
 
     // 非下钻
@@ -716,6 +725,19 @@
       }
     });
 
+    console.log('params', {
+      apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
+      chartToolMenu: [
+        { type: 'tool', id: 'fullscreen', build_in: true },
+        { type: 'tool', id: 'refresh', build_in: true },
+        { type: 'menu', id: 'excel', build_in: true },
+      ],
+      filters: isDrillDownOpen.value ? drillDownFilters : filters,
+      ...(riskToolParams.value && Object.keys(riskToolParams.value).length > 0
+        ? { constants: JSON.parse(JSON.stringify(riskToolParams.value)) }
+        : {}),
+      handleError,
+    });
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(
@@ -729,6 +751,9 @@
             { type: 'menu', id: 'excel', build_in: true },
           ],
           filters: isDrillDownOpen.value ? drillDownFilters : filters,
+          ...(riskToolParams.value && Object.keys(riskToolParams.value).length > 0
+            ? { constants: JSON.parse(JSON.stringify(riskToolParams.value)) }
+            : {}),
           handleError,
         },
       );
@@ -747,11 +772,13 @@
     itemUid: string,
     drillDownItem?: DrillDownItem,
     isDrillDownItemRowData?: Record<string, any>,
+    isRiskToolParams?: Record<string, any>,
     preview?: boolean,
   ) => {
     // 是否预览 （暂时用不上）
     isPreview.value = preview;
     isShow.value = true;
+    riskToolParams.value = isRiskToolParams;
 
     // dialog层级
     const isNewIndex = sessionStorage.getItem('dialogIndex');
@@ -953,8 +980,8 @@
     closeDialog() {
       handleCloseDialog();
     },
-    openDialog(itemUid, drillDownItem, drillDownItemRowData, preview) {
-      handleOpenDialog(itemUid, drillDownItem, drillDownItemRowData, preview);
+    openDialog(itemUid, drillDownItem, drillDownItemRowData, isRiskToolParams, preview) {
+      handleOpenDialog(itemUid, drillDownItem, drillDownItemRowData, isRiskToolParams, preview);
     },
   });
 </script>
