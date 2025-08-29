@@ -18,11 +18,11 @@
   <div class="bk-vision-component">
     <div class="component">
       <div class="lable">
-        {{ props.config?.title }}({{ props.config?.chartConfig.flag }})
+        {{ config?.display_name }}({{ config?.raw_name }})
       </div>
       <div class="content">
         <bk-date-picker
-          v-if="props.config?.type === 'time-picker'"
+          v-if="config?.field_category === 'time-picker'"
           v-model="dateValue"
           format="yyyy-MM-dd HH:mm:ss"
           :shortcuts="dateShortCut"
@@ -30,7 +30,7 @@
           use-shortcut-text
           @change="handlePickerChange" />
         <div
-          v-else-if="props.config?.type === 'time-ranger'"
+          v-else-if="config?.field_category === 'time-ranger'"
           style="position: relative;"
           @mouseenter="showDeleteIcon = true"
           @mouseleave="showDeleteIcon = false">
@@ -45,7 +45,7 @@
             @click="initPickerValue" />
         </div>
         <bk-input
-          v-else-if="props.config?.type === 'inputer' "
+          v-else-if="config?.field_category === 'inputer' "
           v-model="inputVal"
           @change="handleInputChange" />
         <bk-tag-input
@@ -66,7 +66,18 @@
 
 
   interface Props {
-    config: any;
+    config: {
+      raw_name: string;
+      display_name: string;
+      description: string;
+      required: boolean;
+      field_category: string;
+      default_value: string | Array<string>;
+      choices: Array<{
+        key: string,
+        name: string
+      }>
+    };
   }
   interface Emits {
     (e: 'change', value: any): void
@@ -74,10 +85,10 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const now = new Date();
-  const dateValue = ref(props.config.value || new Date());
-  const pickerValue = ref<Array<string>>(props.config.value || []);
-  const inputVal = ref(props.config.value || []);
-  const selectorValue = ref(props.config.value || []);
+  const dateValue = ref<Date>(props.config.default_value instanceof Date ? props.config.default_value : new Date());
+  const pickerValue = ref<Array<string>>(Array.isArray(props.config.default_value) ? props.config.default_value : []);
+  const inputVal = ref(typeof props.config.default_value === 'string' ? props.config.default_value : '');
+  const selectorValue = ref(Array.isArray(props.config.default_value) ? props.config.default_value : []);
   const showDeleteIcon = ref(false);
   const dateShortCut: any = [
     {
@@ -127,22 +138,25 @@
   };
   const handleRangeChange = (val: Array<string>) => {
     pickerValue.value = val;
-    emits('change', val || []);
+    emits('change', val);
   };
   const handleInputChange = (val: string) => {
     inputVal.value = val;
     emits('change', val || '');
   };
-  const handleSelectorChange = (val: string) => {
+  const handleSelectorChange = (val: string[]) => {
     selectorValue.value = val;
-    emits('change', val || []);
+    emits('change', val);
   };
-  // 监听 props.config.value 的变化
-  watch(() => props.config?.value, (newValue) => {
-    dateValue.value = newValue || new Date();
-    pickerValue.value = newValue || [];
-    inputVal.value = newValue || [];
-    selectorValue.value = newValue || [];
+  // 监听 props.config.default_value 的变化
+  watch(() => props.config?.default_value, (newValue) => {
+    console.log(newValue, 'newValue');
+    dateValue.value = newValue instanceof Date ? newValue : new Date();
+    pickerValue.value = Array.isArray(newValue) ? newValue : [];
+    inputVal.value = typeof newValue === 'string' ? newValue : '';
+    selectorValue.value = Array.isArray(newValue) ? newValue : [];
+  }, {
+    immediate: true,
   });
 </script>
 

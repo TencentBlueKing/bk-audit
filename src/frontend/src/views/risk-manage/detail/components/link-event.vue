@@ -85,7 +85,8 @@
                     theme="primary"
                     @click="handleClick(
                       subItem,
-                      drillMap.get(subItem.field_name).drill_config.tool.uid
+                      drillMap.get(subItem.field_name).drill_config.tool.uid,
+                      subItem.field_name
                     )">
                     {{ t('查看') }}
                   </bk-button>
@@ -146,7 +147,8 @@
                       theme="primary"
                       @click="handleClick(
                         drillMap.get(basicItem.field_name),
-                        drillMap.get(basicItem.field_name).drill_config.tool.uid
+                        drillMap.get(basicItem.field_name).drill_config.tool.uid,
+                        basicItem.field_name
                       )">
                       {{ t('查看') }}
                     </bk-button>
@@ -210,7 +212,8 @@
                           theme="primary"
                           @click="handleClick(
                             drillMap.get(key),
-                            drillMap.get(key).drill_config.tool.uid
+                            drillMap.get(key).drill_config.tool.uid,
+                            key
                           )">
                           {{ t('查看') }}
                         </bk-button>
@@ -246,6 +249,7 @@
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item] = el"
+      source="risk"
       :tags-enums="tagData"
       @close="handleClose"
       @open-field-down="openFieldDown" />
@@ -360,6 +364,14 @@
   const allToolsData = ref<string[]>([]);
 
   const dialogRefs = ref<Record<string, any>>({});
+
+  const riskToolParams = computed(() => ({
+    caller_resource_type: 'risk',
+    caller_resource_id: props.data.risk_id,
+    drill_field: '',
+    event_start_time: props.data.event_time,
+    event_end_time: props.data.event_end_time,
+  }));
 
   // 获取标签列表
   const {
@@ -480,19 +492,20 @@
 
     nextTick(() => {
       if (dialogRefs.value[uid]) {
-        dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
+        dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData, riskToolParams.value);
       }
     });
   };
 
   // 打开工具
-  const handleClick = (item: DrillItem, id: string) => {
+  const handleClick = (item: DrillItem, id: string, fieldName: string) => {
+    riskToolParams.value.drill_field = fieldName;
     if (!(allToolsData.value.find(tool => tool === id))) {
       allToolsData.value.push(id);
     }
     nextTick(() => {
       if (dialogRefs.value[id]) {
-        dialogRefs.value[id].openDialog(id, item, eventItem.value);
+        dialogRefs.value[id].openDialog(id, item, eventItem.value, riskToolParams.value);
       }
     });
   };
