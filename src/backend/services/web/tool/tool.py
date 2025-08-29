@@ -105,7 +105,7 @@ def sync_resource_tags(
 
         # 批量保存标签
         tags = resource.meta.save_tags([{"tag_name": t} for t in tag_names])
-
+        print(f"Tags: {tags}")
         # 批量创建关联
         objs = [relation_model(**{relation_resource_field: resource_uid, "tag_id": t["tag_id"]}) for t in tags]
         relation_model.objects.bulk_create(objs)
