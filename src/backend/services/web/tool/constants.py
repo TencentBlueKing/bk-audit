@@ -189,6 +189,7 @@ class DataSearchDrillConfig(BaseModel):
 
     tool: Tool
     config: List[ToolDrillConfig] = PydanticField(default_factory=list)
+    drill_name: str = PydanticField("", description="下钻工具名称")
 
 
 class SQLDataSearchOutputField(DataSearchBaseField):
@@ -196,7 +197,7 @@ class SQLDataSearchOutputField(DataSearchBaseField):
     SQL数据查询输出字段
     """
 
-    drill_config: Optional[DataSearchDrillConfig] = None  # 下钻配置
+    drill_config: Optional[List[DataSearchDrillConfig]] = None  # 下钻配置
     enum_mappings: Optional[EnumMappingConfig] = None
 
 
