@@ -57,6 +57,8 @@ export default class ToolInfo {
   tags: Array<string>;
   created_by: string;
   created_at: string;
+  updated_by: string;
+  updated_at: string;
   constructor(payload = {} as ToolInfo) {
     this.name = payload.name;
     this.uid = payload.uid;
@@ -69,5 +71,7 @@ export default class ToolInfo {
     this.created_by = payload.created_by;
     this.created_at = payload.created_at;
     this.strategies = payload.strategies;
+    this.updated_by = payload.updated_by;
+    this.updated_at = payload.updated_at;
   }
 }

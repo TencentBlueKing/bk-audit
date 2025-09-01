@@ -16,38 +16,22 @@
 -->
 <template>
   <div class="tools-square">
-    <div class="content-header">
-      <bk-tab
-        v-model:active="active"
-        style="margin-left: 20px;"
-        type="unborder-card">
-        <bk-tab-panel
-          v-for="item in panels"
-          :key="item.name"
-          :label="item.label"
-          :name="item.name">
-          <content
-            ref="concentRef"
-            @handle-checked-tags="handleCheckedTags"
-            @handle-tags-enums="handleTagsEnums" />
-        </bk-tab-panel>
-      </bk-tab>
-    </div>
+    <!-- 左侧标签-->
+    <render-label
+      ref="renderLabelRef"
+      :labels="strategyLabelList"
+      :total="total"
+      :upgrade-total="upgradeTotal"
+      @checked="handleChecked" />
+
+    <!-- 右侧内容-->
     <div class="content-content">
-      <div class="content-tag">
-        {{ t('已选场景') }}:
-        <span>{{ checkedTags.join('、') }}</span>
-        <span
-          v-show="checkedTags.length > 0"
-          class="clear-tag"
-          @click="handleClear">{{ t('清除已选') }}</span>
-      </div>
       <div class="content-card">
         <content-card
           ref="ContentCardRef"
-          :my-created="active === 'my'"
-          :recent-used="active === 'history'"
-          :tags="tagsList"
+          :my-created="tagId === '-4'"
+          :recent-used="tagId === '-5'"
+          :tag-id="tagId"
           :tags-enums="tagsEnums" />
       </div>
     </div>
@@ -55,75 +39,63 @@
 </template>
 
 <script setup lang='ts'>
-  import { ref, watch } from 'vue';
-  import { useI18n } from 'vue-i18n';
+  import { onMounted, ref } from 'vue';
+
+  import ToolManageService from '@service/tool-manage';
+
+  import RenderLabel from '@views/strategy-manage/list/components/render-label.vue';
 
   import ContentCard from './square-content/concent-card.vue';
-  import Content from './square-content/index.vue';
 
+  import useRequest from '@/hooks/use-request';
 
   interface TagItem {
-    tag_id: string
-    tag_name: string
-    tool_count: number
+    tag_id: string;
+    tag_name: string;
+    tool_count: number;
   }
+  const renderLabelRef = ref();
 
-  const { t } = useI18n();
-  const active = ref('all');
-  const concentRef = ref<InstanceType<typeof Content>[]>([]);
-  const ContentCardRef = ref<InstanceType<typeof ContentCard>[]>([]);
-  const panels = ref([
-    { name: 'all', label: '全部' },
-    { name: 'my', label: '我创建的' },
-    { name: 'history', label: '最近使用的' },
-  ]);
-  const checkedTags = ref<Array<string>>([]);
-  const tagsList = ref<Array<TagItem>>([]);
+  const ContentCardRef = ref<InstanceType<typeof ContentCard>>();
+
+
   const tagsEnums = ref<Array<TagItem>>([]);
-
-  const handleCheckedTags = (tags: Array<TagItem>, tagsName: Array<string>) => {
-    if (JSON.stringify(checkedTags.value) !== JSON.stringify(tagsName)) {
-      checkedTags.value = tagsName;
-      tagsList.value = tags;
-    }
-  };
-  // 获取标签枚举
-  const handleTagsEnums = (tags: Array<TagItem>) => {
-    tagsEnums.value = tags;
-  };
-  // 清除已选
-  const handleClear = () => {
-    const activeIndex = panels.value.findIndex(p => p.name === active.value);
-    if (activeIndex >= 0 && concentRef.value[activeIndex]) {
-      concentRef.value[activeIndex].clearCheckedTags();
-    } else {
-      checkedTags.value = []; // 确保无论如何都能清空
-    }
+  const upgradeTotal = ref(0);
+  const total = ref(0);
+  const tagId = ref('');
+  const strategyLabelList = ref<Array<TagItem>>([]);
+  // 选中左侧label
+  const handleChecked = (name: string) => {
+    tagId.value = name;
+    ContentCardRef.value?.getToolsList(name);
   };
 
-  watch(() => active.value, (val) => {
-    // 获取当前激活tab对应的组件实例
-    const activeIndex = panels.value.findIndex(p => p.name === val);
+  // 工具标签列表
+  const {
+    run: fetchToolsTagsList,
+  } = useRequest(ToolManageService.fetchToolTags, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      renderLabelRef.value?.resetAll([]);
+      strategyLabelList.value = data.map(item => ({ strategy_count: item.tool_count, ...item }));
+      tagsEnums.value = strategyLabelList.value;
+    },
+  });
 
-    if (activeIndex >= 0 && concentRef.value[activeIndex]) {
-      // 直接从子组件获取最新状态
-      checkedTags.value = [...concentRef.value[activeIndex].checkedTags];
-      tagsList.value = [...concentRef.value[activeIndex].checkedTagsList];
-    } else {
-      checkedTags.value = []; // 如果没有找到组件实例，清空选中状态
-      tagsList.value = [];
-    }
-  }, { immediate: true });
 
+  onMounted(() => {
+    fetchToolsTagsList();
+  });
 </script>
 
 <style scoped lang="postcss">
 .tools-square {
   position: absolute;
-  inset: 0;
+  display: flex;
   width: 100%;
   height: 100%;
   background-color: #fff;
+  inset: 0;
 
   .content-header {
     top: 0;
@@ -139,7 +111,7 @@
   .content-content {
     width: 100%;
     height: 100%;
-    margin-top: 12px;
+    margin-top: 0;
 
     .content-tag {
       margin-left: 20px;
@@ -153,11 +125,6 @@
         cursor: pointer;
       }
     }
-  }
-
-  .content-card {
-    margin-top: 12px;
-    margin-left: 20px;
   }
 }
 </style>
