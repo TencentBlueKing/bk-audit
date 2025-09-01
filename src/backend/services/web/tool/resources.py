@@ -42,9 +42,6 @@ from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.page import paginate_data
 from services.web.strategy_v2.models import StrategyTool
 from services.web.tool.constants import (
-    MY_CREATED_TOOLS_ID,
-    RECENTLY_USED_TOOLS_ID,
-    All_TOOLS_ID,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
     ToolTagsEnum,
@@ -124,23 +121,28 @@ class ListToolTags(ToolBase):
 
         tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
 
+        current_user = get_request_username()
+        permission = ToolPermission(username=current_user)
+        authed_tool_filter = permission.authed_tool_filter
+        tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
         tag_count = [
             {
-                "tag_name": ToolTagsEnum.ALL_TOOLS.value,
-                "tag_id": All_TOOLS_ID,
-                "tool_count": Tool.all_latest_tools().count(),
+                "tag_name": str(ToolTagsEnum.ALL_TOOLS.label),
+                "tag_id": ToolTagsEnum.ALL_TOOLS.value,
+                "tool_count": Tool.all_latest_tools().filter(authed_tool_filter).count(),
             },
             {
-                "tag_name": ToolTagsEnum.MY_CREATED_TOOLS.value,
-                "tag_id": MY_CREATED_TOOLS_ID,
+                "tag_name": str(ToolTagsEnum.MY_CREATED_TOOLS.label),
+                "tag_id": ToolTagsEnum.MY_CREATED_TOOLS.value,
                 "tool_count": Tool.all_latest_tools().filter(created_by=get_request_username()).count(),
             },
             {
-                "tag_name": ToolTagsEnum.RECENTLY_USED_TOOLS.value,
-                "tag_id": RECENTLY_USED_TOOLS_ID,
-                "tool_count": Tool.objects.filter(
-                    uid__in=recent_tool_usage_manager.get_recent_uids(get_request_username())
-                ).count(),
+                "tag_name": str(ToolTagsEnum.RECENTLY_USED_TOOLS.label),
+                "tag_id": ToolTagsEnum.RECENTLY_USED_TOOLS.value,
+                "tool_count": Tool.all_latest_tools()
+                .filter(uid__in=recent_tool_usage_manager.get_recent_uids(current_user))
+                .filter(authed_tool_filter)
+                .count(),
             },
             {
                 "tag_name": str(NO_TAG_NAME),
@@ -217,7 +219,14 @@ class ListTool(ToolBase):
         permission = ToolPermission(username=current_user)
         authed_tool_filter = permission.authed_tool_filter
         queryset = Tool.all_latest_tools().filter(authed_tool_filter)
-        if (int(All_TOOLS_ID) or int(RECENTLY_USED_TOOLS_ID) or int(MY_CREATED_TOOLS_ID)) in tags:
+        if any(
+            int(tag_id) in tags
+            for tag_id in [
+                ToolTagsEnum.ALL_TOOLS.value,
+                ToolTagsEnum.MY_CREATED_TOOLS.value,
+                ToolTagsEnum.RECENTLY_USED_TOOLS.value,
+            ]
+        ):
             tags = []
         if recent_used:
             recent_tool_uids = recent_tool_usage_manager.get_recent_uids(current_user)
