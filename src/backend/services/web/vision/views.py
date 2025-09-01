@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import contextlib
 from typing import Tuple
 
 from bk_resource import resource
@@ -42,8 +43,10 @@ from services.web.vision.models import Scenario, VisionPanel
 
 class ToolVisionPermission(BasePermission):
     def has_permission(self, request, view):
-        # 下文透传：若 caller 参数命中并有权限，跳过原有校验
-        if should_skip_permission_from(request, request.user.username):
+        # 优先：从 query 参数 constants[...] 中抽取上下文做 caller 鉴权
+        # 仅当 constants 存在且校验通过时放行（通常用于 Meta 接口）
+        constants = self._extract_constants_from_query(request)
+        if constants and should_skip_permission_from(constants, request.user.username):
             return True
 
         panel_id, tool_uid = self.get_tool_and_panel_id(request)
@@ -59,6 +62,19 @@ class ToolVisionPermission(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         return self.has_permission(request, view)
+
+    @staticmethod
+    def _extract_constants_from_query(request) -> dict:
+        """从 query_params 中抽取 constants[...] 的键值作为权限上下文"""
+        params = getattr(request, "query_params", {}) or {}
+        extracted = {}
+        with contextlib.suppress(Exception):
+            for k, v in params.items():
+                if k.startswith("constants[") and k.endswith("]"):
+                    inner_key = k[len("constants[") : -1]
+                    if inner_key:
+                        extracted[inner_key] = v
+        return extracted
 
     def get_tool_and_panel_id(self, request) -> Tuple[str, str]:
         instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
