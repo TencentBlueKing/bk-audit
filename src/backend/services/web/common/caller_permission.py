@@ -217,9 +217,9 @@ def validate_tool_variables_with_risk(
     event_record: Dict[str, Any] = {}
     with suppress(Exception):
         if start_time and end_time:
-            events = resource.risk.list_event(start_time=start_time, end_time=end_time, risk_id=risk_id).get(
-                "results", []
-            )
+            events = resource.risk.list_event(
+                start_time=start_time, end_time=end_time, risk_id=risk_id, page=1, page_size=100
+            ).get("results", [])
             if events:
                 event_record = events[0] or {}
     if not event_record:

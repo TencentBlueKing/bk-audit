@@ -4,7 +4,7 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.drf import AnyOfPermissions
 from core.utils.data import get_value_by_request
-from services.web.tool.permissions import ManageToolPermission, UseToolPermission,CallerContextPermission
+from services.web.tool.permissions import ManageToolPermission, UseToolPermission, CallerContextPermission
 
 
 class ToolViewSet(ResourceViewSet):
@@ -13,7 +13,7 @@ class ToolViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["update", "destroy", "sql_analyse_with_tool"]:
             return [ManageToolPermission()]
-        if self.action in ["execute"]:
+        if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
             return [
                 AnyOfPermissions(
                     CallerContextPermission(),
