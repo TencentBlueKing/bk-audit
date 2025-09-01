@@ -835,13 +835,15 @@
   };
   watch(() => isFullScreen.value, (val) => {
     nextTick(() => {
-      // 判断可视高度大于900px
-      // eslint-disable-next-line no-nested-ternary
-      dialogTableHeight.value = val ? (window.innerHeight >= 900 ? '57vh' : '40%') : '300px';
-      // eslint-disable-next-line no-nested-ternary
-      dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? '65vh' : '60%') : '50vh';
-      // eslint-disable-next-line no-nested-ternary
-      dialogTableMinHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? '65vh' : '60%')  : '200px';
+      if (tableData.value.length > 0) {
+        // 判断可视高度大于900px
+        // eslint-disable-next-line no-nested-ternary
+        dialogTableHeight.value = val ? (window.innerHeight >= 900 ? '57vh' : '40%') : '300px';
+        // eslint-disable-next-line no-nested-ternary
+        dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? '65vh' : '60%') : '50vh';
+        // eslint-disable-next-line no-nested-ternary
+        dialogTableMinHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? '65vh' : '60%')  : '200px';
+      }
     });
   });
   // 文本溢出检测
