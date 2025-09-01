@@ -83,7 +83,13 @@
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import { useRoute  } from 'vue-router';
 
+  interface TagItem {
+    tag_id: string;
+    tag_name: string;
+    strategy_count: number;
+  }
   interface Emits {
     (e: 'change', showLabel: boolean):void;
     (e: 'checked', name: string): void
@@ -91,6 +97,7 @@
   interface Exposes{
     resetAllLabel: () => void;
     setLabel: (tag: string) => void;
+    resetAll: (val: Array<TagItem>) => void;
   }
   interface Props{
     labels: Array<Record<string, any>>,
@@ -99,13 +106,16 @@
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const route = useRoute();
   const showTipObjects = ref({} as Record<string, boolean>);
+
   const all = ref([
-    { tag_id: 'all', tag_name: '全部策略', strategy_count: 0 },
+    { tag_id: 'all', tag_name: route.name === 'strategyList' ? '全部策略' : '', strategy_count: 0 },
   ]);
   const active = ref<string|number>('all');
   const showLabel = ref(true);
   const { t, te } = useI18n();
+
   // eslint-disable-next-line vue/no-mutating-props, vue/no-side-effects-in-computed-properties
   const labelList = computed(() => [...all.value, ...props.labels.sort((x, y) => {
     const reg = /[a-zA-Z0-9]/;
@@ -180,6 +190,13 @@
     },
     setLabel(tag: string) {
       active.value = tag;
+    },
+    // 重置所有标签
+    resetAll(val: Array<TagItem>) {
+      all.value = val;
+      nextTick(() => {
+        handleSelect(labelList.value[0].tag_id);
+      });
     },
   });
 </script>

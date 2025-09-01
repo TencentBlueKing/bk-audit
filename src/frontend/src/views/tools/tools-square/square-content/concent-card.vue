@@ -171,8 +171,8 @@
                 {{ item.description }}
               </div>
               <div class="item-footer">
-                <span>{{ item.created_by }}</span>
-                <span>{{ formatDate(item.created_at) }}</span>
+                <span>{{ item.updated_by }}</span>
+                <span>{{ formatDate(item.updated_at) }}</span>
               </div>
             </div>
           </div>
@@ -216,7 +216,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { nextTick, ref, watch } from 'vue';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -235,6 +235,11 @@
   import useRequest from '@/hooks/use-request';
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
+
+  interface Exposes{
+    getToolsList: (id: string) => void;
+  }
+
   const props = defineProps<Props>();
   declare global {
     interface Window {
@@ -247,10 +252,10 @@
     tool_count: number
   }
   interface Props {
-    tags: Array<TagItem>,
     tagsEnums: Array<TagItem>,
     myCreated: boolean,
     recentUsed: boolean,
+    tagId: string,
   }
 
   interface DrillDownItem {
@@ -292,12 +297,13 @@
   const scrollStyle = {
     width: '98%',
     'margin-top': '10px',
-    height: 'calc(100vh - 300px)',
+    height: 'calc(100vh - 200px)',
   };
   const urlToolsIds = ref<string[]>([]);
   const {
     appendSearchParams,
   } = useUrlSearch();
+
   // 工具列表
   const {
     run: fetchToolsList,
@@ -332,7 +338,6 @@
       }
     },
   });
-
   // 删除
   const {
     run: fetchDeleteTool,
@@ -377,7 +382,7 @@
         my_created: props.myCreated,
         recent_used: props.recentUsed,
         keyword: searchValue.value,
-        tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+        tags: [props.tagId],
       }).finally(() => {
         loading.value = false;
       });
@@ -555,7 +560,7 @@
       keyword: searchValue.value,
       my_created: props.myCreated,
       recent_used: props.recentUsed,
-      tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+      tags: [props.tagId],
     }).finally(() => {
       loading.value = false;
     });
@@ -581,7 +586,7 @@
         keyword: searchValue.value,
         my_created: props.myCreated,
         recent_used: props.recentUsed,
-        tags: props.tags.map((item: TagItem) => item.tag_id) || [],
+        tags: [props.tagId],
       }).then((res) => {
         if (res) {
           currentPage.value += 1;
@@ -595,28 +600,29 @@
     }, 1000);
   };
 
-  watch(() => props, (newTags) => {
-    loading.value = true;
-    fetchToolsList({
-      page: currentPage.value,
-      page_size: currentPagSize.value,
-      keyword: searchValue.value,
-      my_created: props.myCreated,
-      recent_used: props.recentUsed,
-      tags: newTags.tags.map((item: TagItem) => item.tag_id) || [],
-    }).finally(() => {
-      loading.value = false;
-    });
-  }, {
-    deep: true,
-    immediate: false,
+  defineExpose<Exposes>({
+    getToolsList(id: string) {
+      nextTick(() => {
+        fetchToolsList({
+          page: currentPage.value,
+          page_size: currentPagSize.value,
+          keyword: searchValue.value,
+          my_created: props.myCreated,
+          recent_used: props.recentUsed,
+          tags: [id],
+        }).finally(() => {
+          loading.value = false;
+        });
+      });
+    },
   });
-
 </script>
 
 <style scoped lang="postcss">
 .card {
   position: relative;
+  padding-top: 20px;
+  padding-left: 20px;
   background-color: #f5f7fa;
 
   .card-search {
@@ -627,7 +633,7 @@
       position: absolute;
       right: 50px;
       width: 600px;
-      margin-left: 10px;
+      margin-left: 15px;
     }
   }
 
@@ -645,7 +651,7 @@
 
       .card-list-item {
         position: relative;
-        width: 19.5%;
+        width: 19.4%;
         height: 188px;
         margin-top: 10px;
         margin-bottom: 0;

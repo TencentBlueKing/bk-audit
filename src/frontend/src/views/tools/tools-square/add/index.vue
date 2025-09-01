@@ -1179,11 +1179,16 @@
     onSuccess: (data) => {
       formData.value = data;
       nextTick(() => {
-        editor.setValue(formData.value.config.sql);
-        formItemRefs.value.forEach((item: any, index: number) => {
-          item?.setData(formData.value.config.input_variable[index].default_value);
-        });
-        formData.value.config.output_fields.forEach((item) => {
+        if (data.tool_type === 'data_search' && data.data_search_config_type === 'sql') {
+          editor.setValue(formData.value.config.sql);
+        }
+        if (formItemRefs.value) {
+          formItemRefs.value?.forEach((item: any, index: number) => {
+            item?.setData(formData.value.config.input_variable[index].default_value);
+          });
+        }
+
+        formData.value.config.output_fields?.forEach((item) => {
           if (!item.enum_mappings) {
             // eslint-disable-next-line no-param-reassign
             item.enum_mappings = {
@@ -1558,7 +1563,12 @@
         uid: route.params.id,
       });
     }
-    initEditor();
+
+    if (formData.value.tool_type === 'data_search' && formData.value.data_search_config_type === 'sql') {
+      nextTick(() => {
+        initEditor();
+      });
+    }
     defineTheme();
   });
 
