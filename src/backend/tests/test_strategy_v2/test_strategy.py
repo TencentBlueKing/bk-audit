@@ -76,10 +76,9 @@ class StrategyTest(TestCase):
                 "display_name": "字段名",
                 "is_priority": True,
                 "duplicate_field": False,
-                "drill_config": {
-                    "tool": {"uid": "fake_tool_uid", "version": 1, "params": {}},
-                    "config": [],
-                },
+                "drill_config": [
+                    {"tool": {"uid": "fake_tool_uid", "version": 1, "params": {}}, "config": [], "drill_name": ""},
+                ],
             }
         ]
 
