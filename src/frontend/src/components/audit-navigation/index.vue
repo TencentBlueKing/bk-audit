@@ -130,14 +130,15 @@
   const { feature: showNotice } = useFeature('bknotice');
   const route = useRoute();
   const apiUrl = `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/api/v1/bk-notice/announcements/`;
-  const TOGGLE_CACHE = 'navigation_toggle_status';
+  // const TOGGLE_CACHE = 'navigation_toggle_status';
   const PAGE_MIN_WIDTH = 1366;
   const PAGE_MIDDLE_WIDTH = 1920;
   const SIDE_LEFT_EXPAND_SMALL_WIDTH = 220;
   const SIDE_LEFT_EXPAND_BIG_WIDTH = 280;
   const SIDE_LEFT_INEXPAND_WIDTH = 60;
 
-  const isSideMenuFixed = ref(Boolean(localStorage.getItem(TOGGLE_CACHE)));
+  // const isSideMenuFixed = ref(Boolean(localStorage.getItem(TOGGLE_CACHE)));
+  const isSideMenuFixed = ref(true);
 
   const isSideMenuHover = ref(false);
   const pageWidth = ref(PAGE_MIN_WIDTH);
@@ -237,11 +238,11 @@
    */
   const handleSideFlodToggle = () => {
     isSideMenuFixed.value = !isSideMenuFixed.value;
-    if (isSideMenuFixed.value) {
-      localStorage.setItem(TOGGLE_CACHE, 'true');
-    } else {
-      localStorage.setItem(TOGGLE_CACHE, '');
-    }
+    // if (isSideMenuFixed.value) {
+    //   localStorage.setItem(TOGGLE_CACHE, 'true');
+    // } else {
+    //   localStorage.setItem(TOGGLE_CACHE, '');
+    // }
     if (!isSideMenuFixed.value) {
       emit('menu-flod', isSideMenuFixed.value);
     }
