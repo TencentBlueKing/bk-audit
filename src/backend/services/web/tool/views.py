@@ -18,7 +18,7 @@ class ToolViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["update", "destroy", "sql_analyse_with_tool"]:
             return [ManageToolPermission()]
-        if self.action in ["execute"]:
+        if self.action in ["execute", "enum_mapping_by_collection_keys", "enum_mapping_by_collection"]:
             return [
                 AnyOfPermissions(
                     CallerContextPermission(),

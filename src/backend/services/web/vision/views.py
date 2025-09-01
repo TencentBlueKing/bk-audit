@@ -42,12 +42,16 @@ from services.web.vision.models import Scenario, VisionPanel
 
 
 class ToolVisionPermission(BasePermission):
+    def __init__(self, try_skip_permission=False):
+        self.try_skip_permission = try_skip_permission
+
     def has_permission(self, request, view):
         # 优先：从 query 参数 constants[...] 中抽取上下文做 caller 鉴权
         # 仅当 constants 存在且校验通过时放行（通常用于 Meta 接口）
-        constants = self._extract_constants_from_query(request)
-        if constants and should_skip_permission_from(constants, request.user.username):
-            return True
+        if self.try_skip_permission:
+            constants = self._extract_constants_from_query(request)
+            if constants and should_skip_permission_from(constants, request.user.username):
+                return True
 
         panel_id, tool_uid = self.get_tool_and_panel_id(request)
         perm = UseToolPermission(
@@ -90,7 +94,7 @@ class ToolVisionPermission(BasePermission):
         raise ValidationError(message=gettext("无法获取报表ID"))
 
 
-class ShareDetailPermission(ToolVisionPermission):
+class ShareDetailPermission(BasePermission):
     def has_permission(self, request, view):
         instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
         return check_bkvision_share_permission(get_request_username(), instance_id)
@@ -152,6 +156,13 @@ class MetaViewSet(API200ViewSet, BKVisionInstanceViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.vision.query_meta, endpoint="query"),
     ]
+
+    def get_permissions(self):
+        instance_id = self.get_instance_id()
+        panel: VisionPanel = get_object_or_404(VisionPanel, id=instance_id)
+        if panel.scenario == Scenario.TOOL.value:
+            return [ToolVisionPermission(try_skip_permission=True)]
+        return super().get_permissions()
 
 
 class DatasetViewSet(API200ViewSet, BKVisionInstanceViewSet):
