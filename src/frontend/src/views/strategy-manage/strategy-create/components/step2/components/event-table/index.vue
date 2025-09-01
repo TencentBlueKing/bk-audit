@@ -255,6 +255,10 @@
       target_value: '',
       source_field: '',
     },
+    enum_mappings: {
+      collection_id: '',
+      mappings: [],
+    },
     drill_config: {
       tool: {
         uid: '',
