@@ -205,24 +205,26 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
 
         for field_source, config_key in field_config_map:
             for field_cfg in validated_request_data.get(config_key, []):
-                drill_config = field_cfg.get("drill_config") or {}
-                tool = drill_config.get("tool") or {}
+                drill_config = field_cfg.get("drill_config", [])
 
-                # 如果未配置 drill_config 或 tool.uid 为空，就跳过
-                if not tool.get("uid"):
-                    continue
+                for drill in drill_config:
+                    tool = drill.get("tool", {})
 
-                tools_to_create.append(
-                    StrategyTool(
-                        strategy=strategy,
-                        field_name=field_cfg.get("field_name"),
-                        tool_uid=tool["uid"],
-                        tool_version=tool.get("version"),
-                        field_source=field_source,
+                    if not tool.get("uid"):
+                        continue
+
+                    tools_to_create.append(
+                        StrategyTool(
+                            strategy=strategy,
+                            field_name=field_cfg.get("field_name"),
+                            tool_uid=tool["uid"],
+                            tool_version=tool.get("version"),
+                            field_source=field_source,
+                        )
                     )
-                )
 
         if tools_to_create:
+            # 批量创建 StrategyTool 对象
             StrategyTool.objects.bulk_create(tools_to_create)
 
     @staticmethod
