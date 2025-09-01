@@ -23,11 +23,7 @@ from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
-from apps.meta.serializers import (
-    BatchUpdateEnumMappingSerializer,
-    EnumMappingByCollectionKeysSerializer,
-    EnumMappingByCollectionSerializer,
-)
+from apps.meta.serializers import BatchUpdateEnumMappingSerializer
 from core.serializers import ChoiceListSerializer, OrderSerializer
 from services.web.analyze.constants import (
     ControlTypeChoices,
@@ -38,7 +34,6 @@ from services.web.analyze.constants import (
 )
 from services.web.analyze.exceptions import ControlNotExist
 from services.web.analyze.models import Control, ControlVersion
-from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.risk.constants import EVENT_BASIC_MAP_FIELDS
 from services.web.strategy_v2.constants import (
     BKMONITOR_AGG_INTERVAL_MIN,
@@ -67,7 +62,7 @@ from services.web.strategy_v2.exceptions import (
     StrategyTypeNotSupport,
 )
 from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTool
-from services.web.tool.constants import DrillConfig
+from services.web.tool.constants import DataSearchDrillConfig
 
 
 class MapFieldSerializer(serializers.Serializer):
@@ -95,26 +90,6 @@ class EnumMappingConfigSerializer(BatchUpdateEnumMappingSerializer):
     collection_id = serializers.CharField(read_only=True, default='auto-generate')
 
 
-class EnumMappingByCollectionWithCallerSerializer(EnumMappingByCollectionSerializer):
-    """
-    枚举集合查询（携带可选的 caller 权限上下文）
-    """
-
-    # 可选：调用方上下文（目前支持 risk）
-    caller_resource_type = serializers.ChoiceField(required=False, choices=CALLER_RESOURCE_TYPE_CHOICES)
-    caller_resource_id = serializers.CharField(required=False, allow_blank=True)
-
-
-class EnumMappingByCollectionKeysWithCallerSerializer(EnumMappingByCollectionKeysSerializer):
-    """
-    枚举查询（携带可选的 caller 权限上下文）
-    """
-
-    # 可选：调用方上下文（目前支持 risk）
-    caller_resource_type = serializers.ChoiceField(required=False, choices=CALLER_RESOURCE_TYPE_CHOICES)
-    caller_resource_id = serializers.CharField(required=False, allow_blank=True)
-
-
 class EventFieldSerializer(serializers.Serializer):
     field_name = serializers.CharField(label=gettext_lazy("Field Name"))
     display_name = serializers.CharField(label=gettext_lazy("Field Display Name"))
@@ -125,7 +100,7 @@ class EventFieldSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
-    drill_config = DrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), default=None, allow_null=True)
+    drill_config = DataSearchDrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), default=None, allow_null=True)
     is_show = serializers.BooleanField(label=gettext_lazy("是否展示"), default=True)
 
 
