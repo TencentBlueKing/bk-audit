@@ -125,7 +125,7 @@ class EventFieldSerializer(serializers.Serializer):
         required=False,
         allow_null=True,
     )
-    drill_config = DrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), default=None, allow_null=True)
+    drill_config = DrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), many=True, default=list, allow_null=True)
     is_show = serializers.BooleanField(label=gettext_lazy("是否展示"), default=True)
 
 
