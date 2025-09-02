@@ -19,7 +19,9 @@
     <!-- 左侧标签-->
     <render-label
       ref="renderLabelRef"
+      :final="3"
       :labels="strategyLabelList"
+      :render-style="renderStyle"
       :total="total"
       :upgrade-total="upgradeTotal"
       @checked="handleChecked" />
@@ -53,6 +55,7 @@
     tag_id: string;
     tag_name: string;
     tool_count: number;
+    icon?: string;
   }
   const renderLabelRef = ref();
 
@@ -64,6 +67,9 @@
   const total = ref(0);
   const tagId = ref('');
   const strategyLabelList = ref<Array<TagItem>>([]);
+  const renderStyle = ref({
+    backgroundColor: '#fff',
+  });
   // 选中左侧label
   const handleChecked = (name: string) => {
     tagId.value = name;
@@ -77,7 +83,19 @@
     defaultValue: [],
     onSuccess: (data) => {
       renderLabelRef.value?.resetAll([]);
-      strategyLabelList.value = data.map(item => ({ strategy_count: item.tool_count, ...item }));
+      const strategyList = data.map(item => ({ strategy_count: item.tool_count, ...item, icon: '' }));
+      // 自定义strategyLabelList.value 的前三个icon
+      const iconMap: Record<number, string> = {
+        0: 'quanbu-xuanzhong',
+        1: 'morentouxiang',
+        2: 'shijian',
+        3: 'weifenpei',
+      };
+      strategyLabelList.value = strategyList.map((item: any, index: number) => ({
+        ...item,
+        icon: iconMap[index] || 'tag',
+      }));
+
       tagsEnums.value = strategyLabelList.value;
     },
   });
@@ -128,3 +146,4 @@
   }
 }
 </style>
+

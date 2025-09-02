@@ -250,6 +250,7 @@
     tag_id: string
     tag_name: string
     tool_count: number
+    icon?: string;
   }
   interface SearchItem {
     value: any;
@@ -297,7 +298,7 @@
   }
   interface Emits {
     (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>): void;
-    (e: 'close', val?: ToolDetailModel): void;
+    (e: 'close', val?: string): void;
   }
 
   const props = defineProps<Props>();
@@ -742,7 +743,7 @@
   const handleFieldDownClick = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>) => {
     emit('openFieldDown', drillDownItem, drillDownItemRowData);
   };
-
+  const dialogUid = ref('');
   // 打开弹窗
   const handleOpenDialog = async (
     itemUid: string,
@@ -753,7 +754,7 @@
     // 是否预览 （暂时用不上）
     isPreview.value = preview;
     isShow.value = true;
-
+    dialogUid.value = itemUid;
     // dialog层级
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -821,7 +822,7 @@
 
   // 关闭弹窗
   const handleCloseDialog = () => {
-    emit('close', itemInfo.value);
+    emit('close', dialogUid.value);
     handleReset();
     isShow.value = false;
     dialogWidth.value = '50%';

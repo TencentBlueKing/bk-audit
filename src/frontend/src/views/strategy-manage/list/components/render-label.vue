@@ -16,7 +16,8 @@
 -->
 <template>
   <div
-    class="render-label-box">
+    class="render-label-box"
+    :style="renderStyle">
     <scroll-faker>
       <transition name="draw">
         <div
@@ -28,20 +29,27 @@
             class="label-item"
             :class="[
               {active: active===item.tag_id},
-              {final: index === 1}
+              {final: index === final}
             ]"
             @click="handleSelect(item.tag_id)">
             <div class="label-box">
               <audit-icon
-                v-if="index !== 0"
+                v-if="item?.icon"
                 class="tag-icon"
                 :class="[{active: active===item.tag_id}]"
-                type="tag" />
-              <audit-icon
-                v-else
-                class="tag-icon"
-                :class="[{active: active===item.tag_id}]"
-                type="quanbu" />
+                :type="item?.icon" />
+              <span v-else>
+                <audit-icon
+                  v-if="index !== 0"
+                  class="tag-icon"
+                  :class="[{active: active===item.tag_id}]"
+                  type="tag" />
+                <audit-icon
+                  v-else
+                  class="tag-icon"
+                  :class="[{active: active===item.tag_id}]"
+                  type="quanbu" />
+              </span>
               <span
                 v-if="showTipObjects[item.tag_id]"
                 v-bk-tooltips="{content:item.tag_name, placement: 'top-start'}"
@@ -89,6 +97,7 @@
     tag_id: string;
     tag_name: string;
     strategy_count: number;
+    icon: string;
   }
   interface Emits {
     (e: 'change', showLabel: boolean):void;
@@ -103,14 +112,19 @@
     labels: Array<Record<string, any>>,
     total: number,
     upgradeTotal: number,
+    final?: number;
+    renderStyle?: Record<string, any>;
   }
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    final: 1,
+    renderStyle: () => ({}),
+  });
   const emits = defineEmits<Emits>();
   const route = useRoute();
   const showTipObjects = ref({} as Record<string, boolean>);
 
   const all = ref([
-    { tag_id: 'all', tag_name: route.name === 'strategyList' ? '全部策略' : '', strategy_count: 0 },
+    { tag_id: 'all', tag_name: route.name === 'strategyList' ? '全部策略' : '', strategy_count: 0, icon: 'quanbu' },
   ]);
   const active = ref<string|number>('all');
   const showLabel = ref(true);
@@ -204,7 +218,8 @@
 .render-label-box {
   position: relative;
   height: calc(100vh - 144px);
-  background-color: #f5f7fa;
+
+  /* background-color: #f5f7fa; */
 
   .render-label {
     position: relative;
