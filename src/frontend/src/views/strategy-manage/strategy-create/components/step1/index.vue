@@ -208,7 +208,11 @@
       </div>
       <template #action>
         <bk-button
-          :disabled="tagLoading"
+          v-bk-tooltips="{
+            content: typeTableLoading ? t('数据加载中，请稍等') : '',
+            disabled: !typeTableLoading,
+          }"
+          :disabled="typeTableLoading"
           theme="primary"
           @click="handleNext">
           {{ t('下一步') }}
@@ -225,6 +229,7 @@
 <script setup lang="ts">
   import { InfoBox } from 'bkui-vue';
   import {
+    computed,
     h,
     onBeforeUnmount,
     onMounted,
@@ -479,6 +484,8 @@
     MIDDLE: t('问题存在影响范围较大或程度较深，可能影响局部业务效率或安全性，需针对性制定措施并跟踪整改'),
     LOW: t('问题存在但影响范围有限，短期内不会对有重大问题，可通过常规流程优化解决'),
   };
+
+  const typeTableLoading = computed(() => comRef.value?.typeTableLoading);
 
   // 编辑
   const setFormData = (editData: StrategyModel) => {
