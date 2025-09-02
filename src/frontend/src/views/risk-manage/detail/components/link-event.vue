@@ -272,7 +272,6 @@
   import EventModel from '@model/event/event';
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
-  import ToolDetailModel from '@model/tool/tool-detail';
 
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
@@ -520,9 +519,9 @@
   };
 
   // 关闭弹窗
-  const handleClose = (ToolInfo: ToolDetailModel | undefined) => {
+  const handleClose = (ToolInfo: string | undefined) => {
     if (ToolInfo) {
-      allToolsData.value = allToolsData.value.filter(item => item !== ToolInfo.uid);
+      allToolsData.value = allToolsData.value.filter(item => item !== ToolInfo);
     }
   };
   watch(() => props.data, (data) => {

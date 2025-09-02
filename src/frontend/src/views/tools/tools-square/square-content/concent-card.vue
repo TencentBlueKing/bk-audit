@@ -223,7 +223,6 @@
 
   import ToolManageService from '@service/tool-manage';
 
-  import ToolDetailModel from '@model/tool/tool-detail';
   import ToolInfo from '@model/tool/tool-info';
 
   import useUrlSearch from '@hooks/use-url-search';
@@ -543,11 +542,11 @@
     });
   };
   // 关闭弹窗
-  const handleClose = (ToolInfo: ToolDetailModel | undefined) => {
-    if (ToolInfo) {
-      allToolsData.value = allToolsData.value.filter(item => item !== ToolInfo.uid);
+  const handleClose = (ToolUid: string | undefined) => {
+    if (ToolUid) {
+      allToolsData.value = allToolsData.value.filter(item => item !== ToolUid);
 
-      urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolInfo.uid);
+      urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolUid);
       appendSearchParams({
         tool_id: urlToolsIds.value.join(','),
       });
