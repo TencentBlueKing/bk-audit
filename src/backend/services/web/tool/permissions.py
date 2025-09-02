@@ -19,16 +19,17 @@ from typing import Callable, Dict, List, Set, Union
 
 from bk_resource import api, resource
 from django.db.models import Q, QuerySet
+from rest_framework.permissions import BasePermission
 
+from apps.feature.constants import FeatureTypeChoices
+from apps.feature.handlers import FeatureHandler
 from apps.permission.handlers.actions import ActionEnum, ActionMeta
 from apps.permission.handlers.drf import (
+    InstanceActionPermission,
     wrapper_permission_field,
 )
 from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
-from apps.feature.constants import FeatureTypeChoices
-from apps.feature.handlers import FeatureHandler
-from apps.permission.handlers.drf import InstanceActionPermission
 from core.models import get_request_username
 from services.web.common.caller_permission import should_skip_permission_from
 from services.web.tool.converter import (
@@ -43,7 +44,7 @@ from services.web.tool.models import Tool, ToolTag
 
 
 def get_tool_permission_always_allowed_func(
-        current_user: str, use_tool_permission_tags: Set[str], manage_tool_permission_tags: Set[str]
+    current_user: str, use_tool_permission_tags: Set[str], manage_tool_permission_tags: Set[str]
 ) -> Callable[[dict, str], bool]:
     """
     获取工具权限是否始终允许使用的函数
@@ -131,7 +132,7 @@ class ToolPermission:
         return Q(created_by=self.username)
 
     def fetch_auth_tool_tags(
-            self, action: Union[ActionEnum.USE_TOOL_BY_TAG, ActionEnum.MANAGE_TOOL_BY_TAG]
+        self, action: Union[ActionEnum.USE_TOOL_BY_TAG, ActionEnum.MANAGE_TOOL_BY_TAG]
     ) -> QuerySet["ToolTag"]:
         """
         获取用户有权限的工具标签
@@ -144,7 +145,7 @@ class ToolPermission:
         return ToolTag.objects.filter(tool_tag_q).distinct()
 
     def get_tool_filter_by_tag_action(
-            self, action: Union[ActionEnum.USE_TOOL_BY_TAG, ActionEnum.MANAGE_TOOL_BY_TAG]
+        self, action: Union[ActionEnum.USE_TOOL_BY_TAG, ActionEnum.MANAGE_TOOL_BY_TAG]
     ) -> Q:
         """
         根据标签权限动作获取工具筛选条件
@@ -177,11 +178,11 @@ class ToolPermission:
         - OR 用户有按标签管理权限的工具
         """
         return (
-                self.local_tool_filter
-                | self.get_tool_filter_by_tool_action(action=ActionEnum.USE_TOOL)
-                | self.get_tool_filter_by_tool_action(action=ActionEnum.MANAGE_TOOL)
-                | self.get_tool_filter_by_tag_action(action=ActionEnum.USE_TOOL_BY_TAG)
-                | self.get_tool_filter_by_tag_action(action=ActionEnum.MANAGE_TOOL_BY_TAG)
+            self.local_tool_filter
+            | self.get_tool_filter_by_tool_action(action=ActionEnum.USE_TOOL)
+            | self.get_tool_filter_by_tool_action(action=ActionEnum.MANAGE_TOOL)
+            | self.get_tool_filter_by_tag_action(action=ActionEnum.USE_TOOL_BY_TAG)
+            | self.get_tool_filter_by_tag_action(action=ActionEnum.MANAGE_TOOL_BY_TAG)
         )
 
 

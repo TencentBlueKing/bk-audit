@@ -35,8 +35,6 @@ from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import EnumMappingRelatedType, Tag
 from apps.meta.serializers import EnumMappingSerializer
-from apps.permission.handlers.actions.action import ActionEnum
-from apps.permission.handlers.drf import wrapper_permission_field
 from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
@@ -50,7 +48,6 @@ from services.web.strategy_v2.serializers import (
     EnumMappingByCollectionKeysWithCallerSerializer,
     EnumMappingByCollectionWithCallerSerializer,
 )
-from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.constants import (
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
@@ -809,9 +806,7 @@ class GetToolDetail(ToolBase):
             for table in tool.config["referenced_tables"]:
                 table["permission"] = auth_results.get(table["table_name"], {})
         data = self.ResponseSerializer(instance=tool).data
-        current_user = get_request_username()
-        permission = ToolPermission(username=current_user)
-        data = permission.wrapper_tool_permission_field(tool_list=[data], tool_tag_ids=tag_ids)[0]
+        data["permission"] = {'use_tool': True, 'manage_tool': False}
         return data
 
 
