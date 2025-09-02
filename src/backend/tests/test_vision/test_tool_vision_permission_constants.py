@@ -60,11 +60,16 @@ class TestToolVisionPermissionConstants(TestCase):
             "drill_field": "raw_event_id",
             "event_start_time": "2025-08-29 16:56:58",
             "event_end_time": "2025-08-29 16:56:58",
-            "system_id": "1756457818000",
+            "current_type": "tool",
+            "current_object_id": "tool-uid-1",
+            'tool_variables': [{'raw_name': 'system_id', 'value': '1756457818000'}],
         }
 
-        with mock.patch("services.web.vision.views.should_skip_permission_from", return_value=True) as m_should_skip:
-            ok = ToolVisionPermission().has_permission(req, DummyView())
+        with (
+            mock.patch.object(ToolVisionPermission, "get_tool_and_panel_id", return_value=("panel", "tool-uid-1")),
+            mock.patch("services.web.vision.views.should_skip_permission_from", return_value=True) as m_should_skip,
+        ):
+            ok = ToolVisionPermission(True).has_permission(req, DummyView())
         self.assertTrue(ok)
         # 断言以 constants 字典形式调用
         args, kwargs = m_should_skip.call_args

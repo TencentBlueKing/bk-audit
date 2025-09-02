@@ -136,8 +136,8 @@ def extract_caller_context(source: Any) -> Tuple[Optional[str], Optional[str]]:
     for attr in ("data", "query_params"):
         if hasattr(source, attr):
             with suppress(Exception):
-                crt = getattr(source, attr).get("caller_resource_type")
-                cri = getattr(source, attr).get("caller_resource_id")
+                crt = crt or getattr(source, attr).get("caller_resource_type")
+                cri = cri or getattr(source, attr).get("caller_resource_id")
     return crt, cri
 
 
@@ -200,7 +200,9 @@ def validate_tool_variables_with_risk(
     基于策略字段 drill_config(DrillConfig) 与风险 event_data，对工具执行变量进行值校验：
       - FIXED_VALUE：变量值必须等于配置的 target_value
       - FIELD：变量值必须等于 event_data 中的 target_value (basic和非basic处理逻辑不同，详见带阿米)
-    若风险/策略不可用、配置缺失、字段缺失或传入的变量过多、任一校验失败，返回 False。
+    仅对在 mapping（由 drill_config 针对该 tool 建立的映射）中声明的变量进行校验；
+    未在 mapping 中声明的变量不参与校验。
+    若风险/策略不可用、字段值校验失败，返回 False。
     """
     from services.web.risk.models import Risk
     from services.web.strategy_v2.models import Strategy
@@ -259,16 +261,12 @@ def validate_tool_variables_with_risk(
                 continue
             mapping[src] = {"type": tv_type, "target": target_value, "target_field_type": target_field_type}
 
-    if not mapping:
-        # 未找到映射，判定失败
-        return False
-
-    # 逐个变量进行匹配校验（仅在 mapping 中声明的变量可以透传）
+    # 逐个变量进行匹配校验（仅在 mapping 中声明的变量参与校验）
     for name, value in variable_values.items():
         rule = mapping.get(name)
+        # 若变量未在 mapping 中声明，则跳过校验
         if not rule:
-            # 未在映射中声明的变量，判定失败
-            return False
+            continue
         if rule["type"] == TargetValueTypeEnum.FIXED_VALUE.value:
             if value != rule["target"]:
                 return False
@@ -281,8 +279,6 @@ def validate_tool_variables_with_risk(
                 expected = event_record.get("event_data", {}).get(rule["target"])
             if expected != value:
                 return False
-        else:
-            return False
     return True
 
 
