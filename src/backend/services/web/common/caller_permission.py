@@ -136,8 +136,8 @@ def extract_caller_context(source: Any) -> Tuple[Optional[str], Optional[str]]:
     for attr in ("data", "query_params"):
         if hasattr(source, attr):
             with suppress(Exception):
-                crt = getattr(source, attr).get("caller_resource_type")
-                cri = getattr(source, attr).get("caller_resource_id")
+                crt = crt or getattr(source, attr).get("caller_resource_type")
+                cri = cri or getattr(source, attr).get("caller_resource_id")
     return crt, cri
 
 
