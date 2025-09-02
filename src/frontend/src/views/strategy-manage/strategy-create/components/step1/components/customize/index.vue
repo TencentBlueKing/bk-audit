@@ -353,7 +353,8 @@
     (e: 'updateFormData', value: IFormData): void
   }
   interface Expose {
-    getFields: () => IFormData
+    getFields: () => IFormData;
+    typeTableLoading: boolean;
   }
   interface Props {
     editData: any
@@ -996,6 +997,10 @@
       // 同步display_name
       params.configs.data_source.display_name = (params.configs.data_source.rt_id?.length > 1 ? params.configs.data_source.rt_id : '') as string;
       return params;
+    },
+    // 暴露 typeTableLoading 状态
+    get typeTableLoading() {
+      return typeTableLoading.value;
     },
   });
   onMounted(() => {
