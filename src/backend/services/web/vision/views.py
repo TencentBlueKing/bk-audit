@@ -135,8 +135,8 @@ class BKVisionInstanceViewSet(BKVisionViewSet):
         if panel.scenario in self.escape_scenario:
             return []
         elif panel.scenario == Scenario.TOOL.value:
-            # 工具场景：启用工具权限 + 分享权限综合校验
-            return [ToolVisionPermission()]
+            # 工具场景除了meta无需鉴权
+            return []
         return [
             InstanceActionPermission(
                 actions=[ActionEnum.VIEW_BASE_PANEL],
