@@ -142,7 +142,7 @@ class TestCallerPermission(TestCase):
             raw_event_id="e3",
             strategy=strategy,
             event_time=timezone.now(),
-            event_data={"username": "admin", "ip": "1.1.1.1"},
+            event_data={"ip": "1.1.1.1", "event_data": {"username": "admin"}},
         )
         StrategyTool.objects.create(
             strategy=strategy,

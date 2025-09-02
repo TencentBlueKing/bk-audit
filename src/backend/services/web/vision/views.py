@@ -48,12 +48,14 @@ class ToolVisionPermission(BasePermission):
     def has_permission(self, request, view):
         # 优先：从 query 参数 constants[...] 中抽取上下文做 caller 鉴权
         # 仅当 constants 存在且校验通过时放行（通常用于 Meta 接口）
+        panel_id, tool_uid = self.get_tool_and_panel_id(request)
         if self.try_skip_permission:
             constants = self._extract_constants_from_query(request)
-            if constants and should_skip_permission_from(constants, request.user.username):
+            constants['current_type'] = "tool"
+            constants['current_object_id'] = tool_uid
+            if should_skip_permission_from(constants, request.user.username):
                 return True
 
-        panel_id, tool_uid = self.get_tool_and_panel_id(request)
         perm = UseToolPermission(
             get_instance_id=lambda: tool_uid,
         )
@@ -71,13 +73,24 @@ class ToolVisionPermission(BasePermission):
     def _extract_constants_from_query(request) -> dict:
         """从 query_params 中抽取 constants[...] 的键值作为权限上下文"""
         params = getattr(request, "query_params", {}) or {}
-        extracted = {}
+        extracted = {'tool_variables': []}
         with contextlib.suppress(Exception):
             for k, v in params.items():
                 if k.startswith("constants[") and k.endswith("]"):
                     inner_key = k[len("constants[") : -1]
                     if inner_key:
                         extracted[inner_key] = v
+        caller_params = [
+            "caller_resource_type",
+            "caller_resource_id",
+            "drill_field",
+            "event_start_time",
+            "event_end_time",
+            "tool_variables",
+        ]
+        for k, v in extracted.copy().items():
+            if k not in caller_params:
+                extracted['tool_variables'].append({'raw_name': k, 'value': extracted.pop(k)})
         return extracted
 
     def get_tool_and_panel_id(self, request) -> Tuple[str, str]:
@@ -135,8 +148,8 @@ class BKVisionInstanceViewSet(BKVisionViewSet):
         if panel.scenario in self.escape_scenario:
             return []
         elif panel.scenario == Scenario.TOOL.value:
-            # 工具场景：启用工具权限 + 分享权限综合校验
-            return [ToolVisionPermission()]
+            # 工具场景除了meta无需鉴权
+            return []
         return [
             InstanceActionPermission(
                 actions=[ActionEnum.VIEW_BASE_PANEL],
