@@ -35,6 +35,9 @@
       <template #item="{element}">
         <div class="select-result-text">
           <span>{{ element }}</span>
+          <span v-if="localValueDisplay">
+            ({{ localValueDisplay }})
+          </span>
         </div>
       </template>
     </vuedraggable>
@@ -75,7 +78,7 @@
           :key="fieldItem.raw_name"
           class="field-item"
           @click="handleAlternativeFieldSelect(fieldItem)">
-          <span>{{ fieldItem.raw_name }}</span>
+          <span>{{ fieldItem.raw_name }}({{ fieldItem.display_name }})</span>
         </div>
       </div>
       <div
@@ -133,6 +136,7 @@
   const popRef = ref();
 
   const searchKey = useDebouncedRef('');
+  const localValueDisplay = ref('');
 
   const renderFieldList = computed(() => props.alternativeFieldList.reduce((result, item) => {
     const reg = new RegExp(encodeRegexp(searchKey.value), 'i');
@@ -147,20 +151,24 @@
   }, {
     immediate: true,
   });
+
   // 拖拽
   const handelValueDragChange = (dragEvent: any) => {
     isError.value = false;
     if (dragEvent.added && dragEvent.added.element) {
+      localValueDisplay.value = dragEvent.added.element.display_name;
       emits('change', [dragEvent.added.element]);
     }
   };
   // 用户选择
   const handleAlternativeFieldSelect = (field: LocalOutputField) => {
+    localValueDisplay.value = field.display_name;
     emits('change', [field]);
     tippyIns.hide();
   };
   // 删除值
   const handleRemove = () => {
+    localValueDisplay.value = '';
     emits('change', []);
   };
 

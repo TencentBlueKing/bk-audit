@@ -41,7 +41,7 @@
                 class="list-item">
                 <audit-icon type="move" />
                 <span>{{ element.key }}</span>
-                <span class="value">{{ element.raw_name }}</span>
+                <span class="value">{{ element.raw_name }}({{ element.display_name }})</span>
               </div>
             </template>
           </vuedraggable>
