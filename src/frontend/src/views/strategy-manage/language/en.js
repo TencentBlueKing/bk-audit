@@ -413,5 +413,6 @@ export default {
     为储存值配置可读的展示文本: 'Configure readable display text for stored values',
     字段值映射: 'Field Value Mapping',
     字段关联: 'Field Association',
+    '数据加载中，请稍等': 'Data loading, please wait',
   },
 };
