@@ -17,11 +17,13 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import traceback
 from collections import defaultdict
 from copy import deepcopy
 from typing import List
 
 from bk_resource import Resource, api, resource
+from blueapps.utils.logger import logger
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy
@@ -709,15 +711,22 @@ class ExecuteTool(ToolBase):
         if not tool:
             raise ToolDoesNotExist()
 
+        current_user = get_request_username()
+        try:
+            recent_tool_usage_manager.record_usage(current_user, uid)
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            logger.error(
+                f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
+                f"Err: {e}; Detail: {traceback.format_exc()}"
+            )
         # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限，命中则跳过原有工具权限校验
         check_request_data = deepcopy(validated_request_data)
         check_request_data["current_type"] = CurrentType.TOOL.value
         check_request_data["current_object_id"] = uid
         check_request_data["tool_variables"] = params.get("tool_variables", [])
-        skip_permission = should_skip_permission_from(check_request_data, get_request_username())
+        skip_permission = should_skip_permission_from(check_request_data, current_user)
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
         data = executor.execute(params, skip_permission=skip_permission).model_dump()
-        recent_tool_usage_manager.record_usage(get_request_username(), uid)
         return {"data": data, "tool_type": tool.tool_type}
 
 
