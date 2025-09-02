@@ -64,24 +64,34 @@ class TestToolVisionPermissionConstants(TestCase):
         }
 
         with mock.patch("services.web.vision.views.should_skip_permission_from", return_value=True) as m_should_skip:
-            ok = ToolVisionPermission().has_permission(req, DummyView())
+            ok = ToolVisionPermission(True).has_permission(req, DummyView())
         self.assertTrue(ok)
         # 断言以 constants 字典形式调用
         args, kwargs = m_should_skip.call_args
         self.assertEqual(args[0], expected)
 
     def test_non_meta_does_not_use_constants_branch(self):
+        from services.web.tool.constants import ToolTypeEnum
+        from services.web.tool.models import Tool
         from services.web.vision.views import ToolVisionPermission
 
         req = DummyRequest()
-        # 非 meta 分支走工具权限与分享权限，为避免依赖 DB，这里打桩 get_tool_and_panel_id 与权限校验
+        # 准备一个真实的 Tool 供权限逻辑读取 updated_by
+        real_tool = Tool.objects.create(
+            namespace="ns",
+            name="vision_related_tool",
+            uid="tool",
+            version=1,
+            tool_type=ToolTypeEnum.BK_VISION.value,
+            config={"uid": "v_panel", "input_variable": []},
+            updated_by="u",
+        )
+        # 非 meta 分支走工具权限与分享权限，这里打桩 get_tool_and_panel_id 与权限校验
         with (
             mock.patch.object(ToolVisionPermission, "get_tool_and_panel_id", return_value=("panel", "tool")),
             mock.patch("services.web.vision.views.UseToolPermission.has_permission", return_value=True),
             mock.patch("services.web.vision.views.check_bkvision_share_permission", return_value=True),
-            mock.patch(
-                "services.web.vision.views.Tool.last_version_tool", return_value=type("T", (), {"updated_by": "u"})()
-            ),
+            mock.patch("services.web.vision.views.Tool.last_version_tool", return_value=real_tool),
             mock.patch("services.web.vision.views.should_skip_permission_from") as m_skip,
         ):
             ok = ToolVisionPermission().has_permission(req, DummyOtherView())
