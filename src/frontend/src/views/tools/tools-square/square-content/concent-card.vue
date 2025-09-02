@@ -18,6 +18,7 @@
   <div class="card">
     <div class="card-search">
       <bk-button
+        class="search-button"
         theme="primary"
         @click="handleCreate">
         <audit-icon
@@ -629,11 +630,14 @@
     position: relative;
     display: flex;
 
+    .search-button {
+      margin-left: 10px;
+    }
+
     .search-input {
       position: absolute;
-      right: 50px;
+      right: 55px;
       width: 600px;
-      margin-left: 15px;
     }
   }
 
