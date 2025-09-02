@@ -114,16 +114,20 @@ class ListToolTags(ToolBase):
     many_response_data = True
 
     def perform_request(self, validated_request_data):
-        tag_count = list(ToolTag.objects.values("tag_id").annotate(tool_count=Count("tag_id")).order_by())
+        current_user = get_request_username()
+        permission = ToolPermission(username=current_user)
+        authed_tool_filter = permission.authed_tool_filter  # 获取权限过滤条件
+
+        tag_count = (
+            ToolTag.objects.filter(tool__in=Tool.all_latest_tools().filter(authed_tool_filter))
+            .values("tag_id")
+            .annotate(tool_count=Count("tag_id"))
+            .order_by()
+        )
         tag_map = {t.tag_id: {"name": t.tag_name} for t in Tag.objects.all()}
         for t in tag_count:
             t.update({"tag_name": tag_map.get(t["tag_id"], {}).get("name", t["tag_id"])})
 
-        tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
-
-        current_user = get_request_username()
-        permission = ToolPermission(username=current_user)
-        authed_tool_filter = permission.authed_tool_filter
         tag_count.sort(key=lambda tag: [lazy_pinyin(tag["tag_name"].lower(), errors="ignore"), tag["tag_name"].lower()])
         tag_count = [
             {
@@ -149,6 +153,7 @@ class ListToolTags(ToolBase):
                 "tag_id": NO_TAG_ID,
                 "tool_count": Tool.all_latest_tools()
                 .exclude(uid__in=ToolTag.objects.values_list("tool_uid", flat=True).distinct())
+                .filter(authed_tool_filter)
                 .count(),
             },
         ] + tag_count
