@@ -17,10 +17,12 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import traceback
 from collections import defaultdict
 from typing import List
 
 from bk_resource import Resource, api, resource
+from blueapps.utils.logger import logger
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy
@@ -655,9 +657,17 @@ class ExecuteTool(ToolBase):
         tool: Tool = Tool.last_version_tool(uid=uid)
         if not tool:
             raise ToolDoesNotExist()
+
+        current_user = get_request_username()
+        try:
+            recent_tool_usage_manager.record_usage(current_user, uid)
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            logger.error(
+                f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
+                f"Err: {e}; Detail: {traceback.format_exc()}"
+            )
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
         data = executor.execute(params).model_dump()
-        recent_tool_usage_manager.record_usage(get_request_username(), uid)
         return {"data": data, "tool_type": tool.tool_type}
 
 
