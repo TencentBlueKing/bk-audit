@@ -373,17 +373,15 @@
     isLoading.value = true;
     fetchToolsExecute({
       uid: uid.value,
-      params: {
-        ...(itemInfo.value?.tool_type === 'data_search' ? {
-          tool_variables: searchList.value.map(item => ({
-            raw_name: item.raw_name,
-            value: item.value,
-          })),
-          page: pagination.value.current,
-          page_size: pagination.value.limit,
-        } : {}),
-        ...(riskToolParams.value && Object.keys(riskToolParams.value).length > 0 ? riskToolParams.value : {}),
-      },
+      params: itemInfo.value?.tool_type === 'data_search' ? {
+        tool_variables: searchList.value.map(item => ({
+          raw_name: item.raw_name,
+          value: item.value,
+        })),
+        page: pagination.value.current,
+        page_size: pagination.value.limit,
+      } : {},
+      ...(riskToolParams.value && Object.keys(riskToolParams.value).length > 0 ? riskToolParams.value : {}),
     })
       .finally(() => {
         isLoading.value = false;
@@ -702,42 +700,65 @@
   const initBK = async  (id: string) => {
     const filters: Record<string, any> = {};
     const drillDownFilters: Record<string, any> = {};
+    const constants: Record<string, any> = {};
+
+    // 将风险工具参数添加到常量中
+    if (riskToolParams.value && Object.keys(riskToolParams.value).length > 0) {
+      Object.keys(riskToolParams.value).forEach((key) => {
+        if (riskToolParams.value && key in riskToolParams.value) {
+          constants[key] = riskToolParams.value[key];
+        }
+      });
+    }
 
     if (isDrillDownOpen.value) {
       drillDownItemConfig.value.forEach((item) => {
-        if (item.target_value_type === 'field') { // 直接应用值
+        // 根据源字段名称查找对应的字段分类
+        const fieldCategory = toolDetails.value?.config.input_variable
+          .find((i: any) => i.raw_name === item.source_field)?.field_category;
+
+        if (item.target_value_type === 'field') { // 目标值为字段引用类型
           if (item.target_field_type === 'basic' || !item.target_field_type) {
-            // 从根对象取值
-            drillDownFilters[item.source_field] = drillDownItemRowData.value?.[item.target_value] ?? '';
+            // 从根对象中获取字段值
+            if (fieldCategory === 'variable') {
+              // 变量类型字段：存储到 constants 中，用于工具执行时的参数传递
+              constants[item.source_field] = drillDownItemRowData.value?.[item.target_value] ?? '';
+            } else {
+              // 过滤器类型字段：存储到 drillDownFilters 中，用于数据过滤
+              drillDownFilters[item.source_field] = drillDownItemRowData.value?.[item.target_value] ?? '';
+            }
           } else {
-            // 从event_data对象取值
-            drillDownFilters[item.source_field] = drillDownItemRowData.value?.event_data?.[item.target_value] ?? '';
+            // 从 event_data 嵌套对象中获取字段值
+            if (fieldCategory === 'variable') {
+              // 变量类型字段：存储到 constants 中
+              constants[item.source_field] = drillDownItemRowData.value?.event_data?.[item.target_value] ?? '';
+            } else {
+              // 过滤器类型字段：存储到 drillDownFilters 中
+              drillDownFilters[item.source_field] = drillDownItemRowData.value?.event_data?.[item.target_value] ?? '';
+            }
           }
-        } else { // 固定值
-          drillDownFilters[item.source_field] = item.target_value;
+        } else { // 目标值为固定值类型
+          if (fieldCategory === 'variable') {
+            // 变量类型字段：直接使用固定值，存储到 constants 中
+            constants[item.source_field] = item.target_value;
+          } else {
+            // 过滤器类型字段：直接使用固定值，存储到 drillDownFilters 中
+            drillDownFilters[item.source_field] = item.target_value;
+          }
         }
       });
     }
 
     toolDetails.value?.config.input_variable.forEach((item: any) => {
       if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
-        filters[item.raw_name] = item.default_value;
+        if (item.field_category === 'variable') {
+          constants[item.raw_name] = item.default_value;
+        } else {
+          filters[item.raw_name] = item.default_value;
+        }
       }
     });
 
-    console.log('params', {
-      apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
-      chartToolMenu: [
-        { type: 'tool', id: 'fullscreen', build_in: true },
-        { type: 'tool', id: 'refresh', build_in: true },
-        { type: 'menu', id: 'excel', build_in: true },
-      ],
-      filters: isDrillDownOpen.value ? drillDownFilters : filters,
-      ...(riskToolParams.value && Object.keys(riskToolParams.value).length > 0
-        ? { constants: JSON.parse(JSON.stringify(riskToolParams.value)) }
-        : {}),
-      handleError,
-    });
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(
@@ -751,9 +772,7 @@
             { type: 'menu', id: 'excel', build_in: true },
           ],
           filters: isDrillDownOpen.value ? drillDownFilters : filters,
-          ...(riskToolParams.value && Object.keys(riskToolParams.value).length > 0
-            ? { constants: JSON.parse(JSON.stringify(riskToolParams.value)) }
-            : {}),
+          constants,
           handleError,
         },
       );
