@@ -239,8 +239,12 @@
   interface Exposes{
     getToolsList: (id: string) => void;
   }
+  interface Emits {
+    (e: 'change'):void;
+  }
 
   const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
   declare global {
     interface Window {
       scrollDebounceTimer: number | undefined;
@@ -312,6 +316,8 @@
     onSuccess: (data) => {
       dataList.value = data.results;
       total.value = data.total;
+      // 刷新右侧标签数据
+      emits('change');
       // 自动打开弹窗
       if (route.query.tool_id) {
         urlToolsIds.value = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
@@ -621,6 +627,7 @@
 <style scoped lang="postcss">
 .card {
   position: relative;
+  width: 100%;
   padding-top: 20px;
   padding-left: 20px;
   background-color: #f5f7fa;
@@ -628,14 +635,11 @@
   .card-search {
     position: relative;
     display: flex;
-
-    .search-button {
-      margin-left: 10px;
-    }
+    width: 98%;
 
     .search-input {
       position: absolute;
-      right: 55px;
+      right: 0;
       width: 600px;
     }
   }
@@ -643,7 +647,6 @@
   .card-list {
     position: relative;
     width: 100%;
-    padding: 10px 0;
     margin-top: 10px;
     align-content: flex-start;
 
@@ -651,14 +654,15 @@
     .card-list-box {
       display: flex;
       flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
 
       .card-list-item {
         position: relative;
-        width: 19.4%;
+        width: calc((100% - 40px) / 5);
         height: 188px;
-        margin-top: 10px;
-        margin-bottom: 0;
-        margin-left: 10px;
+        margin-bottom: 10px;
         cursor: pointer;
         background: #fff;
         transition: all .3s ease;
@@ -669,11 +673,11 @@
         }
 
         @media (width <=2200px) {
-          width: 32%;
+          width: calc((100% - 30px) / 3);
         }
 
         @media (width <=2000px) {
-          width: 32%;
+          width: calc((100% - 30px) / 3);
         }
 
         @media (width <=1600px) {

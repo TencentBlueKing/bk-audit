@@ -34,7 +34,8 @@
           :my-created="tagId === '-4'"
           :recent-used="tagId === '-5'"
           :tag-id="tagId"
-          :tags-enums="tagsEnums" />
+          :tags-enums="tagsEnums"
+          @change="handleChange" />
       </div>
     </div>
   </div>
@@ -75,7 +76,10 @@
     tagId.value = name;
     ContentCardRef.value?.getToolsList(name);
   };
-
+  // 右边数据刷新
+  const handleChange = () => {
+    fetchToolsTagsList();
+  };
   // 工具标签列表
   const {
     run: fetchToolsTagsList,
