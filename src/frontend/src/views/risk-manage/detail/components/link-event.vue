@@ -169,10 +169,10 @@
               {{ t('事件数据') }}
             </div>
             <div
-              v-if="eventItemDataKeyArr.length"
+              v-if="eventDataKeyArr.length"
               class="data-info">
               <div
-                v-for="(keyArr, keyIndex) in eventItemDataKeyArr"
+                v-for="(keyArr, keyIndex) in eventDataKeyArr"
                 :key="keyIndex"
                 class="flex data-info-row">
                 <div
@@ -257,7 +257,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import _ from 'lodash';
+  // import _ from 'lodash';
   import {
     computed,
     nextTick,
@@ -353,16 +353,17 @@
   const props = defineProps<Props>();
   const router = useRouter();
   const { t, locale } = useI18n();
-  const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
   const linkEventList = ref<Array<EventModel>>([]); // 事件列表
   const currentPage = ref(1); // 当前页数
   const active = ref<number>(0);
   const eventItem = ref(new EventModel()); // 当前选中事件
-  const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
+  // const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
   const showTooltips = ref(false); // 是否显示tooltips
   const allToolsData = ref<string[]>([]);
 
   const dialogRefs = ref<Record<string, any>>({});
+
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
 
   const riskToolParams = computed(() => ({
     caller_resource_type: 'risk',
@@ -371,6 +372,73 @@
     event_start_time: props.data.event_time,
     event_end_time: props.data.event_end_time,
   }));
+
+  const strategyInfo = computed(() => [
+    ...props.data.event_basic_field_configs,
+    ...props.data.event_data_field_configs,
+    ...props.data.event_evidence_field_configs,
+  ]);
+
+  // 基本信息
+  const basicInfo = computed(() => group(props.data.event_basic_field_configs));
+
+  // 不显示的字段
+  // const notDisplay = computed(() => strategyInfo.value.filter(item => !item.is_show).map(item => item.field_name));
+
+  // 重点信息（如果is_show为false, 则is_priority也一定为false）
+  const importantInformation = computed(() => group(strategyInfo.value.filter(item => item.is_priority)));
+
+  // 显示字段下钻的字段
+  const drillMap = computed(() => {
+    const map = new Map();
+    strategyInfo.value.forEach((item) => {
+      if (item.drill_config?.tool.uid) {
+        map.set(item.field_name, item);
+      }
+    });
+    return map;
+  });
+
+  // 有字典翻译的字段
+  const dictDataMap = computed(() => {
+    const map: Map<string, { name: string; key: string }[]> = new Map();
+    strategyInfo.value.forEach((item) => {
+      if (item.enum_mappings?.mappings.length) {
+        map.set(item.field_name, item.enum_mappings.mappings);
+      }
+    });
+    return map;
+  });
+
+  // 预处理所有展示值
+  const displayValueDict = computed<DisplayValueDict>(() => {
+    const baseKeys = Object.keys(eventItem.value).filter(key => key !== 'event_data');
+    const baseResult = baseKeys.reduce((acc, key) => {
+      acc[key as keyof typeof acc] = getDisplayValue(key, eventItem.value[key as keyof typeof eventItem.value]);
+      return acc;
+    }, {} as any);
+
+    const eventDataResult = Object.keys(eventItem.value.event_data || {}).reduce((acc, key) => {
+      acc[key] = getDisplayValue(key, eventItem.value.event_data[key]);
+      return acc;
+    }, {} as Record<string, DisplayValue>);
+
+    return {
+      ...baseResult,
+      eventData: eventDataResult,
+    };
+  });
+
+  // 事件数据展示字段，从策略中获取
+  const eventDataKeyArr = computed(() => {
+    const eventInfo = [
+      ...props.data.event_data_field_configs,
+      ...props.data.event_evidence_field_configs,
+    ];
+    const eventInfoKeys = eventInfo.filter(item => item.is_show).map(item => item.field_name);
+    console.log(group(eventInfoKeys));
+    return group(eventInfoKeys);
+  });
 
   // 获取标签列表
   const {
@@ -399,9 +467,10 @@
         // 默认获取第一个
         [eventItem.value] = linkEventList.value;
 
+
         // 事件event_data数据处理
-        const eventDataKey = getEventDataKey(eventItem.value.event_data);
-        eventItemDataKeyArr.value = group(eventDataKey);
+        // const eventDataKey = getEventDataKey(eventItem.value.event_data);
+        // eventItemDataKeyArr.value = group(eventDataKey);
       }
     },
   });
@@ -434,24 +503,24 @@
   };
 
   // 过滤事件event_data数据，只保留有数据的key和策略配置is_show为true的数据
-  const getEventDataKey = (eventData: Record<string, any>) => {
-    const eventDataKeys = Object.keys(eventData);
-    return eventDataKeys.filter((key) => {
-      // 排除 notDisplay 中的键
-      if (notDisplay.value.includes(key)) {
-        return false;
-      }
+  // const getEventDataKey = (eventData: Record<string, any>) => {
+  //   const eventDataKeys = Object.keys(eventData);
+  //   return eventDataKeys.filter((key) => {
+  //     // 排除 notDisplay 中的键
+  //     if (notDisplay.value.includes(key)) {
+  //       return false;
+  //     }
 
-      const value = eventItem.value.event_data[key];
-      if (typeof value !== 'object' && value !== null && value !== '') {
-        return true;
-      }
-      if ((_.isArray(value) || _.isObject(value)) && !_.isEmpty(value)) {
-        return true;
-      }
-      return false;
-    });
-  };
+  //     const value = eventItem.value.event_data[key];
+  //     if (typeof value !== 'object' && value !== null && value !== '') {
+  //       return true;
+  //     }
+  //     if ((_.isArray(value) || _.isObject(value)) && !_.isEmpty(value)) {
+  //       return true;
+  //     }
+  //     return false;
+  //   });
+  // };
 
   // 转为二维数组
   const group = (array: Array<any>, subGroupLength: number = 2) => {
@@ -468,8 +537,8 @@
     active.value = index;
 
     // 事件event_data数据处理
-    const eventDataKey = getEventDataKey(eventItem.value.event_data);
-    eventItemDataKeyArr.value = group(eventDataKey);
+    // const eventDataKey = getEventDataKey(eventItem.value.event_data);
+    // eventItemDataKeyArr.value = group(eventDataKey);
   };
 
   const handlerStrategy = () => {
@@ -537,6 +606,7 @@
       allToolsData.value = allToolsData.value.filter(item => item !== ToolInfo);
     }
   };
+
   watch(() => props.data, (data) => {
     if (data.risk_id) {
       fetchLinkEvent({
@@ -549,62 +619,6 @@
     }
   }, {
     immediate: true,
-  });
-
-  const strategyInfo = computed(() => [
-    ...props.data.event_basic_field_configs,
-    ...props.data.event_data_field_configs,
-    ...props.data.event_evidence_field_configs,
-  ]);
-
-  // 基本信息
-  const basicInfo = computed(() => group(props.data.event_basic_field_configs));
-
-  // 不显示的字段
-  const notDisplay = computed(() => strategyInfo.value.filter(item => !item.is_show).map(item => item.field_name));
-
-  // 重点信息（如果is_show为false, 则is_priority也一定为false）
-  const importantInformation = computed(() => group(strategyInfo.value.filter(item => item.is_priority)));
-
-  // 显示字段下钻的字段
-  const drillMap = computed(() => {
-    const map = new Map();
-    strategyInfo.value.forEach((item) => {
-      if (item.drill_config?.tool.uid) {
-        map.set(item.field_name, item);
-      }
-    });
-    return map;
-  });
-
-  // 有字典翻译的字段
-  const dictDataMap = computed(() => {
-    const map: Map<string, { name: string; key: string }[]> = new Map();
-    strategyInfo.value.forEach((item) => {
-      if (item.enum_mappings?.mappings.length) {
-        map.set(item.field_name, item.enum_mappings.mappings);
-      }
-    });
-    return map;
-  });
-
-  // 预处理所有展示值
-  const displayValueDict = computed<DisplayValueDict>(() => {
-    const baseKeys = Object.keys(eventItem.value).filter(key => key !== 'event_data');
-    const baseResult = baseKeys.reduce((acc, key) => {
-      acc[key as keyof typeof acc] = getDisplayValue(key, eventItem.value[key as keyof typeof eventItem.value]);
-      return acc;
-    }, {} as any);
-
-    const eventDataResult = Object.keys(eventItem.value.event_data || {}).reduce((acc, key) => {
-      acc[key] = getDisplayValue(key, eventItem.value.event_data[key]);
-      return acc;
-    }, {} as Record<string, DisplayValue>);
-
-    return {
-      ...baseResult,
-      eventData: eventDataResult,
-    };
   });
 
   onMounted(() => {
