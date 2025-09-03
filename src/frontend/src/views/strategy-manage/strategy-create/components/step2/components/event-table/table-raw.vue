@@ -16,34 +16,42 @@
 -->
 <template>
   <template v-if="eventItemArr && eventItemArr.length">
-    <div
-      v-for="(eventItem, eventItemIndex) in eventItemArr"
-      :key="eventItemIndex"
-      class="table-row">
-      <template
-        v-for="(value, valueKey) in eventItem"
-        :key="valueKey">
-        <div
-          v-if="!excludeKey.includes(valueKey)"
-          class="cell"
-          :class="getCellClass(valueKey)">
-          <field-cell
-            ref="fieldCellRef"
-            :all-tools-data="allToolsData"
-            :event-item="eventItem"
-            :event-item-key="eventItemKey"
-            :field-key="valueKey"
-            :output-fields="outputFields"
-            :select-options="localSelect"
-            :strategy-name="strategyName"
-            :tag-data="tagData"
-            @add-custom-constant="addCustomConstant"
-            @open-tool="handleOpenTool"
-            @select="handleSelect"
-            @update:field-value="updateFieldValue(eventItem, valueKey, $event)" />
+    <vuedraggable
+      item-key="field_name"
+      :list="eventItemArr">
+      <template #item="{element}: { element: StrategyFieldEvent['event_basic_field_configs'][0] }">
+        <div class="table-row">
+          <template
+            v-for="(value, valueKey) in element"
+            :key="valueKey">
+            <div
+              v-if="!excludeKey.includes(valueKey)"
+              class="cell"
+              :class="getCellClass(valueKey)">
+              <template v-if="valueKey === 'field_name'">
+                <audit-icon
+                  style=" margin: 0 10px;font-size: 13px;color: #c4c6cc;"
+                  type="move" />
+              </template>
+              <field-cell
+                ref="fieldCellRef"
+                :all-tools-data="allToolsData"
+                :event-item="element"
+                :event-item-key="eventItemKey"
+                :field-key="valueKey"
+                :output-fields="outputFields"
+                :select-options="localSelect"
+                :strategy-name="strategyName"
+                :tag-data="tagData"
+                @add-custom-constant="addCustomConstant"
+                @open-tool="handleOpenTool"
+                @select="handleSelect"
+                @update:field-value="updateFieldValue(element, valueKey, $event)" />
+            </div>
+          </template>
         </div>
       </template>
-    </div>
+    </vuedraggable>
   </template>
   <div
     v-else
@@ -58,6 +66,7 @@
   import _ from 'lodash';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+  import Vuedraggable from 'vuedraggable';
 
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';

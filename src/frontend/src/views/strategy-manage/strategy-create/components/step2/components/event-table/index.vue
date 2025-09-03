@@ -302,14 +302,29 @@
       break;
     case 'event_data_field_configs':
       if (props.select && props.select.length) {
-        // 根据select更新event_data_field_configs
-        tableData.value.event_data_field_configs = props.select.map((item) => {
-          const existingField = tableData.value.event_data_field_configs.
-            find(fieldItem => fieldItem.field_name === item.display_name);
-          if (existingField) {
-            return existingField;
+        // 保持原有顺序，只保留 props.select 中存在的字段
+        tableData.value.event_data_field_configs = tableData.value.event_data_field_configs
+          .filter(fieldItem => props.select.some(item => item.display_name === fieldItem.field_name))
+          .map((fieldItem) => {
+            // 找到对应的 props.select 项
+            const selectItem = props.select.find(item => item.display_name === fieldItem.field_name);
+            if (selectItem) {
+              return {
+                ...fieldItem,
+                // 可以在这里添加需要更新的属性
+              };
+            }
+            return fieldItem;
+          });
+
+        // 添加 props.select 中有但 tableData 中没有的新字段到末尾
+        props.select.forEach((item) => {
+          const existingField = tableData.value.event_data_field_configs
+            .find(fieldItem => fieldItem.field_name === item.display_name);
+
+          if (!existingField) {
+            tableData.value.event_data_field_configs.push(createField(item));
           }
-          return createField(item);
         });
       }
     }
@@ -333,13 +348,15 @@
       if (isEditMode || isCloneMode) {
         (Object.keys(tableData.value) as Array<keyof typeof tableData.value>).forEach((key)  => {
           if (props.data[key]?.length && tableData.value[key]?.length) {
-            // 编辑填充参数
-            tableData.value[key] = tableData.value[key].map((item) => {
-              const editItem = props.data[key] && props.data[key].find(edItem => edItem.field_name === item.field_name);
-              if (editItem) {
+            // 编辑填充参数，保持与 props.data[key] 相同的顺序
+            const orderedTableData = props.data[key].map((editItem) => {
+              // 在 tableData.value[key] 中查找对应的字段
+              const originalItem = tableData.value[key].find(item => item.field_name === editItem.field_name);
+
+              if (originalItem) {
                 return {
-                  field_name: item.field_name,
-                  display_name: item.display_name,
+                  field_name: originalItem.field_name,
+                  display_name: originalItem.display_name,
                   is_show: editItem.is_show ?? true,
                   is_priority: editItem.is_priority,
                   map_config: {
@@ -358,14 +375,17 @@
                     config: editItem.drill_config?.config || [],
                   },
                   description: editItem.description,
-                  example: item.example,
-                  prefix: item.prefix || '',
+                  example: originalItem.example,
+                  prefix: originalItem.prefix || '',
                 };
               }
-              return {
-                ...item,
-              };
+
+              // 如果找不到对应的原始项，返回编辑项（这种情况应该很少见）
+              return editItem;
             });
+
+            // 将重新排序后的数据赋值给 tableData.value[key]
+            tableData.value[key] = orderedTableData;
           }
         });
       }
