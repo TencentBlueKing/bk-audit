@@ -172,8 +172,25 @@
                 {{ item.description }}
               </div>
               <div class="item-footer">
-                <span>{{ item.updated_by }}</span>
-                <span>{{ formatDate(item.updated_at) }}</span>
+                <div>
+                  <span
+                    v-bk-tooltips="{
+                      content: t('创建人'),
+                      theme: 'light',
+                    }">{{ item.created_by }}</span>
+                  <span class="line" />
+
+                  <span
+                    v-bk-tooltips="{
+                      content: t('更新人'),
+                      theme: 'light',
+                    }">{{ item.updated_by }}</span>
+                </div>
+                <span
+                  v-bk-tooltips="{
+                    content: t('更新时间'),
+                    theme: 'light',
+                  }">{{ formatDate(item.updated_at) }}</span>
               </div>
             </div>
           </div>
@@ -316,8 +333,6 @@
     onSuccess: (data) => {
       dataList.value = data.results;
       total.value = data.total;
-      // 刷新右侧标签数据
-      emits('change');
       // 自动打开弹窗
       if (route.query.tool_id) {
         urlToolsIds.value = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
@@ -351,6 +366,8 @@
     defaultValue: {},
     onSuccess: () => {
       messageSuccess(t('删除成功'));
+      // 刷新右侧标签数据
+      emits('change');
     },
   });
 
@@ -570,6 +587,7 @@
     }).finally(() => {
       loading.value = false;
     });
+    emits('change');
   };
 
   // 下拉加载
@@ -775,7 +793,16 @@
           letter-spacing: 0;
           color: #979ba5;
           align-items: center;
-          justify-content: space-between
+          justify-content: space-between;
+
+          .line {
+            display: inline-block;
+            width: 1px;
+            height: 10px;
+            margin-right: 5px;
+            margin-left: 5px;
+            background-color: #979ba5;
+          }
         }
 
         .item-top-right-icon {

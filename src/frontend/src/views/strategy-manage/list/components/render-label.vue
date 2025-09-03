@@ -114,10 +114,12 @@
     upgradeTotal: number,
     final?: number;
     renderStyle?: Record<string, any>;
+    active?: string|number;
   }
   const props = withDefaults(defineProps<Props>(), {
     final: 1,
     renderStyle: () => ({}),
+    active: 'all',
   });
   const emits = defineEmits<Emits>();
   const route = useRoute();
@@ -126,7 +128,7 @@
   const all = ref([
     { tag_id: 'all', tag_name: route.name === 'strategyList' ? '全部策略' : '', strategy_count: 0, icon: 'quanbu' },
   ]);
-  const active = ref<string|number>('all');
+  const active = ref<string|number>(props.active);
   const showLabel = ref(true);
   const { t, te } = useI18n();
 
@@ -209,7 +211,9 @@
     resetAll(val: Array<TagItem>) {
       all.value = val;
       nextTick(() => {
-        handleSelect(labelList.value[0].tag_id);
+        if (active.value === '-3') {
+          emits('checked', active.value);
+        }
       });
     },
   });

@@ -19,6 +19,7 @@
     <!-- 左侧标签-->
     <render-label
       ref="renderLabelRef"
+      active="-3"
       :final="3"
       :labels="strategyLabelList"
       :render-style="renderStyle"
@@ -86,7 +87,6 @@
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     onSuccess: (data) => {
-      renderLabelRef.value?.resetAll([]);
       const strategyList = data.map(item => ({ strategy_count: item.tool_count, ...item, icon: '' }));
       // 自定义strategyLabelList.value 的前三个icon
       const iconMap: Record<number, string> = {
@@ -101,6 +101,7 @@
       }));
 
       tagsEnums.value = strategyLabelList.value;
+      renderLabelRef.value?.resetAll([]);
     },
   });
 
