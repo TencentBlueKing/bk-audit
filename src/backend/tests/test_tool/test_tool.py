@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from typing import Type
 from unittest import mock
 from unittest.mock import MagicMock, PropertyMock, patch
@@ -270,6 +271,41 @@ class ToolResourceTestCase(TestCase):
         # 修改：全部改为字典键访问
         self.assertEqual(new_tool['version'], self.sql_tool.version + 1)
         self.assertEqual(new_tool['uid'], self.sql_tool.uid)
+
+    def test_update_tool_preserve_creator_on_new_version(self):
+        """创建新版本时应保持创建人与旧版本一致"""
+        # 将旧版本创建人设为特定用户
+        self.sql_tool.created_by = "origin_user"
+        # 将旧版本创建时间设为固定时间
+        fixed_created_at = timezone.now() - timedelta(days=7)
+        self.sql_tool.created_at = fixed_created_at
+        # 不更新操作记录，以免被自动覆盖
+        self.sql_tool.save(update_record=False, update_fields=["created_by", "created_at"])
+
+        new_config = {
+            "sql": "select now()",
+            "referenced_tables": [],
+            "input_variable": [],
+            "output_fields": [],
+        }
+        data = {
+            "uid": self.sql_tool.uid,
+            "name": "Updated SQL Tool v2",
+            "namespace": self.sql_tool.namespace,
+            "config": new_config,
+            "description": "updated desc",
+            "tags": [],
+        }
+
+        # 模拟当前操作者与创建人不同
+        with patch("services.web.tool.resources.get_request_username", return_value="another_user"):
+            UpdateTool().perform_request(data)
+
+        # 校验：新版本创建人应与旧版本一致
+        created_new = Tool.objects.get(uid=self.sql_tool.uid, version=self.sql_tool.version + 1)
+        self.assertEqual(created_new.created_by, "origin_user")
+        # 校验：新版本创建时间应与旧版本一致
+        self.assertEqual(created_new.created_at, fixed_created_at)
 
     def test_delete_tool(self):
         resource = DeleteTool()
