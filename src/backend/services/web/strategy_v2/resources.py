@@ -434,6 +434,9 @@ class UpdateStrategy(StrategyV2Base):
                     sorted(new_value, key=lambda x: x.get(EVENT_BASIC_CONFIG_SORT_FIELD)),
                 )
             )
+        # 如果两个值都为空，则不需要更新，避免 None 和 空值 的比较异常
+        if not origin_value and not new_value:
+            return False
         if origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
             return True
         return False
