@@ -498,6 +498,10 @@ class UpdateTool(ToolBase):
             "version": old_tool.version + 1,
             "config": new_config,
             "tags": validated_request_data.get("tags"),
+            # 保持创建人与旧版本一致，避免因新版本创建导致创建人变更为当前操作者
+            "created_by": old_tool.created_by,
+            # 保持创建时间与旧版本一致
+            "created_at": old_tool.created_at,
         }
         change_permission_owner = old_tool.has_change_permission_owner(new_config)
         new_tool_data["permission_owner"] = (
