@@ -208,6 +208,7 @@ def validate_tool_variables_with_risk(
     from services.web.risk.models import Risk
     from services.web.strategy_v2.models import Strategy
     from services.web.tool.constants import TargetValueTypeEnum
+    from services.web.tool.models import Tool
 
     if not start_time or not end_time or not drill_field:
         return False
@@ -240,7 +241,19 @@ def validate_tool_variables_with_risk(
     if not strategy:
         return False
 
-    # 收集所有字段的 drill_config 中与 tool_uid 匹配的映射（source_field -> (type, target)）
+    uncheck_field = set()
+
+    with suppress(Exception):
+        tool = Tool.last_version_tool(tool_uid)
+        if tool:
+            cfg = tool.config or {}
+            for item in cfg.get("input_variable") or []:
+                name = (item or {}).get("raw_name")
+                ftype = (item or {}).get("field_category")
+                if ftype in ["time_select", "time_range_select"]:
+                    uncheck_field.add(name)
+
+    # 收集所有字段的 drill_config 中与 tool_uid 匹配的映射（source_field -> (type, target, source_field_type)）
     def iter_field_configs() -> list[dict]:
         cfgs = []
         for key in ("event_basic_field_configs", "event_data_field_configs", "event_evidence_field_configs"):
@@ -265,8 +278,9 @@ def validate_tool_variables_with_risk(
                 continue
             mapping[src].append({"type": tv_type, "target": target_value, "target_field_type": target_field_type})
 
-    # 逐个变量进行匹配校验（仅在 mapping 中声明的变量参与校验）
     for name, value in variable_values.items():
+        if name in uncheck_field:
+            continue
         rules = mapping.get(name)
         # 若变量未在 mapping 中声明，则跳过校验
         if not rules:
