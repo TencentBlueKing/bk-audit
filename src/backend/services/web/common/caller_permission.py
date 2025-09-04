@@ -10,10 +10,11 @@
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Mapping as _Mapping
 from contextlib import suppress
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
 from bk_resource import resource
 
@@ -199,7 +200,7 @@ def validate_tool_variables_with_risk(
     """
     基于策略字段 drill_config(DrillConfig) 与风险 event_data，对工具执行变量进行值校验：
       - FIXED_VALUE：变量值必须等于配置的 target_value
-      - FIELD：变量值必须等于 event_data 中的 target_value (basic和非basic处理逻辑不同，详见带阿米)
+      - FIELD：变量值必须等于 event_data 中的 target_value (basic和非basic处理逻辑不同，详见具体逻辑)
     仅对在 mapping（由 drill_config 针对该 tool 建立的映射）中声明的变量进行校验；
     未在 mapping 中声明的变量不参与校验。
     若风险/策略不可用、字段值校验失败，返回 False。
@@ -216,16 +217,18 @@ def validate_tool_variables_with_risk(
         return False
 
     # 获取事件数据：通过接口按时间范围获取
-    event_record: Dict[str, Any] = {}
+    event_record: Dict[str, Any] = defaultdict(set, **{"event_data": defaultdict(set)})
     with suppress(Exception):
         if start_time and end_time:
             events = resource.risk.list_event(
                 start_time=start_time, end_time=end_time, risk_id=risk_id, page=1, page_size=100
             ).get("results", [])
             if events:
-                event_record = events[0] or {}
-    if not event_record:
-        event_record = {"event_data": risk.event_data or {}}
+                for event in events:
+                    for k, v in event.pop("event_data", {}).items():
+                        event_record["event_data"][k].add(v)
+                    for k, v in event.items():
+                        event_record[k].add(v)
 
     strategy = (
         Strategy.objects.filter(strategy_id=risk.strategy_id)
@@ -236,7 +239,6 @@ def validate_tool_variables_with_risk(
         return False
 
     # 收集所有字段的 drill_config 中与 tool_uid 匹配的映射（source_field -> (type, target)）
-    # todo: 处理不同target_field_type但同字段的情况
     def iter_field_configs() -> list[dict]:
         cfgs = []
         for key in ("event_basic_field_configs", "event_data_field_configs", "event_evidence_field_configs"):
@@ -246,7 +248,7 @@ def validate_tool_variables_with_risk(
             cfgs.extend(fields)
         return cfgs
 
-    mapping: Dict[str, Dict[str, Any]] = {}
+    mapping: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for field_cfg in iter_field_configs():
         drill = (field_cfg or {}).get("drill_config") or {}
         tool = (drill or {}).get("tool") or {}
@@ -259,26 +261,34 @@ def validate_tool_variables_with_risk(
             target_field_type = item.get("target_field_type")
             if not src or not tv_type:
                 continue
-            mapping[src] = {"type": tv_type, "target": target_value, "target_field_type": target_field_type}
+            mapping[src].append({"type": tv_type, "target": target_value, "target_field_type": target_field_type})
 
     # 逐个变量进行匹配校验（仅在 mapping 中声明的变量参与校验）
     for name, value in variable_values.items():
-        rule = mapping.get(name)
+        rules = mapping.get(name)
         # 若变量未在 mapping 中声明，则跳过校验
-        if not rule:
+        if not rules:
             continue
-        if rule["type"] == TargetValueTypeEnum.FIXED_VALUE.value:
-            if value != rule["target"]:
-                return False
-        elif rule["type"] == TargetValueTypeEnum.FIELD.value:
-            # 根据 target_field_type 决定取顶层事件字段还是嵌套的 event_data 字段
-            tft = (rule.get("target_field_type") or "").lower()
-            if tft == "basic":
-                expected = event_record.get(rule["target"])
-            else:
-                expected = event_record.get("event_data", {}).get(rule["target"])
-            if expected != value:
-                return False
+        # 逐个规则进行校验
+        match_result = []
+        for rule in rules:
+            if rule["type"] == TargetValueTypeEnum.FIXED_VALUE.value:
+                if value != rule["target"]:
+                    match_result.append(False)
+                    continue
+            elif rule["type"] == TargetValueTypeEnum.FIELD.value:
+                # 根据 target_field_type 决定取顶层事件字段还是嵌套的 event_data 字段
+                tft = (rule.get("target_field_type") or "").lower()
+                if tft == "basic":
+                    expected = event_record.get(rule["target"])
+                else:
+                    expected = event_record.get("event_data", {}).get(rule["target"])
+                if value not in expected:
+                    match_result.append(False)
+                    continue
+            match_result.append(True)
+        if not any(match_result):
+            return False
     return True
 
 
