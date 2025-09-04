@@ -218,17 +218,19 @@ def validate_tool_variables_with_risk(
 
     # 获取事件数据：通过接口按时间范围获取
     event_record: Dict[str, Any] = defaultdict(set, **{"event_data": defaultdict(set)})
+    events = []
     with suppress(Exception):
         if start_time and end_time:
             events = resource.risk.list_event(
                 start_time=start_time, end_time=end_time, risk_id=risk_id, page=1, page_size=100
             ).get("results", [])
-            if events:
-                for event in events:
-                    for k, v in event.pop("event_data", {}).items():
-                        event_record["event_data"][k].add(v)
-                    for k, v in event.items():
-                        event_record[k].add(v)
+    if not events:
+        events = [risk.event_data]
+    for event in events:
+        for k, v in event.pop("event_data", {}).items():
+            event_record["event_data"][k].add(v)
+        for k, v in event.items():
+            event_record[k].add(v)
 
     strategy = (
         Strategy.objects.filter(strategy_id=risk.strategy_id)
@@ -283,7 +285,7 @@ def validate_tool_variables_with_risk(
                     expected = event_record.get(rule["target"])
                 else:
                     expected = event_record.get("event_data", {}).get(rule["target"])
-                if value not in expected:
+                if not expected or value not in expected:
                     match_result.append(False)
                     continue
             match_result.append(True)
