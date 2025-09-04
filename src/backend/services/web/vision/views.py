@@ -42,8 +42,6 @@ class ToolVisionPermission(BasePermission):
     def has_permission(self, request, view):
         panel_id, tool_uid = self.get_tool_and_panel_id(request)
         perm = UseToolPermission(
-            actions=[ActionEnum.USE_TOOL],
-            resource_meta=ResourceEnum.TOOL,
             get_instance_id=lambda: tool_uid,
         )
         # 工具使用权限校验（返回布尔值）
