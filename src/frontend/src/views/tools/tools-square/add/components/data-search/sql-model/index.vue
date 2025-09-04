@@ -687,6 +687,9 @@
   } = useRequest(ToolManageService.fetchToolTags, {
     defaultValue: [],
     manual: true,
+    onSuccess: () => {
+      fetchAllTools();
+    },
   });
 
   const handleCopy = () => {
@@ -929,7 +932,6 @@
   });
 
   onMounted(() => {
-    fetchAllTools();
     initEditor();
     defineTheme();
   });
@@ -949,7 +951,6 @@
       // 设置默认值
       nextTick(() => {
         formItemRefs.value.forEach((item: any, index: number) => {
-          console.log(formData.value.config.input_variable[index].default_value);
           item?.setData(formData.value.config.input_variable[index].default_value);
         });
       });
