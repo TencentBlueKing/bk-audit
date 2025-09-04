@@ -78,7 +78,6 @@
       return Promise.resolve();
     },
     setConfigs(configs: InputVariable) {
-      console.log(configs);
       inputVariable.value = configs;
     },
     getFields() {

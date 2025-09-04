@@ -150,7 +150,6 @@
   };
   // 监听 props.config.default_value 的变化
   watch(() => props.config?.default_value, (newValue) => {
-    console.log(newValue, 'newValue');
     dateValue.value = newValue instanceof Date ? newValue : new Date();
     pickerValue.value = Array.isArray(newValue) ? newValue : [];
     inputVal.value = typeof newValue === 'string' ? newValue : '';
