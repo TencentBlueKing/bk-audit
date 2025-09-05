@@ -79,7 +79,7 @@ from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
 from services.web.analyze.utils import is_asset
 from services.web.query.utils.search_config import QueryConditionOperator
-from services.web.risk.constants import EventMappingFields
+from services.web.risk.constants import EventMappingFields, RiskMetaFields
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.constants import (
@@ -198,6 +198,7 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             (StrategyFieldSourceEnum.BASIC.value, "event_basic_field_configs"),
             (StrategyFieldSourceEnum.DATA.value, "event_data_field_configs"),
             (StrategyFieldSourceEnum.EVIDENCE.value, "event_evidence_field_configs"),
+            (StrategyFieldSourceEnum.RISK_META.value, "risk_meta_field_config"),
         ]
 
         for field_source, config_key in field_config_map:
@@ -350,6 +351,7 @@ class CreateStrategy(StrategyV2Base):
                 'event_basic_field_configs',
                 'event_data_field_configs',
                 'event_evidence_field_configs',
+                'risk_meta_field_config',
             ]:
                 for field_config in validated_request_data.get(field_category, []):
                     enum_mappings = field_config.get('enum_mappings')
@@ -470,7 +472,12 @@ class UpdateStrategy(StrategyV2Base):
             strategy.sql = self.build_rule_audit_sql(strategy)
             strategy.save(update_fields=["sql"])
         # 更新enum
-        for field_category in ['event_basic_field_configs', 'event_data_field_configs', 'event_evidence_field_configs']:
+        for field_category in [
+            'event_basic_field_configs',
+            'event_data_field_configs',
+            'event_evidence_field_configs',
+            'risk_meta_field_config',
+        ]:
             for field_config in validated_request_data.get(field_category, []):
                 enum_mappings = field_config.get('enum_mappings')
                 if enum_mappings:
@@ -1157,6 +1164,23 @@ class GetEventFieldsConfig(StrategyV2Base):
             ]
         ]
 
+    def get_risk_meta_field_config(
+        self, strategy: Optional[Strategy], risk: Optional[Risk], has_permission: bool
+    ) -> List[EventInfoField]:
+        """
+        风险元字段配置（共14项），与 event_basic_field_configs 保持相同数据结构
+        """
+        return [
+            EventInfoField(
+                field_name=field.field_name,
+                display_name=str(field.description),
+                description="",
+                example="",
+                is_show=True,
+            )
+            for field in RiskMetaFields().fields
+        ]
+
     def get_event_data_field_configs(
         self, strategy: Optional[Strategy], risk: Optional[Risk], has_permission: bool
     ) -> List[EventInfoField]:
@@ -1254,6 +1278,7 @@ class GetEventFieldsConfig(StrategyV2Base):
                 "event_basic_field_configs": self.get_event_basic_field_configs(None, False),
                 "event_data_field_configs": [],
                 "event_evidence_field_configs": [],
+                "risk_meta_field_config": self.get_risk_meta_field_config(None, None, False),
             }
 
         # 有策略，查找相关风险
@@ -1272,6 +1297,7 @@ class GetEventFieldsConfig(StrategyV2Base):
             "event_basic_field_configs": self.get_event_basic_field_configs(risk, has_permission),
             "event_data_field_configs": self.get_event_data_field_configs(strategy, risk, has_permission),
             "event_evidence_field_configs": self.get_event_evidence_field_configs(strategy, risk, has_permission),
+            "risk_meta_field_config": self.get_risk_meta_field_config(strategy, risk, has_permission),
         }
 
 

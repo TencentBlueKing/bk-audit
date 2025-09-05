@@ -48,6 +48,7 @@ LOCAL_UPDATE_FIELDS = [
     "processor_groups",
     "event_data_field_configs",
     "event_evidence_field_configs",
+    "risk_meta_field_config",
 ]
 
 # 事件基本配置字段
@@ -308,3 +309,4 @@ class StrategyFieldSourceEnum(TextChoices):
     BASIC = "basic", gettext_lazy("基本字段")
     DATA = "data", gettext_lazy("数据字段")
     EVIDENCE = "evidence", gettext_lazy("证据字段")
+    RISK_META = "risk_meta", gettext_lazy("风险元字段")

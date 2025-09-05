@@ -383,6 +383,178 @@ class RiskFields:
     RISK_DATA = Field(field_name="risk_data", alias_name=gettext_lazy("拓展数据"))
 
 
+class RiskMetaFields:
+    """
+    风险元信息字段（用于策略配置中的风险字段展示）
+    """
+
+    @property
+    def fields(self):
+        return [
+            # 1 风险标题
+            self.RISK_TITLE,
+            # 2 风险ID
+            self.RISK_ID,
+            # 3 风险描述
+            self.RISK_DESCRIPTION,
+            # 4 风险标签
+            self.RISK_TAGS,
+            # 5 风险类型
+            self.RISK_TYPE,
+            # 6 风险等级
+            self.RISK_LEVEL,
+            # 7 风险命中策略
+            self.STRATEGY_NAME,
+            # 8 风险危害
+            self.RISK_HAZARD,
+            # 9 处理指引
+            self.RISK_GUIDANCE,
+            # 10 处理状态
+            self.PROCESSING_STATUS,
+            # 11 处理规则
+            self.PROCESSING_RULE,
+            # 12 责任人
+            self.RESPONSIBLE_PERSON,
+            # 13 当前处理人
+            self.ASSIGNED_TO,
+            # 14 关注人
+            self.FOLLOWERS,
+        ]
+
+    RISK_TITLE = Field(
+        field_name="risk_title",
+        alias_name="risk_title",
+        description=gettext_lazy("风险标题"),
+        field_type=FIELD_TYPE_STRING,
+        option=dict(),
+    )
+
+    RISK_LEVEL = Field(
+        field_name="risk_level",
+        alias_name="risk_level",
+        description=gettext_lazy("风险等级"),
+        field_type=FIELD_TYPE_STRING,
+        option=dict(),
+    )
+
+    RISK_ID = Field(
+        field_name="risk_id",
+        alias_name="risk_id",
+        description=gettext_lazy("风险ID"),
+        field_type=FIELD_TYPE_STRING,
+        option=dict(),
+    )
+
+    RISK_DESCRIPTION = Field(
+        field_name="event_content",
+        alias_name="risk_description",
+        description=gettext_lazy("风险描述"),
+        field_type=FIELD_TYPE_TEXT,
+        is_analyzed=True,
+        is_text=True,
+        option=dict(),
+        is_required=False,
+    )
+
+    RISK_TAGS = Field(
+        field_name="risk_tags",
+        alias_name="risk_tags",
+        description=gettext_lazy("风险标签"),
+        field_type=FIELD_TYPE_TEXT,
+        is_analyzed=True,
+        is_text=True,
+        option=dict(),
+        is_required=False,
+    )
+
+    RISK_TYPE = Field(
+        field_name="event_type",
+        alias_name="risk_type",
+        description=gettext_lazy("风险类型"),
+        field_type=FIELD_TYPE_TEXT,
+        is_required=False,
+        is_analyzed=True,
+        is_text=True,
+        option=dict(),
+    )
+
+    STRATEGY_NAME = Field(
+        field_name="strategy_name",
+        alias_name="strategy_name",
+        description=gettext_lazy("风险命中策略"),
+        field_type=FIELD_TYPE_STRING,
+        option=dict(),
+    )
+
+    RISK_HAZARD = Field(
+        field_name="risk_hazard",
+        alias_name="risk_hazard",
+        description=gettext_lazy("危害"),
+        field_type=FIELD_TYPE_TEXT,
+        is_analyzed=True,
+        is_text=True,
+        option=dict(),
+        is_required=False,
+    )
+
+    RISK_GUIDANCE = Field(
+        field_name="risk_guidance",
+        alias_name="risk_guidance",
+        description=gettext_lazy("处理建议"),
+        field_type=FIELD_TYPE_TEXT,
+        is_analyzed=True,
+        is_text=True,
+        option=dict(),
+        is_required=False,
+    )
+
+    PROCESSING_STATUS = Field(
+        field_name="status",
+        alias_name="status",
+        description=gettext_lazy("处理状态"),
+        field_type=FIELD_TYPE_STRING,
+        option=dict(),
+    )
+
+    PROCESSING_RULE = Field(
+        field_name="rule_id",
+        alias_name="rule_id",
+        description=gettext_lazy("处理规则"),
+        field_type=FIELD_TYPE_LONG,
+        option=dict(),
+    )
+
+    RESPONSIBLE_PERSON = Field(
+        field_name="operator",
+        alias_name="operator",
+        description=gettext_lazy("责任人"),
+        field_type=FIELD_TYPE_TEXT,
+        is_text=True,
+        is_analyzed=True,
+        option=dict(),
+    )
+
+    ASSIGNED_TO = Field(
+        field_name="current_operator",
+        alias_name="current_operator",
+        description=gettext_lazy("当前处理人"),
+        field_type=FIELD_TYPE_TEXT,
+        is_text=True,
+        is_analyzed=True,
+        option=dict(),
+    )
+
+    FOLLOWERS = Field(
+        field_name="notice_users",
+        alias_name="notice_users",
+        description=gettext_lazy("关注人"),
+        field_type=FIELD_TYPE_TEXT,
+        is_text=True,
+        is_analyzed=True,
+        option=dict(),
+    )
+
+
 # 事件基础字段中需要映射的字段
 EVENT_BASIC_MAP_FIELDS = [
     EventMappingFields.RAW_EVENT_ID,

@@ -90,6 +90,9 @@ class TestGetEventFieldsConfig(TestCase):
         self.assertIn("event_basic_field_configs", response)
         self.assertIn("event_data_field_configs", response)
         self.assertIn("event_evidence_field_configs", response)
+        self.assertIn("risk_meta_field_config", response)
+        # 默认风险元字段包含14个条目
+        self.assertEqual(len(response["risk_meta_field_config"]), 14)
 
     @patch('apps.meta.utils.format.preprocess_data')
     def test_perform_request_without_strategy(self, mock_preprocess):
@@ -103,6 +106,9 @@ class TestGetEventFieldsConfig(TestCase):
         self.assertEqual(len(response["event_basic_field_configs"]), 7)
         self.assertEqual(len(response["event_data_field_configs"]), 0)
         self.assertEqual(len(response["event_evidence_field_configs"]), 0)
+        # 无策略也返回默认的风险元字段配置
+        self.assertIn("risk_meta_field_config", response)
+        self.assertEqual(len(response["risk_meta_field_config"]), 14)
 
     @patch('apps.meta.utils.format.preprocess_data')
     @patch('services.web.strategy_v2.resources.get_request_username')
@@ -124,6 +130,8 @@ class TestGetEventFieldsConfig(TestCase):
         for field in response["event_data_field_configs"]:
             self.assertEqual(field["example"], "")
         for field in response["event_evidence_field_configs"]:
+            self.assertEqual(field["example"], "")
+        for field in response["risk_meta_field_config"]:
             self.assertEqual(field["example"], "")
 
     def test_preprocess_data_function(self):

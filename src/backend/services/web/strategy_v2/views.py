@@ -96,8 +96,6 @@ class StrategyTagsViewSet(ResourceViewSet):
 
 class StrategyFieldsViewSet(ResourceViewSet):
     def get_permissions(self):
-        if self.action in ["fields_config"]:
-            return [IAMPermission(actions=[ActionEnum.LIST_STRATEGY])]
         return []
 
     resource_routes = [
