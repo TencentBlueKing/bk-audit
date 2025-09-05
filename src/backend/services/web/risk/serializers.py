@@ -661,6 +661,12 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
         required=False,
         allow_empty=True,
     )
+    risk_meta_field_config = serializers.ListField(
+        label=gettext_lazy("Risk Meta Field Config"),
+        child=EventFieldSerializer(),
+        required=False,
+        allow_empty=True,
+    )
 
     class Meta:
         model = Strategy
@@ -671,6 +677,7 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
             "event_basic_field_configs",
             "event_data_field_configs",
             "event_evidence_field_configs",
+            "risk_meta_field_config",
         ]
 
     def to_representation(self, instance):
