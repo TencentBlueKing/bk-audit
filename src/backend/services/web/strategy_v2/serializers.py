@@ -227,6 +227,9 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
     )
+    risk_meta_field_config = serializers.ListField(
+        label=gettext_lazy("Risk Meta Field Config"), child=EventBasicFieldSerializer(), default=list, allow_empty=True
+    )
     risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
     risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
     processor_groups = serializers.ListField(
@@ -255,6 +258,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "event_basic_field_configs",
             "event_data_field_configs",
             "event_evidence_field_configs",
+            "risk_meta_field_config",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -302,6 +306,9 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"), child=EventFieldSerializer(), default=list, allow_empty=True
     )
+    risk_meta_field_config = serializers.ListField(
+        label=gettext_lazy("Risk Meta Field Config"), child=EventBasicFieldSerializer(), default=list, allow_empty=True
+    )
     risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
     processor_groups = serializers.ListField(
         label=gettext_lazy("Processor Groups"),
@@ -332,6 +339,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "event_basic_field_configs",
             "event_data_field_configs",
             "event_evidence_field_configs",
+            "risk_meta_field_config",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -795,6 +803,9 @@ class GetEventInfoFieldsResponseSerializer(serializers.Serializer):
     )
     event_evidence_field_configs = serializers.ListField(
         label=gettext_lazy("Event Evidence Field Configs"), child=EventInfoFieldSerializer(), required=False
+    )
+    risk_meta_field_config = serializers.ListField(
+        label=gettext_lazy("Risk Meta Field Config"), child=EventInfoFieldSerializer(), required=False
     )
 
 

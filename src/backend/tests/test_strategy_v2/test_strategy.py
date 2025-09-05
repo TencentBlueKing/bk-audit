@@ -30,6 +30,7 @@ from core.utils.data import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
 from services.web.strategy_v2.constants import RiskLevel, RuleAuditSourceType
 from services.web.strategy_v2.models import StrategyTool
+from services.web.strategy_v2.resources import CreateStrategy
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.test_collector_plugin import (
     CollectorPluginTest,
@@ -66,6 +67,7 @@ class StrategyTest(TestCase):
             "basic": "event_basic_field_configs",
             "data": "event_data_field_configs",
             "evidence": "event_evidence_field_configs",
+            "risk_meta": "risk_meta_field_config",
         }
         key = key_map.get(field_source, "event_basic_field_configs")
         data[key] = [
@@ -116,6 +118,76 @@ class StrategyTest(TestCase):
         )
         return resource.strategy_v2.create_strategy(**params)
 
+    @mock.patch("services.web.strategy_v2.resources.call_controller", mock.Mock(return_value=None))
+    def _create_rule_strategy(self, name_suffix="") -> dict:
+        from services.web.strategy_v2.constants import (
+            RiskLevel,
+            RuleAuditConfigType,
+            RuleAuditFieldType,
+            RuleAuditSourceType,
+        )
+
+        strategy_name = f"test_rule_strategy{name_suffix and '_' + name_suffix}"
+        params = {
+            "namespace": settings.DEFAULT_NAMESPACE,
+            "strategy_name": strategy_name,
+            "strategy_type": "rule",
+            "configs": {
+                "config_type": RuleAuditConfigType.EVENT_LOG.value,
+                "data_source": {
+                    "source_type": RuleAuditSourceType.REALTIME.value,
+                    "rt_id": "bklog.demo_table",
+                    "system_ids": ["bklog"],
+                },
+                "select": [
+                    {
+                        "table": "bklog.demo_table",
+                        "raw_name": "raw_event_id",
+                        "display_name": "raw_event_id",
+                        "field_type": RuleAuditFieldType.STRING.value,
+                        "aggregate": None,
+                    }
+                ],
+            },
+            "tags": ["BkAudit"],
+            "risk_level": RiskLevel.HIGH.value,
+            "risk_hazard": "",
+            "risk_guidance": "",
+            "risk_title": "risk title",
+            "processor_groups": ["123"],
+            # 满足规则策略对基础字段映射的校验要求
+            "event_basic_field_configs": [
+                {
+                    "field_name": "raw_event_id",
+                    "display_name": "raw_event_id",
+                    "is_priority": True,
+                    "map_config": {"source_field": "raw_event_id"},
+                },
+                {
+                    "field_name": "event_source",
+                    "display_name": "event_source",
+                    "is_priority": False,
+                    "map_config": {"source_field": "raw_event_id"},
+                },
+                {
+                    "field_name": "operator",
+                    "display_name": "operator",
+                    "is_priority": False,
+                    "map_config": {"source_field": "raw_event_id"},
+                },
+            ],
+            "risk_meta_field_config": [
+                {
+                    "field_name": "risk_title",
+                    "display_name": "风险标题",
+                    "is_priority": True,
+                    "description": "",
+                }
+            ],
+        }
+
+        return CreateStrategy()(**params)
+
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
     def test_update_bkm_strategy(self) -> None:
         """UpdateStrategy"""
@@ -153,6 +225,7 @@ class StrategyTest(TestCase):
         """ListStrategy"""
         data1 = self._create_bkm_strategy(name_suffix="11")
         data2 = self._create_bkm_strategy(name_suffix="22")
+        rule_data = self._create_rule_strategy(name_suffix="33")
 
         result = resource.strategy_v2.list_strategy(namespace=self.namespace, order_field="-strategy_id")
 
@@ -160,14 +233,34 @@ class StrategyTest(TestCase):
         strategy_ids = [s["strategy_id"] for s in result]
         self.assertIn(data1["strategy_id"], strategy_ids)
         self.assertIn(data2["strategy_id"], strategy_ids)
+        self.assertIn(rule_data["strategy_id"], strategy_ids)
 
-        # 校验 tool 字段也在（工具数目等）
+        # 校验 tool 字段也在（工具数目等）；规则策略包含 risk_field_config 信息
         for strategy_data in result:
             if strategy_data["strategy_id"] in [data1["strategy_id"], data2["strategy_id"]]:
                 self.assertIn("tools", strategy_data)
                 self.assertEqual(len(strategy_data["tools"]), 1)
                 tool = strategy_data["tools"][0]
                 self.assertEqual(tool["tool_uid"], "fake_tool_uid")
+            if strategy_data["strategy_id"] == rule_data["strategy_id"]:
+                # risk_field_config 透传出来
+                self.assertIn("risk_meta_field_config", strategy_data)
+                self.assertTrue(isinstance(strategy_data["risk_meta_field_config"], list))
+                # 我们在创建时放了 risk_title 一项
+                self.assertGreaterEqual(len(strategy_data["risk_meta_field_config"]), 1)
+                self.assertEqual(strategy_data["risk_meta_field_config"][0]["field_name"], "risk_title")
+
+    def test_create_rule_strategy(self) -> None:
+        """Create Rule Strategy with risk_field_config"""
+        data = self._create_rule_strategy(name_suffix="create")
+        self.assertIn("strategy_id", data)
+        # 校验 DB 中策略可取且 risk_field_config 被保存
+        from services.web.strategy_v2.models import Strategy
+
+        s = Strategy.objects.get(strategy_id=data["strategy_id"])
+        self.assertTrue(isinstance(s.risk_meta_field_config, list))
+        self.assertGreaterEqual(len(s.risk_meta_field_config), 1)
+        self.assertEqual(s.risk_meta_field_config[0]["field_name"], "risk_title")
 
 
 class TestRuleAuditSourceTypeCheck(TestCase):
