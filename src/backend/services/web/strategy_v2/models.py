@@ -79,6 +79,9 @@ class Strategy(SoftDeleteModel):
     event_evidence_field_configs = models.JSONField(
         gettext_lazy("Event Evidence Configs"), default=list, null=True, blank=True
     )
+    risk_meta_field_config = models.JSONField(
+        gettext_lazy("Risk Meta Field Config"), default=list, null=True, blank=True
+    )
     is_formal = models.BooleanField(gettext_lazy("Is Formal"), default=True)
 
     class Meta:
