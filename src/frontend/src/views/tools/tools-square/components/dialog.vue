@@ -304,7 +304,9 @@
     (e: 'close', val?: string): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    source: '',
+  });
   const emit = defineEmits<Emits>();
   const   emitBus  = useEventBus().emit;
   const { messageError } = useMessage();
