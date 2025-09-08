@@ -63,7 +63,7 @@ export default class ApplyData {
   get permissionList() {
     const systemName = this.permission.system_name;
     const stack = [] as IRenderPermissionList;
-    this.permission.actions.forEach((action) => {
+    this.permission.actions?.forEach((action) => {
       const relatedResourceTypes: IRenderPermissionList[0]['relatedResources'] = [];
       action.related_resource_types.forEach((relateResource) => {
         const instances = relateResource.instances.reduce((result, instancePathList) => {
