@@ -306,8 +306,12 @@
 
       // 获取当前配置中已存在的 source_field 集合
       const existingFields = new Set(formData.value.config.map(item => item.source_field));
+      const inputVariableFields = new Set(toolsDetailData.value.config.input_variable.map(item => item.raw_name));
 
-      // 遍历工具详情数据中的输入变量
+      // 删除不在 input_variable 中的字段
+      formData.value.config = formData.value.config.filter(item => inputVariableFields.has(item.source_field));
+
+      // 遍历工具详情数据中的输入变量，添加缺失的字段
       toolsDetailData.value.config.input_variable.forEach((item) => {
         // 如果当前字段尚未存在于配置中，则添加新配置项
         if (!existingFields.has(item.raw_name)) {
