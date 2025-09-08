@@ -82,6 +82,7 @@ class Strategy(SoftDeleteModel):
     risk_meta_field_config = models.JSONField(
         gettext_lazy("Risk Meta Field Config"), default=list, null=True, blank=True
     )
+    is_formal = models.BooleanField(gettext_lazy("Is Formal"), default=True)
 
     class Meta:
         verbose_name = gettext_lazy("Strategy")

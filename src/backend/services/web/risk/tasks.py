@@ -128,9 +128,8 @@ def process_risk_ticket(*, risk_id: str = None):
     if risk_id:
         risks = risks.filter(risk_id=risk_id)
 
-    # 风险白名单
-    if settings.ENABLE_PROCESS_RISK_WHITELIST:
-        risks = risks.filter(strategy_id__in=settings.PROCESS_RISK_WHITELIST)
+    # 仅处理正式发单的策略对应的风险
+    risks = risks.filter(strategy__is_formal=True)
 
     # 逐个处理
     for risk in risks:

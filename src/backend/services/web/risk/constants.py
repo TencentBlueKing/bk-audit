@@ -232,12 +232,12 @@ class RiskStatus(TextChoices):
 
     ```mermaid
     graph TB
-    A(风险单产生)
-    B(自动处理审批中)
-    C("套餐处理中(自动)")
-    D(已关单)
-    E(待处理)
-    F("套餐处理中(人工发起)")
+    A(风险单产生 NEW)
+    B(自动处理审批中 FOR_APPROVE)
+    C(套餐处理中(自动) AUTO_PROCESS)
+    D(已关单 CLOSED)
+    E(待处理 AWAIT_PROCESS)
+    F(套餐处理中(人工发起) AUTO_PROCESS)
     A --配置了处理规则--> B
     A --未配置处理规则--> E
     B --审批通过--> C
