@@ -84,9 +84,9 @@
   const tabs = ref<Array<tabsItem>>(props.tabs);
 
 
-  const itemRef = ref<HTMLElement | null>(null);
+  const itemRef = ref();
   const isOverflow = ref(false);
-  let resizeObserver = null;
+  const resizeObserver = ref();
   const beforeActiveIndex = ref(0);
 
 
@@ -181,16 +181,16 @@
   });
 
   onMounted(() => {
-    resizeObserver = new ResizeObserver(() => {
+    resizeObserver.value = new ResizeObserver(() => {
       checkOverflow();
     });
-    resizeObserver.observe(itemRef.value);
+    resizeObserver.value.observe(itemRef.value);
   });
 
   onUnmounted(() => {
-    if (resizeObserver) {
-      resizeObserver.unobserve(itemRef.value);
-      resizeObserver.disconnect();
+    if (resizeObserver.value) {
+      resizeObserver.value.unobserve(itemRef.value);
+      resizeObserver.value.disconnect();
     }
   });
 </script>

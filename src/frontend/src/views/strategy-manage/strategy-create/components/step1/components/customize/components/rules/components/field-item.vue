@@ -124,7 +124,7 @@
         :paste-fn="pasteFn"
         :placeholder="t('请输入并Enter结束')"
         trigger="focus"
-        @change="(value: Array<string>) => handleFilter(value, index)" />
+        @change="(value: Array<string>) => handleTagInput(value, index)" />
       <bk-input
         v-else
         v-model="condition.condition.filter"
@@ -166,6 +166,8 @@
 
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+
+  import { splitAndMerge } from '@utils/assist/split-and-merge';
 
   import nodeSelect from './tree.vue';
 
@@ -311,6 +313,11 @@
   // tag-input、user、input输入
   const handleFilter = (value: Array<string> | string, index: number) => {
     emits('updateFieldItem', value, props.conditionsIndex, index, 'filter');
+  };
+  // tag-input输入
+  const handleTagInput = (value: Array<string>, index: number) => {
+    localConditions.value.conditions[index].condition.filters = splitAndMerge(value);
+    emits('updateFieldItem', splitAndMerge(value), props.conditionsIndex, index, 'filter');
   };
 
   const handleChangeConnector = () => {

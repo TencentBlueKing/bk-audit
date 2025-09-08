@@ -21,12 +21,22 @@
         dataConfig.field_category === 'inputer' ||
         dataConfig.field_category === 'variable'"
       v-model="inputData"
+      v-bk-tooltips="{
+        disabled: !dataConfig.disabled,
+        content: t('下钻场景中，为确保数据安全，禁止更改查询输入参数'),
+        placement: 'top',
+      }"
       :disabled="dataConfig.disabled"
       @update:model-value="handleInputDataChange" />
 
     <bk-input
       v-else-if="dataConfig.field_category === 'number_input'"
       v-model="numberInputData"
+      v-bk-tooltips="{
+        disabled: !dataConfig.disabled,
+        content: t('下钻场景中，为确保数据安全，禁止更改查询输入参数'),
+        placement: 'top',
+      }"
       :disabled="dataConfig.disabled"
       type="number"
       @update:model-value="handleNumberInputDataChange" />
@@ -34,6 +44,11 @@
     <audit-user-selector
       v-else-if="dataConfig.field_category === 'person_select'"
       v-model="user"
+      v-bk-tooltips="{
+        disabled: !dataConfig.disabled,
+        content: t('下钻场景中，为确保数据安全，禁止更改查询输入参数'),
+        placement: 'top',
+      }"
       :disabled="dataConfig.disabled"
       @change="handleUserChange" />
 
@@ -50,6 +65,11 @@
     <date-picker
       v-else-if="dataConfig.field_category === 'time_range_select' || dataConfig.field_category === 'time-ranger'"
       v-model="pickerRangeValue"
+      v-bk-tooltips="{
+        disabled: !dataConfig.disabled,
+        content: t('下钻场景中，为确保数据安全，禁止更改查询输入参数'),
+        placement: 'top',
+      }"
       class="date-picker"
       :disabled="dataConfig.disabled"
       @update:model-value="handleRangeChange" />
@@ -57,6 +77,11 @@
     <bk-date-picker
       v-else-if="dataConfig.field_category === 'time_select' || dataConfig.field_category === 'time-picker'"
       v-model="pickerValue"
+      v-bk-tooltips="{
+        disabled: !dataConfig.disabled,
+        content: t('下钻场景中，为确保数据安全，禁止更改查询输入参数'),
+        placement: 'top',
+      }"
       append-to-body
       clearable
       :disabled="dataConfig.disabled"
@@ -67,6 +92,11 @@
     <bk-select
       v-else-if="dataConfig.field_category === 'multiselect'"
       v-model="enumValue"
+      v-bk-tooltips="{
+        disabled: !dataConfig.disabled,
+        content: t('下钻场景中，为确保数据安全，禁止更改查询输入参数'),
+        placement: 'top',
+      }"
       class="bk-select"
       :disabled="dataConfig.disabled"
       filterable
@@ -84,6 +114,11 @@
     <bk-tag-input
       v-else
       v-model="selectorValue"
+      v-bk-tooltips="{
+        disabled: !dataConfig.disabled,
+        content: t('下钻场景中，为确保数据安全，禁止更改查询输入参数'),
+        placement: 'top',
+      }"
       allow-create
       collapse-tags
       :disabled="dataConfig.disabled"

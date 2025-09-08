@@ -254,8 +254,6 @@
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item] = el"
-      active-id="77"
-      is-show-tags
       :tags-enums="tagsEnums"
       @close="handleClose"
       @open-field-down="openFieldDown" />
@@ -325,21 +323,6 @@
     };
   }
 
-  const tabs = ref([
-    { uid: '6d7a3b9263db11f0a2670a5af1dd70e3', name: 'raja 一定有值2' },
-    { uid: 'd78a811a896311f086d8b608da0ec47a', name: 'dadasda' },
-    { uid: 'c6dcf78e833811f0989c46d562054416', name: 'frodomei-test-01' },
-    { uid: 'b0c8ede4893811f08d5782654242a3b5', name: '注释权限权限豁免' },
-    { uid: '863dcd8478e311f0917ea2eca6e43bb5', name: 'zzlbkvsion' },
-    { uid: 'f3f01ae683b811f0989c46d562054416', name: 'rajaceshi' },
-    { uid: '57260a8a88be11f088153ee3b737277f', name: 'frodomei-test-02' },
-    { uid: '1951720c816711f08e5592db065bd82b', name: 'bkvions-yyh' },
-    { uid: '334ea51a887111f0b13d46622613e18d', name: 'gaga' },
-    { uid: '9720797a84ab11f0942dae088ffd3fa0', name: '测试变量透传' },
-    { uid: '3d92220484a711f0b3efae088ffd3fa0', name: '权限豁免-bkvision' },
-    { uid: '35f64b30660f11f0ba7caa7ab44381e5', name: '六年的' },
-    { uid: '1axzczvzvvbzd', name: 'frodomei测试工具' },
-  ]);
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
@@ -612,8 +595,6 @@
     nextTick(() => {
       if (dialogRefs.value[toolInfo.uid]) {
         dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
-        // 初始化 头部tabs值
-        dialogRefs.value[toolInfo.uid].initTabsValue(tabs.value, tabs.value[0].uid);
       }
     });
   };

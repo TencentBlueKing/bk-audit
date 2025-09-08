@@ -39,6 +39,7 @@
             class="dialog-header">
             <dialog-header
               ref="dialogHeaderRef"
+              :tabs="tabs"
               @click-item="handleClickTag" />
           </div>
           <div
@@ -139,7 +140,7 @@
                   </bk-form-item>
                 </div>
               </bk-form>
-              <div>
+              <div v-if="source === ''">
                 <bk-button
                   class="mr8"
                   theme="primary"
@@ -366,7 +367,7 @@
   const formRef = ref();
   const searchFormData = ref();
   const router = useRouter();
-
+  const tabs = ref<Array<tabsItem>>([]);
   const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>([]);
   const drillDownItemRowData = ref<Record<string, any>>({});
 
@@ -692,12 +693,18 @@
         nextTick(() => {
           formRef.value.clearValidate();
         });
-        const isValid = searchList.value.every((e) => {
-          if (e.field_category === 'person_select' || e.field_category === 'time_range_select') {
-            return Array.isArray(e.value) && e.value.length > 0;
+        // 判断每个字段是否有值
+        const validateField = (field: any) => {
+          if (field.field_category === 'person_select' || field.field_category === 'time_range_select') {
+            return Array.isArray(field.value) && field.value.length > 0;
           }
-          return e.value !== null && e.value !== '';
-        });
+          return field.value !== null && field.value !== '';
+        };
+
+        const isValid = props.source
+          ? searchList.value.map(e => (e.required ? validateField(e) : true)).every(e => e)
+          : searchList.value.every(validateField);
+
         if (isValid) {
           submit();
         }
@@ -1040,7 +1047,7 @@
   };
 
   // 点击头部标签
-  const handleClickTag = (TagItem: string) => {
+  const handleClickTag = (TagItem: any) => {
     getToolsDetail(TagItem.uid);
   };
 
