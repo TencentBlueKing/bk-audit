@@ -450,6 +450,7 @@ class StrategyInfoSerializer(serializers.ModelSerializer):
             "strategy_name",
             "control_id",
             "control_version",
+            "is_formal",
             "notice_groups",
             "risk_level",
             "risk_hazard",

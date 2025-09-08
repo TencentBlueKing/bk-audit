@@ -43,10 +43,11 @@ class StrategyAdmin(admin.ModelAdmin):
         "control_id",
         "control_version",
         "status",
+        "is_formal",
         "tags",
         "is_deleted",
     ]
-    list_filter = ["namespace", "is_deleted", "strategy_type"]
+    list_filter = ["namespace", "is_deleted", "strategy_type", "is_formal"]
     search_fields = ["strategy_id", "strategy_name"]
     ordering = ["-strategy_id"]
 
