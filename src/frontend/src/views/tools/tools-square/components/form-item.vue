@@ -72,6 +72,7 @@
       }"
       class="date-picker"
       :disabled="dataConfig.disabled"
+      style="width: 100%"
       @update:model-value="handleRangeChange" />
 
     <bk-date-picker
@@ -234,6 +235,9 @@
     const type: keyof typeof handlers = props.dataConfig.field_category as keyof typeof handlers;
     const handlers = {
       inputer: () => {
+        handleInputDataChange(val);
+      },
+      variable: () => {
         handleInputDataChange(val);
       },
       input: () => {
