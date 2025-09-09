@@ -717,10 +717,11 @@ class ExecuteTool(ToolBase):
 
         # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限，命中则跳过原有工具权限校验
         check_request_data = deepcopy(validated_request_data)
+        check_request_data["caller_validated"] = True
         check_request_data["current_type"] = CurrentType.TOOL.value
         check_request_data["current_object_id"] = uid
         check_request_data["tool_variables"] = params.get("tool_variables", [])
-        skip_permission = should_skip_permission_from(check_request_data, get_request_username())
+        should_skip_permission_from(check_request_data, get_request_username())
         current_user = get_request_username()
         try:
             recent_tool_usage_manager.record_usage(current_user, uid)
@@ -730,8 +731,7 @@ class ExecuteTool(ToolBase):
                 f"Err: {e}; Detail: {traceback.format_exc()}"
             )
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
-        data = executor.execute(params, skip_permission=skip_permission).model_dump()
-        recent_tool_usage_manager.record_usage(get_request_username(), uid)
+        data = executor.execute(params).model_dump()
         return {"data": data, "tool_type": tool.tool_type}
 
 

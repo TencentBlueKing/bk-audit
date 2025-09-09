@@ -14,13 +14,16 @@ from collections import defaultdict
 from collections.abc import Mapping as _Mapping
 from contextlib import suppress
 from enum import Enum
+from functools import singledispatch
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 from bk_resource import resource
+from blueapps.utils.logger import logger
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import PermissionException
+from services.web.common.constants import CallerResourceType
 
 
 class BaseCallerPermission:
@@ -34,50 +37,50 @@ class RiskCallerPermission(BaseCallerPermission):
     def has_permission(self, instance_id: str, username: str, **kwargs) -> bool:
         from services.web.risk.permissions import RiskViewPermission
 
-        perm = RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK)
-        # 1) 先校验风险查看权限（失败会抛出权限异常，成功继续）
-        perm.has_risk_permission(instance_id, username)
-
-        # 2) 优先基于 current_type/current_object_id 做关系校验
         current_type = kwargs.get("current_type")
         current_object_id = kwargs.get("current_object_id")
+        caller_validated = kwargs.get("caller_validated")
+        # 1) 先校验风险查看权限（失败会抛出权限异常，成功继续）
+        if not caller_validated:
+            perm = RiskViewPermission(actions=[ActionEnum.LIST_RISK], resource_meta=ResourceEnum.RISK)
+            perm.has_risk_permission(instance_id, username)
+        # 2) 基于 current_type+current_object_id/extra_context 做关系校验
         if current_type and current_object_id:
-            # 如果存在current_type但current_type异常则检验不通过
-            try:
-                ct = CurrentType(current_type)
-            except ValueError:
-                return False
-            if ct == CurrentType.STRATEGY:
-                return is_risk_related_to_strategy(instance_id, current_object_id)
-            if ct == CurrentType.TOOL:
-                # 先校验工具与风险所属策略是否建立关联
-                if not is_tool_related_to_risk(instance_id, current_object_id):
-                    return False
-                # 如调用方传入了工具变量值，则基于策略字段 drill_config 与风险事件进行值校验
-                tool_variable_items = kwargs.get("tool_variables") or []
-                variable_values = {item["raw_name"]: item["value"] for item in tool_variable_items}
-                drill_field = kwargs.get("drill_field")
-                event_start_time = kwargs.get("event_start_time")
-                event_end_time = kwargs.get("event_end_time")
-                if variable_values:
-                    return validate_tool_variables_with_risk(
-                        risk_id=instance_id,
-                        tool_uid=current_object_id,
-                        variable_values=variable_values,
-                        drill_field=drill_field,
-                        start_time=event_start_time,
-                        end_time=event_end_time,
-                    )
-                return True
-
-        # 3) 未指定当前对象关联，仅基于风险权限放行（允许跳过原有权限）
+            return self.extra_context_validate(current_type, current_object_id, instance_id, kwargs)
         return True
+
+    def extra_context_validate(self, current_type, current_object_id, instance_id, kwargs):
+        # 如果存在current_type但current_type异常则检验不通过
+        try:
+            ct = CurrentType(current_type)
+        except ValueError:
+            return False
+        if ct == CurrentType.STRATEGY:
+            return is_risk_related_to_strategy(instance_id, current_object_id)
+        if ct == CurrentType.TOOL:
+            # 先校验工具与风险所属策略是否建立关联
+            if not is_tool_related_to_risk(instance_id, current_object_id):
+                return False
+            # 如调用方传入了工具变量值，则基于策略字段 drill_config 与风险事件进行值校验
+            tool_variable_items = kwargs.get("tool_variables") or []
+            variable_values = {item["raw_name"]: item["value"] for item in tool_variable_items}
+            drill_field = kwargs.get("drill_field")
+            event_start_time = kwargs.get("event_start_time")
+            event_end_time = kwargs.get("event_end_time")
+            if variable_values:
+                return validate_tool_variables_with_risk(
+                    risk_id=instance_id,
+                    tool_uid=current_object_id,
+                    variable_values=variable_values,
+                    drill_field=drill_field,
+                    start_time=event_start_time,
+                    end_time=event_end_time,
+                )
+            return True
 
 
 # 权限处理器注册表：resource_type -> 权限处理器
 # 受支持的调用者资源类型
-class CallerResourceType(str, Enum):
-    RISK = "risk"
 
 
 CALLER_RESOURCE_TYPE_CHOICES = tuple((i.value, i.value) for i in CallerResourceType)
@@ -120,7 +123,7 @@ def should_skip_permission(
     if permission_handler and permission_handler().has_permission(caller_resource_id, username, **kwargs):
         return True
     elif raise_exception:
-        raise PermissionException('使用{caller_resource_type}:{caller_resource_id}', '?')
+        raise PermissionException(f'使用{caller_resource_type}:{caller_resource_id}', '?')
     else:
         return False
 
@@ -148,7 +151,7 @@ def extract_extra_variables(source: Any) -> Dict[str, Any]:
     当前支持：
       - current_type：如 "strategy" / "tool"
       - current_object_id：如策略ID/工具UID
-      - tool_variable_values：当 current_type=tool 且调用方传入了执行变量时，提取变量名->值映射
+      - tool_variable：当 current_type=tool 且调用方传入了执行变量时，提取变量名->值映射
       - event_start_time：当 current_type=tool 且调用方传入了执行变量时，提取事件开始时间
       - event_end_time：当 current_type=tool 且调用方传入了执行变量时，提取事件结束时间
       - drill_field：当 current_type=tool 时，指定应使用的字段 drill_config
@@ -163,6 +166,7 @@ def extract_extra_variables(source: Any) -> Dict[str, Any]:
             "event_end_time",
             "drill_field",
             "tool_variables",
+            "caller_validated",
         ):
             extra[variable] = mapping.get(variable)
 
@@ -189,6 +193,21 @@ def is_tool_related_to_risk(risk_id: str, tool_uid: str) -> bool:
     return StrategyTool.objects.filter(strategy_id=strategy_id, tool_uid=tool_uid).exists()
 
 
+@singledispatch
+def collection_to_tuple(collection: Any) -> Tuple[Any, ...]:
+    return collection
+
+
+@collection_to_tuple.register
+def _dict_to_tuple(iterable: dict) -> Tuple[tuple, ...]:
+    return tuple(iterable.items())
+
+
+@collection_to_tuple.register
+def _list_to_tuple(iterable: list) -> Tuple[str, ...]:
+    return tuple(iterable)
+
+
 def validate_tool_variables_with_risk(
     risk_id: str,
     tool_uid: str,
@@ -206,9 +225,8 @@ def validate_tool_variables_with_risk(
     若风险/策略不可用、字段值校验失败，返回 False。
     """
     from services.web.risk.models import Risk
-    from services.web.strategy_v2.models import Strategy
+    from services.web.strategy_v2.constants import StrategyFieldSourceEnum
     from services.web.tool.constants import TargetValueTypeEnum
-    from services.web.tool.models import Tool
 
     if not start_time or not end_time or not drill_field:
         return False
@@ -217,21 +235,44 @@ def validate_tool_variables_with_risk(
     if not risk or not risk.strategy_id:
         return False
 
-    # 获取事件数据：通过接口按时间范围获取
-    event_record: Dict[str, Any] = defaultdict(set, **{"event_data": defaultdict(set)})
-    events = []
-    with suppress(Exception):
-        if start_time and end_time:
-            events = resource.risk.list_event(
-                start_time=start_time, end_time=end_time, risk_id=risk_id, page=1, page_size=100
-            ).get("results", [])
-    if not events:
-        events = [risk.event_data]
-    for event in events:
-        for k, v in event.pop("event_data", {}).items():
-            event_record["event_data"][k].add(v)
-        for k, v in event.items():
-            event_record[k].add(v)
+    event_record = _get_risk_event_record(risk, start_time, end_time)
+    uncheck_field, mapping = _collect_check_rules(risk, tool_uid, drill_field)
+
+    for name, value in variable_values.items():
+        if name in uncheck_field:
+            continue
+        rules = mapping.get(name)
+        # 若变量未在 mapping 中声明，则跳过校验
+        if not rules:
+            continue
+        # 逐个规则进行校验
+        match_result = []
+        for rule in rules:
+            if rule["type"] == TargetValueTypeEnum.FIXED_VALUE.value:
+                if value != rule["target"]:
+                    match_result.append(False)
+                    continue
+            elif rule["type"] == TargetValueTypeEnum.FIELD.value:
+                # 根据 target_field_type 决定取顶层事件字段还是嵌套的 event_data 字段
+                tft = (rule.get("target_field_type") or "").lower()
+                if tft == StrategyFieldSourceEnum.BASIC.value:
+                    expected = event_record.get(rule["target"])
+                else:
+                    expected = event_record.get("event_data", {}).get(rule["target"])
+                if not expected or collection_to_tuple(value) not in expected:
+                    match_result.append(False)
+                    continue
+            match_result.append(True)
+        if not any(match_result):
+            return False
+    return True
+
+
+def _collect_check_rules(risk, tool_uid: str, drill_field: Optional[str] = None):
+    """生成检查规则"""
+    from services.web.strategy_v2.models import Strategy
+    from services.web.tool.constants import FieldCategory
+    from services.web.tool.models import Tool
 
     strategy = (
         Strategy.objects.filter(strategy_id=risk.strategy_id)
@@ -239,19 +280,18 @@ def validate_tool_variables_with_risk(
         .first()
     )
     if not strategy:
-        return False
+        return set(), {}
 
+    # 某些字段类型不检查值，比如时间范围选择器常会有NOW等非具体值
     uncheck_field = set()
 
-    with suppress(Exception):
-        tool = Tool.last_version_tool(tool_uid)
-        if tool:
-            cfg = tool.config or {}
-            for item in cfg.get("input_variable") or []:
-                name = (item or {}).get("raw_name")
-                ftype = (item or {}).get("field_category")
-                if ftype in ["time_select", "time_range_select"]:
-                    uncheck_field.add(name)
+    tool = Tool.last_version_tool(tool_uid)
+    cfg = (tool.config if tool else {}) or {}
+    for item in cfg.get("input_variable") or []:
+        name = (item or {}).get("raw_name")
+        ftype = (item or {}).get("field_category")
+        if ftype in [FieldCategory.TIME_RANGE_SELECT, FieldCategory.TIME_SELECT]:
+            uncheck_field.add(name)
 
     # 收集所有字段的 drill_config 中与 tool_uid 匹配的映射（source_field -> (type, target, source_field_type)）
     def iter_field_configs() -> list[dict]:
@@ -277,35 +317,30 @@ def validate_tool_variables_with_risk(
             if not src or not tv_type:
                 continue
             mapping[src].append({"type": tv_type, "target": target_value, "target_field_type": target_field_type})
+    # 返回顺序需与调用方保持一致：(uncheck_field, mapping)
+    return uncheck_field, mapping
 
-    for name, value in variable_values.items():
-        if name in uncheck_field:
-            continue
-        rules = mapping.get(name)
-        # 若变量未在 mapping 中声明，则跳过校验
-        if not rules:
-            continue
-        # 逐个规则进行校验
-        match_result = []
-        for rule in rules:
-            if rule["type"] == TargetValueTypeEnum.FIXED_VALUE.value:
-                if value != rule["target"]:
-                    match_result.append(False)
-                    continue
-            elif rule["type"] == TargetValueTypeEnum.FIELD.value:
-                # 根据 target_field_type 决定取顶层事件字段还是嵌套的 event_data 字段
-                tft = (rule.get("target_field_type") or "").lower()
-                if tft == "basic":
-                    expected = event_record.get(rule["target"])
-                else:
-                    expected = event_record.get("event_data", {}).get(rule["target"])
-                if not expected or value not in expected:
-                    match_result.append(False)
-                    continue
-            match_result.append(True)
-        if not any(match_result):
-            return False
-    return True
+
+def _get_risk_event_record(risk, start_time, end_time) -> Dict[str, Any]:
+    """获取风险事件记录"""
+    risk_id = risk.risk_id
+    # 获取事件数据：通过接口按时间范围获取
+    event_record: Dict[str, Any] = defaultdict(set, **{"event_data": defaultdict(set)})
+    events = []
+    try:
+        events = resource.risk.list_event(
+            start_time=start_time, end_time=end_time, risk_id=risk_id, page=1, page_size=100
+        ).get("results", [])
+    except Exception as e:
+        logger.exception("Failed to get event data", exc_info=e)
+    if not events:
+        events = [risk.event_data]
+    for event in events:
+        for k, v in event.pop("event_data", {}).items():
+            event_record["event_data"][k].add(collection_to_tuple(v))
+        for k, v in event.items():
+            event_record[k].add(collection_to_tuple(v))
+    return event_record
 
 
 def is_risk_related_to_strategy(risk_id: str, strategy_id: Any) -> bool:
@@ -323,6 +358,9 @@ def is_risk_related_to_strategy(risk_id: str, strategy_id: Any) -> bool:
 
 
 def should_skip_permission_from(source: Any, username: str) -> bool:
+    """
+    根据调用方上下文判断是否跳过原始权限校验，使用上下文权限进行判断。
+    """
     crt, cri = extract_caller_context(source)
     extras = extract_extra_variables(source)
     return should_skip_permission(crt, cri, username, **extras)

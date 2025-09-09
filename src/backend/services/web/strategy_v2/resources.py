@@ -646,6 +646,7 @@ class GetStrategyEnumMappingByCollectionKeys(StrategyV2Base):
         # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限
         validated_request_data["related_type"] = EnumMappingRelatedType.STRATEGY.value
 
+        validated_request_data["caller_validated"] = True
         validated_request_data["current_type"] = CurrentType.STRATEGY.value
         validated_request_data["current_object_id"] = validated_request_data["related_object_id"]
         should_skip_permission_from(validated_request_data, get_request_username())
@@ -685,6 +686,7 @@ class GetStrategyEnumMappingByCollection(StrategyV2Base):
         validated_request_data["related_type"] = EnumMappingRelatedType.STRATEGY.value
 
         # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限
+        validated_request_data["caller_validated"] = True
         validated_request_data["current_type"] = CurrentType.STRATEGY.value
         validated_request_data["current_object_id"] = validated_request_data["related_object_id"]
         should_skip_permission_from(validated_request_data, get_request_username())

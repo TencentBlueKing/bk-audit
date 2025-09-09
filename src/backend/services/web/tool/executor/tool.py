@@ -114,8 +114,7 @@ class BaseToolExecutor(abc.ABC, Generic[TConfig, TParams, TResult]):
 
     def execute(self, params: dict, skip_permission: bool = False):
         params = self._parse_params(params)
-        if not skip_permission:
-            self.validate_permission(params)
+        self.validate_permission(params)
         return self._execute(params)
 
 
