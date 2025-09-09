@@ -346,6 +346,7 @@
   };
 
   const process = () => {
+    console.log(21222);
     // 填充内容（字段自动填充, 根据select更新event_data_field_configs)
     setTableData('event_basic_field_configs');
     setTableData('event_data_field_configs');
