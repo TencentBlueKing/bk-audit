@@ -50,7 +50,9 @@
               v-for="(item, key) in tableData"
               :key="key">
               <!-- strategyType === 'rule'时不显示 event_evidence_field_configs -->
-              <template v-if="data.strategy_type === 'rule' && key === 'event_evidence_field_configs'" />
+              <template
+                v-if="(data.strategy_type === 'rule' && key === 'event_evidence_field_configs')
+                  || key === 'risk_meta_field_config'" />
               <div
                 v-else
                 class="table-section">
@@ -103,10 +105,10 @@
       { key: 'field_name', label: t('字段名称') },
       { key: 'display_name', label: t('字段显示名') },
       { key: 'is_show', label: t('在单据中展示') },
-      { key: 'is_priority', label: t('重点展示'), tips: t('开启后将在单据里优先展示') },
+      { key: 'is_priority', label: t('重点展示'), tips: t('设为重点展示的字段将在风险单据中直接显示，其他字段将被折叠收起') },
       { key: 'map_config', label: t('字段关联'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
       { key: 'enum_mappings', label: t('字段值映射'), tips: t('为储存值配置可读的展示文本') },
-      { key: 'drill_config', label: t('字段下钻') },
+      { key: 'drill_config', label: t('字段下钻'), tips: t('为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息') },
       { key: 'description', label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
     ];
 
@@ -131,8 +133,8 @@
       event_basic_field_configs: props.data.event_basic_field_configs,
       event_data_field_configs: props.data.event_data_field_configs,
       event_evidence_field_configs: props.data.event_evidence_field_configs,
+      risk_meta_field_config: props.data.risk_meta_field_config,
     };
-    console.log(new StrategyFieldEvent(data));
     return new StrategyFieldEvent(data);
   });
 

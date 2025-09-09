@@ -210,7 +210,7 @@ export default {
     策略标签: 'strategy Tag',
     方案名称: 'Solution Name',
     预览: 'Preview',
-    开启后将在单据里优先展示: 'After opening, it will be displayed first in the ticket',
+    '设为重点展示的字段将在风险单据中直接显示，其他字段将被折叠收起': 'Fields set as highlights will be displayed directly in the risk ticket and other fields will be folded and hidden',
     '在单据页，鼠标移入label，即可显示字段说明': 'On the ticket page, move the mouse into the label to display the field description',
     请输入风险单名称: 'Please enter the name of the risk order',
     请选择通知组: 'Please select a notification group',
@@ -414,5 +414,6 @@ export default {
     字段值映射: 'Field Value Mapping',
     字段关联: 'Field Association',
     '数据加载中，请稍等': 'Data loading, please wait',
+    '为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息': 'After configuring the drill tool for the field, you can click the field in the risk ticket to query the associated information',
   },
 };
