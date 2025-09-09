@@ -394,6 +394,9 @@
 
   const handleTypeChange = (index: number) => {
     formData.value.config[index].target_value = '';
+    if (formData.value.config[index].target_field_type) {
+      formData.value.config[index].target_field_type = '';
+    }
   };
 
   const handleSelectMapValueChange = (index: number, value: Array<LocalOutputFields>) => {
