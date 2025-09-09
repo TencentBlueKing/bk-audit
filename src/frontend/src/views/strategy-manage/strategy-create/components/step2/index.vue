@@ -82,6 +82,19 @@
                 </template>
               </bk-popover>
             </bk-form-item>
+            <bk-form-item
+              class="is-required"
+              :label="t('风险字段配置')"
+              label-width="160"
+              property="">
+              <strategy-table
+                ref="strategyTableRef"
+                :data="editData"
+                :select="select"
+                :strategy-id="editData.strategy_id"
+                :strategy-name="strategyName"
+                :strategy-type="strategyType" />
+            </bk-form-item>
           </template>
         </card-part-vue>
         <card-part-vue :title="t('事件信息')">
@@ -135,6 +148,7 @@
 
   // import EventInfoTable from './components/event-info-table.vue';
   import EventTable from './components/event-table/index.vue';
+  import StrategyTable from './components/strategy-table/index.vue';
   import VariableTable from './components/variable-table.vue';
 
   interface IFormData {
@@ -142,6 +156,7 @@
     event_evidence_field_configs:  StrategyFieldEvent['event_evidence_field_configs'],
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
+    risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'],
   }
 
   interface Emits {
@@ -168,6 +183,7 @@
   const eventRef = ref();
   const inputRef = ref();
   const variablePopRef = ref();
+  const strategyTableRef = ref();
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
@@ -182,6 +198,7 @@
     event_evidence_field_configs: [],
     event_data_field_configs: [],
     event_basic_field_configs: [],
+    risk_meta_field_config: [],
   });
 
   const rules = {
@@ -220,7 +237,12 @@
 
   const handlePreview = () => {
     // 预览前更新一次formData，用于查看重点信息
-    const params: IFormData = Object.assign({}, formData.value, eventRef.value.getData());
+    const params: IFormData = Object.assign(
+      {},
+      formData.value,
+      eventRef.value.getData(),
+      strategyTableRef.value.getData(),
+    );
     emits('nextStep', 2, params);
     emits('showPreview');
   };
@@ -237,9 +259,18 @@
 
   const handleNext = () => {
     Promise.all([formRef.value.validate(), eventRef.value.getValue()]).then(() => {
-      const params: IFormData = _.cloneDeep(Object.assign({}, formData.value, eventRef.value.getData()));
+      const params: IFormData = _.cloneDeep(Object.assign(
+        {},
+        formData.value, eventRef.value.getData(),
+        strategyTableRef.value.getData(),
+      ));
       // 统一处理配置字段
       params.event_basic_field_configs = params.event_basic_field_configs.map((item) => {
+        cleanMapConfig(item);
+        cleanDrillConfig(item);
+        return item;
+      });
+      params.risk_meta_field_config = params.risk_meta_field_config.map((item) => {
         cleanMapConfig(item);
         cleanDrillConfig(item);
         return item;
@@ -251,6 +282,7 @@
       emits('nextStep', 3, params);
     });
   };
+
   // 公共函数：清理配置中的无效drill_config
   const cleanDrillConfig = (item: any) => {
     if (item.drill_config && !item.drill_config.tool?.uid) {

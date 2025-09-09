@@ -98,6 +98,7 @@ export default class Strategy {
   event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
   event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
+  risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'];
   processor_groups: Array<number>;
   link_table_uid: string;
   link_table_version: number;
@@ -128,6 +129,7 @@ export default class Strategy {
     this.event_data_field_configs = payload.event_data_field_configs;
     this.event_basic_field_configs = payload.event_basic_field_configs;
     this.event_evidence_field_configs = payload.event_evidence_field_configs;
+    this.risk_meta_field_config = payload.risk_meta_field_config;
     this.processor_groups = payload.processor_groups;
     this.link_table_uid = payload.link_table_uid;
     this.link_table_version = payload.link_table_version;

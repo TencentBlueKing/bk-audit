@@ -16,73 +16,26 @@
 -->
 <template>
   <div class="field-cell">
-    <!-- 字段显示名 -->
-    <template v-if="fieldKey === 'display_name'">
-      <field-input
-        v-if="localEventItem.prefix"
-        ref="displayNameRef"
-        v-model="localEventItem.display_name"
-        required
-        theme="background" />
+    <!-- 字段名 -->
+    <template v-if="fieldKey === 'field_name'">
       <span
-        v-else
         class="ml8">
-        {{ localEventItem.display_name }}
+        {{ localEventItem.field_name }}({{ (localEventItem.display_name) }})
       </span>
     </template>
 
-    <!-- 是否展示 -->
-    <bk-switcher
-      v-else-if="fieldKey === 'is_show'"
-      v-model="localEventItem.is_show"
-      style="margin-left: 8px;"
-      theme="primary"
-      @change="handleUpdateIsShow" />
 
     <!-- 是否重点展示 -->
     <bk-switcher
       v-else-if="fieldKey === 'is_priority'"
       v-model="localEventItem.is_priority"
-      :disabled="!localEventItem.is_show || !localEventItem.prefix"
+      :disabled="disabledList.includes(localEventItem.field_name)"
       style="margin-left: 8px;"
-      theme="primary" />
+      theme="primary"
+      @change="(val: boolean) => {
+        console.log(val);
+      }" />
 
-    <!-- 字段关联 -->
-    <field-mapping
-      v-else-if="fieldKey === 'map_config' && localEventItem.map_config"
-      ref="fieldMappingRef"
-      :event-item="eventItem"
-      :event-item-key="eventItemKey"
-      :optional-fields="optionalFields"
-      :required-fields="requiredFields"
-      :select-options="selectOptions"
-      @add-custom-constant="addCustomConstant"
-      @select="handleFieldSelect" />
-
-    <div
-      v-else-if="fieldKey === 'enum_mappings' && localEventItem.enum_mappings"
-      class="field-cell-div"
-      style="width: 100%;cursor: pointer;"
-      @click="handleFiledDict">
-      <span
-        :style="{
-          color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
-        }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : '请点击配置' }}</span>
-      <audit-popconfirm
-        v-if="localEventItem.enum_mappings.mappings.length"
-        :confirm-handler="() => handleRemoveMappings()"
-        :content="t('删除操作无法撤回，请谨慎操作！')"
-        :title="t('确认删除该配置？')">
-        <audit-icon
-          class="remove-mappings-btn remove-btn"
-          type="delete-fill" />
-      </audit-popconfirm>
-      <field-dict
-        ref="fieldDictRef"
-        v-model:showFieldDict="showFieldDict"
-        :edit-data="localEventItem.enum_mappings.mappings"
-        @submit="handleDictSubmit" />
-    </div>
 
     <!-- 字段下钻 -->
     <template v-else-if="fieldKey === 'drill_config' && localEventItem.drill_config">
@@ -151,21 +104,15 @@
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import DatabaseTableFieldModel from '@model/strategy/database-table-field';
-  import StrategyFieldEvent from '@model/strategy/strategy-field-event';
   import ToolDetailModel from '@model/tool/tool-detail';
 
-  import FieldDict from './field-dict.vue';
-  import FieldInput from './field-input.vue';
-  import FieldMapping from './field-mapping.vue';
-
+  import type StrategyFieldEvent from '@/domain/model/strategy/strategy-field-event';
   import FieldReference from '@/views/tools/tools-square/add/components/data-search/components/field-reference/index.vue';
 
+
   interface Props {
-    eventItem: StrategyFieldEvent['event_basic_field_configs'][0];
-    eventItemKey: keyof StrategyFieldEvent;
-    fieldKey: keyof StrategyFieldEvent['event_basic_field_configs'][0];
-    selectOptions: Array<DatabaseTableFieldModel>;
+    eventItem: StrategyFieldEvent['risk_meta_field_config'][0];
+    fieldKey: keyof StrategyFieldEvent['risk_meta_field_config'][0];
     strategyName: string;
     outputFields: Array<{
       raw_name: string;
@@ -182,9 +129,6 @@
   }
 
   interface Emits {
-    (e: 'update:fieldValue', value: any): void;
-    (e: 'select', value: string, config: StrategyFieldEvent['event_basic_field_configs'][0]): void;
-    (e: 'add-custom-constant', value: string): void;
     (e: 'openTool', value: ToolDetailModel): void;
   }
 
@@ -192,17 +136,12 @@
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const requiredFields = ['raw_event_id', 'event_source', 'operator'];
-  const optionalFields = ['event_content', 'event_type'];
-
   const localEventItem = ref(props.eventItem);
   const showFieldReference = ref(false);
-  const showFieldDict = ref(false);
 
   const fieldMappingRef = ref();
   const fieldReferenceRef = ref();
   const displayNameRef = ref();
-  const fieldDictRef = ref();
 
   const iconMap = {
     data_search: 'sqlxiao',
@@ -210,39 +149,14 @@
     bk_vision: 'bkvisonxiao',
   };
 
+  const disabledList = ['risk_level', 'status', 'current_operator'];
+
   const toolMaxVersionMap = computed(() => props.allToolsData.reduce((res, item) => {
     res[item.uid] = item.version;
     return res;
   }, {} as Record<string, number>));
 
-  const handleFieldSelect = (value: string) => {
-    emit('select', value, props.eventItem);
-  };
-
-  const handleFiledDict = () => {
-    showFieldDict.value = true;
-  };
-
-  const handleDictSubmit = (data: Array<{
-    key: string;
-    name: string;
-  }>) => {
-    if (localEventItem.value.enum_mappings) {
-      localEventItem.value.enum_mappings.mappings = data;
-    }
-  };
-
-  const addCustomConstant = (value: string) => {
-    emit('add-custom-constant', value);
-  };
-
-  const handleUpdateIsShow = (value: boolean) => {
-    if (!value && localEventItem.value.is_priority && localEventItem.value.prefix) {
-      localEventItem.value.is_priority = false;
-    }
-  };
-
-  const handleClick = (drillConfig?: StrategyFieldEvent['event_basic_field_configs'][0]['drill_config']) => {
+  const handleClick = (drillConfig?: StrategyFieldEvent['risk_meta_field_config'][0]['drill_config']) => {
     showFieldReference.value = true;
     if (drillConfig) {
       fieldReferenceRef.value.setFormData(drillConfig);
@@ -261,13 +175,6 @@
         version: 1,
       },
       config: [],
-    };
-  };
-
-  const handleRemoveMappings = async () => {
-    localEventItem.value.enum_mappings =  {
-      collection_id: '',
-      mappings: [],
     };
   };
 

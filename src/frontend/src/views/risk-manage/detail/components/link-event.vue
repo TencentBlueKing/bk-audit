@@ -23,13 +23,13 @@
       <template v-if="linkEventList.length">
         <div
           class="list"
-          :style="isShowMore ? 'width: 15px' : 'min-width: 164px;'">
+          :style="isShowSide ? 'width: 15px' : 'min-width: 164px;'">
           <scroll-faker @scroll="handleScroll">
             <transition name="draw">
               <div>
                 <div
                   v-for="(item, index) in linkEventList"
-                  v-show="!isShowMore"
+                  v-show="!isShowSide"
                   :key="index"
                   class="list-item"
                   :class="[
@@ -42,7 +42,7 @@
                   <bk-button
                     class="show-more-btn"
                     text
-                    @click="() => isShowMore = !isShowMore">
+                    @click="() => isShowSide = !isShowSide">
                     <audit-icon
                       :class="{ audit: isShowMore }"
                       style="margin-top: -15px;"
@@ -54,73 +54,14 @@
           </scroll-faker>
         </div>
 
-
         <!-- detail -->
-        <div
-          class="list-item-detail"
-          :style="isShowMore ? `width: calc(100% - 15px);`: `width: calc(100% - 164px);`">
-          <div
-            v-if="importantInformation.length"
-            class="important-information">
-            <!-- 重点信息 -->
-            <div class="title">
-              {{ t('重点信息') }}
-            </div>
-            <render-info-block
-              v-for="(item, index) in importantInformation"
-              :key="index"
-              class="flex mt16"
-              style="margin-bottom: 12px;">
-              <render-info-item
-                v-for="(subItem, subIndex) in item"
-                :key="subIndex"
-                :description="subItem.description"
-                :label="subItem.display_name"
-                :label-width="labelWidth">
-                <span
-                  v-bk-tooltips="{
-                    content: t('映射对象', {
-                      key: displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.key ||
-                        displayValueDict.eventData[subItem.field_name]?.dict?.key,
-                      name: displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.name ||
-                        displayValueDict.eventData[subItem.field_name]?.dict?.name,
-                    }),
-                    disabled: !displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings &&
-                      !displayValueDict.eventData[subItem.field_name]?.isMappings,
-                  }"
-                  :class="[
-                    displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings ||
-                      displayValueDict.eventData[subItem.field_name]?.isMappings ?
-                        'tips' : '',
-                  ]">
-                  {{ displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.value ||
-                    displayValueDict.eventData[subItem.field_name]?.value }}
-                </span>
-                <template v-if="drillMap.get(subItem.field_name)">
-                  <bk-button
-                    class="ml8"
-                    text
-                    theme="primary"
-                    @click="handleClick(
-                      subItem,
-                      drillMap.get(subItem.field_name).drill_config.tool.uid,
-                      subItem.field_name
-                    )">
-                    {{ t('查看') }}
-                  </bk-button>
-                </template>
-              </render-info-item>
-            </render-info-block>
-          </div>
-
+        <div class="list-item-detail">
           <div style="padding-left: 12px">
             <!-- 基本信息 -->
             <div class="title mt16">
               {{ t('基本信息') }}
             </div>
-            <div
-              v-if="eventItem.event_id || eventItem.strategy_id"
-              class="base-info">
+            <div class="base-info">
               <render-info-block
                 v-for="(basicArr, basicIndex) in basicInfo"
                 :key="basicIndex"
@@ -129,6 +70,7 @@
                 <render-info-item
                   v-for="(basicItem, itemIndex) in basicArr"
                   :key="itemIndex"
+                  :description="basicItem.description"
                   :label="basicItem.display_name"
                   :label-width="labelWidth">
                   <template v-if="basicItem.field_name === 'strategy_id'">
@@ -174,73 +116,112 @@
                 </render-info-item>
               </render-info-block>
             </div>
-            <bk-exception
-              v-else
-              class="exception-part"
-              scene="part"
-              type="empty">
-              {{ t('暂无数据') }}
-            </bk-exception>
 
             <!-- 事件数据 -->
             <div class="title">
               {{ t('事件数据') }}
             </div>
-            <div
-              v-if="eventDataKeyArr.length"
-              class="data-info">
+            <template v-if="eventDataKeyArr.length || eventDataKeyArrNormal.length">
               <div
-                v-for="(keyArr, keyIndex) in eventDataKeyArr"
-                :key="keyIndex"
-                class="flex data-info-row">
-                <div
-                  v-for="(key, index) in keyArr"
-                  :key="index"
-                  class="flex data-info-item">
-                  <div
-                    class="data-info-item-key"
-                    style="display: flex; flex-direction: column; justify-content: center;">
-                    <tooltips
-                      :data="strategyInfo.find(item => item.field_name === key)?.display_name || key"
-                      style="width: 100%;" />
-                  </div>
-                  <div class="data-info-item-value">
-                    <div
+                v-if="eventDataKeyArr.length"
+                class="data-info"
+                style="background-color: #f5f7fa;">
+                <render-info-block
+                  v-for="(keyArr, keyIndex) in eventDataKeyArr"
+                  :key="keyIndex"
+                  class="flex mt16">
+                  <render-info-item
+                    v-for="(key, index) in keyArr"
+                    :key="index"
+                    :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
+                    :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
+                    :label-width="labelWidth"
+                    style="width: 50%;">
+                    <span
                       v-bk-tooltips="{
-                        content: JSON.stringify(eventItem.event_data[key]),
-                        disabled: !showTooltips,
-                        extCls: 'evidence-info-value-tooltips',
+                        content: t('映射对象', {
+                          key: displayValueDict.eventData[key]?.dict?.key,
+                          name: displayValueDict.eventData[key]?.dict?.name,
+                        }),
+                        disabled: !displayValueDict.eventData[key]?.isMappings,
                       }"
-                      @mouseenter="handlerEnter($event)">
-                      <span
-                        v-bk-tooltips="{
-                          content: t('映射对象', {
-                            key: displayValueDict.eventData[key]?.dict?.key,
-                            name: displayValueDict.eventData[key]?.dict?.name,
-                          }),
-                          disabled: !displayValueDict.eventData[key]?.isMappings,
-                        }"
-                        :class="[
-                          displayValueDict.eventData[key]?.isMappings ? 'tips' : '',
-                        ]">{{ displayValueDict.eventData[key]?.value }}</span>
-                      <template v-if="drillMap.get(key)">
-                        <bk-button
-                          class="ml8"
-                          text
-                          theme="primary"
-                          @click="handleClick(
-                            drillMap.get(key),
-                            drillMap.get(key).drill_config.tool.uid,
-                            key
-                          )">
-                          {{ t('查看') }}
-                        </bk-button>
-                      </template>
-                    </div>
-                  </div>
-                </div>
+                      :class="[
+                        displayValueDict.eventData[key]?.isMappings ? 'tips' : '',
+                      ]">{{ displayValueDict.eventData[key]?.value }}</span>
+                    <template v-if="drillMap.get(key)">
+                      <bk-button
+                        class="ml8"
+                        text
+                        theme="primary"
+                        @click="handleClick(
+                          drillMap.get(key),
+                          drillMap.get(key).drill_config.tool.uid,
+                          key
+                        )">
+                        {{ t('查看') }}
+                      </bk-button>
+                    </template>
+                  </render-info-item>
+                </render-info-block>
               </div>
-            </div>
+              <div
+                v-if="(eventDataKeyArrNormal.length && isShowMore) || !eventDataKeyArr.length"
+                class="data-info"
+                style="margin-top: 0;">
+                <render-info-block
+                  v-for="(keyArr, keyIndex) in eventDataKeyArrNormal"
+                  :key="keyIndex"
+                  class="flex mt16">
+                  <render-info-item
+                    v-for="(key, index) in keyArr"
+                    :key="index"
+                    :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
+                    :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
+                    :label-width="labelWidth"
+                    style="width: 50%;">
+                    <span
+                      v-bk-tooltips="{
+                        content: t('映射对象', {
+                          key: displayValueDict.eventData[key]?.dict?.key,
+                          name: displayValueDict.eventData[key]?.dict?.name,
+                        }),
+                        disabled: !displayValueDict.eventData[key]?.isMappings,
+                      }"
+                      :class="[
+                        displayValueDict.eventData[key]?.isMappings ? 'tips' : '',
+                      ]">{{ displayValueDict.eventData[key]?.value }}</span>
+                    <template v-if="drillMap.get(key)">
+                      <bk-button
+                        class="ml8"
+                        text
+                        theme="primary"
+                        @click="handleClick(
+                          drillMap.get(key),
+                          drillMap.get(key).drill_config.tool.uid,
+                          key
+                        )">
+                        {{ t('查看') }}
+                      </bk-button>
+                    </template>
+                  </render-info-item>
+                </render-info-block>
+              </div>
+              <div
+                v-if="eventDataKeyArr.length && eventDataKeyArrNormal.length"
+                style="height: 20px; margin-top: 10px;">
+                <bk-button
+                  style="float: right;"
+                  text
+                  theme="primary"
+                  @click="() => isShowMore = !isShowMore">
+                  <audit-icon
+                    :class="{ active: isShowMore }"
+                    style=" margin-right: 5px;"
+                    type="angle-double-down" />
+                  {{ isShowMore ? t('收起字段') : t('展开更多字段') }}
+                </bk-button>
+              </div>
+            </template>
             <bk-exception
               v-else
               class="exception-part"
@@ -296,8 +277,7 @@
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
 
-  import Tooltips from '@components/show-tooltips-text/index.vue';
-
+  // import Tooltips from '@components/show-tooltips-text/index.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
@@ -370,7 +350,7 @@
   type DisplayValueKeysWithoutEventData = Exclude<DisplayValueKeys, 'eventData'>;
   const props = defineProps<Props>();
 
-  const isShowMore = ref(false);
+  const isShowSide = ref(false);
 
   const router = useRouter();
   const { t, locale } = useI18n();
@@ -379,9 +359,9 @@
   const active = ref<number>(0);
   const eventItem = ref(new EventModel()); // 当前选中事件
   // const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
-  const showTooltips = ref(false); // 是否显示tooltips
+  // const showTooltips = ref(false); // 是否显示tooltips
   const allToolsData = ref<string[]>([]);
-
+  const isShowMore = ref(false);
   const dialogRefs = ref<Record<string, any>>({});
 
   const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
@@ -401,13 +381,7 @@
   ]);
 
   // 基本信息
-  const basicInfo = computed(() => group(props.data.event_basic_field_configs));
-
-  // 不显示的字段
-  // const notDisplay = computed(() => strategyInfo.value.filter(item => !item.is_show).map(item => item.field_name));
-
-  // 重点信息（如果is_show为false, 则is_priority也一定为false）
-  const importantInformation = computed(() => group(strategyInfo.value.filter(item => item.is_priority)));
+  const basicInfo = computed(() => group(props.data.event_basic_field_configs.filter(item => item.is_show)));
 
   // 显示字段下钻的字段
   const drillMap = computed(() => {
@@ -450,13 +424,23 @@
     };
   });
 
-  // 事件数据展示字段，从策略中获取
+  // 事件数据展示字段，从策略中获取，重点展示的字段
   const eventDataKeyArr = computed(() => {
     const eventInfo = [
       ...props.data.event_data_field_configs,
       ...props.data.event_evidence_field_configs,
     ];
-    const eventInfoKeys = eventInfo.filter(item => item.is_show).map(item => item.field_name);
+    const eventInfoKeys = eventInfo.filter(item => item.is_show && item.is_priority).map(item => item.field_name);
+    return group(eventInfoKeys);
+  });
+
+  // 事件数据展示字段，从策略中获取，非重点展示的字段
+  const eventDataKeyArrNormal = computed(() => {
+    const eventInfo = [
+      ...props.data.event_data_field_configs,
+      ...props.data.event_evidence_field_configs,
+    ];
+    const eventInfoKeys = eventInfo.filter(item => item.is_show && !item.is_priority).map(item => item.field_name);
     return group(eventInfoKeys);
   });
 
@@ -486,7 +470,7 @@
 
         // 默认获取第一个
         [eventItem.value] = linkEventList.value;
-        isShowMore.value = !(linkEventList.value.length > 1);
+        isShowSide.value = !(linkEventList.value.length > 1);
       // 事件event_data数据处理
       // const eventDataKey = getEventDataKey(eventItem.value.event_data);
       // eventItemDataKeyArr.value = group(eventDataKey);
@@ -510,37 +494,6 @@
     }
   };
 
-  // 是否显示tooltips
-  const handlerEnter = (event: Event) => {
-    // 获取div宽度
-    const target = event?.target as HTMLDivElement;
-    const parentWidth = target.offsetWidth;
-    // 获取子元素宽度
-    const span = target.firstElementChild as HTMLSpanElement;
-    const spanWidth = span.offsetWidth;
-    showTooltips.value = spanWidth > parentWidth;
-  };
-
-  // 过滤事件event_data数据，只保留有数据的key和策略配置is_show为true的数据
-  // const getEventDataKey = (eventData: Record<string, any>) => {
-  //   const eventDataKeys = Object.keys(eventData);
-  //   return eventDataKeys.filter((key) => {
-  //     // 排除 notDisplay 中的键
-  //     if (notDisplay.value.includes(key)) {
-  //       return false;
-  //     }
-
-  //     const value = eventItem.value.event_data[key];
-  //     if (typeof value !== 'object' && value !== null && value !== '') {
-  //       return true;
-  //     }
-  //     if ((_.isArray(value) || _.isObject(value)) && !_.isEmpty(value)) {
-  //       return true;
-  //     }
-  //     return false;
-  //   });
-  // };
-
   // 转为二维数组
   const group = (array: Array<any>, subGroupLength: number = 2) => {
     let index = 0;
@@ -554,10 +507,6 @@
   const handlerSelect = (item: EventModel, index: number) => {
     eventItem.value = item;
     active.value = index;
-
-  // 事件event_data数据处理
-  // const eventDataKey = getEventDataKey(eventItem.value.event_data);
-  // eventItemDataKeyArr.value = group(eventDataKey);
   };
 
   const handlerStrategy = () => {
@@ -767,8 +716,10 @@
       }
 
       .data-info {
-        margin: 16px 0 24px;
-        border: 1px solid #ecedf1;
+        padding: 10px 0;
+        margin-top: 16px;
+
+        /* border: 1px solid #ecedf1; */
 
         .data-info-row:last-child {
           .data-info-item-key,
@@ -854,6 +805,11 @@
           text-align: right;
           background-color: #fafbfd;
         }
+      }
+
+      .active {
+        transform: rotateZ(-180deg);
+        transition: all .15s;
       }
     }
   }

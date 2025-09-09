@@ -35,45 +35,6 @@
         </div>
       </div>
       <div class="list-item-detail">
-        <div class="important-information">
-          <div class="title">
-            {{ t('重点信息') }}
-          </div>
-          <template v-if="importantInformation.length">
-            <render-info-block
-              v-for="(item, index) in importantInformation"
-              :key="index"
-              class="flex mt16"
-              style=" padding: 0 24px;margin-bottom: 12px;">
-              <render-info-item
-                v-for="(subItem, subIndex) in item"
-                :key="subIndex"
-                :description="subItem.description"
-                :label="subItem.display_name"
-                :label-width="labelWidth">
-                {{ subItem.map_config?.target_value || t('以实际内容为准') }}
-              </render-info-item>
-            </render-info-block>
-          </template>
-          <template v-else>
-            <render-info-block
-              v-for="item in 2"
-              :key="item"
-              class="flex mt16"
-              style="margin-bottom: 12px;">
-              <render-info-item
-                :label="t('以实际内容为准')"
-                :label-width="120">
-                {{ t('以实际内容为准') }}
-              </render-info-item>
-              <render-info-item
-                :label="t('以实际内容为准')"
-                :label-width="120">
-                {{ t('以实际内容为准') }}
-              </render-info-item>
-            </render-info-block>
-          </template>
-        </div>
         <div
           class="title"
           style="padding-left: 12px">
@@ -82,65 +43,18 @@
         <div
           class="base-info">
           <render-info-block
+            v-for="(basicArr, basicIndex) in basicInfo"
+            :key="basicIndex"
             class="flex mt16"
             style="margin-bottom: 12px;">
             <render-info-item
-              v-if="!notDisplay.includes('event_id')"
-              :label="t('事件ID')"
+              v-for="(basicItem, itemIndex) in basicArr"
+              :key="itemIndex"
+              :label="basicItem.display_name"
               :label-width="labelWidth">
-              {{ data.event_basic_field_configs.
-                find(field => field.field_name === 'raw_event_id')?.map_config?.target_value || ('以实际内容为准') }}
+              {{ basicItem.map_config?.target_value || ('以实际内容为准') }}
               <bk-button
-                v-if="data.event_basic_field_configs.
-                  find(field => field.field_name === 'raw_event_id')?.drill_config?.tool.uid"
-                class="ml8"
-                text
-                theme="primary">
-                {{ t('查看') }}
-              </bk-button>
-            </render-info-item>
-            <render-info-item
-              v-if="!notDisplay.includes('operator')"
-              :label="t('责任人')"
-              :label-width="labelWidth">
-              {{ data.event_basic_field_configs.
-                find(field => field.field_name === 'operator')?.map_config?.target_value || ('以实际内容为准') }}
-              <bk-button
-                v-if="data.event_basic_field_configs.
-                  find(field => field.field_name === 'operator')?.drill_config?.tool.uid"
-                class="ml8"
-                text
-                theme="primary">
-                {{ t('查看') }}
-              </bk-button>
-            </render-info-item>
-          </render-info-block>
-          <render-info-block
-            class="flex mt16"
-            style="margin-bottom: 12px;">
-            <render-info-item
-              v-if="!notDisplay.includes('strategy_id')"
-              :label="t('命中策略')"
-              :label-width="labelWidth">
-              {{ data.strategy_name }}
-              <bk-button
-                v-if="data.event_basic_field_configs.
-                  find(field => field.field_name === 'strategy_name')?.drill_config?.tool.uid"
-                class="ml8"
-                text
-                theme="primary">
-                {{ t('查看') }}
-              </bk-button>
-            </render-info-item>
-            <render-info-item
-              v-if="!notDisplay.includes('event_content')"
-              :label="t('事件描述')"
-              :label-width="labelWidth">
-              {{ data.event_basic_field_configs.
-                find(field => field.field_name === 'event_content')?.map_config?.target_value || ('以实际内容为准') }}
-              <bk-button
-                v-if="data.event_basic_field_configs.
-                  find(field => field.field_name === 'event_content')?.drill_config?.tool.uid"
+                v-if="basicItem.drill_config?.tool.uid"
                 class="ml8"
                 text
                 theme="primary">
@@ -149,6 +63,7 @@
             </render-info-item>
           </render-info-block>
         </div>
+        <!-- 事件数据 -->
         <div
           class="title"
           style="padding-left: 12px">
@@ -157,35 +72,18 @@
         <div
           class="data-info">
           <template v-if="eventData.length">
-            <div
-              v-for="(item, index) in eventData"
-              :key="index"
-              class="flex data-info-row">
-              <div
-                v-for="(subItem, subIndex) in item"
-                :key="subIndex"
-                class="flex data-info-item">
-                <div
-                  class="data-info-item-key"
-                  style="display: flex; flex-direction: column; justify-content: center;">
-                  <div>{{ subItem.display_name.substring(0, subItem.display_name.indexOf('(')) }}</div>
-                  <tooltips
-                    v-if="subItem.display_name.substring(subItem.display_name.indexOf('('))"
-                    :data="subItem.display_name.substring(subItem.display_name.indexOf('('))"
-                    style="width: 100%; text-align: center;" />
-                </div>
-                <div class="data-info-item-value">
-                  <span>{{ t('以实际内容为准') }}</span>
-                  <bk-button
-                    v-if="subItem.drill_config?.tool.uid"
-                    class="ml8"
-                    text
-                    theme="primary">
-                    {{ t('查看') }}
-                  </bk-button>
-                </div>
-              </div>
-            </div>
+            <render-info-block
+              v-for="(keyArr, keyIndex) in eventData"
+              :key="keyIndex"
+              class="flex mt16">
+              <render-info-item
+                v-for="(key, index) in keyArr"
+                :key="index"
+                :label="key.display_name"
+                :label-width="labelWidth">
+                {{ key.map_config?.target_value || ('以实际内容为准') }}
+              </render-info-item>
+            </render-info-block>
           </template>
           <template v-else>
             <div
@@ -222,8 +120,7 @@
 
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
-  import Tooltips from '@components/show-tooltips-text/index.vue';
-
+  // import Tooltips from '@components/show-tooltips-text/index.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
 
   import RenderInfoItem from './render-info-item.vue';
@@ -270,18 +167,8 @@
     return newArray;
   };
 
-  // 重点信息（如果is_show为false, 则is_priority也一定为false）
-  const importantInformation = computed(() => group([
-    ...props.data.event_basic_field_configs.filter(item => item.is_priority),
-    ...props.data.event_data_field_configs.filter(item => item.is_priority),
-  ]));
-
-  // 不显示的字段
-  const notDisplay = computed(() => [
-    ...props.data.event_basic_field_configs.filter(item => !item.is_show).map(item => item.field_name),
-    ...props.data.event_data_field_configs.filter(item => !item.is_show).map(item => item.field_name),
-    ...props.data.event_evidence_field_configs.filter(item => !item.is_show).map(item => item.field_name),
-  ]);
+  // 基本信息
+  const basicInfo = computed(() => group(props.data.event_basic_field_configs.filter(item => item.is_show)));
 
   // 事件数据
   const eventData = computed(() => group(props.data.event_data_field_configs));
@@ -370,7 +257,8 @@
 
       .data-info {
         margin: 16px 0 24px;
-        border: 1px solid #ecedf1;
+
+        /* border: 1px solid #ecedf1; */
 
         .data-info-row:last-child {
           .data-info-item-key,

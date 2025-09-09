@@ -93,6 +93,7 @@
     event_data_field_configs: StrategyFieldEvent['event_data_field_configs'],
     event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'],
     event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'],
+    risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'],
     processor_groups: [],
     notice_groups: []
   }
@@ -139,6 +140,7 @@
     event_data_field_configs: [],
     event_basic_field_configs: [],
     event_evidence_field_configs: [],
+    risk_meta_field_config: [],
     processor_groups: [],
     notice_groups: [],
   });
