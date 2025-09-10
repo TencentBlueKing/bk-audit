@@ -22,7 +22,12 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from apps.meta.constants import SYSTEM_INSTANCE_SEPARATOR
 from apps.meta.permissions import SystemPermissionHandler
 from apps.permission.handlers.actions import ActionEnum
-from apps.permission.handlers.drf import IAMPermission, insert_action_permission_field
+from apps.permission.handlers.drf import (
+    IAMPermission,
+    InstanceActionPermission,
+    insert_action_permission_field,
+)
+from apps.permission.handlers.resource_types import ResourceEnum
 
 
 class SystemsViewSet(ResourceViewSet):
@@ -31,13 +36,17 @@ class SystemsViewSet(ResourceViewSet):
     def get_permissions(self):
         if self.action in ["list"]:
             return [IAMPermission(actions=[ActionEnum.LIST_SYSTEM])]
-        if self.action in ["retrieve", "resource_types", "resource_type_schema"]:
+        if self.action in ["retrieve", "resource_types", "resource_type_schema", "actions"]:
             return SystemPermissionHandler.system_view_permissions()
         if self.action in ["create"]:
             return [IAMPermission(actions=[ActionEnum.CREATE_SYSTEM])]
         if self.action in ["update"]:
             return SystemPermissionHandler.system_edit_permissions()
-        # all,favorite,actions,resource_type_search,action_search
+        if self.action in ["search", "resource_type_schema_search"]:
+            return [
+                InstanceActionPermission(actions=[ActionEnum.SEARCH_REGULAR_EVENT], resource_meta=ResourceEnum.SYSTEM)
+            ]
+        # all,favorite,resource_type_search,action_search
         return []
 
     resource_routes = [
@@ -61,6 +70,11 @@ class SystemsViewSet(ResourceViewSet):
         ResourceRoute("PUT", resource.meta.update_system_audit_status, pk_field="system_id", endpoint="audit_status"),
         ResourceRoute("GET", resource.meta.action_search_list, endpoint="action_search"),
         ResourceRoute("GET", resource.meta.resource_type_search_list, endpoint="resource_type_search"),
+        # 指定系统搜索
+        ResourceRoute("GET", resource.meta.system_info, pk_field="system_id", endpoint="search"),
+        ResourceRoute(
+            "GET", resource.meta.resource_type_schema, pk_field="system_id", endpoint="resource_type_schema_search"
+        ),
     ]
 
 
