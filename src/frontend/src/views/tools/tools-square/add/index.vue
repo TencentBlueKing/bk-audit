@@ -223,7 +223,9 @@
       </template>
     </smart-action>
   </skeleton-loading>
-  <creating v-if="isCreating" />
+  <creating
+    v-if="isCreating"
+    :is-edit-mode="isEditMode" />
   <failed
     v-if="isFailed"
     :is-edit-mode="isEditMode"
@@ -330,7 +332,7 @@
   const searchTypeList = [{
     label: '简易模式',
     value: 'simple',
-    disabled: false,
+    disabled: true,
   }, {
     label: 'SQL模式',
     value: 'sql',

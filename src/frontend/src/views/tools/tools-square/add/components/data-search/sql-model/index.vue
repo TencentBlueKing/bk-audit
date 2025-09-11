@@ -111,7 +111,6 @@
           <bk-popover
             ref="requiredListRef"
             allow-html
-            boundary="parent"
             content="#hidden_pop_content"
             ext-cls="field-required-pop"
             placement="top"
