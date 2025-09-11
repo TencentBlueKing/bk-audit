@@ -112,7 +112,7 @@ class BaseToolExecutor(abc.ABC, Generic[TConfig, TParams, TResult]):
 
         raise NotImplementedError()
 
-    def execute(self, params: dict):
+    def execute(self, params: dict, skip_permission: bool = False):
         params = self._parse_params(params)
         self.validate_permission(params)
         return self._execute(params)

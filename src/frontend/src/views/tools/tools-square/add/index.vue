@@ -523,8 +523,7 @@
       if (res) {
         const configInputVariable = _.cloneDeep(formData.value.config.input_variable);
 
-        // const { panels, variables } = res.data;
-        const { panels } = res.data;
+        const { panels, variables } = res.data;
         const filters = [...new Set(Object.keys(res.filters))];
 
 
@@ -557,24 +556,24 @@
           })
           .filter((item): item is NonNullable<typeof item> => item !== null); // 类型安全的过滤
 
-        // if (variables.length > 0) {
-        //   variables.forEach((com: any) => {
-        //     // 内置变量不处理,
-        //     if (com.build_in) {
-        //       return;
-        //     }
-        //     // 此input_variable 是 bkvision 图表的变量 配置下钻时才显示
-        //     formData.value.config.input_variable.push({
-        //       raw_name: com.flag,
-        //       display_name: com.description || '',
-        //       description: com.description || '',
-        //       field_category: com.type || '',
-        //       required: true,
-        //       default_value: '',
-        //       choices: [],
-        //     });
-        //   });
-        // }
+        if (variables.length > 0) {
+          variables.forEach((com: any) => {
+            // 内置变量不处理,
+            if (com.build_in) {
+              return;
+            }
+            // 此input_variable 是 bkvision 图表的变量 配置下钻时才显示
+            formData.value.config.input_variable.push({
+              raw_name: com.flag,
+              display_name: com.description || '',
+              description: com.description || '',
+              field_category: com.type || '',
+              required: true,
+              default_value: '',
+              choices: [],
+            });
+          });
+        }
         // 设置组件配置
         nextTick(() => {
           comRef.value.setConfigs(formData.value.config.input_variable);

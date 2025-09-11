@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import contextlib
 from typing import Tuple
 
 from bk_resource import resource
@@ -29,7 +30,9 @@ from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
 from apps.permission.handlers.resource_types import ResourceEnum
 from core.exceptions import ValidationError
+from core.models import get_request_username
 from core.utils.renderers import API200Renderer
+from services.web.common.caller_permission import should_skip_permission_from
 from services.web.tool.models import Tool
 from services.web.tool.permissions import (
     UseToolPermission,
@@ -39,8 +42,20 @@ from services.web.vision.models import Scenario, VisionPanel
 
 
 class ToolVisionPermission(BasePermission):
+    def __init__(self, try_skip_permission=False):
+        self.try_skip_permission = try_skip_permission
+
     def has_permission(self, request, view):
+        # 优先：从 query 参数 constants[...] 中抽取上下文做 caller 鉴权
+        # 仅当 constants 存在且校验通过时放行（通常用于 Meta 接口）
         panel_id, tool_uid = self.get_tool_and_panel_id(request)
+        if self.try_skip_permission:
+            constants = self._extract_constants_from_query(request)
+            constants['current_type'] = "tool"
+            constants['current_object_id'] = tool_uid
+            if should_skip_permission_from(constants, request.user.username):
+                return True
+
         perm = UseToolPermission(
             get_instance_id=lambda: tool_uid,
         )
@@ -52,7 +67,31 @@ class ToolVisionPermission(BasePermission):
         return True
 
     def has_object_permission(self, request, view, obj):
-        return True
+        return self.has_permission(request, view)
+
+    @staticmethod
+    def _extract_constants_from_query(request) -> dict:
+        """从 query_params 中抽取 constants[...] 的键值作为权限上下文"""
+        params = getattr(request, "query_params", {}) or {}
+        extracted = {'tool_variables': []}
+        with contextlib.suppress(Exception):
+            for k, v in params.items():
+                if k.startswith("constants[") and k.endswith("]"):
+                    inner_key = k[len("constants[") : -1]
+                    if inner_key:
+                        extracted[inner_key] = v
+        caller_params = [
+            "caller_resource_type",
+            "caller_resource_id",
+            "drill_field",
+            "event_start_time",
+            "event_end_time",
+            "tool_variables",
+        ]
+        for k, v in extracted.copy().items():
+            if k not in caller_params:
+                extracted['tool_variables'].append({'raw_name': k, 'value': extracted.pop(k)})
+        return extracted
 
     def get_tool_and_panel_id(self, request) -> Tuple[str, str]:
         instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
@@ -66,6 +105,15 @@ class ToolVisionPermission(BasePermission):
         if actual_instance_id and tool_uid:
             return actual_instance_id, tool_uid
         raise ValidationError(message=gettext("无法获取报表ID"))
+
+
+class ShareDetailPermission(BasePermission):
+    def has_permission(self, request, view):
+        instance_id: str = request.query_params.get("share_uid") or request.data.get("share_uid")
+        return check_bkvision_share_permission(get_request_username(), instance_id)
+
+    def has_object_permission(self, request, view, obj):
+        return self.has_permission(request, view)
 
 
 class API200ViewSet(ResourceViewSet, abc.ABC):
@@ -100,8 +148,8 @@ class BKVisionInstanceViewSet(BKVisionViewSet):
         if panel.scenario in self.escape_scenario:
             return []
         elif panel.scenario == Scenario.TOOL.value:
-            # 工具场景：启用工具权限 + 分享权限综合校验
-            return [ToolVisionPermission()]
+            # 工具场景除了meta无需鉴权
+            return []
         return [
             InstanceActionPermission(
                 actions=[ActionEnum.VIEW_BASE_PANEL],
@@ -121,6 +169,13 @@ class MetaViewSet(API200ViewSet, BKVisionInstanceViewSet):
     resource_routes = [
         ResourceRoute("GET", resource.vision.query_meta, endpoint="query"),
     ]
+
+    def get_permissions(self):
+        instance_id = self.get_instance_id()
+        panel: VisionPanel = get_object_or_404(VisionPanel, id=instance_id)
+        if panel.scenario == Scenario.TOOL.value:
+            return [ToolVisionPermission(try_skip_permission=True)]
+        return super().get_permissions()
 
 
 class DatasetViewSet(API200ViewSet, BKVisionInstanceViewSet):
@@ -146,3 +201,10 @@ class ShareViewSet(BKVisionViewSet):
         ResourceRoute("GET", resource.vision.query_share_list, endpoint="share_list"),
         ResourceRoute("GET", resource.vision.query_share_detail, endpoint="share_detail"),
     ]
+
+    def get_permissions(self):
+        if self.action in ["share_list"]:
+            return []
+        if self.action in ["share_detail"]:
+            return [ShareDetailPermission()]
+        return super().get_permissions()

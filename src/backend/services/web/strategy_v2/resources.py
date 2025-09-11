@@ -46,11 +46,7 @@ from apps.feature.constants import FeatureTypeChoices
 from apps.feature.handlers import FeatureHandler
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import DataMap, EnumMappingRelatedType, Tag
-from apps.meta.serializers import (
-    EnumMappingByCollectionKeysSerializer,
-    EnumMappingByCollectionSerializer,
-    EnumMappingSerializer,
-)
+from apps.meta.serializers import EnumMappingSerializer
 from apps.meta.utils.fields import (
     ACTION_ID,
     DIMENSION_FIELD_TYPES,
@@ -78,6 +74,10 @@ from services.web.analyze.constants import (
 from services.web.analyze.controls.base import BaseControl
 from services.web.analyze.tasks import call_controller
 from services.web.analyze.utils import is_asset
+from services.web.common.caller_permission import (
+    CurrentType,
+    should_skip_permission_from,
+)
 from services.web.query.utils.search_config import QueryConditionOperator
 from services.web.risk.constants import EventMappingFields, RiskMetaFields
 from services.web.risk.models import Risk
@@ -135,6 +135,8 @@ from services.web.strategy_v2.serializers import (
     CreateLinkTableResponseSerializer,
     CreateStrategyRequestSerializer,
     CreateStrategyResponseSerializer,
+    EnumMappingByCollectionKeysWithCallerSerializer,
+    EnumMappingByCollectionWithCallerSerializer,
     GetEventInfoFieldsRequestSerializer,
     GetEventInfoFieldsResponseSerializer,
     GetLinkTableRequestSerializer,
@@ -635,15 +637,27 @@ class GetStrategyEnumMappingByCollectionKeys(StrategyV2Base):
     [{"collection_id":"status_collection_112233","key": "1", "name": "未处理"},
     {"collection_id":"user_collection_112233","key": "2", "name": "张三"}]
     ```
+
+    可选权限上下文（调用方透传）：
+    - caller_resource_type：调用方资源类型（当前支持：risk）
+    - caller_resource_id：调用方资源ID（如风险ID）
+    行为：若提供且鉴权通过，则基于调用方上下文放行（跳过原有权限）；若鉴权失败，返回标准权限异常。
     """
 
     name = gettext_lazy("获取某个策略的某个集合中的某个枚举值的信息")
-    RequestSerializer = EnumMappingByCollectionKeysSerializer
+    RequestSerializer = EnumMappingByCollectionKeysWithCallerSerializer
     ResponseSerializer = EnumMappingSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
+        # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限
         validated_request_data["related_type"] = EnumMappingRelatedType.STRATEGY.value
+
+        validated_request_data["caller_validated"] = True
+        validated_request_data["current_type"] = CurrentType.STRATEGY.value
+        validated_request_data["current_object_id"] = validated_request_data["related_object_id"]
+        should_skip_permission_from(validated_request_data, get_request_username())
+
         return resource.meta.get_enum_mapping_by_collection_keys(**validated_request_data)
 
 
@@ -663,15 +677,27 @@ class GetStrategyEnumMappingByCollection(StrategyV2Base):
     [{"collection_id":"status_collection_112233","key": "1", "name": "未处理"},
     {"collection_id":"status_collection_112233","key": "2", "name": "已处理"}]
     ```
+
+    可选权限上下文（调用方透传）：
+    - caller_resource_type：调用方资源类型（当前支持：risk）
+    - caller_resource_id：调用方资源ID（如风险ID）
+    行为：若提供且鉴权通过，则基于调用方上下文放行（跳过原有权限）；若鉴权失败，返回标准权限异常。
     """
 
     name = gettext_lazy("获取某个策略的某个集合中的所有枚举值的信息")
-    RequestSerializer = EnumMappingByCollectionSerializer
+    RequestSerializer = EnumMappingByCollectionWithCallerSerializer
     ResponseSerializer = EnumMappingSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
         validated_request_data["related_type"] = EnumMappingRelatedType.STRATEGY.value
+
+        # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限
+        validated_request_data["caller_validated"] = True
+        validated_request_data["current_type"] = CurrentType.STRATEGY.value
+        validated_request_data["current_object_id"] = validated_request_data["related_object_id"]
+        should_skip_permission_from(validated_request_data, get_request_username())
+
         return resource.meta.get_enum_mapping_by_collection(**validated_request_data)
 
 
@@ -1168,7 +1194,7 @@ class GetEventFieldsConfig(StrategyV2Base):
         self, strategy: Optional[Strategy], risk: Optional[Risk], has_permission: bool
     ) -> List[EventInfoField]:
         """
-        风险元字段配置（共14项），与 event_basic_field_configs 保持相同数据结构
+        风险元字段配置（共17项），与 event_basic_field_configs 保持相同数据结构
         """
         return [
             EventInfoField(

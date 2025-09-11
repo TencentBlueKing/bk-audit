@@ -19,6 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import traceback
 from collections import defaultdict
+from copy import deepcopy
 from typing import List
 
 from bk_resource import Resource, api, resource
@@ -33,16 +34,20 @@ from api.bk_base.serializers import UserAuthCheckRespSerializer
 from apps.audit.resources import AuditMixinResource
 from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import EnumMappingRelatedType, Tag
-from apps.meta.serializers import (
-    EnumMappingByCollectionKeysSerializer,
-    EnumMappingByCollectionSerializer,
-    EnumMappingSerializer,
-)
+from apps.meta.serializers import EnumMappingSerializer
 from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.page import paginate_data
+from services.web.common.caller_permission import (
+    CurrentType,
+    should_skip_permission_from,
+)
 from services.web.strategy_v2.models import StrategyTool
+from services.web.strategy_v2.serializers import (
+    EnumMappingByCollectionKeysWithCallerSerializer,
+    EnumMappingByCollectionWithCallerSerializer,
+)
 from services.web.tool.constants import (
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
@@ -319,15 +324,24 @@ class GetToolEnumMappingByCollectionKeys(ToolBase):
     [{"collection_id":"status_collection_112233","key": "1", "name": "未处理"},
     {"collection_id":"user_collection_112233","key": "2", "name": "张三"}]
     ```
+
+    可选权限上下文（调用方透传）：
+    - caller_resource_type：调用方资源类型（当前支持：risk）
+    - caller_resource_id：调用方资源ID（如风险ID）
+    行为：若提供且鉴权通过，则基于调用方上下文放行（跳过原有权限）；若鉴权失败，返回标准权限异常。
     """
 
     name = gettext_lazy("获取某个策略的某个集合中的某个枚举值的信息")
-    RequestSerializer = EnumMappingByCollectionKeysSerializer
+    RequestSerializer = EnumMappingByCollectionKeysWithCallerSerializer
     ResponseSerializer = EnumMappingSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
         validated_request_data["related_type"] = EnumMappingRelatedType.TOOL.value
+        # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限
+        validated_request_data["current_type"] = CurrentType.TOOL.value
+        validated_request_data["current_object_id"] = validated_request_data["related_object_id"]
+        should_skip_permission_from(validated_request_data, get_request_username())
         return resource.meta.get_enum_mapping_by_collection_keys(**validated_request_data)
 
 
@@ -347,15 +361,24 @@ class GetToolEnumMappingByCollection(ToolBase):
     [{"collection_id":"status_collection_112233","key": "1", "name": "未处理"},
     {"collection_id":"status_collection_112233","key": "2", "name": "已处理"}]
     ```
+
+    可选权限上下文（调用方透传）：
+    - caller_resource_type：调用方资源类型（当前支持：risk）
+    - caller_resource_id：调用方资源ID（如风险ID）
+    行为：若提供且鉴权通过，则基于调用方上下文放行（跳过原有权限）；若鉴权失败，返回标准权限异常。
     """
 
     name = gettext_lazy("获取某个策略的某个集合中的所有枚举值的信息")
-    RequestSerializer = EnumMappingByCollectionSerializer
+    RequestSerializer = EnumMappingByCollectionWithCallerSerializer
     ResponseSerializer = EnumMappingSerializer
     many_response_data = True
 
     def perform_request(self, validated_request_data):
         validated_request_data["related_type"] = EnumMappingRelatedType.TOOL.value
+        # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限
+        validated_request_data["current_type"] = CurrentType.TOOL.value
+        validated_request_data["current_object_id"] = validated_request_data["related_object_id"]
+        should_skip_permission_from(validated_request_data, get_request_username())
         return resource.meta.get_enum_mapping_by_collection(**validated_request_data)
 
 
@@ -561,7 +584,9 @@ class ExecuteTool(ToolBase):
                     ],
                     "page": 1,
                     "page_size": 100
-                }
+                },
+                "caller_resource_type": "risk",
+                "caller_resource_id": "R123"
             }
             ```
         不同的变量下的输入格式:
@@ -632,7 +657,9 @@ class ExecuteTool(ToolBase):
             ```json
             {
                 "uid": "api_tool_123",
-                "params": {}
+                "params": {},
+                "caller_resource_type": "risk",
+                "caller_resource_id": "R123"
             }
             ```
         response:
@@ -644,6 +671,32 @@ class ExecuteTool(ToolBase):
                 "tool_type": "bk_vision"
             }
             ```
+    3. 权限上下文（可选）
+        - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
+            - `caller_resource_type`：调用方资源类型（当前支持：`risk`）
+            - `caller_resource_id`：调用方资源实例 ID（如风险ID）
+            - `drill_field`：指定使用哪个字段的 drill_config 进行变量值校验
+            - `event_start_time`/`event_end_time`：事件时间范围（用于 list_event 获取事件数据）
+        - 行为说明：
+            - 命中且有权限：跳过原有工具权限校验，直接执行
+            - 命中但无权限：返回标准权限异常（包含可申请信息）
+
+    示例（携带 drill_field 与时间范围，映射 basic 字段 operator）：
+        ```json
+        {
+          "uid": "vision_tool_123",
+          "caller_resource_type": "risk",
+          "caller_resource_id": "RISK-001",
+          "drill_field": "operator",
+          "event_start_time": "2025-08-06 00:00:00",
+          "event_end_time": "2025-08-07 00:00:00",
+          "params": {
+            "tool_variables": [
+              {"raw_name": "ctx", "value": "admin"}
+            ]
+          }
+        }
+        ```
     """
 
     name = gettext_lazy("工具执行")
@@ -662,6 +715,13 @@ class ExecuteTool(ToolBase):
         if not tool:
             raise ToolDoesNotExist()
 
+        # 特殊权限分支：当来自调用方上下文（目前支持 risk）时，校验其权限，命中则跳过原有工具权限校验
+        check_request_data = deepcopy(validated_request_data)
+        check_request_data["caller_validated"] = True
+        check_request_data["current_type"] = CurrentType.TOOL.value
+        check_request_data["current_object_id"] = uid
+        check_request_data["tool_variables"] = params.get("tool_variables", [])
+        should_skip_permission_from(check_request_data, get_request_username())
         current_user = get_request_username()
         try:
             recent_tool_usage_manager.record_usage(current_user, uid)
@@ -746,9 +806,7 @@ class GetToolDetail(ToolBase):
             for table in tool.config["referenced_tables"]:
                 table["permission"] = auth_results.get(table["table_name"], {})
         data = self.ResponseSerializer(instance=tool).data
-        current_user = get_request_username()
-        permission = ToolPermission(username=current_user)
-        data = permission.wrapper_tool_permission_field(tool_list=[data], tool_tag_ids=tag_ids)[0]
+        data["permission"] = {'use_tool': True, 'manage_tool': False}
         return data
 
 

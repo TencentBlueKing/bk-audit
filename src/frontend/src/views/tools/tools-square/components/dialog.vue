@@ -128,7 +128,7 @@
                   </bk-form-item>
                 </div>
               </bk-form>
-              <div>
+              <div v-if="source === ''">
                 <bk-button
                   class="mr8"
                   theme="primary"
@@ -304,7 +304,9 @@
     (e: 'close', val?: string): void;
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    source: '',
+  });
   const emit = defineEmits<Emits>();
   const   emitBus  = useEventBus().emit;
   const { messageError } = useMessage();
@@ -667,12 +669,18 @@
         nextTick(() => {
           formRef.value.clearValidate();
         });
-        const isValid = searchList.value.every((e) => {
-          if (e.field_category === 'person_select' || e.field_category === 'time_range_select') {
-            return Array.isArray(e.value) && e.value.length > 0;
+        // 判断每个字段是否有值
+        const validateField = (field: any) => {
+          if (field.field_category === 'person_select' || field.field_category === 'time_range_select') {
+            return Array.isArray(field.value) && field.value.length > 0;
           }
-          return e.value !== null && e.value !== '';
-        });
+          return field.value !== null && field.value !== '';
+        };
+
+        const isValid = props.source
+          ? searchList.value.map(e => (e.required ? validateField(e) : true)).every(e => e)
+          : searchList.value.every(validateField);
+
         if (isValid) {
           submit();
         }
@@ -820,8 +828,11 @@
       // 下钻父节点所在行数据
       drillDownItemRowData.value = isDrillDownItemRowData;
     }
+    getToolsDetail(itemUid);
+  };
 
-    // 获取工具详情
+  // 获取工具详情
+  const getToolsDetail = (itemUid: string) => {
     fetchToolsDetail({ uid: itemUid }).then((res: ToolDetailModel) => {
       itemInfo.value = res;
 

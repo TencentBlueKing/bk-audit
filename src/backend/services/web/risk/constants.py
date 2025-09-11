@@ -391,43 +391,41 @@ class RiskMetaFields:
     @property
     def fields(self):
         return [
-            # 1 风险标题
-            self.RISK_TITLE,
-            # 2 风险ID
+            # 1 风险ID
             self.RISK_ID,
-            # 3 风险描述
-            self.RISK_DESCRIPTION,
+            # 2 风险等级
+            self.RISK_LEVEL,
+            # 3 风险类型
+            self.RISK_TYPE,
             # 4 风险标签
             self.RISK_TAGS,
-            # 5 风险类型
-            self.RISK_TYPE,
-            # 6 风险等级
-            self.RISK_LEVEL,
-            # 7 风险命中策略
+            # 5 风险命中策略
             self.STRATEGY_NAME,
-            # 8 风险危害
+            # 6 风险描述
+            self.RISK_DESCRIPTION,
+            # 7 风险危害
             self.RISK_HAZARD,
-            # 9 处理指引
+            # 8 处理指引
             self.RISK_GUIDANCE,
-            # 10 处理状态
+            # 9 处理状态
             self.PROCESSING_STATUS,
-            # 11 处理规则
-            self.PROCESSING_RULE,
-            # 12 责任人
+            # 10 责任人
             self.RESPONSIBLE_PERSON,
-            # 13 当前处理人
+            # 11 当前处理人
             self.ASSIGNED_TO,
-            # 14 关注人
+            # 12 关注人
             self.FOLLOWERS,
+            # 13 首次发现时间
+            self.EVENT_TIME,
+            # 14 最后发现时间
+            self.EVENT_END_TIME,
+            # 15 最后一次处理时间
+            self.LAST_OPERATE_TIME,
+            # 16 风险标记
+            self.RISK_LABEL,
+            # 17 处理规则
+            self.PROCESSING_RULE,
         ]
-
-    RISK_TITLE = Field(
-        field_name="risk_title",
-        alias_name="risk_title",
-        description=gettext_lazy("风险标题"),
-        field_type=FIELD_TYPE_STRING,
-        option=dict(),
-    )
 
     RISK_LEVEL = Field(
         field_name="risk_level",
@@ -489,7 +487,7 @@ class RiskMetaFields:
     RISK_HAZARD = Field(
         field_name="risk_hazard",
         alias_name="risk_hazard",
-        description=gettext_lazy("危害"),
+        description=gettext_lazy("风险危害"),
         field_type=FIELD_TYPE_TEXT,
         is_analyzed=True,
         is_text=True,
@@ -500,7 +498,7 @@ class RiskMetaFields:
     RISK_GUIDANCE = Field(
         field_name="risk_guidance",
         alias_name="risk_guidance",
-        description=gettext_lazy("处理建议"),
+        description=gettext_lazy("处理指引"),
         field_type=FIELD_TYPE_TEXT,
         is_analyzed=True,
         is_text=True,
@@ -551,6 +549,45 @@ class RiskMetaFields:
         field_type=FIELD_TYPE_TEXT,
         is_text=True,
         is_analyzed=True,
+        option=dict(),
+    )
+
+    # 13 首次发现时间
+    EVENT_TIME = Field(
+        field_name="event_time",
+        alias_name="event_time",
+        description=gettext_lazy("首次发现时间"),
+        field_type=FIELD_TYPE_LONG,
+        option={"time_zone": DEFAULT_TIME_ZONE, "time_format": TRANSFER_TIME_FORMAT},
+        is_time=True,
+    )
+
+    # 14 最后发现时间
+    EVENT_END_TIME = Field(
+        field_name="event_end_time",
+        alias_name="event_end_time",
+        description=gettext_lazy("最后发现时间"),
+        field_type=FIELD_TYPE_LONG,
+        option={"time_zone": DEFAULT_TIME_ZONE, "time_format": TRANSFER_TIME_FORMAT},
+        is_time=True,
+    )
+
+    # 15 最后一次处理时间
+    LAST_OPERATE_TIME = Field(
+        field_name="last_operate_time",
+        alias_name="last_operate_time",
+        description=gettext_lazy("最后一次处理时间"),
+        field_type=FIELD_TYPE_LONG,
+        option={"time_zone": DEFAULT_TIME_ZONE, "time_format": TRANSFER_TIME_FORMAT},
+        is_time=True,
+    )
+
+    # 16 风险标记
+    RISK_LABEL = Field(
+        field_name="risk_label",
+        alias_name="risk_label",
+        description=gettext_lazy("风险标记"),
+        field_type=FIELD_TYPE_STRING,
         option=dict(),
     )
 
