@@ -36,7 +36,7 @@
         :strategy-list="strategyList" />
     </template>
     <div
-      v-if="priorityFieldNames.length || normalFieldNames.length"
+      v-if="priorityFieldNames.length && normalFieldNames.length"
       class="show-more-condition-btn">
       <bk-button
         class="show-more-btn"

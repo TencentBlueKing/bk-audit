@@ -25,9 +25,12 @@
           content: description
         }"
         :class="[description ? 'tips' : '']">
-        {{ label }}:
+        {{ label }}
       </span>
     </div>
+    <span>
+      :
+    </span>
     <div class="info-value">
       <slot />
     </div>
@@ -41,13 +44,15 @@
   interface Props{
     label: string,
     labelWidth?: number,
+    labelWidthPercent?: number,
     description?: string,
   }
 
   const props = defineProps<Props>();
   const labelStyle = computed(() => ({
     'min-width': `${props.labelWidth || 80}px`,
-    'max-width': `${props.labelWidth || 80}px`,
+    'max-width': props.labelWidthPercent ? `${props.labelWidthPercent}%` : `${props.labelWidth || 80}px`,
+    width: props.labelWidthPercent ? `${props.labelWidthPercent}%` : `${props.labelWidth || 80}px`,
     flex: '0 0 auto',
   }));
 </script>
