@@ -80,13 +80,14 @@
 
   const localSelect = ref<Array<DatabaseTableFieldModel>>([]);
 
-  const includesKey = ['field_name', 'is_priority', 'drill_config', 'description'];
+  const includesKey = ['field_name', 'is_priority', 'drill_config', 'display_name'];
 
   const getCellClass = (valueKey: string) => ({
     'field-name': valueKey === 'field_name',
+    'display-name': valueKey === 'display_name',
     'is-priority': valueKey === 'is_priority',
     'drill-config': valueKey === 'drill_config',
-    description: valueKey === 'description',
+    // description: valueKey === 'description',
   });
 
   // 打开工具
@@ -122,6 +123,10 @@
     align-items: center;
 
     &.field-name {
+      width: 250px;
+    }
+
+    &.display-name {
       width: 250px;
     }
 

@@ -155,7 +155,7 @@
       { key: 'field_name', label: t('字段名称') },
       { key: 'display_name', label: t('字段显示名') },
       { key: 'is_show', label: t('在单据中展示') },
-      { key: 'is_priority', label: t('重点展示'), tips: t('为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息') },
+      { key: 'is_priority', label: t('重点展示'), tips: t('设为重点展示的字段将在风险单据中直接显示，其他字段将被折叠收起') },
       { key: 'map_config', label: t('字段关联'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
       { key: 'enum_mappings', label: t('字段值映射'), tips: t('为储存值配置可读的展示文本') },
       { key: 'drill_config', label: t('字段下钻'), tips: t('为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息') },
@@ -346,7 +346,6 @@
   };
 
   const process = () => {
-    console.log(21222);
     // 填充内容（字段自动填充, 根据select更新event_data_field_configs)
     setTableData('event_basic_field_configs');
     setTableData('event_data_field_configs');

@@ -19,7 +19,9 @@
     <div class="title">
       {{ t('关联事件') }}
     </div>
-    <div class="body">
+    <div
+      :key="detailRenderKey"
+      class="body">
       <template v-if="linkEventList.length">
         <div
           class="list"
@@ -44,7 +46,7 @@
                     text
                     @click="() => isShowSide = !isShowSide">
                     <audit-icon
-                      :class="{ audit: isShowMore }"
+                      :class="{ audit: isShowSide }"
                       style="margin-top: -15px;"
                       type="angle-double-up" />
                   </bk-button>
@@ -55,8 +57,12 @@
         </div>
 
         <!-- detail -->
-        <div class="list-item-detail">
-          <div style="padding-left: 12px">
+        <div
+          class="list-item-detail"
+          :style="{
+            width: isShowSide ? 'calc(100% - 15px)' : 'calc(100% - 164px)',
+          }">
+          <div style=" height: auto;padding-left: 12px;">
             <!-- 基本信息 -->
             <div class="title mt16">
               {{ t('基本信息') }}
@@ -213,7 +219,7 @@
                   style="float: right;"
                   text
                   theme="primary"
-                  @click="() => isShowMore = !isShowMore">
+                  @click="handleToggleShowMore">
                   <audit-icon
                     :class="{ active: isShowMore }"
                     style=" margin-right: 5px;"
@@ -363,6 +369,7 @@
   const allToolsData = ref<string[]>([]);
   const isShowMore = ref(false);
   const dialogRefs = ref<Record<string, any>>({});
+  const detailRenderKey = ref(0);
 
   const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
 
@@ -546,6 +553,12 @@
     });
   };
 
+  // 切换显示更多字段
+  const handleToggleShowMore = () => {
+    isShowMore.value = !isShowMore.value;
+    detailRenderKey.value += 1;
+  };
+
   // 如果有字段从字典取name
   const getDisplayValue = (key: string, value: unknown) => {
     if (dictDataMap.value.has(key)) {
@@ -626,7 +639,8 @@
 
     .list {
       display: inline-block;
-      height: 500px;
+
+      /* height: 500px; */
       overflow: hidden;
       text-align: center;
       background: #f5f7fa;
