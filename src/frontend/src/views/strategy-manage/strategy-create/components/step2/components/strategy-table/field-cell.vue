@@ -20,7 +20,15 @@
     <template v-if="fieldKey === 'field_name'">
       <span
         class="ml8">
-        {{ localEventItem.field_name }}({{ (localEventItem.display_name) }})
+        {{ localEventItem.field_name }}
+      </span>
+    </template>
+
+    <!-- 字段显示名 -->
+    <template v-else-if="fieldKey === 'display_name'">
+      <span
+        class="ml8">
+        {{ localEventItem.display_name }}
       </span>
     </template>
 
@@ -29,12 +37,13 @@
     <bk-switcher
       v-else-if="fieldKey === 'is_priority'"
       v-model="localEventItem.is_priority"
+      v-bk-tooltips="{
+        content: t('风险关键字段，禁止取消重点展示'),
+        disabled: !disabledList.includes(localEventItem.field_name),
+      }"
       :disabled="disabledList.includes(localEventItem.field_name)"
       style="margin-left: 8px;"
-      theme="primary"
-      @change="(val: boolean) => {
-        console.log(val);
-      }" />
+      theme="primary" />
 
 
     <!-- 字段下钻 -->
@@ -84,12 +93,12 @@
     </template>
 
     <!-- 描述 -->
-    <bk-input
+    <!-- <bk-input
       v-else-if="fieldKey === 'description'"
       v-model="localEventItem.description"
       class="description-input"
       :maxlength="100"
-      :show-word-limit="false" />
+      :show-word-limit="false" /> -->
 
     <!-- 仅查看 -->
     <span

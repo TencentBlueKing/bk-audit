@@ -43,6 +43,10 @@
     <bk-switcher
       v-else-if="fieldKey === 'is_priority'"
       v-model="localEventItem.is_priority"
+      v-bk-tooltips="{
+        content: t('基本信息字段不支持折叠，无需配置'),
+        disabled: localEventItem.prefix,
+      }"
       :disabled="!localEventItem.is_show || !localEventItem.prefix"
       style="margin-left: 8px;"
       theme="primary" />
