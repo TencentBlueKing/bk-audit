@@ -23,7 +23,7 @@
         class="flex mt16"
         :style="{ marginBottom: groupIndex === renderShowFieldNames.length - 1 ? '0px' : '12px' }">
         <render-info-item
-          v-for="(fieldItem, itemIndex) in fieldGroup"
+          v-for="(fieldItem, itemIndex) in fieldGroup.filter(item => item)"
           :key="itemIndex"
           :label="fieldItem.display_name"
           :label-width="labelWidth"
@@ -226,10 +226,32 @@
 
   // 转为二维数组
   const group = (array: Array<any>, subGroupLength: number = 2): Array<Array<Props['showFieldNames'][0]>> => {
-    let index = 0;
     const newArray = [];
+    let index = 0;
+
     while (index < array.length) {
-      newArray.push(array.slice(index, index += subGroupLength));
+      const currentItem = array[index];
+
+      // 检查是否为需要单独占一行的字段
+      if (currentItem.field_name === 'risk_guidance' || currentItem.field_name === 'risk_hazard') {
+        // 单独占一行，另一个元素为空
+        newArray.push([currentItem, null]);
+        index += 1;
+      } else {
+        // 正常分组逻辑
+        const group = array.slice(index, index + subGroupLength);
+        // 如果组内最后一个元素是特殊字段，需要调整
+        if (group.length === 2 && group[1]
+          && (group[1].field_name === 'risk_guidance' || group[1].field_name === 'risk_hazard')) {
+          // 如果第二个元素是特殊字段，第一个元素单独成组
+          newArray.push([group[0], null]);
+          index += 1;
+        } else {
+          // 正常添加组
+          newArray.push(group);
+          index += group.length;
+        }
+      }
     }
     return newArray;
   };
@@ -239,6 +261,10 @@
   // 获取字段样式
   const getFieldStyle = (fieldName: string) => {
     if (fieldName === 'notice_users') {
+      return 'width: 100%;';
+    }
+    // risk_guidance 和 risk_hazard 单独占一行，宽度为100%
+    if (fieldName === 'risk_guidance' || fieldName === 'risk_hazard') {
       return 'width: 100%;';
     }
     return '';

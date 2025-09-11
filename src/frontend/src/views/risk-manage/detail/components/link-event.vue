@@ -64,64 +64,66 @@
           }">
           <div style=" height: auto;padding-left: 12px;">
             <!-- 基本信息 -->
-            <div class="title mt16">
-              {{ t('基本信息') }}
-            </div>
-            <div class="base-info">
-              <render-info-block
-                v-for="(basicArr, basicIndex) in basicInfo"
-                :key="basicIndex"
-                class="flex mt16"
-                style="margin-bottom: 12px;">
-                <render-info-item
-                  v-for="(basicItem, itemIndex) in basicArr"
-                  :key="itemIndex"
-                  :description="basicItem.description"
-                  :label="basicItem.display_name"
-                  :label-width="labelWidth">
-                  <template v-if="basicItem.field_name === 'strategy_id'">
-                    <bk-button
-                      v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
-                      text
-                      theme="primary"
-                      @click="handlerStrategy()">
-                      {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
-                    </bk-button>
-                    <span v-else> -- </span>
-                  </template>
-                  <template v-else>
-                    <span
-                      v-bk-tooltips="{
-                        content: t('映射对象', {
-                          key: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.key,
-                          name: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.name,
-                        }),
-                        // eslint-disable-next-line max-len
-                        disabled: !displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings,
-                      }"
-                      :class="[
-                        // eslint-disable-next-line max-len
-                        displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings ? 'tips' : ''
-                      ]">
-                      {{ displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value }}
-                    </span>
-                  </template>
-                  <template v-if="drillMap.get(basicItem.field_name)">
-                    <bk-button
-                      class="ml8"
-                      text
-                      theme="primary"
-                      @click="handleClick(
-                        drillMap.get(basicItem.field_name),
-                        drillMap.get(basicItem.field_name).drill_config.tool.uid,
-                        basicItem.field_name
-                      )">
-                      {{ t('查看') }}
-                    </bk-button>
-                  </template>
-                </render-info-item>
-              </render-info-block>
-            </div>
+            <template v-if="basicInfo.length">
+              <div class="title mt16">
+                {{ t('基本信息') }}
+              </div>
+              <div class="base-info">
+                <render-info-block
+                  v-for="(basicArr, basicIndex) in basicInfo"
+                  :key="basicIndex"
+                  class="flex mt16"
+                  style="margin-bottom: 12px;">
+                  <render-info-item
+                    v-for="(basicItem, itemIndex) in basicArr"
+                    :key="itemIndex"
+                    :description="basicItem.description"
+                    :label="basicItem.display_name"
+                    :label-width="labelWidth">
+                    <template v-if="basicItem.field_name === 'strategy_id'">
+                      <bk-button
+                        v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
+                        text
+                        theme="primary"
+                        @click="handlerStrategy()">
+                        {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
+                      </bk-button>
+                      <span v-else> -- </span>
+                    </template>
+                    <template v-else>
+                      <span
+                        v-bk-tooltips="{
+                          content: t('映射对象', {
+                            key: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.key,
+                            name: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.name
+                          }),
+                          // eslint-disable-next-line max-len
+                          disabled: !displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings,
+                        }"
+                        :class="[
+                          // eslint-disable-next-line max-len
+                          displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings ? 'tips' : ''
+                        ]">
+                        {{ displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value }}
+                      </span>
+                    </template>
+                    <template v-if="drillMap.get(basicItem.field_name)">
+                      <bk-button
+                        class="ml8"
+                        text
+                        theme="primary"
+                        @click="handleClick(
+                          drillMap.get(basicItem.field_name),
+                          drillMap.get(basicItem.field_name).drill_config.tool.uid,
+                          basicItem.field_name
+                        )">
+                        {{ t('查看') }}
+                      </bk-button>
+                    </template>
+                  </render-info-item>
+                </render-info-block>
+              </div>
+            </template>
 
             <!-- 事件数据 -->
             <div class="title">
@@ -142,6 +144,7 @@
                     :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
                     :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
+                    :label-width-percent="30"
                     style="width: 50%;">
                     <span
                       v-bk-tooltips="{
@@ -184,6 +187,7 @@
                     :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
                     :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
+                    :label-width-percent="30"
                     style="width: 50%;">
                     <span
                       v-bk-tooltips="{
