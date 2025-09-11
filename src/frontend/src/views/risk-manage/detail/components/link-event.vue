@@ -21,12 +21,15 @@
     </div>
     <div class="body">
       <template v-if="linkEventList.length">
-        <div class="list">
+        <div
+          class="list"
+          :style="isShowMore ? 'width: 15px' : 'min-width: 164px;'">
           <scroll-faker @scroll="handleScroll">
             <transition name="draw">
               <div>
                 <div
                   v-for="(item, index) in linkEventList"
+                  v-show="!isShowMore"
                   :key="index"
                   class="list-item"
                   :class="[
@@ -35,12 +38,27 @@
                   @click="handlerSelect(item, index)">
                   {{ item.event_time }}
                 </div>
+                <div class="show-more-condition-btn">
+                  <bk-button
+                    class="show-more-btn"
+                    text
+                    @click="() => isShowMore = !isShowMore">
+                    <audit-icon
+                      :class="{ audit: isShowMore }"
+                      style="margin-top: -15px;"
+                      type="angle-double-up" />
+                  </bk-button>
+                </div>
               </div>
             </transition>
           </scroll-faker>
         </div>
+
+
         <!-- detail -->
-        <div class="list-item-detail">
+        <div
+          class="list-item-detail"
+          :style="isShowMore ? `width: calc(100% - 15px);`: `width: calc(100% - 164px);`">
           <div
             v-if="importantInformation.length"
             class="important-information">
@@ -63,9 +81,9 @@
                   v-bk-tooltips="{
                     content: t('映射对象', {
                       key: displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.key ||
-                        displayValueDict.eventData[subItem.field_name]?.dict?.key ,
+                        displayValueDict.eventData[subItem.field_name]?.dict?.key,
                       name: displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.dict?.name ||
-                        displayValueDict.eventData[subItem.field_name]?.dict?.name ,
+                        displayValueDict.eventData[subItem.field_name]?.dict?.name,
                     }),
                     disabled: !displayValueDict[subItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings &&
                       !displayValueDict.eventData[subItem.field_name]?.isMappings,
@@ -135,7 +153,7 @@
                       }"
                       :class="[
                         // eslint-disable-next-line max-len
-                        displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings ? 'tips':''
+                        displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings ? 'tips' : ''
                       ]">
                       {{ displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value }}
                     </span>
@@ -191,7 +209,7 @@
                       v-bk-tooltips="{
                         content: JSON.stringify(eventItem.event_data[key]),
                         disabled: !showTooltips,
-                        extCls:'evidence-info-value-tooltips',
+                        extCls: 'evidence-info-value-tooltips',
                       }"
                       @mouseenter="handlerEnter($event)">
                       <span
@@ -248,7 +266,7 @@
     :key="item">
     <component
       :is="DialogVue"
-      :ref="(el:any) => dialogRefs[item] = el"
+      :ref="(el: any) => dialogRefs[item] = el"
       source="risk"
       :tags-enums="tagData"
       @close="handleClose"
@@ -257,14 +275,15 @@
 </template>
 
 <script setup lang='tsx'>
-  // import _ from 'lodash';
+// import _ from 'lodash';
   import {
     computed,
     nextTick,
     onBeforeUnmount,
     onMounted,
     ref,
-    watch  } from 'vue';
+    watch,
+  } from 'vue';
   import {
     useI18n,
   } from 'vue-i18n';
@@ -326,7 +345,7 @@
     };
   }
 
-  interface Props{
+  interface Props {
     strategyList: Array<{
       label: string,
       value: number
@@ -349,8 +368,10 @@
   type DisplayValueKeys = keyof typeof displayValueDict.value;
 
   type DisplayValueKeysWithoutEventData = Exclude<DisplayValueKeys, 'eventData'>;
-
   const props = defineProps<Props>();
+
+  const isShowMore = ref(false);
+
   const router = useRouter();
   const { t, locale } = useI18n();
   const linkEventList = ref<Array<EventModel>>([]); // 事件列表
@@ -436,7 +457,6 @@
       ...props.data.event_evidence_field_configs,
     ];
     const eventInfoKeys = eventInfo.filter(item => item.is_show).map(item => item.field_name);
-    console.log(group(eventInfoKeys));
     return group(eventInfoKeys);
   });
 
@@ -466,11 +486,10 @@
 
         // 默认获取第一个
         [eventItem.value] = linkEventList.value;
-
-
-        // 事件event_data数据处理
-        // const eventDataKey = getEventDataKey(eventItem.value.event_data);
-        // eventItemDataKeyArr.value = group(eventDataKey);
+        isShowMore.value = !(linkEventList.value.length > 1);
+      // 事件event_data数据处理
+      // const eventDataKey = getEventDataKey(eventItem.value.event_data);
+      // eventItemDataKeyArr.value = group(eventDataKey);
       }
     },
   });
@@ -536,9 +555,9 @@
     eventItem.value = item;
     active.value = index;
 
-    // 事件event_data数据处理
-    // const eventDataKey = getEventDataKey(eventItem.value.event_data);
-    // eventItemDataKeyArr.value = group(eventDataKey);
+  // 事件event_data数据处理
+  // const eventDataKey = getEventDataKey(eventItem.value.event_data);
+  // eventItemDataKeyArr.value = group(eventDataKey);
   };
 
   const handlerStrategy = () => {
@@ -643,7 +662,7 @@
     });
   });
 </script>
-<style  lang="postcss">
+<style lang="postcss">
 .risk-manage-detail-linkevent-part {
   .title {
     font-size: 14px;
@@ -659,7 +678,6 @@
     .list {
       display: inline-block;
       height: 500px;
-      min-width: 164px;
       overflow: hidden;
       text-align: center;
       background: #f5f7fa;
@@ -686,8 +704,33 @@
       }
     }
 
+    .show-more-condition-btn {
+      position: absolute;
+      top: 50%;
+      right: -60px;
+      transform: rotate(-90deg);
+      box-shadow: 0 2px 4px 0 #1919290d;
+
+      .show-more-btn {
+        width: 120px;
+        height: 30px;
+        line-height: 5px;
+        color: #fff;
+        background: #c4c6cc;
+        border-radius: 10px;
+
+        &:hover {
+          background-color: #3a84ff;
+        }
+      }
+
+      .audit {
+        transform: rotateZ(-180deg);
+        transition: all .15s;
+      }
+    }
+
     .list-item-detail {
-      width: calc(100% - 164px);
       padding-left: 12px;
 
       .important-information {
@@ -757,7 +800,7 @@
             background-color: #fafbfd;
             justify-self: flex-end;
 
-            & > span {
+            &>span {
               display: inline-block;
               width: 100%;
               text-align: right;
