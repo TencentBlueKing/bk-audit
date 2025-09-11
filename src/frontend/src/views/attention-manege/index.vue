@@ -148,7 +148,7 @@
     {
       label: () => t('风险等级'),
       field: () => 'risk_id',
-      minWidth: 320,
+      width: 90,
       render: ({ data }: { data: RiskManageModel }) => <>
           <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
         </>,
@@ -156,7 +156,7 @@
     {
       label: () => t('风险标签'),
       field: () => 'tags',
-      minWidth: 200,
+      width: 120,
       render: ({ data }: { data: RiskManageModel }) => {
         const tags = data.tags.map(item => strategyTagMap.value[item] || item);
         return <EditTag data={tags} key={data.strategy_id} />;
@@ -165,13 +165,13 @@
     {
       label: () => t('责任人'),
       field: () => 'operator',
-      minWidth: 148,
+      width: 110,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.operator} />,
     },
     {
       label: () => t('处理状态'),
       field: () => 'status',
-      minWidth: 148,
+      width: 110,
       render: ({ data }: { data: RiskManageModel }) => (
         data.status === 'closed' && data.experiences > 0
           ? (
@@ -201,13 +201,13 @@
     {
       label: () => t('当前处理人'),
       field: () => 'current_operator',
-      minWidth: 148,
+      width: 110,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.current_operator} />,
     },
     {
       label: () => t('风险标记'),
       field: () => 'risk_label',
-      minWidth: 100,
+      width: 100,
       render: ({ data }: { data: RiskManageModel }) => <span
         class={{
           misreport: data.risk_label === 'misreport',
@@ -221,12 +221,11 @@
       field: () => 'event_time',
       sort: 'custom',
       width: 168,
-      minWidth: 168,
     },
     {
       label: () => t('风险命中策略(ID)'),
       field: () => 'strategy_id',
-      minWidth: 200,
+      minWidth: 170,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
           name: 'strategyList',
@@ -249,14 +248,14 @@
     {
       label: () => t('关注人'),
       field: () => 'notice_users',
-      minWidth: 160,
+      width: 120,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
     },
     {
       label: () => t('最后一次处理时间'),
       field: () => 'last_operate_time',
       // sort: 'custom',
-      minWidth: 168,
+      width: 160,
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
     },
   ];

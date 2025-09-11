@@ -22,13 +22,18 @@
         type="loading" />
     </div>
     <div class="tool-status-creating-text">
-      {{ t('工具正在创建中，请稍等...') }}
+      {{ isEditMode ? t('工具正在更新中，请稍等...') : t('工具正在创建中，请稍等...') }}
     </div>
   </div>
 </template>
 <script setup lang='ts'>
   import { useI18n } from 'vue-i18n';
 
+  interface Props {
+    isEditMode: boolean;
+  }
+
+  defineProps<Props>();
   const { t } = useI18n();
 </script>
 <style lang="postcss" scoped>
