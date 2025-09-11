@@ -115,21 +115,24 @@
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
   const disabledList = ['risk_level', 'status', 'current_operator'];
+  const isPriorityList = ['risk_id', 'risk_tags', 'risk_hazard', 'risk_guidance'];
 
   const dialogRefs = ref<Record<string, any>>({});
 
   const columns = [
     { key: 'field_name', label: t('字段名称') },
+    { key: 'display_name', label: t('字段显示名') },
     { key: 'is_priority', label: t('重点展示'), tips: t('设为重点展示的字段将在风险单据中直接显示，其他字段将被折叠收起') },
     { key: 'drill_config', label: t('字段下钻'), tips: t('为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息') },
-    { key: 'description', label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
+    // { key: 'description', label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
   ];
 
   const getHeaderClass = (valueKey: string) => ({
     'field-name': valueKey === 'field_name',
+    'display-name': valueKey === 'display_name',
     'is-priority': valueKey === 'is_priority',
     'drill-config': valueKey === 'drill_config',
-    description: valueKey === 'description',
+    // description: valueKey === 'description',
   });
 
   const tableData = ref<StrategyFieldEvent['risk_meta_field_config']>([]);
@@ -143,7 +146,7 @@
     onSuccess: (data) => {
       tableData.value = data.risk_meta_field_config.map(item => ({
         ...item,
-        is_priority: disabledList.includes(item.field_name) ? true : item.is_priority,
+        is_priority: disabledList.concat(isPriorityList).includes(item.field_name) ? true : item.is_priority,
       }));
       if ((isEditMode || isCloneMode) && props.data.risk_meta_field_config?.length && tableData.value.length) {
         // 编辑填充参数，不需要保持顺序
@@ -256,6 +259,10 @@
       background-color: #f5f7fa;
 
       &.field-name {
+        width: 250px;
+      }
+
+      &.display-name {
         width: 250px;
       }
 
