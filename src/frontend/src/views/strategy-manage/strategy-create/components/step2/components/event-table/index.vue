@@ -375,7 +375,7 @@
                   field_name: originalItem.field_name,
                   display_name: originalItem.display_name,
                   is_show: editItem.is_show ?? true,
-                  is_priority: editItem.is_priority,
+                  is_priority: !originalItem.prefix ? editItem.is_show ?? true : editItem.is_priority,
                   map_config: {
                     target_value: editItem.map_config?.target_value,
                     source_field: editItem.map_config?.source_field || editItem.map_config?.target_value, // 固定值赋值，用于反显

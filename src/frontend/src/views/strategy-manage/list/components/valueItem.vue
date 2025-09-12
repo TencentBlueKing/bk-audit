@@ -10,7 +10,10 @@
         <div
           v-if="!excludeKey.includes(valueKey)"
           class="cell"
-          :class="getCellClass(valueKey)">
+          :class="getCellClass(valueKey)"
+          :style="{
+            width: riskColumns?.find(item => item.key === valueKey)?.width,
+          }">
           <div v-if="typeof value === 'boolean'">
             {{ value ? t('是') : t('否') }}
           </div>
@@ -75,6 +78,7 @@
     item: StrategyFieldEvent['event_basic_field_configs'],
     data: StrategyModel,
     allToolsData: Array<ToolDetailModel>;
+    riskColumns?: Array<{ key: string; label: string; width: string }>;
   }
 
   const props = defineProps<Props>();
@@ -85,6 +89,11 @@
     const initKey = ['example', 'prefix'];
     if (props.data.strategy_type === 'model') {
       initKey.push('map_config');
+    }
+    if (props.riskColumns) {
+      initKey.push('is_show');
+      initKey.push('enum_mappings');
+      initKey.push('description');
     }
     return initKey;
   });
