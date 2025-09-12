@@ -16,6 +16,19 @@
 -->
 <template>
   <div class="risk-manage-detail-linkevent-part">
+    <div
+      class="show-side-condition-btn"
+      :style="{ left: isShowSide ? '-16px' : '164px' }">
+      <bk-button
+        class="show-more-btn"
+        text
+        @click="() => isShowSide = !isShowSide">
+        <audit-icon
+          :style="{ transform: isShowSide ? 'rotateZ(90deg)' : 'rotateZ(-90deg)' }"
+          type="angle-double-up" />
+      </bk-button>
+    </div>
+
     <div class="title">
       {{ t('关联事件') }}
     </div>
@@ -25,7 +38,7 @@
       <template v-if="linkEventList.length">
         <div
           class="list"
-          :style="isShowSide ? 'width: 15px' : 'min-width: 164px;'">
+          :style="isShowSide ? 'width: 0px' : 'min-width: 164px;'">
           <scroll-faker @scroll="handleScroll">
             <transition name="draw">
               <div>
@@ -40,17 +53,6 @@
                   @click="handlerSelect(item, index)">
                   {{ item.event_time }}
                 </div>
-                <div class="show-more-condition-btn">
-                  <bk-button
-                    class="show-more-btn"
-                    text
-                    @click="() => isShowSide = !isShowSide">
-                    <audit-icon
-                      :class="{ audit: isShowSide }"
-                      style="margin-top: -15px;"
-                      type="angle-double-up" />
-                  </bk-button>
-                </div>
               </div>
             </transition>
           </scroll-faker>
@@ -60,7 +62,7 @@
         <div
           class="list-item-detail"
           :style="{
-            width: isShowSide ? 'calc(100% - 15px)' : 'calc(100% - 164px)',
+            width: isShowSide ? '100%' : 'calc(100% - 164px)',
           }">
           <div style=" height: auto;padding-left: 12px;">
             <!-- 基本信息 -->
@@ -630,6 +632,28 @@
 </script>
 <style lang="postcss">
 .risk-manage-detail-linkevent-part {
+  position: relative;
+
+  .show-side-condition-btn {
+    position: absolute;
+    top: 50%;
+    overflow: hidden;
+    border-radius: 0 5px 5px 0;
+    box-shadow: 0 2px 4px 0 #1919290d;
+
+    .show-more-btn {
+      width: 14px;
+      height: 65px;
+      line-height: 5px;
+      color: #fff;
+      background: #eaecef;
+
+      &:hover {
+        background-color: #c4c6cc;
+      }
+    }
+  }
+
   .title {
     font-size: 14px;
     font-weight: 700;
@@ -668,32 +692,6 @@
         &:hover {
           background: #e1ecff !important;
         }
-      }
-    }
-
-    .show-more-condition-btn {
-      position: absolute;
-      top: 50%;
-      right: -60px;
-      transform: rotate(-90deg);
-      box-shadow: 0 2px 4px 0 #1919290d;
-
-      .show-more-btn {
-        width: 120px;
-        height: 30px;
-        line-height: 5px;
-        color: #fff;
-        background: #c4c6cc;
-        border-radius: 10px;
-
-        &:hover {
-          background-color: #3a84ff;
-        }
-      }
-
-      .audit {
-        transform: rotateZ(-180deg);
-        transition: all .15s;
       }
     }
 
