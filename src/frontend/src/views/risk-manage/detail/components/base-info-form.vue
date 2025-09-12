@@ -233,7 +233,7 @@
       const currentItem = array[index];
 
       // 检查是否为需要单独占一行的字段
-      if (currentItem.field_name === 'risk_guidance' || currentItem.field_name === 'risk_hazard') {
+      if (currentItem.field_name === 'risk_guidance' || currentItem.field_name === 'risk_hazard' || currentItem.field_name === 'event_content') {
         // 单独占一行，另一个元素为空
         newArray.push([currentItem, null]);
         index += 1;
@@ -242,7 +242,7 @@
         const group = array.slice(index, index + subGroupLength);
         // 如果组内最后一个元素是特殊字段，需要调整
         if (group.length === 2 && group[1]
-          && (group[1].field_name === 'risk_guidance' || group[1].field_name === 'risk_hazard')) {
+          && (group[1].field_name === 'risk_guidance' || group[1].field_name === 'risk_hazard' || group[1].field_name === 'event_content')) {
           // 如果第二个元素是特殊字段，第一个元素单独成组
           newArray.push([group[0], null]);
           index += 1;
