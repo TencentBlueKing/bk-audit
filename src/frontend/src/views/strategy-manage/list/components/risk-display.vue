@@ -25,52 +25,77 @@
           {{ data.risk_title || '--' }}
         </render-info-item>
       </render-info-block>
+      <div>
+        <span style="font-size: 12px;color: #979ba5;">{{ t('风险字段配置') }}:</span>
+        <div
+          class="event-table"
+          style="margin-top: 12px;">
+          <div class="head">
+            <div
+              v-for="(item, index) in riskColumns"
+              :key="index"
+              class="header-cell"
+              :style="{
+                width: item.width,
+              }">
+              {{ item.label }}
+            </div>
+          </div>
+          <div class="rows-container">
+            <value-item
+              :all-tools-data="allToolsData"
+              :data="data"
+              :item="tableData.risk_meta_field_config"
+              :risk-columns="riskColumns" />
+          </div>
+        </div>
+      </div>
     </collapse-panel>
     <collapse-panel
       class="collapse-card-title"
       :label="t('事件信息')"
       style="margin-top: 24px;">
       <render-info-block class="mt16">
-        <render-info-item :label="t('事件信息')">
-          <div class="event-table">
-            <div class="head">
+        <!-- <render-info-item :label="t('事件信息')"> -->
+        <div class="event-table">
+          <div class="head">
+            <div
+              v-for="(item, index) in columns"
+              :key="index"
+              class="header-cell"
+              :class="getHeaderClass(item.key)"
+              :style="{
+                minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
+                borderRight: index === 0 ? '1px solid #dcdee5' : ''
+              }">
+              {{ item.label }}
+            </div>
+          </div>
+          <template
+            v-for="(item, key) in tableData"
+            :key="key">
+            <!-- strategyType === 'rule'时不显示 event_evidence_field_configs -->
+            <template
+              v-if="(data.strategy_type === 'rule' && key === 'event_evidence_field_configs')
+                || key === 'risk_meta_field_config'" />
+            <div
+              v-else
+              class="table-section">
               <div
-                v-for="(item, index) in columns"
-                :key="index"
-                class="header-cell"
-                :class="getHeaderClass(item.key)"
-                :style="{
-                  minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
-                  borderRight: index === 0 ? '1px solid #dcdee5' : ''
-                }">
-                {{ item.label }}
+                class="group-cell"
+                :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
+                <span>{{ groupMap[key] }}</span>
+              </div>
+              <div class="rows-container">
+                <value-item
+                  :all-tools-data="allToolsData"
+                  :data="data"
+                  :item="item" />
               </div>
             </div>
-            <template
-              v-for="(item, key) in tableData"
-              :key="key">
-              <!-- strategyType === 'rule'时不显示 event_evidence_field_configs -->
-              <template
-                v-if="(data.strategy_type === 'rule' && key === 'event_evidence_field_configs')
-                  || key === 'risk_meta_field_config'" />
-              <div
-                v-else
-                class="table-section">
-                <div
-                  class="group-cell"
-                  :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
-                  <span>{{ groupMap[key] }}</span>
-                </div>
-                <div class="rows-container">
-                  <value-item
-                    :all-tools-data="allToolsData"
-                    :data="data"
-                    :item="item" />
-                </div>
-              </div>
-            </template>
-          </div>
-        </render-info-item>
+          </template>
+        </div>
+        <!-- </render-info-item> -->
       </render-info-block>
     </collapse-panel>
   </div>
@@ -98,6 +123,13 @@
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
 
+  const riskColumns = computed(() => [
+    { key: 'field_name', label: t('字段名称'), width: '200px' },
+    { key: 'display_name', label: t('字段显示名'), width: '200px' },
+    { key: 'is_priority', label: t('重点展示'), tips: t('设为重点展示的字段将在风险单据中直接显示，其他字段将被折叠收起'), width: '200px' },
+    { key: 'drill_config', label: t('字段下钻'), tips: t('为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息'), width: 'auto' },
+  ]);
+
   //  strategyType === 'rule'时显示全部列，否则排除 “字段映射”
   const columns = computed(() => {
     const initColumns = [
@@ -114,7 +146,7 @@
 
     return props.data.strategy_type === 'rule'
       ? initColumns
-      : initColumns.filter((_, index) => index !== 4);
+      : initColumns.filter(item => item.key !== 'map_config');
   });
 
   //  strategyType === 'rule'时不显示 event_evidence_field_configs

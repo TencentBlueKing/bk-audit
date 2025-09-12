@@ -241,8 +241,11 @@
   };
 
   const handleUpdateIsShow = (value: boolean) => {
-    if (!value && localEventItem.value.is_priority && localEventItem.value.prefix) {
+    if (!value && localEventItem.value.is_priority) {
       localEventItem.value.is_priority = false;
+    }
+    if (!localEventItem.value.prefix) {
+      localEventItem.value.is_priority = value;
     }
   };
 

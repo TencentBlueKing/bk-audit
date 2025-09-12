@@ -65,7 +65,7 @@ export default class StrategyFieldEvent {
       field_name: item.field_name,
       display_name: item.display_name,
       is_show: item.is_show ?? true,
-      is_priority: item.is_priority || false,
+      is_priority: !prefix ? true : item.is_priority || false,
       map_config: {
         target_value: item.map_config?.target_value,
         source_field: item.map_config?.source_field,
