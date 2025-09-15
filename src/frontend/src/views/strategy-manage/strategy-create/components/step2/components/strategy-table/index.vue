@@ -149,31 +149,43 @@
         is_priority: disabledList.concat(isPriorityList).includes(item.field_name) ? true : item.is_priority,
       }));
       if ((isEditMode || isCloneMode) && props.data.risk_meta_field_config?.length && tableData.value.length) {
-        // 编辑填充参数，不需要保持顺序
-        tableData.value = props.data.risk_meta_field_config.map(item => ({
-          field_name: item.field_name,
-          display_name: item.display_name,
-          is_show: item.is_show ?? true,
-          is_priority: item.is_priority,
-          map_config: {
-            target_value: item.map_config?.target_value,
-            source_field: item.map_config?.source_field || item.map_config?.target_value, // 固定值赋值，用于反显
-          },
-          enum_mappings: {
-            collection_id: item.enum_mappings?.collection_id || '',
-            mappings: item.enum_mappings?.mappings || [],
-          },
-          drill_config: {
-            tool: {
-              uid: item.drill_config?.tool?.uid || '',
-              version: item.drill_config?.tool?.version || 1,
-            },
-            config: item.drill_config?.config || [],
-          },
-          description: item.description,
-          example: item.example,
-          prefix: item.prefix || '',
-        }));
+        // 以 tableData 的顺序为主，用 props.data 填充数据
+        const propsDataMap = new Map();
+        props.data.risk_meta_field_config.forEach((item) => {
+          propsDataMap.set(item.field_name, item);
+        });
+
+        tableData.value = tableData.value.map((tableItem) => {
+          const propsItem = propsDataMap.get(tableItem.field_name);
+          if (propsItem) {
+            return {
+              ...tableItem,
+              field_name: propsItem.field_name,
+              display_name: propsItem.display_name,
+              is_show: propsItem.is_show ?? true,
+              is_priority: propsItem.is_priority,
+              map_config: {
+                target_value: propsItem.map_config?.target_value,
+                source_field: propsItem.map_config?.source_field || propsItem.map_config?.target_value, // 固定值赋值，用于反显
+              },
+              enum_mappings: {
+                collection_id: propsItem.enum_mappings?.collection_id || '',
+                mappings: propsItem.enum_mappings?.mappings || [],
+              },
+              drill_config: {
+                tool: {
+                  uid: propsItem.drill_config?.tool?.uid || '',
+                  version: propsItem.drill_config?.tool?.version || 1,
+                },
+                config: propsItem.drill_config?.config || [],
+              },
+              description: propsItem.description,
+              example: propsItem.example,
+              prefix: propsItem.prefix || '',
+            };
+          }
+          return tableItem;
+        });
       }
     },
   });

@@ -131,7 +131,7 @@
       }
 
       &.is-priority {
-        width: 80px;
+        width: 100px;
       }
 
       &.map-config {

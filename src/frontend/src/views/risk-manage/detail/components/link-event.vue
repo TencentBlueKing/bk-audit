@@ -81,7 +81,8 @@
                     :key="itemIndex"
                     :description="basicItem.description"
                     :label="basicItem.display_name"
-                    :label-width="labelWidth">
+                    :label-width="labelWidth"
+                    :label-width-percent="25">
                     <template v-if="basicItem.field_name === 'strategy_id'">
                       <bk-button
                         v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
@@ -146,7 +147,7 @@
                     :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
                     :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
-                    :label-width-percent="30"
+                    :label-width-percent="25"
                     style="width: 50%;">
                     <span
                       v-bk-tooltips="{
@@ -189,7 +190,7 @@
                     :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
                     :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
-                    :label-width-percent="30"
+                    :label-width-percent="25"
                     style="width: 50%;">
                     <span
                       v-bk-tooltips="{
