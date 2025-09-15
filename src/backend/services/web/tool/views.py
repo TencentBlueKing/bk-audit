@@ -4,7 +4,11 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 
 from apps.permission.handlers.drf import AnyOfPermissions
 from core.utils.data import get_value_by_request
-from services.web.tool.permissions import ManageToolPermission, UseToolPermission, CallerContextPermission
+from services.web.tool.permissions import (
+    CallerContextPermission,
+    ManageToolPermission,
+    UseToolPermission,
+)
 
 
 class ToolViewSet(ResourceViewSet):
