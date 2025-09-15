@@ -28,6 +28,7 @@ from apps.meta.models import Tag
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
+    RISK_LEVEL_ORDER_FIELD,
     EventMappingFields,
     RiskLabel,
     RiskRuleOperator,
@@ -214,7 +215,9 @@ class ListRiskRequestSerializer(serializers.Serializer):
     tags = serializers.CharField(label=gettext_lazy("Tags"), required=False)
     event_content = serializers.CharField(label=gettext_lazy("Event Content"), required=False)
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), required=False)
-    order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
+    order_field = serializers.CharField(
+        label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True, help_text="risk_level:根据风险等级排序"
+    )
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"),
         required=False,
@@ -231,6 +234,9 @@ class ListRiskRequestSerializer(serializers.Serializer):
         # 校验
         data = super().validate(attrs)
         # 排序
+        # 兼容：前端传入 risk_level 作为排序字段时，转换为 strategy__risk_level
+        if data.get("order_field") == Strategy.risk_level.field.name:
+            data["order_field"] = RISK_LEVEL_ORDER_FIELD
         if data.get("order_field") and data.get("order_type"):
             data["order_field"] = (
                 f"-{data['order_field']}"
@@ -259,7 +265,12 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["title__contains"] = data.pop("title")
         # 格式转换
         for key, val in attrs.items():
-            if key in ["event_time__gte", "event_time__lt", "order_type", "order_field"]:
+            if key in [
+                "event_time__gte",
+                "event_time__lt",
+                "order_type",
+                "order_field",
+            ]:
                 continue
             if key in ["tag_objs__in"]:
                 data[key] = [int(i) for i in val.split(",") if i]
