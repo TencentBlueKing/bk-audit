@@ -27,49 +27,52 @@ from core.utils.distutils import strtobool
 APIGW_ENABLED = strtobool(os.getenv("BKAPP_USE_APIGW", "False"))
 
 # 权限中心
-BK_IAM_API_URL = get_endpoint("bk-iam", stag="stage")
+BK_IAM_API_URL = get_endpoint(settings.BK_IAM_APIGW_NAME, stag="stage")
 
 # 日志平台
 BK_LOG_API_URL = (
-    (os.getenv("BKAPP_LOG_API_URL") or get_endpoint("log-search"))
+    (os.getenv("BKAPP_LOG_API_URL") or get_endpoint(settings.LOG_APIGW_NAME))
     if APIGW_ENABLED
-    else get_endpoint("bk_log", APIProvider.ESB)
+    else get_endpoint(settings.BK_LOG_ESB_NAME, APIProvider.ESB)
 )
 
 # PaaSV3
-BK_PAAS_API_URL = get_endpoint(os.getenv("BKAPP_BK_PAAS_APIGW_NAME", "bkpaas3"), stage="prod")
+BK_PAAS_API_URL = get_endpoint(settings.BK_PAAS_APIGW_NAME, stage="prod")
 
 # User Manage
-USER_MANAGE_URL = get_endpoint("usermanage", APIProvider.ESB)
+USER_MANAGE_URL = get_endpoint(settings.USERMANAGE_ESB_NAME, APIProvider.ESB)
 
 # BkBase
-BK_BASE_API_URL = os.getenv("BKAPP_BASE_API_URL") or get_endpoint(
-    os.getenv("BKAPP_BK_BASE_APIGW_NAME", "bk-base"), stag="test"
-)
+BK_BASE_API_URL = os.getenv("BKAPP_BASE_API_URL") or get_endpoint(settings.BK_BASE_APIGW_NAME, stag="test")
 
 # BkMonitor
 BK_MONITOR_API_URL = (
-    get_endpoint("bkmonitorv3", stag="stage") if APIGW_ENABLED else get_endpoint("monitor_v3", provider=APIProvider.ESB)
+    get_endpoint(settings.BK_MONITOR_APIGW_NAME, stag="stage")
+    if APIGW_ENABLED
+    else get_endpoint(settings.MONITOR_V3_ESB_NAME, provider=APIProvider.ESB)
 )
 BK_MONITOR_METRIC_PROXY_URL = settings.BK_MONITOR_METRIC_PROXY_URL
 
 # CMSI
-BK_CMSI_API_URL = os.getenv("BKAPP_CMSI_URL") or get_endpoint("cmsi", APIProvider.ESB, stage="prod")
+BK_CMSI_API_URL = os.getenv("BKAPP_CMSI_URL") or get_endpoint(settings.CMSI_ESB_NAME, APIProvider.ESB, stage="prod")
 
 # Watermark
-WATERMARK_API_URL = get_endpoint("devsecops", APIProvider.APIGW)
+WATERMARK_API_URL = get_endpoint(settings.DEVSECOPS_APIGW_NAME, APIProvider.APIGW)
 
 # BK SOps
-BK_SOPS_API_URL = get_endpoint("bk-sops", APIProvider.APIGW, stag="stage")
+BK_SOPS_API_URL = get_endpoint(settings.BK_SOPS_APIGW_NAME, APIProvider.APIGW, stag="stage")
 
 # BK ITSM
-BK_ITSM_API_URL = get_endpoint("bk-itsm", APIProvider.APIGW) if APIGW_ENABLED else get_endpoint("itsm", APIProvider.ESB)
+BK_ITSM_API_URL = (
+    get_endpoint(settings.BK_ITSM_APIGW_NAME, APIProvider.APIGW)
+    if APIGW_ENABLED
+    else get_endpoint(settings.ITSM_ESB_NAME, APIProvider.ESB)
+)
 
 # BK Vision
 BK_VISION_API_URL = os.getenv("BKAPP_BK_VISION_API_URL")
-BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
 if not BK_VISION_API_URL:
-    BK_VISION_API_URL = get_endpoint(BK_VISION_API_NAME, APIProvider.APIGW, stag="stag-new")
+    BK_VISION_API_URL = get_endpoint(settings.BK_VISION_API_NAME, APIProvider.APIGW, stag="stag-new")
 
 # BK IAM V4
-BK_IAM_V4_API_URL = get_endpoint("bkiam", APIProvider.APIGW, stag="dev")
+BK_IAM_V4_API_URL = get_endpoint(settings.BKIAM_APIGW_NAME, APIProvider.APIGW, stag="dev")
