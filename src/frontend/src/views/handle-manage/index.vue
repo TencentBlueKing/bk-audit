@@ -209,7 +209,7 @@
     {
       label: () => t('责任人'),
       field: () => 'operator',
-      width: 110,
+      width: 160,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.operator} />,
     },
     {
@@ -245,7 +245,7 @@
     {
       label: () => t('当前处理人'),
       field: () => 'current_operator',
-      width: 130,
+      width: 160,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.current_operator} />,
     },
     {
@@ -270,7 +270,7 @@
     {
       label: () => t('风险命中策略(ID)'),
       field: () => 'strategy_id',
-      minWidth: 200,
+      width: 200,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
           name: 'strategyList',
@@ -293,7 +293,7 @@
     {
       label: () => t('关注人'),
       field: () => 'notice_users',
-      width: 130,
+      width: 160,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
     },
     {
