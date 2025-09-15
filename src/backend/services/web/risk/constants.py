@@ -401,12 +401,6 @@ class RiskMetaFields:
             self.RISK_TAGS,
             # 5 风险命中策略
             self.STRATEGY_NAME,
-            # 6 风险描述
-            self.RISK_DESCRIPTION,
-            # 7 风险危害
-            self.RISK_HAZARD,
-            # 8 处理指引
-            self.RISK_GUIDANCE,
             # 9 处理状态
             self.PROCESSING_STATUS,
             # 10 责任人
@@ -425,6 +419,12 @@ class RiskMetaFields:
             self.RISK_LABEL,
             # 17 处理规则
             self.PROCESSING_RULE,
+            # 6 风险描述
+            self.RISK_DESCRIPTION,
+            # 7 风险危害
+            self.RISK_HAZARD,
+            # 8 处理指引
+            self.RISK_GUIDANCE,
         ]
 
     RISK_LEVEL = Field(
