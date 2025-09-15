@@ -44,13 +44,14 @@ from apps.sops.constants import SOPSTaskOperation, SOPSTaskStatus
 from core.exceptions import RiskStatusInvalid
 from core.exporter.constants import ExportField
 from core.models import get_request_username
-from core.utils.data import choices_to_dict, data2string
+from core.utils.data import choices_to_dict, data2string, preserved_order_sort
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
 from core.utils.tools import get_app_info
 from services.web.risk.constants import (
     EVENT_EXPORT_FIELD_PREFIX,
     RISK_EXPORT_FILE_NAME_TMP,
+    RISK_LEVEL_ORDER_FIELD,
     RISK_SHOW_FIELDS,
     RiskExportField,
     RiskFields,
@@ -157,11 +158,12 @@ class ListRisk(RiskMeta):
         request = validated_request_data.pop("_request")
         # 获取风险
         order_field = validated_request_data.pop("order_field", "-event_time")
-        risks = self.load_risks(validated_request_data).order_by(order_field).only("pk")
+        base_qs = self.load_risks(validated_request_data)
+        risks = self._apply_ordering(base_qs, order_field).only("pk")
         # 分页
         paged_risks, page = paginate_queryset(queryset=risks, request=request, base_queryset=Risk.annotated_queryset())
         # 预加载策略标签
-        paged_risks: QuerySet[Risk] = Risk.prefetch_strategy_tags(paged_risks).order_by(order_field)
+        paged_risks: QuerySet[Risk] = self._apply_ordering(Risk.prefetch_strategy_tags(paged_risks), order_field)
         # 获取关联的经验
         experiences = {
             e["risk_id"]: e["count"]
@@ -174,6 +176,24 @@ class ListRisk(RiskMeta):
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
         # 响应
         return page.get_paginated_response(data=ListRiskResponseSerializer(instance=paged_risks, many=True).data)
+
+    def _apply_ordering(self, queryset: QuerySet["Risk"], order_field: str) -> QuerySet["Risk"]:
+        """Apply ordering, including custom order for strategy risk level.
+
+        - Use ORM order_by for general fields
+        - For strategy__risk_level, use custom numeric order: asc => LOW<MIDDLE<HIGH, desc => HIGH>MIDDLE>LOW
+        """
+        if not order_field:
+            return queryset
+        field = order_field.lstrip("-")
+        if field == RISK_LEVEL_ORDER_FIELD:
+            return preserved_order_sort(
+                queryset,
+                ordering_field=order_field,
+                value_list=[RiskLevel.LOW, RiskLevel.MIDDLE, RiskLevel.HIGH],
+                extra_order_by=["-event_time"],
+            )
+        return queryset.order_by(order_field)
 
     def load_risks(self, validated_request_data: dict) -> QuerySet["Risk"]:
         # 构造表达式
