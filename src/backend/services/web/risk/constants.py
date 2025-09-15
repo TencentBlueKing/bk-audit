@@ -634,3 +634,6 @@ class RiskExportField(TextChoices):
 EVENT_EXPORT_FIELD_PREFIX = "event."
 # 风险导出文件名模板
 RISK_EXPORT_FILE_NAME_TMP = gettext_lazy("审计风险_{risk_view_type}_{datetime}.xlsx")
+
+# 风险等级排序字段
+RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"

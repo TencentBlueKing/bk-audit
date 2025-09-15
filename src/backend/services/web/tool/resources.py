@@ -38,6 +38,7 @@ from apps.meta.serializers import EnumMappingSerializer
 from core.models import get_request_username
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
+from core.utils.data import preserved_order_sort
 from core.utils.page import paginate_data
 from services.web.common.caller_permission import (
     CurrentType,
@@ -77,7 +78,6 @@ from services.web.tool.serializers import (
 )
 from services.web.tool.tool import (
     create_tool_with_config,
-    custom_sort_order,
     recent_tool_usage_manager,
     sync_resource_tags,
 )
@@ -265,7 +265,11 @@ class ListTool(ToolBase):
             queryset = queryset.filter(uid__in=tagged_tool_uids)
 
         if recent_used and recent_tool_uids:
-            queryset = custom_sort_order(queryset, "uid", recent_tool_uids)
+            queryset = preserved_order_sort(
+                queryset,
+                ordering_field="uid",
+                value_list=recent_tool_uids,
+            )
         else:
             queryset = queryset.order_by("-updated_at")
         paged_tools, page = paginate_data(queryset=queryset, request=request)

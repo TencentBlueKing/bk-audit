@@ -29,6 +29,7 @@ from typing import Any, Iterator, List, Union
 
 from bk_resource.base import Empty
 from blueapps.utils.logger import logger
+from django.db.models import QuerySet
 from django.db.models.enums import ChoicesMeta
 
 from core.choices import Unset
@@ -267,3 +268,43 @@ def data2string(data: Any, char: str = ",") -> str:
     if not isinstance(data, list):
         return str(data)
     return char.join([str(d) for d in data])
+
+
+def preserved_order_sort(
+    queryset: QuerySet,
+    ordering_field: str,
+    value_list: List,
+    *,
+    annotate_name: str = "_preserved_order",
+    extra_order_by: List[str] | None = None,
+):
+    """
+    使用 ORM 的 Case/When 注解实现安全的“按给定值顺序”排序，兼容跨表字段。
+
+    Args:
+        queryset: 原始查询集
+        ordering_field: 排序字段，支持带 '-' 前缀表示倒序，如 '-strategy__risk_level'
+        value_list: 期望的排序值列表（从小到大）
+        annotate_name: 注解字段名，默认 '_preserved_order'
+        extra_order_by: 附加的排序字段列表，用于二级排序，比如 ['-event_time']
+
+    Returns:
+        QuerySet: 已按指定顺序排序的查询集
+    """
+
+    from django.db.models import Case, IntegerField, Value, When
+
+    if not ordering_field:
+        return queryset
+
+    desc = ordering_field.startswith("-")
+    field = ordering_field.lstrip("-")
+
+    whens = [When(**{field: val}, then=Value(pos)) for pos, val in enumerate(value_list)]
+    preserved = Case(*whens, default=Value(-1), output_field=IntegerField())
+    qs = queryset.annotate(**{annotate_name: preserved})
+
+    orders = [f"-{annotate_name}" if desc else annotate_name]
+    if extra_order_by:
+        orders.extend(extra_order_by)
+    return qs.order_by(*orders)
