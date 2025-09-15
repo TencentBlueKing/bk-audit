@@ -173,6 +173,24 @@ APIGW_DEFINITION_SETTINGS = {"BK_APIGW_NAME": BK_APIGW_NAME}
 # ESB配置
 BK_COMPONENT_API_URL = os.getenv("BKAPP_BK_COMPONENT_API_URL", os.getenv("BK_COMPONENT_API_URL"))
 
+BK_IAM_APIGW_NAME = os.getenv("BKAPP_BK_IAM_APIGW_NAME", "bk-iam")
+LOG_APIGW_NAME = os.getenv("BKAPP_LOG_APIGW_NAME", "log-search")
+BK_PAAS_APIGW_NAME = os.getenv("BKAPP_BK_PAAS_APIGW_NAME", "bkpaas3")
+BK_BASE_APIGW_NAME = os.getenv("BKAPP_BK_BASE_APIGW_NAME", "bk-base")
+BK_MONITOR_APIGW_NAME = os.getenv("BKAPP_BK_MONITOR_APIGW_NAME", "bkmonitorv3")
+DEVSECOPS_APIGW_NAME = os.getenv("BKAPP_DEVSECOPS_APIGW_NAME", "devsecops")
+BK_SOPS_APIGW_NAME = os.getenv("BKAPP_BK_SOPS_APIGW_NAME", "bk-sops")
+BK_ITSM_APIGW_NAME = os.getenv("BKAPP_BK_ITSM_APIGW_NAME", "bk-itsm")
+BKIAM_APIGW_NAME = os.getenv("BKAPP_BKIAM_APIGW_NAME", "bkiam")
+BK_VISION_API_NAME = os.getenv("BKAPP_BK_VISION_API_NAME", "bk-vision")
+
+# ESB component names
+BK_LOG_ESB_NAME = os.getenv("BKAPP_BK_LOG_ESB_NAME", "bk_log")
+USERMANAGE_ESB_NAME = os.getenv("BKAPP_USERMANAGE_ESB_NAME", "usermanage")
+MONITOR_V3_ESB_NAME = os.getenv("BKAPP_MONITOR_V3_ESB_NAME", "monitor_v3")
+ITSM_ESB_NAME = os.getenv("BKAPP_ITSM_ESB_NAME", "itsm")
+CMSI_ESB_NAME = os.getenv("BKAPP_CMSI_ESB_NAME", "cmsi")
+
 SWAGGER_SETTINGS = {
     "DEFAULT_INFO": "urls.info",
     "DEFAULT_GENERATOR_CLASS": "bk_resource.utils.generators.BKResourceOpenAPISchemaGenerator",
