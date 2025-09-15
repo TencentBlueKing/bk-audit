@@ -47,7 +47,7 @@
           <template v-else-if="fieldItem.field_name === 'event_type'">
             {{ data.event_type?.join('、') || '--' }}
           </template>
-          <template v-else-if="fieldItem.field_name === 'tags'">
+          <template v-else-if="fieldItem.field_name === 'risk_tags'">
             <edit-tag :data="data.tags?.map(item=>strategyTagMap[item] || item) || ''" />
           </template>
           <template v-else-if="fieldItem.field_name === 'strategy_name'">
@@ -114,6 +114,15 @@
             </router-link>
             <span v-else>--</span>
           </template>
+          <template v-else-if="fieldItem.field_name === 'risk_label'">
+            <span
+              class="risk-label-status"
+              :class="{
+                misreport: data.risk_label === 'misreport',
+              }">
+              {{ data.risk_label === 'normal' ? t('正常') : t('误报') }}
+            </span>
+          </template>
           <template v-else>
             {{ data[fieldItem.field_name as keyof RiskManageModel] || '--' }}
           </template>
@@ -157,7 +166,7 @@
 
   const { t, locale } = useI18n();
 
-  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 80));
+  const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 100));
 
   const strategyTagMap = ref<Record<string, string>>({});
 

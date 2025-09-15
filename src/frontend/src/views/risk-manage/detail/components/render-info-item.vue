@@ -75,6 +75,8 @@
     padding-left: 14px;
     color: #313238;
     flex: 1;
+    word-break: break-all;
+    word-wrap: break-word;
   }
 }
 </style>
