@@ -24,7 +24,6 @@
       @batch="handleBatch"
       @change="handleSearchChange"
       @export="handleExport" />
-
     <div class="risk-manage-list">
       <render-list
         ref="listRef"
@@ -191,8 +190,9 @@
     },
     {
       label: () => t('风险等级'),
-      field: () => 'risk_id',
-      width: 90,
+      field: () => 'risk_level',
+      sort: 'custom',
+      width: 120,
       render: ({ data }: { data: RiskManageModel }) => <>
           <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
         </>,
@@ -366,6 +366,7 @@
     }>),
     checked: [
       'risk_id',
+      'risk_level',
       'event_content',
       'tags',
       'operator',

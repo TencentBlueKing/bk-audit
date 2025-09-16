@@ -147,7 +147,8 @@
     },
     {
       label: () => t('风险等级'),
-      field: () => 'risk_id',
+      field: () => 'risk_level',
+      sort: 'custom',
       width: 90,
       render: ({ data }: { data: RiskManageModel }) => <>
           <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
@@ -304,6 +305,7 @@
       'risk_label',
       'event_time',
       'title',
+      'risk_level',
       'notice_users',
       'strategy_id',
     ],
