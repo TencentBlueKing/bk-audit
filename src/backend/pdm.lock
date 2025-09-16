@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:88ca81d44780bc7724b4dc9a5af741c7f827e7e5bb39a7e78a05c2b884f42ffd"
+content_hash = "sha256:f649c01bf02818f3fab67c7df1484bbf3e8273953f680f1dac2e8d9e107b8ee5"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -763,7 +763,7 @@ files = [
 
 [[package]]
 name = "django"
-version = "4.2.24"
+version = "4.2.23"
 requires_python = ">=3.8"
 summary = "A high-level Python web framework that encourages rapid development and clean, pragmatic design."
 groups = ["default"]
@@ -774,8 +774,8 @@ dependencies = [
     "tzdata; sys_platform == \"win32\"",
 ]
 files = [
-    {file = "django-4.2.24-py3-none-any.whl", hash = "sha256:a6527112c58821a0dfc5ab73013f0bdd906539790a17196658e36e66af43c350"},
-    {file = "django-4.2.24.tar.gz", hash = "sha256:40cd7d3f53bc6cd1902eadce23c337e97200888df41e4a73b42d682f23e71d80"},
+    {file = "django-4.2.23-py3-none-any.whl", hash = "sha256:dafbfaf52c2f289bd65f4ab935791cb4fb9a198f2a5ba9faf35d7338a77e9803"},
+    {file = "django-4.2.23.tar.gz", hash = "sha256:42fdeaba6e6449d88d4f66de47871015097dc6f1b87910db00a91946295cfae4"},
 ]
 
 [[package]]
@@ -846,21 +846,6 @@ dependencies = [
     "Django",
     "SQLAlchemy",
     "sqlparams",
-]
-files = [
-    {file = "django_db_connection_pool-1.2.6-py3-none-any.whl", hash = "sha256:80436d8228dfcbad02b75b5f65b328968105ef204672e7d84156407a82dbc5f4"},
-]
-
-[[package]]
-name = "django-db-connection-pool"
-version = "1.2.6"
-extras = ["mysql"]
-requires_python = ">=3.0"
-summary = "Database connection pool component library for Django"
-groups = ["default"]
-dependencies = [
-    "django-db-connection-pool==1.2.6",
-    "mysqlclient",
 ]
 files = [
     {file = "django_db_connection_pool-1.2.6-py3-none-any.whl", hash = "sha256:80436d8228dfcbad02b75b5f65b328968105ef204672e7d84156407a82dbc5f4"},
@@ -1564,17 +1549,6 @@ groups = ["default"]
 files = [
     {file = "mistune-2.0.3-py2.py3-none-any.whl", hash = "sha256:e3964140c0775535fba50bd616fe180920044a64bc21850253267b07bff89924"},
     {file = "mistune-2.0.3.tar.gz", hash = "sha256:d7605b46b6156b53b7d52a465202b29a6f00f4ea4130ad5d25e9d5547d6b7e50"},
-]
-
-[[package]]
-name = "mysqlclient"
-version = "2.2.7"
-requires_python = ">=3.8"
-summary = "Python interface to MySQL"
-groups = ["default"]
-files = [
-    {file = "mysqlclient-2.2.7-cp311-cp311-win_amd64.whl", hash = "sha256:a22d99d26baf4af68ebef430e3131bb5a9b722b79a9fcfac6d9bbf8a88800687"},
-    {file = "mysqlclient-2.2.7.tar.gz", hash = "sha256:24ae22b59416d5fcce7e99c9d37548350b4565baac82f95e149cac6ce4163845"},
 ]
 
 [[package]]
