@@ -167,6 +167,21 @@
       }
     },
     {
+      "operation": "upsert_resource_type",
+      "data": {
+        "id": "tool",
+        "name": "工具",
+        "name_en": "Tool",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
       "operation": "upsert_instance_selection",
       "data": {
         "id": "system_list",
@@ -300,6 +315,20 @@
           {
             "system_id": "bk-audit",
             "id": "link_table"
+          }
+        ]
+      }
+    },
+    {
+      "operation": "upsert_instance_selection",
+      "data": {
+        "id": "tool_list",
+        "name": "工具列表",
+        "name_en": "Tool List",
+        "resource_type_chain": [
+          {
+            "system_id": "bk-audit",
+            "id": "tool"
           }
         ]
       }
@@ -1554,35 +1583,6 @@
                 "required": true
               }
             ]
-          }
-        ]
-      }
-    },
-    {
-      "operation": "upsert_resource_type",
-      "data": {
-        "id": "tool",
-        "name": "工具",
-        "name_en": "Tool",
-        "description": "",
-        "description_en": "",
-        "parents": [],
-        "provider_config": {
-          "path": "/api/v1/iam/resources/"
-        },
-        "version": 1
-      }
-    },
-    {
-      "operation": "upsert_instance_selection",
-      "data": {
-        "id": "tool_list",
-        "name": "工具列表",
-        "name_en": "Tool List",
-        "resource_type_chain": [
-          {
-            "system_id": "bk-audit",
-            "id": "tool"
           }
         ]
       }
