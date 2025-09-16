@@ -158,7 +158,7 @@
       label: () => t('风险等级'),
       field: () => 'risk_level',
       sort: 'custom',
-      width: 90,
+      width: 120,
       render: ({ data }: { data: RiskManageModel }) => <>
           <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
         </>,
