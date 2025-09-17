@@ -88,6 +88,8 @@ from services.web.risk.serializers import (
     ForceRevokeAutoProcessReqSerializer,
     GetRiskFieldsByStrategyRequestSerializer,
     GetRiskFieldsByStrategyResponseSerializer,
+    ListEventFieldsByStrategyRequestSerializer,
+    ListEventFieldsByStrategyResponseSerializer,
     ListRiskMetaRequestSerializer,
     ListRiskRequestSerializer,
     ListRiskResponseSerializer,
@@ -605,6 +607,44 @@ class GetRiskFieldsByStrategy(RiskMeta):
                     }
                 )
         return fields
+
+
+class ListEventFieldsByStrategy(RiskMeta):
+    """
+    新增接口：根据策略获取对应的事件字段；支持返回所有策略的事件字段（不传 strategy_ids）
+    返回结构化字段 key，用于前端筛选构建
+    """
+
+    name = gettext_lazy("根据策略获取事件字段")
+    RequestSerializer = ListEventFieldsByStrategyRequestSerializer
+    ResponseSerializer = ListEventFieldsByStrategyResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        # 决定策略集合
+        strategy_ids = validated_request_data.get("strategy_ids")
+        if strategy_ids:
+            strategies = Strategy.objects.filter(strategy_id__in=strategy_ids)
+        else:
+            strategies = Strategy.objects.all()
+
+        results = []
+        for s in strategies:
+            for cfg in s.event_basic_field_configs or []:
+                field_name = cfg.get("field_name")
+                display_name = cfg.get("display_name") or field_name
+                if not field_name:
+                    continue
+                results.append(
+                    {
+                        "strategy_id": s.strategy_id,
+                        "strategy_name": s.strategy_name,
+                        "field_name": field_name,
+                        "display_name": display_name,
+                    }
+                )
+
+        return results
 
 
 class ProcessRiskTicket(RiskMeta):

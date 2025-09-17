@@ -350,6 +350,23 @@ class RiskRuleOperator(TextChoices):
         return q
 
 
+class EventFilterOperator(TextChoices):
+    """
+    事件筛选操作符
+    """
+
+    EQUAL = "=", gettext_lazy("=")
+    NOT_EQUAL = "!=", gettext_lazy("!=")
+    GREATER_THAN = ">", gettext_lazy(">")
+    GREATER_THAN_EQUAL = ">=", gettext_lazy(">=")
+    LESS_THAN = "<", gettext_lazy("<")
+    LESS_THAN_EQUAL = "<=", gettext_lazy("<=")
+    IN = "IN", gettext_lazy("IN")
+    NOT_IN = "NOT IN", gettext_lazy("NOT IN")
+    CONTAINS = "CONTAINS", gettext_lazy("包含")
+    NOT_CONTAINS = "NOT CONTAINS", gettext_lazy("不包含")
+
+
 class RiskLabel(TextChoices):
     NORMAL = "normal", gettext_lazy("正常")
     MISREPORT = "misreport", gettext_lazy("误报")
