@@ -241,8 +241,6 @@
     emits('onSettingChange', setting);
   };
   const handleColumnSortChange = (sortPayload: any) => {
-    console.log('sortPayload', sortPayload);
-
     let { type } = sortPayload;
     // 移除之前选中的排序样式
     const sortAr:Array<Element> = rootRef.value.getElementsByClassName('bk-head-cell-sort');
