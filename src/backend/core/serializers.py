@@ -60,6 +60,16 @@ class ExtraDataSerializerMixin(serializers.Serializer):
         return validated_data
 
 
+class AnyValueField(serializers.Field):
+    """无损传递任意 JSON 值，不做转换或格式化"""
+
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
+
+
 class FieldType(object):
     BOOLEAN = "Boolean"
     NUMBER = "Number"

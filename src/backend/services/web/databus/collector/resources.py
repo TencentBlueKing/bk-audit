@@ -97,7 +97,6 @@ from services.web.databus.collector.snapshot.join.base import (
     BasicJoinHandler,
 )
 from services.web.databus.collector.snapshot.join.http_pull import HttpPullHandler
-from services.web.databus.collector_plugin.handlers import PluginEtlHandler
 from services.web.databus.constants import (
     API_PUSH_COLLECTOR_NAME_FORMAT,
     BKBASE_API_MAX_PAGESIZE,
@@ -905,7 +904,7 @@ class DeleteDataId(DataIdResource):
         )
         # 停止并删除清洗入库
         if collector.processing_id:
-            PluginEtlHandler.stop_bkbase_clean(collector.bkbase_table_id, collector.processing_id)
+            stop_bkbase_clean(collector.bkbase_table_id, collector.processing_id)
             api.bk_base.databus_cleans_delete(processing_id=collector.processing_id)
         # 数据库删除
         CollectorConfig._objects.filter(collector_config_id=collector.collector_config_id).delete()
