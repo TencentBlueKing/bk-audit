@@ -98,7 +98,6 @@ class Risk(OperateRecordModel):
         gettext_lazy("Current Operator"), max_length=64, null=True, blank=True, default=list
     )
     notice_users = models.JSONField(gettext_lazy("Notice Users"), default=list, null=True, blank=True)
-    tag_objs = models.ManyToManyField(Tag, verbose_name=gettext_lazy("Tags"), blank=True, related_name="risks")
     risk_label = models.CharField(
         gettext_lazy("Risk Label"),
         max_length=32,
