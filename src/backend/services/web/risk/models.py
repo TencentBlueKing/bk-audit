@@ -24,7 +24,7 @@ from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from blueapps.utils.request_provider import get_request_username
 from django.db import models
-from django.db.models import Max, Q, QuerySet
+from django.db.models import Field, Max, Q, QuerySet
 from django.db.models.functions import Substr
 from django.utils.translation import gettext_lazy
 
@@ -225,6 +225,14 @@ class Risk(OperateRecordModel):
             ],
             ignore_conflicts=True,
         )
+
+    @classmethod
+    def fields(cls) -> List[Field]:
+        """
+        返回风险的字段
+        """
+
+        return cls._meta.fields
 
 
 class RiskAuditInstance(AuditInstance):
