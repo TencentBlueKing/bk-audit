@@ -2,19 +2,21 @@ import datetime
 from types import SimpleNamespace
 from unittest import mock
 
+from django.conf import settings
 from django.db.models import Q
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
+from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from apps.permission.handlers.actions import ActionEnum
-from services.web.risk.constants import (
-    EVENT_RESULT_TABLE_ID_KEY,
-    RISK_RESULT_TABLE_ID_KEY,
-    STRATEGY_RESULT_TABLE_ID_KEY,
-    STRATEGY_TAG_RESULT_TABLE_ID_KEY,
-    RiskStatus,
+from services.web.databus.constants import (
+    ASSET_RISK_BKBASE_RT_ID_KEY,
+    ASSET_STRATEGY_BKBASE_RT_ID_KEY,
+    ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
+from services.web.risk.constants import RiskStatus
 from services.web.risk.models import Risk, TicketPermission, UserType
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy
@@ -33,13 +35,18 @@ class TestListRiskResource(TestCase):
         self.addCleanup(self.authed_filter_patcher.stop)
 
         self.bkbase_table_config = {
-            RISK_RESULT_TABLE_ID_KEY: "bkdata.risk_rt",
-            STRATEGY_RESULT_TABLE_ID_KEY: "bkdata.strategy_rt",
-            STRATEGY_TAG_RESULT_TABLE_ID_KEY: "bkdata.strategy_tag_rt",
-            EVENT_RESULT_TABLE_ID_KEY: "bkdata.event_rt",
+            ASSET_RISK_BKBASE_RT_ID_KEY: "bkdata.risk_rt",
+            ASSET_STRATEGY_BKBASE_RT_ID_KEY: "bkdata.strategy_rt",
+            ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY: "bkdata.strategy_tag_rt",
+            DORIS_EVENT_BKBASE_RT_ID_KEY: "bkdata.event_rt",
         }
         for config_key, table_id in self.bkbase_table_config.items():
-            GlobalMetaConfig.set(config_key=config_key, config_value=table_id)
+            GlobalMetaConfig.set(
+                config_key=config_key,
+                config_value=table_id,
+                config_level=ConfigLevelChoices.NAMESPACE.value,
+                instance_key=settings.DEFAULT_NAMESPACE,
+            )
 
         self.addCleanup(
             lambda: GlobalMetaConfig.objects.filter(config_key__in=self.bkbase_table_config.keys()).delete()
@@ -102,7 +109,7 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertEqual(len(sql_log), 2)  # count + data
 
-        risk_table = self.bkbase_table_config[RISK_RESULT_TABLE_ID_KEY]
+        risk_table = self.bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]
         self.assertIn(risk_table, sql_log[0])
         self.assertIn(risk_table, sql_log[1])
 
@@ -135,7 +142,7 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertTrue(any("JSON_EXTRACT" in sql for sql in sql_log))
 
-        event_table = self._format_expected_table(self.bkbase_table_config[EVENT_RESULT_TABLE_ID_KEY])
+        event_table = self._format_expected_table(self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY])
         self.assertTrue(any(event_table in sql for sql in sql_log))
 
     def test_list_risk_via_bkbase_with_risk_level(self):
@@ -156,7 +163,7 @@ class TestListRiskResource(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
 
-        strategy_table = self.bkbase_table_config[STRATEGY_RESULT_TABLE_ID_KEY]
+        strategy_table = self.bkbase_table_config[ASSET_STRATEGY_BKBASE_RT_ID_KEY]
         self.assertTrue(any(strategy_table in sql for sql in sql_log))
         data_sql = sql_log[1]
         self.assertIn("CASE base_query.`strategy__risk_level`", data_sql)
