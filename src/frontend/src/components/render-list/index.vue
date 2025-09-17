@@ -241,6 +241,8 @@
     emits('onSettingChange', setting);
   };
   const handleColumnSortChange = (sortPayload: any) => {
+    console.log('sortPayload', sortPayload);
+
     let { type } = sortPayload;
     // 移除之前选中的排序样式
     const sortAr:Array<Element> = rootRef.value.getElementsByClassName('bk-head-cell-sort');
@@ -257,7 +259,8 @@
     }
     paramsMemo = {
       ...paramsMemo,
-      order_field: _.isString(sortPayload.column.field) ? sortPayload.column.field : sortPayload.column.field(),
+      // eslint-disable-next-line no-nested-ternary
+      order_field: type === 'null' ? undefined : (_.isString(sortPayload.column.field) ? sortPayload.column.field : sortPayload.column.field()),
       order_type: type === 'null' ? undefined : type,
     };
     fetchListData();
