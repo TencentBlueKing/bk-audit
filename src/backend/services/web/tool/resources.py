@@ -616,11 +616,20 @@ class ExecuteTool(ToolBase):
                 }
             ```
         4. person_select（人员选择器）
+            多值传递采用列表
             ```json
                 {
                     "raw_name": "usernames",
                     "value": ["user1", "user2"]
                 }
+            ```
+            单值也可以直接传递
+            ```json
+                {
+                    "raw_name": "usernames",
+                    "value": "user1" // 单个值会自动转为列表 ["user1"]
+                }
+            ```
         5. time_range_select（时间范围选择器）
             ```json
                 {
