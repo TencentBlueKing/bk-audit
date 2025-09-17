@@ -222,7 +222,15 @@ class ListRiskFields(RiskMeta):
     name = gettext_lazy("获取风险字段")
 
     def perform_request(self, validated_request_data):
-        return [{"id": f.name, "name": str(f.verbose_name)} for f in Risk._meta.fields if f.name in RISK_SHOW_FIELDS]
+        show_fields = set(RISK_SHOW_FIELDS)
+        return [
+            {
+                "id": f.attname if getattr(f, "attname", None) in show_fields else f.name,
+                "name": str(f.verbose_name),
+            }
+            for f in Risk.fields()
+            if f.name in show_fields or getattr(f, "attname", None) in show_fields
+        ]
 
 
 class UpdateRiskLabel(RiskMeta):
