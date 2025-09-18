@@ -262,7 +262,6 @@
   // import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
-
   interface FormData {
     uid?: string; // 工具uid
     source?:string;
@@ -296,17 +295,18 @@
         raw_name: string;
         display_name: string;
         description: string;
-        drill_config: {
+        drill_config: Array<{
           tool: {
             uid: string;
             version: number;
           };
+          drill_name: string;
           config: Array<{
             source_field: string;
             target_value_type: string;
             target_value: string;
           }>
-        };
+        }>;
         enum_mappings: {
           collection_id: string;
           mappings: Array<{
@@ -386,13 +386,7 @@
         raw_name: '',
         display_name: '',
         description: '',
-        drill_config: {
-          tool: {
-            uid: '',
-            version: 1,
-          },
-          config: [],
-        },
+        drill_config: [],
         enum_mappings: {
           collection_id: '',
           mappings: [],
@@ -606,6 +600,18 @@
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
+      data.config.output_fields.forEach((item) => {
+        if (!Array.isArray(item.drill_config)) {
+          // eslint-disable-next-line no-param-reassign
+          item.drill_config = [item.drill_config];
+          item.drill_config.forEach((drill) => {
+            if (!drill.drill_name) {
+              // eslint-disable-next-line no-param-reassign
+              drill.drill_name = '';
+            }
+          });
+        }
+      });
       formData.value = data;
       comRef.value.setConfigs(formData.value.config);
     },

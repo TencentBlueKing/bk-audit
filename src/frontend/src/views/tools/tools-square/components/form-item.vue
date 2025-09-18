@@ -130,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -159,7 +159,8 @@
   }
   interface Props {
     dataConfig: SearchItem,
-    originModel?: boolean
+    originModel?: boolean,
+    targetValue: any,
   }
   interface Emits {
     (e: 'change', value: any): void
@@ -296,6 +297,14 @@
       handleSelectorChange(val);
     }
   };
+
+  watch(() => props.targetValue, (newVal) => {
+    if (newVal) {
+      setData(newVal);
+    }
+  }, {
+    immediate: true,
+  });
 
   onMounted(() => {
     fetchGlobalChoices();

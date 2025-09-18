@@ -327,7 +327,7 @@
     raw_name: string;
     display_name: string;
     description: string;
-    drill_config: {
+    drill_config: Array<{
       tool: {
         uid: string;
         version: number;
@@ -337,7 +337,7 @@
         target_value_type: string;
         target_value: string;
       }>
-    };
+    }>;
   }
 
   interface Props {
@@ -407,7 +407,7 @@
   const drillMap = computed(() => {
     const map = new Map();
     strategyInfo.value.forEach((item) => {
-      if (item.drill_config?.tool?.uid) {
+      if (item.drill_config && item.drill_config.length) {
         map.set(item.field_name, item);
       }
     });
@@ -551,7 +551,7 @@
 
   // 下转打开
   const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
+    const { uid } = drillDownItem.drill_config[0].tool;
     if (!(allToolsData.value.find(item => item === uid))) {
       allToolsData.value.push(uid);
     }
