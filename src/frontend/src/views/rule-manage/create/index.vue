@@ -297,7 +297,7 @@
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
 
-  import ApplicationParameter from '@components/application-parameter/index.vue';
+  import ApplicationParameter from '@components/application-parameter/rule-index.vue';
 
   import BatchDialog from './components/dialog.vue';
 

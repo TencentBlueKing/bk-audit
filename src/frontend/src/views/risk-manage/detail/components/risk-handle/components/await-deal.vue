@@ -119,6 +119,7 @@
                     v-model="formData.pa_params[val.key]"
                     clearable
                     :config="val"
+                    :detail-data="detailData"
                     :event-data-list="eventDataList"
                     :risk-field-list="riskFieldList" />
                   <template #error="message">
