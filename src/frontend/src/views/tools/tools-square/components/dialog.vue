@@ -671,8 +671,14 @@
         });
         // 判断每个字段是否有值
         const validateField = (field: any) => {
-          if (field.field_category === 'person_select' || field.field_category === 'time_range_select') {
+          if (field.field_category === 'time_range_select') {
             return Array.isArray(field.value) && field.value.length > 0;
+          }
+          if (field.field_category === 'person_select') {
+            if (Array.isArray(field.value)) {
+              return field.value.length > 0;
+            }
+            return field.value !== '';
           }
           return field.value !== null && field.value !== '';
         };

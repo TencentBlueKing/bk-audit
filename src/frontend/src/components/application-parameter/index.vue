@@ -125,6 +125,7 @@
     </div>
     <tool-tip-text
       :data="tipText"
+      :max-width="800"
       placement="left"
       theme="light" />
   </div>

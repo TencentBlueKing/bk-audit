@@ -202,8 +202,12 @@
     numberInputData.value = value;
     emits('change', value || null);
   };
-  const handleUserChange = (value: Array<string>) => {
-    user.value = value;
+  const handleUserChange = (value: Array<string> | string) => {
+    if (!Array.isArray(value)) {
+      user.value = [value];
+    } else {
+      user.value = value;
+    }
     emits('change', value || []);
   };
   const handleRangeChange = (value: Array<string>) => {
