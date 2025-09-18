@@ -113,7 +113,7 @@
     raw_name: string;
     display_name: string;
     description: string;
-    drill_config: {
+    drill_config: Array<{
       tool: {
         uid: string;
         version: number;
@@ -123,7 +123,7 @@
         target_value_type: string;
         target_value: string;
       }>
-    };
+    }>;
   }
 
   const props = defineProps<Props>();
@@ -226,7 +226,7 @@
 
   // 下钻打开
   const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
+    const { uid } = drillDownItem.drill_config[0].tool;
 
     // 如果工具不在 allToolsDataUids 中，添加它
     if (!allToolsDataUids.value.find(item => item === uid)) {
@@ -276,13 +276,7 @@
       collection_id: '',
       mappings: [],
     },
-    drill_config: {
-      tool: {
-        uid: '',
-        version: 1,
-      },
-      config: [],
-    },
+    drill_config: [],
     description: '',
     example: '',
     prefix: 'event_data',
@@ -348,7 +342,6 @@
   };
 
   const process = () => {
-    console.log(21222);
     // 填充内容（字段自动填充, 根据select更新event_data_field_configs)
     setTableData('event_basic_field_configs');
     setTableData('event_data_field_configs');
@@ -388,13 +381,14 @@
                     collection_id: editItem.enum_mappings?.collection_id || '',
                     mappings: editItem.enum_mappings?.mappings || [],
                   },
-                  drill_config: {
+                  drill_config: editItem.drill_config ? editItem.drill_config.map(drill => ({
                     tool: {
-                      uid: editItem.drill_config?.tool?.uid || '',
-                      version: editItem.drill_config?.tool?.version || 1,
+                      uid: drill.tool.uid || '',
+                      version: drill.tool.version || 1,
                     },
-                    config: editItem.drill_config?.config || [],
-                  },
+                    drill_name: drill.drill_name || '',
+                    config: drill.config || [],
+                  })) : [],
                   description: editItem.description,
                   example: originalItem.example,
                   prefix: originalItem.prefix || '',

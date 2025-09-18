@@ -16,13 +16,18 @@
 -->
 <template>
   <div class="collapse-panel">
-    <div
-      class="collapse-panel-title"
-      :style="titleStyle"
-      @click="handleClick">
-      <audit-icon :type="isCollapseActive?'angle-fill-down':'angle-fill-rignt'" />
-      {{ label }}
-    </div>
+    <slot
+      :handle-click="handleClick"
+      :is-collapse-active="isCollapseActive"
+      name="label">
+      <div
+        class="collapse-panel-title"
+        :style="titleStyle"
+        @click="handleClick">
+        <audit-icon :type="isCollapseActive?'angle-fill-down':'angle-fill-rignt'" />
+        {{ label }}
+      </div>
+    </slot>
     <transition>
       <div v-show="isCollapseActive">
         <slot />
