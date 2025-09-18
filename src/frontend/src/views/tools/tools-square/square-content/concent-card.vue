@@ -310,7 +310,7 @@
     raw_name: string;
     display_name: string;
     description: string;
-    drill_config: {
+    drill_config: Array<{
       tool: {
         uid: string;
         version: number;
@@ -320,7 +320,7 @@
         target_value_type: string;
         target_value: string;
       }>
-    };
+    }>;
   }
 
   const { messageSuccess } = useMessage();
@@ -567,7 +567,7 @@
 
   // 下钻打开
   const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
+    const { uid } = drillDownItem.drill_config[0].tool;
     if (!(allToolsData.value.find(item => item === uid))) {
       allToolsData.value.push(uid);
     }
