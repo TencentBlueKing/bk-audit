@@ -23,8 +23,8 @@
     </span>
     <div
       :id="`${data}`"
-      style="display: none;">
-      <div style="max-width: 300px; word-break: break-all;">
+      style="display: none;max-height: 90vh;overflow: auto;">
+      <div style="max-height: 90vh;overflow: auto;word-break: break-all;">
         {{ data }}
       </div>
     </div>
@@ -48,12 +48,14 @@
     theme?: string,
     placement?: Placement,
     isShow?: boolean,
+    maxWidth?: string | number,
   }
 
   const props = withDefaults(defineProps<Props>(), {
     theme: 'dark',
     placement: 'top',
     isShow: true,
+    maxWidth: 'none',
   });
 
   const rootRef = ref();
@@ -64,7 +66,6 @@
     nextTick(() => {
       if (tippyIns) {
         tippyIns.hide();
-        tippyIns.unmount();
         tippyIns.destroy();
       }
       const template = document.getElementById(`${data}`);
@@ -75,7 +76,7 @@
           allowHTML: true,
           appendTo: () => document.body,
           theme: props.theme || 'dark',
-          maxWidth: 'none',
+          maxWidth: props.maxWidth || 'none',
           interactive: true,
           arrow: true,
           offset: [0, 8],
