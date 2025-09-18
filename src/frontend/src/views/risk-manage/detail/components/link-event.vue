@@ -407,7 +407,7 @@
   const drillMap = computed(() => {
     const map = new Map();
     strategyInfo.value.forEach((item) => {
-      if (item.drill_config?.tool.uid) {
+      if (item.drill_config?.tool?.uid) {
         map.set(item.field_name, item);
       }
     });
