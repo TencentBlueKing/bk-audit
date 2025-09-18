@@ -29,7 +29,7 @@
     allow-create
     class="bk-select"
     filterable
-    :placeholder="t('请选择已有选项或自行输入内容后Enter结束')"
+    :placeholder="t('请选择已有选项')"
     @change="handlerSelectChange">
     <bk-option
       v-for="(item, index) in JSON.parse(config.value.items_text)"
@@ -72,6 +72,7 @@
         :key="index"
         :name="item.name">
         <bk-popover
+          max-width="800px"
           placement="left"
           theme="light">
           <div style="width: 100%;height: 100%;">
@@ -82,7 +83,7 @@
               <div style="font-size: 12px;font-weight: 700;">
                 {{ t('当前值：') }}
               </div>
-              <div>{{ item.id }}</div>
+              <div>{{ getCurrentValue(item.id) }}</div>
             </div>
           </template>
         </bk-popover>
@@ -123,13 +124,13 @@
       {{ t('当前值：') }}
     </div>
     <tool-tip-text
-      :data="formatTooltipData(config.custom_type, localValue)"
+      :data="tipText"
       placement="left"
       theme="light" />
   </div>
 </template>
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
@@ -141,11 +142,12 @@
     }>
     config?: any,
     eventDataList?: any,
+    detailData: any,
   }
 
   const props = defineProps<Props>();
   const { t } = useI18n();
-
+  const tipText = ref('');
   const localValue = ref('');  // 仅仅用于select绑定，真正传给父组件的是：根据input，select类型赋值给modelValue.value，modelValue.field
 
   const modelValue = defineModel<{field: string, value: string}>({
@@ -194,10 +196,26 @@
       const minutes = String(date.getMinutes()).padStart(2, '0');
       const seconds = String(date.getSeconds()).padStart(2, '0');
       return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    } if (type === 'select') {
+      return value;
     }
-    return value;
+    if (modelValue.value.field === '' && modelValue.value.value !== '' && type !== 'datetime' && type !== 'select') {
+      return value;
+    }
+    if (modelValue.value.field !== '' && modelValue.value.value === '' && type !== 'datetime' && type !== 'select') {
+      return  props.detailData[modelValue.value.field];
+    }
   };
   localValue.value = modelValue.value.value || modelValue.value.field;
+
+  const getCurrentValue = (id: string) => props.detailData[id];
+
+  watch(() => modelValue.value, (val) => {
+    tipText.value = formatTooltipData(props.config.custom_type, val.value || val.field);
+  }, {
+    immediate: true,
+    deep: true,
+  });
 </script>
 
 <style lang="postcss" scoped>

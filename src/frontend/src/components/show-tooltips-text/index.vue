@@ -62,6 +62,11 @@
 
   watch(() => props.data, (data) => {
     nextTick(() => {
+      if (tippyIns) {
+        tippyIns.hide();
+        tippyIns.unmount();
+        tippyIns.destroy();
+      }
       const template = document.getElementById(`${data}`);
       if (hanldeIsShowTippy() && template && props.isShow) {
         tippyIns = tippy(rootRef.value as SingleTarget, {
