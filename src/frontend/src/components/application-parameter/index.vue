@@ -139,7 +139,7 @@
       id: string,
       name: string,
     }>
-    config: any,
+    config?: any,
     eventDataList?: any,
   }
 

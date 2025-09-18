@@ -34,6 +34,7 @@
   import tippy, {
     type Instance,
     type Placement,
+    type SingleTarget,
   } from 'tippy.js';
   import {
     nextTick,
@@ -45,7 +46,7 @@
   interface Props {
     data: string | number,
     theme?: string,
-    placement?: string,
+    placement?: Placement,
     isShow?: boolean,
   }
 
@@ -63,9 +64,9 @@
     nextTick(() => {
       const template = document.getElementById(`${data}`);
       if (hanldeIsShowTippy() && template && props.isShow) {
-        tippyIns = tippy(rootRef.value, {
+        tippyIns = tippy(rootRef.value as SingleTarget, {
           content: template.innerHTML,
-          placement: props.placement as Placement,
+          placement: props.placement as Placement || 'top',
           allowHTML: true,
           appendTo: () => document.body,
           theme: props.theme || 'dark',

@@ -232,7 +232,6 @@
                     <application-parameter
                       v-model="formData.pa_params[val.key]"
                       clearable
-                      :config="val"
                       :risk-field-list="riskFieldList" />
                     <template #error="message">
                       <div>{{ val.name }}{{ message }}</div>
