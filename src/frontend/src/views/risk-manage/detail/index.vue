@@ -30,7 +30,8 @@
         <div class="link-event-wrap">
           <link-event
             :data="detailData"
-            :strategy-list="strategyList" />
+            :strategy-list="strategyList"
+            @get-event-data="handleGetEventData" />
         </div>
       </div>
       <!-- 事件处理 -->
@@ -40,6 +41,7 @@
         <div class="right">
           <risk-handle
             :data="riskData"
+            :event-data-list="eventDataList"
             :risk-id="riskData.risk_id"
             @update="handleUpdate" />
         </div>
@@ -64,6 +66,7 @@
     computed,
     onBeforeUnmount,
     onMounted,
+    ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -91,6 +94,8 @@
   const router = useRouter();
   const route = useRoute();
   const { t } = useI18n();
+  const eventDataList = ref();
+
   let timeout: undefined | number = undefined;
 
   const {
@@ -161,7 +166,10 @@
     ...riskData.value,
     ...strategyInfoData.value,
   }));
-
+  // 获取事件信息
+  const handleGetEventData = (data: any) => {
+    eventDataList.value = data;
+  };
   useRouterBack(() => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { tab, ...rest } = route.query;

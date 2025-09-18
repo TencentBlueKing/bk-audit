@@ -118,6 +118,8 @@
                   <application-parameter
                     v-model="formData.pa_params[val.key]"
                     clearable
+                    :config="val"
+                    :event-data-list="eventDataList"
                     :risk-field-list="riskFieldList" />
                   <template #error="message">
                     <div>{{ val.name }}{{ message }}</div>
@@ -183,8 +185,10 @@
     detailData: RiskManageModel,
     userInfo: {
       username: string,
-    }
+    },
+    eventDataList: Record<string, any>[],
   }
+
   interface Emits{
     (e:'update'): void,
   }

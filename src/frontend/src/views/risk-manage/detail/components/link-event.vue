@@ -354,6 +354,10 @@
     dict?: { name: string; key: string };
   }
 
+  interface Emits {
+    (e: 'getEventData', value: any): void
+  }
+
   type DisplayValueDict = {
     [K in keyof Omit<typeof eventItem.value, 'event_data'>]: DisplayValue;
   } & {
@@ -364,7 +368,7 @@
 
   type DisplayValueKeysWithoutEventData = Exclude<DisplayValueKeys, 'eventData'>;
   const props = defineProps<Props>();
-
+  const emits = defineEmits<Emits>();
   const isShowSide = ref(false);
 
   const router = useRouter();
@@ -438,6 +442,15 @@
       ...baseResult,
       eventData: eventDataResult,
     };
+  }) ;
+
+  const displayValueDictEventData = computed(() => {
+    // 遍历 displayValueDict.value.eventData 对象的Key value 输出数组 [{text: 'key', value: 'value'}]
+    const result = Object.keys(displayValueDict.value.eventData).map(key => ({
+      text: key,
+      value: displayValueDict.value.eventData[key].value,
+    }));
+    return result;
   });
 
   // 事件数据展示字段，从策略中获取，重点展示的字段
@@ -609,6 +622,13 @@
     }
   }, {
     immediate: true,
+  });
+
+  watch(() => displayValueDictEventData.value, (data) => {
+    emits('getEventData', data);
+  }, {
+    immediate: true,
+    deep: true,
   });
 
   onMounted(() => {

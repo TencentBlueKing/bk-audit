@@ -45,9 +45,15 @@
   interface Props {
     data: string | number,
     theme?: string,
+    placement?: string,
+    isShow?: boolean,
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    theme: 'dark',
+    placement: 'top',
+    isShow: true,
+  });
 
   const rootRef = ref();
 
@@ -56,10 +62,10 @@
   watch(() => props.data, (data) => {
     nextTick(() => {
       const template = document.getElementById(`${data}`);
-      if (hanldeIsShowTippy() && template) {
+      if (hanldeIsShowTippy() && template && props.isShow) {
         tippyIns = tippy(rootRef.value as SingleTarget, {
           content: template.innerHTML,
-          placement: 'top',
+          placement: props.placement || 'top',
           allowHTML: true,
           appendTo: () => document.body,
           theme: props.theme || 'dark',

@@ -156,8 +156,9 @@
     },
     {
       label: () => t('风险等级'),
-      field: () => 'risk_id',
-      width: 90,
+      field: () => 'risk_level',
+      sort: 'custom',
+      width: 120,
       render: ({ data }: { data: RiskManageModel }) => <>
           <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
         </>,
@@ -338,7 +339,7 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['risk_id', 'event_content', 'tags', 'operator', 'status', 'current_operator', 'risk_label', 'event_time', 'title', 'notice_users', 'strategy_id'],
+    checked: ['risk_id', 'risk_level', 'event_content', 'tags', 'operator', 'status', 'current_operator', 'risk_label', 'event_time', 'title', 'notice_users', 'strategy_id'],
     showLineHeight: false,
     trigger: 'manual' as const,  // 添加 as const 类型断言
   });

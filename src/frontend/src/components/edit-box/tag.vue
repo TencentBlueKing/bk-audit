@@ -114,30 +114,33 @@
     }
     isCalcRenderTagNum.value = true;
     nextTick(() => {
-      const {
-        width: boxWidth,
-      } = rootRef.value.getBoundingClientRect();
+      if (rootRef.value && tagElsRef.value) {
+        const {
+          width: boxWidth,
+        } = rootRef.value.getBoundingClientRect();
 
-      const {
-        width: tagWidth,
-      } = tagElsRef.value[0].$el.getBoundingClientRect();
-      let totalTagWidth = tagWidth;
-      renderTagNum.value = 1;   // 最少展示一个
 
-      const numTagWidth = 50;
-      const copyBtnWidth = 20;
-      for (let i = 1; i < tagElsRef.value.length; i++) {
         const {
           width: tagWidth,
-        } = tagElsRef.value[i].$el.getBoundingClientRect();
-        totalTagWidth += tagWidth;
-        if (totalTagWidth + numTagWidth + copyBtnWidth  < boxWidth) {
-          renderTagNum.value = renderTagNum.value + 1;
-        } else {
-          break;
+        } = tagElsRef.value[0].$el.getBoundingClientRect();
+        let totalTagWidth = tagWidth;
+        renderTagNum.value = 1;   // 最少展示一个
+
+        const numTagWidth = 50;
+        const copyBtnWidth = 20;
+        for (let i = 1; i < tagElsRef.value.length; i++) {
+          const {
+            width: tagWidth,
+          } = tagElsRef.value[i].$el.getBoundingClientRect();
+          totalTagWidth += tagWidth;
+          if (totalTagWidth + numTagWidth + copyBtnWidth  < boxWidth) {
+            renderTagNum.value = renderTagNum.value + 1;
+          } else {
+            break;
+          }
         }
+        isCalcRenderTagNum.value = false;
       }
-      isCalcRenderTagNum.value = false;
     });
   };
 

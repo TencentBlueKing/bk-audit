@@ -58,6 +58,7 @@
           :is="comMap[getIndexByTag(tag).action as keyof typeof comMap]"
           :data="getIndexByTag(tag)"
           :detail-data="data"
+          :event-data-list="eventDataList"
           :itsm-status-data="itsmStatusData"
           :process-application-list="processApplicationList"
           :process-detail="processPackageIdToDetailMap"
@@ -112,6 +113,7 @@
   interface Props{
     data: RiskManageModel,
     riskId: number,
+    eventDataList: Record<string, any>[],
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();

@@ -257,7 +257,8 @@
     }
     paramsMemo = {
       ...paramsMemo,
-      order_field: _.isString(sortPayload.column.field) ? sortPayload.column.field : sortPayload.column.field(),
+      // eslint-disable-next-line no-nested-ternary
+      order_field: type === 'null' ? undefined : (_.isString(sortPayload.column.field) ? sortPayload.column.field : sortPayload.column.field()),
       order_type: type === 'null' ? undefined : type,
     };
     fetchListData();
