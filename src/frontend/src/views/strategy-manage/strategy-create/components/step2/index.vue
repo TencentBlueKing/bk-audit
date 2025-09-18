@@ -284,8 +284,8 @@
   };
 
   // 公共函数：清理配置中的无效drill_config
-  const cleanDrillConfig = (item: any) => {
-    if (item.drill_config && !item.drill_config.tool?.uid) {
+  const cleanDrillConfig = (item: IFormData['event_basic_field_configs'][0]) => {
+    if (item.drill_config && !item.drill_config.length) {
       // eslint-disable-next-line no-param-reassign
       delete item.drill_config;
     }
@@ -293,7 +293,7 @@
   };
 
   // 公共函数：清理配置中的无效map_config
-  const cleanMapConfig = (item:any) => {
+  const cleanMapConfig = (item: IFormData['event_basic_field_configs'][0]) => {
     if (item.map_config) {
       if (!item.map_config.source_field && !item.map_config.target_value) {
         // eslint-disable-next-line no-param-reassign

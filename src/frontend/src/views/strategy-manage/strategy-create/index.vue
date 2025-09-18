@@ -159,6 +159,59 @@
     onSuccess: (data) => {
       // eslint-disable-next-line prefer-destructuring
       editData.value = data.results[0];
+      editData.value.event_basic_field_configs = editData.value.event_basic_field_configs.map((item) => {
+        if (item.drill_config && !Array.isArray(item.drill_config)) {
+          // eslint-disable-next-line no-param-reassign
+          item.drill_config = [item.drill_config];
+          item.drill_config.forEach((drill) => {
+            if (!drill.drill_name) {
+              // eslint-disable-next-line no-param-reassign
+              drill.drill_name = '';
+            }
+          });
+        }
+        return item;
+      });
+      editData.value.event_data_field_configs = editData.value.event_data_field_configs.map((item) => {
+        if (item.drill_config && !Array.isArray(item.drill_config)) {
+          // eslint-disable-next-line no-param-reassign
+          item.drill_config = [item.drill_config];
+          item.drill_config.forEach((drill) => {
+            if (!drill.drill_name) {
+              // eslint-disable-next-line no-param-reassign
+              drill.drill_name = '';
+            }
+          });
+        }
+        return item;
+      });
+      editData.value.event_evidence_field_configs = editData.value.event_evidence_field_configs.map((item) => {
+        if (item.drill_config && !Array.isArray(item.drill_config)) {
+          // eslint-disable-next-line no-param-reassign
+          item.drill_config = [item.drill_config];
+          item.drill_config.forEach((drill) => {
+            if (!drill.drill_name) {
+              // eslint-disable-next-line no-param-reassign
+              drill.drill_name = '';
+            }
+          });
+        }
+        return item;
+      });
+      editData.value.risk_meta_field_config = editData.value.risk_meta_field_config.map((item) => {
+        if (item.drill_config && !Array.isArray(item.drill_config)) {
+          // eslint-disable-next-line no-param-reassign
+          item.drill_config = [item.drill_config];
+          item.drill_config.forEach((drill) => {
+            if (!drill.drill_name) {
+              // eslint-disable-next-line no-param-reassign
+              drill.drill_name = '';
+            }
+          });
+        }
+        return item;
+      });
+      console.log(editData.value);
     },
   });
 

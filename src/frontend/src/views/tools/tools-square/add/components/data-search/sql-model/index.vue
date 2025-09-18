@@ -87,7 +87,7 @@
       </bk-button>
     </div>
   </bk-form-item>
-
+  <!-- 输入 -->
   <bk-form-item
     :label="t('查询输入设置')"
     label-width="160">
@@ -263,9 +263,9 @@
                 <template v-else>
                   <!-- 不同前端类型 -->
                   <form-item
-                    ref="formItemRefs"
                     :data-config="item"
                     origin-model
+                    :target-value="item.default_value"
                     @change="(val: any) => handleFormItemChange(val, item)" />
                 </template>
               </bk-form-item>
@@ -275,6 +275,7 @@
       </audit-form>
     </div>
   </bk-form-item>
+  <!-- 输出 -->
   <bk-form-item
     :label="t('查询结果设置')"
     label-width="160">
@@ -393,26 +394,61 @@
                   v-else
                   class="field-value-div"
                   @click="() => handleClick(index, item.drill_config)">
-                  <template v-if="item.drill_config.tool.uid">
-                    <audit-icon
-                      style=" margin-right: 5px;font-size: 16px;"
-                      svg
-                      :type="iconMap[
-                        getToolNameAndType(item.drill_config.tool.uid).type as keyof typeof iconMap
-                      ]" />
-                    {{ getToolNameAndType(item.drill_config.tool.uid).name }}
-                    <audit-icon
-                      class="remove-btn"
-                      type="delete-fill"
-                      @click.stop="handleRemove(index)" />
-                    <audit-icon
-                      v-if="!(item.drill_config.tool.version
-                        >= (toolMaxVersionMap[item.drill_config.tool.uid] || 1))"
-                      v-bk-tooltips="{
-                        content: t('该工具已更新，请确认'),
-                      }"
-                      class="renew-tips"
-                      type="info-fill" />
+                  <template v-if="item.drill_config.length && item.drill_config.every(item => item.tool.uid)">
+                    <bk-popover
+                      placement="top"
+                      theme="black">
+                      <span style="cursor: help;">{{ t('已配置工具下钻', { count: item.drill_config.length }) }}</span>
+                      <template #content>
+                        <div>
+                          <div
+                            v-for="config in item.drill_config"
+                            :key="config.tool.uid">
+                            • {{ getToolNameAndType(config.tool.uid).name }}
+                          </div>
+                        </div>
+                      </template>
+                    </bk-popover>
+                    <!-- 删除 -->
+                    <audit-popconfirm
+                      class="ml8"
+                      :confirm-handler="() => handleRemove(index)"
+                      :content="t('移除操作无法撤回，请谨慎操作！')"
+                      :title="t('确认移除以下工具？')">
+                      <audit-icon
+                        class="remove-btn"
+                        type="delete-fill" />
+                      <template #content>
+                        <bk-table
+                          ref="refTable"
+                          :columns="columns"
+                          :data="item.drill_config"
+                          height="auto"
+                          max-height="100%"
+                          show-overflow-tooltip
+                          stripe />
+                      </template>
+                    </audit-popconfirm>
+                    <bk-popover
+                      v-if="item.drill_config
+                        .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                      placement="top"
+                      theme="black">
+                      <audit-icon
+                        class="renew-tips"
+                        type="info-fill" />
+                      <template #content>
+                        <div>
+                          <div>{{ t('以下工具已更新，请确认：') }}</div>
+                          <div
+                            v-for="drill in item.drill_config
+                              .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                            :key="drill.tool.uid">
+                            • {{ getToolNameAndType(drill.tool.uid).name }}
+                          </div>
+                        </div>
+                      </template>
+                    </bk-popover>
                   </template>
                   <span
                     v-else
@@ -516,17 +552,18 @@
         raw_name: string;
         display_name: string;
         description: string;
-        drill_config: {
+        drill_config: Array<{
           tool: {
             uid: string;
             version: number;
           };
+          drill_name: string;
           config: Array<{
             source_field: string;
             target_value_type: string;
             target_value: string;
           }>
-        };
+        }>;
         enum_mappings: {
           collection_id: string;
           mappings: Array<{
@@ -544,7 +581,7 @@
     raw_name: string;
     display_name: string;
     description: string;
-    drill_config: {
+    drill_config: Array<{
       tool: {
         uid: string;
         version: number;
@@ -554,7 +591,7 @@
         target_value_type: string;
         target_value: string;
       }>
-    };
+    }>;
   }
 
   interface Exposes {
@@ -571,8 +608,7 @@
   const requiredListRef = ref();
   const addEnumRefs = ref();
   const fieldReferenceRef = ref();
-  const formItemRefs = ref();
-  const dialogRefs = ref();
+  const dialogRefs = ref<Record<string, any>>({});
   const tableInputFormRef = ref();
 
   // const loading = ref(false);
@@ -603,13 +639,7 @@
         raw_name: '',
         display_name: '',
         description: '',
-        drill_config: {
-          tool: {
-            uid: '',
-            version: 1,
-          },
-          config: [],
-        },
+        drill_config: [],
         enum_mappings: {
           collection_id: '',
           mappings: [],
@@ -633,11 +663,16 @@
     name: string;
   }>>([]);
 
-  const iconMap = {
-    data_search: 'sqlxiao',
-    api: 'apixiao',
-    bk_vision: 'bkvisonxiao',
-  };
+  // const iconMap = {
+  //   data_search: 'sqlxiao',
+  //   api: 'apixiao',
+  //   bk_vision: 'bkvisonxiao',
+  // };
+
+  const columns = [{
+    label: () => t('工具列表'),
+    render: ({ data }: {data: FormData['config']['output_fields'][0]['drill_config'][0]}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
+  }];
 
   // 字段下钻使用index
   const outputIndex = ref(-1);
@@ -796,14 +831,8 @@
   };
 
   // 删除值
-  const handleRemove = (index: number) => {
-    formData.value.config.output_fields[index] = {
-      ...formData.value.config.output_fields[index],
-      drill_config: {
-        tool: { uid: '', version: 1 },
-        config: [],
-      },
-    };
+  const  handleRemove = async (index: number) => {
+    formData.value.config.output_fields[index].drill_config = [];
   };
 
   const defineTheme = () => {
@@ -860,10 +889,7 @@
       return {
         ...newItem,
         description: '',
-        drill_config: {
-          tool: { uid: '', version: 1 },
-          config: [],
-        },
+        drill_config: [],
         enum_mappings: {
           collection_id: '',
           mappings: [],
@@ -874,15 +900,12 @@
     defineTheme();
     nextTick(() => {
       editor.setValue(sqlData.original_sql);
-      formItemRefs.value.forEach((item: any, index: number) => {
-        item?.setData(formData.value.config.input_variable[index].default_value);
-      });
     });
   };
 
   // 下钻打开
   const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
+    const { uid } = drillDownItem.drill_config[0].tool;
     const toolItem = allToolsData.value.find(item => item.uid === uid);
     if (!toolItem) {
       return;
@@ -947,12 +970,6 @@
       formData.value.config = configs;
       // 设置sql编辑器
       editor.setValue(configs.sql);
-      // 设置默认值
-      nextTick(() => {
-        formItemRefs.value.forEach((item: any, index: number) => {
-          item?.setData(formData.value.config.input_variable[index].default_value);
-        });
-      });
     },
     getFields() {
       return formData.value.config;
@@ -1061,6 +1078,7 @@
 
       .remove-btn {
         position: absolute;
+        top: 36%;
         right: 28px;
         z-index: 1;
         display: none;

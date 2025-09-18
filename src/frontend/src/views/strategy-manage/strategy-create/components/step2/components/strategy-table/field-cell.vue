@@ -49,7 +49,7 @@
     <!-- 字段下钻 -->
     <template v-else-if="fieldKey === 'drill_config' && localEventItem.drill_config">
       <div
-        v-if="!localEventItem.drill_config.tool.uid"
+        v-if="!localEventItem.drill_config.length"
         class="field-cell-div"
         style="color: #c4c6cc;"
         @click="() => handleClick()">
@@ -59,26 +59,60 @@
         v-else
         class="field-cell-div"
         @click="() => handleClick(localEventItem.drill_config)">
-        <audit-icon
-          style=" margin-right: 5px;font-size: 16px;"
-          svg
-          :type="iconMap[
-            getToolNameAndType(localEventItem.drill_config.tool.uid).type as keyof typeof iconMap
-          ]" />
-        {{ getToolNameAndType(localEventItem.drill_config.tool.uid).name }}
-        <audit-icon
-          v-if="localEventItem.drill_config.tool.uid"
-          class="remove-btn"
-          type="delete-fill"
-          @click.stop="handleRemove" />
-        <audit-icon
-          v-if="!(localEventItem.drill_config.tool.version
-            >= (toolMaxVersionMap[localEventItem.drill_config.tool.uid] || 1))"
-          v-bk-tooltips="{
-            content: t('该工具已更新，请确认'),
-          }"
-          class="renew-tips"
-          type="info-fill" />
+        <bk-popover
+          placement="top"
+          theme="black">
+          <span style="cursor: help;">{{ t('已配置工具下钻', { count: localEventItem.drill_config.length }) }}</span>
+          <template #content>
+            <div>
+              <div
+                v-for="config in localEventItem.drill_config"
+                :key="config.tool.uid">
+                • {{ getToolNameAndType(config.tool.uid).name }}
+              </div>
+            </div>
+          </template>
+        </bk-popover>
+        <!-- 删除 -->
+        <audit-popconfirm
+          class="ml8"
+          :confirm-handler="() => handleRemove()"
+          :content="t('移除操作无法撤回，请谨慎操作！')"
+          :title="t('确认移除以下工具？')">
+          <audit-icon
+            class="remove-btn"
+            type="delete-fill" />
+          <template #content>
+            <bk-table
+              ref="refTable"
+              :columns="columns"
+              :data="localEventItem.drill_config"
+              height="auto"
+              max-height="100%"
+              show-overflow-tooltip
+              stripe />
+          </template>
+        </audit-popconfirm>
+        <bk-popover
+          v-if="localEventItem.drill_config
+            .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+          placement="top"
+          theme="black">
+          <audit-icon
+            class="renew-tips"
+            type="info-fill" />
+          <template #content>
+            <div>
+              <div>{{ t('以下工具已更新，请确认：') }}</div>
+              <div
+                v-for="drill in localEventItem.drill_config
+                  .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                :key="drill.tool.uid">
+                • {{ getToolNameAndType(drill.tool.uid).name }}
+              </div>
+            </div>
+          </template>
+        </bk-popover>
       </div>
       <!-- 字段下钻 -->
       <field-reference
@@ -109,7 +143,7 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="tsx">
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -152,11 +186,16 @@
   const fieldReferenceRef = ref();
   const displayNameRef = ref();
 
-  const iconMap = {
-    data_search: 'sqlxiao',
-    api: 'apixiao',
-    bk_vision: 'bkvisonxiao',
-  };
+  // const iconMap = {
+  //   data_search: 'sqlxiao',
+  //   api: 'apixiao',
+  //   bk_vision: 'bkvisonxiao',
+  // };
+
+  const columns = [{
+    label: () => t('工具列表'),
+    render: ({ data }: {data: NonNullable<Props['eventItem']['drill_config']>[0]}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
+  }];
 
   const disabledList = ['risk_level', 'status', 'current_operator'];
 
@@ -177,14 +216,8 @@
   };
 
   // 删除值
-  const handleRemove = () => {
-    localEventItem.value.drill_config =  {
-      tool: {
-        uid: '',
-        version: 1,
-      },
-      config: [],
-    };
+  const handleRemove = async () => {
+    localEventItem.value.drill_config = [];
   };
 
   // 打开工具

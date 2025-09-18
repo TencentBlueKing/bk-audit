@@ -30,12 +30,9 @@
               :data="value.target_value" />
           </div>
           <div
-            v-else-if="typeof value === 'object' &&
-              value !== null &&
-              'tool' in value &&
-              'config' in value">
+            v-else-if="typeof value === 'object' && Array.isArray(value)">
             <tooltips
-              :data="getToolName(value.tool.uid)" />
+              :data="value.map(v => getToolName(v.tool.uid)).join('、')" />
           </div>
           <div
             v-else-if="typeof value === 'object' &&

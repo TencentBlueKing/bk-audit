@@ -58,17 +58,18 @@ export default class ToolDetail {
       raw_name: string;
       display_name: string;
       description: string;
-      drill_config: {
+      drill_config: Array<{
         tool: {
           uid: string;
           version: number;
         };
+        drill_name: string;
         config: Array<{
           source_field: string;
           target_value_type: string;
           target_value: string;
         }>
-      };
+      }>;
       enum_mappings: {
         collection_id: string;
         mappings: Array<{

@@ -37,6 +37,8 @@ import strategyEn from '@views/strategy-manage/language/en.js';
 import strategyZh from '@views/strategy-manage/language/zh.js';
 import systemEn from '@views/system-manage/language/en.js';
 import systemZh from '@views/system-manage/language/zh.js';
+import toolsEn from '@views/tools/language/en.js';
+import toolsZh from '@views/tools/language/zh.js';
 
 import allEn from '../../src/language/lang/en.js';
 import allZh from '../../src/language/lang/zh.js';
@@ -63,6 +65,7 @@ const i18n = createI18n({
       ...ruleZh.ruleManage,
       ...applicationZh.applicationManage,
       ...linkZh.linkDataManage,
+      ...toolsZh.toolsManage,
       ...allZh,
     },
     'en-US': {
@@ -76,6 +79,7 @@ const i18n = createI18n({
       ...ruleEn.ruleManage,
       ...applicationEn.applicationManage,
       ...linkEn.linkDataManage,
+      ...toolsEn.toolsManage,
       ...allEn,
     },
   },

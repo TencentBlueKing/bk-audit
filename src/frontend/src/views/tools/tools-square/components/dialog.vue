@@ -33,55 +33,67 @@
       @click="handleClick"
       @closed="handleCloseDialog">
       <template #header>
-        <div class="header">
-          <div class="header-left">
-            <audit-icon
-              class="full-screen-img"
-              svg
-              :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
-              @click="handleFullscreen()" />
+        <div>
+          <div
+            v-if="isShowTags"
+            class="dialog-header">
+            <dialog-header
+              ref="dialogHeaderRef"
+              :tabs="tabs"
+              @click-item="handleClickTag" />
           </div>
-          <div class="top-right">
-            <audit-icon
-              class="top-left-icon"
-              svg
-              :type="itemInfo ? itemIcon(itemInfo) : ''" />
-            <div class="top-right-box">
-              <div class="top-right-title">
-                <span
-                  v-bk-tooltips="{
-                    disabled: !isTextOverflow(itemInfo?.name || '', 0, '300px', { isSingleLine: true }),
-                    content: t(itemInfo?.name || ''),
-                    placement: 'top',
-                  }"
-                  class="top-right-name">
-                  {{ itemInfo?.name }}
-                </span>
-                <bk-tag
-                  v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
-                  :key="tagIndex"
-                  class="desc-tag">
-                  {{ returnTagsName(tag) }}
-                </bk-tag>
-                <bk-tag
-                  v-if="itemInfo?.tags && itemInfo.tags.length > 3"
-                  v-bk-tooltips="{
-                    content: tagContent(itemInfo.tags),
-                    placement: 'top',
-                  }"
-                  class="desc-tag">
-                  + {{ itemInfo.tags.length - 3
-                  }}
-                </bk-tag>
-                <bk-tag
-                  class="desc-tag desc-tag-info"
-                  theme="info"
-                  @click="handlesStrategiesClick(itemInfo)">
-                  运用在 {{ itemInfo?.strategies.length }} 个策略中
-                </bk-tag>
-              </div>
-              <div class="top-right-desc">
-                {{ itemInfo?.description }}
+          <div
+            class="header"
+            :style="isShowTags ? `margin-top: 35px;` : ``">
+            <div class="header-left">
+              <audit-icon
+                class="full-screen-img"
+                svg
+                :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
+                @click="handleFullscreen()" />
+            </div>
+            <div class="top-right">
+              <audit-icon
+                class="top-left-icon"
+                svg
+                :type="itemInfo ? itemIcon(itemInfo) : ''" />
+              <div class="top-right-box">
+                <div class="top-right-title">
+                  <span
+                    v-bk-tooltips="{
+                      disabled: !isTextOverflow(itemInfo?.name || '', 0, '300px', { isSingleLine: true }),
+                      content: t(itemInfo?.name || ''),
+                      placement: 'top',
+                    }"
+                    class="top-right-name">
+                    {{ itemInfo?.name }}
+                  </span>
+                  <bk-tag
+                    v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
+                    :key="tagIndex"
+                    class="desc-tag">
+                    {{ returnTagsName(tag) }}
+                  </bk-tag>
+                  <bk-tag
+                    v-if="itemInfo?.tags && itemInfo.tags.length > 3"
+                    v-bk-tooltips="{
+                      content: tagContent(itemInfo.tags),
+                      placement: 'top',
+                    }"
+                    class="desc-tag">
+                    + {{ itemInfo.tags.length - 3
+                    }}
+                  </bk-tag>
+                  <bk-tag
+                    class="desc-tag desc-tag-info"
+                    theme="info"
+                    @click="handlesStrategiesClick(itemInfo)">
+                    运用在 {{ itemInfo?.strategies.length }} 个策略中
+                  </bk-tag>
+                </div>
+                <div class="top-right-desc">
+                  {{ itemInfo?.description }}
+                </div>
               </div>
             </div>
           </div>
@@ -124,6 +136,7 @@
                     <form-item
                       ref="formItemRef"
                       :data-config="item"
+                      :target-value="item.value"
                       @change="(val:any) => handleFormItemChange(val, item)" />
                   </bk-form-item>
                 </div>
@@ -229,6 +242,8 @@
 
   import useMessage from '@hooks/use-message';
 
+  import DialogHeader from './dialog-header.vue';
+
   import useEventBus from '@/hooks/use-event-bus';
   import useRequest from '@/hooks/use-request';
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
@@ -268,12 +283,13 @@
   interface Props {
     tagsEnums: Array<TagItem>,
     source?: string,
+    isShowTags?: boolean,
   }
   interface DrillDownItem {
     raw_name: string;
     display_name: string;
     description: string;
-    drill_config: {
+    drill_config: Array<{
       tool: {
         uid: string;
         version: number;
@@ -284,11 +300,17 @@
         target_value: string;
         target_field_type?: string;
       }>
-    };
+    }>;
   }
   interface TableDataItem {
     [key: string]: any;
   }
+
+  interface tabsItem {
+    uid: string;
+    name: string;
+  }
+
   interface Exposes {
     closeDialog: () => void,
     openDialog: (
@@ -298,6 +320,7 @@
       isRiskToolParams?: Record<string, any>, // 风险工具参数
       preview?: boolean // 是否预览
     ) => void,
+    initTabsValue: (tabs: Array<tabsItem>, id: string) => void;
   }
   interface Emits {
     (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>): void;
@@ -306,12 +329,14 @@
 
   const props = withDefaults(defineProps<Props>(), {
     source: '',
+    isShowTags: false, // 是否显示标签
   });
   const emit = defineEmits<Emits>();
   const   emitBus  = useEventBus().emit;
   const { messageError } = useMessage();
   const { t } = useI18n();
 
+  const dialogHeaderRef = ref();
   const dialogIndex = ref(2000);
   const dialogWidth = ref('50%');
   const dialogHeight = ref('50vh');
@@ -343,8 +368,8 @@
   const formRef = ref();
   const searchFormData = ref();
   const router = useRouter();
-
-  const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>([]);
+  const tabs = ref<Array<tabsItem>>([]);
+  const drillDownItemConfig = ref<DrillDownItem['drill_config'][0]['config']>([]);
   const drillDownItemRowData = ref<Record<string, any>>({});
 
   const toolDetails = ref<ToolDetailModel>();
@@ -555,7 +580,7 @@
           ? mappings.find((m: any) => String(m.key) === String(rawVal))
           : undefined;
         const display = mapped ? mapped.name : rawVal;
-        if (item.drill_config === null || item.drill_config?.tool.uid === '') {
+        if (item.drill_config === null || item.drill_config.length === 0) {
           // 普通单元格
           return <span
             v-bk-tooltips={{
@@ -801,6 +826,7 @@
   const handleFieldDownClick = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>) => {
     emit('openFieldDown', drillDownItem, drillDownItemRowData);
   };
+
   const dialogUid = ref('');
   // 打开弹窗
   const handleOpenDialog = async (
@@ -830,7 +856,7 @@
       // 是否下钻
       isDrillDownOpen.value = true;
       // 下选父节点drill_config的config
-      drillDownItemConfig.value = drillDownItem?.drill_config?.config;
+      drillDownItemConfig.value = drillDownItem?.drill_config?.[0]?.config;
       // 下钻父节点所在行数据
       drillDownItemRowData.value = isDrillDownItemRowData;
     }
@@ -1028,6 +1054,11 @@
     document.addEventListener('mouseup', onMouseUp);
   };
 
+  // 点击头部标签
+  const handleClickTag = (TagItem: any) => {
+    getToolsDetail(TagItem.uid);
+  };
+
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
@@ -1035,7 +1066,13 @@
     openDialog(itemUid, drillDownItem, drillDownItemRowData, isRiskToolParams, preview) {
       handleOpenDialog(itemUid, drillDownItem, drillDownItemRowData, isRiskToolParams, preview);
     },
+    initTabsValue(tabs: Array<tabsItem>, id: string) {
+      nextTick(() => {
+        dialogHeaderRef.value.initTabsValue(tabs, id);
+      });
+    },
   });
+
 </script>
 
 <style scoped lang="postcss">
@@ -1070,6 +1107,14 @@
   height: 10px;
   cursor: ns-resize;
   opacity: 50%;
+}
+
+.dialog-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: #fafbfd;
 }
 
 .header {
