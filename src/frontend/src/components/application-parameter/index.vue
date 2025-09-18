@@ -63,6 +63,7 @@
     :placeholder="t('请选择已有选项或自行输入内容后Enter结束')"
     @change="handlerChange">
     <bk-option-group
+      v-if="riskFieldList.length > 0"
       collapsible
       :label="t('风险字段')">
       <bk-option
@@ -89,6 +90,7 @@
     </bk-option-group>
 
     <bk-option-group
+      v-if="eventDataList.length > 0"
       collapsible
       :label="t('事件字段')">
       <bk-option
@@ -138,7 +140,7 @@
       name: string,
     }>
     config: any,
-    eventDataList: any,
+    eventDataList?: any,
   }
 
   const props = defineProps<Props>();

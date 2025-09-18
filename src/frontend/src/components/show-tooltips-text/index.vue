@@ -33,7 +33,7 @@
 <script setup lang="ts">
   import tippy, {
     type Instance,
-    type SingleTarget,
+    type Placement,
   } from 'tippy.js';
   import {
     nextTick,
@@ -63,9 +63,9 @@
     nextTick(() => {
       const template = document.getElementById(`${data}`);
       if (hanldeIsShowTippy() && template && props.isShow) {
-        tippyIns = tippy(rootRef.value as SingleTarget, {
+        tippyIns = tippy(rootRef.value, {
           content: template.innerHTML,
-          placement: props.placement || 'top',
+          placement: props.placement as Placement,
           allowHTML: true,
           appendTo: () => document.body,
           theme: props.theme || 'dark',
