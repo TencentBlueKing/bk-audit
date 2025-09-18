@@ -190,7 +190,7 @@ class DrillConfig(BaseModel):
 
     tool: Tool
     config: List[ToolDrillConfig] = PydanticField(default_factory=list)
-    drill_name: str = PydanticField("", description="下钻工具名称")
+    drill_name: str
 
 
 class SQLDataSearchOutputField(DataSearchBaseField):
