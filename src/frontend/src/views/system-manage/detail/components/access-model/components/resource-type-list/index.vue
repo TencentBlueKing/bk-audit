@@ -389,8 +389,6 @@
 
     // 3. 提取筛选值（如 ["closed"]）
     const statusIds = statusItem.values.map(v => v.id);
-    console.log(resourceTypeList.value);
-    console.log(statusIds);
 
     return resourceTypeList.value.filter(item => statusIds.
       includes(snapShotStatusList.value[item.resource_type_id]?.status));

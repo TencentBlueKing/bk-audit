@@ -211,7 +211,6 @@
         }
         return item;
       });
-      console.log(editData.value);
     },
   });
 

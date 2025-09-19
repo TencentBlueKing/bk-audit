@@ -160,7 +160,7 @@
   interface Props {
     dataConfig: SearchItem,
     originModel?: boolean,
-    targetValue: any,
+    targetValue?: any,
   }
   interface Emits {
     (e: 'change', value: any): void
@@ -171,7 +171,9 @@
     getData: () => void,
   }
 
-  const props = withDefaults(defineProps<Props>(), {});
+  const props = withDefaults(defineProps<Props>(), {
+    targetValue: undefined,
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 

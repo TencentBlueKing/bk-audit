@@ -600,18 +600,6 @@
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
-      data.config.output_fields.forEach((item) => {
-        if (!Array.isArray(item.drill_config)) {
-          // eslint-disable-next-line no-param-reassign
-          item.drill_config = [item.drill_config];
-          item.drill_config.forEach((drill) => {
-            if (!drill.drill_name) {
-              // eslint-disable-next-line no-param-reassign
-              drill.drill_name = '';
-            }
-          });
-        }
-      });
       formData.value = data;
       comRef.value.setConfigs(formData.value.config);
     },
@@ -647,7 +635,6 @@
       // 获取组件配置
       if (comRef.value.getFields) {
         if (data.tool_type === 'bk_vision') {
-          console.log(comRef.value.getFields());
           data.config.input_variable = comRef.value.getFields();
         } else {
           data.config = comRef.value.getFields();
@@ -658,7 +645,6 @@
       if (data.tags) {
         data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
       }
-      console.log(data);
       service(data)
         .then(() => {
           isFailed.value = false;

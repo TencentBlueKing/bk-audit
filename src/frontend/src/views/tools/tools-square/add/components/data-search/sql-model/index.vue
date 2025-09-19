@@ -398,7 +398,7 @@
                     <bk-popover
                       placement="top"
                       theme="black">
-                      <span style="cursor: help;">{{ t('已配置工具下钻', { count: item.drill_config.length }) }}</span>
+                      <span style="cursor: pointer;">{{ t('已配置工具下钻', { count: item.drill_config.length }) }}</span>
                       <template #content>
                         <div>
                           <div
@@ -492,6 +492,7 @@
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item.uid] = el"
+      :all-tools-data="allToolsData"
       :tags-enums="toolTagData"
       @open-field-down="openFieldDown" />
   </div>

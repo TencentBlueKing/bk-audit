@@ -52,11 +52,12 @@
   </div>
   <!-- 循环所有工具 -->
   <div
-    v-for="item in allToolsDataUids"
+    v-for="item in allOpenToolsData"
     :key="item">
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item] = el"
+      :all-tools-data="allToolsData"
       :tags-enums="tagData"
       @open-field-down="openFieldDown" />
   </div>
@@ -193,7 +194,7 @@
   });
 
   // 动态工具数据
-  const allToolsDataUids = ref<string[]>([]);
+  const allOpenToolsData = ref<string[]>([]);
 
   // 获取标签列表
   const {
@@ -210,9 +211,9 @@
   const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
     const { uid } = drillDownItem.drill_config[0].tool;
 
-    // 如果工具不在 allToolsDataUids 中，添加它
-    if (!allToolsDataUids.value.find(item => item === uid)) {
-      allToolsDataUids.value.push(uid);
+    // 如果工具不在 allOpenToolsData 中，添加它
+    if (!allOpenToolsData.value.find(item => item === uid)) {
+      allOpenToolsData.value.push(uid);
     }
 
     if (dialogRefs.value[uid]) {
@@ -223,9 +224,9 @@
   // 打开工具
   const handleOpenTool = async (toolInfo: any) => {
     const { uid } = toolInfo;
-    // 如果工具不在 allToolsDataUids 中，添加它
-    if (!allToolsDataUids.value.find(item => item === uid)) {
-      allToolsDataUids.value.push(uid);
+    // 如果工具不在 allOpenToolsData 中，添加它
+    if (!allOpenToolsData.value.find(item => item === uid)) {
+      allOpenToolsData.value.push(uid);
     }
   };
 
