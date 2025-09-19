@@ -17,7 +17,8 @@ to the current version of the project delivered to anyone in the future.
 """
 import sys
 
-if "celery" in sys.argv and "worker" in sys.argv:  # 根据命令行参数判断
+if "gevent" in sys.argv and "worker" in sys.argv:  # 根据命令行参数判断
+    print("Using gevent patch.")
     from gevent import monkey
 
     monkey.patch_all()
