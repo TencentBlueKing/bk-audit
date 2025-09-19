@@ -136,7 +136,6 @@
                     <form-item
                       ref="formItemRef"
                       :data-config="item"
-                      :target-value="item.value"
                       @change="(val:any) => handleFormItemChange(val, item)" />
                   </bk-form-item>
                 </div>
@@ -283,7 +282,7 @@
   interface Props {
     tagsEnums: Array<TagItem>,
     source?: string,
-    isShowTags?: boolean,
+    allToolsData: Array<ToolDetailModel>,
   }
   interface DrillDownItem {
     raw_name: string;
@@ -301,6 +300,13 @@
         target_field_type?: string;
       }>
     }>;
+    enum_mappings: {
+      collection_id: string;
+      mappings: Array<{
+        key: string;
+        name: string;
+      }>;
+    };
   }
   interface TableDataItem {
     [key: string]: any;
@@ -317,13 +323,14 @@
       itemUid: string,  // 工具信息
       drillDownItem?: DrillDownItem, // 下钻信息
       drillDownItemRowData?: Record<string, string>, // 下钻table所在行信息
+      activeUid?: string, // 多工具时，当前激活的工具信息
       isRiskToolParams?: Record<string, any>, // 风险工具参数
       preview?: boolean // 是否预览
     ) => void,
     initTabsValue: (tabs: Array<tabsItem>, id: string) => void;
   }
   interface Emits {
-    (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>): void;
+    (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>, activeUid?: string): void;
     (e: 'close', val?: string): void;
   }
 
@@ -371,12 +378,20 @@
   const tabs = ref<Array<tabsItem>>([]);
   const drillDownItemConfig = ref<DrillDownItem['drill_config'][0]['config']>([]);
   const drillDownItemRowData = ref<Record<string, any>>({});
+  const drillDownItem = ref<DrillDownItem>();
 
   const toolDetails = ref<ToolDetailModel>();
   // 权限
   const urlIamApply = ref('');
 
   const riskToolParams = ref<Record<string, any> | undefined>(undefined);
+
+  const dialogUid = ref('');
+
+  const isShowTags = ref(false);
+
+  // 当前激活的工具
+  const activeUid = ref('');
 
   // 工具执行
   const {
@@ -488,6 +503,17 @@
     return tagNameList.join(',');
   };
 
+  const getToolNameAndType = (uid: string) => {
+    const tool = props.allToolsData?.find(item => item.uid === uid);
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
+    };
+  };
+
   const handleClick = () => {
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -597,23 +623,64 @@
         }
         // 可下钻的列，显示按钮
         return (
-          <bk-button
-            v-bk-tooltips={{
-              content: t('映射对象', {
-                key: mapped?.key,
-                name: mapped?.name,
-              }),
-              disabled: !mapped,
-            }}
-            class={{ tips: mapped }}
-            theme="primary"
-            text
-            onClick={(e: any) => {
-              e.stopPropagation(); // 阻止事件冒泡
-              handleFieldDownClick(item, data);
-            }}>
-            {display}
-          </bk-button>
+          <div>
+            <bk-button
+              v-bk-tooltips={{
+                content: t('映射对象', {
+                  key: mapped?.key,
+                  name: mapped?.name,
+                }),
+                disabled: !mapped,
+              }}
+              class={{ tips: mapped }}
+              theme="primary"
+              text
+              onClick={(e: any) => {
+                e.stopPropagation(); // 阻止事件冒泡
+                handleFieldDownClick(item, data);
+              }}>
+              {display}
+            </bk-button>
+            <bk-popover
+              placement="top"
+              theme="black"
+              v-slots={{
+                content: () => (
+                  <div>
+                    {item.drill_config.map(config => (
+                      <div key={config.tool.uid}>
+                        • {getToolNameAndType(config.tool.uid).name}
+                        <bk-button
+                          class="ml8"
+                          theme="primary"
+                          text
+                          onClick={(e: any) => {
+                            e.stopPropagation(); // 阻止事件冒泡
+                            handleFieldDownClick(item, data, config.tool.uid);
+                          }}>
+                          {t('查看')}
+                        </bk-button>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              }}>
+              <span style={{
+                padding: '1px 8px',
+                backgroundColor: '#cddffe',
+                borderRadius: '8px',
+                marginLeft: '5px',
+                color: '#3a84ff',
+                cursor: 'pointer',
+              }}
+              onClick={(e: any) => {
+                e.stopPropagation(); // 阻止事件冒泡
+                handleFieldDownClick(item, data);
+              }}>
+                {item.drill_config.length}
+              </span>
+            </bk-popover>
+          </div>
         );
       };
 
@@ -823,16 +890,20 @@
   };
 
   // 下钻点击
-  const handleFieldDownClick = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>) => {
-    emit('openFieldDown', drillDownItem, drillDownItemRowData);
+  const handleFieldDownClick = (
+    drillDownItem: DrillDownItem,
+    drillDownItemRowData: Record<string, any>,
+    activeUid?: string,
+  ) => {
+    emit('openFieldDown', drillDownItem, drillDownItemRowData, activeUid);
   };
 
-  const dialogUid = ref('');
   // 打开弹窗
   const handleOpenDialog = async (
     itemUid: string,
-    drillDownItem?: DrillDownItem,
+    isDrillDownItem?: DrillDownItem,
     isDrillDownItemRowData?: Record<string, any>,
+    isActiveUid?: string,
     isRiskToolParams?: Record<string, any>,
     preview?: boolean,
   ) => {
@@ -841,6 +912,30 @@
     isShow.value = true;
     dialogUid.value = itemUid;
     riskToolParams.value = isRiskToolParams;
+
+    // 多工具下钻
+    if (itemUid.includes('&')) {
+      const uids = itemUid.split('&');
+
+      // 默认激活第一个
+      activeUid.value = isActiveUid || uids[0];
+
+      // 创建tabs列表
+      const tabs = uids.map(uid => ({
+        uid,
+        name: getToolNameAndType(uid).name,
+      }));
+
+      // 如果tabs列表长度大于1，则显示tabs
+      if (tabs.length > 1) {
+        isShowTags.value = true;
+        nextTick(() => {
+          dialogHeaderRef.value.initTabsValue(tabs, activeUid.value);
+        });
+      }
+    } else {
+      activeUid.value = itemUid;
+    }
 
     // dialog层级
     const isNewIndex = sessionStorage.getItem('dialogIndex');
@@ -852,15 +947,23 @@
     });
 
     // 下钻
-    if (drillDownItem && isDrillDownItemRowData) {
+    if (isDrillDownItem && isDrillDownItemRowData) {
       // 是否下钻
       isDrillDownOpen.value = true;
-      // 下选父节点drill_config的config
-      drillDownItemConfig.value = drillDownItem?.drill_config?.[0]?.config;
-      // 下钻父节点所在行数据
+
+      // 下选节点
+      drillDownItem.value = isDrillDownItem;
+
+      // 下选节点drill_config的config
+      drillDownItemConfig.value = isDrillDownItem?.drill_config
+        .find(item => item.tool.uid === activeUid.value)?.config || [];
+
+      // 下钻节点所在行数据
       drillDownItemRowData.value = isDrillDownItemRowData;
     }
-    getToolsDetail(itemUid);
+
+    // 获取工具详情
+    getToolsDetail(activeUid.value);
   };
 
   // 获取工具详情
@@ -924,6 +1027,7 @@
   const handleFullscreen = () => {
     isFullScreen.value = !isFullScreen.value;
   };
+
   watch(() => isFullScreen.value, (val) => {
     nextTick(() => {
       if (tableData.value.length > 0) {
@@ -937,6 +1041,7 @@
       }
     });
   });
+
   // 文本溢出检测
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
     isSingleLine?: boolean;
@@ -1056,15 +1161,23 @@
 
   // 点击头部标签
   const handleClickTag = (TagItem: any) => {
-    getToolsDetail(TagItem.uid);
+    activeUid.value = TagItem.uid;
+    drillDownItemConfig.value = drillDownItem.value?.drill_config
+      .find(item => item.tool.uid === activeUid.value)?.config || [];
+
+    // 清空表格数据
+    tableData.value = [];
+    pagination.value.count = 0;
+
+    getToolsDetail(activeUid.value);
   };
 
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
     },
-    openDialog(itemUid, drillDownItem, drillDownItemRowData, isRiskToolParams, preview) {
-      handleOpenDialog(itemUid, drillDownItem, drillDownItemRowData, isRiskToolParams, preview);
+    openDialog(itemUid, drillDownItem, drillDownItemRowData, activeUid, isRiskToolParams, preview) {
+      handleOpenDialog(itemUid, drillDownItem, drillDownItemRowData, activeUid, isRiskToolParams, preview);
     },
     initTabsValue(tabs: Array<tabsItem>, id: string) {
       nextTick(() => {
