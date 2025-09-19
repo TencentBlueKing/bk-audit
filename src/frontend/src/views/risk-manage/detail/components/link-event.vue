@@ -75,13 +75,15 @@
                   v-for="(basicArr, basicIndex) in basicInfo"
                   :key="basicIndex"
                   class="flex mt16"
-                  style="margin-bottom: 12px;">
+                  style="justify-content: space-between; gap: 24px;">
                   <render-info-item
                     v-for="(basicItem, itemIndex) in basicArr"
                     :key="itemIndex"
                     :description="basicItem.description"
                     :label="basicItem.display_name"
-                    :label-width="labelWidth">
+                    :label-width="labelWidth"
+                    :label-width-percent="25"
+                    style="flex-basis: 50%;">
                     <template v-if="basicItem.field_name === 'strategy_id'">
                       <bk-button
                         v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
@@ -139,15 +141,16 @@
                 <render-info-block
                   v-for="(keyArr, keyIndex) in eventDataKeyArr"
                   :key="keyIndex"
-                  class="flex mt16">
+                  class="flex mt16"
+                  style="justify-content: space-between; gap: 24px;">
                   <render-info-item
                     v-for="(key, index) in keyArr"
                     :key="index"
                     :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
                     :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
-                    :label-width-percent="30"
-                    style="width: 50%;">
+                    :label-width-percent="25"
+                    style="flex-basis: 50%;">
                     <span
                       v-bk-tooltips="{
                         content: t('映射对象', {
@@ -189,7 +192,7 @@
                     :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
                     :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
-                    :label-width-percent="30"
+                    :label-width-percent="25"
                     style="width: 50%;">
                     <span
                       v-bk-tooltips="{

@@ -76,7 +76,7 @@
     :show-footer="false"
     show-header-slot
     title="策略详情"
-    :width="960">
+    :width="1000">
     <template #header>
       <div
         class="flex"

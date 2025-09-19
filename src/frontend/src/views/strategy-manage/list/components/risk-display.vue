@@ -28,8 +28,7 @@
       <div>
         <span style="font-size: 12px;color: #979ba5;">{{ t('风险字段配置') }}:</span>
         <div
-          class="event-table"
-          style="margin-top: 12px;">
+          class="event-table">
           <div class="head">
             <div
               v-for="(item, index) in riskColumns"
@@ -57,6 +56,7 @@
       style="margin-top: 24px;">
       <render-info-block class="mt16">
         <!-- <render-info-item :label="t('事件信息')"> -->
+        <span style="font-size: 12px;color: #979ba5;">{{ t('风险字段配置') }}:</span>
         <div class="event-table">
           <div class="head">
             <div
@@ -189,6 +189,15 @@
 <style lang="postcss" scoped>
 .risk-display {
   .event-table {
+    display: flex;
+    margin-top: 12px;
+    margin-bottom: 10px;
+    color: #63656e;
+    border-top: 1px solid #dcdee5;
+    border-right: 1px solid #dcdee5;
+    border-left: 1px solid #dcdee5;
+    flex-direction: column;
+
     @mixin cell-base {
       display: flex;
       padding: 0 12px;
@@ -196,14 +205,6 @@
       border-bottom: 1px solid #dcdee5;
       align-items: center;
     }
-
-    display: flex;
-    margin-bottom: 10px;
-    color: #63656e;
-    border-top: 1px solid #dcdee5;
-    border-right: 1px solid #dcdee5;
-    border-left: 1px solid #dcdee5;
-    flex-direction: column;
 
     .head {
       display: flex;
@@ -226,7 +227,7 @@
         }
 
         &.is-priority {
-          width: 80px;
+          width: 100px;
         }
 
         &.map-config {

@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => {
     },
     envPrefix: 'AUDIT_',
     server: {
-      https: true,
+      https: {},
       port: 8082,
       strictPort: true,
     },
