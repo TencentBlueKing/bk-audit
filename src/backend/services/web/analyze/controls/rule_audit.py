@@ -64,6 +64,7 @@ class RuleAuditController(BkbaseFlowController):
     """
 
     base_control_type = BaseControlTypeChoices.RULE_AUDIT
+    storage_nodes = [ESStorageNode, QueueStorageNode, HDFSStorageNode]
 
     def __init__(self, strategy_id: int):
         super().__init__(strategy_id)
@@ -342,8 +343,7 @@ class RuleAuditController(BkbaseFlowController):
         bk_biz_id = int(self.rt_ids[0].split("_", 1)[0])
         from_result_table_ids = [BaseStorageNode.build_rt_id(bk_biz_id, self.raw_table_name)]
         storage_node_ids = [] if need_create else self.strategy.backend_data.get("storage_node_ids", [])
-        storage_nodes = [ESStorageNode, QueueStorageNode, HDFSStorageNode]
-        for idx, storage_node in enumerate(storage_nodes):
+        for idx, storage_node in enumerate(self.storage_nodes):
             node_config = storage_node(namespace=self.strategy.namespace).build_node_config(
                 bk_biz_id=bk_biz_id, raw_table_name=self.raw_table_name, from_result_table_ids=from_result_table_ids
             )
