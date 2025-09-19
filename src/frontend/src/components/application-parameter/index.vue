@@ -15,7 +15,6 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  {{ modelValue }}
   <bk-date-picker
     v-if="config.custom_type === 'datetime'"
     v-model="localValue"
