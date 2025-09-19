@@ -15,6 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  {{ modelValue }}
   <bk-date-picker
     v-if="config.custom_type === 'datetime'"
     v-model="localValue"
@@ -98,7 +99,7 @@
         v-for="(item, index) in eventDataList"
         :id="item.text"
         :key="index"
-        :name="item.text">
+        :name="item.lable">
         <bk-popover
           placement="left"
           theme="light">
