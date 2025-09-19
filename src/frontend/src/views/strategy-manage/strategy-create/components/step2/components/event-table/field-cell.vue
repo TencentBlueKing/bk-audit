@@ -111,7 +111,7 @@
         <bk-popover
           placement="top"
           theme="black">
-          <span style="cursor: help;">{{ t('已配置工具下钻', { count: localEventItem.drill_config.length }) }}</span>
+          <span style="cursor: pointer;">{{ t('已配置工具下钻', { count: localEventItem.drill_config.length }) }}</span>
           <template #content>
             <div>
               <div

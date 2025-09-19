@@ -107,22 +107,56 @@
                         :class="[
                           // eslint-disable-next-line max-len
                           displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings ? 'tips' : ''
-                        ]">
+                        ]"
+                        :style="{
+                          color: drillMap.get(basicItem.field_name) ? '#3a84ff' : '#313238',
+                        }">
                         {{ displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value }}
                       </span>
                     </template>
                     <template v-if="drillMap.get(basicItem.field_name)">
-                      <bk-button
-                        class="ml8"
-                        text
-                        theme="primary"
-                        @click="handleClick(
-                          drillMap.get(basicItem.field_name),
-                          drillMap.get(basicItem.field_name).drill_config.tool.uid,
-                          basicItem.field_name
-                        )">
-                        {{ t('查看') }}
-                      </bk-button>
+                      <bk-popover
+                        placement="top"
+                        theme="black">
+                        <bk-button
+                          class="ml8"
+                          text
+                          theme="primary"
+                          @click="handleClick(
+                            drillMap.get(basicItem.field_name),
+                            basicItem.field_name
+                          )">
+                          <span
+                            style="
+                              padding: 2px 10px;
+                              color: #3a84ff;
+                              cursor: pointer;
+                              background-color: #cddffe;
+                              border-radius: 8px;
+                            ">
+                            {{ drillMap.get(basicItem.field_name).drill_config.length }}
+                          </span>
+                        </bk-button>
+                        <template #content>
+                          <div>
+                            <div
+                              v-for="config in drillMap.get(basicItem.field_name).drill_config"
+                              :key="config.tool.uid">
+                              • {{ getToolNameAndType(config.tool.uid).name }}
+                              <bk-button
+                                class="ml8"
+                                text
+                                theme="primary"
+                                @click="(e: any) => {
+                                  e.stopPropagation(); // 阻止事件冒泡
+                                  //
+                                }">
+                                {{ t('查看') }}
+                              </bk-button>
+                            </div>
+                          </div>
+                        </template>
+                      </bk-popover>
                     </template>
                   </render-info-item>
                 </render-info-block>
@@ -161,19 +195,55 @@
                       }"
                       :class="[
                         displayValueDict.eventData[key]?.isMappings ? 'tips' : '',
-                      ]">{{ displayValueDict.eventData[key]?.value }}</span>
+                      ]"
+                      :style="{
+                        color: drillMap.get(key) ? '#3a84ff' : '#313238',
+                      }">
+                      {{ displayValueDict.eventData[key]?.value }}
+                    </span>
                     <template v-if="drillMap.get(key)">
-                      <bk-button
-                        class="ml8"
-                        text
-                        theme="primary"
-                        @click="handleClick(
-                          drillMap.get(key),
-                          drillMap.get(key).drill_config.tool.uid,
-                          key
-                        )">
-                        {{ t('查看') }}
-                      </bk-button>
+                      <bk-popover
+                        placement="top"
+                        theme="black">
+                        <bk-button
+                          class="ml8"
+                          text
+                          theme="primary"
+                          @click="handleClick(
+                            drillMap.get(key),
+                            key
+                          )">
+                          <span
+                            style="
+                              padding: 2px 10px;
+                              color: #3a84ff;
+                              cursor: pointer;
+                              background-color: #cddffe;
+                              border-radius: 8px;
+                            ">
+                            {{ drillMap.get(key).drill_config.length }}
+                          </span>
+                        </bk-button>
+                        <template #content>
+                          <div>
+                            <div
+                              v-for="config in drillMap.get(key).drill_config"
+                              :key="config.tool.uid">
+                              • {{ getToolNameAndType(config.tool.uid).name }}
+                              <bk-button
+                                class="ml8"
+                                text
+                                theme="primary"
+                                @click="(e: any) => {
+                                  e.stopPropagation(); // 阻止事件冒泡
+                                  //
+                                }">
+                                {{ t('查看') }}
+                              </bk-button>
+                            </div>
+                          </div>
+                        </template>
+                      </bk-popover>
                     </template>
                   </render-info-item>
                 </render-info-block>
@@ -204,19 +274,55 @@
                       }"
                       :class="[
                         displayValueDict.eventData[key]?.isMappings ? 'tips' : '',
-                      ]">{{ displayValueDict.eventData[key]?.value }}</span>
+                      ]"
+                      :style="{
+                        color: drillMap.get(key) ? '#3a84ff' : '#313238',
+                      }">
+                      {{ displayValueDict.eventData[key]?.value }}
+                    </span>
                     <template v-if="drillMap.get(key)">
-                      <bk-button
-                        class="ml8"
-                        text
-                        theme="primary"
-                        @click="handleClick(
-                          drillMap.get(key),
-                          drillMap.get(key).drill_config.tool.uid,
-                          key
-                        )">
-                        {{ t('查看') }}
-                      </bk-button>
+                      <bk-popover
+                        placement="top"
+                        theme="black">
+                        <bk-button
+                          class="ml8"
+                          text
+                          theme="primary"
+                          @click="handleClick(
+                            drillMap.get(key),
+                            key
+                          )">
+                          <span
+                            style="
+                              padding: 2px 10px;
+                              color: #3a84ff;
+                              cursor: pointer;
+                              background-color: #cddffe;
+                              border-radius: 8px;
+                            ">
+                            {{ drillMap.get(key).drill_config.length }}
+                          </span>
+                        </bk-button>
+                        <template #content>
+                          <div>
+                            <div
+                              v-for="config in drillMap.get(key).drill_config"
+                              :key="config.tool.uid">
+                              • {{ getToolNameAndType(config.tool.uid).name }}
+                              <bk-button
+                                class="ml8"
+                                text
+                                theme="primary"
+                                @click="(e: any) => {
+                                  e.stopPropagation(); // 阻止事件冒泡
+                                  //
+                                }">
+                                {{ t('查看') }}
+                              </bk-button>
+                            </div>
+                          </div>
+                        </template>
+                      </bk-popover>
                     </template>
                   </render-info-item>
                 </render-info-block>
@@ -258,11 +364,12 @@
   </div>
   <!-- 循环所有工具 -->
   <div
-    v-for="item in allToolsData"
+    v-for="item in allOpenToolsData"
     :key="item">
     <component
       :is="DialogVue"
       :ref="(el: any) => dialogRefs[item] = el"
+      :all-tools-data="allToolsData"
       source="risk"
       :tags-enums="tagData"
       @close="handleClose"
@@ -309,7 +416,7 @@
       target_value: string | undefined,
       source_field: string | undefined,
     };
-    drill_config: {
+    drill_config: Array<{
       tool: {
         uid: string;
         version: number;
@@ -320,6 +427,13 @@
         target_value: string;
         target_field_type: string;
       }>
+    }>;
+    enum_mappings: {
+      collection_id: string;
+      mappings: Array<{
+        key: string;
+        name: string;
+      }>;
     };
   }
 
@@ -379,7 +493,7 @@
   const eventItem = ref(new EventModel()); // 当前选中事件
   // const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
   // const showTooltips = ref(false); // 是否显示tooltips
-  const allToolsData = ref<string[]>([]);
+  const allOpenToolsData = ref<string[]>([]);
   const isShowMore = ref(false);
   const dialogRefs = ref<Record<string, any>>({});
   const detailRenderKey = ref(0);
@@ -533,6 +647,14 @@
     return String(value);
   };
 
+  // 获取所有工具
+  const {
+    data: allToolsData,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    manual: true,
+  });
+
   // 获取标签列表
   const {
     data: tagData,
@@ -540,6 +662,17 @@
     defaultValue: [],
     manual: true,
   });
+
+  const getToolNameAndType = (uid: string) => {
+    const tool = allToolsData.value?.find(item => item.uid === uid);
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
+    };
+  };
 
   const {
     data: linkEventData,
@@ -629,28 +762,41 @@
   };
 
   // 下转打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config[0].tool;
-    if (!(allToolsData.value.find(item => item === uid))) {
-      allToolsData.value.push(uid);
+  const openFieldDown = (
+    drillDownItem: DrillDownItem,
+    drillDownItemRowData: Record<any, string>,
+    activeUid?: string,
+  ) => {
+    const uids = drillDownItem.drill_config.map(config => config.tool.uid).join('&');
+    if (!(allOpenToolsData.value.find(item => item === uids))) {
+      allOpenToolsData.value.push(uids);
     }
 
     nextTick(() => {
-      if (dialogRefs.value[uid]) {
-        dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData, riskToolParams.value);
+      if (dialogRefs.value[uids]) {
+        dialogRefs.value[uids].openDialog(uids, drillDownItem, drillDownItemRowData, activeUid);
       }
     });
   };
 
-  // 打开工具
-  const handleClick = (item: DrillItem, id: string, fieldName: string) => {
+  // 打开工具(风险单打开就是下钻模式)
+  const handleClick = (
+    drillDownItem: DrillItem,
+    fieldName: string,
+    activeUid?: string,
+  ) => {
     riskToolParams.value.drill_field = fieldName;
-    if (!(allToolsData.value.find(tool => tool === id))) {
-      allToolsData.value.push(id);
+    const drillDownItemRowData = eventItem.value;
+
+    const uids = drillDownItem.drill_config.map(config => config.tool.uid).join('&');
+
+    if (!(allOpenToolsData.value.find(item => item === uids))) {
+      allOpenToolsData.value.push(uids);
     }
+
     nextTick(() => {
-      if (dialogRefs.value[id]) {
-        dialogRefs.value[id].openDialog(id, item, eventItem.value, riskToolParams.value);
+      if (dialogRefs.value[uids]) {
+        dialogRefs.value[uids].openDialog(uids, drillDownItem, drillDownItemRowData, activeUid, riskToolParams.value);
       }
     });
   };
@@ -686,7 +832,7 @@
   // 关闭弹窗
   const handleClose = (ToolInfo: string | undefined) => {
     if (ToolInfo) {
-      allToolsData.value = allToolsData.value.filter(item => item !== ToolInfo);
+      allOpenToolsData.value = allOpenToolsData.value.filter(item => item !== ToolInfo);
     }
   };
 
