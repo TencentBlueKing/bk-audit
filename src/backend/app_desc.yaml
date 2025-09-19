@@ -12,15 +12,15 @@ modules:
         plan: 4C4G5R
         replicas: 5
       worker:
-        command: python manage.py celery worker -O fair -l info -Q celery,default -P gevent -c 512 -E
+        command: python manage.py celery worker -O fair -l info -Q celery,default -P gevent -c 128 -E
         plan: 2C4G5R
         replicas: 5
       risk-worker:
-        command: python manage.py celery worker -O fair -l info -Q risk -P gevent -c 512 -E
+        command: python manage.py celery worker -O fair -l info -Q risk -P gevent -c 128 -E
         plan: 2C4G5R
         replicas: 5
       notice:
-        command: python manage.py celery worker -O fair -l info -Q notice -P gevent -c 512 -E
+        command: python manage.py celery worker -O fair -l info -Q notice -P gevent -c 128 -E
         plan: 2C2G5R
         replicas: 1
       beat:
@@ -32,7 +32,7 @@ modules:
         plan: 2C1G5R
         replicas: 2
       log-export:
-        command: python manage.py celery worker -O fair -l info -Q log_export -P gevent -c 512 -E
+        command: python manage.py celery worker -O fair -l info -Q log_export -P gevent -c 128 -E
         plan: 2C2G5R
         replicas: 5
     scripts:
