@@ -102,7 +102,7 @@
             property="pa_params">
             <div style="padding: 16px 12px;background: rgb(245 247 250 / 100%)">
               <template
-                v-for="(val, index) in Object.values(paramsDetailData)"
+                v-for="(val, index) in Object.values(sortByIndex (paramsDetailData))"
                 :key="`${val.key}-${index}`">
                 <!-- 只显示需要显示的字段 -->
                 <bk-form-item
@@ -193,6 +193,27 @@
   interface Emits{
     (e:'update'): void,
   }
+
+  interface ParamItem {
+    custom_type: string;
+    desc:string;
+    form_schema: Record<string, any>;
+    index: number;
+    key: string;
+    name: string;
+    show_type: string;
+    source_info: Record<string, any>;
+    source_tag: string;
+    source_type: string;
+    validation: string;
+    is_condition_hide: boolean | string;
+    pre_render_mako: boolean;
+    value: string;
+    version: string;
+    is_meta: boolean;
+    schema: Record<string, any>;
+  }
+
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
@@ -283,6 +304,15 @@
     manual: true,
   });
   // 获取处理套餐详情
+  const sortByIndex = (obj: Record<string, ParamItem>) => {
+    const sortedKeys = Object.keys(obj).sort((a, b) => obj[a].index - obj[b].index);
+
+    return sortedKeys.reduce((acc, key) => {
+      acc[key] = obj[key];
+      return acc;
+    }, {} as Record<string, ParamItem>);
+  };
+
   const {
     run: fetchDetail,
     loading: detailLoading,

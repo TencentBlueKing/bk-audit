@@ -96,14 +96,14 @@
       :label="t('事件字段')">
       <bk-option
         v-for="(item, index) in eventDataList"
-        :id="item.value"
+        :id="item.text"
         :key="index"
         :name="item.text">
         <bk-popover
           placement="left"
           theme="light">
           <div style="width: 100%;height: 100%;">
-            {{ item.text }}
+            {{ item.lable }}
           </div>
           <template #content>
             <div>
@@ -118,7 +118,7 @@
     </bk-option-group>
   </bk-select>
   <div
-    v-if="localValue !== ''"
+    v-if="localValue !== '' && config.custom_type !== 'select' && isShowtip"
     class="item-value">
     <div>
       {{ t('当前值：') }}
@@ -150,7 +150,7 @@
   const { t } = useI18n();
   const tipText = ref('');
   const localValue = ref('');  // 仅仅用于select绑定，真正传给父组件的是：根据input，select类型赋值给modelValue.value，modelValue.field
-
+  const isShowtip = ref(false);
   const modelValue = defineModel<{field: string, value: string}>({
     default: () => ({
       field: '',
@@ -179,13 +179,25 @@
         field: val,
         value: '',
       };
+      isShowtip.value = true;
       return;
     }
-    // 自定义输入
-    modelValue.value = {
-      field: '',
-      value: val,
-    };
+
+    if (props.eventDataList.find((item: { text: string; }) => item.text === val)) {
+      isShowtip.value = true;
+      // 自定义输入
+      modelValue.value = {
+        field: '',
+        value: props.eventDataList.find((item: { text: string; }) => item.text === val).value,
+      };
+    } else {
+      isShowtip.value = false;
+      // 自定义输入
+      modelValue.value = {
+        field: '',
+        value: val,
+      };
+    }
   };
   const formatTooltipData = (type: string, value: string) => {
     if (type === 'datetime') {
