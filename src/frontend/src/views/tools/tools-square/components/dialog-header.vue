@@ -75,7 +75,6 @@
     (e: 'clickItem', item: tabsItem): void;
   }
 
-
   const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const { t } = useI18n();
@@ -83,12 +82,10 @@
 
   const tabs = ref<Array<tabsItem>>(props.tabs);
 
-
   const itemRef = ref();
   const isOverflow = ref(false);
   const resizeObserver = ref();
   const beforeActiveIndex = ref(0);
-
 
   // 点击tab
   const handlerClickItem = (itemInfo: any) => {
@@ -106,12 +103,14 @@
       }, 0);
     }
   };
+
   // 点击右侧按钮
   const handlerClickRight = () => {
     if (itemRef.value && isOverflow.value) {
       itemRef.value.scrollLeft += 150;
     }
   };
+
   // 点击左侧按钮
   const handlerClickLeft = () => {
     if (itemRef.value && isOverflow.value) {
@@ -173,13 +172,6 @@
     });
   };
 
-  defineExpose<Exposes>({
-    initTabsValue(tabsList: Array<tabsItem>, id: string) {
-      tabs.value = tabsList;
-      activeId.value = id;
-    },
-  });
-
   onMounted(() => {
     resizeObserver.value = new ResizeObserver(() => {
       checkOverflow();
@@ -192,6 +184,13 @@
       resizeObserver.value.unobserve(itemRef.value);
       resizeObserver.value.disconnect();
     }
+  });
+
+  defineExpose<Exposes>({
+    initTabsValue(tabsList: Array<tabsItem>, id: string) {
+      tabs.value = tabsList;
+      activeId.value = id;
+    },
   });
 </script>
 <style lang="postcss" scoped>
