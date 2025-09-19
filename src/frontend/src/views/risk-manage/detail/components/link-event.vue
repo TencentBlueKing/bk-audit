@@ -445,10 +445,11 @@
   }) ;
 
   const displayValueDictEventData = computed(() => {
-    // 遍历 displayValueDict.value.eventData 对象的Key value 输出数组 [{text: 'key', value: 'value'}]
+    // 遍历 displayValueDict.value.eventData 对象的Key value 输出数组
     const result = Object.keys(displayValueDict.value.eventData).map(key => ({
       text: key,
       value: displayValueDict.value.eventData[key].value,
+      lable: strategyInfo.value.find(item => item.field_name === key)?.display_name || key,
     }));
     return result;
   });
