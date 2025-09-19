@@ -249,11 +249,12 @@
     </scroll-faker>
   </div>
   <div
-    v-for="item in allToolsData"
+    v-for="item in allOpenToolsData"
     :key="item">
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item] = el"
+      :all-tools-data="allToolsData"
       :tags-enums="tagsEnums"
       @close="handleClose"
       @open-field-down="openFieldDown" />
@@ -321,13 +322,20 @@
         target_value: string;
       }>
     }>;
+    enum_mappings: {
+      collection_id: string;
+      mappings: Array<{
+        key: string;
+        name: string;
+      }>;
+    };
   }
 
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
-  const allToolsData = ref<string[]>([]);
+  const allOpenToolsData = ref<string[]>([]);
 
   const searchValue = ref<string>('');
   const isFixedDelete = ref(false);
@@ -352,6 +360,14 @@
     appendSearchParams,
   } = useUrlSearch();
 
+  // 获取所有工具
+  const {
+    data: allToolsData,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    manual: true,
+  });
+
   // 工具列表
   const {
     run: fetchToolsList,
@@ -363,7 +379,7 @@
       // 自动打开弹窗
       if (route.query.tool_id) {
         urlToolsIds.value = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
-        allToolsData.value = urlToolsIds.value;
+        allOpenToolsData.value = urlToolsIds.value;
         if (urlToolsIds.value.length > 0) {
           urlToolsIds.value.forEach((item: string) => {
             nextTick(() => {
@@ -386,6 +402,7 @@
       }
     },
   });
+
   // 删除
   const {
     run: fetchDeleteTool,
@@ -565,21 +582,35 @@
     }
   };
 
-  // 下钻打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config[0].tool;
-    if (!(allToolsData.value.find(item => item === uid))) {
-      allToolsData.value.push(uid);
+  /* *
+   * 下钻打开工具，根据下钻配置信息，打开工具，并传递下钻配置信息和下钻table所在行信息
+   * @param drillDownItem: DrillDownItem 下钻配置信息，包含工具信息和配置信息
+   * @param drillDownItemRowData: Record<any, string> 下钻table所在行信息，包含需要映射的信息
+   * @param activeUid: string 多工具时，当前激活的工具信息
+   * @returns void
+  */
+  const openFieldDown = (
+    drillDownItem: DrillDownItem,
+    drillDownItemRowData: Record<any, string>,
+    activeUid?: string,
+  ) => {
+    const uids = drillDownItem.drill_config.map(config => config.tool.uid).join('&');
+    if (!(allOpenToolsData.value.find(item => item === uids))) {
+      allOpenToolsData.value.push(uids);
     }
 
     nextTick(() => {
-      if (dialogRefs.value[uid]) {
-        dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
+      if (dialogRefs.value[uids]) {
+        dialogRefs.value[uids].openDialog(uids, drillDownItem, drillDownItemRowData, activeUid);
       }
     });
   };
 
-  // 打开工具
+  /* *
+   * 打开工具，根据工具信息，打开工具，并传递工具信息
+   * @param toolInfo: ToolInfo 工具信息
+   * @returns void
+  */
   const handleClick = async (toolInfo: ToolInfo) => {
     urlToolsIds.value.push(toolInfo.uid);
     // 在游览器地址增加参数单不刷新页面
@@ -589,19 +620,21 @@
 
     handleCancel(toolInfo.uid);
 
-    if (!(allToolsData.value.find(item => item === toolInfo.uid))) {
-      allToolsData.value.push(toolInfo.uid);
+    if (!(allOpenToolsData.value.find(item => item === toolInfo.uid))) {
+      allOpenToolsData.value.push(toolInfo.uid);
     }
+
     nextTick(() => {
       if (dialogRefs.value[toolInfo.uid]) {
         dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
       }
     });
   };
+
   // 关闭弹窗
   const handleClose = (ToolUid: string | undefined) => {
     if (ToolUid) {
-      allToolsData.value = allToolsData.value.filter(item => item !== ToolUid);
+      allOpenToolsData.value = allOpenToolsData.value.filter(item => item !== ToolUid);
 
       urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolUid);
       appendSearchParams({
@@ -609,6 +642,7 @@
       });
     }
   };
+
   const handleSearch = () => {
     loading.value = true;
     fetchToolsList({

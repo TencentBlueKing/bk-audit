@@ -515,7 +515,6 @@
 
   const handleSubmit = () => Promise.resolve()
     .then(() => {
-      console.log(targetList.value);
       updateField(targetList.value);
     });
 
