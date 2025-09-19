@@ -16,7 +16,7 @@ modules:
         plan: 2C4G5R
         replicas: 5
       risk-worker:
-        command: python manage.py celery worker -O fair -l info -Q risk -P gevent -c 128 -E
+        command: python manage.py celery multi start risk1 risk2 risk3 risk4 risk5 risk6 -O fair -l info -Q risk -P gevent -c 128 -E
         plan: 2C4G5R
         replicas: 5
       notice:
