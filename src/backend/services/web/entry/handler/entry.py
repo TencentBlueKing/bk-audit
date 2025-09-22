@@ -29,6 +29,7 @@ from apps.feature.handlers import FeatureHandler
 from apps.meta.models import GlobalMetaConfig
 from services.web.entry.constants import (
     BKBASE_WEB_URL_KEY,
+    BKVISION_WEB_URL_KEY,
     DEFAULT_QUERY_STRING_HELP_ENV_KEY,
     DEFAULT_QUERY_STRING_HELP_KEY,
     DEFAULT_SCHEMA_HELP,
@@ -107,6 +108,7 @@ class EntryHandler(object):
             "third_party_system": {
                 "bkbase_web_url": GlobalMetaConfig.get(BKBASE_WEB_URL_KEY, default=""),
                 "v3_system_create_url": GlobalMetaConfig.get(V3_SYSTEM_CREATE_URL_KEY, default=""),
+                "bkvision_web_url": GlobalMetaConfig.get(BKVISION_WEB_URL_KEY, default=""),
             },
             # 三方文档地址
             "third_doc_url": {
