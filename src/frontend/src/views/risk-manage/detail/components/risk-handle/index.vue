@@ -335,6 +335,8 @@
       list.value.reverse();
       ticketHistory.value.reverse();
       isInit = true;
+      console.log('ticketHistory.value', ticketHistory.value);
+
       if (ticketHistory.value.length > 0) {
         handleFetchParamsDetail();
       }
@@ -349,6 +351,7 @@
     }
   }, {
     immediate: true,
+    deep: true,
   });
 </script>
 <style scoped lang="postcss">
