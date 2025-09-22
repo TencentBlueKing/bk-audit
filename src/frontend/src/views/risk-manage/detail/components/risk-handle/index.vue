@@ -278,7 +278,6 @@
 
   watch(() => props.data, (data) => {
     if (data && data.ticket_history && !isInit) {
-      isInit = true;
       list.value = [];
       ticketHistory.value = [];
       data.ticket_history.forEach((item, index) => {
@@ -335,7 +334,10 @@
       // 翻转列表
       list.value.reverse();
       ticketHistory.value.reverse();
-
+      isInit = true;
+      if (ticketHistory.value.length > 0) {
+        handleFetchParamsDetail();
+      }
       nextTick(() => {
         const el =  document.getElementById('risk-manage-content-btn');
         if (el && needScrollToContent.value) {
