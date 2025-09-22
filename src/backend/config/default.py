@@ -222,6 +222,7 @@ APPEND_SLASH = False
 FETCH_INSTANCE_USERNAME = os.getenv("BKAPP_FETCH_INSTANCE_USERNAME", "bk_iam")
 
 DATABASES["default"]["ENGINE"] = "dj_db_conn_pool.backends.mysql"
+DATABASES["default"]["CONN_MAX_AGE"] = 60
 DATABASES["default"]['POOL_OPTIONS'] = {
     'POOL_SIZE': int(os.getenv("BKAPP_DB_POOL_SIZE", 96)),
     'MAX_OVERFLOW': int(os.getenv("BKAPP_DB_MAX_OVERFLOW", 32)),
