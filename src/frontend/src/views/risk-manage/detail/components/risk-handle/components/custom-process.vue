@@ -37,7 +37,7 @@
           {{ processApplicationList
             .find(item=>item.id === data.pa_id)?.name || data.pa_id || '--' }}
         </render-info-item>
-        <template v-if="data.pa_params">
+        <template v-if="data.pa_params && Object.keys(processPackageDetail).length > 0">
           <!-- 只显示需要显示的字段 -->
           <template
             v-for="(key,index) in Object.keys(data.pa_params)"
