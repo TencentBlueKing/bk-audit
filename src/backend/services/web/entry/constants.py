@@ -74,3 +74,5 @@ VISION_SHARE_PERMISSION_URL_KEY = "vision_share_permission_url"
 V3_SYSTEM_CREATE_URL_KEY = "v3_system_create_url"
 # 检索规则 iwiki 地址
 PERMISSION_MODEL_IWIKI_URL_KEY = "permission_model_iwiki_url"
+# bkvision WEB 访问地址
+BKVISION_WEB_URL_KEY = "bkvision_web_url"
