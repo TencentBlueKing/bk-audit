@@ -277,10 +277,7 @@
   });
 
   watch(() => props.data, (data) => {
-    console.log('!!', data);
-
     if (data && data.ticket_history && !isInit) {
-      console.log('>>>', ticketHistory.value);
       list.value = [];
       ticketHistory.value = [];
       data.ticket_history.forEach((item, index) => {
@@ -338,7 +335,6 @@
       list.value.reverse();
       ticketHistory.value.reverse();
       isInit = true;
-      console.log('ticketHistory.value', ticketHistory.value);
 
       if (ticketHistory.value.length > 0) {
         handleFetchParamsDetail();
