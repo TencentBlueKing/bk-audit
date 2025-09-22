@@ -16,7 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from jinja2 import TemplateAssertionError
+from jinja2 import TemplateAssertionError, UndefinedError
 
 from core.render import Jinja2Renderer, VariableUndefined
 from tests.base import TestCase
@@ -44,3 +44,20 @@ class TestJinja2Renderer(TestCase):
         renderer = Jinja2Renderer()  # 默认 allow_safe=False
         with self.assertRaisesRegex(TemplateAssertionError, "No filter named 'safe'"):
             renderer.jinja_render("{{ '<br>' | safe }}", {})
+
+    def test_special_char(self):
+        """
+        测试：特殊字符
+        """
+
+        template = "render: 游戏中文名: {{ 游戏中文名(game_name) }}"
+        context = {"游戏中文名(game_name)": "王者荣耀"}
+        renderer = Jinja2Renderer(undefined=VariableUndefined)
+        with self.assertRaises(UndefinedError):
+            renderer.jinja_render(template, context)
+
+        template = """render: 游戏中文名: {{ event_data["游戏中文名 a(game_name」}）：:<>%%"] }}"""
+        context = {"event_data": {"""游戏中文名 a(game_name」}）：:<>%%""": "xxx"}}
+        renderer = Jinja2Renderer(undefined=VariableUndefined)
+        actual = renderer.jinja_render(template, context)
+        self.assertEqual(actual, "render: 游戏中文名: xxx")
