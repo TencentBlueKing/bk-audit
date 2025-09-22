@@ -284,7 +284,9 @@
   };
 
   const handlePaValidate = (value: {field: string, value: string}) => {
-    if (!value.field && !value.value) return false;
+    // 排除空值 和 0
+    if (value.field === undefined && value.value === undefined) return false;
+    if (value.field === null && value.value === null) return false;
     return true;
   };
 

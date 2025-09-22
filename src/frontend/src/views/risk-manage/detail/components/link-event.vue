@@ -446,11 +446,18 @@
 
   const displayValueDictEventData = computed(() => {
     // 遍历 displayValueDict.value.eventData 对象的Key value 输出数组
-    const result = Object.keys(displayValueDict.value.eventData).map(key => ({
-      text: key,
-      value: displayValueDict.value.eventData[key].value,
-      lable: strategyInfo.value.find(item => item.field_name === key)?.display_name || key,
-    }));
+    const result = Object.keys(displayValueDict.value.eventData).map((key) => {
+      // 如果key在dictMap里面，使用原始值；否则使用翻译后的值
+      const isInDictMap = dictDataMap.value.has(key);
+      const rawValue = eventItem.value.event_data?.[key];
+      const displayValue = isInDictMap ? rawValue : displayValueDict.value.eventData[key].value;
+
+      return {
+        text: key,
+        value: displayValue,
+        lable: strategyInfo.value.find(item => item.field_name === key)?.display_name || key,
+      };
+    });
     return result;
   });
 
