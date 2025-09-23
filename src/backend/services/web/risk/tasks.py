@@ -198,6 +198,9 @@ def process_one_risk(*, risk_id: str):
                 value=retry_times + 1,
                 timeout=(settings.PROCESS_RISK_MAX_RETRY + 1) * settings.DEFAULT_CACHE_LOCK_TIMEOUT,
             )
+    except BaseException as err:
+        logger_celery.exception("[ProcessRiskTicket] %s Error %s %s", process_class.__name__, risk.risk_id, err)
+        raise err
     finally:
         logger_celery.info("[ProcessRiskTicket] %s End %s", process_class.__name__, risk.risk_id)
 
