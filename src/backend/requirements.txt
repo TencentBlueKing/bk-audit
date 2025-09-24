@@ -12,7 +12,7 @@ bkapi-component-open>=1.1.0
 bkstorages==2.0.0
 blueapps[opentelemetry]==4.16rc2
 celery==5.5.3
-client-throttler==1.1.0
+client-throttler==2.1.0
 django==4.2.24
 django-celery-beat==2.7.0
 django-celery-results==2.4.0
