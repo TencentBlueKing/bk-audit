@@ -110,6 +110,10 @@ class EventSourceTypeChoices(TextChoices):
     API = "api", gettext_lazy("API")
 
 
+# 原始事件ID 备注
+RAW_EVENT_ID_REMARK = gettext_lazy("系统会将原始事件ID相同的事件，关联至同一个未关闭的风险单据")
+
+
 class EventMappingFields:
     """
     审计事件标准字段
@@ -155,6 +159,9 @@ class EventMappingFields:
         description=gettext_lazy("原始事件ID"),
         field_type=FIELD_TYPE_STRING,
         option=dict(),
+        property={
+            "remark": RAW_EVENT_ID_REMARK,
+        },
     )
 
     STRATEGY_ID = Field(

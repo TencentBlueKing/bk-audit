@@ -156,6 +156,7 @@ class TestToolViewPermissions(TestCase):
                     "field_name": "operator",
                     "display_name": "责任人",
                     "is_priority": True,
+                    "duplicate_field": False,
                     "drill_config": {
                         "tool": {"uid": sql_tool.uid, "version": 1},
                         "config": [
@@ -274,6 +275,7 @@ class TestToolViewPermissions(TestCase):
                     "field_name": "env",
                     "display_name": "环境",
                     "is_priority": True,
+                    "duplicate_field": False,
                     "drill_config": {
                         "tool": {"uid": sql_tool.uid, "version": 1},
                         "config": [

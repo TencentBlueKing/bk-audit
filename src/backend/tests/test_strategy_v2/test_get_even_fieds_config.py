@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from django.utils import timezone
 
+from services.web.risk.constants import RAW_EVENT_ID_REMARK
 from services.web.risk.models import Risk
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.resources import GetEventFieldsConfig
@@ -14,11 +15,16 @@ class TestGetEventFieldsConfig(TestCase):
         self.strategy = Strategy.objects.create(
             strategy_id=1,
             event_data_field_configs=[
-                {"field_name": "data_field1", "display_name": "Data Field 1"},
+                {"field_name": "data_field1", "display_name": "Data Field 1", "duplicate_field": True},
                 {"field_name": "data_field2"},
             ],
             event_evidence_field_configs=[
-                {"field_name": "evidence_field1", "display_name": "Evidence Field 1", "description": "Desc1"},
+                {
+                    "field_name": "evidence_field1",
+                    "display_name": "Evidence Field 1",
+                    "description": "Desc1",
+                    "duplicate_field": True,
+                },
                 {"field_name": "evidence_field2"},
             ],
         )
@@ -44,6 +50,8 @@ class TestGetEventFieldsConfig(TestCase):
         self.assertEqual(len(fields), 7)
         self.assertEqual(fields[0]["field_name"], "raw_event_id")
         self.assertEqual(fields[0]["example"], "event123")
+        self.assertTrue(all(field["duplicate_field"] is False for field in fields))
+        self.assertEqual(fields[0]["description"], str(RAW_EVENT_ID_REMARK))
 
     @patch('apps.meta.utils.format.preprocess_data')
     def test_get_event_data_field_configs(self, mock_preprocess):
@@ -55,6 +63,8 @@ class TestGetEventFieldsConfig(TestCase):
         self.assertEqual(len(field_dict), 3)
         self.assertEqual(field_dict["data_field1"]["display_name"], "Data Field 1")
         self.assertEqual(field_dict["data_field3"]["example"], "a, b, c")
+        self.assertTrue(field_dict["data_field1"]["duplicate_field"])
+        self.assertFalse(field_dict["data_field3"]["duplicate_field"])
 
     @patch('apps.meta.utils.format.preprocess_data')
     def test_get_event_evidence_field_configs(self, mock_preprocess):
@@ -70,6 +80,8 @@ class TestGetEventFieldsConfig(TestCase):
         self.assertEqual(field_dict["evidence_field1"]["description"], "Desc1")
         # Update expectation to match actual behavior (dictionary instead of string)
         self.assertEqual(field_dict["evidence_field3"]["example"], {'nested': 'value'})
+        self.assertTrue(field_dict["evidence_field1"]["duplicate_field"])
+        self.assertFalse(field_dict["evidence_field3"]["duplicate_field"])
 
     @patch('apps.meta.utils.format.preprocess_data')
     @patch('services.web.strategy_v2.resources.get_request_username')
