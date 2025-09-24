@@ -22,9 +22,10 @@ from unittest import mock
 import openpyxl
 from bk_resource import resource
 
-from services.web.risk.constants import RiskExportField, RiskStatus
+from services.web.risk.constants import RAW_EVENT_ID_REMARK, RiskExportField, RiskStatus
 from services.web.risk.models import Risk
 from services.web.risk.resources import ListEvent
+from services.web.risk.serializers import RetrieveRiskStrategyInfoResponseSerializer
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -44,15 +45,15 @@ class TestRiskExport(TestCase):
             strategy_name="Strategy A",
             risk_level=RiskLevel.HIGH,
             event_data_field_configs=[
-                {"field_name": "user", "display_name": "Username"},
-                {"field_name": "action", "display_name": "Action"},
+                {"field_name": "user", "display_name": "Username", "duplicate_field": False},
+                {"field_name": "action", "display_name": "Action", "duplicate_field": False},
             ],
         )
         self.strategy_2 = Strategy.objects.create(
             strategy_id=2,
             strategy_name="Strategy B",
             risk_level=RiskLevel.MIDDLE,
-            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
+            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP", "duplicate_field": False}],
         )
         # 创建风险
         self.risk_1 = Risk.objects.create(
@@ -182,3 +183,27 @@ class TestRiskExport(TestCase):
         # Row 3 (risk004, no events)
         self.assertEqual(sheet2.cell(row=4, column=header_map2[str(RiskExportField.RISK_ID.label)]).value, "risk004")
         self.assertEqual(sheet2.cell(row=4, column=header_map2["Source IP"]).value, None)
+
+    def test_retrieve_strategy_serializer_populates_raw_event_description(self):
+        strategy = Strategy(
+            strategy_id=3,
+            strategy_name="Strategy C",
+            risk_level=RiskLevel.LOW,
+            event_basic_field_configs=[
+                {
+                    "field_name": "raw_event_id",
+                    "display_name": "raw_event_id",
+                    "description": "",
+                    "is_priority": True,
+                    "duplicate_field": False,
+                }
+            ],
+        )
+
+        serializer = RetrieveRiskStrategyInfoResponseSerializer(instance=strategy)
+        data = serializer.data
+        raw_config = next(
+            cfg for cfg in data.get("event_basic_field_configs", []) if cfg.get("field_name") == "raw_event_id"
+        )
+
+        self.assertEqual(raw_config["description"], str(RAW_EVENT_ID_REMARK))

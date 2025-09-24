@@ -125,6 +125,7 @@ class TestCallerPermission(TestCase):
                     "field_name": "username",
                     "display_name": "用户名",
                     "is_priority": True,
+                    "duplicate_field": False,
                     "drill_config": {
                         "tool": {"uid": "T1", "version": 1},
                         "config": [
@@ -184,6 +185,7 @@ class TestCallerPermission(TestCase):
                     "field_name": "operator",
                     "display_name": "责任人",
                     "is_priority": True,
+                    "duplicate_field": False,
                     "drill_config": {
                         "tool": {"uid": "T1", "version": 1},
                         "config": [
@@ -252,6 +254,7 @@ class TestCallerPermission(TestCase):
                     "field_name": "env",
                     "display_name": "环境",
                     "is_priority": True,
+                    "duplicate_field": False,
                     "drill_config": {
                         "tool": {"uid": "T1", "version": 1},
                         "config": [
