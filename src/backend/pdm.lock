@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:f649c01bf02818f3fab67c7df1484bbf3e8273953f680f1dac2e8d9e107b8ee5"
+content_hash = "sha256:6ce59affd454ae2d4fc063fc687e9f9e3dab296e1012c427c8b25484763ae6a9"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -568,16 +568,16 @@ files = [
 
 [[package]]
 name = "client-throttler"
-version = "1.1.0"
-requires_python = ">=3.6, <4"
+version = "2.1.0"
+requires_python = "<4,>=3.6"
 summary = "A client throttle tool based on redis."
 groups = ["default"]
 dependencies = [
     "redis>=3.2.0",
 ]
 files = [
-    {file = "client_throttler-1.1.0-py3-none-any.whl", hash = "sha256:5e9747a297f8a94091bd199d8ea3aa0d485f6dbac0a52becda68da19ce8adc8d"},
-    {file = "client_throttler-1.1.0.tar.gz", hash = "sha256:86274850fd05f2c78e4ab52c74a75d2801cd6e871f7ee315433d39d31a755cc7"},
+    {file = "client_throttler-2.1.0-py3-none-any.whl", hash = "sha256:643f5bfce4656fa4be63d804e5334eaff56bc1bbee519d8e5b97d212f81faa87"},
+    {file = "client_throttler-2.1.0.tar.gz", hash = "sha256:6506c0497d1745483949e7a73870151b814086e9399e8da10df3372ec71a8721"},
 ]
 
 [[package]]
@@ -763,7 +763,7 @@ files = [
 
 [[package]]
 name = "django"
-version = "4.2.23"
+version = "4.2.24"
 requires_python = ">=3.8"
 summary = "A high-level Python web framework that encourages rapid development and clean, pragmatic design."
 groups = ["default"]
@@ -774,8 +774,8 @@ dependencies = [
     "tzdata; sys_platform == \"win32\"",
 ]
 files = [
-    {file = "django-4.2.23-py3-none-any.whl", hash = "sha256:dafbfaf52c2f289bd65f4ab935791cb4fb9a198f2a5ba9faf35d7338a77e9803"},
-    {file = "django-4.2.23.tar.gz", hash = "sha256:42fdeaba6e6449d88d4f66de47871015097dc6f1b87910db00a91946295cfae4"},
+    {file = "django-4.2.24-py3-none-any.whl", hash = "sha256:a6527112c58821a0dfc5ab73013f0bdd906539790a17196658e36e66af43c350"},
+    {file = "django-4.2.24.tar.gz", hash = "sha256:40cd7d3f53bc6cd1902eadce23c337e97200888df41e4a73b42d682f23e71d80"},
 ]
 
 [[package]]

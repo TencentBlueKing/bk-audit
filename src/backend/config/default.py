@@ -23,6 +23,7 @@ from bkcrypto.constants import AsymmetricCipherType, SymmetricCipherType
 from blueapps.conf.default_settings import *  # noqa
 from blueapps.conf.log import get_logging_config_dict
 from client_throttler import ThrottlerConfig, setup
+from client_throttler.constants import TimeDurationUnit
 from django.utils.translation import gettext_lazy
 from redis.client import Redis
 
@@ -349,7 +350,8 @@ DEFAULT_CACHE_LOCK_TIMEOUT = int(os.getenv("BKAPP_DEFAULT_CACHE_LOCK_TIMEOUT", 6
 
 # Throttler
 throttler_config = ThrottlerConfig(
-    redis_client=Redis(host=REDIS_HOST, port=int(REDIS_PORT), password=REDIS_PASSWORD, db=int(REDIS_DB))
+    redis_client=Redis(host=REDIS_HOST, port=int(REDIS_PORT), password=REDIS_PASSWORD, db=int(REDIS_DB)),
+    placeholder_offset=int(os.getenv("BKAPP_THROTTLER_PLACEHOLDER_OFFSET", TimeDurationUnit.MINUTE.value)),
 )
 setup(throttler_config)
 SOPS_API_RATE_LIMIT = os.getenv("BKAPP_SOPS_API_RATE_LIMIT", "10/s")
