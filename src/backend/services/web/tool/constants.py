@@ -157,6 +157,9 @@ class BKVisionInputVariable(DataSearchBaseField):
     default_value: Annotated[
         Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
     ] = PydanticField(None, description="字段默认值")
+    raw_default_value: Annotated[
+        Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
+    ] = PydanticField(None, description="原始字段默认值")
 
 
 class Tool(BaseModel):
