@@ -223,13 +223,27 @@
                         <bk-input
                           v-model="item.display_name"
                           behavior="simplicity"
-                          :class="{ 'is-duplicate': item.isDuplicate }"
+                          :class="{
+                            'is-duplicate': item.isDuplicate,
+                            'is-invalid': !fieldComplianceMap.get(`${item.table}_${item.raw_name}`)
+                          }"
                           @change="(val: string) => handleInputChange(val, item)">
                           <template
                             v-if="item.isDuplicate"
                             #suffix>
                             <span class="duplicate-icon">
                               {{ t('重复') }}
+                            </span>
+                          </template>
+                          <template
+                            v-else-if="!fieldComplianceMap.get(`${item.table}_${item.raw_name}`)"
+                            #suffix>
+                            <span
+                              v-bk-tooltips="{
+                                content: t('只允许中英文、空格、括号（中英文）、下划线')
+                              }"
+                              class="invalid-icon">
+                              {{ t('输入不合法') }}
                             </span>
                           </template>
                         </bk-input>
@@ -254,7 +268,7 @@
         <div class="field-pop-bth">
           <bk-button
             class="mr8"
-            :disabled="!tableData.length || exist || isTableAggregate"
+            :disabled="!tableData.length || exist || isTableAggregate || hasInvalidFields"
             size="small"
             theme="primary"
             @click="handleAddField">
@@ -331,7 +345,39 @@
   const tableData = ref<Array<ExDatabaseTableFieldModel>>([]);
   const exist = ref(false);
 
+  // 用于跟踪每个字段的合规状态，避免在item中添加属性
+  const fieldComplianceMap = ref<Map<string, boolean>>(new Map());
+
   const searchKey = useDebouncedRef('');
+
+  // 检查是否有不合规的字段
+  const hasInvalidFields = computed(() => Array.from(fieldComplianceMap.value.values()).some(isValid => !isValid));
+
+  // 输入合规性检查函数
+  const validateInput = (value: string): boolean => {
+    if (!value || value.trim().length === 0) {
+      return false; // 空值不合规
+    }
+
+    // 检查长度限制（例如：最大50个字符）
+    if (value.length > 50) {
+      return false;
+    }
+
+    // 只允许中英文、空格、括号（中英文）
+    // 正则表达式说明：
+    // \u4e00-\u9fff: 中文字符
+    // a-zA-Z: 英文字母
+    // \s: 空格
+    // （）：中英文括号
+    // _：下划线
+    const validChars = /^[\u4e00-\u9fffa-zA-Z\s()（）_]*$/;
+    if (!validChars.test(value)) {
+      return false;
+    }
+
+    return true; // 合规
+  };
 
   const renderFieldList = computed(() => localTableFields.value.reduce((result, item) => {
     const reg = new RegExp(encodeRegexp(searchKey.value), 'i');
@@ -452,6 +498,11 @@
         : displayName;
     }
 
+    // 初始化合规状态
+    const fieldKey = `${processedField.table}_${processedField.raw_name}`;
+    const isValid = validateInput(processedField.display_name);
+    fieldComplianceMap.value.set(fieldKey, isValid);
+
     return {
       ...processedField,
       aggregateList: processedField.aggregateList,
@@ -486,6 +537,13 @@
   // 修改显示名
   const handleInputChange = (value: string, currentItem: ExDatabaseTableFieldModel) => {
     if (!value) return;
+
+    // 生成字段的唯一标识符
+    const fieldKey = `${currentItem.table}_${currentItem.raw_name}`;
+
+    // 1. 合规性检查
+    const isValid = validateInput(value);
+    fieldComplianceMap.value.set(fieldKey, isValid);
 
     // 合并所有显示名(包括已存在的和当前已选的)
     const allDisplayNames = [
@@ -522,6 +580,8 @@
     editIndex.value = -1;
     // 重置tableData
     tableData.value = [];
+    // 清理合规性状态
+    fieldComplianceMap.value.clear();
   };
 
   const handleAfterHidden = (value: { isShow: boolean}) => {
@@ -717,6 +777,26 @@
             padding: 1px;
             font-size: 10px;
             background: red;
+            border-radius: 2px;
+          }
+        }
+
+        .is-invalid {
+          position: relative;
+
+          input {
+            background-color: #fff3cd;
+            border-color: #ffc107;
+          }
+
+          .invalid-icon {
+            position: absolute;
+            top: 15px;
+            right: 10px;
+            padding: 1px;
+            font-size: 10px;
+            color: #856404;
+            background: #ffc107;
             border-radius: 2px;
           }
         }

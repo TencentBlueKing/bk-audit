@@ -207,6 +207,7 @@
     }
   };
   let resizeObserver: any;
+  let handleWindowResize: any;
   onMounted(() => {
     calcRenderTagNum();
     setTimeout(() => {
@@ -217,6 +218,15 @@
       calcRenderTagNum();
     }));
     resizeObserver.observe(rootRef.value);
+
+    // 创建函数引用，用于移除监听器
+    handleWindowResize = () => {
+      calcRenderTagNum();
+      setTimeout(() => {
+        dynamicCalcWidth();
+      });
+    };
+    window.addEventListener('resize', handleWindowResize);
   });
 
   onBeforeUnmount(() => {
@@ -226,6 +236,10 @@
       tippyIns.destroy();
     }
     resizeObserver?.disconnect();
+
+    if (handleWindowResize) {
+      window.removeEventListener('resize', handleWindowResize);
+    }
   });
 </script>
 <style scoped lang="postcss">
