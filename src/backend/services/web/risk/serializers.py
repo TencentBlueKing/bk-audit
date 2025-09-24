@@ -28,6 +28,7 @@ from apps.meta.models import Tag
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
+    RAW_EVENT_ID_REMARK,
     RISK_LEVEL_ORDER_FIELD,
     EventMappingFields,
     RiskLabel,
@@ -697,6 +698,9 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
         event_basic_field_configs = data.get("event_basic_field_configs") or []
         for config in event_basic_field_configs:
             config["display_name"] = gettext(config["display_name"])
+            # 兼容历史数据
+            if config["field_name"] == EventMappingFields.RAW_EVENT_ID.field_name:
+                config["description"] = str(RAW_EVENT_ID_REMARK)
         return data
 
 

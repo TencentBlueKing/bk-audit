@@ -75,6 +75,7 @@ class StrategyTest(TestCase):
                 "field_name": field_name,
                 "display_name": "字段名",
                 "is_priority": True,
+                "duplicate_field": False,
                 "drill_config": [
                     {
                         "tool": {"uid": "fake_tool_uid", "version": 1, "params": {}},
@@ -163,18 +164,21 @@ class StrategyTest(TestCase):
                     "field_name": "raw_event_id",
                     "display_name": "raw_event_id",
                     "is_priority": True,
+                    "duplicate_field": False,
                     "map_config": {"source_field": "raw_event_id"},
                 },
                 {
                     "field_name": "event_source",
                     "display_name": "event_source",
                     "is_priority": False,
+                    "duplicate_field": False,
                     "map_config": {"source_field": "raw_event_id"},
                 },
                 {
                     "field_name": "operator",
                     "display_name": "operator",
                     "is_priority": False,
+                    "duplicate_field": False,
                     "map_config": {"source_field": "raw_event_id"},
                 },
             ],
@@ -184,6 +188,7 @@ class StrategyTest(TestCase):
                     "display_name": "风险标题",
                     "is_priority": True,
                     "description": "",
+                    "duplicate_field": False,
                 }
             ],
         }
@@ -365,6 +370,7 @@ class StrategyEnumMappingTest(StrategyTest):
                         "display_name": "username",
                         "is_priority": True,
                         "description": "",
+                        "duplicate_field": False,
                         "enum_mappings": enum_mappings,
                     }
                 ],
@@ -426,6 +432,7 @@ class StrategyEnumMappingTest(StrategyTest):
                         "display_name": "username",
                         "is_priority": True,
                         "description": "",
+                        "duplicate_field": False,
                         "enum_mappings": {"mappings": []},
                     }
                 ],
@@ -465,6 +472,7 @@ class StrategyEnumMappingResourceTest(TestCase):
                         "display_name": "username",
                         "is_priority": True,
                         "description": "",
+                        "duplicate_field": False,
                         "enum_mappings": enum_mappings,
                     }
                 ],

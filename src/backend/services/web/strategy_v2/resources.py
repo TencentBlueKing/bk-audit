@@ -79,7 +79,11 @@ from services.web.common.caller_permission import (
     should_skip_permission_from,
 )
 from services.web.query.utils.search_config import QueryConditionOperator
-from services.web.risk.constants import EventMappingFields, RiskMetaFields
+from services.web.risk.constants import (
+    RAW_EVENT_ID_REMARK,
+    EventMappingFields,
+    RiskMetaFields,
+)
 from services.web.risk.models import Risk
 from services.web.risk.permissions import RiskViewPermission
 from services.web.strategy_v2.constants import (
@@ -318,6 +322,7 @@ class CreateStrategy(StrategyV2Base):
                     "field_name": "status",
                     "display_name": "Status",
                     "is_priority": false,
+                    "duplicate_field": false,
                     "enum_mappings": {
                         "collection_id": "status_collection_112233", # 枚举名字全局唯一，建议生成随机值
                         "mappings": [
@@ -1177,9 +1182,14 @@ class GetEventFieldsConfig(StrategyV2Base):
             EventInfoField(
                 field_name=field.field_name,
                 display_name=str(field.description),
-                description="",
+                description=(
+                    str(RAW_EVENT_ID_REMARK)
+                    if field == EventMappingFields.RAW_EVENT_ID
+                    else str(field.property.get("remark", ""))
+                ),
                 example=preprocess_data(getattr(risk, field.field_name, "")) if risk and has_permission else "",
                 is_show=True,
+                duplicate_field=False,
             )
             for field in [
                 EventMappingFields.RAW_EVENT_ID,
@@ -1205,6 +1215,7 @@ class GetEventFieldsConfig(StrategyV2Base):
                 description="",
                 example="",
                 is_show=True,
+                duplicate_field=False,
             )
             for field in RiskMetaFields().fields
         ]
@@ -1230,6 +1241,7 @@ class GetEventFieldsConfig(StrategyV2Base):
                 example="",
                 description="",
                 is_show=field.get("is_show", True),
+                duplicate_field=field.get("duplicate_field", False),
             )
 
         # 2. 从风险数据中获取字段
@@ -1243,6 +1255,7 @@ class GetEventFieldsConfig(StrategyV2Base):
                         example="",
                         description="",
                         is_show=True,
+                        duplicate_field=False,
                     )
                 if has_permission:
                     field_dict[key]["example"] = preprocess_data(value)
@@ -1270,6 +1283,7 @@ class GetEventFieldsConfig(StrategyV2Base):
                 example="",
                 description=field.get("description", ""),
                 is_show=field.get("is_show", True),
+                duplicate_field=field.get("duplicate_field", False),
             )
 
         # 2. 从风险数据中获取字段
@@ -1287,6 +1301,7 @@ class GetEventFieldsConfig(StrategyV2Base):
                         example="",
                         description="",
                         is_show=True,
+                        duplicate_field=False,
                     )
                 if has_permission:
                     field_dict[key]["example"] = preprocess_data(value)
