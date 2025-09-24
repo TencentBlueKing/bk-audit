@@ -30,6 +30,7 @@ class Tool(SoftDeleteModel):
     tool_type = models.CharField(gettext_lazy("工具类型"), choices=ToolTypeEnum.choices, max_length=16)
     config = models.JSONField(gettext_lazy("工具配置"), default=dict, blank=True)
     permission_owner = models.CharField(gettext_lazy("权限负责人"), max_length=255, help_text="用于工具的权限认证")
+    is_bkvision = models.BooleanField(gettext_lazy("是否更新BkVision工具"), default=False)
 
     class Meta:
         verbose_name = gettext_lazy("Tool")
@@ -139,6 +140,7 @@ class BkVisionToolConfig(OperateRecordModel):
 
     tool = models.OneToOneField(Tool, on_delete=models.CASCADE, related_name="bkvision_config")
     panel = models.ForeignKey(VisionPanel, on_delete=models.DO_NOTHING, related_name="tools")
+    updated_time = models.DateTimeField(gettext_lazy("bkvision更新时间"), blank=True, null=True, db_index=True)
 
     class Meta:
         verbose_name = gettext_lazy("Bkvision Tool Config")
