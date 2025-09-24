@@ -60,7 +60,7 @@
       render: ({ data }: { data: StrategyFieldEvent['event_basic_field_configs'][0]}) => <div
         style='width: 100%; height: 100%;'
         onClick={e => handleVariableCopy(e, data.prefix, data.field_name)}>
-          { `{{${data.field_name}}}` }
+          { data.prefix ? `{{ ${data.prefix}["${data.field_name}"] }}` : `{{ ${data.field_name} }}` }
         </div>,
     },
     {
@@ -117,10 +117,10 @@
   });
 
   const handleVariableCopy = (e: Event, prefix: string, value: string) => {
-    const formattedVariable = prefix ? `{{${prefix}.${value}}}` : `{{${value}}}`;
+    const formattedVariable = prefix ? `{{ ${prefix}["${value}"] }}` : `{{ ${value} }}`;
     e.stopPropagation();
     emits('isCopy');
-    execCopy(formattedVariable, t('变量 {variable} 复制成功', { variable: `{{${value}}}` }));
+    execCopy(formattedVariable, t('变量 {variable} 复制成功', { variable: `{{ ${value} }}` }));
   };
 
   onActivated(() => {
