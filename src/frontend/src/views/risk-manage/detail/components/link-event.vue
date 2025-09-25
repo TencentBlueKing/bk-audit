@@ -444,6 +444,7 @@
     };
   }) ;
 
+  // 套餐下拉列表使用
   const displayValueDictEventData = computed(() => {
     // 遍历 displayValueDict.value.eventData 对象的Key value 输出数组
     const result = Object.keys(displayValueDict.value.eventData).map((key) => {
@@ -481,6 +482,16 @@
     return group(eventInfoKeys);
   });
 
+  // 去重字段
+  const distinctEventDataKeyArr = computed(() => {
+    const eventInfo = [
+      ...props.data.event_basic_field_configs,
+      ...props.data.event_data_field_configs,
+      ...props.data.event_evidence_field_configs,
+    ];
+    return eventInfo.filter(item => item.duplicate_field).map(item => item.field_name);
+  });
+
   // 获取标签列表
   const {
     data: tagData,
@@ -501,9 +512,24 @@
     },
     onSuccess() {
       if (linkEventData.value.results.length) {
-        // 触底加载，拼接
-        linkEventList.value = [...linkEventList.value, ...linkEventData.value.results].
-          filter((item, index, self) => index === self.findIndex(t => t.event_id === item.event_id));
+        // 触底加载，拼接 - 使用动态去重字段
+        const allEvents = [...linkEventList.value, ...linkEventData.value.results];
+        linkEventList.value = allEvents;
+
+        // 根据指定字段组合进行去重（包含关系）
+        linkEventList.value = allEvents.filter((event, index, self) => {
+          // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
+          const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
+          // 查找第一个具有包含关系的事件索引
+          const firstIndex = self.findIndex((e) => {
+            const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
+            // 检查所有字段值都完全相同（全等关系）);
+            return currentValues.every((currentValue, i) => currentValue === eValues[i]);
+          });
+
+          // 只保留第一次出现的事件（去重）
+          return index === firstIndex;
+        });
 
         // 默认获取第一个
         [eventItem.value] = linkEventList.value;
