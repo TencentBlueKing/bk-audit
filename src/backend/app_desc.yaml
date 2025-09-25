@@ -16,12 +16,7 @@ modules:
         plan: 2C4G5R
         replicas: 5
       risk-worker:
-        command: >
-          sh -c "
-          python manage.py celery worker -O fair -l info -Q risk -P gevent -c 64 -E -n risk-1@%h &
-          python manage.py celery worker -O fair -l info -Q risk -P gevent -c 64 -E -n risk-2@%h &
-          python manage.py celery worker -O fair -l info -Q risk -P gevent -c 64 -E -n risk-3@%h &
-          wait"
+        command: python manage.py celery worker -O fair -l info -Q risk -P gevent -c 64 -E
         plan: 2C4G5R
         replicas: 5
       notice:
