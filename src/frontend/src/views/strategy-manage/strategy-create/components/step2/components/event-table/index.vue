@@ -156,6 +156,7 @@
       { key: 'display_name', label: t('字段显示名') },
       { key: 'is_show', label: t('在单据中展示') },
       { key: 'is_priority', label: t('重点展示'), tips: t('设为重点展示的字段将在风险单据中直接显示，其他字段将被折叠收起') },
+      { key: 'duplicate_field', label: t('去重字段'), tips: t('同一风险单据内，所有启用的去重字段值与历史事件重复时，将不会生成新的事件') },
       { key: 'map_config', label: t('字段关联'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
       { key: 'enum_mappings', label: t('字段值映射'), tips: t('为储存值配置可读的展示文本') },
       { key: 'drill_config', label: t('字段下钻'), tips: t('为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息') },
@@ -255,7 +256,7 @@
   const getHeaderClass = (valueKey: string | undefined) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
-    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show' || valueKey === 'enum_mappings',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show' || valueKey === 'enum_mappings' || valueKey === 'duplicate_field',
     'map-config': valueKey === 'map_config',
     'drill-config': valueKey === 'drill_config',
     description: valueKey === 'description',
@@ -266,6 +267,7 @@
     display_name: item.display_name,
     is_show: true,
     is_priority: false,
+    duplicate_field: false,
     map_config: {
       target_value: '',
       source_field: '',
@@ -376,6 +378,7 @@
                   display_name: originalItem.display_name,
                   is_show: editItem.is_show ?? true,
                   is_priority: !originalItem.prefix ? editItem.is_show ?? true : editItem.is_priority,
+                  duplicate_field: editItem.duplicate_field,
                   map_config: {
                     target_value: editItem.map_config?.target_value,
                     source_field: editItem.map_config?.source_field || editItem.map_config?.target_value, // 固定值赋值，用于反显

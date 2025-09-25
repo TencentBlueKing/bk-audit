@@ -51,6 +51,13 @@
       style="margin-left: 8px;"
       theme="primary" />
 
+    <!-- 是否去重 -->
+    <bk-switcher
+      v-else-if="fieldKey === 'duplicate_field'"
+      v-model="localEventItem.duplicate_field"
+      style="margin-left: 8px;"
+      theme="primary" />
+
     <!-- 字段关联 -->
     <field-mapping
       v-else-if="fieldKey === 'map_config' && localEventItem.map_config"

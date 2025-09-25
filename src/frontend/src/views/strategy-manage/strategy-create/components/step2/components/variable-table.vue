@@ -83,6 +83,7 @@
     display_name: item.display_name,
     is_show: true,
     is_priority: false,
+    duplicate_field: false,
     map_config: {
       target_value: '',
       source_field: '',
