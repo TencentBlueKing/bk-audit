@@ -94,6 +94,7 @@
       initKey.push('is_show');
       initKey.push('enum_mappings');
       initKey.push('description');
+      initKey.push('duplicate_field');
     }
     return initKey;
   });
@@ -106,7 +107,7 @@
   const getCellClass = (valueKey: string) => ({
     'field-name': valueKey === 'field_name',
     'display-name': valueKey === 'display_name',
-    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show'  || valueKey === 'enum_mappings',
+    'is-priority': valueKey === 'is_priority' || valueKey === 'is_show'  || valueKey === 'enum_mappings' || valueKey === 'duplicate_field',
     'map-config': valueKey === 'map_config',
     'drill-config': valueKey === 'drill_config',
     description: valueKey === 'description',

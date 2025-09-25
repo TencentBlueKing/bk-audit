@@ -20,6 +20,7 @@ type EventItem = {
   display_name: string;
   is_show: boolean;
   is_priority: boolean;
+  duplicate_field: boolean;
   map_config?: {
     target_value: string | undefined,
     source_field: string | undefined,
@@ -65,7 +66,8 @@ export default class StrategyFieldEvent {
       field_name: item.field_name,
       display_name: item.display_name,
       is_show: item.is_show ?? true,
-      is_priority: !prefix ? true : item.is_priority || false,
+      is_priority: !prefix ? true : item.is_priority || false, // 如果不是基本信息，则默认不重点展示
+      duplicate_field: item.duplicate_field || false,
       map_config: {
         target_value: item.map_config?.target_value,
         source_field: item.map_config?.source_field,
