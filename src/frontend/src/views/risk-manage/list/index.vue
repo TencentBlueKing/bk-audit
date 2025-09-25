@@ -42,7 +42,6 @@
 
 <script setup lang='tsx'>
   import {
-    computed,
     onUnmounted,
     ref,
   } from 'vue';
@@ -71,6 +70,8 @@
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
   import RiskLevel from './components/risk-level.vue';
+
+  import useTableSettings from '@/hooks/use-table-settings';
 
   const dataSource = RiskManageService.fetchRiskList;
 
@@ -215,25 +216,10 @@
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.current_operator} />,
     },
     {
-      label: () => t('风险标记'),
-      field: () => 'risk_label',
-      width: 110,
-      minWidth: 100,
-      render: ({ data }: { data: RiskManageModel }) => <span
-        class={{
-          misreport: data.risk_label === 'misreport',
-          'risk-label-status': true,
-        }}>
-          {data.risk_label === 'normal' ? t('正常') : t('误报')}
-        </span>,
-    },
-    {
-      label: () => t('首次发现时间'),
-      field: () => 'event_time',
-      sort: 'custom',
-      width: 168,
-      minWidth: 168,
-      render: ({ data }: { data: RiskManageModel }) => data.event_time || '--',
+      label: () => t('关注人'),
+      field: () => 'notice_users',
+      width: 160,
+      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
     },
     {
       label: () => t('风险命中策略(ID)'),
@@ -253,10 +239,12 @@
       },
     },
     {
-      label: () => t('关注人'),
-      field: () => 'notice_users',
-      width: 160,
-      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
+      label: () => t('首次发现时间'),
+      field: () => 'event_time',
+      sort: 'custom',
+      width: 168,
+      minWidth: 168,
+      render: ({ data }: { data: RiskManageModel }) => data.event_time || '--',
     },
     {
       label: () => t('最后一次处理时间'),
@@ -264,6 +252,19 @@
       // sort: 'custom',
       width: 160,
       render: ({ data }: { data: RiskManageModel }) => data.last_operate_time || '--',
+    },
+    {
+      label: () => t('风险标记'),
+      field: () => 'risk_label',
+      width: 110,
+      minWidth: 100,
+      render: ({ data }: { data: RiskManageModel }) => <span
+        class={{
+          misreport: data.risk_label === 'misreport',
+          'risk-label-status': true,
+        }}>
+          {data.risk_label === 'normal' ? t('正常') : t('误报')}
+        </span>,
     },
     {
       label: () => t('操作'),
@@ -321,10 +322,13 @@
 
   const disabledMap: Record<string, string> = {
     risk_id: 'risk_id',
-    event_content: 'event_content',
+    title: 'title',
+    risk_level: 'risk_level',
     operator: 'operator',
     status: 'status',
     current_operator: 'current_operator',
+    last_operate_time: 'last_operate_time',
+    risk_label: 'risk_label',
   };
   const initSettings = () => ({
     fields: tableColumn.reduce((res, item) => {
@@ -339,47 +343,11 @@
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
     }>),
-    checked: ['risk_id', 'risk_level', 'event_content', 'tags', 'operator', 'status', 'current_operator', 'risk_label', 'event_time', 'title', 'notice_users', 'strategy_id'],
+    checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'],
     showLineHeight: false,
     trigger: 'manual' as const,  // 添加 as const 类型断言
   });
-  const settings = computed(() => {
-    const defaultSettings = initSettings(); // 获取最新的默认配置
-    const jsonStr = localStorage.getItem('audit-all-risk-list-setting');
-
-    if (!jsonStr) return defaultSettings;
-
-    try {
-      const savedSettings = JSON.parse(jsonStr);
-
-      // 字段合并：以默认配置为基础，合并用户保存的字段状态
-      const mergedFields = defaultSettings.fields.map((defaultField) => {
-        const savedField = savedSettings.fields?.find((f: any) => f.field === defaultField.field);
-        // 保留新字段配置，仅继承用户设置的disabled状态
-        return savedField
-          ? { ...defaultField, disabled: savedField.disabled }
-          : defaultField;
-      });
-
-      // 选中的字段合并：保留用户选择 + 新增的默认选中字段
-      const savedCheckedSet = new Set(savedSettings.checked || []);
-      const newDefaultChecked = defaultSettings.checked
-        .filter(field => !savedCheckedSet.has(field)); // 找出新增的默认选中字段
-      const mergedChecked = [...(savedSettings.checked || []), ...newDefaultChecked]
-        .filter(field => mergedFields.some(f => f.field === field)); // 过滤无效字段
-
-      return {
-        ...defaultSettings,       // 保留最新默认配置的其他属性
-        fields: mergedFields,     // 合并后的字段配置
-        checked: mergedChecked,   // 合并后的选中字段
-        showLineHeight: false,    // 强制重置行高设置
-        trigger: 'manual' as const,  // 添加 as const 类型断言
-      };
-    } catch (e) {
-      console.error('本地设置解析失败，使用默认配置', e);
-      return defaultSettings;
-    }
-  });
+  const { settings } = useTableSettings('audit-all-risk-list-setting', initSettings);
 
   // 导出数据
   const handleExport = () => {
