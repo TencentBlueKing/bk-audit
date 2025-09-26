@@ -35,12 +35,20 @@ export default function useTableSettings(storageKey: string, defaultSettings: ()
       const savedSettings = JSON.parse(jsonStr);
 
       // 字段配置：完全以代码中的定义为准，直接使用 latestDefaultSettings.fields
-      // 选中的字段合并：保留用户选择 + 新增的默认选中字段
+      // 选中的字段合并：disabled字段强制checked，非disabled字段以用户本地设置为主
       const savedCheckedSet = new Set(savedSettings.checked || []);
-      const newDefaultChecked = latestDefaultSettings.checked
-        .filter(field => !savedCheckedSet.has(field)); // 找出新增的默认选中字段
-      const mergedChecked = [...(savedSettings.checked || []), ...newDefaultChecked]
-        .filter(field => latestDefaultSettings.fields.some(f => f.field === field)); // 过滤无效字段
+
+      // 获取所有字段的选中状态
+      const mergedChecked = latestDefaultSettings.fields
+        .map((field) => {
+          // disabled字段：强制为checked（以代码为准）
+          if (field.disabled) {
+            return field.field;
+          }
+          // 非disabled字段：以用户本地设置为主
+          return savedCheckedSet.has(field.field) ? field.field : null;
+        })
+        .filter(field => field !== null); // 过滤掉null值
 
       return {
         ...latestDefaultSettings,       // 保留最新默认配置的其他属性

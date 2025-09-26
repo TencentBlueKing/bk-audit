@@ -280,11 +280,11 @@
     risk_id: 'risk_id',
     title: 'title',
     risk_level: 'risk_level',
-    operator: 'operator',
+    // operator: 'operator',
     status: 'status',
     current_operator: 'current_operator',
-    last_operate_time: 'last_operate_time',
-    risk_label: 'risk_label',
+    // last_operate_time: 'last_operate_time',
+    // risk_label: 'risk_label',
   };
   const initSettings = () => ({
     fields: tableColumn.reduce((res, item) => {
