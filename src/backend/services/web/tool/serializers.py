@@ -166,6 +166,7 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
             "tags",
             "permission",
             "strategies",
+            "is_bkvision",
         ]
 
 
