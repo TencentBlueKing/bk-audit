@@ -492,6 +492,47 @@
     return eventInfo.filter(item => item.duplicate_field).map(item => item.field_name);
   });
 
+  // 将各种类型转换为字符串，模拟 Vue 模板的显示效果
+  const convertToString = (value: any): string => {
+    // Vue 模板显示逻辑：
+    // 1. null/undefined 显示为空字符串
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    // 2. 布尔值在 Vue 模板中显示为字符串
+    if (typeof value === 'boolean') {
+      return value.toString();
+    }
+
+    // 3. 数字直接转换为字符串
+    if (typeof value === 'number') {
+      return value.toString();
+    }
+
+    // 4. 字符串直接返回
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    // 5. 数组在 Vue 模板中会调用 join() 方法，默认用逗号连接
+    if (Array.isArray(value)) {
+      return value.join(',');
+    }
+
+    // 6. 对象在 Vue 模板中会调用 JSON.stringify()
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '[object Object]';
+      }
+    }
+
+    // 7. 其他类型转换为字符串
+    return String(value);
+  };
+
   // 获取标签列表
   const {
     data: tagData,
@@ -512,7 +553,6 @@
     },
     onSuccess() {
       if (linkEventData.value.results.length) {
-        console.log(linkEventList.value);
         // 触底加载，拼接 - 使用动态去重字段
         const allEvents = [...linkEventList.value, ...linkEventData.value.results];
         linkEventList.value = allEvents;
@@ -521,11 +561,18 @@
         linkEventList.value = allEvents.filter((event, index, self) => {
           // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
           const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
+          console.log('currentValues', currentValues);
           // 查找第一个具有包含关系的事件索引
           const firstIndex = self.findIndex((e) => {
             const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
-            // 检查所有字段值都完全相同（全等关系）);
-            return currentValues.every((currentValue, i) => currentValue === eValues[i]);
+            console.log('eValues', eValues);
+            // 检查所有字段值都完全相同（转换为字符串比较）
+            return currentValues.every((currentValue, i) => {
+              // 将值转换为字符串进行比较，处理各种特殊类型
+              const currentStr = convertToString(currentValue);
+              const eValueStr = convertToString(eValues[i]);
+              return currentStr === eValueStr;
+            });
           });
 
           // 只保留第一次出现的事件（去重）
