@@ -35,11 +35,43 @@ class AuditEventKafkaRecordConsumer(KafkaRecordConsumer):
         self.eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()
 
     def process_records(self, records: list):
+        if records:
+            first_record = records[0]
+            logger.info(
+                "[%s] processing batch topic=%s partition=%s count=%s offset_range=[%s,%s]",
+                self.__class__.__name__,
+                first_record.topic,
+                first_record.partition,
+                len(records),
+                records[0].offset,
+                records[-1].offset,
+            )
         self.eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()  # 更新 eligible_strategy_ids
         super().process_records(records)
 
     def process_record(self, record):
-        RiskHandler().generate_risk(record.value, self.eligible_strategy_ids)
+        key_present = record.key is not None
+        value = record.value
+        value_type = type(value).__name__
+        if isinstance(value, (str, bytes)):
+            value_size = len(value)
+        elif isinstance(value, dict):
+            value_size = len(value.keys())
+        elif isinstance(value, list):
+            value_size = len(value)
+        else:
+            value_size = None
+        logger.info(
+            "[%s] record topic=%s partition=%s offset=%s key_present=%s value_type=%s value_size=%s",
+            self.__class__.__name__,
+            record.topic,
+            record.partition,
+            record.offset,
+            key_present,
+            value_type,
+            value_size,
+        )
+        RiskHandler().generate_risk(value, self.eligible_strategy_ids)
 
 
 class Command(BaseCommand):

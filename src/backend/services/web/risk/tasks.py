@@ -123,7 +123,9 @@ def process_risk_ticket(*, risk_id: str = None):
         return
 
     # 获取风险
-    risks = Risk.objects.filter(status__in=[RiskStatus.NEW, RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS])
+    risks = Risk.objects.filter(status__in=[RiskStatus.NEW, RiskStatus.FOR_APPROVE, RiskStatus.AUTO_PROCESS]).only(
+        "risk_id", "strategy"
+    )
     if risk_id:
         risks = risks.filter(risk_id=risk_id)
 

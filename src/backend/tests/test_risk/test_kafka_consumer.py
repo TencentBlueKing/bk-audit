@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+from collections import namedtuple
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -26,6 +27,12 @@ from services.web.risk.management.commands.gen_risk import AuditEventKafkaRecord
 from services.web.risk.models import Risk
 from services.web.strategy_v2.constants import StrategyStatusChoices
 from services.web.strategy_v2.models import Strategy
+
+MockTopicPartition = namedtuple("MockTopicPartition", ["topic", "partition"])
+
+
+def make_record(topic, partition, offset, *, key=None, value=None):
+    return SimpleNamespace(topic=topic, partition=partition, offset=offset, key=key, value=value)
 
 
 class TestAuditEventKafkaRecordConsumer(TestCase):
@@ -50,7 +57,10 @@ class TestAuditEventKafkaRecordConsumer(TestCase):
             consumer=self._build_consumer(), timeout_ms=1000, max_records=100, sleep_time=0.1
         )
         # Prepare two fake records
-        records = [SimpleNamespace(value={"event": 1}), SimpleNamespace(value={"event": 2})]
+        records = [
+            make_record("queue_test", 0, 1, value={"event": 1}),
+            make_record("queue_test", 0, 2, value={"event": 2}),
+        ]
         consumer.process_records(records)
 
         # After refresh, eligible ids should be updated to second value
@@ -66,7 +76,7 @@ class TestAuditEventKafkaRecordConsumer(TestCase):
             consumer=self._build_consumer(), timeout_ms=1000, max_records=100, sleep_time=0.1
         )
         consumer.eligible_strategy_ids = {99}
-        record = SimpleNamespace(value={"hello": "world"})
+        record = make_record("queue_test", 0, 1, value={"hello": "world"})
         consumer.process_record(record)
         mock_generate.assert_called_once_with({"hello": "world"}, {99})
 
@@ -96,9 +106,12 @@ class TestAuditEventKafkaRecordConsumer(TestCase):
         }
 
         # Mock KafkaConsumer.poll to return our records then empty to exit
-        records_batch = [SimpleNamespace(value=event_ok), SimpleNamespace(value=event_skip)]
+        records_batch = [
+            make_record("queue_test", 0, 1, value=event_ok),
+            make_record("queue_test", 0, 2, value=event_skip),
+        ]
         mock_consumer = MagicMock()
-        mock_consumer.poll.side_effect = [{"tp": records_batch}, {}]
+        mock_consumer.poll.side_effect = [{MockTopicPartition("queue_test", 0): records_batch}, {}]
 
         consumer = AuditEventKafkaRecordConsumer(
             consumer=mock_consumer, timeout_ms=1000, max_records=100, sleep_time=0.01, sleep_wait=False
