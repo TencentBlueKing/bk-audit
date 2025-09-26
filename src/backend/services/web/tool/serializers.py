@@ -59,6 +59,9 @@ class ToolCreateRequestSerializer(serializers.Serializer):
         label=gettext_lazy("数据查询配置类型"),
         help_text=gettext_lazy("仅在 tool_type=data_search 时必须，支持 simple/sql"),
     )
+    updated_time = serializers.DateTimeField(
+        required=False, allow_null=True, label=gettext_lazy("BKVision 更新时间"), default=None
+    )
 
     def validate(self, attrs):
         tool_type = attrs["tool_type"]
@@ -84,6 +87,9 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     tags = serializers.ListField(
         child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")
+    )
+    updated_time = serializers.DateTimeField(
+        required=False, allow_null=True, label=gettext_lazy("BKVision 更新时间"), default=None
     )
 
     def validate(self, attrs):
@@ -191,6 +197,7 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
             "tags",
             "data_search_config_type",
             "permission_owner",
+            "is_bkvision",
         ]
 
 
