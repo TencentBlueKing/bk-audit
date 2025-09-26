@@ -206,6 +206,7 @@ class ToolResourceTestCase(TestCase):
             "field_category": "button",
             "required": True,
             "default_value": "default_val",
+            "is_default_value": True,
         }
         example_var2 = {
             "raw_name": "list_field",
@@ -214,6 +215,7 @@ class ToolResourceTestCase(TestCase):
             "field_category": "selector",
             "required": False,
             "default_value": [1, 2, 3],
+            "is_default_value": True,
         }
         data = {
             "uid": new_uid,

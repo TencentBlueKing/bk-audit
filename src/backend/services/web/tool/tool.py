@@ -1,3 +1,4 @@
+import datetime
 import time
 from typing import List, Type
 
@@ -31,6 +32,7 @@ def create_tool_with_config(validated_data: dict) -> Tool:
     """
     config_data = validated_data.get("config")
     tag_names = validated_data.pop("tags", [])
+    updated_time = validated_data.pop("updated_time", None)
     data_search_config_type = validated_data.pop("data_search_config_type", "")
     tool = Tool.objects.create(**validated_data)
     if tool.tool_type == ToolTypeEnum.DATA_SEARCH.value:
@@ -38,7 +40,7 @@ def create_tool_with_config(validated_data: dict) -> Tool:
             raise DataSearchSimpleModeNotSupportedError()
         _create_sql_tool(tool, config_data, data_search_config_type)
     elif tool.tool_type == ToolTypeEnum.BK_VISION.value:
-        _create_bkvision_tool(tool, config_data)
+        _create_bkvision_tool(tool, config_data, updated_time)
     sync_resource_tags(
         resource_uid=tool.uid,
         tag_names=tag_names,
@@ -63,7 +65,7 @@ def _create_sql_tool(tool: Tool, config_data: dict, config_type: str):
 
 
 @transaction.atomic
-def _create_bkvision_tool(tool: Tool, config_data: dict):
+def _create_bkvision_tool(tool: Tool, config_data: dict, updated_time: datetime):
     """
     创建 bkvision 类型工具的子表配置
     """
@@ -76,7 +78,7 @@ def _create_bkvision_tool(tool: Tool, config_data: dict):
         handler=VisionHandler.__name__,
         defaults={"id": unique_id(), "name": f"Tool-{tool.uid}"},
     )
-    BkVisionToolConfig.objects.create(tool=tool, panel=panel)
+    BkVisionToolConfig.objects.create(tool=tool, panel=panel, updated_time=updated_time)
 
 
 def sync_resource_tags(
