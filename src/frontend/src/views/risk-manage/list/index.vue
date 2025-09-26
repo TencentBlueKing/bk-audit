@@ -146,14 +146,16 @@
     {
       label: () => t('风险标题'),
       field: () => 'title',
+      showOverflowTooltip: true,
       minWidth: 320,
-      render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.title} />,
+      // render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.title} />,
     },
     {
       label: () => t('风险描述'),
       field: () => 'event_content',
+      showOverflowTooltip: true,
       minWidth: 320,
-      render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.event_content} />,
+      // render: ({ data }: { data: RiskManageModel }) => <Tooltips data={data.event_content} />,
     },
     {
       label: () => t('风险等级'),
@@ -324,11 +326,11 @@
     risk_id: 'risk_id',
     title: 'title',
     risk_level: 'risk_level',
-    operator: 'operator',
+    // operator: 'operator',
     status: 'status',
     current_operator: 'current_operator',
-    last_operate_time: 'last_operate_time',
-    risk_label: 'risk_label',
+    // last_operate_time: 'last_operate_time',
+    // risk_label: 'risk_label',
   };
   const initSettings = () => ({
     fields: tableColumn.reduce((res, item) => {
