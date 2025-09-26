@@ -43,7 +43,7 @@ def update_bkvision_config():
             # 从 API 获取 BKVision 配置
             bkvision = api.bk_vision.query_meta(type="dashboard", share_uid=tool.config.get("uid"))
             bkvision_updated_time = bkvision["data"].get("updated_time")
-            tool_updated_time = tool.bkvision_config.updated_at
+            tool_updated_time = tool.bkvision_config.updated_time
             if isinstance(bkvision_updated_time, str):
                 bkvision_updated_time = datetime.fromisoformat(bkvision_updated_time)
 
@@ -59,7 +59,6 @@ def update_bkvision_config():
                 tool.bkvision_config.updated_time = bkvision_updated_time
                 tool.is_bkvision = True
                 updated_tools.append(tool)  # 记录需要更新的工具
-
         except Exception as e:
             logger.error(f"Error processing Tool {tool.uid}: {str(e)}", exc_info=True)
 
