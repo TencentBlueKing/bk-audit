@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import abc
+import datetime
 import traceback
 from collections import defaultdict
 from copy import deepcopy
@@ -57,7 +58,7 @@ from services.web.tool.constants import (
 )
 from services.web.tool.exceptions import ToolDoesNotExist, ToolTypeNotSupport
 from services.web.tool.executor.tool import ToolExecutorFactory
-from services.web.tool.models import Tool, ToolTag
+from services.web.tool.models import BkVisionToolConfig, Tool, ToolTag
 from services.web.tool.permissions import ToolPermission
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
@@ -510,7 +511,7 @@ class UpdateTool(ToolBase):
     RequestSerializer = ToolUpdateRequestSerializer
     ResponseSerializer = ToolResponseSerializer
 
-    def create_tool_new_version(self, old_tool: Tool, validated_request_data: dict):
+    def create_tool_new_version(self, old_tool: Tool, validated_request_data: dict, updated_time: datetime):
         """
         创建工具新版本
         """
@@ -529,6 +530,7 @@ class UpdateTool(ToolBase):
             "created_by": old_tool.created_by,
             # 保持创建时间与旧版本一致
             "created_at": old_tool.created_at,
+            "updated_time": updated_time,
         }
         change_permission_owner = old_tool.has_change_permission_owner(new_config)
         new_tool_data["permission_owner"] = (
@@ -551,11 +553,20 @@ class UpdateTool(ToolBase):
     def perform_request(self, validated_request_data: dict):
         uid = validated_request_data["uid"]
         tool = Tool.last_version_tool(uid)
+        updated_time = validated_request_data.pop("updated_time", None)
         if not tool:
             raise ToolDoesNotExist()
         # 如果配置有变更则创建新版本
         if validated_request_data.get("config") and validated_request_data.get("config") != tool.config:
-            return self.create_tool_new_version(old_tool=tool, validated_request_data=validated_request_data)
+            return self.create_tool_new_version(
+                old_tool=tool, validated_request_data=validated_request_data, updated_time=updated_time
+            )
+        bkvision_config = BkVisionToolConfig.objects.filter(tool__uid=uid).order_by('-id').first()
+        if bkvision_config:
+            bkvision_config.updated_time = updated_time
+            bkvision_config.save()
+            tool.is_bkvision = False
+            tool.save()
         # 配置未变更则更新原版本
         tag_names = validated_request_data.pop("tags")
         for key, value in validated_request_data.items():

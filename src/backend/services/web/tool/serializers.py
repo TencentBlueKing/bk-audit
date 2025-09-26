@@ -16,6 +16,7 @@ to the current version of the project delivered to anyone in the future.
 """
 from typing import Annotated, Optional
 
+import pytz
 from django.utils.translation import gettext_lazy
 from pydantic import Field as PydanticField
 from rest_framework import serializers
@@ -59,6 +60,9 @@ class ToolCreateRequestSerializer(serializers.Serializer):
         label=gettext_lazy("数据查询配置类型"),
         help_text=gettext_lazy("仅在 tool_type=data_search 时必须，支持 simple/sql"),
     )
+    updated_time = serializers.DateTimeField(
+        required=False, allow_null=True, label=gettext_lazy("BKVision 更新时间"), default=None
+    )
 
     def validate(self, attrs):
         tool_type = attrs["tool_type"]
@@ -84,6 +88,9 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     tags = serializers.ListField(
         child=serializers.CharField(), required=True, allow_empty=True, label=gettext_lazy("标签列表")
+    )
+    updated_time = serializers.DateTimeField(
+        required=False, allow_null=True, label=gettext_lazy("BKVision 更新时间"), default=None
     )
 
     def validate(self, attrs):
@@ -160,6 +167,7 @@ class ToolListResponseSerializer(serializers.ModelSerializer):
             "tags",
             "permission",
             "strategies",
+            "is_bkvision",
         ]
 
 
@@ -169,10 +177,19 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     data_search_config_type = serializers.SerializerMethodField()
     permission_owner = serializers.SerializerMethodField()
+    updated_time = serializers.SerializerMethodField()
 
     def get_data_search_config_type(self, obj):
         if hasattr(obj, "data_search_config") and obj.data_search_config:
             return obj.data_search_config.data_search_config_type
+        return None
+
+    def get_updated_time(self, obj):
+        if hasattr(obj, "bkvision_config") and obj.bkvision_config:
+            if obj.bkvision_config.updated_time:
+                utc_time = obj.bkvision_config.updated_time.replace(tzinfo=pytz.utc)
+                local_time = utc_time.astimezone(pytz.timezone('Asia/Shanghai'))
+                return local_time.strftime("%Y-%m-%d %H:%M:%S")
         return None
 
     def get_permission_owner(self, obj: Tool):
@@ -197,6 +214,8 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
             "tags",
             "data_search_config_type",
             "permission_owner",
+            "is_bkvision",
+            "updated_time",
         ]
 
 
