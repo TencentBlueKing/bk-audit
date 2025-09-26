@@ -44,6 +44,12 @@ class KafkaRecordConsumer:
                     return
                 time.sleep(self.sleep_time)
                 continue
+            records_summary = {f"{tp.topic}:{tp.partition}": len(records) for tp, records in data.items()}
+            total_records = sum(records_summary.values())
+            logger.info(
+                f"[{self.__class__.__name__}] polled {total_records} records from {len(data)} "
+                f"partitions: {records_summary}"
+            )
             # 重连 db，防止消费者长时间没有消费数据的情况下， db 连接因为空闲被释放
             ping_db()
             for records in data.values():
