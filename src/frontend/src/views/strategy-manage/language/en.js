@@ -415,5 +415,6 @@ export default {
     字段关联: 'Field Association',
     '数据加载中，请稍等': 'Data loading, please wait',
     '为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息': 'After configuring the drill tool for the field, you can click the field in the risk ticket to query the associated information',
+    '同一风险单据内，当所有启用的去重字段值与历史事件匹配时，使用新事件替换历史事件': 'When all enabled duplicate field values match the historical events in the same risk ticket, the new event replaces the historical event',
   },
 };

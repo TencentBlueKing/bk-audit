@@ -444,6 +444,7 @@
     };
   }) ;
 
+  // 套餐下拉列表使用
   const displayValueDictEventData = computed(() => {
     // 遍历 displayValueDict.value.eventData 对象的Key value 输出数组
     const result = Object.keys(displayValueDict.value.eventData).map((key) => {
@@ -481,6 +482,57 @@
     return group(eventInfoKeys);
   });
 
+  // 去重字段
+  const distinctEventDataKeyArr = computed(() => {
+    const eventInfo = [
+      ...props.data.event_basic_field_configs,
+      ...props.data.event_data_field_configs,
+      ...props.data.event_evidence_field_configs,
+    ];
+    return eventInfo.filter(item => item.duplicate_field).map(item => item.field_name);
+  });
+
+  // 将各种类型转换为字符串，模拟 Vue 模板的显示效果
+  const convertToString = (value: any): string => {
+    // Vue 模板显示逻辑：
+    // 1. null/undefined 显示为空字符串
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    // 2. 布尔值在 Vue 模板中显示为字符串
+    if (typeof value === 'boolean') {
+      return value.toString();
+    }
+
+    // 3. 数字直接转换为字符串
+    if (typeof value === 'number') {
+      return value.toString();
+    }
+
+    // 4. 字符串直接返回
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    // 5. 数组在 Vue 模板中会调用 join() 方法，默认用逗号连接
+    if (Array.isArray(value)) {
+      return value.join(',');
+    }
+
+    // 6. 对象在 Vue 模板中会调用 JSON.stringify()
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '[object Object]';
+      }
+    }
+
+    // 7. 其他类型转换为字符串
+    return String(value);
+  };
+
   // 获取标签列表
   const {
     data: tagData,
@@ -501,9 +553,31 @@
     },
     onSuccess() {
       if (linkEventData.value.results.length) {
-        // 触底加载，拼接
-        linkEventList.value = [...linkEventList.value, ...linkEventData.value.results].
-          filter((item, index, self) => index === self.findIndex(t => t.event_id === item.event_id));
+        // 触底加载，拼接 - 使用动态去重字段
+        const allEvents = [...linkEventList.value, ...linkEventData.value.results];
+        linkEventList.value = allEvents;
+
+        // 根据指定字段组合进行去重（包含关系）
+        linkEventList.value = allEvents.filter((event, index, self) => {
+          // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
+          const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
+          console.log('currentValues', currentValues);
+          // 查找第一个具有包含关系的事件索引
+          const firstIndex = self.findIndex((e) => {
+            const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
+            console.log('eValues', eValues);
+            // 检查所有字段值都完全相同（转换为字符串比较）
+            return currentValues.every((currentValue, i) => {
+              // 将值转换为字符串进行比较，处理各种特殊类型
+              const currentStr = convertToString(currentValue);
+              const eValueStr = convertToString(eValues[i]);
+              return currentStr === eValueStr;
+            });
+          });
+
+          // 只保留第一次出现的事件（去重）
+          return index === firstIndex;
+        });
 
         // 默认获取第一个
         [eventItem.value] = linkEventList.value;
@@ -520,6 +594,7 @@
     // 下拉触底没有加载完时，继续获取列表
     // eslint-disable-next-line max-len
     if ((target.scrollTop + target.clientHeight === target.scrollHeight) && linkEventList.value.length < linkEventData.value.total) {
+      console.log('触底');
       currentPage.value += 1;
       fetchLinkEvent({
         start_time: props.data.event_time,
@@ -618,15 +693,25 @@
     }
   };
 
-  watch(() => props.data, (data) => {
-    if (data.risk_id) {
-      fetchLinkEvent({
-        start_time: data.event_time,
-        end_time: data.event_end_time,
-        risk_id: data.risk_id,
-        page: currentPage.value,
-        page_size: 50,
-      });
+  // 防抖处理
+  let fetchTimeout: number | undefined;
+  watch(() => props.data, (data, oldData) => {
+    // 只有当 risk_id 真正发生变化时才触发
+    if (data.risk_id && data.risk_id !== oldData?.risk_id) {
+      // 清除之前的定时器，实现防抖
+      if (fetchTimeout) {
+        clearTimeout(fetchTimeout);
+      }
+
+      fetchTimeout = setTimeout(() => {
+        fetchLinkEvent({
+          start_time: data.event_time,
+          end_time: data.event_end_time,
+          risk_id: data.risk_id,
+          page: currentPage.value,
+          page_size: 50,
+        });
+      }, 100); // 100ms 防抖延迟
     }
   }, {
     immediate: true,
@@ -658,6 +743,10 @@
     onBeforeUnmount(() => {
       observer.takeRecords();
       observer.disconnect();
+      // 清理定时器
+      if (fetchTimeout) {
+        clearTimeout(fetchTimeout);
+      }
     });
   });
 </script>

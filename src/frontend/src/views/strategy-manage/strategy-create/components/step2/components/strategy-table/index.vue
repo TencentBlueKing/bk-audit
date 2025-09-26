@@ -164,6 +164,7 @@
               display_name: propsItem.display_name,
               is_show: propsItem.is_show ?? true,
               is_priority: propsItem.is_priority,
+              duplicate_field: propsItem.duplicate_field,
               map_config: {
                 target_value: propsItem.map_config?.target_value,
                 source_field: propsItem.map_config?.source_field || propsItem.map_config?.target_value, // 固定值赋值，用于反显
