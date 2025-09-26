@@ -48,7 +48,7 @@ export default function useTableSettings(storageKey: string, defaultSettings: ()
           // 非disabled字段：以用户本地设置为主
           return savedCheckedSet.has(field.field) ? field.field : null;
         })
-        .filter(field => field !== null); // 过滤掉null值
+        .filter((field): field is string => field !== null); // 类型守卫，过滤掉null值
 
       return {
         ...latestDefaultSettings,       // 保留最新默认配置的其他属性
