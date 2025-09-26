@@ -512,6 +512,7 @@
     },
     onSuccess() {
       if (linkEventData.value.results.length) {
+        console.log(linkEventList.value);
         // 触底加载，拼接 - 使用动态去重字段
         const allEvents = [...linkEventList.value, ...linkEventData.value.results];
         linkEventList.value = allEvents;
@@ -546,6 +547,7 @@
     // 下拉触底没有加载完时，继续获取列表
     // eslint-disable-next-line max-len
     if ((target.scrollTop + target.clientHeight === target.scrollHeight) && linkEventList.value.length < linkEventData.value.total) {
+      console.log('触底');
       currentPage.value += 1;
       fetchLinkEvent({
         start_time: props.data.event_time,
@@ -644,15 +646,25 @@
     }
   };
 
-  watch(() => props.data, (data) => {
-    if (data.risk_id) {
-      fetchLinkEvent({
-        start_time: data.event_time,
-        end_time: data.event_end_time,
-        risk_id: data.risk_id,
-        page: currentPage.value,
-        page_size: 50,
-      });
+  // 防抖处理
+  let fetchTimeout: number | undefined;
+  watch(() => props.data, (data, oldData) => {
+    // 只有当 risk_id 真正发生变化时才触发
+    if (data.risk_id && data.risk_id !== oldData?.risk_id) {
+      // 清除之前的定时器，实现防抖
+      if (fetchTimeout) {
+        clearTimeout(fetchTimeout);
+      }
+
+      fetchTimeout = setTimeout(() => {
+        fetchLinkEvent({
+          start_time: data.event_time,
+          end_time: data.event_end_time,
+          risk_id: data.risk_id,
+          page: currentPage.value,
+          page_size: 50,
+        });
+      }, 100); // 100ms 防抖延迟
     }
   }, {
     immediate: true,
@@ -684,6 +696,10 @@
     onBeforeUnmount(() => {
       observer.takeRecords();
       observer.disconnect();
+      // 清理定时器
+      if (fetchTimeout) {
+        clearTimeout(fetchTimeout);
+      }
     });
   });
 </script>
