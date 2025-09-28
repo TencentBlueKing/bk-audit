@@ -176,7 +176,7 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     data_search_config_type = serializers.SerializerMethodField()
     permission_owner = serializers.SerializerMethodField()
-    updated_time = serializers.DateTimeField(required=False, allow_null=True, label=gettext_lazy("BKVision 更新时间"))
+    updated_time = serializers.SerializerMethodField()
 
     def get_data_search_config_type(self, obj):
         if hasattr(obj, "data_search_config") and obj.data_search_config:
@@ -185,7 +185,8 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
 
     def get_updated_time(self, obj):
         if hasattr(obj, "bkvision_config") and obj.bkvision_config:
-            return obj.bkvision_config.updated_time
+            if obj.bkvision_config.updated_time:
+                return obj.bkvision_config.updated_time.strftime("%Y-%m-%d %H:%M:%S")
         return None
 
     def get_permission_owner(self, obj: Tool):
