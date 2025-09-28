@@ -44,43 +44,63 @@
         property="selectTool"
         required>
         <div style="display: flex;">
-          <bk-cascader
-            v-model="formData.selectTool"
-            filterable
-            :list="toolCascaderList"
-            multiple
-            :show-complete-name="false"
-            style="flex: 1;"
-            trigger="hover"
-            @change="handleSelectTool">
-            <template #extension>
-              <div class="view-mode">
-                <auth-router-link
-                  action-id="create_notice_group"
-                  class="create_notice_group"
-                  target="_blank"
-                  :to="{
-                    name: 'noticeGroupList',
-                    query: {
-                      create: true
-                    }
-                  }">
+          <bk-loading
+            :loading="isToolLoading"
+            style="width: 100%;">
+            <bk-select
+              v-model="formData.selectTool"
+              class="bk-select"
+              display-key="name"
+              filterable
+              id-key="id"
+              multiple
+              multiple-mode="tag"
+              style="flex: 1;"
+              @change="handleSelectTool">
+              <template
+                v-for="(item, index) in toolCascaderList"
+                :key="index">
+                <bk-option-group
+                  collapsible
+                  :label="item.name">
+                  <bk-option
+                    v-for="(child, childIndex) in item.children"
+                    :id="child.id"
+                    :key="childIndex"
+                    :name="child.name" />
+                </bk-option-group>
+              </template>
+              <template #extension>
+                <div class="create-tool-group">
+                  <router-link
+                    class="create_tool-group"
+                    target="_blank"
+                    :to="{
+                      name: 'toolsAdd',
+                    }">
+                    <audit-icon
+                      style="font-size: 14px;color: #3a84ff;"
+                      type="plus-circle" />
+                    {{ t('新建工具') }}
+                  </router-link>
+                </div>
+                <div
+                  class="refresh"
+                  @click="refreshToolList">
                   <audit-icon
-                    style="font-size: 14px;color: #3a84ff;"
-                    type="plus-circle" />
-                  {{ t('新建工具') }}
-                </auth-router-link>
-                <span class="divider-wrapper">
-                  <span
-                    class="add-node"
-                    @click="handleRefresh">
-                    <plus class="icon-plus" />
+                    v-if="isToolLoading"
+                    class="rotate-loading"
+                    svg
+                    type="loading" />
+                  <template v-else>
+                    <audit-icon
+                      type="refresh" />
                     {{ t('刷新') }}
-                  </span>
-                </span>
-              </div>
-            </template>
-          </bk-cascader>
+                  </template>
+                </div>
+              </template>
+            </bk-select>
+          </bk-loading>
           <bk-button
             class="ml16"
             :disabled="formData.selectTool.length === 0"
@@ -135,7 +155,7 @@
                     <audit-icon
                       class="field-title-icon-item"
                       type="delete"
-                      @click="handleDeleteTool(toolIndex)" />
+                      @click="handleDeleteTool(toolConfig)" />
                   </div>
                 </template>
                 <div class="field-list">
@@ -269,7 +289,8 @@
 
   interface Emits {
     (e: 'submit', data: FormData['tools']): void;
-    (e: 'openTool', value: ToolDetailModel): void;
+    (e: 'openTool', value: string): void;
+    (e: 'refreshToolList'): void;
   }
 
   interface Props {
@@ -310,7 +331,7 @@
 
   interface FormData {
     tools: Array<ToolConfig>;
-    selectTool: Array<string[]>;
+    selectTool: Array<string>;
   }
 
   const props =  defineProps<Props>();
@@ -333,6 +354,8 @@
   }]);
 
   const toolCascaderList = ref<Array<ToolCascaderItem>>([]);
+
+  const isToolLoading = ref(true);
 
   const formData = ref<FormData>({
     tools: [],
@@ -435,11 +458,11 @@
     toolsDetailData.value.clear();
   };
 
-  const handleSelectTool = async (value: string[][]) => {
+  const handleSelectTool = async (value: string[]) => {
     // 批量处理多个工具选择
     if (value.length > 0) {
       // 获取当前选择的工具 UID 列表
-      const selectedToolUids = value.map(toolSelection => toolSelection[1]);
+      const selectedToolUids = value;
 
       const currentToolUids = formData.value.tools.length > 0
         ? formData.value.tools.map(toolConfig => toolConfig.tool.uid)
@@ -501,8 +524,9 @@
     }
   };
 
-  const handleRefresh = () => {
-    // fetchAllTools();
+  const refreshToolList = () => {
+    isToolLoading.value = true;
+    emit('refreshToolList');
   };
 
   // 获取工具名称
@@ -511,15 +535,9 @@
     return tool?.name || uid;
   };
 
-
   const handleOpenTool = () => {
-    // 打开第一个工具
-    if (formData.value.tools.length > 0) {
-      const firstTool = props.allToolsData.find(item => item.uid === formData.value.tools[0].tool.uid);
-      if (firstTool) {
-        emit('openTool', firstTool);
-      }
-    }
+    const uids = formData.value.tools.map(tool => tool.tool.uid).join('&');
+    emit('openTool', uids);
   };
 
   const getDictName = (value: string) => {
@@ -549,19 +567,11 @@
   };
 
   // 删除工具配置
-  const handleDeleteTool = (toolIndex: number) => {
-    const toolConfig = formData.value.tools[toolIndex];
-    if (toolConfig?.tool?.uid) {
-      // 清理工具详情数据
-      toolsDetailData.value.delete(toolConfig.tool.uid);
-    }
-    // 删除工具配置
-    formData.value.tools.splice(toolIndex, 1);
-    // 更新级联选择器的值
-    formData.value.selectTool = formData.value.tools.map((tool) => {
-      const tagItem = toolCascaderList.value.find(item => item.children.some(child => child.id === tool.tool.uid));
-      return tagItem ? [tagItem.id, tool.tool.uid] : [];
-    }).filter(item => item.length > 0);
+  const handleDeleteTool = (element: ToolConfig) => {
+    const deleteTool = element.tool.uid;
+    formData.value.tools = formData.value.tools.filter(tool => tool.tool.uid !== deleteTool);
+    formData.value.selectTool = formData.value.tools.map(tool => tool.tool.uid);
+    toolsDetailData.value.delete(deleteTool);
   };
 
   const handleSubmit = () => {
@@ -582,11 +592,7 @@
     formData.value.tools = _.cloneDeep(data);
 
     if (formData.value.tools.length > 0) {
-      // 为每个工具构造级联选择器的值
-      formData.value.selectTool = formData.value.tools.map((tool) => {
-        const tagItem = toolCascaderList.value.find(item => item.children.some(child => child.id === tool.tool.uid));
-        return tagItem ? [tagItem.id, tool.tool.uid] : [];
-      }).filter(item => item.length > 0);
+      formData.value.selectTool = formData.value.tools.map(tool => tool.tool.uid);
 
       // 使用 Promise.all 并发获取所有工具详情
       const toolDetailPromises = formData.value.tools
@@ -622,6 +628,7 @@
   });
 
   watch(() => props.allToolsData, (data) => {
+    isToolLoading.value = false;
     // 先过滤出有权限数据
     const filteredData = data.filter(tool => tool.permission.use_tool || tool.permission.manage_tool);
     toolCascaderList.value  = props.tagData
@@ -714,5 +721,20 @@
       }
     }
   }
+}
+
+.create-tool-group {
+  padding: 0 12px;
+  text-align: center;
+  flex: 1;
+}
+
+.refresh {
+  padding: 0 12px;
+  color: #3a84ff;
+  text-align: center;
+  cursor: pointer;
+  border-left: 1px solid #dcdee5;
+  flex: 1;
 }
 </style>
