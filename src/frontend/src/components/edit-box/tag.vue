@@ -112,35 +112,49 @@
     if (!rootRef.value || props.data.length < 1) {
       return;
     }
+
+    // 防止重复计算
+    if (isCalcRenderTagNum.value) {
+      return;
+    }
+
     isCalcRenderTagNum.value = true;
-    nextTick(() => {
-      if (rootRef.value && tagElsRef.value) {
-        const {
-          width: boxWidth,
-        } = rootRef.value.getBoundingClientRect();
 
+    requestAnimationFrame(() => {
+      nextTick(() => {
+        if (rootRef.value && tagElsRef.value && tagElsRef.value.length > 0) {
+          const { width: boxWidth } = rootRef.value.getBoundingClientRect();
+          const numTagWidth = 50;
+          const copyBtnWidth = 20;
+          let totalTagWidth = 0;
 
-        const {
-          width: tagWidth,
-        } = tagElsRef.value[0].$el.getBoundingClientRect();
-        let totalTagWidth = tagWidth;
-        renderTagNum.value = 1;   // 最少展示一个
+          // 从0开始重新计算
+          for (let i = 0; i < tagElsRef.value.length; i++) {
+            const currentTagWidth = tagElsRef.value[i].$el.getBoundingClientRect().width;
+            totalTagWidth += currentTagWidth;
 
-        const numTagWidth = 50;
-        const copyBtnWidth = 20;
-        for (let i = 1; i < tagElsRef.value.length; i++) {
-          const {
-            width: tagWidth,
-          } = tagElsRef.value[i].$el.getBoundingClientRect();
-          totalTagWidth += tagWidth;
-          if (totalTagWidth + numTagWidth + copyBtnWidth  < boxWidth) {
-            renderTagNum.value = renderTagNum.value + 1;
-          } else {
-            break;
+            // 检查是否还能放下当前标签和"+N"按钮
+            const needNumBtn = i < tagElsRef.value.length - 1;
+            const requiredWidth = totalTagWidth + (needNumBtn ? numTagWidth + copyBtnWidth : copyBtnWidth);
+
+            if (requiredWidth <= boxWidth) {
+              renderTagNum.value = i + 1;
+            } else {
+              break;
+            }
           }
+
+          // 确保至少显示一个标签
+          if (renderTagNum.value === 0 && tagElsRef.value.length > 0) {
+            renderTagNum.value = 1;
+          }
+
+          isCalcRenderTagNum.value = false;
+        } else {
+          renderTagNum.value = 0;
+          isCalcRenderTagNum.value = false;
         }
-        isCalcRenderTagNum.value = false;
-      }
+      });
     });
   };
 
@@ -207,7 +221,6 @@
     }
   };
   let resizeObserver: any;
-  let handleWindowResize: any;
   onMounted(() => {
     calcRenderTagNum();
     setTimeout(() => {
@@ -215,18 +228,14 @@
     });
 
     const resizeObserver = new ResizeObserver(throttle(() => {
-      calcRenderTagNum();
-    }));
-    resizeObserver.observe(rootRef.value);
-
-    // 创建函数引用，用于移除监听器
-    handleWindowResize = () => {
-      calcRenderTagNum();
+      // 延迟执行，确保 DOM 更新完成
       setTimeout(() => {
-        dynamicCalcWidth();
+        renderTagNum.value = 0;
+        calcRenderTagNum();
+        dynamicCalcWidth(); // 同时处理动态宽度计算
       });
-    };
-    window.addEventListener('resize', handleWindowResize);
+    }, 200));
+    resizeObserver.observe(rootRef.value);
   });
 
   onBeforeUnmount(() => {
@@ -236,10 +245,6 @@
       tippyIns.destroy();
     }
     resizeObserver?.disconnect();
-
-    if (handleWindowResize) {
-      window.removeEventListener('resize', handleWindowResize);
-    }
   });
 </script>
 <style scoped lang="postcss">
