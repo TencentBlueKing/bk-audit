@@ -18,6 +18,7 @@
   <div>
     <bk-dialog
       ref="dialogRef"
+      class="tools-use-dialog"
       draggable
       :esc-close="false"
       :fullscreen="isFullScreen"
@@ -998,7 +999,7 @@
       }
 
       setTimeout(() => {
-        const modals = document.getElementsByClassName('bk-modal-wrapper');
+        const modals = document.querySelectorAll('.tools-use-dialog .bk-modal-wrapper');
 
         // 遍历所有弹窗，只调整未被拖动过的弹窗位置
         Array.from(modals).reverse()

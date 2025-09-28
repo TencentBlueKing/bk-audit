@@ -278,6 +278,7 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
@@ -307,40 +308,24 @@
     tagId: string,
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: Array<{
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    }>;
-    enum_mappings: {
-      collection_id: string;
-      mappings: Array<{
-        key: string;
-        name: string;
-      }>;
-    };
-  }
 
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
-  const allOpenToolsData = ref<string[]>([]);
+
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+    handleCloseTool,
+  } = useToolDialog();
 
   const searchValue = ref<string>('');
   const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
-  const dialogRefs = ref<Record<string, any>>({});
   const dataList = ref<ToolInfo[]>([]);
   const popoverRefs = ref<Map<string, any>>(new Map());
   const currentPage = ref(1);
@@ -382,21 +367,18 @@
         allOpenToolsData.value = urlToolsIds.value;
         if (urlToolsIds.value.length > 0) {
           urlToolsIds.value.forEach((item: string) => {
-            nextTick(() => {
-              if (dialogRefs.value[item]) {
-                dialogRefs.value[item].openDialog(item);
-                setTimeout(() => {
-                  const modals = document.getElementsByClassName('bk-modal-wrapper');
-                  Array.from(modals).reverse()
-                    .forEach((modal, index) => {
-                      const htmlModal = modal as HTMLElement;
-                      if (index > 0 && !htmlModal.style.transform) {
-                        htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-                      }
-                    });
-                }, 0);
-              }
-            });
+            // 使用hooks中的handleOpenTool
+            handleOpenTool(item);
+            setTimeout(() => {
+              const modals = document.querySelectorAll('.tools-use-dialog.bk-modal-wrapper');
+              Array.from(modals).reverse()
+                .forEach((modal, index) => {
+                  const htmlModal = modal as HTMLElement;
+                  if (index > 0 && !htmlModal.style.transform) {
+                    htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+                  }
+                });
+            }, 0);
           });
         }
       }
@@ -582,29 +564,6 @@
     }
   };
 
-  /* *
-   * 下钻打开工具，根据下钻配置信息，打开工具，并传递下钻配置信息和下钻table所在行信息
-   * @param drillDownItem: DrillDownItem 下钻配置信息，包含工具信息和配置信息
-   * @param drillDownItemRowData: Record<any, string> 下钻table所在行信息，包含需要映射的信息
-   * @param activeUid: string 多工具时，当前激活的工具信息
-   * @returns void
-  */
-  const openFieldDown = (
-    drillDownItem: DrillDownItem,
-    drillDownItemRowData: Record<any, string>,
-    activeUid?: string,
-  ) => {
-    const uids = drillDownItem.drill_config.map(config => config.tool.uid).join('&');
-    if (!(allOpenToolsData.value.find(item => item === uids))) {
-      allOpenToolsData.value.push(uids);
-    }
-
-    nextTick(() => {
-      if (dialogRefs.value[uids]) {
-        dialogRefs.value[uids].openDialog(uids, drillDownItem, drillDownItemRowData, activeUid);
-      }
-    });
-  };
 
   /* *
    * 打开工具，根据工具信息，打开工具，并传递工具信息
@@ -620,21 +579,15 @@
 
     handleCancel(toolInfo.uid);
 
-    if (!(allOpenToolsData.value.find(item => item === toolInfo.uid))) {
-      allOpenToolsData.value.push(toolInfo.uid);
-    }
-
-    nextTick(() => {
-      if (dialogRefs.value[toolInfo.uid]) {
-        dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
-      }
-    });
+    // 使用hooks中的handleOpenTool
+    handleOpenTool(toolInfo.uid);
   };
 
   // 关闭弹窗
   const handleClose = (ToolUid: string | undefined) => {
     if (ToolUid) {
-      allOpenToolsData.value = allOpenToolsData.value.filter(item => item !== ToolUid);
+      // 使用hooks中的handleCloseTool
+      handleCloseTool(ToolUid);
 
       urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolUid);
       appendSearchParams({
