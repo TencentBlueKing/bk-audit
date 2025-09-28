@@ -563,7 +563,8 @@ class UpdateTool(ToolBase):
             )
         bkvision_config = BkVisionToolConfig.objects.filter(tool__uid=uid).order_by('-id').first()
         if bkvision_config:
-            bkvision_config.update(updated_time=updated_time)
+            bkvision_config.updated_time = updated_time
+            bkvision_config.save()
         # 配置未变更则更新原版本
         tag_names = validated_request_data.pop("tags")
         for key, value in validated_request_data.items():
