@@ -95,7 +95,7 @@
   }
 
   interface Emits {
-    (e: 'openTool', value: ToolDetailModel): void;
+    (e: 'openTool', value: string): void;
   }
 
   const props = defineProps<Props>();
@@ -152,7 +152,7 @@
   };
 
   // 打开工具
-  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
+  const handleOpenTool = async (toolInfo: string) => {
     emit('openTool', toolInfo);
   };
 

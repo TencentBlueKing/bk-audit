@@ -176,11 +176,13 @@
     resizeObserver.value = new ResizeObserver(() => {
       checkOverflow();
     });
-    resizeObserver.value.observe(itemRef.value);
+    if (itemRef.value) {
+      resizeObserver.value.observe(itemRef.value);
+    }
   });
 
   onUnmounted(() => {
-    if (resizeObserver.value) {
+    if (resizeObserver.value && itemRef.value) {
       resizeObserver.value.unobserve(itemRef.value);
       resizeObserver.value.disconnect();
     }

@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang='tsx'>
-  import { computed, nextTick, onActivated, ref } from 'vue';
+  import { computed, onActivated, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -89,13 +89,14 @@
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
-  import ToolDetailModel from '@model/tool/tool-detail';
 
+  // import ToolDetailModel from '@model/tool/tool-detail';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
   import TableRow from './table-raw.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
 
   interface Exposes{
     getData: () => Omit<StrategyFieldEvent, 'risk_meta_field_config'>,
@@ -110,29 +111,20 @@
     strategyName: string
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: Array<{
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    }>;
-  }
 
   const props = defineProps<Props>();
   const route = useRoute();
 
   const { t, locale } = useI18n();
   const tableRowRef = ref();
-  const dialogRefs = ref<Record<string, any>>({});
+
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+  } = useToolDialog();
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
@@ -204,7 +196,6 @@
     return basicFields.concat(dataFields, evidenceFields);
   });
 
-  const allOpenToolsData = ref<string[]>([]);
 
   // 获取所有工具
   const {
@@ -225,34 +216,6 @@
     },
   });
 
-  // 下钻打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config[0].tool;
-
-    // 如果工具不在 allOpenToolsData 中，添加它
-    if (!allOpenToolsData.value.find(item => item === uid)) {
-      allOpenToolsData.value.push(uid);
-    }
-
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
-    }
-  };
-
-  // 打开工具
-  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
-    const { uid } = toolInfo;
-    // 如果工具不在 allOpenToolsData 中，添加它
-    if (!allOpenToolsData.value.find(item => item === uid)) {
-      allOpenToolsData.value.push(uid);
-    }
-
-    nextTick(() => {
-      if (dialogRefs.value[uid]) {
-        dialogRefs.value[uid].openDialog(uid);
-      }
-    });
-  };
 
   const getHeaderClass = (valueKey: string | undefined) => ({
     'field-name': valueKey === 'field_name',

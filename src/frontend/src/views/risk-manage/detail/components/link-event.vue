@@ -406,6 +406,7 @@
   import RenderInfoItem from './render-info-item.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
 
   interface DrillItem {
     field_name: string;
@@ -437,22 +438,6 @@
     };
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: Array<{
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    }>;
-  }
 
   interface Props {
     strategyList: Array<{
@@ -493,10 +478,16 @@
   const eventItem = ref(new EventModel()); // 当前选中事件
   // const eventItemDataKeyArr = ref<Array<string[]>>([]); // 当前选中事件-事件数据
   // const showTooltips = ref(false); // 是否显示tooltips
-  const allOpenToolsData = ref<string[]>([]);
   const isShowMore = ref(false);
-  const dialogRefs = ref<Record<string, any>>({});
   const detailRenderKey = ref(0);
+
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleCloseTool,
+  } = useToolDialog();
 
   const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
 
@@ -761,23 +752,6 @@
     window.open(to.href, '_blank');
   };
 
-  // 下转打开
-  const openFieldDown = (
-    drillDownItem: DrillDownItem,
-    drillDownItemRowData: Record<any, string>,
-    activeUid?: string,
-  ) => {
-    const uids = drillDownItem.drill_config.map(config => config.tool.uid).join('&');
-    if (!(allOpenToolsData.value.find(item => item === uids))) {
-      allOpenToolsData.value.push(uids);
-    }
-
-    nextTick(() => {
-      if (dialogRefs.value[uids]) {
-        dialogRefs.value[uids].openDialog(uids, drillDownItem, drillDownItemRowData, activeUid);
-      }
-    });
-  };
 
   // 打开工具(风险单打开就是下钻模式)
   const handleClick = (
@@ -788,8 +762,8 @@
     riskToolParams.value.drill_field = fieldName;
     const drillDownItemRowData = eventItem.value;
 
+    // 需要传递额外的riskToolParams参数
     const uids = drillDownItem.drill_config.map(config => config.tool.uid).join('&');
-
     if (!(allOpenToolsData.value.find(item => item === uids))) {
       allOpenToolsData.value.push(uids);
     }
@@ -832,7 +806,8 @@
   // 关闭弹窗
   const handleClose = (ToolInfo: string | undefined) => {
     if (ToolInfo) {
-      allOpenToolsData.value = allOpenToolsData.value.filter(item => item !== ToolInfo);
+      // 使用hooks中的handleCloseTool
+      handleCloseTool(ToolInfo);
     }
   };
 
