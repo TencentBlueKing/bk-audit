@@ -561,11 +561,9 @@
         linkEventList.value = allEvents.filter((event, index, self) => {
           // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
           const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
-          console.log('currentValues', currentValues);
           // 查找第一个具有包含关系的事件索引
           const firstIndex = self.findIndex((e) => {
             const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
-            console.log('eValues', eValues);
             // 检查所有字段值都完全相同（转换为字符串比较）
             return currentValues.every((currentValue, i) => {
               // 将值转换为字符串进行比较，处理各种特殊类型
@@ -594,7 +592,6 @@
     // 下拉触底没有加载完时，继续获取列表
     // eslint-disable-next-line max-len
     if ((target.scrollTop + target.clientHeight === target.scrollHeight) && linkEventList.value.length < linkEventData.value.total) {
-      console.log('触底');
       currentPage.value += 1;
       fetchLinkEvent({
         start_time: props.data.event_time,
