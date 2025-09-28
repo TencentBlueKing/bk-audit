@@ -79,6 +79,7 @@
   import tableRow from './table-raw.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
 
   interface Exposes {
     getData: () => { risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'] };
@@ -92,22 +93,6 @@
     strategyName: string
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: Array<{
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    }>;
-  }
 
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
@@ -118,7 +103,13 @@
   const disabledList = ['risk_level', 'status', 'current_operator'];
   const isPriorityList = ['risk_id', 'risk_tags', 'risk_hazard', 'risk_guidance'];
 
-  const dialogRefs = ref<Record<string, any>>({});
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+  } = useToolDialog();
 
   const columns = [
     { key: 'field_name', label: t('字段名称') },
@@ -194,8 +185,6 @@
     defaultValue: [],
   });
 
-  // 动态工具数据
-  const allOpenToolsData = ref<string[]>([]);
 
   // 获取标签列表
   const {
@@ -208,28 +197,6 @@
     },
   });
 
-  // 下钻打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config[0].tool;
-
-    // 如果工具不在 allOpenToolsData 中，添加它
-    if (!allOpenToolsData.value.find(item => item === uid)) {
-      allOpenToolsData.value.push(uid);
-    }
-
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
-    }
-  };
-
-  // 打开工具
-  const handleOpenTool = async (toolInfo: any) => {
-    const { uid } = toolInfo;
-    // 如果工具不在 allOpenToolsData 中，添加它
-    if (!allOpenToolsData.value.find(item => item === uid)) {
-      allOpenToolsData.value.push(uid);
-    }
-  };
 
   defineExpose<Exposes>({
     getData() {

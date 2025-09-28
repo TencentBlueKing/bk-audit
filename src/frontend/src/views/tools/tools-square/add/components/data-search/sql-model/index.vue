@@ -478,6 +478,7 @@
     :output-fields="formData.config.output_fields"
     :tag-data="toolTagData"
     @open-tool="handleOpenTool"
+    @refresh-tool-list="refreshToolList"
     @submit="handleFieldSubmit" />
   <!-- 字段映射 -->
   <field-dict
@@ -487,11 +488,11 @@
     @submit="handleDictSubmit" />
   <!-- 循环所有工具 -->
   <div
-    v-for="item in allToolsData"
-    :key="item.uid">
+    v-for="item in allOpenToolsData"
+    :key="item">
     <component
       :is="DialogVue"
-      :ref="(el:any) => dialogRefs[item.uid] = el"
+      :ref="(el:any) => dialogRefs[item] = el"
       :all-tools-data="allToolsData"
       :tags-enums="toolTagData"
       @open-field-down="openFieldDown" />
@@ -508,8 +509,8 @@
 
   import ConfigModel from '@model/root/config';
   import type ParseSqlModel from '@model/tool/parse-sql';
-  import ToolDetailModel from '@model/tool/tool-detail';
 
+  // import ToolDetailModel from '@model/tool/tool-detail';
   import { execCopy } from '@utils/assist';
 
   import DialogVue from '../../../../components/dialog.vue';
@@ -517,9 +518,10 @@
   import editSql from '../components/edit-sql.vue';
   import FieldReference from '../components/field-reference/index.vue';
 
-  import ToolInfo from '@/domain/model/tool/tool-info';
+  // import ToolInfo from '@/domain/model/tool/tool-info';
   import useFullScreen from '@/hooks/use-full-screen';
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
   import fieldDict from '@/views/strategy-manage/strategy-create/components/step2/components/event-table/field-dict.vue';
   import formItem from '@/views/tools/tools-square/components/form-item.vue';
 
@@ -578,22 +580,6 @@
     };
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: Array<{
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    }>;
-  }
 
   interface Exposes {
     getValue: () => Promise<any>;
@@ -609,8 +595,15 @@
   const requiredListRef = ref();
   const addEnumRefs = ref();
   const fieldReferenceRef = ref();
-  const dialogRefs = ref<Record<string, any>>({});
   const tableInputFormRef = ref();
+
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+  } = useToolDialog();
 
   // const loading = ref(false);
   const showEditSql = ref(false);
@@ -623,6 +616,7 @@
     () => editor,
     () => viewRootRef.value,
   );
+
 
   const formData = ref<FormData>({
     config: {
@@ -904,25 +898,9 @@
     });
   };
 
-  // 下钻打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config[0].tool;
-    const toolItem = allToolsData.value.find(item => item.uid === uid);
-    if (!toolItem) {
-      return;
-    }
 
-    const toolInfo = new ToolInfo(toolItem as any);
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(toolInfo, drillDownItem, drillDownItemRowData);
-    }
-  };
-
-  // 打开工具
-  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
-    if (dialogRefs.value[toolInfo.uid]) {
-      dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
-    }
+  const refreshToolList = () => {
+    fetchAllTools();
   };
 
   const handleFieldSubmit = (drillConfig: FormData['config']['output_fields'][0]['drill_config']) => {
