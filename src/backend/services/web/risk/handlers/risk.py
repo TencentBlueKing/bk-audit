@@ -219,7 +219,7 @@ class RiskHandler:
         # 存在则更新结束时间
         if risk:
             last_end_time = int(event["event_time"] / 1000)
-            logger.info("[UpdateRisk] Risk exists. risk_id=%s; last_end_time", risk.risk_id, last_end_time)
+            logger.info("[UpdateRisk] Risk exists. risk_id=%s; last_end_time=%s", risk.risk_id, last_end_time)
             # 只在事件的时间更新的时候存储
             if int(risk.event_end_time.timestamp()) < last_end_time:
                 risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
