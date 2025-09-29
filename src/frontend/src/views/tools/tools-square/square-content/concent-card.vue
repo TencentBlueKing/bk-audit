@@ -149,6 +149,15 @@
                       {{ item.name }}
                     </span>
                     <bk-tag
+                      v-if="item.is_bkvision"
+                      v-bk-tooltips="{ content: t('bkvision参数变量待更新') }"
+                      class="title-tag"
+                      size="small"
+                      theme="danger"
+                      type="filled">
+                      {{ t('待更新') }}
+                    </bk-tag>
+                    <bk-tag
                       v-if="!item.permission.use_tool"
                       v-bk-tooltips="{ content: t('申请权限可用') }"
                       class="title-tag"

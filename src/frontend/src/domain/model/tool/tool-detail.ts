@@ -33,7 +33,11 @@ export default class ToolDetail {
     manage_tool: boolean;
   };
   strategies: Array<string>;
+  updated_at: string;
+  updated_by: string;
+  updated_time: string;
   data_search_config_type: string;
+  is_bkvision: boolean;
   config: {
     referenced_tables: Array<{
       table_name: string | null;
@@ -46,7 +50,9 @@ export default class ToolDetail {
       raw_name: string;
       display_name: string;
       description: string;
+      is_default_value?: boolean;
       required: boolean;
+      raw_default_value?: string;
       field_category: string;
       default_value: string | Array<string>;
       choices: Array<{
@@ -79,6 +85,9 @@ export default class ToolDetail {
     }>
     sql: string;
     uid: string;
+    updated_at: string;
+    updated_by: string;
+    updated_time: string;
   };
   constructor(payload = {} as ToolDetail) {
     this.name = payload.name;
@@ -95,5 +104,9 @@ export default class ToolDetail {
     this.strategies = payload.strategies;
     this.created_by = payload.created_by;
     this.created_at = payload.created_at;
+    this.updated_at = payload.updated_at;
+    this.updated_by = payload.updated_by;
+    this.updated_time = payload.updated_time;
+    this.is_bkvision = payload.is_bkvision;
   }
 }
