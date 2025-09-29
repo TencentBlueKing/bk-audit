@@ -56,7 +56,6 @@ def update_bkvision_config():
                 tool_updated_time = pytz.timezone('Asia/Shanghai').localize(tool_updated_time)
             # 仅在更新时间更晚时才处理
             if bkvision_updated_time > tool_updated_time:
-                tool.bkvision_config.updated_time = bkvision_updated_time
                 tool.is_bkvision = True
                 updated_tools.append(tool)  # 记录需要更新的工具
         except Exception as e:
@@ -66,7 +65,6 @@ def update_bkvision_config():
         try:
             with transaction.atomic():
                 for tool in updated_tools:
-                    tool.bkvision_config.save()  # 更新工具的配置
                     tool.save()
         except Exception as e:
             logger.error(f"Error saving tools: {str(e)}", exc_info=True)
