@@ -24,6 +24,7 @@
         <bk-date-picker
           v-if="config?.field_category === 'time-picker'"
           v-model="dateValue"
+          append-to-body
           format="yyyy-MM-dd HH:mm:ss"
           :shortcuts="dateShortCut"
           type="datetime"
@@ -85,7 +86,7 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const now = new Date();
-  const dateValue = ref<Date>(props.config.default_value instanceof Date ? props.config.default_value : new Date());
+  const dateValue = ref<string | Date>(props.config.default_value instanceof Date ? props.config.default_value : '');
   const pickerValue = ref<Array<string>>(Array.isArray(props.config.default_value) ? props.config.default_value : []);
   const inputVal = ref(typeof props.config.default_value === 'string' ? props.config.default_value : '');
   const selectorValue = ref(Array.isArray(props.config.default_value) ? props.config.default_value : []);
@@ -133,7 +134,7 @@
     emits('change', []);
   };
   const handlePickerChange = (val: Date) => {
-    dateValue.value = val;
+    dateValue.value = val || '';
     emits('change', val || '');
   };
   const handleRangeChange = (val: Array<string>) => {

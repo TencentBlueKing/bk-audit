@@ -21,6 +21,7 @@ export default class ToolInfo {
   tool_type: string;
   description: string;
   namespace: string;
+  is_bkvision: boolean;
   config?: {  // 预览携带的配置
     sql: string;
     output_fields: Array<{
@@ -61,6 +62,7 @@ export default class ToolInfo {
   updated_by: string;
   updated_at: string;
   constructor(payload = {} as ToolInfo) {
+    this.is_bkvision = payload.is_bkvision;
     this.name = payload.name;
     this.uid = payload.uid;
     this.version = payload.version;
