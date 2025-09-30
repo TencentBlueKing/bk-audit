@@ -311,7 +311,7 @@
           default_value: item.value || '',
           choices: [],
         };
-      }).filter((item: any): item is Record<string, any> => item !== undefined);
+      }).filter((item: any): item is Record<string, any> => item !== undefined) as Array<Record<string, any>>;
     },
   });
 </script>
