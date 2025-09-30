@@ -166,7 +166,7 @@
   // const variablesConfig = ref<Array<Record, any>>([]);
   const bkVisionVariable = ref<Array<Record<string, any>>>([]);
   // bkVision 的组件信息
-  const bkVisionComList = ref<InputVariable>([]);
+  const bkVisionComList = ref<Array<Record<string, any>>>([]);
   const updateVariableRef = ref();
   const addClass = ref<string[]>([]);
   const updateClass = ref<string[]>([]);
