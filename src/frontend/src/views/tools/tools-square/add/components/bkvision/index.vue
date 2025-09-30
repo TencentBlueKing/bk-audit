@@ -284,17 +284,7 @@
     setVariablesConfig(configs: Array<Record<string, any>>, bkVisionCom: Array<Record<string, any>>) {
       variablesConfig.value = configs;
       // 组件
-      bkVisionComList.value = bkVisionCom.map((item: Record<string, any>) => ({
-        raw_name: item.flag || '',
-        display_name: item.description || '',
-        description: item.uid || '',
-        field_category: item.type || '',
-        required: true,
-        is_default_value: true,
-        raw_default_value: item.value || '',
-        default_value: item.value || '',
-        choices: [],
-      })) as InputVariable;
+      bkVisionComList.value = bkVisionCom;
       // bkVision变量
       bkVisionVariable.value = configs.map((item: any) => {
         if (item.build_in) {
