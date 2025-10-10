@@ -116,6 +116,6 @@
     overflow: hidden;
     word-break: break-all;
     -webkit-box-orient: vertical;
-    line-clamp: v-bind(line);
+    -webkit-line-clamp: v-bind(line);
   }
 </style>

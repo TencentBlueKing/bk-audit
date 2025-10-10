@@ -146,7 +146,7 @@
     </div>
     <tool-tip-text
       :data="tipText"
-      :line-clamp="2"
+      :line="2"
       :max-width="800"
       placement="left"
       theme="light" />
