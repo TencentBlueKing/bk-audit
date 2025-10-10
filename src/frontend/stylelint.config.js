@@ -29,6 +29,9 @@ module.exports = {
     'string-quotes': 'single',
     'number-leading-zero': 'never',
     'declaration-colon-space-after': 'always',
+    'function-no-unknown': [true, {
+      ignoreFunctions: ['v-bind'],
+    }],
     'at-rule-no-unknown': [true, {
       ignoreAtRules: [
         'function',
