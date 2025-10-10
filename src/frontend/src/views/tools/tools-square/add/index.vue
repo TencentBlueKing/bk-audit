@@ -177,7 +177,10 @@
                         :style="spacePermission ? `width: 50%;border: 1px solid #e71818;` : `width: 50%;`"
                         trigger="click"
                         @change="handleSpaceChange" />
-                      <bk-button class="ml8">
+                      <bk-button
+                        v-show="goBkVisionBtn"
+                        class="ml8"
+                        @click="handleGoBkvision">
                         {{ t('跳转至 bkvision') }}
                       </bk-button>
                     </div>
@@ -375,7 +378,7 @@
   const isCreating = ref(false);
   const isFailed = ref(false);
   const isSuccessful = ref(false);
-
+  const goBkVisionBtn = ref(false);
   const allTagMap = ref<Record<string, string>>({});
   const isUpdate = ref(false);
   const isSubmit = computed(() => {
@@ -492,6 +495,10 @@
     manual: true,
   });
 
+  // 跳转到bkvision
+  const handleGoBkvision = () => {
+    window.open(`${configData.value.bkvision_web_url}}#/${configUid.value[0]}/share/detail/${configUid.value[1]}/dashboard`);
+  };
   // 获取所有标签列表
   const {
     loading: tagLoading,
@@ -625,8 +632,10 @@
           comRef.value.setConfigs(formData.value.config.input_variable);
           comRef.value.setVariablesConfig(res.data.variables, bkVisionCom);
         });
+        goBkVisionBtn.value = true;
       } else {
         spacePermission.value = true;
+        goBkVisionBtn.value = false;
       }
     },
   });

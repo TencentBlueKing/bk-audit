@@ -572,7 +572,7 @@
   const addEnumRefs = ref();
   const fieldReferenceRef = ref();
   const formItemRefs = ref();
-  const dialogRefs = ref();
+  const dialogRefs = ref({});
   const tableInputFormRef = ref();
 
   // const loading = ref(false);
