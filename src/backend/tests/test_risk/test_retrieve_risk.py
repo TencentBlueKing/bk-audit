@@ -53,7 +53,10 @@ class TestListRiskResource(TestCase):
         )
 
         self.strategy = Strategy.objects.create(
-            namespace="default", strategy_name="strategy", risk_level=RiskLevel.HIGH.value
+            namespace="default",
+            strategy_name="strategy",
+            risk_level=RiskLevel.HIGH.value,
+            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
         )
         self.risk = Risk.objects.create(
             risk_id="risk-db",
@@ -88,6 +91,18 @@ class TestListRiskResource(TestCase):
 
     def test_list_risk_via_db(self):
         data = self._call_resource({"use_bkbase": False})
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+
+    def test_list_risk_via_db_with_event_filters(self):
+        payload = {
+            "use_bkbase": False,
+            "event_filters": [{"field": "ip", "display_name": "Source IP", "value": "127.0.0.1"}],
+        }
+
+        data = self._call_resource(payload)
+
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
@@ -127,8 +142,7 @@ class TestListRiskResource(TestCase):
             "event_filters": [
                 {
                     "field": "ip",
-                    "field_source": StrategyFieldSourceEnum.DATA.value,
-                    "operator": "=",
+                    "display_name": "Source IP",
                     "value": "127.0.0.1",
                 }
             ],
@@ -154,7 +168,12 @@ class TestListRiskResource(TestCase):
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
-        payload = {"use_bkbase": True, "risk_level": RiskLevel.HIGH.value}
+        payload = {
+            "use_bkbase": True,
+            "risk_level": RiskLevel.HIGH.value,
+            "order_field": "risk_level",
+            "order_type": "desc",
+        }
 
         with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
             data = self._call_resource(payload)
@@ -168,3 +187,21 @@ class TestListRiskResource(TestCase):
         data_sql = sql_log[1]
         self.assertIn("CASE base_query.`strategy__risk_level`", data_sql)
         self.assertIn("base_query.`event_time` DESC", data_sql)
+
+    def test_list_risk_event_filters_without_matching_strategy_field(self):
+        Strategy.objects.create(
+            namespace="default",
+            strategy_name="other strategy",
+            risk_level=RiskLevel.HIGH.value,
+            event_data_field_configs=[{"field_name": "address", "display_name": "Address"}],
+        )
+        payload = {
+            "use_bkbase": False,
+            "event_filters": [
+                {"field": "unknown", "display_name": "Unknown Field", "value": "value"},
+            ],
+        }
+
+        data = self._call_resource(payload)
+
+        self.assertEqual(len(data["results"]), 0)

@@ -170,7 +170,8 @@ class ListRisk(RiskMeta):
         order_field = validated_request_data.pop("order_field", "-event_time")
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
-        base_queryset = self.load_risks(validated_request_data).order_by()
+        base_queryset = self.load_risks(validated_request_data)
+        base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
 
         if use_bkbase:
             paged_risks, page, risk_ids = self.retrieve_via_bkbase(
@@ -200,10 +201,36 @@ class ListRisk(RiskMeta):
         paged_queryset, page = paginate_queryset(
             queryset=risks, request=request, base_queryset=Risk.annotated_queryset()
         )
-        paged_queryset = Risk.prefetch_strategy_tags(paged_queryset).order_by(order_field)
+        paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_field)
         paged_risks = list(paged_queryset)
         risk_ids = [risk.risk_id for risk in paged_risks]
         return paged_risks, page, risk_ids
+
+    def _filter_queryset_by_event_data_fields(
+        self, queryset: QuerySet, event_filters: List[Dict[str, Any]]
+    ) -> QuerySet:
+        if not event_filters:
+            return queryset
+
+        strategy_ids = list(queryset.values_list("strategy_id", flat=True).distinct())
+        if not strategy_ids:
+            return queryset.none()
+
+        # 使用JSONField contains能力在数据库侧完成过滤，避免加载并解析所有配置
+        strategy_queryset = Strategy.objects.filter(strategy_id__in=strategy_ids)
+
+        for item in event_filters:
+            field = item.get("field")
+            display_name = item.get("display_name")
+            strategy_queryset = strategy_queryset.filter(
+                event_data_field_configs__contains=[{"field_name": field, "display_name": display_name}]
+            )
+
+        matched_strategy_ids = list(strategy_queryset.values_list("strategy_id", flat=True))
+        if not matched_strategy_ids:
+            return queryset.none()
+
+        return queryset.filter(strategy_id__in=matched_strategy_ids)
 
     def retrieve_via_bkbase(
         self,
@@ -373,7 +400,6 @@ class ListRisk(RiskMeta):
             instance_key=settings.DEFAULT_NAMESPACE,
             default=fallback,
         )
-
     @staticmethod
     def _split_table_parts(table_name: str) -> Tuple[Optional[str], Optional[str], str]:
         cleaned = (table_name or "").strip().strip("`")
@@ -411,9 +437,14 @@ class ListRisk(RiskMeta):
                 return node
 
             catalog, db, table = self._split_table_parts(target)
-            node.set("catalog", exp.to_identifier(catalog) if catalog else None)
-            node.set("db", exp.to_identifier(db) if db else None)
-            node.set("this", exp.to_identifier(table))
+            if not table:
+                node.set("catalog", None)
+                node.set("db", None)
+                node.set("this", exp.Identifier(this=target, quoted=False))
+            else:
+                node.set("catalog", exp.Identifier(this=catalog, quoted=False) if catalog else None)
+                node.set("db", exp.Identifier(this=db, quoted=False) if db else None)
+                node.set("this", exp.Identifier(this=table, quoted=False))
 
             if not node.alias:
                 node.set("alias", exp.TableAlias(this=exp.to_identifier(source)))
@@ -470,19 +501,14 @@ class ListRisk(RiskMeta):
         return f" ORDER BY {field_expr} {order_direction}"
 
     def _build_event_filter_condition(self, filter_item: Dict[str, Any], index: int) -> str:
-        field = filter_item.get("field")
-        field_source = filter_item.get("field_source")
-        operator = filter_item.get("operator")
-        value = filter_item.get("value")
-
         alias = f"risk_event_{index}"
         join_conditions = [f"{alias}.strategy_id = base_query.strategy_id"]
 
-        field_expression = self._build_event_field_expression(alias, field_source, field)
+        field_expression = self._build_event_field_expression(alias, filter_item)
         if not field_expression:
             return ""
 
-        comparison = self._build_event_filter_expression(field_expression, operator, value)
+        comparison = self._build_event_filter_expression(field_expression, filter_item)
         if not comparison:
             return ""
 
@@ -490,13 +516,20 @@ class ListRisk(RiskMeta):
         table_reference = self._get_risk_event_table_reference()
         return f"EXISTS (SELECT 1 FROM {table_reference} {alias} WHERE {join_clause} AND {comparison})"
 
-    def _build_event_field_expression(self, alias: str, field_source: str, field_name: str) -> str:
-        if field_source == StrategyFieldSourceEnum.BASIC.value:
+    def _build_event_field_expression(self, alias: str, filter_item: Dict[str, Any]) -> str:
+        field_source = filter_item.get("field_source")
+        field_name = filter_item.get("field")
+        if not field_name:
+            return ""
+
+        resolved_source = field_source or StrategyFieldSourceEnum.DATA.value
+
+        if resolved_source == StrategyFieldSourceEnum.BASIC.value:
             return f"{alias}.{self._quote_identifier(field_name)}"
 
-        if field_source == StrategyFieldSourceEnum.DATA.value:
+        if resolved_source == StrategyFieldSourceEnum.DATA.value:
             column = self._qualified_column(alias, "event_data")
-        elif field_source == StrategyFieldSourceEnum.EVIDENCE.value:
+        elif resolved_source == StrategyFieldSourceEnum.EVIDENCE.value:
             column = self._qualified_column(alias, "event_evidence")
         else:
             return ""
@@ -504,7 +537,12 @@ class ListRisk(RiskMeta):
         json_path = self._build_json_path(field_name)
         return f"JSON_EXTRACT({column}, '{json_path}')"
 
-    def _build_event_filter_expression(self, field_expr: str, operator: str, value: Any) -> str:
+    def _build_event_filter_expression(self, field_expr: str, filter_item: Dict[str, Any]) -> str:
+        value = filter_item.get("value")
+        operator = filter_item.get("operator") or EventFilterOperator.EQUAL.value
+        if isinstance(operator, str):
+            operator = operator.upper()
+
         if operator in {EventFilterOperator.EQUAL.value, EventFilterOperator.NOT_EQUAL.value}:
             formatted_value = self._format_sql_value(value)
             comparator = "=" if operator == EventFilterOperator.EQUAL.value else "!="
@@ -1106,26 +1144,13 @@ class ListEventFieldsByStrategy(RiskMeta):
         else:
             strategies = Strategy.objects.all()
 
-        results = []
+        results = set()
         for s in strategies:
-            for config_name in [
-                "event_data_field_configs",
-                "event_evidence_field_configs",
-                "event_basic_field_configs",
-            ]:
+            for config_name in ["event_data_field_configs"]:
                 for cfg in getattr(s, config_name) or []:
                     field_name = cfg.get("field_name")
                     display_name = cfg.get("display_name") or field_name
                     if not field_name:
                         continue
-                    results.append(
-                        {
-                            "strategy_id": s.strategy_id,
-                            "strategy_name": s.strategy_name,
-                            "field_source": config_name.split("event_")[1].split("_field_configs")[0],
-                            "field_name": field_name,
-                            "display_name": display_name,
-                        }
-                    )
-
-        return results
+                    results.add((field_name, display_name))
+        return [{"field_name": field_name, "display_name": display_name} for field_name, display_name in results]

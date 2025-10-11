@@ -214,18 +214,13 @@ class ListEventFieldsByStrategyRequestSerializer(serializers.Serializer):
 
 
 class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
-    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"))
-    strategy_name = serializers.CharField(label=gettext_lazy("策略名称"))
     field_name = serializers.CharField(label=gettext_lazy("字段名"))
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
-    field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
 
 
 class EventFieldFilterItemSerializer(serializers.Serializer):
-    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"), required=False, allow_null=True)
     field = serializers.CharField(label=gettext_lazy("字段名"))
-    field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
-    operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     value = AnyValueField(label=gettext_lazy("值"))
 
 
@@ -248,7 +243,8 @@ class ListRiskRequestSerializer(serializers.Serializer):
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), allow_blank=True, required=False)
     use_bkbase = serializers.BooleanField(label=gettext_lazy("是否通过BKBase查询"), required=False, default=False)
     order_field = serializers.CharField(
-        label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True, help_text="risk_level:根据风险等级排序"
+        label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True,
+        help_text="risk_level:根据风险等级排序"
     )
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"),
@@ -524,7 +520,8 @@ class ListRiskRuleReqSerializer(serializers.Serializer):
     name = serializers.CharField(label=gettext_lazy("Rule Name"), required=False)
     updated_by = serializers.CharField(label=gettext_lazy("Update User"), required=False)
     is_enabled = serializers.CharField(label=gettext_lazy("Is Enabled"), required=False)
-    order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
+    order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True,
+                                        allow_blank=True)
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"),
         required=False,
@@ -621,7 +618,8 @@ class ListProcessApplicationsReqSerializer(serializers.Serializer):
     name = serializers.CharField(required=False)
     updated_by = serializers.CharField(required=False)
     is_enabled = serializers.CharField(required=False)
-    order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
+    order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True,
+                                        allow_blank=True)
     order_type = serializers.ChoiceField(
         label=gettext_lazy("排序方式"),
         required=False,
