@@ -65,6 +65,8 @@
   import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import { DateRange } from '@blueking/date-picker';
+
 
   type InputVariable = Array<{
     raw_name: string;
@@ -142,7 +144,16 @@
     },
   ];
 
-  const columnText = (data: any) => (data.type === 'update' ?  (`${data.old_default_value}->${data.default_value}`)  : '--') ;
+  const columnText = (data: any) => (data.type === 'update' ?  columnTextSting(data) : '--') ;
+  const columnTextSting = (data: any) => {
+    if (data.field_category === 'time-ranger') {
+      const oldText = new DateRange(data.old_default_value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
+      const newText = new DateRange(data.default_value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
+      return `${oldText.toDisplayString()}->${newText.toDisplayString()}`;
+    }
+    return `${data.old_default_value}->${data.default_value}`;
+  };
+
   const handleSubmit = () => {
     const updataList = {
       addArrays: addArrays.value,
