@@ -347,15 +347,6 @@
     }>;
   }
 
-  const searchTypeList = [{
-    label: '简易模式',
-    value: 'simple',
-    disabled: true,
-  }, {
-    label: 'SQL模式',
-    value: 'sql',
-  }];
-
   const ToolTypeComMap: Record<string, any> = {
     data_search: DataSearch,
     bk_vision: BkVision,
@@ -364,7 +355,14 @@
   const route = useRoute();
   const router = useRouter();
   const { t } = useI18n();
-
+  const searchTypeList = [{
+    label: t('简单模式'),
+    value: 'simple',
+    disabled: true,
+  }, {
+    label: t('SQL模式'),
+    value: 'sql',
+  }];
   const isEditMode = route.name === 'toolsEdit';
 
   const configUid = ref<string[]>([]);
