@@ -25,7 +25,7 @@ from django.utils.translation import gettext_lazy
 
 from apps.meta.models import Field
 from apps.meta.utils.fields import FIELD_TYPE_LONG, FIELD_TYPE_STRING, FIELD_TYPE_TEXT
-from core.choices import TextChoices
+from core.choices import TextChoices, register_choices
 from core.exporter.constants import ExportField
 from services.web.databus.constants import DEFAULT_TIME_ZONE, TRANSFER_TIME_FORMAT
 
@@ -641,6 +641,30 @@ class RiskExportField(TextChoices):
 EVENT_EXPORT_FIELD_PREFIX = "event."
 # 风险导出文件名模板
 RISK_EXPORT_FILE_NAME_TMP = gettext_lazy("审计风险_{risk_view_type}_{datetime}.xlsx")
+
+
+@register_choices("event_filter_operator")
+class EventFilterOperator(TextChoices):
+    """
+    事件筛选操作符
+    """
+
+    EQUAL = "=", gettext_lazy("=")
+    NOT_EQUAL = "!=", gettext_lazy("!=")
+    GREATER_THAN = ">", gettext_lazy(">")
+    GREATER_THAN_EQUAL = ">=", gettext_lazy(">=")
+    LESS_THAN = "<", gettext_lazy("<")
+    LESS_THAN_EQUAL = "<=", gettext_lazy("<=")
+    IN = "IN", gettext_lazy("IN")
+    NOT_IN = "NOT IN", gettext_lazy("NOT IN")
+    CONTAINS = "CONTAINS", gettext_lazy("包含")
+    NOT_CONTAINS = "NOT CONTAINS", gettext_lazy("不包含")
+
+
+EVENT_RESULT_TABLE_ID_KEY = "event_result_table_id_key"
+RISK_RESULT_TABLE_ID_KEY = "risk_result_table_id_key"
+STRATEGY_RESULT_TABLE_ID_KEY = "strategy_result_table_id_key"
+STRATEGY_TAG_RESULT_TABLE_ID_KEY = "strategy_tag_result_table_id_key"
 
 # 风险等级排序字段
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"

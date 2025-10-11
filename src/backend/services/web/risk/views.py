@@ -220,4 +220,5 @@ class RiskRulesViewSet(ResourceViewSet):
         ResourceRoute("PUT", resource.risk.toggle_risk_rule, pk_field="rule_id", endpoint="toggle"),
         ResourceRoute("GET", resource.risk.list_risk_rule_operator, endpoint="operators"),
         ResourceRoute("PUT", resource.risk.batch_update_risk_rule_priority_index, endpoint="set_priority_index"),
+        ResourceRoute("GET", resource.risk.list_event_fields_by_strategy, endpoint="event_fields"),
     ]
