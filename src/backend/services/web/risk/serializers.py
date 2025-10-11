@@ -229,6 +229,43 @@ class EventFieldFilterItemSerializer(serializers.Serializer):
     value = AnyValueField(label=gettext_lazy("值"))
 
 
+class ListEventFieldsByStrategyRequestSerializer(serializers.Serializer):
+    # 支持多个策略；不传或为空返回所有策略的字段
+    strategy_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs.get("strategy_ids") and isinstance(attrs["strategy_ids"], str):
+            attrs["strategy_ids"] = [int(i) for i in attrs["strategy_ids"].split(",") if i]
+        return attrs
+
+
+class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"))
+    strategy_name = serializers.CharField(label=gettext_lazy("策略名称"))
+    field_name = serializers.CharField(label=gettext_lazy("字段名"))
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
+    field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
+
+
+class AnyValueField(serializers.Field):
+    """无损传递任意 JSON 值，不做转换或格式化"""
+
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
+
+
+class EventFieldFilterItemSerializer(serializers.Serializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"), required=False, allow_null=True)
+    field = serializers.CharField(label=gettext_lazy("字段名"))
+    field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
+    operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
+    value = AnyValueField(label=gettext_lazy("值"))
+
+
 class ListRiskRequestSerializer(serializers.Serializer):
     """
     List Risk
