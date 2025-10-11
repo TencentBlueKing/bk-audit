@@ -46,7 +46,6 @@ from services.web.risk.models import (
     TicketNode,
     TicketPermission,
 )
-from services.web.strategy_v2.constants import StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.serializers import EventFieldSerializer
 
@@ -284,17 +283,14 @@ class ListEventFieldsByStrategyRequestSerializer(serializers.Serializer):
 
 
 class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
-    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"))
-    strategy_name = serializers.CharField(label=gettext_lazy("策略名称"))
     field_name = serializers.CharField(label=gettext_lazy("字段名"))
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
-    field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
+    id = serializers.CharField(label=gettext_lazy("字段ID"))
 
 
 class EventFieldFilterItemSerializer(serializers.Serializer):
-    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"), required=False, allow_null=True)
     field = serializers.CharField(label=gettext_lazy("字段名"))
-    field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
     value = AnyValueField(label=gettext_lazy("值"))
 
