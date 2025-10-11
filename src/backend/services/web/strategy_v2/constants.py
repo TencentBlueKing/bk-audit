@@ -19,7 +19,7 @@ from typing import TypedDict
 
 from django.utils.translation import gettext_lazy
 
-from core.choices import TextChoices
+from core.choices import TextChoices, register_choices
 from core.sql.constants import (
     AggregateType,
     FieldType,
@@ -302,6 +302,7 @@ STRATEGY_STATUS_DEFAULT_INTERVAL = 30 * 6
 STRATEGY_RISK_DEFAULT_INTERVAL = 30 * 6
 
 
+@register_choices("strategy_field_source")
 class StrategyFieldSourceEnum(TextChoices):
     """
     策略字段来源
