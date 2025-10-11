@@ -259,7 +259,7 @@
   const router = useRouter();
   const route = useRoute();
   const { messageSuccess } = useMessage();
-  const typeText = (val: string | undefined) => (val === 'self' ?  '自定义输入' : '字段值引用');
+  const typeText = (val: string | undefined) => (val === 'self' ?  t('自定义输入') : t('字段值引用'));
   const handleShow = (val:ParamItem) => {
     Object.keys(paramsDetailData.value).forEach((obj) => {
       if (obj  === val.key) {

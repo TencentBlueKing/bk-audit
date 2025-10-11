@@ -138,7 +138,7 @@
              <bk-tag
      type="stroke"
      theme={data.field_category === 'variable' ? '' : 'info'}>
-      {data.field_category === 'variable' ? '变量' : '交互组件'}
+      {data.field_category === 'variable' ? t('变量') : t('交互组件')}
       </bk-tag>
         </div>,
     },

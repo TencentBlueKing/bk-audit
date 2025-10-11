@@ -191,7 +191,7 @@
                       size="small"
                       theme="info"
                       @click="handlesStrategiesClick(item)">
-                      运用在 {{ item.strategies.length }} 个策略中
+                      {{ t('运用在') }} {{ item.strategies.length }} {{ t('个策略中') }}
                     </bk-tag>
                   </div>
                 </div>

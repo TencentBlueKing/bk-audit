@@ -21,7 +21,7 @@ export default {
     查看套餐详情: 'Detail',
     套餐参数: 'Parameter',
     冻结账号: 'Account freezing',
-    处理套餐: 'Tools | New',
+    处理套餐: 'Processing package',
     适用范围: 'Usage',
     待我处理: 'My Open Tickets',
     套餐参数不能为空: 'Tool parameter is required',
@@ -66,5 +66,7 @@ export default {
     可在调整: 'you can change the status after set-up',
     后手动启用: '',
     克隆处理规则: 'Clone Rule',
+    工具广场: 'Tools',
+    编辑工具: 'Edit Tool',
   },
 };
