@@ -164,10 +164,20 @@
                     :key="index"
                     class="field-item">
                     <div class="field-key">
-                      <bk-input
-                        v-model="item.source_field"
-                        disabled
-                        style="flex: 1;" />
+                      <div
+                        class="field-display"
+                        style="
+                          height: 30px;
+                          padding: 0 8px;
+                          font-size: 12px;
+                          color: #63656e;
+                          background-color: #f5f7fa;
+                          border: 1px solid #c4c6cc;
+                          border-radius: 2px;
+                          flex: 1;
+                        ">
+                        {{ getFieldDisplayName(toolConfig.tool.uid, item.source_field) }}
+                      </div>
                     </div>
                     <div class="field-reference-type">
                       <bk-select
@@ -188,37 +198,45 @@
                           :name="typeItem.name" />
                       </bk-select>
                     </div>
-                    <div
-                      v-if="item.target_value_type === 'field'"
-                      class="field-value">
-                      <bk-select
-                        v-model="item.target_value"
-                        class="bk-select"
-                        filterable>
-                        <bk-option
-                          v-for="(outputField, OutputFieldIndex) in localOutputFields"
-                          :id="outputField.raw_name"
-                          :key="OutputFieldIndex"
-                          :disabled="getUsedFields(toolIndex, index).has(outputField.raw_name)"
-                          :name="outputField.display_name"
-                          @change="(value: string) => handleSelectMapValueChange(toolIndex, index, value)">
-                          {{ outputField.raw_name }}({{ outputField.display_name }})
-                        </bk-option>
-                      </bk-select>
-                    </div>
-                    <div
-                      v-else
+                    <!-- 校验 -->
+                    <bk-form-item
                       class="field-value"
-                      style="border: none;">
-                      <!-- 不同前端类型 -->
-                      <form-item
-                        v-if="toolInputVariableMap.get(toolConfig.tool.uid)?.has(item.source_field)"
-                        :data-config="toolInputVariableMap
-                          .get(toolConfig.tool.uid)?.get(item.source_field) as SearchItem"
-                        origin-model
-                        :target-value="item.target_value"
-                        @change="(val:any) => handleFormItemChange(val, toolIndex, index)" />
-                    </div>
+                      error-display-type="tooltips"
+                      label=""
+                      label-width="0"
+                      :property="`tools.${toolIndex}.config.${index}.target_value`"
+                      :required="
+                        toolInputVariableMap.get(toolConfig.tool.uid)?.get(item.source_field)?.required || false
+                      "
+                      style="margin-bottom: 0;">
+                      <div
+                        v-if="item.target_value_type === 'field'">
+                        <bk-select
+                          v-model="item.target_value"
+                          class="bk-select"
+                          filterable
+                          @change="(value: string) => handleTargetValueChange(value, toolIndex, index)">
+                          <bk-option
+                            v-for="(outputField, OutputFieldIndex) in localOutputFields"
+                            :id="outputField.raw_name"
+                            :key="OutputFieldIndex"
+                            :disabled="getUsedFields(toolIndex, index).has(outputField.raw_name)"
+                            :name="outputField.trigger_display_name" />
+                        </bk-select>
+                      </div>
+                      <div
+                        v-else
+                        style="border: none;">
+                        <!-- 不同前端类型 -->
+                        <form-item
+                          v-if="toolInputVariableMap.get(toolConfig.tool.uid)?.has(item.source_field)"
+                          :data-config="toolInputVariableMap
+                            .get(toolConfig.tool.uid)?.get(item.source_field) as SearchItem"
+                          origin-model
+                          :target-value="item.target_value"
+                          @change="(val:any) => handleFormItemChange(val, toolIndex, index)" />
+                      </div>
+                    </bk-form-item>
                     <div style=" width: 75px;margin-left: 10px; color: #979ba5;">
                       <span v-if="item.target_value_type==='field'"> {{ t('的值作为输入') }}</span>
                     </div>
@@ -275,6 +293,7 @@
     description: string;
     display_name: string;
     field_category: string;
+    drillTooltip?: string;
     choices:Array<{
       key: string,
       name: string
@@ -284,6 +303,7 @@
   interface LocalOutputFields {
     raw_name: string;
     display_name: string;
+    trigger_display_name: string;
     target_field_type?: string;
   }
 
@@ -535,6 +555,16 @@
     return tool?.name || uid;
   };
 
+  // 获取字段显示名称
+  const getFieldDisplayName = (toolUid: string, sourceField: string) => {
+    const fieldMap = toolInputVariableMap.value.get(toolUid);
+    if (fieldMap && fieldMap.has(sourceField)) {
+      const fieldInfo = fieldMap.get(sourceField);
+      return `${sourceField}(${fieldInfo?.display_name || sourceField})`;
+    }
+    return sourceField;
+  };
+
   const handleOpenTool = () => {
     const uids = formData.value.tools.map(tool => tool.tool.uid).join('&');
     emit('openTool', uids);
@@ -552,7 +582,7 @@
     }
   };
 
-  const handleSelectMapValueChange = (toolIndex: number, configIndex: number, value: string) => {
+  const handleTargetValueChange = (value: string, toolIndex: number, configIndex: number) => {
     const localOutputField = localOutputFields.value.find(item => item.raw_name === value);
     const configItem = formData.value.tools[toolIndex].config[configIndex];
 
@@ -622,9 +652,11 @@
       raw_name: item.raw_name,
       display_name: item.display_name,
       description: item.description,
+      trigger_display_name: `${item.raw_name}(${item.display_name})`,
     }));
   }, {
     immediate: true,
+    deep: true,
   });
 
   watch(() => props.allToolsData, (data) => {

@@ -26,7 +26,7 @@
         </render-info-item>
       </render-info-block>
       <div>
-        <span style="font-size: 12px;color: #979ba5;">{{ t('风险字段配置') }}:</span>
+        <span class="info-label">{{ t('风险字段配置') }}:</span>
         <div
           class="event-table">
           <div class="head">
@@ -56,7 +56,7 @@
       style="margin-top: 24px;">
       <render-info-block class="mt16">
         <!-- <render-info-item :label="t('事件信息')"> -->
-        <span style="font-size: 12px;color: #979ba5;">{{ t('风险字段配置') }}:</span>
+        <span class="info-label">{{ t('事件字段配置') }}:</span>
         <div class="event-table">
           <div class="head">
             <div
@@ -189,6 +189,14 @@
 </script>
 <style lang="postcss" scoped>
 .risk-display {
+  .info-label {
+    display: inline-block;
+    min-width: 80px;
+    font-size: 12px;
+    color: #979ba5;
+    text-align: right;
+  }
+
   .event-table {
     display: flex;
     margin-top: 12px;
