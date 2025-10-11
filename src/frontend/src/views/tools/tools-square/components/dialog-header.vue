@@ -243,8 +243,7 @@
       height: 100%;
       max-width: 180px;
       min-width: 100px;
-      padding-right: 5px;
-      padding-left: 5px;
+      padding: 0 15px;
       overflow: hidden;
       line-height: 42px;
       text-align: center;
@@ -253,12 +252,13 @@
       cursor: pointer;
       background: #fafbfd;
       border: 1px solid #dcdee5;
+      border-top: none;
     }
 
     .active-item {
       color: #3a84ff;
       background: #fff;
-      border: 1px solid #dcdee5;
+      border: none;
     }
   }
 

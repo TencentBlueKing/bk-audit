@@ -117,7 +117,7 @@
               <div
                 v-for="config in localEventItem.drill_config"
                 :key="config.tool.uid">
-                • {{ getToolNameAndType(config.tool.uid).name }}
+                {{ getToolNameAndType(config.tool.uid).name }}
               </div>
             </div>
           </template>
@@ -157,7 +157,7 @@
                 v-for="drill in localEventItem.drill_config
                   .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
                 :key="drill.tool.uid">
-                • {{ getToolNameAndType(drill.tool.uid).name }}
+                {{ getToolNameAndType(drill.tool.uid).name }}
               </div>
             </div>
           </template>

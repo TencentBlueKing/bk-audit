@@ -131,6 +131,9 @@ export default {
     数据异常: 'Data anomaly',
     '系统尚未完成确实模型配置，请继续设置': 'The system has not completed the actual model configuration, please continue to set up',
     '系统尚未完成日志数据上报，请继续上报': 'The system has not completed the log data report, please continue to report',
+    '存储值: ': 'Storage value: ',
+    '展示文本: ': 'Display text: ',
+    点击查看此字段的证据下探: 'Click to view the evidence of this field',
     映射对象: `key：{key}
     name：{name}`,  // 换行特意为之
   },

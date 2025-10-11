@@ -392,19 +392,22 @@
                   :placeholder="t('请先配置sql')" />
                 <div
                   v-else
-                  class="field-value-div"
-                  @click="() => handleClick(index, item.drill_config)">
+                  class="field-value-div">
                   <template v-if="item.drill_config.length && item.drill_config.every(item => item.tool.uid)">
                     <bk-popover
                       placement="top"
                       theme="black">
-                      <span style="cursor: pointer;">{{ t('已配置工具下钻', { count: item.drill_config.length }) }}</span>
+                      <span
+                        style="cursor: pointer;"
+                        @click="() => handleClick(index, item.drill_config)">
+                        {{ t('已配置工具下钻', { count: item.drill_config.length }) }}
+                      </span>
                       <template #content>
                         <div>
                           <div
                             v-for="config in item.drill_config"
                             :key="config.tool.uid">
-                            • {{ getToolNameAndType(config.tool.uid).name }}
+                            {{ getToolNameAndType(config.tool.uid).name }}
                           </div>
                         </div>
                       </template>
@@ -444,7 +447,7 @@
                             v-for="drill in item.drill_config
                               .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
                             :key="drill.tool.uid">
-                            • {{ getToolNameAndType(drill.tool.uid).name }}
+                            {{ getToolNameAndType(drill.tool.uid).name }}
                           </div>
                         </div>
                       </template>
@@ -452,7 +455,8 @@
                   </template>
                   <span
                     v-else
-                    style="color: #c4c6cc;">
+                    style="color: #c4c6cc;"
+                    @click="() => handleClick(index)">
                     {{ t('请点击配置') }}
                   </span>
                 </div>

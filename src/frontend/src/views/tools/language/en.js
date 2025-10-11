@@ -17,5 +17,6 @@
 export default {
   toolsManage: {
     已配置工具下钻: 'configured {count} tool drill',
+    去查看: 'Go to view',
   },
 };

@@ -33,16 +33,18 @@
       :z-index="dialogIndex"
       @click="handleClick"
       @closed="handleCloseDialog">
+      <template #tools>
+        <div
+          v-if="isShowTags"
+          class="dialog-header">
+          <dialog-header
+            ref="dialogHeaderRef"
+            :tabs="tabs"
+            @click-item="handleClickTag" />
+        </div>
+      </template>
       <template #header>
         <div>
-          <div
-            v-if="isShowTags"
-            class="dialog-header">
-            <dialog-header
-              ref="dialogHeaderRef"
-              :tabs="tabs"
-              @click-item="handleClickTag" />
-          </div>
           <div
             class="header"
             :style="isShowTags ? `margin-top: 35px;` : ``">
@@ -299,7 +301,8 @@
         target_value_type: string;
         target_value: string;
         target_field_type?: string;
-      }>
+      }>;
+      drill_name?: string;
     }>;
     enum_mappings: {
       collection_id: string;
@@ -607,7 +610,9 @@
           ? mappings.find((m: any) => String(m.key) === String(rawVal))
           : undefined;
         const display = mapped ? mapped.name : rawVal;
-        if (item.drill_config === null || item.drill_config.length === 0) {
+        if (item.drill_config === null
+          || item.drill_config.length === 0
+          || (item.drill_config.length === 1 && !item.drill_config[0].tool.uid)) {
           // 普通单元格
           return <span
             v-bk-tooltips={{
@@ -617,6 +622,9 @@
               }),
               disabled: !mapped,
             }}
+            style={{
+              cursor: 'pointer',
+            }}
             class={{ tips: mapped }}
           >
             {display}
@@ -625,23 +633,52 @@
         // 可下钻的列，显示按钮
         return (
           <div>
-            <bk-button
-              v-bk-tooltips={{
-                content: t('映射对象', {
-                  key: mapped?.key,
-                  name: mapped?.name,
-                }),
-                disabled: !mapped,
-              }}
-              class={{ tips: mapped }}
-              theme="primary"
-              text
-              onClick={(e: any) => {
-                e.stopPropagation(); // 阻止事件冒泡
-                handleFieldDownClick(item, data);
+            <bk-popover
+              placement="top"
+              theme="black"
+              v-slots={{
+                content: () => (
+                  <>
+                    {
+                      mapped && (
+                        <>
+                          <span>
+                          { t('存储值: ') }
+                          </span>
+                          <span>
+                            { mapped?.key }
+                          </span>
+                          <br />
+                          <span>
+                            { t('展示文本: ') }
+                          </span>
+                          <span>
+                            { mapped?.name }
+                          </span>
+                        </>
+                      )
+                    }
+                    <div style={{
+                      marginTop: '8px',
+                    }}>
+                      { t('点击查看此字段的证据下探') }
+                    </div>
+                  </>
+                ),
               }}>
-              {display}
-            </bk-button>
+              <span
+                style={{
+                  cursor: 'pointer',
+                  color: '#3a84ff',
+                }}
+                class={{ tips: mapped }}
+                onClick={(e: any) => {
+                  e.stopPropagation(); // 阻止事件冒泡
+                  handleFieldDownClick(item, data);
+                }}>
+                {display}
+              </span>
+            </bk-popover>
             <bk-popover
               placement="top"
               theme="black"
@@ -650,7 +687,7 @@
                   <div>
                     {item.drill_config.map(config => (
                       <div key={config.tool.uid}>
-                        • {getToolNameAndType(config.tool.uid).name}
+                        {config.drill_name || getToolNameAndType(config.tool.uid).name}
                         <bk-button
                           class="ml8"
                           theme="primary"
@@ -659,7 +696,10 @@
                             e.stopPropagation(); // 阻止事件冒泡
                             handleFieldDownClick(item, data, config.tool.uid);
                           }}>
-                          {t('查看')}
+                          {t('去查看')}
+                          <audit-icon
+                            class="mr-18"
+                            type="jump-link" />
                         </bk-button>
                       </div>
                     ))}
@@ -1224,10 +1264,9 @@
 }
 
 .dialog-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
+  margin-left: 24px;
+
+  /* width: 100%; */
   background: #fafbfd;
 }
 
@@ -1401,5 +1440,12 @@
 
 :deep(.bk-table .bk-table-head .col-resize-drag) {
   background-color: #fafbfd;
+}
+</style>
+<style lang="postcss">
+.tools-use-dialog {
+  .bk-modal-body {
+    border-radius: 16px 16px 8px 8px;
+  }
 }
 </style>
