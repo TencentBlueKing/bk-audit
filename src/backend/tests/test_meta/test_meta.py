@@ -330,7 +330,7 @@ class MetaTest(TestCase):
 
     def test_get_global_choices(self):
         """GetGlobalChoicesResource"""
-
+        self.maxDiff = None
         result = self.resource.meta.get_global_choices()
         self.assertEqual(result, GLOBAL_CHOICES)
 

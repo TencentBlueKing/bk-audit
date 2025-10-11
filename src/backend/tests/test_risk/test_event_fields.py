@@ -21,6 +21,10 @@ class TestListEventFieldsByStrategy(TestCase):
                 {"field_name": "raw_event_id", "display_name": "Raw Event ID"},
                 {"field_name": "operator", "display_name": "Operator"},
             ],
+            event_data_field_configs=[
+                {"field_name": "raw_event_id", "display_name": "Raw Event ID"},
+                {"field_name": "operator", "display_name": "Operator"},
+            ],
         )
         self.s2 = Strategy.objects.create(
             strategy_id=102,
@@ -29,45 +33,29 @@ class TestListEventFieldsByStrategy(TestCase):
                 {"field_name": "operator", "display_name": "Operator"},
                 {"field_name": "event_time", "display_name": "Event Time"},
             ],
+            event_data_field_configs=[
+                {"field_name": "operator", "display_name": "Operator"},
+                {"field_name": "event_time", "display_name": "Event Time"},
+            ],
         )
         self.s3 = Strategy.objects.create(
             strategy_id=103,
             strategy_name="Strategy Three",
             event_basic_field_configs=[],
+            event_data_field_configs=[],
         )
 
     def _sorted(self, items):
-        return sorted(items, key=lambda x: (x["strategy_id"], x["field_name"]))
+        return sorted(items, key=lambda x: x["field_name"])
 
     def test_list_event_fields_by_specific_strategies(self):
         # 仅查询 s1、s2
         result = resource.risk.list_event_fields_by_strategy(strategy_ids=[self.s1.strategy_id, self.s2.strategy_id])
 
         expected = [
-            {
-                "strategy_id": self.s1.strategy_id,
-                "strategy_name": self.s1.strategy_name,
-                "field_name": "raw_event_id",
-                "display_name": "Raw Event ID",
-            },
-            {
-                "strategy_id": self.s1.strategy_id,
-                "strategy_name": self.s1.strategy_name,
-                "field_name": "operator",
-                "display_name": "Operator",
-            },
-            {
-                "strategy_id": self.s2.strategy_id,
-                "strategy_name": self.s2.strategy_name,
-                "field_name": "operator",
-                "display_name": "Operator",
-            },
-            {
-                "strategy_id": self.s2.strategy_id,
-                "strategy_name": self.s2.strategy_name,
-                "field_name": "event_time",
-                "display_name": "Event Time",
-            },
+            {"field_name": "event_time", "display_name": "Event Time"},
+            {"field_name": "operator", "display_name": "Operator"},
+            {"field_name": "raw_event_id", "display_name": "Raw Event ID"},
         ]
 
         assert_list_contains(self._sorted(result), self._sorted(expected))
@@ -78,30 +66,9 @@ class TestListEventFieldsByStrategy(TestCase):
 
         # 预期包含 s1、s2 的基础字段，s3 无字段
         expected = [
-            {
-                "strategy_id": self.s1.strategy_id,
-                "strategy_name": self.s1.strategy_name,
-                "field_name": "raw_event_id",
-                "display_name": "Raw Event ID",
-            },
-            {
-                "strategy_id": self.s1.strategy_id,
-                "strategy_name": self.s1.strategy_name,
-                "field_name": "operator",
-                "display_name": "Operator",
-            },
-            {
-                "strategy_id": self.s2.strategy_id,
-                "strategy_name": self.s2.strategy_name,
-                "field_name": "operator",
-                "display_name": "Operator",
-            },
-            {
-                "strategy_id": self.s2.strategy_id,
-                "strategy_name": self.s2.strategy_name,
-                "field_name": "event_time",
-                "display_name": "Event Time",
-            },
+            {"field_name": "event_time", "display_name": "Event Time"},
+            {"field_name": "operator", "display_name": "Operator"},
+            {"field_name": "raw_event_id", "display_name": "Raw Event ID"},
         ]
 
         assert_list_contains(self._sorted(result), self._sorted(expected))
