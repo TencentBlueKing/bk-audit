@@ -17,5 +17,6 @@
 export default {
   toolsManage: {
     已配置工具下钻: '已配置 {count} 个工具',
+    去查看: '去查看',
   },
 };
