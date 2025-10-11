@@ -497,7 +497,7 @@
 
   // 跳转到bkvision
   const handleGoBkvision = () => {
-    window.open(`${configData.value.bkvision_web_url}}#/${configUid.value[0]}/share/detail/${configUid.value[1]}/dashboard`);
+    window.open(`${configData.value.third_party_system.bkvision_web_url}#/${configUid.value[0]}/share/detail/${configUid.value[1]}/dashboard`);
   };
   // 获取所有标签列表
   const {

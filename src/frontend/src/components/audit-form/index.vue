@@ -61,11 +61,11 @@
 
 
   onMounted(() => {
-    rootRef?.value.addEventListener('click', handleUserEdit);
+    rootRef.value?.addEventListener('click', handleUserEdit);
   });
 
   onBeforeUnmount(() => {
-    rootRef?.value.removeEventListener('click', handleUserEdit);
+    rootRef.value?.removeEventListener('click', handleUserEdit);
   });
 
   defineExpose<Exposes>({
