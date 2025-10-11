@@ -51,7 +51,6 @@ export default class Config {
     query_string: string;
   };
   bk_biz_id: number;
-  bkvision_web_url: string;
   shared_res_url: string;
   system_diagnosis: {
     iam_web_url: string;
@@ -59,6 +58,7 @@ export default class Config {
   };
   third_party_system: {
     bkbase_web_url: string;
+    bkvision_web_url: string;
   };
   third_doc_url: {
     search_rule_iwiki_url: string;
@@ -97,7 +97,6 @@ export default class Config {
     this.metric = payload.metric;
     this.help_info = this.initHelpInfo(payload.help_info);
     this.tool = payload.tool;
-    this.bkvision_web_url = payload.bkvision_web_url;
   }
 
   initHelpInfo(params: Config['help_info']) {
