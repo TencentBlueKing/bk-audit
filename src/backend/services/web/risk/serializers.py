@@ -30,6 +30,7 @@ from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     RISK_LEVEL_ORDER_FIELD,
+    EventFilterOperator,
     EventMappingFields,
     RiskLabel,
     RiskRuleOperator,
@@ -42,6 +43,7 @@ from services.web.risk.models import (
     RiskRule,
     TicketNode,
 )
+from services.web.strategy_v2.constants import StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.serializers import EventFieldSerializer
 
@@ -207,6 +209,43 @@ class RiskProviderSerializer(serializers.ModelSerializer):
         exclude = ["strategy"]
 
 
+class ListEventFieldsByStrategyRequestSerializer(serializers.Serializer):
+    # 支持多个策略；不传或为空返回所有策略的字段
+    strategy_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs.get("strategy_ids") and isinstance(attrs["strategy_ids"], str):
+            attrs["strategy_ids"] = [int(i) for i in attrs["strategy_ids"].split(",") if i]
+        return attrs
+
+
+class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"))
+    strategy_name = serializers.CharField(label=gettext_lazy("策略名称"))
+    field_name = serializers.CharField(label=gettext_lazy("字段名"))
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
+    field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
+
+
+class AnyValueField(serializers.Field):
+    """无损传递任意 JSON 值，不做转换或格式化"""
+
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
+
+
+class EventFieldFilterItemSerializer(serializers.Serializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("策略ID"), required=False, allow_null=True)
+    field = serializers.CharField(label=gettext_lazy("字段名"))
+    field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
+    operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
+    value = AnyValueField(label=gettext_lazy("值"))
+
+
 class ListRiskRequestSerializer(serializers.Serializer):
     """
     List Risk
@@ -224,6 +263,8 @@ class ListRiskRequestSerializer(serializers.Serializer):
     tags = serializers.CharField(label=gettext_lazy("Tags"), required=False)
     event_content = serializers.CharField(label=gettext_lazy("Event Content"), required=False)
     risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), required=False)
+    use_bkbase = serializers.BooleanField(label=gettext_lazy("是否通过BKBase查询"), required=False, default=False)
+    order_field = serializers.CharField(label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True)
     order_field = serializers.CharField(
         label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True, help_text="risk_level:根据风险等级排序"
     )
@@ -238,6 +279,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
     title = serializers.CharField(label=gettext_lazy("Risk Title"), required=False)
+    event_filters = EventFieldFilterItemSerializer(label=gettext_lazy("关联事件字段筛选"), many=True, required=False)
 
     def validate(self, attrs: dict) -> dict:
         # 校验
@@ -272,14 +314,12 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["event_content__contains"] = data.pop("event_content")
         if data.get("title"):
             data["title__contains"] = data.pop("title")
+        event_filters = attrs.get("event_filters") or []
+        data["event_filters"] = event_filters
+        data["use_bkbase"] = bool(data.get("use_bkbase", False))
         # 格式转换
         for key, val in attrs.items():
-            if key in [
-                "event_time__gte",
-                "event_time__lt",
-                "order_type",
-                "order_field",
-            ]:
+            if key in ["event_time__gte", "event_time__lt", "order_type", "order_field", "use_bkbase", "event_filters"]:
                 continue
             if key in ["tag_objs__in"]:
                 data[key] = [int(i) for i in val.split(",") if i]
