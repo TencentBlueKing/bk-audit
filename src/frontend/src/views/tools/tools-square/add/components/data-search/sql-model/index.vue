@@ -503,6 +503,7 @@
   </div>
 </template>
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import * as monaco from 'monaco-editor';
   import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -671,7 +672,7 @@
   const columns = [{
     label: () => t('工具列表'),
     render: ({ data }: {data: FormData['config']['output_fields'][0]['drill_config'][0]}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
-  }];
+  }] as Column[];
 
   // 字段下钻使用index
   const outputIndex = ref(-1);

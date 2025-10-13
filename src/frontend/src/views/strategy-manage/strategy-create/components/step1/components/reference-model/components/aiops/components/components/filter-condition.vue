@@ -108,7 +108,6 @@
                 multiple-mode="tag"
                 :no-data-text="t('无数据')"
                 :placeholder="t('请输入并Enter结束')"
-                trigger="focus"
                 @blur="isValueFocus[index]=false"
                 @change="handleUpdateFilterConfig"
                 @focus="isValueFocus[index]=true">

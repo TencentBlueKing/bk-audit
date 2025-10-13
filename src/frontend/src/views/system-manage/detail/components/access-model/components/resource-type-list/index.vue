@@ -102,7 +102,9 @@
     @update-resource="handleUpdateResource" />
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
+  import { type Ref } from 'vue';
   import {
     computed,
     onMounted,
@@ -378,7 +380,7 @@
         </>,
       },
     ];
-  });
+  }) as Ref<Column[]>;
 
   const renderResourceTypeList = computed(() => {
     // 1. 在 search 中查找 id 为 "status" 的项

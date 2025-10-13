@@ -59,7 +59,9 @@
 </template>
 <script setup lang="tsx">
   import { InfoBox } from 'bkui-vue';
+  import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
+  import type { Ref } from 'vue';
   import { computed, h, onMounted, ref, shallowRef } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -266,7 +268,7 @@
         </auth-button>
       </>
       ),
-    }]);
+    }]) as Ref<Column[]>;
 
   const styles = shallowRef({ left: '216px' });
   const disabledMap: Record<string, string> = {
@@ -277,12 +279,14 @@
     updated_at: 'updated_at',
   };
   const initSettings = () => ({
-    fields: tableColumn.value.reduce((res, item) => {
+    fields: tableColumn.value.reduce((res, item, index) => {
       if (item.field) {
+        const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
+        const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
         res.push({
-          label: item.label(),
-          field: item.field(),
-          disabled: !!disabledMap[item.field()],
+          label: String(labelValue),
+          field: String(fieldValue),
+          disabled: !!disabledMap[String(fieldValue)],
         });
       }
       return res;

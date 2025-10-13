@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     nextTick,
     onUnmounted,
@@ -340,7 +341,7 @@
 
           </p>,
     },
-  ];
+  ] as Column[];
   let timeout: number| undefined = undefined;
 
   const listRef = ref();
@@ -358,18 +359,20 @@
     // risk_label: 'risk_label',
   };
   const initSettings = () => ({
-    fields: tableColumn.reduce((res, item) => {
+    fields: tableColumn.reduce((res, item, index) => {
       if (item.field) {
+        const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
+        const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
         res.push({
-          label: item.label(),
-          field: item.field(),
-          disabled: !!disabledMap[item.field()],
+          label: String(labelValue),
+          field: String(fieldValue),
+          disabled: !!disabledMap[String(fieldValue)],
         });
       }
       return res;
     }, [] as Array<{
       label: string, field: string, disabled: boolean,
-    }>),
+    }>) || [],
     checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'],
     showLineHeight: false,
     trigger: 'manual' as const,  // 添加 as const 类型断言
