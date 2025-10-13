@@ -59,7 +59,7 @@
     <div v-else>
       <bk-select
         v-if="config.type === 'field'"
-        v-model="generalValue"
+        v-model="selectValue"
         class="bk-select"
         filterable
         :placeholder="t('请选择已有选项')"
@@ -98,7 +98,7 @@
           :label="t('事件字段')">
           <bk-option
             v-for="(item, index) in eventDataList"
-            :id="item.text"
+            :id="item.lable"
             :key="index"
             :name="item.lable">
             <bk-popover
@@ -171,6 +171,10 @@
   const props = defineProps<Props>();
   const { t } = useI18n();
   const tipText = ref('');
+  const selectValue =  computed<string>(() => {
+    const value = props.config.default_value || '';
+    return value ? String(value) : '';
+  });
 
   const datePickerValue = computed(() => {
     if (props.config.custom_type === 'datetime' && props.config.type === 'self') {
@@ -201,6 +205,9 @@
     }
     if (props.config.custom_type === 'bk_user_selector') {
       return userSelectorValue.value;
+    }
+    if (selectValue.value) {
+      return selectValue.value;
     }
     return generalValue.value;
   });
@@ -266,6 +273,9 @@
     if (Array.isArray(value)) {
       return value.join(', ');
     }
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
     if (type === 'datetime' && props.config.type === 'self') {
       const date = new Date(String(value));
       const year = date.getFullYear();
@@ -294,27 +304,28 @@
   watch(() => modelValue.value, (val) => {
     const valueToFormat = val.value || val.field;
     // eslint-disable-next-line max-len
-    tipText.value = formatTooltipData(props.config.custom_type, Array.isArray(valueToFormat) ? valueToFormat : String(valueToFormat));
+    tipText.value = formatTooltipData(props.config.custom_type, valueToFormat);
   }, {
     deep: true,
   });
 
-  watch(() => props.config.type, () => {
+  watch(() => props.config.custom_type, () => {
     if (props.config.custom_type === 'bk_user_selector') {
       modelValue.value = {
-        field: '',
-        value: [],
+        field: props.config.default_value || [],
+        value: props.config.default_value || [],
       };
     } else {
       modelValue.value = {
-        field: '',
-        value: '',
+        field: props.config.default_value || '',
+        value: props.config.default_value || '',
       };
     }
   }, {
     immediate: true,
     deep: true,
   });
+
 </script>
 
 <style lang="postcss" scoped>
