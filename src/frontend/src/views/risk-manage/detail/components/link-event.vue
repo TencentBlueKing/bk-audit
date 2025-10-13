@@ -187,7 +187,8 @@
                                 theme="primary"
                                 @click="(e: any) => {
                                   e.stopPropagation(); // 阻止事件冒泡
-                                  //
+                                  handleUseTool(drillMap.get(basicItem.field_name),
+                                                basicItem.field_name, config.tool.uid);
                                 }">
                                 {{ t('去查看') }}
                                 <audit-icon
@@ -309,7 +310,7 @@
                                 theme="primary"
                                 @click="(e: any) => {
                                   e.stopPropagation(); // 阻止事件冒泡
-                                  //
+                                  handleUseTool(drillMap.get(key), key, config.tool.uid);
                                 }">
                                 {{ t('去查看') }}
                                 <audit-icon
@@ -423,7 +424,7 @@
                                 theme="primary"
                                 @click="(e: any) => {
                                   e.stopPropagation(); // 阻止事件冒泡
-                                  //
+                                  handleUseTool(drillMap.get(key), key, config.tool.uid);
                                 }">
                                 {{ t('去查看') }}
                                 <audit-icon
