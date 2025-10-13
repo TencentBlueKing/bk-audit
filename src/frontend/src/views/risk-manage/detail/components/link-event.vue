@@ -17,6 +17,7 @@
 <template>
   <div class="risk-manage-detail-linkevent-part">
     <div
+      v-if="linkEventList.length"
       class="show-side-condition-btn"
       :style="{ left: isShowSide ? '-16px' : '164px' }">
       <bk-button

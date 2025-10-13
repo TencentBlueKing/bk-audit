@@ -576,7 +576,7 @@
 
         // 编辑模式下第一次进入检查更新
         if (isEditMode && clickSpaceChange.value === 1) {
-          isUpdate.value =  formData.value.is_bkvision; // !(formData.value.updated_time === res.data.updated_time);
+          isUpdate.value =  formData.value.is_bkvision;
           formData.value.config.input_variable = formData.value.config.input_variable.map(item => ({
             ...item,
             default_value: item.default_value,

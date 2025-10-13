@@ -230,12 +230,8 @@
                       { message: '不能为空', trigger: 'change', validator: (value: any) => handlePaValidate(value) },
                     ]"
                     style="margin-bottom: 16px;">
-                    <!-- <application-parameter
-                      v-model="formData.pa_params[val.key]"
-                      clearable
-                      :config="val"
-                      :risk-field-list="riskFieldList" /> -->
                     <application-parameter
+                      ref="applicationParameterRef"
                       v-model="formData.pa_params[val.key]"
                       clearable
                       :config="val"
@@ -247,9 +243,15 @@
                     </template>
                     <template #label>
                       <div class="val-label">
-                        <span class="label-name">{{ val.name }} </span>
+                        <span
+                          v-bk-tooltips="{
+                            content: t(val.desc),
+                            disabled: val.desc === '',
+                          }"
+                          :class="val.desc === '' ? 'label-name' : 'label-name underline'">{{ val.name }} </span>
                         <bk-dropdown
-                          v-if="val.custom_type !== 'select'"
+                          v-if="val.custom_type === 'datetime' || val.custom_type === 'textarea'
+                            || val.custom_type === 'input' || val.custom_type === 'bk_date_picker'"
                           ref="dropdownRef"
                           :is-show="val.dropdownShow"
                           trigger="manual">
@@ -408,6 +410,7 @@
   const formData = ref(new RiskRuleManageModel());
   const formRef = ref();
   const batchDialogRef = ref();
+  const applicationParameterRef = ref();
   const errors = ref<Array<Errors>>([]);
   const lists = [{
     operator: '',
@@ -538,10 +541,14 @@
         data[key].dropdownShow = false;
         // eslint-disable-next-line no-param-reassign
         data[key].is_hide = false;
+        // eslint-disable-next-line no-param-reassign
+        data[key].default_value = '';
       });
-      paramsDetailData.value = data;
+
       // 如果是新建 或者 pa_params为null
       if (!(isEditMode || isCloneMode) || !formData.value.pa_params) {
+        paramsDetailData.value = data;
+
         formData.value.pa_params = {};
         Object.values(data).forEach((val) => {
           formData.value.pa_params[val.key] = {
@@ -556,21 +563,32 @@
             fetchAllStrategyList();
           }
         });
-        // 防止新增字段取不到对应field
-        Object.values(paramsDetailData.value).forEach((val) => {
-          if (!formData.value.pa_params[val.key]) {
-            formData.value.pa_params[val.key] = {
-              field: '',
-              value: '', // 添加填写字段
-            };
-          }
+        Object.keys(data).forEach((key) => {
+          // eslint-disable-next-line no-param-reassign
+          data[key].type =  formData.value.pa_params[key].field === '' ? 'self' : 'field';
+          // eslint-disable-next-line no-param-reassign
+          data[key].dropdownShow = false;
+          // eslint-disable-next-line no-param-reassign
+          data[key].is_hide = false;
+          // eslint-disable-next-line no-param-reassign
+          data[key].default_value = formData.value.pa_params[key].value || formData.value.pa_params[key].field;
         });
-        // 如果删除字段删除对应field
-        Object.keys(formData.value.pa_params).forEach((key) => {
-          if (!paramsDetailData.value[key]) {
-            delete formData.value.pa_params[key];
-          }
-        });
+        paramsDetailData.value = data;
+        // // 防止新增字段取不到对应field
+        // Object.values(paramsDetailData.value).forEach((val) => {
+        //   if (!formData.value.pa_params[val.key]) {
+        //     formData.value.pa_params[val.key] = {
+        //       field: '',
+        //       value: '', // 添加填写字段
+        //     };
+        //   }
+        // });
+        // // 如果删除字段删除对应field
+        // Object.keys(formData.value.pa_params).forEach((key) => {
+        //   if (!paramsDetailData.value[key]) {
+        //     delete formData.value.pa_params[key];
+        //   }
+        // });
       }
     },
   });
@@ -799,5 +817,9 @@
   color: #ea3636;
   text-align: center;
   content: '*';
+}
+
+.underline {
+  border-bottom: 1px dashed #c4c6cc;
 }
 </style>

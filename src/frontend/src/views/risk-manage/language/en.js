@@ -137,5 +137,7 @@ export default {
     自定义输入: 'Custom input',
     字段值引用: 'Field value reference',
     请选择已有选项: 'Please select existing options',
+    请选择日期: 'Please select date',
+    展开更多字段: 'Expand more fields',
   },
 };
