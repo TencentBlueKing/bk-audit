@@ -26,6 +26,7 @@
 </template>
 
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     onMounted,
     ref,
@@ -77,7 +78,7 @@
         <bk-tag type={data.is_enabled ? 'success' : ''}>{data.is_enabled ? t('启用') : t('停用')}</bk-tag>
       ),
     },
-  ];
+  ] as Column[];
 
   onMounted(() => {
     if (!props.data) return;

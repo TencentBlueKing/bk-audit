@@ -144,6 +144,7 @@
 </template>
 
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -195,7 +196,7 @@
   const columns = [{
     label: () => t('工具列表'),
     render: ({ data }: {data: NonNullable<Props['eventItem']['drill_config']>[0]}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
-  }];
+  }] as Column[];
 
   const disabledList = ['risk_level', 'status', 'current_operator'];
 

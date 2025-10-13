@@ -54,6 +54,7 @@
   </skeleton-loading>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
     onMounted,
@@ -278,7 +279,7 @@
       width: 140,
       render: ({ data }: {data: SyetemModel}) => data.created_by || '--',
     },
-  ];
+  ] as Column[];
 
   const listRef = ref();
   const dataSource = MetaManageService.fetchSystemList;
@@ -299,7 +300,7 @@
   const initSettings = () => ({
     fields: tableColumn.reduce((
       res: Array<{ label: string; field: string; disabled: boolean }>,
-      item: { field?: () => string; label: () => string },
+      item: any,
     ) => {
       if (item.field) {
         res.push({

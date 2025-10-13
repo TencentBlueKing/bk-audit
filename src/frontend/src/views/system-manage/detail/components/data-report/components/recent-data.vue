@@ -69,7 +69,7 @@
   </skeleton-loading>
 </template>
 <script setup lang="tsx">
-
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     nextTick,
     onMounted,
@@ -152,7 +152,7 @@
         </span>
       ),
     },
-  ];
+  ] as Column[];
   const dataIdTableColumn = [
     {
       label: () => t('上报信息'),
@@ -198,7 +198,7 @@
         </span>
       ),
     },
-  ];
+  ] as Column[];
   const rootRef = ref();
   const boxHeight = ref('auto');
   const tableWrapperRef = ref();
