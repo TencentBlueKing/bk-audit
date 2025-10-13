@@ -24,6 +24,7 @@
   </div>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
     onMounted,
@@ -71,7 +72,7 @@
       showOverflowTooltip: true,
       render: ({ data }: { data: DataType }) => <div class={data.is_diff ? 'is-diff active-color' : ''}><Tooltips data={data.update_after} /> </div>,
     },
-  ];
+  ] as Column[];
 
   // eslint-disable-next-line vue/no-setup-props-destructure
   useRequest(MetaManageService.fetchResourceTypeSchemaSearch, {
