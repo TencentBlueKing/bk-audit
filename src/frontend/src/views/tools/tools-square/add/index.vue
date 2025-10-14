@@ -462,6 +462,16 @@
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
   const rules = {
+    name: [
+      {
+        validator: (value: string) => {
+          const reg = /^[\w\u4e00-\u9fa5-_]+$/;
+          return reg.test(value);
+        },
+        message: t('工具名称只允许中文、字母、数字、中划线或下划线组成'),
+        trigger: 'change',
+      },
+    ],
     tags: [
       // 因为校验的是name，但value是id的数组；将item转为name，自定义输入id = name，直接使用item即可
       {
@@ -475,6 +485,10 @@
       {
         validator: (value: Array<string>) => {
           const reg = /\D+/;
+          // 接口过慢时 allTagMap.value为空
+          if (Object.keys(allTagMap.value).length === 0) {
+            return true;
+          }
           return value.every(item => reg.test(allTagMap.value[item] ? allTagMap.value[item] : item));
         },
         message: t('标签不能为纯数字'),

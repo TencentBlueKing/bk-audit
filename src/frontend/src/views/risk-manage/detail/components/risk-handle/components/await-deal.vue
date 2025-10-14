@@ -112,7 +112,7 @@
                   :property="`pa_params.${val.key}`"
                   required
                   :rules="[
-                    { message: '不能为空', trigger: 'change', validator: (value: any) => handlePaValidate(value) },
+                    { message: t('不能为空'), trigger: 'change', validator: (value: any) => handlePaValidate(value) },
                   ]"
                   style="margin-bottom: 16px;">
                   <application-parameter

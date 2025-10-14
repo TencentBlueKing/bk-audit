@@ -177,9 +177,6 @@
   const variablesConfig = ref<Array<Record<string, any>>>([]);
   // 更新变量
   const handleUpdateVariable = () => {
-    // const com = inputVariable.value.filter((item: any) => item.field_category !== 'variable');
-    // const tool = com.concat(toolInfoVariable.value);
-    // const variables = com.concat(bkVisionVariable.value);
     updateVariableRef.value?.show(toolInfoVariable.value, bkVisionVariable.value, comList.value, bkVisionComList.value);
   };
 
