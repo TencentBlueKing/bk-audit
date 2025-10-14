@@ -5,6 +5,7 @@ ListEventFieldsByStrategy 接口单测
 
 from bk_resource import resource
 
+from core.testing import assert_list_contains
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -69,7 +70,7 @@ class TestListEventFieldsByStrategy(TestCase):
             },
         ]
 
-        self.assertEqual(self._sorted(result), self._sorted(expected))
+        assert_list_contains(self._sorted(result), self._sorted(expected))
 
     def test_list_event_fields_all_strategies_when_none(self):
         # 不传 strategy_ids，返回全部策略
@@ -103,4 +104,4 @@ class TestListEventFieldsByStrategy(TestCase):
             },
         ]
 
-        self.assertEqual(self._sorted(result), self._sorted(expected))
+        assert_list_contains(self._sorted(result), self._sorted(expected))

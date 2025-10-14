@@ -38,6 +38,7 @@ from sqlglot import exp
 
 from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketOperate, TicketStatus
+from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, Tag
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
@@ -50,15 +51,17 @@ from core.utils.data import choices_to_dict, data2string, preserved_order_sort
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
 from core.utils.tools import get_app_info
+from services.web.databus.constants import (
+    ASSET_RISK_BKBASE_RT_ID_KEY,
+    ASSET_STRATEGY_BKBASE_RT_ID_KEY,
+    ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    DORIS_EVENT_BKBASE_RT_ID_KEY,
+)
 from services.web.risk.constants import (
     EVENT_EXPORT_FIELD_PREFIX,
-    EVENT_RESULT_TABLE_ID_KEY,
     RISK_EXPORT_FILE_NAME_TMP,
     RISK_LEVEL_ORDER_FIELD,
-    RISK_RESULT_TABLE_ID_KEY,
     RISK_SHOW_FIELDS,
-    STRATEGY_RESULT_TABLE_ID_KEY,
-    STRATEGY_TAG_RESULT_TABLE_ID_KEY,
     EventFilterOperator,
     RiskExportField,
     RiskFields,
@@ -349,22 +352,27 @@ class ListRisk(RiskMeta):
         if not hasattr(self, "_bkbase_table_map"):
             self._bkbase_table_map = {
                 Risk._meta.db_table: self._get_configured_table_name(
-                    config_key=RISK_RESULT_TABLE_ID_KEY, fallback=Risk._meta.db_table
+                    config_key=ASSET_RISK_BKBASE_RT_ID_KEY, fallback=Risk._meta.db_table
                 ),
                 Strategy._meta.db_table: self._get_configured_table_name(
-                    config_key=STRATEGY_RESULT_TABLE_ID_KEY, fallback=Strategy._meta.db_table
+                    config_key=ASSET_STRATEGY_BKBASE_RT_ID_KEY, fallback=Strategy._meta.db_table
                 ),
                 StrategyTag._meta.db_table: self._get_configured_table_name(
-                    config_key=STRATEGY_TAG_RESULT_TABLE_ID_KEY, fallback=StrategyTag._meta.db_table
+                    config_key=ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY, fallback=StrategyTag._meta.db_table
                 ),
                 "risk_event": self._get_configured_table_name(
-                    config_key=EVENT_RESULT_TABLE_ID_KEY, fallback="risk_event"
+                    config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
                 ),
             }
         return self._bkbase_table_map
 
     def _get_configured_table_name(self, *, config_key: str, fallback: str) -> str:
-        return GlobalMetaConfig.get(config_key=config_key, default=fallback)
+        return GlobalMetaConfig.get(
+            config_key=config_key,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=settings.DEFAULT_NAMESPACE,
+            default=fallback,
+        )
 
     @staticmethod
     def _split_table_parts(table_name: str) -> Tuple[Optional[str], Optional[str], str]:
@@ -966,44 +974,6 @@ class GetRiskFieldsByStrategy(RiskMeta):
                     }
                 )
         return fields
-
-
-class ListEventFieldsByStrategy(RiskMeta):
-    """
-    新增接口：根据策略获取对应的事件字段；支持返回所有策略的事件字段（不传 strategy_ids）
-    返回结构化字段 key，用于前端筛选构建
-    """
-
-    name = gettext_lazy("根据策略获取事件字段")
-    RequestSerializer = ListEventFieldsByStrategyRequestSerializer
-    ResponseSerializer = ListEventFieldsByStrategyResponseSerializer
-    many_response_data = True
-
-    def perform_request(self, validated_request_data):
-        # 决定策略集合
-        strategy_ids = validated_request_data.get("strategy_ids")
-        if strategy_ids:
-            strategies = Strategy.objects.filter(strategy_id__in=strategy_ids)
-        else:
-            strategies = Strategy.objects.all()
-
-        results = []
-        for s in strategies:
-            for cfg in s.event_basic_field_configs or []:
-                field_name = cfg.get("field_name")
-                display_name = cfg.get("display_name") or field_name
-                if not field_name:
-                    continue
-                results.append(
-                    {
-                        "strategy_id": s.strategy_id,
-                        "strategy_name": s.strategy_name,
-                        "field_name": field_name,
-                        "display_name": display_name,
-                    }
-                )
-
-        return results
 
 
 class ProcessRiskTicket(RiskMeta):
