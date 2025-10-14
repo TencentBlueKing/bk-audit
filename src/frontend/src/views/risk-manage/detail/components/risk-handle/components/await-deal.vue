@@ -250,6 +250,7 @@
     dropdownShow?: boolean;
     type?: string | undefined;
     is_hide?: boolean | undefined;
+    default_value?: any;
     hide_condition?: any[]; // 添加缺失的hide_condition属性
   }
 
@@ -505,7 +506,7 @@
     () => formData.value, (val) => {
       Object.keys(paramsDetailData.value).forEach((obj) => {
         if (paramsDetailData.value[obj]?.hide_condition) {
-          const hideCondition = paramsDetailData.value[obj].hide_condition;
+          const hideCondition = paramsDetailData.value[obj]?.hide_condition;
           // 添加安全检查，确保hideCondition存在且是数组
           if (hideCondition && Array.isArray(hideCondition)) {
             hideCondition.forEach((item: any) => {

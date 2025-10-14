@@ -221,7 +221,7 @@
                   :key="`${val.key}-${index}`">
                   <!-- 只显示需要显示的字段 -->
                   <bk-form-item
-                    v-if="val.show_type === 'show'"
+                    v-if="val.show_type === 'show' && !val.is_hide"
                     :label="val.name"
                     :label-width="150"
                     :property="`pa_params.${val.key}`"
@@ -313,8 +313,10 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     reactive,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -358,6 +360,9 @@
     schema: Record<string, any>;
     dropdownShow?: boolean;
     type?: string | undefined;
+    is_hide?: boolean;
+    default_value?: any;
+    hide_condition?: any[]; // 添加缺失的hide_condition属性
   }
   interface Errors{
     field: boolean,
@@ -542,7 +547,7 @@
         // eslint-disable-next-line no-param-reassign
         data[key].is_hide = false;
         // eslint-disable-next-line no-param-reassign
-        data[key].default_value = '';
+        data[key].default_value = null;
       });
 
       // 如果是新建 或者 pa_params为null
@@ -563,17 +568,25 @@
             fetchAllStrategyList();
           }
         });
-        Object.keys(data).forEach((key) => {
-          // eslint-disable-next-line no-param-reassign
-          data[key].type =  formData.value.pa_params[key].field === '' ? 'self' : 'field';
-          // eslint-disable-next-line no-param-reassign
-          data[key].dropdownShow = false;
-          // eslint-disable-next-line no-param-reassign
-          data[key].is_hide = false;
-          // eslint-disable-next-line no-param-reassign
-          data[key].default_value = formData.value.pa_params[key].value || formData.value.pa_params[key].field;
-        });
+        if (!isPaIdChange.value) {
+          paramsDetailData.value = {};
+          Object.keys(data).forEach((key) => {
+            // eslint-disable-next-line no-param-reassign
+            data[key].type =  formData.value.pa_params[key].field === '' ? 'self' : 'field';
+            // eslint-disable-next-line no-param-reassign
+            data[key].dropdownShow = false;
+            // eslint-disable-next-line no-param-reassign
+            data[key].is_hide = false;
+            // eslint-disable-next-line no-param-reassign
+            data[key].default_value = formData.value.pa_params[key].value || formData.value.pa_params[key].field;
+          });
+        }
+
         paramsDetailData.value = data;
+        setTimeout(() => {
+          isPaIdChange.value = false;
+        }, 0);
+
         // // 防止新增字段取不到对应field
         // Object.values(paramsDetailData.value).forEach((val) => {
         //   if (!formData.value.pa_params[val.key]) {
@@ -648,8 +661,10 @@
       });
     }
   };
+  const isPaIdChange = ref(false);
   const handlePaIdChange = (id: string) => {
     if (id) {
+      isPaIdChange.value = true;
       const sopsTemplateId = processApplicationList.value
         .find(item => item.id === id)?.sops_template_id;
       fetchDetail({
@@ -698,6 +713,42 @@
       name: 'ruleManageList',
     });
   };
+
+  watch(
+    () => formData.value, (val) => {
+      nextTick(() => {
+        Object.keys(paramsDetailData.value).forEach((obj) => {
+          if (paramsDetailData.value[obj]?.hide_condition) {
+            const hideCondition = paramsDetailData.value[obj]?.hide_condition;
+            // 添加安全检查，确保hideCondition存在且是数组
+            if (hideCondition && Array.isArray(hideCondition)) {
+              hideCondition.forEach((item: any) => {
+                // 根据操作符进行条件判断
+                const oldIsHide = paramsDetailData.value[obj].is_hide;
+                switch (item.operator) {
+                case '=':
+                  paramsDetailData.value[obj].is_hide = (
+                    item.value.toString() === val.pa_params[item.constant_key].value.toString()
+                  );
+                  break;
+                default:
+                  paramsDetailData.value[obj].is_hide = false;
+                  break;
+                }
+                // 当字段从显示变为隐藏时，重置对应的参数值
+                if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
+                  formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
+                  formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
+                }
+              });
+            }
+          }
+        });
+      });
+    },
+    { deep: true },
+  );
+
   useRouterBack(() => {
     router.push({
       name: 'ruleManageList',
