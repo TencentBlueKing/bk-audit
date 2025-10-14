@@ -192,7 +192,6 @@ class RiskInfoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Risk
         exclude = ["strategy"]
-        fields = "__all__"
 
 
 class RiskProviderSerializer(serializers.ModelSerializer):
@@ -220,7 +219,6 @@ class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
     field_name = serializers.CharField(label=gettext_lazy("字段名"))
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
-
 
 
 class EventFieldFilterItemSerializer(serializers.Serializer):
