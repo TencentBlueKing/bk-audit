@@ -55,3 +55,13 @@ class ExtraDataSerializerMixin(serializers.Serializer):
         if self.parse_nested_data:
             validated_data = parse_nested_params(validated_data)
         return validated_data
+
+
+class AnyValueField(serializers.Field):
+    """无损传递任意 JSON 值，不做转换或格式化"""
+
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value

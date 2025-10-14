@@ -25,6 +25,7 @@ from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
 from apps.meta.models import Tag
+from core.serializers import AnyValueField
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
@@ -187,17 +188,10 @@ class ListEventResponseSerializer(serializers.Serializer):
 
 class RiskInfoSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
-    tags = serializers.SerializerMethodField()
-
-    def get_tags(self, obj: Risk):
-        """
-        获取风险标签ID列表,从策略获取
-        """
-
-        return obj.get_tag_ids()
 
     class Meta:
         model = Risk
+        exclude = ["strategy"]
         fields = "__all__"
 
 
@@ -227,15 +221,6 @@ class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     field_source = serializers.ChoiceField(label=gettext_lazy("字段来源"), choices=StrategyFieldSourceEnum.choices)
 
-
-class AnyValueField(serializers.Field):
-    """无损传递任意 JSON 值，不做转换或格式化"""
-
-    def to_internal_value(self, data):
-        return data
-
-    def to_representation(self, value):
-        return value
 
 
 class EventFieldFilterItemSerializer(serializers.Serializer):

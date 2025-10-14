@@ -20,6 +20,7 @@ import datetime
 import os
 import time
 import traceback
+from typing import Dict, Optional, Type
 
 import requests
 from bk_resource import api, resource
@@ -36,6 +37,7 @@ from api.bk_base.constants import StorageType
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from apps.notice.handlers import ErrorMsgHandler
+from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.lock import lock
 from services.web.databus.collector.check.handlers import ReportCheckHandler
 from services.web.databus.collector.etl.base import EtlClean
@@ -45,13 +47,20 @@ from services.web.databus.collector.snapshot.join.base import (
     BasicJoinHandler,
 )
 from services.web.databus.collector.snapshot.join.http_pull import HttpPullHandler
-from services.web.databus.collector_plugin.handlers import PluginEtlHandler
+from services.web.databus.collector_plugin.handlers import (
+    EventCollectorEtlHandler,
+    PluginEtlHandler,
+)
 from services.web.databus.constants import (
     API_PUSH_ETL_RETRY_TIMES,
     API_PUSH_ETL_RETRY_WAIT_TIME,
+    ASSET_RISK_BKBASE_RT_ID_KEY,
+    ASSET_STRATEGY_BKBASE_RT_ID_KEY,
+    ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
     COLLECTOR_PLUGIN_ID,
     PULL_HANDLER_PRE_CHECK_TIMEOUT,
     EtlConfigEnum,
+    JoinDataType,
     PluginSceneChoices,
     SnapshotRunningStatus,
 )
@@ -286,13 +295,22 @@ def create_or_update_plugin_etl(collector_plugin_id: int = None):
     if collector_plugin_id:
         plugins = CollectorPlugin.objects.filter(collector_plugin_id=collector_plugin_id)
     else:
-        # 仅为采集项类型的采集插件创建入库
+        # 仅为日志/事件采集插件创建入库
         plugins = CollectorPlugin.objects.filter(
-            plugin_scene=PluginSceneChoices.COLLECTOR.value, bkbase_table_id__isnull=True
+            plugin_scene__in=[PluginSceneChoices.EVENT.value, PluginSceneChoices.COLLECTOR.value],
+            bkbase_table_id__isnull=True,
         )
     # 创建或更新
+    handler_map = {
+        PluginSceneChoices.EVENT.value: EventCollectorEtlHandler,
+        PluginSceneChoices.COLLECTOR.value: PluginEtlHandler,
+    }
     for plugin in plugins:
-        PluginEtlHandler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
+        handler = handler_map.get(plugin.plugin_scene)
+        if not handler:
+            logger.error("[PluginEtlHandlerNotFound] PluginScene => %s", plugin.plugin_scene)
+            continue
+        handler(collector_plugin_id=plugin.collector_plugin_id).create_or_update()
 
 
 @periodic_task(run_every=crontab(minute="0", hour="5"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
@@ -407,3 +425,49 @@ def refresh_system_snapshots(system_id: int):
     ).update(status=SnapshotRunningStatus.PREPARING.value)
 
     logger.info("[restart_resource_types] system_id %s Updated %s", system_id, updated_count)
+
+
+@periodic_task(run_every=crontab(minute="0", hour="*"), soft_time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@lock(lock_name="celery:sync_asset_bkbase_rt_ids")
+def sync_asset_bkbase_rt_ids():
+    """
+    同步资产快照的 bkbase_table_id 到全局配置
+    """
+
+    asset_configs: Dict[Type[ResourceTypeMeta], str] = {
+        ResourceEnum.RISK: ASSET_RISK_BKBASE_RT_ID_KEY,
+        ResourceEnum.STRATEGY: ASSET_STRATEGY_BKBASE_RT_ID_KEY,
+        ResourceEnum.STRATEGY_TAG: ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    }
+
+    # TODO: 当前只有一个 namespace，直接使用 settings.DEFAULT_NAMESPACE，后续需要支持多 namespace
+    for resource_cls, config_key in asset_configs.items():
+        result_table_id = GlobalMetaConfig.get(
+            config_key,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=settings.DEFAULT_NAMESPACE,
+            default="",
+        )
+        if result_table_id:
+            continue
+
+        snapshot: Optional[Snapshot] = (
+            Snapshot.objects.filter(
+                system_id=resource_cls.system_id,
+                resource_type_id=resource_cls.id,
+                status=SnapshotRunningStatus.RUNNING.value,
+                bkbase_data_id__isnull=False,
+                join_data_type=JoinDataType.ASSET.value,
+            )
+            .order_by("-updated_at")
+            .first()
+        )
+        if not snapshot or not snapshot.bkbase_table_id:
+            continue
+
+        GlobalMetaConfig.set(
+            config_key,
+            str(snapshot.bkbase_table_id),
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=settings.DEFAULT_NAMESPACE,
+        )
