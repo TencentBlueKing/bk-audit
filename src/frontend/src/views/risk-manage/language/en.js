@@ -139,5 +139,9 @@ export default {
     请选择已有选项: 'Please select existing options',
     请选择日期: 'Please select date',
     展开更多字段: 'Expand more fields',
+    风险字段: 'Risk fields',
+    事件字段: 'Event fields',
+    当前值: 'Current value',
+    不能为空: ' can not be empty',
   },
 };

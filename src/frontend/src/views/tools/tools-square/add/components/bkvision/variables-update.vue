@@ -144,7 +144,7 @@
     },
   ];
 
-  const columnText = (data: any) => (data.type === 'update' ?  columnTextSting(data) : '--') ;
+  const columnText = (data: any) => (data.type === 'update' ?  columnTextSting(data) : data.default_value) ;
   const columnTextSting = (data: any) => {
     if (data.field_category === 'time-ranger') {
       const oldText = new DateRange(data.old_default_value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
@@ -187,15 +187,12 @@
                 ...newVar,
                 type: 'add',
               });
-            } else if (JSON.stringify(oldVar) !== JSON.stringify(newVar)) {
-              // 修改 不使用默认值时不处理
-              if (oldVar.default_value && !deepEqual(oldVar, newVar)) {
-                updateAry.push({
-                  ...newVar,
-                  type: 'update',
-                  old_default_value: oldVar.default_value,
-                });
-              }
+            } else if ((JSON.stringify(oldVar) !== JSON.stringify(newVar)) && !deepEqual(oldVar, newVar)) {
+              updateAry.push({
+                ...newVar,
+                type: 'update',
+                old_default_value: oldVar.default_value,
+              });
             }
           });
 

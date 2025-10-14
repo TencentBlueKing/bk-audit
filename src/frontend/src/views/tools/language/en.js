@@ -113,5 +113,6 @@ export default {
     更新: 'Update',
     删除: 'Delete',
     更新类型: 'Update Type',
+    '工具名称只允许中文、字母、数字、中划线或下划线组成': 'Tool name can only be composed of Chinese, letters, numbers, middle lines, or underscores',
   },
 };
