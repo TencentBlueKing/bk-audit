@@ -31,13 +31,6 @@ from apps.meta.utils.fields import (
     FIELD_TYPE_TEXT,
 )
 from core.choices import TextChoices, register_choices
-from apps.meta.utils.fields import (
-    FIELD_TYPE_LONG,
-    FIELD_TYPE_OBJECT,
-    FIELD_TYPE_STRING,
-    FIELD_TYPE_TEXT,
-)
-from core.choices import TextChoices
 from core.exporter.constants import ExportField
 from services.web.databus.constants import DEFAULT_TIME_ZONE, TRANSFER_TIME_FORMAT
 
