@@ -32,7 +32,11 @@ from apps.permission.handlers.resource_types.sensitive_object import (
     SensitiveObject,
     SensitiveResourceType,
 )
-from apps.permission.handlers.resource_types.strategy import LinkTable, Strategy
+from apps.permission.handlers.resource_types.strategy import (
+    LinkTable,
+    Strategy,
+    StrategyTag,
+)
 from apps.permission.handlers.resource_types.system import System
 from apps.permission.handlers.resource_types.tag import Tag
 from apps.permission.handlers.resource_types.tool import Tool
@@ -48,6 +52,7 @@ class ResourceEnum:
     SENSITIVE_ACTION = SensitiveAction
     SENSITIVE_RESOURCE_TYPE = SensitiveResourceType
     STRATEGY = Strategy
+    STRATEGY_TAG = StrategyTag
     LINK_TABLE = LinkTable
     NOTICE_GROUP = NoticeGroup
     RISK = Risk

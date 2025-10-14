@@ -17,60 +17,23 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from bk_resource.tools import get_serializer_fields
-from blueapps.utils.logger import logger
-from blueapps.utils.request_provider import get_local_request
 from django.db.models import QuerySet
-from iam.collection import FancyDict
 from iam.resource.provider import ListResult, SchemaResult
 from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
-from apps.permission.provider.base import BaseResourceProvider
+from apps.permission.provider.base import IAMResourceProvider
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.risk.models import Risk
 from services.web.risk.serializers import RiskInfoSerializer
 
 
-class RiskResourceProvider(BaseResourceProvider):
-    @staticmethod
-    def get_local_request():
-        return get_local_request()
-
-    def list_instance(self, filters: FancyDict, page: Page, **options: dict) -> ListResult:
-        """
-        根据过滤条件查询实例
-        """
-        logger.info(
-            "%s list_instance: headers= %s, filters = %s, page = %s, options = %s",
-            self.__class__.__name__,
-            dict(self.get_local_request().headers),
-            filters,
-            page.__dict__,
-            options,
-        )
-        # 获得父节点
-        parent = filters.parent
-        if parent:
-            # 获得父资源的ID
-            parent_id = parent["id"]
-            # 获得父资源的资源类型
-            resource_type = parent["type"]
-        else:
-            parent_id = None
-            resource_type = None
-
-        # 查询资源实例列表
-        try:
-            results, count = self.filter_list_instance_results(parent_id, resource_type, page)
-        except Exception as exc_info:  # pylint: disable=broad-except
-            logger.exception(exc_info)
-            raise
-        logger.info("%s list_instance response results = %s, count = %s", self.__class__.__name__, results, count)
-
-        return ListResult(results=results, count=count)
+class RiskResourceProvider(IAMResourceProvider):
+    def list_attr_value_choices(self, attr: str, page: Page) -> List:
+        return []
 
     def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
         """
@@ -91,40 +54,6 @@ class RiskResourceProvider(BaseResourceProvider):
         ]
         count = queryset.count()
         return results, count
-
-    def search_instance(self, filters: FancyDict, page: Page, **options: dict) -> ListResult:
-        """
-        根据过滤条件和搜索关键字查询实例
-        """
-        logger.info(
-            "%s search_instance: headers= %s, filters = %s, page = %s, options = %s",
-            self.__class__.__name__,
-            dict(self.get_local_request().headers),
-            filters,
-            page.__dict__,
-            options,
-        )
-        # 获得父节点
-        parent = filters.parent
-        if parent:
-            # 搜索子资源
-            parent_id = parent["id"]
-            resource_type = parent["type"]
-        else:
-            # 搜索当前资源
-            parent_id = None
-            resource_type = None
-        # 获得搜索词
-        keyword = filters.keyword
-        # 查询资源实例
-        try:
-            results, count = self.filter_search_instance_results(parent_id, resource_type, keyword, page)
-        except Exception as exc_info:  # pylint: disable=broad-except
-            logger.exception(exc_info)
-            raise
-        logger.info("%s search_instance response results = %s, count = %s", self.__class__.__name__, results, count)
-
-        return ListResult(results=results, count=count)
 
     def filter_search_instance_results(
         self, parent_id: Optional[str], resource_type: Optional[str], keyword: str, page: Page
@@ -147,15 +76,15 @@ class RiskResourceProvider(BaseResourceProvider):
         count = queryset.count()
         return results, count
 
-    def fetch_instance_info(self, filters, **options):
-        ids = []
-        if filters.ids:
-            ids = [i for i in filters.ids]
+    def filter_fetch_instance_results(self, ids: List[str]) -> Tuple:
+        """
+        批量查询资源实例
+        """
 
         queryset = Risk.objects.filter(risk_id__in=ids)
 
         results = [{"id": item.risk_id, "display_name": item.risk_id} for item in queryset]
-        return ListResult(results=results, count=queryset.count())
+        return results, queryset.count()
 
     def list_instance_by_policy(self, filters, page, **options):
         expression = filters.expression

@@ -48,6 +48,7 @@ from services.web.analyze.controls.base import BkbaseFlowController
 from services.web.analyze.exceptions import NotSupportDataSource
 from services.web.analyze.storage_node import (
     BaseStorageNode,
+    DorisStorageNode,
     ESStorageNode,
     HDFSStorageNode,
     QueueStorageNode,
@@ -64,7 +65,7 @@ class RuleAuditController(BkbaseFlowController):
     """
 
     base_control_type = BaseControlTypeChoices.RULE_AUDIT
-    storage_nodes = [ESStorageNode, QueueStorageNode, HDFSStorageNode]
+    storage_nodes = [ESStorageNode, QueueStorageNode, HDFSStorageNode, DorisStorageNode]
 
     def __init__(self, strategy_id: int):
         super().__init__(strategy_id)
@@ -342,13 +343,23 @@ class RuleAuditController(BkbaseFlowController):
         self.y = self.y_interval
         bk_biz_id = int(self.rt_ids[0].split("_", 1)[0])
         from_result_table_ids = [BaseStorageNode.build_rt_id(bk_biz_id, self.raw_table_name)]
-        storage_node_ids = [] if need_create else self.strategy.backend_data.get("storage_node_ids", [])
+        stored_node_ids = self.strategy.backend_data.get("storage_node_ids") or {}
+        if not isinstance(stored_node_ids, dict):
+            logger.warning(
+                "[InvalidStorageNodeIdsFormat] strategy_id=%s format=%s",
+                self.strategy.strategy_id,
+                type(stored_node_ids).__name__,
+            )
+            stored_node_ids = {}
+        updated_node_ids = {} if need_create else stored_node_ids.copy()
+        returned_ids: List[int] = []
         for idx, storage_node in enumerate(self.storage_nodes):
             node_config = storage_node(namespace=self.strategy.namespace).build_node_config(
                 bk_biz_id=bk_biz_id, raw_table_name=self.raw_table_name, from_result_table_ids=from_result_table_ids
             )
             if not node_config:
                 continue
+            node_type = storage_node.node_type
             storage_node_config = {
                 "flow_id": flow_id,
                 "frontend_info": {"x": self.x, "y": self.y},
@@ -356,20 +367,23 @@ class RuleAuditController(BkbaseFlowController):
                 "node_type": node_config["node_type"],
                 "config": node_config,
             }
-            if need_create:
+            node_id = None if need_create else stored_node_ids.get(node_type)
+            if not node_id:
                 resp = api.bk_base.create_flow_node(**storage_node_config)
-                storage_node_ids.append(resp["node_id"])
+                node_id = resp["node_id"]
             else:
-                storage_node_config["node_id"] = storage_node_ids[idx]
+                storage_node_config["node_id"] = node_id
                 api.bk_base.update_flow_node(**storage_node_config)
+            updated_node_ids[node_type] = node_id
+            returned_ids.append(node_id)
             self.y += self.y_interval
-        self.strategy.backend_data["storage_node_ids"] = storage_node_ids
+        self.strategy.backend_data["storage_node_ids"] = updated_node_ids
         logger.info(
             "[CreateOrUpdateStorageNodes] FlowID => %s; NodeIDS => %s",
             flow_id,
-            storage_node_ids,
+            updated_node_ids,
         )
-        return storage_node_ids
+        return returned_ids
 
     def stop_flow(self):
         flow_status = self._describe_flow_status()

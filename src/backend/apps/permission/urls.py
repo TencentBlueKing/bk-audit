@@ -31,15 +31,18 @@ from apps.notice.provider import NoticeGroupResourceProvider
 from apps.permission import views
 from apps.permission.dispatcher import BkAuditResourceApiDispatcher
 from apps.permission.handlers.permission import Permission
+from apps.permission.handlers.resource_types import ResourceEnum
 
 try:
     from services.web.strategy_v2.provider import (
         LinkTableProvider,
         StrategyResourceProvider,
+        StrategyTagResourceProvider,
     )
 except (RuntimeError, ImportError):
     StrategyResourceProvider = None
     LinkTableProvider = None
+    StrategyTagResourceProvider = None
 
 try:
     from services.web.risk.provider import RiskResourceProvider
@@ -57,31 +60,34 @@ except (RuntimeError, ImportError):
     ToolResourceProvider = None
 
 resources_dispatcher = BkAuditResourceApiDispatcher(Permission.get_iam_client(), settings.BK_IAM_SYSTEM_ID)
-resources_dispatcher.register("system", SystemResourceProvider())
-resources_dispatcher.register("tag", TagResourceProvider())
+resources_dispatcher.register(ResourceEnum.SYSTEM.id, SystemResourceProvider())
+resources_dispatcher.register(ResourceEnum.TAG.id, TagResourceProvider())
 resources_dispatcher.register(
-    "sensitive_action", SensitiveObjResourceProvider(SensitiveResourceTypeEnum.ACTION.value, Action)
+    ResourceEnum.SENSITIVE_ACTION.id, SensitiveObjResourceProvider(SensitiveResourceTypeEnum.ACTION.value, Action)
 )
 resources_dispatcher.register(
-    "sensitive_resource_type",
+    ResourceEnum.SENSITIVE_RESOURCE_TYPE.id,
     SensitiveObjResourceProvider(SensitiveResourceTypeEnum.RESOURCE.value, ResourceType),
 )
-resources_dispatcher.register("notice_group", NoticeGroupResourceProvider())
+resources_dispatcher.register(ResourceEnum.NOTICE_GROUP.id, NoticeGroupResourceProvider())
 
 if StrategyResourceProvider is not None:
-    resources_dispatcher.register("strategy", StrategyResourceProvider())
+    resources_dispatcher.register(ResourceEnum.STRATEGY.id, StrategyResourceProvider())
 
 if RiskResourceProvider is not None:
-    resources_dispatcher.register("risk", RiskResourceProvider())
+    resources_dispatcher.register(ResourceEnum.RISK.id, RiskResourceProvider())
 
 if PanelResourceProvider is not None:
-    resources_dispatcher.register("panel", PanelResourceProvider())
+    resources_dispatcher.register(ResourceEnum.PANEL.id, PanelResourceProvider())
 
 if ToolResourceProvider is not None:
-    resources_dispatcher.register("tool", ToolResourceProvider())
+    resources_dispatcher.register(ResourceEnum.TOOL.id, ToolResourceProvider())
 
 if LinkTableProvider is not None:
-    resources_dispatcher.register("link_table", LinkTableProvider())
+    resources_dispatcher.register(ResourceEnum.LINK_TABLE.id, LinkTableProvider())
+
+if StrategyTagResourceProvider is not None:
+    resources_dispatcher.register(ResourceEnum.STRATEGY_TAG.id, StrategyTagResourceProvider())
 
 router = ResourceRouter()
 router.register_module(views)

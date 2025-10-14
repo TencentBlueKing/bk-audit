@@ -488,6 +488,14 @@ class ListStrategyTagsResponseSerializer(serializers.Serializer):
     strategy_count = serializers.IntegerField(label=gettext_lazy("Strategy Count"))
 
 
+class StrategyTagResourceSerializer(serializers.Serializer):
+    """Serializer for IAM strategy tag resource snapshot."""
+
+    id = serializers.IntegerField(label=gettext_lazy("ID"))
+    tag_id = serializers.IntegerField(label=gettext_lazy("Tag ID"))
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+
+
 class AggConditionSerializer(serializers.Serializer):
     """
     Agg Condition

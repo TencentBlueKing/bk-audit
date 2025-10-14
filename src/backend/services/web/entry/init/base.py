@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import json
 import os
+from typing import List, Type
 
 from bk_resource import resource
 from django.conf import settings
@@ -25,22 +26,30 @@ from django.utils.translation import gettext_lazy
 
 from apps.exceptions import InitSystemDisabled, ParamsNotValid
 from apps.meta.models import Field, GlobalMetaConfig
+from apps.meta.tasks import sync_iam_systems
 from apps.meta.utils.fields import STANDARD_FIELDS
+from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMeta
 from core.utils.distutils import strtobool
 from services.web.databus.collector.snapshot.system.base import create_iam_data_link
-from services.web.databus.constants import ClusterMode
+from services.web.databus.constants import (
+    ClusterMode,
+    JoinDataType,
+    SnapShotStorageChoices,
+)
 from services.web.databus.storage.serializers import (
     CreateRedisRequestSerializer,
     StorageCreateRequestSerializer,
 )
 from services.web.databus.tasks import create_or_update_plugin_etl
 from services.web.entry.constants import (
+    INIT_ASSET_FINISHED_KEY,
     INIT_DORIS_FISHED_KEY,
     INIT_ES_FISHED_KEY,
     INIT_EVENT_FINISHED_KEY,
     INIT_FIELDS_FINISHED_KEY,
     INIT_REDIS_FISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
+    INIT_SYSTEM_FINISHED_KEY,
 )
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
@@ -99,7 +108,9 @@ class SystemInitHandler:
         self.init_redis()
         self.init_snapshot()
         self.init_event()
-        self.init_log()
+        self.create_or_update_plugin_etl()
+        self.init_system()
+        self.init_asset()
         print("[Main] Init Finished")
 
     def pre_init(self):
@@ -207,8 +218,49 @@ class SystemInitHandler:
         print("[InitEvent] Stop")
         self.post_init(INIT_EVENT_FINISHED_KEY)
 
-    def init_log(self):
+    def init_system(self):
+        if self.pre_check(INIT_SYSTEM_FINISHED_KEY):
+            return
+        print("[InitSystem] Start")
+        sync_iam_systems()
+        print("[InitSystem] Finished")
+        self.post_init(INIT_SYSTEM_FINISHED_KEY)
+
+    def create_or_update_plugin_etl(self):
         """创建或更新采集入库"""
         print("[CreateOrUpdatePluginEtl] Start")
         create_or_update_plugin_etl()
         print("[CreateOrUpdatePluginEtl] Stop")
+
+    def init_asset(self):
+        """
+        初始化资产
+        """
+
+        print("[InitAsset] Start")
+        status_map = GlobalMetaConfig.get(INIT_ASSET_FINISHED_KEY, default={})
+        assets: List[Type[ResourceTypeMeta]] = [ResourceEnum.RISK, ResourceEnum.STRATEGY, ResourceEnum.STRATEGY_TAG]
+        for asset in assets:
+            system_id, resource_type_id = asset.system_id, asset.id
+            map_key = f"{system_id}-{resource_type_id}"
+            if status_map.get(map_key):
+                continue
+            try:
+                resource.databus.collector.toggle_join_data(
+                    {
+                        "system_id": system_id,
+                        "resource_type_id": resource_type_id,
+                        "is_enabled": True,
+                        "join_data_type": JoinDataType.ASSET.value,
+                        "storage_type": [
+                            SnapShotStorageChoices.HDFS.value,
+                            SnapShotStorageChoices.DORIS.value,
+                        ],
+                    }
+                )
+                status_map[map_key] = True
+            except Exception as err:  # pylint: disable=broad-except
+                print(f"[InitAsset] Failed => {system_id}-{resource_type_id}: {err}")
+                status_map[map_key] = False
+        GlobalMetaConfig.set(INIT_ASSET_FINISHED_KEY, status_map)
+        print("[InitAsset] Finished")
