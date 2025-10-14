@@ -133,6 +133,12 @@ class ToolListAllResponseSerializer(serializers.ModelSerializer):
         ]
 
 
+class ToolSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Tool
+        fields = "__all__"
+
+
 class ToolListResponseSerializer(serializers.ModelSerializer):
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
