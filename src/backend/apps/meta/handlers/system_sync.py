@@ -393,8 +393,15 @@ class IAMV3SystemSyncer(IamSystemSyncer):
         system_info_requests = [{"system_id": system_id} for system_id in instance_ids]
         system_infos = api.bk_iam.get_system_info.bulk_request(system_info_requests)
         system_info_map = dict()
-        for system_info in system_infos:
-            base_info = system_info["base_info"]
+        for i in range(len(system_infos)):
+            system_id = instance_ids[i]
+            system_info = system_infos[i]
+            base_info = system_info.get("base_info", {})
+            if not base_info:
+                logger.error(
+                    f"[{self.cls_name}] get_system_info_map system_id =>{system_id}, system_info => {system_info}"
+                )
+                continue
             system_info_map[system_info["base_info"]["id"]] = {
                 "name": base_info["name"],
                 "description": base_info["description"],
@@ -412,6 +419,13 @@ class IAMV3SystemSyncer(IamSystemSyncer):
         for i in range(len(system_infos)):
             system_info = system_infos[i]
             system_id = instance_ids[i]
+            resource_types = system_info.get("resource_types", None)
+            actions = system_info.get("actions", None)
+            if resource_types is None or actions is None:
+                logger.error(
+                    f"[{self.cls_name}] get_resources_actions system_id => {system_id}, system_info => {system_info}"
+                )
+                continue
             data[system_id] = {
                 "resource_types": [
                     {
@@ -424,9 +438,9 @@ class IAMV3SystemSyncer(IamSystemSyncer):
                         "version": resource_type["version"],
                         "description": resource_type["description"],
                     }
-                    for resource_type in system_info["resource_types"]
+                    for resource_type in resource_types
                 ],
-                "actions": system_info["actions"],
+                "actions": actions,
             }
         return data
 
@@ -444,7 +458,12 @@ class IAMV4SystemSyncer(IamSystemSyncer):
         system_info_requests = [{"system_id": system_id, "fields": "system_info"} for system_id in instance_ids]
         bulk_resp = api.bk_iam_v4.retrieve_system.bulk_request(system_info_requests)
         system_info_map = dict()
-        for resp in bulk_resp:
+        for i in range(len(bulk_resp)):
+            resp = bulk_resp[i]
+            system_id = instance_ids[i]
+            if not resp.get("system_info"):
+                logger.error(f"[{self.cls_name}] get_system_info_map system_id => {system_id}, resp => {resp}")
+                continue
             system_info = resp["system_info"]
             system_info_map[system_info["id"]] = {
                 "name": system_info["name"],
@@ -465,6 +484,13 @@ class IAMV4SystemSyncer(IamSystemSyncer):
         for i in range(len(bulk_resp)):
             system_info = bulk_resp[i]
             system_id = instance_ids[i]
+            resource_types = system_info.get("resource_types", None)
+            actions = system_info.get("actions", None)
+            if resource_types is None or actions is None:
+                logger.error(
+                    f"[{self.cls_name}] get_resources_actions system_id => {system_id}, system_info => {system_info}"
+                )
+                continue
             data[system_id] = {
                 "resource_types": [
                     {
@@ -473,7 +499,7 @@ class IAMV4SystemSyncer(IamSystemSyncer):
                         "name_en": resource_type["name"],
                         'ancestors': resource_type['ancestors'],
                     }
-                    for resource_type in system_info["resource_types"]
+                    for resource_type in resource_types
                 ],
                 "actions": [
                     {
@@ -482,7 +508,7 @@ class IAMV4SystemSyncer(IamSystemSyncer):
                         "name_en": action["name"],
                         'resource_type_ids': [action['resource_type_id']] if action['resource_type_id'] else [],
                     }
-                    for action in system_info["actions"]
+                    for action in actions
                 ],
             }
 

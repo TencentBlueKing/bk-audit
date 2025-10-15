@@ -111,6 +111,8 @@ def start_snapshot():
             if not ret:
                 break
         else:
+            # 这里同步下状态，避免状态被其他任务修改
+            snapshot.refresh_from_db()
             snapshot.status = SnapshotRunningStatus.RUNNING.value
             snapshot.status_msg = ""
             snapshot.save(update_fields=["status", "status_msg"])

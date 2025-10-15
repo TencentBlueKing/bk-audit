@@ -152,9 +152,12 @@ def sync_iam_systems():
 
     syncers: List[Type[IamSystemSyncer]] = [IAMV3SystemSyncer, IAMV4SystemSyncer]
     for syncer in syncers:
-        syncer().sync_systems()
-        syncer().sync_system_infos()
-        syncer().sync_resources_actions()
+        try:
+            syncer().sync_systems()
+            syncer().sync_system_infos()
+            syncer().sync_resources_actions()
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            logger.error(f"[sync_iam_systems] sync {syncer.__name__} error: {e}")
 
 
 @periodic_task(run_every=crontab(minute="*/30"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
