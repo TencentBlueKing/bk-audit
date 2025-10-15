@@ -203,6 +203,7 @@
           </card-part-vue>
           <component
             :is="ToolTypeComMap[formData.tool_type]"
+            v-if="isShowComponent"
             ref="comRef"
             :data-search-config-type="formData.data_search_config_type"
             :is-edit-mode="isEditMode"
@@ -364,7 +365,7 @@
     value: 'sql',
   }];
   const isEditMode = route.name === 'toolsEdit';
-
+  const isShowComponent = ref(false);
   const configUid = ref<string[]>([]);
   const hasPermission = ref(true);
   const spacePermission = ref(false);
@@ -659,10 +660,14 @@
     if (val.length === 0) {
       return;
     }
-    formData.value.config.uid = val[val.length - 1];
-    formRef.value?.validate('config.uid');
     fetchReportLists({
       share_uid: val[val.length - 1],
+    }).then((r) => {
+      if (!r) {
+        isShowComponent.value = false;
+      } else {
+        isShowComponent.value = true;
+      }
     });
   };
 
@@ -706,7 +711,7 @@
 
       const data = _.cloneDeep(formData.value);
       // 获取组件配置
-      if (comRef.value.getFields) {
+      if (comRef.value?.getFields) {
         if (data.tool_type === 'bk_vision') {
           data.config.input_variable = comRef.value.getFields();
           data.updated_time = bkVisionUpdateTime.value;
@@ -739,6 +744,19 @@
     if (val === 'bk_vision') {
       fetchChartLists();
     }
+  });
+
+  watch(() => configUid.value, (val) => {
+    if (val.length  === 0) {
+      formData.value.config.uid = '';
+      isShowComponent.value = false;
+    } else {
+      formData.value.config.uid = val[val.length - 1];
+      isShowComponent.value = true;
+    }
+    formRef.value?.validate('config.uid');
+  }, {
+    deep: true,
   });
 
   onMounted(() => {
