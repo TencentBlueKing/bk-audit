@@ -660,7 +660,7 @@
       return;
     }
     formData.value.config.uid = val[val.length - 1];
-
+    formRef.value?.validate('config.uid');
     fetchReportLists({
       share_uid: val[val.length - 1],
     });

@@ -77,7 +77,7 @@
                   class="desc-tag desc-tag-info"
                   theme="info"
                   @click="handlesStrategiesClick(itemInfo)">
-                  运用在 {{ itemInfo?.strategies.length }} 个策略中
+                  {{ t('运用在') }} {{ itemInfo?.strategies.length }} {{ t('个策略中') }}
                 </bk-tag>
               </div>
               <div class="top-right-desc">

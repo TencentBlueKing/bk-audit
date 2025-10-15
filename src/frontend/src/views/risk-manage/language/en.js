@@ -141,7 +141,7 @@ export default {
     展开更多字段: 'Expand more fields',
     风险字段: 'Risk fields',
     事件字段: 'Event fields',
-    当前值: 'Current value',
+    '当前值：': 'Current value:',
     不能为空: ' can not be empty',
   },
 };
