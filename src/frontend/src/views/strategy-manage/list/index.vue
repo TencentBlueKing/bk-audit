@@ -245,7 +245,6 @@
         {{ t('确定') }}
       </bk-button>
       <bk-button
-        theme="default"
         @click="isShowDeleteDialog = false">
         {{ t('取消') }}
       </bk-button>
