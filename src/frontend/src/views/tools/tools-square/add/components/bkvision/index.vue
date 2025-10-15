@@ -38,9 +38,12 @@
         header-icon="collapse-demo"
         :list="list">
         <template #title>
-          <div class="collapse-title">
+          <div
+            class="collapse-title"
+            @click="changeCom">
             <audit-icon
               class="full-screen-img"
+              :class="{ 'rotated': isRotatedCom }"
               type="angle-fill-down" />
             <span class="title-text">{{ t('交互组件') }} </span>
             <audit-icon
@@ -69,9 +72,12 @@
         header-icon="collapse-demo"
         :list="list">
         <template #title>
-          <div class="collapse-title">
+          <div
+            class="collapse-title"
+            @click="changeVar">
             <audit-icon
               class="full-screen-img"
+              :class="{ 'rotated': isRotatedVar }"
               type="angle-fill-down" />
             <span class="title-text">{{ t('变量') }} </span>
             <audit-icon
@@ -175,6 +181,9 @@
     content: '',
   }]);
   const variablesConfig = ref<Array<Record<string, any>>>([]);
+  // 旋转状态
+  const isRotatedVar = ref(false);
+  const isRotatedCom = ref(false);
   // 更新变量
   const handleUpdateVariable = () => {
     updateVariableRef.value?.show(toolInfoVariable.value, bkVisionVariable.value, comList.value, bkVisionComList.value);
@@ -205,7 +214,6 @@
     // 添加新项
     infoObj.addArrays.forEach((newItem: any) => {
       const exists = updated.some(item => item.raw_name === newItem.raw_name
-        && item.display_name === newItem.display_name
         && item.description === newItem.description);
 
       if (!exists) {
@@ -216,7 +224,6 @@
     // 更新项
     infoObj.updateArrays.forEach((itemToUpdate: any) => {
       const index = updated.findIndex(item => item.raw_name === itemToUpdate.raw_name
-        && item.display_name === itemToUpdate.display_name
         && item.description === itemToUpdate.description);
       if (index !== -1) {
         updated[index] = { ...updated[index], ...itemToUpdate };
@@ -226,7 +233,6 @@
     // 删除项
     infoObj.delArrays.forEach((itemToDelete: any) => {
       updated = updated.filter(item => !(item.raw_name === itemToDelete.raw_name
-        && item.display_name === itemToDelete.display_name
         && item.description === itemToDelete.description));
     });
     // 删除每个数组项的 type 属性
@@ -262,6 +268,13 @@
       return 'variables-item-update';
     }
     return '';
+  };
+
+  const changeVar = () => {
+    isRotatedVar.value = !isRotatedVar.value;
+  };
+  const changeCom = () => {
+    isRotatedCom.value = !isRotatedCom.value;
   };
 
   defineExpose<Exposes>({
@@ -333,6 +346,7 @@
 .collapse-title {
   position: absolute;
   left: 10px;
+  width: 100%;
 }
 
 .title-text {
@@ -372,4 +386,11 @@
   padding: 5px;
   background-color: #fdf4e8;
 }
+
+.rotated {
+  display: inline-block;
+  transform: rotate(-90deg);
+  transition: transform .2s ease;
+}
+
 </style>

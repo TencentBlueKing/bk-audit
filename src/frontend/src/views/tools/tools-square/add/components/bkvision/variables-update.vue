@@ -62,6 +62,7 @@
 </template>
 
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -123,12 +124,19 @@
     {
       label: t('参数名'),
       field: 'raw_name',
+      showOverflowTooltip: true,
       render: ({ data }: { data: any }) => <div>{data.raw_name}</div>,
     },
     {
       label: t('默认值'),
       field: 'default_value',
-      render: ({ data }: { data: any }) => <div>{columnText(data)}</div>,
+      showOverflowTooltip: {
+        popoverOption: {
+          with: 200,
+          maxWidth: 400,
+        },
+      },
+      render: ({ data }: { data: any }) => <span>{columnText(data)}</span>,
     },
     {
       label: t('参数类型'),
@@ -142,7 +150,7 @@
       </bk-tag>
         </div>,
     },
-  ];
+  ] as Column[];
 
   const columnText = (data: any) => (data.type === 'update' ?  columnTextSting(data) : data.default_value) ;
   const columnTextSting = (data: any) => {
@@ -314,3 +322,4 @@
   }
 }
 </style>
+

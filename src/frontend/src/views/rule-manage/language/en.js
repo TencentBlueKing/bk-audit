@@ -68,5 +68,6 @@ export default {
     克隆处理规则: 'Clone Rule',
     工具广场: 'Tools',
     编辑工具: 'Edit Tool',
+    自定义输入: 'Custom Input',
   },
 };

@@ -114,5 +114,10 @@ export default {
     删除: 'Delete',
     更新类型: 'Update Type',
     '工具名称只允许中文、字母、数字、中划线或下划线组成': 'Tool name can only be composed of Chinese, letters, numbers, middle lines, or underscores',
+    工具编辑成功: 'Tool edited successfully',
+    工具创建成功: 'Tool created successfully',
+    '接下来你可以返回工具广场使用该工具，或前往策略中配置该工具': 'Next, you can return to the tool square to use this tool, or go to the strategy to configure this tool',
+    返回工具广场: 'Return to Tool Square',
+    配置策略: 'Configure Strategy',
   },
 };
