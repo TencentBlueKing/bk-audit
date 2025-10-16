@@ -19,13 +19,13 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 
 from bk_resource.tools import get_serializer_fields
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult, SchemaResult
 
 from apps.permission.provider.base import BaseResourceProvider
 from services.web.tool.models import Tool
-from services.web.tool.serializers import ToolListAllResponseSerializer
+from services.web.tool.serializers import ToolSerializer
 
 
 class ToolResourceProvider(BaseResourceProvider):
@@ -105,23 +105,23 @@ class ToolResourceProvider(BaseResourceProvider):
     def fetch_instance_list(self, filter, page, **options):
         start_time = datetime.datetime.fromtimestamp(int(filter.start_time // 1000))
         end_time = datetime.datetime.fromtimestamp(int(filter.end_time // 1000))
-        queryset = self.get_object().filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        queryset: QuerySet[Tool] = self.get_object().filter(updated_at__gt=start_time, updated_at__lte=end_time)
         results = [
             {
                 "id": item.uid,
                 "display_name": item.name,
-                "creator": None,
-                "created_at": None,
-                "updater": None,
-                "updated_at": None,
-                "data": ToolListAllResponseSerializer(instance=item).data,
+                "creator": item.created_by,
+                "created_at": int(item.created_at.timestamp() * 1000) if item.created_at else None,
+                "updater": item.updated_by,
+                "updated_at": int(item.updated_at.timestamp() * 1000) if item.updated_at else None,
+                "data": ToolSerializer(instance=item).data,
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
         return ListResult(results=results, count=queryset.count())
 
     def fetch_resource_type_schema(self, **options):
-        data = get_serializer_fields(ToolListAllResponseSerializer)
+        data = get_serializer_fields(ToolSerializer)
         return SchemaResult(
             properties={
                 item["name"]: {

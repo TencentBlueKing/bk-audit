@@ -65,3 +65,26 @@ class LinkTable(ResourceTypeMeta):
 
         resource.attribute = {"id": str(instance_id), "name": instance_name}
         return resource
+
+
+class StrategyTag(ResourceTypeMeta):
+    system_id = settings.BK_IAM_SYSTEM_ID
+    id = "strategy_tag"
+    name = gettext("策略标签")
+    selection_mode = "instance"
+    related_instance_selections: list = []
+
+    @classmethod
+    def create_instance(cls, instance_id: str, attribute=None) -> Resource:
+        from services.web.strategy_v2.models import StrategyTag as StrategyTagModel
+
+        resource = cls.create_simple_instance(instance_id, attribute)
+
+        instance_name = str(instance_id)
+        strategy_tag = StrategyTagModel.objects.select_related("tag").filter(pk=int(instance_id)).first()
+
+        if strategy_tag and strategy_tag.tag:
+            instance_name = strategy_tag.tag.tag_name
+
+        resource.attribute = {"id": str(instance_id), "name": instance_name}
+        return resource
