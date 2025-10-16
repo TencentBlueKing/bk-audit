@@ -102,9 +102,11 @@ def start_snapshot():
             if not ret:
                 break
         else:
+            # 这里同步下状态，避免状态被其他任务修改
+            snapshot.refresh_from_db()
             snapshot.status = SnapshotRunningStatus.RUNNING.value
             snapshot.status_msg = ""
-            snapshot.save()
+            snapshot.save(update_fields=["status", "status_msg"])
 
 
 @periodic_task(run_every=crontab(minute="*/10"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)

@@ -98,7 +98,7 @@ class PanelBaseProvider(BaseResourceProvider):
     def fetch_instance_list(self, filter, page, **options):
         start_time = datetime.datetime.fromtimestamp(int(filter.start_time // 1000))
         end_time = datetime.datetime.fromtimestamp(int(filter.end_time // 1000))
-        queryset = self.get_object().filter(event_time__gt=start_time, event_time__lte=end_time)
+        queryset = self.get_object().filter(updated_at__gt=start_time, updated_at__lte=end_time)
         results = [
             {
                 "id": item.id,

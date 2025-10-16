@@ -42,6 +42,9 @@ def fetch_system_status(namespace: str, system_ids: List[str]) -> Dict[str, Syst
         3. 否则：系统接入 & 有权限模型 & 日志上报正常 & 资产上报： 数据正常
     """
 
+    if not system_ids:
+        return {}
+
     # 排序复用缓存
     system_ids = sorted(system_ids)
 

@@ -94,6 +94,21 @@
     {
       "operation": "upsert_resource_type",
       "data": {
+        "id": "strategy_tag",
+        "name": "策略标签",
+        "name_en": "Strategy Tag",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
         "id": "notice_group",
         "name": "通知组",
         "name_en": "Notice Group",
