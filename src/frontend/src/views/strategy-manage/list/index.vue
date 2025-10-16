@@ -383,7 +383,7 @@
   // const retryIdMap = ref<Record<number, number>>({});
   const deleteName = ref('');
   const deleteInputName = ref('');
-  const deleteId = ref('');
+  const deleteId = ref();
   const userGroupList = computed(() => groupList.value.results
     .reduce((result: Array<{ id: number; name: string }>, item) => {
       // eslint-disable-next-line no-param-reassign
@@ -882,7 +882,7 @@
   const handleDelete = (data: StrategyModel) => {
     isShowDeleteDialog.value = true;
     deleteName.value = data.strategy_name;
-    deleteId.value = data.strategy_id;
+    deleteId.value = Number(data.strategy_id);
   };
   const handleCopyName = () => {
     execCopy(deleteName.value, t('复制成功'));
