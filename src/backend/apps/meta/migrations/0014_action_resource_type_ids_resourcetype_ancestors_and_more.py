@@ -10,6 +10,9 @@ def migrate_meta_system_instance_id(apps, schema_editor):
     # 更新所有系统的 callback_url 和 auth_token
     systems = system.objects.all()
     for system in systems:
+        if not system.provider_config:
+            print(f"system {system.system_id} has no provider_config")
+            continue
         system.callback_url = system.provider_config.get("host")
         system.auth_token = system.provider_config.get("token")
         system.save(update_fields=['callback_url', 'auth_token'])

@@ -17,17 +17,21 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+from typing import List, Optional, Tuple
 
 from bk_resource.tools import get_serializer_fields
 from django.db.models import Q
 from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult, SchemaResult
+from iam.resource.utils import Page
 
-from apps.permission.provider.base import BaseResourceProvider
-from services.web.strategy_v2.models import LinkTable, Strategy
+from apps.permission.handlers.resource_types import ResourceEnum
+from apps.permission.provider.base import BaseResourceProvider, IAMResourceProvider
+from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTag
 from services.web.strategy_v2.serializers import (
     LinkTableInfoSerializer,
     StrategyInfoSerializer,
+    StrategyTagResourceSerializer,
 )
 
 
@@ -230,6 +234,117 @@ class LinkTableProvider(BaseResourceProvider):
 
     def fetch_resource_type_schema(self, **options):
         data = get_serializer_fields(LinkTableInfoSerializer)
+        return SchemaResult(
+            properties={
+                item["name"]: {
+                    "type": item["type"].lower(),
+                    "description_en": item["name"],
+                    "description": item["description"],
+                }
+                for item in data
+            }
+        )
+
+
+class StrategyTagResourceProvider(IAMResourceProvider):
+    """
+    策略标签资源提供者
+    """
+
+    resource_type = ResourceEnum.STRATEGY_TAG.id
+
+    def list_attr_value_choices(self, attr: str, page: Page) -> List:
+        return []
+
+    def filter_list_instance_results(
+        self, parent_id: Optional[str], resource_type: Optional[str], page: Page
+    ) -> Tuple[List[dict], int]:
+        queryset = StrategyTag.objects.select_related("tag")
+        if parent_id and resource_type == ResourceEnum.STRATEGY.id:
+            queryset = queryset.filter(strategy_id=int(parent_id))
+
+        results = [
+            {
+                "id": str(item.pk),
+                "display_name": item.tag.tag_name if item.tag else str(item.pk),
+            }
+            for item in queryset[page.slice_from : page.slice_to]
+        ]
+        return results, queryset.count()
+
+    def filter_fetch_instance_results(self, ids: List[str]) -> Tuple[List[dict], int]:
+        queryset = StrategyTag.objects.select_related("tag").filter(pk__in=ids)
+        results = [
+            {
+                "id": str(item.pk),
+                "display_name": item.tag.tag_name if item.tag else str(item.pk),
+            }
+            for item in queryset
+        ]
+        return results, queryset.count()
+
+    def filter_search_instance_results(
+        self, parent_id: Optional[str], resource_type: Optional[str], keyword: str, page: Page
+    ) -> Tuple[List[dict], int]:
+        queryset = StrategyTag.objects.select_related("tag")
+        if parent_id and resource_type == ResourceEnum.STRATEGY.id:
+            queryset = queryset.filter(strategy_id=int(parent_id))
+
+        queryset = queryset.filter(tag__tag_name__icontains=keyword)
+        results = [
+            {
+                "id": str(item.pk),
+                "display_name": item.tag.tag_name if item.tag else str(item.pk),
+            }
+            for item in queryset[page.slice_from : page.slice_to]
+        ]
+        return results, queryset.count()
+
+    def list_instance_by_policy(self, filters, page, **options):
+        expression = filters.expression
+        if not expression:
+            return ListResult(results=[], count=0)
+
+        key_mapping = {
+            f"{self.resource_type}.id": "id",
+        }
+        converter = PathEqDjangoQuerySetConverter(key_mapping)
+        django_filters = converter.convert(expression)
+        queryset = StrategyTag.objects.select_related("tag").filter(django_filters)
+        results = [
+            {
+                "id": str(item.pk),
+                "display_name": item.tag.tag_name if item.tag else str(item.pk),
+            }
+            for item in queryset[page.slice_from : page.slice_to]
+        ]
+        return ListResult(results=results, count=queryset.count())
+
+    def fetch_instance_list(self, filter, page, **options):
+        start_time = datetime.datetime.fromtimestamp(int(filter.start_time // 1000))
+        end_time = datetime.datetime.fromtimestamp(int(filter.end_time // 1000))
+        queryset = StrategyTag.objects.select_related("tag").filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        page_queryset = queryset[page.slice_from : page.slice_to]
+        snapshot = StrategyTagResourceSerializer(page_queryset, many=True).data
+        results = [
+            {
+                "id": str(item.pk),
+                "display_name": item.tag.tag_name if item.tag else str(item.pk),
+                "creator": item.created_by,
+                "created_at": item.created_at,
+                "updater": item.updated_by,
+                "updated_at": item.updated_at,
+                "data": data,
+            }
+            for item, data in zip(page_queryset, snapshot)
+        ]
+        return ListResult(results=results, count=queryset.count())
+
+    def fetch_resource_type_schema(self, **options):
+        """
+        获取资源类型 Schema
+        """
+        data = get_serializer_fields(StrategyTagResourceSerializer)
         return SchemaResult(
             properties={
                 item["name"]: {

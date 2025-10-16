@@ -199,6 +199,14 @@ class RiskInfoSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class RiskProviderSerializer(serializers.ModelSerializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+
+    class Meta:
+        model = Risk
+        exclude = ["strategy"]
+
+
 class ListRiskRequestSerializer(serializers.Serializer):
     """
     List Risk
