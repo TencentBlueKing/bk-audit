@@ -170,7 +170,7 @@ class ListRisk(RiskMeta):
         order_field = validated_request_data.pop("order_field", "-event_time")
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
-        base_queryset = self.load_risks(validated_request_data).order_by()
+        base_queryset = self.load_risks(validated_request_data)
 
         if use_bkbase:
             paged_risks, page, risk_ids = self.retrieve_via_bkbase(
