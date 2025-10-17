@@ -460,8 +460,10 @@
     router.push(params);
   };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>) => {
-    searchModel.value = value;
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue };
     fetchList();
   };
   const handleClearSearch = () => {
