@@ -39,6 +39,7 @@
 <script setup lang='tsx'>
   import {
     computed,
+    onMounted,
     onUnmounted,
     ref,
   } from 'vue';
@@ -481,11 +482,35 @@
       title: '',
       notice_users: '',
     };
-    listRef.value.fetchData({
+    const dataParams: Record<string, any> = {
       ...params,
       ...searchModel.value,
+    };
+    // 去除dataParams 中空的值
+    Object.keys(dataParams).forEach((key: string) => {
+      if (dataParams[key] === '') {
+        delete dataParams[key];
+      }
     });
+    listRef.value.fetchData(dataParams);
   };
+
+  const {
+    run: getEventFields,
+  } = useRequest(RiskManageService.fetchEventFields, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      const eventFields = data.map((item: any, index: number) => ({
+        ...item,
+        id: index,
+      }));
+      searchBoxRef.value?.initSelectedItems(eventFields);
+    },
+  });
+
+  onMounted(() => {
+    getEventFields();
+  });
   onUnmounted(() => {
     clearTimeout(timeout);
   });

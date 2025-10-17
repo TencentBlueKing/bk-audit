@@ -59,7 +59,9 @@
             @change="handleChange" />
         </template>
       </div>
+      <slot name="more-list" />
     </template>
+    <slot name="more-button" />
     <div class="mt16">
       <bk-button
         class="mr8"
@@ -100,7 +102,9 @@
     (e: 'submit'): void,
     (e: 'clear'): void,
   }
-
+  interface Exposes {
+    showMore: (val: boolean) =>void,
+  }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
@@ -133,6 +137,9 @@
   // 显示更多搜索条件
   const handleShowMore = () => {
     isShowMore.value = !isShowMore.value;
+  };
+  const handleExShowMore = (val: boolean) => {
+    isShowMore.value = val;
   };
   // 搜索项值改变
   const handleChange = (fieldName: string, value: any) => {
@@ -177,6 +184,11 @@
   });
   onBeforeUnmount(() => {
     window.removeEventListener('resize', resizeHandler);
+  });
+  defineExpose<Exposes>({
+    showMore(val: boolean) {
+      handleExShowMore(val);
+    },
   });
 </script>
 <style lang="postcss">

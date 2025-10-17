@@ -34,7 +34,7 @@ class RiskManage extends ModuleBase {
     page: number,
     page_size: number
   }, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/`, {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/`, {
       params,
       payload,
     });
@@ -44,7 +44,7 @@ class RiskManage extends ModuleBase {
       page: number,
       page_size: number
     }) {
-    return Request.get<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/`, {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/`, {
       params,
     });
   }
@@ -53,7 +53,7 @@ class RiskManage extends ModuleBase {
     page: number,
     page_size: number
   }, payload = {} as IRequestPayload) {
-    return Request.get<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/`, {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/`, {
       params,
       payload,
     });
@@ -64,6 +64,13 @@ class RiskManage extends ModuleBase {
       id: string,
       name: string,
     }>>(`${this.module}/fields/`);
+  }
+
+  // 获取风险事件可用字段
+  getEventFields(params: Record<string, any>) {
+    return Request.get(`${this.module}/event_fields/`, {
+      params,
+    });
   }
   // 获取风险状态类型
   getRiskStatusCommon() {

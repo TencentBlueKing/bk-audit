@@ -42,6 +42,7 @@
 
 <script setup lang='tsx'>
   import {
+    onMounted,
     onUnmounted,
     ref,
   } from 'vue';
@@ -326,11 +327,8 @@
     risk_id: 'risk_id',
     title: 'title',
     risk_level: 'risk_level',
-    // operator: 'operator',
     status: 'status',
     current_operator: 'current_operator',
-    // last_operate_time: 'last_operate_time',
-    // risk_label: 'risk_label',
   };
   const initSettings = () => ({
     fields: tableColumn.reduce((res, item) => {
@@ -360,6 +358,20 @@
     }
     searchBoxRef.value.exportData(selectedData, 'all');
   };
+
+  const {
+    run: getEventFields,
+  } = useRequest(RiskManageService.fetchEventFields, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      const eventFields = data.map((item: any, index: number) => ({
+        ...item,
+        id: index,
+      }));
+      searchBoxRef.value?.initSelectedItems(eventFields);
+    },
+  });
+
   // 获取userinfo
   const {
     data: userInfo,
@@ -475,8 +487,10 @@
     localStorage.setItem('audit-all-risk-list-setting', JSON.stringify(setting));
   };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>) => {
-    searchModel.value = value;
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue };
     fetchList();
   };
   const handleClearSearch = () => {
@@ -499,12 +513,21 @@
       title: '',
       notice_users: '',
     };
-    listRef.value.fetchData({
+    const dataParams: Record<string, any> = {
       ...params,
       ...searchModel.value,
+    };
+    // 去除dataParams 中空的值
+    Object.keys(dataParams).forEach((key: string) => {
+      if (dataParams[key] === '') {
+        delete dataParams[key];
+      }
     });
+    listRef.value.fetchData(dataParams);
   };
-
+  onMounted(() => {
+    getEventFields();
+  });
   onUnmounted(() => {
     clearTimeout(timeout);
   });

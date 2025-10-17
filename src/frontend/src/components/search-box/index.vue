@@ -19,6 +19,7 @@
     <keep-alive>
       <component
         :is="renderComponent"
+        ref="searchRef"
         v-model="searchModel"
         :field-config="fieldConfig"
         @clear="handleClear"
@@ -37,6 +38,63 @@
             @click="handleExport">
             {{ t('批量导出') }}
           </bk-button>
+        </template>
+        <template #more-list>
+          <div class="box-row">
+            <div
+              v-for="(item, index) in selectedItemList"
+              :key="index"
+              class="more-list-item">
+              <span class="item-label">{{ item.display_name }}</span>
+              <div class="item-value">
+                <bk-select
+                  v-model="item.operator"
+                  class="bk-select"
+                  :placeholder="t('请选择')"
+                  style="width: 150px;padding-right: 5px;">
+                  <bk-option
+                    v-for="condition in conditionList"
+                    :id="condition.id"
+                    :key="condition.id"
+                    :name="condition.name" />
+                </bk-select>
+                <bk-input
+                  v-model="item.value"
+                  :placeholder="t('')" />
+              </div>
+            </div>
+          </div>
+        </template>
+        <template #more-button>
+          <bk-select
+            ref="selectRef"
+            v-model="selectedVal"
+            :auto-height="false"
+            collapse-tags
+            custom-content
+            display-key="name"
+            filterable
+            id-key="id"
+            multiple
+            :popover-options="{
+              'width': 'auto',
+              extCls: 'add-search-tree-pop',
+            }"
+            @change="handleSelectChange">
+            <template #trigger>
+              <span style="color: #3884ff; cursor: pointer;">
+                <audit-icon
+                  style="margin-right: 5px;"
+                  type="add" />
+                <span>{{ t('添加其他条件') }}</span>
+              </span>
+            </template>
+            <bk-option
+              v-for="(item, index) in selectedItems"
+              :id="item.id"
+              :key="index"
+              :name="item.display_name" />
+          </bk-select>
         </template>
       </component>
     </keep-alive>
@@ -57,9 +115,11 @@
     computed,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import MetaManageService from '@service/meta-manage';
   import RiskManageService from '@service/risk-manage';
 
   import useMessage from '@hooks/use-message';
@@ -71,15 +131,8 @@
   import RenderKey from './components/render-key.vue';
   import RenderValue from './components/render-value/index.vue';
 
-  const props = withDefaults(defineProps<Props>(), {
-    isReassignment: false,
-    isExport: false,
-  });
-
-  const emit = defineEmits<Emits>();
-
   interface Emits {
-    (e: 'change', value: Record<string, any>): void;
+    (e: 'change', value: Record<string, any>, otherValue?: any): void;
     (e: 'changeTableHeight'): void;
     (e: 'export'): void;
     (e: 'batch'): void;
@@ -92,7 +145,18 @@
   interface Exposes {
     clearValue: () => void;
     exportData: (val: string[], type: string) => void;
+    initSelectedItems:(val: Array< Record<string, any>>) => void;
   }
+
+
+  const props = withDefaults(defineProps<Props>(), {
+    isReassignment: false,
+    isExport: false,
+  });
+  const emit = defineEmits<Emits>();
+
+
+  const searchRef = ref();
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
   const { t } = useI18n();
   const isLoading = ref(false);
@@ -101,14 +165,52 @@
     value: RenderValue,
   };
   const { messageSuccess } = useMessage();
-
+  const selectedVal = ref();
+  const selectedItems = ref<Array<Record<string, any>>>([]);
+  const selectedItemList = ref<Array<Record<string, any>>>([]);
   const {
     getSearchParams,
     appendSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParams();
+  const conditionList = computed(() => GlobalChoices.value.event_filter_operator);
+  const eventFiltersParams = computed(() => {
+    const data = selectedItemList.value.map(item => ({
+      strategy_id: item.strategy_id,
+      field: item.field_name,
+      field_source: item.field_source,
+      operator: item.operator,
+      value: item.value,
+    }));
+    return data;
+  });
+
+  const {
+    data: GlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    manual: true,
+  });
+
+  // 更多选项 选择
+  const handleSelectChange = (val: string[]) => {
+    // selectedVal.value = val;
+    const list = selectedItems.value.filter(item => val.includes(item.id));
+    selectedItemList.value = list.map((item) => {
+      const existingItem = selectedItemList.value.find(existing => existing.id === item.id);
+      return {
+        ...item,
+        value: existingItem?.value || '',
+        operator: existingItem?.operator || '',
+      };
+    });
+    console.log('selectedItemList', selectedItemList.value);
+
+    searchRef.value?.showMore(val.length !== 0);
+  };
 
   const renderType = ref<keyof typeof comMap>('key');
+
   if (comMap[urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap]) {
     renderType.value = urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap;
   }
@@ -163,6 +265,7 @@
       searchModel.value[searchFieldName] = urlSearchParams[searchFieldName];
     }
   });
+
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
     searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
   }
@@ -170,13 +273,21 @@
     searchModel.value.datetime_origin = urlSearchParams.datetime_origin.split(',');
   }
 
+
   const handleRenderTypeChange = () => {
     renderType.value = renderType.value === 'key' ? 'value' : 'key';
     appendSearchParams({
       [SEARCH_TYPE_QUERY_KEY]: renderType.value,
     });
   };
-
+  watch(selectedItems.value, (val) => {
+    if (urlSearchParams.event_filters) {
+      console.log('u哈哈哈', urlSearchParams.event_filters, val);
+    }
+  }, {
+    immediate: true,
+    deep: true,
+  });
   // 提交搜索条件
   const handleSubmit = () => {
     const result = Object.keys(searchModel.value).reduce((result, key) => {
@@ -196,7 +307,11 @@
       }
       return result;
     }, {} as Record<string, any>);
-    emit('change', result);
+    console.log('搜索》》》', result, selectedItemList.value);
+
+    console.log('eventFiltersParams', eventFiltersParams.value);
+
+    emit('change', result, eventFiltersParams.value);
   };
   const handleClear = () => {
     searchModel.value = {
@@ -216,43 +331,69 @@
     exportData(val, type) {
       handleExportData(val, type);
     },
+    initSelectedItems(val) {
+      selectedItems.value = val;
+      console.log('val》》》', val);
+    },
   });
 
 </script>
 <style lang="postcss">
-  .analysis-search-box {
-    position: relative;
-    background-color: #fff;
-    border-radius: 2px;
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+.analysis-search-box {
+  position: relative;
+  background-color: #fff;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
 
-    .panel-toggle-btn {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      display: flex;
-      width: 64px;
-      height: 16px;
-      justify-content: center;
-      align-items: center;
-      font-size: 12px;
-      color: #fff;
-      text-align: center;
-      cursor: pointer;
-      background: #dcdee5;
-      border-radius: 0 0 8px 8px;
-      transform: translate(-50%, 100%);
-      transition: all .15s;
+  .panel-toggle-btn {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    display: flex;
+    width: 64px;
+    height: 16px;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    color: #fff;
+    text-align: center;
+    cursor: pointer;
+    background: #dcdee5;
+    border-radius: 0 0 8px 8px;
+    transform: translate(-50%, 100%);
+    transition: all .15s;
 
-      &:hover {
-        background: #c4c6cc;
-      }
+    &:hover {
+      background: #c4c6cc;
+    }
 
-      &.is-floded {
-        i {
-          transform: rotateZ(-180deg);
-        }
+    &.is-floded {
+      i {
+        transform: rotateZ(-180deg);
       }
     }
   }
+}
+
+
+.box-row {
+  display: grid;
+  margin-bottom: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px 16px;
+
+  .more-list-item {
+    .item-label {
+      font-size: 12px;
+      line-height: 20px;
+      color: #63656e;
+      vertical-align: top;
+    }
+
+    .item-value {
+      display: flex;
+      padding-top: 6px;
+    }
+  }
+}
 </style>
