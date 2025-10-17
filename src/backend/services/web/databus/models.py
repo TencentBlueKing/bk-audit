@@ -17,7 +17,6 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from blueapps.utils.request_provider import get_local_request_id, get_request_username
-from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy
 
@@ -88,6 +87,14 @@ class CollectorPlugin(OperateRecordModel):
 
         return cls.make_table_id(bk_biz_id, collector_plugin_name_en).replace(".", "_")
 
+    @property
+    def result_table_id(self) -> str:
+        """
+        bkbase结果表ID
+        """
+
+        return self.build_result_table_id(self.bkdata_biz_id, self.collector_plugin_name_en)
+
     @classmethod
     def build_collector_rt(cls, namespace: str):
         """
@@ -100,7 +107,7 @@ class CollectorPlugin(OperateRecordModel):
             instance_key=namespace,
         )
         plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
-        return plugin.build_result_table_id(settings.DEFAULT_BK_BIZ_ID, plugin.collector_plugin_name_en)
+        return plugin.result_table_id
 
 
 class CollectorConfig(SoftDeleteModel):

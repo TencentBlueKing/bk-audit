@@ -20,23 +20,26 @@ import abc
 import json
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict, List, Type
+from typing import Any, Dict, List, Optional, Tuple, Type
 
+import sqlglot
 from bk_resource import CacheResource, api, resource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Case, Count, IntegerField, Q, QuerySet, When
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
+from sqlglot import exp
 
 from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketOperate, TicketStatus
-from apps.meta.models import Tag
+from apps.meta.constants import ConfigLevelChoices
+from apps.meta.models import GlobalMetaConfig, Tag
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import wrapper_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
@@ -48,11 +51,18 @@ from core.utils.data import choices_to_dict, data2string, preserved_order_sort
 from core.utils.page import paginate_queryset
 from core.utils.time import mstimestamp_to_date_string
 from core.utils.tools import get_app_info
+from services.web.databus.constants import (
+    ASSET_RISK_BKBASE_RT_ID_KEY,
+    ASSET_STRATEGY_BKBASE_RT_ID_KEY,
+    ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    DORIS_EVENT_BKBASE_RT_ID_KEY,
+)
 from services.web.risk.constants import (
     EVENT_EXPORT_FIELD_PREFIX,
     RISK_EXPORT_FILE_NAME_TMP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_SHOW_FIELDS,
+    EventFilterOperator,
     RiskExportField,
     RiskFields,
     RiskLabel,
@@ -88,6 +98,8 @@ from services.web.risk.serializers import (
     ForceRevokeAutoProcessReqSerializer,
     GetRiskFieldsByStrategyRequestSerializer,
     GetRiskFieldsByStrategyResponseSerializer,
+    ListEventFieldsByStrategyRequestSerializer,
+    ListEventFieldsByStrategyResponseSerializer,
     ListRiskMetaRequestSerializer,
     ListRiskRequestSerializer,
     ListRiskResponseSerializer,
@@ -102,7 +114,7 @@ from services.web.risk.serializers import (
     UpdateRiskLabelReqSerializer,
 )
 from services.web.risk.tasks import process_one_risk, sync_auto_result
-from services.web.strategy_v2.constants import RiskLevel
+from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
 
@@ -154,28 +166,121 @@ class ListRisk(RiskMeta):
     audit_action = ActionEnum.LIST_RISK
 
     def perform_request(self, validated_request_data):
-        # 获取请求
         request = validated_request_data.pop("_request")
-        # 获取风险
         order_field = validated_request_data.pop("order_field", "-event_time")
-        base_qs = self.load_risks(validated_request_data)
-        risks = self._apply_ordering(base_qs, order_field).only("pk")
-        # 分页
-        paged_risks, page = paginate_queryset(queryset=risks, request=request, base_queryset=Risk.annotated_queryset())
-        # 预加载策略标签
-        paged_risks: QuerySet[Risk] = self._apply_ordering(Risk.prefetch_strategy_tags(paged_risks), order_field)
-        # 获取关联的经验
+        use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
+        event_filters = validated_request_data.pop("event_filters", [])
+        base_queryset = self.load_risks(validated_request_data)
+        base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
+
+        if use_bkbase:
+            paged_risks, page, risk_ids = self.retrieve_via_bkbase(
+                base_queryset=base_queryset,
+                request=request,
+                order_field=order_field,
+                event_filters=event_filters,
+            )
+        else:
+            paged_risks, page, risk_ids = self.retrieve_via_db(
+                base_queryset=base_queryset, request=request, order_field=order_field
+            )
+
         experiences = {
             e["risk_id"]: e["count"]
-            for e in RiskExperience.objects.filter(risk_id__in=paged_risks.values("risk_id"))
+            for e in RiskExperience.objects.filter(risk_id__in=risk_ids)
             .values("risk_id")
             .order_by("risk_id")
             .annotate(count=Count("risk_id"))
         }
         for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
-        # 响应
-        return page.get_paginated_response(data=ListRiskResponseSerializer(instance=paged_risks, many=True).data)
+        return page.get_paginated_response(data=ListRiskResponseSerializer(instance=paged_risks, many=True).data).data
+
+    def retrieve_via_db(self, base_queryset: QuerySet, request, order_field: str):
+        risks = self._apply_ordering(base_queryset, order_field).only("pk")
+        paged_queryset, page = paginate_queryset(
+            queryset=risks, request=request, base_queryset=Risk.annotated_queryset()
+        )
+        paged_queryset = self._apply_ordering(Risk.prefetch_strategy_tags(paged_queryset), order_field)
+        paged_risks = list(paged_queryset)
+        risk_ids = [risk.risk_id for risk in paged_risks]
+        return paged_risks, page, risk_ids
+
+    def _filter_queryset_by_event_data_fields(
+        self, queryset: QuerySet, event_filters: List[Dict[str, Any]]
+    ) -> QuerySet:
+        if not event_filters:
+            return queryset
+
+        strategy_ids = list(queryset.values_list("strategy_id", flat=True).distinct())
+        if not strategy_ids:
+            return queryset.none()
+
+        # 使用JSONField contains能力在数据库侧完成过滤，避免加载并解析所有配置
+        strategy_queryset = Strategy.objects.filter(strategy_id__in=strategy_ids)
+
+        for item in event_filters:
+            field = item.get("field")
+            display_name = item.get("display_name")
+            strategy_queryset = strategy_queryset.filter(
+                event_data_field_configs__contains=[{"field_name": field, "display_name": display_name}]
+            )
+
+        matched_strategy_ids = list(strategy_queryset.values_list("strategy_id", flat=True))
+        if not matched_strategy_ids:
+            return queryset.none()
+
+        return queryset.filter(strategy_id__in=matched_strategy_ids)
+
+    def retrieve_via_bkbase(
+        self,
+        base_queryset: QuerySet,
+        request,
+        order_field: str,
+        event_filters: List[Dict[str, Any]],
+    ):
+        order_field_name = order_field.lstrip("-")
+        order_direction = "DESC" if order_field.startswith("-") else "ASC"
+
+        value_fields = ["risk_id", "strategy_id"]
+        if order_field_name not in value_fields:
+            value_fields.append(order_field_name)
+        if order_field_name == RISK_LEVEL_ORDER_FIELD and "event_time" not in value_fields:
+            value_fields.append("event_time")
+
+        values_queryset = base_queryset.values(*value_fields).distinct()
+
+        total = self._query_total_count(values_queryset, event_filters)
+        page = api_settings.DEFAULT_PAGINATION_CLASS()
+        page.paginate_queryset(range(total), request)
+
+        page_obj = getattr(page, "page", None)
+        page_size = page_obj.paginator.per_page if page_obj else 0
+        page_number = page_obj.number if page_obj else 1
+
+        offset = (page_number - 1) * page_size if page_size else 0
+        limit = page_size or total
+
+        risk_ids: List[str] = []
+        if total:
+            risk_ids = self._query_risk_ids(
+                queryset=values_queryset,
+                event_filters=event_filters,
+                order_field=order_field_name,
+                order_direction=order_direction,
+                limit=limit,
+                offset=offset,
+            )
+
+        paged_queryset = self._build_risk_queryset(risk_ids)
+        paged_queryset = Risk.prefetch_strategy_tags(paged_queryset)
+        paged_risks = list(paged_queryset)
+        risk_ids = [risk.risk_id for risk in paged_risks]
+
+        if getattr(page, "page", None):
+            page.page.object_list = list(risk_ids)
+
+        return paged_risks, page, risk_ids
 
     def _apply_ordering(self, queryset: QuerySet["Risk"], order_field: str) -> QuerySet["Risk"]:
         """Apply ordering, including custom order for strategy risk level.
@@ -218,6 +323,308 @@ class ListRisk(RiskMeta):
             q &= _q
         # 获取有权限且符合表达式的
         return Risk.load_authed_risks(action=ActionEnum.LIST_RISK).filter(q).distinct()
+
+    def _build_risk_queryset(self, risk_ids: List[str]) -> QuerySet["Risk"]:
+        if not risk_ids:
+            return Risk.annotated_queryset().none()
+
+        order_cases = [When(risk_id=risk_id, then=index) for index, risk_id in enumerate(risk_ids)]
+        order_expression = Case(*order_cases, default=len(risk_ids), output_field=IntegerField())
+        return Risk.annotated_queryset().filter(risk_id__in=risk_ids).order_by(order_expression)
+
+    def _query_total_count(self, queryset: QuerySet, event_filters: List[Dict[str, Any]]) -> int:
+        base_query = queryset.order_by()
+        base_sql = self._clean_sql(str(base_query.query))
+        base_sql = self._convert_to_bkbase_sql(base_sql)
+        filtered_sql = self._build_filtered_subquery(base_sql, event_filters)
+        count_sql = f"SELECT COUNT(*) AS count FROM ({filtered_sql}) AS risk_count"
+        count_resp = api.bk_base.query_sync(sql=count_sql) or {}
+        results = count_resp.get("list") or []
+        if not results:
+            return 0
+        count_value = results[0].get("count", 0)
+        try:
+            return int(count_value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _query_risk_ids(
+        self,
+        queryset: QuerySet,
+        event_filters: List[Dict[str, Any]],
+        order_field: str,
+        order_direction: str,
+        limit: int,
+        offset: int,
+    ) -> List[str]:
+        base_query = queryset.order_by()
+        base_sql = self._clean_sql(str(base_query.query))
+        base_sql = self._convert_to_bkbase_sql(base_sql)
+        filtered_sql = self._build_filtered_subquery(base_sql, event_filters)
+        data_sql = self._append_order_and_limit(
+            filtered_sql,
+            order_field=order_field,
+            order_direction=order_direction,
+            limit=limit,
+            offset=offset,
+        )
+        data_resp = api.bk_base.query_sync(sql=data_sql) or {}
+        results = data_resp.get("list") or []
+        risk_ids: List[str] = []
+        for row in results:
+            risk_ids.append(row["risk_id"])
+        return risk_ids
+
+    def _get_bkbase_table_map(self) -> Dict[str, str]:
+        if not hasattr(self, "_bkbase_table_map"):
+            self._bkbase_table_map = {
+                Risk._meta.db_table: self._get_configured_table_name(
+                    config_key=ASSET_RISK_BKBASE_RT_ID_KEY, fallback=Risk._meta.db_table
+                ),
+                Strategy._meta.db_table: self._get_configured_table_name(
+                    config_key=ASSET_STRATEGY_BKBASE_RT_ID_KEY, fallback=Strategy._meta.db_table
+                ),
+                StrategyTag._meta.db_table: self._get_configured_table_name(
+                    config_key=ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY, fallback=StrategyTag._meta.db_table
+                ),
+                "risk_event": self._get_configured_table_name(
+                    config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
+                ),
+            }
+        return self._bkbase_table_map
+
+    def _get_configured_table_name(self, *, config_key: str, fallback: str) -> str:
+        return GlobalMetaConfig.get(
+            config_key=config_key,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=settings.DEFAULT_NAMESPACE,
+            default=fallback,
+        )
+    @staticmethod
+    def _split_table_parts(table_name: str) -> Tuple[Optional[str], Optional[str], str]:
+        cleaned = (table_name or "").strip().strip("`")
+        if not cleaned:
+            return None, None, ""
+        parts = [part.strip().strip("`") for part in cleaned.split(".") if part.strip()]
+        if not parts:
+            return None, None, ""
+        if len(parts) == 1:
+            return None, None, parts[0]
+        if len(parts) == 2:
+            return None, parts[0], parts[1]
+        # 当存在 catalog.db.table 或更多层级时，仅保留后三段
+        return parts[-3], parts[-2], parts[-1]
+
+    def _convert_to_bkbase_sql(self, sql: str) -> str:
+        if not sql:
+            return sql
+        table_map = self._get_bkbase_table_map()
+        if not table_map:
+            return sql
+        try:
+            expression = sqlglot.parse_one(sql, read="mysql")
+        except sqlglot.errors.ParseError:
+            return sql
+
+        def transform_table(node: exp.Expression) -> exp.Expression:
+            if not isinstance(node, exp.Table):
+                return node
+            source = node.name
+            if not source:
+                return node
+            target = table_map.get(source)
+            if not target or target == source:
+                return node
+
+            catalog, db, table = self._split_table_parts(target)
+            if not table:
+                node.set("catalog", None)
+                node.set("db", None)
+                node.set("this", exp.Identifier(this=target, quoted=False))
+            else:
+                node.set("catalog", exp.Identifier(this=catalog, quoted=False) if catalog else None)
+                node.set("db", exp.Identifier(this=db, quoted=False) if db else None)
+                node.set("this", exp.Identifier(this=table, quoted=False))
+
+            if not node.alias:
+                node.set("alias", exp.TableAlias(this=exp.to_identifier(source)))
+            return node
+
+        transformed = expression.transform(transform_table)
+        return transformed.sql(dialect="hive")
+
+    def _get_risk_event_table_reference(self) -> str:
+        table_name = self._get_bkbase_table_map().get("risk_event", "risk_event")
+        formatted = self._format_table_identifier(table_name)
+        return formatted or "risk_event"
+
+    @classmethod
+    def _format_table_identifier(cls, table_name: str) -> str:
+        catalog, db, table = cls._split_table_parts(table_name)
+        parts = [part for part in (catalog, db, table) if part]
+        return ".".join(f"`{part}`" for part in parts)
+
+    def _build_filtered_subquery(self, base_sql: str, event_filters: List[Dict[str, Any]]) -> str:
+        subquery = f"SELECT * FROM ({base_sql}) AS base_query"
+        conditions = [
+            condition
+            for index, item in enumerate(event_filters)
+            if (condition := self._build_event_filter_condition(item, index))
+        ]
+        if not conditions:
+            return subquery
+        return f"{subquery} WHERE {' AND '.join(conditions)}"
+
+    def _append_order_and_limit(
+        self, subquery_sql: str, order_field: str, order_direction: str, limit: int, offset: int
+    ) -> str:
+        order_clause = self._build_order_clause(order_field, order_direction)
+        limit_clause = ""
+        if limit:
+            limit_clause = f" LIMIT {int(limit)}"
+            if offset:
+                limit_clause += f" OFFSET {int(offset)}"
+        return f"{subquery_sql}{order_clause}{limit_clause}"
+
+    def _build_order_clause(self, order_field: str, order_direction: str) -> str:
+        if order_field == RISK_LEVEL_ORDER_FIELD:
+            field_expr = f"base_query.{self._quote_identifier(order_field)}"
+            case_parts = []
+            for index, level in enumerate([RiskLevel.LOW.value, RiskLevel.MIDDLE.value, RiskLevel.HIGH.value]):
+                case_parts.append(f"WHEN {field_expr} = {self._format_sql_value(level)} THEN {index}")
+            case_expression = f"CASE {field_expr} " + " ".join(case_parts) + " ELSE 99 END"
+            return (
+                f" ORDER BY {case_expression} {order_direction}, "
+                f"base_query.{self._quote_identifier('event_time')} DESC"
+            )
+        field_expr = f"base_query.{self._quote_identifier(order_field)}"
+        return f" ORDER BY {field_expr} {order_direction}"
+
+    def _build_event_filter_condition(self, filter_item: Dict[str, Any], index: int) -> str:
+        alias = f"risk_event_{index}"
+        join_conditions = [f"{alias}.strategy_id = base_query.strategy_id"]
+
+        field_expression = self._build_event_field_expression(alias, filter_item)
+        if not field_expression:
+            return ""
+
+        comparison = self._build_event_filter_expression(field_expression, filter_item)
+        if not comparison:
+            return ""
+
+        join_clause = " AND ".join(join_conditions)
+        table_reference = self._get_risk_event_table_reference()
+        return f"EXISTS (SELECT 1 FROM {table_reference} {alias} WHERE {join_clause} AND {comparison})"
+
+    def _build_event_field_expression(self, alias: str, filter_item: Dict[str, Any]) -> str:
+        field_source = filter_item.get("field_source")
+        field_name = filter_item.get("field")
+        if not field_name:
+            return ""
+
+        resolved_source = field_source or StrategyFieldSourceEnum.DATA.value
+
+        if resolved_source == StrategyFieldSourceEnum.BASIC.value:
+            return f"{alias}.{self._quote_identifier(field_name)}"
+
+        if resolved_source == StrategyFieldSourceEnum.DATA.value:
+            column = self._qualified_column(alias, "event_data")
+        elif resolved_source == StrategyFieldSourceEnum.EVIDENCE.value:
+            column = self._qualified_column(alias, "event_evidence")
+        else:
+            return ""
+
+        json_path = self._build_json_path(field_name)
+        return f"JSON_EXTRACT({column}, '{json_path}')"
+
+    def _build_event_filter_expression(self, field_expr: str, filter_item: Dict[str, Any]) -> str:
+        value = filter_item.get("value")
+        operator = filter_item.get("operator") or EventFilterOperator.EQUAL.value
+        if isinstance(operator, str):
+            operator = operator.upper()
+
+        if operator in {EventFilterOperator.EQUAL.value, EventFilterOperator.NOT_EQUAL.value}:
+            formatted_value = self._format_sql_value(value)
+            comparator = "=" if operator == EventFilterOperator.EQUAL.value else "!="
+            if formatted_value == "NULL":
+                return f"{field_expr} IS {'NOT ' if comparator == '!=' else ''}NULL"
+            return f"{field_expr} {comparator} {formatted_value}"
+
+        if operator in {
+            EventFilterOperator.GREATER_THAN.value,
+            EventFilterOperator.GREATER_THAN_EQUAL.value,
+            EventFilterOperator.LESS_THAN.value,
+            EventFilterOperator.LESS_THAN_EQUAL.value,
+        }:
+            if self._is_numeric_value(value):
+                field_expr = f"CAST({field_expr} AS DOUBLE)"
+                formatted_value = str(float(value))
+            else:
+                formatted_value = self._format_sql_value(value)
+            return f"{field_expr} {operator} {formatted_value}"
+
+        if operator in {EventFilterOperator.IN.value, EventFilterOperator.NOT_IN.value}:
+            values = self._ensure_list(value)
+            if not values:
+                return "1=0" if operator == EventFilterOperator.IN.value else "1=1"
+            formatted = ", ".join(self._format_sql_value(item) for item in values)
+            return f"{field_expr} {operator} ({formatted})"
+
+        if operator in {EventFilterOperator.CONTAINS.value, EventFilterOperator.NOT_CONTAINS.value}:
+            pattern = self._escape_like_pattern(str(value))
+            comparator = "NOT LIKE" if operator == EventFilterOperator.NOT_CONTAINS.value else "LIKE"
+            return f"{field_expr} {comparator} '%{pattern}%' ESCAPE '\\\\'"
+
+        return ""
+
+    def _quote_identifier(self, identifier: str) -> str:
+        parts = [part for part in identifier.split(".") if part]
+        return ".".join(f"`{part}`" for part in parts)
+
+    def _qualified_column(self, alias: str, column: str) -> str:
+        return f"{alias}.{self._quote_identifier(column)}"
+
+    def _build_json_path(self, field_name: str) -> str:
+        safe_field = field_name.replace("\\", "\\\\").replace("'", "\\'")
+        path_parts = [part for part in safe_field.split(".") if part]
+        return "$" + "".join(f".{part}" for part in path_parts)
+
+    def _ensure_list(self, value: Any) -> List[Any]:
+        if value is None:
+            return []
+        if isinstance(value, (list, tuple, set)):
+            return list(value)
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return [value]
+
+    def _format_sql_value(self, value: Any) -> str:
+        if value is None:
+            return "NULL"
+        if isinstance(value, bool):
+            return "'true'" if value else "'false'"
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return str(value)
+        escaped = str(value).replace("'", "''")
+        return f"'{escaped}'"
+
+    def _escape_like_pattern(self, value: str) -> str:
+        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    def _is_numeric_value(self, value: Any) -> bool:
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return True
+        if isinstance(value, str):
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
+        return False
+
+    @staticmethod
+    def _clean_sql(sql: str) -> str:
+        return sql.strip().rstrip(";")
 
 
 class ListMineRisk(ListRisk):
@@ -716,3 +1123,34 @@ class RiskExport(RiskMeta):
         stream_response = FileResponse(excel_file, as_attachment=True, filename=filename)
         stream_response["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         return stream_response
+
+
+class ListEventFieldsByStrategy(RiskMeta):
+    """
+    新增接口：根据策略获取对应的事件字段；支持返回所有策略的事件字段（不传 strategy_ids）
+    返回结构化字段 key，用于前端筛选构建
+    """
+
+    name = gettext_lazy("根据策略获取事件字段")
+    RequestSerializer = ListEventFieldsByStrategyRequestSerializer
+    ResponseSerializer = ListEventFieldsByStrategyResponseSerializer
+    many_response_data = True
+
+    def perform_request(self, validated_request_data):
+        # 决定策略集合
+        strategy_ids = validated_request_data.get("strategy_ids")
+        if strategy_ids:
+            strategies = Strategy.objects.filter(strategy_id__in=strategy_ids)
+        else:
+            strategies = Strategy.objects.all()
+
+        results = set()
+        for s in strategies:
+            for config_name in ["event_data_field_configs"]:
+                for cfg in getattr(s, config_name) or []:
+                    field_name = cfg.get("field_name")
+                    display_name = cfg.get("display_name") or field_name
+                    if not field_name:
+                        continue
+                    results.add((field_name, display_name))
+        return [{"field_name": field_name, "display_name": display_name} for field_name, display_name in results]

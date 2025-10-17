@@ -35,6 +35,8 @@ INIT_PLUGIN_FISHED_KEY = "init_plugin_finished_check"
 INIT_SNAPSHOT_FINISHED_KEY = "init_snapshot_finished_check"
 INIT_EVENT_FINISHED_KEY = "init_event_finished_check"
 INIT_FIELDS_FINISHED_KEY = "init_fields_finished_check"
+INIT_SYSTEM_FINISHED_KEY = "init_system_finished_check"
+INIT_ASSET_FINISHED_KEY = "init_asset_finished_check"
 
 DEFAULT_QUERY_STRING_HELP_KEY = "query_string_help"
 DEFAULT_QUERY_STRING_HELP_ENV_KEY = "BKAPP_QUERY_STRING_HELP"
