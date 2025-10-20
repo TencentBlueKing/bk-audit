@@ -18,8 +18,9 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import json
+import logging
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 import sqlglot
@@ -117,6 +118,8 @@ from services.web.risk.tasks import process_one_risk, sync_auto_result
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
+logger = logging.getLogger(__name__)
+
 
 class RiskMeta(AuditMixinResource, abc.ABC):
     tags = ["Risk"]
@@ -170,6 +173,7 @@ class ListRisk(RiskMeta):
         order_field = validated_request_data.pop("order_field", "-event_time")
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
+        thedate_range = self._extract_thedate_range(validated_request_data)
         base_queryset = self.load_risks(validated_request_data)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
 
@@ -179,6 +183,7 @@ class ListRisk(RiskMeta):
                 request=request,
                 order_field=order_field,
                 event_filters=event_filters,
+                thedate_range=thedate_range,
             )
         else:
             paged_risks, page, risk_ids = self.retrieve_via_db(
@@ -195,6 +200,21 @@ class ListRisk(RiskMeta):
         for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
         return page.get_paginated_response(data=ListRiskResponseSerializer(instance=paged_risks, many=True).data).data
+
+    def _extract_thedate_range(self, validated_request_data) -> Tuple[str, str]:
+        start_dt = (
+            validated_request_data['event_time__gte'][0]
+            if validated_request_data.get('event_time__gte')
+            else datetime.now()
+        )
+        end_dt = (
+            validated_request_data['event_time__lt'][0]
+            if validated_request_data.get('event_time__lt')
+            else datetime.now() - timedelta(days=180)
+        )
+        start_date = start_dt.date().strftime("%Y%m%d")
+        end_date = end_dt.date().strftime("%Y%m%d")
+        return start_date, end_date
 
     def retrieve_via_db(self, base_queryset: QuerySet, request, order_field: str):
         risks = self._apply_ordering(base_queryset, order_field).only("pk")
@@ -238,6 +258,7 @@ class ListRisk(RiskMeta):
         request,
         order_field: str,
         event_filters: List[Dict[str, Any]],
+        thedate_range: Optional[Tuple[str, str]] = None,
     ):
         order_field_name = order_field.lstrip("-")
         order_direction = "DESC" if order_field.startswith("-") else "ASC"
@@ -250,7 +271,7 @@ class ListRisk(RiskMeta):
 
         values_queryset = base_queryset.values(*value_fields).distinct()
 
-        total = self._query_total_count(values_queryset, event_filters)
+        total = self._query_total_count(values_queryset, event_filters, thedate_range)
         page = api_settings.DEFAULT_PAGINATION_CLASS()
         page.paginate_queryset(range(total), request)
 
@@ -270,6 +291,7 @@ class ListRisk(RiskMeta):
                 order_direction=order_direction,
                 limit=limit,
                 offset=offset,
+                thedate_range=thedate_range,
             )
 
         paged_queryset = self._build_risk_queryset(risk_ids)
@@ -332,12 +354,15 @@ class ListRisk(RiskMeta):
         order_expression = Case(*order_cases, default=len(risk_ids), output_field=IntegerField())
         return Risk.annotated_queryset().filter(risk_id__in=risk_ids).order_by(order_expression)
 
-    def _query_total_count(self, queryset: QuerySet, event_filters: List[Dict[str, Any]]) -> int:
+    def _query_total_count(
+        self, queryset: QuerySet, event_filters: List[Dict[str, Any]], thedate_range: Optional[Tuple[str, str]]
+    ) -> int:
         base_query = queryset.order_by()
         base_sql = self._clean_sql(str(base_query.query))
         base_sql = self._convert_to_bkbase_sql(base_sql)
-        filtered_sql = self._build_filtered_subquery(base_sql, event_filters)
+        filtered_sql = self._build_filtered_subquery(base_sql, event_filters, thedate_range)
         count_sql = f"SELECT COUNT(*) AS count FROM ({filtered_sql}) AS risk_count"
+        logger.info("BKBase count SQL: %s", count_sql)
         count_resp = api.bk_base.query_sync(sql=count_sql) or {}
         results = count_resp.get("list") or []
         if not results:
@@ -356,11 +381,12 @@ class ListRisk(RiskMeta):
         order_direction: str,
         limit: int,
         offset: int,
+        thedate_range: Optional[Tuple[str, str]],
     ) -> List[str]:
         base_query = queryset
         base_sql = self._clean_sql(str(base_query.query))
         base_sql = self._convert_to_bkbase_sql(base_sql)
-        filtered_sql = self._build_filtered_subquery(base_sql, event_filters)
+        filtered_sql = self._build_filtered_subquery(base_sql, event_filters, thedate_range)
         data_sql = self._append_order_and_limit(
             filtered_sql,
             order_field=order_field,
@@ -368,6 +394,7 @@ class ListRisk(RiskMeta):
             limit=limit,
             offset=offset,
         )
+        logger.info("BKBase data SQL: %s", data_sql)
         data_resp = api.bk_base.query_sync(sql=data_sql) or {}
         results = data_resp.get("list") or []
         risk_ids: List[str] = []
@@ -465,13 +492,17 @@ class ListRisk(RiskMeta):
         parts = [part for part in (catalog, db, table) if part]
         return ".".join(f"`{part}`" for part in parts)
 
-    def _build_filtered_subquery(self, base_sql: str, event_filters: List[Dict[str, Any]]) -> str:
+    def _build_filtered_subquery(
+        self, base_sql: str, event_filters: List[Dict[str, Any]], thedate_range: Optional[Tuple[str, str]]
+    ) -> str:
         subquery = f"SELECT * FROM ({base_sql}) AS base_query"
-        conditions = [
+        conditions = []
+        conditions.extend(self._build_thedate_conditions(alias="base_query", thedate_range=thedate_range))
+        conditions.extend(
             condition
             for index, item in enumerate(event_filters)
-            if (condition := self._build_event_filter_condition(item, index))
-        ]
+            if (condition := self._build_event_filter_condition(item, index, thedate_range))
+        )
         if not conditions:
             return subquery
         return f"{subquery} WHERE {' AND '.join(conditions)}"
@@ -501,7 +532,9 @@ class ListRisk(RiskMeta):
         field_expr = f"base_query.{self._quote_identifier(order_field)}"
         return f" ORDER BY {field_expr} {order_direction}"
 
-    def _build_event_filter_condition(self, filter_item: Dict[str, Any], index: int) -> str:
+    def _build_event_filter_condition(
+        self, filter_item: Dict[str, Any], index: int, thedate_range: Optional[Tuple[str, str]]
+    ) -> str:
         alias = f"risk_event_{index}"
         join_conditions = [
             f"{alias}.strategy_id = base_query.strategy_id",
@@ -516,9 +549,24 @@ class ListRisk(RiskMeta):
         if not comparison:
             return ""
 
-        join_clause = " AND ".join(join_conditions)
+        conditions = list(join_conditions)
+        conditions.extend(self._build_thedate_conditions(alias=alias, thedate_range=thedate_range))
+        conditions.append(comparison)
+        where_clause = " AND ".join(conditions)
         table_reference = self._get_risk_event_table_reference()
-        return f"EXISTS (SELECT 1 FROM {table_reference} {alias} WHERE {join_clause} AND {comparison})"
+        return f"EXISTS (SELECT 1 FROM {table_reference} {alias} WHERE {where_clause})"
+
+    def _build_thedate_conditions(self, alias: str, thedate_range: Optional[Tuple[str, str]]) -> List[str]:
+        if not thedate_range:
+            return []
+        start_date, end_date = thedate_range
+        if not start_date or not end_date:
+            return []
+        column = f"{alias}.{self._quote_identifier('thedate')}"
+        return [
+            f"{column} >= {self._format_sql_value(start_date)}",
+            f"{column} <= {self._format_sql_value(end_date)}",
+        ]
 
     def _build_event_field_expression(self, alias: str, filter_item: Dict[str, Any]) -> str:
         field_source = filter_item.get("field_source")
