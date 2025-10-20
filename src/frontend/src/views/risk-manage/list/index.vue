@@ -364,9 +364,8 @@
   } = useRequest(RiskManageService.fetchEventFields, {
     defaultValue: [],
     onSuccess: (data) => {
-      const eventFields = data.map((item: any, index: number) => ({
+      const eventFields = data.map((item: any) => ({
         ...item,
-        id: index,
       }));
       searchBoxRef.value?.initSelectedItems(eventFields);
     },
@@ -517,12 +516,7 @@
       ...params,
       ...searchModel.value,
     };
-    // 去除dataParams 中空的值
-    Object.keys(dataParams).forEach((key: string) => {
-      if (dataParams[key] === '') {
-        delete dataParams[key];
-      }
-    });
+
     listRef.value.fetchData(dataParams);
   };
   onMounted(() => {

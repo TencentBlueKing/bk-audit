@@ -113,6 +113,7 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     onMounted,
     ref,
     watch,
@@ -176,9 +177,8 @@
   const conditionList = computed(() => GlobalChoices.value.event_filter_operator);
   const eventFiltersParams = computed(() => {
     const data = selectedItemList.value.map(item => ({
-      strategy_id: item.strategy_id,
       field: item.field_name,
-      field_source: item.field_source,
+      display_name: item.display_name,
       operator: item.operator,
       value: item.value,
     }));
@@ -204,7 +204,6 @@
         operator: existingItem?.operator || '',
       };
     });
-    console.log('selectedItemList', selectedItemList.value);
 
     searchRef.value?.showMore(val.length !== 0);
   };
@@ -280,14 +279,7 @@
       [SEARCH_TYPE_QUERY_KEY]: renderType.value,
     });
   };
-  watch(selectedItems.value, (val) => {
-    if (urlSearchParams.event_filters) {
-      console.log('u哈哈哈', urlSearchParams.event_filters, val);
-    }
-  }, {
-    immediate: true,
-    deep: true,
-  });
+
   // 提交搜索条件
   const handleSubmit = () => {
     const result = Object.keys(searchModel.value).reduce((result, key) => {
@@ -307,20 +299,49 @@
       }
       return result;
     }, {} as Record<string, any>);
-    console.log('搜索》》》', result, selectedItemList.value);
-
-    console.log('eventFiltersParams', eventFiltersParams.value);
-
     emit('change', result, eventFiltersParams.value);
   };
   const handleClear = () => {
     searchModel.value = {
-      datetime: ['', ''],
-      datetime_origin: ['', ''],
+      datetime: [
+        dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+        dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      ],
+      datetime_origin: [
+        'now-6M',
+        'now',
+      ],
     };
+    selectedVal.value = [];
+    selectedItemList.value = [];
     handleSubmit();
   };
+  const findIdByDisplayAndField = (display: string, field: string, ary: Array<Record<string, any>>) => {
+    const foundItem = ary.find(item => item
+      && item.display_name === display
+      && item.field_name === field);
+
+    return foundItem ? foundItem.id : null;
+  };
+  watch(() => selectedItems.value, (val) => {
+    selectedVal.value =  eventFiltersParams.value.map((item) => {
+      const foundId = findIdByDisplayAndField(item.display_name, item.field, val);
+      return foundId;
+    });
+  });
   onMounted(() => {
+    if (urlSearchParams?.event_filters) {
+      selectedItemList.value = urlSearchParams.event_filters?.map((item: Record<string, any>) => ({
+        field_name: item.field,
+        display_name: item.display_name,
+        operator: item.operator,
+        value: item.value,
+      }));
+
+      nextTick(() => {
+        searchRef.value?.showMore(urlSearchParams.event_filters.length > 0);
+      });
+    }
     handleSubmit();
   });
 
@@ -333,7 +354,6 @@
     },
     initSelectedItems(val) {
       selectedItems.value = val;
-      console.log('val》》》', val);
     },
   });
 
