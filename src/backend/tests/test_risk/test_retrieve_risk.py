@@ -16,9 +16,9 @@ from services.web.databus.constants import (
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import EventFilterOperator, RiskStatus
 from services.web.risk.models import Risk, TicketPermission, UserType
-from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
+from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
@@ -98,7 +98,14 @@ class TestListRiskResource(TestCase):
     def test_list_risk_via_db_with_event_filters(self):
         payload = {
             "use_bkbase": False,
-            "event_filters": [{"field": "ip", "display_name": "Source IP", "value": "127.0.0.1"}],
+            "event_filters": [
+                {
+                    "field": "ip",
+                    "display_name": "Source IP",
+                    "operator": EventFilterOperator.CONTAINS.value,
+                    "value": "127.0.0.1",
+                }
+            ],
         }
 
         data = self._call_resource(payload)
@@ -143,6 +150,7 @@ class TestListRiskResource(TestCase):
                 {
                     "field": "ip",
                     "display_name": "Source IP",
+                    "operator": EventFilterOperator.CONTAINS.value,
                     "value": "127.0.0.1",
                 }
             ],
@@ -155,6 +163,7 @@ class TestListRiskResource(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertTrue(any("JSON_EXTRACT" in sql for sql in sql_log))
+        self.assertTrue(any("risk_event_0.risk_id = base_query.risk_id" in sql for sql in sql_log))
 
         event_table = self._format_expected_table(self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY])
         self.assertTrue(any(event_table in sql for sql in sql_log))
@@ -198,7 +207,12 @@ class TestListRiskResource(TestCase):
         payload = {
             "use_bkbase": False,
             "event_filters": [
-                {"field": "unknown", "display_name": "Unknown Field", "value": "value"},
+                {
+                    "field": "unknown",
+                    "display_name": "Unknown Field",
+                    "operator": EventFilterOperator.CONTAINS.value,
+                    "value": "value",
+                },
             ],
         }
 
