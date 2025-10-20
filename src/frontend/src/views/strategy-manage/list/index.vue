@@ -220,7 +220,9 @@
     <div class="title">
       {{ t('确定删除该策略？') }}
     </div>
-    <div class="title-tips">
+    <div
+      class="title-tips"
+      :class="locale === 'zh-CN' ? 'title-tips-zh' : ''">
       {{ t('删除的策略将') }}
       <span class="red-text">{{ t('无法找回') }}</span>
       ，{{ t('请谨慎操作') }} !
@@ -228,6 +230,7 @@
     <div class="content">
       {{ t('请输入策略名称') }}
       <span
+        v-bk-tooltips="{ content: t('点击复制策略名称') }"
         class="content-text"
         @click="handleCopyName">{{ deleteName }} </span>
       {{ t('以确认删除') }}
@@ -240,12 +243,12 @@
       <bk-button
         class="mr8"
         :disabled="deleteInputName !== deleteName"
-        theme="primary"
+        theme="danger"
         @click="handleDeleteConfirm">
-        {{ t('确定') }}
+        {{ t('删除') }}
       </bk-button>
       <bk-button
-        @click="isShowDeleteDialog = false">
+        @click="handleClose">
         {{ t('取消') }}
       </bk-button>
     </template>
@@ -369,7 +372,7 @@
   const renderLabelRef = ref();
   const total = ref(0);
   const upgradeTotal = ref(0);
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const switchStrategyParams = ref({ strategy_id: 0, toggle: false });
   const isNeedShowDetail = ref(false);
   const leftLabelFilterCondition = ref('');
@@ -890,6 +893,14 @@
   const handleDeleteConfirm = () => {
     handleRemove(deleteId.value);
     isShowDeleteDialog.value = false;
+    deleteName.value = '';
+    deleteInputName.value = '';
+  };
+  const handleClose = () => {
+    isShowDeleteDialog.value = false;
+    deleteName.value = '';
+    deleteInputName.value = '';
+    deleteId.value = null;
   };
   const disabledMap: Record<string, string> = {
     strategy_id: 'strategy_id',
@@ -1528,15 +1539,20 @@
   margin-top: 20px;
   margin-bottom: 20px;
   font-size: 12px;
-  line-height: 46px;
   color: #63656e;
   text-align: center;
+  overflow-wrap: break-word;
   background: #f5f6fa;
   border-radius: 2px;
 
   .red-text {
     color: #ea3636;
   }
+}
+
+.title-tips-zh {
+  line-height: 46px;
+
 }
 
 .content {
