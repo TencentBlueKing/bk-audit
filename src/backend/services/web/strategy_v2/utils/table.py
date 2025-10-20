@@ -31,10 +31,11 @@ from services.web.analyze.utils import is_asset
 from services.web.databus.constants import COLLECTOR_PLUGIN_ID, SnapshotRunningStatus
 from services.web.databus.models import CollectorPlugin, Snapshot
 from services.web.strategy_v2.constants import (
+    ALLOWED_OFFLINE_STORAGES,
+    ALLOWED_REALTIME_STORAGES,
     BIZ_RT_TABLE_ALLOW_STORAGES,
     BKBASE_INTERNAL_FIELD,
     BKBaseProcessingType,
-    BkBaseStorageType,
     ResultTableType,
     RuleAuditSourceType,
 )
@@ -255,12 +256,12 @@ class RuleAuditSourceTypeChecker:
 
         support_source_types = []
         rt = api.bk_base.get_result_table(result_table_id=rt_id, related=["storages"])
-        storage = rt.get("storages", {}).keys()
+        storage = set(rt.get("storages", {}).keys())
         # 实时计算中：kafka 可作为实时流水表
-        if BkBaseStorageType.KAFKA in storage:
+        if ALLOWED_REALTIME_STORAGES & storage:
             support_source_types.append(RuleAuditSourceType.REALTIME)
         # 离线计算中：HDFS 可作为离线流水表；资产表可作为离线维表
-        if BkBaseStorageType.HDFS in storage or is_asset(rt):
+        if ALLOWED_OFFLINE_STORAGES & storage or is_asset(rt):
             support_source_types.append(RuleAuditSourceType.BATCH)
         return support_source_types
 
