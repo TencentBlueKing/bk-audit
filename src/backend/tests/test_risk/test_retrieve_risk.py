@@ -146,6 +146,8 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
+            "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
             "event_filters": [
                 {
                     "field": "ip",
@@ -164,6 +166,8 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertTrue(any("JSON_EXTRACT" in sql for sql in sql_log))
         self.assertTrue(any("risk_event_0.risk_id = base_query.risk_id" in sql for sql in sql_log))
+        self.assertTrue(any("base_query.`thedate` >=" in sql for sql in sql_log))
+        self.assertTrue(any("risk_event_0.`thedate` >=" in sql for sql in sql_log))
 
         event_table = self._format_expected_table(self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY])
         self.assertTrue(any(event_table in sql for sql in sql_log))
