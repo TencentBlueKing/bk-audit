@@ -357,7 +357,7 @@ class ListRisk(RiskMeta):
         limit: int,
         offset: int,
     ) -> List[str]:
-        base_query = queryset.order_by()
+        base_query = queryset
         base_sql = self._clean_sql(str(base_query.query))
         base_sql = self._convert_to_bkbase_sql(base_sql)
         filtered_sql = self._build_filtered_subquery(base_sql, event_filters)
@@ -400,6 +400,7 @@ class ListRisk(RiskMeta):
             instance_key=settings.DEFAULT_NAMESPACE,
             default=fallback,
         )
+
     @staticmethod
     def _split_table_parts(table_name: str) -> Tuple[Optional[str], Optional[str], str]:
         cleaned = (table_name or "").strip().strip("`")
@@ -502,7 +503,10 @@ class ListRisk(RiskMeta):
 
     def _build_event_filter_condition(self, filter_item: Dict[str, Any], index: int) -> str:
         alias = f"risk_event_{index}"
-        join_conditions = [f"{alias}.strategy_id = base_query.strategy_id"]
+        join_conditions = [
+            f"{alias}.strategy_id = base_query.strategy_id",
+            f"{alias}.risk_id = base_query.risk_id",
+        ]
 
         field_expression = self._build_event_field_expression(alias, filter_item)
         if not field_expression:
@@ -538,7 +542,7 @@ class ListRisk(RiskMeta):
         return f"JSON_EXTRACT({column}, '{json_path}')"
 
     def _build_event_filter_expression(self, field_expr: str, filter_item: Dict[str, Any]) -> str:
-        value = filter_item.get("value")
+        value = filter_item["value"]
         operator = filter_item.get("operator") or EventFilterOperator.EQUAL.value
         if isinstance(operator, str):
             operator = operator.upper()
@@ -1153,4 +1157,7 @@ class ListEventFieldsByStrategy(RiskMeta):
                     if not field_name:
                         continue
                     results.add((field_name, display_name))
-        return [{"field_name": field_name, "display_name": display_name} for field_name, display_name in results]
+        return [
+            {"field_name": field_name, "display_name": display_name, "id": f"{display_name}:{field_name}"}
+            for field_name, display_name in results
+        ]
