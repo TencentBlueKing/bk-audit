@@ -329,12 +329,11 @@ class ListRisk(RiskMeta):
         # 风险等级
         risk_level = validated_request_data.pop("risk_level", None)
         if risk_level:
-            q &= Q(strategy_id__in=Strategy.objects.filter(risk_level__in=risk_level).values("strategy_id"))
+            q &= Q(strategy__risk_level__in=risk_level)
 
         # 标签筛选条件
         if tag_filter := validated_request_data.pop("tag_objs__in", None):
-            strategy_ids = StrategyTag.objects.filter(tag_id__in=tag_filter).values_list('strategy_id', flat=True)
-            q &= Q(strategy_id__in=strategy_ids)
+            q &= Q(strategy__tags__tag_id__in=tag_filter)
 
         for key, val in validated_request_data.items():
             if not val:
@@ -515,20 +514,112 @@ class ListRisk(RiskMeta):
         parts = [part for part in (catalog, db, table) if part]
         return ".".join(f"`{part}`" for part in parts)
 
+    def _prepare_base_expression(
+        self, base_expression: exp.Expression, thedate_range: Optional[Tuple[str, str]]
+    ) -> exp.Expression:
+        prepared = base_expression.copy()
+        prepared = self._strip_select_ordering(prepared)
+        prepared = self._push_partition_filters(prepared, thedate_range)
+        return prepared
+
+    def _strip_select_ordering(self, expression: exp.Expression) -> exp.Expression:
+        if isinstance(expression, exp.Select):
+            expression.set("order", None)
+            expression.set("limit", None)
+            expression.set("offset", None)
+        return expression
+
+    def _has_primary_key_filter(self, expression: exp.Select) -> bool:
+        where_clause = expression.args.get("where")
+        if not isinstance(where_clause, exp.Expression):
+            return False
+        for node in where_clause.walk():
+            if not isinstance(node, exp.EQ):
+                continue
+            left = node.args.get("this")
+            right = node.args.get("expression")
+            if self._is_risk_id_equality(left, right) or self._is_risk_id_equality(right, left):
+                return True
+        return False
+
+    def _is_risk_id_equality(self, column: Optional[exp.Expression], other: Optional[exp.Expression]) -> bool:
+        if not isinstance(column, exp.Column):
+            return False
+        if column.name != "risk_id":
+            return False
+        table_name = column.table
+        if table_name and table_name.strip("`") != "risk_risk":
+            return False
+        return isinstance(other, (exp.Literal, exp.Boolean, exp.Null))
+
+    def _push_partition_filters(
+        self, expression: exp.Expression, thedate_range: Optional[Tuple[str, str]]
+    ) -> exp.Expression:
+        if not isinstance(expression, exp.Select):
+            return expression
+        if not thedate_range:
+            return expression
+        start_date, end_date = thedate_range
+        if not start_date or not end_date:
+            return expression
+        alias = self._get_risk_table_alias(expression)
+        if not alias:
+            return expression
+        conditions = self._combine_conditions(
+            [
+                exp.GTE(this=self._column(alias, "thedate"), expression=self._literal(start_date)),
+                exp.LTE(this=self._column(alias, "thedate"), expression=self._literal(end_date)),
+            ]
+        )
+        if not conditions:
+            return expression
+        existing_where = expression.args.get("where")
+        if isinstance(existing_where, exp.Where):
+            combined = exp.and_(existing_where.this, conditions)
+            expression.set("where", exp.Where(this=combined))
+        elif isinstance(existing_where, exp.Expression):
+            expression.set("where", exp.Where(this=exp.and_(existing_where, conditions)))
+        else:
+            expression.set("where", exp.Where(this=conditions))
+        return expression
+
+    def _get_risk_table_alias(self, expression: exp.Select) -> Optional[str]:
+        from_clause = expression.args.get("from")
+        if not isinstance(from_clause, exp.From):
+            return None
+        for table in from_clause.find_all(exp.Table):
+            alias_name = table.alias or None
+            if not alias_name:
+                table_identifier = table.this
+                if isinstance(table_identifier, exp.Identifier):
+                    alias_name = table_identifier.this
+                elif table_identifier is not None:
+                    alias_name = str(table_identifier)
+                else:
+                    alias_name = table.name
+            if not alias_name:
+                continue
+            cleaned = str(alias_name).strip("`")
+            if cleaned == "risk_risk":
+                return cleaned
+        return None
+
     def _build_filtered_query(
         self,
         base_expression: exp.Expression,
         event_filters: List[Dict[str, Any]],
         thedate_range: Optional[Tuple[str, str]],
     ) -> exp.Select:
+        prepared_base = self._prepare_base_expression(base_expression, thedate_range)
         base_subquery = exp.Subquery(
-            this=base_expression.copy(),
+            this=prepared_base,
             alias=exp.TableAlias(this=exp.to_identifier("base_query")),
         )
-        query = exp.select("*").from_(base_subquery)
+        query = exp.select(exp.column("*", table="base_query")).from_(base_subquery)
 
         conditions: List[exp.Expression] = []
-        conditions.extend(self._build_thedate_conditions(alias="base_query", thedate_range=thedate_range))
+        if event_filters:
+            conditions.extend(self._build_thedate_conditions(alias="base_query", thedate_range=thedate_range))
         conditions.extend(
             condition
             for index, item in enumerate(event_filters)
@@ -541,8 +632,9 @@ class ListRisk(RiskMeta):
         return query
 
     def _build_count_query(self, filtered_query: exp.Expression) -> exp.Select:
+        filtered_copy = self._strip_select_ordering(filtered_query.copy())
         subquery = exp.Subquery(
-            this=filtered_query.copy(),
+            this=filtered_copy,
             alias=exp.TableAlias(this=exp.to_identifier("risk_count")),
         )
         count_expr = exp.func("COUNT", exp.Star())
