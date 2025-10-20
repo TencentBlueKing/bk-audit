@@ -232,12 +232,25 @@ class BkBaseStorageType(TextChoices):
     REDIS = "redis", gettext_lazy("Redis")
     KAFKA = "kafka", gettext_lazy("Kafka")
     DORIS = "doris", gettext_lazy("Doris")
+    PULSAR = "pulsar", gettext_lazy("Pulsar")
 
+
+# 可用于实时计算的存储类型
+ALLOWED_REALTIME_STORAGES = {
+    BkBaseStorageType.KAFKA.value,
+    BkBaseStorageType.PULSAR.value,
+}
+
+# 可用于离线计算的存储类型
+ALLOWED_OFFLINE_STORAGES = {
+    BkBaseStorageType.HDFS.value,
+}
 
 # 业务下的RT表允许的存储类型
 BIZ_RT_TABLE_ALLOW_STORAGES = {
     BkBaseStorageType.HDFS.value,
     BkBaseStorageType.KAFKA.value,
+    BkBaseStorageType.PULSAR.value,
 }
 
 
