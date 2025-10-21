@@ -30,6 +30,7 @@ from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
 from django.conf import settings
+from django.core.exceptions import EmptyResultSet
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, QuerySet, When
 from django.http import FileResponse
@@ -168,6 +169,7 @@ class ListRisk(RiskMeta):
     RequestSerializer = ListRiskRequestSerializer
     bind_request = True
     audit_action = ActionEnum.LIST_RISK
+    STORAGE_SUFFIX = "doris"
 
     def perform_request(self, validated_request_data):
         request = validated_request_data.pop("_request")
@@ -264,7 +266,7 @@ class ListRisk(RiskMeta):
         order_field_name = order_field.lstrip("-")
         order_direction = "DESC" if order_field.startswith("-") else "ASC"
 
-        value_fields = ["risk_id", "strategy_id"]
+        value_fields = ["risk_id", "strategy_id", "raw_event_id", "event_time", "event_end_time"]
         if order_field_name not in value_fields:
             value_fields.append(order_field_name)
         if order_field_name == RISK_LEVEL_ORDER_FIELD and "event_time" not in value_fields:
@@ -359,10 +361,12 @@ class ListRisk(RiskMeta):
     ) -> int:
         base_query = queryset.order_by()
         base_sql = self._compile_queryset_sql(base_query)
+        if base_sql is None:
+            return 0
         base_expression = self._convert_to_bkbase_expression(base_sql)
         filtered_query = self._build_filtered_query(base_expression, event_filters, thedate_range)
         count_query = self._build_count_query(filtered_query)
-        count_sql = count_query.sql(dialect="hive")
+        count_sql = count_query.sql(dialect="mysql")
         logger.info("BKBase count SQL: %s", count_sql)
         count_resp = api.bk_base.query_sync(sql=count_sql) or {}
         results = count_resp.get("list") or []
@@ -386,6 +390,8 @@ class ListRisk(RiskMeta):
     ) -> List[str]:
         base_query = queryset
         base_sql = self._compile_queryset_sql(base_query)
+        if base_sql is None:
+            return []
         base_expression = self._convert_to_bkbase_expression(base_sql)
         filtered_query = self._build_filtered_query(base_expression, event_filters, thedate_range)
         data_query = self._apply_order_and_limit(
@@ -395,7 +401,7 @@ class ListRisk(RiskMeta):
             limit=limit,
             offset=offset,
         )
-        data_sql = data_query.sql(dialect="hive")
+        data_sql = data_query.sql(dialect="mysql")
         logger.info("BKBase data SQL: %s", data_sql)
         data_resp = api.bk_base.query_sync(sql=data_sql) or {}
         results = data_resp.get("list") or []
@@ -406,7 +412,7 @@ class ListRisk(RiskMeta):
 
     def _get_bkbase_table_map(self) -> Dict[str, str]:
         if not hasattr(self, "_bkbase_table_map"):
-            self._bkbase_table_map = {
+            table_map = {
                 Risk._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_RISK_BKBASE_RT_ID_KEY, fallback=Risk._meta.db_table
                 ),
@@ -420,6 +426,9 @@ class ListRisk(RiskMeta):
                     config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
                 ),
             }
+            self._bkbase_table_map = {
+                source: self._apply_storage_suffix(target) for source, target in table_map.items()
+            }
         return self._bkbase_table_map
 
     def _get_configured_table_name(self, *, config_key: str, fallback: str) -> str:
@@ -430,24 +439,43 @@ class ListRisk(RiskMeta):
             default=fallback,
         )
 
-    @staticmethod
-    def _split_table_parts(table_name: str) -> Tuple[Optional[str], Optional[str], str]:
+    @classmethod
+    def _apply_storage_suffix(cls, table_name: str) -> str:
+        cleaned = (table_name or "").strip()
+        if not cleaned:
+            return cleaned
+        parts = [part for part in cleaned.split(".") if part]
+        if parts and parts[-1].strip("`").lower() == cls.STORAGE_SUFFIX:
+            return ".".join(parts)
+        return ".".join(parts + [cls.STORAGE_SUFFIX])
+
+    @classmethod
+    def _split_table_parts(cls, table_name: str) -> Tuple[Optional[str], Optional[str], str]:
         cleaned = (table_name or "").strip().strip("`")
         if not cleaned:
             return None, None, ""
         parts = [part.strip().strip("`") for part in cleaned.split(".") if part.strip()]
         if not parts:
             return None, None, ""
+        storage_suffix = cls.STORAGE_SUFFIX.lower()
+        if len(parts) >= 2 and parts[-1].strip("`").lower() == storage_suffix:
+            merged = f"{parts[-2]}.{parts[-1]}"
+            parts = parts[:-2] + [merged]
         if len(parts) == 1:
             return None, None, parts[0]
         if len(parts) == 2:
             return None, parts[0], parts[1]
+        if len(parts) == 3:
+            return parts[0], parts[1], parts[2]
         # 当存在 catalog.db.table 或更多层级时，仅保留后三段
         return parts[-3], parts[-2], parts[-1]
 
-    def _compile_queryset_sql(self, queryset: QuerySet) -> str:
+    def _compile_queryset_sql(self, queryset: QuerySet) -> Optional[str]:
         compiler = queryset.query.get_compiler(using=queryset.db)
-        sql, params = compiler.as_sql()
+        try:
+            sql, params = compiler.as_sql()
+        except EmptyResultSet:
+            return None
         sql = self._clean_sql(sql or "")
         if params:
             sql = self._render_sql_with_params(sql, params)
@@ -512,7 +540,7 @@ class ListRisk(RiskMeta):
     def _format_table_identifier(cls, table_name: str) -> str:
         catalog, db, table = cls._split_table_parts(table_name)
         parts = [part for part in (catalog, db, table) if part]
-        return ".".join(f"`{part}`" for part in parts)
+        return ".".join(parts)
 
     def _prepare_base_expression(
         self, base_expression: exp.Expression, thedate_range: Optional[Tuple[str, str]]
@@ -615,11 +643,9 @@ class ListRisk(RiskMeta):
             this=prepared_base,
             alias=exp.TableAlias(this=exp.to_identifier("base_query")),
         )
-        query = exp.select(exp.column("*", table="base_query")).from_(base_subquery)
+        query = exp.select(exp.Star()).from_(base_subquery)
 
         conditions: List[exp.Expression] = []
-        if event_filters:
-            conditions.extend(self._build_thedate_conditions(alias="base_query", thedate_range=thedate_range))
         conditions.extend(
             condition
             for index, item in enumerate(event_filters)
@@ -688,10 +714,11 @@ class ListRisk(RiskMeta):
                 expression=self._column("base_query", "strategy_id"),
             ),
             exp.EQ(
-                this=self._column(alias, "risk_id"),
-                expression=self._column("base_query", "risk_id"),
+                this=self._column(alias, "raw_event_id"),
+                expression=self._column("base_query", "raw_event_id"),
             ),
         ]
+        join_conditions.extend(self._build_event_timestamp_conditions(alias))
 
         field_expression = self._build_event_field_expression(alias, filter_item)
         if field_expression is None:
@@ -722,6 +749,23 @@ class ListRisk(RiskMeta):
             exp.LTE(this=self._column(alias, "thedate"), expression=self._literal(end_date)),
         ]
 
+    def _build_event_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
+        event_timestamp = self._column(alias, "dteventtimestamp")
+        start_datetime = self._column("base_query", "event_time")
+        end_datetime = exp.func(
+            "COALESCE",
+            self._column("base_query", "event_end_time"),
+            self._column("base_query", "event_time"),
+        )
+
+        start_milliseconds = self._to_milliseconds(start_datetime)
+        end_milliseconds = self._to_milliseconds(end_datetime)
+
+        return [
+            exp.GTE(this=event_timestamp.copy(), expression=start_milliseconds),
+            exp.LTE(this=event_timestamp.copy(), expression=end_milliseconds),
+        ]
+
     def _build_event_field_expression(self, alias: str, filter_item: Dict[str, Any]) -> Optional[exp.Expression]:
         field_name = filter_item.get("field")
         if not field_name:
@@ -740,7 +784,7 @@ class ListRisk(RiskMeta):
             return None
 
         json_path = self._build_json_path(field_name)
-        return exp.func("JSON_EXTRACT", column, exp.Literal.string(json_path))
+        return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
 
     def _build_event_filter_expression(
         self, field_expr: exp.Expression, filter_item: Dict[str, Any]
@@ -795,7 +839,7 @@ class ListRisk(RiskMeta):
         if operator in {EventFilterOperator.CONTAINS.value, EventFilterOperator.NOT_CONTAINS.value}:
             pattern = self._escape_like_pattern(str(value))
             like_expr = exp.Like(this=field_expr.copy(), expression=exp.Literal.string(f"%{pattern}%"))
-            escape_expr = exp.Escape(this=like_expr, expression=exp.Literal.string("\\"))
+            escape_expr = like_expr
             return exp.not_(escape_expr) if operator == EventFilterOperator.NOT_CONTAINS.value else escape_expr
 
         return None
@@ -815,6 +859,10 @@ class ListRisk(RiskMeta):
 
     def _column(self, alias: str, identifier: str) -> exp.Column:
         return exp.column(identifier, table=alias)
+
+    def _to_milliseconds(self, expression: exp.Expression) -> exp.Expression:
+        unix_timestamp = exp.func("UNIX_TIMESTAMP", expression.copy())
+        return exp.Mul(this=unix_timestamp, expression=exp.Literal.number("1000"))
 
     def _literal(self, value: Any) -> exp.Expression:
         if value is None:

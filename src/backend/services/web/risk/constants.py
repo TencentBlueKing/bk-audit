@@ -139,6 +139,14 @@ class EventMappingFields:
             self.OPERATOR,
         ]
 
+    @classmethod
+    def dynamic_json_fields(cls):
+        """
+        动态JSON字段
+        """
+
+        return [cls.EVENT_DATA, cls.EVENT_EVIDENCE]
+
     EVENT_ID = Field(
         field_name="event_id",
         alias_name="event_id",

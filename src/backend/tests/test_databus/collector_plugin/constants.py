@@ -267,8 +267,14 @@ EXPECTED_RESULT_TABLE_NAME = "bklog_event_plugin"
 EXPECTED_CLEAN_CONFIG_NAME = "event_plugin"
 EXPECTED_PHYSICAL_TABLE_NAME = f"mapleleaf_{settings.DEFAULT_BK_BIZ_ID}_bklog.event_plugin"
 
-EXPECTED_DORIS_FIELDS = [
-    {
+_DYNAMIC_JSON_FIELDS = {"event_evidence", "event_data"}
+
+# Doris fields follow handler logic:
+# - add physical_field and is_doc_values
+# - dynamic JSON fields should not be marked as is_json; instead set is_original_json
+EXPECTED_DORIS_FIELDS = []
+for field in EXPECTED_EVENT_FIELDS:
+    item = {
         "field_name": field["field_name"],
         "field_type": field["field_type"],
         "field_alias": field["field_alias"],
@@ -279,5 +285,7 @@ EXPECTED_DORIS_FIELDS = [
         "physical_field": field["field_name"],
         "is_doc_values": field["is_dimension"],
     }
-    for field in EXPECTED_EVENT_FIELDS
-]
+    if field["field_name"] in _DYNAMIC_JSON_FIELDS:
+        item["is_json"] = False
+        item["is_original_json"] = True
+    EXPECTED_DORIS_FIELDS.append(item)
