@@ -19,14 +19,23 @@ class TestTicketPermissionResourceProvider:
         self.provider = TicketPermissionResourceProvider()
 
     def _mk_tp(self, risk_id: str, action: str, user: str, user_type: str = "operator", ts: datetime.datetime = None):
-        ts = ts or timezone.now()
-        return TicketPermission.objects.create(
+        """
+        注意：TicketPermission.authorized_at 使用 auto_now_add=True，直接在 create() 中传值会被覆盖。
+        为了保证时间精确可控（避免 CI 与本地因为毫秒边界/执行时延产生不稳定），
+        这里先创建，再通过 update() 显式写入 authorized_at。
+        """
+        obj = TicketPermission.objects.create(
             risk_id=risk_id,
             action=action,
             user=user,
             user_type=user_type,
-            authorized_at=ts,
         )
+        if ts is None:
+            ts = timezone.now()
+        # 通过 update() 绕过 auto_now_add 行为，确保写入指定时间
+        TicketPermission.objects.filter(pk=obj.pk).update(authorized_at=ts)
+        obj.refresh_from_db()
+        return obj
 
     def test_filter_list_and_parent_filter(self):
         a = self._mk_tp("R1", "list_risk", "alice")
@@ -73,8 +82,8 @@ class TestTicketPermissionResourceProvider:
         assert results2 == [{"id": str(a.pk), "display_name": str(a.pk)}]
 
     def test_fetch_instance_list_and_schema(self):
-        t0 = timezone.now() - datetime.timedelta(minutes=10)
         t1 = timezone.now()
+        t0 = t1 - datetime.timedelta(minutes=10)
         a = self._mk_tp("R1", "list_risk", "alice", ts=t1)
         # 构造毫秒时间窗覆盖 a
         filter_fd = FancyDict(start_time=int((t0.timestamp()) * 1000), end_time=int((t1.timestamp()) * 1000))

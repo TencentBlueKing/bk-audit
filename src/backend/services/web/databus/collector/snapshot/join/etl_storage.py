@@ -468,7 +468,7 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
             f
             for f in schema_fields
             if f["field_name"] not in build_in_field_names
-            and (is_json is None or f["is_json"] == is_json or f["is_original_json"] == is_json)
+            and (is_json is None or any([f["is_json"], f["is_original_json"]]) == is_json)
         ]
 
     @property
