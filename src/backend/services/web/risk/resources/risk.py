@@ -540,7 +540,7 @@ class ListRisk(RiskMeta):
     def _format_table_identifier(cls, table_name: str) -> str:
         catalog, db, table = cls._split_table_parts(table_name)
         parts = [part for part in (catalog, db, table) if part]
-        return ".".join(f"`{part}`" for part in parts)
+        return ".".join(parts)
 
     def _prepare_base_expression(
         self, base_expression: exp.Expression, thedate_range: Optional[Tuple[str, str]]
