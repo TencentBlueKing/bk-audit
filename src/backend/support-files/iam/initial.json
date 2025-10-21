@@ -19,6 +19,21 @@
     {
       "operation": "upsert_resource_type",
       "data": {
+        "id": "ticket_permission",
+        "name": "风险工单权限",
+        "name_en": "Ticket Permission",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
         "id": "system",
         "name": "接入系统",
         "name_en": "Systems",

@@ -216,6 +216,7 @@ class JsonSchemaFieldType(TextChoices):
     BOOLEAN = "boolean", gettext_lazy("Boolean")
     NULL = "null", gettext_lazy("Null")
     ENUM = "enum", gettext_lazy("Enum")
+    JSON = "json", gettext_lazy("Json")
 
     @classmethod
     def get_bkbase_field_type(cls, field_type: str) -> str:
@@ -228,6 +229,7 @@ class JsonSchemaFieldType(TextChoices):
             cls.BOOLEAN.value: FIELD_TYPE_STRING,
             cls.NULL.value: FIELD_TYPE_STRING,
             cls.ENUM.value: FIELD_TYPE_STRING,
+            cls.JSON.value: FIELD_TYPE_TEXT,
         }
         try:
             return bkbase_field_map[field_type]

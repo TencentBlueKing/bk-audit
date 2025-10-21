@@ -447,7 +447,8 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                 "is_dimension": False,
                 "is_key": False,
                 "field_index": index,
-                "is_json": field["type"] in [JsonSchemaFieldType.OBJECT.value, JsonSchemaFieldType.ARRAY.value],
+                "is_json": field["type"]
+                in [JsonSchemaFieldType.OBJECT.value, JsonSchemaFieldType.ARRAY.value, JsonSchemaFieldType.JSON.value],
             }
             for index, field in enumerate(schema)
         ]

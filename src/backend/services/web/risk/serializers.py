@@ -43,6 +43,7 @@ from services.web.risk.models import (
     RiskExperience,
     RiskRule,
     TicketNode,
+    TicketPermission,
 )
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.serializers import EventFieldSerializer
@@ -223,6 +224,14 @@ class EventFieldFilterItemSerializer(serializers.Serializer):
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
     operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
     value = AnyValueField(label=gettext_lazy("值"))
+
+
+class TicketPermissionProviderSerializer(serializers.ModelSerializer):
+    """用于反向拉取 TicketPermission 的快照结构"""
+
+    class Meta:
+        model = TicketPermission
+        fields = "__all__"
 
 
 class ListRiskRequestSerializer(serializers.Serializer):
