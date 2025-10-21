@@ -712,11 +712,7 @@ class ListRisk(RiskMeta):
             exp.EQ(
                 this=self._column(alias, "strategy_id"),
                 expression=self._column("base_query", "strategy_id"),
-            ),
-            exp.EQ(
-                this=self._column(alias, "risk_id"),
-                expression=self._column("base_query", "risk_id"),
-            ),
+            )
         ]
 
         field_expression = self._build_event_field_expression(alias, filter_item)
