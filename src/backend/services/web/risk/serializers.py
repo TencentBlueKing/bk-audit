@@ -216,6 +216,14 @@ class TicketPermissionProviderSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class TicketPermissionProviderSerializer(serializers.ModelSerializer):
+    """用于反向拉取 TicketPermission 的快照结构"""
+
+    class Meta:
+        model = TicketPermission
+        fields = "__all__"
+
+
 class ListRiskRequestSerializer(serializers.Serializer):
     """
     List Risk
