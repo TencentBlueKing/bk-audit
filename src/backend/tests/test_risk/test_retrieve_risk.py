@@ -138,6 +138,7 @@ class TestListRiskResource(TestCase):
 
         def fake_query_sync(sql):
             sql_log.append(sql)
+            print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
@@ -160,6 +161,7 @@ class TestListRiskResource(TestCase):
 
         def fake_query_sync(sql):
             sql_log.append(sql)
+            print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
@@ -187,8 +189,8 @@ class TestListRiskResource(TestCase):
         normalized_sql = [sql.replace("`", "") for sql in sql_log]
         self.assertTrue(any(("JSON_EXTRACT" in sql) or ("GET_JSON_OBJECT" in sql) for sql in normalized_sql))
         self.assertTrue(any("risk_event_0.risk_id = base_query.risk_id" in sql for sql in normalized_sql))
-        self.assertTrue(any("base_query.thedate >=" in sql for sql in normalized_sql))
         self.assertTrue(any("risk_event_0.thedate >=" in sql for sql in normalized_sql))
+        self.assertFalse(any("base_query.thedate" in sql for sql in normalized_sql))
 
         event_table = self._format_expected_table(self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]).replace(
             "`", ""
@@ -201,6 +203,7 @@ class TestListRiskResource(TestCase):
 
         def fake_query_sync(sql):
             sql_log.append(sql)
+            print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
@@ -270,6 +273,7 @@ class TestListRiskResource(TestCase):
 
         def fake_query_sync(sql):
             sql_log.append(sql)
+            print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": extra_risk.risk_id, "strategy_id": extra_risk.strategy_id}]}
@@ -378,6 +382,7 @@ class TestListMineAndNoticingRisk(TestCase):
 
         def fake_query_sync(sql):
             sql_log.append(sql)
+            print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk_owned.risk_id, "strategy_id": self.strategy.strategy_id}]}
@@ -421,6 +426,7 @@ class TestListMineAndNoticingRisk(TestCase):
 
         def fake_query_sync(sql):
             sql_log.append(sql)
+            print(sql)
             if "COUNT" in sql.upper():
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk_noticed.risk_id, "strategy_id": self.strategy.strategy_id}]}
