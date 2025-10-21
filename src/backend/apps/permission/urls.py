@@ -45,9 +45,13 @@ except (RuntimeError, ImportError):
     StrategyTagResourceProvider = None
 
 try:
-    from services.web.risk.provider import RiskResourceProvider
+    from services.web.risk.provider import (
+        RiskResourceProvider,
+        TicketPermissionResourceProvider,
+    )
 except (RuntimeError, ImportError):
     RiskResourceProvider = None
+    TicketPermissionResourceProvider = None
 
 try:
     from services.web.vision.providers import PanelResourceProvider
@@ -76,6 +80,8 @@ if StrategyResourceProvider is not None:
 
 if RiskResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.RISK.id, RiskResourceProvider())
+if TicketPermissionResourceProvider is not None:
+    resources_dispatcher.register(ResourceEnum.TICKET_PERMISSION.id, TicketPermissionResourceProvider())
 
 if PanelResourceProvider is not None:
     resources_dispatcher.register(ResourceEnum.PANEL.id, PanelResourceProvider())

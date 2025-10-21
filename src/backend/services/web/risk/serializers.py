@@ -41,6 +41,7 @@ from services.web.risk.models import (
     RiskExperience,
     RiskRule,
     TicketNode,
+    TicketPermission,
 )
 from services.web.strategy_v2.models import Strategy
 from services.web.strategy_v2.serializers import EventFieldSerializer
@@ -205,6 +206,14 @@ class RiskProviderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Risk
         exclude = ["strategy"]
+
+
+class TicketPermissionProviderSerializer(serializers.ModelSerializer):
+    """用于反向拉取 TicketPermission 的快照结构"""
+
+    class Meta:
+        model = TicketPermission
+        fields = "__all__"
 
 
 class ListRiskRequestSerializer(serializers.Serializer):
