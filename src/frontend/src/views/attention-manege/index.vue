@@ -482,6 +482,7 @@
       event_content: '',
       risk_level: '',
       title: '',
+      use_bkbase: true,
       notice_users: '',
     };
     const dataParams: Record<string, any> = {

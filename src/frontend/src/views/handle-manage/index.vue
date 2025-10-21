@@ -573,6 +573,7 @@
       status: '',
       event_content: '',
       risk_level: '',
+      use_bkbase: true,
       title: '',
       notice_users: '',
     };
