@@ -188,7 +188,7 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         normalized_sql = [sql.replace("`", "") for sql in sql_log]
         self.assertTrue(any(("JSON_EXTRACT" in sql) or ("GET_JSON_OBJECT" in sql) for sql in normalized_sql))
-        self.assertTrue(any("risk_event_0.risk_id = base_query.risk_id" in sql for sql in normalized_sql))
+        self.assertTrue(any("risk_event_0.strategy_id = base_query.strategy_id" in sql for sql in normalized_sql))
         self.assertTrue(any("risk_event_0.thedate >=" in sql for sql in normalized_sql))
         self.assertFalse(any("base_query.thedate" in sql for sql in normalized_sql))
 
