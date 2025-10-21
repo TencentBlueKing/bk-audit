@@ -26,6 +26,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     JoinDataType,
     SnapshotRunningStatus,
 )
@@ -46,7 +47,12 @@ class SyncAssetBkbaseRtIdsTests(TestCase):
         config_get_mock.return_value = ""
 
         snapshots: Dict[ResourceEnum, mock.Mock] = {}
-        for resource_cls in [ResourceEnum.RISK, ResourceEnum.STRATEGY, ResourceEnum.STRATEGY_TAG]:
+        for resource_cls in [
+            ResourceEnum.RISK,
+            ResourceEnum.STRATEGY,
+            ResourceEnum.STRATEGY_TAG,
+            ResourceEnum.TICKET_PERMISSION,
+        ]:
             snapshot_mock = mock.Mock(spec=Snapshot)
             snapshot_mock.system_id = resource_cls.system_id
             snapshot_mock.resource_type_id = resource_cls.id
@@ -60,6 +66,7 @@ class SyncAssetBkbaseRtIdsTests(TestCase):
             snapshots[ResourceEnum.RISK],
             snapshots[ResourceEnum.STRATEGY],
             snapshots[ResourceEnum.STRATEGY_TAG],
+            snapshots[ResourceEnum.TICKET_PERMISSION],
         ]
 
         sync_asset_bkbase_rt_ids()
@@ -83,6 +90,12 @@ class SyncAssetBkbaseRtIdsTests(TestCase):
                 config_level=mock.ANY,
                 instance_key=settings.DEFAULT_NAMESPACE,
             ),
+            mock.call(
+                ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
+                str(snapshots[ResourceEnum.TICKET_PERMISSION].bkbase_table_id),
+                config_level=mock.ANY,
+                instance_key=settings.DEFAULT_NAMESPACE,
+            ),
         ]
         config_set_mock.assert_has_calls(expected_calls, any_order=True)
 
@@ -93,11 +106,7 @@ class SyncAssetBkbaseRtIdsTests(TestCase):
         self, snapshot_objects_mock, config_get_mock, config_set_mock
     ):
         """已有配置的 namespace 应跳过，不再重复写入。"""
-        config_get_mock.side_effect = [
-            "existing_rt",
-            "",
-            "",
-        ]
+        config_get_mock.side_effect = ["existing_rt", "", "", ""]
 
         snapshot_mock = mock.Mock(spec=Snapshot)
         snapshot_mock.bkbase_data_id = 123
@@ -115,6 +124,12 @@ class SyncAssetBkbaseRtIdsTests(TestCase):
         )
         config_set_mock.assert_any_call(
             ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+            str(snapshot_mock.bkbase_table_id),
+            config_level=mock.ANY,
+            instance_key=settings.DEFAULT_NAMESPACE,
+        )
+        config_set_mock.assert_any_call(
+            ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
             str(snapshot_mock.bkbase_table_id),
             config_level=mock.ANY,
             instance_key=settings.DEFAULT_NAMESPACE,
