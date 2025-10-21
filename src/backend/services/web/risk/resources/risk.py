@@ -615,7 +615,7 @@ class ListRisk(RiskMeta):
             this=prepared_base,
             alias=exp.TableAlias(this=exp.to_identifier("base_query")),
         )
-        query = exp.select(exp.column("*", table="base_query")).from_(base_subquery)
+        query = exp.select(exp.Star()).from_(base_subquery)
 
         conditions: List[exp.Expression] = []
         if event_filters:
