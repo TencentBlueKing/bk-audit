@@ -502,6 +502,7 @@ class EventCollectorEtlHandler(PluginEtlHandler):
         """
 
         doris_fields = []
+        dynamic_json_fields = {field.field_name for field in EventMappingFields.dynamic_json_fields()}
         for field in cls.get_fields():
             field_copy = {k: v for k, v in field.items() if k not in {"__field_type"}}
             field_copy.update(
@@ -510,6 +511,14 @@ class EventCollectorEtlHandler(PluginEtlHandler):
                     "is_doc_values": field["is_dimension"],  # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
                 }
             )
+            # 动态 JSON 字段 不能设置 is_json 配置(Variant类型)，需要设置 is_original_json 配置
+            if field["field_name"] in dynamic_json_fields:
+                field_copy.update(
+                    {
+                        "is_json": False,
+                        "is_original_json": True,
+                    }
+                )
             doris_fields.append(field_copy)
         return doris_fields
 

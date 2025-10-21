@@ -57,6 +57,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     COLLECTOR_PLUGIN_ID,
     PULL_HANDLER_PRE_CHECK_TIMEOUT,
     EtlConfigEnum,
@@ -438,6 +439,7 @@ def sync_asset_bkbase_rt_ids():
         ResourceEnum.RISK: ASSET_RISK_BKBASE_RT_ID_KEY,
         ResourceEnum.STRATEGY: ASSET_STRATEGY_BKBASE_RT_ID_KEY,
         ResourceEnum.STRATEGY_TAG: ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+        ResourceEnum.TICKET_PERMISSION: ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     }
 
     # TODO: 当前只有一个 namespace，直接使用 settings.DEFAULT_NAMESPACE，后续需要支持多 namespace
