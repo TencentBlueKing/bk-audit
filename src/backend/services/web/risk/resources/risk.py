@@ -762,7 +762,7 @@ class ListRisk(RiskMeta):
             return None
 
         json_path = self._build_json_path(field_name)
-        return exp.func("JSON_EXTRACT", column, exp.Literal.string(json_path))
+        return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
 
     def _build_event_filter_expression(
         self, field_expr: exp.Expression, filter_item: Dict[str, Any]
