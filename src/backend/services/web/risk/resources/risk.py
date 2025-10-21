@@ -30,6 +30,7 @@ from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
 from django.conf import settings
+from django.core.exceptions import EmptyResultSet
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, QuerySet, When
 from django.http import FileResponse
@@ -360,6 +361,8 @@ class ListRisk(RiskMeta):
     ) -> int:
         base_query = queryset.order_by()
         base_sql = self._compile_queryset_sql(base_query)
+        if base_sql is None:
+            return 0
         base_expression = self._convert_to_bkbase_expression(base_sql)
         filtered_query = self._build_filtered_query(base_expression, event_filters, thedate_range)
         count_query = self._build_count_query(filtered_query)
@@ -387,6 +390,8 @@ class ListRisk(RiskMeta):
     ) -> List[str]:
         base_query = queryset
         base_sql = self._compile_queryset_sql(base_query)
+        if base_sql is None:
+            return []
         base_expression = self._convert_to_bkbase_expression(base_sql)
         filtered_query = self._build_filtered_query(base_expression, event_filters, thedate_range)
         data_query = self._apply_order_and_limit(
@@ -465,9 +470,12 @@ class ListRisk(RiskMeta):
         # 当存在 catalog.db.table 或更多层级时，仅保留后三段
         return parts[-3], parts[-2], parts[-1]
 
-    def _compile_queryset_sql(self, queryset: QuerySet) -> str:
+    def _compile_queryset_sql(self, queryset: QuerySet) -> Optional[str]:
         compiler = queryset.query.get_compiler(using=queryset.db)
-        sql, params = compiler.as_sql()
+        try:
+            sql, params = compiler.as_sql()
+        except EmptyResultSet:
+            return None
         sql = self._clean_sql(sql or "")
         if params:
             sql = self._render_sql_with_params(sql, params)
