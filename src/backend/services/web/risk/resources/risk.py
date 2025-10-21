@@ -168,6 +168,7 @@ class ListRisk(RiskMeta):
     RequestSerializer = ListRiskRequestSerializer
     bind_request = True
     audit_action = ActionEnum.LIST_RISK
+    STORAGE_SUFFIX = "doris"
 
     def perform_request(self, validated_request_data):
         request = validated_request_data.pop("_request")
@@ -406,7 +407,7 @@ class ListRisk(RiskMeta):
 
     def _get_bkbase_table_map(self) -> Dict[str, str]:
         if not hasattr(self, "_bkbase_table_map"):
-            self._bkbase_table_map = {
+            table_map = {
                 Risk._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_RISK_BKBASE_RT_ID_KEY, fallback=Risk._meta.db_table
                 ),
@@ -420,6 +421,9 @@ class ListRisk(RiskMeta):
                     config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
                 ),
             }
+            self._bkbase_table_map = {
+                source: self._apply_storage_suffix(target) for source, target in table_map.items()
+            }
         return self._bkbase_table_map
 
     def _get_configured_table_name(self, *, config_key: str, fallback: str) -> str:
@@ -430,18 +434,34 @@ class ListRisk(RiskMeta):
             default=fallback,
         )
 
-    @staticmethod
-    def _split_table_parts(table_name: str) -> Tuple[Optional[str], Optional[str], str]:
+    @classmethod
+    def _apply_storage_suffix(cls, table_name: str) -> str:
+        cleaned = (table_name or "").strip()
+        if not cleaned:
+            return cleaned
+        parts = [part for part in cleaned.split(".") if part]
+        if parts and parts[-1].strip("`").lower() == cls.STORAGE_SUFFIX:
+            return ".".join(parts)
+        return ".".join(parts + [cls.STORAGE_SUFFIX])
+
+    @classmethod
+    def _split_table_parts(cls, table_name: str) -> Tuple[Optional[str], Optional[str], str]:
         cleaned = (table_name or "").strip().strip("`")
         if not cleaned:
             return None, None, ""
         parts = [part.strip().strip("`") for part in cleaned.split(".") if part.strip()]
         if not parts:
             return None, None, ""
+        storage_suffix = cls.STORAGE_SUFFIX.lower()
+        if len(parts) >= 2 and parts[-1].strip("`").lower() == storage_suffix:
+            merged = f"{parts[-2]}.{parts[-1]}"
+            parts = parts[:-2] + [merged]
         if len(parts) == 1:
             return None, None, parts[0]
         if len(parts) == 2:
             return None, parts[0], parts[1]
+        if len(parts) == 3:
+            return parts[0], parts[1], parts[2]
         # 当存在 catalog.db.table 或更多层级时，仅保留后三段
         return parts[-3], parts[-2], parts[-1]
 

@@ -89,6 +89,10 @@ class TestListRiskResource(TestCase):
 
     def _format_expected_table(self, table_id: str) -> str:
         parts = [part for part in table_id.split(".") if part]
+        if not parts:
+            return ""
+        if parts[-1].strip("`").lower() != "doris":
+            parts[-1] = f"{parts[-1]}.doris"
         return ".".join(f"`{part}`" for part in parts)
 
     def _make_request(self, query=None):
@@ -146,7 +150,7 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertEqual(len(sql_log), 2)  # count + data
 
-        risk_table = self.bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]
+        risk_table = f"{self.bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]}.doris"
         self.assertIn(risk_table, sql_log[0])
         self.assertIn(risk_table, sql_log[1])
         assert_hive_sql(self, sql_log)
@@ -215,7 +219,7 @@ class TestListRiskResource(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
 
-        strategy_table = self.bkbase_table_config[ASSET_STRATEGY_BKBASE_RT_ID_KEY]
+        strategy_table = f"{self.bkbase_table_config[ASSET_STRATEGY_BKBASE_RT_ID_KEY]}.doris"
         self.assertTrue(any(strategy_table in sql for sql in sql_log))
         data_sql = sql_log[1]
         data_sql_normalized = data_sql.replace("`", "")
