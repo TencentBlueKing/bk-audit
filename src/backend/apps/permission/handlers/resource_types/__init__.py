@@ -26,7 +26,7 @@ from apps.permission.handlers.resource_types.collection_bk_log import Collection
 from apps.permission.handlers.resource_types.dept_bk_usermgr import DeptBKUsermgr
 from apps.permission.handlers.resource_types.notice_group import NoticeGroup
 from apps.permission.handlers.resource_types.panel import Panel
-from apps.permission.handlers.resource_types.risk import Risk
+from apps.permission.handlers.resource_types.risk import Risk, TicketPermission
 from apps.permission.handlers.resource_types.sensitive_object import (
     SensitiveAction,
     SensitiveObject,
@@ -56,6 +56,7 @@ class ResourceEnum:
     LINK_TABLE = LinkTable
     NOTICE_GROUP = NoticeGroup
     RISK = Risk
+    TICKET_PERMISSION = TicketPermission
     PANEL = Panel
     TAG = Tag
     TOOL = Tool
