@@ -448,6 +448,7 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                 "is_key": False,
                 "field_index": index,
                 "is_json": field["type"] in [JsonSchemaFieldType.OBJECT.value, JsonSchemaFieldType.ARRAY.value],
+                "is_original_json": field["type"] in [JsonSchemaFieldType.JSON.value],
             }
             for index, field in enumerate(schema)
         ]
@@ -466,7 +467,8 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
         return [
             f
             for f in schema_fields
-            if f["field_name"] not in build_in_field_names and (is_json is None or f["is_json"] == is_json)
+            if f["field_name"] not in build_in_field_names
+            and (is_json is None or any([f["is_json"], f["is_original_json"]]) == is_json)
         ]
 
     @property

@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+from collections import OrderedDict
+
+from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
 
@@ -55,3 +58,96 @@ class ExtraDataSerializerMixin(serializers.Serializer):
         if self.parse_nested_data:
             validated_data = parse_nested_params(validated_data)
         return validated_data
+
+
+class FieldType(object):
+    BOOLEAN = "Boolean"
+    NUMBER = "Number"
+    STRING = "String"
+    INTEGER = "Integer"
+    OBJECT = "Object"
+    ARRAY = "Array"
+    ENUM = "Enum"
+    JSON = "Json"
+
+
+def get_serializer_fields(serializer_class):
+    """
+    遍历serializer所有field，生成关于该serializer的schema列表
+    """
+
+    if not serializer_class:
+        return []
+
+    serializer = serializer_class()
+
+    if isinstance(serializer, serializers.ListSerializer):
+        return []
+
+    if not isinstance(serializer, serializers.Serializer):
+        return []
+
+    fields = []
+    for field in list(serializer.fields.values()):
+        if field.read_only or isinstance(field, serializers.HiddenField):
+            continue
+
+        fields.append(field_to_schema(field))
+
+    return fields
+
+
+def field_to_schema(field):
+    """
+    根据serializer field生成关于该field数据结构的schema
+    """
+    description = force_str(field.label) if field.label else ""
+
+    type_params = {
+        "type": FieldType.STRING,
+    }
+
+    if isinstance(field, (serializers.ListSerializer, serializers.ListField)):
+        child_schema = field_to_schema(field.child)
+        type_params = {"type": FieldType.ARRAY, "items": child_schema}
+    elif isinstance(field, serializers.Serializer):
+        type_params = {
+            "type": FieldType.OBJECT,
+            "properties": OrderedDict([(key, field_to_schema(value)) for key, value in list(field.fields.items())]),
+        }
+    elif isinstance(field, serializers.JSONField):
+        type_params = {
+            "type": FieldType.JSON,
+        }
+    elif isinstance(field, serializers.RelatedField):
+        type_params = {
+            "type": FieldType.STRING,
+        }
+    elif isinstance(field, (serializers.MultipleChoiceField, serializers.ChoiceField)):
+        type_params = {
+            "type": FieldType.ENUM,
+            "choices": list(field.choices.keys()),
+        }
+    elif isinstance(field, serializers.BooleanField):
+        type_params = {
+            "type": FieldType.BOOLEAN,
+        }
+    elif isinstance(field, (serializers.DecimalField, serializers.FloatField)):
+        type_params = {
+            "type": FieldType.NUMBER,
+        }
+    elif isinstance(field, serializers.IntegerField):
+        type_params = {
+            "type": FieldType.INTEGER,
+        }
+
+    type_params.update(
+        {
+            "required": field.required,
+            "name": field.field_name,
+            "source_name": field.source,
+            "description": description,
+            "default": field.default,
+        }
+    )
+    return type_params

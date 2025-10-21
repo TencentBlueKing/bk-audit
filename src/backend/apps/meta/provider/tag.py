@@ -18,7 +18,6 @@ to the current version of the project delivered to anyone in the future.
 
 import datetime
 
-from bk_resource.tools import get_serializer_fields
 from django.db.models import Q
 from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult, SchemaResult
@@ -26,6 +25,7 @@ from iam.resource.provider import ListResult, SchemaResult
 from apps.meta.models import Tag
 from apps.permission.provider.base import BaseResourceProvider
 from apps.permission.serializers import TagListSerializer
+from core.serializers import get_serializer_fields
 
 
 class TagBaseProvider(BaseResourceProvider):
