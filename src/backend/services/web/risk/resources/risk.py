@@ -366,7 +366,7 @@ class ListRisk(RiskMeta):
         base_expression = self._convert_to_bkbase_expression(base_sql)
         filtered_query = self._build_filtered_query(base_expression, event_filters, thedate_range)
         count_query = self._build_count_query(filtered_query)
-        count_sql = count_query.sql(dialect="hive")
+        count_sql = count_query.sql(dialect="mysql")
         logger.info("BKBase count SQL: %s", count_sql)
         count_resp = api.bk_base.query_sync(sql=count_sql) or {}
         results = count_resp.get("list") or []
@@ -401,7 +401,7 @@ class ListRisk(RiskMeta):
             limit=limit,
             offset=offset,
         )
-        data_sql = data_query.sql(dialect="hive")
+        data_sql = data_query.sql(dialect="mysql")
         logger.info("BKBase data SQL: %s", data_sql)
         data_resp = api.bk_base.query_sync(sql=data_sql) or {}
         results = data_resp.get("list") or []
@@ -646,8 +646,6 @@ class ListRisk(RiskMeta):
         query = exp.select(exp.Star()).from_(base_subquery)
 
         conditions: List[exp.Expression] = []
-        if event_filters:
-            conditions.extend(self._build_thedate_conditions(alias="base_query", thedate_range=thedate_range))
         conditions.extend(
             condition
             for index, item in enumerate(event_filters)
