@@ -36,7 +36,12 @@ export default function () {
       if (values.length === 1) {
         try {
           // 尝试解析JSON，如果不是JSON则直接使用原值
-          params[processedKey] = JSON.parse(values[0]);
+          // 判断 values[0] 是否为对象
+          if (typeof JSON.parse(values[0]) === 'object') {
+            params[processedKey] = [JSON.parse(values[0])];
+          } else {
+            params[processedKey] = JSON.parse(values[0]);
+          }
         } catch {
           params[processedKey] = values[0] || '';
         }

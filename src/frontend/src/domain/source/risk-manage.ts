@@ -34,7 +34,7 @@ class RiskManage extends ModuleBase {
     page: number,
     page_size: number
   }, payload = {} as IRequestPayload) {
-    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/`, {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/?page=${params.page}&page_size=${params.page_size}`, {
       params,
       payload,
     });
@@ -44,7 +44,7 @@ class RiskManage extends ModuleBase {
       page: number,
       page_size: number
     }) {
-    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/`, {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/todo/?page=${params.page}&page_size=${params.page_size}`, {
       params,
     });
   }
