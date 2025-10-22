@@ -70,23 +70,29 @@
       @add-custom-constant="addCustomConstant"
       @select="handleFieldSelect" />
 
+    <!-- 字段值映射 -->
     <div
       v-else-if="fieldKey === 'enum_mappings' && localEventItem.enum_mappings"
       class="field-cell-div"
       style="width: 100%;cursor: pointer;"
-      @click="handleFiledDict">
+      @click="handleFiledDict"
+      @mouseleave="handleMouseLeave">
       <span
         :style="{
           color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
         }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : '请点击配置' }}</span>
       <audit-popconfirm
         v-if="localEventItem.enum_mappings.mappings.length"
+        ref="popconfirmRef"
         :confirm-handler="() => handleRemoveMappings()"
         :content="t('删除操作无法撤回，请谨慎操作！')"
-        :title="t('确认删除该配置？')">
+        :title="t('确认删除该配置？')"
+        @hide="handlePopconfirmHide">
         <audit-icon
-          class="remove-mappings-btn remove-btn"
-          type="delete-fill" />
+          class="remove-btn"
+          :class="{ 'is-popconfirm-visible': isPopconfirmVisible }"
+          type="delete-fill"
+          @click="handlePopconfirmShow" />
       </audit-popconfirm>
       <field-dict
         ref="fieldDictRef"
@@ -107,7 +113,8 @@
       <div
         v-else
         class="field-cell-div"
-        @click="() => handleClick(localEventItem.drill_config)">
+        @click="() => handleClick(localEventItem.drill_config)"
+        @mouseleave="handleDrillMouseLeave">
         <bk-popover
           placement="top"
           theme="black">
@@ -124,13 +131,17 @@
         </bk-popover>
         <!-- 删除 -->
         <audit-popconfirm
+          ref="drillPopconfirmRef"
           class="ml8"
           :confirm-handler="() => handleRemove()"
           :content="t('移除操作无法撤回，请谨慎操作！')"
-          :title="t('确认移除以下工具？')">
+          :title="t('确认移除以下工具？')"
+          @hide="handleDrillPopconfirmHide">
           <audit-icon
             class="remove-btn"
-            type="delete-fill" />
+            :class="{ 'is-popconfirm-visible': isDrillPopconfirmVisible }"
+            type="delete-fill"
+            @click="handleDrillPopconfirmShow" />
           <template #content>
             <bk-table
               ref="refTable"
@@ -246,11 +257,15 @@
   const localEventItem = ref(props.eventItem);
   const showFieldReference = ref(false);
   const showFieldDict = ref(false);
+  const isPopconfirmVisible = ref(false);
+  const isDrillPopconfirmVisible = ref(false);
 
   const fieldMappingRef = ref();
   const fieldReferenceRef = ref();
   const displayNameRef = ref();
   const fieldDictRef = ref();
+  const popconfirmRef = ref();
+  const drillPopconfirmRef = ref();
 
   // const iconMap = {
   //   data_search: 'sqlxiao',
@@ -282,6 +297,36 @@
   }>) => {
     if (localEventItem.value.enum_mappings) {
       localEventItem.value.enum_mappings.mappings = data;
+    }
+  };
+
+  const handlePopconfirmShow = () => {
+    isPopconfirmVisible.value = true;
+  };
+
+  const handlePopconfirmHide = () => {
+    isPopconfirmVisible.value = false;
+  };
+
+  const handleDrillPopconfirmShow = () => {
+    isDrillPopconfirmVisible.value = true;
+  };
+
+  const handleDrillPopconfirmHide = () => {
+    isDrillPopconfirmVisible.value = false;
+  };
+
+  const handleMouseLeave = () => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (popconfirmRef.value && !isPopconfirmVisible.value) {
+      popconfirmRef.value.hide();
+    }
+  };
+
+  const handleDrillMouseLeave = () => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (drillPopconfirmRef.value && !isDrillPopconfirmVisible.value) {
+      drillPopconfirmRef.value.hide();
     }
   };
 
@@ -387,15 +432,20 @@
     cursor: pointer;
 
     &:hover {
-      .remove-btn {
+      .remove-btn,
+      .remove-btn-confirm {
         display: block;
       }
     }
 
+    .remove-btn-confirm {
+      display: none;
+    }
+
     .remove-btn {
       position: absolute;
-      top: 38%;
-      right: 28px;
+      top: 40%;
+      right: 8px;
       z-index: 1;
       display: none;
       font-size: 12px;
@@ -405,11 +455,10 @@
       &:hover {
         color: #979ba5;
       }
-    }
 
-    .remove-mappings-btn {
-      top: 40%;
-      right: 8px;
+      &.is-popconfirm-visible {
+        display: block;
+      }
     }
 
     .renew-tips {
