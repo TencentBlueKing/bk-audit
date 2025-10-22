@@ -772,6 +772,7 @@ class ListRisk(RiskMeta):
             return None
 
         resolved_source = filter_item.get("field_source") or StrategyFieldSourceEnum.DATA.value
+        operator = self._normalize_operator(filter_item.get("operator"))
 
         if resolved_source == StrategyFieldSourceEnum.BASIC.value:
             return self._column(alias, field_name)
@@ -784,15 +785,14 @@ class ListRisk(RiskMeta):
             return None
 
         json_path = self._build_json_path(field_name)
-        return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
+        extractor = "JSON_EXTRACT_DOUBLE" if self._is_numeric_operator(operator) else "JSON_EXTRACT_STRING"
+        return exp.func(extractor, column, exp.Literal.string(json_path))
 
     def _build_event_filter_expression(
         self, field_expr: exp.Expression, filter_item: Dict[str, Any]
     ) -> Optional[exp.Expression]:
         value = filter_item.get("value")
-        operator = filter_item.get("operator") or EventFilterOperator.EQUAL.value
-        if isinstance(operator, str):
-            operator = operator.upper()
+        operator = self._normalize_operator(filter_item.get("operator"))
 
         if operator == EventFilterOperator.EQUAL.value:
             if value is None:
@@ -804,12 +804,7 @@ class ListRisk(RiskMeta):
                 return exp.not_(exp.Is(this=field_expr.copy(), expression=exp.Null()))
             return exp.NEQ(this=field_expr.copy(), expression=self._literal(value))
 
-        if operator in {
-            EventFilterOperator.GREATER_THAN.value,
-            EventFilterOperator.GREATER_THAN_EQUAL.value,
-            EventFilterOperator.LESS_THAN.value,
-            EventFilterOperator.LESS_THAN_EQUAL.value,
-        }:
+        if self._is_numeric_operator(operator):
             comparator_map = {
                 EventFilterOperator.GREATER_THAN.value: exp.GT,
                 EventFilterOperator.GREATER_THAN_EQUAL.value: exp.GTE,
@@ -817,13 +812,13 @@ class ListRisk(RiskMeta):
                 EventFilterOperator.LESS_THAN_EQUAL.value: exp.LTE,
             }
             comparator = comparator_map[operator]
-            if self._is_numeric_value(value):
-                cast_field = exp.Cast(this=field_expr.copy(), to=exp.DataType.build("DOUBLE"))
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
-                    literal = exp.Literal.number(str(value))
-                else:
-                    literal = exp.Literal.number(str(float(value)))
-                return comparator(this=cast_field, expression=literal)
+            numeric_value = self._convert_to_float(value)
+            if numeric_value is not None:
+                left_expr = field_expr.copy()
+                if not self._uses_numeric_json_extraction(field_expr):
+                    left_expr = exp.Cast(this=left_expr, to=exp.DataType.build("DOUBLE"))
+                literal = exp.Literal.number(format(numeric_value, "g"))
+                return comparator(this=left_expr, expression=literal)
             return comparator(this=field_expr.copy(), expression=self._literal(value))
 
         if operator in {EventFilterOperator.IN.value, EventFilterOperator.NOT_IN.value}:
@@ -882,19 +877,38 @@ class ListRisk(RiskMeta):
             return [item.strip() for item in value.split(",") if item.strip()]
         return [value]
 
+    def _normalize_operator(self, operator: Any) -> str:
+        if operator is None:
+            return EventFilterOperator.EQUAL.value
+        if isinstance(operator, str):
+            return operator.strip().upper()
+        if hasattr(operator, "value"):
+            return str(operator.value).strip().upper()
+        return str(operator).strip().upper()
+
+    def _is_numeric_operator(self, operator: str) -> bool:
+        return operator in {
+            EventFilterOperator.GREATER_THAN.value,
+            EventFilterOperator.GREATER_THAN_EQUAL.value,
+            EventFilterOperator.LESS_THAN.value,
+            EventFilterOperator.LESS_THAN_EQUAL.value,
+        }
+
+    def _convert_to_float(self, value: Any) -> Optional[float]:
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        try:
+            return float(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+
+    def _uses_numeric_json_extraction(self, expression: exp.Expression) -> bool:
+        return isinstance(expression, exp.Func) and expression.name.upper() == "JSON_EXTRACT_DOUBLE"
+
     def _escape_like_pattern(self, value: str) -> str:
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-    def _is_numeric_value(self, value: Any) -> bool:
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return True
-        if isinstance(value, str):
-            try:
-                float(value)
-                return True
-            except ValueError:
-                return False
-        return False
 
     @staticmethod
     def _clean_sql(sql: str) -> str:
