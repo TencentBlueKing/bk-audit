@@ -46,7 +46,8 @@
           :strategy-name="strategyName"
           :strategy-type="strategyType"
           :tag-data="tagData"
-          @open-tool="handleOpenTool" />
+          @open-tool="handleOpenTool"
+          @refresh-tool-list="handleRefreshToolList" />
       </div>
     </div>
   </div>
@@ -197,6 +198,9 @@
     },
   });
 
+  const handleRefreshToolList = () => {
+    fetchAllTools();
+  };
 
   defineExpose<Exposes>({
     getData() {
