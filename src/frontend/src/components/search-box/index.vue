@@ -42,10 +42,16 @@
         <template #more-list>
           <div class="box-row">
             <div
-              v-for="(item, index) in selectedItemList"
-              :key="index"
+              v-for="item in selectedItemList"
+              :key="item.id"
               class="more-list-item">
-              <span class="item-label">{{ `${item.display_name}[${item.field_name}]` }}</span>
+              <div class="list-item-lable">
+                <span class="item-label">{{ `${item.display_name}[${item.field_name}]` }}</span>
+                <audit-icon
+                  class="close-btn"
+                  type="close"
+                  @click="handleRemove(item.id)" />
+              </div>
               <div class="item-value">
                 <bk-select
                   v-model="item.operator"
@@ -191,17 +197,20 @@
     defaultValue: {},
     manual: true,
   });
-
+  // 删除
+  const handleRemove = (val: string) => {
+    selectedItemList.value = selectedItemList.value.filter(item => item.id !== val);
+    selectedVal.value = selectedItemList.value.map(item => item.id);
+  };
   // 更多选项 选择
   const handleSelectChange = (val: string[]) => {
-    // selectedVal.value = val;
     const list = selectedItems.value.filter(item => val.includes(item.id));
     selectedItemList.value = list.map((item) => {
       const existingItem = selectedItemList.value.find(existing => existing.id === item.id);
       return {
         ...item,
         value: existingItem?.value || '',
-        operator: existingItem?.operator || '',
+        operator: existingItem?.operator || '=',
       };
     });
 
@@ -332,6 +341,7 @@
   onMounted(() => {
     if (urlSearchParams?.event_filters) {
       selectedItemList.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
+        id: item.id,
         field_name: item.field,
         display_name: item.display_name,
         operator: item.operator,
@@ -403,12 +413,25 @@
   gap: 16px 16px;
 
   .more-list-item {
-    .item-label {
-      font-size: 12px;
-      line-height: 20px;
-      color: #63656e;
-      vertical-align: top;
+    .list-item-lable {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+
+      .item-label {
+        font-size: 12px;
+        line-height: 20px;
+        color: #63656e;
+        vertical-align: top;
+      }
+
+      .close-btn {
+        color: #63656e;
+        cursor: pointer;
+      }
     }
+
 
     .item-value {
       display: flex;
