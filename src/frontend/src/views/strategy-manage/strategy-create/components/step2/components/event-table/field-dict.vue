@@ -185,14 +185,15 @@
                     v-bk-tooltips="{
                       content: t('新增'),
                     }"
-                    style="margin-right: 10px; cursor: pointer;"
+                    class="icon-item"
                     type="add-fill"
                     @click="handleAdd(index)" />
                   <audit-icon
                     v-bk-tooltips="{
                       content: formData.renderData.length > 1 ? t('删除') : t('至少保留一个'),
                     }"
-                    :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : 'delete-icon']"
+                    class="icon-item"
+                    :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : '']"
                     type="reduce-fill"
                     @click="handleDelete(index)" />
                 </div>
@@ -447,6 +448,11 @@
   watch(() => showFieldDict.value, (value) => {
     if (value && props.editData.length) {
       formData.value.renderData = _.cloneDeep(props.editData);
+    } else {
+      formData.value.renderData = [{
+        key: '',
+        name: '',
+      }];
     }
   });
 </script>
@@ -499,6 +505,25 @@
     padding-left: 16px;
     background: #fafbfd;
     border-left: 1px solid #dcdee5;
+
+    .icon-group {
+      font-size: 16px;
+      color: #979ba5;
+
+      .icon-item {
+        margin-right: 10px;
+        cursor: pointer;
+
+        &:hover:not(.delete-icon-disabled) {
+          color: #4d4f56;
+        }
+      }
+
+      .delete-icon-disabled {
+        color: #dcdee5;
+        cursor: not-allowed;
+      }
+    }
   }
 
   :deep(.field-value) {
