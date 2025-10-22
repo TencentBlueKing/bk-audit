@@ -45,7 +45,7 @@
               v-for="(item, index) in selectedItemList"
               :key="index"
               class="more-list-item">
-              <span class="item-label">{{ item.display_name }}</span>
+              <span class="item-label">{{ `${item.display_name}[${item.field_name}]` }}</span>
               <div class="item-value">
                 <bk-select
                   v-model="item.operator"
@@ -93,7 +93,7 @@
               v-for="(item, index) in selectedItems"
               :id="item.id"
               :key="index"
-              :name="item.display_name" />
+              :name="`${item.display_name}[${item.field_name}]`" />
           </bk-select>
         </template>
       </component>
@@ -331,7 +331,7 @@
   });
   onMounted(() => {
     if (urlSearchParams?.event_filters) {
-      selectedItemList.value = urlSearchParams.event_filters?.map((item: Record<string, any>) => ({
+      selectedItemList.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
         field_name: item.field,
         display_name: item.display_name,
         operator: item.operator,
