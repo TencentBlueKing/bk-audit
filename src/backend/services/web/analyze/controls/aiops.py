@@ -58,7 +58,7 @@ from services.web.analyze.constants import (
 from services.web.analyze.controls.base import BkbaseFlowController, Controller
 from services.web.analyze.exceptions import ClusterNotExists
 from services.web.analyze.models import Control, ControlVersion
-from services.web.analyze.storage_node import DorisStorageNode
+from services.web.analyze.storage_node import DorisStorageNode, ESStorageNode
 from services.web.analyze.utils import calculate_offline_flow_start_time, is_asset
 from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
 from services.web.risk.constants import EventMappingFields
@@ -73,6 +73,7 @@ class AIOpsController(Controller, BkbaseFlowController):
     """
 
     base_control_type = BaseControlTypeChoices.CONTROL
+    doris_storage_node = DorisStorageNode
 
     @transaction.atomic()
     def _update_or_create_bkbase_flow(self) -> bool:
@@ -82,18 +83,25 @@ class AIOpsController(Controller, BkbaseFlowController):
             self._create_flow()
         # create or update node
         last_node_id = 0
+        scene_node_id = None  # 记录场景方案节点ID，用于让存储节点并联到场景节点
         node_configs = self._build_flow_nodes()
         for index, node_config in enumerate(node_configs):
             node = {
                 "flow_id": self.strategy.backend_data["flow_id"],
                 "frontend_info": {"x": (index + 1) * 300, "y": 30},
-                "from_links": self._describe_from_links(index, last_node_id),
                 "node_type": node_config["node_type"],
                 "config": node_config,
             }
+
+            # 对存储节点（ES/Doris）进行特殊处理：并联到场景方案节点
+            if node["node_type"] in {ESStorageNode.node_type, DorisStorageNode.node_type} and scene_node_id:
+                last_node_id = scene_node_id
+            node["from_links"] = self._describe_from_links(index, last_node_id)
+
             # 离线节点需要配置上游id
             if node["config"].get("inputs") and "id" in node["config"]["inputs"][0]:
                 node["config"]["inputs"][0]["id"] = last_node_id
+
             node_id = node_config.get("node_id")
             if node_id:
                 node["node_id"] = node_id
@@ -102,6 +110,9 @@ class AIOpsController(Controller, BkbaseFlowController):
                 resp = api.bk_base.create_flow_node(**node)
             node_config["node_id"] = resp["node_id"]
             last_node_id = resp["node_id"]
+            # 记录场景方案节点ID，供后续存储节点并联
+            if node["node_type"] == "scenario_app":
+                scene_node_id = last_node_id
             logger.info(
                 "[CreateOrUpdateBkBaseFlowNodeSuccess] FlowID => %s; NodeID => %s",
                 self.strategy.backend_data["flow_id"],
@@ -403,7 +414,7 @@ class AIOpsController(Controller, BkbaseFlowController):
         if es_node:
             nodes.append(es_node)
 
-        doris_node = DorisStorageNode(namespace=self.strategy.namespace).build_node_config(
+        doris_node = self.doris_storage_node(namespace=self.strategy.namespace).build_node_config(
             bk_biz_id=bk_biz_id,
             raw_table_name=scenario_table_name,
             from_result_table_ids=[result_table_id],
