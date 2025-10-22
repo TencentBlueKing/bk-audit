@@ -110,7 +110,7 @@ class RiskResourceProvider(IAMResourceProvider):
         # 注意：filter.start_time/end_time 为毫秒时间戳，这里保持毫秒精度，避免边界被截断
         start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000)
         end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000)
-        queryset = Risk.objects.filter(event_time__gt=start_time, event_time__lte=end_time)
+        queryset = Risk.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
         results = [
             {
                 "id": item.risk_id,
