@@ -763,7 +763,7 @@ class ListRisk(RiskMeta):
 
         return [
             exp.GTE(this=event_timestamp.copy(), expression=start_milliseconds),
-            exp.LT(this=event_timestamp.copy(), expression=end_milliseconds),
+            exp.LTE(this=event_timestamp.copy(), expression=end_milliseconds),
         ]
 
     def _build_event_field_expression(self, alias: str, filter_item: Dict[str, Any]) -> Optional[exp.Expression]:
@@ -839,7 +839,7 @@ class ListRisk(RiskMeta):
         if operator in {EventFilterOperator.CONTAINS.value, EventFilterOperator.NOT_CONTAINS.value}:
             pattern = self._escape_like_pattern(str(value))
             like_expr = exp.Like(this=field_expr.copy(), expression=exp.Literal.string(f"%{pattern}%"))
-            escape_expr = exp.Escape(this=like_expr, expression=exp.Literal.string("\\"))
+            escape_expr = like_expr
             return exp.not_(escape_expr) if operator == EventFilterOperator.NOT_CONTAINS.value else escape_expr
 
         return None
