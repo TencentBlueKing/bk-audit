@@ -266,7 +266,7 @@ class ListRisk(RiskMeta):
         order_field_name = order_field.lstrip("-")
         order_direction = "DESC" if order_field.startswith("-") else "ASC"
 
-        value_fields = ["risk_id", "strategy_id"]
+        value_fields = ["risk_id", "strategy_id", "raw_event_id", "event_time", "event_end_time"]
         if order_field_name not in value_fields:
             value_fields.append(order_field_name)
         if order_field_name == RISK_LEVEL_ORDER_FIELD and "event_time" not in value_fields:
@@ -712,8 +712,13 @@ class ListRisk(RiskMeta):
             exp.EQ(
                 this=self._column(alias, "strategy_id"),
                 expression=self._column("base_query", "strategy_id"),
-            )
+            ),
+            exp.EQ(
+                this=self._column(alias, "raw_event_id"),
+                expression=self._column("base_query", "raw_event_id"),
+            ),
         ]
+        join_conditions.extend(self._build_event_timestamp_conditions(alias))
 
         field_expression = self._build_event_field_expression(alias, filter_item)
         if field_expression is None:
@@ -742,6 +747,23 @@ class ListRisk(RiskMeta):
         return [
             exp.GTE(this=self._column(alias, "thedate"), expression=self._literal(start_date)),
             exp.LTE(this=self._column(alias, "thedate"), expression=self._literal(end_date)),
+        ]
+
+    def _build_event_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
+        event_timestamp = self._column(alias, "dteventtimestamp")
+        start_datetime = self._column("base_query", "event_time")
+        end_datetime = exp.func(
+            "COALESCE",
+            self._column("base_query", "event_end_time"),
+            self._column("base_query", "event_time"),
+        )
+
+        start_milliseconds = self._to_milliseconds(start_datetime)
+        end_milliseconds = self._to_milliseconds(end_datetime)
+
+        return [
+            exp.GTE(this=event_timestamp.copy(), expression=start_milliseconds),
+            exp.LT(this=event_timestamp.copy(), expression=end_milliseconds),
         ]
 
     def _build_event_field_expression(self, alias: str, filter_item: Dict[str, Any]) -> Optional[exp.Expression]:
@@ -837,6 +859,10 @@ class ListRisk(RiskMeta):
 
     def _column(self, alias: str, identifier: str) -> exp.Column:
         return exp.column(identifier, table=alias)
+
+    def _to_milliseconds(self, expression: exp.Expression) -> exp.Expression:
+        unix_timestamp = exp.func("UNIX_TIMESTAMP", expression.copy())
+        return exp.Mul(this=unix_timestamp, expression=exp.Literal.number("1000"))
 
     def _literal(self, value: Any) -> exp.Expression:
         if value is None:
