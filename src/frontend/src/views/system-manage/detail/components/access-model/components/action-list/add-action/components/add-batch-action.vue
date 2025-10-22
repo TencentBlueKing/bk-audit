@@ -288,21 +288,22 @@
                   v-bk-tooltips="{
                     content: t('添加'),
                   }"
-                  style="margin-right: 10px; cursor: pointer;"
+                  class="icon-item"
                   type="add-fill"
                   @click="handleAdd(index)" />
                 <audit-icon
                   v-bk-tooltips="{
                     content: formData.renderData.length > 1 ? t('删除') : t('至少保留一个'),
                   }"
-                  :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : 'delete-icon']"
+                  class="icon-item"
+                  :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : '']"
                   type="reduce-fill"
                   @click="handleDelete(index)" />
                 <audit-icon
                   v-bk-tooltips="{
                     content: t('克隆'),
                   }"
-                  style="margin-left: 10px; cursor: pointer;"
+                  class="icon-item"
                   type="fuzhi"
                   @click="handleClone(item)" />
               </div>
@@ -622,14 +623,20 @@
   padding: 24px;
 
   .icon-group {
-    font-size: 14px;
-    color: #c4c6cc;
+    font-size: 16px;
+    color: #979ba5;
 
-    .delete-icon {
+    .icon-item {
+      margin-right: 10px;
       cursor: pointer;
+
+      &:hover:not(.delete-icon-disabled) {
+        color: #4d4f56;
+      }
     }
 
     .delete-icon-disabled {
+      color: #dcdee5;
       cursor: not-allowed;
     }
   }
