@@ -53,7 +53,7 @@ class RiskManage extends ModuleBase {
     page: number,
     page_size: number
   }, payload = {} as IRequestPayload) {
-    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/`, {
+    return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/watch/?page=${params.page}&page_size=${params.page_size}`, {
       params,
       payload,
     });
