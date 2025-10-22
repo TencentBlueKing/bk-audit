@@ -16,149 +16,432 @@
 -->
 <template>
   <div class="strategy-customize">
-    <auth-collapse-panel
-      is-active
-      :label="t('规则配置')"
-      style="margin-bottom: 14px">
-      <div class="customize-rule">
-        <bk-form-item
-          label=""
-          label-width="0"
-          required>
-          <span
-            v-bk-tooltips="{
-              content: t(
-                '审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'
-              ),
-              extCls: 'strategy-config-type-tooltips',
-              placement: 'top-start'
-            }"
-            class="label-is-required"
-            style="
-              color: #63656e;
-              cursor: pointer;
-              border-bottom: 1px dashed #979ba5;
-            ">
-            {{ t('数据源') }}
-          </span>
-          <bk-loading :loading="typeTableLoading">
-            <div
-              class="select-group"
-              :class="formData.configs.config_type === 'EventLog' ? 'select-group-grid' : ''">
-              <bk-form-item
-                v-if="allConfigTypeTable.length"
-                class="no-label"
-                label-width="0"
-                property="configs.config_type">
-                <bk-cascader
-                  v-slot="{data, node}"
-                  v-model="tableId"
-                  :filter-method="configTypeTableFilter"
-                  filterable
-                  id-key="value"
-                  :list="allConfigTypeTable"
-                  name-key="label"
-                  :placeholder="t('搜索数据名称、别名、数据ID等')"
-                  trigger="hover"
-                  @change="handleChangeTable">
-                  <p
-                    v-bk-tooltips="{
-                      disabled: !data.disabled || !data.leaf,
-                      content: node.pathNames[0] === '资产数据'
-                        ? t('该系统暂未上报资源数据')
-                        : t('审计无权限，请前往BKBase申请授权'),
-                      delay: 400,
-                    }">
-                    {{ node.name }}
-                  </p>
-                </bk-cascader>
-              </bk-form-item>
-              <template v-if="formData.configs.config_type === 'EventLog'">
-                <event-log-component
-                  ref="eventLogRef"
-                  @update-system="handleUpdateSystem" />
+    <bk-form-item
+      label=""
+      label-width="0"
+      required>
+      <span
+        v-bk-tooltips="{
+          content: t(
+            '审计规则的数据来源，联动后续步骤字段结构。如需组合数据，请提前创建并选择联表数据'
+          ),
+          extCls: 'strategy-config-type-tooltips',
+          placement: 'top-start'
+        }"
+        class="label-is-required"
+        style="
+          color: #63656e;
+          cursor: pointer;
+          border-bottom: 1px dashed #979ba5;
+        ">
+        {{ t('数据源') }}
+      </span>
+      <bk-loading :loading="typeTableLoading">
+        <div
+          class="select-group"
+          :class="formData.configs.config_type === 'EventLog' ? 'select-group-grid' : ''">
+          <bk-form-item
+            v-if="allConfigTypeTable.length"
+            class="no-label"
+            label-width="0"
+            property="configs.config_type">
+            <bk-cascader
+              v-slot="{data, node}"
+              v-model="tableId"
+              :filter-method="configTypeTableFilter"
+              filterable
+              id-key="value"
+              :list="allConfigTypeTable"
+              name-key="label"
+              :placeholder="t('搜索数据名称、别名、数据ID等')"
+              trigger="hover"
+              @change="handleChangeTable">
+              <p
+                v-bk-tooltips="{
+                  disabled: !data.disabled || !data.leaf,
+                  content: node.pathNames[0] === '资产数据'
+                    ? t('该系统暂未上报资源数据')
+                    : t('审计无权限，请前往BKBase申请授权'),
+                  delay: 400,
+                }">
+                {{ node.name }}
+              </p>
+            </bk-cascader>
+          </bk-form-item>
+          <template v-if="formData.configs.config_type === 'EventLog'">
+            <event-log-component
+              ref="eventLogRef"
+              @update-system="handleUpdateSystem" />
+          </template>
+        </div>
+      </bk-loading>
+      <!-- 联表详情 -->
+      <link-data-detail-component
+        v-if="formData.configs.data_source.link_table
+          && formData.configs.data_source.link_table.uid
+        "
+        :join-type-list="joinTypeList"
+        :link-data-detail="linkDataDetail"
+        @refresh-link-data="handleRefreshLinkData" />
+      <!-- 其他数据表详情 -->
+      <other-table-detail-component
+        v-if="formData.configs.data_source.rt_id?.length"
+        :rt-id="formData.configs.data_source.rt_id"
+        @show-structure-preview="handleShowStructureView" />
+      <!-- 查看表字段详情 -->
+      <structure-preview-component
+        v-model:show-structure="showStructure"
+        :current-view-field="currentViewField"
+        :rt-id="currentViewRtId" />
+    </bk-form-item>
+    <bk-form-item
+      label=""
+      label-width="160">
+      <template #label>
+        <span
+          v-bk-tooltips="{
+            content: t(
+              '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
+            ),
+            extCls: 'strategy-config-type-tooltips',
+            placement: 'top-start'
+          }"
+          style="
+                color: #63656e;
+                cursor: pointer;
+                border-bottom: 1px dashed #979ba5;
+              ">
+          {{ t('预期结果') }}
+        </span>
+      </template>
+      <expected-results
+        ref="expectedResultsRef"
+        :aggregate-list="aggregateList"
+        :config-type="formData.configs.config_type"
+        :table-fields="tableFields"
+        @update-expected-result="handleUpdateExpectedResult" />
+    </bk-form-item>
+
+    <!-- 配置规则列表 -->
+    <div style=" margin-bottom: 16px;font-weight: bold;">
+      {{ t('规则配置') }}
+    </div>
+    <!-- 多规则 -->
+    <template
+      v-for="(rule, ruleIndex) in formData.configs.rule_list"
+      :key="ruleIndex">
+      <auth-collapse-panel
+        is-active
+        :label="rule.rule_name"
+        style="margin-bottom: 14px">
+        <template #title>
+          <div
+            class="flex align-center justify-between"
+            style="flex: 1;">
+            <div class="flex align-center">
+              <template v-if="editingRuleIndex === ruleIndex">
+                <bk-input
+                  v-model="editingRuleName"
+                  class="rule-name-input"
+                  :maxlength="50"
+                  :placeholder="t('请输入规则名称')"
+                  style="width: 200px;"
+                  @blur="handleSaveRuleName(ruleIndex)"
+                  @keyup.enter="handleSaveRuleName(ruleIndex)"
+                  @keyup.esc="handleCancelEditRuleName" />
+              </template>
+              <template v-else>
+                <span>{{ rule.rule_name }}</span>
+                <audit-icon
+                  class="edit-icon"
+                  style="margin-left: 16px; cursor: pointer;"
+                  type="edit-fill"
+                  @click.stop="handleStartEditRuleName(ruleIndex)" />
               </template>
             </div>
-          </bk-loading>
-          <!-- 联表详情 -->
-          <link-data-detail-component
-            v-if="formData.configs.data_source.link_table
-              && formData.configs.data_source.link_table.uid
-            "
-            :join-type-list="joinTypeList"
-            :link-data-detail="linkDataDetail"
-            @refresh-link-data="handleRefreshLinkData" />
-          <!-- 其他数据表详情 -->
-          <other-table-detail-component
-            v-if="formData.configs.data_source.rt_id?.length"
-            :rt-id="formData.configs.data_source.rt_id"
-            @show-structure-preview="handleShowStructureView" />
-          <!-- 查看表字段详情 -->
-          <structure-preview-component
-            v-model:show-structure="showStructure"
-            :current-view-field="currentViewField"
-            :rt-id="currentViewRtId" />
-        </bk-form-item>
-        <bk-form-item
-          label=""
-          label-width="160">
-          <template #label>
-            <span
-              v-bk-tooltips="{
-                content: t(
-                  '需要哪些字段作为结果，每行记录可生成一个风险事件，展示在风险单内；也可用于第2步”单据展示“的字段映射；点击下方”预览“可提前预览风险单展示内容；'
-                ),
-                extCls: 'strategy-config-type-tooltips',
-                placement: 'top-start'
+            <audit-icon
+              class="delete-icon"
+              :style="{
+                fontSize: '14px',
+                cursor: 'pointer',
+                visibility: formData.configs.rule_list.length === 1 ? 'hidden' : 'visible'
               }"
-              style="
-                color: #63656e;
-                cursor: pointer;
-                border-bottom: 1px dashed #979ba5;
-              ">
-              {{ t('预期结果') }}
-            </span>
-          </template>
-          <expected-results
-            ref="expectedResultsRef"
-            :aggregate-list="aggregateList"
-            :config-type="formData.configs.config_type"
-            :table-fields="tableFields"
-            @update-expected-result="handleUpdateExpectedResult" />
-        </bk-form-item>
-        <bk-form-item
-          label=""
-          label-width="160"
-          required>
-          <template #label>
-            <span
-              v-bk-tooltips="{
-                content: t(
-                  '配置对应的字段与规则，筛选出我们期望的数据；可能是风险数据。'
-                ),
-                extCls: 'strategy-config-type-tooltips',
-                placement: 'top-start'
-              }"
-              style="
-                color: #63656e;
-                cursor: pointer;
-                border-bottom: 1px dashed #979ba5;
-              ">
-              {{ t('风险发现规则') }}
-            </span>
-          </template>
-          <rules-component
-            ref="rulesComponentRef"
-            :aggregate-list="aggregateList"
-            :config-type="formData.configs.config_type"
-            :configs-data="formData.configs"
-            :expected-result="formData.configs.select"
-            :table-fields="tableFields"
-            @show-structure-preview="handleShowStructureView"
-            @update-where="handleUpdateWhere" />
-        </bk-form-item>
-      </div>
-    </auth-collapse-panel>
+              type="delete"
+              @click.stop="handleDeleteRule(ruleIndex)" />
+          </div>
+        </template>
+        <div class="customize-rule">
+          <bk-form-item
+            label=""
+            label-width="160"
+            required>
+            <template #label>
+              <span
+                v-bk-tooltips="{
+                  content: t(
+                    '配置对应的字段与规则，筛选出我们期望的数据；可能是风险数据。'
+                  ),
+                  extCls: 'strategy-config-type-tooltips',
+                  placement: 'top-start'
+                }"
+                style="
+                  color: #63656e;
+                  cursor: pointer;
+                  border-bottom: 1px dashed #979ba5;
+                ">
+                {{ t('规则表达式') }}
+              </span>
+            </template>
+            <rules-component
+              ref="rulesComponentRef"
+              :aggregate-list="aggregateList"
+              :config-type="formData.configs.config_type"
+              :configs-data="formData.configs"
+              :expected-result="formData.configs.select"
+              :table-fields="tableFields"
+              @show-structure-preview="handleShowStructureView"
+              @update-where="handleUpdateWhere" />
+          </bk-form-item>
+          <!-- 风险等级 -->
+          <bk-form-item
+            class="is-required risk-level-group"
+            label=""
+            label-width="160"
+            property="risk_level">
+            <template #label>
+              <span
+                v-bk-tooltips="{
+                  content: t('创建策略人工定义，标识和方便风险单快捷筛选，指引后续处理的跟进'),
+                  placement: 'top-start'
+                }"
+                style="
+                  color: #63656e;
+                  cursor: pointer;
+                  border-bottom: 1px dashed #979ba5;
+                ">
+                {{ t('风险等级') }}
+              </span>
+            </template>
+            <bk-button-group>
+              <bk-button
+                v-for="item in riskLevelList"
+                :key="item.value"
+                :disabled="!!editData.configs.rule_list[ruleIndex]?.risk_level"
+                :loading="commonLoading"
+                :selected="rule.risk_level === item.value"
+                @click="() => rule.risk_level = item.value">
+                <span
+                  v-bk-tooltips="{
+                    content: item.config.tips,
+                    extCls: 'strategy-way-tips',
+                    placement: 'top-start'
+                  }"
+                  style="
+                        line-height: 16px;
+                        border-bottom: 1px dashed #979ba5;
+                      ">
+                  {{ item.label }}
+                </span>
+              </bk-button>
+            </bk-button-group>
+          </bk-form-item>
+          <!-- 风险危害和处理指引 -->
+          <div class="flex">
+            <bk-form-item
+              class="mr16"
+              :label="t('风险危害')"
+              label-width="160"
+              property="risk_hazard"
+              style="flex: 1;">
+              <bk-input
+                v-model.trim="rule.risk_hazard"
+                autosize
+                :maxlength="1000"
+                :placeholder="t('请输入描述')"
+                show-word-limit
+                style="width: 100%;"
+                type="textarea" />
+            </bk-form-item>
+            <bk-form-item
+              :label="t('处理指引')"
+              label-width="160"
+              property="risk_guidance"
+              style="flex: 1;">
+              <bk-input
+                v-model.trim="rule.risk_guidance"
+                autosize
+                :maxlength="1000"
+                :placeholder="t('请输入描述')"
+                show-word-limit
+                style="width: 100%;"
+                type="textarea" />
+            </bk-form-item>
+          </div>
+          <!-- 处理人 -->
+          <bk-form-item
+            class="is-required"
+            :label="t('风险单处理人')"
+            label-width="160"
+            property="processor_groups"
+            style="flex: 1;">
+            <bk-loading
+              :loading="isGroupLoading"
+              style="width: 100%;">
+              <bk-select
+                ref="groupSelectRef"
+                v-model="rule.processor_groups"
+                class="bk-select"
+                filterable
+                :input-search="false"
+                multiple
+                multiple-mode="tag"
+                :placeholder="t('请选择通知组')"
+                :popover-options="{
+                  zIndex: 1000
+                }"
+                :search-placeholder="t('请输入关键字')">
+                <auth-option
+                  v-for="(item, index) in groupList"
+                  :key="index"
+                  action-id="list_notice_group"
+                  :label="item.name"
+                  :permission="checkResultMap.list_notice_group"
+                  :value="item.id" />
+                <template #extension>
+                  <div class="create-notice-group">
+                    <auth-router-link
+                      action-id="create_notice_group"
+                      class="create_notice_group"
+                      target="_blank"
+                      :to="{
+                        name: 'noticeGroupList',
+                        query: {
+                          create: true
+                        }
+                      }">
+                      <audit-icon
+                        style="font-size: 14px;color: #3a84ff;"
+                        type="plus-circle" />
+                      {{ t('新增通知组') }}
+                    </auth-router-link>
+                  </div>
+                  <div
+                    class="refresh"
+                    @click="refreshGroupList">
+                    <audit-icon
+                      v-if="isGroupLoading"
+                      class="rotate-loading"
+                      svg
+                      type="loading" />
+                    <template v-else>
+                      <audit-icon
+                        type="refresh" />
+                      {{ t('刷新') }}
+                    </template>
+                  </div>
+                </template>
+              </bk-select>
+            </bk-loading>
+          </bk-form-item>
+          <!-- 关注人 -->
+          <bk-form-item
+            :label="t('关注人')"
+            label-width="160"
+            property="notice_groups"
+            style="flex: 1;">
+            <bk-loading
+              :loading="isGroupLoading"
+              style="width: 100%;">
+              <bk-select
+                ref="groupSelectRef"
+                v-model="rule.notice_groups"
+                class="bk-select"
+                filterable
+                :input-search="false"
+                multiple
+                multiple-mode="tag"
+                :placeholder="t('请选择通知组')"
+                :popover-options="{
+                  zIndex: 1000
+                }"
+                :search-placeholder="t('请输入关键字')">
+                <auth-option
+                  v-for="(item, index) in groupList"
+                  :key="index"
+                  action-id="list_notice_group"
+                  :label="item.name"
+                  :permission="checkResultMap.list_notice_group"
+                  :value="item.id" />
+                <template #extension>
+                  <div class="create-notice-group">
+                    <auth-router-link
+                      action-id="create_notice_group"
+                      class="create_notice_group"
+                      target="_blank"
+                      :to="{
+                        name: 'noticeGroupList',
+                        query: {
+                          create: true
+                        }
+                      }">
+                      <audit-icon
+                        style="font-size: 14px;color: #3a84ff;"
+                        type="plus-circle" />
+                      {{ t('新增通知组') }}
+                    </auth-router-link>
+                  </div>
+                  <div
+                    class="refresh"
+                    @click="refreshGroupList">
+                    <audit-icon
+                      v-if="isGroupLoading"
+                      class="rotate-loading"
+                      svg
+                      type="loading" />
+                    <template v-else>
+                      <audit-icon
+                        type="refresh" />
+                      {{ t('刷新') }}
+                    </template>
+                  </div>
+                </template>
+              </bk-select>
+            </bk-loading>
+          </bk-form-item>
+          <!-- 规则描述 -->
+          <div class="flex">
+            <bk-form-item
+              class="mr16"
+              :label="t('规则描述')"
+              label-width="160"
+              property="rule_description"
+              style="flex-basis: 50%;">
+              <bk-input
+                v-model.trim="rule.rule_description"
+                autosize
+                :maxlength="1000"
+                :placeholder="t('请输入描述')"
+                show-word-limit
+                style="width: 100%;"
+                type="textarea" />
+            </bk-form-item>
+          </div>
+        </div>
+      </auth-collapse-panel>
+    </template>
+    <bk-button
+      class="mr8"
+      outline
+      style="margin-bottom: 24px;"
+      theme="primary"
+      @click="handleAddRule">
+      <audit-icon
+        style="margin-right: 8px;font-size: 14px;"
+        type="add" />
+      {{ t('新增规则') }}
+    </bk-button>
+
+    <!-- 调度配置 -->
     <auth-collapse-panel
       is-active
       :label="t('调度配置')"
@@ -283,12 +566,15 @@
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
+  import IamManageService from '@service/iam-manage';
   import LinkDataManageService from '@service/link-data-manage';
+  import NoticeManageService from '@service/notice-group';
   import StrategyManageService from '@service/strategy-manage';
 
   import LinkDataDetailModel from '@model/link-data/link-data-detail';
   import CommonDataModel from '@model/strategy/common-data';
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
+  import StrategyModel from '@model/strategy/strategy';
 
   import ExpectedResults from './components/expected-results/index.vue';
   import LinkDataDetailComponent from './components/link-table-detail/index.vue';
@@ -299,6 +585,11 @@
 
   import useRequest from '@/hooks/use-request';
 
+  type ItemType = {
+    label: string,
+    value: string
+    config?: any;
+  }
   interface Where {
     connector: 'and' | 'or'
     conditions: Array<{
@@ -328,6 +619,17 @@
       }
       config_type: string
       select: Array<DatabaseTableFieldModel>
+      rule_list: Array<{
+        where: Where
+        having?: Where
+        rule_name: string
+        rule_description: string
+        risk_level: string
+        risk_hazard: string
+        risk_guidance: string
+        processor_groups: Array<number>
+        notice_groups: Array<number>
+      }>
       where: Where
       having?: Where
       schedule_config: {
@@ -357,7 +659,9 @@
     typeTableLoading: boolean;
   }
   interface Props {
-    editData: any
+    editData: StrategyModel,
+    riskLevelList: Array<ItemType>,
+    commonLoading: boolean
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -367,6 +671,7 @@
   const rulesComponentRef = ref();
   const expectedResultsRef = ref();
   const eventLogRef = ref();
+  const groupSelectRef = ref();
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
@@ -388,6 +693,23 @@
       },
       config_type: '',
       select: [],
+      rule_list: [{
+        where: {
+          connector: 'and',
+          conditions: [],
+        },
+        having: {
+          connector: 'and',
+          conditions: [],
+        },
+        rule_name: '规则1',
+        rule_description: '',
+        risk_level: '',
+        risk_hazard: '',
+        risk_guidance: '',
+        processor_groups: [],
+        notice_groups: [],
+      }],
       where: {
         connector: 'and',
         conditions: [],
@@ -417,6 +739,8 @@
   const showStructure = ref(false);
   const currentViewRtId = ref<string | Array<string>>([]);
   const currentViewField = ref<string>('');
+  const editingRuleIndex = ref<number | null>(null);
+  const editingRuleName = ref<string>('');
 
   const hasData = computed(() => Boolean(formData.value.configs.select.length
     || (formData.value.configs.where.conditions.length
@@ -467,6 +791,26 @@
     },
   });
 
+  // 获取通知组权限
+  const {
+    data: checkResultMap,
+  } = useRequest(IamManageService.check, {
+    defaultParams: {
+      action_ids: 'list_notice_group',
+    },
+    defaultValue: {},
+    manual: true,
+  });
+
+  const {
+    loading: isGroupLoading,
+    data: groupList,
+    run: fetchGroupList,
+  } = useRequest(NoticeManageService.fetchGroupSelectList, {
+    defaultValue: [],
+    manual: true,
+  });
+
   // 获取tableid
   const {
     run: fetchTable,
@@ -480,6 +824,88 @@
   } = useRequest(LinkDataManageService.fetchLinkTableAll, {
     defaultValue: [],
   });
+
+  const refreshGroupList = () => {
+    groupList.value = [];
+    groupSelectRef.value.searchKey = '';
+    fetchGroupList();
+  };
+
+  const handleAddRule = () => {
+    formData.value.configs.rule_list.push({
+      where: {
+        connector: 'and',
+        conditions: [],
+      },
+      rule_name: `规则${formData.value.configs.rule_list.length + 1}`,
+      rule_description: '',
+      risk_level: '',
+      risk_hazard: '',
+      risk_guidance: '',
+      processor_groups: [],
+      notice_groups: [],
+    });
+  };
+
+  // 开始编辑规则名称
+  const handleStartEditRuleName = (index: number) => {
+    editingRuleIndex.value = index;
+    editingRuleName.value = formData.value.configs.rule_list[index].rule_name;
+    // 等待DOM更新后聚焦输入框
+    nextTick(() => {
+      const inputElement = document.querySelector('.rule-name-input input') as HTMLInputElement;
+      if (inputElement) {
+        inputElement.focus();
+        inputElement.select();
+      }
+    });
+  };
+
+  // 保存规则名称
+  const handleSaveRuleName = (index: number) => {
+    if (editingRuleName.value.trim()) {
+      formData.value.configs.rule_list[index].rule_name = editingRuleName.value.trim();
+    }
+    editingRuleIndex.value = null;
+    editingRuleName.value = '';
+  };
+
+  // 取消编辑规则名称
+  const handleCancelEditRuleName = () => {
+    editingRuleIndex.value = null;
+    editingRuleName.value = '';
+  };
+
+  // 删除规则
+  const handleDeleteRule = (index: number) => {
+    // 如果只有一个规则，不允许删除
+    if (formData.value.configs.rule_list.length === 1) {
+      return;
+    }
+
+    InfoBox({
+      type: 'warning',
+      title: t('确认删除规则'),
+      subTitle: t('删除后将无法恢复，是否确认删除该规则？'),
+      confirmText: t('删除'),
+      cancelText: t('取消'),
+      headerAlign: 'center',
+      contentAlign: 'center',
+      footerAlign: 'center',
+      onConfirm: () => {
+        // 如果正在编辑被删除的规则，取消编辑状态
+        if (editingRuleIndex.value === index) {
+          handleCancelEditRuleName();
+        } else if (editingRuleIndex.value !== null && editingRuleIndex.value > index) {
+          // 如果正在编辑的规则在被删除规则之后，需要更新索引
+          editingRuleIndex.value -= 1;
+        }
+
+        // 删除规则
+        formData.value.configs.rule_list.splice(index, 1);
+      },
+    });
+  };
 
   // 获取全部tableid
   const getAllConfigTypeTable = () => {
@@ -1065,6 +1491,24 @@
       color: #63656e;
       cursor: pointer;
       border-bottom: 1px dashed #979ba5;
+    }
+  }
+
+  .edit-icon {
+    color: #979ba5;
+    transition: color .2s;
+
+    &:hover {
+      color: #3a84ff;
+    }
+  }
+
+  .delete-icon {
+    color: #979ba5;
+    transition: color .2s;
+
+    &:hover {
+      color: #ea3636;
     }
   }
 }

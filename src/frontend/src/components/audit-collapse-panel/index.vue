@@ -21,7 +21,9 @@
       :style="titleStyle"
       @click="handleClick">
       <audit-icon :type="isCollapseActive?'angle-fill-down':'angle-fill-rignt'" />
-      {{ label }}
+      <slot name="title">
+        {{ label }}
+      </slot>
     </div>
     <transition>
       <div v-show="isCollapseActive">
@@ -51,6 +53,8 @@
 <style scoped lang="postcss">
   .collapse-panel {
     .collapse-panel-title {
+      display: flex;
+      align-items: center;
       height: 40px;
       padding: 0 12px;
       font-weight: 700;

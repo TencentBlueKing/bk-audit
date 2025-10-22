@@ -72,7 +72,7 @@
                   </bk-loading>
                 </bk-form-item>
               </div>
-              <bk-form-item
+              <!-- <bk-form-item
                 class="is-required risk-level-group"
                 label=""
                 label-width="160"
@@ -113,8 +113,8 @@
                     </span>
                   </bk-button>
                 </bk-button-group>
-              </bk-form-item>
-              <div class="flex">
+              </bk-form-item> -->
+              <!-- <div class="flex">
                 <bk-form-item
                   class="mr16"
                   :label="t('风险危害')"
@@ -144,7 +144,7 @@
                     style="width: 100%;"
                     type="textarea" />
                 </bk-form-item>
-              </div>
+              </div> -->
               <bk-form-item
                 :label="t('描述')"
                 label-width="160"
@@ -194,7 +194,9 @@
               <component
                 :is="strategyWayComMap[formData.strategy_type]"
                 ref="comRef"
+                :common-loading="commonLoading"
                 :edit-data="editData"
+                :risk-level-list="riskLevelList"
                 @update-control-detail="updateControlDetail"
                 @update-form-data="updateFormData" />
             </template>
@@ -599,11 +601,11 @@
     });
   };
 
-  // 设置风险等级
-  const handleLevel = (level: string) => {
-    formData.value.risk_level = level;
-    formRef.value.validate('risk_level');
-  };
+  // // 设置风险等级
+  // const handleLevel = (level: string) => {
+  //   formData.value.risk_level = level;
+  //   formRef.value.validate('risk_level');
+  // };
 
   // 更新方案详情
   const updateControlDetail = (detail: ControlModel) => {
