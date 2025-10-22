@@ -123,6 +123,7 @@
         :output-fields="outputFields"
         :tag-data="tagData"
         @open-tool="handleOpenTool"
+        @refresh-tool-list="handleRefreshToolList"
         @submit="handleFieldSubmit" />
     </template>
 
@@ -174,6 +175,7 @@
 
   interface Emits {
     (e: 'openTool', value: string): void;
+    (e: 'refresh-tool-list'): void;
   }
 
   const props = defineProps<Props>();
@@ -224,6 +226,10 @@
   // 打开工具
   const handleOpenTool = async (uids: string) => {
     emit('openTool', uids);
+  };
+
+  const handleRefreshToolList = () => {
+    emit('refresh-tool-list');
   };
 
   const getToolNameAndType = (uid: string) => {

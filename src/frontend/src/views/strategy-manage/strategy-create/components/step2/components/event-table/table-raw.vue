@@ -45,6 +45,7 @@
                 :tag-data="tagData"
                 @add-custom-constant="addCustomConstant"
                 @open-tool="handleOpenTool"
+                @refresh-tool-list="handleRefreshToolList"
                 @select="handleSelect"
                 @update:field-value="updateFieldValue(element, valueKey, $event)" />
             </div>
@@ -96,6 +97,7 @@
 
   interface Emits {
     (e: 'openTool', value: string): void;
+    (e: 'refresh-tool-list'): void;
   }
 
   const props = defineProps<Props>();
@@ -154,6 +156,10 @@
   // 打开工具
   const handleOpenTool = async (toolInfo: string) => {
     emit('openTool', toolInfo);
+  };
+
+  const handleRefreshToolList = () => {
+    emit('refresh-tool-list');
   };
 
   watch(() => props.select, (data) => {

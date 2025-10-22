@@ -482,7 +482,7 @@
     :output-fields="formData.config.output_fields"
     :tag-data="toolTagData"
     @open-tool="handleOpenTool"
-    @refresh-tool-list="refreshToolList"
+    @refresh-tool-list="handleRefreshToolList"
     @submit="handleFieldSubmit" />
   <!-- 字段映射 -->
   <field-dict
@@ -903,8 +903,7 @@
     });
   };
 
-
-  const refreshToolList = () => {
+  const handleRefreshToolList = () => {
     fetchAllTools();
   };
 

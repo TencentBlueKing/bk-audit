@@ -60,7 +60,8 @@
             :strategy-name="strategyName"
             :strategy-type="strategyType"
             :tag-data="tagData"
-            @open-tool="handleOpenTool" />
+            @open-tool="handleOpenTool"
+            @refresh-tool-list="handleRefreshToolList" />
         </div>
       </div>
     </template>
@@ -216,6 +217,9 @@
     },
   });
 
+  const handleRefreshToolList = () => {
+    fetchAllTools();
+  };
 
   const getHeaderClass = (valueKey: string | undefined) => ({
     'field-name': valueKey === 'field_name',
