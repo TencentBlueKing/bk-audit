@@ -189,6 +189,7 @@ class TestListRiskResource(TestCase):
         normalized_sql = [sql.replace("`", "") for sql in sql_log]
         self.assertTrue(any(("JSON_EXTRACT" in sql) or ("GET_JSON_OBJECT" in sql) for sql in normalized_sql))
         self.assertTrue(any("risk_event_0.strategy_id = base_query.strategy_id" in sql for sql in normalized_sql))
+        self.assertTrue(any("risk_event_0.raw_event_id = base_query.raw_event_id" in sql for sql in normalized_sql))
         self.assertTrue(any("risk_event_0.dteventtimestamp >=" in sql for sql in normalized_sql))
         self.assertTrue(
             any("COALESCE(base_query.event_end_time, base_query.event_time)" in sql for sql in normalized_sql)

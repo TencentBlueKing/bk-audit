@@ -266,7 +266,7 @@ class ListRisk(RiskMeta):
         order_field_name = order_field.lstrip("-")
         order_direction = "DESC" if order_field.startswith("-") else "ASC"
 
-        value_fields = ["risk_id", "strategy_id", "event_time", "event_end_time"]
+        value_fields = ["risk_id", "strategy_id", "raw_event_id", "event_time", "event_end_time"]
         if order_field_name not in value_fields:
             value_fields.append(order_field_name)
         if order_field_name == RISK_LEVEL_ORDER_FIELD and "event_time" not in value_fields:
@@ -712,7 +712,11 @@ class ListRisk(RiskMeta):
             exp.EQ(
                 this=self._column(alias, "strategy_id"),
                 expression=self._column("base_query", "strategy_id"),
-            )
+            ),
+            exp.EQ(
+                this=self._column(alias, "raw_event_id"),
+                expression=self._column("base_query", "raw_event_id"),
+            ),
         ]
         join_conditions.extend(self._build_event_timestamp_conditions(alias))
 
