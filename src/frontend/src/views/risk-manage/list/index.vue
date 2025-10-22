@@ -51,6 +51,7 @@
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
+    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -87,6 +88,7 @@
   const { t } = useI18n();
   const { getSearchParams } = useUrlSearch();
   const router = useRouter();
+  const route = useRoute();
   let timeout: number| undefined = undefined;
   const statusToMap: Record<string, {
     tag: string,
@@ -502,7 +504,7 @@
       tags: '',
       start_time: '',
       end_time: '',
-      strategy_id: '',
+      strategy_id: route.query.strategy_id || '',
       operator: '',
       current_operator: '',
       status: '',

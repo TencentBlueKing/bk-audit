@@ -268,6 +268,10 @@
     }
     if (!urlSearchParams[searchFieldName]) return;
     if (config.type !== 'string') {
+      // 如果urlSearchParams[searchFieldName]是数字则转换成字符串
+      if (_.isNumber(urlSearchParams[searchFieldName])) {
+        urlSearchParams[searchFieldName] = urlSearchParams[searchFieldName].toString();
+      }
       searchModel.value[searchFieldName] = urlSearchParams[searchFieldName].split(',');
     } else {
       searchModel.value[searchFieldName] = urlSearchParams[searchFieldName];
