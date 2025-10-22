@@ -57,6 +57,7 @@
       ref="comRef"
       :control-detail="controlDetail"
       :data="formData"
+      :edit-data="props.editData"
       @update-aiops-config="handleUpdateAiopsConfig"
       @update-config-type="handleUpdateConfigType"
       @update-configs="handleUpdateConfigs"

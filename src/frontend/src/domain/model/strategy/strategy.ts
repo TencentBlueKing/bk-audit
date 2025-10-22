@@ -19,35 +19,166 @@ import DatabaseTableFieldModel from '@model/strategy/database-table-field';
 
 import StrategyFieldEvent from '../strategy/strategy-field-event';
 
+// export default class Strategy {
+//   strategy_id: number;
+//   strategy_name: string;
+//   tags: string[];
+//   created_at: string;
+//   created_by: string;
+//   updated_at: string;
+//   updated_by: string;
+//   is_deleted: boolean;
+//   namespace: string;
+//   control_id: string;// 控件id
+//   control_version: number;// 版本
+//   configs: {
+//     config_type?: string;
+//     data_source?: {
+//       source_type: string;
+//       result_table_id?: string;
+//       rt_id: string;
+//       link_table: {
+//         uid: string,
+//         version: number,
+//       },
+//       system_ids: Array<string>,
+//       filter_config: Array<{
+//         connector: string;
+//         key: string;
+//         method: string;
+//         value: string[];
+//       }>;
+//       fields: {
+//         [key: string]: Array<{
+//           field_name: string,
+//           source_field: Array<{
+//             action_id: string;
+//             source_field: string;
+//             mapping_type: string
+//           }>
+//         }> | Array<{
+//           field_name: string;
+//           source_field: string;
+//         }>
+//       }
+//     };
+//     select: Array<DatabaseTableFieldModel>,
+//     where: {
+//       connector: 'and' | 'or' ;
+//       conditions: Array<{
+//         connector: 'and' | 'or';
+//         index: number;
+//         conditions: Array<{
+//           condition: {
+//             field: DatabaseTableFieldModel | '';
+//             filter: string;
+//             filters: string[];
+//             operator: '',
+//           }
+//         }>
+//       }>;
+//     },
+//     schedule_config: {
+//       count_freq: string,
+//       schedule_period: string,
+//     },
+//     [key: string]: any
+//   };
+//   status: string;
+//   status_msg: string;
+//   permission: Record<string, boolean>;
+//   notice_groups: Array<number>;
+//   description: string;
+//   risk_level: string;
+//   risk_hazard: string;
+//   risk_guidance: string;
+//   risk_title: string;
+//   risk_count: number;
+//   strategy_type: string;
+//   event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
+//   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
+//   event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
+//   risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'];
+//   processor_groups: Array<number>;
+//   link_table_uid: string;
+//   link_table_version: number;
+//   constructor(payload = {} as Strategy) {
+//     this.strategy_id = payload.strategy_id;
+//     this.strategy_name = payload.strategy_name;
+//     this.tags = payload.tags;
+//     this.created_at = payload.created_at;
+//     this.created_by = payload.created_by;
+//     this.updated_at = payload.updated_at;
+//     this.updated_by = payload.updated_by;
+//     this.is_deleted = payload.is_deleted;
+//     this.namespace = payload.namespace;
+//     this.control_id = payload.control_id;
+//     this.control_version = payload.control_version;
+//     this.configs = payload.configs;
+//     this.status = payload.status;
+//     this.status_msg = payload.status_msg;
+//     this.permission = payload.permission;
+//     this.notice_groups = payload.notice_groups;
+//     this.description = payload.description;
+//     this.risk_level = payload.risk_level;
+//     this.risk_hazard = payload.risk_hazard;
+//     this.risk_guidance = payload.risk_guidance;
+//     this.risk_title = payload.risk_title;
+//     this.risk_count = payload.risk_count; // 风险数量
+//     this.strategy_type = payload.strategy_type;
+//     this.event_data_field_configs = payload.event_data_field_configs;
+//     this.event_basic_field_configs = payload.event_basic_field_configs;
+//     this.event_evidence_field_configs = payload.event_evidence_field_configs;
+//     this.risk_meta_field_config = payload.risk_meta_field_config;
+//     this.processor_groups = payload.processor_groups;
+//     this.link_table_uid = payload.link_table_uid;
+//     this.link_table_version = payload.link_table_version;
+//   }
+//   get isFailed() {
+//     const failedStatusMap: Record<string, string> = {
+//       failed: 'failed',
+//       start_failed: 'start_failed',
+//       update_failed: 'update_failed',
+//       stop_failed: 'stop_failed',
+//       delete_failed: 'delete_failed',
+//     };
+//     return failedStatusMap[this.status];
+//   }
+//   get isPending() {
+//     const pendingStatusMap: Record<string, string> = {
+//       pending: 'pending',
+//       starting: 'starting',
+//       updating: 'updating',
+//       stop_failed: 'stop_failed',
+//       stopping: 'stopping',
+//     };
+//     return pendingStatusMap[this.status];
+//   }
+
+//   get statusTag() {
+//     const statusTagMap: Record<string, string> = {
+//       disabled: 'unknown',
+//       running: 'normal',
+//       // 处理中
+//       pending: 'warning',
+//       starting: 'warning',
+//       updating: 'warning',
+//       stopping: 'warning',
+//       // 失败
+//       failed: 'abnormal',
+//       start_failed: 'abnormal',
+//       update_failed: 'abnormal',
+//       stop_failed: 'abnormal',
+//       delete_failed: 'abnormal',
+//     };
+//     return statusTagMap[this.status];
+//   }
+// }
+
 export default class Strategy {
-  strategy_id: number;
-  strategy_name: string;
-  tags: string[];
-  created_at: string;
-  created_by: string;
-  updated_at: string;
-  updated_by: string;
-  is_deleted: boolean;
-  namespace: string;
-  control_id: string;// 控件id
-  control_version: number;// 版本
   configs: {
     config_type?: string;
     data_source?: {
-      source_type: string;
-      result_table_id?: string;
-      rt_id: string;
-      link_table: {
-        uid: string,
-        version: number,
-      },
-      system_ids: Array<string>,
-      filter_config: Array<{
-        connector: string;
-        key: string;
-        method: string;
-        value: string[];
-      }>;
       fields: {
         [key: string]: Array<{
           field_name: string,
@@ -60,8 +191,49 @@ export default class Strategy {
           field_name: string;
           source_field: string;
         }>
-      }
+      };
+      filter_config: Array<{
+        connector: string;
+        key: string;
+        method: string;
+        value: string[];
+      }>;
+      link_table: {
+        uid: string,
+        version: number,
+      };
+      result_table_id?: string;
+      rt_id: string;
+      source_type: string;
+      system_ids: Array<string>;
     };
+    rule_list: Array<{
+      where: {
+        connector: 'and' | 'or' ;
+        conditions: Array<{
+          connector: 'and' | 'or';
+          index: number;
+          conditions: Array<{
+            condition: {
+              field: DatabaseTableFieldModel | '';
+              filter: string;
+              filters: string[];
+              operator: '',
+            }
+          }>
+        }>;
+      },
+      rule_name: string;
+      risk_level: string;
+      risk_hazard: string;
+      risk_guidance: string;
+      processor_groups: Array<number>;
+      notice_groups: Array<number>;
+    }>,
+    schedule_config: {
+      count_freq: string,
+      schedule_period: string,
+    },
     select: Array<DatabaseTableFieldModel>,
     where: {
       connector: 'and' | 'or' ;
@@ -78,61 +250,78 @@ export default class Strategy {
         }>
       }>;
     },
-    schedule_config: {
-      count_freq: string,
-      schedule_period: string,
-    },
     [key: string]: any
   };
-  status: string;
-  status_msg: string;
-  permission: Record<string, boolean>;
-  notice_groups: Array<number>;
+  control_id: string;// 控件id
+  control_version: number;// 版本
+  created_at: string;
+  created_by: string;
   description: string;
-  risk_level: string;
-  risk_hazard: string;
-  risk_guidance: string;
-  risk_title: string;
-  risk_count: number;
-  strategy_type: string;
-  event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_basic_field_configs: StrategyFieldEvent['event_basic_field_configs'];
+  event_data_field_configs: StrategyFieldEvent['event_data_field_configs'];
   event_evidence_field_configs: StrategyFieldEvent['event_evidence_field_configs'];
-  risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'];
-  processor_groups: Array<number>;
+  is_deleted: boolean;
   link_table_uid: string;
   link_table_version: number;
+  namespace: string;
+  notice_groups: Array<number>;
+  permission: Record<string, boolean>;
+  processor_groups: Array<number>;
+  risk_count: number;
+  risk_guidance: string;
+  risk_hazard: string;
+  risk_level: string;
+  risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'];
+  risk_title: string;
+  status: string;
+  status_msg: string;
+  strategy_id: number;
+  strategy_name: string;
+  strategy_type: string;
+  tags: string[];
+  updated_at: string;
+  updated_by: string;
   constructor(payload = {} as Strategy) {
-    this.strategy_id = payload.strategy_id;
-    this.strategy_name = payload.strategy_name;
-    this.tags = payload.tags;
-    this.created_at = payload.created_at;
-    this.created_by = payload.created_by;
-    this.updated_at = payload.updated_at;
-    this.updated_by = payload.updated_by;
-    this.is_deleted = payload.is_deleted;
-    this.namespace = payload.namespace;
+    this.configs = payload.configs || {};
+    // 模拟数据
+    this.configs.rule_list = [{
+      where: payload.configs?.where || [],
+      rule_name: payload.configs?.rule_list?.[0]?.rule_name || '',
+      risk_level: payload.risk_level,
+      risk_hazard: payload.risk_hazard,
+      risk_guidance: payload.risk_guidance,
+      processor_groups: payload.processor_groups,
+      notice_groups: payload.notice_groups,
+    }];
     this.control_id = payload.control_id;
     this.control_version = payload.control_version;
-    this.configs = payload.configs;
-    this.status = payload.status;
-    this.status_msg = payload.status_msg;
-    this.permission = payload.permission;
-    this.notice_groups = payload.notice_groups;
+    this.created_at = payload.created_at;
+    this.created_by = payload.created_by;
     this.description = payload.description;
-    this.risk_level = payload.risk_level;
-    this.risk_hazard = payload.risk_hazard;
-    this.risk_guidance = payload.risk_guidance;
-    this.risk_title = payload.risk_title;
-    this.risk_count = payload.risk_count; // 风险数量
-    this.strategy_type = payload.strategy_type;
-    this.event_data_field_configs = payload.event_data_field_configs;
     this.event_basic_field_configs = payload.event_basic_field_configs;
+    this.event_data_field_configs = payload.event_data_field_configs;
     this.event_evidence_field_configs = payload.event_evidence_field_configs;
-    this.risk_meta_field_config = payload.risk_meta_field_config;
-    this.processor_groups = payload.processor_groups;
+    this.is_deleted = payload.is_deleted;
     this.link_table_uid = payload.link_table_uid;
     this.link_table_version = payload.link_table_version;
+    this.namespace = payload.namespace;
+    this.notice_groups = payload.notice_groups;
+    this.permission = payload.permission;
+    this.processor_groups = payload.processor_groups;
+    this.risk_count = payload.risk_count; // 风险数量
+    this.risk_guidance = payload.risk_guidance;
+    this.risk_hazard = payload.risk_hazard;
+    this.risk_level = payload.risk_level;
+    this.risk_meta_field_config = payload.risk_meta_field_config;
+    this.risk_title = payload.risk_title;
+    this.status = payload.status;
+    this.status_msg = payload.status_msg;
+    this.strategy_id = payload.strategy_id;
+    this.strategy_name = payload.strategy_name;
+    this.strategy_type = payload.strategy_type;
+    this.tags = payload.tags;
+    this.updated_at = payload.updated_at;
+    this.updated_by = payload.updated_by;
   }
   get isFailed() {
     const failedStatusMap: Record<string, string> = {

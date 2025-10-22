@@ -20,126 +20,114 @@
       label=""
       label-width="0"
       required>
-      <collapse-panel
+      <!-- <collapse-panel
         :is-active="isActive"
         :label="t('方案输入')"
-        style="margin-bottom: 14px;">
-        <div style="padding: 16px 32px 24px;">
-          <bk-form-item
-            :label="t('数据源类型')"
-            label-width="160"
-            property="configs.config_type"
-            required>
-            <bk-radio-group
-              v-model="formData.configs.config_type"
-              class="strategy-radio-group"
-              :disabled="isEditMode || isCloneMode || isUpgradeMode"
-              @change="handleDataSourceType">
-              <bk-radio-button
-                v-for="item in commonData.table_type"
-                :key="item.value"
-                v-bk-tooltips="tableTypeTip[item.value]"
-                class="form-raido-common"
-                :label="item.value"
-                style="min-width: 181px;">
-                {{ t(item.label) }}
-              </bk-radio-button>
-            </bk-radio-group>
-          </bk-form-item>
+        style="margin-bottom: 14px;"> -->
+      <div>
+        <bk-form-item
+          :label="t('数据源类型')"
+          label-width="160"
+          property="configs.config_type"
+          required>
+          <bk-radio-group
+            v-model="formData.configs.config_type"
+            class="strategy-radio-group"
+            :disabled="isEditMode || isCloneMode || isUpgradeMode"
+            @change="handleDataSourceType">
+            <bk-radio-button
+              v-for="item in commonData.table_type"
+              :key="item.value"
+              v-bk-tooltips="tableTypeTip[item.value]"
+              class="form-raido-common"
+              :label="item.value"
+              style="min-width: 181px;">
+              {{ t(item.label) }}
+            </bk-radio-button>
+          </bk-radio-group>
+        </bk-form-item>
 
-          <component
-            :is="comMap[formData.configs.config_type]"
-            ref="comRef"
-            :control-detail="controlDetail"
-            :input-fields="inputFields"
-            :loading="tableLoading"
-            :source-type="formData.configs.config_type"
-            :table-data="tableData"
-            :trigger-error="triggerError"
-            @update-data-source="handleUpdateDataSource" />
-        </div>
-      </collapse-panel>
+        <component
+          :is="comMap[formData.configs.config_type]"
+          ref="comRef"
+          :control-detail="controlDetail"
+          :input-fields="inputFields"
+          :loading="tableLoading"
+          :source-type="formData.configs.config_type"
+          :table-data="tableData"
+          :trigger-error="triggerError"
+          @update-data-source="handleUpdateDataSource" />
+      </div>
+      <!-- </collapse-panel> -->
 
-      <collapse-panel
-        :is-active="isActive"
-        :label="t('方案参数')"
-        style="margin-bottom: 14px;">
-        <!-- <model-empty /> -->
-        <div style="padding: 16px 32px 24px;">
-          <scheme-paramenters
-            ref="paramenterRef"
-            :control-detail="controlDetail" />
-        </div>
-      </collapse-panel>
-
-      <collapse-panel
+      <!-- <collapse-panel
         :is-active="isActive"
         :label="t('调度配置')"
-        style="margin-bottom: 12px;">
-        <div class="dispatch-wrap">
-          <bk-form-item
-            :label="t('调度方式')"
-            property="source_type"
-            style="margin-bottom: 12px;">
-            <bk-radio-group
-              v-model="formData.configs.data_source.source_type"
-              @change="handleSourceTypeChange">
-              <bk-radio label="batch_join_source">
-                {{ t('固定周期调度') }}
-              </bk-radio>
-              <bk-radio label="stream_source">
-                <span
-                  v-bk-tooltips="t('策略实时运行')"
-                  style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
-                  {{ t('实时调度') }}
-                </span>
-              </bk-radio>
-            </bk-radio-group>
-          </bk-form-item>
-          <template v-if="formData.configs.data_source.source_type !== 'stream_source'">
-            <span
-              v-bk-tooltips="t('策略运行的周期')"
-              class="label-is-required"
-              style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
-              {{ t('调度周期') }}
-            </span>
-            <div class="flex-center">
-              <bk-form-item
-                class="is-required no-label"
-                label-width="0"
-                property="configs.aiops_config.count_freq"
-                style="margin-bottom: 12px;">
-                <bk-input
-                  v-model="formData.configs.aiops_config.count_freq"
-                  class="schedule-input"
-                  :min="1"
-                  onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
-                  :placeholder="t('请输入')"
-                  type="number"
-                  @change="handleAiopsConfig" />
-              </bk-form-item>
-              <bk-form-item
-                class="is-required no-label"
-                label-width="0"
-                property="configs.aiops_config.schedule_period"
-                style="margin-bottom: 12px;">
-                <bk-select
-                  v-model="formData.configs.aiops_config.schedule_period"
-                  class="schedule-select"
-                  :clearable="false"
-                  style="width: 68px;"
-                  @change="handleAiopsConfig">
-                  <bk-option
-                    v-for="(item, index) in commonData.offset_unit"
-                    :key="index"
-                    :label="item.label"
-                    :value="item.value" />
-                </bk-select>
-              </bk-form-item>
-            </div>
-          </template>
-        </div>
-      </collapse-panel>
+        style="margin-bottom: 12px;"> -->
+      <div class="dispatch-wrap">
+        <bk-form-item
+          :label="t('调度方式')"
+          property="source_type"
+          style="margin-bottom: 12px;">
+          <bk-radio-group
+            v-model="formData.configs.data_source.source_type"
+            @change="handleSourceTypeChange">
+            <bk-radio label="batch_join_source">
+              {{ t('固定周期调度') }}
+            </bk-radio>
+            <bk-radio label="stream_source">
+              <span
+                v-bk-tooltips="t('策略实时运行')"
+                style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+                {{ t('实时调度') }}
+              </span>
+            </bk-radio>
+          </bk-radio-group>
+        </bk-form-item>
+        <template v-if="formData.configs.data_source.source_type !== 'stream_source'">
+          <span
+            v-bk-tooltips="t('策略运行的周期')"
+            class="label-is-required"
+            style="color: #63656e; cursor: pointer; border-bottom: 1px dashed #979ba5;">
+            {{ t('调度周期') }}
+          </span>
+          <div class="flex-center">
+            <bk-form-item
+              class="is-required no-label"
+              label-width="0"
+              property="configs.aiops_config.count_freq"
+              style="margin-bottom: 12px;">
+              <bk-input
+                v-model="formData.configs.aiops_config.count_freq"
+                class="schedule-input"
+                :min="1"
+                onkeypress="return( /[\d]/.test(String.fromCharCode(event.keyCode) ) )"
+                :placeholder="t('请输入')"
+                type="number"
+                @change="handleAiopsConfig" />
+            </bk-form-item>
+            <bk-form-item
+              class="is-required no-label"
+              label-width="0"
+              property="configs.aiops_config.schedule_period"
+              style="margin-bottom: 12px;">
+              <bk-select
+                v-model="formData.configs.aiops_config.schedule_period"
+                class="schedule-select"
+                :clearable="false"
+                style="width: 68px;"
+                @change="handleAiopsConfig">
+                <bk-option
+                  v-for="(item, index) in commonData.offset_unit"
+                  :key="index"
+                  :label="item.label"
+                  :value="item.value" />
+              </bk-select>
+            </bk-form-item>
+          </div>
+        </template>
+      </div>
+      <!-- </collapse-panel> -->
     </bk-form-item>
   </div>
 </template>
@@ -162,7 +150,7 @@
 
   import useRequest from '@hooks/use-request';
 
-  import CollapsePanel from './components/components/collapse-panel.vue';
+  // import CollapsePanel from './components/components/collapse-panel.vue';
   // import ModelEmpty from './components/components/model-empty.vue';
   import EventLogComponent from './components/scheme-input/event-log.vue';
   import ResourceDataComponent from './components/scheme-input/resource-data.vue';
@@ -224,7 +212,7 @@
   const comRef = ref();
   const paramenterRef = ref();
   const inputFields = shallowRef<ValueOf<AiopPlanModel['input_fields']>>([]);
-  const isActive = ref(true);
+  // const isActive = ref(true);
   const formData = ref<IFormData>({
     configs: {
       data_source: {
@@ -410,7 +398,7 @@
   }
 
   .dispatch-wrap {
-    padding: 16px 24px;
+    /* padding: 16px 24px; */
 
     .flex-center {
       display: flex;
