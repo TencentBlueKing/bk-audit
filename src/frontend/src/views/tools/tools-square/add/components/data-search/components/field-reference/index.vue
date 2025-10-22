@@ -310,7 +310,7 @@
   interface Emits {
     (e: 'submit', data: FormData['tools']): void;
     (e: 'openTool', value: string): void;
-    (e: 'refreshToolList'): void;
+    (e: 'refresh-tool-list'): void;
   }
 
   interface Props {
@@ -546,7 +546,7 @@
 
   const refreshToolList = () => {
     isToolLoading.value = true;
-    emit('refreshToolList');
+    emit('refresh-tool-list');
   };
 
   // 获取工具名称
