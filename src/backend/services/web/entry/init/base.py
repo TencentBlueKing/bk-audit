@@ -239,7 +239,12 @@ class SystemInitHandler:
 
         print("[InitAsset] Start")
         status_map = GlobalMetaConfig.get(INIT_ASSET_FINISHED_KEY, default={})
-        assets: List[Type[ResourceTypeMeta]] = [ResourceEnum.RISK, ResourceEnum.STRATEGY, ResourceEnum.STRATEGY_TAG]
+        assets: List[Type[ResourceTypeMeta]] = [
+            ResourceEnum.RISK,
+            ResourceEnum.STRATEGY,
+            ResourceEnum.STRATEGY_TAG,
+            ResourceEnum.TICKET_PERMISSION,
+        ]
         for asset in assets:
             system_id, resource_type_id = asset.system_id, asset.id
             map_key = f"{system_id}-{resource_type_id}"

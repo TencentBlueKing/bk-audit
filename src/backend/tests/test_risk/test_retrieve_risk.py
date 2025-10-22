@@ -203,6 +203,41 @@ class TestListRiskResource(TestCase):
         self.assertTrue(any(event_table in sql for sql in normalized_sql))
         assert_hive_sql(self, sql_log)
 
+    def test_list_risk_via_bkbase_with_numeric_event_filter(self):
+        sql_log = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            print(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        payload = {
+            "use_bkbase": True,
+            "event_filters": [
+                {
+                    "field": "ip",
+                    "display_name": "Source IP",
+                    "operator": EventFilterOperator.GREATER_THAN.value,
+                    "value": "1.5",
+                }
+            ],
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+        normalized_sql = [sql.replace("`", "") for sql in sql_log]
+        combined_sql = " ".join(normalized_sql)
+        self.assertIn("JSON_EXTRACT_DOUBLE", combined_sql)
+        self.assertIn("> 1.5", combined_sql)
+        self.assertNotIn("> '1.5'", combined_sql)
+        assert_hive_sql(self, sql_log)
+
     def test_list_risk_via_bkbase_with_risk_level(self):
         sql_log = []
 
