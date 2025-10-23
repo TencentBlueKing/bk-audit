@@ -19,13 +19,13 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 from typing import Type, Union
 
-from bk_resource.tools import get_serializer_fields
 from django.db.models import Q
 from iam.resource.provider import ListResult, SchemaResult
 
 from apps.meta.models import Action, ResourceType, SensitiveObject
 from apps.meta.serializers import SensitiveObjSerializer
 from apps.permission.provider.base import BaseResourceProvider
+from core.serializers import get_serializer_fields
 
 
 class SensitiveObjBaseProvider(BaseResourceProvider):

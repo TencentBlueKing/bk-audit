@@ -344,6 +344,7 @@ BK_SOPS_APP_CODE = os.getenv("BKAPP_BK_SOPS_APP_CODE", "bk_sops")
 ENABLE_PROCESS_RISK_TASK = strtobool(os.getenv("BKAPP_ENABLE_PROCESS_RISK_TASK", "True"))
 PROCESS_RISK_MAX_RETRY = int(os.getenv("BKAPP_PROCESS_RISK_MAX_RETRY", 3))
 ENABLE_MULTI_PROCESS_RISK = strtobool(os.getenv("BKAPP_ENABLE_MULTI_PROCESS_RISK", "True"))
+DISABLE_RISK_PERMISSION_FILTER = strtobool(os.getenv("BKAPP_DISABLE_RISK_PERMISSION_FILTER", "False"))
 
 # cache lock
 DEFAULT_CACHE_LOCK_TIMEOUT = int(os.getenv("BKAPP_DEFAULT_CACHE_LOCK_TIMEOUT", 60 * 60))
@@ -502,6 +503,9 @@ RECENT_USED_TTL = int(os.getenv("BKAPP_RECENT_USED_TTL", 60 * 60 * 24 * 365))
 
 # CORS 允许的 header
 CORS_EXPOSE_HEADERS = ['Content-Disposition']
+
+# Doris 事件表入库配置
+EVENT_DORIS_EXPIRES = os.getenv("BKAPP_EVENT_DORIS_EXPIRES", "1080d")
 
 """
 以下为框架代码 请勿修改

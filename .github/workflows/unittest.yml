@@ -14,17 +14,6 @@ jobs:
   unittest:
     runs-on: ubuntu-latest
     services:
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ROOT_PASSWORD: root
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=3
       redis:
         image: redis:latest
         ports:
@@ -79,6 +68,15 @@ jobs:
         uses: actions/setup-python@v3
         with:
           python-version: '3.11'
+      - name: Set up MySQL 8
+        uses: shogo82148/actions-setup-mysql@v1
+        with:
+          mysql-version: '8.0'
+          root-password: root
+      - name: Install MySQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
       - name: Install dependencies
         run: |
           cd src/backend

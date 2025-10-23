@@ -58,6 +58,7 @@ from services.web.analyze.constants import (
 from services.web.analyze.controls.base import BkbaseFlowController, Controller
 from services.web.analyze.exceptions import ClusterNotExists
 from services.web.analyze.models import Control, ControlVersion
+from services.web.analyze.storage_node import DorisStorageNode, ESStorageNode
 from services.web.analyze.utils import calculate_offline_flow_start_time, is_asset
 from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
 from services.web.risk.constants import EventMappingFields
@@ -72,6 +73,7 @@ class AIOpsController(Controller, BkbaseFlowController):
     """
 
     base_control_type = BaseControlTypeChoices.CONTROL
+    doris_storage_node = DorisStorageNode
 
     @transaction.atomic()
     def _update_or_create_bkbase_flow(self) -> bool:
@@ -81,24 +83,36 @@ class AIOpsController(Controller, BkbaseFlowController):
             self._create_flow()
         # create or update node
         last_node_id = 0
+        scene_node_id = None  # 记录场景方案节点ID，用于让存储节点并联到场景节点
         node_configs = self._build_flow_nodes()
         for index, node_config in enumerate(node_configs):
             node = {
                 "flow_id": self.strategy.backend_data["flow_id"],
                 "frontend_info": {"x": (index + 1) * 300, "y": 30},
-                "from_links": self._describe_from_links(index, last_node_id),
                 "node_type": node_config["node_type"],
                 "config": node_config,
             }
+
+            # 对存储节点（ES/Doris）进行特殊处理：并联到场景方案节点
+            if node["node_type"] in {ESStorageNode.node_type, DorisStorageNode.node_type} and scene_node_id:
+                last_node_id = scene_node_id
+            node["from_links"] = self._describe_from_links(index, last_node_id)
+
             # 离线节点需要配置上游id
             if node["config"].get("inputs") and "id" in node["config"]["inputs"][0]:
                 node["config"]["inputs"][0]["id"] = last_node_id
-            if is_create:
-                resp = api.bk_base.create_flow_node(**node)
-            else:
-                node["node_id"] = node_config["node_id"]
+
+            node_id = node_config.get("node_id")
+            if node_id:
+                node["node_id"] = node_id
                 resp = api.bk_base.update_flow_node(**node)
+            else:
+                resp = api.bk_base.create_flow_node(**node)
+            node_config["node_id"] = resp["node_id"]
             last_node_id = resp["node_id"]
+            # 记录场景方案节点ID，供后续存储节点并联
+            if node["node_type"] == "scenario_app":
+                scene_node_id = last_node_id
             logger.info(
                 "[CreateOrUpdateBkBaseFlowNodeSuccess] FlowID => %s; NodeID => %s",
                 self.strategy.backend_data["flow_id"],
@@ -151,8 +165,8 @@ class AIOpsController(Controller, BkbaseFlowController):
                 flow_id=flow_id,
                 project_id=project_id,
             ),
-            self._build_storage_node(bk_biz_id=bk_biz_id, raw_table_name=raw_table_name),
         ]
+        nodes.extend(self._build_storage_nodes(bk_biz_id=bk_biz_id, raw_table_name=raw_table_name))
 
         # get exist nodes
         if self.strategy.backend_data.get("flow_id"):
@@ -160,7 +174,8 @@ class AIOpsController(Controller, BkbaseFlowController):
             if bkbase_nodes:
                 node_ids = [node["node_id"] for node in bkbase_nodes]
                 for index, node in enumerate(nodes):
-                    node["node_id"] = node_ids[index]
+                    if index < len(node_ids):
+                        node["node_id"] = node_ids[index]
 
         return nodes
 
@@ -381,13 +396,40 @@ class AIOpsController(Controller, BkbaseFlowController):
             else ScenePlanServingMode.BATCH,
         }
 
-    def _build_storage_node(self, bk_biz_id: int, raw_table_name: str) -> dict:
+    def _build_storage_nodes(self, bk_biz_id: int, raw_table_name: str) -> List[dict]:
         """
-        build storage node
+        build storage nodes
         """
 
-        # add storage node
-        # storage
+        scenario_table_name = f"scenario_{raw_table_name}"
+        result_table_id = f"{bk_biz_id}_{scenario_table_name}"
+        nodes: List[dict] = []
+
+        es_node = self._build_es_storage_node(
+            bk_biz_id=bk_biz_id,
+            raw_table_name=raw_table_name,
+            scenario_table_name=scenario_table_name,
+            result_table_id=result_table_id,
+        )
+        if es_node:
+            nodes.append(es_node)
+
+        doris_node = self.doris_storage_node(namespace=self.strategy.namespace).build_node_config(
+            bk_biz_id=bk_biz_id,
+            raw_table_name=scenario_table_name,
+            from_result_table_ids=[result_table_id],
+        )
+        if doris_node:
+            nodes.append(doris_node)
+        return nodes
+
+    def _build_es_storage_node(
+        self, bk_biz_id: int, raw_table_name: str, scenario_table_name: str, result_table_id: str
+    ) -> dict:
+        """
+        build ES storage node config
+        """
+
         default_cluster_id = int(
             GlobalMetaConfig.get(
                 DEFAULT_STORAGE_CONFIG_KEY,
@@ -400,6 +442,7 @@ class AIOpsController(Controller, BkbaseFlowController):
         for item in clusters:
             if item["cluster_config"]["cluster_id"] == default_cluster_id:
                 cluster_info = item
+                break
         if cluster_info is None:
             raise ClusterNotExists()
         bkbase_cluster_id = cluster_info["cluster_config"].get("custom_option", {})["bkbase_cluster_id"]
@@ -408,7 +451,7 @@ class AIOpsController(Controller, BkbaseFlowController):
         return {
             "node_type": "elastic_storage",
             "name": f"es_storage_{raw_table_name}",
-            "result_table_id": f"{bk_biz_id}_scenario_{raw_table_name}",
+            "result_table_id": result_table_id,
             "bk_biz_id": bk_biz_id,
             "indexed_fields": [],
             "cluster": bkbase_cluster_id,
@@ -419,7 +462,7 @@ class AIOpsController(Controller, BkbaseFlowController):
             "analyzed_fields": [],
             "doc_values_fields": [],
             "json_fields": [],
-            "from_result_table_ids": [f"{bk_biz_id}_scenario_{raw_table_name}"],
+            "from_result_table_ids": [result_table_id],
             "physical_table_name": f"write_{{yyyyMMdd}}_{table_id}",
         }
 

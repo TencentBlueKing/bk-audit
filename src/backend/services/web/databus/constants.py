@@ -119,6 +119,19 @@ CollectorParamConditionMatchType = _CollectorParamConditionMatchType
 
 PULL_HANDLER_PRE_CHECK_TIMEOUT = int(os.getenv("BKAPP_PULL_HANDLER_PRE_CHECK_TIMEOUT", 5))  # ss
 
+# Doris 事件存储配置
+DORIS_EVENT_STORAGE_CONFIG_KEY = "doris_event_storage_config"
+# Doris 事件结果表 ID
+DORIS_EVENT_BKBASE_RT_ID_KEY = "doris_event_bkbase_rt_id"
+# Doris 事件物理表
+DORIS_EVENT_PHYSICAL_TABLE_NAME_KEY = "doris_event_physical_table_name"
+
+# Asset BKBase 结果表配置
+ASSET_RISK_BKBASE_RT_ID_KEY = "asset_risk_bkbase_rt_id"
+ASSET_STRATEGY_BKBASE_RT_ID_KEY = "asset_strategy_bkbase_rt_id"
+ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY = "asset_strategy_tag_bkbase_rt_id"
+ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY = "asset_ticket_permission_bkbase_rt_id"
+
 
 class DefaultPullConfig:
     period = 1  # minute
@@ -204,6 +217,7 @@ class JsonSchemaFieldType(TextChoices):
     BOOLEAN = "boolean", gettext_lazy("Boolean")
     NULL = "null", gettext_lazy("Null")
     ENUM = "enum", gettext_lazy("Enum")
+    JSON = "json", gettext_lazy("Json")
 
     @classmethod
     def get_bkbase_field_type(cls, field_type: str) -> str:
@@ -216,6 +230,7 @@ class JsonSchemaFieldType(TextChoices):
             cls.BOOLEAN.value: FIELD_TYPE_STRING,
             cls.NULL.value: FIELD_TYPE_STRING,
             cls.ENUM.value: FIELD_TYPE_STRING,
+            cls.JSON.value: FIELD_TYPE_TEXT,
         }
         try:
             return bkbase_field_map[field_type]
