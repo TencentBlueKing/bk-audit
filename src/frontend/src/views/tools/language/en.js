@@ -16,7 +16,9 @@
 */
 export default {
   toolsManage: {
-    已配置工具下钻: 'configured {count} tool drill',
+    已配置: 'Configured',
+    个工具: 'tools',
     去查看: 'Go to view',
+    请选择引用的结果字段: 'Please select the referenced result field',
   },
 };
