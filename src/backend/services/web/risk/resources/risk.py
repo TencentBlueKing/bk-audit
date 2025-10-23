@@ -22,7 +22,7 @@ import logging
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Type
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Type
 
 import sqlglot
 from bk_resource import CacheResource, api, resource
@@ -58,6 +58,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import (
@@ -91,6 +92,7 @@ from services.web.risk.models import (
     RiskAuditInstance,
     RiskExperience,
     TicketNode,
+    TicketPermission,
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
@@ -176,6 +178,8 @@ class ListRisk(RiskMeta):
         order_field = validated_request_data.pop("order_field", "-event_time")
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
+        self._duplicate_event_field_map: Dict[int, Dict[str, Set[str]]] = {}
+        self._bkbase_sql_statements: List[str] = []
         thedate_range = self._extract_thedate_range(validated_request_data)
         base_queryset = self.load_risks(validated_request_data)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
@@ -202,7 +206,11 @@ class ListRisk(RiskMeta):
         }
         for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
-        return page.get_paginated_response(data=ListRiskResponseSerializer(instance=paged_risks, many=True).data).data
+        response = page.get_paginated_response(
+            data=ListRiskResponseSerializer(instance=paged_risks, many=True).data
+        ).data
+        response["sql"] = list(self._bkbase_sql_statements) if use_bkbase else []
+        return response
 
     def _extract_thedate_range(self, validated_request_data) -> Tuple[str, str]:
         end_dt = (
@@ -253,7 +261,44 @@ class ListRisk(RiskMeta):
         if not matched_strategy_ids:
             return queryset.none()
 
+        self._duplicate_event_field_map = self._collect_duplicate_event_fields(matched_strategy_ids)
         return queryset.filter(strategy_id__in=matched_strategy_ids)
+
+    def _collect_duplicate_event_fields(self, strategy_ids: Sequence[str]) -> Dict[int, Dict[str, Set[str]]]:
+        duplicate_map: Dict[int, Dict[str, Set[str]]] = defaultdict(lambda: defaultdict(set))
+        if not strategy_ids:
+            return {}
+        configs_qs = Strategy.objects.filter(strategy_id__in=strategy_ids).values_list(
+            "strategy_id",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
+        )
+        for strategy_id, basic_configs, data_configs, evidence_configs in configs_qs:
+            strategy_map = duplicate_map[int(strategy_id)]
+            self._collect_duplicate_fields_for_source(strategy_map, StrategyFieldSourceEnum.BASIC.value, basic_configs)
+            self._collect_duplicate_fields_for_source(strategy_map, StrategyFieldSourceEnum.DATA.value, data_configs)
+            self._collect_duplicate_fields_for_source(
+                strategy_map, StrategyFieldSourceEnum.EVIDENCE.value, evidence_configs
+            )
+        return {
+            strategy_id: {src: fields for src, fields in source_map.items() if fields}
+            for strategy_id, source_map in duplicate_map.items()
+        }
+
+    def _collect_duplicate_fields_for_source(
+        self,
+        source_map: Dict[str, Set[str]],
+        source: str,
+        configs: Optional[Sequence[Dict[str, Any]]],
+    ) -> None:
+        if not configs:
+            return
+        for field_config in configs:
+            field_name = field_config.get("field_name")
+            if not field_name or not field_config.get("duplicate_field"):
+                continue
+            source_map[source].add(field_name)
 
     def retrieve_via_bkbase(
         self,
@@ -368,6 +413,7 @@ class ListRisk(RiskMeta):
         count_query = self._build_count_query(filtered_query)
         count_sql = count_query.sql(dialect="mysql")
         logger.info("BKBase count SQL: %s", count_sql)
+        self._record_bkbase_sql(count_sql)
         count_resp = api.bk_base.query_sync(sql=count_sql) or {}
         results = count_resp.get("list") or []
         if not results:
@@ -403,6 +449,7 @@ class ListRisk(RiskMeta):
         )
         data_sql = data_query.sql(dialect="mysql")
         logger.info("BKBase data SQL: %s", data_sql)
+        self._record_bkbase_sql(data_sql)
         data_resp = api.bk_base.query_sync(sql=data_sql) or {}
         results = data_resp.get("list") or []
         risk_ids: List[str] = []
@@ -421,6 +468,9 @@ class ListRisk(RiskMeta):
                 ),
                 StrategyTag._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY, fallback=StrategyTag._meta.db_table
+                ),
+                TicketPermission._meta.db_table: self._get_configured_table_name(
+                    config_key=ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY, fallback=TicketPermission._meta.db_table
                 ),
                 "risk_event": self._get_configured_table_name(
                     config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
@@ -492,6 +542,13 @@ class ListRisk(RiskMeta):
             return self._literal(value).sql("mysql")
 
         return re.sub(r"%s", replacer, sql)
+
+    def _record_bkbase_sql(self, sql: Optional[str]) -> None:
+        if not sql:
+            return
+        if not hasattr(self, "_bkbase_sql_statements"):
+            self._bkbase_sql_statements = []
+        self._bkbase_sql_statements.append(sql)
 
     def _convert_to_bkbase_expression(self, sql: str) -> exp.Expression:
         if not sql:
@@ -708,6 +765,7 @@ class ListRisk(RiskMeta):
         self, filter_item: Dict[str, Any], index: int, thedate_range: Optional[Tuple[str, str]]
     ) -> Optional[exp.Expression]:
         alias = f"risk_event_{index}"
+        resolved_source = self._resolve_event_field_source(filter_item)
         join_conditions: List[exp.Expression] = [
             exp.EQ(
                 this=self._column(alias, "strategy_id"),
@@ -720,7 +778,7 @@ class ListRisk(RiskMeta):
         ]
         join_conditions.extend(self._build_event_timestamp_conditions(alias))
 
-        field_expression = self._build_event_field_expression(alias, filter_item)
+        field_expression = self._build_event_field_expression(alias, filter_item, resolved_source=resolved_source)
         if field_expression is None:
             return None
 
@@ -733,8 +791,7 @@ class ListRisk(RiskMeta):
         if combined is None:
             return None
 
-        table_reference = self._get_risk_event_table_reference()
-        table_expr = exp.to_table(table_reference).copy().as_(alias)
+        table_expr = self._build_event_table_expression(alias, filter_item, resolved_source)
         exists_query = exp.select("1").from_(table_expr).where(combined)
         return exp.Exists(this=exists_query)
 
@@ -766,13 +823,17 @@ class ListRisk(RiskMeta):
             exp.LTE(this=event_timestamp.copy(), expression=end_milliseconds),
         ]
 
-    def _build_event_field_expression(self, alias: str, filter_item: Dict[str, Any]) -> Optional[exp.Expression]:
+    def _build_event_field_expression(
+        self,
+        alias: str,
+        filter_item: Dict[str, Any],
+        resolved_source: Optional[str] = None,
+    ) -> Optional[exp.Expression]:
         field_name = filter_item.get("field")
         if not field_name:
             return None
 
-        resolved_source = filter_item.get("field_source") or StrategyFieldSourceEnum.DATA.value
-        operator = self._normalize_operator(filter_item.get("operator"))
+        resolved_source = resolved_source or self._resolve_event_field_source(filter_item)
 
         if resolved_source == StrategyFieldSourceEnum.BASIC.value:
             return self._column(alias, field_name)
@@ -785,8 +846,7 @@ class ListRisk(RiskMeta):
             return None
 
         json_path = self._build_json_path(field_name)
-        extractor = "JSON_EXTRACT_DOUBLE" if self._is_numeric_operator(operator) else "JSON_EXTRACT_STRING"
-        return exp.func(extractor, column, exp.Literal.string(json_path))
+        return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
 
     def _build_event_filter_expression(
         self, field_expr: exp.Expression, filter_item: Dict[str, Any]
@@ -815,8 +875,7 @@ class ListRisk(RiskMeta):
             numeric_value = self._convert_to_float(value)
             if numeric_value is not None:
                 left_expr = field_expr.copy()
-                if not self._uses_numeric_json_extraction(field_expr):
-                    left_expr = exp.Cast(this=left_expr, to=exp.DataType.build("DOUBLE"))
+                left_expr = exp.Cast(this=left_expr, to=exp.DataType.build("DOUBLE"))
                 literal = exp.Literal.number(format(numeric_value, "g"))
                 return comparator(this=left_expr, expression=literal)
             return comparator(this=field_expr.copy(), expression=self._literal(value))
@@ -838,6 +897,55 @@ class ListRisk(RiskMeta):
             return exp.not_(escape_expr) if operator == EventFilterOperator.NOT_CONTAINS.value else escape_expr
 
         return None
+
+    def _build_event_table_expression(
+        self, alias: str, filter_item: Dict[str, Any], resolved_source: str
+    ) -> exp.Expression:
+        table_reference = self._get_risk_event_table_reference()
+        base_table = exp.to_table(table_reference).copy()
+        if not self._should_apply_duplicate_filter(filter_item, resolved_source):
+            return base_table.as_(alias)
+
+        field_name = filter_item.get("field")
+        duplicates_by_strategy = self._get_duplicate_partition_fields(resolved_source, field_name)
+        if not duplicates_by_strategy:
+            return base_table.as_(alias)
+
+        base_alias = f"{alias}_base"
+        partition_key = self._build_duplicate_partition_key_expression(
+            base_alias, resolved_source, duplicates_by_strategy
+        )
+        if partition_key is None:
+            return base_table.as_(alias)
+
+        partition_expressions = [self._column(base_alias, "strategy_id"), partition_key]
+        order_expressions = [exp.Ordered(this=self._column(base_alias, "dteventtimestamp"), desc=True)]
+        window = exp.Window(
+            this=exp.func("ROW_NUMBER"),
+            partition_by=partition_expressions,
+            order=exp.Order(expressions=order_expressions),
+        )
+
+        ranked_select = exp.select(exp.Star(), exp.alias_(window, "_row_number")).from_(base_table.as_(base_alias))
+        ranked_alias = f"{alias}_ranked"
+        ranked_subquery = exp.Subquery(
+            this=ranked_select,
+            alias=exp.TableAlias(this=exp.to_identifier(ranked_alias)),
+        )
+        filtered_select = (
+            exp.select(exp.Star())
+            .from_(ranked_subquery)
+            .where(
+                exp.EQ(
+                    this=exp.column("_row_number", table=ranked_alias),
+                    expression=exp.Literal.number("1"),
+                )
+            )
+        )
+        return exp.Subquery(
+            this=filtered_select,
+            alias=exp.TableAlias(this=exp.to_identifier(alias)),
+        )
 
     def _build_json_path(self, field_name: str) -> str:
         safe_field = field_name.replace("\\", "\\\\").replace("'", "\\'")
@@ -877,6 +985,9 @@ class ListRisk(RiskMeta):
             return [item.strip() for item in value.split(",") if item.strip()]
         return [value]
 
+    def _resolve_event_field_source(self, filter_item: Dict[str, Any]) -> str:
+        return filter_item.get("field_source") or StrategyFieldSourceEnum.DATA.value
+
     def _normalize_operator(self, operator: Any) -> str:
         if operator is None:
             return EventFilterOperator.EQUAL.value
@@ -906,6 +1017,87 @@ class ListRisk(RiskMeta):
 
     def _uses_numeric_json_extraction(self, expression: exp.Expression) -> bool:
         return isinstance(expression, exp.Func) and expression.name.upper() == "JSON_EXTRACT_DOUBLE"
+
+    def _should_apply_duplicate_filter(self, filter_item: Dict[str, Any], resolved_source: str) -> bool:
+        field_name = filter_item.get("field")
+        if not field_name:
+            return False
+        duplicates_by_strategy = self._get_duplicate_partition_fields(resolved_source, field_name)
+        return bool(duplicates_by_strategy)
+
+    def _get_duplicate_partition_fields(self, resolved_source: str, field_name: Optional[str]) -> Dict[int, Set[str]]:
+        if not hasattr(self, "_duplicate_event_field_map") or not field_name:
+            return {}
+        applicable: Dict[int, Set[str]] = {}
+        for strategy_id, source_map in self._duplicate_event_field_map.items():
+            fields = source_map.get(resolved_source)
+            if not fields or field_name not in fields:
+                continue
+            applicable[strategy_id] = set(fields)
+        return applicable
+
+    def _build_duplicate_partition_key_expression(
+        self,
+        alias: str,
+        resolved_source: str,
+        duplicates_by_strategy: Dict[int, Set[str]],
+    ) -> Optional[exp.Expression]:
+        if not duplicates_by_strategy:
+            return None
+
+        cases: List[Tuple[exp.Expression, exp.Expression]] = []
+        for strategy_id, fields in duplicates_by_strategy.items():
+            field_expressions = [
+                self._build_duplicate_partition_value_expression(alias, field_name, resolved_source)
+                for field_name in sorted(fields)
+            ]
+            field_expressions = [expr for expr in field_expressions if expr is not None]
+            if not field_expressions:
+                continue
+            concat_expr = self._concat_partition_values(field_expressions)
+            condition = exp.EQ(
+                this=self._column(alias, "strategy_id"),
+                expression=exp.Literal.number(str(strategy_id)),
+            )
+            cases.append((condition, concat_expr))
+
+        default_expr = self._concat_partition_values(
+            [self._column(alias, "raw_event_id"), self._column(alias, "dteventtimestamp")]
+        )
+
+        if not cases:
+            return default_expr
+
+        case_expr = exp.Case()
+        for condition, value in cases:
+            case_expr = case_expr.when(condition, value)
+        return case_expr.else_(default_expr)
+
+    def _concat_partition_values(self, expressions: List[exp.Expression]) -> exp.Expression:
+        safe_expressions = [self._coalesce_to_string(expr) for expr in expressions]
+        if not safe_expressions:
+            safe_expressions = [exp.Literal.string("")]
+        return exp.func("CONCAT_WS", exp.Literal.string("||"), *safe_expressions)
+
+    def _build_duplicate_partition_value_expression(
+        self, alias: str, field_name: str, resolved_source: str
+    ) -> Optional[exp.Expression]:
+        if resolved_source == StrategyFieldSourceEnum.BASIC.value:
+            return self._column(alias, field_name)
+
+        if resolved_source == StrategyFieldSourceEnum.DATA.value:
+            column = self._column(alias, "event_data")
+        elif resolved_source == StrategyFieldSourceEnum.EVIDENCE.value:
+            column = self._column(alias, "event_evidence")
+        else:
+            return None
+
+        json_path = self._build_json_path(field_name)
+        return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
+
+    def _coalesce_to_string(self, expression: exp.Expression) -> exp.Expression:
+        cast_expr = exp.Cast(this=expression.copy(), to=exp.DataType.build("CHAR"))
+        return exp.func("COALESCE", cast_expr, exp.Literal.string(""))
 
     def _escape_like_pattern(self, value: str) -> str:
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
