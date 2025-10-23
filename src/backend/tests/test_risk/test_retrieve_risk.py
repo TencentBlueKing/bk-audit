@@ -17,6 +17,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import EventFilterOperator, RiskStatus
@@ -53,6 +54,7 @@ class TestListRiskResource(TestCase):
             ASSET_RISK_BKBASE_RT_ID_KEY: "bkdata.risk_rt",
             ASSET_STRATEGY_BKBASE_RT_ID_KEY: "bkdata.strategy_rt",
             ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY: "bkdata.strategy_tag_rt",
+            ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY: "bkdata.ticket_permission_rt",
             DORIS_EVENT_BKBASE_RT_ID_KEY: "bkdata.event_rt",
         }
         for config_key, table_id in self.bkbase_table_config.items():
@@ -71,7 +73,7 @@ class TestListRiskResource(TestCase):
             namespace="default",
             strategy_name="strategy",
             risk_level=RiskLevel.HIGH.value,
-            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
+            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP", "duplicate_field": False}],
         )
         self.risk = Risk.objects.create(
             risk_id="risk-db",
@@ -113,6 +115,7 @@ class TestListRiskResource(TestCase):
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+        self.assertEqual(data["sql"], [])
 
     def test_list_risk_via_db_with_event_filters(self):
         payload = {
@@ -132,6 +135,7 @@ class TestListRiskResource(TestCase):
         results = data["results"]
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+        self.assertEqual(data["sql"], [])
 
     def test_list_risk_via_bkbase(self):
         sql_log = []
@@ -143,8 +147,14 @@ class TestListRiskResource(TestCase):
                 return {"list": [{"count": 1}]}
             return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
 
-        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
-            data = self._call_resource({"use_bkbase": True})
+        permission_q = Q(risk_id__in=TicketPermission.objects.filter(user=self.username).values("risk_id"))
+        original_return = Risk.authed_risk_filter.return_value
+        Risk.authed_risk_filter.return_value = permission_q
+        try:
+            with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+                data = self._call_resource({"use_bkbase": True})
+        finally:
+            Risk.authed_risk_filter.return_value = original_return
 
         results = data["results"]
         self.assertEqual(len(results), 1)
@@ -154,6 +164,9 @@ class TestListRiskResource(TestCase):
         risk_table = f"{self.bkbase_table_config[ASSET_RISK_BKBASE_RT_ID_KEY]}.doris"
         self.assertIn(risk_table, sql_log[0])
         self.assertIn(risk_table, sql_log[1])
+        ticket_table = f"{self.bkbase_table_config[ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY]}.doris"
+        self.assertTrue(any(ticket_table in sql for sql in sql_log))
+        self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
     def test_list_risk_via_bkbase_with_event_filters(self):
@@ -201,6 +214,7 @@ class TestListRiskResource(TestCase):
             "`", ""
         )
         self.assertTrue(any(event_table in sql for sql in normalized_sql))
+        self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
     def test_list_risk_via_bkbase_with_numeric_event_filter(self):
@@ -233,9 +247,54 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         normalized_sql = [sql.replace("`", "") for sql in sql_log]
         combined_sql = " ".join(normalized_sql)
-        self.assertIn("JSON_EXTRACT_DOUBLE", combined_sql)
+        self.assertIn("CAST(JSON_EXTRACT_STRING", combined_sql)
         self.assertIn("> 1.5", combined_sql)
         self.assertNotIn("> '1.5'", combined_sql)
+        self.assertEqual(data["sql"], sql_log)
+        assert_hive_sql(self, sql_log)
+
+    def test_list_risk_via_bkbase_with_duplicate_field(self):
+        sql_log = []
+        self.strategy.event_data_field_configs = [
+            {"field_name": "ip", "display_name": "Source IP", "duplicate_field": False},
+            {"field_name": "user", "display_name": "User", "duplicate_field": True},
+        ]
+        self.strategy.save(update_fields=["event_data_field_configs"])
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            print(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        payload = {
+            "use_bkbase": True,
+            "event_filters": [
+                {
+                    "field": "user",
+                    "display_name": "User",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "tester",
+                }
+            ],
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+
+        normalized_sql = [sql.replace("`", "") for sql in sql_log]
+        combined_sql = " ".join(normalized_sql)
+        self.assertIn("ROW_NUMBER() OVER (PARTITION BY risk_event_0_base.strategy_id", combined_sql)
+        self.assertIn("CASE WHEN risk_event_0_base.strategy_id", combined_sql)
+        self.assertIn("CONCAT_WS('||'", combined_sql)
+        self.assertIn("risk_event_0_ranked", combined_sql)
+        self.assertIn("_row_number = 1", combined_sql)
+        self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
     def test_list_risk_via_bkbase_with_risk_level(self):
@@ -269,6 +328,7 @@ class TestListRiskResource(TestCase):
         self.assertIn("CASE WHEN base_query.strategy__risk_level", data_sql_normalized)
         self.assertIn("ELSE 99 END DESC", data_sql_normalized)
         self.assertIn("base_query.event_time DESC", data_sql_normalized)
+        self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
     def test_list_risk_event_filters_without_matching_strategy_field(self):
@@ -293,6 +353,7 @@ class TestListRiskResource(TestCase):
         data = self._call_resource(payload)
 
         self.assertEqual(len(data["results"]), 0)
+        self.assertEqual(data["sql"], [])
 
     def test_list_risk_via_bkbase_with_full_payload(self):
         sql_log: List[str] = []
@@ -343,6 +404,7 @@ class TestListRiskResource(TestCase):
         combined_sql = " ".join(sql_log)
         self.assertIn("20250420", combined_sql)
         self.assertIn("20251020", combined_sql)
+        self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
 
@@ -415,6 +477,7 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_owned.risk_id, risk_ids)
         self.assertNotIn(self.risk_noticed.risk_id, risk_ids)
+        self.assertEqual(response["sql"], [])
 
     def test_list_mine_risk_via_bkbase(self):
         request = self._make_request()
@@ -445,6 +508,7 @@ class TestListMineAndNoticingRisk(TestCase):
         results = response["results"]
         self.assertEqual([item["risk_id"] for item in results], [self.risk_owned.risk_id])
         self.assertEqual(len(sql_log), 2)
+        self.assertEqual(response["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
     def test_list_noticing_risk(self):
@@ -459,6 +523,7 @@ class TestListMineAndNoticingRisk(TestCase):
         risk_ids = {item["risk_id"] for item in results}
         self.assertIn(self.risk_noticed.risk_id, risk_ids)
         self.assertNotIn(self.risk_owned.risk_id, risk_ids)
+        self.assertEqual(response["sql"], [])
 
     def test_list_noticing_risk_via_bkbase(self):
         request = self._make_request("/notice-risks/")
@@ -489,4 +554,5 @@ class TestListMineAndNoticingRisk(TestCase):
         results = response["results"]
         self.assertEqual([item["risk_id"] for item in results], [self.risk_noticed.risk_id])
         self.assertEqual(len(sql_log), 2)
+        self.assertEqual(response["sql"], sql_log)
         assert_hive_sql(self, sql_log)
