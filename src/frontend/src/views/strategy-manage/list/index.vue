@@ -144,15 +144,12 @@
             action-id="delete_strategy"
             :permission="strategyItem.permission.delete_strategy"
             :resource="strategyItem.strategy_id">
-            <audit-popconfirm
+            <bk-button
               class="ml8"
-              :confirm-handler="() => handleRemove(strategyItem.strategy_id)"
-              :content="t('删除后不可恢复')"
-              :title="t('确认删除？')">
-              <bk-button style="width: 64px;">
-                {{ t('删除') }}
-              </bk-button>
-            </audit-popconfirm>
+              style="width: 64px;"
+              @click="handleDelete(strategyItem)">
+              {{ t('删除') }}
+            </bk-button>
           </auth-component>
           <span>
             <span
@@ -211,6 +208,51 @@
     :width="960">
     <strategy-records :data="strategyItem" />
   </audit-sideslider>
+  <bk-dialog
+    v-model:is-show="isShowDeleteDialog"
+    footer-align="center"
+    :quick-close="false"
+    theme="primary">
+    <audit-icon
+      class="alert-icon"
+      svg
+      type="alert" />
+    <div class="title">
+      {{ t('确定删除该策略？') }}
+    </div>
+    <div
+      class="title-tips"
+      :class="locale === 'zh-CN' ? 'title-tips-zh' : ''">
+      {{ t('删除的策略将') }}
+      <span class="red-text">{{ t('无法找回') }}</span>
+      ，{{ t('请谨慎操作') }} !
+    </div>
+    <div class="content">
+      {{ t('请输入策略名称') }}
+      <span
+        v-bk-tooltips="{ content: t('点击复制策略名称') }"
+        class="content-text"
+        @click="handleCopyName">{{ deleteName }} </span>
+      {{ t('以确认删除') }}
+    </div>
+    <bk-input
+      v-model="deleteInputName"
+      class="input"
+      :placeholder="t('请输入待删除的策略名称')" />
+    <template #footer>
+      <bk-button
+        class="mr8"
+        :disabled="deleteInputName !== deleteName"
+        theme="danger"
+        @click="handleDeleteConfirm">
+        {{ t('删除') }}
+      </bk-button>
+      <bk-button
+        @click="handleClose">
+        {{ t('取消') }}
+      </bk-button>
+    </template>
+  </bk-dialog>
 </template>
 <script setup lang="tsx">
   import _ from 'lodash';
@@ -317,7 +359,7 @@
     removePageParams,
     getRecordPageParams,
   } = useRecordPage;
-
+  const isShowDeleteDialog = ref(false);
   const listRef = ref();
   const switchSuccessMap = ref<Record<string, boolean>>({});
   const showDetail = ref(false);
@@ -330,7 +372,7 @@
   const renderLabelRef = ref();
   const total = ref(0);
   const upgradeTotal = ref(0);
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const switchStrategyParams = ref({ strategy_id: 0, toggle: false });
   const isNeedShowDetail = ref(false);
   const leftLabelFilterCondition = ref('');
@@ -342,7 +384,9 @@
   const maxVersionMap = ref<Record<string, number>>({});
   const linkTableMaxVersionMap = ref<Record<string, number>>({});
   // const retryIdMap = ref<Record<number, number>>({});
-
+  const deleteName = ref('');
+  const deleteInputName = ref('');
+  const deleteId = ref();
   const userGroupList = computed(() => groupList.value.results
     .reduce((result: Array<{ id: number; name: string }>, item) => {
       // eslint-disable-next-line no-param-reassign
@@ -819,19 +863,15 @@
                     {t('删除')}
                   </bk-button>
                 ) : (
-                  <audit-popconfirm
-                    title={t('确认删除？')}
-                    content={t('删除后不可恢复')}
-                    class="ml8"
-                    confirmHandler={() => handleRemove(data.strategy_id)}>
                     <auth-button
+                      style="width: 100%;"
                       actionId="delete_strategy"
                       permission={data.permission.delete_strategy}
                       resource={data.strategy_id}
+                      onClick={() => handleDelete(data)}
                       text>
                       {t('删除')}
                     </auth-button>
-                  </audit-popconfirm>
                 )}
               </bk-dropdown-item>
             </bk-dropdown-menu>
@@ -841,6 +881,27 @@
     </>,
     },
   ] as any[]);
+
+  const handleDelete = (data: StrategyModel) => {
+    isShowDeleteDialog.value = true;
+    deleteName.value = data.strategy_name;
+    deleteId.value = Number(data.strategy_id);
+  };
+  const handleCopyName = () => {
+    execCopy(deleteName.value, t('复制成功'));
+  };
+  const handleDeleteConfirm = () => {
+    handleRemove(deleteId.value);
+    isShowDeleteDialog.value = false;
+    deleteName.value = '';
+    deleteInputName.value = '';
+  };
+  const handleClose = () => {
+    isShowDeleteDialog.value = false;
+    deleteName.value = '';
+    deleteInputName.value = '';
+    deleteId.value = null;
+  };
   const disabledMap: Record<string, string> = {
     strategy_id: 'strategy_id',
     strategy_name: 'strategy_name',
@@ -1452,5 +1513,58 @@
 
 .strategy-operation-dropdown-pop {
   z-index: 2000 !important;
+}
+
+.alert-icon {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  font-size: 42px;
+  transform: translate(-50%, -50%)
+}
+
+.title {
+  margin-top: 20px;
+  font-size: 20px;
+  line-height: 32px;
+  letter-spacing: 0;
+  color: #313238;
+  text-align: center;
+}
+
+.title-tips {
+  width: 416px;
+  height: 46px;
+  margin: 0 auto;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  font-size: 12px;
+  color: #63656e;
+  text-align: center;
+  overflow-wrap: break-word;
+  background: #f5f6fa;
+  border-radius: 2px;
+
+  .red-text {
+    color: #ea3636;
+  }
+}
+
+.title-tips-zh {
+  line-height: 46px;
+
+}
+
+.content {
+  width: 416px;
+  padding-bottom: 10px;
+  font-size: 14px;
+  color: #333;
+  text-align: center;
+
+  .content-text {
+    font-weight: 700;
+    cursor: pointer;
+  }
 }
 </style>
