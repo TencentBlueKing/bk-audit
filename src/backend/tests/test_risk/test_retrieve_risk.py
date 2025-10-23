@@ -71,7 +71,7 @@ class TestListRiskResource(TestCase):
             namespace="default",
             strategy_name="strategy",
             risk_level=RiskLevel.HIGH.value,
-            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP"}],
+            event_data_field_configs=[{"field_name": "ip", "display_name": "Source IP", "duplicate_field": False}],
         )
         self.risk = Risk.objects.create(
             risk_id="risk-db",
@@ -233,9 +233,52 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         normalized_sql = [sql.replace("`", "") for sql in sql_log]
         combined_sql = " ".join(normalized_sql)
-        self.assertIn("JSON_EXTRACT_DOUBLE", combined_sql)
+        self.assertIn("CAST(JSON_EXTRACT_STRING", combined_sql)
         self.assertIn("> 1.5", combined_sql)
         self.assertNotIn("> '1.5'", combined_sql)
+        assert_hive_sql(self, sql_log)
+
+    def test_list_risk_via_bkbase_with_duplicate_field(self):
+        sql_log = []
+        self.strategy.event_data_field_configs = [
+            {"field_name": "ip", "display_name": "Source IP", "duplicate_field": False},
+            {"field_name": "user", "display_name": "User", "duplicate_field": True},
+        ]
+        self.strategy.save(update_fields=["event_data_field_configs"])
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            print(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        payload = {
+            "use_bkbase": True,
+            "event_filters": [
+                {
+                    "field": "user",
+                    "display_name": "User",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "tester",
+                }
+            ],
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+
+        normalized_sql = [sql.replace("`", "") for sql in sql_log]
+        combined_sql = " ".join(normalized_sql)
+        self.assertIn("ROW_NUMBER() OVER (PARTITION BY risk_event_0_base.strategy_id", combined_sql)
+        self.assertIn("CASE WHEN risk_event_0_base.strategy_id", combined_sql)
+        self.assertIn("CONCAT_WS('||'", combined_sql)
+        self.assertIn("risk_event_0_ranked", combined_sql)
+        self.assertIn("_row_number = 1", combined_sql)
         assert_hive_sql(self, sql_log)
 
     def test_list_risk_via_bkbase_with_risk_level(self):
