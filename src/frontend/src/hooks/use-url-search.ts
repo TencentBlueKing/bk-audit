@@ -18,8 +18,17 @@ import { buildURLParams } from '@utils/assist';
 
 export default function () {
   const searchParams = new URLSearchParams(window.location.search);
-
   const getSearchParams = () => {
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    const curSearchParams = new URLSearchParams(window.location.search);
+    const params = Object.create(null);
+    Array.from(curSearchParams.keys()).forEach((key) => {
+      if (dangerousKeys.includes(key)) return;
+      params[key] = curSearchParams.get(key) || '';
+    });
+    return params;
+  };
+  const getSearchParamsPost = () => {
     const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
     const curSearchParams = new URLSearchParams(window.location.search);
     const params = Object.create(null);
@@ -86,6 +95,7 @@ export default function () {
   return {
     searchParams,
     getSearchParams,
+    getSearchParamsPost,
     appendSearchParams,
     removeSearchParam,
     replaceSearchParams,

@@ -86,7 +86,7 @@
   const { messageWarn } = useMessage();
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
-  const { getSearchParams } = useUrlSearch();
+  const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
   const route = useRoute();
   let timeout: number| undefined = undefined;
@@ -460,7 +460,7 @@
     });
     if (!Object.keys(pollingDataMap.value).length) return;
     timeout = setTimeout(() => {
-      const params = getSearchParams();
+      const params = getSearchParamsPost();
       fetchRiskList({
         ...params,
         risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
@@ -531,7 +531,7 @@
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'riskManageDetail') {
-      const params = getSearchParams();
+      const params = getSearchParamsPost();
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
       to.query = {

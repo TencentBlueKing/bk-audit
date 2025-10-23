@@ -176,10 +176,10 @@
   const selectedItems = ref<Array<Record<string, any>>>([]);
   const selectedItemList = ref<Array<Record<string, any>>>([]);
   const {
-    getSearchParams,
+    getSearchParamsPost,
     appendSearchParams,
   } = useUrlSearch();
-  const urlSearchParams = getSearchParams();
+  const urlSearchParams = getSearchParamsPost();
   const conditionList = computed(() => GlobalChoices.value.event_filter_operator);
   const eventFiltersParams = computed(() => {
     const data = selectedItemList.value.map(item => ({
