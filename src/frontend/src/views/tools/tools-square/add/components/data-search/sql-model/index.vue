@@ -398,9 +398,10 @@
                       placement="top"
                       theme="black">
                       <span
-                        style="cursor: pointer;"
                         @click="() => handleClick(index, item.drill_config)">
-                        {{ t('已配置工具下钻', { count: item.drill_config.length }) }}
+                        {{ t('已配置') }}
+                        <span style="color: #3a84ff;">{{ item.drill_config.length }}</span>
+                        {{ t('个工具') }}
                       </span>
                       <template #content>
                         <div>

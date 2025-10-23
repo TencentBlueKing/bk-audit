@@ -37,13 +37,14 @@
       class="field-reference-form"
       form-type="vertical"
       :model="formData">
-      <bk-form-item
-        error-display-type="tooltips"
-        :label="t('选择工具')"
-        label-width="160"
-        property="selectTool"
-        required>
-        <div style="display: flex;">
+      <div style="display: flex;">
+        <bk-form-item
+          error-display-type="tooltips"
+          :label="t('选择工具')"
+          label-width="160"
+          property="selectTool"
+          required
+          style="flex: 1;">
           <bk-loading
             :loading="isToolLoading"
             style="width: 100%;">
@@ -55,7 +56,6 @@
               id-key="id"
               multiple
               multiple-mode="tag"
-              style="flex: 1;"
               @change="handleSelectTool">
               <template
                 v-for="(item, index) in toolCascaderList"
@@ -101,16 +101,16 @@
               </template>
             </bk-select>
           </bk-loading>
-          <bk-button
-            class="ml16"
-            :disabled="formData.selectTool.length === 0"
-            text
-            theme="primary"
-            @click="handleOpenTool">
-            {{ t('去使用') }}
-          </bk-button>
-        </div>
-      </bk-form-item>
+        </bk-form-item>
+        <bk-button
+          class="ml16"
+          :disabled="formData.selectTool.length === 0"
+          text
+          theme="primary"
+          @click="handleOpenTool">
+          {{ t('去使用') }}
+        </bk-button>
+      </div>
 
       <!-- 多工具配置 -->
       <vuedraggable
@@ -215,6 +215,7 @@
                           v-model="item.target_value"
                           class="bk-select"
                           filterable
+                          :placeholder="t('请选择引用的结果字段')"
                           @change="(value: string) => handleTargetValueChange(value, toolIndex, index)">
                           <bk-option
                             v-for="(outputField, OutputFieldIndex) in localOutputFields"
@@ -538,7 +539,7 @@
         }
       }
 
-      formRef.value?.validate();
+      // formRef.value?.validate();
     } else {
       resetFormData();
     }
@@ -700,6 +701,10 @@
   .field-reference-form {
     padding: 16px 40px;
 
+    :deep(.bk-form-error-tips) {
+      z-index: 2;
+    }
+
     .filed-wrapper {
       position: relative;
       padding: 10px;
@@ -722,6 +727,10 @@
           font-size: 13px;
           color: #c4c6cc;
           cursor: pointer;
+
+          &:hover {
+            color: #3858ff;
+          }
         }
       }
 

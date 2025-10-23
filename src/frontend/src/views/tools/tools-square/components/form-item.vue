@@ -27,6 +27,7 @@
         placement: 'top',
       }"
       :disabled="dataConfig.disabled"
+      :placeholder="t('请输入默认值')"
       @update:model-value="handleInputDataChange" />
 
     <bk-input
@@ -38,6 +39,7 @@
         placement: 'top',
       }"
       :disabled="dataConfig.disabled"
+      :placeholder="t('请输入默认值')"
       type="number"
       @update:model-value="handleNumberInputDataChange" />
 
