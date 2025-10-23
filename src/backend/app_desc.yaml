@@ -16,7 +16,7 @@ modules:
         plan: 2C4G5R
         replicas: 5
       risk-worker:
-        command: LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libjemalloc.so" python manage.py celery worker -O fair -l info -Q risk -P gevent -c 64 -E
+        command: python manage.py celery worker -O fair -l info -Q risk -P gevent -c 64 -E
         plan: 2C4G5R
         replicas: 5
       notice:
