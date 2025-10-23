@@ -21,6 +21,16 @@ import os
 import sys
 
 if __name__ == "__main__":
+    if "gevent" in sys.argv:  # 根据命令行参数判断
+        from gevent import monkey
+
+        monkey.patch_all()
+        print("Gevent monkey patch applied successfully.")
+
+    # 启用stackprinter
+    import stackprinter
+
+    stackprinter.set_excepthook()
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 
     from django.core.management import execute_from_command_line
