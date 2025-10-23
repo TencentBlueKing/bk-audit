@@ -58,6 +58,7 @@ from services.web.databus.constants import (
     ASSET_RISK_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_BKBASE_RT_ID_KEY,
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
+    ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import (
@@ -91,6 +92,7 @@ from services.web.risk.models import (
     RiskAuditInstance,
     RiskExperience,
     TicketNode,
+    TicketPermission,
 )
 from services.web.risk.serializers import (
     BulkCustomTransRiskReqSerializer,
@@ -177,6 +179,7 @@ class ListRisk(RiskMeta):
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
         self._duplicate_event_field_map: Dict[int, Dict[str, Set[str]]] = {}
+        self._bkbase_sql_statements: List[str] = []
         thedate_range = self._extract_thedate_range(validated_request_data)
         base_queryset = self.load_risks(validated_request_data)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
@@ -203,7 +206,11 @@ class ListRisk(RiskMeta):
         }
         for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
-        return page.get_paginated_response(data=ListRiskResponseSerializer(instance=paged_risks, many=True).data).data
+        response = page.get_paginated_response(
+            data=ListRiskResponseSerializer(instance=paged_risks, many=True).data
+        ).data
+        response["sql"] = list(self._bkbase_sql_statements) if use_bkbase else []
+        return response
 
     def _extract_thedate_range(self, validated_request_data) -> Tuple[str, str]:
         end_dt = (
@@ -262,20 +269,36 @@ class ListRisk(RiskMeta):
         if not strategy_ids:
             return {}
         configs_qs = Strategy.objects.filter(strategy_id__in=strategy_ids).values_list(
-            "strategy_id", "event_data_field_configs"
+            "strategy_id",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
         )
-        for strategy_id, configs in configs_qs:
-            if configs:
-                for field_config in configs:
-                    field_name = field_config["field_name"]
-                    if not field_config.get("duplicate_field"):
-                        continue
-                    source = StrategyFieldSourceEnum.DATA.value
-                    duplicate_map[int(strategy_id)][source].add(field_name)
+        for strategy_id, basic_configs, data_configs, evidence_configs in configs_qs:
+            strategy_map = duplicate_map[int(strategy_id)]
+            self._collect_duplicate_fields_for_source(strategy_map, StrategyFieldSourceEnum.BASIC.value, basic_configs)
+            self._collect_duplicate_fields_for_source(strategy_map, StrategyFieldSourceEnum.DATA.value, data_configs)
+            self._collect_duplicate_fields_for_source(
+                strategy_map, StrategyFieldSourceEnum.EVIDENCE.value, evidence_configs
+            )
         return {
             strategy_id: {src: fields for src, fields in source_map.items() if fields}
             for strategy_id, source_map in duplicate_map.items()
         }
+
+    def _collect_duplicate_fields_for_source(
+        self,
+        source_map: Dict[str, Set[str]],
+        source: str,
+        configs: Optional[Sequence[Dict[str, Any]]],
+    ) -> None:
+        if not configs:
+            return
+        for field_config in configs:
+            field_name = field_config.get("field_name")
+            if not field_name or not field_config.get("duplicate_field"):
+                continue
+            source_map[source].add(field_name)
 
     def retrieve_via_bkbase(
         self,
@@ -390,6 +413,7 @@ class ListRisk(RiskMeta):
         count_query = self._build_count_query(filtered_query)
         count_sql = count_query.sql(dialect="mysql")
         logger.info("BKBase count SQL: %s", count_sql)
+        self._record_bkbase_sql(count_sql)
         count_resp = api.bk_base.query_sync(sql=count_sql) or {}
         results = count_resp.get("list") or []
         if not results:
@@ -425,6 +449,7 @@ class ListRisk(RiskMeta):
         )
         data_sql = data_query.sql(dialect="mysql")
         logger.info("BKBase data SQL: %s", data_sql)
+        self._record_bkbase_sql(data_sql)
         data_resp = api.bk_base.query_sync(sql=data_sql) or {}
         results = data_resp.get("list") or []
         risk_ids: List[str] = []
@@ -443,6 +468,9 @@ class ListRisk(RiskMeta):
                 ),
                 StrategyTag._meta.db_table: self._get_configured_table_name(
                     config_key=ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY, fallback=StrategyTag._meta.db_table
+                ),
+                TicketPermission._meta.db_table: self._get_configured_table_name(
+                    config_key=ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY, fallback=TicketPermission._meta.db_table
                 ),
                 "risk_event": self._get_configured_table_name(
                     config_key=DORIS_EVENT_BKBASE_RT_ID_KEY, fallback="risk_event"
@@ -514,6 +542,13 @@ class ListRisk(RiskMeta):
             return self._literal(value).sql("mysql")
 
         return re.sub(r"%s", replacer, sql)
+
+    def _record_bkbase_sql(self, sql: Optional[str]) -> None:
+        if not sql:
+            return
+        if not hasattr(self, "_bkbase_sql_statements"):
+            self._bkbase_sql_statements = []
+        self._bkbase_sql_statements.append(sql)
 
     def _convert_to_bkbase_expression(self, sql: str) -> exp.Expression:
         if not sql:
