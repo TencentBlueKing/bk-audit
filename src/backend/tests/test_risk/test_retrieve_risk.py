@@ -402,8 +402,8 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], extra_risk.risk_id)
         self.assertEqual(len(sql_log), 2)
         combined_sql = " ".join(sql_log)
-        self.assertIn("20250420", combined_sql)
-        self.assertIn("20251020", combined_sql)
+        self.assertIn("2025-04-20", combined_sql)
+        self.assertIn("2025-10-20", combined_sql)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
