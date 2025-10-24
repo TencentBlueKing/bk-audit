@@ -619,6 +619,9 @@
     isCreating.value = false;
     isFailed.value = false;
     isSuccessful.value = false;
+    nextTick(() => {
+      comRef.value.setConfigs(formData.value.config);
+    });
   };
 
   // 提交
@@ -631,15 +634,16 @@
     Promise.all(tastQueue).then(() => {
       isCreating.value = true;
 
-      const data = _.cloneDeep(formData.value);
       // 获取组件配置
       if (comRef.value.getFields) {
-        if (data.tool_type === 'bk_vision') {
-          data.config.input_variable = comRef.value.getFields();
+        if (formData.value.tool_type === 'bk_vision') {
+          formData.value.config.input_variable = comRef.value.getFields();
         } else {
-          data.config = comRef.value.getFields();
+          formData.value.config = comRef.value.getFields();
         }
       }
+      const data = _.cloneDeep(formData.value);
+
       const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
 
       if (data.tags) {
