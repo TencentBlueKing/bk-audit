@@ -211,6 +211,9 @@ class RiskProviderSerializer(serializers.ModelSerializer):
 class TicketPermissionProviderSerializer(serializers.ModelSerializer):
     """用于反向拉取 TicketPermission 的快照结构"""
 
+    # 显式声明，便于在 Schema 中展示
+    authorized_at = serializers.DateTimeField(label=gettext_lazy("Authorized Time"))
+
     class Meta:
         model = TicketPermission
         fields = "__all__"
