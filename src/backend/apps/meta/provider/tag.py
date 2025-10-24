@@ -24,7 +24,7 @@ from iam.resource.provider import ListResult, SchemaResult
 
 from apps.meta.models import Tag
 from apps.permission.provider.base import BaseResourceProvider
-from apps.permission.serializers import TagListSerializer
+from apps.permission.serializers import TagProviderSerializer
 from core.serializers import get_serializer_fields
 
 
@@ -111,14 +111,14 @@ class TagBaseProvider(BaseResourceProvider):
                 "created_at": int(item.created_at.timestamp() * 1000) if item.created_at else None,
                 "updater": item.updated_by,
                 "updated_at": int(item.updated_at.timestamp() * 1000) if item.updated_at else None,
-                "data": TagListSerializer(instance=item).data,
+                "data": TagProviderSerializer(instance=item).data,
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
         return ListResult(results=results, count=queryset.count())
 
     def fetch_resource_type_schema(self, **options):
-        data = get_serializer_fields(TagListSerializer)
+        data = get_serializer_fields(TagProviderSerializer)
         return SchemaResult(
             properties={
                 item["name"]: {
