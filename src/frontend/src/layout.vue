@@ -485,13 +485,23 @@
         systemId.value = route.params.id as string;
       } else {
         systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
+        router.push({
+          name: 'systemInfo',
+          params: {
+            id: systemId.value,
+          },
+        });
       }
     },
   });
 
   on('statement-menuData', (data) => {
     menuData.value = data as Array<MenuDataType>;
-    titleRef.value = menuData.value[0]?.name;
+    if (route.params.id) {
+      titleRef.value = menuData.value.find(item => item.id === route.params.id)?.name || '';
+    } else {
+      titleRef.value =  menuData.value[0]?.name;
+    }
   });
 
   const handleSideMenuFlodChange = (value: boolean) => {

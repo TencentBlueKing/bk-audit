@@ -82,6 +82,7 @@
   import _ from 'lodash';
   import {
     computed,
+    onMounted,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -160,11 +161,7 @@
     loading,
     run: fetchSystemDetail,
   } = useRequest(MetaManageService.fetchSystemDetail, {
-    defaultParams: {
-      id: route.params.id,
-    },
     defaultValue: new SystemModel(),
-    manual: true,
     onSuccess: (result) => {
       emit('get-system-info', result);
     },
@@ -180,6 +177,13 @@
     router.push({
       name: 'systemList',
     });
+  });
+  onMounted(() => {
+    if (route.params.id) {
+      fetchSystemDetail({
+        id: route.params.id,
+      });
+    }
   });
 </script>
 <style lang="postcss">

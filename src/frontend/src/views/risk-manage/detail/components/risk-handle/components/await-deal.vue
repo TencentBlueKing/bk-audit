@@ -140,7 +140,7 @@
 
                         ref="dropdownRef"
                         :is-show="val.dropdownShow"
-                        trigger="manual">
+                        trigger="hover">
                         <span
                           class="label-text"
                           @click="handleShow(val)">{{ typeText(val?.type) }} <audit-icon

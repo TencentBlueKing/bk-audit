@@ -237,6 +237,7 @@
                       :config="val"
                       :detail-data="[]"
                       :event-data-list="[]"
+                      :is-current-value="false"
                       :risk-field-list="riskFieldList" />
                     <template #error="message">
                       <div>{{ val.name }}{{ message }}</div>
@@ -254,7 +255,7 @@
                             || val.custom_type === 'input' || val.custom_type === 'bk_date_picker'"
                           ref="dropdownRef"
                           :is-show="val.dropdownShow"
-                          trigger="manual">
+                          trigger="hover">
                           <span
                             class="label-text"
                             @click="handleShow(val)">{{ typeText(val?.type) }} <audit-icon

@@ -39,7 +39,9 @@
             <div style="font-size: 12px;font-weight: 700;">
               {{ t('当前值：') }}
             </div>
-            <div>{{ item.value }}</div>
+            <div class="current-value">
+              {{ item.value }}
+            </div>
           </div>
         </template>
       </bk-popover>
@@ -81,11 +83,13 @@
                 {{ item.name }}
               </div>
               <template #content>
-                <div>
+                <div v-if="isCurrentValue">
                   <div style="font-size: 12px;font-weight: 700;">
                     {{ t('当前值：') }}
                   </div>
-                  <div>{{ getCurrentValue(item.id) }}</div>
+                  <div class="current-value">
+                    {{ getCurrentValue(item.id) }}
+                  </div>
                 </div>
               </template>
             </bk-popover>
@@ -108,11 +112,13 @@
                 {{ item.lable }}
               </div>
               <template #content>
-                <div>
+                <div v-if="isCurrentValue">
                   <div style="font-size: 12px;font-weight: 700;">
                     {{ t('当前值：') }}
                   </div>
-                  <div>{{ item.value }}</div>
+                  <div class="current-value">
+                    {{ item.value }}
+                  </div>
                 </div>
               </template>
             </bk-popover>
@@ -130,7 +136,10 @@
         <bk-input
           v-else
           v-model="generalValue"
-          clearable
+          clearableshow-word-limit
+          :resize="false"
+          :rows="4"
+          show-overflow-tooltips
           :type="config.custom_type === 'textarea' ? 'textarea': 'text'"
           @change="handlerChange" />
       </div>
@@ -139,7 +148,7 @@
 
   <div
     v-if="localValue && (Array.isArray(localValue) ? localValue.length > 0 : localValue !== '')
-      && config.custom_type !== 'select' && isShowtip"
+      && config.custom_type !== 'select' && isShowtip && isCurrentValue"
     class="item-value">
     <div>
       {{ t('当前值：') }}
@@ -163,12 +172,18 @@
       id: string,
       name: string,
     }>
+    isCurrentValue?: boolean,
     config?: any,
     eventDataList?: any,
     detailData: any,
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    isCurrentValue: true,
+    config: () => ({}),
+    eventDataList: () => ([]),
+    detailData: () => ({}),
+  });
   const { t } = useI18n();
   const tipText = ref('');
   const selectValue =  computed<string>(() => {
@@ -331,10 +346,24 @@
 <style lang="postcss" scoped>
 .item-value {
   width: 100%;
-  height: 50px;
+  height: auto;
   padding: 3px;
   padding-bottom: 5px;
   margin-top: 3px;
+  font-size: 12px;
+  line-height: 16px;
+  word-break: break-all;
+  background: #fff;
+}
+
+.current-value {
+  height: auto;
+  max-width: 50vw;
+  max-height: 50vh;
+  padding: 3px;
+  padding-bottom: 5px;
+  margin-top: 3px;
+  overflow: auto;
   font-size: 12px;
   line-height: 16px;
   word-break: break-all;

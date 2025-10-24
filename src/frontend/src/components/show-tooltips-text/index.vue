@@ -24,7 +24,7 @@
     <div
       :id="`${data}`"
       style="display: none;max-height: 90vh;overflow: auto;">
-      <div style="max-height: 90vh;overflow: auto;word-break: break-all;">
+      <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
         {{ data }}
       </div>
     </div>
@@ -112,10 +112,14 @@
 <style lang="postcss">
   .show-tooltips-text {
     display: -webkit-box;
-    max-width: 300px;
     overflow: hidden;
     word-break: break-all;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: v-bind(line);
+  }
+
+  .text-content {
+    word-break: break-all;
+    white-space: pre-wrap;
   }
 </style>

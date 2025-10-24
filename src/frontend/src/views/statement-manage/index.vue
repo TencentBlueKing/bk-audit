@@ -76,12 +76,13 @@
     defaultValue: [],
     onSuccess: (menuData) => {
       emit('statement-menuData', menuData);
-      // 获取菜单成功
-      router.push({
-        name: 'statementManageDetail',
-        params: {
-          id: menuData[0]?.id || 'undefined',
-        } });
+      if (!(route.params?.id)) {
+        router.push({
+          name: 'statementManageDetail',
+          params: {
+            id: menuData[0]?.id || 'undefined',
+          } });
+      }
     },
   });
 </script>
