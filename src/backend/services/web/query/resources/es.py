@@ -63,7 +63,7 @@ class EsQueryResource(QueryBaseResource):
                 "use_time_range": True,
             }
         )
-        return api.bk_log.es_query_search(**validated_request_data)
+        return api.bk_log.es_query_search_prod(**validated_request_data)
 
 
 class SearchAllResource(QueryBaseResource, SearchDataParser):

@@ -33,6 +33,8 @@ BK_LOG_API_URL = (
     else get_endpoint(settings.BK_LOG_ESB_NAME, APIProvider.ESB)
 )
 
+BK_LOG_API_URL_PROD = get_endpoint(settings.LOG_APIGW_NAME, stage="prod")
+
 # PaaSV3
 BK_PAAS_API_URL = get_endpoint(settings.BK_PAAS_APIGW_NAME, stage="prod")
 

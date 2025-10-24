@@ -66,7 +66,7 @@ from api.bk_log.serializers import (
     ValidateContainerConfigYamlRequestSerializer,
     ValidateContainerConfigYamlResponseSerializer,
 )
-from api.domains import BK_LOG_API_URL
+from api.domains import BK_LOG_API_URL, BK_LOG_API_URL_PROD
 from apps.bk_crypto.crypto import asymmetric_cipher
 from core.utils.data import distinct
 
@@ -451,6 +451,10 @@ class EsQuerySearchResource(BKLogBaseResource):
     action = "/esquery_search/"
     method = "POST"
     platform_authorization = True
+
+
+class EsQuerySearchProdResource(EsQuerySearchResource):
+    base_url = BK_LOG_API_URL_PROD
 
 
 class EsQueryScroll(BKLogBaseResource):
