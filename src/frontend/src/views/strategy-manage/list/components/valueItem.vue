@@ -91,6 +91,7 @@
       initKey.push('is_show');
       initKey.push('enum_mappings');
       initKey.push('description');
+      initKey.push('map_config');
       initKey.push('duplicate_field');
     }
     return initKey;

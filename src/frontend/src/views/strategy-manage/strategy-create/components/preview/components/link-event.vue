@@ -54,7 +54,7 @@
               :label-width="labelWidth">
               {{ basicItem.map_config?.target_value || ('以实际内容为准') }}
               <bk-button
-                v-if="basicItem.drill_config?.tool.uid"
+                v-if="basicItem.drill_config?.tool?.uid"
                 class="ml8"
                 text
                 theme="primary">
