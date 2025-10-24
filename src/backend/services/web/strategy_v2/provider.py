@@ -30,7 +30,7 @@ from core.serializers import get_serializer_fields
 from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTag
 from services.web.strategy_v2.serializers import (
     LinkTableInfoSerializer,
-    StrategyInfoSerializer,
+    StrategyProviderSerializer,
     StrategyTagResourceSerializer,
 )
 
@@ -116,17 +116,18 @@ class StrategyBaseProvider(BaseResourceProvider):
                 "id": item.pk,
                 "display_name": item.strategy_name,
                 "creator": item.created_by,
-                "created_at": item.created_at,
+                "created_at": int(item.created_at.timestamp() * 1000) if item.created_at else None,
                 "updater": item.updated_by,
-                "updated_at": item.updated_at,
-                "data": StrategyInfoSerializer(instance=item).data,
+                "updated_at": int(item.updated_at.timestamp() * 1000) if item.updated_at else None,
+                "data": StrategyProviderSerializer(instance=item).data,
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
         return ListResult(results=results, count=queryset.count())
 
     def fetch_resource_type_schema(self, **options):
-        data = get_serializer_fields(StrategyInfoSerializer)
+        # 需要在反向拉取的 Schema 中包含只读字段（如主键 strategy_id）
+        data = get_serializer_fields(StrategyProviderSerializer)
         return SchemaResult(
             properties={
                 item["name"]: {

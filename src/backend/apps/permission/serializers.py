@@ -55,3 +55,13 @@ class TagListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = "__all__"
+
+
+class TagProviderSerializer(serializers.ModelSerializer):
+    """用于 Provider 的标签快照/Schema 序列化器（白名单字段）。"""
+
+    tag_id = serializers.IntegerField(label=gettext_lazy("Tag ID"))
+
+    class Meta:
+        model = Tag
+        fields = ["tag_id", "tag_name"]
