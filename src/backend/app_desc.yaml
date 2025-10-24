@@ -16,7 +16,7 @@ modules:
         plan: 2C4G5R
         replicas: 5
       risk-worker:
-        command: python manage.py celery worker -O fair -l info -Q risk -P gevent -c 64 -E
+        command: supervisord -n -c support-files/supervisor/risk_worker.conf
         plan: 2C4G5R
         replicas: 5
       notice:
