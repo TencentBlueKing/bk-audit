@@ -80,7 +80,7 @@
       <span
         :style="{
           color: localEventItem.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
-        }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : '请点击配置' }}</span>
+        }">{{ localEventItem.enum_mappings.mappings.length ? t('已配置') : t('请点击配置') }}</span>
       <audit-popconfirm
         v-if="localEventItem.enum_mappings.mappings.length"
         ref="popconfirmRef"

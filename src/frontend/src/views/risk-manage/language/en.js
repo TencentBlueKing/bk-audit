@@ -136,5 +136,9 @@ export default {
     点击查看此字段的证据下探: 'Click to view the evidence of this field',
     映射对象: `key：{key}
     name：{name}`,  // 换行特意为之
+    批量导出: 'Batch export',
+    导出成功: 'Export successfully',
+    展开更多字段: 'Expand more fields',
+    收起字段: 'Collapse fields',
   },
 };

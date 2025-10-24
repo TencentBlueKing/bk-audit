@@ -340,9 +340,9 @@
     // 3. 验证索引是否有效
     if (valueIndex === -1 || textIndex === -1) {
       const missingHeaders = [];
-      if (valueIndex === -1) missingHeaders.push('存储值');
-      if (textIndex === -1) missingHeaders.push('展示文本');
-      throw new Error(`缺少必要的表头: ${missingHeaders.join(', ')}`);
+      if (valueIndex === -1) missingHeaders.push(t('存储值'));
+      if (textIndex === -1) missingHeaders.push(t('展示文本'));
+      throw new Error(`${t('缺少必要的表头')}: ${missingHeaders.join(', ')}`);
     }
 
     // 4. 处理数据行（跳过表头）
@@ -365,7 +365,7 @@
       try {
         const arrayBuffer = e.target?.result as ArrayBuffer | null;
         if (!arrayBuffer) {
-          throw new Error('文件读取失败');
+          throw new Error(t('文件读取失败'));
         }
         const data = new Uint8Array(arrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
@@ -382,7 +382,7 @@
         });
 
         if (jsonData.length === 0) {
-          throw new Error('Excel文件中没有数据');
+          throw new Error(t('Excel文件中没有数据'));
         }
 
         const result = convertExcelData(jsonData as any[][]);
@@ -406,7 +406,7 @@
       formData.value.renderData = await parseExcel(file);
       messageSuccess(t('导入成功'));
     } catch (error) {
-      messageError(`Excel解析失败: ${error}`);
+      messageError(`${t('Excel解析失败')}: ${error}`);
     } finally {
       loading.value = false;
       if (e.target) {
