@@ -98,6 +98,9 @@ CELERY_IMPORTS = ()
 CELERY_TASK_SERIALIZER = "pickle"
 CELERY_ACCEPT_CONTENT = ["pickle", "json"]
 
+# 最大任务数
+SELF_MANAGED_MAX_TASKS = int(os.getenv("BKAPP_SELF_MANAGED_MAX_TASKS", 10000))
+
 # load logging settings
 LOGGING = get_logging_config_dict(locals())
 # 日志使用json格式
