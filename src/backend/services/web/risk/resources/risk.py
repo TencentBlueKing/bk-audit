@@ -604,7 +604,6 @@ class ListRisk(RiskMeta):
     ) -> exp.Expression:
         prepared = base_expression.copy()
         prepared = self._strip_select_ordering(prepared)
-        prepared = self._push_partition_filters(prepared, thedate_range)
         return prepared
 
     def _strip_select_ordering(self, expression: exp.Expression) -> exp.Expression:
@@ -636,58 +635,6 @@ class ListRisk(RiskMeta):
         if table_name and table_name.strip("`") != "risk_risk":
             return False
         return isinstance(other, (exp.Literal, exp.Boolean, exp.Null))
-
-    def _push_partition_filters(
-        self, expression: exp.Expression, thedate_range: Optional[Tuple[str, str]]
-    ) -> exp.Expression:
-        if not isinstance(expression, exp.Select):
-            return expression
-        if not thedate_range:
-            return expression
-        start_date, end_date = thedate_range
-        if not start_date or not end_date:
-            return expression
-        alias = self._get_risk_table_alias(expression)
-        if not alias:
-            return expression
-        conditions = self._combine_conditions(
-            [
-                exp.GTE(this=self._column(alias, "thedate"), expression=self._literal(start_date)),
-                exp.LTE(this=self._column(alias, "thedate"), expression=self._literal(end_date)),
-            ]
-        )
-        if not conditions:
-            return expression
-        existing_where = expression.args.get("where")
-        if isinstance(existing_where, exp.Where):
-            combined = exp.and_(existing_where.this, conditions)
-            expression.set("where", exp.Where(this=combined))
-        elif isinstance(existing_where, exp.Expression):
-            expression.set("where", exp.Where(this=exp.and_(existing_where, conditions)))
-        else:
-            expression.set("where", exp.Where(this=conditions))
-        return expression
-
-    def _get_risk_table_alias(self, expression: exp.Select) -> Optional[str]:
-        from_clause = expression.args.get("from")
-        if not isinstance(from_clause, exp.From):
-            return None
-        for table in from_clause.find_all(exp.Table):
-            alias_name = table.alias or None
-            if not alias_name:
-                table_identifier = table.this
-                if isinstance(table_identifier, exp.Identifier):
-                    alias_name = table_identifier.this
-                elif table_identifier is not None:
-                    alias_name = str(table_identifier)
-                else:
-                    alias_name = table.name
-            if not alias_name:
-                continue
-            cleaned = str(alias_name).strip("`")
-            if cleaned == "risk_risk":
-                return cleaned
-        return None
 
     def _build_filtered_query(
         self,
