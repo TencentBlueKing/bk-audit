@@ -65,7 +65,7 @@
               class="header-cell"
               :class="getHeaderClass(item.key)"
               :style="{
-                minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
+                // minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
                 borderRight: index === 0 ? '1px solid #dcdee5' : ''
               }">
               {{ item.label }}
@@ -83,7 +83,10 @@
               class="table-section">
               <div
                 class="group-cell"
-                :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
+                :style="{
+                  // minWidth: locale === 'en-US' ? '140px' : '80px'
+                  maxWidth: '100px'
+                }">
                 <span>{{ groupMap[key] }}</span>
               </div>
               <div class="rows-container">
@@ -121,7 +124,7 @@
   }
 
   const props = defineProps<Props>();
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
 
   const riskColumns = computed(() => [
     { key: 'field_name', label: t('字段名称'), width: '200px' },
