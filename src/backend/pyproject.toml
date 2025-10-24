@@ -102,7 +102,8 @@ dependencies = [
     "pympler>=1.1",
     "drf-pydantic==2.7.1",
     "sqlglot==26.26.0",
-    "django-db-connection-pool==1.2.6"
+    "django-db-connection-pool==1.2.6",
+    "supervisor==4.2.5"
 ]
 requires-python = "==3.11.*"
 readme = "README.md"
