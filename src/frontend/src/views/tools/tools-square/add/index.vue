@@ -178,7 +178,7 @@
                         trigger="click"
                         @change="handleSpaceChange" />
                       <bk-button
-                        v-show="goBkVisionBtn"
+                        v-show="goBkVisionBtn && configUid.length > 0"
                         class="ml8"
                         @click="handleGoBkvision">
                         {{ t('跳转至 bkvision') }}
@@ -303,7 +303,7 @@
         description: string;
         required: boolean;
         field_category: string;
-        default_value: string | Array<string>;
+        default_value: any;
         raw_default_value?: string,
         is_default_value?: boolean;
         choices: Array<{
@@ -585,7 +585,7 @@
           required: true,
           is_default_value: true,
           raw_default_value: '',
-          default_value: isEditMode ? originalDefaultValue : (com.value || ''),
+          default_value: isEditMode ? originalDefaultValue : (originalDefaultValue || ''),
           choices: [],
         });
 
@@ -608,6 +608,8 @@
               if (isEditMode && configInputVariable.length > 0) {
                 const originalItem = configInputVariable.find((original: any) => original.description === com.uid);
                 if (originalItem) originalDefaultValue = originalItem.default_value;
+              } else {
+                originalDefaultValue = res.filters[com.uid];
               }
               return getInputVariableConfig(false, com, isEditMode, originalDefaultValue);
             })
@@ -620,6 +622,8 @@
               if (isEditMode && configInputVariable.length > 0) {
                 const originalItem = configInputVariable.find((original: any) => original.description === com.uid);
                 if (originalItem) originalDefaultValue = originalItem.default_value;
+              } else {
+                originalDefaultValue = res.constants[com.flag];
               }
               formData.value.config.input_variable.push({
                 ...getInputVariableConfig(true, com, isEditMode, originalDefaultValue),
@@ -744,6 +748,12 @@
     if (val === 'bk_vision') {
       fetchChartLists();
     }
+    if (val === 'data_search') {
+      isShowComponent.value = true;
+    }
+  }, {
+    deep: true,
+    immediate: true,
   });
 
   watch(() => configUid.value, (val) => {

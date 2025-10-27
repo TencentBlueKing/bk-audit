@@ -18,7 +18,7 @@
   <card-part-vue
     v-if="inputVariable.length > 0"
     :title="t('参数配置')"
-    :title-description="t('BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值')">
+    :title-description="t('设置仪表盘组件和变量的值，替代BKVision仪表盘的默认值')">
     <template #content>
       <div
         v-if="isUpdate && isEditMode"

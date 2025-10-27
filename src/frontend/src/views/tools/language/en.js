@@ -99,7 +99,7 @@ export default {
     '确认删除该配置？': 'Confirm to delete this configuration?',
     '该工具已更新，请确认': 'The tool has been updated, please confirm',
     参数配置: 'Parameter Configuration',
-    'BKVision仪表盘内中可供用户操作的选择器，此处配置为展示的默认值': 'Selector available for user operation in BKVision dashboard, configure the default value to be displayed here',
+    '设置仪表盘组件和变量的值，替代BKVision仪表盘的默认值': 'Set the value of the dashboard component and variable to replace the default value of the BKVision dashboard',
     '该仪表盘参数已更新，请同步工具参数以获取BKVision最新参数': 'The dashboard parameter has been updated, please synchronize the tool parameter to obtain the latest parameter of BKVision',
     立即更新: 'Update Now',
     交互组件: 'Interactive Component',

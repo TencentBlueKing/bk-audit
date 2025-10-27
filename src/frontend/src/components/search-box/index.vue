@@ -64,7 +64,15 @@
                     :key="condition.id"
                     :name="condition.name" />
                 </bk-select>
+                <bk-tag-input
+                  v-if="item.operator === 'IN'"
+                  v-model="item.value"
+                  allow-create
+                  collapse-tags
+                  :placeholder="t('请输入并按回车键结束')"
+                  style="width: 100%;" />
                 <bk-input
+                  v-else
                   v-model="item.value"
                   :placeholder="t('')" />
               </div>
@@ -180,13 +188,15 @@
     appendSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParamsPost();
+
   const conditionList = computed(() => GlobalChoices.value.event_filter_operator);
   const eventFiltersParams = computed(() => {
     const data = selectedItemList.value.map(item => ({
       field: item.field_name,
       display_name: item.display_name,
       operator: item.operator,
-      value: item.value,
+      // 判断 item.value 是否是数组
+      value: _.isArray(item.value) ? item.value.join(',') : item.value,
     }));
     return data;
   });
@@ -349,9 +359,8 @@
         field_name: item.field,
         display_name: item.display_name,
         operator: item.operator,
-        value: item.value,
+        value: item.operator === 'IN' ? item.value.split(',') : item.value,
       }));
-
       nextTick(() => {
         searchRef.value?.showMore(urlSearchParams.event_filters.length > 0);
       });
