@@ -485,12 +485,14 @@
         systemId.value = route.params.id as string;
       } else {
         systemId.value = sessionStorage.getItem('systemProjectId') || data[0].id;
-        router.push({
-          name: 'systemInfo',
-          params: {
-            id: systemId.value,
-          },
-        });
+        if (route.name === 'systemInfo') {
+          router.push({
+            name: 'systemInfo',
+            params: {
+              id: systemId.value,
+            },
+          });
+        }
       }
     },
   });

@@ -557,26 +557,28 @@
         // 触底加载，拼接 - 使用动态去重字段
         const allEvents = [...linkEventList.value, ...linkEventData.value.results];
         linkEventList.value = allEvents;
+        if (distinctEventDataKeyArr.value.length) {
+          // 根据指定字段组合进行去重（包含关系）
+          linkEventList.value =  allEvents.filter((event, index, self) => {
+            // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
+            const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
 
-        // 根据指定字段组合进行去重（包含关系）
-        linkEventList.value = allEvents.filter((event, index, self) => {
-          // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
-          const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
-          // 查找第一个具有包含关系的事件索引
-          const firstIndex = self.findIndex((e) => {
-            const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
-            // 检查所有字段值都完全相同（转换为字符串比较）
-            return currentValues.every((currentValue, i) => {
-              // 将值转换为字符串进行比较，处理各种特殊类型
-              const currentStr = convertToString(currentValue);
-              const eValueStr = convertToString(eValues[i]);
-              return currentStr === eValueStr;
+            // 查找第一个具有包含关系的事件索引
+            const firstIndex = self.findIndex((e) => {
+              const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
+              // 检查所有字段值都完全相同（转换为字符串比较）
+              return currentValues.every((currentValue, i) => {
+                // 将值转换为字符串进行比较，处理各种特殊类型
+                const currentStr = convertToString(currentValue);
+                const eValueStr = convertToString(eValues[i]);
+                return currentStr === eValueStr;
+              });
             });
-          });
 
-          // 只保留第一次出现的事件（去重）
-          return index === firstIndex;
-        });
+            // 只保留第一次出现的事件（去重）
+            return index === firstIndex;
+          });
+        }
 
         // 默认获取第一个
         [eventItem.value] = linkEventList.value;
