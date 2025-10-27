@@ -156,7 +156,27 @@ class RiskHandler:
             )
             return strategy.risk_title
 
+    @staticmethod
+    def _datetime_from_milliseconds(
+        milliseconds: Union[int, float], *, ceil_to_second: bool = False
+    ) -> datetime.datetime:
+        """
+        将毫秒时间戳转换为当前时区的 datetime。
+        - 当 `ceil_to_second=True` 且存在毫秒时，向上取整到下一秒，避免精度丢失。
+        """
+        milliseconds_int = int(milliseconds)
+        seconds, remainder = divmod(milliseconds_int, 1000)
+        tz = timezone.get_default_timezone()
+        base_dt = datetime.datetime.fromtimestamp(seconds, tz=tz)
+        if ceil_to_second and remainder:
+            return base_dt + datetime.timedelta(seconds=1)
+        if not ceil_to_second and remainder:
+            return base_dt + datetime.timedelta(milliseconds=remainder)
+        return base_dt
+
     def gen_risk_create_params(self, event: dict) -> dict:
+        event_time_dt = self._datetime_from_milliseconds(event["event_time"], ceil_to_second=False)
+        event_end_time_dt = self._datetime_from_milliseconds(event["event_time"], ceil_to_second=True)
         create_params = {
             "event_content": event.get("event_content"),
             "raw_event_id": event["raw_event_id"],
@@ -164,8 +184,8 @@ class RiskHandler:
             "event_evidence": event.get("event_evidence"),
             "event_type": self.parse_event_type(event.get("event_type")),
             "event_data": event.get("event_data"),
-            "event_time": datetime.datetime.fromtimestamp(event["event_time"] / 1000),
-            "event_end_time": datetime.datetime.fromtimestamp(event["event_time"] / 1000),
+            "event_time": event_time_dt,
+            "event_end_time": event_end_time_dt,
             "event_source": event.get("event_source"),
             "operator": self.parse_operator(event.get("operator")),
         }
@@ -198,18 +218,12 @@ class RiskHandler:
         # 策略ID相同，原始事件ID相同，不为关单状态或事件时间小于最后发现时间
         # 若未关单，则不创建新风险
         # 若事件时间小于最后发现时间，则应当收敛风险
+        event_time_dt = self._datetime_from_milliseconds(event["event_time"], ceil_to_second=False)
         risk = (
             Risk.objects.filter(
                 Q(
                     Q(strategy_id=event["strategy_id"], raw_event_id=event["raw_event_id"])
-                    & Q(
-                        ~Q(status=RiskStatus.CLOSED)
-                        | Q(
-                            event_end_time__gte=datetime.datetime.fromtimestamp(
-                                event["event_time"] / 1000, tz=timezone.get_default_timezone()
-                            )
-                        )
-                    )
+                    & Q(~Q(status=RiskStatus.CLOSED) | Q(event_end_time__gte=event_time_dt))
                 )
             )
             .order_by("-event_time")
@@ -218,11 +232,11 @@ class RiskHandler:
 
         # 存在则更新结束时间
         if risk:
-            last_end_time = int(event["event_time"] / 1000)
+            last_end_time = self._datetime_from_milliseconds(event["event_time"], ceil_to_second=True)
             logger.info("[UpdateRisk] Risk exists. risk_id=%s; last_end_time=%s", risk.risk_id, last_end_time)
             # 只在事件的时间更新的时候存储
-            if int(risk.event_end_time.timestamp()) < last_end_time:
-                risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
+            if risk.event_end_time < last_end_time:
+                risk.event_end_time = last_end_time
                 risk.save(update_fields=["event_end_time"])
             return False, None
 
