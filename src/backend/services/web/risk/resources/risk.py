@@ -35,6 +35,7 @@ from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, QuerySet, When
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 from sqlglot import exp
@@ -921,6 +922,12 @@ class ListRisk(RiskMeta):
             return exp.Literal.string("true" if value else "false")
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             return exp.Literal.number(str(value))
+        if isinstance(value, datetime):
+            if timezone.is_aware(value):
+                localized = timezone.localtime(value)
+            else:
+                localized = timezone.make_aware(value, timezone.get_current_timezone())
+            return exp.Literal.string(localized.strftime("%Y-%m-%d %H:%M:%S"))
         return exp.Literal.string(str(value))
 
     def _ensure_list(self, value: Any) -> List[Any]:
