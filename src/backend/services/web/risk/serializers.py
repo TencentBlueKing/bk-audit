@@ -431,6 +431,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
     experiences = serializers.IntegerField(required=False)
     event_content = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
+    event_end_time = serializers.SerializerMethodField()
 
     def get_event_content(self, obj):
         return getattr(obj, "event_content_short")
@@ -446,6 +447,26 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
         else:
             # 回退到实时查询
             return obj.get_tag_ids()
+
+    def get_event_end_time(self, obj: Risk) -> str | None:
+        """
+        获取事件结束时间。
+        如果存在毫秒/微秒，则向上取整到下一秒。
+        """
+        dt = obj.event_end_time
+
+        if dt is None:
+            return None
+
+        # 核心逻辑：检查是否存在微秒
+        if dt.microsecond > 0:
+            # 1. 先去掉微秒 (归零)
+            # 2. 再加上1秒，实现“向上取整”
+            dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
+        # 所以我们需要在这里手动格式化为您的全局格式
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     class Meta:
         model = Risk
