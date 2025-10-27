@@ -65,6 +65,6 @@ def update_bkvision_config():
         try:
             with transaction.atomic():
                 for tool in updated_tools:
-                    tool.save()
+                    tool.save(update_record=False)
         except Exception as e:
             logger.error(f"Error saving tools: {str(e)}", exc_info=True)
