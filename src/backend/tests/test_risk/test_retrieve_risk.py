@@ -225,9 +225,7 @@ class TestListRiskResource(TestCase):
         self.assertTrue(any("risk_event_0.strategy_id = base_query.strategy_id" in sql for sql in normalized_sql))
         self.assertTrue(any("risk_event_0.raw_event_id = base_query.raw_event_id" in sql for sql in normalized_sql))
         self.assertTrue(any("risk_event_0.dteventtimestamp >=" in sql for sql in normalized_sql))
-        self.assertTrue(
-            any("COALESCE(base_query.event_end_time, base_query.event_time)" in sql for sql in normalized_sql)
-        )
+        self.assertTrue(any("base_query.event_end_time + INTERVAL 1 SECOND" in sql for sql in normalized_sql))
         self.assertTrue(any("risk_event_0.thedate >=" in sql for sql in normalized_sql))
         self.assertFalse(any("base_query.thedate" in sql for sql in normalized_sql))
 
