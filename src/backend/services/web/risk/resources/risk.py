@@ -22,6 +22,7 @@ import logging
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Type
 
 import sqlglot
@@ -36,6 +37,7 @@ from django.db.models import Case, Count, IntegerField, Q, QuerySet, When
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
 from sqlglot import exp
@@ -1078,10 +1080,10 @@ class ListRisk(RiskMeta):
         cleaned = (sql or "").strip().rstrip(";")
         if not cleaned:
             return cleaned
-        return cls._strip_redundant_like_casts(cleaned)
+        return cls._normalize_query_expressions(cleaned)
 
     @classmethod
-    def _strip_redundant_like_casts(cls, sql: str) -> str:
+    def _normalize_query_expressions(cls, sql: str) -> str:
         try:
             expression = sqlglot.parse_one(sql, read="mysql")
         except sqlglot.errors.ParseError:
@@ -1095,6 +1097,8 @@ class ListRisk(RiskMeta):
                 literal = cls._unwrap_text_cast(node.args.get("expression"))
                 if literal is not None:
                     node.set("expression", literal)
+            elif isinstance(node, (exp.GT, exp.GTE, exp.LT, exp.LTE, exp.EQ)):
+                cls._normalize_event_time_comparison(node)
             return node
 
         return expression.transform(transform).sql(dialect="mysql")
@@ -1109,6 +1113,61 @@ class ListRisk(RiskMeta):
                 if any(dtype_name.startswith(prefix) for prefix in cls._TEXTUAL_CAST_PREFIXES):
                     return literal.copy()
         return None
+
+    @classmethod
+    def _normalize_event_time_comparison(cls, node: exp.Expression) -> None:
+        left = node.args.get("this")
+        right = node.args.get("expression")
+        if cls._is_event_time_column(left):
+            localized = cls._localize_datetime_expression(right)
+            if localized is not None:
+                node.set("expression", localized)
+        if cls._is_event_time_column(right):
+            localized = cls._localize_datetime_expression(left)
+            if localized is not None:
+                node.set("this", localized)
+
+    @staticmethod
+    def _is_event_time_column(expression: Optional[exp.Expression]) -> bool:
+        if not isinstance(expression, exp.Column):
+            return False
+        column_name = expression.name
+        if column_name != "event_time":
+            return False
+        return True
+
+    @classmethod
+    def _localize_datetime_expression(cls, expression: Optional[exp.Expression]) -> Optional[exp.Expression]:
+        target = expression
+        if isinstance(target, exp.Paren):
+            inner = cls._localize_datetime_expression(target.args.get("this"))
+            if inner is not None:
+                target.set("this", inner)
+                return target
+            return None
+        if not isinstance(target, exp.Literal) or not target.is_string:
+            return None
+        localized = cls._localize_datetime_string(target.this)
+        if localized is None:
+            return None
+        return exp.Literal.string(localized)
+
+    @classmethod
+    def _localize_datetime_string(cls, value: str) -> Optional[str]:
+        raw = (value or "").strip()
+        if not raw:
+            return None
+        dt_obj = parse_datetime(raw)
+        if dt_obj is None:
+            try:
+                dt_obj = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                return None
+        if timezone.is_naive(dt_obj):
+            # 视为 UTC 时间再转换为当前时区，避免 base_query 中的 UTC 字符串偏移
+            dt_obj = dt_obj.replace(tzinfo=dt_timezone.utc)
+        localized = timezone.localtime(dt_obj, timezone.get_current_timezone())
+        return localized.strftime("%Y-%m-%d %H:%M:%S")
 
 
 class ListMineRisk(ListRisk):
