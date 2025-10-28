@@ -117,6 +117,24 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         self.assertEqual(data["sql"], [])
 
+    def test_list_risk_via_db_event_end_time_ceils_microseconds(self):
+        target_end_time = self.risk.event_time + datetime.timedelta(seconds=59, microseconds=1)
+        Risk.objects.filter(pk=self.risk.pk).update(event_end_time=target_end_time)
+
+        data = self._call_resource({"use_bkbase": False})
+        results = data["results"]
+
+        self.assertEqual(len(results), 1)
+        result = results[0]
+        self.assertEqual(result["risk_id"], self.risk.risk_id)
+
+        original_formatted = target_end_time.strftime("%Y-%m-%d %H:%M:%S")
+        expected = target_end_time.replace(microsecond=0) + datetime.timedelta(seconds=1)
+        expected_formatted = expected.strftime("%Y-%m-%d %H:%M:%S")
+
+        self.assertEqual(result["event_end_time"], expected_formatted)
+        self.assertNotEqual(result["event_end_time"], original_formatted)
+
     def test_list_risk_via_db_with_event_filters(self):
         payload = {
             "use_bkbase": False,
