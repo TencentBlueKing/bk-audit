@@ -25,6 +25,7 @@
           v-if="config?.field_category === 'time-picker'"
           v-model="dateValue"
           append-to-body
+          :disabled="!disabled"
           format="yyyy-MM-dd HH:mm:ss"
           :shortcuts="dateShortCut"
           type="datetime"
@@ -37,6 +38,7 @@
           @mouseleave="showDeleteIcon = false">
           <date-picker
             v-model="pickerValue"
+            :disabled="!disabled"
             style="width: 100%;"
             @update:model-value="handleRangeChange" />
           <audit-icon
@@ -48,12 +50,14 @@
         <bk-input
           v-else-if="config?.field_category === 'inputer' "
           v-model="inputVal"
+          :disabled="!disabled"
           @change="handleInputChange" />
         <bk-tag-input
           v-else
           v-model="selectorValue"
           allow-create
           collapse-tags
+          :disabled="!disabled"
           has-delete-icon
           :list="[]"
           @change="handleSelectorChange" />
@@ -64,7 +68,6 @@
 
 <script setup lang='ts'>
   import { ref, watch } from 'vue';
-
 
   interface Props {
     config: {
@@ -79,6 +82,7 @@
         name: string
       }>
     };
+    disabled: boolean;
   }
   interface Emits {
     (e: 'change', value: any): void

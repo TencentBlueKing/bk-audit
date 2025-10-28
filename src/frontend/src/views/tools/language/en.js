@@ -119,5 +119,8 @@ export default {
     '接下来你可以返回工具广场使用该工具，或前往策略中配置该工具': 'Next, you can return to the tool square to use this tool, or go to the strategy to configure this tool',
     返回工具广场: 'Return to Tool Square',
     配置策略: 'Configure Strategy',
+    提示: 'Tip',
+    '当启用「使用默认值」选项后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示': 'After enabling the "Use Default Value" option, if the variable value is modified in the BKVision embedded management page, the current tool will have a parameter update prompt',
+    '当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数': 'The BKVision parameter referenced by the current tool has been updated. Please complete the update operation of the BKVision parameter first, and then edit the parameter',
   },
 };

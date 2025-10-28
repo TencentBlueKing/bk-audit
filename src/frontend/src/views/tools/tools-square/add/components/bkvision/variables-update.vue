@@ -152,12 +152,18 @@
     },
   ] as Column[];
 
-  const columnText = (data: any) => (data.type === 'update' ?  columnTextSting(data) : data.default_value) ;
+  const columnText = (data: any) => ((data.type === 'update' && data.field_category === 'time-ranger') ?  columnTextSting(data) : data.default_value) ;
   const columnTextSting = (data: any) => {
     if (data.field_category === 'time-ranger') {
-      const oldText = new DateRange(data.old_default_value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
-      const newText = new DateRange(data.default_value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
-      return `${oldText.toDisplayString()}->${newText.toDisplayString()}`;
+      let oldTimeText = '';
+      let newTimeText = '';
+      if (data.old_default_value) {
+        oldTimeText = new DateRange(data.old_default_value, 'YYYY-MM-DD HH:mm:ss', window.timezone).toDisplayString();
+      }
+      if (data.default_value) {
+        newTimeText = new DateRange(data.default_value, 'YYYY-MM-DD HH:mm:ss', window.timezone).toDisplayString();
+      }
+      return `${oldTimeText}->${newTimeText}`;
     }
     return `${data.old_default_value}->${data.default_value}`;
   };
@@ -173,25 +179,20 @@
   };
 
   defineExpose<Exposes>({
-    show(tool: InputVariable, variables: InputVariable, comList: InputVariable, bkVisionComList: InputVariable) {
+    show(
+      tool: InputVariable,
+      variables: InputVariable,
+      comList: InputVariable,
+      bkVisionComList: InputVariable,
+    ) {
       nextTick(() => {
         isShow.value = true;
         // 过滤 is_default_value 为 false 的项 tool 的描述（display_name）置空以便不对比描述
-        const toolVariableList = tool.map(item => ({
-          ...item,
-          display_name: '',
-        }));
         // eslint-disable-next-line no-param-reassign
-        oldVariable.value = toolVariableList.concat(comList).filter(item => item.is_default_value);
-        console.log('oldVariable.value', oldVariable.value);
+        oldVariable.value = tool.concat(comList);
         // 过滤 is_default_value 为 false 的项 variables 的描述（display_name）置空以便不对比描述
-        const variableList = tool.map(item => ({
-          ...item,
-          display_name: '',
-        }));
         // eslint-disable-next-line no-param-reassign
-        newVariable.value = variableList.concat(bkVisionComList).filter(item => item.is_default_value);
-        console.log('newVariable.value', newVariable.value);
+        newVariable.value = variables.concat(bkVisionComList);
         // 对比旧数组 oldVariable 与新数组 newVariable
         const compareVariables = (oldVars: InputVariable, newVars: InputVariable) => {
           const addAry: InputVariable = [];
@@ -200,7 +201,8 @@
 
           // 检查新增和修改的项
           newVars.forEach((newVar) => {
-            const oldVar = oldVars.find(item => item.raw_name === newVar.raw_name);
+            const oldVar = oldVars.find(item => item.description === newVar.description);
+
             if (!oldVar) {
               // 新增
               addAry.push({
@@ -208,17 +210,19 @@
                 type: 'add',
               });
             } else if ((JSON.stringify(oldVar) !== JSON.stringify(newVar)) && !deepEqual(oldVar, newVar)) {
-              updateAry.push({
-                ...newVar,
-                type: 'update',
-                old_default_value: oldVar.default_value,
-              });
+              if (oldVar.is_default_value) {
+                updateAry.push({
+                  ...newVar,
+                  type: 'update',
+                  old_default_value: oldVar.default_value,
+                });
+              }
             }
           });
 
           // 检查删除的项
           oldVars.forEach((oldVar) => {
-            if (!newVars.find(item => item.raw_name === oldVar.raw_name)) {
+            if (!newVars.find(item => item.description === oldVar.description)) {
               delAry.push({
                 ...oldVar,
                 type: 'delete',
@@ -334,4 +338,3 @@
   }
 }
 </style>
-

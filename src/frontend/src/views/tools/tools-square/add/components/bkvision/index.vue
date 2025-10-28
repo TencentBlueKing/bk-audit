@@ -53,12 +53,19 @@
           </div>
         </template>
         <template #content>
-          <div style="display: flex;width: 100%;flex-wrap: wrap;margin-top: -10px;">
+          <div
+            v-bk-tooltips="{
+              disabled: isUpdateSubmit,
+              theme: 'light',
+              content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
+            }"
+            style="display: flex;width: 100%;flex-wrap: wrap;margin-top: -10px;">
             <bk-vision-components
               v-for="comItem in comList"
               :key="comItem.raw_name"
               :class="getClass(comItem)"
               :config="comItem"
+              :disabled="isUpdateSubmit"
               style="width: 22%;margin: 0 1.5%;margin-top: 10px;"
               @change="(val: any) => handleVisionChange(val, comItem.raw_name)" />
           </div>
@@ -87,17 +94,28 @@
           </div>
         </template>
         <template #content>
-          <div style="display: flex;width: 100%;flex-wrap: wrap;margin-top: -10px;">
+          <div
+            v-bk-tooltips="{
+              disabled: isUpdateSubmit,
+              theme: 'light',
+              content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
+            }"
+            style="display: flex;width: 100%;flex-wrap: wrap;margin-top: -10px;">
             <div
               v-for="(variables, variableIndex) in toolInfoVariable"
               :key="variableIndex"
               :class="getClass(variables)"
               style="width: 22%;margin: 0 1.5%;margin-top: 10px;">
               <div class="variables-title">
-                <span v-bk-tooltips="variables.display_name">{{ variables.raw_name }}</span>
+                <span
+                  v-bk-tooltips="{
+                    disabled: variables.display_name === '',
+                    content: variables.display_name
+                  }"> {{ variables.raw_name }}</span>
                 <bk-checkbox
                   v-model="variables.is_default_value"
                   class="title-right"
+                  :disabled="!isUpdateSubmit"
                   size="small"
                   @change="getVariablesDefaultValue(variables.is_default_value, variableIndex)">
                   {{ t('使用默认值') }}
@@ -105,9 +123,9 @@
               </div>
               <div>
                 <bk-input
-                  :disabled="variables.is_default_value"
-                  :model-value="typeof variables.default_value === 'string' ? variables.default_value : ''"
-                  :placeholder="t(variables.is_default_value ? ' ' : '请输入变量值')"
+                  :disabled="variables.is_default_value || !isUpdateSubmit"
+                  :model-value="variables.default_value as string"
+                  placeholder=" "
                   @update:model-value="(val: string) => variables.default_value = val" />
               </div>
             </div>
@@ -121,7 +139,8 @@
     @change-submit="handleUpdateSubmit" />
 </template>
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import CardPartVue from '../card-part.vue';
@@ -162,9 +181,10 @@
 
   interface Emits {
     (event: 'changeSubmit', value: boolean): void;
+    (event: 'changeIsUpdateSubmit', value: boolean): void;
   }
 
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const activeIndex = ref(0);
@@ -188,9 +208,17 @@
   // 旋转状态
   const isRotatedVar = ref(false);
   const isRotatedCom = ref(false);
+  const isUpdateSubmit = ref(false);
   // 更新变量
   const handleUpdateVariable = () => {
-    updateVariableRef.value?.show(toolInfoVariable.value, bkVisionVariable.value, comList.value, bkVisionComList.value);
+    if (updateVariableRef.value) {
+      updateVariableRef.value?.show(
+        toolInfoVariable.value,
+        bkVisionVariable.value,
+        comList.value,
+        bkVisionComList.value,
+      );
+    }
   };
 
   // bk_vision 组件值改动
@@ -206,7 +234,16 @@
   // 获取变量默认值
   const getVariablesDefaultValue = (isDefault: boolean | undefined, index: number) => {
     if (isDefault) {
-      toolInfoVariable.value[index].default_value = toolInfoVariable.value[index].raw_default_value || '';
+      InfoBox({
+        title: t('提示'),
+        closeIcon: false,
+        content: t('当启用「使用默认值」选项后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示'),
+        onConfirm() {
+          toolInfoVariable.value[index].default_value = toolInfoVariable.value[index].raw_default_value || '';
+        },
+        onCancel() {
+        },
+      });
     }
   };
 
@@ -260,7 +297,10 @@
     const updateArrays = updateArray(comList.value.concat(toolInfoVariable.value), value);
     comList.value = updateArrays.filter((item: any) => item.field_category !== 'variable');
     toolInfoVariable.value = updateArrays.filter((item: any) => item.field_category === 'variable');
+    isUpdateSubmit.value = true;
     emits('changeSubmit', false);
+
+    emits('changeIsUpdateSubmit', isUpdateSubmit.value);
   };
   // class
   const getClass = (value: any) => {
@@ -295,7 +335,11 @@
     getFields() {
       return comList.value.concat(toolInfoVariable.value);
     },
-    setVariablesConfig(configs: Array<Record<string, any>>, bkVisionCom: Array<Record<string, any>>, bkVisionRes: any) {
+    setVariablesConfig(
+      configs: Array<Record<string, any>>,
+      bkVisionCom: Array<Record<string, any>>,
+      bkVisionRes: any,
+    ) {
       variablesConfig.value = configs;
       // 组件
       bkVisionComList.value = bkVisionCom;
@@ -305,7 +349,7 @@
           return undefined;
         }
         const matchedTool = toolInfoVariable.value.find((toolItem: any) => toolItem.raw_name === item.flag);
-        const toolIsDefaultValue = matchedTool ? matchedTool.is_default_value : true;
+        const toolIsDefaultValue = matchedTool ? matchedTool.is_default_value : false;
         return {
           raw_name: item.flag || '',
           display_name: item.description || '',
@@ -320,6 +364,17 @@
       }).filter((item: any): item is Record<string, any> => item !== undefined) as Array<Record<string, any>>;
     },
   });
+
+  watch(
+    () => props.isUpdate, (value) => {
+      if (value && props.isEditMode) {
+        nextTick(() => {
+          handleUpdateVariable();
+        });
+      }
+    },
+    { deep: true, immediate: true },
+  );
 </script>
 
 <style lang="postcss" scoped>

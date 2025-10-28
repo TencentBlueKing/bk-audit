@@ -210,13 +210,13 @@
             :is-update="isUpdate"
             :name="formData.name"
             :uid="formData.uid"
+            @change-is-update-submit="changeIsUpdateSubmit"
             @change-submit="changeSubmit" />
         </audit-form>
       </div>
       <template #action>
         <bk-button
           class="w88"
-          :disabled="isSubmit"
           theme="primary"
           @click="handleSubmit">
           {{ isEditMode ? t('提交') : t('创建') }}
@@ -252,7 +252,7 @@
 
 <script setup lang='tsx'>
   import _ from 'lodash';
-  import { computed, nextTick, onMounted, ref, watch } from 'vue';
+  import { nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -380,12 +380,8 @@
   const goBkVisionBtn = ref(false);
   const allTagMap = ref<Record<string, string>>({});
   const isUpdate = ref(false);
-  const isSubmit = computed(() => {
-    if (!isEditMode) {
-      return false;
-    }
-    return isUpdate.value;
-  });
+  const isUpdateSubmit = ref(false);
+  const dashboardUid = ref('');
   const formData = ref<FormData>({
     source: '',
     users: [],
@@ -501,6 +497,10 @@
   const changeSubmit = (value: boolean) => {
     isUpdate.value = value;
   };
+  // 是否执行更新数据
+  const changeIsUpdateSubmit = (value: boolean) => {
+    isUpdateSubmit.value = value;
+  };
   const {
     data: configData,
   } = useRequest(RootManageService.config, {
@@ -510,7 +510,7 @@
 
   // 跳转到bkvision
   const handleGoBkvision = () => {
-    window.open(`${configData.value.third_party_system.bkvision_web_url}#/${configUid.value[0]}/share/detail/${configUid.value[1]}/dashboard`);
+    window.open(`${configData.value.third_party_system.bkvision_web_url}#/${configUid.value[0]}/detail/root/${dashboardUid.value}`);
   };
   // 获取所有标签列表
   const {
@@ -573,6 +573,7 @@
     defaultValue: {},
     onSuccess: (res) => {
       if (res) {
+        dashboardUid.value = res.data.dashboard_uid;
         const configInputVariable = _.cloneDeep(formData.value.config.input_variable);
         const { panels, variables } = res.data;
         const filters = [...new Set(Object.keys(res.filters))];
@@ -583,7 +584,7 @@
           description: com.uid || '',
           field_category: com.type || '',
           required: true,
-          is_default_value: true,
+          is_default_value: false,
           raw_default_value: '',
           default_value: isEditMode ? originalDefaultValue : (originalDefaultValue || ''),
           choices: [],
@@ -592,11 +593,29 @@
         // 编辑模式下第一次进入检查更新
         if (isEditMode && clickSpaceChange.value === 1) {
           isUpdate.value =  formData.value.is_bkvision;
-          formData.value.config.input_variable = formData.value.config.input_variable.map(item => ({
-            ...item,
-            default_value: item.default_value,
-            choices: [],
-          }));
+          formData.value.config.input_variable = formData.value.config.input_variable.map((item) => {
+            // 变量描述取最新的变量描述
+            if (item.field_category === 'variable') {
+              let variablesDescription = '';
+              variables.forEach((variable: any) => {
+                if (variable.uid === item.description) {
+                  variablesDescription = variable.description;
+                }
+              });
+              return {
+                ...item,
+                raw_default_value: res.constants[item.raw_name],
+                display_name: variablesDescription,
+                default_value: item.default_value,
+                choices: [],
+              };
+            }
+            return {
+              ...item,
+              default_value: item.default_value,
+              choices: [],
+            };
+          });
         } else {
           isUpdate.value = false;
           formData.value.config.input_variable = filters
@@ -627,7 +646,7 @@
               }
               formData.value.config.input_variable.push({
                 ...getInputVariableConfig(true, com, isEditMode, originalDefaultValue),
-                is_default_value: true,
+                is_default_value: false,
                 raw_default_value: originalDefaultValue || '',
               });
             });
@@ -718,7 +737,9 @@
       if (comRef.value?.getFields) {
         if (data.tool_type === 'bk_vision') {
           data.config.input_variable = comRef.value.getFields();
-          data.updated_time = bkVisionUpdateTime.value || null;
+          if (isUpdateSubmit.value) {
+            data.updated_time = bkVisionUpdateTime.value || null;
+          }
         } else {
           data.config = comRef.value.getFields();
         }
