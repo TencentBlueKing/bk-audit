@@ -44,6 +44,7 @@ class TestListRiskResource(TestCase):
         super().setUp()
         self.factory = APIRequestFactory()
         self.username = "admin"
+        self.bkbase_title = "bkbase-title"
         self.authed_filter_patcher = mock.patch(
             "services.web.risk.models.Risk.authed_risk_filter", return_value=Q(), autospec=True
         )
@@ -80,6 +81,7 @@ class TestListRiskResource(TestCase):
             raw_event_id="raw",
             strategy=self.strategy,
             status=RiskStatus.NEW,
+            title=self.bkbase_title,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
         )
         TicketPermission.objects.create(
@@ -170,7 +172,7 @@ class TestListRiskResource(TestCase):
         Risk.authed_risk_filter.return_value = permission_q
         try:
             with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
-                data = self._call_resource({"use_bkbase": True})
+                data = self._call_resource({"use_bkbase": True, "title": "bkbase-title"})
         finally:
             Risk.authed_risk_filter.return_value = original_return
 
@@ -199,6 +201,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
             "event_filters": [
@@ -247,6 +250,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             "event_filters": [
                 {
                     "field": "ip",
@@ -288,6 +292,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             # 期望：thedate 应加在 base 层（risk_event_0_base）
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
@@ -350,6 +355,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             # 期望：thedate 应加在 base 层（risk_event_0_base）
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
@@ -398,6 +404,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             # 无去重：thedate 应在 risk_event_0 基础子查询处
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
@@ -438,6 +445,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             "risk_level": RiskLevel.HIGH.value,
             "order_field": "risk_level",
             "order_type": "desc",
@@ -492,6 +500,7 @@ class TestListRiskResource(TestCase):
             raw_event_id="raw-full",
             strategy=self.strategy,
             status=RiskStatus.NEW,
+            title="bkbase-full-title",
             event_time=datetime.datetime(2025, 6, 1, tzinfo=datetime.timezone.utc),
         )
         TicketPermission.objects.create(
@@ -518,7 +527,7 @@ class TestListRiskResource(TestCase):
             "status": "",
             "event_content": "",
             "risk_level": "",
-            "title": "",
+            "title": "bkbase-full-title",
             "notice_users": "",
             "use_bkbase": True,
         }
@@ -542,6 +551,7 @@ class TestListMineAndNoticingRisk(TestCase):
         super().setUp()
         self.factory = APIRequestFactory()
         self.username = "admin"
+        self.bkbase_title = "bkbase-title"
 
         self.strategy = Strategy.objects.create(
             namespace="default",
@@ -555,6 +565,7 @@ class TestListMineAndNoticingRisk(TestCase):
             raw_event_id="raw-owned",
             strategy=self.strategy,
             status=RiskStatus.NEW,
+            title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[],
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
@@ -564,6 +575,7 @@ class TestListMineAndNoticingRisk(TestCase):
             raw_event_id="raw-noticed",
             strategy=self.strategy,
             status=RiskStatus.NEW,
+            title=self.bkbase_title,
             current_operator=[],
             notice_users=[self.username],
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
@@ -628,6 +640,7 @@ class TestListMineAndNoticingRisk(TestCase):
                     "page": 1,
                     "page_size": 10,
                     "use_bkbase": True,
+                    "title": "bkbase-title",
                     "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
                     "end_time": datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc).isoformat(),
                 },
@@ -674,6 +687,7 @@ class TestListMineAndNoticingRisk(TestCase):
                     "page": 1,
                     "page_size": 10,
                     "use_bkbase": True,
+                    "title": "bkbase-title",
                     "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
                     "end_time": datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc).isoformat(),
                 },
