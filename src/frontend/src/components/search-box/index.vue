@@ -57,7 +57,8 @@
                   v-model="item.operator"
                   class="bk-select"
                   :placeholder="t('请选择')"
-                  style="width: 150px;padding-right: 5px;">
+                  style="width: 150px;padding-right: 5px;"
+                  @change="handleOperatorChange(item)">
                   <bk-option
                     v-for="condition in conditionList"
                     :id="condition.id"
@@ -69,6 +70,9 @@
                   v-model="item.value"
                   allow-create
                   collapse-tags
+                  has-delete-icon
+                  :list="[]"
+                  :paste-fn="pasteFn"
                   :placeholder="t('请输入并按回车键结束')"
                   style="width: 100%;" />
                 <bk-input
@@ -207,6 +211,20 @@
     defaultValue: {},
     manual: true,
   });
+  const handleOperatorChange = (val: Record<string, any>) => {
+    selectedItemList.value = selectedItemList.value.map((item) => {
+      if (item.id === val.id) {
+        return {
+          ...item,
+          operator: val.operator,
+          value: val.operator === 'IN' ? [] : item.value,
+        };
+      }
+      return item;
+    });
+  };
+  const pasteFn = (value: string) => ([{ id: value, name: value }]);
+
   // 删除
   const handleRemove = (val: string) => {
     selectedItemList.value = selectedItemList.value.filter(item => item.id !== val);

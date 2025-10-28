@@ -107,7 +107,7 @@
                 <bk-input
                   :disabled="variables.is_default_value"
                   :model-value="typeof variables.default_value === 'string' ? variables.default_value : ''"
-                  :placeholder="t('请输入变量值')"
+                  :placeholder="t(variables.is_default_value ? ' ' : '请输入变量值')"
                   @update:model-value="(val: string) => variables.default_value = val" />
               </div>
             </div>
@@ -153,7 +153,11 @@
     getValue: () => Promise<any>;
     setConfigs: (configs: InputVariable) => void;
     getFields: () => InputVariable;
-    setVariablesConfig: (configs: Array<Record<string, any>>, bkVisionCom: Array<Record<string, any>>) => void;
+    setVariablesConfig: (
+      configs: Array<Record<string, any>>,
+      bkVisionCom: Array<Record<string, any>>,
+      bkVisionRes: any
+    ) => void;
   }
 
   interface Emits {
@@ -291,7 +295,7 @@
     getFields() {
       return comList.value.concat(toolInfoVariable.value);
     },
-    setVariablesConfig(configs: Array<Record<string, any>>, bkVisionCom: Array<Record<string, any>>) {
+    setVariablesConfig(configs: Array<Record<string, any>>, bkVisionCom: Array<Record<string, any>>, bkVisionRes: any) {
       variablesConfig.value = configs;
       // 组件
       bkVisionComList.value = bkVisionCom;
@@ -300,15 +304,17 @@
         if (item.build_in) {
           return undefined;
         }
+        const matchedTool = toolInfoVariable.value.find((toolItem: any) => toolItem.raw_name === item.flag);
+        const toolIsDefaultValue = matchedTool ? matchedTool.is_default_value : true;
         return {
           raw_name: item.flag || '',
           display_name: item.description || '',
           description: item.uid || '',
           field_category: item.type || '',
           required: true,
-          is_default_value: true,
-          raw_default_value: item.value || '',
-          default_value: item.value || '',
+          is_default_value: toolIsDefaultValue,
+          raw_default_value: bkVisionRes.constants[item.flag] || '',
+          default_value: bkVisionRes.constants[item.flag] || '',
           choices: [],
         };
       }).filter((item: any): item is Record<string, any> => item !== undefined) as Array<Record<string, any>>;

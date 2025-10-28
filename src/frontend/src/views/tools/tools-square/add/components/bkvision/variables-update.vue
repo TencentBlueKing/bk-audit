@@ -176,10 +176,22 @@
     show(tool: InputVariable, variables: InputVariable, comList: InputVariable, bkVisionComList: InputVariable) {
       nextTick(() => {
         isShow.value = true;
+        // 过滤 is_default_value 为 false 的项 tool 的描述（display_name）置空以便不对比描述
+        const toolVariableList = tool.map(item => ({
+          ...item,
+          display_name: '',
+        }));
         // eslint-disable-next-line no-param-reassign
-        oldVariable.value = tool.concat(comList);
+        oldVariable.value = toolVariableList.concat(comList).filter(item => item.is_default_value);
+        console.log('oldVariable.value', oldVariable.value);
+        // 过滤 is_default_value 为 false 的项 variables 的描述（display_name）置空以便不对比描述
+        const variableList = tool.map(item => ({
+          ...item,
+          display_name: '',
+        }));
         // eslint-disable-next-line no-param-reassign
-        newVariable.value = variables.concat(bkVisionComList);
+        newVariable.value = variableList.concat(bkVisionComList).filter(item => item.is_default_value);
+        console.log('newVariable.value', newVariable.value);
         // 对比旧数组 oldVariable 与新数组 newVariable
         const compareVariables = (oldVars: InputVariable, newVars: InputVariable) => {
           const addAry: InputVariable = [];

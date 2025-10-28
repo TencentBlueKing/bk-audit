@@ -287,7 +287,7 @@
     updated_at: string;
     updated_by: string;
     is_bkvision: boolean;
-    updated_time: string;
+    updated_time: string | null;
     data_search_config_type: string;
     config: {
       referenced_tables: Array<{
@@ -304,7 +304,7 @@
         required: boolean;
         field_category: string;
         default_value: any;
-        raw_default_value?: string,
+        raw_default_value?: any,
         is_default_value?: boolean;
         choices: Array<{
           key: string,
@@ -397,7 +397,7 @@
     data_search_config_type: 'sql',
     updated_at: '',
     updated_by: '',
-    updated_time: '',
+    updated_time: null,
     config: {
       referenced_tables: [],
       input_variable: [{
@@ -628,13 +628,13 @@
               formData.value.config.input_variable.push({
                 ...getInputVariableConfig(true, com, isEditMode, originalDefaultValue),
                 is_default_value: true,
-                raw_default_value: com.value || '',
+                raw_default_value: originalDefaultValue || '',
               });
             });
           }
         }
 
-        bkVisionUpdateTime.value = res.data.updated_time;
+        bkVisionUpdateTime.value = res.data.updated_time || null;
 
         // 设置组件配置
         nextTick(() => {
@@ -642,12 +642,12 @@
             .map((item) => {
               const com = panels.find((p: any) => p.uid === item);
               if (!com) return null;
-              return getInputVariableConfig(false, com, true, com?.chartConfig.default);
+              return getInputVariableConfig(false, com, true, res.filters[item]);
             })
             .filter((item): item is NonNullable<typeof item> => item !== null);
 
           comRef.value.setConfigs(formData.value.config.input_variable);
-          comRef.value.setVariablesConfig(res.data.variables, bkVisionCom);
+          comRef.value.setVariablesConfig(res.data.variables, bkVisionCom, res);
         });
         goBkVisionBtn.value = true;
       } else {
@@ -718,7 +718,7 @@
       if (comRef.value?.getFields) {
         if (data.tool_type === 'bk_vision') {
           data.config.input_variable = comRef.value.getFields();
-          data.updated_time = bkVisionUpdateTime.value;
+          data.updated_time = bkVisionUpdateTime.value || null;
         } else {
           data.config = comRef.value.getFields();
         }
