@@ -447,5 +447,8 @@ export default {
     功能开发中: 'Feature development in progress',
     去重字段: 'Duplicate field',
     '基本信息字段不支持折叠，无需配置': 'Basic information fields do not support folding and no configuration is required',
+    请输入展示文本: 'Please enter the display text',
+    请输入存储值: 'Please enter the stored value',
+    '风险关键字段，禁止取消重点展示': 'Risk keyword field, forbidden to cancel the focus display',
   },
 };
