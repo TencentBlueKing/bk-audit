@@ -270,6 +270,9 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            # 期望：thedate 应加在 base 层（risk_event_0_base）
+            "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
+            "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
             "event_filters": [
                 {
                     "field": "user",
@@ -298,9 +301,16 @@ class TestListRiskResource(TestCase):
         self.assertIn(window_fragment, count_sql)
         self.assertIn("JSON_EXTRACT_STRING(risk_event_0_base.event_data, '$.user')", count_sql)
         self.assertIn("JSON_EXTRACT_STRING(risk_event_1.event_data, '$.ip')", count_sql)
+        # thedate 应在 base 层过滤
+        normalized_count_sql = count_sql.replace("`", "")
+        self.assertIn("risk_event_0_base.thedate >=", normalized_count_sql)
+        self.assertIn("risk_event_0_base.thedate <=", normalized_count_sql)
         self.assertIn(window_fragment, data_sql)
         self.assertIn("JSON_EXTRACT_STRING(risk_event_0_base.event_data, '$.user')", data_sql)
         self.assertIn("JSON_EXTRACT_STRING(risk_event_1.event_data, '$.ip')", data_sql)
+        normalized_data_sql = data_sql.replace("`", "")
+        self.assertIn("risk_event_0_base.thedate >=", normalized_data_sql)
+        self.assertIn("risk_event_0_base.thedate <=", normalized_data_sql)
         assert_hive_sql(self, data["sql"])
 
     def test_list_risk_via_bkbase_with_duplicate_basic_field(self):
@@ -322,6 +332,9 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            # 期望：thedate 应加在 base 层（risk_event_0_base）
+            "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
+            "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
             "event_filters": [
                 {
                     "field": "user",
@@ -342,6 +355,9 @@ class TestListRiskResource(TestCase):
         combined_sql = " ".join(sql_log)
         self.assertIn("ROW_NUMBER() OVER", combined_sql)
         self.assertIn("risk_event_0_base.raw_event_id", combined_sql)
+        normalized_sql = combined_sql.replace("`", "")
+        self.assertIn("risk_event_0_base.thedate >=", normalized_sql)
+        self.assertIn("risk_event_0_base.thedate <=", normalized_sql)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -364,6 +380,9 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            # 无去重：thedate 应在 risk_event_0 基础子查询处
+            "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
+            "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
             "event_filters": [
                 {
                     "field": "user",
@@ -383,6 +402,9 @@ class TestListRiskResource(TestCase):
 
         combined_sql = " ".join(sql_log)
         self.assertNotIn("ROW_NUMBER() OVER", combined_sql)
+        normalized_sql = combined_sql.replace("`", "")
+        self.assertIn("risk_event_0.thedate >=", normalized_sql)
+        self.assertIn("risk_event_0.thedate <=", normalized_sql)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 

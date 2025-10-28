@@ -734,12 +734,13 @@ class ListRisk(RiskMeta):
         if comparison is None:
             return None
 
-        conditions = join_conditions + self._build_thedate_conditions(alias, thedate_range) + [comparison]
+        # thedate 条件已在事件表的基础选择中统一处理，这里不再追加，避免重复
+        conditions = join_conditions + [comparison]
         combined = self._combine_conditions(conditions)
         if combined is None:
             return None
 
-        table_expr = self._build_event_table_expression(alias, filter_item, resolved_source)
+        table_expr = self._build_event_table_expression(alias, filter_item, resolved_source, thedate_range)
         exists_query = exp.select("1").from_(table_expr).where(combined)
         return exp.Exists(this=exists_query)
 
@@ -847,21 +848,26 @@ class ListRisk(RiskMeta):
         return None
 
     def _build_event_table_expression(
-        self, alias: str, filter_item: Dict[str, Any], resolved_source: str
+        self, alias: str, filter_item: Dict[str, Any], resolved_source: str, thedate_range: Optional[Tuple[str, str]]
     ) -> exp.Expression:
         table_reference = self._get_risk_event_table_reference()
         base_table = exp.to_table(table_reference).copy()
-        if not self._should_apply_duplicate_filter(filter_item, resolved_source):
-            return base_table.as_(alias)
+        # 简化：统一在最早接触事件表时添加 thedate 条件
+        should_dedup = self._should_apply_duplicate_filter(filter_item, resolved_source)
+        if not should_dedup:
+            return self._with_thedate(base_table, alias, thedate_range)
 
         duplicates_by_strategy = self._get_duplicate_partition_fields()
         if not duplicates_by_strategy:
-            return base_table.as_(alias)
+            return self._with_thedate(base_table, alias, thedate_range)
 
         base_alias = f"{alias}_base"
         partition_key = self._build_duplicate_partition_key_expression(base_alias, duplicates_by_strategy)
         if partition_key is None:
-            return base_table.as_(alias)
+            return self._with_thedate(base_table, alias, thedate_range)
+
+        # 在 base 层先加 thedate 条件，再做窗口去重
+        base_from = self._with_thedate(base_table, base_alias, thedate_range)
 
         partition_expressions = [self._column(base_alias, "strategy_id"), partition_key]
         order_expressions = [exp.Ordered(this=self._column(base_alias, "dteventtimestamp"), desc=True)]
@@ -871,7 +877,7 @@ class ListRisk(RiskMeta):
             order=exp.Order(expressions=order_expressions),
         )
 
-        ranked_select = exp.select(exp.Star(), exp.alias_(window, "_row_number")).from_(base_table.as_(base_alias))
+        ranked_select = exp.select(exp.Star(), exp.alias_(window, "_row_number")).from_(base_from)
         ranked_alias = f"{alias}_ranked"
         ranked_subquery = exp.Subquery(
             this=ranked_select,
@@ -889,6 +895,22 @@ class ListRisk(RiskMeta):
         )
         return exp.Subquery(
             this=filtered_select,
+            alias=exp.TableAlias(this=exp.to_identifier(alias)),
+        )
+
+    def _with_thedate(
+        self, base_table: exp.Expression, alias: str, thedate_range: Optional[Tuple[str, str]]
+    ) -> exp.Expression:
+        table_as = base_table.as_(alias)
+        if not thedate_range:
+            return table_as
+        inner_select = exp.select(exp.Star()).from_(table_as)
+        date_conditions = self._build_thedate_conditions(alias, thedate_range)
+        combined = self._combine_conditions(date_conditions)
+        if combined is not None:
+            inner_select = inner_select.where(combined)
+        return exp.Subquery(
+            this=inner_select,
             alias=exp.TableAlias(this=exp.to_identifier(alias)),
         )
 
