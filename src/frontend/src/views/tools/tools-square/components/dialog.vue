@@ -348,7 +348,7 @@
   const { t } = useI18n();
 
   const dialogHeaderRef = ref();
-  const dialogIndex = ref(2000);
+  const dialogIndex = ref(3000);
   const dialogWidth = ref('50%');
   const dialogHeight = ref('50vh');
   const dialogTableHeight = ref('300px');

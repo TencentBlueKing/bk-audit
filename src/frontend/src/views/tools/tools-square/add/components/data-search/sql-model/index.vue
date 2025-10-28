@@ -348,7 +348,8 @@
                 <div
                   v-else
                   class="field-value-div"
-                  @click="() => handleFiledDict(index, item.enum_mappings)">
+                  @click="() => handleFiledDict(index, item.enum_mappings)"
+                  @mouseleave="() => handleMappingsMouseLeave(index)">
                   <span
                     :style="{
                       color: item.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
@@ -357,12 +358,16 @@
                     }">{{ item.enum_mappings.mappings.length ? t('已配置') : t('请点击配置') }}</span>
                   <audit-popconfirm
                     v-if="item.enum_mappings.mappings.length"
+                    :ref="(el: any) => mappingsPopconfirmRefs[index] = el"
                     :confirm-handler="() => handleRemoveMappings(index)"
                     :content="t('删除操作无法撤回，请谨慎操作！')"
-                    :title="t('确认删除该配置？')">
+                    :title="t('确认删除该配置？')"
+                    @hide="() => handleMappingsPopconfirmHide(index)">
                     <audit-icon
                       class="remove-mappings-btn remove-btn"
-                      type="delete-fill" />
+                      :class="{ 'is-popconfirm-visible': mappingsPopconfirmVisible[index] }"
+                      type="delete-fill"
+                      @click="() => handleMappingsPopconfirmShow(index)" />
                   </audit-popconfirm>
                 </div>
               </bk-form-item>
@@ -392,7 +397,8 @@
                   :placeholder="t('请先配置sql')" />
                 <div
                   v-else
-                  class="field-value-div">
+                  class="field-value-div"
+                  @mouseleave="() => handleDrillMouseLeave(index)">
                   <template v-if="item.drill_config.length && item.drill_config.every(item => item.tool.uid)">
                     <bk-popover
                       placement="top"
@@ -415,13 +421,17 @@
                     </bk-popover>
                     <!-- 删除 -->
                     <audit-popconfirm
+                      :ref="(el: any) => drillPopconfirmRefs[index] = el"
                       class="ml8"
                       :confirm-handler="() => handleRemove(index)"
                       :content="t('移除操作无法撤回，请谨慎操作！')"
-                      :title="t('确认移除以下工具？')">
+                      :title="t('确认移除以下工具？')"
+                      @hide="() => handleDrillPopconfirmHide(index)">
                       <audit-icon
                         class="remove-btn"
-                        type="delete-fill" />
+                        :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[index] }"
+                        type="delete-fill"
+                        @click="() => handleDrillPopconfirmShow(index)" />
                       <template #content>
                         <bk-table
                           ref="refTable"
@@ -686,6 +696,12 @@
 
   const toolMaxVersionMap = ref<Record<string, number>>({});
 
+  // 气泡框状态管理
+  const mappingsPopconfirmRefs = ref<Record<number, any>>({});
+  const drillPopconfirmRefs = ref<Record<number, any>>({});
+  const mappingsPopconfirmVisible = ref<Record<number, boolean>>({});
+  const drillPopconfirmVisible = ref<Record<number, boolean>>({});
+
   const {
     data: configData,
   } = useRequest(RootManageService.config, {
@@ -804,6 +820,22 @@
     }
   };
 
+  // 字段值映射气泡框显示/隐藏处理
+  const handleMappingsPopconfirmShow = (index: number) => {
+    mappingsPopconfirmVisible.value[index] = true;
+  };
+
+  const handleMappingsPopconfirmHide = (index: number) => {
+    mappingsPopconfirmVisible.value[index] = false;
+  };
+
+  const handleMappingsMouseLeave = (index: number) => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (mappingsPopconfirmRefs.value[index] && !mappingsPopconfirmVisible.value[index]) {
+      mappingsPopconfirmRefs.value[index].hide();
+    }
+  };
+
   const handleRemoveMappings = async (index: number) => {
     formData.value.config.output_fields[index].enum_mappings = {
       collection_id: '',
@@ -829,6 +861,22 @@
       name: '',
       type: '',
     };
+  };
+
+  // 字段下钻气泡框显示/隐藏处理
+  const handleDrillPopconfirmShow = (index: number) => {
+    drillPopconfirmVisible.value[index] = true;
+  };
+
+  const handleDrillPopconfirmHide = (index: number) => {
+    drillPopconfirmVisible.value[index] = false;
+  };
+
+  const handleDrillMouseLeave = (index: number) => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (drillPopconfirmRefs.value[index] && !drillPopconfirmVisible.value[index]) {
+      drillPopconfirmRefs.value[index].hide();
+    }
   };
 
   // 删除值
@@ -1072,6 +1120,10 @@
 
         &:hover {
           color: #979ba5;
+        }
+
+        &.is-popconfirm-visible {
+          display: block;
         }
       }
 

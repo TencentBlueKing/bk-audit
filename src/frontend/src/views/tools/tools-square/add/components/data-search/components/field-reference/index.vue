@@ -22,7 +22,8 @@
     show-footer
     show-footer-slot
     :title="t('配置数据下钻')"
-    width="1100">
+    width="1100"
+    @update:is-show="handleUpdateIsShow">
     <template #header>
       <div class="flex mr24 custom-title">
         <span> {{ t('配置数据下钻') }}</span>
@@ -617,6 +618,11 @@
   const closeDialog = () => {
     resetFormData();
     showEditSql.value = false;
+  };
+
+  // 快捷关闭
+  const handleUpdateIsShow = () => {
+    resetFormData();
   };
 
   const setFormData = async (data: FormData['tools']) => {
