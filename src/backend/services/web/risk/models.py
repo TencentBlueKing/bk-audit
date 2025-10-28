@@ -23,7 +23,6 @@ from typing import List, Union
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from blueapps.utils.request_provider import get_request_username
-from django.conf import settings
 from django.db import models
 from django.db.models import Field, Max, Q, QuerySet
 from django.db.models.functions import Substr
@@ -172,9 +171,6 @@ class Risk(OperateRecordModel):
         """
         获取有权限处理的风险筛选条件
         """
-
-        if getattr(settings, "DISABLE_RISK_PERMISSION_FILTER", False):
-            return Q()
 
         q = Q(
             risk_id__in=TicketPermission.objects.filter(
