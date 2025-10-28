@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-19 11:11+0800\n"
+"POT-Creation-Date: 2025-10-28 14:47+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -923,6 +923,9 @@ msgstr "Edit Storage"
 msgid "启用 Doris"
 msgstr "Enable Doris"
 
+msgid "校验BKVision分享权限"
+msgstr ""
+
 msgid "特性开关ID"
 msgstr "Feature Toggle ID"
 
@@ -949,9 +952,6 @@ msgstr "Feature ID"
 
 msgid "待处理"
 msgstr "Open"
-
-msgid "待我处理"
-msgstr "TODO"
 
 msgid "审批中"
 msgstr "For Approve"
@@ -1195,6 +1195,9 @@ msgstr "System {system_id} is not editable"
 #, python-brace-format
 msgid "当前系统 {system_id} 下 操作已存在: {action_id}"
 msgstr "Action {action_id} already exists in system {system_id}"
+
+msgid "枚举映射集合和关联对象没有从属关系"
+msgstr "The enum mapping collection and associated objects have no hierarchical relationship"
 
 msgid "配置级别"
 msgstr "Config Level"
@@ -1451,6 +1454,14 @@ msgstr ""
 msgid "System Favorite"
 msgstr ""
 
+#, fuzzy
+#| msgid "策略ID"
+msgid "策略"
+msgstr "Strategy ID"
+
+msgid "工具"
+msgstr "Tool"
+
 msgid "获取 Namespace 列表"
 msgstr "Get Namespcae List"
 
@@ -1593,6 +1604,18 @@ msgstr "Delete Common Config"
 
 msgid "通用配置列表"
 msgstr "Common Config List"
+
+msgid "批量更新枚举映射"
+msgstr "Bulk Update Enum Mapping"
+
+msgid "获取枚举映射关联关系"
+msgstr "Get Enum Mapping Relationships"
+
+msgid "根据多个 collection_id 和 key 获取对应的 name"
+msgstr "Get corresponding names based on multiple collection_id and keys"
+
+msgid "通过 collection_id 获取所有的枚举映射"
+msgstr "Get all enum mappings by collection_id"
 
 msgid "创建系统"
 msgstr "Create System"
@@ -2033,10 +2056,6 @@ msgstr "Builder initialization failed: {err}"
 msgid "消息构造器不存在"
 msgstr "Msg Builer Not Exists"
 
-#, fuzzy, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【BK Audit%s】"
-
 msgid "异常信息"
 msgstr "Error Msg"
 
@@ -2316,6 +2335,17 @@ msgstr "View Scene Vision"
 msgid "使用工具"
 msgstr "Use Tool"
 
+#, fuzzy
+#| msgid "使用工具"
+msgid "使用工具(标签)"
+msgstr "Use Tool"
+
+msgid "管理工具"
+msgstr "Management Tool"
+
+msgid "管理工具(标签)"
+msgstr "Management Tool (Tag)"
+
 msgid "采集新建"
 msgstr "Create Collection"
 
@@ -2354,6 +2384,9 @@ msgstr "Department"
 msgid "审计报表"
 msgstr "Audit Report"
 
+msgid "风险工单权限"
+msgstr "Risk Ticket Permissions"
+
 msgid "敏感操作"
 msgstr "Sensitive Action"
 
@@ -2366,8 +2399,8 @@ msgstr "Audit Strategy"
 msgid "联表"
 msgstr "Link Table"
 
-msgid "工具"
-msgstr "Tool"
+msgid "策略标签"
+msgstr "Policy Label"
 
 msgid "获取IAM系统配置"
 msgstr "Get IAM System COnfig"
@@ -2642,12 +2675,6 @@ msgstr "The value {aggregation} {value} of the field {field} in the conditional 
 
 msgid "数据拉取"
 msgstr "Data Pull"
-
-msgid "未实现方法"
-msgstr "Unimplemented method"
-
-msgid "未实现类型"
-msgstr "Unimplemented type"
 
 msgid "Control Name"
 msgstr "Control Name"
@@ -3083,7 +3110,6 @@ msgstr "Url cannot be empty"
 msgid "URL必须使用http或https协议"
 msgstr "The URL must use the http or https protocol."
 
-#, python-brace-format
 msgid "URL包含高危端口: {}"
 msgstr "The URL contains high-risk ports: {}"
 
@@ -3206,6 +3232,12 @@ msgstr "Boolean"
 
 msgid "Null"
 msgstr "Null"
+
+msgid "Enum"
+msgstr "Enum"
+
+msgid "Json"
+msgstr "Json"
 
 msgid "增量"
 msgstr "Partial"
@@ -3737,6 +3769,9 @@ msgstr "Audit Relate Ticket"
 msgid "BK Monitor"
 msgstr "BK Monitor"
 
+msgid "系统会将原始事件ID相同的事件，关联至同一个未关闭的风险单据"
+msgstr "The system will associate events with the same original event ID to the same open risk case."
+
 msgid "原始事件ID"
 msgstr "Raw Event ID"
 
@@ -3776,6 +3811,9 @@ msgstr "False positive"
 msgid "全部风险"
 msgstr "ALL"
 
+msgid "待我处理"
+msgstr "TODO"
+
 msgid "我的关注"
 msgstr "Watch"
 
@@ -3787,6 +3825,71 @@ msgstr "Risk Owner"
 
 msgid "风险证据"
 msgstr "Risk Evidence"
+
+msgid "风险标签"
+msgstr "Risk Label"
+
+msgid "风险类型"
+msgstr "Risk Type"
+
+#, fuzzy
+#| msgid "命中策略"
+msgid "风险命中策略"
+msgstr "Match Strategy"
+
+msgid "风险危害"
+msgstr "Risk Hazard"
+
+msgid "处理指引"
+msgstr "Processing Guidelines"
+
+msgid "处理状态"
+msgstr "Processing Status"
+
+#, fuzzy
+#| msgid "自动处理规则"
+msgid "处理规则"
+msgstr "Risk Rule"
+
+msgid "当前处理人"
+msgstr "Current Handler"
+
+msgid "关注人"
+msgstr "Follower"
+
+#, fuzzy
+#| msgid "风险发现时间"
+msgid "首次发现时间"
+msgstr "Risk Discover Time"
+
+#, fuzzy
+#| msgid "风险发现时间"
+msgid "最后发现时间"
+msgstr "Risk Discover Time"
+
+msgid "最后一次处理时间"
+msgstr "Last Processed Time"
+
+#, fuzzy
+#| msgid "更新风险标记"
+msgid "风险标记"
+msgstr "Update Risk Label"
+
+msgid "风险标题"
+msgstr "Risk Title"
+
+#, fuzzy
+#| msgid "命中策略(ID)"
+msgid "风险命中策略ID"
+msgstr "Matched Strategy (ID)"
+
+#, python-brace-format
+msgid "审计风险_{risk_view_type}_{datetime}.xlsx"
+msgstr "Audit Risk_{risk_view_type}_{datetime}.xlsx"
+
+#, python-brace-format
+msgid "您没有权限导出风险:{risk_ids}"
+msgstr "You do not have permission to export risks: {risk_ids}"
 
 msgid "Create Risk Failed"
 msgstr "Create Risk Failed"
@@ -4028,6 +4131,11 @@ msgstr "%s close risk"
 msgid "人工转单"
 msgstr "Trans Operator"
 
+#, fuzzy
+#| msgid "人工转单"
+msgid "批量人工转单"
+msgstr "Trans Operator"
+
 msgid "人工执行处理套餐"
 msgstr "Execute Tool"
 
@@ -4053,6 +4161,9 @@ msgstr "%s reopen ticket, assign to %s"
 
 msgid "风险单据流转"
 msgstr "Process Risk Ticket"
+
+msgid "风险导出"
+msgstr "Risk Export"
 
 msgid "风险处理规则列表"
 msgstr "List Risk Rules"
@@ -4154,8 +4265,10 @@ msgstr "Deal Desciption"
 msgid "新处理人"
 msgstr "New Operator"
 
-msgid "不能转单给自己"
-msgstr "Not allowed to trans to yourself"
+#, fuzzy
+#| msgid "Risk ID"
+msgid "Risk IDs"
+msgstr "Risk ID"
 
 msgid "Event Basic Field Configs"
 msgstr "Event Basic Field Configs"
@@ -4165,6 +4278,11 @@ msgstr "Event Data Field Configs"
 
 msgid "Event Evidence Field Configs"
 msgstr "Event Evidence Field Configs"
+
+#, fuzzy
+#| msgid "Event Field Configs"
+msgid "Risk Meta Field Config"
+msgstr "Event Field Configs"
 
 msgid "Sync BKM Alert Failed"
 msgstr "Sync BKM Alert Failed"
@@ -4301,6 +4419,9 @@ msgstr "Basic Fields"
 msgid "证据字段"
 msgstr "Evidence Fields"
 
+msgid "风险元字段"
+msgstr "Risk Metadata Field"
+
 msgid "Control Changed"
 msgstr "Control Changed"
 
@@ -4396,6 +4517,9 @@ msgstr "Event Data Configs"
 msgid "Event Evidence Configs"
 msgstr "Event Evidence Configs"
 
+msgid "Is Formal"
+msgstr "Is Formal"
+
 msgid "Strategy"
 msgstr "Strategy"
 
@@ -4434,6 +4558,12 @@ msgstr "List Strategy"
 
 msgid "List All Strategy"
 msgstr "List All Strategy"
+
+msgid "获取某个策略的某个集合中的某个枚举值的信息"
+msgstr "Get information about a specific enum value in a specific collection of a policy"
+
+msgid "获取某个策略的某个集合中的所有枚举值的信息"
+msgstr "Get information about all enum values in a specific collection of a policy"
 
 msgid "Toggle Strategy"
 msgstr "Toggle Strategy"
@@ -4532,8 +4662,14 @@ msgstr "Is Priority"
 msgid "Field Description"
 msgstr "Field Description"
 
+msgid "Enum Mappings"
+msgstr "Enum Mappings"
+
 msgid "下钻配置"
 msgstr "Drill-down Config"
+
+msgid "是否去重字段"
+msgstr "Whether to deduplicate fields"
 
 msgid "Map Field"
 msgstr "Map Field"
@@ -4889,6 +5025,34 @@ msgstr "User Selector"
 msgid "下拉列表"
 msgstr "Dropdown List"
 
+msgid "按钮"
+msgstr "Button"
+
+msgid "级联选择器"
+msgstr "Cascading Selector"
+
+msgid "单选按钮组"
+msgstr "Radio Button Group"
+
+#, fuzzy
+#| msgid "时间选择器"
+msgid "选择器"
+msgstr "Time Selector"
+
+#, fuzzy
+#| msgid "增量"
+msgid "变量"
+msgstr "Partial"
+
+msgid "全部工具"
+msgstr "All Tools"
+
+msgid "我创建的"
+msgstr "My Created"
+
+msgid "最近使用"
+msgstr "Recently Used"
+
 msgid "当前暂不支持 '简易模式'(simple) 的数据查询工具"
 msgstr "Simple mode data query tools are not currently supported"
 
@@ -4927,6 +5091,14 @@ msgstr "BKBase query exception; executing SQL: {sql}"
 msgid "用户{user}没有权限访问嵌入图表{share_uid}"
 msgstr "The user {user} has no permission to access the embedded chart {share_uid}."
 
+msgid "工具不存在"
+msgstr "Tool does not exist"
+
+#, fuzzy
+#| msgid "策略类型不支持"
+msgid "工具类型不支持"
+msgstr "Policy type not supported"
+
 msgid "工具名称"
 msgstr "Tool Name"
 
@@ -4939,6 +5111,12 @@ msgstr "Tool Type"
 msgid "工具配置"
 msgstr "Tool Config"
 
+msgid "权限负责人"
+msgstr "Permission Owner"
+
+msgid "是否更新BkVision工具"
+msgstr "Whether to update BkVision tool"
+
 msgid "Tool"
 msgstr "Tool"
 
@@ -4950,6 +5128,11 @@ msgstr "Search SQL"
 
 msgid "Data Search Tool Config"
 msgstr "Data Search Tool Config"
+
+#, fuzzy
+#| msgid "更新时间"
+msgid "bkvision更新时间"
+msgstr "Update Time"
 
 msgid "Bkvision Tool Config"
 msgstr "BKVision Tool Config"
@@ -4972,10 +5155,6 @@ msgstr "Create Tool"
 msgid "编辑工具"
 msgstr "Edit Tool"
 
-#, python-format
-msgid "Tool not found: %s"
-msgstr "Tool not found: %s"
-
 msgid "工具执行"
 msgstr "Tool Execution"
 
@@ -4991,6 +5170,11 @@ msgstr "Get Tool Details"
 msgid "SQL解析"
 msgstr "SQL Parsing"
 
+#, fuzzy
+#| msgid "编辑工具"
+msgid "SQL解析(编辑工具)"
+msgstr "Edit Tool"
+
 msgid "用户查询权限批量校验"
 msgstr "Batch User Query Permission Validation"
 
@@ -5005,6 +5189,16 @@ msgstr "Data Query Config Type"
 
 msgid "仅在 tool_type=data_search 时必须，支持 simple/sql"
 msgstr "Required only when tool_type=data_search, supports simple/sql"
+
+#, fuzzy
+#| msgid "更新时间"
+msgid "BKVision 更新时间"
+msgstr "Update Time"
+
+#, fuzzy
+#| msgid "数据查询配置类型"
+msgid "数据查询配置类型不能为空"
+msgstr "Data Query Config Type"
 
 msgid "工具 UID"
 msgstr "Tool UID"
@@ -5066,6 +5260,9 @@ msgstr "Load Field Data"
 
 msgid "查询变量数据"
 msgstr "Get Variables Data"
+
+msgid "获取图表元数据"
+msgstr "Fetching chart metadata"
 
 msgid "无法获取报表ID"
 msgstr "Cannot get audit report id"
@@ -5145,3 +5342,19 @@ msgstr "[BKAudit] Process waiting for approve"
 #, python-format
 msgid "%s 操作关单"
 msgstr "%s close risk"
+
+#, fuzzy
+#~ msgid "【蓝鲸审计中心%s】"
+#~ msgstr "【BK Audit%s】"
+
+#~ msgid "未实现方法"
+#~ msgstr "Unimplemented method"
+
+#~ msgid "未实现类型"
+#~ msgstr "Unimplemented type"
+
+#~ msgid "不能转单给自己"
+#~ msgstr "Not allowed to trans to yourself"
+
+#~ msgid "Tool not found: %s"
+#~ msgstr "Tool not found: %s"
