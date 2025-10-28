@@ -760,19 +760,18 @@ class ListRisk(RiskMeta):
 
     def _build_event_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
         event_timestamp = self._column(alias, "dteventtimestamp")
-        start_datetime = self._column("base_query", "event_time")
-        end_datetime = exp.func(
-            "COALESCE",
-            self._column("base_query", "event_end_time"),
-            self._column("base_query", "event_time"),
-        )
+        event_time_column = self._column("base_query", "event_time")
+        event_end_column = self._column("base_query", "event_end_time")
+
+        start_datetime = event_time_column.copy()
+        end_datetime = self._add_seconds(event_end_column.copy(), seconds=1)
 
         start_milliseconds = self._to_milliseconds(start_datetime)
         end_milliseconds = self._to_milliseconds(end_datetime)
 
         return [
             exp.GTE(this=event_timestamp.copy(), expression=start_milliseconds),
-            exp.LTE(this=event_timestamp.copy(), expression=end_milliseconds),
+            exp.LT(this=event_timestamp.copy(), expression=end_milliseconds),
         ]
 
     def _build_event_field_expression(
@@ -1168,6 +1167,11 @@ class ListRisk(RiskMeta):
             dt_obj = dt_obj.replace(tzinfo=dt_timezone.utc)
         localized = timezone.localtime(dt_obj, timezone.get_current_timezone())
         return localized.strftime("%Y-%m-%d %H:%M:%S")
+
+    @staticmethod
+    def _add_seconds(expression: exp.Expression, *, seconds: int) -> exp.Expression:
+        interval = exp.Interval(this=exp.Literal.number(str(seconds)), unit="SECOND")
+        return exp.Add(this=expression.copy(), expression=interval)
 
 
 class ListMineRisk(ListRisk):
