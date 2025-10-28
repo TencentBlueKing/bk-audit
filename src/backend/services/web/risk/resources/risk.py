@@ -854,15 +854,12 @@ class ListRisk(RiskMeta):
         if not self._should_apply_duplicate_filter(filter_item, resolved_source):
             return base_table.as_(alias)
 
-        field_name = filter_item.get("field")
-        duplicates_by_strategy = self._get_duplicate_partition_fields(resolved_source, field_name)
+        duplicates_by_strategy = self._get_duplicate_partition_fields()
         if not duplicates_by_strategy:
             return base_table.as_(alias)
 
         base_alias = f"{alias}_base"
-        partition_key = self._build_duplicate_partition_key_expression(
-            base_alias, resolved_source, duplicates_by_strategy
-        )
+        partition_key = self._build_duplicate_partition_key_expression(base_alias, duplicates_by_strategy)
         if partition_key is None:
             return base_table.as_(alias)
 
@@ -973,38 +970,35 @@ class ListRisk(RiskMeta):
         return isinstance(expression, exp.Func) and expression.name.upper() == "JSON_EXTRACT_DOUBLE"
 
     def _should_apply_duplicate_filter(self, filter_item: Dict[str, Any], resolved_source: str) -> bool:
-        field_name = filter_item.get("field")
-        if not field_name:
-            return False
-        duplicates_by_strategy = self._get_duplicate_partition_fields(resolved_source, field_name)
+        duplicates_by_strategy = self._get_duplicate_partition_fields()
         return bool(duplicates_by_strategy)
 
-    def _get_duplicate_partition_fields(self, resolved_source: str, field_name: Optional[str]) -> Dict[int, Set[str]]:
-        if not hasattr(self, "_duplicate_event_field_map") or not field_name:
+    def _get_duplicate_partition_fields(self) -> Dict[int, Dict[str, Set[str]]]:
+        if not hasattr(self, "_duplicate_event_field_map"):
             return {}
-        applicable: Dict[int, Set[str]] = {}
+        applicable: Dict[int, Dict[str, Set[str]]] = {}
         for strategy_id, source_map in self._duplicate_event_field_map.items():
-            fields = source_map.get(resolved_source)
-            if not fields or field_name not in fields:
-                continue
-            applicable[strategy_id] = set(fields)
+            filtered_sources = {src: set(fields) for src, fields in source_map.items() if fields}
+            if filtered_sources:
+                applicable[strategy_id] = filtered_sources
         return applicable
 
     def _build_duplicate_partition_key_expression(
         self,
         alias: str,
-        resolved_source: str,
-        duplicates_by_strategy: Dict[int, Set[str]],
+        duplicates_by_strategy: Dict[int, Dict[str, Set[str]]],
     ) -> Optional[exp.Expression]:
         if not duplicates_by_strategy:
             return None
 
         cases: List[Tuple[exp.Expression, exp.Expression]] = []
-        for strategy_id, fields in duplicates_by_strategy.items():
-            field_expressions = [
-                self._build_duplicate_partition_value_expression(alias, field_name, resolved_source)
-                for field_name in sorted(fields)
-            ]
+        for strategy_id, source_fields in duplicates_by_strategy.items():
+            field_expressions: List[exp.Expression] = []
+            for source in sorted(source_fields.keys()):
+                for field_name in sorted(source_fields[source]):
+                    expr = self._build_duplicate_partition_value_expression(alias, field_name, source)
+                    if expr is not None:
+                        field_expressions.append(expr)
             field_expressions = [expr for expr in field_expressions if expr is not None]
             if not field_expressions:
                 continue
