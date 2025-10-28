@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-19 11:11+0800\n"
+"POT-Creation-Date: 2025-10-28 14:47+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -921,6 +921,9 @@ msgstr "存储编辑"
 msgid "启用 Doris"
 msgstr "启用 Doris"
 
+msgid "校验BKVision分享权限"
+msgstr "校验BKVision分享权限"
+
 msgid "特性开关ID"
 msgstr "特性开关ID"
 
@@ -945,7 +948,9 @@ msgstr "云区域"
 msgid "特性ID"
 msgstr "特性ID"
 
-msgid "待我处理"
+#, fuzzy
+#| msgid "待我处理"
+msgid "待处理"
 msgstr "待我处理"
 
 msgid "审批中"
@@ -1196,6 +1201,9 @@ msgstr "系统 {system_id} 不可编辑"
 #, python-brace-format
 msgid "当前系统 {system_id} 下 操作已存在: {action_id}"
 msgstr "当前系统 {system_id} 下 操作已存在: {action_id}"
+
+msgid "枚举映射集合和关联对象没有从属关系"
+msgstr "枚举映射集合和关联对象没有从属关系"
 
 msgid "配置级别"
 msgstr "配置级别"
@@ -1452,6 +1460,14 @@ msgstr ""
 msgid "System Favorite"
 msgstr ""
 
+#, fuzzy
+#| msgid "策略ID"
+msgid "策略"
+msgstr "策略ID"
+
+msgid "工具"
+msgstr "工具"
+
 msgid "获取 Namespace 列表"
 msgstr "获取 Namespace 列表"
 
@@ -1594,6 +1610,18 @@ msgstr "删除通用配置"
 
 msgid "通用配置列表"
 msgstr "通用配置列表"
+
+msgid "批量更新枚举映射"
+msgstr "批量更新枚举映射"
+
+msgid "获取枚举映射关联关系"
+msgstr "获取枚举映射关联关系"
+
+msgid "根据多个 collection_id 和 key 获取对应的 name"
+msgstr "根据多个 collection_id 和 key 获取对应的 name"
+
+msgid "通过 collection_id 获取所有的枚举映射"
+msgstr "通过 collection_id 获取所有的枚举映射"
 
 msgid "创建系统"
 msgstr "创建系统"
@@ -2032,10 +2060,6 @@ msgstr "构建器初始化失败: {err}"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
-#, python-format
-msgid "【蓝鲸审计中心%s】"
-msgstr "【蓝鲸审计中心%s】"
-
 msgid "异常信息"
 msgstr "异常信息"
 
@@ -2315,6 +2339,17 @@ msgstr "查看场景视图"
 msgid "使用工具"
 msgstr "使用工具"
 
+#, fuzzy
+#| msgid "使用工具"
+msgid "使用工具(标签)"
+msgstr "使用工具"
+
+msgid "管理工具"
+msgstr "管理工具"
+
+msgid "管理工具(标签)"
+msgstr "管理工具(标签)"
+
 msgid "采集新建"
 msgstr "采集新建"
 
@@ -2353,6 +2388,9 @@ msgstr "组织架构"
 msgid "审计报表"
 msgstr "审计报表"
 
+msgid "风险工单权限"
+msgstr "风险工单权限"
+
 msgid "敏感操作"
 msgstr "敏感操作"
 
@@ -2365,8 +2403,8 @@ msgstr "审计策略"
 msgid "联表"
 msgstr "联表"
 
-msgid "工具"
-msgstr "工具"
+msgid "策略标签"
+msgstr "策略标签"
 
 msgid "获取IAM系统配置"
 msgstr "获取IAM系统配置"
@@ -2641,12 +2679,6 @@ msgstr "条件表达式中字段 {field} 的值 {aggregation} {value} 无法转�
 
 msgid "数据拉取"
 msgstr "数据拉取"
-
-msgid "未实现方法"
-msgstr "未实现方法"
-
-msgid "未实现类型"
-msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -3082,7 +3114,6 @@ msgstr "URL不能为空"
 msgid "URL必须使用http或https协议"
 msgstr "URL必须使用http或https协议"
 
-#, python-brace-format
 msgid "URL包含高危端口: {}"
 msgstr "URL包含高危端口: {}"
 
@@ -3205,6 +3236,12 @@ msgstr "布尔"
 
 msgid "Null"
 msgstr "空"
+
+msgid "Enum"
+msgstr "Enum"
+
+msgid "Json"
+msgstr "Json"
 
 msgid "增量"
 msgstr "增量"
@@ -3731,6 +3768,9 @@ msgstr "审计关联单据"
 msgid "BK Monitor"
 msgstr "蓝鲸监控"
 
+msgid "系统会将原始事件ID相同的事件，关联至同一个未关闭的风险单据"
+msgstr "系统会将原始事件ID相同的事件，关联至同一个未关闭的风险单据"
+
 msgid "原始事件ID"
 msgstr "原始事件ID"
 
@@ -3770,6 +3810,9 @@ msgstr "误报"
 msgid "全部风险"
 msgstr "全部风险"
 
+msgid "待我处理"
+msgstr "待我处理"
+
 msgid "我的关注"
 msgstr "我的关注"
 
@@ -3781,6 +3824,71 @@ msgstr "风险责任人"
 
 msgid "风险证据"
 msgstr "风险证据"
+
+msgid "风险标签"
+msgstr "风险标签"
+
+msgid "风险类型"
+msgstr "风险类型"
+
+#, fuzzy
+#| msgid "命中策略"
+msgid "风险命中策略"
+msgstr "命中策略"
+
+msgid "风险危害"
+msgstr "风险危害"
+
+msgid "处理指引"
+msgstr "处理指引"
+
+msgid "处理状态"
+msgstr "处理状态"
+
+#, fuzzy
+#| msgid "自动处理规则"
+msgid "处理规则"
+msgstr "自动处理规则"
+
+msgid "当前处理人"
+msgstr "当前处理人"
+
+msgid "关注人"
+msgstr "关注人"
+
+#, fuzzy
+#| msgid "风险发现时间"
+msgid "首次发现时间"
+msgstr "风险发现时间"
+
+#, fuzzy
+#| msgid "风险发现时间"
+msgid "最后发现时间"
+msgstr "风险发现时间"
+
+msgid "最后一次处理时间"
+msgstr ""
+
+#, fuzzy
+#| msgid "更新风险标记"
+msgid "风险标记"
+msgstr "更新风险标记"
+
+msgid "风险标题"
+msgstr ""
+
+#, fuzzy
+#| msgid "命中策略(ID)"
+msgid "风险命中策略ID"
+msgstr "命中策略(ID)"
+
+#, python-brace-format
+msgid "审计风险_{risk_view_type}_{datetime}.xlsx"
+msgstr "审计风险_{risk_view_type}_{datetime}.xlsx"
+
+#, python-brace-format
+msgid "您没有权限导出风险:{risk_ids}"
+msgstr "您没有权限导出风险:{risk_ids}"
 
 msgid "Create Risk Failed"
 msgstr "创建风险失败"
@@ -4022,6 +4130,11 @@ msgstr "%s 人工关单"
 msgid "人工转单"
 msgstr "人工转单"
 
+#, fuzzy
+#| msgid "人工转单"
+msgid "批量人工转单"
+msgstr "人工转单"
+
 msgid "人工执行处理套餐"
 msgstr "人工执行处理套餐"
 
@@ -4047,6 +4160,9 @@ msgstr "%s 重开单据，指定处理人 %s"
 
 msgid "风险单据流转"
 msgstr "风险单据流转"
+
+msgid "风险导出"
+msgstr "风险导出"
 
 msgid "风险处理规则列表"
 msgstr "风险处理规则列表"
@@ -4148,8 +4264,10 @@ msgstr "处理说明"
 msgid "新处理人"
 msgstr "新处理人"
 
-msgid "不能转单给自己"
-msgstr "不能转单给自己"
+#, fuzzy
+#| msgid "Risk ID"
+msgid "Risk IDs"
+msgstr "风险ID"
 
 msgid "Event Basic Field Configs"
 msgstr "事件基本字段配置"
@@ -4159,6 +4277,11 @@ msgstr "事件数据字段配置"
 
 msgid "Event Evidence Field Configs"
 msgstr "事件证据字段配置"
+
+#, fuzzy
+#| msgid "Event Field Configs"
+msgid "Risk Meta Field Config"
+msgstr "事件字段配置"
 
 msgid "Sync BKM Alert Failed"
 msgstr "同步监控告警异常"
@@ -4295,6 +4418,9 @@ msgstr "基本字段"
 msgid "证据字段"
 msgstr "证据字段"
 
+msgid "风险元字段"
+msgstr "风险元字段"
+
 msgid "Control Changed"
 msgstr "控件切换"
 
@@ -4390,6 +4516,9 @@ msgstr "事件数据字段配置"
 msgid "Event Evidence Configs"
 msgstr "事件证据字段配置"
 
+msgid "Is Formal"
+msgstr "Is Formal"
+
 msgid "Strategy"
 msgstr "策略"
 
@@ -4428,6 +4557,12 @@ msgstr "策略列表"
 
 msgid "List All Strategy"
 msgstr "策略列表(All)"
+
+msgid "获取某个策略的某个集合中的某个枚举值的信息"
+msgstr "获取某个策略的某个集合中的某个枚举值的信息"
+
+msgid "获取某个策略的某个集合中的所有枚举值的信息"
+msgstr "获取某个策略的某个集合中的所有枚举值的信息"
 
 msgid "Toggle Strategy"
 msgstr "启停策略"
@@ -4526,8 +4661,14 @@ msgstr "是否优先"
 msgid "Field Description"
 msgstr "字段描述"
 
+msgid "Enum Mappings"
+msgstr "Enum Mappings"
+
 msgid "下钻配置"
 msgstr "下钻配置"
+
+msgid "是否去重字段"
+msgstr "是否去重字段"
 
 msgid "Map Field"
 msgstr "字段关联"
@@ -4863,6 +5004,34 @@ msgstr "人员选择器"
 msgid "下拉列表"
 msgstr "下拉列表"
 
+msgid "按钮"
+msgstr "按钮"
+
+msgid "级联选择器"
+msgstr "级联选择器"
+
+msgid "单选按钮组"
+msgstr "单选按钮组"
+
+#, fuzzy
+#| msgid "时间选择器"
+msgid "选择器"
+msgstr "时间选择器"
+
+#, fuzzy
+#| msgid "增量"
+msgid "变量"
+msgstr "增量"
+
+msgid "全部工具"
+msgstr "全部工具"
+
+msgid "我创建的"
+msgstr "我创建的"
+
+msgid "最近使用"
+msgstr "最近使用"
+
 msgid "当前暂不支持 '简易模式'(simple) 的数据查询工具"
 msgstr "当前暂不支持 '简易模式'(simple) 的数据查询工具"
 
@@ -4901,6 +5070,14 @@ msgstr "bkbase 查询异常;执行 SQL：{sql}"
 msgid "用户{user}没有权限访问嵌入图表{share_uid}"
 msgstr "用户{user}没有权限访问嵌入图表{share_uid}"
 
+msgid "工具不存在"
+msgstr "工具不存在"
+
+#, fuzzy
+#| msgid "策略类型不支持"
+msgid "工具类型不支持"
+msgstr "策略类型不支持"
+
 msgid "工具名称"
 msgstr "工具名称"
 
@@ -4913,6 +5090,12 @@ msgstr "工具类型"
 msgid "工具配置"
 msgstr "工具配置"
 
+msgid "权限负责人"
+msgstr ""
+
+msgid "是否更新BkVision工具"
+msgstr "是否更新BkVision工具"
+
 msgid "Tool"
 msgstr "工具"
 
@@ -4924,6 +5107,11 @@ msgstr "检索SQL"
 
 msgid "Data Search Tool Config"
 msgstr "数据检索工具配置"
+
+#, fuzzy
+#| msgid "更新时间"
+msgid "bkvision更新时间"
+msgstr "更新时间"
 
 msgid "Bkvision Tool Config"
 msgstr "Bkvision 工具配置"
@@ -4946,10 +5134,6 @@ msgstr "新增工具"
 msgid "编辑工具"
 msgstr "编辑工具"
 
-#, python-format
-msgid "Tool not found: %s"
-msgstr "工具未找到：%s"
-
 msgid "工具执行"
 msgstr "工具执行"
 
@@ -4964,6 +5148,11 @@ msgstr "获取工具详情"
 
 msgid "SQL解析"
 msgstr "SQL解析"
+
+#, fuzzy
+#| msgid "编辑工具"
+msgid "SQL解析(编辑工具)"
+msgstr "编辑工具"
 
 msgid "用户查询权限批量校验"
 msgstr "用户查询权限批量校验"
@@ -4985,6 +5174,16 @@ msgstr "数据查询配置类型"
 
 msgid "仅在 tool_type=data_search 时必须，支持 simple/sql"
 msgstr "仅在 tool_type=data_search 时必须，支持 simple/sql"
+
+#, fuzzy
+#| msgid "更新时间"
+msgid "BKVision 更新时间"
+msgstr "更新时间"
+
+#, fuzzy
+#| msgid "配置类型"
+msgid "数据查询配置类型不能为空"
+msgstr "数据查询配置类型"
 
 msgid "工具 UID"
 msgstr "工具 UID"
@@ -5046,6 +5245,9 @@ msgstr "获取字段数据"
 
 msgid "查询变量数据"
 msgstr "查询变量数据"
+
+msgid "获取图表元数据"
+msgstr "获取图表元数据"
 
 msgid "无法获取报表ID"
 msgstr "无法获取报表ID"
@@ -5125,3 +5327,18 @@ msgstr "【审计中心】执行自动处理套餐审批"
 #, python-format
 msgid "%s 操作关单"
 msgstr "%s 操作关单"
+
+#~ msgid "【蓝鲸审计中心%s】"
+#~ msgstr "【蓝鲸审计中心%s】"
+
+#~ msgid "未实现方法"
+#~ msgstr "未实现方法"
+
+#~ msgid "未实现类型"
+#~ msgstr "未实现类型"
+
+#~ msgid "不能转单给自己"
+#~ msgstr "不能转单给自己"
+
+#~ msgid "Tool not found: %s"
+#~ msgstr "工具未找到：%s"
