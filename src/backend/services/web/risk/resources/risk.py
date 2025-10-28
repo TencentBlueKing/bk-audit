@@ -734,12 +734,13 @@ class ListRisk(RiskMeta):
         if comparison is None:
             return None
 
-        conditions = join_conditions + self._build_thedate_conditions(alias, thedate_range) + [comparison]
+        # thedate 条件已在事件表的基础选择中统一处理，这里不再追加，避免重复
+        conditions = join_conditions + [comparison]
         combined = self._combine_conditions(conditions)
         if combined is None:
             return None
 
-        table_expr = self._build_event_table_expression(alias, filter_item, resolved_source)
+        table_expr = self._build_event_table_expression(alias, filter_item, resolved_source, thedate_range)
         exists_query = exp.select("1").from_(table_expr).where(combined)
         return exp.Exists(this=exists_query)
 
@@ -847,24 +848,26 @@ class ListRisk(RiskMeta):
         return None
 
     def _build_event_table_expression(
-        self, alias: str, filter_item: Dict[str, Any], resolved_source: str
+        self, alias: str, filter_item: Dict[str, Any], resolved_source: str, thedate_range: Optional[Tuple[str, str]]
     ) -> exp.Expression:
         table_reference = self._get_risk_event_table_reference()
         base_table = exp.to_table(table_reference).copy()
-        if not self._should_apply_duplicate_filter(filter_item, resolved_source):
-            return base_table.as_(alias)
+        # 简化：统一在最早接触事件表时添加 thedate 条件
+        should_dedup = self._should_apply_duplicate_filter(filter_item, resolved_source)
+        if not should_dedup:
+            return self._with_thedate(base_table, alias, thedate_range)
 
-        field_name = filter_item.get("field")
-        duplicates_by_strategy = self._get_duplicate_partition_fields(resolved_source, field_name)
+        duplicates_by_strategy = self._get_duplicate_partition_fields()
         if not duplicates_by_strategy:
-            return base_table.as_(alias)
+            return self._with_thedate(base_table, alias, thedate_range)
 
         base_alias = f"{alias}_base"
-        partition_key = self._build_duplicate_partition_key_expression(
-            base_alias, resolved_source, duplicates_by_strategy
-        )
+        partition_key = self._build_duplicate_partition_key_expression(base_alias, duplicates_by_strategy)
         if partition_key is None:
-            return base_table.as_(alias)
+            return self._with_thedate(base_table, alias, thedate_range)
+
+        # 在 base 层先加 thedate 条件，再做窗口去重
+        base_from = self._with_thedate(base_table, base_alias, thedate_range)
 
         partition_expressions = [self._column(base_alias, "strategy_id"), partition_key]
         order_expressions = [exp.Ordered(this=self._column(base_alias, "dteventtimestamp"), desc=True)]
@@ -874,7 +877,7 @@ class ListRisk(RiskMeta):
             order=exp.Order(expressions=order_expressions),
         )
 
-        ranked_select = exp.select(exp.Star(), exp.alias_(window, "_row_number")).from_(base_table.as_(base_alias))
+        ranked_select = exp.select(exp.Star(), exp.alias_(window, "_row_number")).from_(base_from)
         ranked_alias = f"{alias}_ranked"
         ranked_subquery = exp.Subquery(
             this=ranked_select,
@@ -892,6 +895,22 @@ class ListRisk(RiskMeta):
         )
         return exp.Subquery(
             this=filtered_select,
+            alias=exp.TableAlias(this=exp.to_identifier(alias)),
+        )
+
+    def _with_thedate(
+        self, base_table: exp.Expression, alias: str, thedate_range: Optional[Tuple[str, str]]
+    ) -> exp.Expression:
+        table_as = base_table.as_(alias)
+        if not thedate_range:
+            return table_as
+        inner_select = exp.select(exp.Star()).from_(table_as)
+        date_conditions = self._build_thedate_conditions(alias, thedate_range)
+        combined = self._combine_conditions(date_conditions)
+        if combined is not None:
+            inner_select = inner_select.where(combined)
+        return exp.Subquery(
+            this=inner_select,
             alias=exp.TableAlias(this=exp.to_identifier(alias)),
         )
 
@@ -973,38 +992,35 @@ class ListRisk(RiskMeta):
         return isinstance(expression, exp.Func) and expression.name.upper() == "JSON_EXTRACT_DOUBLE"
 
     def _should_apply_duplicate_filter(self, filter_item: Dict[str, Any], resolved_source: str) -> bool:
-        field_name = filter_item.get("field")
-        if not field_name:
-            return False
-        duplicates_by_strategy = self._get_duplicate_partition_fields(resolved_source, field_name)
+        duplicates_by_strategy = self._get_duplicate_partition_fields()
         return bool(duplicates_by_strategy)
 
-    def _get_duplicate_partition_fields(self, resolved_source: str, field_name: Optional[str]) -> Dict[int, Set[str]]:
-        if not hasattr(self, "_duplicate_event_field_map") or not field_name:
+    def _get_duplicate_partition_fields(self) -> Dict[int, Dict[str, Set[str]]]:
+        if not hasattr(self, "_duplicate_event_field_map"):
             return {}
-        applicable: Dict[int, Set[str]] = {}
+        applicable: Dict[int, Dict[str, Set[str]]] = {}
         for strategy_id, source_map in self._duplicate_event_field_map.items():
-            fields = source_map.get(resolved_source)
-            if not fields or field_name not in fields:
-                continue
-            applicable[strategy_id] = set(fields)
+            filtered_sources = {src: set(fields) for src, fields in source_map.items() if fields}
+            if filtered_sources:
+                applicable[strategy_id] = filtered_sources
         return applicable
 
     def _build_duplicate_partition_key_expression(
         self,
         alias: str,
-        resolved_source: str,
-        duplicates_by_strategy: Dict[int, Set[str]],
+        duplicates_by_strategy: Dict[int, Dict[str, Set[str]]],
     ) -> Optional[exp.Expression]:
         if not duplicates_by_strategy:
             return None
 
         cases: List[Tuple[exp.Expression, exp.Expression]] = []
-        for strategy_id, fields in duplicates_by_strategy.items():
-            field_expressions = [
-                self._build_duplicate_partition_value_expression(alias, field_name, resolved_source)
-                for field_name in sorted(fields)
-            ]
+        for strategy_id, source_fields in duplicates_by_strategy.items():
+            field_expressions: List[exp.Expression] = []
+            for source in sorted(source_fields.keys()):
+                for field_name in sorted(source_fields[source]):
+                    expr = self._build_duplicate_partition_value_expression(alias, field_name, source)
+                    if expr is not None:
+                        field_expressions.append(expr)
             field_expressions = [expr for expr in field_expressions if expr is not None]
             if not field_expressions:
                 continue
