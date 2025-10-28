@@ -8,5 +8,5 @@ INSTALLED_APPS = (
     "services.web.version",
     "services.web.vision",
     "services.web.tool",
-    "services.web.doris",
+    "services.web.blob_storage",
 )
