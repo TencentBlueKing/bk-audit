@@ -20,6 +20,7 @@ import json
 from typing import List, Union
 
 from django.conf import settings
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
@@ -205,6 +206,11 @@ class RiskInfoSerializer(serializers.ModelSerializer):
             # 1. 先去掉微秒 (归零)
             # 2. 再加上1秒，实现“向上取整”
             dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+        dt = timezone.localtime(dt)
 
         # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
         # 所以我们需要在这里手动格式化为您的全局格式
