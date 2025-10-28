@@ -10,4 +10,5 @@ urlpatterns = [
     path("api/v1/", include("services.web.version.urls")),
     path("bkvision/api/v1/", include("services.web.vision.urls")),
     path("api/v1/", include("services.web.tool.urls")),
+    path("api/v1/", include("services.web.doris.urls")),
 ]
