@@ -1,4 +1,5 @@
 import datetime
+import json
 from types import SimpleNamespace
 from typing import List
 from unittest import mock
@@ -44,6 +45,7 @@ class TestListRiskResource(TestCase):
         super().setUp()
         self.factory = APIRequestFactory()
         self.username = "admin"
+        self.bkbase_title = "bkbase-title"
         self.authed_filter_patcher = mock.patch(
             "services.web.risk.models.Risk.authed_risk_filter", return_value=Q(), autospec=True
         )
@@ -80,6 +82,7 @@ class TestListRiskResource(TestCase):
             raw_event_id="raw",
             strategy=self.strategy,
             status=RiskStatus.NEW,
+            title=self.bkbase_title,
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
         )
         TicketPermission.objects.create(
@@ -170,7 +173,7 @@ class TestListRiskResource(TestCase):
         Risk.authed_risk_filter.return_value = permission_q
         try:
             with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
-                data = self._call_resource({"use_bkbase": True})
+                data = self._call_resource({"use_bkbase": True, "title": "bkbase-title"})
         finally:
             Risk.authed_risk_filter.return_value = original_return
 
@@ -199,6 +202,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
             "event_filters": [
@@ -219,13 +223,11 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
         normalized_sql = [sql.replace("`", "") for sql in sql_log]
         self.assertTrue(any(("JSON_EXTRACT" in sql) or ("GET_JSON_OBJECT" in sql) for sql in normalized_sql))
-        self.assertTrue(any("risk_event_0.strategy_id = base_query.strategy_id" in sql for sql in normalized_sql))
-        self.assertTrue(any("risk_event_0.raw_event_id = base_query.raw_event_id" in sql for sql in normalized_sql))
-        self.assertTrue(any("risk_event_0.dteventtimestamp >=" in sql for sql in normalized_sql))
-        self.assertTrue(
-            any("COALESCE(base_query.event_end_time, base_query.event_time)" in sql for sql in normalized_sql)
-        )
-        self.assertTrue(any("risk_event_0.thedate >=" in sql for sql in normalized_sql))
+        self.assertTrue(any("matched_event.strategy_id = base_query.strategy_id" in sql for sql in normalized_sql))
+        self.assertTrue(any("matched_event.raw_event_id = base_query.raw_event_id" in sql for sql in normalized_sql))
+        self.assertTrue(any("matched_event.dteventtimestamp >=" in sql for sql in normalized_sql))
+        self.assertTrue(any("base_query.event_end_time + INTERVAL 1 SECOND" in sql for sql in normalized_sql))
+        self.assertTrue(any("matched_event_src.thedate >=" in sql for sql in normalized_sql))
         self.assertFalse(any("base_query.thedate" in sql for sql in normalized_sql))
 
         event_table = self._format_expected_table(self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]).replace(
@@ -234,6 +236,102 @@ class TestListRiskResource(TestCase):
         self.assertTrue(any(event_table in sql for sql in normalized_sql))
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
+
+    def test_list_risk_via_bkbase_returns_filtered_event_data(self):
+        sql_log = []
+        matched_event = {"ip": "127.0.0.1"}
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {
+                "list": [
+                    {
+                        "risk_id": self.risk.risk_id,
+                        "strategy_id": self.risk.strategy_id,
+                        "raw_event_id": self.risk.raw_event_id,
+                        "__matched_event_data": json.dumps(matched_event),
+                    }
+                ]
+            }
+
+        payload = {
+            "use_bkbase": True,
+            "title": "bkbase-title",
+            "event_filters": [
+                {
+                    "field": "ip",
+                    "display_name": "Source IP",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "127.0.0.1",
+                }
+            ],
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        self.assertEqual(len(sql_log), 2)
+        _, data_sql = sql_log
+        self.assertIn("__matched_event_data", data_sql)
+        assert_hive_sql(self, sql_log)
+
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
+        self.assertEqual(results[0]["event_data"], matched_event)
+
+    def test_list_risk_via_bkbase_order_by_event_data_field(self):
+        sql_log = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {
+                "list": [
+                    {
+                        "risk_id": self.risk.risk_id,
+                        "strategy_id": self.risk.strategy_id,
+                        "raw_event_id": self.risk.raw_event_id,
+                        "__order_event_field": "192.168.0.1",
+                        "__matched_event_data": json.dumps({"ip": "192.168.0.1"}),
+                    }
+                ]
+            }
+
+        payload = {
+            "use_bkbase": True,
+            "title": "bkbase-title",
+            "order_field": "event_data.ip",
+            "order_type": "desc",
+            "event_filters": [
+                {
+                    "field": "ip",
+                    "display_name": "Source IP",
+                    "operator": EventFilterOperator.CONTAINS.value,
+                    "value": "192.168",
+                }
+            ],
+        }
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self._call_resource(payload)
+
+        self.assertEqual(len(sql_log), 2)
+        _, data_sql = sql_log
+        normalized_sql = data_sql.replace("`", "")
+        normalized_upper = normalized_sql.upper()
+        self.assertIn("__ORDER_EVENT_FIELD", normalized_upper)
+        self.assertIn("__MATCHED_EVENT_DATA", normalized_upper)
+        self.assertIn("ORDER BY __ORDER_EVENT_FIELD DESC", normalized_upper)
+        self.assertIn("MATCHED_EVENT.DTEVENTTIMESTAMP DESC", normalized_upper)
+        assert_hive_sql(self, sql_log)
+
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
 
     def test_list_risk_via_bkbase_with_numeric_event_filter(self):
         sql_log = []
@@ -247,6 +345,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             "event_filters": [
                 {
                     "field": "ip",
@@ -288,6 +387,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             # 期望：thedate 应加在 base 层（risk_event_0_base）
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
@@ -315,20 +415,19 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
 
         count_sql, data_sql = data["sql"]
-        window_fragment = "ROW_NUMBER() OVER (PARTITION BY risk_event_0_base.strategy_id"
+        window_fragment = "ROW_NUMBER() OVER (PARTITION BY matched_event_src_base.strategy_id"
         self.assertIn(window_fragment, count_sql)
-        self.assertIn("JSON_EXTRACT_STRING(risk_event_0_base.event_data, '$.user')", count_sql)
-        self.assertIn("JSON_EXTRACT_STRING(risk_event_1.event_data, '$.ip')", count_sql)
+        self.assertIn("JSON_EXTRACT_STRING(matched_event_src_base.event_data, '$.user')", count_sql)
+        self.assertIn("JSON_EXTRACT_STRING(matched_event_src.event_data, '$.ip')", count_sql)
         # thedate 应在 base 层过滤
         normalized_count_sql = count_sql.replace("`", "")
-        self.assertIn("risk_event_0_base.thedate >=", normalized_count_sql)
-        self.assertIn("risk_event_0_base.thedate <=", normalized_count_sql)
+        self.assertIn("matched_event_src_base.thedate >=", normalized_count_sql)
+        self.assertIn("matched_event_src_base.thedate <=", normalized_count_sql)
         self.assertIn(window_fragment, data_sql)
-        self.assertIn("JSON_EXTRACT_STRING(risk_event_0_base.event_data, '$.user')", data_sql)
-        self.assertIn("JSON_EXTRACT_STRING(risk_event_1.event_data, '$.ip')", data_sql)
+        self.assertIn("JSON_EXTRACT_STRING(matched_event_src_base.event_data, '$.user')", data_sql)
         normalized_data_sql = data_sql.replace("`", "")
-        self.assertIn("risk_event_0_base.thedate >=", normalized_data_sql)
-        self.assertIn("risk_event_0_base.thedate <=", normalized_data_sql)
+        self.assertIn("matched_event_src_base.thedate >=", normalized_data_sql)
+        self.assertIn("matched_event_src_base.thedate <=", normalized_data_sql)
         assert_hive_sql(self, data["sql"])
 
     def test_list_risk_via_bkbase_with_duplicate_basic_field(self):
@@ -350,6 +449,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             # 期望：thedate 应加在 base 层（risk_event_0_base）
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
@@ -372,10 +472,10 @@ class TestListRiskResource(TestCase):
 
         combined_sql = " ".join(sql_log)
         self.assertIn("ROW_NUMBER() OVER", combined_sql)
-        self.assertIn("risk_event_0_base.raw_event_id", combined_sql)
+        self.assertIn("matched_event_src_base.raw_event_id", combined_sql)
         normalized_sql = combined_sql.replace("`", "")
-        self.assertIn("risk_event_0_base.thedate >=", normalized_sql)
-        self.assertIn("risk_event_0_base.thedate <=", normalized_sql)
+        self.assertIn("matched_event_src_base.thedate >=", normalized_sql)
+        self.assertIn("matched_event_src_base.thedate <=", normalized_sql)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -398,6 +498,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             # 无去重：thedate 应在 risk_event_0 基础子查询处
             "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
             "end_time": datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc).isoformat(),
@@ -421,8 +522,8 @@ class TestListRiskResource(TestCase):
         combined_sql = " ".join(sql_log)
         self.assertNotIn("ROW_NUMBER() OVER", combined_sql)
         normalized_sql = combined_sql.replace("`", "")
-        self.assertIn("risk_event_0.thedate >=", normalized_sql)
-        self.assertIn("risk_event_0.thedate <=", normalized_sql)
+        self.assertIn("matched_event_src.thedate >=", normalized_sql)
+        self.assertIn("matched_event_src.thedate <=", normalized_sql)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -438,6 +539,7 @@ class TestListRiskResource(TestCase):
 
         payload = {
             "use_bkbase": True,
+            "title": "bkbase-title",
             "risk_level": RiskLevel.HIGH.value,
             "order_field": "risk_level",
             "order_type": "desc",
@@ -492,6 +594,7 @@ class TestListRiskResource(TestCase):
             raw_event_id="raw-full",
             strategy=self.strategy,
             status=RiskStatus.NEW,
+            title="bkbase-full-title",
             event_time=datetime.datetime(2025, 6, 1, tzinfo=datetime.timezone.utc),
         )
         TicketPermission.objects.create(
@@ -518,7 +621,7 @@ class TestListRiskResource(TestCase):
             "status": "",
             "event_content": "",
             "risk_level": "",
-            "title": "",
+            "title": "bkbase-full-title",
             "notice_users": "",
             "use_bkbase": True,
         }
@@ -542,6 +645,7 @@ class TestListMineAndNoticingRisk(TestCase):
         super().setUp()
         self.factory = APIRequestFactory()
         self.username = "admin"
+        self.bkbase_title = "bkbase-title"
 
         self.strategy = Strategy.objects.create(
             namespace="default",
@@ -555,6 +659,7 @@ class TestListMineAndNoticingRisk(TestCase):
             raw_event_id="raw-owned",
             strategy=self.strategy,
             status=RiskStatus.NEW,
+            title=self.bkbase_title,
             current_operator=[self.username],
             notice_users=[],
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
@@ -564,6 +669,7 @@ class TestListMineAndNoticingRisk(TestCase):
             raw_event_id="raw-noticed",
             strategy=self.strategy,
             status=RiskStatus.NEW,
+            title=self.bkbase_title,
             current_operator=[],
             notice_users=[self.username],
             event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
@@ -628,6 +734,7 @@ class TestListMineAndNoticingRisk(TestCase):
                     "page": 1,
                     "page_size": 10,
                     "use_bkbase": True,
+                    "title": "bkbase-title",
                     "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
                     "end_time": datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc).isoformat(),
                 },
@@ -674,6 +781,7 @@ class TestListMineAndNoticingRisk(TestCase):
                     "page": 1,
                     "page_size": 10,
                     "use_bkbase": True,
+                    "title": "bkbase-title",
                     "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
                     "end_time": datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc).isoformat(),
                 },
