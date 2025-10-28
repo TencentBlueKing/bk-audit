@@ -19,26 +19,21 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import json
 import logging
-import re
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Type
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple, Type
 
-import sqlglot
 from bk_resource import CacheResource, api, resource
 from bk_resource.settings import bk_resource_settings
 from bk_resource.utils.cache import CacheTypeItem
 from bk_resource.utils.common_utils import ignored
 from django.conf import settings
-from django.core.exceptions import EmptyResultSet
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, QuerySet, When
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework.settings import api_settings
-from sqlglot import exp
 
 from apps.audit.resources import AuditMixinResource
 from apps.itsm.constants import TicketOperate, TicketStatus
@@ -67,13 +62,27 @@ from services.web.risk.constants import (
     RISK_EXPORT_FILE_NAME_TMP,
     RISK_LEVEL_ORDER_FIELD,
     RISK_SHOW_FIELDS,
-    EventFilterOperator,
     RiskExportField,
     RiskFields,
     RiskLabel,
     RiskStatus,
     RiskViewType,
     TicketNodeStatus,
+)
+from services.web.risk.converter.bkbase import (
+    BkBaseCountExecutor,
+    BkBaseCountQueryBuilder,
+    BkBaseDataExecutor,
+    BkBaseDataQueryBuilder,
+    BkBaseEventJoiner,
+    BkBaseFieldResolver,
+    BkBasePaginationPlanner,
+    BkBaseQueryComponentsBuilder,
+    BkBaseQueryExpressionBuilder,
+    BkBaseQueryPlanner,
+    BkBaseResponseAssembler,
+    BkBaseSQLRunner,
+    FinalSelectAssembler,
 )
 from services.web.risk.exceptions import ExportRiskNoPermission
 from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
@@ -180,37 +189,34 @@ class ListRisk(RiskMeta):
         use_bkbase = bool(validated_request_data.pop("use_bkbase", False))
         event_filters = validated_request_data.pop("event_filters", [])
         self._duplicate_event_field_map: Dict[int, Dict[str, Set[str]]] = {}
-        self._bkbase_sql_statements: List[str] = []
         thedate_range = self._extract_thedate_range(validated_request_data)
         base_queryset = self.load_risks(validated_request_data)
         base_queryset = self._filter_queryset_by_event_data_fields(base_queryset, event_filters)
 
         if use_bkbase:
-            paged_risks, page, risk_ids = self.retrieve_via_bkbase(
+            paged_risks, page, sql_statements = self.retrieve_via_bkbase(
                 base_queryset=base_queryset,
                 request=request,
                 order_field=order_field,
                 event_filters=event_filters,
                 thedate_range=thedate_range,
             )
-        else:
-            paged_risks, page, risk_ids = self.retrieve_via_db(
-                base_queryset=base_queryset, request=request, order_field=order_field
+            return BkBaseResponseAssembler(self, ListRiskResponseSerializer).build_response(
+                paged_risks, page, sql_statements
             )
 
-        experiences = {
-            e["risk_id"]: e["count"]
-            for e in RiskExperience.objects.filter(risk_id__in=risk_ids)
-            .values("risk_id")
-            .order_by("risk_id")
-            .annotate(count=Count("risk_id"))
-        }
+        paged_risks, page, risk_ids = self.retrieve_via_db(
+            base_queryset=base_queryset, request=request, order_field=order_field
+        )
+
+        experiences = self._fetch_experiences(risk_ids)
         for risk in paged_risks:
             setattr(risk, "experiences", experiences.get(risk.risk_id, 0))
+
         response = page.get_paginated_response(
             data=ListRiskResponseSerializer(instance=paged_risks, many=True).data
         ).data
-        response["sql"] = list(self._bkbase_sql_statements) if use_bkbase else []
+        response["sql"] = []
         return response
 
     def _extract_thedate_range(self, validated_request_data) -> Tuple[str, str]:
@@ -237,6 +243,17 @@ class ListRisk(RiskMeta):
         paged_risks = list(paged_queryset)
         risk_ids = [risk.risk_id for risk in paged_risks]
         return paged_risks, page, risk_ids
+
+    def _fetch_experiences(self, risk_ids: List[str]) -> Dict[str, int]:
+        if not risk_ids:
+            return {}
+        return {
+            row["risk_id"]: row["count"]
+            for row in RiskExperience.objects.filter(risk_id__in=risk_ids)
+            .values("risk_id")
+            .order_by("risk_id")
+            .annotate(count=Count("risk_id"))
+        }
 
     def _filter_queryset_by_event_data_fields(
         self, queryset: QuerySet, event_filters: List[Dict[str, Any]]
@@ -282,10 +299,12 @@ class ListRisk(RiskMeta):
             self._collect_duplicate_fields_for_source(
                 strategy_map, StrategyFieldSourceEnum.EVIDENCE.value, evidence_configs
             )
-        return {
-            strategy_id: {src: fields for src, fields in source_map.items() if fields}
-            for strategy_id, source_map in duplicate_map.items()
-        }
+        cleaned: Dict[int, Dict[str, Set[str]]] = {}
+        for strategy_id, source_map in duplicate_map.items():
+            filtered = {src: fields for src, fields in source_map.items() if fields}
+            if filtered:
+                cleaned[strategy_id] = filtered
+        return cleaned
 
     def _collect_duplicate_fields_for_source(
         self,
@@ -312,46 +331,71 @@ class ListRisk(RiskMeta):
         order_field_name = order_field.lstrip("-")
         order_direction = "DESC" if order_field.startswith("-") else "ASC"
 
-        value_fields = ["risk_id", "strategy_id", "raw_event_id", "event_time", "event_end_time"]
-        if order_field_name not in value_fields:
-            value_fields.append(order_field_name)
-        if order_field_name == RISK_LEVEL_ORDER_FIELD and "event_time" not in value_fields:
-            value_fields.append("event_time")
-
+        resolver = BkBaseFieldResolver(order_field, event_filters, self._duplicate_event_field_map)
+        value_fields = resolver.resolve_value_fields(
+            ["risk_id", "strategy_id", "raw_event_id", "event_time", "event_end_time"]
+        )
         values_queryset = base_queryset.values(*value_fields).distinct()
 
-        total = self._query_total_count(values_queryset, event_filters, thedate_range)
-        page = api_settings.DEFAULT_PAGINATION_CLASS()
-        page.paginate_queryset(range(total), request)
+        table_map = self._get_bkbase_table_map()
+        expression_builder = BkBaseQueryExpressionBuilder(
+            table_map=table_map,
+            storage_suffix=self.STORAGE_SUFFIX,
+        )
+        base_sql = expression_builder.compile_queryset_sql(values_queryset.order_by())
+        if base_sql is None:
+            page = api_settings.DEFAULT_PAGINATION_CLASS()
+            page.paginate_queryset(range(0), request)
+            return [], page, []
 
-        page_obj = getattr(page, "page", None)
-        page_size = page_obj.paginator.per_page if page_obj else 0
-        page_number = page_obj.number if page_obj else 1
+        base_expression = expression_builder.convert_to_expression(base_sql)
+        pagination_class = api_settings.DEFAULT_PAGINATION_CLASS
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map=self._duplicate_event_field_map,
+            thedate_range=thedate_range,
+            table_name=self._get_risk_event_table_reference(expression_builder, table_map),
+        )
+        assembler = FinalSelectAssembler(resolver)
+        count_query_builder = BkBaseCountQueryBuilder(assembler)
+        data_query_builder = BkBaseDataQueryBuilder(assembler)
+        sql_runner = BkBaseSQLRunner(api.bk_base.query_sync)
+        count_executor = BkBaseCountExecutor(
+            components_builder=components_builder,
+            count_query_builder=count_query_builder,
+            sql_runner=sql_runner,
+        )
+        data_executor = BkBaseDataExecutor(
+            components_builder=components_builder,
+            data_query_builder=data_query_builder,
+            sql_runner=sql_runner,
+        )
+        pagination_planner = BkBasePaginationPlanner(pagination_class)
+        planner = BkBaseQueryPlanner(
+            queryset_expression=base_expression,
+            count_executor=count_executor,
+            data_executor=data_executor,
+            pagination_planner=pagination_planner,
+            sql_runner=sql_runner,
+        )
 
-        offset = (page_number - 1) * page_size if page_size else 0
-        limit = page_size or total
+        risk_rows, page = planner.plan(
+            request,
+            order_field=order_field_name,
+            order_direction=order_direction,
+        )
 
-        risk_ids: List[str] = []
-        if total:
-            risk_ids = self._query_risk_ids(
-                queryset=values_queryset,
-                event_filters=event_filters,
-                order_field=order_field_name,
-                order_direction=order_direction,
-                limit=limit,
-                offset=offset,
-                thedate_range=thedate_range,
-            )
-
+        risk_ids = [row["risk_id"] for row in risk_rows]
         paged_queryset = self._build_risk_queryset(risk_ids)
         paged_queryset = Risk.prefetch_strategy_tags(paged_queryset)
         paged_risks = list(paged_queryset)
-        risk_ids = [risk.risk_id for risk in paged_risks]
+
+        BkBaseEventJoiner(self).attach_events(paged_risks, risk_rows)
 
         if getattr(page, "page", None):
             page.page.object_list = list(risk_ids)
 
-        return paged_risks, page, risk_ids
+        return paged_risks, page, planner.sql_statements
 
     def _apply_ordering(self, queryset: QuerySet["Risk"], order_field: str) -> QuerySet["Risk"]:
         """Apply ordering, including custom order for strategy risk level.
@@ -402,62 +446,6 @@ class ListRisk(RiskMeta):
         order_expression = Case(*order_cases, default=len(risk_ids), output_field=IntegerField())
         return Risk.annotated_queryset().filter(risk_id__in=risk_ids).order_by(order_expression)
 
-    def _query_total_count(
-        self, queryset: QuerySet, event_filters: List[Dict[str, Any]], thedate_range: Optional[Tuple[str, str]]
-    ) -> int:
-        base_query = queryset.order_by()
-        base_sql = self._compile_queryset_sql(base_query)
-        if base_sql is None:
-            return 0
-        base_expression = self._convert_to_bkbase_expression(base_sql)
-        filtered_query = self._build_filtered_query(base_expression, event_filters, thedate_range)
-        count_query = self._build_count_query(filtered_query)
-        count_sql = count_query.sql(dialect="mysql")
-        logger.info("BKBase count SQL: %s", count_sql)
-        self._record_bkbase_sql(count_sql)
-        count_resp = api.bk_base.query_sync(sql=count_sql) or {}
-        results = count_resp.get("list") or []
-        if not results:
-            return 0
-        count_value = results[0].get("count", 0)
-        try:
-            return int(count_value)
-        except (TypeError, ValueError):
-            return 0
-
-    def _query_risk_ids(
-        self,
-        queryset: QuerySet,
-        event_filters: List[Dict[str, Any]],
-        order_field: str,
-        order_direction: str,
-        limit: int,
-        offset: int,
-        thedate_range: Optional[Tuple[str, str]],
-    ) -> List[str]:
-        base_query = queryset
-        base_sql = self._compile_queryset_sql(base_query)
-        if base_sql is None:
-            return []
-        base_expression = self._convert_to_bkbase_expression(base_sql)
-        filtered_query = self._build_filtered_query(base_expression, event_filters, thedate_range)
-        data_query = self._apply_order_and_limit(
-            filtered_query,
-            order_field=order_field,
-            order_direction=order_direction,
-            limit=limit,
-            offset=offset,
-        )
-        data_sql = data_query.sql(dialect="mysql")
-        logger.info("BKBase data SQL: %s", data_sql)
-        self._record_bkbase_sql(data_sql)
-        data_resp = api.bk_base.query_sync(sql=data_sql) or {}
-        results = data_resp.get("list") or []
-        risk_ids: List[str] = []
-        for row in results:
-            risk_ids.append(row["risk_id"])
-        return risk_ids
-
     def _get_bkbase_table_map(self) -> Dict[str, str]:
         if not hasattr(self, "_bkbase_table_map"):
             table_map = {
@@ -500,581 +488,19 @@ class ListRisk(RiskMeta):
             return ".".join(parts)
         return ".".join(parts + [cls.STORAGE_SUFFIX])
 
-    @classmethod
-    def _split_table_parts(cls, table_name: str) -> Tuple[Optional[str], Optional[str], str]:
-        cleaned = (table_name or "").strip().strip("`")
-        if not cleaned:
-            return None, None, ""
-        parts = [part.strip().strip("`") for part in cleaned.split(".") if part.strip()]
-        if not parts:
-            return None, None, ""
-        storage_suffix = cls.STORAGE_SUFFIX.lower()
-        if len(parts) >= 2 and parts[-1].strip("`").lower() == storage_suffix:
-            merged = f"{parts[-2]}.{parts[-1]}"
-            parts = parts[:-2] + [merged]
-        if len(parts) == 1:
-            return None, None, parts[0]
-        if len(parts) == 2:
-            return None, parts[0], parts[1]
-        if len(parts) == 3:
-            return parts[0], parts[1], parts[2]
-        # 当存在 catalog.db.table 或更多层级时，仅保留后三段
-        return parts[-3], parts[-2], parts[-1]
-
-    def _compile_queryset_sql(self, queryset: QuerySet) -> Optional[str]:
-        compiler = queryset.query.get_compiler(using=queryset.db)
-        try:
-            sql, params = compiler.as_sql()
-        except EmptyResultSet:
-            return None
-        sql = self._clean_sql(sql or "")
-        if params:
-            sql = self._render_sql_with_params(sql, params)
-        return sql
-
-    def _render_sql_with_params(self, sql: str, params: Sequence[Any]) -> str:
-        params_iter: Iterator[Any] = iter(params or [])
-
-        def replacer(match: re.Match[str]) -> str:
-            try:
-                value = next(params_iter)
-            except StopIteration:
-                return match.group(0)
-            return self._literal(value).sql("mysql")
-
-        return re.sub(r"%s", replacer, sql)
-
-    def _record_bkbase_sql(self, sql: Optional[str]) -> None:
-        if not sql:
-            return
-        if not hasattr(self, "_bkbase_sql_statements"):
-            self._bkbase_sql_statements = []
-        self._bkbase_sql_statements.append(sql)
-
-    def _convert_to_bkbase_expression(self, sql: str) -> exp.Expression:
-        if not sql:
-            return sqlglot.parse_one("SELECT 1")
-        table_map = self._get_bkbase_table_map()
-        if not table_map:
-            return sqlglot.parse_one(sql, read="mysql")
-        try:
-            expression = sqlglot.parse_one(sql, read="mysql")
-        except sqlglot.errors.ParseError:
-            expression = sqlglot.parse_one(sql, read="hive")
-
-        def transform_table(node: exp.Expression) -> exp.Expression:
-            if not isinstance(node, exp.Table):
-                return node
-            source = node.name
-            if not source:
-                return node
-            target = table_map.get(source)
-            if not target or target == source:
-                return node
-
-            catalog, db, table = self._split_table_parts(target)
-            if not table:
-                node.set("catalog", None)
-                node.set("db", None)
-                node.set("this", exp.Identifier(this=target, quoted=False))
-            else:
-                node.set("catalog", exp.Identifier(this=catalog, quoted=False) if catalog else None)
-                node.set("db", exp.Identifier(this=db, quoted=False) if db else None)
-                node.set("this", exp.Identifier(this=table, quoted=False))
-
-            if not node.alias:
-                node.set("alias", exp.TableAlias(this=exp.to_identifier(source)))
-            return node
-
-        transformed = expression.transform(transform_table)
-        return transformed
-
-    def _get_risk_event_table_reference(self) -> str:
-        table_name = self._get_bkbase_table_map().get("risk_event", "risk_event")
-        formatted = self._format_table_identifier(table_name)
+    def _get_risk_event_table_reference(
+        self,
+        expression_builder: Optional[BkBaseQueryExpressionBuilder] = None,
+        table_map: Optional[Dict[str, str]] = None,
+    ) -> str:
+        resolved_table_map = table_map or self._get_bkbase_table_map()
+        builder = expression_builder or BkBaseQueryExpressionBuilder(
+            table_map=resolved_table_map,
+            storage_suffix=self.STORAGE_SUFFIX,
+        )
+        table_name = resolved_table_map.get("risk_event", "risk_event")
+        formatted = builder.format_table_identifier(table_name)
         return formatted or "risk_event"
-
-    @classmethod
-    def _format_table_identifier(cls, table_name: str) -> str:
-        catalog, db, table = cls._split_table_parts(table_name)
-        parts = [part for part in (catalog, db, table) if part]
-        return ".".join(parts)
-
-    def _prepare_base_expression(
-        self, base_expression: exp.Expression, thedate_range: Optional[Tuple[str, str]]
-    ) -> exp.Expression:
-        prepared = base_expression.copy()
-        prepared = self._strip_select_ordering(prepared)
-        return prepared
-
-    def _strip_select_ordering(self, expression: exp.Expression) -> exp.Expression:
-        if isinstance(expression, exp.Select):
-            expression.set("order", None)
-            expression.set("limit", None)
-            expression.set("offset", None)
-        return expression
-
-    def _has_primary_key_filter(self, expression: exp.Select) -> bool:
-        where_clause = expression.args.get("where")
-        if not isinstance(where_clause, exp.Expression):
-            return False
-        for node in where_clause.walk():
-            if not isinstance(node, exp.EQ):
-                continue
-            left = node.args.get("this")
-            right = node.args.get("expression")
-            if self._is_risk_id_equality(left, right) or self._is_risk_id_equality(right, left):
-                return True
-        return False
-
-    def _is_risk_id_equality(self, column: Optional[exp.Expression], other: Optional[exp.Expression]) -> bool:
-        if not isinstance(column, exp.Column):
-            return False
-        if column.name != "risk_id":
-            return False
-        table_name = column.table
-        if table_name and table_name.strip("`") != "risk_risk":
-            return False
-        return isinstance(other, (exp.Literal, exp.Boolean, exp.Null))
-
-    def _build_filtered_query(
-        self,
-        base_expression: exp.Expression,
-        event_filters: List[Dict[str, Any]],
-        thedate_range: Optional[Tuple[str, str]],
-    ) -> exp.Select:
-        prepared_base = self._prepare_base_expression(base_expression, thedate_range)
-        base_subquery = exp.Subquery(
-            this=prepared_base,
-            alias=exp.TableAlias(this=exp.to_identifier("base_query")),
-        )
-        query = exp.select(exp.Star()).from_(base_subquery)
-
-        conditions: List[exp.Expression] = []
-        conditions.extend(
-            condition
-            for index, item in enumerate(event_filters)
-            if (condition := self._build_event_filter_condition(item, index, thedate_range))
-        )
-
-        combined = self._combine_conditions(conditions)
-        if combined is not None:
-            query = query.where(combined)
-        return query
-
-    def _build_count_query(self, filtered_query: exp.Expression) -> exp.Select:
-        filtered_copy = self._strip_select_ordering(filtered_query.copy())
-        subquery = exp.Subquery(
-            this=filtered_copy,
-            alias=exp.TableAlias(this=exp.to_identifier("risk_count")),
-        )
-        count_expr = exp.func("COUNT", exp.Star())
-        count_query = exp.select(exp.alias_(count_expr, "count")).from_(subquery)
-        return count_query.limit(exp.Literal.number(1))
-
-    def _apply_order_and_limit(
-        self, query: exp.Select, order_field: str, order_direction: str, limit: int, offset: int
-    ) -> exp.Select:
-        ordered_query = query.copy()
-        order_expressions = self._build_order_expressions(order_field, order_direction)
-        if order_expressions:
-            ordered_query = ordered_query.order_by(*order_expressions)
-        if limit:
-            ordered_query = ordered_query.limit(int(limit))
-            if offset:
-                ordered_query = ordered_query.offset(int(offset))
-        elif offset:
-            ordered_query = ordered_query.offset(int(offset))
-        return ordered_query
-
-    def _build_order_expressions(self, order_field: str, order_direction: str) -> List[exp.Expression]:
-        if not order_field:
-            return []
-        field_name = order_field.lstrip("-")
-        descending = order_direction.upper() == "DESC"
-
-        if field_name == RISK_LEVEL_ORDER_FIELD:
-            case_expr = exp.Case()
-            for index, level in enumerate([RiskLevel.LOW.value, RiskLevel.MIDDLE.value, RiskLevel.HIGH.value]):
-                comparison = exp.EQ(
-                    this=self._column("base_query", field_name),
-                    expression=self._literal(level),
-                )
-                case_expr = case_expr.when(comparison, exp.Literal.number(str(index)))
-            case_expr = case_expr.else_(exp.Literal.number("99"))
-            return [
-                exp.Ordered(this=case_expr, desc=descending),
-                exp.Ordered(this=self._column("base_query", "event_time"), desc=True),
-            ]
-
-        return [exp.Ordered(this=self._column("base_query", field_name), desc=descending)]
-
-    def _build_event_filter_condition(
-        self, filter_item: Dict[str, Any], index: int, thedate_range: Optional[Tuple[str, str]]
-    ) -> Optional[exp.Expression]:
-        alias = f"risk_event_{index}"
-        resolved_source = self._resolve_event_field_source(filter_item)
-        join_conditions: List[exp.Expression] = [
-            exp.EQ(
-                this=self._column(alias, "strategy_id"),
-                expression=self._column("base_query", "strategy_id"),
-            ),
-            exp.EQ(
-                this=self._column(alias, "raw_event_id"),
-                expression=self._column("base_query", "raw_event_id"),
-            ),
-        ]
-        join_conditions.extend(self._build_event_timestamp_conditions(alias))
-
-        field_expression = self._build_event_field_expression(alias, filter_item, resolved_source=resolved_source)
-        if field_expression is None:
-            return None
-
-        comparison = self._build_event_filter_expression(field_expression, filter_item)
-        if comparison is None:
-            return None
-
-        # thedate 条件已在事件表的基础选择中统一处理，这里不再追加，避免重复
-        conditions = join_conditions + [comparison]
-        combined = self._combine_conditions(conditions)
-        if combined is None:
-            return None
-
-        table_expr = self._build_event_table_expression(alias, filter_item, resolved_source, thedate_range)
-        exists_query = exp.select("1").from_(table_expr).where(combined)
-        return exp.Exists(this=exists_query)
-
-    def _build_thedate_conditions(self, alias: str, thedate_range: Optional[Tuple[str, str]]) -> List[exp.Expression]:
-        if not thedate_range:
-            return []
-        start_date, end_date = thedate_range
-        if not start_date or not end_date:
-            return []
-        return [
-            exp.GTE(this=self._column(alias, "thedate"), expression=self._literal(start_date)),
-            exp.LTE(this=self._column(alias, "thedate"), expression=self._literal(end_date)),
-        ]
-
-    def _build_event_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
-        event_timestamp = self._column(alias, "dteventtimestamp")
-        start_datetime = self._column("base_query", "event_time")
-        end_datetime = exp.func(
-            "COALESCE",
-            self._column("base_query", "event_end_time"),
-            self._column("base_query", "event_time"),
-        )
-
-        start_milliseconds = self._to_milliseconds(start_datetime)
-        end_milliseconds = self._to_milliseconds(end_datetime)
-
-        return [
-            exp.GTE(this=event_timestamp.copy(), expression=start_milliseconds),
-            exp.LTE(this=event_timestamp.copy(), expression=end_milliseconds),
-        ]
-
-    def _build_event_field_expression(
-        self,
-        alias: str,
-        filter_item: Dict[str, Any],
-        resolved_source: Optional[str] = None,
-    ) -> Optional[exp.Expression]:
-        field_name = filter_item.get("field")
-        if not field_name:
-            return None
-
-        resolved_source = resolved_source or self._resolve_event_field_source(filter_item)
-
-        if resolved_source == StrategyFieldSourceEnum.BASIC.value:
-            return self._column(alias, field_name)
-
-        if resolved_source == StrategyFieldSourceEnum.DATA.value:
-            column = self._column(alias, "event_data")
-        elif resolved_source == StrategyFieldSourceEnum.EVIDENCE.value:
-            column = self._column(alias, "event_evidence")
-        else:
-            return None
-
-        json_path = self._build_json_path(field_name)
-        return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
-
-    def _build_event_filter_expression(
-        self, field_expr: exp.Expression, filter_item: Dict[str, Any]
-    ) -> Optional[exp.Expression]:
-        value = filter_item.get("value")
-        operator = self._normalize_operator(filter_item.get("operator"))
-
-        if operator == EventFilterOperator.EQUAL.value:
-            if value is None:
-                return exp.Is(this=field_expr.copy(), expression=exp.Null())
-            return exp.EQ(this=field_expr.copy(), expression=self._literal(value))
-
-        if operator == EventFilterOperator.NOT_EQUAL.value:
-            if value is None:
-                return exp.not_(exp.Is(this=field_expr.copy(), expression=exp.Null()))
-            return exp.NEQ(this=field_expr.copy(), expression=self._literal(value))
-
-        if self._is_numeric_operator(operator):
-            comparator_map = {
-                EventFilterOperator.GREATER_THAN.value: exp.GT,
-                EventFilterOperator.GREATER_THAN_EQUAL.value: exp.GTE,
-                EventFilterOperator.LESS_THAN.value: exp.LT,
-                EventFilterOperator.LESS_THAN_EQUAL.value: exp.LTE,
-            }
-            comparator = comparator_map[operator]
-            numeric_value = self._convert_to_float(value)
-            if numeric_value is not None:
-                left_expr = field_expr.copy()
-                left_expr = exp.Cast(this=left_expr, to=exp.DataType.build("DOUBLE"))
-                literal = exp.Literal.number(format(numeric_value, "g"))
-                return comparator(this=left_expr, expression=literal)
-            return comparator(this=field_expr.copy(), expression=self._literal(value))
-
-        if operator in {EventFilterOperator.IN.value, EventFilterOperator.NOT_IN.value}:
-            values = self._ensure_list(value)
-            if not values:
-                return exp.false() if operator == EventFilterOperator.IN.value else exp.true()
-            in_expr = exp.In(
-                this=field_expr.copy(),
-                expressions=[self._literal(item) for item in values],
-            )
-            return exp.not_(in_expr) if operator == EventFilterOperator.NOT_IN.value else in_expr
-
-        if operator in {EventFilterOperator.CONTAINS.value, EventFilterOperator.NOT_CONTAINS.value}:
-            pattern = self._escape_like_pattern(str(value))
-            like_expr = exp.Like(this=field_expr.copy(), expression=exp.Literal.string(f"%{pattern}%"))
-            escape_expr = like_expr
-            return exp.not_(escape_expr) if operator == EventFilterOperator.NOT_CONTAINS.value else escape_expr
-
-        return None
-
-    def _build_event_table_expression(
-        self, alias: str, filter_item: Dict[str, Any], resolved_source: str, thedate_range: Optional[Tuple[str, str]]
-    ) -> exp.Expression:
-        table_reference = self._get_risk_event_table_reference()
-        base_table = exp.to_table(table_reference).copy()
-        # 简化：统一在最早接触事件表时添加 thedate 条件
-        should_dedup = self._should_apply_duplicate_filter(filter_item, resolved_source)
-        if not should_dedup:
-            return self._with_thedate(base_table, alias, thedate_range)
-
-        duplicates_by_strategy = self._get_duplicate_partition_fields()
-        if not duplicates_by_strategy:
-            return self._with_thedate(base_table, alias, thedate_range)
-
-        base_alias = f"{alias}_base"
-        partition_key = self._build_duplicate_partition_key_expression(base_alias, duplicates_by_strategy)
-        if partition_key is None:
-            return self._with_thedate(base_table, alias, thedate_range)
-
-        # 在 base 层先加 thedate 条件，再做窗口去重
-        base_from = self._with_thedate(base_table, base_alias, thedate_range)
-
-        partition_expressions = [self._column(base_alias, "strategy_id"), partition_key]
-        order_expressions = [exp.Ordered(this=self._column(base_alias, "dteventtimestamp"), desc=True)]
-        window = exp.Window(
-            this=exp.func("ROW_NUMBER"),
-            partition_by=partition_expressions,
-            order=exp.Order(expressions=order_expressions),
-        )
-
-        ranked_select = exp.select(exp.Star(), exp.alias_(window, "_row_number")).from_(base_from)
-        ranked_alias = f"{alias}_ranked"
-        ranked_subquery = exp.Subquery(
-            this=ranked_select,
-            alias=exp.TableAlias(this=exp.to_identifier(ranked_alias)),
-        )
-        filtered_select = (
-            exp.select(exp.Star())
-            .from_(ranked_subquery)
-            .where(
-                exp.EQ(
-                    this=exp.column("_row_number", table=ranked_alias),
-                    expression=exp.Literal.number("1"),
-                )
-            )
-        )
-        return exp.Subquery(
-            this=filtered_select,
-            alias=exp.TableAlias(this=exp.to_identifier(alias)),
-        )
-
-    def _with_thedate(
-        self, base_table: exp.Expression, alias: str, thedate_range: Optional[Tuple[str, str]]
-    ) -> exp.Expression:
-        table_as = base_table.as_(alias)
-        if not thedate_range:
-            return table_as
-        inner_select = exp.select(exp.Star()).from_(table_as)
-        date_conditions = self._build_thedate_conditions(alias, thedate_range)
-        combined = self._combine_conditions(date_conditions)
-        if combined is not None:
-            inner_select = inner_select.where(combined)
-        return exp.Subquery(
-            this=inner_select,
-            alias=exp.TableAlias(this=exp.to_identifier(alias)),
-        )
-
-    def _build_json_path(self, field_name: str) -> str:
-        safe_field = field_name.replace("\\", "\\\\").replace("'", "\\'")
-        path_parts = [part for part in safe_field.split(".") if part]
-        return "$" + "".join(f".{part}" for part in path_parts)
-
-    def _combine_conditions(self, conditions: List[exp.Expression]) -> Optional[exp.Expression]:
-        if not conditions:
-            return None
-        combined = conditions[0]
-        for condition in conditions[1:]:
-            combined = exp.and_(combined, condition)
-        return combined
-
-    def _column(self, alias: str, identifier: str) -> exp.Column:
-        return exp.column(identifier, table=alias)
-
-    def _to_milliseconds(self, expression: exp.Expression) -> exp.Expression:
-        unix_timestamp = exp.func("UNIX_TIMESTAMP", expression.copy())
-        return exp.Mul(this=unix_timestamp, expression=exp.Literal.number("1000"))
-
-    def _literal(self, value: Any) -> exp.Expression:
-        if value is None:
-            return exp.Null()
-        if isinstance(value, bool):
-            return exp.Literal.string("true" if value else "false")
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return exp.Literal.number(str(value))
-        if isinstance(value, datetime):
-            if timezone.is_aware(value):
-                localized = timezone.localtime(value)
-            else:
-                localized = timezone.make_aware(value, timezone.get_current_timezone())
-            return exp.Literal.string(localized.strftime("%Y-%m-%d %H:%M:%S"))
-        return exp.Literal.string(str(value))
-
-    def _ensure_list(self, value: Any) -> List[Any]:
-        if value is None:
-            return []
-        if isinstance(value, (list, tuple, set)):
-            return list(value)
-        if isinstance(value, str):
-            return [item.strip() for item in value.split(",") if item.strip()]
-        return [value]
-
-    def _resolve_event_field_source(self, filter_item: Dict[str, Any]) -> str:
-        return filter_item.get("field_source") or StrategyFieldSourceEnum.DATA.value
-
-    def _normalize_operator(self, operator: Any) -> str:
-        if operator is None:
-            return EventFilterOperator.EQUAL.value
-        if isinstance(operator, str):
-            return operator.strip().upper()
-        if hasattr(operator, "value"):
-            return str(operator.value).strip().upper()
-        return str(operator).strip().upper()
-
-    def _is_numeric_operator(self, operator: str) -> bool:
-        return operator in {
-            EventFilterOperator.GREATER_THAN.value,
-            EventFilterOperator.GREATER_THAN_EQUAL.value,
-            EventFilterOperator.LESS_THAN.value,
-            EventFilterOperator.LESS_THAN_EQUAL.value,
-        }
-
-    def _convert_to_float(self, value: Any) -> Optional[float]:
-        if value is None or isinstance(value, bool):
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        try:
-            return float(str(value).strip())
-        except (TypeError, ValueError):
-            return None
-
-    def _uses_numeric_json_extraction(self, expression: exp.Expression) -> bool:
-        return isinstance(expression, exp.Func) and expression.name.upper() == "JSON_EXTRACT_DOUBLE"
-
-    def _should_apply_duplicate_filter(self, filter_item: Dict[str, Any], resolved_source: str) -> bool:
-        duplicates_by_strategy = self._get_duplicate_partition_fields()
-        return bool(duplicates_by_strategy)
-
-    def _get_duplicate_partition_fields(self) -> Dict[int, Dict[str, Set[str]]]:
-        if not hasattr(self, "_duplicate_event_field_map"):
-            return {}
-        applicable: Dict[int, Dict[str, Set[str]]] = {}
-        for strategy_id, source_map in self._duplicate_event_field_map.items():
-            filtered_sources = {src: set(fields) for src, fields in source_map.items() if fields}
-            if filtered_sources:
-                applicable[strategy_id] = filtered_sources
-        return applicable
-
-    def _build_duplicate_partition_key_expression(
-        self,
-        alias: str,
-        duplicates_by_strategy: Dict[int, Dict[str, Set[str]]],
-    ) -> Optional[exp.Expression]:
-        if not duplicates_by_strategy:
-            return None
-
-        cases: List[Tuple[exp.Expression, exp.Expression]] = []
-        for strategy_id, source_fields in duplicates_by_strategy.items():
-            field_expressions: List[exp.Expression] = []
-            for source in sorted(source_fields.keys()):
-                for field_name in sorted(source_fields[source]):
-                    expr = self._build_duplicate_partition_value_expression(alias, field_name, source)
-                    if expr is not None:
-                        field_expressions.append(expr)
-            field_expressions = [expr for expr in field_expressions if expr is not None]
-            if not field_expressions:
-                continue
-            concat_expr = self._concat_partition_values(field_expressions)
-            condition = exp.EQ(
-                this=self._column(alias, "strategy_id"),
-                expression=exp.Literal.number(str(strategy_id)),
-            )
-            cases.append((condition, concat_expr))
-
-        default_expr = self._concat_partition_values(
-            [self._column(alias, "raw_event_id"), self._column(alias, "dteventtimestamp")]
-        )
-
-        if not cases:
-            return default_expr
-
-        case_expr = exp.Case()
-        for condition, value in cases:
-            case_expr = case_expr.when(condition, value)
-        return case_expr.else_(default_expr)
-
-    def _concat_partition_values(self, expressions: List[exp.Expression]) -> exp.Expression:
-        safe_expressions = [self._coalesce_to_string(expr) for expr in expressions]
-        if not safe_expressions:
-            safe_expressions = [exp.Literal.string("")]
-        return exp.func("CONCAT_WS", exp.Literal.string("||"), *safe_expressions)
-
-    def _build_duplicate_partition_value_expression(
-        self, alias: str, field_name: str, resolved_source: str
-    ) -> Optional[exp.Expression]:
-        if resolved_source == StrategyFieldSourceEnum.BASIC.value:
-            return self._column(alias, field_name)
-
-        if resolved_source == StrategyFieldSourceEnum.DATA.value:
-            column = self._column(alias, "event_data")
-        elif resolved_source == StrategyFieldSourceEnum.EVIDENCE.value:
-            column = self._column(alias, "event_evidence")
-        else:
-            return None
-
-        json_path = self._build_json_path(field_name)
-        return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
-
-    def _coalesce_to_string(self, expression: exp.Expression) -> exp.Expression:
-        cast_expr = exp.Cast(this=expression.copy(), to=exp.DataType.build("CHAR"))
-        return exp.func("COALESCE", cast_expr, exp.Literal.string(""))
-
-    def _escape_like_pattern(self, value: str) -> str:
-        return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-    @staticmethod
-    def _clean_sql(sql: str) -> str:
-        return sql.strip().rstrip(";")
 
 
 class ListMineRisk(ListRisk):

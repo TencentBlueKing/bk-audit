@@ -263,14 +263,6 @@ class RiskProviderSerializer(serializers.ModelSerializer):
         exclude = ["strategy"]
 
 
-class TicketPermissionProviderSerializer(serializers.ModelSerializer):
-    """用于反向拉取 TicketPermission 的快照结构"""
-
-    class Meta:
-        model = TicketPermission
-        fields = "__all__"
-
-
 class ListEventFieldsByStrategyRequestSerializer(serializers.Serializer):
     # 支持多个策略；不传或为空返回所有策略的字段
     strategy_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
@@ -343,6 +335,10 @@ class ListRiskRequestSerializer(serializers.Serializer):
     def validate(self, attrs: dict) -> dict:
         # 校验
         data = super().validate(attrs)
+        event_filters = data.get("event_filters") or []
+        raw_order_field = data.get("order_field") or attrs.get("order_field")
+        if raw_order_field and raw_order_field.lstrip("-").startswith("event_data.") and not event_filters:
+            raise serializers.ValidationError(gettext("关联事件字段排序需同时指定事件筛选条件"))
         # 排序
         # 兼容：前端传入 risk_level 作为排序字段时，转换为 strategy__risk_level
         if data.get("order_field") == Strategy.risk_level.field.name:
@@ -373,7 +369,7 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["event_content__contains"] = data.pop("event_content")
         if data.get("title"):
             data["title__contains"] = data.pop("title")
-        event_filters = attrs.get("event_filters") or []
+        event_filters = event_filters or []
         data["event_filters"] = event_filters
         data["use_bkbase"] = bool(data.get("use_bkbase", False))
         # 格式转换
@@ -429,9 +425,16 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
     """
 
     experiences = serializers.IntegerField(required=False)
+    event_data = serializers.SerializerMethodField()
     event_content = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
+
+    def get_event_data(self, obj: Risk):
+        """
+        返回风险列表中用于展示的事件数据。
+        """
+        return getattr(obj, "filtered_event_data", {})
 
     def get_event_content(self, obj):
         return getattr(obj, "event_content_short")
@@ -480,6 +483,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "status",
             "current_operator",
             "notice_users",
+            "event_data",
             "tags",
             "risk_label",
             "experiences",
