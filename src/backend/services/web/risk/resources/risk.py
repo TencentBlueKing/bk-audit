@@ -173,6 +173,7 @@ class ListRisk(RiskMeta):
     bind_request = True
     audit_action = ActionEnum.LIST_RISK
     STORAGE_SUFFIX = "doris"
+    _TEXTUAL_CAST_PREFIXES = ("BINARY", "CHAR", "NCHAR", "VARCHAR", "NVARCHAR", "TEXT", "STRING")
 
     def perform_request(self, validated_request_data):
         request = validated_request_data.pop("_request")
@@ -527,10 +528,10 @@ class ListRisk(RiskMeta):
             sql, params = compiler.as_sql()
         except EmptyResultSet:
             return None
-        sql = self._clean_sql(sql or "")
+        sql = (sql or "").strip()
         if params:
             sql = self._render_sql_with_params(sql, params)
-        return sql
+        return self._clean_sql(sql)
 
     def _render_sql_with_params(self, sql: str, params: Sequence[Any]) -> str:
         params_iter: Iterator[Any] = iter(params or [])
@@ -1072,9 +1073,42 @@ class ListRisk(RiskMeta):
     def _escape_like_pattern(self, value: str) -> str:
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
-    @staticmethod
-    def _clean_sql(sql: str) -> str:
-        return sql.strip().rstrip(";")
+    @classmethod
+    def _clean_sql(cls, sql: str) -> str:
+        cleaned = (sql or "").strip().rstrip(";")
+        if not cleaned:
+            return cleaned
+        return cls._strip_redundant_like_casts(cleaned)
+
+    @classmethod
+    def _strip_redundant_like_casts(cls, sql: str) -> str:
+        try:
+            expression = sqlglot.parse_one(sql, read="mysql")
+        except sqlglot.errors.ParseError:
+            try:
+                expression = sqlglot.parse_one(sql, read="hive")
+            except sqlglot.errors.ParseError:
+                return sql
+
+        def transform(node: exp.Expression) -> exp.Expression:
+            if isinstance(node, exp.Like):
+                literal = cls._unwrap_text_cast(node.args.get("expression"))
+                if literal is not None:
+                    node.set("expression", literal)
+            return node
+
+        return expression.transform(transform).sql(dialect="mysql")
+
+    @classmethod
+    def _unwrap_text_cast(cls, expression: Optional[exp.Expression]) -> Optional[exp.Expression]:
+        if isinstance(expression, (exp.Cast, exp.TryCast)):
+            literal = expression.args.get("this")
+            dtype = expression.args.get("to")
+            if isinstance(literal, exp.Literal) and isinstance(dtype, exp.DataType):
+                dtype_name = dtype.sql(dialect="mysql").upper()
+                if any(dtype_name.startswith(prefix) for prefix in cls._TEXTUAL_CAST_PREFIXES):
+                    return literal.copy()
+        return None
 
 
 class ListMineRisk(ListRisk):
