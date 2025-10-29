@@ -151,7 +151,7 @@
     },
   ] as Column[];
 
-  const columnText = (data: any) => ((data.type === 'update' && data.field_category === 'time-ranger') ?  columnTextSting(data) : data.default_value) ;
+  const columnText = (data: any) => ((data.type === 'update') ?  columnTextSting(data) : data.default_value) ;
   const columnTextSting = (data: any) => {
     if (data.field_category === 'time-ranger') {
       let oldTimeText = '';
