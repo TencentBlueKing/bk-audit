@@ -209,7 +209,8 @@
                 type: 'add',
               });
             } else if ((JSON.stringify(oldVar) !== JSON.stringify(newVar)) && !deepEqual(oldVar, newVar)) {
-              if (!(oldVar.is_default_value)) {
+              // 修改 使用默认值更新
+              if (oldVar.is_default_value) {
                 updateAry.push({
                   ...newVar,
                   type: 'update',
