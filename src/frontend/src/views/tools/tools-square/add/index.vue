@@ -734,7 +734,7 @@
       if (comRef.value?.getFields) {
         if (formData.value.tool_type === 'bk_vision') {
           formData.value.config.input_variable = comRef.value.getFields();
-          if (isUpdateSubmit.value) {
+          if (!isUpdate.value) {
             formData.value.updated_time = bkVisionUpdateTime.value || null;
           }
         } else {
