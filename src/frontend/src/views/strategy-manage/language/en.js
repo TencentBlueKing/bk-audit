@@ -443,5 +443,6 @@ export default {
     请输入展示文本: 'Please enter the display text',
     请输入存储值: 'Please enter the stored value',
     '风险关键字段，禁止取消重点展示': 'Risk keyword field, forbidden to cancel the focus display',
+    '存储值、展示文本': 'Stored value, display text',
   },
 };

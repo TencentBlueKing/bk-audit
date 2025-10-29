@@ -58,7 +58,8 @@
       <div
         v-else
         class="field-cell-div"
-        @click="() => handleClick(localEventItem.drill_config)">
+        @click="() => handleClick(localEventItem.drill_config)"
+        @mouseleave="handleDrillMouseLeave">
         <bk-popover
           placement="top"
           theme="black">
@@ -79,13 +80,17 @@
         </bk-popover>
         <!-- 删除 -->
         <audit-popconfirm
+          ref="drillPopconfirmRef"
           class="ml8"
           :confirm-handler="() => handleRemove()"
           :content="t('移除操作无法撤回，请谨慎操作！')"
-          :title="t('确认移除以下工具？')">
+          :title="t('确认移除以下工具？')"
+          @hide="handleDrillPopconfirmHide">
           <audit-icon
             class="remove-btn"
-            type="delete-fill" />
+            :class="{ 'is-popconfirm-visible': isDrillPopconfirmVisible }"
+            type="delete-fill"
+            @click="handleDrillPopconfirmShow" />
           <template #content>
             <bk-table
               ref="refTable"
@@ -192,6 +197,8 @@
   const fieldMappingRef = ref();
   const fieldReferenceRef = ref();
   const displayNameRef = ref();
+  const drillPopconfirmRef = ref();
+  const isDrillPopconfirmVisible = ref(false);
 
   // const iconMap = {
   //   data_search: 'sqlxiao',
@@ -220,6 +227,22 @@
 
   const handleFieldSubmit = (drillConfig: any) => {
     localEventItem.value.drill_config = drillConfig;
+  };
+
+  // 字段下钻气泡框显示/隐藏处理
+  const handleDrillPopconfirmShow = () => {
+    isDrillPopconfirmVisible.value = true;
+  };
+
+  const handleDrillPopconfirmHide = () => {
+    isDrillPopconfirmVisible.value = false;
+  };
+
+  const handleDrillMouseLeave = () => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (drillPopconfirmRef.value && !isDrillPopconfirmVisible.value) {
+      drillPopconfirmRef.value.hide();
+    }
   };
 
   // 删除值
@@ -309,6 +332,10 @@
 
       &:hover {
         color: #979ba5;
+      }
+
+      &.is-popconfirm-visible {
+        display: block;
       }
     }
 
