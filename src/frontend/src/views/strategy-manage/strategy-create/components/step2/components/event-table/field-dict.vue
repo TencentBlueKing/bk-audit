@@ -516,10 +516,7 @@
       loading.value = true;
       // 解析Excel数据
       formData.value.renderData = await parseExcel(file);
-      // 导入数据后，可能有搜索条件，重新渲染列表
-      if (isSearching.value) {
-        updateRenderList();
-      }
+      updateRenderList();
       messageSuccess(t('导入成功'));
     } catch (error) {
       messageError(`${t('Excel解析失败')}: ${error}`);
@@ -540,6 +537,7 @@
       key: '',
       name: '',
     }];
+    updateRenderList();
     await nextTick();
     tableFormRef.value.clearValidate();
   };
@@ -571,9 +569,11 @@
   };
 
   watch(() => showFieldDict.value, (value) => {
+    // 初始化时直接引用 formData.renderData，保持引用关系
+    renderList.value = formData.value.renderData;
     if (value && props.editData.length) {
       formData.value.renderData = _.cloneDeep(props.editData);
-      renderList.value = _.cloneDeep(props.editData);
+      renderList.value = formData.value.renderData;
     }
   });
 </script>
