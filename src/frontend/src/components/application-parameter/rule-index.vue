@@ -15,36 +15,96 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
+  <bk-date-picker
+    v-if="config.custom_type === 'datetime'"
+    v-model="localValue"
+    clearable
+    :placeholder="t('请选择日期')"
+    type="datetime"
+    @change="handleChange" />
+
   <bk-select
+    v-if="config.custom_type === 'select'"
     v-model="localValue"
     allow-create
     class="bk-select"
     filterable
-    placeholder="请选择已有选项或自行输入内容后Enter结束"
-    @change="handlerChange">
+    :placeholder="t('请选择已有选项')"
+    @change="handlerSelectChange">
     <bk-option
-      v-for="(item, index) in riskFieldList"
-      :id="item.id"
+      v-for="(item, index) in JSON.parse(config.value.items_text)"
+      :id="item.value"
       :key="index"
-      :name="item.name">
-      {{ item.name }}
+      :name="item.text">
+      <bk-popover
+        placement="left"
+        theme="light">
+        <div style="width: 100%;height: 100%;">
+          {{ item.text }}
+        </div>
+        <template #content>
+          <div>
+            <div style="font-size: 12px;font-weight: 700;">
+              {{ t('当前值：') }}
+            </div>
+            <div>{{ item.value }}</div>
+          </div>
+        </template>
+      </bk-popover>
     </bk-option>
   </bk-select>
+
+  <div v-else>
+    <div v-if="config.custom_type === 'datetime' && config.type === 'self'">
+      <bk-date-picker
+        v-if="config.custom_type === 'datetime' && config.type === 'self'"
+        v-model="localValue"
+        clearable
+        :placeholder="t('请选择日期')"
+        type="datetime"
+        @change="handleChange" />
+    </div>
+    <div v-else>
+      <bk-select
+        v-if="config.type === 'field' || config.type === 'self'"
+        v-model="localValue"
+        class="bk-select"
+        filterable
+        :placeholder="t('请选择已有选项')"
+        @change="handlerFieldChange">
+        <bk-option
+          v-for="(item, index) in riskFieldList"
+          :id="item.id"
+          :key="index"
+          :name="item.name">
+          {{ item.name }} {{ item.id }}
+        </bk-option>
+      </bk-select>
+      <bk-input
+        v-else
+        v-model="localValue"
+        clearable
+        @change="handlerInputChange" />
+    </div>
+  </div>
 </template>
 <script setup lang="ts">
   import {
     ref,
   } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   interface Props {
     riskFieldList: Array<{
       id: string,
       name: string,
     }>
+    config?: any,
+
   }
 
-  const props = defineProps<Props>();
-
+  defineProps<Props>();
+  const { t } = useI18n();
   const localValue = ref('');  // 仅仅用于select绑定，真正传给父组件的是：根据input，select类型赋值给modelValue.value，modelValue.field
 
   const modelValue = defineModel<{field: string, value: string}>({
@@ -53,23 +113,32 @@
       value: '',
     }),
   });
-
-  // 选中或者enter选中，也可能是自定义输入
-  const handlerChange = (val: string) => {
-    // 如果是选中（包含搜索enter选中）
-    if (props.riskFieldList.find((item: { id: string; }) => item.id === val)) {
-      modelValue.value = {
-        field: val,
-        value: '',
-      };
-      return;
-    }
-    // 自定义输入
+  // 日期选择
+  const handleChange = (val: string) => {
+    modelValue.value = {
+      field: '',
+      value: val,
+    };
+  };
+  // 选择
+  const handlerSelectChange = (val: string) => {
     modelValue.value = {
       field: '',
       value: val,
     };
   };
 
+  const handlerFieldChange = (val: string) => {
+    modelValue.value = {
+      field: val,
+      value: '',
+    };
+  };
+  const handlerInputChange = (val: string) => {
+    modelValue.value = {
+      field: '',
+      value: val,
+    };
+  };
   localValue.value = modelValue.value.value || modelValue.value.field;
 </script>

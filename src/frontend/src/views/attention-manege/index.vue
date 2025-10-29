@@ -39,6 +39,7 @@
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
+    computed,
     onUnmounted,
     ref,
   } from 'vue';
@@ -57,7 +58,6 @@
 
   import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
-  import useTableSettings from '@hooks/use-table-settings';
   import useUrlSearch from '@hooks/use-url-search';
 
   import EditTag from '@components/edit-box/tag.vue';
@@ -148,9 +148,8 @@
     },
     {
       label: () => t('风险等级'),
-      field: () => 'risk_level',
-      sort: 'custom',
-      width: 120,
+      field: () => 'risk_id',
+      width: 90,
       render: ({ data }: { data: RiskManageModel }) => <>
           <RiskLevel levelData={levelData.value} data={data}></RiskLevel>
         </>,
@@ -167,7 +166,7 @@
     {
       label: () => t('责任人'),
       field: () => 'operator',
-      width: 160,
+      width: 110,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.operator} />,
     },
     {
@@ -203,19 +202,19 @@
     {
       label: () => t('当前处理人'),
       field: () => 'current_operator',
-      width: 160,
+      width: 110,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.current_operator} />,
     },
     {
-      label: () => t('关注人'),
-      field: () => 'notice_users',
-      width: 160,
-      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
+      label: () => t('首次发现时间'),
+      field: () => 'event_time',
+      sort: 'custom',
+      width: 168,
     },
     {
       label: () => t('风险命中策略(ID)'),
       field: () => 'strategy_id',
-      width: 200,
+      minWidth: 170,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
           name: 'strategyList',
@@ -236,10 +235,10 @@
       },
     },
     {
-      label: () => t('首次发现时间'),
-      field: () => 'event_time',
-      sort: 'custom',
-      width: 168,
+      label: () => t('关注人'),
+      field: () => 'notice_users',
+      width: 120,
+      render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
     },
     {
       label: () => t('最后一次处理时间'),
@@ -276,16 +275,12 @@
     }
     searchBoxRef.value.exportData(selectedData, 'watch');
   };
-
   const disabledMap: Record<string, string> = {
     risk_id: 'risk_id',
-    title: 'title',
-    risk_level: 'risk_level',
-    // operator: 'operator',
+    event_content: 'event_content',
+    operator: 'operator',
     status: 'status',
     current_operator: 'current_operator',
-    // last_operate_time: 'last_operate_time',
-    // risk_label: 'risk_label',
   };
   const initSettings = () => ({
     fields: tableColumn?.reduce((res, item, index) => {
@@ -306,8 +301,44 @@
     showLineHeight: false,
     trigger: 'manual' as const,  // 添加 as const 类型断言
   });
-  // 使用表格设置合并
-  const { settings } = useTableSettings('audit-attention-risk-list-setting', initSettings);
+  const settings = computed(() => {
+    const defaultSettings = initSettings(); // 获取最新的默认配置
+    const jsonStr = localStorage.getItem('audit-attention-risk-list-setting');
+
+    if (!jsonStr) return defaultSettings;
+
+    try {
+      const savedSettings = JSON.parse(jsonStr);
+
+      // 字段合并：以默认配置为基础，合并用户保存的字段状态
+      const mergedFields = defaultSettings.fields.map((defaultField) => {
+        const savedField = savedSettings.fields?.find((f: any) => f.field === defaultField.field);
+        // 保留新字段配置，仅继承用户设置的disabled状态
+        return savedField
+          ? { ...defaultField, disabled: savedField.disabled }
+          : defaultField;
+      });
+
+      // 选中的字段合并：保留用户选择 + 新增的默认选中字段
+      const savedCheckedSet = new Set(savedSettings.checked || []);
+      const newDefaultChecked = defaultSettings.checked
+        .filter(field => !savedCheckedSet.has(field)); // 找出新增的默认选中字段
+      const mergedChecked = [...(savedSettings.checked || []), ...newDefaultChecked]
+        .filter(field => mergedFields.some(f => f.field === field)); // 过滤无效字段
+
+      return {
+        ...defaultSettings,       // 保留最新默认配置的其他属性
+        fields: mergedFields,     // 合并后的字段配置
+        checked: mergedChecked,   // 合并后的选中字段
+        showLineHeight: false,    // 强制重置行高设置
+        trigger: 'manual' as const,  // 添加 as const 类型断言
+      };
+    } catch (e) {
+      console.error('本地设置解析失败，使用默认配置', e);
+      return defaultSettings;
+    }
+  });
+
 
   // 获取标签列表
   useRequest(RiskManageService.fetchRiskTags, {

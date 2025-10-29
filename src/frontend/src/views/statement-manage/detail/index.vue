@@ -21,8 +21,7 @@
 </template>
 <script setup lang="ts">
   import {
-    onMounted,
-    onUnmounted,
+    nextTick,
     watch,
   } from 'vue';
   import {
@@ -64,10 +63,6 @@
     }
   };
 
-  const change = (uid: string) => {
-    app.update(uid);
-  };
-
   const init = async  () => {
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
@@ -91,19 +86,16 @@
 
   watch(() => route, () => {
     if (route.params.id !== '' && route.name === 'statementManageDetail') {
-      change(route.params.id as string);
+      nextTick(() => {
+        if (app) {
+          app.unmount();
+        }
+        init();
+      });
     }
   }, {
     deep: true,
+    immediate: true,
   });
 
-  onMounted(() => {
-    init();
-  });
-
-  onUnmounted(() => {
-    if (app) {
-      app.unmount();
-    }
-  });
 </script>

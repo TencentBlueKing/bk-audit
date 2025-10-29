@@ -91,7 +91,7 @@
                     class="desc-tag desc-tag-info"
                     theme="info"
                     @click="handlesStrategiesClick(itemInfo)">
-                    运用在 {{ itemInfo?.strategies.length }} 个策略中
+                    {{ t('运用在') }} {{ itemInfo?.strategies.length }} {{ t('个策略中') }}
                   </bk-tag>
                 </div>
                 <div class="top-right-desc">
@@ -907,7 +907,8 @@
         }
       }
     });
-
+    console.log('constants>>>',  constants);
+    console.log('filters>>>',  filters);
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(
