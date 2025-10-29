@@ -24,6 +24,8 @@
         <bk-date-picker
           v-if="config?.field_category === 'time-picker'"
           v-model="dateValue"
+          append-to-body
+          :disabled="disabled"
           format="yyyy-MM-dd HH:mm:ss"
           :shortcuts="dateShortCut"
           type="datetime"
@@ -36,6 +38,7 @@
           @mouseleave="showDeleteIcon = false">
           <date-picker
             v-model="pickerValue"
+            :disabled="disabled"
             style="width: 100%;"
             @update:model-value="handleRangeChange" />
           <audit-icon
@@ -47,12 +50,14 @@
         <bk-input
           v-else-if="config?.field_category === 'inputer' "
           v-model="inputVal"
+          :disabled="disabled"
           @change="handleInputChange" />
         <bk-tag-input
           v-else
           v-model="selectorValue"
           allow-create
           collapse-tags
+          :disabled="disabled"
           has-delete-icon
           :list="[]"
           @change="handleSelectorChange" />
@@ -63,7 +68,6 @@
 
 <script setup lang='ts'>
   import { ref, watch } from 'vue';
-
 
   interface Props {
     config: {
@@ -78,6 +82,7 @@
         name: string
       }>
     };
+    disabled: boolean;
   }
   interface Emits {
     (e: 'change', value: any): void
@@ -85,7 +90,7 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const now = new Date();
-  const dateValue = ref<Date>(props.config.default_value instanceof Date ? props.config.default_value : new Date());
+  const dateValue = ref<string | Date>(props.config.default_value instanceof Date ? props.config.default_value : '');
   const pickerValue = ref<Array<string>>(Array.isArray(props.config.default_value) ? props.config.default_value : []);
   const inputVal = ref(typeof props.config.default_value === 'string' ? props.config.default_value : '');
   const selectorValue = ref(Array.isArray(props.config.default_value) ? props.config.default_value : []);
@@ -133,7 +138,7 @@
     emits('change', []);
   };
   const handlePickerChange = (val: Date) => {
-    dateValue.value = val;
+    dateValue.value = val || '';
     emits('change', val || '');
   };
   const handleRangeChange = (val: Array<string>) => {

@@ -166,16 +166,24 @@
                   property="config.uid"
                   required>
                   <div v-if="hasPermission">
-                    <bk-cascader
-                      v-model="configUid"
-                      children-key="share"
-                      id-key="uid"
-                      :list="Array.isArray(chartLists) ? chartLists : []"
-                      :multiple="false"
-                      :show-complete-name="false"
-                      :style="spacePermission ? `width: 50%;border: 1px solid #e71818;` : `width: 50%;`"
-                      trigger="click"
-                      @change="handleSpaceChange" />
+                    <div class="chart-cascade">
+                      <bk-cascader
+                        v-model="configUid"
+                        children-key="share"
+                        id-key="uid"
+                        :list="Array.isArray(chartLists) ? chartLists : []"
+                        :multiple="false"
+                        :show-complete-name="false"
+                        :style="spacePermission ? `width: 50%;border: 1px solid #e71818;` : `width: 50%;`"
+                        trigger="click"
+                        @change="handleSpaceChange" />
+                      <bk-button
+                        v-show="goBkVisionBtn && configUid.length > 0"
+                        class="ml8"
+                        @click="handleGoBkvision">
+                        {{ t('跳转至 bkvision') }}
+                      </bk-button>
+                    </div>
                     <div
                       v-if="spacePermission"
                       class="permission">
@@ -195,10 +203,15 @@
           </card-part-vue>
           <component
             :is="ToolTypeComMap[formData.tool_type]"
+            v-if="isShowComponent"
             ref="comRef"
             :data-search-config-type="formData.data_search_config_type"
+            :is-edit-mode="isEditMode"
+            :is-update="isUpdate"
             :name="formData.name"
-            :uid="formData.uid" />
+            :uid="formData.uid"
+            @change-is-update-submit="changeIsUpdateSubmit"
+            @change-submit="changeSubmit" />
         </audit-form>
       </div>
       <template #action>
@@ -270,6 +283,10 @@
     tags: string[];
     description: string;
     tool_type: string;
+    updated_at: string;
+    updated_by: string;
+    is_bkvision: boolean;
+    updated_time: string | null;
     data_search_config_type: string;
     config: {
       referenced_tables: Array<{
@@ -285,7 +302,9 @@
         description: string;
         required: boolean;
         field_category: string;
-        default_value: string | Array<string>;
+        default_value: any;
+        raw_default_value?: any,
+        is_default_value?: boolean;
         choices: Array<{
           key: string,
           name: string
@@ -346,9 +365,8 @@
     label: t('SQL模式'),
     value: 'sql',
   }];
-
   const isEditMode = route.name === 'toolsEdit';
-
+  const isShowComponent = ref(false);
   const configUid = ref<string[]>([]);
   const hasPermission = ref(true);
   const spacePermission = ref(false);
@@ -360,9 +378,11 @@
   const isCreating = ref(false);
   const isFailed = ref(false);
   const isSuccessful = ref(false);
-
+  const goBkVisionBtn = ref(false);
   const allTagMap = ref<Record<string, string>>({});
-
+  const isUpdate = ref(false);
+  const isUpdateSubmit = ref(false);
+  const dashboardUid = ref('');
   const formData = ref<FormData>({
     source: '',
     users: [],
@@ -370,7 +390,11 @@
     tags: [],
     description: '',
     tool_type: 'data_search',
+    is_bkvision: false,
     data_search_config_type: 'sql',
+    updated_at: '',
+    updated_by: '',
+    updated_time: null,
     config: {
       referenced_tables: [],
       input_variable: [{
@@ -380,6 +404,7 @@
         required: false,
         field_category: '',
         default_value: '',
+        raw_default_value: '',
         choices: [],
       }],
       output_fields: [{
@@ -425,9 +450,20 @@
     bk_vision: 'bkvisonxiao',
   };
 
+
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
   const rules = {
+    name: [
+      {
+        validator: (value: string) => {
+          const reg = /^[\w\u4e00-\u9fa5-_]+$/;
+          return reg.test(value);
+        },
+        message: t('工具名称只允许中文、字母、数字、中划线或下划线组成'),
+        trigger: 'change',
+      },
+    ],
     tags: [
       // 因为校验的是name，但value是id的数组；将item转为name，自定义输入id = name，直接使用item即可
       {
@@ -441,6 +477,10 @@
       {
         validator: (value: Array<string>) => {
           const reg = /\D+/;
+          // 接口过慢时 allTagMap.value为空
+          if (Object.keys(allTagMap.value).length === 0) {
+            return true;
+          }
           return value.every(item => reg.test(allTagMap.value[item] ? allTagMap.value[item] : item));
         },
         message: t('标签不能为纯数字'),
@@ -448,7 +488,14 @@
       },
     ],
   };
-
+  // 侧边栏确认之后更新状态
+  const changeSubmit = (value: boolean) => {
+    isUpdate.value = value;
+  };
+  // 是否执行更新数据
+  const changeIsUpdateSubmit = (value: boolean) => {
+    isUpdateSubmit.value = value;
+  };
   const {
     data: configData,
   } = useRequest(RootManageService.config, {
@@ -456,6 +503,10 @@
     manual: true,
   });
 
+  // 跳转到bkvision
+  const handleGoBkvision = () => {
+    window.open(`${configData.value.third_party_system.bkvision_web_url}#/${configUid.value[0]}/detail/root/${dashboardUid.value}`);
+  };
   // 获取所有标签列表
   const {
     loading: tagLoading,
@@ -510,86 +561,131 @@
       }
     },
   });
-
+  const bkVisionUpdateTime = ref('');
   const {
     run: fetchReportLists,
   } = useRequest(ToolManageService.fetchReportLists, {
     defaultValue: {},
     onSuccess: (res) => {
       if (res) {
+        dashboardUid.value = res.data.dashboard_uid;
         const configInputVariable = _.cloneDeep(formData.value.config.input_variable);
-
         const { panels, variables } = res.data;
         const filters = [...new Set(Object.keys(res.filters))];
+        // eslint-disable-next-line max-len
+        const getInputVariableConfig = (isVariables: boolean, com: any, isEditMode: boolean, originalDefaultValue?: string | Array<string>) => ({
+          raw_name: (isVariables ? com?.flag  : com?.chartConfig?.flag) || '',
+          display_name: (isVariables ? com?.description  : com.title) || '',
+          description: com.uid || '',
+          field_category: com.type || '',
+          required: true,
+          is_default_value: false,
+          raw_default_value: '',
+          default_value: isEditMode ? originalDefaultValue : (originalDefaultValue || ''),
+          choices: [],
+        });
 
-
-        formData.value.config.input_variable = filters
-          .map((item) => {
-            const com = panels.find((p:any) => p.uid === item);
-            // 如果找不到对应的组件，返回 null，后续过滤掉
-            if (!com) {
-              return null;
+        // 编辑模式下第一次进入检查更新
+        if (isEditMode && clickSpaceChange.value === 1) {
+          isUpdate.value =  formData.value.is_bkvision;
+          formData.value.config.input_variable = formData.value.config.input_variable.map((item) => {
+            // 变量描述取最新的变量描述
+            if (item.field_category === 'variable') {
+              let variablesDescription = '';
+              variables.forEach((variable: any) => {
+                if (variable.uid === item.description) {
+                  variablesDescription = variable.description;
+                }
+              });
+              return {
+                ...item,
+                raw_default_value: res.constants[item.raw_name],
+                display_name: variablesDescription,
+                default_value: item.default_value,
+                choices: [],
+              };
             }
-
-            // 在编辑模式下，查找原有的 default_value
-            let originalDefaultValue: string | Array<string>  = '';
-            if (isEditMode && configInputVariable.length > 0) {
-              const originalItem = configInputVariable.find((original: any) => original.description === com.uid);
-              if (originalItem) {
-                originalDefaultValue = originalItem.default_value;
-              }
-            }
-
             return {
-              raw_name: com?.chartConfig?.flag || '',
-              display_name: com.title || '',
-              description: com.uid || '',
-              field_category: com.type || '',
-              required: true,
-              default_value: isEditMode ? originalDefaultValue : (com.value || ''),
+              ...item,
+              default_value: item.default_value,
               choices: [],
             };
-          })
-          .filter((item): item is NonNullable<typeof item> => item !== null); // 类型安全的过滤
-
-        if (variables.length > 0) {
-          variables.forEach((com: any) => {
-            // 内置变量不处理,
-            if (com.build_in) {
-              return;
-            }
-            // 此input_variable 是 bkvision 图表的变量 配置下钻时才显示
-            formData.value.config.input_variable.push({
-              raw_name: com.flag,
-              display_name: com.description || '',
-              description: com.description || '',
-              field_category: com.type || '',
-              required: true,
-              default_value: '',
-              choices: [],
-            });
           });
+        } else {
+          isUpdate.value = false;
+          formData.value.config.input_variable = filters
+            .map((item) => {
+              const com = panels.find((p: any) => p.uid === item);
+              if (!com) return null;
+
+              let originalDefaultValue: string | Array<string> = '';
+              if (isEditMode && configInputVariable.length > 0) {
+                const originalItem = configInputVariable.find((original: any) => original.description === com.uid);
+                if (originalItem) originalDefaultValue = originalItem.default_value;
+              } else {
+                originalDefaultValue = res.filters[com.uid];
+              }
+              return getInputVariableConfig(false, com, isEditMode, originalDefaultValue);
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null);
+
+          if (variables.length > 0) {
+            variables.forEach((com: any) => {
+              if (com.build_in) return;
+              let originalDefaultValue: string | Array<string> = '';
+              if (isEditMode && configInputVariable.length > 0) {
+                const originalItem = configInputVariable.find((original: any) => original.description === com.uid);
+                if (originalItem) originalDefaultValue = originalItem.default_value;
+              } else {
+                originalDefaultValue = res.constants[com.flag];
+              }
+              formData.value.config.input_variable.push({
+                ...getInputVariableConfig(true, com, isEditMode, originalDefaultValue),
+                is_default_value: false,
+                raw_default_value: originalDefaultValue || '',
+              });
+            });
+          }
         }
+
+        bkVisionUpdateTime.value = res.data.updated_time || null;
+
         // 设置组件配置
         nextTick(() => {
+          const bkVisionCom = filters
+            .map((item) => {
+              const com = panels.find((p: any) => p.uid === item);
+              if (!com) return null;
+              return getInputVariableConfig(false, com, true, res.filters[item]);
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null);
+
           comRef.value.setConfigs(formData.value.config.input_variable);
+          comRef.value.setVariablesConfig(res.data.variables, bkVisionCom, res);
         });
+        goBkVisionBtn.value = true;
       } else {
         spacePermission.value = true;
+        goBkVisionBtn.value = false;
       }
     },
   });
-
+  const clickSpaceChange = ref(0);
   // 选择报表
   const handleSpaceChange = (val: string) => {
+    clickSpaceChange.value += 1;
     spacePermission.value = false;
     if (val.length === 0) {
       return;
     }
-    formData.value.config.uid = val[val.length - 1];
-
     fetchReportLists({
       share_uid: val[val.length - 1],
+    }).then((r) => {
+      if (!r) {
+        isShowComponent.value = false;
+      } else {
+        isShowComponent.value = true;
+      }
     });
   };
 
@@ -635,9 +731,12 @@
       isCreating.value = true;
 
       // 获取组件配置
-      if (comRef.value.getFields) {
+      if (comRef.value?.getFields) {
         if (formData.value.tool_type === 'bk_vision') {
           formData.value.config.input_variable = comRef.value.getFields();
+          if (isUpdateSubmit.value) {
+            formData.value.updated_time = bkVisionUpdateTime.value || null;
+          }
         } else {
           formData.value.config = comRef.value.getFields();
         }
@@ -668,6 +767,25 @@
     if (val === 'bk_vision') {
       fetchChartLists();
     }
+    if (val === 'data_search') {
+      isShowComponent.value = true;
+    }
+  }, {
+    deep: true,
+    immediate: true,
+  });
+
+  watch(() => configUid.value, (val) => {
+    if (val.length  === 0) {
+      formData.value.config.uid = '';
+      isShowComponent.value = false;
+    } else {
+      formData.value.config.uid = val[val.length - 1];
+      isShowComponent.value = true;
+    }
+    formRef.value?.validate('config.uid');
+  }, {
+    deep: true,
   });
 
   onMounted(() => {
@@ -689,6 +807,10 @@
   .flex-center {
     display: flex;
     align-items: center;
+  }
+
+  .chart-cascade {
+    display: flex;
   }
 
   .permission {

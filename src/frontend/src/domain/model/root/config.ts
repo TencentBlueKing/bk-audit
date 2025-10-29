@@ -58,6 +58,7 @@ export default class Config {
   };
   third_party_system: {
     bkbase_web_url: string;
+    bkvision_web_url: string;
   };
   third_doc_url: {
     search_rule_iwiki_url: string;
