@@ -90,7 +90,7 @@ module.exports = {
           order: ['defineProps', 'defineEmits'],
         }],
         'vue/no-undef-properties': ['error', {
-          ignores: ['/^\\$/'],
+          ignores: ['/^\\$/', '/^v-bind\\(/'],
         }],
         'vue/no-unused-properties': ['error', {
           groups: ['props'],

@@ -27,6 +27,7 @@
     :multiple="multiple"
     multiple-mode="tag"
     :no-data-text="noDataText"
+    :popover-options="{ boundary: 'parent'}"
     :remote-method="remoteMethod"
     @blur="handleBlur"
     @change="handleChange"
@@ -181,7 +182,6 @@
 <style lang="postcss">
   .audit-user-selector {
     position: relative;
-    z-index: 1;
     width: 100%;
 
     .angle-up {

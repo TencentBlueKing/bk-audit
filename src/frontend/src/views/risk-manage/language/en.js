@@ -140,5 +140,13 @@ export default {
     导出成功: 'Export successfully',
     展开更多字段: 'Expand more fields',
     收起字段: 'Collapse fields',
+    自定义输入: 'Custom input',
+    字段值引用: 'Field value reference',
+    请选择已有选项: 'Please select existing options',
+    请选择日期: 'Please select date',
+    风险字段: 'Risk fields',
+    事件字段: 'Event fields',
+    '当前值：': 'Current value:',
+    不能为空: ' can not be empty',
   },
 };
