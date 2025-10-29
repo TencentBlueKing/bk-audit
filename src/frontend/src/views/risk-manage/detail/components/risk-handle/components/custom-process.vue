@@ -47,8 +47,8 @@
               class="mt8"
               :label="processPackageDetail[key]?.name || key">
               {{ riskFieldMap[data.pa_params[key].field]
-                || data.pa_params[key].field
-                || data.pa_params[key].value
+                || formatValue(data.pa_params[key].field)
+                || formatValue(data.pa_params[key].value)
                 || '--' }}
             </render-info-item>
           </template>
@@ -102,6 +102,12 @@
     }
     return {};
   });
+  const formatValue = (value: any) => {
+    if (Array.isArray(value)) {
+      return value.join(', ');
+    }
+    return value;
+  };
 </script>
 <style scoped lang="postcss">
 .reopen-mis-report-wrap {

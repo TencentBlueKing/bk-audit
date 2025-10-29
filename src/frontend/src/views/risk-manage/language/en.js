@@ -133,5 +133,15 @@ export default {
     '系统尚未完成日志数据上报，请继续上报': 'The system has not completed the log data report, please continue to report',
     映射对象: `key：{key}
     name：{name}`,  // 换行特意为之
+    批量导出: 'Batch export',
+    自定义输入: 'Custom input',
+    字段值引用: 'Field value reference',
+    请选择已有选项: 'Please select existing options',
+    请选择日期: 'Please select date',
+    展开更多字段: 'Expand more fields',
+    风险字段: 'Risk fields',
+    事件字段: 'Event fields',
+    '当前值：': 'Current value:',
+    不能为空: ' can not be empty',
   },
 };

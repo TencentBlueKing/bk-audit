@@ -37,7 +37,7 @@
       <!-- 事件处理 -->
       <scroll-faker
         v-if="route.name !== 'attentionManageDetail'"
-        style="width: 368px;">
+        style="width: 368px; height: auto; min-height: 85vh;">
         <div class="right">
           <risk-handle
             :data="riskData"

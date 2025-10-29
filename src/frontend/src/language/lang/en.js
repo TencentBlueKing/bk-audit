@@ -16,6 +16,7 @@
 */
 export default {
   '': ' ',
+  ' ': ' ',
   蓝鲸审计中心: 'BK Audit Center',
   'BK Audit': 'BK Audit',
   审计策略: 'Strategies',
