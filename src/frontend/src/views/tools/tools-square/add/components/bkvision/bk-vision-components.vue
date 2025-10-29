@@ -25,7 +25,7 @@
           v-if="config?.field_category === 'time-picker'"
           v-model="dateValue"
           append-to-body
-          :disabled="!disabled"
+          :disabled="disabled"
           format="yyyy-MM-dd HH:mm:ss"
           :shortcuts="dateShortCut"
           type="datetime"
@@ -38,7 +38,7 @@
           @mouseleave="showDeleteIcon = false">
           <date-picker
             v-model="pickerValue"
-            :disabled="!disabled"
+            :disabled="disabled"
             style="width: 100%;"
             @update:model-value="handleRangeChange" />
           <audit-icon
@@ -50,14 +50,14 @@
         <bk-input
           v-else-if="config?.field_category === 'inputer' "
           v-model="inputVal"
-          :disabled="!disabled"
+          :disabled="disabled"
           @change="handleInputChange" />
         <bk-tag-input
           v-else
           v-model="selectorValue"
           allow-create
           collapse-tags
-          :disabled="!disabled"
+          :disabled="disabled"
           has-delete-icon
           :list="[]"
           @change="handleSelectorChange" />

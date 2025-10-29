@@ -55,7 +55,7 @@
         <template #content>
           <div
             v-bk-tooltips="{
-              disabled: isUpdateSubmit,
+              disabled: !isUpdateSubmit,
               theme: 'light',
               content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
             }"
@@ -96,7 +96,7 @@
         <template #content>
           <div
             v-bk-tooltips="{
-              disabled: isUpdateSubmit,
+              disabled: !isUpdateSubmit,
               theme: 'light',
               content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
             }"
@@ -115,7 +115,7 @@
                 <bk-checkbox
                   v-model="variables.is_default_value"
                   class="title-right"
-                  :disabled="!isUpdateSubmit"
+                  :disabled="isUpdateSubmit"
                   size="small"
                   @change="getVariablesDefaultValue(variables.is_default_value, variableIndex)">
                   {{ t('使用默认值') }}
@@ -123,7 +123,7 @@
               </div>
               <div>
                 <bk-input
-                  :disabled="variables.is_default_value || !isUpdateSubmit"
+                  :disabled="variables.is_default_value || isUpdateSubmit"
                   :model-value="variables.default_value as string"
                   placeholder=" "
                   @update:model-value="(val: string) => variables.default_value = val" />
@@ -297,7 +297,7 @@
     const updateArrays = updateArray(comList.value.concat(toolInfoVariable.value), value);
     comList.value = updateArrays.filter((item: any) => item.field_category !== 'variable');
     toolInfoVariable.value = updateArrays.filter((item: any) => item.field_category === 'variable');
-    isUpdateSubmit.value = true;
+    isUpdateSubmit.value = false;
     emits('changeSubmit', false);
 
     emits('changeIsUpdateSubmit', isUpdateSubmit.value);
@@ -369,8 +369,11 @@
     () => props.isUpdate, (value) => {
       if (value && props.isEditMode) {
         nextTick(() => {
+          isUpdateSubmit.value = true;
           handleUpdateVariable();
         });
+      } else {
+        isUpdateSubmit.value = false;
       }
     },
     { deep: true, immediate: true },

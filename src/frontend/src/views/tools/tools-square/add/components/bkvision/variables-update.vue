@@ -19,7 +19,6 @@
     v-model:isShow="isShow"
     :esc-close="false"
     :quick-close="false"
-    :show-mask="false"
     :title="t('更新变量')"
     width="30%">
     <div class="head-tip">

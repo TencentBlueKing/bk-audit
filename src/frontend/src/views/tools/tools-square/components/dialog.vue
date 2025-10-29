@@ -774,7 +774,8 @@
         }
       }
     });
-
+    console.log('constants>>>',  constants);
+    console.log('filters>>>',  filters);
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(
