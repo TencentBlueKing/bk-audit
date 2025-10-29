@@ -737,7 +737,7 @@
       if (comRef.value?.getFields) {
         if (data.tool_type === 'bk_vision') {
           data.config.input_variable = comRef.value.getFields();
-          if (isUpdateSubmit.value) {
+          if (!isUpdate.value) {
             data.updated_time = bkVisionUpdateTime.value || null;
           }
         } else {
@@ -749,6 +749,7 @@
       if (data.tags) {
         data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
       }
+      console.log(data);
 
       service(data)
         .then(() => {

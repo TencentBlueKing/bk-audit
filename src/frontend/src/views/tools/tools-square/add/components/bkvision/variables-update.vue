@@ -209,7 +209,7 @@
                 type: 'add',
               });
             } else if ((JSON.stringify(oldVar) !== JSON.stringify(newVar)) && !deepEqual(oldVar, newVar)) {
-              if (oldVar.is_default_value) {
+              if (!(oldVar.is_default_value)) {
                 updateAry.push({
                   ...newVar,
                   type: 'update',
