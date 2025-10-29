@@ -189,9 +189,13 @@
         // 过滤 is_default_value 为 false 的项 tool 的描述（display_name）置空以便不对比描述
         // eslint-disable-next-line no-param-reassign
         oldVariable.value = tool.concat(comList);
+        console.log('oldVariable', oldVariable.value);
+
         // 过滤 is_default_value 为 false 的项 variables 的描述（display_name）置空以便不对比描述
         // eslint-disable-next-line no-param-reassign
         newVariable.value = variables.concat(bkVisionComList);
+        console.log('newVariable', newVariable.value);
+
         // 对比旧数组 oldVariable 与新数组 newVariable
         const compareVariables = (oldVars: InputVariable, newVars: InputVariable) => {
           const addAry: InputVariable = [];

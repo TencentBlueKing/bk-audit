@@ -166,6 +166,7 @@
   interface Props {
     isEditMode: boolean;
     isUpdate: boolean;
+    isFirstEdit: boolean;
   }
 
   interface Exposes {
@@ -367,7 +368,7 @@
 
   watch(
     () => props.isUpdate, (value) => {
-      if (value && props.isEditMode) {
+      if (value && props.isEditMode && props.isFirstEdit) {
         nextTick(() => {
           isUpdateSubmit.value = true;
           handleUpdateVariable();
