@@ -18,7 +18,6 @@ import { buildURLParams } from '@utils/assist';
 
 export default function () {
   const searchParams = new URLSearchParams(window.location.search);
-
   const getSearchParams = () => {
     const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
     const curSearchParams = new URLSearchParams(window.location.search);
@@ -26,6 +25,44 @@ export default function () {
     Array.from(curSearchParams.keys()).forEach((key) => {
       if (dangerousKeys.includes(key)) return;
       params[key] = curSearchParams.get(key) || '';
+    });
+    return params;
+  };
+  const getSearchParamsPost = () => {
+    const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+    const curSearchParams = new URLSearchParams(window.location.search);
+    const params = Object.create(null);
+    Array.from(curSearchParams.keys()).forEach((key) => {
+      if (dangerousKeys.includes(key)) return;
+
+      // 处理参数名：如果以[]结尾，去掉[]
+      const processedKey = key.endsWith('[]') ? key.slice(0, -2) : key;
+
+      // 获取该key的所有值
+      const values = curSearchParams.getAll(key);
+
+      // 如果只有一个值，直接存储；如果有多个值，存储为数组
+      if (values.length === 1) {
+        try {
+          // 尝试解析JSON，如果不是JSON则直接使用原值
+          // 判断 values[0] 是否为对象
+          if (typeof JSON.parse(values[0]) === 'object') {
+            params[processedKey] = [JSON.parse(values[0])];
+          } else {
+            params[processedKey] = JSON.parse(values[0]);
+          }
+        } catch {
+          params[processedKey] = values[0] || '';
+        }
+      } else {
+        params[processedKey] = values.map((value: any) => {
+          try {
+            return JSON.parse(value);
+          } catch {
+            return value || '';
+          }
+        });
+      }
     });
     return params;
   };
@@ -58,6 +95,7 @@ export default function () {
   return {
     searchParams,
     getSearchParams,
+    getSearchParamsPost,
     appendSearchParams,
     removeSearchParam,
     replaceSearchParams,

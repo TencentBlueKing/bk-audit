@@ -16,39 +16,12 @@
 -->
 <template>
   <div class="render-form-serach-key">
-    <div
-      class="box-row"
-      :style="boxRowStyle">
-      <template
-        v-for="(fieldItem, fieldName) in defaultFieldList"
-        :key="fieldName">
-        <render-field-config
-          ref="fieldConfigRef"
-          class="box-column"
-          :field-config="fieldConfig"
-          :model="localSearchModel"
-          :name="fieldName"
-          @change="handleChange" />
-      </template>
-      <div class="show-more-condition-btn">
-        <bk-button
-          text
-          theme="primary"
-          @click="handleShowMore">
-          {{ t('更多选项') }}
-          <audit-icon
-            :class="{ active: isShowMore }"
-            style=" margin-left: 4px;"
-            type="angle-double-down" />
-        </bk-button>
-      </div>
-    </div>
-    <template v-if="isShowMore">
+    <div class="render-form-serach-top">
       <div
         class="box-row"
         :style="boxRowStyle">
         <template
-          v-for="(fieldItem, fieldName) in moreFieldList"
+          v-for="(fieldItem, fieldName) in defaultFieldList"
           :key="fieldName">
           <render-field-config
             ref="fieldConfigRef"
@@ -58,8 +31,41 @@
             :name="fieldName"
             @change="handleChange" />
         </template>
+        <div class="show-more-condition-btn">
+          <bk-button
+            text
+            theme="primary"
+            @click="handleShowMore">
+            {{ t('更多选项') }}
+            <audit-icon
+              :class="{ active: isShowMore }"
+              style=" margin-left: 4px;"
+              type="angle-double-down" />
+          </bk-button>
+        </div>
       </div>
-    </template>
+
+      <template v-if="isShowMore">
+        <div
+          class="box-row"
+          :style="boxRowStyle">
+          <template
+            v-for="(fieldItem, fieldName) in moreFieldList"
+            :key="fieldName">
+            <render-field-config
+              ref="fieldConfigRef"
+              class="box-column"
+              :field-config="fieldConfig"
+              :model="localSearchModel"
+              :name="fieldName"
+              @change="handleChange" />
+          </template>
+        </div>
+        <slot name="more-list" />
+      </template>
+      <slot name="more-button" />
+    </div>
+
     <div class="mt16">
       <bk-button
         class="mr8"
@@ -100,7 +106,9 @@
     (e: 'submit'): void,
     (e: 'clear'): void,
   }
-
+  interface Exposes {
+    showMore: (val: boolean) =>void,
+  }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
 
@@ -133,6 +141,9 @@
   // 显示更多搜索条件
   const handleShowMore = () => {
     isShowMore.value = !isShowMore.value;
+  };
+  const handleExShowMore = (val: boolean) => {
+    isShowMore.value = val;
   };
   // 搜索项值改变
   const handleChange = (fieldName: string, value: any) => {
@@ -178,11 +189,21 @@
   onBeforeUnmount(() => {
     window.removeEventListener('resize', resizeHandler);
   });
+  defineExpose<Exposes>({
+    showMore(val: boolean) {
+      handleExShowMore(val);
+    },
+  });
 </script>
 <style lang="postcss">
   .render-form-serach-key {
     position: relative;
     padding: 16px 24px;
+
+    .render-form-serach-top {
+      max-height: 40vh;
+      overflow-y: auto
+    }
 
     .box-row {
       display: grid;

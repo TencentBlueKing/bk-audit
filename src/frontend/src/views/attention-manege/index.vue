@@ -40,6 +40,7 @@
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
+    onMounted,
     onUnmounted,
     ref,
   } from 'vue';
@@ -76,7 +77,7 @@
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
-  const { getSearchParams } = useUrlSearch();
+  const { getSearchParamsPost } = useUrlSearch();
   const statusToMap: Record<string, {
     tag: string,
     icon: string,
@@ -421,7 +422,7 @@
     });
     if (!Object.keys(pollingDataMap.value).length) return;
     timeout = setTimeout(() => {
-      const params = getSearchParams();
+      const params = getSearchParamsPost();
       fetchRiskList({
         ...params,
         risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
@@ -450,8 +451,10 @@
     router.push(params);
   };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>) => {
-    searchModel.value = value;
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue };
     fetchList();
   };
   const handleClearSearch = () => {
@@ -470,20 +473,38 @@
       event_content: '',
       risk_level: '',
       title: '',
+      use_bkbase: true,
       notice_users: '',
     };
-    listRef.value.fetchData({
+    const dataParams: Record<string, any> = {
       ...params,
       ...searchModel.value,
-    });
+    };
+    listRef.value.fetchData(dataParams);
   };
+
+  const {
+    run: getEventFields,
+  } = useRequest(RiskManageService.fetchEventFields, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      const eventFields = data.map((item: any) => ({
+        ...item,
+      }));
+      searchBoxRef.value?.initSelectedItems(eventFields);
+    },
+  });
+
+  onMounted(() => {
+    getEventFields();
+  });
   onUnmounted(() => {
     clearTimeout(timeout);
   });
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'attentionManageDetail') {
-      const params = getSearchParams();
+      const params = getSearchParamsPost();
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
       to.query = {

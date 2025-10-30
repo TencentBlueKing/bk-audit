@@ -43,6 +43,7 @@
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
+    onMounted,
     onUnmounted,
     ref,
   } from 'vue';
@@ -51,6 +52,7 @@
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
+    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -85,8 +87,9 @@
   const { messageWarn } = useMessage();
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
-  const { getSearchParams } = useUrlSearch();
+  const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
+  const route = useRoute();
   let timeout: number| undefined = undefined;
   const statusToMap: Record<string, {
     tag: string,
@@ -363,6 +366,19 @@
     }
     searchBoxRef.value.exportData(selectedData, 'all');
   };
+
+  const {
+    run: getEventFields,
+  } = useRequest(RiskManageService.fetchEventFields, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      const eventFields = data.map((item: any) => ({
+        ...item,
+      }));
+      searchBoxRef.value?.initSelectedItems(eventFields);
+    },
+  });
+
   // 获取userinfo
   const {
     data: userInfo,
@@ -450,7 +466,7 @@
     });
     if (!Object.keys(pollingDataMap.value).length) return;
     timeout = setTimeout(() => {
-      const params = getSearchParams();
+      const params = getSearchParamsPost();
       fetchRiskList({
         ...params,
         risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
@@ -478,8 +494,10 @@
     localStorage.setItem('audit-all-risk-list-setting', JSON.stringify(setting));
   };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>) => {
-    searchModel.value = value;
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue };
     fetchList();
   };
   const handleClearSearch = () => {
@@ -492,29 +510,34 @@
       tags: '',
       start_time: '',
       end_time: '',
-      strategy_id: '',
+      strategy_id: route.query.strategy_id || '',
       operator: '',
       current_operator: '',
       status: '',
       risk_label: '',
       event_content: '',
       risk_level: '',
+      use_bkbase: true,
       title: '',
       notice_users: '',
     };
-    listRef.value.fetchData({
+    const dataParams: Record<string, any> = {
       ...params,
       ...searchModel.value,
-    });
-  };
+    };
 
+    listRef.value.fetchData(dataParams);
+  };
+  onMounted(() => {
+    getEventFields();
+  });
   onUnmounted(() => {
     clearTimeout(timeout);
   });
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'riskManageDetail') {
-      const params = getSearchParams();
+      const params = getSearchParamsPost();
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
       to.query = {
