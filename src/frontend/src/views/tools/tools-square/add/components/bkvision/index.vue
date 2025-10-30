@@ -54,11 +54,6 @@
         </template>
         <template #content>
           <div
-            v-bk-tooltips="{
-              disabled: !isUpdateSubmit,
-              theme: 'light',
-              content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
-            }"
             style="display: flex;width: 100%;flex-wrap: wrap;margin-top: -10px;">
             <bk-vision-components
               v-for="comItem in comList"
@@ -67,7 +62,8 @@
               :config="comItem"
               :disabled="isUpdateSubmit"
               style="width: 22%;margin: 0 1.5%;margin-top: 10px;"
-              @change="(val: any) => handleVisionChange(val, comItem.raw_name)" />
+              @change="(val: any) => handleVisionChange(val, comItem.raw_name)"
+              @change-is-default-value="(val: boolean) => handleIsDefaultValue(val, comItem.raw_name)" />
           </div>
         </template>
       </bk-collapse>
@@ -95,11 +91,6 @@
         </template>
         <template #content>
           <div
-            v-bk-tooltips="{
-              disabled: !isUpdateSubmit,
-              theme: 'light',
-              content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
-            }"
             style="display: flex;width: 100%;flex-wrap: wrap;margin-top: -10px;">
             <div
               v-for="(variables, variableIndex) in toolInfoVariable"
@@ -122,11 +113,18 @@
                 </bk-checkbox>
               </div>
               <div>
-                <bk-input
-                  :disabled="variables.is_default_value || isUpdateSubmit"
-                  :model-value="variables.default_value as string"
-                  placeholder=" "
-                  @update:model-value="(val: string) => variables.default_value = val" />
+                <div
+                  v-bk-tooltips="{
+                    disabled: !isUpdateSubmit,
+                    theme: 'light',
+                    content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
+                  }">
+                  <bk-input
+                    :disabled="variables.is_default_value || isUpdateSubmit"
+                    :model-value="variables.default_value as string"
+                    placeholder=" "
+                    @update:model-value="(val: string) => variables.default_value = val" />
+                </div>
               </div>
             </div>
           </div>
@@ -155,7 +153,7 @@
     required: boolean;
     field_category: string;
     default_value: string | Array<string>;
-    is_default_value?: boolean;
+    is_default_value: boolean;
     raw_default_value?: string | Array<string>;
     choices: Array<{
       key: string,
@@ -166,6 +164,7 @@
   interface Props {
     isEditMode: boolean;
     isUpdate: boolean;
+    isFirstEdit: boolean;
   }
 
   interface Exposes {
@@ -227,6 +226,17 @@
       const reItem = item;
       if (item.raw_name === rawName) {
         reItem.default_value = value;
+      }
+      return reItem;
+    });
+  };
+
+  // bk_vision 组件是否使用默认值
+  const handleIsDefaultValue = (value: any, rawName: string) => {
+    inputVariable.value = inputVariable.value.map((item: any) => {
+      const reItem = item;
+      if (item.raw_name === rawName) {
+        reItem.is_default_value = value;
       }
       return reItem;
     });
@@ -367,7 +377,7 @@
 
   watch(
     () => props.isUpdate, (value) => {
-      if (value && props.isEditMode) {
+      if (value && props.isEditMode && props.isFirstEdit) {
         nextTick(() => {
           isUpdateSubmit.value = true;
           handleUpdateVariable();
