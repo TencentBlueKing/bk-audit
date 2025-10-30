@@ -104,3 +104,188 @@ GET_PLUGIN_LIST_DATA = [CREATE_COLLECTOR_PLUGIN_API_RESP]
 RAW_DATA_LIST = [{'id': 121}]
 
 DATACLEAN_RESULT = {"result_table_id": "mock_result_table_id", "processing_id": "mock_processing_id"}
+
+EXPECTED_EVENT_FIELDS = [
+    {
+        "field_name": "event_id",
+        "field_type": "string",
+        "field_alias": "事件ID",
+        "is_dimension": False,
+        "is_json": False,
+        "field_index": 1,
+        "is_index": True,
+        "__field_type": "string",
+    },
+    {
+        "field_name": "event_content",
+        "field_type": "text",
+        "field_alias": "事件描述",
+        "is_dimension": False,
+        "is_json": False,
+        "field_index": 2,
+        "is_index": False,
+        "__field_type": "text",
+    },
+    {
+        "field_name": "raw_event_id",
+        "field_type": "string",
+        "field_alias": "原始事件ID",
+        "is_dimension": False,
+        "is_json": False,
+        "field_index": 3,
+        "is_index": True,
+        "__field_type": "string",
+    },
+    {
+        "field_name": "strategy_id",
+        "field_type": "long",
+        "field_alias": "命中策略(ID)",
+        "is_dimension": False,
+        "is_json": False,
+        "field_index": 4,
+        "is_index": True,
+        "__field_type": "long",
+    },
+    {
+        "field_name": "event_evidence",
+        "field_type": "text",
+        "field_alias": "事件证据",
+        "is_dimension": False,
+        "is_json": True,
+        "field_index": 5,
+        "is_index": False,
+        "__field_type": "object",
+    },
+    {
+        "field_name": "event_type",
+        "field_type": "text",
+        "field_alias": "事件类型",
+        "is_dimension": False,
+        "is_json": False,
+        "field_index": 6,
+        "is_index": False,
+        "__field_type": "text",
+    },
+    {
+        "field_name": "event_data",
+        "field_type": "text",
+        "field_alias": "事件拓展数据",
+        "is_dimension": False,
+        "is_json": True,
+        "field_index": 7,
+        "is_index": False,
+        "__field_type": "object",
+    },
+    {
+        "field_name": "event_time",
+        "field_type": "long",
+        "field_alias": "事件发生时间",
+        "is_dimension": False,
+        "is_json": False,
+        "field_index": 8,
+        "is_index": False,
+        "__field_type": "long",
+    },
+    {
+        "field_name": "event_source",
+        "field_type": "string",
+        "field_alias": "事件来源",
+        "is_dimension": False,
+        "is_json": False,
+        "field_index": 9,
+        "is_index": False,
+        "__field_type": "string",
+    },
+    {
+        "field_name": "operator",
+        "field_type": "text",
+        "field_alias": "责任人",
+        "is_dimension": False,
+        "is_json": False,
+        "field_index": 10,
+        "is_index": False,
+        "__field_type": "text",
+    },
+]
+
+EXPECTED_ASSIGN_NORMAL = [
+    {"type": "string", "assign_to": "event_id", "key": "event_id"},
+    {"type": "text", "assign_to": "event_content", "key": "event_content"},
+    {"type": "string", "assign_to": "raw_event_id", "key": "raw_event_id"},
+    {"type": "long", "assign_to": "strategy_id", "key": "strategy_id"},
+    {"type": "text", "assign_to": "event_type", "key": "event_type"},
+    {"type": "long", "assign_to": "event_time", "key": "event_time"},
+    {"type": "string", "assign_to": "event_source", "key": "event_source"},
+    {"type": "text", "assign_to": "operator", "key": "operator"},
+]
+
+EXPECTED_ASSIGN_JSON = [
+    {"type": "text", "assign_to": "event_evidence", "key": "event_evidence"},
+    {"type": "text", "assign_to": "event_data", "key": "event_data"},
+]
+
+EXPECTED_CLEAN_JSON_CONFIG = {
+    "extract": {
+        "type": "fun",
+        "method": "from_json",
+        "result": "json_data",
+        "label": "labelabcde",
+        "args": [],
+        "next": {
+            "type": "branch",
+            "name": "",
+            "label": None,
+            "next": [
+                {
+                    "type": "assign",
+                    "subtype": "assign_obj",
+                    "label": "labelfghij",
+                    "assign": EXPECTED_ASSIGN_NORMAL,
+                    "next": None,
+                },
+                {
+                    "type": "assign",
+                    "subtype": "assign_json",
+                    "label": "labelklmno",
+                    "assign": EXPECTED_ASSIGN_JSON,
+                    "next": None,
+                },
+            ],
+        },
+    },
+    "conf": {
+        "time_format": "Unix Time Stamp(milliseconds)",
+        "timezone": 0,
+        "time_field_name": "event_time",
+        "output_field_name": "timestamp",
+        "timestamp_len": 13,
+        "encoding": "UTF-8",
+    },
+}
+
+EXPECTED_RESULT_TABLE_NAME = "bklog_event_plugin"
+EXPECTED_CLEAN_CONFIG_NAME = "event_plugin"
+EXPECTED_PHYSICAL_TABLE_NAME = f"mapleleaf_{settings.DEFAULT_BK_BIZ_ID}_bklog.event_plugin"
+
+_DYNAMIC_JSON_FIELDS = {"event_evidence", "event_data"}
+
+# Doris fields follow handler logic:
+# - add physical_field and is_doc_values
+# - dynamic JSON fields should not be marked as is_json; instead set is_original_json
+EXPECTED_DORIS_FIELDS = []
+for field in EXPECTED_EVENT_FIELDS:
+    item = {
+        "field_name": field["field_name"],
+        "field_type": field["field_type"],
+        "field_alias": field["field_alias"],
+        "is_dimension": field["is_dimension"],
+        "is_json": field["is_json"],
+        "field_index": field["field_index"],
+        "is_index": field["is_index"],
+        "physical_field": field["field_name"],
+        "is_doc_values": field["is_dimension"],
+    }
+    if field["field_name"] in _DYNAMIC_JSON_FIELDS:
+        item["is_json"] = False
+        item["is_original_json"] = True
+    EXPECTED_DORIS_FIELDS.append(item)

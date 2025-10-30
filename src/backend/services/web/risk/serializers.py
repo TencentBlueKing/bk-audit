@@ -20,16 +20,19 @@ import json
 from typing import List, Union
 
 from django.conf import settings
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
 from apps.meta.models import Tag
+from core.serializers import AnyValueField
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     RISK_LEVEL_ORDER_FIELD,
+    EventFilterOperator,
     EventMappingFields,
     RiskLabel,
     RiskRuleOperator,
@@ -186,18 +189,36 @@ class ListEventResponseSerializer(serializers.Serializer):
 
 class RiskInfoSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
-    tags = serializers.SerializerMethodField()
+    event_end_time = serializers.SerializerMethodField()
 
-    def get_tags(self, obj: Risk):
+    def get_event_end_time(self, obj: Risk) -> str | None:
         """
-        获取风险标签ID列表,从策略获取
+        获取事件结束时间。
+        如果存在毫秒/微秒，则向上取整到下一秒。
         """
+        dt = obj.event_end_time
 
-        return obj.get_tag_ids()
+        if dt is None:
+            return None
+
+        # 核心逻辑：检查是否存在微秒
+        if dt.microsecond > 0:
+            # 1. 先去掉微秒 (归零)
+            # 2. 再加上1秒，实现“向上取整”
+            dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+        dt = timezone.localtime(dt)
+
+        # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
+        # 所以我们需要在这里手动格式化为您的全局格式
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     class Meta:
         model = Risk
-        fields = "__all__"
+        exclude = ["strategy"]
 
 
 class RiskProviderSerializer(serializers.ModelSerializer):
@@ -216,23 +237,59 @@ class TicketPermissionProviderSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class ListEventFieldsByStrategyRequestSerializer(serializers.Serializer):
+    # 支持多个策略；不传或为空返回所有策略的字段
+    strategy_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs.get("strategy_ids") and isinstance(attrs["strategy_ids"], str):
+            attrs["strategy_ids"] = [int(i) for i in attrs["strategy_ids"].split(",") if i]
+        return attrs
+
+
+class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
+    field_name = serializers.CharField(label=gettext_lazy("字段名"))
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
+    id = serializers.CharField(label=gettext_lazy("字段ID"))
+
+
+class EventFieldFilterItemSerializer(serializers.Serializer):
+    field = serializers.CharField(label=gettext_lazy("字段名"))
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
+    operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
+    value = AnyValueField(label=gettext_lazy("值"))
+
+
+class TicketPermissionProviderSerializer(serializers.ModelSerializer):
+    """用于反向拉取 TicketPermission 的快照结构"""
+
+    # 显式声明，便于在 Schema 中展示
+    authorized_at = serializers.DateTimeField(label=gettext_lazy("Authorized Time"))
+
+    class Meta:
+        model = TicketPermission
+        fields = "__all__"
+
+
 class ListRiskRequestSerializer(serializers.Serializer):
     """
     List Risk
     """
 
-    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"), required=False)
-    strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), required=False)
-    operator = serializers.CharField(label=gettext_lazy("Operator"), required=False)
-    status = serializers.CharField(label=gettext_lazy("Risk Status"), required=False)
+    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"), allow_blank=True, required=False)
+    strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), allow_blank=True, required=False)
+    operator = serializers.CharField(label=gettext_lazy("Operator"), allow_blank=True, required=False)
+    status = serializers.CharField(label=gettext_lazy("Risk Status"), allow_blank=True, required=False)
     start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False)
     end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False)
-    event_type = serializers.CharField(label=gettext_lazy("Risk Type"), required=False)
-    current_operator = serializers.CharField(label=gettext_lazy("Current Operator"), required=False)
-    notice_users = serializers.CharField(label=gettext_lazy("Notice Users"), required=False)
-    tags = serializers.CharField(label=gettext_lazy("Tags"), required=False)
-    event_content = serializers.CharField(label=gettext_lazy("Event Content"), required=False)
-    risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), required=False)
+    event_type = serializers.CharField(label=gettext_lazy("Risk Type"), allow_blank=True, required=False)
+    current_operator = serializers.CharField(label=gettext_lazy("Current Operator"), allow_blank=True, required=False)
+    notice_users = serializers.CharField(label=gettext_lazy("Notice Users"), allow_blank=True, required=False)
+    tags = serializers.CharField(label=gettext_lazy("Tags"), allow_blank=True, required=False)
+    event_content = serializers.CharField(label=gettext_lazy("Event Content"), allow_blank=True, required=False)
+    risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), allow_blank=True, required=False)
+    use_bkbase = serializers.BooleanField(label=gettext_lazy("是否通过BKBase查询"), required=False, default=False)
     order_field = serializers.CharField(
         label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True, help_text="risk_level:根据风险等级排序"
     )
@@ -246,7 +303,8 @@ class ListRiskRequestSerializer(serializers.Serializer):
     risk_level = serializers.CharField(
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
-    title = serializers.CharField(label=gettext_lazy("Risk Title"), required=False)
+    title = serializers.CharField(label=gettext_lazy("Risk Title"), allow_blank=True, required=False)
+    event_filters = EventFieldFilterItemSerializer(label=gettext_lazy("关联事件字段筛选"), many=True, required=False)
 
     def validate(self, attrs: dict) -> dict:
         # 校验
@@ -281,14 +339,12 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["event_content__contains"] = data.pop("event_content")
         if data.get("title"):
             data["title__contains"] = data.pop("title")
+        event_filters = attrs.get("event_filters") or []
+        data["event_filters"] = event_filters
+        data["use_bkbase"] = bool(data.get("use_bkbase", False))
         # 格式转换
         for key, val in attrs.items():
-            if key in [
-                "event_time__gte",
-                "event_time__lt",
-                "order_type",
-                "order_field",
-            ]:
+            if key in ["event_time__gte", "event_time__lt", "order_type", "order_field", "use_bkbase", "event_filters"]:
                 continue
             if key in ["tag_objs__in"]:
                 data[key] = [int(i) for i in val.split(",") if i]
@@ -341,6 +397,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
     experiences = serializers.IntegerField(required=False)
     event_content = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
+    event_end_time = serializers.SerializerMethodField()
 
     def get_event_content(self, obj):
         return getattr(obj, "event_content_short")
@@ -356,6 +413,26 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
         else:
             # 回退到实时查询
             return obj.get_tag_ids()
+
+    def get_event_end_time(self, obj: Risk) -> str | None:
+        """
+        获取事件结束时间。
+        如果存在毫秒/微秒，则向上取整到下一秒。
+        """
+        dt = obj.event_end_time
+
+        if dt is None:
+            return None
+
+        # 核心逻辑：检查是否存在微秒
+        if dt.microsecond > 0:
+            # 1. 先去掉微秒 (归零)
+            # 2. 再加上1秒，实现“向上取整”
+            dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
+        # 所以我们需要在这里手动格式化为您的全局格式
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     class Meta:
         model = Risk

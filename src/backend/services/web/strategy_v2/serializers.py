@@ -469,6 +469,45 @@ class StrategyInfoSerializer(serializers.ModelSerializer):
         ]
 
 
+class StrategyProviderSerializer(serializers.ModelSerializer):
+    """
+    用于 Provider 的策略快照/Schema 序列化器
+    - 显式声明 strategy_id 为可写普通字段，便于在 Schema 中展示
+    """
+
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+
+    class Meta:
+        model = Strategy
+        fields = [
+            "namespace",
+            "strategy_id",
+            "strategy_name",
+            "control_id",
+            "control_version",
+            "strategy_type",
+            "configs",
+            "sql",
+            "link_table_uid",
+            "link_table_version",
+            "status",
+            "status_msg",
+            "backend_data",
+            "notice_groups",
+            "processor_groups",
+            "description",
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+            "risk_title",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
+            "risk_meta_field_config",
+            "is_formal",
+        ]
+
+
 class ToggleStrategyRequestSerializer(serializers.Serializer):
     """
     Toggle Strategy

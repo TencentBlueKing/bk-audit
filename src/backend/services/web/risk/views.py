@@ -104,7 +104,7 @@ class RisksViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.retrieve_risk, pk_field="risk_id"),
         ResourceRoute("GET", resource.risk.retrieve_risk_strategy_info, pk_field="risk_id", endpoint="strategy_info"),
         ResourceRoute(
-            "GET",
+            "POST",
             resource.risk.list_risk,
             decorators=[
                 insert_permission_field(
@@ -115,7 +115,7 @@ class RisksViewSet(ResourceViewSet):
             ],
         ),
         ResourceRoute(
-            "GET",
+            "POST",
             resource.risk.list_mine_risk,
             endpoint="todo",
             decorators=[
@@ -127,7 +127,7 @@ class RisksViewSet(ResourceViewSet):
             ],
         ),
         ResourceRoute(
-            "GET",
+            "POST",
             resource.risk.list_noticing_risk,
             endpoint="watch",
             decorators=[
@@ -139,6 +139,7 @@ class RisksViewSet(ResourceViewSet):
             ],
         ),
         ResourceRoute("GET", resource.risk.list_risk_fields, endpoint="fields"),
+        ResourceRoute("GET", resource.risk.list_event_fields_by_strategy, endpoint="event_fields"),
         ResourceRoute("PUT", resource.risk.update_risk_label, pk_field="risk_id", endpoint="risk_label"),
         ResourceRoute("GET", resource.risk.risk_status_common, endpoint="status_common"),
         ResourceRoute("GET", resource.risk.list_risk_tags, endpoint="tags"),
@@ -220,4 +221,5 @@ class RiskRulesViewSet(ResourceViewSet):
         ResourceRoute("PUT", resource.risk.toggle_risk_rule, pk_field="rule_id", endpoint="toggle"),
         ResourceRoute("GET", resource.risk.list_risk_rule_operator, endpoint="operators"),
         ResourceRoute("PUT", resource.risk.batch_update_risk_rule_priority_index, endpoint="set_priority_index"),
+        ResourceRoute("GET", resource.risk.list_event_fields_by_strategy, endpoint="event_fields"),
     ]

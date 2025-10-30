@@ -98,9 +98,8 @@ class CollectorSearchBaseResource(QueryBaseResource, SearchDataParser, metaclass
             instance_key=namespace,
         )
         plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
-        collector_rt_id = plugin.build_result_table_id(settings.DEFAULT_BK_BIZ_ID, plugin.collector_plugin_name_en)
         sql_builder = self.doris_sql_builder_class(
-            table=collector_rt_id,
+            table=plugin.result_table_id,
             conditions=conditions,
             sort_list=validated_request_data["sort_list"],
             page=page,

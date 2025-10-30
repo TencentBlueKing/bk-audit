@@ -19,7 +19,7 @@ from typing import TypedDict
 
 from django.utils.translation import gettext_lazy
 
-from core.choices import TextChoices
+from core.choices import TextChoices, register_choices
 from core.sql.constants import (
     AggregateType,
     FieldType,
@@ -232,12 +232,25 @@ class BkBaseStorageType(TextChoices):
     REDIS = "redis", gettext_lazy("Redis")
     KAFKA = "kafka", gettext_lazy("Kafka")
     DORIS = "doris", gettext_lazy("Doris")
+    PULSAR = "pulsar", gettext_lazy("Pulsar")
 
+
+# 可用于实时计算的存储类型
+ALLOWED_REALTIME_STORAGES = {
+    BkBaseStorageType.KAFKA.value,
+    BkBaseStorageType.PULSAR.value,
+}
+
+# 可用于离线计算的存储类型
+ALLOWED_OFFLINE_STORAGES = {
+    BkBaseStorageType.HDFS.value,
+}
 
 # 业务下的RT表允许的存储类型
 BIZ_RT_TABLE_ALLOW_STORAGES = {
     BkBaseStorageType.HDFS.value,
     BkBaseStorageType.KAFKA.value,
+    BkBaseStorageType.PULSAR.value,
 }
 
 
@@ -302,6 +315,7 @@ STRATEGY_STATUS_DEFAULT_INTERVAL = 30 * 6
 STRATEGY_RISK_DEFAULT_INTERVAL = 30 * 6
 
 
+@register_choices("strategy_field_source")
 class StrategyFieldSourceEnum(TextChoices):
     """
     策略字段来源

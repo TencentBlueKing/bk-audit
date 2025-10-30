@@ -23,12 +23,19 @@ from django.conf import settings
 
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
+from apps.meta.utils.fields import BKDATA_ES_TYPE_MAP
 from services.web.analyze.constants import (
     DEFAULT_HDFS_STORAGE_CLUSTER_KEY,
     DEFAULT_QUEUE_STORAGE_CLUSTER_KEY,
 )
 from services.web.analyze.exceptions import ClusterNotExists
-from services.web.databus.constants import DEFAULT_RETENTION, DEFAULT_STORAGE_CONFIG_KEY
+from services.web.databus.constants import (
+    DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
+    DEFAULT_RETENTION,
+    DEFAULT_STORAGE_CONFIG_KEY,
+    DORIS_EVENT_PHYSICAL_TABLE_NAME_KEY,
+)
+from services.web.risk.constants import EventMappingFields
 from services.web.risk.handlers import EventHandler
 
 
@@ -59,9 +66,10 @@ class BaseStorageNode(ABC):
         if not self.cluster:
             return {}
         result_table_id = self.build_rt_id(bk_biz_id, raw_table_name)
+        from_ids = from_result_table_ids or [result_table_id]
         return {
             "node_type": self.node_type,
-            "from_result_table_ids": [result_table_id],
+            "from_result_table_ids": from_ids,
             "bk_biz_id": bk_biz_id,
             "result_table_id": result_table_id,
             "name": f"{self.node_type}_{raw_table_name}",
@@ -135,3 +143,64 @@ class HDFSStorageNode(BaseStorageNode):
             instance_key=self.namespace,
             default="",
         )
+
+
+class DorisStorageNode(BaseStorageNode):
+    node_type = "doris"
+    expires = settings.EVENT_DORIS_EXPIRES
+
+    @property
+    def cluster(self) -> Union[str, int]:
+        """
+        获取当前命名空间下的 Doris 集群 ID
+        """
+
+        replica_config = GlobalMetaConfig.get(
+            DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.namespace,
+        )
+        if not replica_config:
+            return ""
+        return replica_config["bkbase_cluster_id"]
+
+    def build_node_config(self, bk_biz_id: int, raw_table_name: str, from_result_table_ids: List[str]) -> dict:
+        fields = []
+        for field in EventMappingFields().fields:
+            field_type = BKDATA_ES_TYPE_MAP.get(field.field_type, field.field_type)
+            fields.append(
+                {
+                    "type": field_type,
+                    "config": "json" if field.is_json else "",
+                    "field": field.field_name,
+                    "alias": str(field.description or field.alias_name or field.field_name),
+                }
+            )
+
+        # 从全局配置中获取物理表名，合流写入
+        physical_table_name = GlobalMetaConfig.get(
+            config_key=DORIS_EVENT_PHYSICAL_TABLE_NAME_KEY,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.namespace,
+        )
+
+        return {
+            **super().build_node_config(bk_biz_id, raw_table_name, from_result_table_ids),
+            "indexed_fields": [],
+            "has_replica": False,
+            "has_unique_key": False,
+            "storage_keys": [],
+            "analyzed_fields": [],
+            "doc_values_fields": [],
+            "json_fields": [EventMappingFields.EVENT_EVIDENCE.field_name, EventMappingFields.EVENT_DATA.field_name],
+            "physical_table_name": physical_table_name,
+            "original_json_fields": [],
+            "udc_name": "doris",
+            "storage_field_config": {},
+            "custom_param_config": {
+                "fields": fields,
+                "expires_dup": settings.EVENT_DORIS_EXPIRES,
+                "expires_uniq": "-1",
+                "data_model": "duplicate",
+            },
+        }
