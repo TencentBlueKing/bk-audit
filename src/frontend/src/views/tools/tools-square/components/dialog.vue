@@ -856,6 +856,8 @@
       Object.keys(riskToolParams.value).forEach((key) => {
         if (riskToolParams.value && key in riskToolParams.value) {
           constants[key] = riskToolParams.value[key];
+        } else {
+          constants[key] = '';
         }
       });
     }
@@ -889,7 +891,7 @@
         } else { // 目标值为固定值类型
           if (fieldCategory === 'variable') {
             // 变量类型字段：直接使用固定值，存储到 constants 中
-            constants[item.source_field] = item.target_value;
+            constants[item.source_field] = item.target_value || '';
           } else {
             // 过滤器类型字段：直接使用固定值，存储到 drillDownFilters 中
             drillDownFilters[item.source_field] = item.target_value;
@@ -901,14 +903,16 @@
     toolDetails.value?.config.input_variable.forEach((item: any) => {
       if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
         if (item.field_category === 'variable') {
-          constants[item.raw_name] = item.default_value;
+          constants[item.raw_name] = item.default_value || '';
         } else {
           filters[item.raw_name] = item.default_value;
         }
+      } else {
+        if (item.field_category === 'variable') {
+          constants[item.raw_name] = '';
+        }
       }
     });
-    console.log('constants>>>',  constants);
-    console.log('filters>>>',  filters);
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(
