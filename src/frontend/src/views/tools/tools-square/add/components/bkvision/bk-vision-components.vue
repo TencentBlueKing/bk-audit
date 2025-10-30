@@ -50,7 +50,7 @@
             style="width: 100%;"
             @update:model-value="handleRangeChange" />
           <audit-icon
-            v-if="showDeleteIcon && !disabled"
+            v-if="showDeleteIcon && !disabled && !isDefaultValue"
             class="delete"
             type="delete-fill"
             @click="initPickerValue" />
