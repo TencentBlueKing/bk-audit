@@ -451,12 +451,5 @@ export default {
     请输入存储值: 'Please enter the stored value',
     '风险关键字段，禁止取消重点展示': 'Risk keyword field, forbidden to cancel the focus display',
     '存储值、展示文本': 'Stored value, display text',
-    点击复制策略名称: 'Click to copy the strategy name',
-    '确定删除该策略？': 'Are you sure you want to delete this strategy?',
-    删除的策略将: 'The deleted strategy will',
-    无法找回: 'cannot be retrieved',
-    请谨慎操作: 'Please operate with caution',
-    以确认删除: 'to confirm deletion',
-    请输入待删除的策略名称: 'Please enter the name of the strategy to be deleted',
   },
 };

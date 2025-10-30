@@ -207,6 +207,7 @@
             ref="comRef"
             :data-search-config-type="formData.data_search_config_type"
             :is-edit-mode="isEditMode"
+            :is-first-edit="isFirstEdit"
             :is-update="isUpdate"
             :name="formData.name"
             :uid="formData.uid"
@@ -382,6 +383,7 @@
   const allTagMap = ref<Record<string, string>>({});
   const isUpdate = ref(false);
   const isUpdateSubmit = ref(false);
+  const isFirstEdit = ref(false);
   const dashboardUid = ref('');
   const formData = ref<FormData>({
     source: '',
@@ -587,6 +589,7 @@
 
         // 编辑模式下第一次进入检查更新
         if (isEditMode && clickSpaceChange.value === 1) {
+          isFirstEdit.value = true;
           isUpdate.value =  formData.value.is_bkvision;
           formData.value.config.input_variable = formData.value.config.input_variable.map((item) => {
             // 变量描述取最新的变量描述
@@ -612,6 +615,7 @@
             };
           });
         } else {
+          isFirstEdit.value = false;
           isUpdate.value = false;
           formData.value.config.input_variable = filters
             .map((item) => {
