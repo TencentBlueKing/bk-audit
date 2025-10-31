@@ -157,6 +157,10 @@ class BKVisionInputVariable(DataSearchBaseField):
     default_value: Annotated[
         Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
     ] = PydanticField(None, description="字段默认值")
+    raw_default_value: Annotated[
+        Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
+    ] = PydanticField(None, description="原始字段默认值")
+    is_default_value: bool = PydanticField(True, description="是否默认值")
 
 
 class Tool(BaseModel):
@@ -190,6 +194,7 @@ class DrillConfig(BaseModel):
 
     tool: Tool
     config: List[ToolDrillConfig] = PydanticField(default_factory=list)
+    drill_name: str = PydanticField("", description="下钻工具名称")
 
 
 class SQLDataSearchOutputField(DataSearchBaseField):
@@ -197,7 +202,7 @@ class SQLDataSearchOutputField(DataSearchBaseField):
     SQL数据查询输出字段
     """
 
-    drill_config: Optional[DrillConfig] = None  # 下钻配置
+    drill_config: Optional[List[DrillConfig]] = None  # 下钻配置
     enum_mappings: Optional[EnumMappingConfig] = None
 
 
