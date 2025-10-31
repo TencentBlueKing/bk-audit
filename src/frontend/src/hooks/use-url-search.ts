@@ -28,7 +28,7 @@ export default function () {
     });
     return params;
   };
-  const getSearchParamsPost = () => {
+  const getSearchParamsPost = (escapedField: string) => {
     const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
     const curSearchParams = new URLSearchParams(window.location.search);
     const params = Object.create(null);
@@ -46,7 +46,7 @@ export default function () {
         try {
           // 尝试解析JSON，如果不是JSON则直接使用原值
           // 判断 values[0] 是否为对象
-          if (typeof JSON.parse(values[0]) === 'object') {
+          if (typeof JSON.parse(values[0]) === 'object' && escapedField !== key) {
             params[processedKey] = [JSON.parse(values[0])];
           } else {
             params[processedKey] = JSON.parse(values[0]);
