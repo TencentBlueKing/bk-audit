@@ -28,7 +28,13 @@
           {{ t('使用默认值') }}
         </bk-checkbox>
       </div>
-      <div class="content">
+      <div
+        v-bk-tooltips="{
+          disabled: !disabled,
+          theme: 'light',
+          content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
+        }"
+        class="content">
         <bk-date-picker
           v-if="config?.field_category === 'time-picker'"
           v-model="dateValue"
