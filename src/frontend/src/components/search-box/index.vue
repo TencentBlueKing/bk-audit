@@ -66,7 +66,7 @@
                     :name="condition.name" />
                 </bk-select>
                 <bk-tag-input
-                  v-if="item.operator === 'IN'"
+                  v-if="item.operator === 'IN' || item.operator === 'NOT IN'"
                   v-model="item.value"
                   allow-create
                   collapse-tags
@@ -104,7 +104,7 @@
                 <audit-icon
                   style="margin-right: 5px;"
                   type="add" />
-                <span>{{ t('添加其他条件') }}</span>
+                <span>{{ t('添加关联事件条件') }}</span>
               </span>
             </template>
             <bk-option
@@ -191,7 +191,7 @@
     getSearchParamsPost,
     appendSearchParams,
   } = useUrlSearch();
-  const urlSearchParams = getSearchParamsPost();
+  const urlSearchParams = getSearchParamsPost('event_filters');
 
   const conditionList = computed(() => GlobalChoices.value.event_filter_operator);
   const eventFiltersParams = computed(() => {

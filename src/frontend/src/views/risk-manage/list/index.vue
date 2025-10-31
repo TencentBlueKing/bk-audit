@@ -43,6 +43,7 @@
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
+    nextTick,
     onMounted,
     onUnmounted,
     ref,
@@ -466,7 +467,7 @@
     });
     if (!Object.keys(pollingDataMap.value).length) return;
     timeout = setTimeout(() => {
-      const params = getSearchParamsPost();
+      const params = getSearchParamsPost('event_filters');
       fetchRiskList({
         ...params,
         risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
@@ -525,11 +526,12 @@
       ...params,
       ...searchModel.value,
     };
-
     listRef.value.fetchData(dataParams);
   };
   onMounted(() => {
-    getEventFields();
+    nextTick(() => {
+      getEventFields();
+    });
   });
   onUnmounted(() => {
     clearTimeout(timeout);
@@ -537,12 +539,18 @@
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'riskManageDetail') {
-      const params = getSearchParamsPost();
+      const params = getSearchParamsPost('event_filters');
+      const paramsEventFilters = JSON.stringify(params.event_filters);
+      const EventFiltersparams = {
+        ...params,
+        event_filters: paramsEventFilters,
+      };
+      // replaceSearchParams(params);
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
       to.query = {
         ...to.query,
-        ...params,
+        ...EventFiltersparams,
       };
     }
     next();

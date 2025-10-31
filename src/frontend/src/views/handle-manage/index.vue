@@ -526,7 +526,7 @@
     });
     if (!Object.keys(pollingDataMap.value).length) return;
     timeout = setTimeout(() => {
-      const params = getSearchParamsPost();
+      const params = getSearchParamsPost('event_filters');
       fetchRiskList({
         ...params,
         risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
@@ -608,7 +608,7 @@
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'handleManageDetail') {
-      const params = getSearchParamsPost();
+      const params = getSearchParamsPost('event_filters');
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
       to.query = {
