@@ -485,7 +485,8 @@ LOG_EXPORT_STATUS_ACCESS_TOKEN = os.getenv("BKAPP_LOG_EXPORT_STATUS_ACCESS_TOKEN
 
 # metric report
 METRIC_REPORT_TRACE_URL = os.getenv("BKAPP_METRIC_REPORT_TRACE_URL", "")
-
+# bkvision是否更新
+BKVISION_UPDATE_HOUR = os.getenv("BKAPP_BKVISION_UPDATE_HOUR", "*/1")
 # 反向拉取需要屏蔽的高危端口
 HIGH_RISK_PORTS = {
     int(port)
