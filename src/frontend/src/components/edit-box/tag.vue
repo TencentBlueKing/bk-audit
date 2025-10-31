@@ -200,7 +200,10 @@
   };
   // 动态设置标签宽度
   const dynamicCalcWidth = () => {
-    const maxWidth = rootRef.value.parentNode.clientWidth - 30;
+    const root = rootRef.value; // 获取 DOM 根节点引用
+    if (!root) return; // 如果 rootRef 还没绑定或未找到，直接退出
+
+    const maxWidth = rootRef?.value.parentNode.clientWidth - 30;
     const gapWidth = 6;
     const copyTipWidth = 25;
     const tags:Array<HTMLElement> = rootRef.value.getElementsByClassName('bk-tag');

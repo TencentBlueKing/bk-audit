@@ -44,7 +44,7 @@
   }
   const props = defineProps<Props>();
 
-  const tableColumn: Column[] = [
+  const tableColumn  = [
     {
       label: () => t('事件ID'),
       minWidth: 120,
@@ -95,7 +95,7 @@
       showOverflowTooltip: true,
       render: ({ data }: { data: EventModel }) => (data.operator || '--'),
     },
-  ];
+  ] as Column[];
   const dateTime = [
     dayjs(Date.now() - (86400000 * 14)).format('YYYY-MM-DD HH:mm:ss'),
     dayjs().format('YYYY-MM-DD HH:mm:ss'),

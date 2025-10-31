@@ -47,6 +47,8 @@
   </div>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
+  import type { Ref } from 'vue';
   import { computed, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
@@ -170,7 +172,7 @@
         </div>;
       },
     },
-  ]);
+  ]) as Ref<Column[]>;
 
   // eslint-disable-next-line max-len
   const hasChange = computed(() => tableData.value.some(data => !(data.link_table_version >= (props.maxVersionMap[data.link_table_uid] || 1))));

@@ -21,7 +21,8 @@
     show-footer
     show-footer-slot
     :title="t('字段值映射配置')"
-    :width="640">
+    :width="640"
+    @update:is-show="handleUpdateIsShow">
     <audit-form
       ref="tableFormRef"
       class="field-dict-sideslider"
@@ -118,10 +119,16 @@
               </bk-button>
             </audit-popconfirm>
           </div>
-          <bk-input
+          <bk-search-select
             v-model="searchKey"
-            style="width: 240px;"
-            type="search" />
+            clearable
+            :condition="[]"
+            :data="searchData"
+            :placeholder="t('存储值、展示文本')"
+            style="width: 280px;"
+            unique-select
+            value-split-code=","
+            @update:model-value="handleSearch" />
         </div>
       </div>
       <div class="render-field">
@@ -185,16 +192,17 @@
                     v-bk-tooltips="{
                       content: t('新增'),
                     }"
-                    style="margin-right: 10px; cursor: pointer;"
+                    class="icon-item"
                     type="add-fill"
-                    @click="handleAdd(index)" />
+                    @click="handleAdd(item.key)" />
                   <audit-icon
                     v-bk-tooltips="{
                       content: formData.renderData.length > 1 ? t('删除') : t('至少保留一个'),
                     }"
-                    :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : 'delete-icon']"
+                    class="icon-item"
+                    :class="[formData.renderData.length <= 1 ? 'delete-icon-disabled' : '']"
                     type="reduce-fill"
-                    @click="handleDelete(index)" />
+                    @click="handleDelete(item.key)" />
                 </div>
               </div>
             </div>
@@ -241,13 +249,23 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import * as XLSX from 'xlsx';
 
-  import useDebouncedRef from '@/hooks/use-debounced-ref';
   import useMessage from '@/hooks/use-message';
   import { encodeRegexp } from '@/utils/assist';
+
+  interface SearchKey {
+    id: string,
+    name: string,
+    values: [
+      {
+        id: string,
+        name: string
+      }
+    ]
+  }
 
   interface Emits {
     (e: 'submit', data: Array<{
@@ -272,11 +290,21 @@
     required: true,
   });
 
-  const searchKey = useDebouncedRef('');
+  const searchKey = ref<Array<SearchKey>>([]);
   const isSearching = ref(false);
   const loading = ref(false);
   const uploadRef = ref();
   const tableFormRef = ref();
+
+  const searchData = ref([{
+    id: 'key',
+    name: t('存储值'),
+    placeholder: t('请输入存储值'),
+  }, {
+    id: 'name',
+    name: t('展示文本'),
+    placeholder: t('请输入展示文本'),
+  }]);
 
   const formData  = ref<{
     source: string,
@@ -292,40 +320,125 @@
     }],
   });
 
-  const renderList = computed(() => formData.value.renderData.reduce((result, item) => {
-    const reg = new RegExp(encodeRegexp(searchKey.value), 'i');
-    if (reg.test(item.key) || reg.test(item.name) || (item.key === '' && item.name === '')) {
-      result.push(item);
-    }
-    isSearching.value = true;
-    return result;
-  }, [] as Array<{
+  const renderList = ref<Array<{
     key: string,
     name: string,
-  }>));
+  }>>([{
+    key: '',
+    name: '',
+  }]);
 
-  const handleClearSearch = () => {
-    searchKey.value = '';
-  };
-
-  const handleAdd = (index: number) => {
-    // 在对应index后添加新字段
-    formData.value.renderData.splice(index + 1, 0, {
+  const updateRenderList = () => {
+    // 构建搜索条件
+    const search = {
       key: '',
       name: '',
+    };
+
+    searchKey.value.forEach((item: SearchKey) => {
+      if (item.values) {
+        const value = item.values.map(v => v.id).join(',');
+        search[item.id as keyof typeof search] = value;
+      }
     });
+
+    // 如果没有搜索条件，显示全部（直接返回引用）
+    if (!search.key && !search.name) {
+      isSearching.value = false;
+      renderList.value = formData.value.renderData;
+      return;
+    }
+
+    isSearching.value = true;
+
+    // 根据搜索条件过滤，保留原始对象的引用
+    renderList.value = formData.value.renderData.filter((item) => {
+      // 空项始终显示
+      if (item.key === '' && item.name === '') {
+        return true;
+      }
+
+      let match = false;
+
+      // 匹配存储值
+      if (search.key) {
+        const reg = new RegExp(encodeRegexp(search.key), 'i');
+        match = reg.test(item.key);
+      }
+
+      // 匹配展示文本
+      if (search.name) {
+        const reg = new RegExp(encodeRegexp(search.name), 'i');
+        match = match || reg.test(item.name);
+      }
+
+      return match;
+    });
+  };
+
+  // 搜索, 失去焦点时触发
+  const handleSearch = () => {
+    updateRenderList();
+  };
+
+  // 清空搜索， 重新渲染列表
+  const handleClearSearch = () => {
+    searchKey.value = [];
+    isSearching.value = false;
+    updateRenderList();
+  };
+
+  const handleAdd = (key: string) => {
+    const formDataIndex = formData.value.renderData.findIndex(item => item.key === key);
+
+    // 只需要在 formData 中添加，renderList 会通过引用自动更新
+    const newItem = {
+      key: '',
+      name: '',
+    };
+    formData.value.renderData.splice(formDataIndex + 1, 0, newItem);
+
+    // 如果当前正在搜索，也需要在 renderList 中添加（因为新项是空的，应该显示）
+    if (isSearching.value) {
+      const renderListIndex = renderList.value.findIndex(item => item.key === key);
+      if (renderListIndex !== -1) {
+        renderList.value.splice(renderListIndex + 1, 0, newItem);
+      }
+    } else {
+      // 未搜索时，直接同步（因为已经是同一个引用了）
+      renderList.value = formData.value.renderData;
+    }
+
     nextTick(() => {
       tableFormRef.value.clearValidate();
     });
   };
 
-  const handleDelete = (index: number) => {
+  const handleDelete = (key: string) => {
     // 只有一个不能再删除
     if (formData.value.renderData.length === 1) {
       return;
     }
-    // 在对应index后删除字段
-    formData.value.renderData.splice(index, 1);
+
+    const formDataIndex = formData.value.renderData.findIndex(item => item.key === key);
+
+    // 只需要在 formData 中删除，renderList 会自动更新
+    if (formDataIndex !== -1) {
+      formData.value.renderData.splice(formDataIndex, 1);
+    }
+
+    // 如果 renderList 和 formData 是同一个引用，不需要额外操作
+    // 否则需要更新 renderList
+    if (!isSearching.value) {
+      // 未搜索时，直接同步（因为已经是同一个引用了）
+      renderList.value = formData.value.renderData;
+    } else {
+      // 搜索时需要手动从 renderList 中删除
+      const renderListIndex = renderList.value.findIndex(item => item.key === key);
+      if (renderListIndex !== -1) {
+        renderList.value.splice(renderListIndex, 1);
+      }
+    }
   };
 
   const convertExcelData = (data: any[][]): { key: any; name: string }[] => {
@@ -339,9 +452,9 @@
     // 3. 验证索引是否有效
     if (valueIndex === -1 || textIndex === -1) {
       const missingHeaders = [];
-      if (valueIndex === -1) missingHeaders.push('存储值');
-      if (textIndex === -1) missingHeaders.push('展示文本');
-      throw new Error(`缺少必要的表头: ${missingHeaders.join(', ')}`);
+      if (valueIndex === -1) missingHeaders.push(t('存储值'));
+      if (textIndex === -1) missingHeaders.push(t('展示文本'));
+      throw new Error(`${t('缺少必要的表头')}: ${missingHeaders.join(', ')}`);
     }
 
     // 4. 处理数据行（跳过表头）
@@ -364,7 +477,7 @@
       try {
         const arrayBuffer = e.target?.result as ArrayBuffer | null;
         if (!arrayBuffer) {
-          throw new Error('文件读取失败');
+          throw new Error(t('文件读取失败'));
         }
         const data = new Uint8Array(arrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
@@ -381,7 +494,7 @@
         });
 
         if (jsonData.length === 0) {
-          throw new Error('Excel文件中没有数据');
+          throw new Error(t('Excel文件中没有数据'));
         }
 
         const result = convertExcelData(jsonData as any[][]);
@@ -403,9 +516,10 @@
       loading.value = true;
       // 解析Excel数据
       formData.value.renderData = await parseExcel(file);
+      updateRenderList();
       messageSuccess(t('导入成功'));
     } catch (error) {
-      messageError(`Excel解析失败: ${error}`);
+      messageError(`${t('Excel解析失败')}: ${error}`);
     } finally {
       loading.value = false;
       if (e.target) {
@@ -423,6 +537,7 @@
       key: '',
       name: '',
     }];
+    updateRenderList();
     await nextTick();
     tableFormRef.value.clearValidate();
   };
@@ -436,6 +551,7 @@
     });
   };
 
+  // 点击确认或取消关闭
   const closeDialog = () => {
     showFieldDict.value = false;
     formData.value.renderData = [{
@@ -444,9 +560,20 @@
     }];
   };
 
+  // 快捷关闭
+  const handleUpdateIsShow = () => {
+    formData.value.renderData = [{
+      key: '',
+      name: '',
+    }];
+  };
+
   watch(() => showFieldDict.value, (value) => {
+    // 初始化时直接引用 formData.renderData，保持引用关系
+    renderList.value = formData.value.renderData;
     if (value && props.editData.length) {
       formData.value.renderData = _.cloneDeep(props.editData);
+      renderList.value = formData.value.renderData;
     }
   });
 </script>
@@ -499,6 +626,25 @@
     padding-left: 16px;
     background: #fafbfd;
     border-left: 1px solid #dcdee5;
+
+    .icon-group {
+      font-size: 16px;
+      color: #979ba5;
+
+      .icon-item {
+        margin-right: 10px;
+        cursor: pointer;
+
+        &:hover:not(.delete-icon-disabled) {
+          color: #4d4f56;
+        }
+      }
+
+      .delete-icon-disabled {
+        color: #dcdee5;
+        cursor: not-allowed;
+      }
+    }
   }
 
   :deep(.field-value) {

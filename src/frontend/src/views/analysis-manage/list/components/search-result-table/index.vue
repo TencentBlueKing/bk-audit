@@ -35,7 +35,7 @@
   </div>
 </template>
 <script setup lang="tsx">
-  import type { Table } from 'bkui-vue';
+  import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
   import {
     computed,
@@ -107,7 +107,7 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  const initColumn: InstanceType<typeof Table>['$props']['columns'] = [
+  const initColumn = [
     // {
     //   label: () => '',
     //   type: 'expand',
@@ -270,7 +270,7 @@
         <LogBox data={data} />
       ),
     },
-  ];
+  ] as Column[];
   const settings = {
     fields: [],
     checked: [],
@@ -378,7 +378,7 @@
   const formatFields = () => {
     if (targetList.value.length) {
       // 获取已有列的field集合，用于去重
-      const existingFields = new Set(initColumn.map(col => col.field));
+      const existingFields = new Set(initColumn?.map(col => col.field) || []);
 
       // 过滤掉已存在的字段
       const lists = targetList.value
@@ -425,7 +425,7 @@
       const customList = formatFields();
       // 从倒数第二个元素开始拼接
       const clonedInitColumn = _.cloneDeep(initColumn);
-      clonedInitColumn.splice(clonedInitColumn.length - 1, 0, ...customList);
+      clonedInitColumn?.splice(clonedInitColumn?.length - 1, 0, ...customList);
       tableColumn.value = clonedInitColumn;
       // tableColumn.value = tableColumn.value.concat(fixedColum);
     },
@@ -454,6 +454,7 @@
       if (item.filter) {
         const values = data.map(obj => getValueFromPath(obj, item.field as string));
         const lists = [...new Set(values)].map(value => ({
+          label: value === undefined ? '--' : value,
           text: value === undefined ? '--' : value,
           value,
         }));

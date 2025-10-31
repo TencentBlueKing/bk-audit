@@ -49,7 +49,7 @@
     <!-- 字段下钻 -->
     <template v-else-if="fieldKey === 'drill_config' && localEventItem.drill_config">
       <div
-        v-if="!localEventItem.drill_config.tool.uid"
+        v-if="!localEventItem.drill_config.length"
         class="field-cell-div"
         style="color: #c4c6cc;"
         @click="() => handleClick()">
@@ -58,27 +58,70 @@
       <div
         v-else
         class="field-cell-div"
-        @click="() => handleClick(localEventItem.drill_config)">
-        <audit-icon
-          style=" margin-right: 5px;font-size: 16px;"
-          svg
-          :type="iconMap[
-            getToolNameAndType(localEventItem.drill_config.tool.uid).type as keyof typeof iconMap
-          ]" />
-        {{ getToolNameAndType(localEventItem.drill_config.tool.uid).name }}
-        <audit-icon
-          v-if="localEventItem.drill_config.tool.uid"
-          class="remove-btn"
-          type="delete-fill"
-          @click.stop="handleRemove" />
-        <audit-icon
-          v-if="!(localEventItem.drill_config.tool.version
-            >= (toolMaxVersionMap[localEventItem.drill_config.tool.uid] || 1))"
-          v-bk-tooltips="{
-            content: t('该工具已更新，请确认'),
-          }"
-          class="renew-tips"
-          type="info-fill" />
+        @click="() => handleClick(localEventItem.drill_config)"
+        @mouseleave="handleDrillMouseLeave">
+        <bk-popover
+          placement="top"
+          theme="black">
+          <span style="cursor: pointer;">
+            {{ t('已配置') }}
+            <span style="color: #3a84ff;">{{ localEventItem.drill_config.length }}</span>
+            {{ t('个工具') }}
+          </span>
+          <template #content>
+            <div>
+              <div
+                v-for="config in localEventItem.drill_config"
+                :key="config.tool.uid">
+                {{ getToolNameAndType(config.tool.uid).name }}
+              </div>
+            </div>
+          </template>
+        </bk-popover>
+        <!-- 删除 -->
+        <audit-popconfirm
+          ref="drillPopconfirmRef"
+          class="ml8"
+          :confirm-handler="() => handleRemove()"
+          :content="t('移除操作无法撤回，请谨慎操作！')"
+          :title="t('确认移除以下工具？')"
+          @hide="handleDrillPopconfirmHide">
+          <audit-icon
+            class="remove-btn"
+            :class="{ 'is-popconfirm-visible': isDrillPopconfirmVisible }"
+            type="delete-fill"
+            @click="handleDrillPopconfirmShow" />
+          <template #content>
+            <bk-table
+              ref="refTable"
+              :columns="columns"
+              :data="localEventItem.drill_config"
+              height="auto"
+              max-height="100%"
+              show-overflow-tooltip
+              stripe />
+          </template>
+        </audit-popconfirm>
+        <bk-popover
+          v-if="localEventItem.drill_config
+            .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+          placement="top"
+          theme="black">
+          <audit-icon
+            class="renew-tips"
+            type="info-fill" />
+          <template #content>
+            <div>
+              <div>{{ t('以下工具已更新，请确认：') }}</div>
+              <div
+                v-for="drill in localEventItem.drill_config
+                  .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                :key="drill.tool.uid">
+                {{ getToolNameAndType(drill.tool.uid).name }}
+              </div>
+            </div>
+          </template>
+        </bk-popover>
       </div>
       <!-- 字段下钻 -->
       <field-reference
@@ -89,6 +132,7 @@
         :output-fields="outputFields"
         :tag-data="tagData"
         @open-tool="handleOpenTool"
+        @refresh-tool-list="handleRefreshToolList"
         @submit="handleFieldSubmit" />
     </template>
 
@@ -109,7 +153,8 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -138,7 +183,8 @@
   }
 
   interface Emits {
-    (e: 'openTool', value: ToolDetailModel): void;
+    (e: 'openTool', value: string): void;
+    (e: 'refresh-tool-list'): void;
   }
 
   const props = defineProps<Props>();
@@ -151,12 +197,19 @@
   const fieldMappingRef = ref();
   const fieldReferenceRef = ref();
   const displayNameRef = ref();
+  const drillPopconfirmRef = ref();
+  const isDrillPopconfirmVisible = ref(false);
 
-  const iconMap = {
-    data_search: 'sqlxiao',
-    api: 'apixiao',
-    bk_vision: 'bkvisonxiao',
-  };
+  // const iconMap = {
+  //   data_search: 'sqlxiao',
+  //   api: 'apixiao',
+  //   bk_vision: 'bkvisonxiao',
+  // };
+
+  const columns = [{
+    label: () => t('工具列表'),
+    render: ({ data }: {data: NonNullable<Props['eventItem']['drill_config']>[0]}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
+  }] as Column[];
 
   const disabledList = ['risk_level', 'status', 'current_operator'];
 
@@ -176,20 +229,34 @@
     localEventItem.value.drill_config = drillConfig;
   };
 
+  // 字段下钻气泡框显示/隐藏处理
+  const handleDrillPopconfirmShow = () => {
+    isDrillPopconfirmVisible.value = true;
+  };
+
+  const handleDrillPopconfirmHide = () => {
+    isDrillPopconfirmVisible.value = false;
+  };
+
+  const handleDrillMouseLeave = () => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (drillPopconfirmRef.value && !isDrillPopconfirmVisible.value) {
+      drillPopconfirmRef.value.hide();
+    }
+  };
+
   // 删除值
-  const handleRemove = () => {
-    localEventItem.value.drill_config =  {
-      tool: {
-        uid: '',
-        version: 1,
-      },
-      config: [],
-    };
+  const handleRemove = async () => {
+    localEventItem.value.drill_config = [];
   };
 
   // 打开工具
-  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
-    emit('openTool', toolInfo);
+  const handleOpenTool = async (uids: string) => {
+    emit('openTool', uids);
+  };
+
+  const handleRefreshToolList = () => {
+    emit('refresh-tool-list');
   };
 
   const getToolNameAndType = (uid: string) => {
@@ -265,6 +332,10 @@
 
       &:hover {
         color: #979ba5;
+      }
+
+      &.is-popconfirm-visible {
+        display: block;
       }
     }
 

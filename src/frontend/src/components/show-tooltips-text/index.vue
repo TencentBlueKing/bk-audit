@@ -24,7 +24,7 @@
     <div
       :id="`${data}`"
       style="display: none;max-height: 90vh;overflow: auto;">
-      <div style="max-height: 90vh;overflow: auto;word-break: break-all;">
+      <div style="max-height: 90vh;overflow: auto;word-break: break-all;white-space: pre-wrap;">
         {{ data }}
       </div>
     </div>
@@ -49,6 +49,7 @@
     placement?: Placement,
     isShow?: boolean,
     maxWidth?: string | number,
+    line?: number,  // 新增行数控制属性
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -56,6 +57,7 @@
     placement: 'top',
     isShow: true,
     maxWidth: 'none',
+    line: 1,  // 默认一行
   });
 
   const rootRef = ref();
@@ -69,7 +71,7 @@
         tippyIns.destroy();
       }
       const template = document.getElementById(`${data}`);
-      if (hanldeIsShowTippy() && template && props.isShow) {
+      if (handleIsShowTippy() && template && props.isShow) {
         tippyIns = tippy(rootRef.value as SingleTarget, {
           content: template.innerHTML,
           placement: props.placement as Placement || 'top',
@@ -90,10 +92,11 @@
     immediate: true,
   });
   // 当文本溢出省略号则hover显示全部内容
-  const hanldeIsShowTippy = () => {
-    const { clientWidth } = rootRef.value;
-    const { scrollWidth } = rootRef.value;
-    if (scrollWidth > clientWidth) {
+  const handleIsShowTippy = () => {
+    const { clientWidth, clientHeight } = rootRef.value;
+    const { scrollWidth, scrollHeight } = rootRef.value;
+    // 多行溢出判断：宽度或高度超出都显示tooltip
+    if (scrollWidth > clientWidth || scrollHeight > clientHeight) {
       return true;
     }
     return false;
@@ -108,9 +111,15 @@
 </script>
 <style lang="postcss">
   .show-tooltips-text {
-    max-width: 300px;
+    display: -webkit-box;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: break-all;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: v-bind(line);
+  }
+
+  .text-content {
+    word-break: break-all;
+    white-space: pre-wrap;
   }
 </style>

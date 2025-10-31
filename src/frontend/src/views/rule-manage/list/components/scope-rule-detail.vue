@@ -27,6 +27,7 @@
 </template>
 
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     onMounted,
     ref,
@@ -82,7 +83,7 @@
       width: 180,
       render: ({ data }: { data: {event_time: string} }) => data.event_time || '--',
     },
-  ];
+  ] as Column[];
   onMounted(() => {
     if (!props.data) return;
     scopeListRef.value.fetchData({

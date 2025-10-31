@@ -46,17 +46,19 @@
           :strategy-name="strategyName"
           :strategy-type="strategyType"
           :tag-data="tagData"
-          @open-tool="handleOpenTool" />
+          @open-tool="handleOpenTool"
+          @refresh-tool-list="handleRefreshToolList" />
       </div>
     </div>
   </div>
   <!-- 循环所有工具 -->
   <div
-    v-for="item in allToolsDataUids"
+    v-for="item in allOpenToolsData"
     :key="item">
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item] = el"
+      :all-tools-data="allToolsData"
       :tags-enums="tagData"
       @open-field-down="openFieldDown" />
   </div>
@@ -78,6 +80,7 @@
   import tableRow from './table-raw.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
 
   interface Exposes {
     getData: () => { risk_meta_field_config: StrategyFieldEvent['risk_meta_field_config'] };
@@ -91,22 +94,6 @@
     strategyName: string
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: {
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    };
-  }
 
   const props = defineProps<Props>();
   const { t, locale } = useI18n();
@@ -117,7 +104,13 @@
   const disabledList = ['risk_level', 'status', 'current_operator'];
   const isPriorityList = ['risk_id', 'risk_tags', 'risk_hazard', 'risk_guidance'];
 
-  const dialogRefs = ref<Record<string, any>>({});
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+  } = useToolDialog();
 
   const columns = [
     { key: 'field_name', label: t('字段名称') },
@@ -173,13 +166,7 @@
                 collection_id: propsItem.enum_mappings?.collection_id || '',
                 mappings: propsItem.enum_mappings?.mappings || [],
               },
-              drill_config: {
-                tool: {
-                  uid: propsItem.drill_config?.tool?.uid || '',
-                  version: propsItem.drill_config?.tool?.version || 1,
-                },
-                config: propsItem.drill_config?.config || [],
-              },
+              drill_config: propsItem.drill_config || [],
               description: propsItem.description,
               example: propsItem.example,
               prefix: propsItem.prefix || '',
@@ -199,8 +186,6 @@
     defaultValue: [],
   });
 
-  // 动态工具数据
-  const allToolsDataUids = ref<string[]>([]);
 
   // 获取标签列表
   const {
@@ -213,27 +198,8 @@
     },
   });
 
-  // 下钻打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
-
-    // 如果工具不在 allToolsDataUids 中，添加它
-    if (!allToolsDataUids.value.find(item => item === uid)) {
-      allToolsDataUids.value.push(uid);
-    }
-
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
-    }
-  };
-
-  // 打开工具
-  const handleOpenTool = async (toolInfo: any) => {
-    const { uid } = toolInfo;
-    // 如果工具不在 allToolsDataUids 中，添加它
-    if (!allToolsDataUids.value.find(item => item === uid)) {
-      allToolsDataUids.value.push(uid);
-    }
+  const handleRefreshToolList = () => {
+    fetchAllTools();
   };
 
   defineExpose<Exposes>({

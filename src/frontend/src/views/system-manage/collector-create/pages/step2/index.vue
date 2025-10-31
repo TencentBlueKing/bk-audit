@@ -87,6 +87,7 @@
   </skeleton-loading>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import {
     computed,
     ref,
@@ -148,7 +149,7 @@
         </bk-button>
       ),
     },
-  ];
+  ] as Column[];
 
   const route = useRoute();
   const router = useRouter();

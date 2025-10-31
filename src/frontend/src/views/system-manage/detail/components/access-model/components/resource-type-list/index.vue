@@ -102,7 +102,9 @@
     @update-resource="handleUpdateResource" />
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
+  import { type Ref } from 'vue';
   import {
     computed,
     onMounted,
@@ -378,7 +380,7 @@
         </>,
       },
     ];
-  });
+  }) as Ref<Column[]>;
 
   const renderResourceTypeList = computed(() => {
     // 1. 在 search 中查找 id 为 "status" 的项
@@ -389,8 +391,6 @@
 
     // 3. 提取筛选值（如 ["closed"]）
     const statusIds = statusItem.values.map(v => v.id);
-    console.log(resourceTypeList.value);
-    console.log(statusIds);
 
     return resourceTypeList.value.filter(item => statusIds.
       includes(snapShotStatusList.value[item.resource_type_id]?.status));

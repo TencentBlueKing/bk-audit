@@ -106,13 +106,13 @@
                 :key="`${val.key}-${index}`">
                 <!-- 只显示需要显示的字段 -->
                 <bk-form-item
-                  v-if="val.show_type === 'show'"
+                  v-if="val.show_type === 'show' && !val.is_hide"
                   :label="val.name"
-                  :label-width="150"
+                  :label-width="300"
                   :property="`pa_params.${val.key}`"
                   required
                   :rules="[
-                    { message: '不能为空', trigger: 'change', validator: (value: any) => handlePaValidate(value) },
+                    { message: t('不能为空'), trigger: 'change', validator: (value: any) => handlePaValidate(value) },
                   ]"
                   style="margin-bottom: 16px;">
                   <application-parameter
@@ -124,6 +124,40 @@
                     :risk-field-list="riskFieldList" />
                   <template #error="message">
                     <div>{{ val.name }}{{ message }}</div>
+                  </template>
+                  <template #label>
+                    <div
+                      class="val-label">
+                      <span
+                        v-bk-tooltips="{
+                          content: t(val.desc),
+                          disabled: val.desc === '',
+                        }"
+                        :class="val.desc === '' ? 'label-name' : 'label-name underline'">{{ val.name }} </span>
+                      <bk-dropdown
+                        v-if="val.custom_type === 'datetime' || val.custom_type === 'textarea'
+                          || val.custom_type === 'input' || val.custom_type === 'bk_date_picker'"
+
+                        ref="dropdownRef"
+                        :is-show="val.dropdownShow"
+                        trigger="hover">
+                        <span
+                          class="label-text"
+                          @click="handleShow(val)">{{ typeText(val?.type) }} <audit-icon
+                            class="line-down"
+                            type="angle-line-down" /></span>
+                        <template #content>
+                          <bk-dropdown-menu>
+                            <bk-dropdown-item
+                              v-for="item in dropdownList"
+                              :key="item.id"
+                              @click="handleClick(item, val)">
+                              {{ item.name }}
+                            </bk-dropdown-item>
+                          </bk-dropdown-menu>
+                        </template>
+                      </bk-dropdown>
+                    </div>
                   </template>
                 </bk-form-item>
               </template>
@@ -163,6 +197,7 @@
   import {
     computed,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -212,6 +247,11 @@
     version: string;
     is_meta: boolean;
     schema: Record<string, any>;
+    dropdownShow?: boolean;
+    type?: string | undefined;
+    is_hide?: boolean | undefined;
+    default_value?: any;
+    hide_condition?: any[]; // 添加缺失的hide_condition属性
   }
 
   const props = defineProps<Props>();
@@ -220,7 +260,24 @@
   const router = useRouter();
   const route = useRoute();
   const { messageSuccess } = useMessage();
-
+  const typeText = (val: string | undefined) => (val === 'self' ?  t('自定义输入') : t('字段值引用'));
+  const handleShow = (val:ParamItem) => {
+    Object.keys(paramsDetailData.value).forEach((obj) => {
+      if (obj  === val.key) {
+        paramsDetailData.value[obj].dropdownShow = true;
+      }
+    });
+  };
+  const dropdownList = ref([
+    {
+      id: 'self',
+      name: t('自定义输入'),
+    },
+    {
+      id: 'field',
+      name: t('字段值引用'),
+    },
+  ]);
   const rules = {
     new_operators: [{
       validator: (value: string) => !!value && value.length > 0,
@@ -270,6 +327,15 @@
   const filterProcessApplicationList = computed(() => processApplicationList.value
     .filter(item => item.is_enabled));
 
+  const dropdownRef = ref();
+  const handleClick = (label: Record<string, any>, item: ParamItem) => {
+    Object.keys(paramsDetailData.value).forEach((obj) => {
+      if (obj  === item.key) {
+        paramsDetailData.value[obj].type = label.id;
+        paramsDetailData.value[obj].dropdownShow = false;
+      }
+    });
+  };
   const handlePaIdChange = (id: string) => {
     if (id) {
       const sopsTemplateId = processApplicationList.value
@@ -284,10 +350,13 @@
   };
 
   const handlePaValidate = (value: {field: string, value: string}) => {
-    // 排除空值 和 0
-    if (value.field === undefined && value.value === undefined) return false;
-    if (value.field === null && value.value === null) return false;
-    return true;
+    if (!value || typeof value !== 'object') return false;
+    const { field, value: val } = value;
+    // 检查field和value是否都为空（包括undefined、null、空字符串、）
+    const isFieldEmpty = field === undefined || field === null || field === '';
+    const isValueEmpty = val === undefined || val === null || val === '' ;
+    // 只有当field和value都为空时才返回false，否则返回true
+    return !(isFieldEmpty && isValueEmpty);
   };
 
   //  获取风险可用字段
@@ -314,14 +383,23 @@
       return acc;
     }, {} as Record<string, ParamItem>);
   };
-
+  const paramsDetailData = ref<Record<string, ParamItem>>({});
   const {
     run: fetchDetail,
     loading: detailLoading,
-    data: paramsDetailData,
   } = useRequest(SoapManageService.fetchDetail, {
     defaultValue: {},
     onSuccess(data) {
+      // 给对象中的每一项添加 type: 'self',
+      Object.keys(data).forEach((key) => {
+        // eslint-disable-next-line no-param-reassign
+        data[key].type = 'self';
+        // eslint-disable-next-line no-param-reassign
+        data[key].dropdownShow = false;
+        // eslint-disable-next-line no-param-reassign
+        data[key].is_hide = false;
+      });
+      paramsDetailData.value = data;
       // 如果是新建 或者 pa_params为null
       formData.value.pa_params = {};
       Object.values(data).forEach((val) => {
@@ -423,6 +501,39 @@
         : 'handleManageList',
     });
   };
+
+  watch(
+    () => formData.value, (val) => {
+      Object.keys(paramsDetailData.value).forEach((obj) => {
+        if (paramsDetailData.value[obj]?.hide_condition) {
+          const hideCondition = paramsDetailData.value[obj]?.hide_condition;
+          // 添加安全检查，确保hideCondition存在且是数组
+          if (hideCondition && Array.isArray(hideCondition)) {
+            hideCondition.forEach((item: any) => {
+              // 根据操作符进行条件判断
+              const oldIsHide = paramsDetailData.value[obj].is_hide;
+              switch (item.operator) {
+              case '=':
+                paramsDetailData.value[obj].is_hide = (
+                  item.value.toString() === val.pa_params[item.constant_key].value.toString()
+                );
+                break;
+              default:
+                paramsDetailData.value[obj].is_hide = false;
+                break;
+              }
+              // 当字段从显示变为隐藏时，重置对应的参数值
+              if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
+                formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
+                formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
+              }
+            });
+          }
+        }
+      });
+    },
+    { deep: true },
+  );
 </script>
 <style scoped>
 .risk-await-deal-wrap {
@@ -432,5 +543,38 @@
   border: 1px solid #eaebf0;
   border-radius: 6px;
   box-shadow: 0 2px 6px 0 #0000000a;
+}
+
+.val-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%
+}
+
+.line-down {
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.label-text {
+  cursor: pointer;
+}
+
+:deep(.bk-form-item.is-required .bk-form-label::after) {
+  display: none;
+}
+
+.label-name::after {
+  top: 0;
+  width: 14px;
+  margin-left: 5px;
+  color: #ea3636;
+  text-align: center;
+  content: '*';
+}
+
+.underline {
+  border-bottom: 1px dashed #c4c6cc;
 }
 </style>

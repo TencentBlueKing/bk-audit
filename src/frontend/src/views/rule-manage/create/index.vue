@@ -22,6 +22,7 @@
         <audit-form
           ref="formRef"
           class="strategt-form"
+          form-type="vertical"
           :label-width="80"
           :model="formData"
           :rules="rules">
@@ -216,25 +217,62 @@
               property="pa_params">
               <div style="width: 976px;padding: 16px 12px;background: rgb(245 247 250 / 100%)">
                 <template
-                  v-for="(val, index) in Object.values(paramsDetailData)"
+                  v-for="(val, index) in Object.values(sortByIndex (paramsDetailData))"
                   :key="`${val.key}-${index}`">
                   <!-- 只显示需要显示的字段 -->
                   <bk-form-item
-                    v-if="val.show_type === 'show'"
+                    v-if="val.show_type === 'show' && !val.is_hide"
                     :label="val.name"
                     :label-width="150"
                     :property="`pa_params.${val.key}`"
                     required
                     :rules="[
-                      { message: '不能为空', trigger: 'change', validator: (value: any) => handlePaValidate(value) },
+                      { message: t('不能为空'), trigger: 'change', validator: (value: any) => handlePaValidate(value) },
                     ]"
                     style="margin-bottom: 16px;">
                     <application-parameter
+                      ref="applicationParameterRef"
                       v-model="formData.pa_params[val.key]"
                       clearable
+                      :config="val"
+                      :detail-data="[]"
+                      :event-data-list="[]"
+                      :is-current-value="false"
                       :risk-field-list="riskFieldList" />
                     <template #error="message">
                       <div>{{ val.name }}{{ message }}</div>
+                    </template>
+                    <template #label>
+                      <div class="val-label">
+                        <span
+                          v-bk-tooltips="{
+                            content: t(val.desc),
+                            disabled: val.desc === '',
+                          }"
+                          :class="val.desc === '' ? 'label-name' : 'label-name underline'">{{ val.name }} </span>
+                        <bk-dropdown
+                          v-if="val.custom_type === 'datetime' || val.custom_type === 'textarea'
+                            || val.custom_type === 'input' || val.custom_type === 'bk_date_picker'"
+                          ref="dropdownRef"
+                          :is-show="val.dropdownShow"
+                          trigger="hover">
+                          <span
+                            class="label-text"
+                            @click="handleShow(val)">{{ typeText(val?.type) }} <audit-icon
+                              class="line-down"
+                              type="angle-line-down" /></span>
+                          <template #content>
+                            <bk-dropdown-menu>
+                              <bk-dropdown-item
+                                v-for="item in dropdownList"
+                                :key="item.id"
+                                @click="handleClick(item, val)">
+                                {{ item.name }}
+                              </bk-dropdown-item>
+                            </bk-dropdown-menu>
+                          </template>
+                        </bk-dropdown>
+                      </div>
                     </template>
                   </bk-form-item>
                 </template>
@@ -276,8 +314,10 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
     reactive,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
   import {
@@ -297,10 +337,34 @@
   import useRequest from '@hooks/use-request';
   import useRouterBack from '@hooks/use-router-back';
 
-  import ApplicationParameter from '@components/application-parameter/rule-index.vue';
+  import ApplicationParameter from '@components/application-parameter/index.vue';
 
   import BatchDialog from './components/dialog.vue';
 
+  interface ParamItem {
+    custom_type: string;
+    desc:string;
+    form_schema: Record<string, any>;
+    index: number;
+    key: string;
+    name: string;
+    show_type: string;
+    source_info: Record<string, any>;
+    source_tag: string;
+    source_type: string;
+    validation: string;
+    is_condition_hide: boolean | string;
+    pre_render_mako: boolean;
+    value: string;
+    version: string;
+    is_meta: boolean;
+    schema: Record<string, any>;
+    dropdownShow?: boolean;
+    type?: string | undefined;
+    is_hide?: boolean;
+    default_value?: any;
+    hide_condition?: any[]; // 添加缺失的hide_condition属性
+  }
   interface Errors{
     field: boolean,
     value: string[],
@@ -336,11 +400,23 @@
   const route = useRoute();
   const { messageSuccess } = useMessage();
 
+  const typeText = (val: string | undefined) => (val === 'self' ?  t('自定义输入') : t('字段值引用'));
 
+  const dropdownList = ref([
+    {
+      id: 'self',
+      name: t('自定义输入'),
+    },
+    {
+      id: 'field',
+      name: t('字段值引用'),
+    },
+  ]);
   const isValueFocus = reactive({} as Record<string, boolean>);
   const formData = ref(new RiskRuleManageModel());
   const formRef = ref();
   const batchDialogRef = ref();
+  const applicationParameterRef = ref();
   const errors = ref<Array<Errors>>([]);
   const lists = [{
     operator: '',
@@ -429,16 +505,56 @@
       }
     },
   });
+
+  const handleShow = (val:ParamItem) => {
+    Object.keys(paramsDetailData.value).forEach((obj) => {
+      if (obj  === val.key) {
+        paramsDetailData.value[obj].dropdownShow = true;
+      }
+    });
+  };
+
+  const handleClick = (label: Record<string, any>, item: ParamItem) => {
+    Object.keys(paramsDetailData.value).forEach((obj) => {
+      if (obj  === item.key) {
+        paramsDetailData.value[obj].type = label.id;
+        paramsDetailData.value[obj].dropdownShow = false;
+      }
+    });
+  };
   // 获取处理套餐详情
+  const sortByIndex = (obj: Record<string, ParamItem>) => {
+    const sortedKeys = Object.keys(obj).sort((a, b) => obj[a].index - obj[b].index);
+
+    return sortedKeys.reduce((acc, key) => {
+      acc[key] = obj[key];
+      return acc;
+    }, {} as Record<string, ParamItem>);
+  };
+  const paramsDetailData = ref<Record<string, ParamItem>>({});
+
   const {
     run: fetchDetail,
     loading: detailLoading,
-    data: paramsDetailData,
   } = useRequest(SoapManageService.fetchDetail, {
     defaultValue: {},
     onSuccess(data) {
+      // 给对象中的每一项添加 type: 'self',
+      Object.keys(data).forEach((key) => {
+        // eslint-disable-next-line no-param-reassign
+        data[key].type = 'self';
+        // eslint-disable-next-line no-param-reassign
+        data[key].dropdownShow = false;
+        // eslint-disable-next-line no-param-reassign
+        data[key].is_hide = false;
+        // eslint-disable-next-line no-param-reassign
+        data[key].default_value = null;
+      });
+
       // 如果是新建 或者 pa_params为null
       if (!(isEditMode || isCloneMode) || !formData.value.pa_params) {
+        paramsDetailData.value = data;
+
         formData.value.pa_params = {};
         Object.values(data).forEach((val) => {
           formData.value.pa_params[val.key] = {
@@ -453,21 +569,40 @@
             fetchAllStrategyList();
           }
         });
-        // 防止新增字段取不到对应field
-        Object.values(paramsDetailData.value).forEach((val) => {
-          if (!formData.value.pa_params[val.key]) {
-            formData.value.pa_params[val.key] = {
-              field: '',
-              value: '', // 添加填写字段
-            };
-          }
-        });
-        // 如果删除字段删除对应field
-        Object.keys(formData.value.pa_params).forEach((key) => {
-          if (!paramsDetailData.value[key]) {
-            delete formData.value.pa_params[key];
-          }
-        });
+        if (!isPaIdChange.value) {
+          paramsDetailData.value = {};
+          Object.keys(data).forEach((key) => {
+            // eslint-disable-next-line no-param-reassign
+            data[key].type =  formData.value.pa_params[key].field === '' ? 'self' : 'field';
+            // eslint-disable-next-line no-param-reassign
+            data[key].dropdownShow = false;
+            // eslint-disable-next-line no-param-reassign
+            data[key].is_hide = false;
+            // eslint-disable-next-line no-param-reassign
+            data[key].default_value = formData.value.pa_params[key].value || formData.value.pa_params[key].field;
+          });
+        }
+
+        paramsDetailData.value = data;
+        setTimeout(() => {
+          isPaIdChange.value = false;
+        }, 0);
+
+        // // 防止新增字段取不到对应field
+        // Object.values(paramsDetailData.value).forEach((val) => {
+        //   if (!formData.value.pa_params[val.key]) {
+        //     formData.value.pa_params[val.key] = {
+        //       field: '',
+        //       value: '', // 添加填写字段
+        //     };
+        //   }
+        // });
+        // // 如果删除字段删除对应field
+        // Object.keys(formData.value.pa_params).forEach((key) => {
+        //   if (!paramsDetailData.value[key]) {
+        //     delete formData.value.pa_params[key];
+        //   }
+        // });
       }
     },
   });
@@ -527,8 +662,10 @@
       });
     }
   };
+  const isPaIdChange = ref(false);
   const handlePaIdChange = (id: string) => {
     if (id) {
+      isPaIdChange.value = true;
       const sopsTemplateId = processApplicationList.value
         .find(item => item.id === id)?.sops_template_id;
       fetchDetail({
@@ -555,8 +692,13 @@
   };
   const handleValidate = (value: any) => value.length > 0;
   const handlePaValidate = (value: {field: string, value: string}) => {
-    if (!value.field && !value.value) return false;
-    return true;
+    if (!value || typeof value !== 'object') return false;
+    const { field, value: val } = value;
+    // 检查field和value是否都为空（包括undefined、null、空字符串、）
+    const isFieldEmpty = field === undefined || field === null || field === '';
+    const isValueEmpty = val === undefined || val === null || val === '' ;
+    // 只有当field和value都为空时才返回false，否则返回true
+    return !(isFieldEmpty && isValueEmpty);
   };
   const handleSubmit = () => {
     formRef.value.validate().then(() => {
@@ -572,13 +714,49 @@
       name: 'ruleManageList',
     });
   };
+
+  watch(
+    () => formData.value, (val) => {
+      nextTick(() => {
+        Object.keys(paramsDetailData.value).forEach((obj) => {
+          if (paramsDetailData.value[obj]?.hide_condition) {
+            const hideCondition = paramsDetailData.value[obj]?.hide_condition;
+            // 添加安全检查，确保hideCondition存在且是数组
+            if (hideCondition && Array.isArray(hideCondition)) {
+              hideCondition.forEach((item: any) => {
+                // 根据操作符进行条件判断
+                const oldIsHide = paramsDetailData.value[obj].is_hide;
+                switch (item.operator) {
+                case '=':
+                  paramsDetailData.value[obj].is_hide = (
+                    item.value.toString() === val.pa_params[item.constant_key].value.toString()
+                  );
+                  break;
+                default:
+                  paramsDetailData.value[obj].is_hide = false;
+                  break;
+                }
+                // 当字段从显示变为隐藏时，重置对应的参数值
+                if (!oldIsHide && paramsDetailData.value[obj].is_hide) {
+                  formData.value.pa_params[paramsDetailData.value[obj].key].value = '';
+                  formData.value.pa_params[paramsDetailData.value[obj].key].field = '';
+                }
+              });
+            }
+          }
+        });
+      });
+    },
+    { deep: true },
+  );
+
   useRouterBack(() => {
     router.push({
       name: 'ruleManageList',
     });
   });
 </script>
-<style scoped lang="postcss">
+<style scoped  lang="postcss">
 .create-strategy-page {
   padding: 28px 24px;
   background-color: #fff;
@@ -658,5 +836,42 @@
       border-color: #ea3636;
     }
   }
+}
+
+.val-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%
+}
+
+.line-down {
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.label-text {
+  cursor: pointer;
+}
+
+:deep(.bk-form-item.is-required .bk-form-label::after) {
+  display: none;
+}
+
+.label-name {
+  position: relative;
+}
+
+.label-name::after {
+  position: absolute;
+  top: 0;
+  margin-left: 5px;
+  color: #ea3636;
+  text-align: center;
+  content: '*';
+}
+
+.underline {
+  border-bottom: 1px dashed #c4c6cc;
 }
 </style>

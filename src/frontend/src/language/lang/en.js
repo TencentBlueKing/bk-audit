@@ -16,6 +16,7 @@
 */
 export default {
   '': ' ',
+  ' ': ' ',
   蓝鲸审计中心: 'BK Audit Center',
   'BK Audit': 'BK Audit',
   审计策略: 'Strategies',
@@ -598,5 +599,5 @@ export default {
   依赖资源: 'Dependent resources',
   批量编辑依赖资源: 'Edit dependent assets in bulk',
   接入新系统: 'New',
-  工具: 'Tools',
+  工具: 'Tool square',
 };

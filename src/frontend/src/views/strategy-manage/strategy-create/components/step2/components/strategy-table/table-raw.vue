@@ -34,7 +34,8 @@
           :output-fields="outputFields"
           :strategy-name="strategyName"
           :tag-data="tagData"
-          @open-tool="handleOpenTool" />
+          @open-tool="handleOpenTool"
+          @refresh-tool-list="handleRefreshToolList" />
       </div>
     </template>
   </div>
@@ -70,7 +71,8 @@
   }
 
   interface Emits {
-    (e: 'openTool', value: ToolDetailModel): void;
+    (e: 'openTool', value: string): void;
+    (e: 'refresh-tool-list'): void;
   }
 
   const props = defineProps<Props>();
@@ -91,8 +93,12 @@
   });
 
   // 打开工具
-  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
-    emit('openTool', toolInfo);
+  const handleOpenTool = async (uids: string) => {
+    emit('openTool', uids);
+  };
+
+  const handleRefreshToolList = () => {
+    emit('refresh-tool-list');
   };
 
   watch(() => props.select, (data) => {

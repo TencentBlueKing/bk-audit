@@ -32,18 +32,19 @@ type EventItem = {
       name: string;
     }>
   }
-  drill_config?: {
+  drill_config?: Array<{
     tool: {
       uid: string;
       version: number;
     };
+    drill_name: string;
     config: Array<{
       source_field: string;
       target_value_type: string;
       target_value: string;
       target_field_type: string;
     }>
-  };
+  }>;
   prefix: string;
   example?: string
 }
@@ -76,13 +77,7 @@ export default class StrategyFieldEvent {
         collection_id: item.enum_mappings?.collection_id || '',
         mappings: item.enum_mappings?.mappings || [],
       },
-      drill_config: {
-        tool: {
-          uid: item.drill_config?.tool?.uid || '',
-          version: item.drill_config?.tool?.version || 1,
-        },
-        config: item.drill_config?.config || [],
-      },
+      drill_config: item.drill_config || [],
       description: item.description,
       example: item.example,
       prefix,

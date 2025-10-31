@@ -27,6 +27,7 @@
     width="100%" />
 </template>
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { onActivated, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -74,7 +75,7 @@
         </div>,
       width: 160,
     },
-  ]);
+  ] as Column[]);
 
   const variableData = ref<StrategyFieldEvent['event_basic_field_configs']>([]);
 

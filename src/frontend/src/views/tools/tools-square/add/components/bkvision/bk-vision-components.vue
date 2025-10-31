@@ -19,11 +19,27 @@
     <div class="component">
       <div class="lable">
         {{ config?.display_name }}({{ config?.raw_name }})
+        <bk-checkbox
+          v-model="isDefaultValue"
+          class="title-right"
+          :disabled="disabled"
+          size="small"
+          @change="getDefaultValue">
+          {{ t('使用默认值') }}
+        </bk-checkbox>
       </div>
-      <div class="content">
+      <div
+        v-bk-tooltips="{
+          disabled: !disabled,
+          theme: 'light',
+          content: t('当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数')
+        }"
+        class="content">
         <bk-date-picker
           v-if="config?.field_category === 'time-picker'"
           v-model="dateValue"
+          append-to-body
+          :disabled="disabled || isDefaultValue"
           format="yyyy-MM-dd HH:mm:ss"
           :shortcuts="dateShortCut"
           type="datetime"
@@ -36,10 +52,11 @@
           @mouseleave="showDeleteIcon = false">
           <date-picker
             v-model="pickerValue"
+            :disabled="disabled || isDefaultValue"
             style="width: 100%;"
             @update:model-value="handleRangeChange" />
           <audit-icon
-            v-if="showDeleteIcon"
+            v-if="showDeleteIcon && !disabled && !isDefaultValue"
             class="delete"
             type="delete-fill"
             @click="initPickerValue" />
@@ -47,12 +64,14 @@
         <bk-input
           v-else-if="config?.field_category === 'inputer' "
           v-model="inputVal"
+          :disabled="disabled || isDefaultValue"
           @change="handleInputChange" />
         <bk-tag-input
           v-else
           v-model="selectorValue"
           allow-create
           collapse-tags
+          :disabled="disabled || isDefaultValue"
           has-delete-icon
           :list="[]"
           @change="handleSelectorChange" />
@@ -62,8 +81,9 @@
 </template>
 
 <script setup lang='ts'>
+  import { InfoBox } from 'bkui-vue';
   import { ref, watch } from 'vue';
-
+  import { useI18n } from 'vue-i18n';
 
   interface Props {
     config: {
@@ -72,20 +92,25 @@
       description: string;
       required: boolean;
       field_category: string;
+      is_default_value: boolean;
       default_value: string | Array<string>;
       choices: Array<{
         key: string,
         name: string
       }>
     };
+    disabled: boolean;
   }
   interface Emits {
     (e: 'change', value: any): void
+    (e: 'changeIsDefaultValue', value: boolean): void
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
+  const { t } = useI18n();
   const now = new Date();
-  const dateValue = ref<Date>(props.config.default_value instanceof Date ? props.config.default_value : new Date());
+  const isDefaultValue = ref(false);
+  const dateValue = ref<string | Date>(props.config.default_value instanceof Date ? props.config.default_value : '');
   const pickerValue = ref<Array<string>>(Array.isArray(props.config.default_value) ? props.config.default_value : []);
   const inputVal = ref(typeof props.config.default_value === 'string' ? props.config.default_value : '');
   const selectorValue = ref(Array.isArray(props.config.default_value) ? props.config.default_value : []);
@@ -133,7 +158,7 @@
     emits('change', []);
   };
   const handlePickerChange = (val: Date) => {
-    dateValue.value = val;
+    dateValue.value = val || '';
     emits('change', val || '');
   };
   const handleRangeChange = (val: Array<string>) => {
@@ -148,12 +173,31 @@
     selectorValue.value = val;
     emits('change', val);
   };
+  const getDefaultValue = () => {
+    if (isDefaultValue.value) {
+      InfoBox({
+        title: t('提示'),
+        closeIcon: false,
+        content: t('当启用「使用默认值」选项后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示'),
+        onConfirm() {
+          emits('changeIsDefaultValue', isDefaultValue.value);
+        },
+        onCancel() {
+        },
+      });
+    }
+  };
   // 监听 props.config.default_value 的变化
   watch(() => props.config?.default_value, (newValue) => {
     dateValue.value = newValue instanceof Date ? newValue : new Date();
     pickerValue.value = Array.isArray(newValue) ? newValue : [];
     inputVal.value = typeof newValue === 'string' ? newValue : '';
     selectorValue.value = Array.isArray(newValue) ? newValue : [];
+  }, {
+    immediate: true,
+  });
+  watch(() => props.config.is_default_value, (newValue) => {
+    isDefaultValue.value = newValue;
   }, {
     immediate: true,
   });
@@ -166,11 +210,19 @@
 
   .component {
     .lable {
+      display: flex;
       padding-bottom: 5px;
       font-size: 12px;
       line-height: 20px;
       letter-spacing: 0;
       color: #4d4f56;
+      justify-content: space-between;
+      align-items: center;
+
+      .title-right {
+        color: #3a84ff;
+        cursor: pointer;
+      }
     }
   }
 

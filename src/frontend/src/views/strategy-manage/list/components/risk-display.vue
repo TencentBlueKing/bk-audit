@@ -26,7 +26,7 @@
         </render-info-item>
       </render-info-block>
       <div>
-        <span style="font-size: 12px;color: #979ba5;">{{ t('风险字段配置') }}:</span>
+        <span class="info-label">{{ t('风险字段配置') }}:</span>
         <div
           class="event-table">
           <div class="head">
@@ -56,7 +56,7 @@
       style="margin-top: 24px;">
       <render-info-block class="mt16">
         <!-- <render-info-item :label="t('事件信息')"> -->
-        <span style="font-size: 12px;color: #979ba5;">{{ t('风险字段配置') }}:</span>
+        <span class="info-label">{{ t('事件字段配置') }}:</span>
         <div class="event-table">
           <div class="head">
             <div
@@ -65,7 +65,7 @@
               class="header-cell"
               :class="getHeaderClass(item.key)"
               :style="{
-                minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
+                // minWidth: (locale === 'en-US' && index === 0) ? '140px' : '80px',
                 borderRight: index === 0 ? '1px solid #dcdee5' : ''
               }">
               {{ item.label }}
@@ -83,7 +83,10 @@
               class="table-section">
               <div
                 class="group-cell"
-                :style="{minWidth: locale === 'en-US' ? '140px' : '80px'}">
+                :style="{
+                  // minWidth: locale === 'en-US' ? '140px' : '80px'
+                  maxWidth: '100px'
+                }">
                 <span>{{ groupMap[key] }}</span>
               </div>
               <div class="rows-container">
@@ -121,7 +124,7 @@
   }
 
   const props = defineProps<Props>();
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
 
   const riskColumns = computed(() => [
     { key: 'field_name', label: t('字段名称'), width: '200px' },
@@ -139,7 +142,7 @@
       { key: 'is_show', label: t('在单据中展示') },
       { key: 'is_priority', label: t('重点展示'), tips: t('设为重点展示的字段将在风险单据中直接显示，其他字段将被折叠收起') },
       { key: 'duplicate_field', label: t('去重字段'), tips: t('同一风险单据内，当所有启用的去重字段值与历史事件匹配时，使用新事件替换历史事件') },
-      { key: 'map_config', label: t('字段关联'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
+      { key: 'map_config', label: t('字段关联'), tips: t('将本字段与指定字段值关联') },
       { key: 'enum_mappings', label: t('字段值映射'), tips: t('为储存值配置可读的展示文本') },
       { key: 'drill_config', label: t('字段下钻'), tips: t('为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息') },
       { key: 'description', label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
@@ -189,6 +192,14 @@
 </script>
 <style lang="postcss" scoped>
 .risk-display {
+  .info-label {
+    display: inline-block;
+    min-width: 80px;
+    font-size: 12px;
+    color: #979ba5;
+    text-align: right;
+  }
+
   .event-table {
     display: flex;
     margin-top: 12px;

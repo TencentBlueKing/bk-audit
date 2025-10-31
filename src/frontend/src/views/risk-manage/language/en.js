@@ -131,7 +131,22 @@ export default {
     数据异常: 'Data anomaly',
     '系统尚未完成确实模型配置，请继续设置': 'The system has not completed the actual model configuration, please continue to set up',
     '系统尚未完成日志数据上报，请继续上报': 'The system has not completed the log data report, please continue to report',
+    '存储值: ': 'Storage value: ',
+    '展示文本: ': 'Display text: ',
+    点击查看此字段的证据下探: 'Click to view the evidence of this field',
     映射对象: `key：{key}
     name：{name}`,  // 换行特意为之
+    批量导出: 'Batch export',
+    导出成功: 'Export successfully',
+    展开更多字段: 'Expand more fields',
+    收起字段: 'Collapse fields',
+    自定义输入: 'Custom input',
+    字段值引用: 'Field value reference',
+    请选择已有选项: 'Please select existing options',
+    请选择日期: 'Please select date',
+    风险字段: 'Risk fields',
+    事件字段: 'Event fields',
+    '当前值：': 'Current value:',
+    不能为空: ' can not be empty',
   },
 };

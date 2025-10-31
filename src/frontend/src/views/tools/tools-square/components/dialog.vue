@@ -18,6 +18,7 @@
   <div>
     <bk-dialog
       ref="dialogRef"
+      class="tools-use-dialog"
       draggable
       :esc-close="false"
       :fullscreen="isFullScreen"
@@ -32,56 +33,70 @@
       :z-index="dialogIndex"
       @click="handleClick"
       @closed="handleCloseDialog">
+      <template #tools>
+        <div
+          v-if="isShowTags"
+          class="dialog-header">
+          <dialog-header
+            ref="dialogHeaderRef"
+            :tabs="tabs"
+            @click-item="handleClickTag" />
+        </div>
+      </template>
       <template #header>
-        <div class="header">
-          <div class="header-left">
-            <audit-icon
-              class="full-screen-img"
-              svg
-              :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
-              @click="handleFullscreen()" />
-          </div>
-          <div class="top-right">
-            <audit-icon
-              class="top-left-icon"
-              svg
-              :type="itemInfo ? itemIcon(itemInfo) : ''" />
-            <div class="top-right-box">
-              <div class="top-right-title">
-                <span
-                  v-bk-tooltips="{
-                    disabled: !isTextOverflow(itemInfo?.name || '', 0, '300px', { isSingleLine: true }),
-                    content: t(itemInfo?.name || ''),
-                    placement: 'top',
-                  }"
-                  class="top-right-name">
-                  {{ itemInfo?.name }}
-                </span>
-                <bk-tag
-                  v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
-                  :key="tagIndex"
-                  class="desc-tag">
-                  {{ returnTagsName(tag) }}
-                </bk-tag>
-                <bk-tag
-                  v-if="itemInfo?.tags && itemInfo.tags.length > 3"
-                  v-bk-tooltips="{
-                    content: tagContent(itemInfo.tags),
-                    placement: 'top',
-                  }"
-                  class="desc-tag">
-                  + {{ itemInfo.tags.length - 3
-                  }}
-                </bk-tag>
-                <bk-tag
-                  class="desc-tag desc-tag-info"
-                  theme="info"
-                  @click="handlesStrategiesClick(itemInfo)">
-                  运用在 {{ itemInfo?.strategies.length }} 个策略中
-                </bk-tag>
-              </div>
-              <div class="top-right-desc">
-                {{ itemInfo?.description }}
+        <div>
+          <div
+            class="header"
+            :style="isShowTags ? `margin-top: 35px;` : ``">
+            <div class="header-left">
+              <audit-icon
+                class="full-screen-img"
+                svg
+                :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
+                @click="handleFullscreen()" />
+            </div>
+            <div class="top-right">
+              <audit-icon
+                class="top-left-icon"
+                svg
+                :type="itemInfo ? itemIcon(itemInfo) : ''" />
+              <div class="top-right-box">
+                <div class="top-right-title">
+                  <span
+                    v-bk-tooltips="{
+                      disabled: !isTextOverflow(itemInfo?.name || '', 0, '300px', { isSingleLine: true }),
+                      content: t(itemInfo?.name || ''),
+                      placement: 'top',
+                    }"
+                    class="top-right-name">
+                    {{ itemInfo?.name }}
+                  </span>
+                  <bk-tag
+                    v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
+                    :key="tagIndex"
+                    class="desc-tag">
+                    {{ returnTagsName(tag) }}
+                  </bk-tag>
+                  <bk-tag
+                    v-if="itemInfo?.tags && itemInfo.tags.length > 3"
+                    v-bk-tooltips="{
+                      content: tagContent(itemInfo.tags),
+                      placement: 'top',
+                    }"
+                    class="desc-tag">
+                    + {{ itemInfo.tags.length - 3
+                    }}
+                  </bk-tag>
+                  <bk-tag
+                    class="desc-tag desc-tag-info"
+                    theme="info"
+                    @click="handlesStrategiesClick(itemInfo)">
+                    {{ t('运用在') }} {{ itemInfo?.strategies.length }} {{ t('个策略中') }}
+                  </bk-tag>
+                </div>
+                <div class="top-right-desc">
+                  {{ itemInfo?.description }}
+                </div>
               </div>
             </div>
           </div>
@@ -229,6 +244,8 @@
 
   import useMessage from '@hooks/use-message';
 
+  import DialogHeader from './dialog-header.vue';
+
   import useEventBus from '@/hooks/use-event-bus';
   import useRequest from '@/hooks/use-request';
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
@@ -268,12 +285,13 @@
   interface Props {
     tagsEnums: Array<TagItem>,
     source?: string,
+    allToolsData: Array<ToolDetailModel>,
   }
   interface DrillDownItem {
     raw_name: string;
     display_name: string;
     description: string;
-    drill_config: {
+    drill_config: Array<{
       tool: {
         uid: string;
         version: number;
@@ -283,36 +301,54 @@
         target_value_type: string;
         target_value: string;
         target_field_type?: string;
-      }>
+      }>;
+      drill_name?: string;
+    }>;
+    enum_mappings: {
+      collection_id: string;
+      mappings: Array<{
+        key: string;
+        name: string;
+      }>;
     };
   }
   interface TableDataItem {
     [key: string]: any;
   }
+
+  interface tabsItem {
+    uid: string;
+    name: string;
+  }
+
   interface Exposes {
     closeDialog: () => void,
     openDialog: (
       itemUid: string,  // 工具信息
       drillDownItem?: DrillDownItem, // 下钻信息
       drillDownItemRowData?: Record<string, string>, // 下钻table所在行信息
+      activeUid?: string, // 多工具时，当前激活的工具信息
       isRiskToolParams?: Record<string, any>, // 风险工具参数
       preview?: boolean // 是否预览
     ) => void,
+    initTabsValue: (tabs: Array<tabsItem>, id: string) => void;
   }
   interface Emits {
-    (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>): void;
+    (e: 'openFieldDown', drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>, activeUid?: string): void;
     (e: 'close', val?: string): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     source: '',
+    isShowTags: false, // 是否显示标签
   });
   const emit = defineEmits<Emits>();
   const   emitBus  = useEventBus().emit;
   const { messageError } = useMessage();
   const { t } = useI18n();
 
-  const dialogIndex = ref(2000);
+  const dialogHeaderRef = ref();
+  const dialogIndex = ref(3000);
   const dialogWidth = ref('50%');
   const dialogHeight = ref('50vh');
   const dialogTableHeight = ref('300px');
@@ -343,15 +379,23 @@
   const formRef = ref();
   const searchFormData = ref();
   const router = useRouter();
-
-  const drillDownItemConfig = ref<DrillDownItem['drill_config']['config']>([]);
+  const tabs = ref<Array<tabsItem>>([]);
+  const drillDownItemConfig = ref<DrillDownItem['drill_config'][0]['config']>([]);
   const drillDownItemRowData = ref<Record<string, any>>({});
+  const drillDownItem = ref<DrillDownItem>();
 
   const toolDetails = ref<ToolDetailModel>();
   // 权限
   const urlIamApply = ref('');
 
   const riskToolParams = ref<Record<string, any> | undefined>(undefined);
+
+  const dialogUid = ref('');
+
+  const isShowTags = ref(false);
+
+  // 当前激活的工具
+  const activeUid = ref('');
 
   // 工具执行
   const {
@@ -463,6 +507,17 @@
     return tagNameList.join(',');
   };
 
+  const getToolNameAndType = (uid: string) => {
+    const tool = props.allToolsData?.find(item => item.uid === uid);
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
+    };
+  };
+
   const handleClick = () => {
     const isNewIndex = sessionStorage.getItem('dialogIndex');
     if (isNewIndex) {
@@ -555,7 +610,9 @@
           ? mappings.find((m: any) => String(m.key) === String(rawVal))
           : undefined;
         const display = mapped ? mapped.name : rawVal;
-        if (item.drill_config === null || item.drill_config?.tool.uid === '') {
+        if (item.drill_config === null
+          || item.drill_config.length === 0
+          || (item.drill_config.length === 1 && !item.drill_config[0].tool.uid)) {
           // 普通单元格
           return <span
             v-bk-tooltips={{
@@ -565,6 +622,9 @@
               }),
               disabled: !mapped,
             }}
+            style={{
+              cursor: 'pointer',
+            }}
             class={{ tips: mapped }}
           >
             {display}
@@ -572,23 +632,96 @@
         }
         // 可下钻的列，显示按钮
         return (
-          <bk-button
-            v-bk-tooltips={{
-              content: t('映射对象', {
-                key: mapped?.key,
-                name: mapped?.name,
-              }),
-              disabled: !mapped,
-            }}
-            class={{ tips: mapped }}
-            theme="primary"
-            text
-            onClick={(e: any) => {
-              e.stopPropagation(); // 阻止事件冒泡
-              handleFieldDownClick(item, data);
-            }}>
-            {display}
-          </bk-button>
+          <div>
+            <bk-popover
+              placement="top"
+              theme="black"
+              v-slots={{
+                content: () => (
+                  <>
+                    {
+                      mapped && (
+                        <>
+                          <span>
+                          { t('存储值: ') }
+                          </span>
+                          <span>
+                            { mapped?.key }
+                          </span>
+                          <br />
+                          <span>
+                            { t('展示文本: ') }
+                          </span>
+                          <span>
+                            { mapped?.name }
+                          </span>
+                        </>
+                      )
+                    }
+                    <div style={{
+                      marginTop: '8px',
+                    }}>
+                      { t('点击查看此字段的证据下探') }
+                    </div>
+                  </>
+                ),
+              }}>
+              <span
+                style={{
+                  cursor: 'pointer',
+                  color: '#3a84ff',
+                }}
+                class={{ tips: mapped }}
+                onClick={(e: any) => {
+                  e.stopPropagation(); // 阻止事件冒泡
+                  handleFieldDownClick(item, data);
+                }}>
+                {display}
+              </span>
+            </bk-popover>
+            <bk-popover
+              placement="top"
+              theme="black"
+              v-slots={{
+                content: () => (
+                  <div>
+                    {item.drill_config.map(config => (
+                      <div key={config.tool.uid}>
+                        {config.drill_name || getToolNameAndType(config.tool.uid).name}
+                        <bk-button
+                          class="ml8"
+                          theme="primary"
+                          text
+                          onClick={(e: any) => {
+                            e.stopPropagation(); // 阻止事件冒泡
+                            handleFieldDownClick(item, data, config.tool.uid);
+                          }}>
+                          {t('去查看')}
+                          <audit-icon
+                            class="mr-18"
+                            type="jump-link" />
+                        </bk-button>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              }}>
+              <span style={{
+                padding: '1px 8px',
+                backgroundColor: '#cddffe',
+                borderRadius: '8px',
+                marginLeft: '5px',
+                color: '#3a84ff',
+                cursor: 'pointer',
+              }}
+              onClick={(e: any) => {
+                e.stopPropagation(); // 阻止事件冒泡
+                handleFieldDownClick(item, data);
+              }}>
+                {item.drill_config.length}
+              </span>
+            </bk-popover>
+          </div>
         );
       };
 
@@ -723,6 +856,8 @@
       Object.keys(riskToolParams.value).forEach((key) => {
         if (riskToolParams.value && key in riskToolParams.value) {
           constants[key] = riskToolParams.value[key];
+        } else {
+          constants[key] = '';
         }
       });
     }
@@ -756,7 +891,7 @@
         } else { // 目标值为固定值类型
           if (fieldCategory === 'variable') {
             // 变量类型字段：直接使用固定值，存储到 constants 中
-            constants[item.source_field] = item.target_value;
+            constants[item.source_field] = item.target_value || '';
           } else {
             // 过滤器类型字段：直接使用固定值，存储到 drillDownFilters 中
             drillDownFilters[item.source_field] = item.target_value;
@@ -768,13 +903,16 @@
     toolDetails.value?.config.input_variable.forEach((item: any) => {
       if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
         if (item.field_category === 'variable') {
-          constants[item.raw_name] = item.default_value;
+          constants[item.raw_name] = item.default_value || '';
         } else {
           filters[item.raw_name] = item.default_value;
         }
+      } else {
+        if (item.field_category === 'variable') {
+          constants[item.raw_name] = '';
+        }
       }
     });
-
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(
@@ -798,15 +936,20 @@
   };
 
   // 下钻点击
-  const handleFieldDownClick = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<string, any>) => {
-    emit('openFieldDown', drillDownItem, drillDownItemRowData);
+  const handleFieldDownClick = (
+    drillDownItem: DrillDownItem,
+    drillDownItemRowData: Record<string, any>,
+    activeUid?: string,
+  ) => {
+    emit('openFieldDown', drillDownItem, drillDownItemRowData, activeUid);
   };
-  const dialogUid = ref('');
+
   // 打开弹窗
   const handleOpenDialog = async (
     itemUid: string,
-    drillDownItem?: DrillDownItem,
+    isDrillDownItem?: DrillDownItem,
     isDrillDownItemRowData?: Record<string, any>,
+    isActiveUid?: string,
     isRiskToolParams?: Record<string, any>,
     preview?: boolean,
   ) => {
@@ -815,6 +958,30 @@
     isShow.value = true;
     dialogUid.value = itemUid;
     riskToolParams.value = isRiskToolParams;
+
+    // 多工具下钻
+    if (itemUid.includes('&')) {
+      const uids = itemUid.split('&');
+
+      // 默认激活第一个
+      activeUid.value = isActiveUid || uids[0];
+
+      // 创建tabs列表
+      const tabs = uids.map(uid => ({
+        uid,
+        name: getToolNameAndType(uid).name,
+      }));
+
+      // 如果tabs列表长度大于1，则显示tabs
+      if (tabs.length > 1) {
+        isShowTags.value = true;
+        nextTick(() => {
+          dialogHeaderRef.value.initTabsValue(tabs, activeUid.value);
+        });
+      }
+    } else {
+      activeUid.value = itemUid;
+    }
 
     // dialog层级
     const isNewIndex = sessionStorage.getItem('dialogIndex');
@@ -826,15 +993,23 @@
     });
 
     // 下钻
-    if (drillDownItem && isDrillDownItemRowData) {
+    if (isDrillDownItem && isDrillDownItemRowData) {
       // 是否下钻
       isDrillDownOpen.value = true;
-      // 下选父节点drill_config的config
-      drillDownItemConfig.value = drillDownItem?.drill_config?.config;
-      // 下钻父节点所在行数据
+
+      // 下选节点
+      drillDownItem.value = isDrillDownItem;
+
+      // 下选节点drill_config的config
+      drillDownItemConfig.value = isDrillDownItem?.drill_config
+        .find(item => item.tool.uid === activeUid.value)?.config || [];
+
+      // 下钻节点所在行数据
       drillDownItemRowData.value = isDrillDownItemRowData;
     }
-    getToolsDetail(itemUid);
+
+    // 获取工具详情
+    getToolsDetail(activeUid.value);
   };
 
   // 获取工具详情
@@ -869,7 +1044,7 @@
       }
 
       setTimeout(() => {
-        const modals = document.getElementsByClassName('bk-modal-wrapper');
+        const modals = document.querySelectorAll('.tools-use-dialog .bk-modal-wrapper');
 
         // 遍历所有弹窗，只调整未被拖动过的弹窗位置
         Array.from(modals).reverse()
@@ -898,6 +1073,7 @@
   const handleFullscreen = () => {
     isFullScreen.value = !isFullScreen.value;
   };
+
   watch(() => isFullScreen.value, (val) => {
     nextTick(() => {
       if (tableData.value.length > 0) {
@@ -911,6 +1087,7 @@
       }
     });
   });
+
   // 文本溢出检测
   const isTextOverflow = (text: string, maxHeight = 0, width: string, options: {
     isSingleLine?: boolean;
@@ -1028,14 +1205,33 @@
     document.addEventListener('mouseup', onMouseUp);
   };
 
+  // 点击头部标签
+  const handleClickTag = (TagItem: any) => {
+    activeUid.value = TagItem.uid;
+    drillDownItemConfig.value = drillDownItem.value?.drill_config
+      .find(item => item.tool.uid === activeUid.value)?.config || [];
+
+    // 清空表格数据
+    tableData.value = [];
+    pagination.value.count = 0;
+
+    getToolsDetail(activeUid.value);
+  };
+
   defineExpose<Exposes>({
     closeDialog() {
       handleCloseDialog();
     },
-    openDialog(itemUid, drillDownItem, drillDownItemRowData, isRiskToolParams, preview) {
-      handleOpenDialog(itemUid, drillDownItem, drillDownItemRowData, isRiskToolParams, preview);
+    openDialog(itemUid, drillDownItem, drillDownItemRowData, activeUid, isRiskToolParams, preview) {
+      handleOpenDialog(itemUid, drillDownItem, drillDownItemRowData, activeUid, isRiskToolParams, preview);
+    },
+    initTabsValue(tabs: Array<tabsItem>, id: string) {
+      nextTick(() => {
+        dialogHeaderRef.value.initTabsValue(tabs, id);
+      });
     },
   });
+
 </script>
 
 <style scoped lang="postcss">
@@ -1070,6 +1266,13 @@
   height: 10px;
   cursor: ns-resize;
   opacity: 50%;
+}
+
+.dialog-header {
+  margin-left: 24px;
+
+  /* width: 100%; */
+  background: #fafbfd;
 }
 
 .header {
@@ -1242,5 +1445,12 @@
 
 :deep(.bk-table .bk-table-head .col-resize-drag) {
   background-color: #fafbfd;
+}
+</style>
+<style lang="postcss">
+.tools-use-dialog {
+  .bk-modal-body {
+    border-radius: 16px 16px 8px 8px;
+  }
 }
 </style>

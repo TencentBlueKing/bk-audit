@@ -94,8 +94,9 @@
     @update-action="handleUpdateAction" />
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
-  import { computed, ref, watch } from 'vue';
+  import { computed, type Ref, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -231,7 +232,7 @@
         </div>
       </>,
     },
-  ]);
+  ]) as Ref<Column[]>;
 
   const searchData = computed<SearchData[]>(() => [
     {

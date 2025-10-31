@@ -80,6 +80,7 @@
   </audit-sideslider>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import dayjs from 'dayjs';
   import {
     onMounted,
@@ -243,7 +244,7 @@
       showOverflowTooltip: true,
       render: ({ data }: { data: RiskModel }) => (data.operator.join(',') || '--'),
     },
-  ];
+  ] as Column[];
 
   let searchData = [
     {

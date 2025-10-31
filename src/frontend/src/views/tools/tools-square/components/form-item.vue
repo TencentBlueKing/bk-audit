@@ -27,6 +27,7 @@
         placement: 'top',
       }"
       :disabled="dataConfig.disabled"
+      :placeholder="t('请输入默认值')"
       @update:model-value="handleInputDataChange" />
 
     <bk-input
@@ -38,6 +39,7 @@
         placement: 'top',
       }"
       :disabled="dataConfig.disabled"
+      :placeholder="t('请输入默认值')"
       type="number"
       @update:model-value="handleNumberInputDataChange" />
 
@@ -130,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -159,7 +161,8 @@
   }
   interface Props {
     dataConfig: SearchItem,
-    originModel?: boolean
+    originModel?: boolean,
+    targetValue?: any,
   }
   interface Emits {
     (e: 'change', value: any): void
@@ -170,7 +173,9 @@
     getData: () => void,
   }
 
-  const props = withDefaults(defineProps<Props>(), {});
+  const props = withDefaults(defineProps<Props>(), {
+    targetValue: undefined,
+  });
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
@@ -296,6 +301,14 @@
       handleSelectorChange(val);
     }
   };
+
+  watch(() => props.targetValue, (newVal) => {
+    if (newVal) {
+      setData(newVal);
+    }
+  }, {
+    immediate: true,
+  });
 
   onMounted(() => {
     fetchGlobalChoices();

@@ -43,6 +43,7 @@
   </div>
 </template>
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -103,7 +104,7 @@
       label: () => t('产生风险单'),
       field: () => 'risk_count',
     },
-  ];
+  ] as Column[];
 
   const statusMap = {
     finished: 'normal',

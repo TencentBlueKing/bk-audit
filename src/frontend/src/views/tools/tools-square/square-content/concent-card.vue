@@ -149,6 +149,15 @@
                       {{ item.name }}
                     </span>
                     <bk-tag
+                      v-if="item.is_bkvision"
+                      v-bk-tooltips="{ content: t('bkvision参数变量待更新') }"
+                      class="title-tag"
+                      size="small"
+                      theme="danger"
+                      type="filled">
+                      {{ t('待更新') }}
+                    </bk-tag>
+                    <bk-tag
                       v-if="!item.permission.use_tool"
                       v-bk-tooltips="{ content: t('申请权限可用') }"
                       class="title-tag"
@@ -182,7 +191,7 @@
                       size="small"
                       theme="info"
                       @click="handlesStrategiesClick(item)">
-                      运用在 {{ item.strategies.length }} 个策略中
+                      {{ t('运用在') }} {{ item.strategies.length }} {{ t('个策略中') }}
                     </bk-tag>
                   </div>
                 </div>
@@ -249,11 +258,12 @@
     </scroll-faker>
   </div>
   <div
-    v-for="item in allToolsData"
+    v-for="item in allOpenToolsData"
     :key="item">
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item] = el"
+      :all-tools-data="allToolsData"
       :tags-enums="tagsEnums"
       @close="handleClose"
       @open-field-down="openFieldDown" />
@@ -277,6 +287,7 @@
 
   import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
   import type { IRequestResponsePaginationData } from '@/utils/request';
 
 
@@ -306,33 +317,24 @@
     tagId: string,
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: {
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    };
-  }
 
   const { messageSuccess } = useMessage();
   const { t } = useI18n();
   const router = useRouter();
   const route = useRoute();
-  const allToolsData = ref<string[]>([]);
+
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+    handleCloseTool,
+  } = useToolDialog();
 
   const searchValue = ref<string>('');
   const isFixedDelete = ref(false);
   const itemMouseenter = ref(null);
-  const dialogRefs = ref<Record<string, any>>({});
   const dataList = ref<ToolInfo[]>([]);
   const popoverRefs = ref<Map<string, any>>(new Map());
   const currentPage = ref(1);
@@ -352,6 +354,14 @@
     appendSearchParams,
   } = useUrlSearch();
 
+  // 获取所有工具
+  const {
+    data: allToolsData,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    manual: true,
+  });
+
   // 工具列表
   const {
     run: fetchToolsList,
@@ -363,29 +373,27 @@
       // 自动打开弹窗
       if (route.query.tool_id) {
         urlToolsIds.value = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
-        allToolsData.value = urlToolsIds.value;
+        allOpenToolsData.value = urlToolsIds.value;
         if (urlToolsIds.value.length > 0) {
           urlToolsIds.value.forEach((item: string) => {
-            nextTick(() => {
-              if (dialogRefs.value[item]) {
-                dialogRefs.value[item].openDialog(item);
-                setTimeout(() => {
-                  const modals = document.getElementsByClassName('bk-modal-wrapper');
-                  Array.from(modals).reverse()
-                    .forEach((modal, index) => {
-                      const htmlModal = modal as HTMLElement;
-                      if (index > 0 && !htmlModal.style.transform) {
-                        htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-                      }
-                    });
-                }, 0);
-              }
-            });
+            // 使用hooks中的handleOpenTool
+            handleOpenTool(item);
+            setTimeout(() => {
+              const modals = document.querySelectorAll('.tools-use-dialog.bk-modal-wrapper');
+              Array.from(modals).reverse()
+                .forEach((modal, index) => {
+                  const htmlModal = modal as HTMLElement;
+                  if (index > 0 && !htmlModal.style.transform) {
+                    htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+                  }
+                });
+            }, 0);
           });
         }
       }
     },
   });
+
   // 删除
   const {
     run: fetchDeleteTool,
@@ -565,21 +573,12 @@
     }
   };
 
-  // 下钻打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
-    if (!(allToolsData.value.find(item => item === uid))) {
-      allToolsData.value.push(uid);
-    }
 
-    nextTick(() => {
-      if (dialogRefs.value[uid]) {
-        dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
-      }
-    });
-  };
-
-  // 打开工具
+  /* *
+   * 打开工具，根据工具信息，打开工具，并传递工具信息
+   * @param toolInfo: ToolInfo 工具信息
+   * @returns void
+  */
   const handleClick = async (toolInfo: ToolInfo) => {
     urlToolsIds.value.push(toolInfo.uid);
     // 在游览器地址增加参数单不刷新页面
@@ -589,19 +588,15 @@
 
     handleCancel(toolInfo.uid);
 
-    if (!(allToolsData.value.find(item => item === toolInfo.uid))) {
-      allToolsData.value.push(toolInfo.uid);
-    }
-    nextTick(() => {
-      if (dialogRefs.value[toolInfo.uid]) {
-        dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
-      }
-    });
+    // 使用hooks中的handleOpenTool
+    handleOpenTool(toolInfo.uid);
   };
+
   // 关闭弹窗
   const handleClose = (ToolUid: string | undefined) => {
     if (ToolUid) {
-      allToolsData.value = allToolsData.value.filter(item => item !== ToolUid);
+      // 使用hooks中的handleCloseTool
+      handleCloseTool(ToolUid);
 
       urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolUid);
       appendSearchParams({
@@ -609,6 +604,7 @@
       });
     }
   };
+
   const handleSearch = () => {
     loading.value = true;
     fetchToolsList({

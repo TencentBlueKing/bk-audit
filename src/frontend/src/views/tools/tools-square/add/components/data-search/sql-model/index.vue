@@ -87,7 +87,7 @@
       </bk-button>
     </div>
   </bk-form-item>
-
+  <!-- 输入 -->
   <bk-form-item
     :label="t('查询输入设置')"
     label-width="160">
@@ -263,9 +263,9 @@
                 <template v-else>
                   <!-- 不同前端类型 -->
                   <form-item
-                    ref="formItemRefs"
                     :data-config="item"
                     origin-model
+                    :target-value="item.default_value"
                     @change="(val: any) => handleFormItemChange(val, item)" />
                 </template>
               </bk-form-item>
@@ -275,6 +275,7 @@
       </audit-form>
     </div>
   </bk-form-item>
+  <!-- 输出 -->
   <bk-form-item
     :label="t('查询结果设置')"
     label-width="160">
@@ -347,7 +348,8 @@
                 <div
                   v-else
                   class="field-value-div"
-                  @click="() => handleFiledDict(index, item.enum_mappings)">
+                  @click="() => handleFiledDict(index, item.enum_mappings)"
+                  @mouseleave="() => handleMappingsMouseLeave(index)">
                   <span
                     :style="{
                       color: item.enum_mappings.mappings.length ? '#63656e' : '#c4c6cc',
@@ -356,12 +358,16 @@
                     }">{{ item.enum_mappings.mappings.length ? t('已配置') : t('请点击配置') }}</span>
                   <audit-popconfirm
                     v-if="item.enum_mappings.mappings.length"
+                    :ref="(el: any) => mappingsPopconfirmRefs[index] = el"
                     :confirm-handler="() => handleRemoveMappings(index)"
                     :content="t('删除操作无法撤回，请谨慎操作！')"
-                    :title="t('确认删除该配置？')">
+                    :title="t('确认删除该配置？')"
+                    @hide="() => handleMappingsPopconfirmHide(index)">
                     <audit-icon
                       class="remove-mappings-btn remove-btn"
-                      type="delete-fill" />
+                      :class="{ 'is-popconfirm-visible': mappingsPopconfirmVisible[index] }"
+                      type="delete-fill"
+                      @click="() => handleMappingsPopconfirmShow(index)" />
                   </audit-popconfirm>
                 </div>
               </bk-form-item>
@@ -392,31 +398,76 @@
                 <div
                   v-else
                   class="field-value-div"
-                  @click="() => handleClick(index, item.drill_config)">
-                  <template v-if="item.drill_config.tool.uid">
-                    <audit-icon
-                      style=" margin-right: 5px;font-size: 16px;"
-                      svg
-                      :type="iconMap[
-                        getToolNameAndType(item.drill_config.tool.uid).type as keyof typeof iconMap
-                      ]" />
-                    {{ getToolNameAndType(item.drill_config.tool.uid).name }}
-                    <audit-icon
-                      class="remove-btn"
-                      type="delete-fill"
-                      @click.stop="handleRemove(index)" />
-                    <audit-icon
-                      v-if="!(item.drill_config.tool.version
-                        >= (toolMaxVersionMap[item.drill_config.tool.uid] || 1))"
-                      v-bk-tooltips="{
-                        content: t('该工具已更新，请确认'),
-                      }"
-                      class="renew-tips"
-                      type="info-fill" />
+                  @mouseleave="() => handleDrillMouseLeave(index)">
+                  <template v-if="item.drill_config.length && item.drill_config.every(item => item.tool.uid)">
+                    <bk-popover
+                      placement="top"
+                      theme="black">
+                      <span
+                        @click="() => handleClick(index, item.drill_config)">
+                        {{ t('已配置') }}
+                        <span style="color: #3a84ff;">{{ item.drill_config.length }}</span>
+                        {{ t('个工具') }}
+                      </span>
+                      <template #content>
+                        <div>
+                          <div
+                            v-for="config in item.drill_config"
+                            :key="config.tool.uid">
+                            {{ getToolNameAndType(config.tool.uid).name }}
+                          </div>
+                        </div>
+                      </template>
+                    </bk-popover>
+                    <!-- 删除 -->
+                    <audit-popconfirm
+                      :ref="(el: any) => drillPopconfirmRefs[index] = el"
+                      class="ml8"
+                      :confirm-handler="() => handleRemove(index)"
+                      :content="t('移除操作无法撤回，请谨慎操作！')"
+                      :title="t('确认移除以下工具？')"
+                      @hide="() => handleDrillPopconfirmHide(index)">
+                      <audit-icon
+                        class="remove-btn"
+                        :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[index] }"
+                        type="delete-fill"
+                        @click="() => handleDrillPopconfirmShow(index)" />
+                      <template #content>
+                        <bk-table
+                          ref="refTable"
+                          :columns="columns"
+                          :data="item.drill_config"
+                          height="auto"
+                          max-height="100%"
+                          show-overflow-tooltip
+                          stripe />
+                      </template>
+                    </audit-popconfirm>
+                    <bk-popover
+                      v-if="item.drill_config
+                        .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                      placement="top"
+                      theme="black">
+                      <audit-icon
+                        class="renew-tips"
+                        type="info-fill" />
+                      <template #content>
+                        <div>
+                          <div>{{ t('以下工具已更新，请确认：') }}</div>
+                          <div
+                            v-for="drill in item.drill_config
+                              .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                            :key="drill.tool.uid">
+                            {{ getToolNameAndType(drill.tool.uid).name }}
+                          </div>
+                        </div>
+                      </template>
+                    </bk-popover>
                   </template>
                   <span
                     v-else
-                    style="color: #c4c6cc;">
+                    style="color: #c4c6cc;"
+                    @click="() => handleClick(index)">
                     {{ t('请点击配置') }}
                   </span>
                 </div>
@@ -442,6 +493,7 @@
     :output-fields="formData.config.output_fields"
     :tag-data="toolTagData"
     @open-tool="handleOpenTool"
+    @refresh-tool-list="handleRefreshToolList"
     @submit="handleFieldSubmit" />
   <!-- 字段映射 -->
   <field-dict
@@ -451,16 +503,18 @@
     @submit="handleDictSubmit" />
   <!-- 循环所有工具 -->
   <div
-    v-for="item in allToolsData"
-    :key="item.uid">
+    v-for="item in allOpenToolsData"
+    :key="item">
     <component
       :is="DialogVue"
-      :ref="(el:any) => dialogRefs[item.uid] = el"
+      :ref="(el:any) => dialogRefs[item] = el"
+      :all-tools-data="allToolsData"
       :tags-enums="toolTagData"
       @open-field-down="openFieldDown" />
   </div>
 </template>
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import * as monaco from 'monaco-editor';
   import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -471,8 +525,8 @@
 
   import ConfigModel from '@model/root/config';
   import type ParseSqlModel from '@model/tool/parse-sql';
-  import ToolDetailModel from '@model/tool/tool-detail';
 
+  // import ToolDetailModel from '@model/tool/tool-detail';
   import { execCopy } from '@utils/assist';
 
   import DialogVue from '../../../../components/dialog.vue';
@@ -480,9 +534,10 @@
   import editSql from '../components/edit-sql.vue';
   import FieldReference from '../components/field-reference/index.vue';
 
-  import ToolInfo from '@/domain/model/tool/tool-info';
+  // import ToolInfo from '@/domain/model/tool/tool-info';
   import useFullScreen from '@/hooks/use-full-screen';
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
   import fieldDict from '@/views/strategy-manage/strategy-create/components/step2/components/event-table/field-dict.vue';
   import formItem from '@/views/tools/tools-square/components/form-item.vue';
 
@@ -516,17 +571,18 @@
         raw_name: string;
         display_name: string;
         description: string;
-        drill_config: {
+        drill_config: Array<{
           tool: {
             uid: string;
             version: number;
           };
+          drill_name: string;
           config: Array<{
             source_field: string;
             target_value_type: string;
             target_value: string;
           }>
-        };
+        }>;
         enum_mappings: {
           collection_id: string;
           mappings: Array<{
@@ -540,22 +596,6 @@
     };
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: {
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    };
-  }
 
   interface Exposes {
     getValue: () => Promise<any>;
@@ -571,9 +611,15 @@
   const requiredListRef = ref();
   const addEnumRefs = ref();
   const fieldReferenceRef = ref();
-  const formItemRefs = ref();
-  const dialogRefs = ref();
   const tableInputFormRef = ref();
+
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+  } = useToolDialog();
 
   // const loading = ref(false);
   const showEditSql = ref(false);
@@ -586,6 +632,7 @@
     () => editor,
     () => viewRootRef.value,
   );
+
 
   const formData = ref<FormData>({
     config: {
@@ -603,13 +650,7 @@
         raw_name: '',
         display_name: '',
         description: '',
-        drill_config: {
-          tool: {
-            uid: '',
-            version: 1,
-          },
-          config: [],
-        },
+        drill_config: [],
         enum_mappings: {
           collection_id: '',
           mappings: [],
@@ -633,11 +674,16 @@
     name: string;
   }>>([]);
 
-  const iconMap = {
-    data_search: 'sqlxiao',
-    api: 'apixiao',
-    bk_vision: 'bkvisonxiao',
-  };
+  // const iconMap = {
+  //   data_search: 'sqlxiao',
+  //   api: 'apixiao',
+  //   bk_vision: 'bkvisonxiao',
+  // };
+
+  const columns = [{
+    label: () => t('工具列表'),
+    render: ({ data }: {data: FormData['config']['output_fields'][0]['drill_config'][0]}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
+  }] as Column[];
 
   // 字段下钻使用index
   const outputIndex = ref(-1);
@@ -649,6 +695,12 @@
   }>>([]);
 
   const toolMaxVersionMap = ref<Record<string, number>>({});
+
+  // 气泡框状态管理
+  const mappingsPopconfirmRefs = ref<Record<number, any>>({});
+  const drillPopconfirmRefs = ref<Record<number, any>>({});
+  const mappingsPopconfirmVisible = ref<Record<number, boolean>>({});
+  const drillPopconfirmVisible = ref<Record<number, boolean>>({});
 
   const {
     data: configData,
@@ -768,6 +820,22 @@
     }
   };
 
+  // 字段值映射气泡框显示/隐藏处理
+  const handleMappingsPopconfirmShow = (index: number) => {
+    mappingsPopconfirmVisible.value[index] = true;
+  };
+
+  const handleMappingsPopconfirmHide = (index: number) => {
+    mappingsPopconfirmVisible.value[index] = false;
+  };
+
+  const handleMappingsMouseLeave = (index: number) => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (mappingsPopconfirmRefs.value[index] && !mappingsPopconfirmVisible.value[index]) {
+      mappingsPopconfirmRefs.value[index].hide();
+    }
+  };
+
   const handleRemoveMappings = async (index: number) => {
     formData.value.config.output_fields[index].enum_mappings = {
       collection_id: '',
@@ -795,15 +863,25 @@
     };
   };
 
+  // 字段下钻气泡框显示/隐藏处理
+  const handleDrillPopconfirmShow = (index: number) => {
+    drillPopconfirmVisible.value[index] = true;
+  };
+
+  const handleDrillPopconfirmHide = (index: number) => {
+    drillPopconfirmVisible.value[index] = false;
+  };
+
+  const handleDrillMouseLeave = (index: number) => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (drillPopconfirmRefs.value[index] && !drillPopconfirmVisible.value[index]) {
+      drillPopconfirmRefs.value[index].hide();
+    }
+  };
+
   // 删除值
-  const handleRemove = (index: number) => {
-    formData.value.config.output_fields[index] = {
-      ...formData.value.config.output_fields[index],
-      drill_config: {
-        tool: { uid: '', version: 1 },
-        config: [],
-      },
-    };
+  const  handleRemove = async (index: number) => {
+    formData.value.config.output_fields[index].drill_config = [];
   };
 
   const defineTheme = () => {
@@ -860,10 +938,7 @@
       return {
         ...newItem,
         description: '',
-        drill_config: {
-          tool: { uid: '', version: 1 },
-          config: [],
-        },
+        drill_config: [],
         enum_mappings: {
           collection_id: '',
           mappings: [],
@@ -874,31 +949,11 @@
     defineTheme();
     nextTick(() => {
       editor.setValue(sqlData.original_sql);
-      formItemRefs.value.forEach((item: any, index: number) => {
-        item?.setData(formData.value.config.input_variable[index].default_value);
-      });
     });
   };
 
-  // 下钻打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
-    const toolItem = allToolsData.value.find(item => item.uid === uid);
-    if (!toolItem) {
-      return;
-    }
-
-    const toolInfo = new ToolInfo(toolItem as any);
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(toolInfo, drillDownItem, drillDownItemRowData);
-    }
-  };
-
-  // 打开工具
-  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
-    if (dialogRefs.value[toolInfo.uid]) {
-      dialogRefs.value[toolInfo.uid].openDialog(toolInfo.uid);
-    }
+  const handleRefreshToolList = () => {
+    fetchAllTools();
   };
 
   const handleFieldSubmit = (drillConfig: FormData['config']['output_fields'][0]['drill_config']) => {
@@ -947,12 +1002,6 @@
       formData.value.config = configs;
       // 设置sql编辑器
       editor.setValue(configs.sql);
-      // 设置默认值
-      nextTick(() => {
-        formItemRefs.value.forEach((item: any, index: number) => {
-          item?.setData(formData.value.config.input_variable[index].default_value);
-        });
-      });
     },
     getFields() {
       return formData.value.config;
@@ -1061,6 +1110,7 @@
 
       .remove-btn {
         position: absolute;
+        top: 36%;
         right: 28px;
         z-index: 1;
         display: none;
@@ -1070,6 +1120,10 @@
 
         &:hover {
           color: #979ba5;
+        }
+
+        &.is-popconfirm-visible {
+          display: block;
         }
       }
 

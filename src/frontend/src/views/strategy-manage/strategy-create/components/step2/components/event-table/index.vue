@@ -60,25 +60,27 @@
             :strategy-name="strategyName"
             :strategy-type="strategyType"
             :tag-data="tagData"
-            @open-tool="handleOpenTool" />
+            @open-tool="handleOpenTool"
+            @refresh-tool-list="handleRefreshToolList" />
         </div>
       </div>
     </template>
   </div>
   <!-- 循环所有工具 -->
   <div
-    v-for="item in allToolsDataUids"
+    v-for="item in allOpenToolsData"
     :key="item">
     <component
       :is="DialogVue"
       :ref="(el:any) => dialogRefs[item] = el"
+      :all-tools-data="allToolsData"
       :tags-enums="tagData"
       @open-field-down="openFieldDown" />
   </div>
 </template>
 
 <script setup lang='tsx'>
-  import { computed, nextTick, onActivated, ref } from 'vue';
+  import { computed, onActivated, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -88,13 +90,14 @@
   import DatabaseTableFieldModel from '@model/strategy/database-table-field';
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
-  import ToolDetailModel from '@model/tool/tool-detail';
 
+  // import ToolDetailModel from '@model/tool/tool-detail';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
   import TableRow from './table-raw.vue';
 
   import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
 
   interface Exposes{
     getData: () => Omit<StrategyFieldEvent, 'risk_meta_field_config'>,
@@ -109,29 +112,20 @@
     strategyName: string
   }
 
-  interface DrillDownItem {
-    raw_name: string;
-    display_name: string;
-    description: string;
-    drill_config: {
-      tool: {
-        uid: string;
-        version: number;
-      };
-      config: Array<{
-        source_field: string;
-        target_value_type: string;
-        target_value: string;
-      }>
-    };
-  }
 
   const props = defineProps<Props>();
   const route = useRoute();
 
   const { t, locale } = useI18n();
   const tableRowRef = ref();
-  const dialogRefs = ref<Record<string, any>>({});
+
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+  } = useToolDialog();
 
   const isEditMode = route.name === 'strategyEdit';
   const isCloneMode = route.name === 'strategyClone';
@@ -157,7 +151,7 @@
       { key: 'is_show', label: t('在单据中展示') },
       { key: 'is_priority', label: t('重点展示'), tips: t('设为重点展示的字段将在风险单据中直接显示，其他字段将被折叠收起') },
       { key: 'duplicate_field', label: t('去重字段'), tips: t('同一风险单据内，当所有启用的去重字段值与历史事件匹配时，使用新事件替换历史事件') },
-      { key: 'map_config', label: t('字段关联'), tips: t('系统字段需要关联到策略，默认按照规则自动从结果字段内获取填充，可修改') },
+      { key: 'map_config', label: t('字段关联'), tips: t('将本字段与指定字段值关联') },
       { key: 'enum_mappings', label: t('字段值映射'), tips: t('为储存值配置可读的展示文本') },
       { key: 'drill_config', label: t('字段下钻'), tips: t('为字段配置下钻工具后，可以在风险单据中点击该字段，查询其关联信息') },
       { key: 'description', label: t('字段说明'), tips: t('在单据页，鼠标移入label，即可显示字段说明') },
@@ -203,7 +197,6 @@
     return basicFields.concat(dataFields, evidenceFields);
   });
 
-  const allToolsDataUids = ref<string[]>([]);
 
   // 获取所有工具
   const {
@@ -224,33 +217,8 @@
     },
   });
 
-  // 下钻打开
-  const openFieldDown = (drillDownItem: DrillDownItem, drillDownItemRowData: Record<any, string>) => {
-    const { uid } = drillDownItem.drill_config.tool;
-
-    // 如果工具不在 allToolsDataUids 中，添加它
-    if (!allToolsDataUids.value.find(item => item === uid)) {
-      allToolsDataUids.value.push(uid);
-    }
-
-    if (dialogRefs.value[uid]) {
-      dialogRefs.value[uid].openDialog(uid, drillDownItem, drillDownItemRowData);
-    }
-  };
-
-  // 打开工具
-  const handleOpenTool = async (toolInfo: ToolDetailModel) => {
-    const { uid } = toolInfo;
-    // 如果工具不在 allToolsDataUids 中，添加它
-    if (!allToolsDataUids.value.find(item => item === uid)) {
-      allToolsDataUids.value.push(uid);
-    }
-
-    nextTick(() => {
-      if (dialogRefs.value[uid]) {
-        dialogRefs.value[uid].openDialog(uid);
-      }
-    });
+  const handleRefreshToolList = () => {
+    fetchAllTools();
   };
 
   const getHeaderClass = (valueKey: string | undefined) => ({
@@ -276,13 +244,7 @@
       collection_id: '',
       mappings: [],
     },
-    drill_config: {
-      tool: {
-        uid: '',
-        version: 1,
-      },
-      config: [],
-    },
+    drill_config: [],
     description: '',
     example: '',
     prefix: 'event_data',
@@ -387,13 +349,14 @@
                     collection_id: editItem.enum_mappings?.collection_id || '',
                     mappings: editItem.enum_mappings?.mappings || [],
                   },
-                  drill_config: {
+                  drill_config: editItem.drill_config ? editItem.drill_config.map(drill => ({
                     tool: {
-                      uid: editItem.drill_config?.tool?.uid || '',
-                      version: editItem.drill_config?.tool?.version || 1,
+                      uid: drill.tool.uid || '',
+                      version: drill.tool.version || 1,
                     },
-                    config: editItem.drill_config?.config || [],
-                  },
+                    drill_name: drill.drill_name || '',
+                    config: drill.config || [],
+                  })) : [],
                   description: editItem.description,
                   example: originalItem.example,
                   prefix: originalItem.prefix || '',
