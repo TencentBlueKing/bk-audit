@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
 import sqlglot
 from django.core.exceptions import EmptyResultSet
@@ -22,6 +22,61 @@ from sqlglot import exp
 from sqlglot.errors import ParseError
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_to_float(value: Any) -> Optional[float]:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+NUMERIC_EVENT_OPERATORS = {">", ">=", "<", "<="}
+
+
+def build_event_json_path(field_name: str) -> str:
+    safe_field = (field_name or "").replace("\\", "\\\\").replace("'", "\\'")
+    path_parts = [part for part in safe_field.split(".") if part]
+    return "$" + "".join(f".{part}" for part in path_parts)
+
+
+@dataclass(frozen=True)
+class EventFilterSpec:
+    raw_field: str
+    normalized_field: str
+    operator: str
+    value: Any
+    json_path: str
+    requires_numeric: bool
+
+    @classmethod
+    def from_raw(cls, item: Dict[str, Any], *, prefix: str) -> Optional["EventFilterSpec"]:
+        if not isinstance(item, dict):
+            return None
+        raw_field = (item.get("field") or "").strip()
+        if not raw_field:
+            return None
+        operator = str(item.get("operator") or "").upper()
+        value = item.get("value")
+        normalized = raw_field
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :].strip()
+        if not normalized:
+            return None
+        json_path = build_event_json_path(normalized)
+        requires_numeric = operator in NUMERIC_EVENT_OPERATORS and _convert_to_float(value) is not None
+        return cls(
+            raw_field=raw_field,
+            normalized_field=normalized,
+            operator=operator,
+            value=value,
+            json_path=json_path,
+            requires_numeric=requires_numeric,
+        )
 
 
 class SQLHelper:
@@ -268,8 +323,9 @@ class BkBaseFieldResolver:
         duplicate_field_map: Dict[int, Dict[str, Sequence[str]]],
     ) -> None:
         self.order_field = order_field or ""
-        self.event_filters = list(event_filters or [])
+        self._event_filter_specs: Tuple[EventFilterSpec, ...] = self._build_event_filter_specs(event_filters)
         self.duplicate_field_map = duplicate_field_map or {}
+        self._numeric_event_filter_fields = self._collect_numeric_event_filter_fields()
 
     def resolve_value_fields(self, base_fields: Iterable[str]) -> List[str]:
         fields = list(base_fields)
@@ -291,6 +347,27 @@ class BkBaseFieldResolver:
 
     def _is_event_order_field(self) -> bool:
         return self.event_order_field() is not None
+
+    def event_order_requires_numeric_cast(self) -> bool:
+        normalized = self.event_order_field()
+        if not normalized:
+            return False
+        return normalized in self._numeric_event_filter_fields
+
+    def _collect_numeric_event_filter_fields(self) -> Set[str]:
+        return {spec.normalized_field for spec in self.event_filters if spec.requires_numeric}
+
+    def _build_event_filter_specs(self, event_filters: Sequence[Dict[str, Any]]) -> Tuple[EventFilterSpec, ...]:
+        specs: List[EventFilterSpec] = []
+        for item in event_filters or []:
+            spec = EventFilterSpec.from_raw(item, prefix=self.EVENT_DATA_PREFIX)
+            if spec is not None:
+                specs.append(spec)
+        return tuple(specs)
+
+    @property
+    def event_filters(self) -> Tuple[EventFilterSpec, ...]:
+        return self._event_filter_specs
 
 
 class BaseRiskSelectBuilder(SQLHelper):
@@ -539,21 +616,18 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             column = self.column(alias, "event_evidence")
         else:
             return None
-        json_path = self._build_json_path(field_name)
+        json_path = build_event_json_path(field_name)
         return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
 
     def _build_event_filter_conditions(self, alias: str) -> Optional[exp.Expression]:
         comparisons: List[exp.Expression] = []
-        for filter_item in self.resolver.event_filters:
-            field_name = filter_item.get("field")
-            if not field_name:
-                continue
+        for filter_spec in self.resolver.event_filters:
             field_expr = exp.func(
                 "JSON_EXTRACT_STRING",
                 self.column(alias, "event_data"),
-                exp.Literal.string(self._build_json_path(field_name)),
+                exp.Literal.string(filter_spec.json_path),
             )
-            comparison = self._build_event_filter_expression(field_expr, filter_item)
+            comparison = self._build_event_filter_expression(field_expr, filter_spec)
             if comparison is not None:
                 comparisons.append(comparison)
         if not comparisons:
@@ -564,35 +638,33 @@ class MatchedEventSubqueryBuilder(SQLHelper):
         return combined
 
     def _build_event_filter_expression(
-        self, field_expr: exp.Expression, filter_item: Dict[str, Any]
+        self, field_expr: exp.Expression, filter_spec: EventFilterSpec
     ) -> Optional[exp.Expression]:
-        value = filter_item.get("value")
-        operator = (filter_item.get("operator") or "").upper()
+        value = filter_spec.value
+        operator = filter_spec.operator
 
-        from services.web.risk.constants import EventFilterOperator  # avoid circular
-
-        if operator == EventFilterOperator.EQUAL.value:
+        if operator == "=":
             if value is None:
                 return exp.Is(this=field_expr.copy(), expression=exp.Null())
             return exp.EQ(this=field_expr.copy(), expression=self.literal(value))
-        if operator == EventFilterOperator.NOT_EQUAL.value:
+        if operator == "!=":
             if value is None:
                 return exp.not_(exp.Is(this=field_expr.copy(), expression=exp.Null()))
             return exp.NEQ(this=field_expr.copy(), expression=self.literal(value))
-        if operator == EventFilterOperator.CONTAINS.value:
+        if operator == "CONTAINS":
             pattern = self._escape_like_pattern(str(value))
             return exp.Like(
                 this=field_expr.copy(),
                 expression=exp.Literal.string(f"%{pattern}%"),
             )
-        if operator == EventFilterOperator.NOT_CONTAINS.value:
+        if operator == "NOT CONTAINS":
             pattern = self._escape_like_pattern(str(value))
             like_expr = exp.Like(
                 this=field_expr.copy(),
                 expression=exp.Literal.string(f"%{pattern}%"),
             )
             return exp.not_(like_expr)
-        if operator == EventFilterOperator.IN.value:
+        if operator == "IN":
             values = self._ensure_list(value)
             if not values:
                 return exp.false()
@@ -601,7 +673,7 @@ class MatchedEventSubqueryBuilder(SQLHelper):
                 this=field_expr.copy(),
                 expressions=[self.literal(item) for item in values],
             )
-        if operator == EventFilterOperator.NOT_IN.value:
+        if operator == "NOT IN":
             values = self._ensure_list(value)
             if not values:
                 return exp.true()
@@ -610,19 +682,14 @@ class MatchedEventSubqueryBuilder(SQLHelper):
                 expressions=[self.literal(item) for item in values],
             )
             return exp.not_(in_expr)
-        if operator in {
-            EventFilterOperator.GREATER_THAN.value,
-            EventFilterOperator.GREATER_THAN_EQUAL.value,
-            EventFilterOperator.LESS_THAN.value,
-            EventFilterOperator.LESS_THAN_EQUAL.value,
-        }:
+        if operator in NUMERIC_EVENT_OPERATORS:
             comparator = {
-                EventFilterOperator.GREATER_THAN.value: exp.GT,
-                EventFilterOperator.GREATER_THAN_EQUAL.value: exp.GTE,
-                EventFilterOperator.LESS_THAN.value: exp.LT,
-                EventFilterOperator.LESS_THAN_EQUAL.value: exp.LTE,
+                ">": exp.GT,
+                ">=": exp.GTE,
+                "<": exp.LT,
+                "<=": exp.LTE,
             }[operator]
-            numeric_value = self._convert_to_float(value)
+            numeric_value = _convert_to_float(value)
             if numeric_value is not None:
                 # Cast JSON string to DOUBLE before comparing to avoid lexicographical ordering.
                 cast_expr = exp.Cast(this=field_expr.copy(), to=exp.DataType.build("DOUBLE"))
@@ -630,12 +697,6 @@ class MatchedEventSubqueryBuilder(SQLHelper):
                 return comparator(this=cast_expr, expression=literal)
             return comparator(this=field_expr.copy(), expression=self.literal(value))
         return None
-
-    @staticmethod
-    def _build_json_path(field_name: str) -> str:
-        safe_field = (field_name or "").replace("\\", "\\\\").replace("'", "\\'")
-        path_parts = [part for part in safe_field.split(".") if part]
-        return "$" + "".join(f".{part}" for part in path_parts)
 
     @staticmethod
     def _escape_like_pattern(value: str) -> str:
@@ -650,17 +711,6 @@ class MatchedEventSubqueryBuilder(SQLHelper):
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return [value]
-
-    @staticmethod
-    def _convert_to_float(value: Any) -> Optional[float]:
-        if value is None or isinstance(value, bool):
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        try:
-            return float(str(value).strip())
-        except (TypeError, ValueError):
-            return None
 
 
 class FinalSelectAssembler(SQLHelper):
@@ -715,20 +765,14 @@ class FinalSelectAssembler(SQLHelper):
         )
         event_order_field = self.resolver.event_order_field()
         if event_order_field:
-            projections.append(
-                exp.alias_(
-                    exp.func(
-                        "JSON_EXTRACT_STRING",
-                        self.column("matched_event", "event_data"),
-                        exp.Literal.string(
-                            MatchedEventSubqueryBuilder._build_json_path(  # type: ignore[attr-defined]
-                                event_order_field
-                            )
-                        ),
-                    ),
-                    "__order_event_field",
-                )
+            order_expression = exp.func(
+                "JSON_EXTRACT_STRING",
+                self.column("matched_event", "event_data"),
+                exp.Literal.string(build_event_json_path(event_order_field)),
             )
+            if self.resolver.event_order_requires_numeric_cast():
+                order_expression = exp.Cast(this=order_expression, to=exp.DataType.build("DOUBLE"))
+            projections.append(exp.alias_(order_expression, "__order_event_field"))
         joined.set("expressions", projections)
 
         order_expressions = self._build_order_expressions(order_field, order_direction)
