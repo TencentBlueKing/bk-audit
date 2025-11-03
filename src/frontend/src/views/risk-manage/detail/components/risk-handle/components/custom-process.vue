@@ -63,7 +63,10 @@
         v-else
         class="mt8"
         :label="t('处理说明')">
-        {{ data.description || '--' }}
+        <!-- eslint-disable vue/no-v-html -->
+        <div
+          class="ql-editor"
+          v-html="data.description || '--'" />
       </render-info-item>
     </div>
   </div>
@@ -131,5 +134,9 @@
       align-items: flex-start;
     }
   }
+}
+
+.ql-editor {
+  padding: 0;
 }
 </style>
