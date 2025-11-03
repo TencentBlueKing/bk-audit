@@ -864,7 +864,7 @@ class BkBaseSQLRunner:
     def run_count(self, query: exp.Select) -> int:
         count_sql = query.sql(dialect="mysql")
         self.sql_statements.append(count_sql)
-        count_resp = self.api_client(count_sql) or {}
+        count_resp = self.api_client(sql=count_sql) or {}
         results = count_resp.get("list") or []
         try:
             return int(results[0].get("count", 0)) if results else 0
