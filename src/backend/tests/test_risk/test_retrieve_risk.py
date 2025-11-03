@@ -7,6 +7,7 @@ from unittest import mock
 import sqlglot
 from django.conf import settings
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from sqlglot import errors as sqlglot_errors
@@ -133,7 +134,10 @@ class TestListRiskResource(TestCase):
 
         original_formatted = target_end_time.strftime("%Y-%m-%d %H:%M:%S")
         expected = target_end_time.replace(microsecond=0) + datetime.timedelta(seconds=1)
-        expected_formatted = expected.strftime("%Y-%m-%d %H:%M:%S")
+        if timezone.is_naive(expected):
+            expected = timezone.make_aware(expected, timezone.get_current_timezone())
+        expected_localized = timezone.localtime(expected)
+        expected_formatted = expected_localized.strftime("%Y-%m-%d %H:%M:%S")
 
         self.assertEqual(result["event_end_time"], expected_formatted)
         self.assertNotEqual(result["event_end_time"], original_formatted)
@@ -187,6 +191,8 @@ class TestListRiskResource(TestCase):
         self.assertIn(risk_table, sql_log[1])
         ticket_table = f"{self.bkbase_table_config[ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY]}.doris"
         self.assertTrue(any(ticket_table in sql for sql in sql_log))
+        event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
+        self.assertFalse(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -227,7 +233,7 @@ class TestListRiskResource(TestCase):
         self.assertTrue(any("matched_event.raw_event_id = base_query.raw_event_id" in sql for sql in normalized_sql))
         self.assertTrue(any("matched_event.dteventtimestamp >=" in sql for sql in normalized_sql))
         self.assertTrue(any("base_query.event_end_time + INTERVAL 1 SECOND" in sql for sql in normalized_sql))
-        self.assertTrue(any("matched_event_src.thedate >=" in sql for sql in normalized_sql))
+        self.assertTrue(any("matched_event_src_base.thedate >=" in sql for sql in normalized_sql))
         self.assertFalse(any("base_query.thedate" in sql for sql in normalized_sql))
 
         event_table = self._format_expected_table(self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]).replace(
@@ -415,16 +421,16 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
 
         count_sql, data_sql = data["sql"]
-        window_fragment = "ROW_NUMBER() OVER (PARTITION BY matched_event_src_base.strategy_id"
+        window_fragment = "ROW_NUMBER() OVER (PARTITION BY matched_event_src_filtered.strategy_id"
         self.assertIn(window_fragment, count_sql)
-        self.assertIn("JSON_EXTRACT_STRING(matched_event_src_base.event_data, '$.user')", count_sql)
+        self.assertIn("JSON_EXTRACT_STRING(matched_event_src_filtered.event_data, '$.user')", count_sql)
         self.assertIn("JSON_EXTRACT_STRING(matched_event_src.event_data, '$.ip')", count_sql)
         # thedate 应在 base 层过滤
         normalized_count_sql = count_sql.replace("`", "")
         self.assertIn("matched_event_src_base.thedate >=", normalized_count_sql)
         self.assertIn("matched_event_src_base.thedate <=", normalized_count_sql)
         self.assertIn(window_fragment, data_sql)
-        self.assertIn("JSON_EXTRACT_STRING(matched_event_src_base.event_data, '$.user')", data_sql)
+        self.assertIn("JSON_EXTRACT_STRING(matched_event_src_filtered.event_data, '$.user')", data_sql)
         normalized_data_sql = data_sql.replace("`", "")
         self.assertIn("matched_event_src_base.thedate >=", normalized_data_sql)
         self.assertIn("matched_event_src_base.thedate <=", normalized_data_sql)
@@ -433,7 +439,7 @@ class TestListRiskResource(TestCase):
     def test_list_risk_via_bkbase_with_duplicate_basic_field(self):
         sql_log = []
         self.strategy.event_data_field_configs = [
-            {"field_name": "user", "display_name": "User", "duplicate_field": False}
+            {"field_name": "user", "display_name": "User", "duplicate_field": True}
         ]
         self.strategy.event_basic_field_configs = [
             {"field_name": "raw_event_id", "display_name": "Raw Event ID", "duplicate_field": True}
@@ -472,7 +478,7 @@ class TestListRiskResource(TestCase):
 
         combined_sql = " ".join(sql_log)
         self.assertIn("ROW_NUMBER() OVER", combined_sql)
-        self.assertIn("matched_event_src_base.raw_event_id", combined_sql)
+        self.assertIn("matched_event_src_filtered.raw_event_id", combined_sql)
         normalized_sql = combined_sql.replace("`", "")
         self.assertIn("matched_event_src_base.thedate >=", normalized_sql)
         self.assertIn("matched_event_src_base.thedate <=", normalized_sql)
@@ -520,10 +526,11 @@ class TestListRiskResource(TestCase):
         self.assertEqual(results[0]["risk_id"], self.risk.risk_id)
 
         combined_sql = " ".join(sql_log)
-        self.assertNotIn("ROW_NUMBER() OVER", combined_sql)
+        self.assertIn("ROW_NUMBER() OVER", combined_sql)
+        self.assertIn("COALESCE(matched_event_src_filtered.raw_event_id", combined_sql)
         normalized_sql = combined_sql.replace("`", "")
-        self.assertIn("matched_event_src.thedate >=", normalized_sql)
-        self.assertIn("matched_event_src.thedate <=", normalized_sql)
+        self.assertIn("matched_event_src_base.thedate >=", normalized_sql)
+        self.assertIn("matched_event_src_base.thedate <=", normalized_sql)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -556,7 +563,7 @@ class TestListRiskResource(TestCase):
         self.assertTrue(any(strategy_table in sql for sql in sql_log))
         data_sql = sql_log[1]
         data_sql_normalized = data_sql.replace("`", "")
-        self.assertIn("CASE WHEN base_query.strategy__risk_level", data_sql_normalized)
+        self.assertIn("CASE WHEN base_query.risk_level", data_sql_normalized)
         self.assertIn("ELSE 99 END DESC", data_sql_normalized)
         self.assertIn("base_query.event_time DESC", data_sql_normalized)
         self.assertEqual(data["sql"], sql_log)
@@ -636,6 +643,8 @@ class TestListRiskResource(TestCase):
         combined_sql = " ".join(sql_log)
         self.assertIn("2025-04-20", combined_sql)
         self.assertIn("2025-10-20", combined_sql)
+        event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
+        self.assertFalse(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 

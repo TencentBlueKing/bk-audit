@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
 import sqlglot
 from django.core.exceptions import EmptyResultSet
@@ -19,6 +20,63 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from sqlglot import exp
 from sqlglot.errors import ParseError
+
+logger = logging.getLogger(__name__)
+
+
+def _convert_to_float(value: Any) -> Optional[float]:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+NUMERIC_EVENT_OPERATORS = {">", ">=", "<", "<="}
+
+
+def build_event_json_path(field_name: str) -> str:
+    safe_field = (field_name or "").replace("\\", "\\\\").replace("'", "\\'")
+    path_parts = [part for part in safe_field.split(".") if part]
+    return "$" + "".join(f".{part}" for part in path_parts)
+
+
+@dataclass(frozen=True)
+class EventFilterSpec:
+    raw_field: str
+    normalized_field: str
+    operator: str
+    value: Any
+    json_path: str
+    requires_numeric: bool
+
+    @classmethod
+    def from_raw(cls, item: Dict[str, Any], *, prefix: str) -> Optional["EventFilterSpec"]:
+        if not isinstance(item, dict):
+            return None
+        raw_field = (item.get("field") or "").strip()
+        if not raw_field:
+            return None
+        operator = str(item.get("operator") or "").upper()
+        value = item.get("value")
+        normalized = raw_field
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :].strip()
+        if not normalized:
+            return None
+        json_path = build_event_json_path(normalized)
+        requires_numeric = operator in NUMERIC_EVENT_OPERATORS and _convert_to_float(value) is not None
+        return cls(
+            raw_field=raw_field,
+            normalized_field=normalized,
+            operator=operator,
+            value=value,
+            json_path=json_path,
+            requires_numeric=requires_numeric,
+        )
 
 
 class SQLHelper:
@@ -68,7 +126,10 @@ class BkBaseQueryExpressionBuilder:
         sql_text = (sql or "").strip()
         if params:
             sql_text = self._render_sql_with_params(sql_text, params)
-        return self._clean_sql(sql_text)
+        cleaned_sql = self._clean_sql(sql_text)
+        if cleaned_sql:
+            logger.info("BKBase base queryset SQL: %s", cleaned_sql)
+        return cleaned_sql
 
     def convert_to_expression(self, sql: str) -> exp.Expression:
         if not sql:
@@ -104,7 +165,12 @@ class BkBaseQueryExpressionBuilder:
                 node.set("alias", exp.TableAlias(this=exp.to_identifier(source)))
             return node
 
-        return expression.transform(transform_table)
+        transformed = expression.transform(transform_table)
+        try:
+            logger.info("BKBase transformed base SQL: %s", transformed.sql(dialect="mysql"))
+        except Exception:  # noqa: BLE001
+            logger.debug("Failed to serialize transformed BKBase SQL", exc_info=True)
+        return transformed
 
     def format_table_identifier(self, table_name: str) -> str:
         catalog, db_name, table = self._split_table_parts(table_name)
@@ -257,8 +323,9 @@ class BkBaseFieldResolver:
         duplicate_field_map: Dict[int, Dict[str, Sequence[str]]],
     ) -> None:
         self.order_field = order_field or ""
-        self.event_filters = list(event_filters or [])
+        self._event_filter_specs: Tuple[EventFilterSpec, ...] = self._build_event_filter_specs(event_filters)
         self.duplicate_field_map = duplicate_field_map or {}
+        self._numeric_event_filter_fields = self._collect_numeric_event_filter_fields()
 
     def resolve_value_fields(self, base_fields: Iterable[str]) -> List[str]:
         fields = list(base_fields)
@@ -278,8 +345,32 @@ class BkBaseFieldResolver:
     def needs_deduplicate(self) -> bool:
         return bool(self.duplicate_field_map)
 
+    def requires_event_join(self) -> bool:
+        return bool(self.event_filters)
+
     def _is_event_order_field(self) -> bool:
         return self.event_order_field() is not None
+
+    def event_order_requires_numeric_cast(self) -> bool:
+        normalized = self.event_order_field()
+        if not normalized:
+            return False
+        return normalized in self._numeric_event_filter_fields
+
+    def _collect_numeric_event_filter_fields(self) -> Set[str]:
+        return {spec.normalized_field for spec in self.event_filters if spec.requires_numeric}
+
+    def _build_event_filter_specs(self, event_filters: Sequence[Dict[str, Any]]) -> Tuple[EventFilterSpec, ...]:
+        specs: List[EventFilterSpec] = []
+        for item in event_filters or []:
+            spec = EventFilterSpec.from_raw(item, prefix=self.EVENT_DATA_PREFIX)
+            if spec is not None:
+                specs.append(spec)
+        return tuple(specs)
+
+    @property
+    def event_filters(self) -> Tuple[EventFilterSpec, ...]:
+        return self._event_filter_specs
 
 
 class BaseRiskSelectBuilder(SQLHelper):
@@ -308,13 +399,13 @@ class BaseRiskSelectBuilder(SQLHelper):
 @dataclass
 class BkBaseQueryComponents:
     base_query: exp.Select
-    matched_event: exp.Subquery
+    matched_event: Optional[exp.Subquery]
 
     def clone(self) -> "BkBaseQueryComponents":
         # All downstream builders mutate sqlglot nodes; clone to keep originals reusable.
         return BkBaseQueryComponents(
             base_query=self.base_query.copy(),
-            matched_event=self.matched_event.copy(),
+            matched_event=self.matched_event.copy() if self.matched_event is not None else None,
         )
 
 
@@ -336,12 +427,14 @@ class BkBaseQueryComponentsBuilder:
 
     def build(self, base_expression: exp.Expression) -> BkBaseQueryComponents:
         base_query = self.base_builder.build(base_expression)
-        matched_event_subquery = MatchedEventSubqueryBuilder(
-            self.resolver,
-            self.duplicate_field_map,
-            self.thedate_range,
-            self.table_name,
-        ).build()
+        matched_event_subquery: Optional[exp.Subquery] = None
+        if self.resolver.requires_event_join():
+            matched_event_subquery = MatchedEventSubqueryBuilder(
+                self.resolver,
+                self.duplicate_field_map,
+                self.thedate_range,
+                self.table_name,
+            ).build()
         return BkBaseQueryComponents(
             base_query=base_query,
             matched_event=matched_event_subquery,
@@ -367,30 +460,34 @@ class MatchedEventSubqueryBuilder(SQLHelper):
 
     def build(self) -> exp.Subquery:
         final_alias = "matched_event_src"
-        needs_dedup = self.resolver.needs_deduplicate()
-        base_alias = self.STORAGE_ALIAS if needs_dedup else final_alias
+        base_alias = self.STORAGE_ALIAS
         base_table = self._with_thedate(exp.to_table(self.table_name).copy(), base_alias)
-        if needs_dedup:
-            base_table = self._apply_deduplicate(base_table, final_alias, base_alias)
-        elif base_alias != final_alias:
-            base_table = base_table.as_(final_alias)
-
         select_expressions = [
             self.column(final_alias, "strategy_id"),
             self.column(final_alias, "raw_event_id"),
             self.column(final_alias, "event_data"),
             self.column(final_alias, "dteventtimestamp"),
         ]
-        select_query = exp.select(*select_expressions).from_(base_table)
+        select_query = exp.select(*select_expressions).from_(base_table.as_(final_alias))
 
         filter_conditions = self._build_event_filter_conditions(final_alias)
         if filter_conditions is not None:
             select_query = select_query.where(filter_conditions)
 
-        return exp.Subquery(
+        filtered_alias = f"{final_alias}_filtered"
+        filtered_subquery = exp.Subquery(
             this=select_query,
-            alias=exp.TableAlias(this=exp.to_identifier("matched_event")),
+            alias=exp.TableAlias(this=exp.to_identifier(filtered_alias)),
         )
+
+        deduplicated_subquery = self._apply_deduplicate(
+            filtered_subquery,
+            final_alias=final_alias,
+            base_alias=filtered_alias,
+        )
+
+        deduplicated_subquery.set("alias", exp.TableAlias(this=exp.to_identifier("matched_event")))
+        return deduplicated_subquery
 
     def _with_thedate(self, base_table: exp.Expression, alias: str) -> exp.Expression:
         table_as = base_table.as_(alias)
@@ -423,16 +520,14 @@ class MatchedEventSubqueryBuilder(SQLHelper):
     def _apply_deduplicate(
         self,
         table_expr: exp.Expression,
+        *,
         final_alias: str,
         base_alias: str,
     ) -> exp.Subquery:
-        base_from = table_expr
-
         partition_key = self._build_duplicate_partition_key_expression(base_alias)
         if partition_key is None:
-            return table_expr.as_(final_alias)
+            partition_key = self._default_partition_key_expression(base_alias)
 
-        # Use ROW_NUMBER over strategy + partition key to keep the newest event per group.
         partition_expressions = [
             self.column(base_alias, "strategy_id"),
             partition_key,
@@ -441,7 +536,11 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             exp.Ordered(
                 this=self.column(base_alias, "dteventtimestamp"),
                 desc=True,
-            )
+            ),
+            exp.Ordered(
+                this=self.column(base_alias, "raw_event_id"),
+                desc=True,
+            ),
         ]
         window = exp.Window(
             this=exp.func("ROW_NUMBER"),
@@ -449,18 +548,31 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             order=exp.Order(expressions=order_expressions),
         )
 
-        ranked_select = exp.select(exp.Star(), exp.alias_(window, "_row_number")).from_(base_from)
+        ranked_select = exp.select(
+            self.column(base_alias, "strategy_id"),
+            self.column(base_alias, "raw_event_id"),
+            self.column(base_alias, "event_data"),
+            self.column(base_alias, "dteventtimestamp"),
+            exp.alias_(window, "_row_number"),
+        ).from_(table_expr)
+
         ranked_alias = f"{final_alias}_ranked"
         ranked_subquery = exp.Subquery(
             this=ranked_select,
             alias=exp.TableAlias(this=exp.to_identifier(ranked_alias)),
         )
+
         filtered_select = (
-            exp.select(exp.Star())
+            exp.select(
+                self.column(ranked_alias, "strategy_id"),
+                self.column(ranked_alias, "raw_event_id"),
+                self.column(ranked_alias, "event_data"),
+                self.column(ranked_alias, "dteventtimestamp"),
+            )
             .from_(ranked_subquery)
             .where(
                 exp.EQ(
-                    this=exp.column("_row_number", table=ranked_alias),
+                    this=self.column(ranked_alias, "_row_number"),
                     expression=exp.Literal.number("1"),
                 )
             )
@@ -491,20 +603,13 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             )
             cases.append((condition, concat_expr))
 
-        default_expr = self._concat_partition_values(
-            [
-                self.column(alias, "raw_event_id"),
-                self.column(alias, "dteventtimestamp"),
-            ]
-        )
-
         if not cases:
-            return default_expr
+            return None
 
         case_expr = exp.Case()
         for condition, value in cases:
             case_expr = case_expr.when(condition, value)
-        return case_expr.else_(default_expr)
+        return case_expr.else_(self._default_partition_key_expression(alias))
 
     def _concat_partition_values(self, expressions: List[exp.Expression]) -> exp.Expression:
         safe_expressions = [
@@ -528,21 +633,28 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             column = self.column(alias, "event_evidence")
         else:
             return None
-        json_path = self._build_json_path(field_name)
+        json_path = build_event_json_path(field_name)
         return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
+
+    def _default_partition_key_expression(self, alias: str) -> exp.Expression:
+        timestamp_as_text = exp.Cast(this=self.column(alias, "dteventtimestamp"), to=exp.DataType.build("CHAR"))
+        return exp.func(
+            "COALESCE",
+            self.column(alias, "raw_event_id"),
+            timestamp_as_text,
+        )
 
     def _build_event_filter_conditions(self, alias: str) -> Optional[exp.Expression]:
         comparisons: List[exp.Expression] = []
-        for filter_item in self.resolver.event_filters:
-            field_name = filter_item.get("field")
-            if not field_name:
+        for filter_spec in self.resolver.event_filters:
+            if (isinstance(filter_spec.value, str) and not filter_spec.value) or filter_spec.value is None:
                 continue
             field_expr = exp.func(
                 "JSON_EXTRACT_STRING",
                 self.column(alias, "event_data"),
-                exp.Literal.string(self._build_json_path(field_name)),
+                exp.Literal.string(filter_spec.json_path),
             )
-            comparison = self._build_event_filter_expression(field_expr, filter_item)
+            comparison = self._build_event_filter_expression(field_expr, filter_spec)
             if comparison is not None:
                 comparisons.append(comparison)
         if not comparisons:
@@ -553,35 +665,33 @@ class MatchedEventSubqueryBuilder(SQLHelper):
         return combined
 
     def _build_event_filter_expression(
-        self, field_expr: exp.Expression, filter_item: Dict[str, Any]
+        self, field_expr: exp.Expression, filter_spec: EventFilterSpec
     ) -> Optional[exp.Expression]:
-        value = filter_item.get("value")
-        operator = (filter_item.get("operator") or "").upper()
+        value = filter_spec.value
+        operator = filter_spec.operator
 
-        from services.web.risk.constants import EventFilterOperator  # avoid circular
-
-        if operator == EventFilterOperator.EQUAL.value:
+        if operator == "=":
             if value is None:
                 return exp.Is(this=field_expr.copy(), expression=exp.Null())
             return exp.EQ(this=field_expr.copy(), expression=self.literal(value))
-        if operator == EventFilterOperator.NOT_EQUAL.value:
+        if operator == "!=":
             if value is None:
                 return exp.not_(exp.Is(this=field_expr.copy(), expression=exp.Null()))
             return exp.NEQ(this=field_expr.copy(), expression=self.literal(value))
-        if operator == EventFilterOperator.CONTAINS.value:
+        if operator == "CONTAINS":
             pattern = self._escape_like_pattern(str(value))
             return exp.Like(
                 this=field_expr.copy(),
                 expression=exp.Literal.string(f"%{pattern}%"),
             )
-        if operator == EventFilterOperator.NOT_CONTAINS.value:
+        if operator == "NOT CONTAINS":
             pattern = self._escape_like_pattern(str(value))
             like_expr = exp.Like(
                 this=field_expr.copy(),
                 expression=exp.Literal.string(f"%{pattern}%"),
             )
             return exp.not_(like_expr)
-        if operator == EventFilterOperator.IN.value:
+        if operator == "IN":
             values = self._ensure_list(value)
             if not values:
                 return exp.false()
@@ -590,7 +700,7 @@ class MatchedEventSubqueryBuilder(SQLHelper):
                 this=field_expr.copy(),
                 expressions=[self.literal(item) for item in values],
             )
-        if operator == EventFilterOperator.NOT_IN.value:
+        if operator == "NOT IN":
             values = self._ensure_list(value)
             if not values:
                 return exp.true()
@@ -599,32 +709,21 @@ class MatchedEventSubqueryBuilder(SQLHelper):
                 expressions=[self.literal(item) for item in values],
             )
             return exp.not_(in_expr)
-        if operator in {
-            EventFilterOperator.GREATER_THAN.value,
-            EventFilterOperator.GREATER_THAN_EQUAL.value,
-            EventFilterOperator.LESS_THAN.value,
-            EventFilterOperator.LESS_THAN_EQUAL.value,
-        }:
+        if operator in NUMERIC_EVENT_OPERATORS:
             comparator = {
-                EventFilterOperator.GREATER_THAN.value: exp.GT,
-                EventFilterOperator.GREATER_THAN_EQUAL.value: exp.GTE,
-                EventFilterOperator.LESS_THAN.value: exp.LT,
-                EventFilterOperator.LESS_THAN_EQUAL.value: exp.LTE,
+                ">": exp.GT,
+                ">=": exp.GTE,
+                "<": exp.LT,
+                "<=": exp.LTE,
             }[operator]
-            numeric_value = self._convert_to_float(value)
+            numeric_value = _convert_to_float(value)
             if numeric_value is not None:
                 # Cast JSON string to DOUBLE before comparing to avoid lexicographical ordering.
                 cast_expr = exp.Cast(this=field_expr.copy(), to=exp.DataType.build("DOUBLE"))
-                literal = exp.Literal.number(format(numeric_value, "g"))
+                literal = exp.Literal.number(repr(numeric_value))
                 return comparator(this=cast_expr, expression=literal)
             return comparator(this=field_expr.copy(), expression=self.literal(value))
         return None
-
-    @staticmethod
-    def _build_json_path(field_name: str) -> str:
-        safe_field = (field_name or "").replace("\\", "\\\\").replace("'", "\\'")
-        path_parts = [part for part in safe_field.split(".") if part]
-        return "$" + "".join(f".{part}" for part in path_parts)
 
     @staticmethod
     def _escape_like_pattern(value: str) -> str:
@@ -640,17 +739,6 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             return [item.strip() for item in value.split(",") if item.strip()]
         return [value]
 
-    @staticmethod
-    def _convert_to_float(value: Any) -> Optional[float]:
-        if value is None or isinstance(value, bool):
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        try:
-            return float(str(value).strip())
-        except (TypeError, ValueError):
-            return None
-
 
 class FinalSelectAssembler(SQLHelper):
     """将基础风险查询与事件子查询组合成最终 SQL。"""
@@ -658,12 +746,21 @@ class FinalSelectAssembler(SQLHelper):
     def __init__(self, resolver: BkBaseFieldResolver) -> None:
         self.resolver = resolver
 
-    def assemble_count_query(self, base_query: exp.Select, matched_event: exp.Subquery) -> exp.Select:
+    def assemble_count_query(self, base_query: exp.Select, matched_event: Optional[exp.Subquery]) -> exp.Select:
         joined = self._join_events(base_query, matched_event)
         filtered_copy = joined.copy()
         filtered_copy.set("order", None)
         filtered_copy.set("limit", None)
         filtered_copy.set("offset", None)
+        filtered_copy.set(
+            "expressions",
+            [
+                exp.alias_(
+                    exp.Literal.number(1),
+                    "__dummy",
+                )
+            ],
+        )
         subquery = exp.Subquery(
             this=filtered_copy,
             alias=exp.TableAlias(this=exp.to_identifier("risk_count")),
@@ -674,7 +771,7 @@ class FinalSelectAssembler(SQLHelper):
     def assemble_data_query(
         self,
         base_query: exp.Select,
-        matched_event: exp.Subquery,
+        matched_event: Optional[exp.Subquery],
         *,
         order_field: str,
         order_direction: str,
@@ -683,35 +780,30 @@ class FinalSelectAssembler(SQLHelper):
     ) -> exp.Select:
         joined = self._join_events(base_query, matched_event)
 
-        projections = list(joined.expressions or [exp.Star()])
-        if not projections:
-            projections = [exp.Star()]
-        projections.append(
-            # Expose matched event payload so Django objects can attach filtered_event_data later.
-            exp.alias_(
-                self.column("matched_event", "event_data"),
-                "__matched_event_data",
-            )
-        )
-        event_order_field = self.resolver.event_order_field()
-        if event_order_field:
+        if matched_event is not None:
+            projections = list(joined.expressions or [exp.Star()])
+            if not projections:
+                projections = [exp.Star()]
             projections.append(
+                # Expose matched event payload so Django objects can attach filtered_event_data later.
                 exp.alias_(
-                    exp.func(
-                        "JSON_EXTRACT_STRING",
-                        self.column("matched_event", "event_data"),
-                        exp.Literal.string(
-                            MatchedEventSubqueryBuilder._build_json_path(  # type: ignore[attr-defined]
-                                event_order_field
-                            )
-                        ),
-                    ),
-                    "__order_event_field",
+                    self.column("matched_event", "event_data"),
+                    "__matched_event_data",
                 )
             )
-        joined.set("expressions", projections)
+            event_order_field = self.resolver.event_order_field()
+            if event_order_field:
+                order_expression = exp.func(
+                    "JSON_EXTRACT_STRING",
+                    self.column("matched_event", "event_data"),
+                    exp.Literal.string(build_event_json_path(event_order_field)),
+                )
+                if self.resolver.event_order_requires_numeric_cast():
+                    order_expression = exp.Cast(this=order_expression, to=exp.DataType.build("DOUBLE"))
+                projections.append(exp.alias_(order_expression, "__order_event_field"))
+            joined.set("expressions", projections)
 
-        order_expressions = self._build_order_expressions(order_field, order_direction)
+        order_expressions = self._build_order_expressions(order_field, order_direction, matched_event is not None)
         if order_expressions:
             joined = joined.order_by(*order_expressions)
         if limit:
@@ -723,7 +815,9 @@ class FinalSelectAssembler(SQLHelper):
 
         return joined
 
-    def _join_events(self, base_query: exp.Select, matched_event: exp.Subquery) -> exp.Select:
+    def _join_events(self, base_query: exp.Select, matched_event: Optional[exp.Subquery]) -> exp.Select:
+        if matched_event is None:
+            return base_query
         join_conditions = [
             exp.EQ(
                 this=self.column("matched_event", "strategy_id"),
@@ -745,12 +839,17 @@ class FinalSelectAssembler(SQLHelper):
             on=combined,
         )
 
-    def _build_order_expressions(self, order_field: str, order_direction: str) -> List[exp.Expression]:
+    def _build_order_expressions(
+        self,
+        order_field: str,
+        order_direction: str,
+        has_event_join: bool,
+    ) -> List[exp.Expression]:
         if not order_field:
             return []
         descending = order_direction.upper() == "DESC"
         event_field = self.resolver.event_order_field()
-        if event_field:
+        if event_field and has_event_join:
             return [
                 exp.Ordered(this=exp.column("__order_event_field"), desc=descending),
                 exp.Ordered(
@@ -762,22 +861,14 @@ class FinalSelectAssembler(SQLHelper):
         from services.web.risk.constants import RISK_LEVEL_ORDER_FIELD  # noqa
         from services.web.strategy_v2.constants import RiskLevel  # noqa
 
+        base_column = self._base_query_column(field_name)
         if field_name == RISK_LEVEL_ORDER_FIELD:
-            case_expr = exp.Case()
-            for index, level in enumerate([RiskLevel.LOW.value, RiskLevel.MIDDLE.value, RiskLevel.HIGH.value]):
-                case_expr = case_expr.when(
-                    exp.EQ(
-                        this=self.column("base_query", field_name),
-                        expression=self.literal(level),
-                    ),
-                    exp.Literal.number(str(index)),
-                )
-            case_expr = case_expr.else_(exp.Literal.number("99"))
+            rank_expr = self._build_risk_level_rank_expression(base_column)
             return [
-                exp.Ordered(this=case_expr, desc=descending),
-                exp.Ordered(this=self.column("base_query", "event_time"), desc=True),
+                exp.Ordered(this=rank_expr, desc=descending),
+                exp.Ordered(this=self._base_query_column("event_time"), desc=True),
             ]
-        return [exp.Ordered(this=self.column("base_query", field_name), desc=descending)]
+        return [exp.Ordered(this=base_column, desc=descending)]
 
     def _build_join_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
         event_timestamp = self.column(alias, "dteventtimestamp")
@@ -787,6 +878,21 @@ class FinalSelectAssembler(SQLHelper):
             exp.GTE(this=event_timestamp.copy(), expression=start_ms),
             exp.LT(this=event_timestamp.copy(), expression=end_ms),
         ]
+
+    def _build_risk_level_rank_expression(self, field_expr: exp.Expression) -> exp.Expression:
+        from services.web.strategy_v2.constants import RiskLevel  # noqa
+
+        case_expr = exp.Case()
+        for index, level in enumerate([RiskLevel.LOW.value, RiskLevel.MIDDLE.value, RiskLevel.HIGH.value]):
+            case_expr = case_expr.when(
+                exp.EQ(this=field_expr.copy(), expression=self.literal(level)),
+                exp.Literal.number(str(index)),
+            )
+        return case_expr.else_(exp.Literal.number("99"))
+
+    def _base_query_column(self, field_name: str) -> exp.Column:
+        normalized = field_name.split("__")[-1] if "__" in field_name else field_name
+        return self.column("base_query", normalized)
 
 
 class BkBaseCountQueryBuilder:
@@ -863,8 +969,9 @@ class BkBaseSQLRunner:
 
     def run_count(self, query: exp.Select) -> int:
         count_sql = query.sql(dialect="mysql")
+        logger.info("BKBase count SQL: %s", count_sql)
         self.sql_statements.append(count_sql)
-        count_resp = self.api_client(count_sql) or {}
+        count_resp = self.api_client(sql=count_sql) or {}
         results = count_resp.get("list") or []
         try:
             return int(results[0].get("count", 0)) if results else 0
@@ -873,8 +980,9 @@ class BkBaseSQLRunner:
 
     def run_data(self, query: exp.Select) -> List[Dict[str, Any]]:
         data_sql = query.sql(dialect="mysql")
+        logger.info("BKBase data SQL: %s", data_sql)
         self.sql_statements.append(data_sql)
-        data_resp = self.api_client(data_sql) or {}
+        data_resp = self.api_client(sql=data_sql) or {}
         return data_resp.get("list") or []
 
 

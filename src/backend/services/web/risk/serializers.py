@@ -347,8 +347,19 @@ class ListRiskRequestSerializer(serializers.Serializer):
         data = super().validate(attrs)
         event_filters = data.get("event_filters") or []
         raw_order_field = data.get("order_field") or attrs.get("order_field")
-        if raw_order_field and raw_order_field.lstrip("-").startswith("event_data.") and not event_filters:
-            raise serializers.ValidationError(gettext("关联事件字段排序需同时指定事件筛选条件"))
+        normalized_order_field = (raw_order_field or "").lstrip("-")
+        if normalized_order_field.startswith("event_data."):
+            if not event_filters:
+                raise serializers.ValidationError(gettext("关联事件字段排序需同时指定事件筛选条件"))
+            event_field_name = normalized_order_field[len("event_data.") :].strip()
+            filter_fields = {(item.get("field") or "").strip() for item in event_filters if isinstance(item, dict)}
+            filter_fields_with_prefix = {f"event_data.{field}" for field in filter_fields if field}
+            if (
+                event_field_name
+                and event_field_name not in filter_fields
+                and normalized_order_field not in filter_fields_with_prefix
+            ):
+                raise serializers.ValidationError(gettext("关联事件字段排序需在筛选条件中包含字段：%s") % event_field_name)
         # 排序
         # 兼容：前端传入 risk_level 作为排序字段时，转换为 strategy__risk_level
         if data.get("order_field") == Strategy.risk_level.field.name:
@@ -476,6 +487,11 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             # 1. 先去掉微秒 (归零)
             # 2. 再加上1秒，实现“向上取整”
             dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+        dt = timezone.localtime(dt)
 
         # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
         # 所以我们需要在这里手动格式化为您的全局格式
