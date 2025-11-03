@@ -675,6 +675,15 @@ class FinalSelectAssembler(SQLHelper):
         filtered_copy.set("order", None)
         filtered_copy.set("limit", None)
         filtered_copy.set("offset", None)
+        filtered_copy.set(
+            "expressions",
+            [
+                exp.alias_(
+                    exp.Literal.number(1),
+                    "__dummy",
+                )
+            ],
+        )
         subquery = exp.Subquery(
             this=filtered_copy,
             alias=exp.TableAlias(this=exp.to_identifier("risk_count")),
