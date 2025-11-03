@@ -874,7 +874,7 @@ class BkBaseSQLRunner:
     def run_data(self, query: exp.Select) -> List[Dict[str, Any]]:
         data_sql = query.sql(dialect="mysql")
         self.sql_statements.append(data_sql)
-        data_resp = self.api_client(data_sql) or {}
+        data_resp = self.api_client(sql=data_sql) or {}
         return data_resp.get("list") or []
 
 
