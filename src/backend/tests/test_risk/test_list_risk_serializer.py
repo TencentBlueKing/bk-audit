@@ -1,0 +1,295 @@
+# -*- coding: utf-8 -*-
+"""
+TencentBlueKing is pleased to support the open source community by making
+蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+Copyright (C) 2023 THL A29 Limited,
+a Tencent company. All rights reserved.
+Licensed under the MIT License (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at https://opensource.org/licenses/MIT
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on
+an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+We undertake not to change the open source license (MIT license) applicable
+to the current version of the project delivered to anyone in the future.
+"""
+
+import datetime
+
+from django.test import SimpleTestCase
+from django.utils import timezone
+from sqlglot import exp
+
+from services.web.risk.constants import EventFilterOperator
+from services.web.risk.converter.bkbase import (
+    BkBaseFieldResolver,
+    BkBaseQueryComponentsBuilder,
+    FinalSelectAssembler,
+)
+from services.web.risk.models import Risk
+from services.web.risk.serializers import (
+    ListRiskRequestSerializer,
+    ListRiskResponseSerializer,
+)
+from services.web.strategy_v2.models import Strategy
+
+
+class TestListRiskResponseSerializer(SimpleTestCase):
+    def setUp(self):
+        super().setUp()
+        self.strategy = Strategy(strategy_id=1, namespace="test", strategy_name="测试策略")
+        self.strategy.prefetched_tags = []
+
+    def create_risk(self, *, risk_id: str, event_end_time: datetime.datetime | None) -> Risk:
+        risk = Risk(
+            risk_id=risk_id,
+            raw_event_id=f"raw_{risk_id}",
+            strategy=self.strategy,
+            event_time=datetime.datetime(2024, 1, 1, 0, 0, 0),
+            event_end_time=event_end_time,
+        )
+        risk.event_content_short = ""
+        return risk
+
+    def _expected_output(self, dt: datetime.datetime | None) -> str | None:
+        if dt is None:
+            return None
+
+        normalized = dt
+        if normalized.microsecond > 0:
+            normalized = normalized.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        if timezone.is_naive(normalized):
+            normalized = timezone.make_aware(normalized, timezone.get_current_timezone())
+
+        normalized = timezone.localtime(normalized)
+
+        return normalized.strftime("%Y-%m-%d %H:%M:%S")
+
+    def test_event_end_time_rounds_up_when_microseconds_present(self):
+        risk = self.create_risk(
+            risk_id="risk_round",
+            event_end_time=datetime.datetime(2024, 1, 1, 0, 0, 59, 999999),
+        )
+
+        serialized = ListRiskResponseSerializer(instance=risk).data
+        expected = self._expected_output(datetime.datetime(2024, 1, 1, 0, 0, 59, 999999))
+        self.assertEqual(serialized["event_end_time"], expected)
+
+    def test_event_end_time_keeps_original_when_already_rounded(self):
+        risk = self.create_risk(
+            risk_id="risk_exact",
+            event_end_time=datetime.datetime(2024, 1, 1, 0, 0, 59),
+        )
+
+        serialized = ListRiskResponseSerializer(instance=risk).data
+
+        expected = self._expected_output(datetime.datetime(2024, 1, 1, 0, 0, 59))
+        self.assertEqual(serialized["event_end_time"], expected)
+
+    def test_event_end_time_none_returns_none(self):
+        risk = self.create_risk(risk_id="risk_none", event_end_time=None)
+
+        serialized = ListRiskResponseSerializer(instance=risk).data
+
+        self.assertIsNone(serialized["event_end_time"])
+
+    def test_event_end_time_timezone_conversion_preserves_round_up(self):
+        aware_end_time = datetime.datetime(2024, 1, 1, 0, 0, 59, 999999, tzinfo=datetime.timezone.utc)
+        risk = self.create_risk(risk_id="risk_tz", event_end_time=aware_end_time)
+
+        serialized = ListRiskResponseSerializer(instance=risk).data
+
+        expected = self._expected_output(aware_end_time)
+        self.assertEqual(serialized["event_end_time"], expected)
+
+    def test_event_data_prefers_filtered_event_data(self):
+        risk = self.create_risk(risk_id="risk_data", event_end_time=None)
+        risk.event_data = {"from": "model"}
+        risk.filtered_event_data = {"from": "filtered"}
+
+        serialized = ListRiskResponseSerializer(instance=risk).data
+
+        self.assertEqual(serialized["event_data"], {"from": "filtered"})
+
+
+class TestListRiskRequestSerializer(SimpleTestCase):
+    def test_event_data_order_requires_matching_filter(self):
+        serializer = ListRiskRequestSerializer(
+            data={
+                "order_field": "event_data.ip",
+                "event_filters": [
+                    {
+                        "field": "other",
+                        "display_name": "其他",
+                        "operator": EventFilterOperator.EQUAL.value,
+                        "value": "x",
+                    }
+                ],
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        error_text = str(serializer.errors)
+        self.assertIn("关联事件字段排序需在筛选条件中包含字段", error_text)
+
+    def test_event_data_order_passes_with_matching_filter(self):
+        serializer = ListRiskRequestSerializer(
+            data={
+                "order_field": "-event_data.ip",
+                "event_filters": [
+                    {
+                        "field": "ip",
+                        "display_name": "IP",
+                        "operator": EventFilterOperator.EQUAL.value,
+                        "value": "1.1.1.1",
+                    }
+                ],
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["order_field"], "-event_data.ip")
+
+
+class TestBkBaseEventOrdering(SimpleTestCase):
+    def _build_final_query(self, order_field: str, operator: str, value: str):
+        resolver = BkBaseFieldResolver(
+            order_field=order_field,
+            event_filters=[
+                {
+                    "field": "latency",
+                    "display_name": "Latency",
+                    "operator": operator,
+                    "value": value,
+                }
+            ],
+            duplicate_field_map={},
+        )
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+            exp.column("event_time_timestamp", table="risk"),
+            exp.column("event_end_time_timestamp", table="risk"),
+        ).from_("risk")
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map={},
+            thedate_range=None,
+            table_name="risk_event",
+        )
+        components = components_builder.build(base_expression)
+        assembler = FinalSelectAssembler(resolver)
+        order_direction = "DESC" if order_field.startswith("-") else "ASC"
+        order_field_name = order_field.lstrip("-")
+        data_query = assembler.assemble_data_query(
+            components.base_query,
+            components.matched_event,
+            order_field=order_field_name,
+            order_direction=order_direction,
+            limit=0,
+            offset=0,
+        )
+        return resolver, data_query
+
+    def _extract_order_alias(self, select_expression: exp.Select) -> exp.Alias:
+        for expression in select_expression.expressions or []:
+            if isinstance(expression, exp.Alias) and expression.alias_or_name == "__order_event_field":
+                return expression
+        raise AssertionError("order field alias not found")
+
+    def test_numeric_filters_cast_order_field(self):
+        resolver, select_expr = self._build_final_query(
+            order_field="-event_data.latency",
+            operator=EventFilterOperator.GREATER_THAN.value,
+            value="1.5",
+        )
+        order_alias = self._extract_order_alias(select_expr)
+        self.assertTrue(resolver.event_order_requires_numeric_cast())
+        self.assertIsInstance(order_alias.this, exp.Cast)
+        cast_to = order_alias.this.args.get("to")
+        self.assertIsNotNone(cast_to)
+        self.assertEqual(cast_to.sql(dialect="mysql"), "DOUBLE")
+
+    def test_non_numeric_filters_keep_string_order(self):
+        resolver, select_expr = self._build_final_query(
+            order_field="event_data.latency",
+            operator=EventFilterOperator.EQUAL.value,
+            value="slow",
+        )
+        order_alias = self._extract_order_alias(select_expr)
+        self.assertFalse(resolver.event_order_requires_numeric_cast())
+        self.assertFalse(isinstance(order_alias.this, exp.Cast))
+        self.assertIn("JSON_EXTRACT_STRING", order_alias.this.sql(dialect="mysql"))
+
+    def test_join_uses_datetime_columns_for_range(self):
+        _resolver, select_expr = self._build_final_query(
+            order_field="event_data.latency",
+            operator=EventFilterOperator.EQUAL.value,
+            value="slow",
+        )
+        sql_text = select_expr.sql(dialect="mysql")
+        self.assertIn("UNIX_TIMESTAMP", sql_text)
+        self.assertIn("base_query.event_time", sql_text)
+        self.assertIn("base_query.event_end_time", sql_text)
+
+    def test_matched_event_subquery_uses_row_number_for_latest_event(self):
+        resolver = BkBaseFieldResolver(
+            order_field="",
+            event_filters=[
+                {
+                    "field": "latency",
+                    "display_name": "Latency",
+                    "operator": EventFilterOperator.EQUAL.value,
+                    "value": "1",
+                }
+            ],
+            duplicate_field_map={},
+        )
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+            exp.column("event_time_timestamp", table="risk"),
+            exp.column("event_end_time_timestamp", table="risk"),
+        ).from_("risk")
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map={},
+            thedate_range=None,
+            table_name="risk_event",
+        )
+        components = components_builder.build(base_expression)
+        matched_sql = components.matched_event.sql(dialect="mysql")
+        self.assertIn("ROW_NUMBER()", matched_sql)
+        self.assertIn("_row_number", matched_sql)
+        self.assertIn("= 1", matched_sql)
+
+    def test_without_event_filters_skips_event_join(self):
+        resolver = BkBaseFieldResolver(
+            order_field="",
+            event_filters=[],
+            duplicate_field_map={},
+        )
+        base_expression = exp.select(
+            exp.column("risk_id", table="risk"),
+            exp.column("strategy_id", table="risk"),
+            exp.column("raw_event_id", table="risk"),
+            exp.column("event_time", table="risk"),
+            exp.column("event_end_time", table="risk"),
+        ).from_("risk")
+        components_builder = BkBaseQueryComponentsBuilder(
+            resolver=resolver,
+            duplicate_field_map={},
+            thedate_range=None,
+            table_name="risk_event",
+        )
+        components = components_builder.build(base_expression)
+        self.assertIsNone(components.matched_event)
