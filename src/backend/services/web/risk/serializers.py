@@ -26,7 +26,7 @@ from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
 from apps.meta.models import Tag
-from core.serializers import AnyValueField
+from core.serializers import AnyValueField, TimestampIntegerField
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
@@ -223,6 +223,13 @@ class RiskInfoSerializer(serializers.ModelSerializer):
 
 class RiskProviderSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
+    event_end_time_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Event End Time Timestamp(ms)"), source="event_end_time"
+    )
+    last_operate_time_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Last Operate Time Timestamp(ms)"), source="last_operate_time"
+    )
 
     class Meta:
         model = Risk
