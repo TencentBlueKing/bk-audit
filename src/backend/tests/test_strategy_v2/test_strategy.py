@@ -77,10 +77,7 @@ class StrategyTest(TestCase):
                 "is_priority": True,
                 "duplicate_field": False,
                 "drill_config": [
-                    {
-                        "tool": {"uid": "fake_tool_uid", "version": 1, "params": {}},
-                        "config": [],
-                    },
+                    {"tool": {"uid": "fake_tool_uid", "version": 1, "params": {}}, "config": [], "drill_name": ""},
                 ],
             }
         ]
