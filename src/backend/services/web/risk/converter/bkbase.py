@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -19,6 +20,8 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from sqlglot import exp
 from sqlglot.errors import ParseError
+
+logger = logging.getLogger(__name__)
 
 
 class SQLHelper:
@@ -68,7 +71,10 @@ class BkBaseQueryExpressionBuilder:
         sql_text = (sql or "").strip()
         if params:
             sql_text = self._render_sql_with_params(sql_text, params)
-        return self._clean_sql(sql_text)
+        cleaned_sql = self._clean_sql(sql_text)
+        if cleaned_sql:
+            logger.info("BKBase base queryset SQL: %s", cleaned_sql)
+        return cleaned_sql
 
     def convert_to_expression(self, sql: str) -> exp.Expression:
         if not sql:
@@ -104,7 +110,12 @@ class BkBaseQueryExpressionBuilder:
                 node.set("alias", exp.TableAlias(this=exp.to_identifier(source)))
             return node
 
-        return expression.transform(transform_table)
+        transformed = expression.transform(transform_table)
+        try:
+            logger.info("BKBase transformed base SQL: %s", transformed.sql(dialect="mysql"))
+        except Exception:  # noqa: BLE001
+            logger.debug("Failed to serialize transformed BKBase SQL", exc_info=True)
+        return transformed
 
     def format_table_identifier(self, table_name: str) -> str:
         catalog, db_name, table = self._split_table_parts(table_name)
@@ -863,6 +874,7 @@ class BkBaseSQLRunner:
 
     def run_count(self, query: exp.Select) -> int:
         count_sql = query.sql(dialect="mysql")
+        logger.info("BKBase count SQL: %s", count_sql)
         self.sql_statements.append(count_sql)
         count_resp = self.api_client(sql=count_sql) or {}
         results = count_resp.get("list") or []
@@ -873,6 +885,7 @@ class BkBaseSQLRunner:
 
     def run_data(self, query: exp.Select) -> List[Dict[str, Any]]:
         data_sql = query.sql(dialect="mysql")
+        logger.info("BKBase data SQL: %s", data_sql)
         self.sql_statements.append(data_sql)
         data_resp = self.api_client(sql=data_sql) or {}
         return data_resp.get("list") or []
