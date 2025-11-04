@@ -831,9 +831,8 @@ class FinalSelectAssembler(SQLHelper):
         base_column = self._base_query_column(field_name)
         if field_name == RISK_LEVEL_ORDER_FIELD:
             rank_expr = self._build_risk_level_rank_expression(base_column)
-            order_value = rank_expr if descending else exp.Neg(this=rank_expr)
             return [
-                exp.Ordered(this=order_value, desc=True),
+                exp.Ordered(this=rank_expr, desc=descending),
                 exp.Ordered(this=self._base_query_column("event_time"), desc=True),
             ]
         return [exp.Ordered(this=base_column, desc=descending)]
