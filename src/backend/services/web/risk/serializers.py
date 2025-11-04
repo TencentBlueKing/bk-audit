@@ -454,7 +454,10 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             # 2. 再加上1秒，实现“向上取整”
             dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
 
-        dt = dt.astimezone(timezone.get_default_timezone())
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+        dt = timezone.localtime(dt)
 
         # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
         # 所以我们需要在这里手动格式化为您的全局格式
