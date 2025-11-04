@@ -168,7 +168,7 @@
                     :columns="columns"
                     :data="tableData"
                     header-align="center"
-                    :height="dialogTableHeight"
+                    :max-height="dialogTableHeight"
                     :min-height="dialogTableMinHeight"
                     :pagination="pagination"
                     remote-pagination
@@ -1079,11 +1079,11 @@
       if (tableData.value.length > 0) {
         // 判断可视高度大于900px
         // eslint-disable-next-line no-nested-ternary
-        dialogTableHeight.value = val ? (window.innerHeight >= 900 ? '57vh' : '40%') : '300px';
+        dialogTableHeight.value = val ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.57}px` : '40%') : '300px';
         // eslint-disable-next-line no-nested-ternary
-        dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? '65vh' : '60%') : '50vh';
+        dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.65}px` : `${window.innerHeight * 0.60}px`) : `${window.innerHeight * 0.50}px`;
         // eslint-disable-next-line no-nested-ternary
-        dialogTableMinHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? '65vh' : '60%')  : '200px';
+        dialogTableMinHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.65}px` : `${window.innerHeight * 0.60}px`)  : '200px';
       }
     });
   });
