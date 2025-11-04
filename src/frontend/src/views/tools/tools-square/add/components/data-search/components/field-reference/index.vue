@@ -68,7 +68,13 @@
                     v-for="(child, childIndex) in item.children"
                     :id="child.id"
                     :key="childIndex"
-                    :name="child.name" />
+                    :name="child.name">
+                    <span>{{ child.name }}</span>
+                    <span
+                      style=" padding: 2px; margin-left: 4px;background: #f0f1f5; border-radius: 2px;">
+                      {{ toolTypeMap[child.tool_type as keyof typeof toolTypeMap] }}
+                    </span>
+                  </bk-option>
                 </bk-option-group>
               </template>
               <template #extension>
@@ -332,6 +338,7 @@
     children: Array<{
       id: string;
       name: string;
+      tool_type: string;
       version: number;
     }>;
   }
@@ -357,7 +364,15 @@
   }
 
   const props =  defineProps<Props>();
+
   const emit = defineEmits<Emits>();
+
+  const toolTypeMap = ref<Record<string, string>>({
+    data_search: 'SQL',
+    api: 'API',
+    bk_vision: 'bkvison',
+  });
+
   const { t } = useI18n();
 
   const showEditSql = defineModel<boolean>('showFieldReference', {
@@ -595,6 +610,9 @@
   };
 
   const handleFormItemChange = (val: any, toolIndex: number, configIndex: number) => {
+    if (val) {
+      formRef.value.clearValidate(`tools.${toolIndex}.config.${configIndex}.target_value`);
+    }
     formData.value.tools[toolIndex].config[configIndex].target_value = val;
   };
 
@@ -677,10 +695,10 @@
         children: item.tag_id === '-2'
           ? filteredData
             .filter(tool => !tool.tags || tool.tags.length === 0)
-            .map(({ uid, version, name }) => ({ id: uid, version, name }))
+            .map(({ uid, version, name, tool_type }) => ({ id: uid, version, name, tool_type }))
           : filteredData
             .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
-            .map(({ uid, version, name }) => ({ id: uid, version, name })),
+            .map(({ uid, version, name, tool_type }) => ({ id: uid, version, name, tool_type })),
       }))
       .filter(item => item.children.length > 0);
   });
