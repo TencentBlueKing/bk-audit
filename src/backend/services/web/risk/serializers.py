@@ -265,6 +265,9 @@ class TicketPermissionProviderSerializer(serializers.ModelSerializer):
 
     # 显式声明，便于在 Schema 中展示
     authorized_at = serializers.DateTimeField(label=gettext_lazy("Authorized Time"))
+    authorized_at_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Authorized Time Timestamp(ms)"), source="authorized_at"
+    )
 
     class Meta:
         model = TicketPermission

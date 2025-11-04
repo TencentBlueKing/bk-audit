@@ -144,7 +144,7 @@ class TicketPermissionResourceProvider(IAMResourceProvider):
     resource_type = ResourceEnum.TICKET_PERMISSION.id
     """TicketPermission 资源提供者（用于反向拉取快照）"""
     resource_provider_serializer = TicketPermissionProviderSerializer
-    resource_type_index_fields = []
+    resource_type_index_fields = ["risk_id", "action", "user", "authorized_at", "user_type", "authorized_at_timestamp"]
 
     def list_attr_value_choices(self, attr: str, page: Page) -> List:
         return []
