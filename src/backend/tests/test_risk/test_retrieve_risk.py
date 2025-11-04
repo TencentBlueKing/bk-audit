@@ -556,7 +556,7 @@ class TestListRiskResource(TestCase):
         self.assertTrue(any(strategy_table in sql for sql in sql_log))
         data_sql = sql_log[1]
         data_sql_normalized = data_sql.replace("`", "")
-        self.assertIn("CASE WHEN base_query.strategy__risk_level", data_sql_normalized)
+        self.assertIn("CASE WHEN base_query.risk_level", data_sql_normalized)
         self.assertIn("ELSE 99 END DESC", data_sql_normalized)
         self.assertIn("base_query.event_time DESC", data_sql_normalized)
         self.assertEqual(data["sql"], sql_log)

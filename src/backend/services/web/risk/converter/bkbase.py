@@ -828,17 +828,15 @@ class FinalSelectAssembler(SQLHelper):
         from services.web.risk.constants import RISK_LEVEL_ORDER_FIELD  # noqa
         from services.web.strategy_v2.constants import RiskLevel  # noqa
 
+        base_column = self._base_query_column(field_name)
         if field_name == RISK_LEVEL_ORDER_FIELD:
-            rank_expr = self._build_risk_level_rank_expression(field_name)
-            if descending:
-                order_value = rank_expr
-            else:
-                order_value = exp.Neg(this=rank_expr)
+            rank_expr = self._build_risk_level_rank_expression(base_column)
+            order_value = rank_expr if descending else exp.Neg(this=rank_expr)
             return [
                 exp.Ordered(this=order_value, desc=True),
-                exp.Ordered(this=self.column("base_query", "event_time"), desc=True),
+                exp.Ordered(this=self._base_query_column("event_time"), desc=True),
             ]
-        return [exp.Ordered(this=self.column("base_query", field_name), desc=descending)]
+        return [exp.Ordered(this=base_column, desc=descending)]
 
     def _build_join_timestamp_conditions(self, alias: str) -> List[exp.Expression]:
         event_timestamp = self.column(alias, "dteventtimestamp")
@@ -849,19 +847,20 @@ class FinalSelectAssembler(SQLHelper):
             exp.LT(this=event_timestamp.copy(), expression=end_ms),
         ]
 
-    def _build_risk_level_rank_expression(self, field_name: str) -> exp.Expression:
+    def _build_risk_level_rank_expression(self, field_expr: exp.Expression) -> exp.Expression:
         from services.web.strategy_v2.constants import RiskLevel  # noqa
 
         case_expr = exp.Case()
         for index, level in enumerate([RiskLevel.LOW.value, RiskLevel.MIDDLE.value, RiskLevel.HIGH.value]):
             case_expr = case_expr.when(
-                exp.EQ(
-                    this=self.column("base_query", field_name),
-                    expression=self.literal(level),
-                ),
+                exp.EQ(this=field_expr.copy(), expression=self.literal(level)),
                 exp.Literal.number(str(index)),
             )
         return case_expr.else_(exp.Literal.number("99"))
+
+    def _base_query_column(self, field_name: str) -> exp.Column:
+        normalized = field_name.split("__")[-1] if "__" in field_name else field_name
+        return self.column("base_query", normalized)
 
 
 class BkBaseCountQueryBuilder:
