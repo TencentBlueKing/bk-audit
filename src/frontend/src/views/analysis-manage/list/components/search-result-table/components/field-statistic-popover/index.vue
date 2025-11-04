@@ -29,101 +29,103 @@
         @click="handleClick" />
     </template>
     <template #content>
-      <div
-        v-if="statisticData.results"
-        class="statistic-content">
-        <div class="statistic-title">
-          <span>
-            {{ t('总行数') }}:
-            <span class="statistic-title-value">{{ statisticData.results.total_rows[0].total_rows }}</span>
-          </span>
-          <span style="margin: 0 32px;">
-            {{ t('出现行数') }}:
-            <span class="statistic-title-value">{{ statisticData.results.non_empty_rows[0].non_empty_rows }}</span>
-          </span>
-          <span>
-            {{ t('日志条数') }}:
-            <span class="statistic-title-value">
-              {{ ((statisticData.results.non_empty_rows[0].non_empty_rows
-                /statisticData.results.total_rows[0].total_rows) * 100).toFixed(2) }}%
+      <bk-loading :loading="loading">
+        <div
+          v-if="statisticData.results"
+          class="statistic-content">
+          <div class="statistic-title">
+            <span>
+              {{ t('总行数') }}:
+              <span class="statistic-title-value">{{ statisticData.results.total_rows[0].total_rows }}</span>
             </span>
-          </span>
-        </div>
-        <template v-if="statisticData.results.max_value">
-          <div class="values-container">
-            <div class="item">
-              {{ t('最大值') }} <span class="item-count">{{ statisticData.results.max_value[0].max_value }}</span>
-            </div>
-            <div class="item">
-              {{ t('最小值') }} <span class="item-count">{{ statisticData.results.min_value[0].min_value }}</span>
-            </div>
-            <div class="item">
-              {{ t('平均值') }} <span class="item-count">{{ statisticData.results.avg_value[0].avg_value }}</span>
-            </div>
-            <div class="item">
-              {{ t('中位数') }} <span class="item-count">{{ statisticData.results.median_value[0].median_value }}</span>
-            </div>
+            <span style="margin: 0 32px;">
+              {{ t('出现行数') }}:
+              <span class="statistic-title-value">{{ statisticData.results.non_empty_rows[0].non_empty_rows }}</span>
+            </span>
+            <span>
+              {{ t('日志条数') }}:
+              <span class="statistic-title-value">
+                {{ ((statisticData.results.non_empty_rows[0].non_empty_rows
+                  /statisticData.results.total_rows[0].total_rows) * 100).toFixed(2) }}%
+              </span>
+            </span>
           </div>
-        </template>
-        <template v-else>
-          <div class="statistic-stack">
-            <div
-              id="main"
-              style="height: 200px;" />
-            <ul class="legend">
-              <li
-                v-for="(item, index) in statisticData.results.top_5_echarts_time_series.series"
-                :key="item.name"
-                class="legend-item">
-                <div style="display: flex; align-items: center;">
-                  <div
-                    :style="{
-                      background: option.color[index],
-                      width: '12px',
-                      height: '12px',
-                      marginRight: '6px',
-                    }" />
-                  {{ item.name }}
-                </div>
-              </li>
-            </ul>
-          </div>
-          <div class="statistic-field">
-            <div class="title">
-              {{ t('去重后字段统计') }}
-              <span class="values-number">{{ statisticData.results.top_5_values.length }}</span>
+          <template v-if="statisticData.results.max_value">
+            <div class="values-container">
+              <div class="item">
+                {{ t('最大值') }} <span class="item-count">{{ statisticData.results.max_value[0].max_value }}</span>
+              </div>
+              <div class="item">
+                {{ t('最小值') }} <span class="item-count">{{ statisticData.results.min_value[0].min_value }}</span>
+              </div>
+              <div class="item">
+                {{ t('平均值') }} <span class="item-count">{{ statisticData.results.avg_value[0].avg_value }}</span>
+              </div>
+              <div class="item">
+                {{ t('中位数') }} <span class="item-count">{{ statisticData.results.median_value[0].median_value }}</span>
+              </div>
             </div>
-            <ul class="field-list">
-              <li
-                v-for="(item, index) in statisticData.results.top_5_values"
-                :key="index"
-                class="field-list-item">
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <span>{{ item[props.fieldName] }}</span>
-                  <div style="color: #2dcb56;">
-                    <span>{{ item.count }}{{ t('条') }}</span>
-                    <span style="margin-left: 4px;">
-                      {{ ((item.count / statisticData.results.total_rows[0].total_rows) * 100).toFixed(2) }}%
-                    </span>
+          </template>
+          <template v-else>
+            <div class="statistic-stack">
+              <div
+                id="main"
+                style="height: 200px;" />
+              <ul class="legend">
+                <li
+                  v-for="(item, index) in statisticData.results.top_5_echarts_time_series.series"
+                  :key="item.name"
+                  class="legend-item">
+                  <div style="display: flex; align-items: center;">
+                    <div
+                      :style="{
+                        background: option.color[index],
+                        width: '12px',
+                        height: '12px',
+                        marginRight: '6px',
+                      }" />
+                    {{ item.name }}
                   </div>
-                </div>
-                <bk-progress
-                  :percent="(item.count / statisticData.results.total_rows[0].total_rows) * 100"
-                  :show-text="false"
-                  size="small"
-                  theme="success" />
-              </li>
-            </ul>
-          </div>
-        </template>
-      </div>
-      <bk-exception
-        v-else
-        class="exception-part"
-        scene="part"
-        type="search-empty">
-        {{ t('暂无数据') }}
-      </bk-exception>
+                </li>
+              </ul>
+            </div>
+            <div class="statistic-field">
+              <div class="title">
+                {{ t('去重后字段统计') }}
+                <span class="values-number">{{ statisticData.results.top_5_values.length }}</span>
+              </div>
+              <ul class="field-list">
+                <li
+                  v-for="(item, index) in statisticData.results.top_5_values"
+                  :key="index"
+                  class="field-list-item">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span>{{ item[props.fieldName] }}</span>
+                    <div style="color: #2dcb56;">
+                      <span>{{ item.count }}{{ t('条') }}</span>
+                      <span style="margin-left: 4px;">
+                        {{ ((item.count / statisticData.results.total_rows[0].total_rows) * 100).toFixed(2) }}%
+                      </span>
+                    </div>
+                  </div>
+                  <bk-progress
+                    :percent="(item.count / statisticData.results.total_rows[0].total_rows) * 100"
+                    :show-text="false"
+                    size="small"
+                    theme="success" />
+                </li>
+              </ul>
+            </div>
+          </template>
+        </div>
+        <bk-exception
+          v-else
+          class="exception-part"
+          scene="part"
+          type="search-empty">
+          {{ t('暂无数据') }}
+        </bk-exception>
+      </bk-loading>
     </template>
   </bk-popover>
 </template>
@@ -214,6 +216,7 @@
   const {
     data: statisticData,
     run: fetchSearchStatistic,
+    loading,
   } = useRequest(EsQueryService.fetchSearchStatistic, {
     defaultValue: new SearchStatisticModel(),
     onSuccess: () => {
@@ -287,9 +290,9 @@
       font-weight: 700;
 
       .values-number {
-        color: #979BA5;
         padding: 0 10px;
-        background-color: #F0F1F5;
+        color: #979ba5;
+        background-color: #f0f1f5;
         border-radius: 10px;
       }
     }
