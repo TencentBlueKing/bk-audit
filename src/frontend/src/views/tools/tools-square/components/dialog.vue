@@ -15,221 +15,218 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div>
-    <bk-dialog
-      ref="dialogRef"
-      class="tools-use-dialog"
-      draggable
-      :esc-close="false"
-      :fullscreen="isFullScreen"
-      :is-show="isShow"
-      render-directive="show"
-      :show-mask="false"
-      :style="{
-        'z-index': dialogIndex,
-        'position': 'absolute'
-      }"
-      :width="dialogWidth"
-      :z-index="dialogIndex"
-      @click="handleClick"
-      @closed="handleCloseDialog">
-      <template #tools>
+  <bk-dialog
+    ref="dialogRef"
+    class="tools-use-dialog"
+    draggable
+    :esc-close="false"
+    :fullscreen="isFullScreen"
+    :is-show="isShow"
+    render-directive="show"
+    :show-mask="false"
+    :style="{
+      'z-index': dialogIndex,
+      'position': 'absolute'
+    }"
+    :width="dialogWidth"
+    :z-index="dialogIndex"
+    @click="handleClick"
+    @closed="handleCloseDialog">
+    <template #tools>
+      <div
+        v-if="isShowTags"
+        class="dialog-header">
+        <dialog-header
+          ref="dialogHeaderRef"
+          :tabs="tabs"
+          @click-item="handleClickTag" />
+      </div>
+    </template>
+    <template #header>
+      <div>
         <div
-          v-if="isShowTags"
-          class="dialog-header">
-          <dialog-header
-            ref="dialogHeaderRef"
-            :tabs="tabs"
-            @click-item="handleClickTag" />
-        </div>
-      </template>
-      <template #header>
-        <div>
-          <div
-            class="header"
-            :style="isShowTags ? `margin-top: 35px;` : ``">
-            <div class="header-left">
-              <audit-icon
-                class="full-screen-img"
-                svg
-                :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
-                @click="handleFullscreen()" />
-            </div>
-            <div class="top-right">
-              <audit-icon
-                class="top-left-icon"
-                svg
-                :type="itemInfo ? itemIcon(itemInfo) : ''" />
-              <div class="top-right-box">
-                <div class="top-right-title">
-                  <span
-                    v-bk-tooltips="{
-                      disabled: !isTextOverflow(itemInfo?.name || '', 0, '300px', { isSingleLine: true }),
-                      content: t(itemInfo?.name || ''),
-                      placement: 'top',
-                    }"
-                    class="top-right-name">
-                    {{ itemInfo?.name }}
-                  </span>
-                  <bk-tag
-                    v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
-                    :key="tagIndex"
-                    class="desc-tag">
-                    {{ returnTagsName(tag) }}
-                  </bk-tag>
-                  <bk-tag
-                    v-if="itemInfo?.tags && itemInfo.tags.length > 3"
-                    v-bk-tooltips="{
-                      content: tagContent(itemInfo.tags),
-                      placement: 'top',
-                    }"
-                    class="desc-tag">
-                    + {{ itemInfo.tags.length - 3
-                    }}
-                  </bk-tag>
-                  <bk-tag
-                    class="desc-tag desc-tag-info"
-                    theme="info"
-                    @click="handlesStrategiesClick(itemInfo)">
-                    {{ t('运用在') }} {{ itemInfo?.strategies.length }} {{ t('个策略中') }}
-                  </bk-tag>
-                </div>
-                <div class="top-right-desc">
-                  {{ itemInfo?.description }}
-                </div>
+          class="header"
+          :style="isShowTags ? `margin-top: 35px;` : ``">
+          <div class="header-left">
+            <audit-icon
+              class="full-screen-img"
+              svg
+              :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
+              @click="handleFullscreen()" />
+          </div>
+          <div class="top-right">
+            <audit-icon
+              class="top-left-icon"
+              svg
+              :type="itemInfo ? itemIcon(itemInfo) : ''" />
+            <div class="top-right-box">
+              <div class="top-right-title">
+                <span
+                  v-bk-tooltips="{
+                    disabled: !isTextOverflow(itemInfo?.name || '', 0, '300px', { isSingleLine: true }),
+                    content: t(itemInfo?.name || ''),
+                    placement: 'top',
+                  }"
+                  class="top-right-name">
+                  {{ itemInfo?.name }}
+                </span>
+                <bk-tag
+                  v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
+                  :key="tagIndex"
+                  class="desc-tag">
+                  {{ returnTagsName(tag) }}
+                </bk-tag>
+                <bk-tag
+                  v-if="itemInfo?.tags && itemInfo.tags.length > 3"
+                  v-bk-tooltips="{
+                    content: tagContent(itemInfo.tags),
+                    placement: 'top',
+                  }"
+                  class="desc-tag">
+                  + {{ itemInfo.tags.length - 3
+                  }}
+                </bk-tag>
+                <bk-tag
+                  class="desc-tag desc-tag-info"
+                  theme="info"
+                  @click="handlesStrategiesClick(itemInfo)">
+                  {{ t('运用在') }} {{ itemInfo?.strategies.length }} {{ t('个策略中') }}
+                </bk-tag>
+              </div>
+              <div class="top-right-desc">
+                {{ itemInfo?.description }}
               </div>
             </div>
           </div>
         </div>
-      </template>
-      <template #default>
-        <div
-          v-if="itemInfo?.tool_type !== 'bk_vision'"
-          class="default"
-          :style="`height:${dialogHeight}`">
-          <div class="top-line" />
-          <div v-if="permission">
-            <div class="top-search">
-              <div class="top-search-title">
-                {{ t('查询输入') }}
-              </div>
-              <bk-form
-                ref="formRef"
-                class="example"
-                form-type="vertical"
-                :model="searchFormData"
-                :rules="rules">
-                <div class="formref-item">
-                  <bk-form-item
-                    v-for="(item, index) in searchList"
-                    :key="index"
-                    class="formref-item-item"
-                    :label="item?.display_name"
-                    :property="item?.raw_name"
-                    :required="item?.required">
-                    <template #label>
-                      <span
-                        v-bk-tooltips="{
-                          disabled: item?.description === '',
-                          content: item?.description,
-                        }">
-                        {{ item?.display_name }}
-                      </span>
-                    </template>
-                    <form-item
-                      ref="formItemRef"
-                      :data-config="item"
-                      @change="(val:any) => handleFormItemChange(val, item)" />
-                  </bk-form-item>
-                </div>
-              </bk-form>
-              <div v-if="source === ''">
-                <bk-button
-                  class="mr8"
-                  theme="primary"
-                  @click.stop="submit">
-                  查询
-                </bk-button>
-                <bk-button
-                  class="mr8"
-                  @click.stop="handleReset">
-                  重置
-                </bk-button>
-              </div>
+      </div>
+    </template>
+    <template #default>
+      <div
+        v-if="itemInfo?.tool_type !== 'bk_vision'"
+        class="default"
+        :style="`height:${dialogHeight}`">
+        <div class="top-line" />
+        <div v-if="permission">
+          <div class="top-search">
+            <div class="top-search-title">
+              {{ t('查询输入') }}
             </div>
-            <div class="top-search">
-              <div class="top-search-title">
-                {{ t('查询结果') }}
+            <bk-form
+              ref="formRef"
+              class="example"
+              form-type="vertical"
+              :model="searchFormData"
+              :rules="rules">
+              <div class="formref-item">
+                <bk-form-item
+                  v-for="(item, index) in searchList"
+                  :key="index"
+                  class="formref-item-item"
+                  :label="item?.display_name"
+                  :property="item?.raw_name"
+                  :required="item?.required">
+                  <template #label>
+                    <span
+                      v-bk-tooltips="{
+                        disabled: item?.description === '',
+                        content: item?.description,
+                      }">
+                      {{ item?.display_name }}
+                    </span>
+                  </template>
+                  <form-item
+                    ref="formItemRef"
+                    :data-config="item"
+                    @change="(val:any) => handleFormItemChange(val, item)" />
+                </bk-form-item>
               </div>
-              <div class="top-search-result">
-                <bk-loading :loading="isLoading">
-                  <bk-table
-                    :border="['row','outer','col']"
-                    :columns="columns"
-                    :data="tableData"
-                    header-align="center"
-                    :max-height="dialogTableHeight"
-                    :min-height="dialogTableMinHeight"
-                    :pagination="pagination"
-                    remote-pagination
-                    show-overflow-tooltip
-                    @page-limit-change="handlePageLimitChange"
-                    @page-value-change="handlePageChange" />
-                </bk-loading>
-              </div>
+            </bk-form>
+            <div v-if="source === ''">
+              <bk-button
+                class="mr8"
+                theme="primary"
+                @click.stop="submit">
+                查询
+              </bk-button>
+              <bk-button
+                class="mr8"
+                @click.stop="handleReset">
+                重置
+              </bk-button>
             </div>
           </div>
-          <div
-            v-else
-            class="default-permission">
-            <div class="no-permission">
-              <img
-                class="no-permission-img"
-                src="@images/no-permission.svg">
-              <div class="no-permission-desc">
-                <p class="no-permission-title">
-                  {{ t('无使用权限') }}
-                </p>
-                <p class="no-permission-text">
-                  {{ t('你没有该工具的使用权限，请前往申请权限') }}
-                </p>
-                <p
-                  class="no-permission-btn"
-                  @click.stop="handleIamApply">
-                  {{ t('申请权限') }}
-                </p>
-              </div>
+          <div class="top-search">
+            <div class="top-search-title">
+              {{ t('查询结果') }}
+            </div>
+            <div class="top-search-result">
+              <bk-loading :loading="isLoading">
+                <bk-table
+                  :border="['row','outer','col']"
+                  :columns="columns"
+                  :data="tableData"
+                  header-align="center"
+                  :max-height="dialogTableHeight"
+                  :pagination="pagination"
+                  remote-pagination
+                  show-overflow-tooltip
+                  @page-limit-change="handlePageLimitChange"
+                  @page-value-change="handlePageChange" />
+              </bk-loading>
             </div>
           </div>
         </div>
-
         <div
           v-else
-          class="default">
-          <div class="top-line" />
-          <div
-            :id="`panel-${uid}`"
-            ref="panelRef"
-            class="panel" />
+          class="default-permission">
+          <div class="no-permission">
+            <img
+              class="no-permission-img"
+              src="@images/no-permission.svg">
+            <div class="no-permission-desc">
+              <p class="no-permission-title">
+                {{ t('无使用权限') }}
+              </p>
+              <p class="no-permission-text">
+                {{ t('你没有该工具的使用权限，请前往申请权限') }}
+              </p>
+              <p
+                class="no-permission-btn"
+                @click.stop="handleIamApply">
+                {{ t('申请权限') }}
+              </p>
+            </div>
+          </div>
         </div>
+      </div>
 
+      <div
+        v-else
+        class="default">
+        <div class="top-line" />
         <div
-          v-if="!isFullScreen"
-          class="resize-handle"
-          @mousedown="startResize" />
-        <div
-          v-if="!isFullScreen"
-          class="resize-handle-left"
-          @mousedown="startResizeLeft" />
-      </template>
-      <template #footer>
-        <div
-          v-if="!isFullScreen"
-          class="resize-handle-top"
-          @mousedown="startResizeBottom" />
-      </template>
-    </bk-dialog>
-  </div>
+          :id="`panel-${uid}`"
+          ref="panelRef"
+          class="panel" />
+      </div>
+
+      <div
+        v-if="!isFullScreen"
+        class="resize-handle"
+        @mousedown="startResize" />
+      <div
+        v-if="!isFullScreen"
+        class="resize-handle-left"
+        @mousedown="startResizeLeft" />
+    </template>
+    <template #footer>
+      <div
+        v-if="!isFullScreen"
+        class="resize-handle-top"
+        @mousedown="startResizeBottom" />
+    </template>
+  </bk-dialog>
 </template>
 <script setup lang='tsx'>
   import { nextTick, ref, watch } from 'vue';
@@ -352,7 +349,6 @@
   const dialogWidth = ref('50%');
   const dialogHeight = ref('50vh');
   const dialogTableHeight = ref('300px');
-  const dialogTableMinHeight = ref('200px');
   const isFullScreen = ref(false);
   const isLoading = ref(false);
   const isShow = ref(false);
@@ -804,6 +800,9 @@
         });
         // 判断每个字段是否有值
         const validateField = (field: any) => {
+          if (!field.required) {
+            return true;
+          }
           if (field.field_category === 'time_range_select') {
             return Array.isArray(field.value) && field.value.length > 0;
           }
@@ -1066,7 +1065,6 @@
     isShow.value = false;
     dialogWidth.value = '50%';
     isFullScreen.value = false;
-    dialogTableMinHeight.value = '200px';
   };
 
   // 放大
@@ -1082,8 +1080,6 @@
         dialogTableHeight.value = val ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.57}px` : '40%') : '300px';
         // eslint-disable-next-line no-nested-ternary
         dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.65}px` : `${window.innerHeight * 0.60}px`) : `${window.innerHeight * 0.50}px`;
-        // eslint-disable-next-line no-nested-ternary
-        dialogTableMinHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.65}px` : `${window.innerHeight * 0.60}px`)  : '200px';
       }
     });
   });

@@ -208,12 +208,9 @@
     emits('change', value || null);
   };
   const handleUserChange = (value: Array<string> | string) => {
-    if (!Array.isArray(value)) {
-      user.value = [value];
-    } else {
-      user.value = value;
-    }
-    emits('change', value || []);
+    const formattedValue = Array.isArray(value) ? value : [value];
+    user.value = formattedValue;
+    emits('change', formattedValue || []);
   };
   const handleRangeChange = (value: Array<string>) => {
     // 新增工具配置默认值，只用原始值
@@ -240,63 +237,58 @@
     emits('change', value || []);
   };
 
+  // 时间戳转换为格式化字符串
+  const formatTimestamp = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+  };
+
+  // 处理时间选择器的值兼容（支持字符串和时间戳）
+  const handleTimeValue = (val: any) => {
+    // 如果已经是正确的格式字符串，直接使用
+    if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) {
+      handleTimeChange(val);
+      return;
+    }
+    // 尝试转换时间戳
+    const timestamp = Number(val);
+    if (!isNaN(timestamp) && timestamp > 0) {
+      handleTimeChange(formatTimestamp(timestamp));
+    }
+  };
+
   const setData = (val: any) => {
-    const type: keyof typeof handlers = props.dataConfig.field_category as keyof typeof handlers;
-    const handlers = {
-      inputer: () => {
-        handleInputDataChange(val);
-      },
-      variable: () => {
-        handleInputDataChange(val);
-      },
-      input: () => {
-        handleInputDataChange(val);
-      },
-      number_input: () => {
-        handleNumberInputDataChange(val);
-      },
-      person_select: () => {
-        handleUserChange(val);
-      },
-      time_range_select: () => {
-        handleRangeChange(val);
-      },
-      'time-ranger': () => {
-        handleRangeChange(val);
-      },
-      'time-picker': () => {
-        // 如果已经是正确的格式字符串，直接使用
-        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) {
-          handleTimeChange(val);
-          return;
-        }
-        const timestamp = Number(val);
-        if (!isNaN(timestamp) && timestamp > 0) {
-          const date = new Date(timestamp);
-          const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-          handleTimeChange(formattedDate);
-        }
-      },
-      time_select: () => {
-        // 如果已经是正确的格式字符串，直接使用
-        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(val)) {
-          handleTimeChange(val);
-          return;
-        }
-        const timestamp = Number(val);
-        if (!isNaN(timestamp) && timestamp > 0) {
-          const date = new Date(timestamp);
-          const formattedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
-          handleTimeChange(formattedDate);
-        }
-      },
-      multiselect: () => {
-        handleEnumChange(val);
-      },
+    const type = props.dataConfig.field_category;
+
+    // 字段类型处理映射表
+    const handlers: Record<string, () => void> = {
+      // 文本输入类（统一处理）
+      inputer: () => handleInputDataChange(val),
+      variable: () => handleInputDataChange(val),
+      input: () => handleInputDataChange(val),
+
+      // 数字输入
+      number_input: () => handleNumberInputDataChange(val),
+
+      // 人员选择
+      person_select: () => handleUserChange(val),
+
+      // 时间范围选择（统一处理）
+      time_range_select: () => handleRangeChange(val),
+      'time-ranger': () => handleRangeChange(val),
+
+      // 时间选择（统一处理，支持字符串和时间戳）
+      'time-picker': () => handleTimeValue(val),
+      time_select: () => handleTimeValue(val),
+
+      // 多选
+      multiselect: () => handleEnumChange(val),
     };
 
-    if (handlers[type]) {
-      handlers[type]();
+    // 执行对应的处理器，未匹配则使用默认的 selector 处理
+    const handler = handlers[type];
+    if (handler) {
+      handler();
     } else {
       handleSelectorChange(val);
     }
