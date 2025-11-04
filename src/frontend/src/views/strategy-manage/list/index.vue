@@ -1155,6 +1155,7 @@
 
   // 详情
   const handleDetail = (data: StrategyModel) => {
+    if (!data) return;
     strategyItem.value = data;
     showDetail.value = true;
   };

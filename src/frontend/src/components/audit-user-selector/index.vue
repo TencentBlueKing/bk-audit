@@ -27,7 +27,6 @@
     :multiple="multiple"
     multiple-mode="tag"
     :no-data-text="noDataText"
-    :popover-options="{ boundary: 'parent'}"
     :remote-method="remoteMethod"
     @blur="handleBlur"
     @change="handleChange"
