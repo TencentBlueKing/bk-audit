@@ -123,7 +123,9 @@
       color: '#0CA668',
     },
   };
-  const tableColumn = [
+  const selectedItemList = ref([]);
+
+  const initTableColumns = ref([
     {
       type: 'selection',
       label: '',
@@ -320,7 +322,9 @@
           }
           </p>,
     },
-  ] as Column[];
+  ]) as Column[];
+
+  const tableColumn = ref([initTableColumns.value]) as Column[];
 
 
   const listRef = ref();
@@ -337,26 +341,31 @@
     // last_operate_time: 'last_operate_time',
     // risk_label: 'risk_label',
   };
-  const initSettings = () => ({
-    fields: tableColumn.reduce((res, item, index) => {
-      if (item.field) {
-        const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
-        const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
-        res.push({
-          label: String(labelValue),
-          field: String(fieldValue),
-          disabled: !!disabledMap[String(fieldValue)],
-        });
-      }
-      return res;
-    }, [] as Array<{
-      label: string, field: string, disabled: boolean,
-    }>) || [],
-    checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'],
-    showLineHeight: false,
-    trigger: 'manual' as const,  // 添加 as const 类型断言
-  });
-  const { settings } = useTableSettings('audit-all-risk-list-setting', initSettings);
+  const initSettings = () => {
+    const fieldNames = selectedItemList.value.map(item => `event_data.${item.field_name}`);
+    const list = selectedItemList.value.length > 0 ? tableColumn.value : initTableColumns.value;
+    return  {
+      fields: list.reduce((res, item, index) => {
+        if (item.field) {
+          const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
+          const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
+          res.push({
+            label: String(labelValue),
+            field: String(fieldValue),
+            disabled: !!disabledMap[String(fieldValue)] || fieldNames.includes(fieldValue),
+          });
+        }
+        return res;
+      }, [] as Array<{
+        label: string, field: string, disabled: boolean,
+      }>) || [],
+      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'].concat(fieldNames),
+      showLineHeight: false,
+      trigger: 'manual' as const,  // 添加 as const 类型断言
+    };
+  };
+  const settings  = ref();
+  settings.value = useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
 
   // 导出数据
   const handleExport = () => {
@@ -449,12 +458,38 @@
   // 记录轮训的数据
   const pollingDataMap = ref<Record<string, RiskManageModel>>({});
   const handleRequestSuccess = ({ results }: {results: Array<RiskManageModel>}) => {
-    startPolling(results);
+    selectedItemList.value =  searchBoxRef.value?.getSelectedItemList();
+    if (JSON.stringify(tableColumn.value) !== JSON.stringify(initColumns())) {
+      tableColumn.value =  initColumns();
+    }
+    settings.value =  useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
     if (!results.length) return;
     // 获取对应风险等级
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),
     });
+  };
+
+  const  initColumns = () => {
+    if (selectedItemList.value.length === 0) {
+      return [...initTableColumns.value];
+    }
+    const columns = [...initTableColumns.value]; // 创建副本避免修改原始数组
+
+    let selectedColumns = [];
+    selectedColumns = selectedItemList.value.map(item => ({
+      label: item.display_name,
+      field: `event_data.${item.field_name}`,
+      width: 120,
+      showOverflowTooltip: true,
+      sort: 'custom',
+      render: ({ data }: { data: RiskManageModel }) => <span>{data.event_data[item.field_name] || '--'}</span>,
+    }));
+    // 在操作列之前插入选中的列
+    const operationColumnIndex = columns.findIndex(col => col.fixed === 'right');
+    const insertIndex = operationColumnIndex > -1 ? operationColumnIndex : columns.length - 1;
+    columns.splice(insertIndex, 0, ...selectedColumns);
+    return  columns;
   };
   //   // 开始轮训
   const startPolling = (results: Array<RiskManageModel>) => {

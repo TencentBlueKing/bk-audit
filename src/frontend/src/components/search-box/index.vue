@@ -165,6 +165,7 @@
     clearValue: () => void;
     exportData: (val: string[], type: string) => void;
     initSelectedItems:(val: Array< Record<string, any>>) => void;
+    getSelectedItemList: (val: Array< Record<string, any>>) => void;
   }
 
 
@@ -353,8 +354,13 @@
         'now',
       ],
     };
-    selectedVal.value = [];
-    selectedItemList.value = [];
+    selectedItemList.value = selectedItemList.value.map(item => ({
+      ...item,
+      value: '',
+      operator: '=',
+    }));
+
+    selectedVal.value = selectedItemList.value.map(item => item.id);
     handleSubmit();
   };
   const findIdByDisplayAndField = (display: string, field: string, ary: Array<Record<string, any>>) => {
@@ -395,6 +401,9 @@
     },
     initSelectedItems(val) {
       selectedItems.value = val;
+    },
+    getSelectedItemList() {
+      return selectedItemList.value;
     },
   });
 

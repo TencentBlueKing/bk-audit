@@ -39,7 +39,6 @@
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
-    computed,
     onMounted,
     onUnmounted,
     ref,
@@ -67,6 +66,8 @@
   import RiskLevel from '@views/risk-manage/list/components/risk-level.vue';
 
   import FieldConfig from './components/config';
+
+  import useTableSettings from '@/hooks/use-table-settings';
 
   const dataSource = RiskManageService.fetchWatchRiskList;
   interface ISettings{
@@ -109,8 +110,9 @@
       color: '#0CA668',
     },
   };
+  const selectedItemList = ref([]);
 
-  const tableColumn = [
+  const initTableColumns = ref([
     {
       type: 'selection',
       label: '',
@@ -260,7 +262,10 @@
           {data.risk_label === 'normal' ? t('正常') : t('误报')}
         </span>,
     },
-  ] as Column[];
+  ]) as Column[];
+
+  const tableColumn = ref([initTableColumns.value]) as Column[];
+
   let timeout: number| undefined = undefined;
 
   const { messageWarn } = useMessage();
@@ -283,62 +288,32 @@
     status: 'status',
     current_operator: 'current_operator',
   };
-  const initSettings = () => ({
-    fields: tableColumn?.reduce((res, item, index) => {
-      if (item.field) {
-        const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
-        const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
-        res.push({
-          label: String(labelValue),
-          field: String(fieldValue),
-          disabled: !!disabledMap[String(fieldValue)],
-        });
-      }
-      return res;
-    }, [] as Array<{
-      label: string, field: string, disabled: boolean,
-    }>) || [],
-    checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'],
-    showLineHeight: false,
-    trigger: 'manual' as const,  // 添加 as const 类型断言
-  });
-  const settings = computed(() => {
-    const defaultSettings = initSettings(); // 获取最新的默认配置
-    const jsonStr = localStorage.getItem('audit-attention-risk-list-setting');
+  const initSettings = () => {
+    const fieldNames = selectedItemList.value.map(item => `event_data.${item.field_name}`);
+    const list = selectedItemList.value.length > 0 ? tableColumn.value : initTableColumns.value;
+    return  {
+      fields: list.reduce((res, item, index) => {
+        if (item.field) {
+          const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
+          const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
+          res.push({
+            label: String(labelValue),
+            field: String(fieldValue),
+            disabled: !!disabledMap[String(fieldValue)] || fieldNames.includes(fieldValue),
+          });
+        }
+        return res;
+      }, [] as Array<{
+        label: string, field: string, disabled: boolean,
+      }>) || [],
+      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'].concat(fieldNames),
+      showLineHeight: false,
+      trigger: 'manual' as const,  // 添加 as const 类型断言
+    };
+  };
+  const settings  = ref();
 
-    if (!jsonStr) return defaultSettings;
-
-    try {
-      const savedSettings = JSON.parse(jsonStr);
-
-      // 字段合并：以默认配置为基础，合并用户保存的字段状态
-      const mergedFields = defaultSettings.fields.map((defaultField) => {
-        const savedField = savedSettings.fields?.find((f: any) => f.field === defaultField.field);
-        // 保留新字段配置，仅继承用户设置的disabled状态
-        return savedField
-          ? { ...defaultField, disabled: savedField.disabled }
-          : defaultField;
-      });
-
-      // 选中的字段合并：保留用户选择 + 新增的默认选中字段
-      const savedCheckedSet = new Set(savedSettings.checked || []);
-      const newDefaultChecked = defaultSettings.checked
-        .filter(field => !savedCheckedSet.has(field)); // 找出新增的默认选中字段
-      const mergedChecked = [...(savedSettings.checked || []), ...newDefaultChecked]
-        .filter(field => mergedFields.some(f => f.field === field)); // 过滤无效字段
-
-      return {
-        ...defaultSettings,       // 保留最新默认配置的其他属性
-        fields: mergedFields,     // 合并后的字段配置
-        checked: mergedChecked,   // 合并后的选中字段
-        showLineHeight: false,    // 强制重置行高设置
-        trigger: 'manual' as const,  // 添加 as const 类型断言
-      };
-    } catch (e) {
-      console.error('本地设置解析失败，使用默认配置', e);
-      return defaultSettings;
-    }
-  });
+  settings.value = useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
 
 
   // 获取标签列表
@@ -404,12 +379,36 @@
   // 记录轮训的数据
   const pollingDataMap = ref<Record<string, RiskManageModel>>({});
   const handleRequestSuccess = ({ results }: {results: Array<RiskManageModel>}) => {
+    selectedItemList.value =  searchBoxRef.value?.getSelectedItemList();
+    if (JSON.stringify(tableColumn.value) !== JSON.stringify(initColumns())) {
+      tableColumn.value =  initColumns();
+    }
+    settings.value =  useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
+
     startPolling(results);
     if (!results.length) return;
     // 获取对应风险等级
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),
     });
+  };
+
+  const  initColumns = () => {
+    if (selectedItemList.value.length === 0) {
+      return [...initTableColumns.value];
+    }
+    const columns = [...initTableColumns.value]; // 创建副本避免修改原始数组
+
+    let selectedColumns = [];
+    selectedColumns = selectedItemList.value.map(item => ({
+      label: item.display_name,
+      field: `event_data.${item.field_name}`,
+      width: 120,
+      showOverflowTooltip: true,
+      sort: 'custom',
+      render: ({ data }: { data: RiskManageModel }) => <span>{data.event_data[item.field_name] || '--'}</span>,
+    }));
+    return  columns.concat(selectedColumns);
   };
   // 开始轮训
   const startPolling = (results: Array<RiskManageModel>) => {
