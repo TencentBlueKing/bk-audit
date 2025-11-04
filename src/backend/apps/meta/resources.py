@@ -861,7 +861,9 @@ class ResourceTypeSchema(Meta, CacheMixin, Resource):
         # 请求数据
         web = requests.session()
         try:
-            data = web.post(url=request_url, json=request_body, headers=request_header).json()["data"]["properties"]
+            resp = web.post(url=request_url, json=request_body, headers=request_header).json()
+            logger.info("[Get ResourceType Schema Success] Response => %s", resp)
+            data = resp["data"]["properties"]
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception(
                 "[Get ResourceType Schema Failed] "
@@ -881,6 +883,7 @@ class ResourceTypeSchema(Meta, CacheMixin, Resource):
                 "type": val.get("type"),
                 "description_en": val.get("description_en") or val.get("description"),
                 "description": val.get("description"),
+                "is_index": val.get("is_index", False),
             }
             for key, val in data.items()
         ]

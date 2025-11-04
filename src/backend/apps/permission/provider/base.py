@@ -25,6 +25,9 @@ from django.conf import settings
 from iam.collection import FancyDict
 from iam.resource.provider import ListResult, ResourceProvider, SchemaResult
 from iam.resource.utils import Page
+from rest_framework import serializers
+
+from core.serializers import get_serializer_fields
 
 
 class BaseResourceProvider(ResourceProvider, metaclass=abc.ABCMeta):
@@ -45,6 +48,18 @@ class BaseResourceProvider(ResourceProvider, metaclass=abc.ABCMeta):
 
 class IAMResourceProvider(ResourceProvider, abc.ABC):
     """IAM资源提供基类 ."""
+
+    # 资源索引字段
+    resource_type_index_fields = []
+
+    @property
+    @abc.abstractmethod
+    def resource_provider_serializer(self) -> Optional[serializers.Serializer]:
+        """
+        资源序列化器
+        """
+
+        raise NotImplementedError()
 
     def __init__(self):
         # 属性配置
@@ -237,4 +252,17 @@ class IAMResourceProvider(ResourceProvider, abc.ABC):
         处理来自 iam 的 fetch_resource_type_schema 请求
         在审计中心显示静态资源时，需要实现此方法
         """
-        return SchemaResult({})
+        if not self.resource_provider_serializer:
+            return SchemaResult({})
+        data = get_serializer_fields(self.resource_provider_serializer)
+        return SchemaResult(
+            properties={
+                item["name"]: {
+                    "type": item["type"].lower(),
+                    "description_en": item["name"],
+                    "description": item["description"],
+                    "is_index": item["name"] in self.resource_type_index_fields,
+                }
+                for item in data
+            }
+        )
