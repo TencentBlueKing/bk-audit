@@ -622,6 +622,8 @@ class MatchedEventSubqueryBuilder(SQLHelper):
     def _build_event_filter_conditions(self, alias: str) -> Optional[exp.Expression]:
         comparisons: List[exp.Expression] = []
         for filter_spec in self.resolver.event_filters:
+            if (isinstance(filter_spec.value, str) and not filter_spec.value) or filter_spec.value is None:
+                continue
             field_expr = exp.func(
                 "JSON_EXTRACT_STRING",
                 self.column(alias, "event_data"),
