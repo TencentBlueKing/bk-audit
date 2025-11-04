@@ -23,12 +23,11 @@ from django.db import models
 from django.db.models import QuerySet
 from django.utils import timezone
 from iam import PathEqDjangoQuerySetConverter
-from iam.resource.provider import ListResult, SchemaResult
+from iam.resource.provider import ListResult
 from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.provider.base import IAMResourceProvider
-from core.serializers import get_serializer_fields
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
 from services.web.risk.models import Risk, TicketPermission
 from services.web.risk.serializers import (
@@ -38,6 +37,21 @@ from services.web.risk.serializers import (
 
 
 class RiskResourceProvider(IAMResourceProvider):
+    resource_provider_serializer = RiskProviderSerializer
+    resource_type_index_fields = [
+        "risk_id",
+        "raw_event_id",
+        "strategy_id",
+        "event_time",
+        "event_end_time",
+        "event_source",
+        "last_operate_time",
+        "title",
+        "event_time_timestamp",
+        "event_end_time_timestamp",
+        "last_operate_time_timestamp",
+    ]
+
     def list_attr_value_choices(self, attr: str, page: Page) -> List:
         return []
 
@@ -119,29 +133,18 @@ class RiskResourceProvider(IAMResourceProvider):
                 "created_at": None,
                 "updater": None,
                 "updated_at": None,
-                "data": RiskProviderSerializer(instance=item).data,
+                "data": self.resource_provider_serializer(instance=item).data,
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]
         return ListResult(results=results, count=queryset.count())
 
-    def fetch_resource_type_schema(self, **options):
-        data = get_serializer_fields(RiskProviderSerializer)
-        return SchemaResult(
-            properties={
-                item["name"]: {
-                    "type": item["type"].lower(),
-                    "description_en": item["name"],
-                    "description": item["description"],
-                }
-                for item in data
-            }
-        )
-
 
 class TicketPermissionResourceProvider(IAMResourceProvider):
     resource_type = ResourceEnum.TICKET_PERMISSION.id
     """TicketPermission 资源提供者（用于反向拉取快照）"""
+    resource_provider_serializer = TicketPermissionProviderSerializer
+    resource_type_index_fields = []
 
     def list_attr_value_choices(self, attr: str, page: Page) -> List:
         return []
@@ -204,7 +207,6 @@ class TicketPermissionResourceProvider(IAMResourceProvider):
         # 上界扩展 1ms，确保包含毫秒边界
         end_time_inclusive = end_time + datetime.timedelta(milliseconds=1)
         queryset = TicketPermission.objects.filter(authorized_at__gt=start_time, authorized_at__lte=end_time_inclusive)
-
         page_queryset = queryset[page.slice_from : page.slice_to]
         # 顶层时间戳要求为毫秒级
         results = [
@@ -215,21 +217,8 @@ class TicketPermissionResourceProvider(IAMResourceProvider):
                 "created_at": int(item.authorized_at.timestamp() * 1000) if item.authorized_at else None,
                 "updater": None,
                 "updated_at": int(item.authorized_at.timestamp() * 1000) if item.authorized_at else None,
-                "data": TicketPermissionProviderSerializer(item).data,
+                "data": self.resource_provider_serializer(item).data,
             }
             for item in page_queryset
         ]
         return ListResult(results=results, count=queryset.count())
-
-    def fetch_resource_type_schema(self, **options):
-        data = get_serializer_fields(TicketPermissionProviderSerializer)
-        return SchemaResult(
-            properties={
-                item["name"]: {
-                    "type": item["type"].lower(),
-                    "description_en": item["name"],
-                    "description": item["description"],
-                }
-                for item in data
-            }
-        )

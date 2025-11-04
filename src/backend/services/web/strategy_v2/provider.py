@@ -38,6 +38,17 @@ from services.web.strategy_v2.serializers import (
 class StrategyBaseProvider(BaseResourceProvider):
     attrs = None
     resource_type = None
+    resource_type_index_fields = [
+        "strategy_id",
+        "strategy_name",
+        "control_id",
+        "control_version",
+        "link_table_uid",
+        "link_table_version",
+        "description",
+        "risk_hazard",
+        "risk_guidance",
+    ]
 
     def list_instance(self, filters, page, **options):
         queryset = Strategy.objects.none()
@@ -134,6 +145,7 @@ class StrategyBaseProvider(BaseResourceProvider):
                     "type": item["type"].lower(),
                     "description_en": item["name"],
                     "description": item["description"],
+                    "is_index": item["name"] in self.resource_type_index_fields,
                 }
                 for item in data
             }
@@ -253,6 +265,8 @@ class StrategyTagResourceProvider(IAMResourceProvider):
     """
 
     resource_type = ResourceEnum.STRATEGY_TAG.id
+    resource_provider_serializer = StrategyTagResourceSerializer
+    resource_type_index_fields = ["tag_id", "strategy_id"]
 
     def list_attr_value_choices(self, attr: str, page: Page) -> List:
         return []
@@ -326,7 +340,7 @@ class StrategyTagResourceProvider(IAMResourceProvider):
         end_time = datetime.datetime.fromtimestamp(int(filter.end_time // 1000))
         queryset = StrategyTag.objects.select_related("tag").filter(updated_at__gt=start_time, updated_at__lte=end_time)
         page_queryset = queryset[page.slice_from : page.slice_to]
-        snapshot = StrategyTagResourceSerializer(page_queryset, many=True).data
+        snapshot = self.resource_provider_serializer(page_queryset, many=True).data
         results = [
             {
                 "id": str(item.pk),
@@ -340,19 +354,3 @@ class StrategyTagResourceProvider(IAMResourceProvider):
             for item, data in zip(page_queryset, snapshot)
         ]
         return ListResult(results=results, count=queryset.count())
-
-    def fetch_resource_type_schema(self, **options):
-        """
-        获取资源类型 Schema
-        """
-        data = get_serializer_fields(StrategyTagResourceSerializer)
-        return SchemaResult(
-            properties={
-                item["name"]: {
-                    "type": item["type"].lower(),
-                    "description_en": item["name"],
-                    "description": item["description"],
-                }
-                for item in data
-            }
-        )
