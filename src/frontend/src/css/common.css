@@ -59,6 +59,10 @@
     table tbody tr td:not(:last-child) .cell .bk-button {
       margin-left: 0;
     }
+
+    .bk-exception {
+      border-bottom: 1px solid #dcdee5;
+    }
   }
 
   .bk-pagination {
