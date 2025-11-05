@@ -157,17 +157,19 @@ class TestToolViewPermissions(TestCase):
                     "display_name": "责任人",
                     "is_priority": True,
                     "duplicate_field": False,
-                    "drill_config": {
-                        "tool": {"uid": sql_tool.uid, "version": 1},
-                        "config": [
-                            {
-                                "source_field": "ctx",
-                                "target_value_type": "field",
-                                "target_field_type": "basic",
-                                "target_value": "operator",
-                            }
-                        ],
-                    },
+                    "drill_config": [
+                        {
+                            "tool": {"uid": sql_tool.uid, "version": 1},
+                            "config": [
+                                {
+                                    "source_field": "ctx",
+                                    "target_value_type": "field",
+                                    "target_field_type": "basic",
+                                    "target_value": "operator",
+                                }
+                            ],
+                        }
+                    ],
                 }
             ],
         )
@@ -276,17 +278,19 @@ class TestToolViewPermissions(TestCase):
                     "display_name": "环境",
                     "is_priority": True,
                     "duplicate_field": False,
-                    "drill_config": {
-                        "tool": {"uid": sql_tool.uid, "version": 1},
-                        "config": [
-                            {
-                                "source_field": "env",
-                                "target_value_type": "fixed_value",
-                                "target_field_type": "basic",
-                                "target_value": "prod",
-                            }
-                        ],
-                    },
+                    "drill_config": [
+                        {
+                            "tool": {"uid": sql_tool.uid, "version": 1},
+                            "config": [
+                                {
+                                    "source_field": "env",
+                                    "target_value_type": "fixed_value",
+                                    "target_field_type": "basic",
+                                    "target_value": "prod",
+                                }
+                            ],
+                        }
+                    ],
                 }
             ],
         )
