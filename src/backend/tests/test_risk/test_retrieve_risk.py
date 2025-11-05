@@ -191,6 +191,8 @@ class TestListRiskResource(TestCase):
         self.assertIn(risk_table, sql_log[1])
         ticket_table = f"{self.bkbase_table_config[ASSET_TICKET_PERMISSION_BKBASE_RT_ID_KEY]}.doris"
         self.assertTrue(any(ticket_table in sql for sql in sql_log))
+        event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
+        self.assertFalse(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
@@ -641,6 +643,8 @@ class TestListRiskResource(TestCase):
         combined_sql = " ".join(sql_log)
         self.assertIn("2025-04-20", combined_sql)
         self.assertIn("2025-10-20", combined_sql)
+        event_table = f"{self.bkbase_table_config[DORIS_EVENT_BKBASE_RT_ID_KEY]}.doris"
+        self.assertFalse(any(event_table in sql for sql in sql_log))
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 

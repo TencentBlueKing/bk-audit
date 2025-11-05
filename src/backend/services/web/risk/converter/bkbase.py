@@ -345,6 +345,9 @@ class BkBaseFieldResolver:
     def needs_deduplicate(self) -> bool:
         return bool(self.duplicate_field_map)
 
+    def requires_event_join(self) -> bool:
+        return bool(self.event_filters)
+
     def _is_event_order_field(self) -> bool:
         return self.event_order_field() is not None
 
@@ -396,13 +399,13 @@ class BaseRiskSelectBuilder(SQLHelper):
 @dataclass
 class BkBaseQueryComponents:
     base_query: exp.Select
-    matched_event: exp.Subquery
+    matched_event: Optional[exp.Subquery]
 
     def clone(self) -> "BkBaseQueryComponents":
         # All downstream builders mutate sqlglot nodes; clone to keep originals reusable.
         return BkBaseQueryComponents(
             base_query=self.base_query.copy(),
-            matched_event=self.matched_event.copy(),
+            matched_event=self.matched_event.copy() if self.matched_event is not None else None,
         )
 
 
@@ -424,12 +427,14 @@ class BkBaseQueryComponentsBuilder:
 
     def build(self, base_expression: exp.Expression) -> BkBaseQueryComponents:
         base_query = self.base_builder.build(base_expression)
-        matched_event_subquery = MatchedEventSubqueryBuilder(
-            self.resolver,
-            self.duplicate_field_map,
-            self.thedate_range,
-            self.table_name,
-        ).build()
+        matched_event_subquery: Optional[exp.Subquery] = None
+        if self.resolver.requires_event_join():
+            matched_event_subquery = MatchedEventSubqueryBuilder(
+                self.resolver,
+                self.duplicate_field_map,
+                self.thedate_range,
+                self.table_name,
+            ).build()
         return BkBaseQueryComponents(
             base_query=base_query,
             matched_event=matched_event_subquery,
@@ -741,7 +746,7 @@ class FinalSelectAssembler(SQLHelper):
     def __init__(self, resolver: BkBaseFieldResolver) -> None:
         self.resolver = resolver
 
-    def assemble_count_query(self, base_query: exp.Select, matched_event: exp.Subquery) -> exp.Select:
+    def assemble_count_query(self, base_query: exp.Select, matched_event: Optional[exp.Subquery]) -> exp.Select:
         joined = self._join_events(base_query, matched_event)
         filtered_copy = joined.copy()
         filtered_copy.set("order", None)
@@ -766,7 +771,7 @@ class FinalSelectAssembler(SQLHelper):
     def assemble_data_query(
         self,
         base_query: exp.Select,
-        matched_event: exp.Subquery,
+        matched_event: Optional[exp.Subquery],
         *,
         order_field: str,
         order_direction: str,
@@ -775,29 +780,30 @@ class FinalSelectAssembler(SQLHelper):
     ) -> exp.Select:
         joined = self._join_events(base_query, matched_event)
 
-        projections = list(joined.expressions or [exp.Star()])
-        if not projections:
-            projections = [exp.Star()]
-        projections.append(
-            # Expose matched event payload so Django objects can attach filtered_event_data later.
-            exp.alias_(
-                self.column("matched_event", "event_data"),
-                "__matched_event_data",
+        if matched_event is not None:
+            projections = list(joined.expressions or [exp.Star()])
+            if not projections:
+                projections = [exp.Star()]
+            projections.append(
+                # Expose matched event payload so Django objects can attach filtered_event_data later.
+                exp.alias_(
+                    self.column("matched_event", "event_data"),
+                    "__matched_event_data",
+                )
             )
-        )
-        event_order_field = self.resolver.event_order_field()
-        if event_order_field:
-            order_expression = exp.func(
-                "JSON_EXTRACT_STRING",
-                self.column("matched_event", "event_data"),
-                exp.Literal.string(build_event_json_path(event_order_field)),
-            )
-            if self.resolver.event_order_requires_numeric_cast():
-                order_expression = exp.Cast(this=order_expression, to=exp.DataType.build("DOUBLE"))
-            projections.append(exp.alias_(order_expression, "__order_event_field"))
-        joined.set("expressions", projections)
+            event_order_field = self.resolver.event_order_field()
+            if event_order_field:
+                order_expression = exp.func(
+                    "JSON_EXTRACT_STRING",
+                    self.column("matched_event", "event_data"),
+                    exp.Literal.string(build_event_json_path(event_order_field)),
+                )
+                if self.resolver.event_order_requires_numeric_cast():
+                    order_expression = exp.Cast(this=order_expression, to=exp.DataType.build("DOUBLE"))
+                projections.append(exp.alias_(order_expression, "__order_event_field"))
+            joined.set("expressions", projections)
 
-        order_expressions = self._build_order_expressions(order_field, order_direction)
+        order_expressions = self._build_order_expressions(order_field, order_direction, matched_event is not None)
         if order_expressions:
             joined = joined.order_by(*order_expressions)
         if limit:
@@ -809,7 +815,9 @@ class FinalSelectAssembler(SQLHelper):
 
         return joined
 
-    def _join_events(self, base_query: exp.Select, matched_event: exp.Subquery) -> exp.Select:
+    def _join_events(self, base_query: exp.Select, matched_event: Optional[exp.Subquery]) -> exp.Select:
+        if matched_event is None:
+            return base_query
         join_conditions = [
             exp.EQ(
                 this=self.column("matched_event", "strategy_id"),
@@ -831,12 +839,17 @@ class FinalSelectAssembler(SQLHelper):
             on=combined,
         )
 
-    def _build_order_expressions(self, order_field: str, order_direction: str) -> List[exp.Expression]:
+    def _build_order_expressions(
+        self,
+        order_field: str,
+        order_direction: str,
+        has_event_join: bool,
+    ) -> List[exp.Expression]:
         if not order_field:
             return []
         descending = order_direction.upper() == "DESC"
         event_field = self.resolver.event_order_field()
-        if event_field:
+        if event_field and has_event_join:
             return [
                 exp.Ordered(this=exp.column("__order_event_field"), desc=descending),
                 exp.Ordered(
