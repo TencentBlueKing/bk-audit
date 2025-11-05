@@ -309,18 +309,19 @@ def _collect_check_rules(risk, tool_uid: str, drill_field: Optional[str] = None)
 
     mapping: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for field_cfg in iter_field_configs():
-        drill = (field_cfg or {}).get("drill_config") or {}
-        tool = (drill or {}).get("tool") or {}
-        if not tool or tool.get("uid") != tool_uid:
-            continue
-        for item in drill.get("config") or []:
-            src = item.get("source_field")
-            tv_type = item.get("target_value_type")
-            target_value = item.get("target_value")
-            target_field_type = item.get("target_field_type")
-            if not src or not tv_type:
+        drill_list = (field_cfg or {}).get("drill_config") or []
+        for drill in drill_list:
+            tool = (drill or {}).get("tool") or {}
+            if not tool or tool.get("uid") != tool_uid:
                 continue
-            mapping[src].append({"type": tv_type, "target": target_value, "target_field_type": target_field_type})
+            for item in drill.get("config") or []:
+                src = item.get("source_field")
+                tv_type = item.get("target_value_type")
+                target_value = item.get("target_value")
+                target_field_type = item.get("target_field_type")
+                if not src or not tv_type:
+                    continue
+                mapping[src].append({"type": tv_type, "target": target_value, "target_field_type": target_field_type})
     # 返回顺序需与调用方保持一致：(uncheck_field, mapping)
     return uncheck_field, mapping
 
