@@ -554,6 +554,8 @@
   // 点击确认或取消关闭
   const closeDialog = () => {
     showFieldDict.value = false;
+    isSearching.value = false;
+    searchKey.value = [];
     formData.value.renderData = [{
       key: '',
       name: '',
@@ -562,6 +564,8 @@
 
   // 快捷关闭
   const handleUpdateIsShow = () => {
+    isSearching.value = false;
+    searchKey.value = [];
     formData.value.renderData = [{
       key: '',
       name: '',
@@ -569,10 +573,19 @@
   };
 
   watch(() => showFieldDict.value, (value) => {
-    // 初始化时直接引用 formData.renderData，保持引用关系
-    renderList.value = formData.value.renderData;
-    if (value && props.editData.length) {
-      formData.value.renderData = _.cloneDeep(props.editData);
+    // 弹窗打开时初始化数据
+    if (value) {
+      if (props.editData.length) {
+        // 有编辑数据时，使用深拷贝
+        formData.value.renderData = _.cloneDeep(props.editData);
+      } else {
+        // 没有编辑数据时，初始化为空项
+        formData.value.renderData = [{
+          key: '',
+          name: '',
+        }];
+      }
+      // 保持引用关系
       renderList.value = formData.value.renderData;
     }
   });
