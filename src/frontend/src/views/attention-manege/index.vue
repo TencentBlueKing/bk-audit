@@ -75,6 +75,15 @@
     fields: Record<string, any>[],
     size: string
   }
+
+  interface FieldItem {
+    id: string;
+    field_name: string;
+    display_name: string;
+    operator?: string;
+    value?: string | string[];
+  }
+
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
@@ -110,9 +119,9 @@
       color: '#0CA668',
     },
   };
-  const selectedItemList = ref([]);
+  const selectedItemList = ref<FieldItem[]>([]);
 
-  const initTableColumns = ref([
+  const initTableColumns = [
     {
       type: 'selection',
       label: '',
@@ -262,9 +271,9 @@
           {data.risk_label === 'normal' ? t('正常') : t('误报')}
         </span>,
     },
-  ]) as Column[];
+  ] as Column[];
 
-  const tableColumn = ref([initTableColumns.value]) as Column[];
+  const tableColumn = ref(initTableColumns);
 
   let timeout: number| undefined = undefined;
 
@@ -290,7 +299,7 @@
   };
   const initSettings = () => {
     const fieldNames = selectedItemList.value.map(item => `event_data.${item.field_name}`);
-    const list = selectedItemList.value.length > 0 ? tableColumn.value : initTableColumns.value;
+    const list = selectedItemList.value.length > 0 ? tableColumn.value : initTableColumns;
     return  {
       fields: list.reduce((res, item, index) => {
         if (item.field) {
@@ -299,7 +308,7 @@
           res.push({
             label: String(labelValue),
             field: String(fieldValue),
-            disabled: !!disabledMap[String(fieldValue)] || fieldNames.includes(fieldValue),
+            disabled: !!disabledMap[String(fieldValue)] || fieldNames.includes(String(fieldValue)),
           });
         }
         return res;
@@ -395,19 +404,22 @@
 
   const  initColumns = () => {
     if (selectedItemList.value.length === 0) {
-      return [...initTableColumns.value];
+      return [...initTableColumns];
     }
-    const columns = [...initTableColumns.value]; // 创建副本避免修改原始数组
+    const columns = [...initTableColumns]; // 创建副本避免修改原始数组
 
-    let selectedColumns = [];
+    let selectedColumns: Column[] = [];
     selectedColumns = selectedItemList.value.map(item => ({
       label: item.display_name,
       field: `event_data.${item.field_name}`,
       width: 120,
       showOverflowTooltip: true,
       sort: 'custom',
-      render: ({ data }: { data: RiskManageModel }) => <span>{data.event_data[item.field_name] || '--'}</span>,
-    }));
+      render: (args: any) => {
+        const data = args.data as RiskManageModel;
+        return <span>{data?.event_data?.[item.field_name] || '--'}</span>;
+      },
+    })) as Column[];
     return  columns.concat(selectedColumns);
   };
   // 开始轮训
