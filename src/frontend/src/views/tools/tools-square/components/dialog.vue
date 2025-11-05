@@ -32,7 +32,7 @@
     :z-index="dialogIndex"
     @click="handleClick"
     @closed="handleCloseDialog">
-    <template #tools>
+    <!-- <template #tools>
       <div
         v-if="isShowTags"
         class="dialog-header">
@@ -41,61 +41,67 @@
           :tabs="tabs"
           @click-item="handleClickTag" />
       </div>
-    </template>
+    </template> -->
     <template #header>
-      <div>
-        <div
-          class="header"
-          :style="isShowTags ? `margin-top: 35px;` : ``">
-          <div class="header-left">
-            <audit-icon
-              class="full-screen-img"
-              svg
-              :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
-              @click="handleFullscreen()" />
-          </div>
-          <div class="top-right">
-            <audit-icon
-              class="top-left-icon"
-              svg
-              :type="itemInfo ? itemIcon(itemInfo) : ''" />
-            <div class="top-right-box">
-              <div class="top-right-title">
-                <span
-                  v-bk-tooltips="{
-                    disabled: !isTextOverflow(itemInfo?.name || '', 0, '300px', { isSingleLine: true }),
-                    content: t(itemInfo?.name || ''),
-                    placement: 'top',
-                  }"
-                  class="top-right-name">
-                  {{ itemInfo?.name }}
-                </span>
-                <bk-tag
-                  v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
-                  :key="tagIndex"
-                  class="desc-tag">
-                  {{ returnTagsName(tag) }}
-                </bk-tag>
-                <bk-tag
-                  v-if="itemInfo?.tags && itemInfo.tags.length > 3"
-                  v-bk-tooltips="{
-                    content: tagContent(itemInfo.tags),
-                    placement: 'top',
-                  }"
-                  class="desc-tag">
-                  + {{ itemInfo.tags.length - 3
-                  }}
-                </bk-tag>
-                <bk-tag
-                  class="desc-tag desc-tag-info"
-                  theme="info"
-                  @click="handlesStrategiesClick(itemInfo)">
-                  {{ t('运用在') }} {{ itemInfo?.strategies.length }} {{ t('个策略中') }}
-                </bk-tag>
-              </div>
-              <div class="top-right-desc">
-                {{ itemInfo?.description }}
-              </div>
+      <div
+        v-if="isShowTags"
+        class="dialog-tool">
+        <dialog-header
+          ref="dialogHeaderRef"
+          :tabs="tabs"
+          @click-item="handleClickTag" />
+      </div>
+      <div
+        class="header"
+        :style="`margin-top: ${isShowTags ? '10px' : '24px'};`">
+        <div class="header-left">
+          <audit-icon
+            class="full-screen-img"
+            svg
+            :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
+            @click="handleFullscreen()" />
+        </div>
+        <div class="top-right">
+          <audit-icon
+            class="top-left-icon"
+            svg
+            :type="itemInfo ? itemIcon(itemInfo) : ''" />
+          <div class="top-right-box">
+            <div class="top-right-title">
+              <span
+                v-bk-tooltips="{
+                  disabled: !isTextOverflow(itemInfo?.name || '', 0, '300px', { isSingleLine: true }),
+                  content: t(itemInfo?.name || ''),
+                  placement: 'top',
+                }"
+                class="top-right-name">
+                {{ itemInfo?.name }}
+              </span>
+              <bk-tag
+                v-for="(tag, tagIndex) in itemInfo?.tags.slice(0, 3)"
+                :key="tagIndex"
+                class="desc-tag">
+                {{ returnTagsName(tag) }}
+              </bk-tag>
+              <bk-tag
+                v-if="itemInfo?.tags && itemInfo.tags.length > 3"
+                v-bk-tooltips="{
+                  content: tagContent(itemInfo.tags),
+                  placement: 'top',
+                }"
+                class="desc-tag">
+                + {{ itemInfo.tags.length - 3
+                }}
+              </bk-tag>
+              <bk-tag
+                class="desc-tag desc-tag-info"
+                theme="info"
+                @click="handlesStrategiesClick(itemInfo)">
+                {{ t('运用在') }} {{ itemInfo?.strategies.length }} {{ t('个策略中') }}
+              </bk-tag>
+            </div>
+            <div class="top-right-desc">
+              {{ itemInfo?.description }}
             </div>
           </div>
         </div>
@@ -1264,8 +1270,8 @@
   opacity: 50%;
 }
 
-.dialog-header {
-  margin-left: 24px;
+.dialog-tool {
+  padding-left: 24px;
 
   /* width: 100%; */
   background: #fafbfd;
@@ -1273,6 +1279,7 @@
 
 .header {
   display: flex;
+  padding: 0 24px;
 
   .header-left {
     position: absolute;
@@ -1447,6 +1454,14 @@
 .tools-use-dialog {
   .bk-modal-body {
     border-radius: 16px 16px 8px 8px;
+
+    .bk-dialog-tool {
+      height: 0;
+    }
+
+    .bk-dialog-header {
+      padding: 0;
+    }
   }
 }
 </style>
