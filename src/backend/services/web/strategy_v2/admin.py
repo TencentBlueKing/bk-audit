@@ -30,6 +30,7 @@ from services.web.strategy_v2.models import (
     LinkTableTag,
     Strategy,
     StrategyTag,
+    StrategyTagSyncTrash,
 )
 
 
@@ -82,3 +83,10 @@ class LinkTableTagAdmin(admin.ModelAdmin):
     list_display = ("id", "link_table_uid", "tag_id", "created_at", "updated_at")
     list_filter = ("created_at",)
     search_fields = ("link_table_uid", "tag_id")
+
+
+@admin.register(StrategyTagSyncTrash)
+class StrategyTagSyncTrashAdmin(admin.ModelAdmin):
+    list_display = ("id", "original_id", "strategy_id", "tag_id", "created_at", "updated_at")
+    list_filter = ("created_at", "updated_at")
+    search_fields = ("original_id", "strategy_id", "tag_id")
