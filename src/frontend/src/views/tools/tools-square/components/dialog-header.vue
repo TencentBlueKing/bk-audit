@@ -213,7 +213,8 @@
     padding: 0;
     cursor: pointer;
     background: #fafbfd;
-    border: 1px solid #dcdee5;
+
+    /* border: 1px solid #dcdee5; */
   }
 
   .left-icon {
