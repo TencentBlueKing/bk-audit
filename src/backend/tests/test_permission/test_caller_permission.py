@@ -126,16 +126,18 @@ class TestCallerPermission(TestCase):
                     "display_name": "用户名",
                     "is_priority": True,
                     "duplicate_field": False,
-                    "drill_config": {
-                        "tool": {"uid": "T1", "version": 1},
-                        "config": [
-                            {
-                                "source_field": "username",
-                                "target_value_type": "field",
-                                "target_value": "username",
-                            }
-                        ],
-                    },
+                    "drill_config": [
+                        {
+                            "tool": {"uid": "T1", "version": 1},
+                            "config": [
+                                {
+                                    "source_field": "username",
+                                    "target_value_type": "field",
+                                    "target_value": "username",
+                                }
+                            ],
+                        }
+                    ],
                 }
             ],
         )
@@ -186,17 +188,19 @@ class TestCallerPermission(TestCase):
                     "display_name": "责任人",
                     "is_priority": True,
                     "duplicate_field": False,
-                    "drill_config": {
-                        "tool": {"uid": "T1", "version": 1},
-                        "config": [
-                            {
-                                "source_field": "ctx",
-                                "target_value_type": "field",
-                                "target_field_type": "basic",
-                                "target_value": "operator",
-                            }
-                        ],
-                    },
+                    "drill_config": [
+                        {
+                            "tool": {"uid": "T1", "version": 1},
+                            "config": [
+                                {
+                                    "source_field": "ctx",
+                                    "target_value_type": "field",
+                                    "target_field_type": "basic",
+                                    "target_value": "operator",
+                                }
+                            ],
+                        }
+                    ],
                 }
             ],
         )
@@ -255,16 +259,18 @@ class TestCallerPermission(TestCase):
                     "display_name": "环境",
                     "is_priority": True,
                     "duplicate_field": False,
-                    "drill_config": {
-                        "tool": {"uid": "T1", "version": 1},
-                        "config": [
-                            {
-                                "source_field": "env",
-                                "target_value_type": "fixed_value",
-                                "target_value": "prod",
-                            }
-                        ],
-                    },
+                    "drill_config": [
+                        {
+                            "tool": {"uid": "T1", "version": 1},
+                            "config": [
+                                {
+                                    "source_field": "env",
+                                    "target_value_type": "fixed_value",
+                                    "target_value": "prod",
+                                }
+                            ],
+                        },
+                    ],
                 }
             ],
         )
