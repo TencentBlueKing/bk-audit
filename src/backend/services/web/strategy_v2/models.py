@@ -21,6 +21,8 @@ from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from django.db import models
 from django.db.models import Max, Q, QuerySet
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
 from django.utils.functional import cached_property
 from django.utils.translation import gettext_lazy
 
@@ -171,6 +173,32 @@ class StrategyTag(OperateRecordModel):
         verbose_name_plural = verbose_name
         ordering = ["-id"]
         unique_together = [("strategy", "tag")]  # 防止重复关联
+
+
+class StrategyTagSyncTrash(OperateRecordModel):
+    """用于记录策略标签删除的墓碑数据"""
+
+    original_id = models.BigIntegerField(gettext_lazy("Strategy Tag ID"), unique=True)
+    strategy_id = models.BigIntegerField(gettext_lazy("Strategy ID"), default=0)
+    tag_id = models.BigIntegerField(gettext_lazy("Tag ID"), default=0)
+
+    class Meta:
+        verbose_name = gettext_lazy("Strategy Tag Tombstone")
+        verbose_name_plural = verbose_name
+        ordering = ["-id"]
+
+
+@receiver(post_delete, sender=StrategyTag)
+def record_strategy_tag_delete(sender, instance: StrategyTag, **kwargs):  # pylint: disable=unused-argument
+    """记录策略标签删除事件，便于 IAM 回写清理"""
+
+    StrategyTagSyncTrash.objects.update_or_create(
+        original_id=instance.pk,
+        defaults={
+            "strategy_id": getattr(instance, "strategy_id", 0) or 0,
+            "tag_id": getattr(instance, "tag_id", 0) or 0,
+        },
+    )
 
 
 class LinkTable(OperateRecordModel):

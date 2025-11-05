@@ -27,7 +27,12 @@ from iam.resource.utils import Page
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.provider.base import BaseResourceProvider, IAMResourceProvider
 from core.serializers import get_serializer_fields
-from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTag
+from services.web.strategy_v2.models import (
+    LinkTable,
+    Strategy,
+    StrategyTag,
+    StrategyTagSyncTrash,
+)
 from services.web.strategy_v2.serializers import (
     LinkTableInfoSerializer,
     StrategyProviderSerializer,
@@ -338,19 +343,77 @@ class StrategyTagResourceProvider(IAMResourceProvider):
     def fetch_instance_list(self, filter, page, **options):
         start_time = datetime.datetime.fromtimestamp(int(filter.start_time // 1000))
         end_time = datetime.datetime.fromtimestamp(int(filter.end_time // 1000))
-        queryset = StrategyTag.objects.select_related("tag").filter(updated_at__gt=start_time, updated_at__lte=end_time)
-        page_queryset = queryset[page.slice_from : page.slice_to]
-        snapshot = self.resource_provider_serializer(page_queryset, many=True).data
-        results = [
-            {
-                "id": str(item.pk),
-                "display_name": item.tag.tag_name if item.tag else str(item.pk),
-                "creator": item.created_by,
-                "created_at": item.created_at,
-                "updater": item.updated_by,
-                "updated_at": item.updated_at,
-                "data": data,
-            }
-            for item, data in zip(page_queryset, snapshot)
-        ]
-        return ListResult(results=results, count=queryset.count())
+        # IAM 反向同步需要同时拿到：
+        # 1. 当前仍存在的策略标签（用于补录或更新）
+        # 2. 已被删除的策略标签（墓碑数据，用于远端清理悬挂关系）
+        queryset = (
+            StrategyTag.objects.select_related("tag")
+            .filter(updated_at__gt=start_time, updated_at__lte=end_time)
+            .order_by("-id")
+        )
+        trash_queryset = StrategyTagSyncTrash.objects.filter(
+            updated_at__gt=start_time, updated_at__lte=end_time
+        ).order_by("-id")
+
+        live_count = queryset.count()
+        trash_count = trash_queryset.count()
+        total_count = live_count + trash_count
+
+        slice_from = page.slice_from
+        slice_to = page.slice_to
+
+        results_payload = []
+
+        if slice_from < live_count:
+            # 优先消费仍存在的实例，保证排序与原 QuerySet 保持一致
+            live_slice_end = min(slice_to, live_count)
+            live_slice = list(queryset[slice_from:live_slice_end])
+            snapshot = self.resource_provider_serializer(live_slice, many=True).data
+            results_payload.extend(zip(live_slice, snapshot))
+
+        if slice_to > live_count:
+            # 若分页范围超过现存实例数量，则继续从墓碑数据中取补足分页窗口
+            trash_start = max(0, slice_from - live_count)
+            trash_end = slice_to - live_count
+            trash_slice = list(trash_queryset[trash_start:trash_end])
+            for item in trash_slice:
+                results_payload.append(
+                    (
+                        item,
+                        {
+                            "id": item.original_id,
+                            "strategy_id": 0,
+                            "tag_id": 0,
+                        },
+                    )
+                )
+
+        results = []
+        for item, data in results_payload:
+            if isinstance(item, StrategyTagSyncTrash):
+                results.append(
+                    {
+                        "id": str(item.original_id),
+                        "display_name": str(item.original_id),
+                        "creator": item.created_by,
+                        "created_at": item.created_at,
+                        "updater": item.updated_by,
+                        "updated_at": item.updated_at,
+                        "data": data,
+                    }
+                )
+            else:
+                tag_name = item.tag.tag_name if item.tag else str(item.pk)
+                results.append(
+                    {
+                        "id": str(item.pk),
+                        "display_name": tag_name,
+                        "creator": item.created_by,
+                        "created_at": item.created_at,
+                        "updater": item.updated_by,
+                        "updated_at": item.updated_at,
+                        "data": data,
+                    }
+                )
+
+        return ListResult(results=results, count=total_count)
