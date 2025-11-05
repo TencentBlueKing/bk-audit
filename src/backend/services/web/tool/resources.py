@@ -58,7 +58,7 @@ from services.web.tool.constants import (
 )
 from services.web.tool.exceptions import ToolDoesNotExist, ToolTypeNotSupport
 from services.web.tool.executor.tool import ToolExecutorFactory
-from services.web.tool.models import BkVisionToolConfig, Tool, ToolTag
+from services.web.tool.models import Tool, ToolTag
 from services.web.tool.permissions import ToolPermission
 from services.web.tool.serializers import (
     ExecuteToolReqSerializer,
@@ -77,6 +77,7 @@ from services.web.tool.serializers import (
     ToolUpdateRequestSerializer,
     UserQueryTableAuthCheckReqSerializer,
 )
+from services.web.tool.tasks import update_bkvision_config
 from services.web.tool.tool import (
     create_tool_with_config,
     recent_tool_usage_manager,
@@ -558,12 +559,8 @@ class UpdateTool(ToolBase):
             raise ToolDoesNotExist()
         # 如果配置有变更则创建新版本
         if validated_request_data.get("config") and validated_request_data.get("config") != tool.config:
-            bkvision_config = BkVisionToolConfig.objects.filter(tool__uid=uid).order_by('-id').first()
-            if bkvision_config:
-                bkvision_config.updated_time = updated_time
-                bkvision_config.save()
-                tool.is_bkvision = False
-                tool.save()
+            if tool.is_bkvision:
+                update_bkvision_config(tool_uid=uid)
             return self.create_tool_new_version(
                 old_tool=tool, validated_request_data=validated_request_data, updated_time=updated_time
             )
