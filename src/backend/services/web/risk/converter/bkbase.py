@@ -455,30 +455,34 @@ class MatchedEventSubqueryBuilder(SQLHelper):
 
     def build(self) -> exp.Subquery:
         final_alias = "matched_event_src"
-        needs_dedup = self.resolver.needs_deduplicate()
-        base_alias = self.STORAGE_ALIAS if needs_dedup else final_alias
+        base_alias = self.STORAGE_ALIAS
         base_table = self._with_thedate(exp.to_table(self.table_name).copy(), base_alias)
-        if needs_dedup:
-            base_table = self._apply_deduplicate(base_table, final_alias, base_alias)
-        elif base_alias != final_alias:
-            base_table = base_table.as_(final_alias)
-
         select_expressions = [
             self.column(final_alias, "strategy_id"),
             self.column(final_alias, "raw_event_id"),
             self.column(final_alias, "event_data"),
             self.column(final_alias, "dteventtimestamp"),
         ]
-        select_query = exp.select(*select_expressions).from_(base_table)
+        select_query = exp.select(*select_expressions).from_(base_table.as_(final_alias))
 
         filter_conditions = self._build_event_filter_conditions(final_alias)
         if filter_conditions is not None:
             select_query = select_query.where(filter_conditions)
 
-        return exp.Subquery(
+        filtered_alias = f"{final_alias}_filtered"
+        filtered_subquery = exp.Subquery(
             this=select_query,
-            alias=exp.TableAlias(this=exp.to_identifier("matched_event")),
+            alias=exp.TableAlias(this=exp.to_identifier(filtered_alias)),
         )
+
+        deduplicated_subquery = self._apply_deduplicate(
+            filtered_subquery,
+            final_alias=final_alias,
+            base_alias=filtered_alias,
+        )
+
+        deduplicated_subquery.set("alias", exp.TableAlias(this=exp.to_identifier("matched_event")))
+        return deduplicated_subquery
 
     def _with_thedate(self, base_table: exp.Expression, alias: str) -> exp.Expression:
         table_as = base_table.as_(alias)
@@ -511,16 +515,14 @@ class MatchedEventSubqueryBuilder(SQLHelper):
     def _apply_deduplicate(
         self,
         table_expr: exp.Expression,
+        *,
         final_alias: str,
         base_alias: str,
     ) -> exp.Subquery:
-        base_from = table_expr
-
         partition_key = self._build_duplicate_partition_key_expression(base_alias)
         if partition_key is None:
-            return table_expr.as_(final_alias)
+            partition_key = self._default_partition_key_expression(base_alias)
 
-        # Use ROW_NUMBER over strategy + partition key to keep the newest event per group.
         partition_expressions = [
             self.column(base_alias, "strategy_id"),
             partition_key,
@@ -529,7 +531,11 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             exp.Ordered(
                 this=self.column(base_alias, "dteventtimestamp"),
                 desc=True,
-            )
+            ),
+            exp.Ordered(
+                this=self.column(base_alias, "raw_event_id"),
+                desc=True,
+            ),
         ]
         window = exp.Window(
             this=exp.func("ROW_NUMBER"),
@@ -537,18 +543,31 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             order=exp.Order(expressions=order_expressions),
         )
 
-        ranked_select = exp.select(exp.Star(), exp.alias_(window, "_row_number")).from_(base_from)
+        ranked_select = exp.select(
+            self.column(base_alias, "strategy_id"),
+            self.column(base_alias, "raw_event_id"),
+            self.column(base_alias, "event_data"),
+            self.column(base_alias, "dteventtimestamp"),
+            exp.alias_(window, "_row_number"),
+        ).from_(table_expr)
+
         ranked_alias = f"{final_alias}_ranked"
         ranked_subquery = exp.Subquery(
             this=ranked_select,
             alias=exp.TableAlias(this=exp.to_identifier(ranked_alias)),
         )
+
         filtered_select = (
-            exp.select(exp.Star())
+            exp.select(
+                self.column(ranked_alias, "strategy_id"),
+                self.column(ranked_alias, "raw_event_id"),
+                self.column(ranked_alias, "event_data"),
+                self.column(ranked_alias, "dteventtimestamp"),
+            )
             .from_(ranked_subquery)
             .where(
                 exp.EQ(
-                    this=exp.column("_row_number", table=ranked_alias),
+                    this=self.column(ranked_alias, "_row_number"),
                     expression=exp.Literal.number("1"),
                 )
             )
@@ -579,20 +598,13 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             )
             cases.append((condition, concat_expr))
 
-        default_expr = self._concat_partition_values(
-            [
-                self.column(alias, "raw_event_id"),
-                self.column(alias, "dteventtimestamp"),
-            ]
-        )
-
         if not cases:
-            return default_expr
+            return None
 
         case_expr = exp.Case()
         for condition, value in cases:
             case_expr = case_expr.when(condition, value)
-        return case_expr.else_(default_expr)
+        return case_expr.else_(self._default_partition_key_expression(alias))
 
     def _concat_partition_values(self, expressions: List[exp.Expression]) -> exp.Expression:
         safe_expressions = [
@@ -618,6 +630,14 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             return None
         json_path = build_event_json_path(field_name)
         return exp.func("JSON_EXTRACT_STRING", column, exp.Literal.string(json_path))
+
+    def _default_partition_key_expression(self, alias: str) -> exp.Expression:
+        timestamp_as_text = exp.Cast(this=self.column(alias, "dteventtimestamp"), to=exp.DataType.build("CHAR"))
+        return exp.func(
+            "COALESCE",
+            self.column(alias, "raw_event_id"),
+            timestamp_as_text,
+        )
 
     def _build_event_filter_conditions(self, alias: str) -> Optional[exp.Expression]:
         comparisons: List[exp.Expression] = []
