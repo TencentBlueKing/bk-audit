@@ -239,7 +239,7 @@
         return strategyName
           ? (
             <router-link to={to}>
-              <Tooltips data={`${strategyName}(${data.strategy_id})`} />
+              <span>{`${strategyName}(${data.strategy_id})`}</span>
             </router-link>
           ) : (
           <span>--</span>

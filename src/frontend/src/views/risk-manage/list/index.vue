@@ -243,6 +243,7 @@
       label: () => t('风险命中策略(ID)'),
       field: () => 'strategy_id',
       width: 200,
+      showOverflowTooltip: true,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
           name: 'strategyList',
@@ -251,8 +252,8 @@
           },
         };
         return <router-link to={to} target='_blank'>
-                  <Tooltips data={`
-                ${strategyList.value.find(item => item.value === data.strategy_id)?.label || '--'}(${data.strategy_id})`}/>
+                  <span>{`
+                ${strategyList.value.find(item => item.value === data.strategy_id)?.label || '--'}(${data.strategy_id})`}</span>
               </router-link>;
       },
     },

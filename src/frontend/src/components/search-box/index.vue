@@ -89,7 +89,6 @@
             v-model="selectedVal"
             :auto-height="false"
             collapse-tags
-            custom-content
             display-key="name"
             filterable
             id-key="id"
@@ -97,6 +96,7 @@
             :popover-options="{
               'width': 'auto',
               extCls: 'add-search-tree-pop',
+              boundary: 'document.body'
             }"
             @change="handleSelectChange">
             <template #trigger>

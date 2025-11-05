@@ -274,6 +274,7 @@
       label: () => t('风险命中策略(ID)'),
       field: () => 'strategy_id',
       width: 200,
+      showOverflowTooltip: true,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
           name: 'strategyList',
@@ -286,7 +287,7 @@
         return strategyName
           ? (
             <router-link to={to} target='_blank'>
-              <Tooltips data={`${strategyName}(${data.strategy_id})`} />
+              <span>{`${strategyName}(${data.strategy_id})`}</span>
             </router-link>
           ) : (
           <span>--</span>
