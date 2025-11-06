@@ -83,7 +83,6 @@
 
   const renderCom = computed(() => comMap[config.type as keyof typeof comMap]);
   const formItem = ref();
-
   defineExpose<Exposes>({
     getValue(fieldValue?: string) {
       return formItem.value.getValue(fieldValue);

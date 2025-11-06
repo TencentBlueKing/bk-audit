@@ -29,6 +29,7 @@ declare module 'vue' {
     Datetimerange: typeof import('./src/components/search-box/components/render-field-config/components/datetimerange.vue')['default']
     Dialog: typeof import('./src/components/apply-permission/dialog.vue')['default']
     Editor: typeof import('./src/components/editor/index.vue')['default']
+    EditorImagePreview: typeof import('./src/components/editor-image-preview/index.vue')['default']
     EventList: typeof import('./src/components/skeleton-loading/components/event-list.vue')['default']
     ExtendAction: typeof import('./src/components/ip-selector/selector-box/components/preview-result/collapse-box/extend-action.vue')['default']
     Input: typeof import('./src/components/search-box/components/render-field-config/components/input.vue')['default']

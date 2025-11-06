@@ -23,6 +23,7 @@
         v-model="searchModel"
         :field-config="fieldConfig"
         @clear="handleClear"
+        @model-value-watch="handleUpdateModelValue"
         @submit="handleSubmit">
         <template #button>
           <bk-button
@@ -155,6 +156,7 @@
     (e: 'changeTableHeight'): void;
     (e: 'export'): void;
     (e: 'batch'): void;
+    (e: 'modelValueWatch', value: Record<string, any>): void;
   }
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
@@ -369,6 +371,10 @@
       && item.field_name === field);
 
     return foundItem ? foundItem.id : null;
+  };
+
+  const handleUpdateModelValue = (val: any) => {
+    emit('modelValueWatch', val);
   };
   watch(() => selectedItems.value, (val) => {
     selectedVal.value =  eventFiltersParams.value.map((item) => {

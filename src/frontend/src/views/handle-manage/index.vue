@@ -23,7 +23,8 @@
       is-reassignment
       @batch="handleBatch"
       @change="handleSearchChange"
-      @export="handleExport" />
+      @export="handleExport"
+      @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
       <render-list
         ref="listRef"
@@ -647,7 +648,15 @@
       searchBoxRef.value?.initSelectedItems(eventFields);
     },
   });
-
+  const handleModelValueWatch = (val: any) => {
+    if (val?.strategy_id?.length) {
+      getEventFields({
+        strategy_ids: val.strategy_id,
+      });
+    } else {
+      getEventFields();
+    }
+  };
   onMounted(() => {
     getEventFields();
   });
