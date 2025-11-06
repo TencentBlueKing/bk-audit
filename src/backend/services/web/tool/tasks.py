@@ -34,7 +34,7 @@ from services.web.tool.models import Tool
 def update_bkvision_config():
     """修改视图是否更新状态"""
 
-    queryset = Tool.all_latest_tools().filter(tool_type=ToolTypeEnum.BK_VISION.value)
+    queryset = Tool.all_latest_tools().filter(tool_type=ToolTypeEnum.BK_VISION.value).filter(is_bkvision=False)
     updated_tools = []
 
     for tool in queryset:
