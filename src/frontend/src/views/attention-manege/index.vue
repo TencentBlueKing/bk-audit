@@ -21,7 +21,8 @@
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
-      @export="handleExport" />
+      @export="handleExport"
+      @model-value-watch="handleModelValueWatch" />
 
     <div class="risk-manage-list">
       <render-list
@@ -239,7 +240,7 @@
         return strategyName
           ? (
             <router-link to={to}>
-              <Tooltips data={`${strategyName}(${data.strategy_id})`} />
+              <span>{`${strategyName}(${data.strategy_id})`}</span>
             </router-link>
           ) : (
           <span>--</span>
@@ -505,7 +506,15 @@
       searchBoxRef.value?.initSelectedItems(eventFields);
     },
   });
-
+  const handleModelValueWatch = (val: any) => {
+    if (val?.strategy_id?.length) {
+      getEventFields({
+        strategy_ids: val.strategy_id,
+      });
+    } else {
+      getEventFields();
+    }
+  };
   onMounted(() => {
     getEventFields();
   });

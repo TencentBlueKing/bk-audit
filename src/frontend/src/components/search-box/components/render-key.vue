@@ -105,6 +105,7 @@
     (e: 'update:modelValue', value: Record<string, any>): void,
     (e: 'submit'): void,
     (e: 'clear'): void,
+    (e: 'modelValueWatch', value: Record<string, any>): void,
   }
   interface Exposes {
     showMore: (val: boolean) =>void,
@@ -134,8 +135,10 @@
   // 同步外部值的改动
   watch(() => props.modelValue, () => {
     localSearchModel.value = props.modelValue;
+    emits('modelValueWatch', localSearchModel.value);
   }, {
     immediate: true,
+    deep: true,
   });
 
   // 显示更多搜索条件

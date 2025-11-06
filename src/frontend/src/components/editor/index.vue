@@ -49,12 +49,16 @@
     <div class="editor-tip-len">
       <span :class="{ 'can-edit': TiLength < maxLen }"> {{ TiLength }} </span>/{{ maxLen }}
     </div>
+    <!-- 编辑器中的图片预览 -->
+    <editor-image-preview
+      v-if="editorImages.length > 0"
+      :images="editorImages" />
   </div>
 </template>
 
 <script setup lang="ts">
   import Cookie from 'js-cookie';
-  import { nextTick, onMounted, reactive, ref, watch } from 'vue';
+  import { nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
   import {
     useI18n,
   } from 'vue-i18n';
@@ -68,6 +72,7 @@
 
   import '@vueup/vue-quill/dist/vue-quill.snow.css';
   import '@vueup/vue-quill/dist/vue-quill.bubble.css';
+  import editorImagePreview from '@/components/editor-image-preview/index.vue';
 
   interface Emits {
     (e: 'update:content', value: string): void;
@@ -120,20 +125,17 @@
 
   // 工具栏
   const container = [
-    [{ header: 1 }, { header: 2 }, 'bold', 'italic', 'strike', 'underline', { color: [] }],
+    [{ header: 1 }, { header: 2 }, 'bold', 'italic', 'strike', 'underline', { color: [] },  { align: 'center' },  { align: 'right' }],
     [
-      { align: '' },
-      { align: 'center' },
-      { align: 'right' },
-      'blockquote',
       { list: 'ordered' }, // 有序
       { list: 'bullet' }, // 无序列表的图标
     ],
-    ['link', { background: [] }, 'code-block'],
+    ['link', { background: [] }, 'code-block', 'fullscreen'],
   ];
   if (props.supportImage) {
     container[2].splice(0, 0, 'image');
   }
+  const isFullscreen = ref(false);
   const options = reactive({
     modules: {
       toolbar: {
@@ -145,6 +147,9 @@
               html.click();
             }
           },
+          fullscreen() {
+            toggleFullscreen();
+          },
         },
       },
       history: {
@@ -154,6 +159,32 @@
       },
     },
   });
+
+  // 全屏切换功能
+  const toggleFullscreen = () => {
+    const editorWrap = document.querySelector('.editor-wrap') as HTMLElement;
+    if (!editorWrap) return;
+
+    if (!isFullscreen.value) {
+      // 进入全屏
+      editorWrap.classList.add('fullscreen-mode');
+      document.body.style.overflow = 'hidden';
+      isFullscreen.value = true;
+    } else {
+      // 退出全屏
+      editorWrap.classList.remove('fullscreen-mode');
+      document.body.style.overflow = '';
+      isFullscreen.value = false;
+    }
+  };
+
+  // 监听ESC键退出全屏
+  const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && isFullscreen.value) {
+      toggleFullscreen();
+    }
+  };
+
   const backgroundColor = ref('#fff');
   // 上传图片成功后的数据
   const successData = ref<ResponseData['data']>();
@@ -232,8 +263,8 @@
     // 设置插入图片的高度为 100%
     const imageElement = quill.root.querySelector(`.ql-editor img[src="${successData.value?.[0]?.url || ''}"]`);
     if (imageElement) {
-      imageElement.setAttribute('width', '100%');
-      imageElement.setAttribute('height', '100%');
+      imageElement.setAttribute('width', '30%');
+      imageElement.setAttribute('height', '30%');
     }
 
     // 调整光标到最后
@@ -294,6 +325,7 @@
 
 
   onMounted(() => {
+    document.addEventListener('keydown', handleKeydown);
     const quill = editorRef.value?.getQuill();
     editorRef.value?.setHTML(props.default);
     if (quill) {
@@ -349,12 +381,10 @@
       );
     }
   });
-  defineExpose({
-    contentChange(data: any) {
-      nextTick(() => {
-        content.value = data;
-      });
-    },
+
+  // 组件卸载时移除事件监听
+  onUnmounted(() => {
+    document.removeEventListener('keydown', handleKeydown);
   });
 </script>
 
@@ -364,6 +394,7 @@
   padding: 0 !important;
   flex-wrap: wrap;
   align-items: center;
+  border: 1px solid #ccc;
 }
 
 /* 禁用时候的样式 */
@@ -400,5 +431,88 @@
   min-height: 120px;
   padding-bottom: 10px;
 }
-</style>
 
+.ql-editor {
+  color: black;
+}
+
+/* 全屏模式样式 */
+.editor-wrap.fullscreen-mode {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  width: 100vw !important;
+  height: 100vh !important;
+  padding: 20px;
+  margin: 0;
+  background: #fff;
+
+  .ql-editor {
+    color: black;
+    border: 1px solid #ccc;
+  }
+
+  .ql-toolbar {
+    padding: 10px 0 !important;
+    background: #fff !important;
+    border-bottom: 1px solid #ccc;
+  }
+
+  .ql-container.ql-snow {
+    height: calc(100vh - 300px) !important;
+    min-height: auto;
+    font-size: 16px;
+    line-height: 1.6;
+    border: none;
+  }
+
+  .editor-tip-len {
+    position: fixed;
+    right: 30px;
+    bottom: 30px;
+    padding: 5px 10px;
+    font-size: 14px;
+    color: #fff;
+    background: rgb(0 0 0 / 70%);
+    border-radius: 4px;
+  }
+}
+
+/* 全屏图标样式 */
+.ql-toolbar .ql-fullscreen {
+  position: relative;
+}
+
+.ql-toolbar .ql-fullscreen::before {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  margin-left: -10px;
+  font-size: 16px;
+  line-height: 1;
+  vertical-align: top;
+  background-image: url('/static/images/field-type/full_screen.svg');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  content: '';
+}
+
+.editor-wrap.fullscreen-mode .ql-toolbar .ql-fullscreen::before {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  margin-left: -10px;
+  font-size: 16px;
+  line-height: 1;
+  vertical-align: top;
+  background-image: url('/static/images/field-type/zoom_out.svg');
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  content: '';
+}
+</style>
