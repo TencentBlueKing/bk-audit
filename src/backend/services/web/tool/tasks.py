@@ -34,7 +34,7 @@ from services.web.tool.models import Tool
 def update_bkvision_config():
     """修改视图是否更新状态"""
 
-    queryset = Tool.all_latest_tools().filter(tool_type=ToolTypeEnum.BK_VISION.value).filter(is_bkvision=False)
+    queryset = Tool.all_latest_tools().filter(tool_type=ToolTypeEnum.BK_VISION.value)
     updated_tools = []
 
     for tool in queryset:
@@ -42,7 +42,12 @@ def update_bkvision_config():
             # 从 API 获取 BKVision 配置
             bkvision = api.bk_vision.query_meta(type="dashboard", share_uid=tool.config.get("uid"))
             if _should_update_bkvision_tool(tool, bkvision):
+                if tool.is_bkvision:
+                    continue
                 tool.is_bkvision = True
+                updated_tools.append(tool)  # 记录需要更新的工具
+            elif tool.is_bkvision:
+                tool.is_bkvision = False
                 updated_tools.append(tool)  # 记录需要更新的工具
         except Exception as e:
             logger.error(f"Error processing Tool {tool.uid}: {str(e)}", exc_info=True)
@@ -51,7 +56,7 @@ def update_bkvision_config():
         try:
             with transaction.atomic():
                 for tool in updated_tools:
-                    tool.save(update_record=False)
+                    tool.save(update_record=False, update_fields=["is_bkvision"])
         except Exception as e:
             logger.error(f"Error saving tools: {str(e)}", exc_info=True)
 

@@ -148,3 +148,33 @@ class UpdateBkVisionConfigTaskTestCase(TestCase):
 
         self.tool.refresh_from_db()
         self.assertFalse(self.tool.is_bkvision)
+
+    @patch("services.web.tool.tasks.api.bk_vision.query_meta")
+    def test_keep_flag_when_already_marked_and_meta_still_differs(self, query_meta):
+        """已标记更新且差异仍存在时应保持 True 不回写。"""
+
+        filters = dict(self.filters_template)
+        filters[self.filter_uid] = ["now-2d/d", "now-1d/d"]
+        query_meta.return_value = self.build_meta(filters=filters)
+
+        self.tool.is_bkvision = True
+        self.tool.save(update_record=False, update_fields=["is_bkvision"])
+
+        update_bkvision_config()
+
+        self.tool.refresh_from_db()
+        self.assertTrue(self.tool.is_bkvision)
+
+    @patch("services.web.tool.tasks.api.bk_vision.query_meta")
+    def test_reset_flag_when_meta_matches(self, query_meta):
+        """已标记更新且差异消失时应恢复为 False。"""
+
+        query_meta.return_value = self.build_meta()
+
+        self.tool.is_bkvision = True
+        self.tool.save(update_record=False, update_fields=["is_bkvision"])
+
+        update_bkvision_config()
+
+        self.tool.refresh_from_db()
+        self.assertFalse(self.tool.is_bkvision)
