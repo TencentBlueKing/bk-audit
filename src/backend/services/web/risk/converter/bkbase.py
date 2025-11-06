@@ -720,7 +720,7 @@ class MatchedEventSubqueryBuilder(SQLHelper):
             if numeric_value is not None:
                 # Cast JSON string to DOUBLE before comparing to avoid lexicographical ordering.
                 cast_expr = exp.Cast(this=field_expr.copy(), to=exp.DataType.build("DOUBLE"))
-                literal = exp.Literal.number(format(numeric_value, "g"))
+                literal = exp.Literal.number(repr(numeric_value))
                 return comparator(this=cast_expr, expression=literal)
             return comparator(this=field_expr.copy(), expression=self.literal(value))
         return None
