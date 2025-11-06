@@ -663,9 +663,19 @@
               return getInputVariableConfig(false, com, true, res.filters[item]);
             })
             .filter((item): item is NonNullable<typeof item> => item !== null);
-
+          const updatedBkVisionCom = bkVisionCom.map((comItem) => {
+            // eslint-disable-next-line max-len
+            const formItemMatch = formData.value.config.input_variable.find(formItem => formItem.description === comItem.description);
+            if (formItemMatch) {
+              return {
+                ...comItem,
+                is_default_value: formItemMatch.is_default_value,
+              };
+            }
+            return comItem;
+          });
           comRef.value.setConfigs(formData.value.config.input_variable);
-          comRef.value.setVariablesConfig(res.data.variables, bkVisionCom, res);
+          comRef.value.setVariablesConfig(res.data.variables, updatedBkVisionCom, res);
         });
         goBkVisionBtn.value = true;
       } else {
