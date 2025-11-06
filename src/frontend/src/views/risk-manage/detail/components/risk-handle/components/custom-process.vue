@@ -67,6 +67,9 @@
         <div
           class="ql-editor"
           v-html="data.description || '--'" />
+        <editor-image-preview
+          v-if="editorImages.length > 0"
+          :images="editorImages" />
       </render-info-item>
     </div>
   </div>
@@ -84,6 +87,8 @@
 
   import RenderInfoItem from '@views/risk-manage/detail/components/render-info-item.vue';
 
+  import editorImagePreview from '@/components/editor-image-preview/index.vue';
+
 
   interface Props{
     data: RiskManageModel['ticket_history'][0],
@@ -98,6 +103,25 @@
   }
   const props = defineProps<Props>();
   const { t } = useI18n();
+  const editorImages = computed(() => {
+    const htmlContent = props.data.description;
+
+    if (!htmlContent) {
+      return [];
+    }
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    const imgElements = doc.querySelectorAll('img');
+
+    const images = Array.from(imgElements).map(img => ({
+      url: img.src,
+    }));
+
+    return images;
+  });
+  console.log('editorImages', editorImages);
+
   const processPackageDetail = computed(() => {
     if (props.data && props.processDetail) {
       const ret = props.processDetail[props.data.pa_id] || {};
@@ -137,6 +161,8 @@
 }
 
 .ql-editor {
+  max-width: 160px;
   padding: 0;
+  white-space: pre-wrap;
 }
 </style>

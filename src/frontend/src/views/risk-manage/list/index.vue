@@ -21,7 +21,8 @@
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
-      @export="handleExport" />
+      @export="handleExport"
+      @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
       <render-list
         ref="listRef"
@@ -243,6 +244,7 @@
       label: () => t('风险命中策略(ID)'),
       field: () => 'strategy_id',
       width: 200,
+      showOverflowTooltip: true,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
           name: 'strategyList',
@@ -251,8 +253,8 @@
           },
         };
         return <router-link to={to} target='_blank'>
-                  <Tooltips data={`
-                ${strategyList.value.find(item => item.value === data.strategy_id)?.label || '--'}(${data.strategy_id})`}/>
+                  <span>{`
+                ${strategyList.value.find(item => item.value === data.strategy_id)?.label || '--'}(${data.strategy_id})`}</span>
               </router-link>;
       },
     },
@@ -540,6 +542,21 @@
   };
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-all-risk-list-setting', JSON.stringify(setting));
+  };
+
+  interface SearchFormValue {
+    strategy_id?: string[];
+    // 可能还有其他字段，但根据当前使用场景，我们只关心 strategy_id
+  }
+
+  const handleModelValueWatch = (val: SearchFormValue) => {
+    if (val?.strategy_id?.length) {
+      getEventFields({
+        strategy_ids: val.strategy_id,
+      });
+    } else {
+      getEventFields();
+    }
   };
   // 搜索
   const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
