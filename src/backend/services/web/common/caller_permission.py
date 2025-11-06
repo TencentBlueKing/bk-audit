@@ -259,7 +259,11 @@ def validate_tool_variables_with_risk(
                     expected = event_record.get(rule["target"])
                 else:
                     expected = event_record.get("event_data", {}).get(rule["target"])
-                if not expected or collection_to_tuple(value) not in expected:
+                value_to_match = collection_to_tuple(value)
+                single_value = value_to_match[0] if len(value_to_match) == 1 else None
+                if not expected or (
+                    (value_to_match not in expected) and (single_value not in expected if single_value else True)
+                ):
                     match_result.append(False)
                     continue
             match_result.append(True)
