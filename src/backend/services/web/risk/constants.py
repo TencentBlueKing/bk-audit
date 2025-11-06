@@ -678,15 +678,15 @@ class EventFilterOperator(TextChoices):
     """
 
     EQUAL = "=", gettext_lazy("=")
-    NOT_EQUAL = "!=", gettext_lazy("!=")
-    GREATER_THAN = ">", gettext_lazy(">")
-    GREATER_THAN_EQUAL = ">=", gettext_lazy(">=")
-    LESS_THAN = "<", gettext_lazy("<")
-    LESS_THAN_EQUAL = "<=", gettext_lazy("<=")
-    IN = "IN", gettext_lazy("IN")
-    NOT_IN = "NOT IN", gettext_lazy("NOT IN")
     CONTAINS = "CONTAINS", gettext_lazy("包含")
+    IN = "IN", gettext_lazy("IN")
+    NOT_EQUAL = "!=", gettext_lazy("!=")
     NOT_CONTAINS = "NOT CONTAINS", gettext_lazy("不包含")
+    NOT_IN = "NOT IN", gettext_lazy("NOT IN")
+    GREATER_THAN_EQUAL = ">=", gettext_lazy(">=")
+    LESS_THAN_EQUAL = "<=", gettext_lazy("<=")
+    GREATER_THAN = ">", gettext_lazy(">")
+    LESS_THAN = "<", gettext_lazy("<")
 
 
 # 风险等级排序字段

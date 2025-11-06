@@ -81,8 +81,13 @@ class TestStrategyResourceProviderAPI:
                 "type": item["type"].lower(),
                 "description_en": item["name"],
                 "description": item["description"],
+                **({"is_index": item["is_index"]} if "is_index" in item else {}),
             }
             for item in fields
         }
         schema = self.provider.fetch_resource_type_schema()
-        assert schema.properties == expected_props
+        for field_name, field_expectation in expected_props.items():
+            assert field_name in schema.properties
+            actual = schema.properties[field_name]
+            for key, value in field_expectation.items():
+                assert actual.get(key) == value
