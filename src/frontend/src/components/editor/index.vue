@@ -52,7 +52,8 @@
     <!-- 编辑器中的图片预览 -->
     <editor-image-preview
       v-if="editorImages.length > 0"
-      :images="editorImages" />
+      :images="editorImages"
+      :title="t('编辑器中的图片预览')" />
   </div>
 </template>
 
@@ -214,10 +215,18 @@
   };
 
   const onContentChange = (val: string) => {
-    editorRef.value?.getQuill().deleteText(props.maxLen, 4);
     if (!content.value || content.value === '') {
       TiLength.value = 0;
     } else {
+      TiLength.value = editorRef.value?.getQuill().getLength() - 1;
+    }
+
+    // 检查是否超过最大长度限制
+    if (TiLength.value > props.maxLen) {
+      // 删除超出部分的字符
+      console.log('TiLength.value', TiLength.value);
+      editorRef.value?.getQuill().deleteText(props.maxLen, 1);
+      // 重新计算长度
       TiLength.value = editorRef.value?.getQuill().getLength() - 1;
     }
 

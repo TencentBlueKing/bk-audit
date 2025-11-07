@@ -210,6 +210,7 @@
             :is-first-edit="isFirstEdit"
             :is-update="isUpdate"
             :name="formData.name"
+            :report-lists-panels="reportListsPanels"
             :uid="formData.uid"
             @change-is-update-submit="changeIsUpdateSubmit"
             @change-submit="changeSubmit" />
@@ -385,6 +386,7 @@
   const isUpdateSubmit = ref(false);
   const isFirstEdit = ref(false);
   const dashboardUid = ref('');
+  const reportListsPanels = ref([]);
   const formData = ref<FormData>({
     source: '',
     users: [],
@@ -573,6 +575,7 @@
         dashboardUid.value = res.data.dashboard_uid;
         const configInputVariable = _.cloneDeep(formData.value.config.input_variable);
         const { panels, variables } = res.data;
+        reportListsPanels.value = panels;
         const filters = [...new Set(Object.keys(res.filters))];
         // eslint-disable-next-line max-len
         const getInputVariableConfig = (isVariables: boolean, com: any, isEditMode: boolean, originalDefaultValue?: string | Array<string>) => ({

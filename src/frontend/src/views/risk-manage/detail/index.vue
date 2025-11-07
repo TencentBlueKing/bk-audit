@@ -48,7 +48,7 @@
               class="angle-double-up"
               :style="{ transform: isShowSide ? 'rotateZ(90deg)' : 'rotateZ(-90deg)' }"
               type="angle-double-up" />
-            <span>{{ isShowSide ? t('收起') : t('展开') }} {{ t('工单处理') }}</span>
+            <span>{{ isShowSide ? t('收起工单处理') : t('展开工单处理') }}</span>
           </div>
           <risk-handle
             v-if="isShowSide"

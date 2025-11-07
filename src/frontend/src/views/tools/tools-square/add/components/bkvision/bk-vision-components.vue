@@ -18,7 +18,11 @@
   <div class="bk-vision-component">
     <div class="component">
       <div class="lable">
-        {{ config?.display_name }}({{ config?.raw_name }})
+        <span
+          v-bk-tooltips="{
+            disabled: tooltipsText === '',
+            content: tooltipsText
+          }">{{ config?.display_name }}({{ config?.raw_name }})</span>
         <bk-checkbox
           v-model="isDefaultValue"
           class="title-right"
@@ -82,10 +86,11 @@
 
 <script setup lang='ts'>
   import { InfoBox } from 'bkui-vue';
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   interface Props {
+    reportListsPanels: Array<Record<string, any>>;
     config: {
       raw_name: string;
       display_name: string;
@@ -147,6 +152,10 @@
       short: 'now-1y/d',
     },
   ];
+  const tooltipsText = computed(() => {
+    const A =  props.reportListsPanels.filter(item => item.uid === props.config.description);
+    return A[0]?.description || '';
+  });
   const getLastMillisecondOfDate = (ts: any) => {
     const date = new Date(ts);
     date.setHours(0, 0, 0, 0);
@@ -195,11 +204,13 @@
     selectorValue.value = Array.isArray(newValue) ? newValue : [];
   }, {
     immediate: true,
+    deep: true,
   });
   watch(() => props.config.is_default_value, (newValue) => {
     isDefaultValue.value = newValue;
   }, {
     immediate: true,
+    deep: true,
   });
 </script>
 
