@@ -217,12 +217,12 @@
       class="alert-icon"
       svg
       type="alert" />
-    <div class="title">
+    <div class="strategy-delete-title">
       {{ t('确定删除该策略？') }}
     </div>
     <div
-      class="title-tips"
-      :class="locale === 'zh-CN' ? 'title-tips-zh' : ''">
+      class="strategy-delete-title-tips"
+      :class="locale === 'zh-CN' ? 'strategy-delete-title-tips-zh' : ''">
       {{ t('删除的策略将') }}
       <span class="red-text">{{ t('无法找回') }}</span>
       ，{{ t('请谨慎操作') }} !
@@ -1524,7 +1524,7 @@
   transform: translate(-50%, -50%)
 }
 
-.title {
+.strategy-delete-title {
   margin-top: 20px;
   font-size: 20px;
   line-height: 32px;
@@ -1533,7 +1533,7 @@
   text-align: center;
 }
 
-.title-tips {
+.strategy-delete-title-tips {
   width: 416px;
   height: 46px;
   margin: 0 auto;
@@ -1551,7 +1551,7 @@
   }
 }
 
-.title-tips-zh {
+.strategy-delete-title-tips-zh {
   line-height: 46px;
 
 }
