@@ -171,5 +171,6 @@ export default {
     收藏成功: 'Collection successful',
     更新成功: 'Update successful',
     '确认删除该收藏条件吗？': 'Are you sure to delete this collection condition?',
+    添加关联事件条件: 'Add related event conditions',
   },
 };

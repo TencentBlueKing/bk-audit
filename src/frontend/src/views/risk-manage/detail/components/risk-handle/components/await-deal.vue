@@ -42,13 +42,11 @@
           :label="t('处理说明')"
           property="description"
           required>
-          <bk-input
-            v-model.trim="formData.description"
-            :maxlength="1000"
-            :placeholder="t('请输入')"
-            show-word-limit
-            style="resize: none;"
-            type="textarea" />
+          <rich-editor
+            ref="richEditor"
+            v-model:content="formData.description"
+            :default="formData.description"
+            :max-len="1000" />
         </bk-form-item>
       </template>
       <!-- 转单 -->
@@ -65,13 +63,11 @@
           :label="t('处理说明')"
           property="description"
           required>
-          <bk-input
-            v-model.trim="formData.description"
-            :maxlength="1000"
-            :placeholder="t('请输入')"
-            show-word-limit
-            style="resize: none;"
-            type="textarea" />
+          <rich-editor
+            ref="richEditor"
+            v-model:content="formData.description"
+            :default="formData.description"
+            :max-len="1000" />
         </bk-form-item>
       </template>
 
@@ -215,6 +211,7 @@
   import useRequest from '@hooks/use-request';
 
   import ApplicationParameter from '@components/application-parameter/index.vue';
+  import RichEditor from '@components/editor/index.vue';
 
   interface Props {
     riskId: string,
