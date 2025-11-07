@@ -186,10 +186,7 @@
   });
   const { t } = useI18n();
   const tipText = ref('');
-  const selectValue =  computed<string>(() => {
-    const value = props.config.default_value || '';
-    return value ? String(value) : '';
-  });
+  const selectValue = ref();
 
   const datePickerValue = computed(() => {
     if (props.config.custom_type === 'datetime' && props.config.type === 'self') {
