@@ -41,15 +41,25 @@ def update_bkvision_config(tool_uid: str = None):
         queryset = queryset.filter(uid=tool_uid)
     for tool in queryset.iterator(chunk_size=100):
         try:
-            # 从 API 获取 BKVision 配置
-            bkvision = api.bk_vision.query_meta(type="dashboard", share_uid=tool.config.get("uid"))
-            need_update = _should_update_bkvision_tool(tool, bkvision)
-            # 两者状态不一致则更新工具状态
-            if need_update != tool.is_bkvision:
-                tool.is_bkvision = need_update
-                tool.save(update_record=False, update_fields=["is_bkvision"])
-        except Exception as e:
+            update_tool_bkvision_config(tool)
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
             logger.error(f"Error processing Tool {tool.uid}: {str(e)}", exc_info=True)
+
+
+@lock(
+    load_lock_name=lambda tool, **kwargs: f"celery:_should_update_bkvision_tool:{tool.uid}",
+    timeout=settings.BKVISION_UPDATE_TASK_TIMEOUT,
+)
+def update_tool_bkvision_config(tool: Tool):
+    """更新工具 BKVision 配置"""
+    # 从 API 获取 BKVision 配置
+    bkvision = api.bk_vision.query_meta(type="dashboard", share_uid=tool.config.get("uid"))
+    need_update = _should_update_bkvision_tool(tool, bkvision)
+    # 两者状态不一致则更新工具状态
+    if need_update != tool.is_bkvision:
+        tool.is_bkvision = need_update
+        tool.save(update_record=False, update_fields=["is_bkvision"])
+        logger.info(f"Tool {tool.uid} bkvision version {tool.version} status updated to {tool.is_bkvision}")
 
 
 def _values_equal(lhs, rhs) -> bool:

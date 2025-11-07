@@ -559,11 +559,12 @@ class UpdateTool(ToolBase):
             raise ToolDoesNotExist()
         # 如果配置有变更则创建新版本
         if validated_request_data.get("config") and validated_request_data.get("config") != tool.config:
-            if tool.is_bkvision:
-                update_bkvision_config(tool_uid=uid)
-            return self.create_tool_new_version(
+            new_tool = self.create_tool_new_version(
                 old_tool=tool, validated_request_data=validated_request_data, updated_time=updated_time
             )
+            if tool.is_bkvision:
+                update_bkvision_config(tool_uid=uid)
+            return new_tool
         # 配置未变更则更新原版本
         tag_names = validated_request_data.pop("tags")
         for key, value in validated_request_data.items():
