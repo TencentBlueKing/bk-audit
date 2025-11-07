@@ -148,5 +148,7 @@ export default {
     事件字段: 'Event fields',
     '当前值：': 'Current value:',
     不能为空: ' can not be empty',
+    展开工单处理: '',
+    收起工单处理: '',
   },
 };

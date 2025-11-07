@@ -63,7 +63,14 @@
         v-else
         class="mt8"
         :label="t('处理说明')">
-        {{ data.description || '--' }}
+        <!-- eslint-disable vue/no-v-html -->
+        <div
+          class="ql-editor"
+          v-html="htmlText(data.description) || '--'" />
+        <editor-image-preview
+          v-if="editorImages.length > 0"
+          :images="editorImages"
+          :title="t('图片')" />
       </render-info-item>
     </div>
   </div>
@@ -81,6 +88,8 @@
 
   import RenderInfoItem from '@views/risk-manage/detail/components/render-info-item.vue';
 
+  import editorImagePreview from '@/components/editor-image-preview/index.vue';
+
 
   interface Props{
     data: RiskManageModel['ticket_history'][0],
@@ -95,6 +104,25 @@
   }
   const props = defineProps<Props>();
   const { t } = useI18n();
+  const editorImages = computed(() => {
+    const htmlContent = props.data.description;
+
+    if (!htmlContent) {
+      return [];
+    }
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    const imgElements = doc.querySelectorAll('img');
+
+    const images = Array.from(imgElements).map(img => ({
+      url: img.src,
+    }));
+
+    return images;
+  });
+  console.log('editorImages', editorImages);
+
   const processPackageDetail = computed(() => {
     if (props.data && props.processDetail) {
       const ret = props.processDetail[props.data.pa_id] || {};
@@ -108,6 +136,7 @@
     }
     return value;
   };
+  const htmlText = (value: string) => value.replace(/<img[^>]*>/g, '');
 </script>
 <style scoped lang="postcss">
 .reopen-mis-report-wrap {
@@ -131,5 +160,11 @@
       align-items: flex-start;
     }
   }
+}
+
+.ql-editor {
+  max-width: 160px;
+  padding: 0;
+  white-space: pre-wrap;
 }
 </style>
