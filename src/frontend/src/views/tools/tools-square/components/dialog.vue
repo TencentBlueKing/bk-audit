@@ -53,7 +53,7 @@
       </div>
       <div
         class="header"
-        :style="isShowTags ? `margin-top: 35px;` : ``">
+        :style="`margin-top: ${isShowTags ? '10px' : '24px'};`">
         <div class="header-left">
           <audit-icon
             class="full-screen-img"

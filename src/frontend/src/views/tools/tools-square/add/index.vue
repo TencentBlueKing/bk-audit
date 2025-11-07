@@ -158,7 +158,7 @@
                     :placeholder="t('请输入数据源名称、表名、ID 等，或可直接按分类筛选')" />
                 </bk-form-item>
               </template>
-              <!-- bkvision 图表 -->
+              <!-- BKVision 图表 -->
               <div v-else-if="formData.tool_type === 'bk_vision'">
                 <bk-form-item
                   :label="t('选择报表')"
@@ -181,7 +181,7 @@
                         v-show="goBkVisionBtn && configUid.length > 0"
                         class="ml8"
                         @click="handleGoBkvision">
-                        {{ t('跳转至 bkvision') }}
+                        {{ t('跳转至 BKVision') }}
                       </bk-button>
                     </div>
                     <div
@@ -420,7 +420,7 @@
         },
       }],
       sql: '',
-      uid: '',  // bkvision图表uid
+      uid: '',  // BKVision图表uid
     },
   });
 
@@ -443,7 +443,7 @@
     tips: t('暂未开放，敬请期待'),
   }, {
     id: 'bk_vision',
-    name: t('bkvision图表'),
+    name: t('BKVision图表'),
   }]);
 
   const iconMap = {
@@ -505,7 +505,7 @@
     manual: true,
   });
 
-  // 跳转到bkvision
+  // 跳转到BKVision
   const handleGoBkvision = () => {
     window.open(`${configData.value.third_party_system.bkvision_web_url}#/${configUid.value[0]}/detail/root/${dashboardUid.value}`);
   };

@@ -57,6 +57,7 @@
               id-key="id"
               multiple
               multiple-mode="tag"
+              :remote-method="handleRemoteMethod"
               @change="handleSelectTool">
               <template
                 v-for="(item, index) in toolCascaderList"
@@ -258,7 +259,8 @@
               property="tools.${toolIndex}.drill_name"
               style="padding-left: 20px;">
               <bk-input
-                v-model="formData.tools[toolIndex].drill_name" />
+                v-model="formData.tools[toolIndex].drill_name"
+                :placeholder="t('未填写时将使用工具名称作为下钻按钮名称')" />
             </bk-form-item>
           </div>
         </template>
@@ -370,7 +372,7 @@
   const toolTypeMap = ref<Record<string, string>>({
     data_search: 'SQL',
     api: 'API',
-    bk_vision: 'bkvison',
+    bk_vision: 'BKVision',
   });
 
   const { t } = useI18n();
@@ -563,6 +565,7 @@
 
   const refreshToolList = () => {
     isToolLoading.value = true;
+    // 刷新后会触发 props.allToolsData 的 watch，自动重建列表
     emit('refresh-tool-list');
   };
 
@@ -671,6 +674,43 @@
     }
   };
 
+  // 构建工具级联列表的通用函数
+  const buildToolCascaderList = (data: ToolDetailModel[], searchKeyword = '') => {
+    // 先过滤出有权限的数据
+    let filteredData = data.filter(tool => tool.permission.use_tool || tool.permission.manage_tool);
+
+    // 如果有搜索关键词，进一步过滤（匹配工具名称或工具类型）
+    if (searchKeyword) {
+      const keyword = searchKeyword.toLowerCase();
+      filteredData = filteredData.filter((tool) => {
+        const toolName = tool.name.toLowerCase();
+        const toolTypeText = toolTypeMap.value[tool.tool_type as keyof typeof toolTypeMap.value]?.toLowerCase() || '';
+        return toolName.includes(keyword) || toolTypeText.includes(keyword);
+      });
+    }
+
+    // 构建级联列表
+    toolCascaderList.value = props.tagData
+      .map(item => ({
+        id: item.tag_id,
+        name: item.tag_name,
+        children: item.tag_id === '-2'
+          ? filteredData
+            .filter(tool => !tool.tags || tool.tags.length === 0)
+            .map(({ uid, version, name, tool_type }) => ({ id: uid, version, name, tool_type }))
+          : filteredData
+            .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
+            .map(({ uid, version, name, tool_type }) => ({ id: uid, version, name, tool_type })),
+      }))
+      .filter(item => item.children.length > 0);
+  };
+
+  // 远程搜索方法
+  const handleRemoteMethod = async (searchValue: string): Promise<void> => {
+    if (!props.allToolsData) return;
+    buildToolCascaderList(props.allToolsData, searchValue);
+  };
+
   watch(() => props.outputFields, (val: Array<Record<string, any>>) => {
     localOutputFields.value = val?.map(item => ({
       ...item,
@@ -686,21 +726,7 @@
 
   watch(() => props.allToolsData, (data) => {
     isToolLoading.value = false;
-    // 先过滤出有权限数据
-    const filteredData = data.filter(tool => tool.permission.use_tool || tool.permission.manage_tool);
-    toolCascaderList.value  = props.tagData
-      .map(item => ({
-        id: item.tag_id,
-        name: item.tag_name,
-        children: item.tag_id === '-2'
-          ? filteredData
-            .filter(tool => !tool.tags || tool.tags.length === 0)
-            .map(({ uid, version, name, tool_type }) => ({ id: uid, version, name, tool_type }))
-          : filteredData
-            .filter(tool => tool.tags && tool.tags.includes(item.tag_id))
-            .map(({ uid, version, name, tool_type }) => ({ id: uid, version, name, tool_type })),
-      }))
-      .filter(item => item.children.length > 0);
+    buildToolCascaderList(data);
   });
 
   defineExpose({

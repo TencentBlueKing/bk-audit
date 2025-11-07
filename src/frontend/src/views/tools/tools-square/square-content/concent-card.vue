@@ -150,7 +150,7 @@
                     </span>
                     <bk-tag
                       v-if="item.is_bkvision"
-                      v-bk-tooltips="{ content: t('bkvision参数变量待更新') }"
+                      v-bk-tooltips="{ content: t('BKVision参数变量待更新') }"
                       class="title-tag"
                       size="small"
                       theme="danger"
