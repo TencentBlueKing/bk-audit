@@ -48,6 +48,7 @@ def update_bkvision_config(tool_uid: str = None):
             if need_update != tool.is_bkvision:
                 tool.is_bkvision = need_update
                 tool.save(update_record=False, update_fields=["is_bkvision"])
+                logger.info(f"Tool {tool.uid} bkvision version {tool.version} status updated to {tool.is_bkvision}")
         except Exception as e:
             logger.error(f"Error processing Tool {tool.uid}: {str(e)}", exc_info=True)
 
@@ -64,6 +65,10 @@ def _values_equal(lhs, rhs) -> bool:
         return False
 
 
+@lock(
+    load_lock_name=lambda tool, bkvision_meta, **kwargs: f"celery:_should_update_bkvision_tool:{tool.uid}",
+    timeout=settings.BKVISION_UPDATE_TASK_TIMEOUT,
+)
 def _should_update_bkvision_tool(tool: Tool, bkvision_meta: dict) -> bool:
     """
     基于 QueryMeta 与工具配置的差异判断是否需要更新工具。
