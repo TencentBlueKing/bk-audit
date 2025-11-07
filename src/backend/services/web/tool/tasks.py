@@ -64,6 +64,10 @@ def _values_equal(lhs, rhs) -> bool:
         return False
 
 
+@lock(
+    load_lock_name=lambda tool, bkvision_meta, **kwargs: f"celery:_should_update_bkvision_tool:{tool.uid}",
+    timeout=settings.BKVISION_UPDATE_TASK_TIMEOUT,
+)
 def _should_update_bkvision_tool(tool: Tool, bkvision_meta: dict) -> bool:
     """
     基于 QueryMeta 与工具配置的差异判断是否需要更新工具。
