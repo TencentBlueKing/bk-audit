@@ -66,10 +66,11 @@
         <!-- eslint-disable vue/no-v-html -->
         <div
           class="ql-editor"
-          v-html="data.description || '--'" />
+          v-html="htmlText(data.description) || '--'" />
         <editor-image-preview
           v-if="editorImages.length > 0"
-          :images="editorImages" />
+          :images="editorImages"
+          :title="t('图片')" />
       </render-info-item>
     </div>
   </div>
@@ -135,6 +136,7 @@
     }
     return value;
   };
+  const htmlText = (value: string) => value.replace(/<img[^>]*>/g, '');
 </script>
 <style scoped lang="postcss">
 .reopen-mis-report-wrap {

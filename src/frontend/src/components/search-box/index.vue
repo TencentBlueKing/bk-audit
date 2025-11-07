@@ -193,6 +193,7 @@
   const {
     getSearchParamsPost,
     appendSearchParams,
+    replaceSearchParams,
   } = useUrlSearch();
   const urlSearchParams = getSearchParamsPost('event_filters');
 
@@ -232,6 +233,11 @@
   const handleRemove = (val: string) => {
     selectedItemList.value = selectedItemList.value.filter(item => item.id !== val);
     selectedVal.value = selectedItemList.value.map(item => item.id);
+    const EventFiltersParams = {
+      ...getSearchParams(),
+      event_filters: eventFiltersParams.value,
+    };
+    replaceSearchParams(EventFiltersParams);
   };
   // 更多选项 选择
   const handleSelectChange = (val: string[]) => {
@@ -323,9 +329,7 @@
       [SEARCH_TYPE_QUERY_KEY]: renderType.value,
     });
   };
-
-  // 提交搜索条件
-  const handleSubmit = () => {
+  const getSearchParams = () => {
     const result = Object.keys(searchModel.value).reduce((result, key) => {
       const value = searchModel.value[key];
       if (key === 'datetime') {
@@ -343,7 +347,11 @@
       }
       return result;
     }, {} as Record<string, any>);
-    emit('change', result, eventFiltersParams.value);
+    return result;
+  };
+  // 提交搜索条件
+  const handleSubmit = () => {
+    emit('change', getSearchParams(), eventFiltersParams.value);
   };
   const handleClear = () => {
     searchModel.value = {

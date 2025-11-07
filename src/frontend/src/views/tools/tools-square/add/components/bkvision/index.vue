@@ -61,9 +61,10 @@
               :class="getClass(comItem)"
               :config="comItem"
               :disabled="isUpdateSubmit"
+              :report-lists-panels="reportListsPanels"
               style="width: 22%;margin: 0 1.5%;margin-top: 10px;"
               @change="(val: any) => handleVisionChange(val, comItem.raw_name)"
-              @change-is-default-value="(val: boolean) => handleIsDefaultValue(val, comItem.raw_name)" />
+              @change-is-default-value="(val: boolean) => handleIsDefaultValue(val, comItem.description)" />
           </div>
         </template>
       </bk-collapse>
@@ -165,6 +166,7 @@
     isEditMode: boolean;
     isUpdate: boolean;
     isFirstEdit: boolean;
+    reportListsPanels: Array<Record<string, any>>;
   }
 
   interface Exposes {
@@ -232,13 +234,23 @@
   };
 
   // bk_vision 组件是否使用默认值
-  const handleIsDefaultValue = (value: any, rawName: string) => {
-    inputVariable.value = inputVariable.value.map((item: any) => {
-      const reItem = item;
-      if (item.raw_name === rawName) {
-        reItem.is_default_value = value;
-      }
-      return reItem;
+  const handleIsDefaultValue = (value: any, description: string) => {
+    if (!value) {
+      return;
+    }
+    nextTick(() => {
+      comList.value = comList.value.map((item: any) => {
+        const reItem = item;
+        if (item.description === description) {
+          const findCom = bkVisionComList.value.find((item: any) => item.description === description);
+          return {
+            ...reItem,
+            default_value: findCom?.default_value,
+            is_default_value: value,
+          };
+        }
+        return reItem;
+      });
     });
   };
   // 获取变量默认值

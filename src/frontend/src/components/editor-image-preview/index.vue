@@ -3,7 +3,7 @@
     v-if="images.length > 0"
     class="editor-image-preview">
     <div class="preview-header">
-      <span class="preview-title">编辑器中的图片 ({{ images.length }})</span>
+      <span class="preview-title">{{ title }} ({{ images.length }})</span>
     </div>
     <div class="preview-grid">
       <div
@@ -11,7 +11,7 @@
         :key="index"
         class="preview-item">
         <img
-          :alt="`图片${index + 1}`"
+          :alt="t('图片') + `${index + 1}`"
           class="preview-thumbnail"
           :src="image.url"
           @click="openModal(index)"
@@ -36,7 +36,7 @@
         <div class="modal-image-wrapper">
           <img
             v-if="currentImage && currentImage.url"
-            :alt="`图片${currentIndex + 1}`"
+            :alt="t('图片') + `${currentIndex + 1}`"
             class="modal-image"
             :src="currentImage.url"
             :style="{
@@ -50,7 +50,7 @@
         <div class="bottom-controls">
           <!-- 图片信息 -->
           <div class="image-info">
-            <span>编辑器图片 {{ currentIndex + 1 }}</span>
+            <span>{{ title }} {{ currentIndex + 1 }}</span>
             <span
               v-if="images.length > 1"
               class="image-counter">
@@ -115,6 +115,7 @@
 
 <script setup lang="ts">
   import { computed, onMounted, onUnmounted, ref } from 'vue';
+  import { useI18n } from 'vue-i18n';
 
   interface ImageItem {
     url: string;
@@ -122,10 +123,11 @@
 
   interface Props {
     images: ImageItem[];
+    title: string;
   }
 
   const props = defineProps<Props>();
-
+  const { t } = useI18n();
   const showModal = ref(false);
   const currentIndex = ref(0);
   const imageRotation = ref(0);
