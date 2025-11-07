@@ -20,6 +20,7 @@ import json
 from typing import List, Union
 
 from django.conf import settings
+from django.utils import timezone
 from django.utils.translation import gettext, gettext_lazy
 from rest_framework import serializers
 
@@ -168,6 +169,32 @@ class ListEventResponseSerializer(serializers.Serializer):
     num_pages = serializers.IntegerField(label=gettext_lazy("Total Pages"))
     total = serializers.IntegerField(label=gettext_lazy("Total"))
     results = serializers.ListField(label=gettext_lazy("Events"), child=serializers.JSONField())
+    event_end_time = serializers.SerializerMethodField()
+
+    def get_event_end_time(self, obj: Risk) -> str | None:
+        """
+        获取事件结束时间。
+        如果存在毫秒/微秒，则向上取整到下一秒。
+        """
+        dt = obj.event_end_time
+
+        if dt is None:
+            return None
+
+        # 核心逻辑：检查是否存在微秒
+        if dt.microsecond > 0:
+            # 1. 先去掉微秒 (归零)
+            # 2. 再加上1秒，实现“向上取整”
+            dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+        dt = timezone.localtime(dt)
+
+        # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
+        # 所以我们需要在这里手动格式化为您的全局格式
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     def validate_results(self, results: List[dict]) -> List[dict]:
         for e in results:
@@ -187,6 +214,32 @@ class ListEventResponseSerializer(serializers.Serializer):
 class RiskInfoSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
     tags = serializers.SerializerMethodField()
+    event_end_time = serializers.SerializerMethodField()
+
+    def get_event_end_time(self, obj: Risk) -> str | None:
+        """
+        获取事件结束时间。
+        如果存在毫秒/微秒，则向上取整到下一秒。
+        """
+        dt = obj.event_end_time
+
+        if dt is None:
+            return None
+
+        # 核心逻辑：检查是否存在微秒
+        if dt.microsecond > 0:
+            # 1. 先去掉微秒 (归零)
+            # 2. 再加上1秒，实现“向上取整”
+            dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+        dt = timezone.localtime(dt)
+
+        # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
+        # 所以我们需要在这里手动格式化为您的全局格式
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     def get_tags(self, obj: Risk):
         """
