@@ -20,7 +20,9 @@
       <div
         class="left"
         :style="{
-          width: route.name === 'attentionManageDetail' ? '100%' : 'calc(100% - 368px)'
+          width: route.name === 'attentionManageDetail' ? '100%' : (
+            isShowSide ? 'calc(100% - 368px)' : '100%'
+          )
         }">
         <base-info
           :data="detailData"
@@ -37,9 +39,19 @@
       <!-- 事件处理 -->
       <scroll-faker
         v-if="route.name !== 'attentionManageDetail'"
-        style="width: 368px; height: auto; min-height: 85vh;">
+        :style="isShowSide ? 'width: 368px; height: auto; min-height: 85vh;' : 'width: 0px; height: 0px;' ">
         <div class="right">
+          <div
+            class="open-right"
+            @click="handleOpenRight">
+            <audit-icon
+              class="angle-double-up"
+              :style="{ transform: isShowSide ? 'rotateZ(90deg)' : 'rotateZ(-90deg)' }"
+              type="angle-double-up" />
+            <span>{{ isShowSide ? t('收起工单处理') : t('展开工单处理') }}</span>
+          </div>
           <risk-handle
+            v-if="isShowSide"
             :data="riskData"
             :event-data-list="eventDataList"
             :risk-id="riskData.risk_id"
@@ -95,9 +107,12 @@
   const route = useRoute();
   const { t } = useI18n();
   const eventDataList = ref();
+  const isShowSide = ref(true);
 
   let timeout: undefined | number = undefined;
-
+  const handleOpenRight = () => {
+    isShowSide.value = !isShowSide.value;
+  };
   const {
     loading: strategyLoading,
     data: strategyList,
@@ -222,5 +237,30 @@
       box-shadow: 0 2px 4px 0 #1919290d;
     }
   }
+
+  .right {
+    .open-right {
+      position: absolute;
+      top: 120px;
+      left: -10px;
+      z-index: 1000;
+      width: 30px;
+      padding: 10px;
+      color: #fff;
+      cursor: pointer;
+      background: #cbccd2;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px 0 #1919290d;
+
+      &:hover {
+        background: #c4c6cc;
+      }
+
+      .angle-double-up {
+        display: inline-block;
+      }
+    }
+  }
 }
+
 </style>
