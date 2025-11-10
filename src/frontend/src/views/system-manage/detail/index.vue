@@ -82,6 +82,8 @@
   import _ from 'lodash';
   import {
     computed,
+    nextTick,
+    onMounted,
     ref,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -164,7 +166,6 @@
       id: route.params.id,
     },
     defaultValue: new SystemModel(),
-    manual: true,
     onSuccess: (result) => {
       emit('get-system-info', result);
     },
@@ -175,7 +176,15 @@
       id: route.params.id,
     });
   };
-
+  onMounted(() => {
+    nextTick(() => {
+      if (route.params.id !== '') {
+        fetchSystemDetail({
+          id: route.params.id,
+        });
+      }
+    });
+  });
   useRouterBack(() => {
     router.push({
       name: 'systemList',
