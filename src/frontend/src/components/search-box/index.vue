@@ -19,9 +19,11 @@
     <keep-alive>
       <component
         :is="renderComponent"
+        ref="searchRef"
         v-model="searchModel"
         :field-config="fieldConfig"
         @clear="handleClear"
+        @model-value-watch="handleUpdateModelValue"
         @submit="handleSubmit">
         <template #button>
           <bk-button
@@ -37,6 +39,82 @@
             @click="handleExport">
             {{ t('批量导出') }}
           </bk-button>
+        </template>
+        <template #more-list>
+          <div class="box-row">
+            <div
+              v-for="item in selectedItemList"
+              :key="item.id"
+              class="more-list-item">
+              <div class="list-item-lable">
+                <span class="item-label">{{ `${item.display_name}[${item.field_name}]` }}</span>
+                <audit-icon
+                  class="close-btn"
+                  type="close"
+                  @click="handleRemove(item.id)" />
+              </div>
+              <div class="item-value">
+                <bk-select
+                  v-model="item.operator"
+                  class="bk-select"
+                  :clearable="false"
+                  :placeholder="t('请选择')"
+                  style="width: 150px;padding-right: 5px;"
+                  @change="handleOperatorChange(item)">
+                  <bk-option
+                    v-for="condition in conditionList"
+                    :id="condition.id"
+                    :key="condition.id"
+                    :name="condition.name" />
+                </bk-select>
+                <bk-tag-input
+                  v-if="item.operator === 'IN' || item.operator === 'NOT IN'"
+                  v-model="item.value"
+                  allow-create
+                  collapse-tags
+                  has-delete-icon
+                  :list="[]"
+                  :paste-fn="pasteFn"
+                  :placeholder="t('请输入并按回车键结束')"
+                  style="width: 100%;" />
+                <bk-input
+                  v-else
+                  v-model="item.value"
+                  :placeholder="t('')" />
+              </div>
+            </div>
+          </div>
+        </template>
+        <template #more-button>
+          <bk-select
+            ref="selectRef"
+            v-model="selectedVal"
+            :auto-height="false"
+            collapse-tags
+            display-key="name"
+            filterable
+            id-key="id"
+            multiple
+            :popover-options="{
+              'width': 'auto',
+              extCls: 'add-search-tree-pop',
+              boundary: 'document.body'
+            }"
+            @change="handleSelectChange">
+            <template #trigger>
+              <span style="color: #3884ff; cursor: pointer;">
+                <audit-icon
+                  style="margin-right: 5px;"
+                  type="add" />
+                <span>{{ t('添加关联事件条件') }}</span>
+              </span>
+            </template>
+            <bk-option
+              v-for="(item, index) in selectedItems"
+              :id="item.id"
+              :key="index"
+              :name="`${item.display_name}[${item.field_name}]`" />
+          </bk-select>
         </template>
       </component>
     </keep-alive>
@@ -55,11 +133,14 @@
   import _ from 'lodash';
   import {
     computed,
+    // nextTick,
     onMounted,
     ref,
+    watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import MetaManageService from '@service/meta-manage';
   import RiskManageService from '@service/risk-manage';
 
   import useMessage from '@hooks/use-message';
@@ -71,18 +152,12 @@
   import RenderKey from './components/render-key.vue';
   import RenderValue from './components/render-value/index.vue';
 
-  const props = withDefaults(defineProps<Props>(), {
-    isReassignment: false,
-    isExport: false,
-  });
-
-  const emit = defineEmits<Emits>();
-
   interface Emits {
-    (e: 'change', value: Record<string, any>): void;
+    (e: 'change', value: Record<string, any>, otherValue?: any): void;
     (e: 'changeTableHeight'): void;
     (e: 'export'): void;
     (e: 'batch'): void;
+    (e: 'modelValueWatch', value: Record<string, any>): void;
   }
   interface Props {
     fieldConfig: Record<string, IFieldConfig>;
@@ -92,7 +167,19 @@
   interface Exposes {
     clearValue: () => void;
     exportData: (val: string[], type: string) => void;
+    initSelectedItems:(val: Array< Record<string, any>>) => void;
+    getSelectedItemList: (val: Array< Record<string, any>>) => void;
   }
+
+
+  const props = withDefaults(defineProps<Props>(), {
+    isReassignment: false,
+    isExport: false,
+  });
+  const emit = defineEmits<Emits>();
+
+
+  const searchRef = ref();
   const SEARCH_TYPE_QUERY_KEY = 'searchType';
   const { t } = useI18n();
   const isLoading = ref(false);
@@ -101,12 +188,84 @@
     value: RenderValue,
   };
   const { messageSuccess } = useMessage();
+  const selectedVal = ref();
+  const selectedItems = ref<Array<Record<string, any>>>([]);
+  const selectedItemList = ref<Array<Record<string, any>>>([]);
+  const {
+    getSearchParamsPost,
+    appendSearchParams,
+    replaceSearchParams,
+  } = useUrlSearch();
+  const urlSearchParams = getSearchParamsPost('event_filters');
+
+  const conditionList = computed(() => GlobalChoices.value.event_filter_operator);
+  const eventFiltersParams = computed(() => {
+    const data = selectedItemList.value.map(item => ({
+      field: item.field_name,
+      display_name: item.display_name,
+      operator: item.operator,
+      // 判断 item.value 是否是数组
+      value: _.isArray(item.value) ? item.value.join(',') : item.value,
+    }));
+    return data;
+  });
 
   const {
-    getSearchParams,
-    appendSearchParams,
-  } = useUrlSearch();
-  const urlSearchParams = getSearchParams();
+    data: GlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    manual: true,
+  });
+  const handleOperatorChange = (val: Record<string, any>) => {
+    selectedItemList.value = selectedItemList.value.map((item) => {
+      if (item.id === val.id) {
+        return {
+          ...item,
+          operator: val.operator,
+          value: val.operator === 'IN' ? [] : item.value,
+        };
+      }
+      return item;
+    });
+  };
+  const pasteFn = (value: string) => ([{ id: value, name: value }]);
+
+  // 删除
+  const handleRemove = (val: string) => {
+    // 使用filter删除指定项目，filter会保持剩余元素的相对顺序
+    selectedItemList.value = selectedItemList.value.filter(item => item.id !== val);
+    selectedVal.value = selectedItemList.value.map(item => item.id);
+    const EventFiltersParams = {
+      ...getSearchParams(),
+      event_filters: eventFiltersParams.value,
+    };
+    replaceSearchParams(EventFiltersParams);
+  };
+  // 更多选项 选择
+  const handleSelectChange = (val: string[]) => {
+    // 按照勾选顺序构建新的列表并去重
+    const newSelectedItemList = [];
+    const seenIds = new Set();
+
+    for (const id of val) {
+      if (seenIds.has(id)) continue; // 去重
+
+      const item = selectedItems.value.find(item => item.id === id);
+      if (item) {
+        const existingItem = selectedItemList.value.find(existing => existing.id === id);
+        newSelectedItemList.push({
+          ...item,
+          value: existingItem?.value || '',
+          operator: existingItem?.operator || '=',
+        });
+        seenIds.add(id);
+      }
+    }
+
+    selectedItemList.value = newSelectedItemList;
+
+    // searchRef.value?.showMore(val.length !== 0);
+  };
 
   const renderType = ref<keyof typeof comMap>('key');
   if (comMap[urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap]) {
@@ -158,6 +317,10 @@
     }
     if (!urlSearchParams[searchFieldName]) return;
     if (config.type !== 'string') {
+      // 如果urlSearchParams[searchFieldName]是数字则转换成字符串
+      if (_.isNumber(urlSearchParams[searchFieldName])) {
+        urlSearchParams[searchFieldName] = urlSearchParams[searchFieldName].toString();
+      }
       searchModel.value[searchFieldName] = urlSearchParams[searchFieldName].split(',');
     } else {
       searchModel.value[searchFieldName] = urlSearchParams[searchFieldName];
@@ -176,9 +339,7 @@
       [SEARCH_TYPE_QUERY_KEY]: renderType.value,
     });
   };
-
-  // 提交搜索条件
-  const handleSubmit = () => {
+  const getSearchParams = () => {
     const result = Object.keys(searchModel.value).reduce((result, key) => {
       const value = searchModel.value[key];
       if (key === 'datetime') {
@@ -196,16 +357,62 @@
       }
       return result;
     }, {} as Record<string, any>);
-    emit('change', result);
+    return result;
+  };
+  // 提交搜索条件
+  const handleSubmit = () => {
+    emit('change', getSearchParams(), eventFiltersParams.value);
   };
   const handleClear = () => {
     searchModel.value = {
-      datetime: ['', ''],
-      datetime_origin: ['', ''],
+      datetime: [
+        dayjs(Date.now() - (86400000 * 182)).format('YYYY-MM-DD HH:mm:ss'),
+        dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      ],
+      datetime_origin: [
+        'now-6M',
+        'now',
+      ],
     };
+    selectedItemList.value = selectedItemList.value.map(item => ({
+      ...item,
+      value: '',
+      operator: '=',
+    }));
+
+    selectedVal.value = selectedItemList.value.map(item => item.id);
     handleSubmit();
   };
+  const findIdByDisplayAndField = (display: string, field: string, ary: Array<Record<string, any>>) => {
+    const foundItem = ary.find(item => item
+      && item.display_name === display
+      && item.field_name === field);
+
+    return foundItem ? foundItem.id : null;
+  };
+
+  const handleUpdateModelValue = (val: any) => {
+    emit('modelValueWatch', val);
+  };
+  watch(() => selectedItems.value, (val) => {
+    selectedVal.value =  eventFiltersParams.value.map((item) => {
+      const foundId = findIdByDisplayAndField(item.display_name, item.field, val);
+      return foundId;
+    });
+  });
   onMounted(() => {
+    if (urlSearchParams?.event_filters) {
+      selectedItemList.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
+        id: item.id,
+        field_name: item.field,
+        display_name: item.display_name,
+        operator: item.operator,
+        value: item.operator === 'IN' ? item.value.split(',') : item.value,
+      }));
+      // nextTick(() => {
+      //   searchRef.value?.showMore(urlSearchParams.event_filters.length > 0);
+      // });
+    }
     handleSubmit();
   });
 
@@ -216,43 +423,84 @@
     exportData(val, type) {
       handleExportData(val, type);
     },
+    initSelectedItems(val) {
+      selectedItems.value = val;
+    },
+    getSelectedItemList() {
+      return selectedItemList.value;
+    },
   });
 
 </script>
 <style lang="postcss">
-  .analysis-search-box {
-    position: relative;
-    background-color: #fff;
-    border-radius: 2px;
-    box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
+.analysis-search-box {
+  position: relative;
+  background-color: #fff;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px 0 rgb(25 25 41 / 5%);
 
-    .panel-toggle-btn {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      display: flex;
-      width: 64px;
-      height: 16px;
-      justify-content: center;
-      align-items: center;
-      font-size: 12px;
-      color: #fff;
-      text-align: center;
-      cursor: pointer;
-      background: #dcdee5;
-      border-radius: 0 0 8px 8px;
-      transform: translate(-50%, 100%);
-      transition: all .15s;
+  .panel-toggle-btn {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    display: flex;
+    width: 64px;
+    height: 16px;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    color: #fff;
+    text-align: center;
+    cursor: pointer;
+    background: #dcdee5;
+    border-radius: 0 0 8px 8px;
+    transform: translate(-50%, 100%);
+    transition: all .15s;
 
-      &:hover {
-        background: #c4c6cc;
-      }
+    &:hover {
+      background: #c4c6cc;
+    }
 
-      &.is-floded {
-        i {
-          transform: rotateZ(-180deg);
-        }
+    &.is-floded {
+      i {
+        transform: rotateZ(-180deg);
       }
     }
   }
+}
+
+
+.box-row {
+  display: grid;
+  margin-bottom: 12px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px 16px;
+
+  .more-list-item {
+    .list-item-lable {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+
+      .item-label {
+        font-size: 12px;
+        line-height: 20px;
+        color: #63656e;
+        vertical-align: top;
+      }
+
+      .close-btn {
+        color: #63656e;
+        cursor: pointer;
+      }
+    }
+
+
+    .item-value {
+      display: flex;
+      padding-top: 6px;
+    }
+  }
+}
 </style>
