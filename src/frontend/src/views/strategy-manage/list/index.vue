@@ -227,11 +227,11 @@
       <span class="red-text">{{ t('无法找回') }}</span>
       ，{{ t('请谨慎操作') }} !
     </div>
-    <div class="content">
+    <div class="strategy-manage-content">
       {{ t('请输入策略名称') }}
       <span
         v-bk-tooltips="{ content: t('点击复制策略名称') }"
-        class="content-text"
+        class="strategy-manage-content-text"
         @click="handleCopyName">{{ deleteName }} </span>
       {{ t('以确认删除') }}
     </div>
@@ -1556,14 +1556,14 @@
 
 }
 
-.content {
+.strategy-manage-content {
   width: 416px;
   padding-bottom: 10px;
   font-size: 14px;
   color: #333;
   text-align: center;
 
-  .content-text {
+  .strategy-manage-content-text {
     font-weight: 700;
     cursor: pointer;
   }
