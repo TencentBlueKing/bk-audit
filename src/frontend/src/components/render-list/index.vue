@@ -231,6 +231,7 @@
     }
     if (orderField && orderType) {
       paramsMemo = {
+        ...paramsMemo,
         order_field: orderField,
         order_type: orderType,
       };

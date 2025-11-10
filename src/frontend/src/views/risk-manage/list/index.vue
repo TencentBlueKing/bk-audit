@@ -21,7 +21,8 @@
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
-      @export="handleExport" />
+      @export="handleExport"
+      @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
       <render-list
         ref="listRef"
@@ -43,6 +44,8 @@
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
+    nextTick,
+    onMounted,
     onUnmounted,
     ref,
   } from 'vue';
@@ -51,6 +54,7 @@
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
+    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -85,9 +89,10 @@
   const { messageWarn } = useMessage();
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
-  const { getSearchParams } = useUrlSearch();
+  const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
-  let timeout: number| undefined = undefined;
+  const route = useRoute();
+  // let timeout: number| undefined = undefined;
   const statusToMap: Record<string, {
     tag: string,
     icon: string,
@@ -119,7 +124,18 @@
       color: '#0CA668',
     },
   };
-  const tableColumn = [
+
+  interface FieldItem {
+    id: string;
+    field_name: string;
+    display_name: string;
+    operator?: string;
+    value?: string | string[];
+  }
+
+  const selectedItemList = ref<FieldItem[]>([]);
+
+  const initTableColumns = [
     {
       type: 'selection',
       label: '',
@@ -228,6 +244,7 @@
       label: () => t('风险命中策略(ID)'),
       field: () => 'strategy_id',
       width: 200,
+      showOverflowTooltip: true,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
           name: 'strategyList',
@@ -236,8 +253,8 @@
           },
         };
         return <router-link to={to} target='_blank'>
-                  <Tooltips data={`
-                ${strategyList.value.find(item => item.value === data.strategy_id)?.label || '--'}(${data.strategy_id})`}/>
+                  <span>{`
+                ${strategyList.value.find(item => item.value === data.strategy_id)?.label || '--'}(${data.strategy_id})`}</span>
               </router-link>;
       },
     },
@@ -318,6 +335,8 @@
     },
   ] as Column[];
 
+  const tableColumn = ref(initTableColumns);
+
 
   const listRef = ref();
   const searchBoxRef = ref();
@@ -333,26 +352,31 @@
     // last_operate_time: 'last_operate_time',
     // risk_label: 'risk_label',
   };
-  const initSettings = () => ({
-    fields: tableColumn.reduce((res, item, index) => {
-      if (item.field) {
-        const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
-        const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
-        res.push({
-          label: String(labelValue),
-          field: String(fieldValue),
-          disabled: !!disabledMap[String(fieldValue)],
-        });
-      }
-      return res;
-    }, [] as Array<{
-      label: string, field: string, disabled: boolean,
-    }>) || [],
-    checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'],
-    showLineHeight: false,
-    trigger: 'manual' as const,  // 添加 as const 类型断言
-  });
-  const { settings } = useTableSettings('audit-all-risk-list-setting', initSettings);
+  const initSettings = () => {
+    const fieldNames = selectedItemList.value.map(item => `event_data.${item.field_name}`);
+    const list = selectedItemList.value.length > 0 ? tableColumn.value : initTableColumns;
+    return  {
+      fields: list.reduce((res, item, index) => {
+        if (item.field) {
+          const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
+          const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
+          res.push({
+            label: String(labelValue),
+            field: String(fieldValue),
+            disabled: !!disabledMap[String(fieldValue)] ||  fieldNames.includes(String(fieldValue)),
+          });
+        }
+        return res;
+      }, [] as Array<{
+        label: string, field: string, disabled: boolean,
+      }>) || [],
+      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'].concat(fieldNames),
+      showLineHeight: false,
+      trigger: 'manual' as const,  // 添加 as const 类型断言
+    };
+  };
+  const settings  = ref();
+  settings.value = useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
 
   // 导出数据
   const handleExport = () => {
@@ -363,6 +387,19 @@
     }
     searchBoxRef.value.exportData(selectedData, 'all');
   };
+
+  const {
+    run: getEventFields,
+  } = useRequest(RiskManageService.fetchEventFields, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      const eventFields = data.map((item: any) => ({
+        ...item,
+      }));
+      searchBoxRef.value?.initSelectedItems(eventFields);
+    },
+  });
+
   // 获取userinfo
   const {
     data: userInfo,
@@ -397,30 +434,30 @@
     },
   });
 
-  const {
-    run: fetchRiskList,
-  } = useRequest(RiskManageService.fetchRiskList, {
-    defaultValue: {
-      total: 0,
-      results: [],
-      page: 1,
-      num_pages: 1,
-    },
-    onSuccess(data) {
-      const { results } = data;
-      if (results && results.length) {
-        results.forEach((item) => {
-          const tmpItem = pollingDataMap.value[item.risk_id];
-          if (!tmpItem) return;
-          tmpItem.status = item.status;
-          tmpItem.current_operator = item.current_operator;
-          tmpItem.risk_label = item.risk_label;
-          tmpItem.last_operate_time = item.last_operate_time;
-        });
-        startPolling(results);
-      }
-    },
-  });
+  // const {
+  //   run: fetchRiskList,
+  // } = useRequest(RiskManageService.fetchRiskList, {
+  //   defaultValue: {
+  //     total: 0,
+  //     results: [],
+  //     page: 1,
+  //     num_pages: 1,
+  //   },
+  //   onSuccess(data) {
+  //     const { results } = data;
+  //     if (results && results.length) {
+  //       results.forEach((item) => {
+  //         const tmpItem = pollingDataMap.value[item.risk_id];
+  //         if (!tmpItem) return;
+  //         tmpItem.status = item.status;
+  //         tmpItem.current_operator = item.current_operator;
+  //         tmpItem.risk_label = item.risk_label;
+  //         tmpItem.last_operate_time = item.last_operate_time;
+  //       });
+  //       // startPolling(results);
+  //     }
+  //   },
+  // });
 
   const {
     data: levelData,
@@ -430,34 +467,63 @@
   });
 
   // 记录轮训的数据
-  const pollingDataMap = ref<Record<string, RiskManageModel>>({});
+  // const pollingDataMap = ref<Record<string, RiskManageModel>>({});
   const handleRequestSuccess = ({ results }: {results: Array<RiskManageModel>}) => {
-    startPolling(results);
+    selectedItemList.value =  searchBoxRef.value?.getSelectedItemList();
+    if (JSON.stringify(tableColumn.value) !== JSON.stringify(initColumns())) {
+      tableColumn.value =  initColumns();
+    }
+    settings.value =  useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
     if (!results.length) return;
     // 获取对应风险等级
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),
     });
   };
-  //   // 开始轮训
-  const startPolling = (results: Array<RiskManageModel>) => {
-    clearTimeout(timeout);
-    pollingDataMap.value = {};
-    results.forEach((item) => {
-      if (item.status !== 'closed') {
-        pollingDataMap.value[item.risk_id] = item;
-      }
-    });
-    if (!Object.keys(pollingDataMap.value).length) return;
-    timeout = setTimeout(() => {
-      const params = getSearchParams();
-      fetchRiskList({
-        ...params,
-        risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
-          .join(','),
-      });
-    }, 60 * 1000);
+
+  const  initColumns = () => {
+    if (selectedItemList.value.length === 0) {
+      return [...initTableColumns];
+    }
+    const columns = [...initTableColumns]; // 创建副本避免修改原始数组
+
+    let selectedColumns: Column[] = [];
+    selectedColumns = selectedItemList.value.map(item => ({
+      label: item.display_name,
+      field: `event_data.${item.field_name}`,
+      width: 120,
+      showOverflowTooltip: true,
+      sort: 'custom',
+      render: (args: any) => {
+        const data = args.data as RiskManageModel;
+        return <span>{data?.event_data?.[item.field_name] || '--'}</span>;
+      },
+    })) as Column[];
+    // 在操作列之前插入选中的列
+    const operationColumnIndex = columns.findIndex(col => col.fixed === 'right');
+    const insertIndex = operationColumnIndex > -1 ? operationColumnIndex : columns.length - 1;
+    columns.splice(insertIndex, 0, ...selectedColumns);
+    return  columns;
   };
+  //   // 开始轮训
+  // const startPolling = (results: Array<RiskManageModel>) => {
+  //   clearTimeout(timeout);
+  //   pollingDataMap.value = {};
+  //   results.forEach((item) => {
+  //     if (item.status !== 'closed') {
+  //       pollingDataMap.value[item.risk_id] = item;
+  //     }
+  //   });
+  //   if (!Object.keys(pollingDataMap.value).length) return;
+  //   timeout = setTimeout(() => {
+  //     const params = getSearchParamsPost('event_filters');
+  //     fetchRiskList({
+  //       ...params,
+  //       risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
+  //         .join(','),
+  //     });
+  //   }, 60 * 1000);
+  // };
 
   const handleToDetail = (data: RiskManageModel, needToRiskContent = false) => {
     const params: Record<string, any> = {
@@ -477,9 +543,26 @@
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-all-risk-list-setting', JSON.stringify(setting));
   };
+
+  interface SearchFormValue {
+    strategy_id?: string[];
+    // 可能还有其他字段，但根据当前使用场景，我们只关心 strategy_id
+  }
+
+  const handleModelValueWatch = (val: SearchFormValue) => {
+    if (val?.strategy_id?.length) {
+      getEventFields({
+        strategy_ids: val.strategy_id,
+      });
+    } else {
+      getEventFields();
+    }
+  };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>) => {
-    searchModel.value = value;
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue };
     fetchList();
   };
   const handleClearSearch = () => {
@@ -492,34 +575,46 @@
       tags: '',
       start_time: '',
       end_time: '',
-      strategy_id: '',
+      strategy_id: route.query.strategy_id || '',
       operator: '',
       current_operator: '',
       status: '',
       risk_label: '',
       event_content: '',
       risk_level: '',
+      use_bkbase: true,
       title: '',
       notice_users: '',
     };
-    listRef.value.fetchData({
+    const dataParams: Record<string, any> = {
       ...params,
       ...searchModel.value,
-    });
+    };
+    listRef.value.fetchData(dataParams);
   };
-
+  onMounted(() => {
+    nextTick(() => {
+      getEventFields();
+    });
+  });
   onUnmounted(() => {
-    clearTimeout(timeout);
+    // clearTimeout(timeout);
   });
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'riskManageDetail') {
-      const params = getSearchParams();
+      const params = getSearchParamsPost('event_filters');
+      const paramsEventFilters = JSON.stringify(params.event_filters);
+      const EventFiltersparams = {
+        ...params,
+        event_filters: paramsEventFilters,
+      };
+      // replaceSearchParams(params);
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
       to.query = {
         ...to.query,
-        ...params,
+        ...EventFiltersparams,
       };
     }
     next();
