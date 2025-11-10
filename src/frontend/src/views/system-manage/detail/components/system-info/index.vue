@@ -40,6 +40,7 @@
   </div>
 </template>
 <script setup lang="ts">
+  import { onMounted } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
@@ -76,12 +77,12 @@
   const {
     data,
     loading,
+    run: fetchSystemDetail,
   } = useRequest(MetaManageService.fetchSystemDetail, {
     defaultParams: {
       id: route.params.id || props.id,
     },
     defaultValue: new SystemModel(),
-    manual: true,
   });
 
   const {
@@ -98,7 +99,13 @@
     const statusItem = GlobalChoices.value.meta_system_status.find(item => item.id === val);
     return statusItem?.name || val; // 如果找不到对应状态，返回原值
   };
-
+  onMounted(() => {
+    if (route.params.id || props.id) {
+      fetchSystemDetail({
+        id: route.params.id || props.id,
+      });
+    }
+  });
   defineExpose<Exposes>({
     loading: loading.value,  // 使用.value获取实际布尔值
   });

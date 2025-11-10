@@ -53,7 +53,7 @@
   import useRequest from '@hooks/use-request';
 
   interface Props {
-    modelValue: Array<string> | string,
+    modelValue: Array<string> | string | number,
     allowCreate?: boolean,
     multiple?: boolean,
     collapseTags?: boolean,
