@@ -295,7 +295,6 @@
   });
 
   const calcTableHeight = () => {
-    console.log('calcTableHeight');
     nextTick(() => {
       const { top } = getOffset(rootRef.value);
       const windowInnerHeight = window.innerHeight;
