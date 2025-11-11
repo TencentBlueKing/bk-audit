@@ -61,8 +61,8 @@
               @change="handleChange" />
           </template>
         </div>
-        <slot name="more-list" />
       </template>
+      <slot name="more-list" />
       <slot name="more-button" />
     </div>
 
