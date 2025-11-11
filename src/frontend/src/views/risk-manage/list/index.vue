@@ -488,7 +488,8 @@
     const columns = [...initTableColumns]; // 创建副本避免修改原始数组
 
     let selectedColumns: Column[] = [];
-    selectedColumns = selectedItemList.value.map(item => ({
+    const noValue = selectedItemList.value.filter(item => item.value !== '');
+    selectedColumns = noValue.map(item => ({
       label: item.display_name,
       field: `event_data.${item.field_name}`,
       width: 120,

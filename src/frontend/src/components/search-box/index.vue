@@ -76,7 +76,8 @@
                   :list="[]"
                   :paste-fn="pasteFn"
                   :placeholder="t('请输入并按回车键结束')"
-                  style="width: 100%;" />
+                  style="width: 100%;"
+                  @change="(val) => handleValueChange(val, item)" />
                 <bk-input
                   v-else
                   v-model="item.value"
@@ -229,7 +230,6 @@
     });
   };
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
-
   // 删除
   const handleRemove = (val: string) => {
     // 使用filter删除指定项目，filter会保持剩余元素的相对顺序
@@ -394,6 +394,37 @@
   const handleUpdateModelValue = (val: any) => {
     emit('modelValueWatch', val);
   };
+
+  const handleValueChange = (val: any[], changeItem: Record<string, any>) => {
+    let processedVal = val;
+    if (Array.isArray(val)) {
+      // 处理包含逗号分隔的字符串，拆分并去重
+      const flattenedValues: any[] = [];
+      val.forEach((item) => {
+        if (typeof item === 'string' && item.includes(',')) {
+          // 拆分逗号分隔的字符串，并去除空白字符
+          const splitItems = item.split(',').map(s => s.trim())
+            .filter(s => s !== '');
+          flattenedValues.push(...splitItems);
+        } else {
+          flattenedValues.push(item);
+        }
+      });
+      // 去重
+      processedVal = [...new Set(flattenedValues)];
+    }
+
+    selectedItemList.value = selectedItemList.value.map((item) => {
+      if (item.id === changeItem.id) {
+        return {
+          ...item,
+          value: processedVal,
+        };
+      }
+      return item;
+    });
+  };
+
   watch(() => selectedItems.value, (val) => {
     selectedVal.value =  eventFiltersParams.value.map((item) => {
       const foundId = findIdByDisplayAndField(item.display_name, item.field, val);
@@ -403,7 +434,7 @@
   onMounted(() => {
     if (urlSearchParams?.event_filters) {
       selectedItemList.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
-        id: item.id,
+        id: item.id ? item.id :  `${item.field}:${item.display_name}`,
         field_name: item.field,
         display_name: item.display_name,
         operator: item.operator,
