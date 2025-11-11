@@ -44,34 +44,34 @@ class BKITSM(BkApiResource, abc.ABC):
 class GetServices(BKITSM):
     name = gettext_lazy("服务列表查询")
     method = "GET"
-    action = "/get_services/" if APIGW_ENABLED else "/v2/itsm/get_services/"
+    action = "/get_services/" if not APIGW_ENABLED else "/v2/itsm/get_services/"
 
 
 class GetServiceDetail(BKITSM):
     name = gettext_lazy("获取服务详情")
     method = "GET"
-    action = "/get_service_detail/" if APIGW_ENABLED else "/v2/itsm/get_service_detail/"
+    action = "/get_service_detail/" if not APIGW_ENABLED else "/v2/itsm/get_service_detail/"
 
 
 class CreateTicket(BKITSM):
     name = gettext_lazy("创建单据")
     method = "POST"
-    action = "/create_ticket/" if APIGW_ENABLED else "/v2/itsm/create_ticket/"
+    action = "/create_ticket/" if not APIGW_ENABLED else "/v2/itsm/create_ticket/"
 
 
 class GetTicketStatus(BKITSM):
     name = gettext_lazy("单据状态查询")
     method = "GET"
-    action = "/get_ticket_status/" if APIGW_ENABLED else "/v2/itsm/get_ticket_status/"
+    action = "/get_ticket_status/" if not APIGW_ENABLED else "/v2/itsm/get_ticket_status/"
 
 
 class TicketApproveResult(BKITSM):
     name = gettext_lazy("查询审批结果")
     method = "POST"
-    action = "/ticket_approval_result/" if APIGW_ENABLED else "/v2/itsm/ticket_approval_result/"
+    action = "/ticket_approval_result/" if not APIGW_ENABLED else "/v2/itsm/ticket_approval_result/"
 
 
 class OperateTicket(BKITSM):
     name = gettext_lazy("操作单据")
     method = "POST"
-    action = "/operate_ticket/" if APIGW_ENABLED else "/v2/itsm/operate_ticket/"
+    action = "/operate_ticket/" if not APIGW_ENABLED else "/v2/itsm/operate_ticket/"
