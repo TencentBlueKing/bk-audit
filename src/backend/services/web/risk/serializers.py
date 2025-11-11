@@ -26,11 +26,13 @@ from rest_framework import serializers
 
 from apps.meta.constants import OrderTypeChoices
 from apps.meta.models import Tag
+from core.serializers import AnyValueField, TimestampIntegerField
 from core.utils.distutils import strtobool
 from core.utils.time import mstimestamp_to_date_string
 from services.web.risk.constants import (
     RAW_EVENT_ID_REMARK,
     RISK_LEVEL_ORDER_FIELD,
+    EventFilterOperator,
     EventMappingFields,
     RiskLabel,
     RiskRuleOperator,
@@ -250,19 +252,56 @@ class RiskInfoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Risk
-        fields = "__all__"
+        exclude = ["strategy"]
 
 
 class RiskProviderSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
+    event_end_time_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Event End Time Timestamp(ms)"), source="event_end_time"
+    )
+    last_operate_time_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Last Operate Time Timestamp(ms)"), source="last_operate_time"
+    )
 
     class Meta:
         model = Risk
         exclude = ["strategy"]
 
 
+class ListEventFieldsByStrategyRequestSerializer(serializers.Serializer):
+    # 支持多个策略；不传或为空返回所有策略的字段
+    strategy_ids = serializers.ListField(child=serializers.IntegerField(), required=False, allow_empty=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs.get("strategy_ids") and isinstance(attrs["strategy_ids"], str):
+            attrs["strategy_ids"] = [int(i) for i in attrs["strategy_ids"].split(",") if i]
+        return attrs
+
+
+class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
+    field_name = serializers.CharField(label=gettext_lazy("字段名"))
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
+    id = serializers.CharField(label=gettext_lazy("字段ID"))
+
+
+class EventFieldFilterItemSerializer(serializers.Serializer):
+    field = serializers.CharField(label=gettext_lazy("字段名"))
+    display_name = serializers.CharField(label=gettext_lazy("字段显示名"))
+    operator = serializers.ChoiceField(label=gettext_lazy("操作符"), choices=EventFilterOperator.choices)
+    value = AnyValueField(label=gettext_lazy("值"))
+
+
 class TicketPermissionProviderSerializer(serializers.ModelSerializer):
     """用于反向拉取 TicketPermission 的快照结构"""
+
+    # 显式声明，便于在 Schema 中展示
+    authorized_at = serializers.DateTimeField(label=gettext_lazy("Authorized Time"))
+    authorized_at_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Authorized Time Timestamp(ms)"), source="authorized_at"
+    )
 
     class Meta:
         model = TicketPermission
@@ -274,18 +313,19 @@ class ListRiskRequestSerializer(serializers.Serializer):
     List Risk
     """
 
-    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"), required=False)
-    strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), required=False)
-    operator = serializers.CharField(label=gettext_lazy("Operator"), required=False)
-    status = serializers.CharField(label=gettext_lazy("Risk Status"), required=False)
+    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"), allow_blank=True, required=False)
+    strategy_id = serializers.CharField(label=gettext_lazy("Strategy ID"), allow_blank=True, required=False)
+    operator = serializers.CharField(label=gettext_lazy("Operator"), allow_blank=True, required=False)
+    status = serializers.CharField(label=gettext_lazy("Risk Status"), allow_blank=True, required=False)
     start_time = serializers.DateTimeField(label=gettext_lazy("Start Time"), required=False)
     end_time = serializers.DateTimeField(label=gettext_lazy("End Time"), required=False)
-    event_type = serializers.CharField(label=gettext_lazy("Risk Type"), required=False)
-    current_operator = serializers.CharField(label=gettext_lazy("Current Operator"), required=False)
-    notice_users = serializers.CharField(label=gettext_lazy("Notice Users"), required=False)
-    tags = serializers.CharField(label=gettext_lazy("Tags"), required=False)
-    event_content = serializers.CharField(label=gettext_lazy("Event Content"), required=False)
-    risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), required=False)
+    event_type = serializers.CharField(label=gettext_lazy("Risk Type"), allow_blank=True, required=False)
+    current_operator = serializers.CharField(label=gettext_lazy("Current Operator"), allow_blank=True, required=False)
+    notice_users = serializers.CharField(label=gettext_lazy("Notice Users"), allow_blank=True, required=False)
+    tags = serializers.CharField(label=gettext_lazy("Tags"), allow_blank=True, required=False)
+    event_content = serializers.CharField(label=gettext_lazy("Event Content"), allow_blank=True, required=False)
+    risk_label = serializers.CharField(label=gettext_lazy("Risk Label"), allow_blank=True, required=False)
+    use_bkbase = serializers.BooleanField(label=gettext_lazy("是否通过BKBase查询"), required=False, default=False)
     order_field = serializers.CharField(
         label=gettext_lazy("排序字段"), required=False, allow_null=True, allow_blank=True, help_text="risk_level:根据风险等级排序"
     )
@@ -299,11 +339,27 @@ class ListRiskRequestSerializer(serializers.Serializer):
     risk_level = serializers.CharField(
         label=gettext_lazy("Risk Level"), required=False, allow_blank=True, allow_null=True
     )
-    title = serializers.CharField(label=gettext_lazy("Risk Title"), required=False)
+    title = serializers.CharField(label=gettext_lazy("Risk Title"), allow_blank=True, required=False)
+    event_filters = EventFieldFilterItemSerializer(label=gettext_lazy("关联事件字段筛选"), many=True, required=False)
 
     def validate(self, attrs: dict) -> dict:
         # 校验
         data = super().validate(attrs)
+        event_filters = data.get("event_filters") or []
+        raw_order_field = data.get("order_field") or attrs.get("order_field")
+        normalized_order_field = (raw_order_field or "").lstrip("-")
+        if normalized_order_field.startswith("event_data."):
+            if not event_filters:
+                raise serializers.ValidationError(gettext("关联事件字段排序需同时指定事件筛选条件"))
+            event_field_name = normalized_order_field[len("event_data.") :].strip()
+            filter_fields = {(item.get("field") or "").strip() for item in event_filters if isinstance(item, dict)}
+            filter_fields_with_prefix = {f"event_data.{field}" for field in filter_fields if field}
+            if (
+                event_field_name
+                and event_field_name not in filter_fields
+                and normalized_order_field not in filter_fields_with_prefix
+            ):
+                raise serializers.ValidationError(gettext("关联事件字段排序需在筛选条件中包含字段：%s") % event_field_name)
         # 排序
         # 兼容：前端传入 risk_level 作为排序字段时，转换为 strategy__risk_level
         if data.get("order_field") == Strategy.risk_level.field.name:
@@ -334,14 +390,12 @@ class ListRiskRequestSerializer(serializers.Serializer):
             data["event_content__contains"] = data.pop("event_content")
         if data.get("title"):
             data["title__contains"] = data.pop("title")
+        event_filters = event_filters or []
+        data["event_filters"] = event_filters
+        data["use_bkbase"] = bool(data.get("use_bkbase", False))
         # 格式转换
         for key, val in attrs.items():
-            if key in [
-                "event_time__gte",
-                "event_time__lt",
-                "order_type",
-                "order_field",
-            ]:
+            if key in ["event_time__gte", "event_time__lt", "order_type", "order_field", "use_bkbase", "event_filters"]:
                 continue
             if key in ["tag_objs__in"]:
                 data[key] = [int(i) for i in val.split(",") if i]
@@ -392,8 +446,16 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
     """
 
     experiences = serializers.IntegerField(required=False)
+    event_data = serializers.SerializerMethodField()
     event_content = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
+    event_end_time = serializers.SerializerMethodField()
+
+    def get_event_data(self, obj: Risk):
+        """
+        返回风险列表中用于展示的事件数据。
+        """
+        return getattr(obj, "filtered_event_data", {})
 
     def get_event_content(self, obj):
         return getattr(obj, "event_content_short")
@@ -410,6 +472,31 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             # 回退到实时查询
             return obj.get_tag_ids()
 
+    def get_event_end_time(self, obj: Risk) -> str | None:
+        """
+        获取事件结束时间。
+        如果存在毫秒/微秒，则向上取整到下一秒。
+        """
+        dt = obj.event_end_time
+
+        if dt is None:
+            return None
+
+        # 核心逻辑：检查是否存在微秒
+        if dt.microsecond > 0:
+            # 1. 先去掉微秒 (归零)
+            # 2. 再加上1秒，实现“向上取整”
+            dt = dt.replace(microsecond=0) + datetime.timedelta(seconds=1)
+
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+
+        dt = timezone.localtime(dt)
+
+        # 因为 SerializerMethodField 不会自动使用 settings.py 中的格式，
+        # 所以我们需要在这里手动格式化为您的全局格式
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
     class Meta:
         model = Risk
         fields = [
@@ -422,6 +509,7 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "status",
             "current_operator",
             "notice_users",
+            "event_data",
             "tags",
             "risk_label",
             "experiences",

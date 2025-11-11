@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import copy
 import json
+from functools import cached_property
 from typing import List
 
 from bk_resource import api, resource
@@ -412,6 +413,18 @@ class JoinDataEtlStorageHandler:
 
 
 class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
+    KEY_BUILTIN_FIELDS = {
+        "utctime",
+        "system_id",
+        "resource_type_id",
+        "id",
+        "display_name",
+        "creator",
+        "updater",
+        "created_at",
+        "updated_at",
+    }
+
     @property
     def config_name(self) -> str:
         return ASSET_RT_FORMAT.format(system_id=self.system_id, resource_type_id=self.resource_type_id).replace(
@@ -425,12 +438,21 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
         """
         # 初始化标准字段
         fields = super().result_table_fields
-        fields = fields[: len(fields) - 1]
-        # 获取资产表字段
-        fields.extend(self.get_asset_uniq_fields())
-        return fields
+        fields = {field["field_name"]: field for field in fields[: len(fields) - 1]}
 
-    def get_schema_fields(self) -> List[dict]:
+        # 获取资产表字段
+        schema_fields = self.schema_fields
+        fields.update(
+            {
+                field["field_name"]: field
+                for field in schema_fields
+                if field["field_name"] not in self.KEY_BUILTIN_FIELDS
+            }
+        )
+        return list(fields.values())
+
+    @cached_property
+    def schema_fields(self) -> List[dict]:
         """
         获取资产字段
         """
@@ -449,6 +471,7 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                 "field_index": index,
                 "is_json": field["type"] in [JsonSchemaFieldType.OBJECT.value, JsonSchemaFieldType.ARRAY.value],
                 "is_original_json": field["type"] in [JsonSchemaFieldType.JSON.value],
+                "is_index": field.get("is_index", False),
             }
             for index, field in enumerate(schema)
         ]
@@ -458,12 +481,10 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
         """
         获取资产唯一字段
         """
-        # 获取内置字段
-        build_in_fields = super().result_table_fields
-        build_in_fields = build_in_fields[: len(build_in_fields) - 1]
-        build_in_field_names = [f["field_name"] for f in build_in_fields]
+        # 关键标准字段，无法覆盖
+        build_in_field_names = self.KEY_BUILTIN_FIELDS
         # 资产字段
-        schema_fields = self.get_schema_fields()
+        schema_fields = self.schema_fields
         return [
             f
             for f in schema_fields
@@ -603,47 +624,57 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                                                         "subtype": "assign_obj",
                                                         "label": "label53e9f2",
                                                         "assign": [
-                                                            {"type": "string", "assign_to": "id", "key": "id"},
-                                                            {
-                                                                "type": "string",
-                                                                "assign_to": "display_name",
-                                                                "key": "display_name",
-                                                            },
-                                                            {
-                                                                "type": "string",
-                                                                "assign_to": "creator",
-                                                                "key": "creator",
-                                                            },
-                                                            {
-                                                                "type": "long",
-                                                                "assign_to": "created_at",
-                                                                "key": "created_at",
-                                                            },
-                                                            {
-                                                                "type": "string",
-                                                                "assign_to": "updater",
-                                                                "key": "updater",
-                                                            },
-                                                            {
-                                                                "type": "long",
-                                                                "assign_to": "updated_at",
-                                                                "key": "updated_at",
-                                                            },
-                                                            {
-                                                                "type": "string",
-                                                                "assign_to": "operator",
-                                                                "key": "operator",
-                                                            },
-                                                            {
-                                                                "type": "string",
-                                                                "assign_to": "bk_bak_operator",
-                                                                "key": "bk_bak_operator",
-                                                            },
-                                                            {
-                                                                "type": "string",
-                                                                "assign_to": "is_deleted",
-                                                                "key": "is_deleted",
-                                                            },
+                                                            item
+                                                            for item in [
+                                                                {"type": "string", "assign_to": "id", "key": "id"},
+                                                                {
+                                                                    "type": "string",
+                                                                    "assign_to": "display_name",
+                                                                    "key": "display_name",
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "assign_to": "creator",
+                                                                    "key": "creator",
+                                                                },
+                                                                {
+                                                                    "type": "long",
+                                                                    "assign_to": "created_at",
+                                                                    "key": "created_at",
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "assign_to": "updater",
+                                                                    "key": "updater",
+                                                                },
+                                                                {
+                                                                    "type": "long",
+                                                                    "assign_to": "updated_at",
+                                                                    "key": "updated_at",
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "assign_to": "operator",
+                                                                    "key": "operator",
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "assign_to": "bk_bak_operator",
+                                                                    "key": "bk_bak_operator",
+                                                                },
+                                                                {
+                                                                    "type": "string",
+                                                                    "assign_to": "is_deleted",
+                                                                    "key": "is_deleted",
+                                                                },
+                                                            ]
+                                                            if item["key"] in self.KEY_BUILTIN_FIELDS
+                                                            or (
+                                                                item["key"]
+                                                                not in {
+                                                                    field["field_name"] for field in self.schema_fields
+                                                                }
+                                                            )
                                                         ],
                                                         "next": None,
                                                     },

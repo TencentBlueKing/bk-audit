@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict
 
 from blueapps.utils.local import request_local
 from rest_framework.request import Request
+from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 
 
@@ -24,4 +25,6 @@ def call_resource_with_request(func: Callable[..., Any], data: Dict[str, Any]):
     # call resource with kwargs
     resp = func(_request=drf_request, **data)
     # normalize: return DRF Response.data when available
-    return resp.data
+    if isinstance(resp, Response):
+        resp = resp.data
+    return resp

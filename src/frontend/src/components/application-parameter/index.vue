@@ -197,7 +197,7 @@
     return undefined;
   });
 
-  const userSelectorValue = computed<string | string[] | undefined>(() => {
+  const userSelectorValue = computed<string | string[] | undefined | number>(() => {
     if (props.config.custom_type === 'bk_user_selector') {
       return modelValue.value.value || [];
     }
@@ -209,6 +209,10 @@
     if (Array.isArray(value)) {
       return value.join(', ');
     }
+    if (value === 0) {
+      return '0';
+    }
+
     return value ? String(value) : '';
   });
 
@@ -225,7 +229,7 @@
     return generalValue.value;
   });
   const isShowtip = ref(false);
-  const modelValue = defineModel<{field: string, value: string | string[]}>({
+  const modelValue = defineModel<{field: string | number, value: string | number |string[]}>({
     default: () => ({
       field: '',
       value: '',
@@ -282,7 +286,7 @@
     };
     return;
   };
-  const formatTooltipData = (type: string, value: string | string[]) => {
+  const formatTooltipData = (type: string | number, value: string | string[] | number) => {
     if (Array.isArray(value)) {
       return value.join(', ');
     }

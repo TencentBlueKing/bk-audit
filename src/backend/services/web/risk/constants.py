@@ -24,8 +24,13 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy
 
 from apps.meta.models import Field
-from apps.meta.utils.fields import FIELD_TYPE_LONG, FIELD_TYPE_STRING, FIELD_TYPE_TEXT
-from core.choices import TextChoices
+from apps.meta.utils.fields import (
+    FIELD_TYPE_LONG,
+    FIELD_TYPE_OBJECT,
+    FIELD_TYPE_STRING,
+    FIELD_TYPE_TEXT,
+)
+from core.choices import TextChoices, register_choices
 from core.exporter.constants import ExportField
 from services.web.databus.constants import DEFAULT_TIME_ZONE, TRANSFER_TIME_FORMAT
 
@@ -134,12 +139,22 @@ class EventMappingFields:
             self.OPERATOR,
         ]
 
+    @classmethod
+    def dynamic_json_fields(cls):
+        """
+        动态JSON字段
+        """
+
+        return [cls.EVENT_DATA, cls.EVENT_EVIDENCE]
+
     EVENT_ID = Field(
         field_name="event_id",
         alias_name="event_id",
         description=gettext_lazy("事件ID"),
         field_type=FIELD_TYPE_STRING,
         option=dict(),
+        is_index=True,
+        is_dimension=False,
     )
 
     EVENT_CONTENT = Field(
@@ -151,6 +166,7 @@ class EventMappingFields:
         is_text=True,
         option=dict(),
         is_required=False,
+        is_dimension=False,
     )
 
     RAW_EVENT_ID = Field(
@@ -159,6 +175,8 @@ class EventMappingFields:
         description=gettext_lazy("原始事件ID"),
         field_type=FIELD_TYPE_STRING,
         option=dict(),
+        is_index=True,
+        is_dimension=False,
         property={
             "remark": RAW_EVENT_ID_REMARK,
         },
@@ -170,17 +188,21 @@ class EventMappingFields:
         description=gettext_lazy("命中策略(ID)"),
         field_type=FIELD_TYPE_LONG,
         option=dict(),
+        is_index=True,
+        is_dimension=False,
     )
 
     EVENT_EVIDENCE = Field(
         field_name="event_evidence",
         alias_name="event_evidence",
         description=gettext_lazy("事件证据"),
-        field_type=FIELD_TYPE_TEXT,
+        field_type=FIELD_TYPE_OBJECT,
         is_required=False,
         is_analyzed=True,
         is_text=True,
-        option=dict(),
+        option={"meta_field_type": FIELD_TYPE_TEXT},  # ES 日志的字段类型为 text
+        is_json=True,
+        is_dimension=False,
     )
 
     EVENT_TYPE = Field(
@@ -192,17 +214,20 @@ class EventMappingFields:
         is_analyzed=True,
         is_text=True,
         option=dict(),
+        is_dimension=False,
     )
 
     EVENT_DATA = Field(
         field_name="event_data",
         alias_name="event_data",
         description=gettext_lazy("事件拓展数据"),
-        field_type=FIELD_TYPE_TEXT,
-        option={},
+        field_type=FIELD_TYPE_OBJECT,
+        option={"meta_field_type": FIELD_TYPE_TEXT},  # ES 日志的字段类型为 text
         is_analyzed=True,
         is_required=False,
         is_text=True,
+        is_json=True,
+        is_dimension=False,
     )
 
     EVENT_TIME = Field(
@@ -212,6 +237,7 @@ class EventMappingFields:
         field_type=FIELD_TYPE_LONG,
         option={"time_zone": DEFAULT_TIME_ZONE, "time_format": TRANSFER_TIME_FORMAT},
         is_time=True,
+        is_dimension=False,
     )
 
     EVENT_SOURCE = Field(
@@ -220,6 +246,7 @@ class EventMappingFields:
         description=gettext_lazy("事件来源"),
         field_type=FIELD_TYPE_STRING,
         option=dict(),
+        is_dimension=False,
     )
 
     OPERATOR = Field(
@@ -230,6 +257,7 @@ class EventMappingFields:
         is_text=True,
         is_analyzed=True,
         option=dict(),
+        is_dimension=False,
     )
 
 
@@ -641,6 +669,25 @@ class RiskExportField(TextChoices):
 EVENT_EXPORT_FIELD_PREFIX = "event."
 # 风险导出文件名模板
 RISK_EXPORT_FILE_NAME_TMP = gettext_lazy("审计风险_{risk_view_type}_{datetime}.xlsx")
+
+
+@register_choices("event_filter_operator")
+class EventFilterOperator(TextChoices):
+    """
+    事件筛选操作符
+    """
+
+    EQUAL = "=", gettext_lazy("=")
+    CONTAINS = "CONTAINS", gettext_lazy("包含")
+    IN = "IN", gettext_lazy("IN")
+    NOT_EQUAL = "!=", gettext_lazy("!=")
+    NOT_CONTAINS = "NOT CONTAINS", gettext_lazy("不包含")
+    NOT_IN = "NOT IN", gettext_lazy("NOT IN")
+    GREATER_THAN_EQUAL = ">=", gettext_lazy(">=")
+    LESS_THAN_EQUAL = "<=", gettext_lazy("<=")
+    GREATER_THAN = ">", gettext_lazy(">")
+    LESS_THAN = "<", gettext_lazy("<")
+
 
 # 风险等级排序字段
 RISK_LEVEL_ORDER_FIELD = "strategy__risk_level"

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+import datetime
 from collections import OrderedDict
 
+from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy
 from rest_framework import serializers
@@ -58,6 +60,40 @@ class ExtraDataSerializerMixin(serializers.Serializer):
         if self.parse_nested_data:
             validated_data = parse_nested_params(validated_data)
         return validated_data
+
+
+class AnyValueField(serializers.Field):
+    """无损传递任意 JSON 值，不做转换或格式化"""
+
+    def to_internal_value(self, data):
+        return data
+
+    def to_representation(self, value):
+        return value
+
+
+class TimestampIntegerField(serializers.IntegerField):
+    """用于将日期时间字段序列化为毫秒级整型时间戳的 IntegerField。"""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("allow_null", True)
+        super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def _to_ms_timestamp(value: datetime.datetime) -> int:
+        if timezone.is_naive(value):
+            value = timezone.make_aware(value, timezone.get_current_timezone())
+        return int(value.timestamp() * 1000)
+
+    def to_representation(self, value):
+        if value in (None, ""):
+            return None
+        if isinstance(value, datetime.datetime):
+            return self._to_ms_timestamp(value)
+        if isinstance(value, float):
+            value = int(value)
+        return super().to_representation(value)
 
 
 class FieldType(object):

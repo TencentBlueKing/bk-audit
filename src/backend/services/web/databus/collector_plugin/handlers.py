@@ -40,23 +40,32 @@ from apps.meta.utils.fields import (
     VERSION_ID,
 )
 from services.web.databus.constants import (
+    DEFAULT_DATA_ENCODING,
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     DEFAULT_STORAGE_CONFIG_KEY,
     DEFAULT_TIME_FORMAT,
     DEFAULT_TIME_LEN,
     DEFAULT_TIME_ZONE,
+    DORIS_EVENT_BKBASE_RT_ID_KEY,
+    DORIS_EVENT_PHYSICAL_TABLE_NAME_KEY,
+    DORIS_EVENT_STORAGE_CONFIG_KEY,
     REPLICA_WRITE_INDEX_SET_CONFIG_KEY,
     REPLICA_WRITE_INDEX_SET_ID,
 )
 from services.web.databus.exceptions import MultiOrNoneRawDataError
 from services.web.databus.models import CollectorPlugin
 from services.web.databus.utils import restart_bkbase_clean, start_bkbase_clean
+from services.web.risk.constants import EventMappingFields
 
 
 class PluginEtlHandler:
-    def __init__(self, collector_plugin_id: int):
-        self.plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
-        self.bkbase_labels = []
+    def __init__(self, collector_plugin_id: Optional[int] = None, plugin: Optional[CollectorPlugin] = None):
+        if plugin is None:
+            if collector_plugin_id is None:
+                raise ValueError("collector_plugin_id or plugin must be provided")
+            plugin = CollectorPlugin.objects.get(collector_plugin_id=collector_plugin_id)
+        self.plugin: CollectorPlugin = plugin
+        self.bkbase_labels: List[str] = []
 
     def create_or_update(self) -> None:
         self.create_or_update_clean()
@@ -87,9 +96,7 @@ class PluginEtlHandler:
                 replica_storage_params.update({"result_table_id": self.plugin.bkbase_table_id})
                 api.bk_base.databus_storages_put(replica_storage_params)
 
-            replica_storage_params["bkbase_result_table_id"] = self.plugin.build_result_table_id(
-                replica_storage_params["bk_biz_id"], self.plugin.collector_plugin_name_en
-            )
+            replica_storage_params["bkbase_result_table_id"] = self.plugin.result_table_id
             GlobalMetaConfig.set(
                 REPLICA_WRITE_INDEX_SET_CONFIG_KEY,
                 replica_storage_params,
@@ -125,18 +132,36 @@ class PluginEtlHandler:
         return "bklog_{}".format(self.plugin.collector_plugin_name_en.lower())
 
     def build_clean_config(self) -> dict:
+        """
+        构建清洗配置
+        """
+
         config = {
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
             "bk_username": bk_resource_settings.PLATFORM_AUTH_ACCESS_USERNAME,
             "clean_config_name": self.get_config_name(),
             "description": self.get_config_name(),
             "fields": self.get_fields(),
-            "json_config": self.get_config(),
+            "json_config": self.get_clean_json_config(),
             "raw_data_id": self.get_bk_data_id(),
             "result_table_name": self.get_table_id(),
             "result_table_name_alias": self.get_table_id(),
         }
         return config
+
+    def get_doris_storage_cluster(self) -> str:
+        """
+        获取 Doris 存储集群
+        """
+
+        replica_config = GlobalMetaConfig.get(
+            DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.plugin.namespace,
+        )
+        if not replica_config:
+            return ""
+        return replica_config["bkbase_cluster_id"]
 
     def build_storage_config(self) -> Tuple[dict, Optional[dict]]:
         # 主存储入库参数
@@ -170,14 +195,7 @@ class PluginEtlHandler:
         }
 
         # 双写存储入库参数
-        replica_config = GlobalMetaConfig.get(
-            DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
-            config_level=ConfigLevelChoices.NAMESPACE.value,
-            instance_key=self.plugin.namespace,
-            default=None,
-        )
-        replica_default_cluster_id = replica_config["cluster_id"]
-        replica_default_bkbase_cluster_id = replica_config["bkbase_cluster_id"]
+        bkbase_doris_cluster_id = self.get_doris_storage_cluster()
         # 更新入库字段
         replica_fields = self.get_doris_fields()
         for field in replica_fields:
@@ -185,8 +203,7 @@ class PluginEtlHandler:
             # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
             field["is_doc_values"] = field.get("is_dimension", False)
         # 获取双写存储入库参数（目前为Doris
-
-        if not replica_default_cluster_id:
+        if not bkbase_doris_cluster_id:
             replica_storage_params = {}
         else:
             replica_storage_params = {
@@ -196,7 +213,7 @@ class PluginEtlHandler:
                 "result_table_name": self.get_table_id(),
                 "result_table_name_alias": self.get_table_id(),
                 "storage_type": "doris",
-                "storage_cluster": replica_default_bkbase_cluster_id,
+                "storage_cluster": bkbase_doris_cluster_id,
                 "expires": "365d",  # 无效，实际由metadata控制
                 "fields": replica_fields,
                 "config": {"dimension_table": False, "data_model": "duplicate_table", "is_profiling": False},
@@ -205,6 +222,10 @@ class PluginEtlHandler:
 
     @classmethod
     def get_fields(cls) -> List[dict]:
+        """
+        清洗规则对应的字段列表
+        """
+
         fields = cls.get_build_in_fields()
         fields.extend(
             [
@@ -216,7 +237,7 @@ class PluginEtlHandler:
                     "field_index": index,
                     "is_json": field.is_json,
                     "is_key": bool(field.field_name in BKBASE_STORAGE_UNIQUE_KEYS),
-                    "__field_type": field.field_type,
+                    "__field_type": field.field_type,  # 原始字段类型，用来进行字段类型判断
                 }
                 for index, field in enumerate([*STANDARD_FIELDS, EXT_FIELD_CONFIG])
                 if field.field_name not in [REPORT_TIME.field_name, VERSION_ID.field_name]
@@ -338,6 +359,10 @@ class PluginEtlHandler:
         return resp[0]["id"]
 
     def get_label(self) -> str:
+        """
+        获取解析每一层级的 label
+        """
+
         label = "label{}".format(uniqid()[:5])
         if label in self.bkbase_labels:
             return self.get_label()
@@ -347,7 +372,25 @@ class PluginEtlHandler:
     def assign_bkbase(self, field: dict) -> dict:
         return {"type": field["field_type"], "assign_to": field["field_name"], "key": field["field_name"]}
 
-    def get_config(self) -> str:
+    @classmethod
+    def get_clean_time_config(cls) -> dict:
+        """
+        获取清洗时间配置
+        """
+        return {
+            "time_format": DEFAULT_TIME_FORMAT,
+            "timezone": DEFAULT_TIME_ZONE,
+            "time_field_name": START_TIME.field_name,
+            "output_field_name": "timestamp",
+            "timestamp_len": DEFAULT_TIME_LEN,
+            "encoding": "UTF-8",
+        }
+
+    def get_clean_json_config(self) -> str:
+        """
+        获取清洗规则 JSON 配置
+        """
+
         config = {
             "extract": {
                 "type": "fun",
@@ -379,14 +422,7 @@ class PluginEtlHandler:
                     ],
                 },
             },
-            "conf": {
-                "time_format": DEFAULT_TIME_FORMAT,
-                "timezone": DEFAULT_TIME_ZONE,
-                "time_field_name": START_TIME.field_name,
-                "output_field_name": "timestamp",
-                "timestamp_len": DEFAULT_TIME_LEN,
-                "encoding": "UTF-8",
-            },
+            "conf": self.get_clean_time_config(),
         }
         return json.dumps(config)
 
@@ -403,3 +439,129 @@ class PluginEtlHandler:
             if field.get("__field_type") == FIELD_TYPE_OBJECT:
                 fields.append(self.assign_bkbase(field))
         return fields
+
+
+class EventCollectorEtlHandler(PluginEtlHandler):
+    def create_or_update_storage(self) -> None:
+        # 更新/创建存储配置
+        storage_config = self.build_event_storage_config()
+        if self.plugin.has_storage and self.plugin.bkbase_table_id:
+            storage_config.update({"result_table_id": self.plugin.bkbase_table_id})
+            api.bk_base.databus_storages_put(storage_config)
+        else:
+            api.bk_base.databus_storages_post(storage_config)
+            self.plugin.has_storage = True
+            self.plugin.save(update_fields=["has_storage"])
+
+        # 更新全局配置：存储配置+事件RT,物理表 用于后续使用
+        GlobalMetaConfig.set(
+            DORIS_EVENT_STORAGE_CONFIG_KEY,
+            storage_config,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.plugin.namespace,
+        )
+        GlobalMetaConfig.set(
+            DORIS_EVENT_BKBASE_RT_ID_KEY,
+            self.plugin.result_table_id,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.plugin.namespace,
+        )
+        GlobalMetaConfig.set(
+            DORIS_EVENT_PHYSICAL_TABLE_NAME_KEY,
+            storage_config["physical_table_name"],
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=self.plugin.namespace,
+        )
+
+    @classmethod
+    def get_fields(cls) -> List[dict]:
+        """
+        获取字段
+        """
+
+        fields: List[dict] = []
+        event_fields = EventMappingFields().fields
+        for index, field in enumerate(event_fields, 1):
+            field_dict = {
+                "field_name": field.field_name,
+                "field_type": BKDATA_ES_TYPE_MAP.get(field.field_type, field.field_type),
+                "field_alias": str(field.description or field.alias_name or field.field_name),
+                "is_dimension": field.is_dimension,
+                "is_json": field.is_json,
+                "field_index": index,
+                "is_index": field.is_index,
+                "__field_type": field.field_type,  # 原始字段类型，用来进行字段类型判断
+            }
+            fields.append(field_dict)
+        return fields
+
+    @classmethod
+    def get_doris_fields(cls) -> List[dict]:
+        """
+        获取 Doris 字段
+        """
+
+        doris_fields = []
+        dynamic_json_fields = {field.field_name for field in EventMappingFields.dynamic_json_fields()}
+        for field in cls.get_fields():
+            field_copy = {k: v for k, v in field.items() if k not in {"__field_type"}}
+            field_copy.update(
+                {
+                    "physical_field": field["field_name"],  # 物理字段名
+                    "is_doc_values": field["is_dimension"],  # 计算平台无法识别 is_dimension 配置，使用 is_doc_values 配置
+                }
+            )
+            # 动态 JSON 字段 不能设置 is_json 配置(Variant类型)，需要设置 is_original_json 配置
+            if field["field_name"] in dynamic_json_fields:
+                field_copy.update(
+                    {
+                        "is_json": False,
+                        "is_original_json": True,
+                    }
+                )
+            doris_fields.append(field_copy)
+        return doris_fields
+
+    @classmethod
+    def get_clean_time_config(cls) -> dict:
+        """
+        获取清洗时间配置
+        """
+
+        return {
+            "time_format": DEFAULT_TIME_FORMAT,
+            "timezone": DEFAULT_TIME_ZONE,
+            "time_field_name": EventMappingFields.EVENT_TIME.field_name,
+            "output_field_name": "timestamp",
+            "timestamp_len": DEFAULT_TIME_LEN,
+            "encoding": DEFAULT_DATA_ENCODING,
+        }
+
+    def get_physical_table_name(self) -> str:
+        """
+        获取物理表名
+        """
+
+        table_id = CollectorPlugin.make_table_id(settings.DEFAULT_BK_BIZ_ID, self.plugin.collector_plugin_name_en)
+        return f"mapleleaf_{table_id}"
+
+    def build_event_storage_config(self) -> dict:
+        """
+        构建事件存储配置
+        """
+
+        cluster_id = self.get_doris_storage_cluster()
+        fields = self.get_doris_fields()
+        return {
+            "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
+            "raw_data_id": self.get_bk_data_id(),
+            "data_type": "clean",
+            "result_table_name": self.get_table_id(),
+            "result_table_name_alias": self.get_table_id(),
+            "storage_type": "doris",
+            "storage_cluster": cluster_id,
+            "expires": settings.EVENT_DORIS_EXPIRES,
+            "fields": fields,
+            "config": {"dimension_table": False, "data_model": "duplicate_table", "is_profiling": False},
+            "physical_table_name": self.get_physical_table_name(),
+        }
