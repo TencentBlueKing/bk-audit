@@ -855,7 +855,20 @@
     const filters: Record<string, any> = {};
     const drillDownFilters: Record<string, any> = {};
     const constants: Record<string, any> = {};
-
+    // 初始化将默认值添加到常量中
+    toolDetails.value?.config.input_variable.forEach((item: any) => {
+      if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
+        if (item.field_category === 'variable') {
+          constants[item.raw_name] = item.default_value || '';
+        } else {
+          filters[item.raw_name] = item.default_value;
+        }
+      } else {
+        if (item.field_category === 'variable') {
+          constants[item.raw_name] = '';
+        }
+      }
+    });
     // 将风险工具参数添加到常量中
     if (riskToolParams.value && Object.keys(riskToolParams.value).length > 0) {
       Object.keys(riskToolParams.value).forEach((key) => {
@@ -866,7 +879,7 @@
         }
       });
     }
-
+    // 下钻 常量使用下钻的值
     if (isDrillDownOpen.value) {
       drillDownItemConfig.value.forEach((item) => {
         // 根据源字段名称查找对应的字段分类
@@ -905,19 +918,6 @@
       });
     }
 
-    toolDetails.value?.config.input_variable.forEach((item: any) => {
-      if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
-        if (item.field_category === 'variable') {
-          constants[item.raw_name] = item.default_value || '';
-        } else {
-          filters[item.raw_name] = item.default_value;
-        }
-      } else {
-        if (item.field_category === 'variable') {
-          constants[item.raw_name] = '';
-        }
-      }
-    });
     try {
       await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
       window.BkVisionSDK.init(

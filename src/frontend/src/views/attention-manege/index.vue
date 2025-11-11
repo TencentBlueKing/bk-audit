@@ -21,7 +21,8 @@
       :field-config="FieldConfig"
       is-export
       @change="handleSearchChange"
-      @export="handleExport" />
+      @export="handleExport"
+      @model-value-watch="handleModelValueWatch" />
 
     <div class="risk-manage-list">
       <render-list
@@ -39,7 +40,7 @@
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
   import {
-    computed,
+    onMounted,
     onUnmounted,
     ref,
   } from 'vue';
@@ -67,16 +68,27 @@
 
   import FieldConfig from './components/config';
 
+  import useTableSettings from '@/hooks/use-table-settings';
+
   const dataSource = RiskManageService.fetchWatchRiskList;
   interface ISettings{
     checked: Array<string>,
     fields: Record<string, any>[],
     size: string
   }
+
+  interface FieldItem {
+    id: string;
+    field_name: string;
+    display_name: string;
+    operator?: string;
+    value?: string | string[];
+  }
+
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
-  const { getSearchParams } = useUrlSearch();
+  const { getSearchParamsPost } = useUrlSearch();
   const statusToMap: Record<string, {
     tag: string,
     icon: string,
@@ -108,8 +120,9 @@
       color: '#0CA668',
     },
   };
+  const selectedItemList = ref<FieldItem[]>([]);
 
-  const tableColumn = [
+  const initTableColumns = [
     {
       type: 'selection',
       label: '',
@@ -214,6 +227,7 @@
     {
       label: () => t('风险命中策略(ID)'),
       field: () => 'strategy_id',
+      showOverflowTooltip: true,
       minWidth: 170,
       render: ({ data }: { data: RiskManageModel }) => {
         const to = {
@@ -227,7 +241,7 @@
         return strategyName
           ? (
             <router-link to={to}>
-              <Tooltips data={`${strategyName}(${data.strategy_id})`} />
+              <span>{`${strategyName}(${data.strategy_id})`}</span>
             </router-link>
           ) : (
           <span>--</span>
@@ -260,7 +274,10 @@
         </span>,
     },
   ] as Column[];
-  let timeout: number| undefined = undefined;
+
+  const tableColumn = ref(initTableColumns);
+
+  // let timeout: number| undefined = undefined;
 
   const { messageWarn } = useMessage();
   const listRef = ref();
@@ -282,62 +299,32 @@
     status: 'status',
     current_operator: 'current_operator',
   };
-  const initSettings = () => ({
-    fields: tableColumn?.reduce((res, item, index) => {
-      if (item.field) {
-        const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
-        const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
-        res.push({
-          label: String(labelValue),
-          field: String(fieldValue),
-          disabled: !!disabledMap[String(fieldValue)],
-        });
-      }
-      return res;
-    }, [] as Array<{
-      label: string, field: string, disabled: boolean,
-    }>) || [],
-    checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'],
-    showLineHeight: false,
-    trigger: 'manual' as const,  // 添加 as const 类型断言
-  });
-  const settings = computed(() => {
-    const defaultSettings = initSettings(); // 获取最新的默认配置
-    const jsonStr = localStorage.getItem('audit-attention-risk-list-setting');
+  const initSettings = () => {
+    const fieldNames = selectedItemList.value.map(item => `event_data.${item.field_name}`);
+    const list = selectedItemList.value.length > 0 ? tableColumn.value : initTableColumns;
+    return  {
+      fields: list.reduce((res, item, index) => {
+        if (item.field) {
+          const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
+          const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
+          res.push({
+            label: String(labelValue),
+            field: String(fieldValue),
+            disabled: !!disabledMap[String(fieldValue)] || fieldNames.includes(String(fieldValue)),
+          });
+        }
+        return res;
+      }, [] as Array<{
+        label: string, field: string, disabled: boolean,
+      }>) || [],
+      checked: ['risk_id', 'title', 'event_content', 'risk_level', 'tags', 'operator', 'status', 'current_operator', 'notice_users', 'strategy_id', 'event_time', 'last_operate_time', 'risk_label'].concat(fieldNames),
+      showLineHeight: false,
+      trigger: 'manual' as const,  // 添加 as const 类型断言
+    };
+  };
+  const settings  = ref();
 
-    if (!jsonStr) return defaultSettings;
-
-    try {
-      const savedSettings = JSON.parse(jsonStr);
-
-      // 字段合并：以默认配置为基础，合并用户保存的字段状态
-      const mergedFields = defaultSettings.fields.map((defaultField) => {
-        const savedField = savedSettings.fields?.find((f: any) => f.field === defaultField.field);
-        // 保留新字段配置，仅继承用户设置的disabled状态
-        return savedField
-          ? { ...defaultField, disabled: savedField.disabled }
-          : defaultField;
-      });
-
-      // 选中的字段合并：保留用户选择 + 新增的默认选中字段
-      const savedCheckedSet = new Set(savedSettings.checked || []);
-      const newDefaultChecked = defaultSettings.checked
-        .filter(field => !savedCheckedSet.has(field)); // 找出新增的默认选中字段
-      const mergedChecked = [...(savedSettings.checked || []), ...newDefaultChecked]
-        .filter(field => mergedFields.some(f => f.field === field)); // 过滤无效字段
-
-      return {
-        ...defaultSettings,       // 保留最新默认配置的其他属性
-        fields: mergedFields,     // 合并后的字段配置
-        checked: mergedChecked,   // 合并后的选中字段
-        showLineHeight: false,    // 强制重置行高设置
-        trigger: 'manual' as const,  // 添加 as const 类型断言
-      };
-    } catch (e) {
-      console.error('本地设置解析失败，使用默认配置', e);
-      return defaultSettings;
-    }
-  });
+  settings.value = useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
 
 
   // 获取标签列表
@@ -367,30 +354,30 @@
     defaultValue: [],
   });
 
-  const {
-    run: fetchRiskList,
-  } = useRequest(RiskManageService.fetchTodoRiskList, {
-    defaultValue: {
-      total: 0,
-      results: [],
-      page: 1,
-      num_pages: 1,
-    },
-    onSuccess(data) {
-      const { results } = data;
-      if (results && results.length) {
-        results.forEach((item) => {
-          const tmpItem = pollingDataMap.value[item.risk_id];
-          if (!tmpItem) return;
-          tmpItem.status = item.status;
-          tmpItem.current_operator = item.current_operator;
-          tmpItem.risk_label = item.risk_label;
-          tmpItem.last_operate_time = item.last_operate_time;
-        });
-        startPolling(results);
-      }
-    },
-  });
+  // const {
+  //   run: fetchRiskList,
+  // } = useRequest(RiskManageService.fetchTodoRiskList, {
+  //   defaultValue: {
+  //     total: 0,
+  //     results: [],
+  //     page: 1,
+  //     num_pages: 1,
+  //   },
+  //   onSuccess(data) {
+  //     const { results } = data;
+  //     if (results && results.length) {
+  //       results.forEach((item) => {
+  //         const tmpItem = pollingDataMap.value[item.risk_id];
+  //         if (!tmpItem) return;
+  //         tmpItem.status = item.status;
+  //         tmpItem.current_operator = item.current_operator;
+  //         tmpItem.risk_label = item.risk_label;
+  //         tmpItem.last_operate_time = item.last_operate_time;
+  //       });
+  //       // startPolling(results);
+  //     }
+  //   },
+  // });
 
 
   const {
@@ -401,34 +388,61 @@
   });
 
   // 记录轮训的数据
-  const pollingDataMap = ref<Record<string, RiskManageModel>>({});
+  // const pollingDataMap = ref<Record<string, RiskManageModel>>({});
   const handleRequestSuccess = ({ results }: {results: Array<RiskManageModel>}) => {
-    startPolling(results);
+    selectedItemList.value =  searchBoxRef.value?.getSelectedItemList();
+    if (JSON.stringify(tableColumn.value) !== JSON.stringify(initColumns())) {
+      tableColumn.value =  initColumns();
+    }
+    settings.value =  useTableSettings('audit-all-risk-list-setting', initSettings).settings.value;
+
+    // startPolling(results);
     if (!results.length) return;
     // 获取对应风险等级
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),
     });
   };
-  // 开始轮训
-  const startPolling = (results: Array<RiskManageModel>) => {
-    clearTimeout(timeout);
-    pollingDataMap.value = {};
-    results.forEach((item) => {
-      if (item.status !== 'closed') {
-        pollingDataMap.value[item.risk_id] = item;
-      }
-    });
-    if (!Object.keys(pollingDataMap.value).length) return;
-    timeout = setTimeout(() => {
-      const params = getSearchParams();
-      fetchRiskList({
-        ...params,
-        risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
-          .join(','),
-      });
-    }, 60 * 1000);
+
+  const  initColumns = () => {
+    if (selectedItemList.value.length === 0) {
+      return [...initTableColumns];
+    }
+    const columns = [...initTableColumns]; // 创建副本避免修改原始数组
+
+    const noValue = selectedItemList.value.filter(item => item.value !== '');
+    const selectedColumns = noValue.map(item => ({
+      label: item.display_name,
+      field: `event_data.${item.field_name}`,
+      width: 120,
+      showOverflowTooltip: true,
+      sort: 'custom',
+      render: (args: any) => {
+        const data = args.data as RiskManageModel;
+        return <span>{data?.event_data?.[item.field_name] || '--'}</span>;
+      },
+    })) as Column[];
+    return  columns.concat(selectedColumns);
   };
+  // 开始轮训
+  // const startPolling = (results: Array<RiskManageModel>) => {
+  //   clearTimeout(timeout);
+  //   pollingDataMap.value = {};
+  //   results.forEach((item) => {
+  //     if (item.status !== 'closed') {
+  //       pollingDataMap.value[item.risk_id] = item;
+  //     }
+  //   });
+  //   if (!Object.keys(pollingDataMap.value).length) return;
+  //   timeout = setTimeout(() => {
+  //     const params = getSearchParamsPost('event_filters');
+  //     fetchRiskList({
+  //       ...params,
+  //       risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
+  //         .join(','),
+  //     });
+  //   }, 60 * 1000);
+  // };
 
   const handleSettingChange = (setting: ISettings) => {
     localStorage.setItem('audit-attention-risk-list-setting', JSON.stringify(setting));
@@ -450,8 +464,10 @@
     router.push(params);
   };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>) => {
-    searchModel.value = value;
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+    searchModel.value = {
+      ...value,
+      event_filters: exValue };
     fetchList();
   };
   const handleClearSearch = () => {
@@ -470,20 +486,46 @@
       event_content: '',
       risk_level: '',
       title: '',
+      use_bkbase: true,
       notice_users: '',
     };
-    listRef.value.fetchData({
+    const dataParams: Record<string, any> = {
       ...params,
       ...searchModel.value,
-    });
+    };
+    listRef.value.fetchData(dataParams);
   };
+
+  const {
+    run: getEventFields,
+  } = useRequest(RiskManageService.fetchEventFields, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      const eventFields = data.map((item: any) => ({
+        ...item,
+      }));
+      searchBoxRef.value?.initSelectedItems(eventFields);
+    },
+  });
+  const handleModelValueWatch = (val: any) => {
+    if (val?.strategy_id?.length) {
+      getEventFields({
+        strategy_ids: val.strategy_id,
+      });
+    } else {
+      getEventFields();
+    }
+  };
+  onMounted(() => {
+    getEventFields();
+  });
   onUnmounted(() => {
-    clearTimeout(timeout);
+    // clearTimeout(timeout);
   });
 
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'attentionManageDetail') {
-      const params = getSearchParams();
+      const params = getSearchParamsPost('event_filters');
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
       to.query = {

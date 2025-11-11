@@ -213,6 +213,7 @@
           cancel();
           run(params);
           replaceSearchParams(params);
+          calcTableHeight();
         }
       });
   };
@@ -231,6 +232,7 @@
     }
     if (orderField && orderType) {
       paramsMemo = {
+        ...paramsMemo,
         order_field: orderField,
         order_type: orderType,
       };
@@ -317,8 +319,14 @@
 
   defineExpose<Exposes>({
     fetchData(params = {} as Record<string, any>) {
+      const {
+        order_field: orderField,
+        order_type: orderType,
+      } = getSearchParams();
       paramsMemo = {
         ...paramsMemo,
+        order_field: orderField,
+        order_type: orderType,
         ...params,
       };
       if (isReady) {

@@ -166,6 +166,7 @@
       id: route.params.id,
     },
     defaultValue: new SystemModel(),
+    // manual: true,
     onSuccess: (result) => {
       emit('get-system-info', result);
     },

@@ -70,6 +70,15 @@ export default {
       .then(({ data }) => data);
   },
   /**
+   * @desc 根据策略获取对应的事件字段
+   */
+  fetchEventFields(params: {
+    strategy_ids: string[]
+  }) {
+    return RiskManageSource.getEventFields(params)
+      .then(({ data }) => data);
+  },
+  /**
    * @desc 获取风险状态类型
    */
   fetchRiskStatusCommon() {
