@@ -15,7 +15,6 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  {{ 11 }}
   <bk-select
     v-if="config.custom_type === 'select'"
     v-model="generalValue"
