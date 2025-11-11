@@ -213,6 +213,7 @@
           cancel();
           run(params);
           replaceSearchParams(params);
+          calcTableHeight();
         }
       });
   };
@@ -294,6 +295,7 @@
   });
 
   const calcTableHeight = () => {
+    console.log('calcTableHeight');
     nextTick(() => {
       const { top } = getOffset(rootRef.value);
       const windowInnerHeight = window.innerHeight;
