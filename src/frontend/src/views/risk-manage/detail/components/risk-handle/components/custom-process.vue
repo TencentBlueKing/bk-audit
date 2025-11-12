@@ -23,7 +23,9 @@
         style="color: #979ba5">{{ data.time }}</span>
     </div>
     <div class="mis-content">
-      <render-info-item :label="t('处理方法')">
+      <render-info-item
+        :label="t('处理方法')"
+        :label-width="50">
         <span v-if="data.custom_action === 'CloseRisk'">{{ t('人工关单') }}</span>
         <span v-else-if="data.custom_action === 'TransOperator'">
           {{ t('转单给') }} {{ data.new_operators?.join(',') }}
@@ -62,7 +64,8 @@
       <render-info-item
         v-else
         class="mt8"
-        :label="t('处理说明')">
+        :label="t('处理说明')"
+        :label-width="50">
         <!-- eslint-disable vue/no-v-html -->
         <div
           class="ql-editor"
@@ -151,7 +154,7 @@
   }
 
   >.mis-content {
-    padding: 12px 16px;
+    padding: 5px 0;
     margin-top: 8px;
     background: #f5f7fa;
     border-radius: 4px;
