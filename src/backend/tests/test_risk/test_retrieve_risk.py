@@ -564,7 +564,7 @@ class TestListRiskResource(TestCase):
         data_sql = sql_log[1]
         data_sql_normalized = data_sql.replace("`", "")
         self.assertIn("CASE WHEN base_query.risk_level", data_sql_normalized)
-        self.assertIn("ELSE 99 END DESC", data_sql_normalized)
+        self.assertIn("ELSE -1 END DESC", data_sql_normalized)
         self.assertIn("base_query.event_time DESC", data_sql_normalized)
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
