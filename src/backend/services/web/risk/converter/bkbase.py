@@ -888,7 +888,7 @@ class FinalSelectAssembler(SQLHelper):
                 exp.EQ(this=field_expr.copy(), expression=self.literal(level)),
                 exp.Literal.number(str(index)),
             )
-        return case_expr.else_(exp.Literal.number("99"))
+        return case_expr.else_(exp.Literal.number("-1"))
 
     def _base_query_column(self, field_name: str) -> exp.Column:
         normalized = field_name.split("__")[-1] if "__" in field_name else field_name
