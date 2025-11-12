@@ -139,6 +139,7 @@
     refreshList: () => void,
     getListData:()=> Array<Record<string, any>>,
     getSelection:()=> void
+    initTableHeight: () => void,
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -213,7 +214,6 @@
           cancel();
           run(params);
           replaceSearchParams(params);
-          calcTableHeight();
         }
       });
   };
@@ -294,26 +294,46 @@
     off('show-notice');
   });
 
+  // 计算表格尺寸信息
+  const calculateTableDimensions = () => {
+    const { top } = getOffset(rootRef.value);
+    const windowInnerHeight = window.innerHeight;
+    const tableHeaderHeight = 42;
+    const paginationHeight = 60;
+    const pageOffsetBottom = 20;
+    const tableRowHeight = 42;
+
+    const tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
+
+    const rowNum = Math.floor(tableRowTotalHeight / tableRowHeight);
+    return {
+      tableHeaderHeight,
+      paginationHeight,
+      tableRowHeight,
+      rowNum,
+    };
+  };
+
+  // 初始化表格高度
+  const initTableHeight = () => {
+    nextTick(() => {
+      const dimensions = calculateTableDimensions();
+      // eslint-disable-next-line max-len
+      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
+    });
+  };
+
   const calcTableHeight = () => {
     nextTick(() => {
-      const { top } = getOffset(rootRef.value);
-      const windowInnerHeight = window.innerHeight;
-      const tableHeaderHeight = 42;
-      const paginationHeight = 60;
-      const pageOffsetBottom = 20;
-      const tableRowHeight = 42;
-
-      const tableRowTotalHeight = windowInnerHeight - top - tableHeaderHeight - paginationHeight - pageOffsetBottom;
-
-      const rowNum = Math.floor(tableRowTotalHeight / tableRowHeight);
+      const dimensions = calculateTableDimensions();
       const pageLimit = new Set([
         ...pagination.limitList,
-        rowNum,
+        dimensions.rowNum,
       ]);
-      pagination.limit = rowNum;
+      pagination.limit = dimensions.rowNum;
       pagination.limitList = [...pageLimit].sort((a, b) => a - b);
-
-      tableMaxHeight.value = tableHeaderHeight + rowNum * tableRowHeight + paginationHeight + 8;
+      // eslint-disable-next-line max-len
+      tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
     });
   };
 
@@ -352,6 +372,9 @@
     },
     getSelection() {
       return tableRef.value?.getSelection();
+    },
+    initTableHeight() {
+      initTableHeight();
     },
   });
 </script>
