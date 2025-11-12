@@ -472,9 +472,10 @@
         operator: item.operator,
         value: (item.operator === 'IN' || item.operator === 'NOT IN') ? item.value.split(',') : item.value,
       }));
-      // nextTick(() => {
-      //   searchRef.value?.showMore(urlSearchParams.event_filters.length > 0);
-      // });
+      selectedItemListOperator.value = urlSearchParams?.event_filters?.map((item: Record<string, any>) => ({
+        id: item.id ? item.id :  `${item.field}:${item.display_name}`,
+        operator: item.operator,
+      }));
     }
     handleSubmit();
   });
