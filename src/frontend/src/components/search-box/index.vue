@@ -211,6 +211,8 @@
     return data;
   });
 
+  const selectedItemListOperator = ref();
+
   const {
     data: GlobalChoices,
   } = useRequest(MetaManageService.fetchGlobalChoices, {
@@ -218,16 +220,44 @@
     manual: true,
   });
   const handleOperatorChange = (val: Record<string, any>) => {
+    const isNewOperatorInOrNotIn = val.operator === 'IN' || val.operator === 'NOT IN';
+    // 找到当前项的操作符
+    const currentItem = selectedItemListOperator.value.find((item: Record<string, any>) => item.id === val.id);
+    const isOldOperatorInOrNotIn = currentItem.operator === 'IN' || currentItem.operator === 'NOT IN';
+
     selectedItemList.value = selectedItemList.value.map((item) => {
       if (item.id === val.id) {
+        if (isOldOperatorInOrNotIn && isNewOperatorInOrNotIn) {
+          return {
+            ...item,
+            operator: val.operator,
+            value: item.value,
+          };
+        } if (isOldOperatorInOrNotIn && !isNewOperatorInOrNotIn) {
+          return {
+            ...item,
+            operator: val.operator,
+            value: '',
+          };
+        } if (!isOldOperatorInOrNotIn && isNewOperatorInOrNotIn) {
+          return {
+            ...item,
+            operator: val.operator,
+            value: [],
+          };
+        }
         return {
           ...item,
           operator: val.operator,
-          value: val.operator === 'IN' ? [] : item.value,
+          value: item.value,
         };
       }
       return item;
     });
+    selectedItemListOperator.value = selectedItemList.value.map(item => ({
+      id: item.id,
+      operator: item.operator,
+    }));
   };
   const pasteFn = (value: string) => ([{ id: value, name: value }]);
   // 删除
@@ -263,8 +293,10 @@
     }
 
     selectedItemList.value = newSelectedItemList;
-
-    // searchRef.value?.showMore(val.length !== 0);
+    selectedItemListOperator.value = newSelectedItemList.map((item: Record<string, any>) => ({
+      id: item.id,
+      operator: item.operator,
+    }));
   };
 
   const renderType = ref<keyof typeof comMap>('key');
@@ -438,7 +470,7 @@
         field_name: item.field,
         display_name: item.display_name,
         operator: item.operator,
-        value: item.operator === 'IN' ? item.value.split(',') : item.value,
+        value: (item.operator === 'IN' || item.operator === 'NOT IN') ? item.value.split(',') : item.value,
       }));
       // nextTick(() => {
       //   searchRef.value?.showMore(urlSearchParams.event_filters.length > 0);

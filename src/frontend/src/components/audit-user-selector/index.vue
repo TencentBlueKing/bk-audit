@@ -18,7 +18,7 @@
   <bk-select
     ref="userSelectorRef"
     :allow-create="allowCreate"
-    auto-focus
+    :auto-focus="autoFocus"
     class="audit-user-selector"
     :collapse-tags="collapseTags"
     :disabled="isDisabled"
@@ -59,6 +59,7 @@
     collapseTags?: boolean,
     needRecord?:boolean,
     isDisabled?:boolean,
+    autoFocus?: boolean,
   }
   interface Option{
     display_name: string,
@@ -77,6 +78,7 @@
     multiple: true,
     collapseTags: true,
     isDisabled: false,
+    autoFocus: true,
   });
   const emit = defineEmits<Emits>();
   const rememberList = ref<Array<Option>>([]);

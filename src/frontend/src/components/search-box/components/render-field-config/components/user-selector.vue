@@ -17,6 +17,7 @@
 <template>
   <audit-user-selector
     allow-create
+    :auto-focus="false"
     :model-value="defaultValue"
     :multiple="multiple"
     need-record
