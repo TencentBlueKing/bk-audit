@@ -408,21 +408,32 @@
     if (selectedItemList.value.length === 0) {
       return [...initTableColumns];
     }
+    const params = getSearchParamsPost('event_filters');
     const columns = [...initTableColumns]; // 创建副本避免修改原始数组
-
+    // 选中的列
+    let selectedColumns: Column[] = [];
     const noValue = selectedItemList.value.filter(item => item.value !== '');
-    const selectedColumns = noValue.map(item => ({
-      label: item.display_name,
-      field: `event_data.${item.field_name}`,
-      width: 120,
-      showOverflowTooltip: true,
-      sort: 'custom',
-      render: (args: any) => {
-        const data = args.data as RiskManageModel;
-        return <span>{data?.event_data?.[item.field_name] || '--'}</span>;
-      },
-    })) as Column[];
-    return  columns.concat(selectedColumns);
+    selectedColumns = noValue.map((item) => {
+      const sortVal = params?.order_field === `event_data.${item.field_name}` ? params?.order_type :  '';
+      return {
+        label: item.display_name,
+        field: `event_data.${item.field_name}`,
+        width: 120,
+        showOverflowTooltip: true,
+        sort: {
+          value: sortVal,
+        },
+        render: (args: any) => {
+          const data = args.data as RiskManageModel;
+          return <span>{data?.event_data?.[item.field_name] || '--'}</span>;
+        },
+      };
+    }) as Column[];
+    // 在操作列之前插入选中的列
+    const operationColumnIndex = columns.findIndex(col => col.fixed === 'right');
+    const insertIndex = operationColumnIndex > -1 ? operationColumnIndex : columns.length - 1;
+    columns.splice(insertIndex, 0, ...selectedColumns);
+    return  columns;
   };
   // 开始轮训
   // const startPolling = (results: Array<RiskManageModel>) => {
@@ -468,6 +479,7 @@
     searchModel.value = {
       ...value,
       event_filters: exValue };
+    listRef.value.initTableHeight();
     fetchList();
   };
   const handleClearSearch = () => {
