@@ -86,7 +86,15 @@
       'now',
     ],
   });
+  // 添加时间格式转换函数
+  const formatTimeWithTimezone = (timeStr: string) => {
+    // 如果已经是标准格式，直接返回
+    if (timeStr.includes('+')) {
+      return timeStr;
+    }
 
+    return timeStr.replace(/\s(\d{2}:\d{2})$/, '+$1');
+  };
   // 解析 url 上面附带的查询参数
   Object.keys(urlSearchParams).forEach((searchFieldName) => {
     const config = FieldConfig[searchFieldName as keyof typeof FieldConfig];
@@ -101,6 +109,10 @@
   });
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
     searchModel.value.datetime = [urlSearchParams.start_time, urlSearchParams.end_time];
+    searchModel.value.datetime = [
+      formatTimeWithTimezone(urlSearchParams.start_time),
+      formatTimeWithTimezone(urlSearchParams.end_time),
+    ];
   }
   if (urlSearchParams.datetime_origin) {
     searchModel.value.datetime_origin = urlSearchParams.datetime_origin.split(',');
