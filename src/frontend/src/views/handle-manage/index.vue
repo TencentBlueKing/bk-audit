@@ -85,6 +85,7 @@
   } from 'vue-i18n';
   import {
     onBeforeRouteLeave,
+    useRoute,
     useRouter,
   } from 'vue-router';
 
@@ -122,6 +123,7 @@
   const strategyTagMap = ref<Record<string, string>>({});
   const { t } = useI18n();
   const router = useRouter();
+  const route = useRoute();
   const { getSearchParamsPost } = useUrlSearch();
   const statusToMap: Record<string, {
     tag: string,
@@ -629,7 +631,7 @@
       tags: '',
       start_time: '',
       end_time: '',
-      strategy_id: '',
+      strategy_id: route.query.strategy_id || '',
       operator: '',
       status: '',
       event_content: '',
@@ -675,11 +677,16 @@
   onBeforeRouteLeave((to, from, next) => {
     if (to.name === 'handleManageDetail') {
       const params = getSearchParamsPost('event_filters');
+      const paramsEventFilters = JSON.stringify(params.event_filters);
+      const EventFiltersParams = {
+        ...params,
+        event_filters: paramsEventFilters,
+      };
       // 保存当前查询参数到目标路由的 query 中
       // eslint-disable-next-line no-param-reassign
       to.query = {
         ...to.query,
-        ...params,
+        ...EventFiltersParams,
       };
     }
     next();
