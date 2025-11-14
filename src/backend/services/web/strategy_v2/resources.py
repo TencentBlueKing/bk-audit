@@ -595,7 +595,7 @@ class ListStrategy(StrategyV2Base):
             if validated_request_data.get(key):
                 q = Q()
                 for item in validated_request_data[key]:
-                    q |= Q(**{f"{key}__contains": item})
+                    q |= Q(**{f"{key}__icontains": item})
                 queryset = queryset.filter(q)
 
         # 预加载策略标签，避免N+1查询
