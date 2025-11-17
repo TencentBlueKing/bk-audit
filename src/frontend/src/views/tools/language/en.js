@@ -209,5 +209,7 @@ export default {
     '当启用「使用默认值」选项后，若在 BKVision 嵌入管理页面中对变量值进行修改，当前工具会有参数更新提示': 'After enabling the "Use Default Value" option, if the variable value is modified in the BKVision embedded management page, the current tool will have a parameter update prompt',
     '当前工具引用的 BKVision 参数有更新，请先完成 BKVision 参数的更新操作，再编辑参数': 'The BKVision parameter referenced by the current tool has been updated. Please complete the update operation of the BKVision parameter first, and then edit the parameter',
     未填写时将使用工具名称作为下钻按钮名称: 'When not filled, the tool name will be used as the drill button name',
+    刷新成功: 'Refresh Success',
+    刷新报表: 'Refresh Report',
   },
 };
