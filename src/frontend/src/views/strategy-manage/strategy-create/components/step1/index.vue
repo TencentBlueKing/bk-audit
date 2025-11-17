@@ -504,7 +504,7 @@
     formData.value.strategy_type = editData.strategy_type || 'referenceModel';
 
     // 是否允许编辑风险等级
-    canEditRiskLevel.value = !!editData.risk_level;
+    // canEditRiskLevel.value = !!editData.risk_level;
   };
 
   const {
