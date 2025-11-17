@@ -141,7 +141,11 @@
                             </div>
                             <div
                               v-if="drillMap.get(basicItem.field_name)"
-                              style="margin-top: 8px;">
+                              :style="{
+                                // eslint-disable-next-line max-len
+                                marginTop: displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.isMappings
+                                  ? '8px' : '0'
+                              }">
                               {{ t('点击查看此字段的证据下探') }}
                             </div>
                           </div>
