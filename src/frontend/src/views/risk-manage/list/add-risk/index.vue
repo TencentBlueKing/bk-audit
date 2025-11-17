@@ -30,8 +30,7 @@
           theme="primary">
           {{ t('预览') }}
         </bk-button>
-        <bk-button
-          theme="default">
+        <bk-button>
           {{ t('取消') }}
         </bk-button>
       </div>
