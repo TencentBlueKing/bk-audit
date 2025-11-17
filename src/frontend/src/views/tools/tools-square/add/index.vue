@@ -865,15 +865,11 @@
     display: flex;
     margin-left: 10px;
     font-size: 18px;
-    color: #57d482;
+    color: #87888f;
     cursor: pointer;
     transition: transform .3s ease;
     align-items: center;
     justify-content: center;
-
-    &:hover {
-      color: #3fc06d;
-    }
 
     &.rotating {
       animation: refresh 1s linear infinite;
