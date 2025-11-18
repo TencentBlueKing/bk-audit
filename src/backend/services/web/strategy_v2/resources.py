@@ -462,9 +462,6 @@ class UpdateStrategy(StrategyV2Base):
             and strategy.control_id != validated_request_data["control_id"]
         ):
             raise ControlChangeError()
-        # check risk_level
-        if strategy.risk_level is not None:
-            validated_request_data.pop("risk_level")
         # save strategy
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
