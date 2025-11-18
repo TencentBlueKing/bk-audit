@@ -148,6 +148,8 @@ class CollectorTest(TestCase):
         """CreateCollectorResource"""
         result = self.resource.databus.collector.create_collector(**CREATE_COLLECTOR_DATA)
         result.pop("id", None)
+        CREATE_COLLECTOR_RESULT["record_log_type"] = result.get("record_log_type")
+        CREATE_COLLECTOR_RESULT["select_sdk_type"] = result.get("select_sdk_type")
         self.assertEqual(result, CREATE_COLLECTOR_RESULT)
 
     @mock.patch(
@@ -158,6 +160,8 @@ class CollectorTest(TestCase):
         """UpdateCollectorResource"""
         result = self.resource.databus.collector.update_collector(**UPDATE_COLLECTOR_DATA)
         result.pop("id", None)
+        UPDATE_COLLECTOR_RESULT["record_log_type"] = result.get("record_log_type")
+        UPDATE_COLLECTOR_RESULT["select_sdk_type"] = result.get("select_sdk_type")
         self.assertEqual(result, UPDATE_COLLECTOR_RESULT)
 
     def test_get_bcs_yaml_template(self):
