@@ -107,13 +107,64 @@
     </card-part-vue>
     <card-part-vue :title="t('事件数据')">
       <template #content>
-        事件数据
+        <div class="event-table">
+          <div class="table-heard">
+            <div class="table-index border-right">
+              #
+            </div>
+            <div class="table-label border-right">
+              <span class="table-text">{{ t('字段显示名称') }}</span>
+            </div>
+            <div class="table-type border-right">
+              <span class="table-text">
+                {{ t('表单类型') }}
+                <audit-icon
+                  class="table-info-fill"
+                  type="info-fill" />
+              </span>
+            </div>
+            <div class="table-value">
+              <span class="table-text">{{ t('映射值') }} <audit-icon
+                class="table-info-fill"
+                type="info-fill" />
+              </span>
+            </div>
+          </div>
+          <div
+            v-for="(item, index) in eventList"
+            :key="index"
+            class="table-list">
+            <div class="table-index border-right">
+              {{ index + 1 }}
+            </div>
+            <div class="table-label border-right">
+              <span class="event-type"> {{ item.type }} </span>
+              <span class="table-text">{{ item.label }}</span>
+            </div>
+            <div class="table-type border-right">
+              <bk-select
+                v-model="item.typeValue"
+                behavior="simplicity"
+                class="bk-select"
+                filterable>
+                <bk-option
+                  v-for="type in handleItemTypeList(item.type)"
+                  :id="type.typeValue"
+                  :key="type.typeValue"
+                  :name="type.label" />
+              </bk-select>
+            </div>
+            <div class="table-value">
+              {{ item.typeValue }}
+            </div>
+          </div>
+        </div>
       </template>
     </card-part-vue>
   </div>
 </template>
 
-<script setup lang="ts">
+  <script lang="ts" setup>
   import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -141,7 +192,79 @@
   const handleSelect = (value: string) => {
     selectedValue.value = value;
   };
-  // const strategyList = ref();
+  const eventList = ref([
+    {
+      label: 'system_id (系统 id)示名称',
+      type: 'sting',
+      value: '',
+      typeValue: 'input',
+    },
+    {
+      label: 'combined_id (资产 id)',
+      type: 'in',
+      value: '字段显示名称',
+      typeValue: 'number-input',
+    },
+    {
+      label: 'combined_id (资产 id)',
+      type: 'long',
+      value: '字段显示名称',
+      typeValue: 'number-input',
+    },
+    {
+      label: 'combined_id (资产 id)',
+      type: 'double',
+      value: '字段显示名称',
+      typeValue: 'number-input',
+    },
+    {
+      label: '字段显示名称',
+      type: 'text',
+      value: '字段显示名称',
+      typeValue: 'textarea',
+    },
+  ]);
+  const typeList = ref([
+    {
+      label: t('输入框'),
+      value: 'input',
+      typeValue: 'input',
+    },
+    {
+      label: t('时间选择器'),
+      value: 'date-picker',
+      typeValue: 'date-picker',
+    },
+    {
+      label: t('数字输入框'),
+      value: 'number-input',
+      typeValue: 'number-input',
+    },
+    {
+      label: t('人员选择器'),
+      value: 'user-selector',
+      typeValue: 'user-selector',
+    },
+    {
+      label: t('文本框'),
+      value: 'textarea',
+      typeValue: 'textarea',
+    },
+  ]);
+  const handleItemTypeList = (type: string) => {
+    if (type === 'sting') {
+      return typeList.value.filter(item => item.typeValue === 'date-picker'
+        || item.value === 'input'
+        || item.value === 'user-selector');
+    }
+    if (type === 'in' || type === 'long' || type === 'double') {
+      return typeList.value.filter(item => item.typeValue === 'number-input' || item.value === 'date-picker');
+    }
+    if (type === 'text') {
+      return typeList.value.filter(item => item.typeValue === 'textarea');
+    }
+    return [];
+  };
 
   // 策略列表
   const {
@@ -154,9 +277,6 @@
       total: 1,
     },
     manual: true,
-    onSuccess: (data) => {
-      console.log('data', data);
-    },
   });
   // 用户信息
   const {
@@ -164,7 +284,6 @@
   } = useRequest(AccountManageService.fetchUserInfo, {
     defaultValue: new AccountModel(),
     onSuccess: (data) => {
-      console.log('用户信息', data);
       formData.value.owner = data.username;
     },
   });
@@ -172,29 +291,95 @@
   onMounted(() => {
     fetchUserInfo();
   });
-</script>
+  </script>
 
-<style lang="postcss" scoped>
-.config {
-  width: 96%;
-  margin-top: 20px;
-  margin-left: 2%;
+  <style
+    lang="postcss"
+    scoped>
+    .config {
+      width: 96%;
+      margin-top: 20px;
+      margin-left: 2%;
 
-  /* background-color: #f5f7fa; */
-  overflow: hidden;
+      /* background-color: #f5f7fa; */
+      overflow: hidden;
 
-  .base-form-item {
-    display: flex;
-    justify-content: space-between;
+      .base-form-item {
+        display: flex;
+        justify-content: space-between;
 
-    .base-item {
-      width: 48%;
+        .base-item {
+          width: 48%;
+        }
+      }
+
+      .dashed-underline {
+        padding-bottom: 2px;
+
+        /* 可选，增加文字和虚线间距 */
+        border-bottom: 1px dashed #c4c6cc;
+      }
     }
-  }
 
-  .dashed-underline {
-    padding-bottom: 2px; /* 可选，增加文字和虚线间距 */
-    border-bottom: 1px dashed #c4c6cc;
-  }
-}
-</style>
+    .event-table {
+      width: 96%;
+      margin-top: 20px;
+      margin-left: 2%;
+      border: 1px solid #dcdee5;
+
+      .border-right {
+        border-right: 1px solid #dcdee5;
+      }
+
+      .table-text {
+        padding: 0 10px;
+      }
+
+      .table-heard {
+        display: flex;
+        height: 42px;
+        line-height: 42px;
+        background: #f5f7fa;
+        border-bottom: 1px solid #dcdee5;
+      }
+
+      .table-list {
+        display: flex;
+        height: 42px;
+        line-height: 42px;
+        border-bottom: 1px solid #dcdee5;
+      }
+
+      .table-index {
+        width: 32px;
+        text-align: center;
+      }
+
+      .table-label {
+        width: 300px;
+      }
+
+      .table-type {
+        width: 140px;
+      }
+
+      .table-value {
+        flex: 1;
+      }
+
+      .table-info-fill {
+        font-size: 12px;
+        color: #c4c6cc;
+      }
+
+      .event-type {
+        height: 22px;
+        padding: 5px 10px;
+        margin-left: 10px;
+        font-size: 12px;
+        color: #1768ef;
+        background: #e1ecff;
+        border-radius: 12px;
+      }
+    }
+  </style>
