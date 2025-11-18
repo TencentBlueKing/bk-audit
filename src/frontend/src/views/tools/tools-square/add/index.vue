@@ -542,7 +542,7 @@
       });
     },
   });
-
+  const isRefreshing = ref(false);
   // 获取图表列表
   const {
     data: chartLists,
@@ -551,6 +551,9 @@
     defaultValue: new Array<ChartListModel>(),
     // manual: true,
     onSuccess: (data) => {
+      if (isRefreshing.value) {
+        return;
+      }
       if (data === 'error') {
         hasPermission.value = false;
         chartLists.value = [];
@@ -578,6 +581,9 @@
   } = useRequest(ToolManageService.fetchReportLists, {
     defaultValue: {},
     onSuccess: (res) => {
+      if (isRefreshing.value) {
+        return;
+      }
       if (res) {
         dashboardUid.value = res.data.dashboard_uid;
         const configInputVariable = _.cloneDeep(formData.value.config.input_variable);
@@ -695,7 +701,6 @@
     },
   });
   const clickSpaceChange = ref(0);
-  const isRefreshing = ref(false);
 
   // 刷新图标点击事件
   const handleRefreshClick = async () => {
@@ -703,16 +708,12 @@
     isRefreshing.value = true;
     try {
       // 如果有选中的报表，重新获取报表数据
+      fetchChartLists().then(() => {
+        messageSuccess(t('刷新成功'));
+      });
       if (configUid.value.length > 0) {
         await fetchReportLists({
           share_uid: configUid.value[configUid.value.length - 1],
-        }).then(() => {
-          messageSuccess(t('刷新成功'));
-        });
-      } else {
-        // 如果没有选中报表，重新获取图表列表
-        await fetchChartLists().then(() => {
-          messageSuccess(t('刷新成功'));
         });
       }
     } finally {
@@ -721,6 +722,7 @@
   };
   // 选择报表
   const handleSpaceChange = (val: string) => {
+    isRefreshing.value = false;
     clickSpaceChange.value += 1;
     spacePermission.value = false;
     if (val.length === 0) {
