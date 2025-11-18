@@ -149,7 +149,7 @@
   });
 
   // 编辑
-  const  setFormdata = (editData: StrategyModel) => {
+  const  setFormdata = async (editData: StrategyModel) => {
     formData.value.strategy_id = editData.strategy_id;
     formData.value.control_id = editData.control_id;
     formData.value.control_version = editData.control_version;
@@ -157,7 +157,7 @@
     if (controlItem) {
       controlTypeId.value = controlItem.control_type_id;
 
-      fetchControlDetail({
+      await fetchControlDetail({
         control_id: controlItem.control_id,
         control_version: formData.value.control_version,
       });
