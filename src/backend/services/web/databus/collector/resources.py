@@ -244,6 +244,8 @@ class CreateCollectorResource(CollectorMeta):
             collector_config_name_en=validated_request_data["collector_config_name_en"],
             bk_data_id=resp["bk_data_id"],
             description=validated_request_data["collector_config_name"],
+            record_log_type=validated_request_data["record_log_type"],
+            select_sdk_type=validated_request_data["select_sdk_type"],
         )
 
     def perform_request(self, validated_request_data):
@@ -275,7 +277,14 @@ class UpdateCollectorResource(CollectorMeta):
         )
         collector_config.collector_config_name = resp["collector_config_name"]
         collector_config.description = validated_request_data["collector_config_name"]
-        collector_config.save(update_fields=["collector_config_name", "description"])
+        update_fields = ["collector_config_name", "description"]
+        if validated_request_data.get("record_log_type"):
+            collector_config.record_log_type = validated_request_data["record_log_type"]
+            update_fields.append("record_log_type")
+        if validated_request_data.get("select_sdk_type"):
+            collector_config.select_sdk_type = validated_request_data["select_sdk_type"]
+            update_fields.append("select_sdk_type")
+        collector_config.save(update_fields=update_fields)
         data = self.serializer_class(collector_config).data
         data.update({"task_id_list": resp.get("task_id_list", [])})
         return data

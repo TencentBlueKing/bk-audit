@@ -107,6 +107,8 @@ CREATE_COLLECTOR_DATA = {
             "match_content": "",
         },
     },
+    "record_log_type":"SDK",
+    "select_sdk_type":"PYTHON_SDK"
 }
 CREATE_COLLECTOR_RESULT = {
     **GET_COLLECTOR_RESULT_DATA,
@@ -122,6 +124,8 @@ UPDATE_COLLECTOR_DATA = {
     **CREATE_COLLECTOR_DATA,
     "collector_config_name": f"{COLLECTOR_NAME}_update_config",
     "collector_config_id": COLLECTOR_ID,
+    "record_log_type":"SDK",
+    "select_sdk_type":"JAVA_SDK"
 }
 UPDATE_COLLECTOR_RESULT = {
     **CREATE_COLLECTOR_RESULT,

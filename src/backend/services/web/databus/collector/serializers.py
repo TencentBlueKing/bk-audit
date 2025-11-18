@@ -40,6 +40,8 @@ from services.web.databus.constants import (
     LogReportStatus,
     SnapShotStorageChoices,
     TargetNodeTypeChoices,
+    RecordLogTypeChoices,
+    SelectSdkTypeChoices
 )
 from services.web.databus.models import (
     CollectorConfig,
@@ -86,6 +88,10 @@ class CollectorCreateRequestSerializer(serializers.Serializer):
     target_nodes = TargetNodeSerializer(label=gettext_lazy("目标节点"), many=True)
     data_encoding = serializers.CharField(label=gettext_lazy("日志字符集"))
     params = PluginParamSerializer()
+
+    # 前置：记录日志参数
+    record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK)
+    select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK)
 
 
 class CollectorCreateResponseSerializer(serializers.ModelSerializer):
@@ -170,6 +176,10 @@ class UpdateCollectorRequestSerializer(serializers.Serializer):
         label=gettext_lazy("备注说明"), max_length=64, required=False, allow_null=True, allow_blank=True
     )
     params = PluginParamSerializer()
+
+    # 前置：记录日志参数
+    record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK)
+    select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK)
 
 
 class CollectorEtlFieldsSerializer(serializers.ModelSerializer):
