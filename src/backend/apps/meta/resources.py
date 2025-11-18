@@ -16,6 +16,7 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 import abc
+import os, json
 from abc import ABC
 from collections import defaultdict
 from enum import EnumMeta
@@ -743,7 +744,10 @@ class GetGlobalsResource(Meta, Resource):
     serializer_class = GetGlobalsResponseSerializer
 
     def perform_request(self, validated_request_data):
-        return Globals().globals
+        bk_log_global_config = Globals().globals
+        # 全局配置中添加sdk配置信息
+        bk_log_global_config["sdk_config"] = json.loads(os.getenv("SDK_CONFIG")) if os.getenv("SDK_CONFIG") else {}
+        return bk_log_global_config
 
 
 class GetStandardFieldsResource(Meta, ModelResource):
