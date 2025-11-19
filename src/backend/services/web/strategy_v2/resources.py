@@ -434,7 +434,7 @@ class UpdateStrategy(StrategyV2Base):
         # response
         return strategy
 
-    def check_need_update_remote(self, key: str, origin_value: any, new_value: any) -> bool:
+    def check_need_update_remote(self, key: str, origin_value: any, new_value: any, strategy: Strategy) -> bool:
         """
         检查当前 key 的值是否需要更新远程服务
         :param key: 字段名
@@ -442,10 +442,10 @@ class UpdateStrategy(StrategyV2Base):
         :param new_value: 新值
         :return: 是否需要更新远程
         """
-
+        need_update_remote = False
         # 事件基本配置字段需要对指定字段检查
         if key == EVENT_BASIC_CONFIG_FIELD and isinstance(origin_value, list) and isinstance(new_value, list):
-            return not all(
+            need_update_remote = not all(
                 compare_dict_specific_keys(d1, d2, EVENT_BASIC_CONFIG_REMOTE_FIELDS)
                 for d1, d2 in zip(
                     sorted(origin_value, key=lambda x: x.get(EVENT_BASIC_CONFIG_SORT_FIELD)),
@@ -453,14 +453,14 @@ class UpdateStrategy(StrategyV2Base):
                 )
             )
         # 如果两个值都为空，则不需要更新，避免 None 和 空值 的比较异常
-        if not origin_value and not new_value:
-            return False
-        if origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
-            logger.info("[CheckNeedUpdateRemote]Update Key: {}, Update Value: {}, Origin Value: {}".format(
-                key, new_value, origin_value
-            ))
-            return True
-        return False
+        elif not origin_value and not new_value:
+            need_update_remote = False
+        # 不同且不在本地更新清单中的字段才触发远程flow更新
+        elif origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
+            need_update_remote = True
+        logger.info("[CheckNeedUpdateRemote]StrategyId: %s, Update Key: %s, Update Value: %s, Origin Value: %s, Need update remote: %s" % (
+        strategy.strategy_id, key, origin_value, new_value, need_update_remote))
+        return need_update_remote
 
     @transaction.atomic()
     def update_db(self, strategy: Strategy, validated_request_data: dict) -> bool:
@@ -479,7 +479,7 @@ class UpdateStrategy(StrategyV2Base):
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
             # 不同且不在本地更新清单中的字段才触发远程flow更新
-            if self.check_need_update_remote(key, inst_val, val):
+            if self.check_need_update_remote(key, inst_val, val, strategy):
                 need_update_remote = True
             setattr(strategy, key, val)
         strategy.save(update_fields=validated_request_data.keys())
