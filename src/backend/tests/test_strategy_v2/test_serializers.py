@@ -77,6 +77,13 @@ class StrategySerializersTest(TestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("params_error", serializer.errors)
 
+    def test_create_strategy_serializer_rejects_sql_for_model_strategy(self):
+        payload = self._build_model_strategy_payload()
+        payload["sql"] = "SELECT 1"
+        serializer = CreateStrategyRequestSerializer(data=payload)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("params_error", serializer.errors)
+
     def test_rule_audit_serializer_requires_schedule_for_batch_source(self):
         rule_data = {
             "config_type": "EventLog",

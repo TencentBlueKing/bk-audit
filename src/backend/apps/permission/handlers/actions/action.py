@@ -180,6 +180,15 @@ class ActionEnum:
         related_actions=[],
         version=1,
     )
+    GENERATE_STRATEGY_RISK = ActionMeta(
+        id="generate_strategy_risk",
+        name=gettext("手工生成策略风险"),
+        name_en="Generate Strategy Risk",
+        type="create",
+        related_resource_types=[ResourceEnum.STRATEGY],
+        related_actions=[],
+        version=1,
+    )
     EDIT_STRATEGY = ActionMeta(
         id="edit_strategy",
         name=gettext("编辑策略"),
