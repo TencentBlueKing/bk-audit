@@ -232,6 +232,15 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             StrategyTool.objects.bulk_create(tools_to_create)
 
     @staticmethod
+    def has_sql_override(validated_request_data: dict) -> bool:
+        """
+        判断请求中是否显式携带可用的 SQL
+        """
+
+        sql_value = validated_request_data.get("sql", Empty())
+        return sql_value not in [Empty(), None, ""]
+
+    @staticmethod
     def get_base_control_type(strategy_type: str) -> Optional[str]:
         """
         获取基础控制类型
@@ -352,7 +361,7 @@ class CreateStrategy(StrategyV2Base):
             # save strategy tag
             self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
             self._save_strategy_tools(strategy, validated_request_data)
-            if strategy_type == StrategyType.RULE:
+            if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
                 strategy.sql = self.build_rule_audit_sql(strategy)
                 strategy.save(update_fields=["sql"])
             # 更新enum
@@ -454,6 +463,7 @@ class UpdateStrategy(StrategyV2Base):
     def update_db(self, strategy: Strategy, validated_request_data: dict) -> bool:
         # 用于控制是否更新真实的监控策略或计算平台Flow
         need_update_remote = False
+        has_manual_sql = self.has_sql_override(validated_request_data)
         # pop tag
         tag_names = validated_request_data.pop("tags", [])
         # check control
@@ -477,7 +487,7 @@ class UpdateStrategy(StrategyV2Base):
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
         self._save_strategy_tools(strategy, validated_request_data)
         # update rule audit sql
-        if need_update_remote and strategy.strategy_type == StrategyType.RULE:
+        if need_update_remote and strategy.strategy_type == StrategyType.RULE and not has_manual_sql:
             strategy.sql = self.build_rule_audit_sql(strategy)
             strategy.save(update_fields=["sql"])
         # 更新enum

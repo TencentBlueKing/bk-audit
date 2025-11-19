@@ -154,6 +154,21 @@
     {
       "operation": "upsert_resource_type",
       "data": {
+        "id": "manual_risk_event",
+        "name": "手工风险事件",
+        "name_en": "Manual Risk Event",
+        "description": "",
+        "description_en": "",
+        "parents": [],
+        "provider_config": {
+          "path": "/api/v1/iam/resources/"
+        },
+        "version": 1
+      }
+    },
+    {
+      "operation": "upsert_resource_type",
+      "data": {
         "id": "panel",
         "name": "报表",
         "name_en": "Statement",
@@ -679,7 +694,37 @@
         "related_actions": [
           "list_strategy",
           "list_notice_group",
-          "list_link_table"
+          "list_link_table",
+          "generate_strategy_risk"
+        ],
+        "description": "",
+        "description_en": ""
+      }
+    },
+    {
+      "operation": "upsert_action",
+      "data": {
+        "id": "generate_strategy_risk",
+        "name": "手工生成策略风险",
+        "name_en": "Generate Strategy Risk",
+        "type": "create",
+        "version": 1,
+        "related_resource_types": [
+          {
+            "system_id": "bk-audit",
+            "id": "strategy",
+            "selection_mode": "instance",
+            "related_instance_selections": [
+              {
+                "system_id": "bk-audit",
+                "id": "strategy_list",
+                "ignore_iam_path": true
+              }
+            ]
+          }
+        ],
+        "related_actions": [
+          "list_strategy"
         ],
         "description": "",
         "description_en": ""
@@ -1433,6 +1478,9 @@
                 },
                 {
                   "id": "delete_strategy"
+                },
+                {
+                  "id": "generate_strategy_risk"
                 }
               ]
             },
