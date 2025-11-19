@@ -250,7 +250,7 @@ class ManualRiskEvent(OperateRecordModel):
     raw_event_id = models.CharField(EventMappingFields.RAW_EVENT_ID.description, max_length=255, db_index=True)
     strategy = models.ForeignKey(
         Strategy,
-        db_constraint=False,
+        db_constraint=True,
         verbose_name=EventMappingFields.STRATEGY_ID.description,
         on_delete=models.DO_NOTHING,
         related_name='manual_risk_events',
