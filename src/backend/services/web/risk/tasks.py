@@ -28,6 +28,7 @@ from celery.schedules import crontab
 from django.conf import settings
 from django.core.cache import cache as _cache
 from django.db import transaction
+from django.utils import timezone
 from django.utils.translation import gettext
 from django_redis.client import DefaultClient
 
@@ -36,6 +37,7 @@ from apps.notice.handlers import ErrorMsgHandler
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
 from services.web.risk.constants import (
+    BULK_ADD_EVENT_SIZE,
     RISK_ESQUERY_DELAY_TIME,
     RISK_ESQUERY_SLICE_DURATION,
     RISK_EVENTS_SYNC_TIME,
@@ -50,7 +52,8 @@ from services.web.risk.handlers.ticket import (
     NewRisk,
     TransOperator,
 )
-from services.web.risk.models import Risk, TicketNode
+from services.web.risk.models import ManualRiskEvent, Risk, TicketNode
+from services.web.risk.serializers import CreateRiskSerializer
 
 cache: DefaultClient = _cache
 
@@ -73,6 +76,49 @@ def add_event(data: list):
     """创建审计事件"""
 
     EventHandler().add_event(data)
+
+
+@lock(lock_name="celery:manual_add_event")
+def manual_add_event(data: list):
+    """将事件写入 ManualRiskEvent 表"""
+
+    if not data:
+        logger_celery.warning("[ManualAddEvent] Empty payload")
+        return
+
+    handler = RiskHandler()
+    manual_events = []
+    for event in data:
+        serializer = CreateRiskSerializer(data=event)
+        if not serializer.is_valid():
+            logger_celery.warning("[ManualAddEvent] invalid event: %s", serializer.errors)
+            continue
+        payload = serializer.validated_data
+        event_time = datetime.datetime.fromtimestamp(payload["event_time"] / 1000, tz=timezone.get_default_timezone())
+        manual_events.append(
+            ManualRiskEvent(
+                event_content=payload.get("event_content"),
+                raw_event_id=payload["raw_event_id"],
+                strategy_id=payload["strategy_id"],
+                event_evidence=payload.get("event_evidence"),
+                event_type=handler.parse_event_type(payload.get("event_type")),
+                event_data=payload.get("event_data"),
+                event_time=event_time,
+                event_end_time=event_time,
+                event_source=payload.get("event_source"),
+                operator=handler.parse_operator(payload.get("operator")),
+            )
+        )
+    if not manual_events:
+        logger_celery.info("[ManualAddEvent] No valid events to persist")
+        return
+    ManualRiskEvent.objects.bulk_create(manual_events, batch_size=BULK_ADD_EVENT_SIZE)
+    logger_celery.info("[ManualAddEvent] Saved %s manual events", len(manual_events))
+
+
+@celery_app.task(queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+def manual_add_event_task(data: list):
+    manual_add_event(data)
 
 
 @periodic_task(

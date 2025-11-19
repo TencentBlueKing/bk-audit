@@ -28,9 +28,15 @@ from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
 from core.utils.data import ordered_dict_to_json
 from services.web.analyze.models import Control, ControlVersion
-from services.web.strategy_v2.constants import RiskLevel, RuleAuditSourceType
-from services.web.strategy_v2.models import StrategyTool
-from services.web.strategy_v2.resources import CreateStrategy
+from services.web.strategy_v2.constants import (
+    RiskLevel,
+    RuleAuditConfigType,
+    RuleAuditFieldType,
+    RuleAuditSourceType,
+    StrategyStatusChoices,
+)
+from services.web.strategy_v2.models import Strategy, StrategyTool
+from services.web.strategy_v2.resources import CreateStrategy, UpdateStrategy
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.test_collector_plugin import (
     CollectorPluginTest,
@@ -82,53 +88,9 @@ class StrategyTest(TestCase):
             }
         ]
 
-    @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
-    def test_create_bkm_strategy(self) -> None:
-        """CreateStrategy"""
-        data = self._create_bkm_strategy()
-        # Create a copy of expected result and update strategy_id dynamically
-        expected_result = copy.deepcopy(CREATE_BKM_DATA_RESULT)
-        expected_result["strategy_id"] = data["strategy_id"]
-        self.assertEqual(ordered_dict_to_json(data), expected_result)
-
-        tools = StrategyTool.objects.filter(strategy_id=data["strategy_id"])
-        self.assertEqual(len(tools), 1)
-        tool = tools[0]
-        self.assertEqual(tool.field_name, "field_1")
-        self.assertEqual(tool.tool_uid, "fake_tool_uid")
-        self.assertEqual(tool.tool_version, 1)
-        self.assertEqual(tool.field_source, "basic")
-
-    @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
-    def _create_bkm_strategy(self, name_suffix="") -> dict:
-        params = copy.deepcopy(BKM_STRATEGY_DATA)
-        self._inject_tool_config(params)
-        if name_suffix:
-            params["strategy_name"] += f"_{name_suffix}"
-        params.update(
-            {
-                "control_id": self.c_version.control_id,
-                "control_version": self.c_version.control_version,
-                "risk_level": RiskLevel.HIGH.value,
-                "risk_hazard": "",
-                "risk_guidance": "",
-                "risk_title": "risk title",
-                "processor_groups": ["123"],
-            }
-        )
-        return resource.strategy_v2.create_strategy(**params)
-
-    @mock.patch("services.web.strategy_v2.resources.call_controller", mock.Mock(return_value=None))
-    def _create_rule_strategy(self, name_suffix="") -> dict:
-        from services.web.strategy_v2.constants import (
-            RiskLevel,
-            RuleAuditConfigType,
-            RuleAuditFieldType,
-            RuleAuditSourceType,
-        )
-
+    def _build_rule_strategy_payload(self, name_suffix=""):
         strategy_name = f"test_rule_strategy{name_suffix and '_' + name_suffix}"
-        params = {
+        return {
             "namespace": settings.DEFAULT_NAMESPACE,
             "strategy_name": strategy_name,
             "strategy_type": "rule",
@@ -190,6 +152,71 @@ class StrategyTest(TestCase):
             ],
         }
 
+    def _mark_strategy_running(self, strategy_id: int):
+        Strategy.objects.filter(strategy_id=strategy_id).update(status=StrategyStatusChoices.RUNNING.value)
+
+    def _build_update_request_from_strategy(self, strategy: Strategy) -> dict:
+        return {
+            "namespace": strategy.namespace,
+            "strategy_name": strategy.strategy_name,
+            "control_id": strategy.control_id,
+            "control_version": strategy.control_version,
+            "strategy_type": strategy.strategy_type,
+            "sql": strategy.sql,
+            "configs": copy.deepcopy(strategy.configs),
+            "tags": [],
+            "notice_groups": copy.deepcopy(strategy.notice_groups or []),
+            "description": strategy.description or "",
+            "risk_level": strategy.risk_level,
+            "risk_hazard": strategy.risk_hazard or "",
+            "risk_guidance": strategy.risk_guidance or "",
+            "risk_title": strategy.risk_title or "",
+            "processor_groups": copy.deepcopy(strategy.processor_groups or []),
+            "event_basic_field_configs": copy.deepcopy(strategy.event_basic_field_configs or []),
+            "event_data_field_configs": copy.deepcopy(strategy.event_data_field_configs or []),
+            "event_evidence_field_configs": copy.deepcopy(strategy.event_evidence_field_configs or []),
+            "risk_meta_field_config": copy.deepcopy(strategy.risk_meta_field_config or []),
+        }
+
+    @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
+    def test_create_bkm_strategy(self) -> None:
+        """CreateStrategy"""
+        data = self._create_bkm_strategy()
+        # Create a copy of expected result and update strategy_id dynamically
+        expected_result = copy.deepcopy(CREATE_BKM_DATA_RESULT)
+        expected_result["strategy_id"] = data["strategy_id"]
+        self.assertEqual(ordered_dict_to_json(data), expected_result)
+
+        tools = StrategyTool.objects.filter(strategy_id=data["strategy_id"])
+        self.assertEqual(len(tools), 1)
+        tool = tools[0]
+        self.assertEqual(tool.field_name, "field_1")
+        self.assertEqual(tool.tool_uid, "fake_tool_uid")
+        self.assertEqual(tool.tool_version, 1)
+        self.assertEqual(tool.field_source, "basic")
+
+    @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
+    def _create_bkm_strategy(self, name_suffix="") -> dict:
+        params = copy.deepcopy(BKM_STRATEGY_DATA)
+        self._inject_tool_config(params)
+        if name_suffix:
+            params["strategy_name"] += f"_{name_suffix}"
+        params.update(
+            {
+                "control_id": self.c_version.control_id,
+                "control_version": self.c_version.control_version,
+                "risk_level": RiskLevel.HIGH.value,
+                "risk_hazard": "",
+                "risk_guidance": "",
+                "risk_title": "risk title",
+                "processor_groups": ["123"],
+            }
+        )
+        return resource.strategy_v2.create_strategy(**params)
+
+    @mock.patch("services.web.strategy_v2.resources.call_controller", mock.Mock(return_value=None))
+    def _create_rule_strategy(self, name_suffix="") -> dict:
+        params = self._build_rule_strategy_payload(name_suffix)
         return CreateStrategy()(**params)
 
     @mock.patch("services.web.analyze.controls.bkm.api.bk_monitor.save_alarm_strategy", mock.Mock(return_value={}))
@@ -259,12 +286,67 @@ class StrategyTest(TestCase):
         data = self._create_rule_strategy(name_suffix="create")
         self.assertIn("strategy_id", data)
         # 校验 DB 中策略可取且 risk_field_config 被保存
-        from services.web.strategy_v2.models import Strategy
-
         s = Strategy.objects.get(strategy_id=data["strategy_id"])
         self.assertTrue(isinstance(s.risk_meta_field_config, list))
         self.assertGreaterEqual(len(s.risk_meta_field_config), 1)
         self.assertEqual(s.risk_meta_field_config[0]["field_name"], "risk_title")
+
+    @mock.patch("services.web.strategy_v2.resources.call_controller")
+    def test_create_rule_strategy_with_manual_sql(self, mock_call_controller):
+        mock_call_controller.return_value = None
+        params = self._build_rule_strategy_payload(name_suffix="manual")
+        params["sql"] = "SELECT 1"
+        with mock.patch("services.web.strategy_v2.resources.RuleAuditSQLBuilder.build_sql") as mock_build_sql:
+            data = CreateStrategy()(**params)
+        strategy = Strategy.objects.get(strategy_id=data["strategy_id"])
+        self.assertEqual(strategy.sql, "SELECT 1")
+        mock_build_sql.assert_not_called()
+        mock_call_controller.assert_called_once()
+
+    def test_update_rule_strategy_manual_sql_skips_auto_builder(self):
+        created = self._create_rule_strategy()
+        self._mark_strategy_running(created["strategy_id"])
+        strategy = Strategy.objects.get(strategy_id=created["strategy_id"])
+        update_data = self._build_update_request_from_strategy(strategy)
+        update_data["sql"] = "SELECT custom_sql"
+        update_data["configs"]["select"].append(
+            {
+                "table": "bklog.demo_table",
+                "raw_name": "event_source",
+                "display_name": "event_source",
+                "field_type": RuleAuditFieldType.STRING.value,
+                "aggregate": None,
+            }
+        )
+        update_resource = UpdateStrategy()
+        with mock.patch.object(UpdateStrategy, "build_rule_audit_sql") as mock_build_sql:
+            need_remote = update_resource.update_db(
+                strategy=strategy, validated_request_data=copy.deepcopy(update_data)
+            )
+        self.assertTrue(need_remote)
+        mock_build_sql.assert_not_called()
+        strategy.refresh_from_db()
+        self.assertEqual(strategy.sql, "SELECT custom_sql")
+
+    def test_update_rule_strategy_manual_sql_updates_remote_only_on_change(self):
+        created = self._create_rule_strategy()
+        strategy_id = created["strategy_id"]
+        self._mark_strategy_running(strategy_id)
+        strategy = Strategy.objects.get(strategy_id=strategy_id)
+        params = self._build_update_request_from_strategy(strategy)
+        update_resource = UpdateStrategy()
+        with mock.patch.object(UpdateStrategy, "build_rule_audit_sql") as mock_build_sql:
+            need_remote = update_resource.update_db(strategy=strategy, validated_request_data=copy.deepcopy(params))
+        self.assertFalse(need_remote)
+        mock_build_sql.assert_not_called()
+
+        params["sql"] = "SELECT changed_sql"
+        with mock.patch.object(UpdateStrategy, "build_rule_audit_sql") as mock_build_sql:
+            need_remote = update_resource.update_db(strategy=strategy, validated_request_data=copy.deepcopy(params))
+        self.assertTrue(need_remote)
+        mock_build_sql.assert_not_called()
+        strategy.refresh_from_db()
+        self.assertEqual(strategy.sql, "SELECT changed_sql")
 
 
 class TestRuleAuditSourceTypeCheck(TestCase):

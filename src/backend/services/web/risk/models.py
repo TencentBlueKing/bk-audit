@@ -65,7 +65,59 @@ class UserType(models.TextChoices):
     NOTICE_USER = "notice_user"
 
 
-class Risk(OperateRecordModel):
+class StrategyTagMixin:
+    """
+    提供策略标签相关能力
+    """
+
+    @cached_property
+    def strategy_tags(self) -> QuerySet[Tag]:
+        """
+        返回策略关联的所有Tag对象的QuerySet
+        """
+        return Tag.objects.filter(strategy_tags__strategy_id=self.strategy_id)
+
+    def get_tag_ids(self):
+        """
+        获取风险的标签ID列表
+
+        Returns:
+            List[int]: 标签ID列表
+        """
+        return list(self.strategy_tags.values_list("tag_id", flat=True))
+
+    def get_tag_names(self):
+        """
+        获取风险的标签名称列表
+
+        Returns:
+            List[str]: 标签名称列表
+        """
+        return list(self.strategy_tags.values_list("tag_name", flat=True))
+
+    @classmethod
+    def prefetch_strategy_tags(cls, queryset: QuerySet["StrategyTagMixin"]):
+        """
+        预加载策略标签，避免N+1查询
+
+        Args:
+            queryset: Risk的QuerySet
+
+        Returns:
+            QuerySet: 预加载了策略标签的QuerySet
+        """
+
+        # 预加载策略和策略标签
+        return queryset.select_related('strategy').prefetch_related(
+            models.Prefetch(
+                'strategy__tags',  # 使用StrategyTag的related_name
+                queryset=StrategyTag.objects.select_related('tag'),
+                to_attr='prefetched_tags',
+            )
+        )
+
+
+class Risk(StrategyTagMixin, OperateRecordModel):
     """
     Risk
     """
@@ -124,52 +176,6 @@ class Risk(OperateRecordModel):
             ["risk_id", "event_time"],
             ["risk_id", "last_operate_time"],
         ]
-
-    @cached_property
-    def strategy_tags(self) -> QuerySet[Tag]:
-        """
-        返回策略关联的所有Tag对象的QuerySet
-        """
-        return Tag.objects.filter(strategy_tags__strategy_id=self.strategy_id)
-
-    def get_tag_ids(self):
-        """
-        获取风险的标签ID列表
-
-        Returns:
-            List[int]: 标签ID列表
-        """
-        return list(self.strategy_tags.values_list("tag_id", flat=True))
-
-    def get_tag_names(self):
-        """
-        获取风险的标签名称列表
-
-        Returns:
-            List[str]: 标签名称列表
-        """
-        return list(self.strategy_tags.values_list("tag_name", flat=True))
-
-    @classmethod
-    def prefetch_strategy_tags(cls, queryset: QuerySet["Risk"]):
-        """
-        预加载策略标签，避免N+1查询
-
-        Args:
-            queryset: Risk的QuerySet
-
-        Returns:
-            QuerySet: 预加载了策略标签的QuerySet
-        """
-
-        # 预加载策略和策略标签
-        return queryset.select_related('strategy').prefetch_related(
-            models.Prefetch(
-                'strategy__tags',  # 使用StrategyTag的related_name
-                queryset=StrategyTag.objects.select_related('tag'),
-                to_attr='prefetched_tags',
-            )
-        )
 
     @classmethod
     def authed_risk_filter(cls, action: Union[ActionMeta, str]) -> Q:
@@ -237,6 +243,62 @@ class Risk(OperateRecordModel):
         """
 
         return cls._meta.fields
+
+
+class ManualRiskEvent(OperateRecordModel):
+    """
+    手工录入的风险事件，除了主键与风险Model一致
+    """
+
+    manual_event_id = models.BigAutoField(gettext_lazy("Manual Risk Event ID"), primary_key=True)
+    event_content = models.TextField(EventMappingFields.EVENT_CONTENT.description, null=True, blank=True)
+    raw_event_id = models.CharField(EventMappingFields.RAW_EVENT_ID.description, max_length=255, db_index=True)
+    strategy = models.ForeignKey(
+        Strategy,
+        db_constraint=False,
+        verbose_name=EventMappingFields.STRATEGY_ID.description,
+        on_delete=models.DO_NOTHING,
+        related_name='manual_risk_events',
+    )
+    event_evidence = models.TextField(EventMappingFields.EVENT_EVIDENCE.description, null=True, blank=True)
+    event_type = models.JSONField(EventMappingFields.EVENT_TYPE.description, null=True, blank=True, default=list)
+    event_data = models.JSONField(EventMappingFields.EVENT_DATA.description, null=True, blank=True)
+    event_time = models.DateTimeField(EventMappingFields.EVENT_TIME.description, db_index=True)
+    event_end_time = models.DateTimeField(
+        EventMappingFields.EVENT_TIME.description, db_index=True, null=True, blank=True
+    )
+    event_source = models.CharField(
+        EventMappingFields.EVENT_SOURCE.description, max_length=255, db_index=True, null=True, blank=True
+    )
+    operator = models.JSONField(EventMappingFields.OPERATOR.description, null=True, blank=True)
+    status = models.CharField(
+        gettext_lazy("Risk Status"), choices=RiskStatus.choices, default=RiskStatus.NEW, max_length=32, db_index=True
+    )
+    rule_id = models.BigIntegerField(gettext_lazy("Risk Rule ID"), null=True, blank=True)
+    rule_version = models.IntegerField(gettext_lazy("Risk Rule Version"), null=True, blank=True)
+    origin_operator = models.JSONField(
+        gettext_lazy("Origin Operator"), max_length=64, null=True, blank=True, default=list
+    )
+    current_operator = models.JSONField(
+        gettext_lazy("Current Operator"), max_length=64, null=True, blank=True, default=list
+    )
+    notice_users = models.JSONField(gettext_lazy("Notice Users"), default=list, null=True, blank=True)
+    risk_label = models.CharField(
+        gettext_lazy("Risk Label"),
+        max_length=32,
+        default=RiskLabel.NORMAL,
+        null=True,
+        blank=True,
+        choices=RiskLabel.choices,
+    )
+    last_operate_time = models.DateTimeField(gettext_lazy("Last Operate Time"), auto_now=True, db_index=True)
+    title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
+
+    class Meta:
+        verbose_name = gettext_lazy("Manual Risk Event")
+        verbose_name_plural = verbose_name
+        ordering = ["-event_time"]
+        index_together = [["strategy", "raw_event_id", "status"], ["strategy", "event_time"]]
 
 
 class RiskAuditInstance(AuditInstance):

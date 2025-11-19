@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 import datetime
 import json
+import uuid
 from typing import List, Union
 
 from django.conf import settings
@@ -39,6 +40,7 @@ from services.web.risk.constants import (
     RiskViewType,
 )
 from services.web.risk.models import (
+    ManualRiskEvent,
     ProcessApplication,
     Risk,
     RiskExperience,
@@ -59,7 +61,7 @@ class CreateEventSerializer(serializers.Serializer):
         label=EventMappingFields.EVENT_CONTENT.description, default=str, allow_blank=True, allow_null=True
     )
     raw_event_id = serializers.CharField(
-        label=EventMappingFields.RAW_EVENT_ID.description, default=str, allow_blank=True, allow_null=True
+        label=EventMappingFields.RAW_EVENT_ID.description, default=lambda: uuid.uuid1().hex
     )
     strategy_id = serializers.IntegerField(label=EventMappingFields.STRATEGY_ID.description)
     event_data = serializers.JSONField(label=EventMappingFields.EVENT_DATA.description, default=dict, allow_null=True)
@@ -140,6 +142,7 @@ class CreateEventAPISerializer(serializers.Serializer):
 
     events = CreateEventSerializer(many=True)
     gen_risk = serializers.BooleanField(label=gettext_lazy("Generate Risk"), default=False)
+    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"), required=False, allow_blank=True)
 
 
 class ListEventRequestSerializer(serializers.Serializer):
@@ -267,6 +270,21 @@ class RiskProviderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Risk
+        exclude = ["strategy"]
+
+
+class ManualRiskEventProviderSerializer(serializers.ModelSerializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
+    event_end_time_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Event End Time Timestamp(ms)"), source="event_end_time"
+    )
+    last_operate_time_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Last Operate Time Timestamp(ms)"), source="last_operate_time"
+    )
+
+    class Meta:
+        model = ManualRiskEvent
         exclude = ["strategy"]
 
 
