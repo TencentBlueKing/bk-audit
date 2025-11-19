@@ -38,7 +38,7 @@ from services.web.risk.serializers import (
     ListEventRequestSerializer,
     ListEventResponseSerializer,
 )
-from services.web.risk.tasks import add_event, manual_add_event
+from services.web.risk.tasks import manual_add_event
 
 
 class EventMeta(AuditMixinResource):
@@ -79,7 +79,6 @@ class CreateEvent(EventMeta):
             eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()  # 更新 eligible_strategy_ids
             for event in events:
                 RiskHandler().generate_risk(event, eligible_strategy_ids)
-        add_event(events)
         return {"event_ids": event_ids}
 
     def _validate_existing_risk(self, risk_id: str, events: List[dict]):
