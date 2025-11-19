@@ -447,6 +447,9 @@ class UpdateStrategy(StrategyV2Base):
         if not origin_value and not new_value:
             return False
         if origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
+            logger.info("[CheckNeedUpdateRemote]Update Key: {}, Update Value: {}, Origin Value: {}".format(
+                key, new_value, origin_value
+            ))
             return True
         return False
 
