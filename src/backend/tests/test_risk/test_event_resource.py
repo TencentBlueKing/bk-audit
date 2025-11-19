@@ -40,11 +40,8 @@ class CreateEventResourceTest(TestCase):
         celery_app.conf.task_eager_propagates = True
         self._orig_lock_cache = lock_module.cache
         lock_module.cache = LocMemCache("risk-event-tests", {})
-        self._add_event_patcher = mock.patch("services.web.risk.resources.event.add_event")
-        self._add_event_patcher.start()
 
     def tearDown(self):
-        self._add_event_patcher.stop()
         lock_module.cache = self._orig_lock_cache
         celery_app.conf.task_always_eager = self._orig_eager
         celery_app.conf.task_eager_propagates = self._orig_propagates
@@ -96,6 +93,11 @@ class CreateEventResourceTest(TestCase):
             )
         self.assertEqual(len(response["event_ids"]), 1)
         self.assertTrue(
+            ManualRiskEvent.objects.filter(
+                raw_event_id=self.risk.raw_event_id, strategy_id=self.strategy.strategy_id
+            ).exists()
+        )
+        self.assertFalse(
             ManualRiskEvent.objects.filter(raw_event_id="raw-no-risk", strategy_id=self.strategy.strategy_id).exists()
         )
         self.assertFalse(Risk.objects.filter(raw_event_id="raw-no-risk").exists())
