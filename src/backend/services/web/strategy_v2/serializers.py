@@ -145,6 +145,9 @@ class StrategySerializer(serializers.Serializer):
         """
 
         strategy_type = validated_request_data["strategy_type"]
+        sql_value = validated_request_data.get("sql")
+        if sql_value and strategy_type != StrategyType.RULE.value:
+            raise serializers.ValidationError(gettext("SQL is only allowed for rule strategy"))
         if strategy_type == StrategyType.MODEL.value:
             if not (validated_request_data.get("control_id") and validated_request_data.get("control_version")):
                 raise serializers.ValidationError(
@@ -213,6 +216,12 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     Create Strategy
     """
 
+    sql = serializers.CharField(
+        label=gettext_lazy("Rule Audit SQL"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
     tags = serializers.ListField(
         label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), default=list
     )
@@ -247,6 +256,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "control_id",
             "control_version",
             "strategy_type",
+            "sql",
             "configs",
             "tags",
             "notice_groups",
@@ -291,6 +301,12 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     Update Strategy
     """
 
+    sql = serializers.CharField(
+        label=gettext_lazy("Rule Audit SQL"),
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
     tags = serializers.ListField(
         label=gettext_lazy("Tags"), child=serializers.CharField(label=gettext_lazy("Tag Name")), default=list
     )
@@ -328,6 +344,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "control_id",
             "control_version",
             "strategy_type",
+            "sql",
             "configs",
             "tags",
             "notice_groups",
