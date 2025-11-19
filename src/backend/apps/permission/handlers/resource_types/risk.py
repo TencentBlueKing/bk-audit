@@ -68,3 +68,39 @@ class TicketPermission(ResourceTypeMeta):
     name = gettext("风险工单权限")
     selection_mode = "instance"
     related_instance_selections = [{"system_id": system_id, "id": id}]
+
+
+class ManualRiskEvent(ResourceTypeMeta):
+    system_id = settings.BK_IAM_SYSTEM_ID
+    id = "manual_risk_event"
+    name = gettext("手工风险事件")
+    selection_mode = "instance"
+    related_instance_selections = [{"system_id": system_id, "id": "manual_risk_event"}]
+
+    @classmethod
+    def create_instance(cls, instance_id: str, attribute=None) -> Resource:
+        return cls.batch_create_instance([instance_id], attribute)[0][0]
+
+    @classmethod
+    def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
+        from services.web.risk.models import ManualRiskEvent as ManualRiskEventModel
+
+        manual_events = (
+            ManualRiskEventModel.objects.filter(manual_event_id__in=instance_ids)
+            .distinct()
+            .order_by()
+            .only("manual_event_id", "raw_event_id", "strategy_id")
+        )
+        event_map = {str(event.manual_event_id): event for event in manual_events}
+        resources = []
+        for instance_id in instance_ids:
+            resource = cls.create_simple_instance(instance_id, attribute)
+            manual_event = event_map.get(str(instance_id))
+            strategy_id = manual_event.strategy_id if manual_event else 0
+            resource.attribute = {
+                "id": str(resource.id),
+                "name": (manual_event.raw_event_id if manual_event and manual_event.raw_event_id else str(resource.id)),
+                KEYWORD_BK_IAM_PATH: f"/{Strategy.id},{strategy_id}/",
+            }
+            resources.append([resource])
+        return resources

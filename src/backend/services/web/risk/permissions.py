@@ -15,14 +15,18 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Callable
+from typing import Callable, List, Set
 
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext
 
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission, InstanceActionPermission
+from apps.permission.handlers.permission import Permission
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.exceptions import PermissionException
 from services.web.risk.models import Risk, TicketPermission, UserType
+from services.web.strategy_v2.models import Strategy
 
 
 class RiskViewPermission(InstanceActionPermission):
@@ -107,3 +111,68 @@ class BatchRiskTicketPermission(IAMPermission):
         # 校验IAM权限
         self.resources = [risk_objs[0] for risk_objs in ResourceEnum.RISK.batch_create_instance(no_permission_risk_ids)]
         return super().has_permission(request, view)
+
+
+class GenerateStrategyRiskPermission:
+    """
+    手动生成策略风险权限
+    """
+
+    def __init__(self, request):
+        self.request = request
+        self.perm_client = Permission(request=request)
+
+    @staticmethod
+    def _collect_strategy_ids(events: List[dict]) -> Set[int]:
+        strategy_ids = set()
+        for event in events:
+            strategy_id = event.get("strategy_id")
+            if isinstance(strategy_id, int):
+                strategy_ids.add(strategy_id)
+            elif isinstance(strategy_id, str) and strategy_id.strip().isdigit():
+                strategy_ids.add(int(strategy_id))
+        return strategy_ids
+
+    def ensure_allowed(self, events: List[dict]):
+        user = getattr(self.request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            self._raise_permission_denied()
+
+        if user.is_superuser:
+            return
+
+        strategy_ids = self._collect_strategy_ids(events)
+        if not strategy_ids:
+            self._raise_permission_denied()
+
+        strategy_records = Strategy.objects.filter(strategy_id__in=strategy_ids).values(
+            "strategy_id", "created_by", "updated_by"
+        )
+        found_ids = {record["strategy_id"] for record in strategy_records}
+        owner_ids = {
+            record["strategy_id"]
+            for record in strategy_records
+            if user.username and user.username in {record.get("created_by") or "", record.get("updated_by") or ""}
+        }
+
+        missing_ids = strategy_ids.difference(found_ids)
+        if missing_ids:
+            self._raise_permission_denied(ResourceEnum.STRATEGY.create_instance(missing_ids.pop()))
+
+        for strategy_id in strategy_ids.difference(owner_ids):
+            resource = ResourceEnum.STRATEGY.create_instance(strategy_id)
+            if any(
+                self.perm_client.is_allowed(action, [resource])
+                for action in (ActionEnum.EDIT_STRATEGY, ActionEnum.GENERATE_STRATEGY_RISK)
+            ):
+                continue
+            self._raise_permission_denied(resource)
+
+    def _raise_permission_denied(self, resource=None):
+        resources = [resource] if resource else []
+        apply_data, apply_url = self.perm_client.get_apply_data([ActionEnum.GENERATE_STRATEGY_RISK], resources)
+        raise PermissionException(
+            action_name=gettext(ActionEnum.GENERATE_STRATEGY_RISK.name),
+            permission=apply_data,
+            apply_url=apply_url,
+        )
