@@ -38,7 +38,7 @@ from services.web.risk.serializers import (
     ListEventRequestSerializer,
     ListEventResponseSerializer,
 )
-from services.web.risk.tasks import add_event, manual_add_event
+from services.web.risk.tasks import manual_add_event
 
 
 class EventMeta(AuditMixinResource):
@@ -65,7 +65,8 @@ class CreateEvent(EventMeta):
         gen_risk = validated_request_data.get("gen_risk", False)
         events = validated_request_data["events"]
         if not gen_risk:
-            self._validate_existing_risk(validated_request_data.get("risk_id"), events)
+            bound_risk = self._validate_existing_risk(validated_request_data.get("risk_id"), events)
+            self._sync_raw_event_id_with_risk(events, bound_risk)
         req = validated_request_data.get("_request")
         if req and getattr(req, "user", None) and getattr(req.user, "is_authenticated", False):
             GenerateStrategyRiskPermission(req).ensure_allowed(events)
@@ -75,14 +76,16 @@ class CreateEvent(EventMeta):
             source = app.bk_app_code
         event_ids = self._create_events(events, source)
         manual_add_event(events)
+        risk_ids = []
         if gen_risk:
             eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()  # 更新 eligible_strategy_ids
             for event in events:
-                RiskHandler().generate_risk(event, eligible_strategy_ids)
-        add_event(events)
-        return {"event_ids": event_ids}
+                risk_id = RiskHandler().generate_risk(event, eligible_strategy_ids)
+                if risk_id:
+                    risk_ids.append(risk_id)
+        return {"event_ids": event_ids, "risk_ids": risk_ids}
 
-    def _validate_existing_risk(self, risk_id: str, events: List[dict]):
+    def _validate_existing_risk(self, risk_id: str, events: List[dict]) -> Risk:
         if not risk_id:
             raise serializers.ValidationError(gettext("风险ID不能为空"))
 
@@ -100,12 +103,17 @@ class CreateEvent(EventMeta):
             if strategy_id and int(strategy_id) != risk.strategy_id:
                 raise serializers.ValidationError(gettext("事件所属策略与风险不一致"))
 
-            if risk.status != RiskStatus.CLOSED:
-                continue
+            if risk.status == RiskStatus.CLOSED:
+                raise serializers.ValidationError(gettext("风险单已关闭，无法添加事件"))
+
             event_dt = datetime.datetime.fromtimestamp(event["event_time"] / 1000, tz=tz)
-            end_time = risk.event_end_time or risk.event_time
-            if not event_dt <= end_time:
+            if not risk.event_time <= event_dt:
                 raise serializers.ValidationError(gettext("事件时间不在风险有效区间内"))
+        return risk
+
+    def _sync_raw_event_id_with_risk(self, events: List[dict], risk: Risk):
+        for event in events:
+            event["raw_event_id"] = risk.raw_event_id
 
 
 class ListEvent(EventMeta):

@@ -254,7 +254,7 @@ class ManualRiskEvent(OperateRecordModel):
     raw_event_id = models.CharField(EventMappingFields.RAW_EVENT_ID.description, max_length=255, db_index=True)
     strategy = models.ForeignKey(
         Strategy,
-        db_constraint=False,
+        db_constraint=True,
         verbose_name=EventMappingFields.STRATEGY_ID.description,
         on_delete=models.DO_NOTHING,
         related_name='manual_risk_events',
@@ -294,7 +294,7 @@ class ManualRiskEvent(OperateRecordModel):
     title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
 
     class Meta:
-        verbose_name = gettext_lazy("Manual Risk Event")
+        verbose_name = gettext_lazy("手动事件存储")
         verbose_name_plural = verbose_name
         ordering = ["-event_time"]
         index_together = [["strategy", "raw_event_id", "status"], ["strategy", "event_time"]]

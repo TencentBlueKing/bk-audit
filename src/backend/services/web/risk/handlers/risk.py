@@ -79,6 +79,7 @@ class RiskHandler:
                 from services.web.risk.tasks import process_risk_ticket
 
                 process_risk_ticket(risk_id=risk.risk_id)
+            return risk.risk_id
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception("[CreateRiskFailed] Event: %s; Error: %s", json.dumps(event), err)
             ErrorMsgHandler(
@@ -224,7 +225,7 @@ class RiskHandler:
             if int(risk.event_end_time.timestamp()) < last_end_time:
                 risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
                 risk.save(update_fields=["event_end_time"])
-            return False, None
+            return False, risk
 
         # 不存在则创建
         create_params = self.gen_risk_create_params(event)
