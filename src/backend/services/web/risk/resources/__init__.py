@@ -21,3 +21,4 @@ from services.web.risk.resources.experience import *  # noqa
 from services.web.risk.resources.process_application import *  # noqa
 from services.web.risk.resources.risk import *  # noqa
 from services.web.risk.resources.rule import *  # noqa
+from services.web.risk.resources.subscription import *  # noqa

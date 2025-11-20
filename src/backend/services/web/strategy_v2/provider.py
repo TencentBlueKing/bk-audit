@@ -19,7 +19,7 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 from typing import List, Optional, Tuple
 
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from iam import PathEqDjangoQuerySetConverter
 from iam.resource.provider import ListResult, SchemaResult
 from iam.resource.utils import Page
@@ -126,7 +126,7 @@ class StrategyBaseProvider(BaseResourceProvider):
     def fetch_instance_list(self, filter, page, **options):
         start_time = datetime.datetime.fromtimestamp(int(filter.start_time // 1000))
         end_time = datetime.datetime.fromtimestamp(int(filter.end_time // 1000))
-        queryset = Strategy.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        queryset: QuerySet[Strategy] = Strategy.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
         results = [
             {
                 "id": item.pk,
@@ -136,6 +136,7 @@ class StrategyBaseProvider(BaseResourceProvider):
                 "updater": item.updated_by,
                 "updated_at": int(item.updated_at.timestamp() * 1000) if item.updated_at else None,
                 "data": StrategyProviderSerializer(instance=item).data,
+                "is_deleted": item.is_deleted,
             }
             for item in queryset[page.slice_from : page.slice_to]
         ]

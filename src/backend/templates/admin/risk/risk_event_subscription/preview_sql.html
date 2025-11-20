@@ -1,0 +1,78 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block breadcrumbs %}
+    <div class="breadcrumbs">
+        <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+        &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+        &rsaquo; <a href="{% url 'admin:risk_riskeventsubscription_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+        {% if original %}
+            &rsaquo; <a href="{% url 'admin:risk_riskeventsubscription_change' original.pk %}">{{ original }}</a>
+            &rsaquo; {% trans "验证 SQL" %}
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'risk/css/subscription_sql_preview.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="risk-preview">
+    <h1>{{ title }}</h1>
+
+    <form id="risk-preview-form"
+          class="aligned"
+          data-api-url="{{ api_url }}"
+          data-subscription-id="{{ original.pk|default_if_none:0 }}"
+          data-subscription-token="{{ original.token|default_if_none:'' }}">
+        {% csrf_token %}
+        <fieldset class="module aligned">
+            <h2>{% trans "时间范围与分页" %}</h2>
+            <div class="form-row">
+                <label for="id_start_time">{% trans "开始时间" %}</label>
+                <input type="datetime-local" id="id_start_time" name="start_time"
+                       value="{{ initial.start_time|date:'Y-m-d\\TH:i' }}">
+            </div>
+            <div class="form-row">
+                <label for="id_end_time">{% trans "结束时间" %}</label>
+                <input type="datetime-local" id="id_end_time" name="end_time"
+                       value="{{ initial.end_time|date:'Y-m-d\\TH:i' }}">
+            </div>
+            <div class="form-row">
+                <label for="id_page">{% trans "页码" %}</label>
+                <input type="number" id="id_page" name="page" value="{{ initial.page }}" min="1">
+            </div>
+            <div class="form-row">
+                <label for="id_page_size">{% trans "每页数量" %}</label>
+                <input type="number" id="id_page_size" name="page_size" value="{{ initial.page_size }}" min="1" max="1000">
+            </div>
+        </fieldset>
+        <div class="submit-row">
+            <button type="submit" class="button default" data-execute="false">{% trans "仅生成 SQL" %}</button>
+            <button type="button" class="button" id="risk-preview-execute" data-execute="true">
+                {% trans "生成并执行查询" %}
+            </button>
+            <a class="button" href="{{ back_url }}">{% trans "返回订阅详情" %}</a>
+        </div>
+    </form>
+
+    <div id="risk-preview-messages"></div>
+
+    <section id="risk-preview-sql" class="module hidden">
+        <h2>Query SQL</h2>
+        <pre class="query-sql"></pre>
+        <h2>Count SQL</h2>
+        <pre class="count-sql"></pre>
+    </section>
+
+    <section id="risk-preview-results" class="module hidden">
+        <h2>{% trans "查询结果" %}</h2>
+        <div class="results-summary"></div>
+        <div class="results-table-wrapper"></div>
+    </section>
+
+    <script src="{% static 'risk/js/subscription_sql_preview.js' %}"></script>
+</div>
+{% endblock %}

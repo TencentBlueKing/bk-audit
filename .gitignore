@@ -53,3 +53,6 @@ yarn.lock
 .env*
 *.pdm-python
 bkcodeai.json
+*.cursor
+*.specify
+AGENTS.md

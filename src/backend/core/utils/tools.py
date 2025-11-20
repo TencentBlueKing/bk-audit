@@ -22,7 +22,7 @@ from django.conf import settings
 from core.exceptions import AppPermissionDenied
 
 
-def get_app_info():
+def get_app_info(request=None):
     """
     获取APP信息，确保请求来自APIGW
     """
@@ -32,7 +32,8 @@ def get_app_info():
         return
 
     try:
-        app = get_local_request().app
+        request = request or get_local_request()
+        app = request.app
         if not app.verified:
             raise AppPermissionDenied()
         return app

@@ -23,6 +23,7 @@ from bk_resource.viewsets import ResourceRoute, ResourceViewSet
 from apps.permission.handlers.actions import ActionEnum
 from apps.permission.handlers.drf import IAMPermission, insert_permission_field
 from apps.permission.handlers.resource_types import ResourceEnum
+from core.view_sets import AdminViewSet, APIGWViewSet
 from services.web.risk.permissions import (
     BatchRiskTicketPermission,
     RiskTicketPermission,
@@ -222,4 +223,16 @@ class RiskRulesViewSet(ResourceViewSet):
         ResourceRoute("GET", resource.risk.list_risk_rule_operator, endpoint="operators"),
         ResourceRoute("PUT", resource.risk.batch_update_risk_rule_priority_index, endpoint="set_priority_index"),
         ResourceRoute("GET", resource.risk.list_event_fields_by_strategy, endpoint="event_fields"),
+    ]
+
+
+class RiskEventSubscriptionApigwViewSet(APIGWViewSet):
+    resource_routes = [
+        ResourceRoute("POST", resource.risk.query_risk_event_subscription, endpoint="subscription"),
+    ]
+
+
+class RiskEventSubscriptionAdminViewSet(AdminViewSet):
+    resource_routes = [
+        ResourceRoute("POST", resource.risk.query_risk_event_subscription, endpoint="preview"),
     ]

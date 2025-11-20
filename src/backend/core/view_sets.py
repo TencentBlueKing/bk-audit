@@ -16,26 +16,19 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
-from django.utils.translation import gettext_lazy
+from bk_resource.viewsets import ResourceViewSet
 
-from apps.exceptions import CoreException
-
-
-class RiskException(CoreException):
-    MODULE_CODE = CoreException.Modules.RISK
+from core.permissions import APIGWPermission, IsAdminPermission
 
 
-class ExportRiskNoPermission(RiskException):
-    MESSAGE = gettext_lazy("您没有权限导出风险:{risk_ids}")
-    STATUS_CODE = 400
-    ERROR_CODE = "001"
+class APIGWViewSet(ResourceViewSet):
+    def get_authenticators(self):
+        return []
 
-    def __init__(self, risk_ids: str, *args, **kwargs):
-        self.MESSAGE = self.MESSAGE.format(risk_ids=risk_ids)
-        super().__init__(*args, **kwargs)
+    def get_permissions(self):
+        return [APIGWPermission()]
 
 
-class RiskEventSubscriptionNotFound(RiskException):
-    MESSAGE = gettext_lazy("订阅 Token 不存在或未启用")
-    STATUS_CODE = 404
-    ERROR_CODE = "002"
+class AdminViewSet(ResourceViewSet):
+    def get_permissions(self):
+        return [IsAdminPermission()]

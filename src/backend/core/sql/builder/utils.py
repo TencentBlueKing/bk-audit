@@ -3,6 +3,7 @@ from typing import List
 from pypika import Field
 from pypika import functions as fn
 
+from core.sql.builder.functions import JsonContains
 from core.sql.builder.terms import DorisField
 from core.sql.constants import AggregateType, Operator
 from core.sql.exceptions import OperatorValueError, UnsupportedOperatorError
@@ -45,6 +46,8 @@ def operate(operator: str, field: Field, value: str | int | float, values: List[
         return field.match_all(values)
     elif operator == cls.MATCH_ANY and isinstance(field, DorisField):
         return field.match_any(values)
+    elif operator == cls.JSON_CONTAINS:
+        return JsonContains(field, value)
     else:
         raise UnsupportedOperatorError(operator)
 

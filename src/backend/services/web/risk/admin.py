@@ -16,17 +16,28 @@ We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
 
+import datetime
+
+from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.template.response import TemplateResponse
+from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.sql.constants import Operator
+from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import (
     ProcessApplication,
     Risk,
+    RiskEventSubscription,
     RiskExperience,
     RiskRule,
     TicketNode,
     TicketPermission,
 )
+from services.web.risk.widgets import WhereConditionWidget
 
 
 class StrategyFilter(admin.SimpleListFilter):
@@ -111,3 +122,98 @@ class TicketPermissionAdmin(admin.ModelAdmin):
     list_display = ["id", "risk_id", "action", "user"]
     search_fields = ["risk_id", "user"]
     list_filter = ["action"]
+
+
+class RiskEventSubscriptionAdminForm(forms.ModelForm):
+    condition = forms.JSONField(required=False, help_text=_("可使用结构化模式或 JSON 模式编辑筛选条件。"))
+
+    class Meta:
+        model = RiskEventSubscription
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["condition"].widget = WhereConditionWidget(
+            field_options=self._build_condition_field_options(),
+            operator_options=list(Operator.choices),
+        )
+
+    @staticmethod
+    def _build_condition_field_options():
+        return RiskEventSubscriptionSQLBuilder.get_field_metadata()
+
+    def clean_condition(self):
+        condition = self.cleaned_data.get("condition") or {}
+        try:
+            RiskEventSubscription.validate_condition_dict(condition)
+        except DjangoValidationError as exc:  # pragma: no cover - admin 校验
+            raise forms.ValidationError(exc) from exc
+        return condition
+
+
+@admin.register(RiskEventSubscription)
+class RiskEventSubscriptionAdmin(admin.ModelAdmin):
+    change_form_template = "admin/risk/risk_event_subscription/change_form.html"
+    form = RiskEventSubscriptionAdminForm
+    list_display = ["token", "name", "namespace", "is_enabled", "updated_at", "is_deleted"]
+    list_filter = ["namespace", "is_enabled", "is_deleted"]
+    search_fields = ["token", "name", "description"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+    fieldsets = (
+        (None, {"fields": ("token", "name", "namespace", "is_enabled")}),
+        (_("Metadata"), {"fields": ("description", "condition")}),
+        (_("Audit"), {"fields": ("created_by", "created_at", "updated_by", "updated_at"), "classes": ("collapse",)}),
+    )
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [
+            path(
+                "<path:object_id>/preview-sql/",
+                self.admin_site.admin_view(self.preview_sql_view),
+                name=f"{self.model._meta.app_label}_{self.model._meta.model_name}_preview_sql",
+            ),
+        ]
+        return custom + urls
+
+    def preview_sql_view(self, request, object_id, *args, **kwargs):
+        subscription = self.get_object(request, object_id)
+        if not subscription:
+            change_url = reverse(f"admin:{self.model._meta.app_label}_{self.model._meta.model_name}_changelist")
+            return TemplateResponse(
+                request,
+                "admin/risk/risk_event_subscription/preview_sql.html",
+                {
+                    **self.admin_site.each_context(request),
+                    "opts": self.model._meta,
+                    "title": _("订阅不存在"),
+                    "api_url": "/api/v1/risk_event_subscription_admin/preview/",
+                    "original": None,
+                    "initial": self._default_preview_initial(),
+                    "back_url": change_url,
+                },
+            )
+
+        change_url = reverse(
+            f"admin:{self.model._meta.app_label}_{self.model._meta.model_name}_change",
+            args=[subscription.pk],
+        )
+        context = {
+            **self.admin_site.each_context(request),
+            "opts": self.model._meta,
+            "original": subscription,
+            "title": _("验证 SQL - {name}").format(name=str(subscription)),
+            "api_url": "/api/v1/risk_event_subscription_admin/preview/",
+            "initial": self._default_preview_initial(),
+            "back_url": request.GET.get("next") or change_url,
+        }
+        return TemplateResponse(request, "admin/risk/risk_event_subscription/preview_sql.html", context)
+
+    def _default_preview_initial(self):
+        now = timezone.localtime()
+        return {
+            "start_time": now - datetime.timedelta(hours=1),
+            "end_time": now,
+            "page": 1,
+            "page_size": 10,
+        }

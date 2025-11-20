@@ -148,10 +148,10 @@ class SQLGenerator:
                 raise UnsupportedJoinTypeError(join_table.join_type)
             if not join_function:
                 raise UnsupportedJoinTypeError(join_table.join_type)
+            criterion = EmptyCriterion()
             for link_field in join_table.link_fields:
-                query = join_function(right_table).on(
-                    left_table.field(link_field.left_field) == right_table.field(link_field.right_field)
-                )
+                criterion &= left_table.field(link_field.left_field) == right_table.field(link_field.right_field)
+            query = join_function(right_table).on(criterion)
         return query
 
     def _build_select(self, query: QueryBuilder) -> QueryBuilder:
