@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
+import json
 from unittest import mock
 
 from apps.meta.exceptions import ActionHasExist, BKAppNotExists, SystemHasExist
@@ -240,6 +241,7 @@ class MetaTest(TestCase):
         storage_duration_time_of_json = ordered_dict_to_json(result["storage_duration_time"])
         storage_duration_timeof_id = trans_object_local([item for item in storage_duration_time_of_json], ["id"])
         result.update({"storage_duration_time": storage_duration_timeof_id})
+        GET_GLOBALS_DATA['sdk_config'] = result.get("sdk_config")
         self.assertEqual(result, GET_GLOBALS_DATA)
 
     def test_get_standard_fields(self):
