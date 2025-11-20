@@ -378,6 +378,12 @@ BK_NOTICE = {
 # APIGW
 # 用于网关Host
 BKAUDIT_API_HOST = os.getenv("BKAPP_BKAUDIT_API_HOST", "")
+# 用于网关 Stag Host
+BKAUDIT_API_STAG_HOST = os.getenv("BKAPP_BKAUDIT_API_STAG_HOST", "")
+# 用于网关发布环境
+BKAUDIT_API_RELEASE_STAGES = [stag for stag in os.getenv("BKAPP_BKAUDIT_API_RELEASE_STAGES", "").split(",") if stag]
+# 用于网关资源文档
+BK_APIGW_RESOURCE_DOCS_BASE_DIR = os.getenv("BKAPP_APIGW_RESOURCE_DOCS_BASE_DIR", "support-files/apigw/docs")
 
 # BK Audit
 BK_AUDIT_SETTINGS = {

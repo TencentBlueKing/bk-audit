@@ -127,6 +127,31 @@ paths:
           userVerifiedRequired: true
         disabledStages: [ ]
         descriptionEn:
+  /risk/event_subscription/query/:
+    post:
+      operationId: risk_event_subscription_query
+      description: 查询风险事件订阅数据
+      tags: [ ]
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/risk_event_subscription_apigw/subscription/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: true
+        disabledStages: [ ]
+        descriptionEn:
+
   /{namespace}/strategies/all/:
     get:
       operationId: get_all_strategy

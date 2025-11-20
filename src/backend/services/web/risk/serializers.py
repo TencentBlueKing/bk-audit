@@ -305,6 +305,35 @@ class ListEventFieldsByStrategyResponseSerializer(serializers.Serializer):
     id = serializers.CharField(label=gettext_lazy("字段ID"))
 
 
+class RiskEventSubscriptionQuerySerializer(serializers.Serializer):
+    token = serializers.CharField(label=gettext_lazy("订阅 Token"))
+    start_time = serializers.IntegerField(label=gettext_lazy("开始时间(ms)"), help_text=gettext_lazy("Unix 毫秒时间戳"))
+    end_time = serializers.IntegerField(label=gettext_lazy("结束时间(ms)"), help_text=gettext_lazy("Unix 毫秒时间戳"))
+    page = serializers.IntegerField(label=gettext_lazy("页码"), min_value=1, default=1)
+    page_size = serializers.IntegerField(label=gettext_lazy("单页数量"), min_value=1, max_value=1000, default=1000)
+    raw = serializers.BooleanField(label=gettext_lazy("仅返回 SQL"), required=False, default=False)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs["start_time"] > attrs["end_time"]:
+            raise serializers.ValidationError(gettext_lazy("开始时间需小于等于结束时间"))
+        return attrs
+
+
+class RiskEventSubscriptionQueryResponseSerializer(serializers.Serializer):
+    page = serializers.IntegerField(label=gettext_lazy("页码"))
+    page_size = serializers.IntegerField(label=gettext_lazy("单页数量"))
+    total = serializers.IntegerField(label=gettext_lazy("总数"))
+    results = serializers.ListField(
+        label=gettext_lazy("数据"),
+        child=serializers.JSONField(label=gettext_lazy("订阅结果行")),
+        help_text=gettext_lazy("透传 BKBase 查询结果，字段结构由订阅配置决定"),
+        allow_empty=True,
+    )
+    query_sql = serializers.CharField(label="query_sql")
+    count_sql = serializers.CharField(label="count_sql")
+
+
 class EventFieldFilterItemSerializer(serializers.Serializer):
     field = serializers.CharField(label=gettext_lazy("字段名"))
     display_name = serializers.CharField(label=gettext_lazy("字段显示名"))

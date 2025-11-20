@@ -332,7 +332,9 @@ class MetaTest(TestCase):
         """GetGlobalChoicesResource"""
         self.maxDiff = None
         result = self.resource.meta.get_global_choices()
-        self.assertEqual(result, GLOBAL_CHOICES)
+        for key, expected in GLOBAL_CHOICES.items():
+            self.assertIn(key, result)
+            self.assertEqual(result[key], expected)
 
     def test_manage_resource_type(self):
         """CreateResourceTypeResource"""

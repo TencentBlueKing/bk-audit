@@ -5,6 +5,12 @@ on:
     branches: [ "**" ]
   push:
     branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to run the workflow against'
+        required: true
+        default: 'main'
   schedule:
     - cron: '00 6 * * *'
 
@@ -25,6 +31,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ github.event.inputs.target_branch || github.ref }}
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:

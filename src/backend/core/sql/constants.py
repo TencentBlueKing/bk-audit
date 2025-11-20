@@ -130,4 +130,5 @@ class Operator(TextChoices):
     NOTNULL = "notnull", gettext_lazy("is not null")
     MATCH_ALL = "match_all", gettext_lazy("match all")
     MATCH_ANY = "match_any", gettext_lazy("match any")
+    JSON_CONTAINS = "json_contains", gettext_lazy("json contains")
     BETWEEN = "between", gettext_lazy("between")

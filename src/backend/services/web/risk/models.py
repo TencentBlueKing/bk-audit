@@ -23,15 +23,19 @@ from typing import List, Union
 from bk_audit.constants.log import DEFAULT_EMPTY_VALUE
 from bk_audit.log.models import AuditInstance
 from blueapps.utils.request_provider import get_request_username
+from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import models
 from django.db.models import Field, Max, Q, QuerySet
 from django.db.models.functions import Substr
 from django.utils.translation import gettext_lazy
+from pydantic import ValidationError as PydanticValidationError
 
 from apps.meta.models import Tag
 from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
+from core.sql.model import WhereCondition
 from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
     EventMappingFields,
@@ -486,3 +490,89 @@ class TicketPermission(models.Model):
         verbose_name_plural = verbose_name
         ordering = ["-id"]
         unique_together = [["risk_id", "action", "user", "user_type"]]
+
+
+class RiskEventSubscription(SoftDeleteModel):
+    """
+    风险事件订阅配置。
+
+    - `token`: 对外暴露给订阅方的查询凭证，需唯一并可直接定位订阅记录；
+    - `namespace`: 绑定 BKBase 命名空间，用于选择不同业务集群内的 Doris 结果表；
+    - `condition`: 以 WhereCondition JSON 存储的筛选条件，运行时会解析为 Pydantic 对象；
+    - `is_enabled`: 控制订阅是否可被拉取，关闭时任何 token 查询都会走 NotFound。
+    """
+
+    token = UUIDField(gettext_lazy("订阅 Token"), unique=True, db_index=True)
+    name = models.CharField(gettext_lazy("配置名称"), max_length=128, blank=True, default="")
+    namespace = models.CharField(
+        gettext_lazy("命名空间"),
+        max_length=64,
+        default=settings.DEFAULT_NAMESPACE,
+        db_index=True,
+    )
+    description = models.TextField(gettext_lazy("描述"), blank=True, default="")
+    condition = models.JSONField(gettext_lazy("筛选条件"), default=dict, blank=True)
+    is_enabled = models.BooleanField(gettext_lazy("是否启用"), default=True)
+
+    class Meta:
+        verbose_name = gettext_lazy("风险事件订阅")
+        verbose_name_plural = verbose_name
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.name or self.token}"
+
+    @staticmethod
+    def validate_condition_dict(condition: dict | None) -> WhereCondition | None:
+        """
+        将存储的 dict 验证并转换为 WhereCondition。
+
+        - condition 为空时返回 None；
+        - 有内容时使用 Pydantic model_validate 解析，失败则抛 DjangoValidationError。
+        """
+        if not condition:
+            return None
+        try:
+            parsed = WhereCondition.model_validate(condition)
+            normalized = RiskEventSubscription._sanitize_condition(parsed)
+            return normalized
+        except PydanticValidationError as exc:  # pragma: no cover - 防御性
+            error_messages = []
+            for err in exc.errors():
+                loc = ".".join(str(part) for part in err.get("loc", [])) or "condition"
+                error_messages.append(f"{loc}: {err.get('msg')}")
+            raise DjangoValidationError({"condition": error_messages or ["invalid condition"]}) from exc
+
+    @staticmethod
+    def _sanitize_condition(condition: WhereCondition | None) -> WhereCondition | None:
+        """
+        递归移除空的条件节点，确保不会出现空 AND/OR 组。
+        """
+        if condition is None:
+            return None
+
+        # 清理子节点
+        sanitized_children = []
+        for child in condition.conditions:
+            sanitized_child = RiskEventSubscription._sanitize_condition(child)
+            if sanitized_child and (sanitized_child.condition or sanitized_child.conditions):
+                sanitized_children.append(sanitized_child)
+
+        condition.conditions = sanitized_children
+
+        # 当前节点既没有 condition 也没有子节点 => 视为 None
+        if not condition.condition and not condition.conditions:
+            return None
+        return condition
+
+    def get_where_condition(self) -> WhereCondition | None:
+        """
+        获取订阅的筛选条件，自动调用 validate_condition_dict 做校验。
+        """
+        return self.validate_condition_dict(self.condition)
+
+    def set_where_condition(self, where: WhereCondition | None) -> None:
+        """
+        将 WhereCondition 序列化为 JSON 存储；没有条件时写入空 dict。
+        """
+        self.condition = where.model_dump(exclude_none=True) if where else {}
