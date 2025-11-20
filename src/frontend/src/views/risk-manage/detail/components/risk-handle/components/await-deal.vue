@@ -132,7 +132,8 @@
                         :class="val.desc === '' ? 'label-name' : 'label-name underline'">{{ val.name }} </span>
                       <bk-dropdown
                         v-if="val.custom_type === 'datetime' || val.custom_type === 'textarea'
-                          || val.custom_type === 'input' || val.custom_type === 'bk_date_picker'"
+                          || val.custom_type === 'input' || val.custom_type === 'bk_date_picker'
+                          || val.custom_type === ''"
 
                         ref="dropdownRef"
                         :is-show="val.dropdownShow"

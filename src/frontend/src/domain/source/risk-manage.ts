@@ -68,8 +68,17 @@ class RiskManage extends ModuleBase {
 
   // 获取风险事件可用字段
   getEventFields(params: Record<string, any>) {
-    return Request.get(`${this.module}/event_fields/`, {
-      params,
+    if (!('strategy_ids' in params)) {
+      return Request.get(`${this.module}/event_fields/`, {
+        params,
+      });
+    }
+    // 将数组转为URL查询字符串格式
+    const urlParams = new URLSearchParams();
+    params?.strategy_ids.forEach((id: string | number) => {
+      urlParams.append('strategy_ids', id.toString());
+    });
+    return Request.get(`${this.module}/event_fields/?${urlParams.toString()}`, {
     });
   }
   // 获取风险状态类型
