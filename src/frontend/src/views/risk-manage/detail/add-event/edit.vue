@@ -27,27 +27,6 @@
             <div class="base-form-item">
               <bk-form-item
                 class="base-item"
-                required>
-                <template #label>
-                  <span
-                    v-bk-tooltips="t('手动创建风险单，事件字段来源于审计策略配置')"
-                    class="dashed-underline">{{ t("审计策略") }}</span>
-                </template>
-                <bk-select
-                  v-model="formData.strategy_id"
-                  auto-focus
-                  class="bk-select"
-                  filterable
-                  @select="handleSelect">
-                  <bk-option
-                    v-for="item in strategyList.results"
-                    :id="item.strategy_id"
-                    :key="item.strategy_id"
-                    :name="item.strategy_name" />
-                </bk-select>
-              </bk-form-item>
-              <bk-form-item
-                class="base-item"
                 :label="t('责任人')"
                 required>
                 <audit-user-selector
@@ -56,8 +35,6 @@
                   :auto-focus="false"
                   class="consition-value" />
               </bk-form-item>
-            </div>
-            <div class="base-form-item">
               <bk-form-item
                 class="base-item"
                 :label="t('事件发生时间')"
@@ -66,6 +43,7 @@
                   v-model="formData.time"
                   append-to-body
                   clearable
+                  style="width: 100%;"
                   type="datetime" />
               </bk-form-item>
             </div>
@@ -172,7 +150,6 @@
   import { useI18n } from 'vue-i18n';
 
   import AccountManageService from '@service/account-manage';
-  import StrategyManageService from '@service/strategy-manage';
 
   import AccountModel from '@model/account/account';
 
@@ -184,7 +161,6 @@
 
   const { t } = useI18n();
   const formData = ref({
-    strategy_id: '',
     owner: '',
     time: '',
     source: '',
@@ -193,10 +169,6 @@
   });
   const rules = ref();
 
-  const selectedValue = ref('');
-  const handleSelect = (value: string) => {
-    selectedValue.value = value;
-  };
   const eventList = ref([
     {
       label: 'system_id (系统 id)示名称',
@@ -271,18 +243,6 @@
     return [];
   };
 
-  // 策略列表
-  const {
-    data: strategyList,
-  } = useRequest(StrategyManageService.fetchStrategyList, {
-    defaultValue: {
-      results: [],
-      page: 1,
-      num_pages: 1,
-      total: 1,
-    },
-    manual: true,
-  });
   // 用户信息
   const {
     run: fetchUserInfo,

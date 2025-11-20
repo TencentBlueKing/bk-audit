@@ -21,31 +21,15 @@
     :esc-close="false"
     :quick-close="false"
     render-directive="if"
-    :title="t( isEdit ? '新建风险' : '风险单预览')"
+    :title="t('新建关联事件')"
     :width="800">
     <edit
-      v-if="isEdit"
       ref="editRef" />
-    <preview
-      v-else
-      ref="previewRef" />
     <template #footer>
       <div class="foot-button">
         <bk-button
-          v-if="isEdit"
-          theme="primary"
-          @click="handlePreview">
-          {{ t('预览') }}
-        </bk-button>
-        <bk-button
-          v-if="!isEdit"
           theme="primary">
           {{ t('提交') }}
-        </bk-button>
-        <bk-button
-          v-if="!isEdit"
-          @click="handleReturn">
-          {{ t('返回修改') }}
         </bk-button>
         <bk-button @click="handleCancel">
           {{ t('取消') }}
@@ -60,7 +44,6 @@
   import { useI18n } from 'vue-i18n';
 
   import edit from './edit.vue';
-  import preview from './preview.vue';
 
   interface Exposes{
     show(): void,
@@ -68,16 +51,7 @@
   const isShow = ref(false);
   const { t } = useI18n();
   const editRef = ref();
-  const previewRef = ref();
-  const isEdit = ref(true);
 
-  const handlePreview = () => {
-    isEdit.value = false;
-  };
-
-  const handleReturn = () => {
-    isEdit.value = true;
-  };
   const handleCancel = () => {
     isShow.value = false;
   };
@@ -96,5 +70,3 @@
   gap: 10px;
 }
 </style>
-
-

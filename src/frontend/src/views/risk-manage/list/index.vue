@@ -617,6 +617,7 @@
   // 新增风险
   const handleAddRisk = () => {
     console.log('新增风险');
+    addRiskRef.value.show();
   };
   onMounted(() => {
     nextTick(() => {
