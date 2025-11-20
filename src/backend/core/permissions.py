@@ -21,6 +21,7 @@ from django.utils.translation import gettext_lazy
 from rest_framework.permissions import BasePermission
 
 from core.models import get_request_username
+from core.utils.tools import get_app_info
 
 
 class Permission(BasePermission):
@@ -74,3 +75,13 @@ class IsCreator(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         return obj.created_by == get_request_username()
+
+
+class APIGWPermission(BasePermission):
+    """
+    校验请求是否为一个合法的 APIGW 请求
+    """
+
+    def has_permission(self, request, view):
+        get_app_info(request)
+        return True

@@ -73,6 +73,31 @@ load_settings(module_path=DJANGO_CONF_MODULE)
 load_settings(module_path=f"services.{DEPLOY_SERVICE}.settings", raise_exception=False)
 
 
+def _ensure_project_templates() -> None:
+    """
+    将项目根目录下的 templates 文件夹加入 Django 搜索路径，
+    并强制使用 settings-aware form renderer（以便加载自定义表单模板）。
+    """
+
+    templates = globals().get("TEMPLATES")
+    if not templates:
+        return
+
+    project_templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+    templates[0].setdefault("DIRS", [])
+    if project_templates_dir not in templates[0]["DIRS"]:
+        templates[0]["DIRS"].append(project_templates_dir)
+
+    globals()["FORM_RENDERER"] = "django.forms.renderers.TemplatesSetting"
+    installed_apps = list(globals().get("INSTALLED_APPS", []))
+    if "django.forms" not in installed_apps:
+        installed_apps.append("django.forms")
+        globals()["INSTALLED_APPS"] = tuple(installed_apps)
+
+
+_ensure_project_templates()
+
+
 # 屏蔽DRF新版本路由注册的不兼容逻辑
 def is_already_registered(self, new_basename):
     return False

@@ -19,7 +19,9 @@ to the current version of the project delivered to anyone in the future.
 from pydantic import ValidationError
 from pypika import Order as pypikaOrder
 from pypika.queries import QueryBuilder
+from pypika.terms import ValueWrapper
 
+from core.sql.builder.functions import Concat, GroupConcat, JsonContains
 from core.sql.builder.generator import SQLGenerator
 from core.sql.constants import (
     AggregateType,
@@ -95,6 +97,34 @@ class TestSQLGenerator(TestCase):
         expected_query = (
             'SELECT "users"."id" "user_id","orders"."order_id" "order_id" FROM "users" '
             '"users" JOIN "orders" "orders" ON "users"."id"="orders"."user_id"'
+        )
+        self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
+
+    def test_join_with_multiple_link_fields(self):
+        """多个 link_fields 应使用 AND 组合在同一个 ON 子句中"""
+        config = SqlConfig(
+            select_fields=[
+                Field(table="users", raw_name="id", display_name="user_id", field_type=FieldType.INT),
+                Field(table="orders", raw_name="order_id", display_name="order_id", field_type=FieldType.INT),
+            ],
+            from_table=Table(table_name="users"),
+            join_tables=[
+                JoinTable(
+                    join_type=JoinType.INNER_JOIN,
+                    link_fields=[
+                        LinkField(left_field="id", right_field="user_id"),
+                        LinkField(left_field="name", right_field="user_name"),
+                    ],
+                    left_table=Table(table_name="users"),
+                    right_table=Table(table_name="orders"),
+                )
+            ],
+        )
+        generator = SQLGenerator(self.query_builder)
+        query = generator.generate(config)
+        expected_query = (
+            'SELECT "users"."id" "user_id","orders"."order_id" "order_id" FROM "users" "users" '
+            'JOIN "orders" "orders" ON "users"."id"="orders"."user_id" AND "users"."name"="orders"."user_name"'
         )
         self.assertEqual(str(query), expected_query, f"Expected: {expected_query}, but got: {query}")
 
@@ -1021,3 +1051,21 @@ class TestSQLGenerator(TestCase):
         )
 
         self.assertEqual(str(query), expected_sql, msg=f"\nExpected:\n{expected_sql}\nGot:\n{str(query)}")
+
+
+class TestSQLFunctions(TestCase):
+    """核心函数输出验证"""
+
+    def test_json_contains_function(self):
+        expr = JsonContains(ValueWrapper("col"), '["a"]')
+        self.assertEqual(str(expr), "JSON_CONTAINS('col','[\"a\"]')")
+        expr_with_path = JsonContains(ValueWrapper("col"), '"a"', "$.path")
+        self.assertEqual(str(expr_with_path), "JSON_CONTAINS('col','\"a\"','$.path')")
+
+    def test_group_concat_function(self):
+        expr = GroupConcat(ValueWrapper("field"))
+        self.assertEqual(str(expr), "GROUP_CONCAT('field')")
+
+    def test_concat_function(self):
+        expr = Concat(ValueWrapper("a"), ValueWrapper("b"))
+        self.assertEqual(str(expr), "CONCAT('a','b')")

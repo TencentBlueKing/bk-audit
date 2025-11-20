@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:b7a4367228b62cad3f3f44f7f52d198544f890cd00bb486d3e9d089dbbb45741"
+content_hash = "sha256:05eb135a718971ae18331a5b15e33665fe2d78e0880f0a272e314d1973db5602"
 
 [[metadata.targets]]
 requires_python = "==3.11.*"
@@ -40,21 +40,21 @@ files = [
 
 [[package]]
 name = "apigw-manager"
-version = "2.0.0"
-requires_python = ">=3.6.1,<4.0.0"
-summary = ""
+version = "4.2.0"
+requires_python = "<3.13,>=3.8"
+summary = "The SDK for managing blueking gateway resource."
 groups = ["default"]
 dependencies = [
-    "bkapi-bk-apigateway<2.0.0,>=1.0.11",
-    "bkapi-client-core>=1.1.3",
-    "future==0.18.2",
-    "packaging>=21.0",
-    "pyyaml>=5.4.1",
+    "bkapi-bk-apigateway<2.0.0,>=1.0.12",
+    "bkapi-client-core>=1.2.0",
+    "docutils==0.20.1",
+    "packaging>=20.4",
+    "pyyaml>=5.4.2",
     "setuptools>=21.0.0",
     "urllib3>=1.25.3",
 ]
 files = [
-    {file = "apigw_manager-2.0.0-py3-none-any.whl", hash = "sha256:fdfd899a5935dbd66ef489ebbcd5ec53c61d926a118e081d4d19621f495ce664"},
+    {file = "apigw_manager-4.2.0-py3-none-any.whl", hash = "sha256:f4e6b0a3fa14d23414fa45f76fd3bc98f63c9f70224dd050989b6c7452a2dddb"},
 ]
 
 [[package]]
@@ -997,6 +997,17 @@ files = [
 ]
 
 [[package]]
+name = "docutils"
+version = "0.20.1"
+requires_python = ">=3.7"
+summary = "Docutils -- Python Documentation Utilities"
+groups = ["default"]
+files = [
+    {file = "docutils-0.20.1-py3-none-any.whl", hash = "sha256:96f387a2c5562db4476f09f13bbab2192e764cac08ebbf3a34a95d9b1e4a59d6"},
+    {file = "docutils-0.20.1.tar.gz", hash = "sha256:f08a4e276c3a1583a86dce3e34aba3fe04d02bba2dd51ed16106244e8a923e3b"},
+]
+
+[[package]]
 name = "drf-pydantic"
 version = "2.7.1"
 requires_python = ">=3.9"
@@ -1176,16 +1187,6 @@ dependencies = [
 files = [
     {file = "flower-2.0.1-py2.py3-none-any.whl", hash = "sha256:9db2c621eeefbc844c8dd88be64aef61e84e2deb29b271e02ab2b5b9f01068e2"},
     {file = "flower-2.0.1.tar.gz", hash = "sha256:5ab717b979530770c16afb48b50d2a98d23c3e9fe39851dcf6bc4d01845a02a0"},
-]
-
-[[package]]
-name = "future"
-version = "0.18.2"
-requires_python = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
-summary = "Clean single-source support for Python 3 and 2"
-groups = ["default"]
-files = [
-    {file = "future-0.18.2.tar.gz", hash = "sha256:b1bead90b70cf6ec3f0710ae53a525360fa360d306a86583adc6bf83a4db537d"},
 ]
 
 [[package]]

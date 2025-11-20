@@ -104,3 +104,31 @@ class PercentileApprox(Function):
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__("PERCENTILE_APPROX", *args, **kwargs)
+
+
+class JsonContains(Function):
+    """JSON_CONTAINS 函数"""
+
+    def __init__(self, json_doc: Term, candidate: Any, json_path: Optional[str] = None, alias: str = None):
+        params = [json_doc, Term.wrap_constant(candidate)]
+        if json_path:
+            params.append(Term.wrap_constant(json_path))
+        super().__init__("JSON_CONTAINS", *params, alias=alias)
+
+
+class GroupConcat(Function):
+    """
+    GROUP_CONCAT 函数
+    """
+
+    def __init__(self, term: Term, alias: Optional[str] = None):
+        super().__init__("GROUP_CONCAT", term, alias=alias)
+
+
+class Concat(Function):
+    """
+    CONCAT 函数
+    """
+
+    def __init__(self, *terms: Term):
+        super().__init__("CONCAT", *terms)
