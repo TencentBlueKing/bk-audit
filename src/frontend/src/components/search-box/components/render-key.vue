@@ -92,6 +92,8 @@
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import useUrlSearch from '@hooks/use-url-search';
+
   import type { IFieldConfig } from './render-field-config/config';
   // import filedConfig from './render-field-config/config';
   import RenderFieldConfig from './render-field-config/index.vue';
@@ -115,6 +117,10 @@
 
   const { t } = useI18n();
   // const isExportLoading = ref(false);
+  const {
+    replaceSearchParams,
+    getSearchParams,
+  } = useUrlSearch();
 
   const localSearchModel = ref<Record<string, any>>({
     datetime: ['', ''],
@@ -152,6 +158,13 @@
   const handleChange = (fieldName: string, value: any) => {
     // 精准更新特定键值
     localSearchModel.value[fieldName] = value;
+    const replaceUrl = getSearchParams();
+    if (Array.isArray(value)) {
+      replaceUrl[fieldName] = value.join(',');
+    } else {
+      replaceUrl[fieldName] = value;
+    }
+    replaceSearchParams(replaceUrl);
   };
   // 提交搜索
   const handleSubmit = () => {
