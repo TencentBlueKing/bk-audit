@@ -322,7 +322,7 @@ class RiskEventSubscriptionQuerySerializer(serializers.Serializer):
     def validate(self, attrs):
         attrs = super().validate(attrs)
         if attrs["start_time"] > attrs["end_time"]:
-            raise serializers.ValidationError(gettext_lazy("开始时间需小于等于结束时间"))
+            raise serializers.ValidationError({"params_error": gettext_lazy("开始时间需小于等于结束时间")})
         return attrs
 
 
