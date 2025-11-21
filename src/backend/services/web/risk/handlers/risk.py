@@ -225,7 +225,7 @@ class RiskHandler:
             if int(risk.event_end_time.timestamp()) < last_end_time:
                 risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
                 risk.save(update_fields=["event_end_time"])
-            return False, None
+            return False, risk
 
         # 不存在则创建
         create_params = self.gen_risk_create_params(event)
