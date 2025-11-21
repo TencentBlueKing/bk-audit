@@ -294,7 +294,7 @@ class ManualRiskEvent(OperateRecordModel):
     title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
 
     class Meta:
-        verbose_name = gettext_lazy("Manual Risk Event")
+        verbose_name = gettext_lazy("手动事件存储")
         verbose_name_plural = verbose_name
         ordering = ["-event_time"]
         index_together = [["strategy", "raw_event_id", "status"], ["strategy", "event_time"]]
