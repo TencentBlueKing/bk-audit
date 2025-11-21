@@ -125,6 +125,7 @@ class CreateEventAPIResponseSerializer(serializers.Serializer):
     event_ids = serializers.ListField(
         label=gettext_lazy("Event IDs"), child=serializers.CharField(label=gettext_lazy("Event ID"))
     )
+    risk_ids = serializers.CharField(label=gettext_lazy("Risk ID"))
 
 
 class CreateEventBKMSerializer(CreateEventSerializer):
