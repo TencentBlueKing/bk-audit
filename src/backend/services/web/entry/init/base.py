@@ -50,6 +50,7 @@ from services.web.entry.constants import (
     INIT_REDIS_FISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
     INIT_SYSTEM_FINISHED_KEY,
+    SDK_CONFIG_KEY,
 )
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
@@ -101,16 +102,17 @@ class SystemInitHelper:
 class SystemInitHandler:
     def init(self):
         print("[Main] Init Start")
-        self.pre_init()
-        self.init_standard_fields()
-        self.init_es()
-        self.init_doris()
-        self.init_redis()
-        self.init_snapshot()
-        self.init_event()
-        self.create_or_update_plugin_etl()
-        self.init_system()
-        self.init_asset()
+        # self.pre_init()
+        # self.init_standard_fields()
+        # self.init_es()
+        # self.init_doris()
+        # self.init_redis()
+        # self.init_snapshot()
+        # self.init_event()
+        # self.create_or_update_plugin_etl()
+        # self.init_system()
+        # self.init_asset()
+        self.init_sdk_config()
         print("[Main] Init Finished")
 
     def pre_init(self):
@@ -225,6 +227,14 @@ class SystemInitHandler:
         sync_iam_systems()
         print("[InitSystem] Finished")
         self.post_init(INIT_SYSTEM_FINISHED_KEY)
+
+    def init_sdk_config(self):
+        sdk_config = {
+            "go_sdk": "https://github.com/TencentBlueKing/bk-audit-go-sdk",
+            "java_sdk": "https://github.com/TencentBlueKing/bk-audit-java-sdk",
+            "python_sdk": "https://github.com/TencentBlueKing/bk-audit-python-sdk"
+        }
+        GlobalMetaConfig.set(SDK_CONFIG_KEY, sdk_config)
 
     def create_or_update_plugin_etl(self):
         """创建或更新采集入库"""

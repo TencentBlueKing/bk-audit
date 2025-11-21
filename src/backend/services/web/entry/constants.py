@@ -78,3 +78,5 @@ V3_SYSTEM_CREATE_URL_KEY = "v3_system_create_url"
 PERMISSION_MODEL_IWIKI_URL_KEY = "permission_model_iwiki_url"
 # bkvision WEB 访问地址
 BKVISION_WEB_URL_KEY = "bkvision_web_url"
+
+SDK_CONFIG_KEY = "sdk_config"

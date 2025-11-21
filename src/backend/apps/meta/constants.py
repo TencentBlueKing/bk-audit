@@ -60,10 +60,6 @@ SYSTEM_DIAGNOSIS_PUSH_RECIPIENTS_KEY = "system_diagnosis_system_push_recipients"
 # 系统管理员
 SYSTEM_ADMIN_KEY = "system_admin"
 
-# 默认sdk配置信息
-SDK_CONFIG_KEY = "SDK_CONFIG"
-SDK_CONFIG = {"python_sdk":"https://github.com/TencentBlueKing/bk-audit-python-sdk", "java_sdk":"https://github.com/TencentBlueKing/bk-audit-java-sdk", "go_sdk": "https://github.com/TencentBlueKing/bk-audit-go-sdk"}
-
 
 class SensitiveUserData:
     SYSTEM_ID = os.getenv("BKAPP_SENSITIVE_USER_DATA_SYSTEM_ID", "bk_usermgr")

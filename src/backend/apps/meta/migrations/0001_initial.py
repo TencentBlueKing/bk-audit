@@ -20,16 +20,6 @@ import uuid
 
 import django.utils.timezone
 from django.db import migrations, models
-from apps.meta.models import GlobalMetaConfig
-from apps.meta.constants import SDK_CONFIG_KEY, SDK_CONFIG
-from apps.exceptions import MetaConfigNotExistException
-
-
-def initial_sdk_config(*args, **kwargs):
-    try:
-        GlobalMetaConfig.get(SDK_CONFIG_KEY)
-    except MetaConfigNotExistException:
-        GlobalMetaConfig.set(SDK_CONFIG_KEY, SDK_CONFIG)
 
 
 class Migration(migrations.Migration):
@@ -245,5 +235,4 @@ class Migration(migrations.Migration):
                 "unique_together": {("system_id", "action_id")},
             },
         ),
-        migrations.RunPython(initial_sdk_config),
     ]
