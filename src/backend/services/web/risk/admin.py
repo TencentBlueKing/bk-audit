@@ -29,6 +29,7 @@ from django.utils.translation import gettext_lazy as _
 from core.sql.constants import Operator
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import (
+    ManualRiskEvent,
     ProcessApplication,
     Risk,
     RiskEventSubscription,
@@ -108,6 +109,23 @@ class RiskExperienceAdmin(admin.ModelAdmin):
     list_display = ["risk_id", "content", "created_by", "created_at", "is_deleted"]
     search_fields = ["risk_id", "created_by"]
     list_filter = ["is_deleted"]
+
+
+@admin.register(ManualRiskEvent)
+class ManualRiskEventAdmin(admin.ModelAdmin):
+    list_display = [
+        "manual_event_id",
+        "title",
+        "strategy",
+        "raw_event_id",
+        "event_time",
+        "status",
+        "risk_label",
+    ]
+    search_fields = ["manual_event_id", "raw_event_id", "title"]
+    list_filter = ["status", "risk_label", "strategy"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
+    date_hierarchy = "event_time"
 
 
 @admin.register(TicketNode)
