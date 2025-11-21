@@ -126,7 +126,10 @@ class CreateEventAPIResponseSerializer(serializers.Serializer):
         label=gettext_lazy("Event IDs"), child=serializers.CharField(label=gettext_lazy("Event ID"))
     )
     risk_ids = serializers.ListField(
-        label=gettext_lazy("Event IDs"), child=serializers.CharField(label=gettext_lazy("Event ID"))
+        label=gettext_lazy("Event IDs"),
+        child=serializers.CharField(label=gettext_lazy("Event ID")),
+        required=False,
+        allow_empty=True,
     )
 
 

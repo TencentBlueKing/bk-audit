@@ -80,7 +80,8 @@ class CreateEvent(EventMeta):
             eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()  # 更新 eligible_strategy_ids
             for event in events:
                 risk_id = RiskHandler().generate_risk(event, eligible_strategy_ids)
-                risk_ids.append(risk_id)
+                if risk_id:
+                    risk_ids.append(risk_id)
         return {"event_ids": event_ids, "risk_ids": risk_ids}
 
     def _validate_existing_risk(self, risk_id: str, events: List[dict]):
