@@ -744,11 +744,7 @@ class GetGlobalsResource(Meta, Resource):
     serializer_class = GetGlobalsResponseSerializer
 
     def perform_request(self, validated_request_data):
-        bk_log_global_config = Globals().globals
-        # 全局配置中添加sdk配置信息
-        bk_log_global_config["sdk_config"] = json.loads(os.getenv("SDK_CONFIG")) if os.getenv("SDK_CONFIG") else {}
-        return bk_log_global_config
-
+        return Globals().globals
 
 class GetStandardFieldsResource(Meta, ModelResource):
     name = gettext_lazy("获取标准字段")
