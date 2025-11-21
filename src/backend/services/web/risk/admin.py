@@ -125,7 +125,6 @@ class ManualRiskEventAdmin(admin.ModelAdmin):
     search_fields = ["manual_event_id", "raw_event_id", "title"]
     list_filter = ["status", "risk_label", "strategy"]
     readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
-    date_hierarchy = "event_time"
 
 
 @admin.register(TicketNode)

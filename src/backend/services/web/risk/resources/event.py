@@ -75,11 +75,13 @@ class CreateEvent(EventMeta):
             source = app.bk_app_code
         event_ids = self._create_events(events, source)
         manual_add_event(events)
+        risk_ids = []
         if gen_risk:
             eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()  # 更新 eligible_strategy_ids
             for event in events:
-                RiskHandler().generate_risk(event, eligible_strategy_ids)
-        return {"event_ids": event_ids}
+                risk_id = RiskHandler().generate_risk(event, eligible_strategy_ids)
+                risk_ids.append(risk_id)
+        return {"event_ids": event_ids, "risk_ids": risk_ids}
 
     def _validate_existing_risk(self, risk_id: str, events: List[dict]):
         if not risk_id:
