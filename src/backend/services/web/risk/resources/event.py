@@ -103,10 +103,10 @@ class CreateEvent(EventMeta):
                 raise serializers.ValidationError(gettext("事件所属策略与风险不一致"))
 
             if risk.status != RiskStatus.CLOSED:
-                continue
+                raise serializers.ValidationError(gettext("风险单已关闭，无法添加事件"))
+
             event_dt = datetime.datetime.fromtimestamp(event["event_time"] / 1000, tz=tz)
-            end_time = risk.event_end_time or risk.event_time
-            if not event_dt <= end_time:
+            if not event_dt <= risk.event_time:
                 raise serializers.ValidationError(gettext("事件时间不在风险有效区间内"))
 
 
