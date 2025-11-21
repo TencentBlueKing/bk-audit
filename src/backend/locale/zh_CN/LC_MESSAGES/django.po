@@ -3,16 +3,15 @@
 # This file is distributed under the same license as the PACKAGE package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
-#, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: bk-audit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-28 14:47+0800\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: \n"
+"POT-Creation-Date: 2025-11-21 14:32+0800\n"
+"PO-Revision-Date: 2025-11-19 15:00+0800\n"
+"Last-Translator: BK审计团队 <bk-audit@example.com>\n"
+"Language-Team: bk-audit <bk-audit@example.com>\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -412,7 +411,7 @@ msgid "用户名"
 msgstr "用户名"
 
 msgid "密码"
-msgstr ""
+msgstr "密码"
 
 msgid "默认保留天数"
 msgstr "默认保留天数"
@@ -948,10 +947,8 @@ msgstr "云区域"
 msgid "特性ID"
 msgstr "特性ID"
 
-#, fuzzy
-#| msgid "待我处理"
 msgid "待处理"
-msgstr "待我处理"
+msgstr "待处理"
 
 msgid "审批中"
 msgstr "审批中"
@@ -1103,15 +1100,11 @@ msgstr "权限中心V4"
 msgid "审计中心"
 msgstr "审计中心"
 
-#, fuzzy
-#| msgid "接入ID"
 msgid "待接入"
-msgstr "接入ID"
+msgstr "待接入"
 
-#, fuzzy
-#| msgid "是否已接入"
 msgid "已接入"
-msgstr "是否已接入"
+msgstr "已接入"
 
 msgid "待完善"
 msgstr "待完善"
@@ -1140,10 +1133,8 @@ msgstr "未配置"
 msgid "权限"
 msgstr "权限"
 
-#, fuzzy
-#| msgid "系统收藏"
 msgid "收藏"
-msgstr "系统收藏"
+msgstr "收藏"
 
 msgid "审计状态"
 msgstr "审计状态"
@@ -1341,10 +1332,8 @@ msgstr "操作类型"
 msgid "操作"
 msgstr "操作"
 
-#, fuzzy
-#| msgid "资源类型配置"
 msgid "资源类型操作关系"
-msgstr "资源类型与操作关系"
+msgstr "资源类型操作关系"
 
 msgid "字段名称"
 msgstr "字段名称"
@@ -1452,18 +1441,16 @@ msgid "System ID"
 msgstr "系统ID"
 
 msgid "Favorite"
-msgstr ""
+msgstr "收藏"
 
 msgid "Username"
-msgstr ""
+msgstr "用户名"
 
 msgid "System Favorite"
-msgstr ""
+msgstr "系统收藏"
 
-#, fuzzy
-#| msgid "策略ID"
 msgid "策略"
-msgstr "策略ID"
+msgstr "策略"
 
 msgid "工具"
 msgstr "工具"
@@ -1483,40 +1470,26 @@ msgstr "获取系统详情"
 msgid "资源类型列表"
 msgstr "资源类型列表"
 
-#, fuzzy
-#| msgid "资源类型"
 msgid "查询资源类型"
 msgstr "查询资源类型"
 
-#, fuzzy
-#| msgid "获取资源类型结构"
 msgid "获取完整的资源类型树"
-msgstr "获取资源类型结构"
+msgstr "获取完整的资源类型树"
 
-#, fuzzy
-#| msgid "获取资源类型结构"
 msgid "获取资源类型"
-msgstr "获取资源类型结构"
+msgstr "获取资源类型"
 
-#, fuzzy
-#| msgid "资源类型"
 msgid "新建资源类型"
-msgstr "资源类型"
+msgstr "新建资源类型"
 
-#, fuzzy
-#| msgid "创建资源"
 msgid "批量创建资源类型"
-msgstr "创建资源"
+msgstr "批量创建资源类型"
 
-#, fuzzy
-#| msgid "更新资源"
 msgid "更新资源类型"
-msgstr "更新资源"
+msgstr "更新资源类型"
 
-#, fuzzy
-#| msgid "资源类型"
 msgid "删除资源类型"
-msgstr "资源类型"
+msgstr "删除资源类型"
 
 msgid "操作列表"
 msgstr "操作列表"
@@ -1650,10 +1623,8 @@ msgstr "批量创建操作"
 msgid "状态信息"
 msgstr "状态信息"
 
-#, fuzzy
-#| msgid "最后数据上报时间"
 msgid "最后上报时间"
-msgstr "最后数据上报时间"
+msgstr "最后上报时间"
 
 msgid "采集器数量"
 msgstr "采集器数量"
@@ -1682,10 +1653,8 @@ msgstr "排序字段"
 msgid "排序方式"
 msgstr "排序方式"
 
-#, fuzzy
-#| msgid "状态筛选"
 msgid "系统状态筛选"
-msgstr "状态筛选"
+msgstr "系统状态筛选"
 
 msgid "状态筛选"
 msgstr "状态筛选"
@@ -1702,10 +1671,8 @@ msgstr "携带收藏状态"
 msgid "携带系统状态"
 msgstr "携带系统状态"
 
-#, fuzzy
-#| msgid "排序字段"
 msgid "排序字段组合"
-msgstr "排序字段"
+msgstr "排序字段组合"
 
 msgid "管理员"
 msgstr "管理员"
@@ -2060,6 +2027,10 @@ msgstr "构建器初始化失败: {err}"
 msgid "消息构造器不存在"
 msgstr "消息构造器不存在"
 
+#, python-format
+msgid "【蓝鲸审计中心%s】"
+msgstr "【蓝鲸审计中心%s】"
+
 msgid "异常信息"
 msgstr "异常信息"
 
@@ -2339,10 +2310,8 @@ msgstr "查看场景视图"
 msgid "使用工具"
 msgstr "使用工具"
 
-#, fuzzy
-#| msgid "使用工具"
 msgid "使用工具(标签)"
-msgstr "使用工具"
+msgstr "使用工具(标签)"
 
 msgid "管理工具"
 msgstr "管理工具"
@@ -2644,6 +2613,9 @@ msgstr "匹配全部"
 msgid "match any"
 msgstr "匹配任意"
 
+msgid "json contains"
+msgstr "json 包含"
+
 msgid "between"
 msgstr "在之间"
 
@@ -2679,6 +2651,12 @@ msgstr "条件表达式中字段 {field} 的值 {aggregation} {value} 无法转�
 
 msgid "数据拉取"
 msgstr "数据拉取"
+
+msgid "未实现方法"
+msgstr "未实现方法"
+
+msgid "未实现类型"
+msgstr "未实现类型"
 
 msgid "Control Name"
 msgstr "控件名称"
@@ -2841,6 +2819,31 @@ msgstr "控件版本"
 msgid "Flow Status Abnormal"
 msgstr "任务状态异常"
 
+msgid "附件"
+msgstr "附件"
+
+msgid "图片URL"
+msgstr "图片URL"
+
+msgid "附件MD5"
+msgstr "附件MD5"
+
+msgid "附件名称"
+msgstr "附件名称"
+
+msgid "附件大小"
+msgstr "附件大小"
+
+msgid "无效的资源后缀名"
+msgstr "无效的资源后缀名"
+
+#, python-brace-format
+msgid "资源大小超出限制，请选择小于{}M文件上传"
+msgstr "资源大小超出限制，请选择小于{}M文件上传"
+
+msgid "资源上传失败"
+msgstr "资源上传失败"
+
 msgid "采集项数量"
 msgstr "采集项数量"
 
@@ -2893,10 +2896,8 @@ msgstr "应用的采集数据上报状态"
 msgid "批量获取应用采集状态"
 msgstr "批量获取应用采集状态"
 
-#, fuzzy
-#| msgid "批量获取应用采集状态"
 msgid "批量获取系统快照状态"
-msgstr "批量获取应用采集状态"
+msgstr "批量获取系统快照状态"
 
 msgid "采集项清洗规则"
 msgstr "采集项清洗规则"
@@ -3114,6 +3115,7 @@ msgstr "URL不能为空"
 msgid "URL必须使用http或https协议"
 msgstr "URL必须使用http或https协议"
 
+#, python-brace-format
 msgid "URL包含高危端口: {}"
 msgstr "URL包含高危端口: {}"
 
@@ -3747,6 +3749,22 @@ msgstr "指定字段范围时，字段列表不能为空"
 msgid "导出参数"
 msgstr "导出参数"
 
+msgid "可使用结构化模式或 JSON 模式编辑筛选条件。"
+msgstr "可使用结构化模式或 JSON 模式编辑筛选条件。"
+
+msgid "Metadata"
+msgstr "Metadata"
+
+msgid "Audit"
+msgstr "蓝鲸审计中心"
+
+msgid "订阅不存在"
+msgstr "订阅不存在"
+
+#, python-brace-format
+msgid "验证 SQL - {name}"
+msgstr "验证 SQL - {name}"
+
 msgid "Risk"
 msgstr "风险"
 
@@ -3831,10 +3849,8 @@ msgstr "风险标签"
 msgid "风险类型"
 msgstr "风险类型"
 
-#, fuzzy
-#| msgid "命中策略"
 msgid "风险命中策略"
-msgstr "命中策略"
+msgstr "风险命中策略"
 
 msgid "风险危害"
 msgstr "风险危害"
@@ -3845,10 +3861,8 @@ msgstr "处理指引"
 msgid "处理状态"
 msgstr "处理状态"
 
-#, fuzzy
-#| msgid "自动处理规则"
 msgid "处理规则"
-msgstr "自动处理规则"
+msgstr "处理规则"
 
 msgid "当前处理人"
 msgstr "当前处理人"
@@ -3856,39 +3870,46 @@ msgstr "当前处理人"
 msgid "关注人"
 msgstr "关注人"
 
-#, fuzzy
-#| msgid "风险发现时间"
 msgid "首次发现时间"
-msgstr "风险发现时间"
+msgstr "首次发现时间"
 
-#, fuzzy
-#| msgid "风险发现时间"
 msgid "最后发现时间"
-msgstr "风险发现时间"
+msgstr "最后发现时间"
 
 msgid "最后一次处理时间"
-msgstr ""
+msgstr "最后一次处理时间"
 
-#, fuzzy
-#| msgid "更新风险标记"
 msgid "风险标记"
-msgstr "更新风险标记"
+msgstr "风险标记"
 
 msgid "风险标题"
-msgstr ""
+msgstr "风险标题"
 
-#, fuzzy
-#| msgid "命中策略(ID)"
 msgid "风险命中策略ID"
-msgstr "命中策略(ID)"
+msgstr "风险命中策略ID"
 
 #, python-brace-format
 msgid "审计风险_{risk_view_type}_{datetime}.xlsx"
 msgstr "审计风险_{risk_view_type}_{datetime}.xlsx"
 
+msgid "包含"
+msgstr "包含"
+
+msgid "IN"
+msgstr "IN"
+
+msgid "不包含"
+msgstr "不包含"
+
+msgid "NOT IN"
+msgstr "NOT IN"
+
 #, python-brace-format
 msgid "您没有权限导出风险:{risk_ids}"
 msgstr "您没有权限导出风险:{risk_ids}"
+
+msgid "订阅 Token 不存在或未启用"
+msgstr "订阅 Token 不存在或未启用"
 
 msgid "Create Risk Failed"
 msgstr "创建风险失败"
@@ -3966,9 +3987,6 @@ msgstr "当前处理人"
 
 msgid "Notice Users"
 msgstr "通知人"
-
-msgid "Tags"
-msgstr "标签"
 
 msgid "Risk Label"
 msgstr "风险标签"
@@ -4057,6 +4075,18 @@ msgstr "用户类型"
 msgid "Ticket Permission"
 msgstr "单据权限"
 
+msgid "订阅 Token"
+msgstr "订阅 Token"
+
+msgid "配置名称"
+msgstr "配置名称"
+
+msgid "筛选条件"
+msgstr "筛选条件"
+
+msgid "风险事件订阅"
+msgstr "风险事件订阅"
+
 msgid "创建事件"
 msgstr "创建事件"
 
@@ -4130,10 +4160,8 @@ msgstr "%s 人工关单"
 msgid "人工转单"
 msgstr "人工转单"
 
-#, fuzzy
-#| msgid "人工转单"
 msgid "批量人工转单"
-msgstr "人工转单"
+msgstr "批量人工转单"
 
 msgid "人工执行处理套餐"
 msgstr "人工执行处理套餐"
@@ -4164,6 +4192,9 @@ msgstr "风险单据流转"
 msgid "风险导出"
 msgstr "风险导出"
 
+msgid "根据策略获取事件字段"
+msgstr "根据策略获取事件字段"
+
 msgid "风险处理规则列表"
 msgstr "风险处理规则列表"
 
@@ -4187,6 +4218,9 @@ msgstr "获取风险处理规则匹配方式"
 
 msgid "批量调整风险处理规则优先级"
 msgstr "批量调整风险处理规则优先级"
+
+msgid "风险事件订阅查询"
+msgstr "风险事件订阅查询"
 
 #, python-format
 msgid "%s 不是有效的 JSON"
@@ -4225,14 +4259,75 @@ msgstr "事件"
 msgid "Strategy ID"
 msgstr "策略ID"
 
+msgid "Event Time Timestamp(ms)"
+msgstr "Event Time Timestamp(ms)"
+
+msgid "Event End Time Timestamp(ms)"
+msgstr "Event End Time Timestamp(ms)"
+
+msgid "Last Operate Time Timestamp(ms)"
+msgstr "最后处理时间戳(ms)"
+
+msgid "字段显示名"
+msgstr "字段显示名"
+
+msgid "字段ID"
+msgstr "字段ID"
+
+msgid "开始时间(ms)"
+msgstr "开始时间(ms)"
+
+msgid "Unix 毫秒时间戳"
+msgstr "Unix 毫秒时间戳"
+
+msgid "结束时间(ms)"
+msgstr "结束时间(ms)"
+
+msgid "仅返回 SQL"
+msgstr "仅返回 SQL"
+
+msgid "开始时间需小于等于结束时间"
+msgstr "开始时间需小于等于结束时间"
+
+msgid "总数"
+msgstr "总数"
+
+msgid "数据"
+msgstr "数据"
+
+msgid "订阅结果行"
+msgstr "订阅结果行"
+
+msgid "透传 BKBase 查询结果，字段结构由订阅配置决定"
+msgstr "透传 BKBase 查询结果，字段结构由订阅配置决定"
+
+msgid "Authorized Time Timestamp(ms)"
+msgstr "授权时间戳(ms)"
+
 msgid "Risk Type"
 msgstr "风险类型"
+
+msgid "Tags"
+msgstr "标签"
 
 msgid "Event Content"
 msgstr "事件详情"
 
+msgid "是否通过BKBase查询"
+msgstr "是否通过BKBase查询"
+
 msgid "Risk Level"
 msgstr "风险等级"
+
+msgid "关联事件字段筛选"
+msgstr "关联事件字段筛选"
+
+msgid "关联事件字段排序需同时指定事件筛选条件"
+msgstr "关联事件字段排序需同时指定事件筛选条件"
+
+#, python-format
+msgid "关联事件字段排序需在筛选条件中包含字段：%s"
+msgstr "关联事件字段排序需在筛选条件中包含字段：%s"
 
 msgid "Risk View Type"
 msgstr "风险视图类型"
@@ -4264,10 +4359,8 @@ msgstr "处理说明"
 msgid "新处理人"
 msgstr "新处理人"
 
-#, fuzzy
-#| msgid "Risk ID"
 msgid "Risk IDs"
-msgstr "风险ID"
+msgstr "风险ID列表"
 
 msgid "Event Basic Field Configs"
 msgstr "事件基本字段配置"
@@ -4278,10 +4371,8 @@ msgstr "事件数据字段配置"
 msgid "Event Evidence Field Configs"
 msgstr "事件证据字段配置"
 
-#, fuzzy
-#| msgid "Event Field Configs"
 msgid "Risk Meta Field Config"
-msgstr "事件字段配置"
+msgstr "风险元字段配置"
 
 msgid "Sync BKM Alert Failed"
 msgstr "同步监控告警异常"
@@ -4398,16 +4489,17 @@ msgstr "更新时间"
 msgid "Updated By"
 msgstr "更新人"
 
-#, fuzzy
 msgid "Created At"
 msgstr "创建时间"
 
-#, fuzzy
 msgid "Created By"
 msgstr "创建人"
 
 msgid "Kafka"
 msgstr "Kafka"
+
+msgid "Pulsar"
+msgstr "Pulsar"
 
 msgid "Link Table Data"
 msgstr "联表数据"
@@ -4453,7 +4545,6 @@ msgstr "联表配置错误"
 msgid "规则审计SQL生成错误: {err}"
 msgstr "规则审计SQL生成错误: {err}"
 
-#, fuzzy
 msgid "联表名称已存在"
 msgstr "联表名称已存在"
 
@@ -4524,6 +4615,12 @@ msgstr "策略"
 
 msgid "Strategy Tag"
 msgstr "策略标签"
+
+msgid "Strategy Tag ID"
+msgstr "策略标签ID"
+
+msgid "Strategy Tag Tombstone"
+msgstr "策略标签墓碑标记"
 
 msgid "Link Table"
 msgstr "联表"
@@ -4676,7 +4773,8 @@ msgstr "字段关联"
 msgid "Storage Type"
 msgstr "存储类型"
 
-msgid "control_id and control_version are required when strategy_type is model"
+msgid ""
+"control_id and control_version are required when strategy_type is model"
 msgstr "当策略类型为模型审计时，必须提供 control_id 和 control_version"
 
 msgid "Control Version not Exists"
@@ -4917,7 +5015,8 @@ msgstr "单个筛选值，可以是字符串、整数或浮点数"
 msgid "Conditions"
 msgstr "条件"
 
-msgid "Rule Audit Where can not have condition and conditions at the same time"
+msgid ""
+"Rule Audit Where can not have condition and conditions at the same time"
 msgstr "规则审计的 Where 不能同时包含 condition 和 conditions"
 
 msgid "Field in having condition must have aggregate set to True"
@@ -5013,15 +5112,11 @@ msgstr "级联选择器"
 msgid "单选按钮组"
 msgstr "单选按钮组"
 
-#, fuzzy
-#| msgid "时间选择器"
 msgid "选择器"
-msgstr "时间选择器"
+msgstr "选择器"
 
-#, fuzzy
-#| msgid "增量"
 msgid "变量"
-msgstr "增量"
+msgstr "变量"
 
 msgid "全部工具"
 msgstr "全部工具"
@@ -5073,10 +5168,8 @@ msgstr "用户{user}没有权限访问嵌入图表{share_uid}"
 msgid "工具不存在"
 msgstr "工具不存在"
 
-#, fuzzy
-#| msgid "策略类型不支持"
 msgid "工具类型不支持"
-msgstr "策略类型不支持"
+msgstr "工具类型不支持"
 
 msgid "工具名称"
 msgstr "工具名称"
@@ -5091,7 +5184,7 @@ msgid "工具配置"
 msgstr "工具配置"
 
 msgid "权限负责人"
-msgstr ""
+msgstr "权限负责人"
 
 msgid "是否更新BkVision工具"
 msgstr "是否更新BkVision工具"
@@ -5108,10 +5201,8 @@ msgstr "检索SQL"
 msgid "Data Search Tool Config"
 msgstr "数据检索工具配置"
 
-#, fuzzy
-#| msgid "更新时间"
 msgid "bkvision更新时间"
-msgstr "更新时间"
+msgstr "BKVision 更新时间"
 
 msgid "Bkvision Tool Config"
 msgstr "Bkvision 工具配置"
@@ -5149,41 +5240,26 @@ msgstr "获取工具详情"
 msgid "SQL解析"
 msgstr "SQL解析"
 
-#, fuzzy
-#| msgid "编辑工具"
 msgid "SQL解析(编辑工具)"
-msgstr "编辑工具"
+msgstr "SQL 解析（编辑工具）"
 
 msgid "用户查询权限批量校验"
 msgstr "用户查询权限批量校验"
 
-#, fuzzy
-#| msgid "Count"
 msgid "Tool Count"
 msgstr "工具数量"
 
-#, fuzzy
-#| msgid "查询联表标签列表"
 msgid "标签列表"
 msgstr "标签列表"
 
-#, fuzzy
-#| msgid "配置类型"
 msgid "数据查询配置类型"
 msgstr "数据查询配置类型"
 
 msgid "仅在 tool_type=data_search 时必须，支持 simple/sql"
 msgstr "仅在 tool_type=data_search 时必须，支持 simple/sql"
 
-#, fuzzy
-#| msgid "更新时间"
-msgid "BKVision 更新时间"
-msgstr "更新时间"
-
-#, fuzzy
-#| msgid "配置类型"
 msgid "数据查询配置类型不能为空"
-msgstr "数据查询配置类型"
+msgstr "数据查询配置类型不能为空"
 
 msgid "工具 UID"
 msgstr "工具 UID"
@@ -5218,7 +5294,7 @@ msgstr "筛选"
 msgid "不支持的权限，请联系管理员"
 msgstr "不支持的权限，请联系管理员！"
 
-#, fuzzy, python-brace-format
+#, python-brace-format
 msgid "不支持的VisionHandler:{handler}，请联系管理员"
 msgstr "不支持的VisionHandler:{handler}，请联系管理员"
 
@@ -5282,6 +5358,45 @@ msgstr "没有管理员权限，请联系管理员！"
 msgid "如有需要，请联系管理员或开发者为您解决上述问题。"
 msgstr "如有需要，请联系管理员或开发者为您解决上述问题。"
 
+msgid "验证 SQL"
+msgstr "验证 SQL"
+
+msgid "Home"
+msgstr "Home"
+
+msgid "时间范围与分页"
+msgstr "时间范围与分页"
+
+msgid "开始时间"
+msgstr "开始时间"
+
+msgid "结束时间"
+msgstr "结束时间"
+
+msgid "每页数量"
+msgstr "每页数量"
+
+msgid "仅生成 SQL"
+msgstr "仅生成 SQL"
+
+msgid "生成并执行查询"
+msgstr "生成并执行查询"
+
+msgid "返回订阅详情"
+msgstr "返回订阅详情"
+
+msgid "查询结果"
+msgstr "查询结果"
+
+msgid "结构化模式"
+msgstr "结构化模式"
+
+msgid "JSON 模式"
+msgstr "JSON 模式"
+
+msgid "复杂嵌套条件可切换到 JSON 编辑"
+msgstr "复杂嵌套条件可切换到 JSON 编辑"
+
 msgid "蓝鲸开发框架(Django模板)"
 msgstr "蓝鲸开发框架(Django模板)"
 
@@ -5328,14 +5443,8 @@ msgstr "【审计中心】执行自动处理套餐审批"
 msgid "%s 操作关单"
 msgstr "%s 操作关单"
 
-#~ msgid "【蓝鲸审计中心%s】"
-#~ msgstr "【蓝鲸审计中心%s】"
-
-#~ msgid "未实现方法"
-#~ msgstr "未实现方法"
-
-#~ msgid "未实现类型"
-#~ msgstr "未实现类型"
+#~ msgid "BKVision 更新时间"
+#~ msgstr "更新时间"
 
 #~ msgid "不能转单给自己"
 #~ msgstr "不能转单给自己"

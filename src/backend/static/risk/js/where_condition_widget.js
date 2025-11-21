@@ -70,15 +70,21 @@
     const fieldSelect = row.querySelector(".condition-field");
     const operatorSelect = row.querySelector(".condition-operator");
     const valueInput = row.querySelector(".condition-value");
-    fieldSelect.innerHTML = fieldOptions
-      .map(
-        (opt) =>
-          `<option value="${opt.raw_name}" data-field-type="${opt.field_type}">${opt.label || opt.name}</option>`
-      )
-      .join("");
-    operatorSelect.innerHTML = operatorOptions
-      .map((opt) => `<option value="${opt[0]}">${opt[1]}</option>`)
-      .join("");
+    fieldSelect.innerHTML = "";
+    fieldOptions.forEach((opt) => {
+      const option = document.createElement("option");
+      option.value = opt.raw_name;
+      option.dataset.fieldType = opt.field_type;
+      option.textContent = opt.label || opt.name;
+      fieldSelect.appendChild(option);
+    });
+    operatorSelect.innerHTML = "";
+    operatorOptions.forEach((opt) => {
+      const option = document.createElement("option");
+      option.value = opt[0];
+      option.textContent = opt[1];
+      operatorSelect.appendChild(option);
+    });
 
     if (condition?.field?.raw_name) {
       fieldSelect.value = condition.field.raw_name;
