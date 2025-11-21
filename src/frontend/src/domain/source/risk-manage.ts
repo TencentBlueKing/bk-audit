@@ -28,6 +28,7 @@ class RiskManage extends ModuleBase {
   constructor() {
     super();
     this.module = '/api/v1/risks';
+    this.api = '/api/v1';
   }
   // 获取风险列表
   getRiskList(params: {
@@ -189,6 +190,11 @@ class RiskManage extends ModuleBase {
     return Request.post(`${this.module}/export/`, {
       params,
       responseType: 'blob',
+    });
+  }
+  addEvent(params: Record<string, any>) {
+    return Request.post(`${this.api}/events/`, {
+      params,
     });
   }
 }

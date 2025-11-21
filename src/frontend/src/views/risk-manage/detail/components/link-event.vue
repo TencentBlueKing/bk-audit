@@ -494,7 +494,10 @@
       @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
-  <add-event ref="addEventRef" />
+  <add-event
+    ref="addEventRef"
+    :event-data="data"
+    @add-success="handleAddSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -938,6 +941,11 @@
   };
   const handleAddEvent = () => {
     addEventRef.value?.show();
+  };
+
+  // 添加事件成功
+  const handleAddSuccess = () => {
+    console.log('添加事件成功',  displayValueDictEventData.value);
   };
   // 防抖处理
   let fetchTimeout: number | undefined;

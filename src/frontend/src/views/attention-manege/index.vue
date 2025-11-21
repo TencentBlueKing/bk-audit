@@ -285,7 +285,7 @@
   const searchModel = ref<Record<string, any>>({});
   // 导出数据
   const handleExport = () => {
-    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id);
+    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id.toString());
     if (!selectedData.length) {
       messageWarn(t('请选择要操作的数据'));
       return;

@@ -20,6 +20,7 @@
       <template #content>
         <div class="flex-center">
           <audit-form
+            ref="formRef"
             class="example"
             form-type="vertical"
             :model="formData"
@@ -28,9 +29,10 @@
               <bk-form-item
                 class="base-item"
                 :label="t('责任人')"
+                property="operator"
                 required>
                 <audit-user-selector
-                  v-model="formData.owner"
+                  v-model="formData.operator"
                   allow-create
                   :auto-focus="false"
                   class="consition-value" />
@@ -38,9 +40,10 @@
               <bk-form-item
                 class="base-item"
                 :label="t('事件发生时间')"
+                property="event_time"
                 required>
                 <bk-date-picker
-                  v-model="formData.time"
+                  v-model="formData.event_time"
                   append-to-body
                   clearable
                   style="width: 100%;"
@@ -51,15 +54,17 @@
               <bk-form-item
                 class="base-item"
                 :label="t('事件来源')"
+                property="event_source"
                 required>
                 <bk-input
-                  v-model="formData.source"
+                  v-model="formData.event_source"
                   clearable
                   placeholder="请输入" />
               </bk-form-item>
               <bk-form-item
                 class="base-item"
                 :label="t('事件类型')"
+                property="event_type"
                 required>
                 <bk-input
                   v-model="formData.event_type"
@@ -71,9 +76,10 @@
               <bk-form-item
                 class="base-item"
                 :label="t('事件描述')"
+                property="event_content"
                 required>
                 <bk-input
-                  v-model="formData.description"
+                  v-model="formData.event_content"
                   :maxlength="100"
                   :rows="4"
                   type="textarea" />
@@ -111,8 +117,16 @@
               {{ index + 1 }}
             </div>
             <div class="table-label border-right">
-              <span class="event-type"> {{ item.type }} </span>
-              <span class="table-text">{{ item.label }}</span>
+              <span
+                v-bk-tooltips="{
+                  content: item.description,
+                  disabled: item.description === '',
+                  placement: 'top'
+                }"
+                class="table-text"
+                :class="item.description !== '' ? 'dashed-underline' : '' ">
+                {{ item.display_name }}({{ item.field_name }})
+              </span>
             </div>
             <div class="table-type border-right">
               <bk-select
@@ -129,14 +143,16 @@
                   </div>
                 </template>
                 <bk-option
-                  v-for="type in handleItemTypeList(item.type)"
+                  v-for="type in typeList"
                   :id="type.typeValue"
                   :key="type.typeValue"
                   :name="type.label" />
               </bk-select>
             </div>
             <div class="table-value">
-              <field-com :type="item.typeValue" />
+              <field-com
+                :type="item.typeValue"
+                @update="(val) => handlerUpdate(val, item)" />
             </div>
           </div>
         </div>
@@ -150,57 +166,46 @@
   import { useI18n } from 'vue-i18n';
 
   import AccountManageService from '@service/account-manage';
+  import RiskManageService from '@service/risk-manage';
 
   import AccountModel from '@model/account/account';
+  import StrategyInfo from '@model/risk/strategy-info';
 
+  import useMessage from '@hooks/use-message';
   import useRequest from '@hooks/use-request';
 
   import CardPartVue from '../../../tools/tools-square/add/components/card-part.vue';
 
   import fieldCom from './field-components.vue';
 
+  import { convertToTimestamp } from '@/utils/assist/timestamp-conversion';
+
+  interface Props {
+    eventData: RiskManageModel & StrategyInfo
+  }
+
+  interface Exposes{
+    submit(): void,
+  }
+  interface Emits{
+    (e: 'addSuccess'): void;
+  }
+  const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
+  const { messageSuccess } = useMessage();
+
   const { t } = useI18n();
+  const formRef = ref();
   const formData = ref({
-    owner: '',
-    time: '',
-    source: '',
+    operator: [],
+    event_time: new Date(),
+    event_source: '',
     event_type: '',
-    description: '',
+    event_content: '',
   });
   const rules = ref();
+  console.log('formData', formData.value);
 
-  const eventList = ref([
-    {
-      label: 'system_id (系统 id)示名称',
-      type: 'sting',
-      value: '',
-      typeValue: 'input',
-    },
-    {
-      label: 'combined_id (资产 id)',
-      type: 'in',
-      value: '字段显示名称',
-      typeValue: 'number-input',
-    },
-    {
-      label: 'combined_id (资产 id)',
-      type: 'long',
-      value: '字段显示名称',
-      typeValue: 'number-input',
-    },
-    {
-      label: 'combined_id (资产 id)',
-      type: 'double',
-      value: '字段显示名称',
-      typeValue: 'number-input',
-    },
-    {
-      label: '字段显示名称',
-      type: 'text',
-      value: '字段显示名称',
-      typeValue: 'textarea',
-    },
-  ]);
   const typeList = ref([
     {
       label: t('输入框'),
@@ -228,20 +233,22 @@
       typeValue: 'textarea',
     },
   ]);
-  const handleItemTypeList = (type: string) => {
-    if (type === 'sting') {
-      return typeList.value.filter(item => item.typeValue === 'date-picker'
-        || item.value === 'input'
-        || item.value === 'user-selector');
-    }
-    if (type === 'in' || type === 'long' || type === 'double') {
-      return typeList.value.filter(item => item.typeValue === 'number-input' || item.value === 'date-picker');
-    }
-    if (type === 'text') {
-      return typeList.value.filter(item => item.typeValue === 'textarea');
-    }
-    return [];
-  };
+
+  const eventList = ref([]);
+  // const handleItemTypeList = (type: string) => {
+  //   if (type === 'sting') {
+  //     return typeList.value.filter(item => item.typeValue === 'date-picker'
+  //       || item.value === 'input'
+  //       || item.value === 'user-selector');
+  //   }
+  //   if (type === 'in' || type === 'long' || type === 'double') {
+  //     return typeList.value.filter(item => item.typeValue === 'number-input' || item.value === 'date-picker');
+  //   }
+  //   if (type === 'text') {
+  //     return typeList.value.filter(item => item.typeValue === 'textarea');
+  //   }
+  //   return [];
+  // };
 
   // 用户信息
   const {
@@ -249,10 +256,74 @@
   } = useRequest(AccountManageService.fetchUserInfo, {
     defaultValue: new AccountModel(),
     onSuccess: (data) => {
-      formData.value.owner = data.username;
+      formData.value.operator = [data.username];
+    },
+  });
+  // 获取策略事件信息
+  useRequest(RiskManageService.fetchRiskInfo, {
+    defaultValue: new StrategyInfo(),
+    defaultParams: {
+      id: props.eventData.risk_id.toString(),
+    },
+    manual: true,
+    onSuccess: (data) => {
+      eventList.value = data.event_data_field_configs.map(item => ({
+        ...item,
+        typeValue: 'input',
+        value: '',
+      }));
     },
   });
 
+  const {
+    run: addEvent,
+  } = useRequest(RiskManageService.addEvent, {
+    defaultValue: [],
+    onSuccess: () => {
+      messageSuccess(t('添加成功'));
+      emits('addSuccess');
+    },
+  });
+
+  const handleSubmit = () => {
+    const eventData = eventList.value.reduce((acc, item) => ({
+      ...acc,
+      [item.display_name]: item.value,
+    }), {});
+    formRef.value.validate().then(() => {
+      const params = {
+        events: [
+          {
+            event_content: formData.value.event_content,
+            strategy_id: props.eventData.strategy_id,
+            event_data: eventData,
+            event_time: convertToTimestamp(formData.value.event_time),
+            event_type: formData.value.event_type,
+            event_source: formData.value.event_source,
+            operator: formData.value.operator.join(','),
+          },
+        ],
+        gen_risk: false,
+        risk_id: props.eventData.risk_id.toString(),
+      };
+      console.log('params>>>>', params);
+      addEvent(params);
+    });
+  };
+
+  const handlerUpdate = (value: any, item: any) => {
+    eventList.value.forEach((eventItem: any) => {
+      if (eventItem.field_name === item.field_name  && eventItem.display_name === item.display_name) {
+        // eslint-disable-next-line no-param-reassign
+        eventItem.value = value;
+      }
+    });
+  };
+  defineExpose<Exposes>({
+    submit() {
+      handleSubmit();
+    },
+  });
   onMounted(() => {
     fetchUserInfo();
   });
@@ -274,13 +345,6 @@
         .base-item {
           width: 48%;
         }
-      }
-
-      .dashed-underline {
-        padding-bottom: 2px;
-
-        /* 可选，增加文字和虚线间距 */
-        border-bottom: 1px dashed #c4c6cc;
       }
     }
 
@@ -320,7 +384,7 @@
       }
 
       .table-label {
-        width: 300px;
+        width: 286px;
       }
 
       .table-type {
@@ -342,16 +406,6 @@
         color: #c4c6cc;
       }
 
-      .event-type {
-        height: 22px;
-        padding: 5px 10px;
-        margin-left: 10px;
-        font-size: 12px;
-        color: #1768ef;
-        background: #e1ecff;
-        border-radius: 12px;
-      }
-
       .trigger {
         display: flex;
         margin-right: 10px;
@@ -363,5 +417,12 @@
         align-items: center;
         justify-content: space-between;
       }
+    }
+
+    .dashed-underline {
+      padding-bottom: 2px;
+
+      /* 可选，增加文字和虚线间距 */
+      border-bottom: 1px dashed #c4c6cc;
     }
   </style>

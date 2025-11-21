@@ -18,17 +18,21 @@
   <bk-sideslider
     v-model:isShow="isShow"
     background-color="#f5f7fa"
+    :before-close="handleCancel"
     :esc-close="false"
     :quick-close="false"
     render-directive="if"
     :title="t('新建关联事件')"
     :width="800">
     <edit
-      ref="editRef" />
+      ref="editRef"
+      :event-data="eventData"
+      @add-success="handleAddSuccess" />
     <template #footer>
       <div class="foot-button">
         <bk-button
-          theme="primary">
+          theme="primary"
+          @click="handleSubmit">
           {{ t('提交') }}
         </bk-button>
         <bk-button @click="handleCancel">
@@ -40,6 +44,7 @@
 </template>
 
 <script setup lang="ts">
+  import { InfoBox } from 'bkui-vue';
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -48,13 +53,40 @@
   interface Exposes{
     show(): void,
   }
+  interface Props {
+    eventData: RiskManageModel & StrategyInfo
+  }
+  interface Emits{
+    (e: 'addSuccess'): void;
+  }
+  defineProps<Props>();
+
+  const emits = defineEmits<Emits>();
   const isShow = ref(false);
   const { t } = useI18n();
   const editRef = ref();
-
+  // 取消
   const handleCancel = () => {
-    isShow.value = false;
+    InfoBox({
+      title: t('确认取消当前操作?'),
+      content: t('已填写的内容将会丢失，请谨慎操作！'),
+      cancelText: t('确认'),
+      confirmText: t('取消'),
+      onConfirm() {
+        isShow.value = false;
+      },
+      onCancel() {},
+    });
   };
+  // 提交
+  const handleSubmit = () => {
+    editRef.value?.submit();
+  };
+  const handleAddSuccess = () => {
+    isShow.value = false;
+    emits('addSuccess');
+  };
+
   defineExpose<Exposes>({
     show() {
       isShow.value = true;
