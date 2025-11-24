@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+import json
 import os
 
 from bk_resource import api
@@ -53,7 +54,7 @@ from services.web.risk.handlers.ticket import (
     TransOperator,
 )
 from services.web.risk.models import ManualRiskEvent, Risk, TicketNode
-from services.web.risk.serializers import CreateRiskSerializer
+from services.web.risk.serializers import CreateEventSerializer
 
 cache: DefaultClient = _cache
 
@@ -89,11 +90,12 @@ def manual_add_event(data: list):
     handler = RiskHandler()
     manual_events = []
     for event in data:
-        serializer = CreateRiskSerializer(data=event)
+        serializer = CreateEventSerializer(data=event)
         if not serializer.is_valid():
             logger_celery.warning("[ManualAddEvent] invalid event: %s", serializer.errors)
             continue
         payload = serializer.validated_data
+        payload["event_data"] = json.loads(payload["event_data"])
         event_time = datetime.datetime.fromtimestamp(payload["event_time"] / 1000, tz=timezone.get_default_timezone())
         manual_events.append(
             ManualRiskEvent(
@@ -114,11 +116,6 @@ def manual_add_event(data: list):
         return
     ManualRiskEvent.objects.bulk_create(manual_events, batch_size=BULK_ADD_EVENT_SIZE)
     logger_celery.info("[ManualAddEvent] Saved %s manual events", len(manual_events))
-
-
-@celery_app.task(queue="risk", time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
-def manual_add_event_task(data: list):
-    manual_add_event(data)
 
 
 @periodic_task(
