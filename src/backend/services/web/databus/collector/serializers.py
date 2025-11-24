@@ -428,6 +428,8 @@ class ApplyDataIdSourceRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     bk_data_id = serializers.IntegerField(label=gettext_lazy("DataID"))
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
+    custom_collector_en_name = serializers.CharField(label=gettext_lazy("自定义英文名"), required=False)
+    custom_collector_ch_name = serializers.CharField(label=gettext_lazy("自定义中文名"), required=False)
 
 
 class DataIdEtlStorageRequestSerializer(serializers.Serializer):

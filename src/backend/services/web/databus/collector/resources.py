@@ -644,7 +644,7 @@ class CreateApiPushResource(GetApiPushBaseResource):
         # 初始化请求参数
         namespace = validated_request_data["namespace"]
         system_id = validated_request_data["system_id"]
-        custom_collector_config_name = validated_request_data["custom_collector_config_name"]
+        custom_collector_config_name = validated_request_data.get("custom_collector_config_name")
 
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
@@ -824,6 +824,9 @@ class ApplyDataIdSource(DataIdResource):
     def perform_request(self, validated_request_data):
         namespace = validated_request_data["namespace"]
         bk_data_id = validated_request_data["bk_data_id"]
+        # 自定义名称
+        custom_collector_ch_name = validated_request_data.get("custom_collector_ch_name")
+        custom_collector_en_name = validated_request_data.get("custom_collector_en_name")
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
             config_level=ConfigLevelChoices.NAMESPACE.value,
@@ -852,8 +855,8 @@ class ApplyDataIdSource(DataIdResource):
             "bk_data_id": bk_data_id,
             "collector_plugin_id": plugin_id,
             "collector_config_id": -bk_data_id,
-            "collector_config_name": raw_data["raw_data_alias"],
-            "collector_config_name_en": raw_data["raw_data_name"],
+            "collector_config_name": raw_data["raw_data_alias"] if not custom_collector_ch_name else custom_collector_ch_name,
+            "collector_config_name_en": raw_data["raw_data_name"] if not custom_collector_en_name else custom_collector_en_name,
             "source_platform": SourcePlatformChoices.BKBASE.value,
             "custom_type": raw_data["custom_type"],
             "description": raw_data["description"],
