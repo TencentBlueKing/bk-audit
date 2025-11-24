@@ -111,16 +111,49 @@
 
   onMounted(() => {
     window.addEventListener('resize', smartPosition);
+
+    // 监听 #auditNavigationContent 滚动容器的滚动事件
+    const handleScroll = _.throttle(() => {
+      smartPosition();
+    }, 100);
+
+    const findScrollContainer = () => {
+      const navigationContent = document.querySelector('#auditNavigationContent');
+      if (navigationContent) {
+        const scrollContent = navigationContent.querySelector('.scroll-faker-content');
+        return scrollContent as HTMLElement | null;
+      }
+      return null;
+    };
+
+    // 尝试立即查找滚动容器
+    let scrollContainer = findScrollContainer();
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', handleScroll);
+    }
+
+    // 如果没找到，使用 MutationObserver 等待 DOM 加载完成
     const observer = new MutationObserver(() => {
+      // 如果还没有找到滚动容器，再次尝试查找
+      if (!scrollContainer) {
+        scrollContainer = findScrollContainer();
+        if (scrollContainer) {
+          scrollContainer.addEventListener('scroll', handleScroll);
+        }
+      }
+
       calcOffsetLeft();
       smartPosition();
     });
+
     observer.observe(document.querySelector('body') as Node, {
       subtree: true,
       childList: true,
       characterData: true,
-      // attributes: true,
+      attributes: true,
+      attributeFilter: ['class', 'style'],
     });
+
     calcOffsetLeft();
     smartPosition();
 
@@ -128,6 +161,9 @@
       observer.takeRecords();
       observer.disconnect();
       window.removeEventListener('resize', smartPosition);
+      if (scrollContainer) {
+        scrollContainer.removeEventListener('scroll', handleScroll);
+      }
     });
   });
 
