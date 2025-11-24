@@ -630,6 +630,7 @@ class GetApiPushResource(GetApiPushBaseResource):
                 "token": asymmetric_cipher.encrypt(report_info["bk_data_token"]),
                 "collector_config_id": collector_config.collector_config_id,
                 "bk_data_id": collector_config.bk_data_id,
+                "collector_config_name": collector_config.collector_config_name,
             }
         # 没有时返回空
         return {"token": ""}
@@ -643,15 +644,19 @@ class CreateApiPushResource(GetApiPushBaseResource):
         # 初始化请求参数
         namespace = validated_request_data["namespace"]
         system_id = validated_request_data["system_id"]
+        custom_collector_config_name = validated_request_data["custom_collector_config_name"]
+
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=namespace,
         )
-        collector_config_name = API_PUSH_COLLECTOR_NAME_FORMAT.format(
-            system_id=system_id, date=datetime.datetime.now().strftime("%Y%m%d"), id=str(uniqid())[:10].lower()
-        ).replace("-", "_")[:COLLECTOR_NAME_MAX_LENGTH]
-
+        if not custom_collector_config_name:
+            collector_config_name = API_PUSH_COLLECTOR_NAME_FORMAT.format(
+                system_id=system_id, date=datetime.datetime.now().strftime("%Y%m%d"), id=str(uniqid())[:10].lower()
+            ).replace("-", "_")[:COLLECTOR_NAME_MAX_LENGTH]
+        else:
+            collector_config_name = custom_collector_config_name
         # 校验，重复则终止创建流程
         collector = self.get_collector(system_id)
         if collector:
