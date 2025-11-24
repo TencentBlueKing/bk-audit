@@ -48,13 +48,16 @@
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import Event from '@model/risk/risk';
+  import StrategyInfo from '@model/risk/strategy-info';
+
   import edit from './edit.vue';
 
   interface Exposes{
     show(): void,
   }
   interface Props {
-    eventData: RiskManageModel & StrategyInfo
+    eventData: Event & StrategyInfo
   }
   interface Emits{
     (e: 'addSuccess'): void;
@@ -66,7 +69,7 @@
   const { t } = useI18n();
   const editRef = ref();
   // 取消
-  const handleCancel = () => {
+  const handleCancel = async (): Promise<boolean> => new Promise((resolve) => {
     InfoBox({
       title: t('确认取消当前操作?'),
       content: t('已填写的内容将会丢失，请谨慎操作！'),
@@ -74,10 +77,13 @@
       confirmText: t('取消'),
       onConfirm() {
         isShow.value = false;
+        resolve(true);
       },
-      onCancel() {},
+      onCancel() {
+        resolve(false);
+      },
     });
-  };
+  });
   // 提交
   const handleSubmit = () => {
     editRef.value?.submit();

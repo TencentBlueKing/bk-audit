@@ -46,7 +46,8 @@
     </div>
   </div>
   <add-risk
-    ref="addRiskRef" />
+    ref="addRiskRef"
+    @add-success="handleAddRiskSuccess" />
   <!-- <handle-risk-label-dialog
     ref="handleRiskLabelDialogRef"
     @close="fetchList" /> -->
@@ -616,8 +617,11 @@
 
   // 新增风险
   const handleAddRisk = () => {
-    console.log('新增风险');
     addRiskRef.value.show();
+  };
+  // 新增风险成功
+  const handleAddRiskSuccess = () => {
+    fetchList();
   };
   onMounted(() => {
     nextTick(() => {

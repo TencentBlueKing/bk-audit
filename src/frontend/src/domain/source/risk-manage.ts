@@ -25,6 +25,7 @@ import Request, {
 import ModuleBase from './module-base';
 
 class RiskManage extends ModuleBase {
+  api: string;
   constructor() {
     super();
     this.module = '/api/v1/risks';

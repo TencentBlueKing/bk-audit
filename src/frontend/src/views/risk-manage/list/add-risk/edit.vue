@@ -20,6 +20,7 @@
       <template #content>
         <div class="flex-center">
           <audit-form
+            ref="formRef"
             class="example"
             form-type="vertical"
             :model="formData"
@@ -27,6 +28,7 @@
             <div class="base-form-item">
               <bk-form-item
                 class="base-item"
+                property="strategy_id"
                 required>
                 <template #label>
                   <span
@@ -49,9 +51,10 @@
               <bk-form-item
                 class="base-item"
                 :label="t('责任人')"
+                property="operator"
                 required>
                 <audit-user-selector
-                  v-model="formData.owner"
+                  v-model="formData.operator"
                   allow-create
                   :auto-focus="false"
                   class="consition-value" />
@@ -61,9 +64,10 @@
               <bk-form-item
                 class="base-item"
                 :label="t('事件发生时间')"
+                property="event_time"
                 required>
                 <bk-date-picker
-                  v-model="formData.time"
+                  v-model="formData.event_time"
                   append-to-body
                   clearable
                   type="datetime" />
@@ -73,15 +77,17 @@
               <bk-form-item
                 class="base-item"
                 :label="t('事件来源')"
+                property="event_source"
                 required>
                 <bk-input
-                  v-model="formData.source"
+                  v-model="formData.event_source"
                   clearable
                   placeholder="请输入" />
               </bk-form-item>
               <bk-form-item
                 class="base-item"
                 :label="t('事件类型')"
+                property="event_type"
                 required>
                 <bk-input
                   v-model="formData.event_type"
@@ -93,9 +99,10 @@
               <bk-form-item
                 class="base-item"
                 :label="t('事件描述')"
+                property="event_content"
                 required>
                 <bk-input
-                  v-model="formData.description"
+                  v-model="formData.event_content"
                   :maxlength="100"
                   :rows="4"
                   type="textarea" />
@@ -107,7 +114,12 @@
     </card-part-vue>
     <card-part-vue :title="t('事件数据')">
       <template #content>
-        <div class="event-table">
+        <div v-if="eventList.length === 0">
+          {{ t('暂无数据') }}
+        </div>
+        <div
+          v-else
+          class="event-table">
           <div class="table-heard">
             <div class="table-index border-right">
               #
@@ -133,8 +145,16 @@
               {{ index + 1 }}
             </div>
             <div class="table-label border-right">
-              <span class="event-type"> {{ item.type }} </span>
-              <span class="table-text">{{ item.label }}</span>
+              <span
+                v-bk-tooltips="{
+                  content: item?.description,
+                  disabled: item?.description === '',
+                  placement: 'top'
+                }"
+                class="table-text"
+                :class="item?.description !== '' ? 'dashed-underline' : '' ">
+                {{ item?.display_name }}({{ item?.field_name }})
+              </span>
             </div>
             <div class="table-type border-right">
               <bk-select
@@ -151,14 +171,18 @@
                   </div>
                 </template>
                 <bk-option
-                  v-for="type in handleItemTypeList(item.type)"
+                  v-for="type in typeList"
                   :id="type.typeValue"
                   :key="type.typeValue"
                   :name="type.label" />
               </bk-select>
             </div>
             <div class="table-value">
-              <field-com :type="item.typeValue" />
+              <field-com
+                ref="fieldComRef"
+                :type="item.typeValue"
+                :value="item.value"
+                @update="(val) => handlerUpdate(val, item)" />
             </div>
           </div>
         </div>
@@ -168,7 +192,7 @@
 </template>
 
   <script lang="ts" setup>
-  import { onMounted, ref } from 'vue';
+  import { nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import AccountManageService from '@service/account-manage';
@@ -182,53 +206,44 @@
 
   import fieldCom from './field-components.vue';
 
+  import { convertGMTTimeToStandard } from '@/utils/assist/timestamp-conversion';
+
+  interface Exposes{
+    getEditData: () => void;
+    handlerReturnData: (data: any) => void;
+    validate: () => void;
+  }
+  interface Emits {
+    (e: 'validateSuccess'): void
+  }
+
+  const emits = defineEmits<Emits>();
+
   const { t } = useI18n();
   const formData = ref({
     strategy_id: '',
-    owner: '',
-    time: '',
-    source: '',
+    operator: [] as string[],
+    event_time: new Date(),
+    event_source: '',
     event_type: '',
-    description: '',
+    event_content: '',
   });
   const rules = ref();
-
+  const formRef = ref();
+  const fieldComRef = ref();
   const selectedValue = ref('');
+  const eventList = ref<Array<Record<string, any>>>([]);
+  const selectedRiskValue = ref();
   const handleSelect = (value: string) => {
     selectedValue.value = value;
-  };
-  const eventList = ref([
-    {
-      label: 'system_id (系统 id)示名称',
-      type: 'sting',
-      value: '',
+    // eslint-disable-next-line max-len
+    selectedRiskValue.value = strategyList.value.results.find((item: Record<string, any>) => item.strategy_id === value);
+    eventList.value = selectedRiskValue.value?.event_data_field_configs.map((item: Record<string, any>) => ({
+      ...item,
       typeValue: 'input',
-    },
-    {
-      label: 'combined_id (资产 id)',
-      type: 'in',
-      value: '字段显示名称',
-      typeValue: 'number-input',
-    },
-    {
-      label: 'combined_id (资产 id)',
-      type: 'long',
-      value: '字段显示名称',
-      typeValue: 'number-input',
-    },
-    {
-      label: 'combined_id (资产 id)',
-      type: 'double',
-      value: '字段显示名称',
-      typeValue: 'number-input',
-    },
-    {
-      label: '字段显示名称',
-      type: 'text',
-      value: '字段显示名称',
-      typeValue: 'textarea',
-    },
-  ]);
+      value: '',
+    }));
+  };
   const typeList = ref([
     {
       label: t('输入框'),
@@ -256,24 +271,10 @@
       typeValue: 'textarea',
     },
   ]);
-  const handleItemTypeList = (type: string) => {
-    if (type === 'sting') {
-      return typeList.value.filter(item => item.typeValue === 'date-picker'
-        || item.value === 'input'
-        || item.value === 'user-selector');
-    }
-    if (type === 'in' || type === 'long' || type === 'double') {
-      return typeList.value.filter(item => item.typeValue === 'number-input' || item.value === 'date-picker');
-    }
-    if (type === 'text') {
-      return typeList.value.filter(item => item.typeValue === 'textarea');
-    }
-    return [];
-  };
-
   // 策略列表
   const {
     data: strategyList,
+    run: fetchStrategyList,
   } = useRequest(StrategyManageService.fetchStrategyList, {
     defaultValue: {
       results: [],
@@ -283,18 +284,62 @@
     },
     manual: true,
   });
+
   // 用户信息
   const {
     run: fetchUserInfo,
   } = useRequest(AccountManageService.fetchUserInfo, {
     defaultValue: new AccountModel(),
     onSuccess: (data) => {
-      formData.value.owner = data.username;
+      formData.value.operator = [data?.username];
     },
   });
 
+  const handlerUpdate = (value: any, item: any) => {
+    eventList.value.forEach((eventItem: any) => {
+      if (eventItem.field_name === item.field_name  && eventItem.display_name === item.display_name) {
+        // eslint-disable-next-line no-param-reassign
+        eventItem.value = value;
+      }
+    });
+  };
+
+  // 表单验证
+  const validate = () => {
+    formRef.value.validate().then(() => {
+      console.log('表单验证');
+      emits('validateSuccess');
+    });
+  };
+
+
   onMounted(() => {
     fetchUserInfo();
+  });
+
+  defineExpose<Exposes>({
+    // 获取编辑数据
+    getEditData() {
+      return {
+        formData: { ...formData.value, event_time: convertGMTTimeToStandard(formData.value.event_time)  },
+        eventData: eventList.value,
+        selectedRiskValue: selectedRiskValue.value,
+      };
+    },
+    // 回显数据
+    handlerReturnData(data: any) {
+      nextTick(() => {
+        selectedValue.value = data.formData.strategy_id;
+        formData.value = data.formData;
+        eventList.value = data.eventData;
+        fetchStrategyList().then((res) => {
+          selectedRiskValue.value = res.results.find((item: any) => item.strategy_id === data.formData.strategy_id);
+        });
+      });
+    },
+    validate() {
+      validate();
+    },
   });
   </script>
 
@@ -360,7 +405,7 @@
       }
 
       .table-label {
-        width: 300px;
+        width: 286px;
       }
 
       .table-type {

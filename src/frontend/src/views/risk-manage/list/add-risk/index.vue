@@ -18,6 +18,7 @@
   <bk-sideslider
     v-model:isShow="isShow"
     background-color="#f5f7fa"
+    :before-close="handleCancel"
     :esc-close="false"
     :quick-close="false"
     render-directive="if"
@@ -25,10 +26,12 @@
     :width="800">
     <edit
       v-if="isEdit"
-      ref="editRef" />
+      ref="editRef"
+      @validate-success="handlePreviewSuccess" />
     <preview
       v-else
-      ref="previewRef" />
+      ref="previewRef"
+      :edit-data="editData" />
     <template #footer>
       <div class="foot-button">
         <bk-button
@@ -39,7 +42,8 @@
         </bk-button>
         <bk-button
           v-if="!isEdit"
-          theme="primary">
+          theme="primary"
+          @click="handleSubmit">
           {{ t('提交') }}
         </bk-button>
         <bk-button
@@ -56,30 +60,107 @@
 </template>
 
 <script setup lang="ts">
-  import { ref } from 'vue';
+  import { InfoBox } from 'bkui-vue';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  import RiskManageService from '@service/risk-manage';
+
+  import useMessage from '@hooks/use-message';
+  import useRequest from '@hooks/use-request';
 
   import edit from './edit.vue';
   import preview from './preview.vue';
 
+  import { convertToTimestamp } from '@/utils/assist/timestamp-conversion';
+
   interface Exposes{
     show(): void,
   }
+  interface Emits {
+    (e: 'addSuccess'): void
+  }
+
+  const emits = defineEmits<Emits>();
   const isShow = ref(false);
   const { t } = useI18n();
   const editRef = ref();
   const previewRef = ref();
   const isEdit = ref(true);
+  const editData = ref();
+  const { messageSuccess } = useMessage();
 
   const handlePreview = () => {
+    console.log('handlePreview', editRef.value);
+    editRef.value?.validate();
+  };
+
+  // 预览表单验证成功
+  const handlePreviewSuccess = () => {
+    editData.value = editRef.value?.getEditData();
     isEdit.value = false;
+    nextTick(() => {
+      console.log('handlePreview', previewRef.value);
+      previewRef.value?.initData(editData.value);
+    });
   };
 
   const handleReturn = () => {
     isEdit.value = true;
+    nextTick(() => {
+      console.log('handleReturn', editData.value, editRef.value);
+      editRef.value?.handlerReturnData(editData.value);
+    });
   };
-  const handleCancel = () => {
-    isShow.value = false;
+  const handleCancel = () => new Promise<boolean>((resolve) => {
+    InfoBox({
+      title: t('确认取消当前操作?'),
+      content: t('已填写的内容将会丢失，请谨慎操作！'),
+      cancelText: t('确认'),
+      confirmText: t('取消'),
+      onConfirm() {
+        isShow.value = false;
+        resolve(true);
+      },
+      onCancel() {
+        resolve(false);
+      },
+    });
+  });
+
+  const {
+    run: addEvent,
+  } = useRequest(RiskManageService.addEvent, {
+    defaultValue: [],
+    onSuccess: () => {
+      messageSuccess(t('添加成功'));
+      isShow.value = false;
+      emits('addSuccess');
+    },
+  });
+
+  // 提交
+  const handleSubmit = () => {
+    const eventDataParams = editData.value.eventData.reduce((acc: any, item: any) => ({
+      ...acc,
+      [item.display_name]: item.value,
+    }), {});
+    const params = {
+      events: [
+        {
+          event_content: editData.value.formData.event_content,
+          strategy_id: editData.value.formData.strategy_id,
+          event_data: eventDataParams,
+          event_time: convertToTimestamp(editData.value.formData.event_time),
+          event_type: editData.value.formData.event_type,
+          event_source: editData.value.formData.event_source,
+          operator: editData.value.formData.operator.join(','),
+        },
+      ],
+      gen_risk: true,
+    };
+    console.log('params>>>>', params);
+    addEvent(params);
   };
   defineExpose<Exposes>({
     show() {
@@ -96,5 +177,3 @@
   gap: 10px;
 }
 </style>
-
-

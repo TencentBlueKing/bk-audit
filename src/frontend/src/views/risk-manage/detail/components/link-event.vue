@@ -945,7 +945,16 @@
 
   // 添加事件成功
   const handleAddSuccess = () => {
-    console.log('添加事件成功',  displayValueDictEventData.value);
+    linkEventList.value = [];
+    nextTick(() => {
+      fetchLinkEvent({
+        start_time: props.data.event_time,
+        end_time: props.data.event_end_time,
+        risk_id: props.data.risk_id,
+        page: currentPage.value,
+        page_size: 50,
+      });
+    });
   };
   // 防抖处理
   let fetchTimeout: number | undefined;

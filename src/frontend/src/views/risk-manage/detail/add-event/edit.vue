@@ -119,13 +119,13 @@
             <div class="table-label border-right">
               <span
                 v-bk-tooltips="{
-                  content: item.description,
-                  disabled: item.description === '',
+                  content: item?.description,
+                  disabled: item?.description === '',
                   placement: 'top'
                 }"
                 class="table-text"
-                :class="item.description !== '' ? 'dashed-underline' : '' ">
-                {{ item.display_name }}({{ item.field_name }})
+                :class="item?.description !== '' ? 'dashed-underline' : '' ">
+                {{ item?.display_name }}({{ item?.field_name }})
               </span>
             </div>
             <div class="table-type border-right">
@@ -169,6 +169,7 @@
   import RiskManageService from '@service/risk-manage';
 
   import AccountModel from '@model/account/account';
+  import Event from '@model/risk/risk';
   import StrategyInfo from '@model/risk/strategy-info';
 
   import useMessage from '@hooks/use-message';
@@ -181,7 +182,7 @@
   import { convertToTimestamp } from '@/utils/assist/timestamp-conversion';
 
   interface Props {
-    eventData: RiskManageModel & StrategyInfo
+    eventData: Event & StrategyInfo
   }
 
   interface Exposes{
@@ -197,7 +198,7 @@
   const { t } = useI18n();
   const formRef = ref();
   const formData = ref({
-    operator: [],
+    operator: [] as string[],
     event_time: new Date(),
     event_source: '',
     event_type: '',
@@ -234,21 +235,7 @@
     },
   ]);
 
-  const eventList = ref([]);
-  // const handleItemTypeList = (type: string) => {
-  //   if (type === 'sting') {
-  //     return typeList.value.filter(item => item.typeValue === 'date-picker'
-  //       || item.value === 'input'
-  //       || item.value === 'user-selector');
-  //   }
-  //   if (type === 'in' || type === 'long' || type === 'double') {
-  //     return typeList.value.filter(item => item.typeValue === 'number-input' || item.value === 'date-picker');
-  //   }
-  //   if (type === 'text') {
-  //     return typeList.value.filter(item => item.typeValue === 'textarea');
-  //   }
-  //   return [];
-  // };
+  const eventList = ref<Array<Record<string, any>>>([]);
 
   // 用户信息
   const {
@@ -288,7 +275,7 @@
   const handleSubmit = () => {
     const eventData = eventList.value.reduce((acc, item) => ({
       ...acc,
-      [item.display_name]: item.value,
+      [item?.display_name]: item.value,
     }), {});
     formRef.value.validate().then(() => {
       const params = {
