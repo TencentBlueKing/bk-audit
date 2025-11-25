@@ -34,11 +34,11 @@ from services.web.databus.constants import (
     JoinDataPullType,
     JoinDataType,
     PluginSceneChoices,
-    RecordLogTypeChoices,
-    SelectSdkTypeChoices,
     SnapshotRunningStatus,
     SnapShotStorageChoices,
     SourcePlatformChoices,
+    RecordLogTypeChoices,
+    SelectSdkTypeChoices,
 )
 
 
@@ -155,13 +155,8 @@ class CollectorConfig(SoftDeleteModel):
     storage_changed = models.BooleanField(gettext_lazy("更新集群"), default=False)
     auth_rt = models.BooleanField(gettext_lazy("已授权RT"), default=False)
 
-    record_log_type = models.CharField(
-        gettext_lazy("记录日志方式"), max_length=64, choices=RecordLogTypeChoices.choices, blank=True
-    )
-    select_sdk_type = models.CharField(
-        gettext_lazy('SDK类型'), max_length=64, choices=SelectSdkTypeChoices.choices, blank=True
-    )
-    is_configuration = models.BooleanField(gettext_lazy("是否配置完成"), default=False)
+    record_log_type = models.CharField(gettext_lazy("记录日志方式"), max_length=64, choices=RecordLogTypeChoices.choices, blank=True)
+    select_sdk_type = models.CharField(gettext_lazy('SDK类型'), max_length=64, choices=SelectSdkTypeChoices.choices, blank=True)
 
     class Meta:
         verbose_name = gettext_lazy("采集项")

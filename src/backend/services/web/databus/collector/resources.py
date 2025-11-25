@@ -246,7 +246,6 @@ class CreateCollectorResource(CollectorMeta):
             description=validated_request_data["collector_config_name"],
             record_log_type=validated_request_data["record_log_type"],
             select_sdk_type=validated_request_data["select_sdk_type"],
-            is_configuration=validated_request_data["is_configuration"],
         )
 
     def perform_request(self, validated_request_data):
@@ -285,9 +284,6 @@ class UpdateCollectorResource(CollectorMeta):
         if validated_request_data.get("select_sdk_type"):
             collector_config.select_sdk_type = validated_request_data["select_sdk_type"]
             update_fields.append("select_sdk_type")
-        if validated_request_data.get("is_configuration") is not None:
-            collector_config.is_configuration = validated_request_data["is_configuration"]
-            update_fields.append("is_configuration")
         collector_config.save(update_fields=update_fields)
         data = self.serializer_class(collector_config).data
         data.update({"task_id_list": resp.get("task_id_list", [])})
@@ -360,9 +356,7 @@ class UpdateBcsCollectorResource(CollectorMeta):
         if validated_request_data.get("select_sdk_type"):
             collector_config.select_sdk_type = validated_request_data["select_sdk_type"]
             update_fields.append("select_sdk_type")
-        if validated_request_data.get("is_configuration") is not None:
-            collector_config.is_configuration = validated_request_data["is_configuration"]
-            update_fields.append("is_configuration")
+        collector_config.save(update_fields=update_fields)
         collector_config.save(update_fields=update_fields)
         return self.serializer_class(collector_config).data
 
@@ -662,7 +656,6 @@ class CreateApiPushResource(GetApiPushBaseResource):
         namespace = validated_request_data["namespace"]
         system_id = validated_request_data["system_id"]
         custom_collector_config_name = validated_request_data.get("custom_collector_config_name")
-        is_configuration = validated_request_data["is_configuration"]
 
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
@@ -702,7 +695,6 @@ class CreateApiPushResource(GetApiPushBaseResource):
             collector_config_name_en=collector_config_name,
             custom_type=CustomTypeEnum.OTLP_LOG.value,
             description=collector_config_name,
-            is_configuration=is_configuration,
         )
 
         # 异步创建ETL避免超时
@@ -846,7 +838,6 @@ class ApplyDataIdSource(DataIdResource):
         # 自定义名称
         custom_collector_ch_name = validated_request_data.get("custom_collector_ch_name")
         custom_collector_en_name = validated_request_data.get("custom_collector_en_name")
-        is_configuration = validated_request_data.get("is_configuration")
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
             config_level=ConfigLevelChoices.NAMESPACE.value,
@@ -886,7 +877,6 @@ class ApplyDataIdSource(DataIdResource):
             "description": raw_data["description"],
             "etl_config": EtlConfigEnum.BK_BASE_JSON.value,
             "is_deleted": False,
-            "is_configuration": is_configuration,
         }
         # 存在则更新
         if collector is not None:

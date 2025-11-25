@@ -38,10 +38,10 @@ from services.web.databus.constants import (
     JoinDataPullType,
     JoinDataType,
     LogReportStatus,
-    RecordLogTypeChoices,
-    SelectSdkTypeChoices,
     SnapShotStorageChoices,
     TargetNodeTypeChoices,
+    RecordLogTypeChoices,
+    SelectSdkTypeChoices
 )
 from services.web.databus.models import (
     CollectorConfig,
@@ -90,13 +90,8 @@ class CollectorCreateRequestSerializer(serializers.Serializer):
     params = PluginParamSerializer()
 
     # 前置：记录日志参数
-    record_log_type = serializers.ChoiceField(
-        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
-    )
-    select_sdk_type = serializers.ChoiceField(
-        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
-    )
-    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
+    record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK)
+    select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK)
 
 
 class CollectorCreateResponseSerializer(serializers.ModelSerializer):
@@ -183,13 +178,8 @@ class UpdateCollectorRequestSerializer(serializers.Serializer):
     params = PluginParamSerializer()
 
     # 前置：记录日志参数
-    record_log_type = serializers.ChoiceField(
-        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
-    )
-    select_sdk_type = serializers.ChoiceField(
-        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
-    )
-    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
+    record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK)
+    select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK)
 
 
 class CollectorEtlFieldsSerializer(serializers.ModelSerializer):
@@ -306,13 +296,10 @@ class BcsCollectorBaseSerializer(serializers.Serializer):
     yaml_config = serializers.CharField(label=gettext_lazy("yaml配置内容"), default="", allow_blank=True)
 
     # 前置：记录日志参数
-    record_log_type = serializers.ChoiceField(
-        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
-    )
-    select_sdk_type = serializers.ChoiceField(
-        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
-    )
-    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
+    record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices,
+                                              default=RecordLogTypeChoices.SDK)
+    select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices,
+                                              default=SelectSdkTypeChoices.PYTHON_SDK)
 
     def validate_yaml_config(self, value):
         try:
@@ -339,7 +326,6 @@ class CreateApiPushRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
     custom_collector_config_name = serializers.CharField(label=gettext_lazy("用户自定义名称"), required=False)
-    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
 
 class GetApiPushRequestSerializer(serializers.Serializer):
@@ -445,7 +431,6 @@ class ApplyDataIdSourceRequestSerializer(serializers.Serializer):
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
     custom_collector_en_name = serializers.CharField(label=gettext_lazy("自定义英文名"), required=False)
     custom_collector_ch_name = serializers.CharField(label=gettext_lazy("自定义中文名"), required=False)
-    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
 
 class DataIdEtlStorageRequestSerializer(serializers.Serializer):
