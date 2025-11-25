@@ -122,10 +122,9 @@ def get_manual_risk_event_strategy_config(rt_id):
     # 2. 构建完整字典
     return {
         "tools": [],
-        "created_at": "2025-11-17 16:52:30",
-        "created_by": "lawrentwang",
+        "created_by": "admin",
         "updated_at": "2025-11-20 11:48:47",
-        "updated_by": "lawrentwang",
+        "updated_by": "admin",
         "is_deleted": False,
         "namespace": "default",
         "strategy_name": "手动新建风险",
