@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("risk", "0035_alter_manualriskevent_options"),
+        ("risk", "0033_alter_manualriskevent_strategy"),
     ]
 
     operations = [

@@ -18,13 +18,16 @@ import core.lock as lock_module
 from services.web.risk.constants import RiskStatus
 from services.web.risk.models import ManualEvent, Risk
 from services.web.risk.tasks import manual_add_event
+from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
 
 class CreateEventResourceTest(TestCase):
     def setUp(self):
         super().setUp()
-        self.strategy = Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name="manual")
+        self.strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE, strategy_name="manual", strategy_type=StrategyType.RULE
+        )
         now = timezone.now()
         self.risk = Risk.objects.create(
             risk_id="risk-manual",
@@ -34,6 +37,10 @@ class CreateEventResourceTest(TestCase):
             event_end_time=now + datetime.timedelta(hours=1),
             event_content="risk",
         )
+        self.perm_patcher = mock.patch(
+            "services.web.risk.permissions.GenerateStrategyRiskPermission.ensure_allowed", return_value=None
+        )
+        self.perm_patcher.start()
         self._orig_eager = celery_app.conf.task_always_eager
         self._orig_propagates = celery_app.conf.task_eager_propagates
         celery_app.conf.task_always_eager = True
@@ -45,6 +52,7 @@ class CreateEventResourceTest(TestCase):
         lock_module.cache = self._orig_lock_cache
         celery_app.conf.task_always_eager = self._orig_eager
         celery_app.conf.task_eager_propagates = self._orig_propagates
+        self.perm_patcher.stop()
         super().tearDown()
 
     def _build_request(self, username, is_superuser=False):
