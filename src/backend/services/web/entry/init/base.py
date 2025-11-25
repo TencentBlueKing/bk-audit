@@ -34,8 +34,10 @@ from services.web.databus.collector.snapshot.system.base import create_iam_data_
 from services.web.databus.constants import (
     ClusterMode,
     JoinDataType,
+    SnapshotRunningStatus,
     SnapShotStorageChoices,
 )
+from services.web.databus.models import Snapshot
 from services.web.databus.storage.serializers import (
     CreateRedisRequestSerializer,
     StorageCreateRequestSerializer,
@@ -50,12 +52,15 @@ from services.web.entry.constants import (
     INIT_REDIS_FISHED_KEY,
     INIT_SNAPSHOT_FINISHED_KEY,
     INIT_SYSTEM_FINISHED_KEY,
+    INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
+    get_manual_risk_event_strategy_config,
 )
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
     EVENT_ES_CLUSTER_ID_KEY,
 )
 from services.web.risk.handlers import EventHandler
+from services.web.strategy_v2.models import Strategy
 
 
 class SystemInitHelper:
@@ -111,6 +116,7 @@ class SystemInitHandler:
         self.create_or_update_plugin_etl()
         self.init_system()
         self.init_asset()
+        self.init_system_rule_audit()
         print("[Main] Init Finished")
 
     def pre_init(self):
@@ -244,28 +250,127 @@ class SystemInitHandler:
             ResourceEnum.STRATEGY,
             ResourceEnum.STRATEGY_TAG,
             ResourceEnum.TICKET_PERMISSION,
+            ResourceEnum.MANUAL_RISK_EVENT,
         ]
+        manual_event_custom_conf = {
+            "etl.clean_config.json_config.conf": {
+                "time_format": "Unix Time Stamp(milliseconds)",
+                "timestamp_len": 13,
+                "timezone": 0,
+                "time_field_name": "event_time_timestamp",
+            }
+        }
         for asset in assets:
             system_id, resource_type_id = asset.system_id, asset.id
             map_key = f"{system_id}-{resource_type_id}"
             if status_map.get(map_key):
                 continue
             try:
-                resource.databus.collector.toggle_join_data(
-                    {
-                        "system_id": system_id,
-                        "resource_type_id": resource_type_id,
-                        "is_enabled": True,
-                        "join_data_type": JoinDataType.ASSET.value,
-                        "storage_type": [
-                            SnapShotStorageChoices.HDFS.value,
-                            SnapShotStorageChoices.DORIS.value,
-                        ],
-                    }
-                )
+                toggle_params = {
+                    "system_id": system_id,
+                    "resource_type_id": resource_type_id,
+                    "is_enabled": True,
+                    "join_data_type": JoinDataType.ASSET.value,
+                    "storage_type": [
+                        SnapShotStorageChoices.HDFS.value,
+                        SnapShotStorageChoices.DORIS.value,
+                    ],
+                }
+                if resource_type_id == ResourceEnum.MANUAL_RISK_EVENT.id:
+                    toggle_params["custom_config"] = manual_event_custom_conf
+                resource.databus.collector.toggle_join_data(toggle_params)
                 status_map[map_key] = True
             except Exception as err:  # pylint: disable=broad-except
                 print(f"[InitAsset] Failed => {system_id}-{resource_type_id}: {err}")
                 status_map[map_key] = False
         GlobalMetaConfig.set(INIT_ASSET_FINISHED_KEY, status_map)
         print("[InitAsset] Finished")
+
+    def _build_system_rule_audit_params(self, rt_id: str) -> dict:
+        """
+        使用 quick_run.py 的模板生成系统默认规则审计参数。
+        仅保留 create_strategy 接口需要的字段。
+        """
+        config = get_manual_risk_event_strategy_config(rt_id)
+        required_fields = [
+            "namespace",
+            "strategy_name",
+            "control_id",
+            "control_version",
+            "strategy_type",
+            "sql",
+            "configs",
+            "tags",
+            "notice_groups",
+            "description",
+            "risk_level",
+            "risk_hazard",
+            "risk_guidance",
+            "risk_title",
+            "processor_groups",
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
+            "risk_meta_field_config",
+        ]
+        params = {field: config.get(field) for field in required_fields if field in config}
+        params.setdefault("namespace", settings.DEFAULT_NAMESPACE)
+        params["control_id"] = params.get("control_id") or None
+        params.setdefault("control_version", None)
+        params.setdefault("tags", [])
+        params.setdefault("notice_groups", [])
+        params.setdefault("processor_groups", [])
+        configs = params.get("configs")
+        if not configs:
+            return {}
+        data_source = configs.setdefault("data_source", {})
+        data_source["rt_id"] = rt_id
+        data_source.setdefault("display_name", rt_id)
+        return params
+
+    def init_system_rule_audit(self):
+        """
+        创建系统默认规则审计策略，基于手工风险事件的快照结果表。
+        """
+
+        if self.pre_check(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY):
+            return
+        print("[InitSystemRuleAudit] Start")
+        snapshot = (
+            Snapshot.objects.filter(
+                system_id=ResourceEnum.MANUAL_RISK_EVENT.system_id,
+                resource_type_id=ResourceEnum.MANUAL_RISK_EVENT.id,
+                bkbase_table_id__isnull=False,
+                join_data_type=JoinDataType.ASSET.value,
+                status__in=[SnapshotRunningStatus.RUNNING.value, SnapshotRunningStatus.PREPARING.value],
+            )
+            .order_by("-updated_at")
+            .first()
+        )
+        if not snapshot:
+            print("[InitSystemRuleAudit] Snapshot Not Ready, Skip")
+            return
+
+        params = self._build_system_rule_audit_params(snapshot.bkbase_table_id)
+        if not params:
+            print("[InitSystemRuleAudit] Params Build Failed")
+            return
+
+        namespace = params.get("namespace", settings.DEFAULT_NAMESPACE)
+        strategy_name = params.get("strategy_name")
+        if not strategy_name:
+            print("[InitSystemRuleAudit] Strategy Name Missing")
+            return
+        if Strategy.objects.filter(strategy_name=strategy_name, namespace=namespace).exists():
+            print(f"[InitSystemRuleAudit] Strategy Already Exists => {strategy_name}")
+            self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
+            return
+
+        try:
+            resource.strategy_v2.create_strategy(**params)
+        except Exception as err:  # pylint: disable=broad-except
+            print(f"[InitSystemRuleAudit] Failed => {err}")
+            return
+
+        self.post_init(INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
+        print("[InitSystemRuleAudit] Finished")

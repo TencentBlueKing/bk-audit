@@ -23,9 +23,18 @@ from django.conf import settings
 from django.test.utils import override_settings
 
 from apps.permission.handlers.resource_types import ResourceEnum
-from services.web.databus.constants import JoinDataType, SnapShotStorageChoices
-from services.web.entry.constants import INIT_ASSET_FINISHED_KEY
+from services.web.databus.constants import (
+    JoinDataType,
+    SnapshotRunningStatus,
+    SnapShotStorageChoices,
+)
+from services.web.databus.models import Snapshot
+from services.web.entry.constants import (
+    INIT_ASSET_FINISHED_KEY,
+    INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
+)
 from services.web.entry.init.base import SystemInitHandler
+from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
 
 
@@ -67,6 +76,36 @@ class SystemInitAssetTests(TestCase):
         for resource_cls in [ResourceEnum.RISK, ResourceEnum.STRATEGY, ResourceEnum.STRATEGY_TAG]:
             key = f"{resource_cls.system_id}-{resource_cls.id}"
             self.assertTrue(saved_status.get(key))
+
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    @mock.patch("services.web.entry.init.base.resource.databus.collector.toggle_join_data")
+    def test_init_asset_manual_risk_event_with_custom_conf(self, mock_toggle, mock_set, mock_get):
+        mock_get.return_value = {}
+
+        self.handler.init_asset()
+
+        manual_call = mock.call(
+            {
+                "system_id": ResourceEnum.MANUAL_RISK_EVENT.system_id,
+                "resource_type_id": ResourceEnum.MANUAL_RISK_EVENT.id,
+                "is_enabled": True,
+                "join_data_type": JoinDataType.ASSET.value,
+                "storage_type": [
+                    SnapShotStorageChoices.HDFS.value,
+                    SnapShotStorageChoices.DORIS.value,
+                ],
+                "custom_config": {
+                    "etl.clean_config.json_config.conf": {
+                        "time_format": "Unix Time Stamp(milliseconds)",
+                        "timestamp_len": 13,
+                        "timezone": 0,
+                        "time_field_name": "event_time_timestamp",
+                    }
+                },
+            }
+        )
+        self.assertIn(manual_call, mock_toggle.call_args_list)
 
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
@@ -130,3 +169,49 @@ class SystemInitAssetTests(TestCase):
         for resource_cls in [ResourceEnum.RISK, ResourceEnum.STRATEGY, ResourceEnum.STRATEGY_TAG]:
             key = f"{resource_cls.system_id}-{resource_cls.id}"
             self.assertFalse(saved_status.get(key))
+
+
+@override_settings(BKAPP_INIT_SYSTEM="True")
+class SystemInitRuleAuditTests(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.handler = SystemInitHandler()
+
+    @mock.patch("services.web.entry.init.base.resource.strategy_v2.create_strategy")
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
+    def test_init_system_rule_audit_create(self, mock_get, mock_set, mock_create):
+        mock_get.return_value = False
+        snapshot = Snapshot.objects.create(
+            system_id=ResourceEnum.MANUAL_RISK_EVENT.system_id,
+            resource_type_id=ResourceEnum.MANUAL_RISK_EVENT.id,
+            bkbase_table_id="test_rt_id",
+            status=SnapshotRunningStatus.RUNNING.value,
+            join_data_type=JoinDataType.ASSET.value,
+        )
+
+        self.handler.init_system_rule_audit()
+
+        mock_create.assert_called_once()
+        params = mock_create.call_args.kwargs
+        self.assertEqual(params["configs"]["data_source"]["rt_id"], snapshot.bkbase_table_id)
+        self.assertEqual(mock_set.call_args.args[0], INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
+
+    @mock.patch("services.web.entry.init.base.resource.strategy_v2.create_strategy")
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
+    @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
+    def test_init_system_rule_audit_skip_when_exists(self, mock_get, mock_set, mock_create):
+        mock_get.return_value = False
+        Snapshot.objects.create(
+            system_id=ResourceEnum.MANUAL_RISK_EVENT.system_id,
+            resource_type_id=ResourceEnum.MANUAL_RISK_EVENT.id,
+            bkbase_table_id="test_rt_id",
+            status=SnapshotRunningStatus.RUNNING.value,
+            join_data_type=JoinDataType.ASSET.value,
+        )
+        Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name="手动新建风险", strategy_type="rule")
+
+        self.handler.init_system_rule_audit()
+
+        mock_create.assert_not_called()
+        self.assertEqual(mock_set.call_args.args[0], INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY)
