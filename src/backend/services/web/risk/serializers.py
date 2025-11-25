@@ -49,7 +49,10 @@ from services.web.risk.models import (
     TicketPermission,
 )
 from services.web.strategy_v2.models import Strategy
-from services.web.strategy_v2.serializers import EventFieldSerializer
+from services.web.strategy_v2.serializers import (
+    EventFieldSerializer,
+    merge_select_field_type,
+)
 
 
 class CreateEventSerializer(serializers.Serializer):
@@ -902,6 +905,7 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        data["event_data_field_configs"] = merge_select_field_type(instance, data.get("event_data_field_configs", []))
         # 对基础字段描述进行国际化
         event_basic_field_configs = data.get("event_basic_field_configs") or []
         for config in event_basic_field_configs:

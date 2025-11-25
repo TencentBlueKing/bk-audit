@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('databus', '0021_collectorconfig_is_configuration_and_more'),
+        ('databus', '0019_collectorplugin_has_replica_storage'),
     ]
 
     operations = [
