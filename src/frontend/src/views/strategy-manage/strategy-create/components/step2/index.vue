@@ -233,7 +233,7 @@
     return resultArray;
   });
 
-  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-main');
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
 
   const handlePreview = () => {
     // 预览前更新一次formData，用于查看重点信息

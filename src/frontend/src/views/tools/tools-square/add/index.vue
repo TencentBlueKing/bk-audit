@@ -183,6 +183,12 @@
                         @click="handleGoBkvision">
                         {{ t('跳转至 BKVision') }}
                       </bk-button>
+                      <audit-icon
+                        v-bk-tooltips="t('刷新报表')"
+                        class="vision-refresh"
+                        :class="{ rotating: isRefreshing }"
+                        type="refresh"
+                        @click="handleRefreshClick" />
                     </div>
                     <div
                       v-if="spacePermission"
@@ -274,7 +280,7 @@
   import Failed from './components/tool-status/failed.vue';
   import Successful from './components/tool-status/Successful.vue';
 
-  // import useMessage from '@/hooks/use-message';
+  import useMessage from '@/hooks/use-message';
   import useRequest from '@/hooks/use-request';
 
   interface FormData {
@@ -376,6 +382,7 @@
   const formRef = ref();
   const comRef = ref();
 
+  const { messageSuccess } = useMessage();
   const loading = ref(false);
   const isCreating = ref(false);
   const isFailed = ref(false);
@@ -535,7 +542,7 @@
       });
     },
   });
-
+  const isRefreshing = ref(false);
   // 获取图表列表
   const {
     data: chartLists,
@@ -544,6 +551,9 @@
     defaultValue: new Array<ChartListModel>(),
     // manual: true,
     onSuccess: (data) => {
+      if (isRefreshing.value) {
+        return;
+      }
       if (data === 'error') {
         hasPermission.value = false;
         chartLists.value = [];
@@ -571,6 +581,9 @@
   } = useRequest(ToolManageService.fetchReportLists, {
     defaultValue: {},
     onSuccess: (res) => {
+      if (isRefreshing.value) {
+        return;
+      }
       if (res) {
         dashboardUid.value = res.data.dashboard_uid;
         const configInputVariable = _.cloneDeep(formData.value.config.input_variable);
@@ -688,8 +701,28 @@
     },
   });
   const clickSpaceChange = ref(0);
+
+  // 刷新图标点击事件
+  const handleRefreshClick = async () => {
+    if (isRefreshing.value) return;
+    isRefreshing.value = true;
+    try {
+      // 如果有选中的报表，重新获取报表数据
+      fetchChartLists().then(() => {
+        messageSuccess(t('刷新成功'));
+      });
+      if (configUid.value.length > 0) {
+        await fetchReportLists({
+          share_uid: configUid.value[configUid.value.length - 1],
+        });
+      }
+    } finally {
+      isRefreshing.value = false;
+    }
+  };
   // 选择报表
   const handleSpaceChange = (val: string) => {
+    isRefreshing.value = false;
     clickSpaceChange.value += 1;
     spacePermission.value = false;
     if (val.length === 0) {
@@ -828,6 +861,31 @@
 
   .chart-cascade {
     display: flex;
+  }
+
+  .vision-refresh {
+    display: flex;
+    margin-left: 10px;
+    font-size: 18px;
+    color: #87888f;
+    cursor: pointer;
+    transition: transform .3s ease;
+    align-items: center;
+    justify-content: center;
+
+    &.rotating {
+      animation: refresh 1s linear infinite;
+    }
+  }
+
+  @keyframes refresh {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .permission {

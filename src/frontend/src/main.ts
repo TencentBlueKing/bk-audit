@@ -135,7 +135,11 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
 
     BKApp.mount('#app');
   })
-  .catch(() => {
+  .catch((e) => {
+    // 如果是未登录，直接跳去登录；避免页面出现一闪错误组件的情况
+    if (e.code === 401) {
+      return;
+    }
     const BKApp = createApp(Exception);
 
     BKApp.use(BkuiVue);

@@ -101,7 +101,7 @@
 <style scoped lang="postcss">
 .diff-text {
   height: 100%;
-  max-width: calc(100% - 1280px);
+  max-width: calc(100% - 1600px);
   min-width: 246px;
   padding-left: 12px;
   color: #63656e;

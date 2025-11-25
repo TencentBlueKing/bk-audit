@@ -462,9 +462,6 @@ class UpdateStrategy(StrategyV2Base):
             and strategy.control_id != validated_request_data["control_id"]
         ):
             raise ControlChangeError()
-        # check risk_level
-        if strategy.risk_level is not None:
-            validated_request_data.pop("risk_level")
         # save strategy
         for key, val in validated_request_data.items():
             inst_val = getattr(strategy, key, Empty())
@@ -595,7 +592,7 @@ class ListStrategy(StrategyV2Base):
             if validated_request_data.get(key):
                 q = Q()
                 for item in validated_request_data[key]:
-                    q |= Q(**{f"{key}__contains": item})
+                    q |= Q(**{f"{key}__icontains": item})
                 queryset = queryset.filter(q)
 
         # 预加载策略标签，避免N+1查询

@@ -111,9 +111,9 @@
               </span>
             </template>
             <bk-option
-              v-for="(item, index) in selectedItems"
+              v-for="item in selectedItems"
               :id="item.id"
-              :key="index"
+              :key="item.id"
               :name="`${item.display_name}[${item.field_name}]`" />
           </bk-select>
         </template>
@@ -298,7 +298,6 @@
       operator: item.operator,
     }));
   };
-
   const renderType = ref<keyof typeof comMap>('key');
   if (comMap[urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap]) {
     renderType.value = urlSearchParams[SEARCH_TYPE_QUERY_KEY] as keyof typeof comMap;
