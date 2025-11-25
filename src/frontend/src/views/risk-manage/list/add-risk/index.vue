@@ -91,7 +91,6 @@
   const { messageSuccess } = useMessage();
 
   const handlePreview = () => {
-    console.log('handlePreview', editRef.value);
     editRef.value?.validate();
   };
 
@@ -100,7 +99,6 @@
     editData.value = editRef.value?.getEditData();
     isEdit.value = false;
     nextTick(() => {
-      console.log('handlePreview', previewRef.value);
       previewRef.value?.initData(editData.value);
     });
   };
@@ -108,7 +106,6 @@
   const handleReturn = () => {
     isEdit.value = true;
     nextTick(() => {
-      console.log('handleReturn', editData.value, editRef.value);
       editRef.value?.handlerReturnData(editData.value);
     });
   };
@@ -159,7 +156,6 @@
       ],
       gen_risk: true,
     };
-    console.log('params>>>>', params);
     addEvent(params);
   };
   defineExpose<Exposes>({

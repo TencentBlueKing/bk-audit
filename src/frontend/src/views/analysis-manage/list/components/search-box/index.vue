@@ -108,13 +108,10 @@
     }
   });
   if (urlSearchParams.start_time && urlSearchParams.end_time) {
-    console.log('>>', urlSearchParams.start_time, urlSearchParams.end_time);
-
     searchModel.value.datetime = [
       formatTimeWithTimezone(urlSearchParams.start_time),
       formatTimeWithTimezone(urlSearchParams.end_time),
     ];
-    console.log(searchModel.value.datetime);
   }
   if (urlSearchParams.datetime_origin) {
     searchModel.value.datetime_origin = urlSearchParams.datetime_origin.split(',');

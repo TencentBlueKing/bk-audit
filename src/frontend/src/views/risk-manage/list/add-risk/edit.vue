@@ -307,7 +307,6 @@
   // 表单验证
   const validate = () => {
     formRef.value.validate().then(() => {
-      console.log('表单验证');
       emits('validateSuccess');
     });
   };

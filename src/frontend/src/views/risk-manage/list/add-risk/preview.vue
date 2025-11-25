@@ -16,7 +16,9 @@
 -->
 <template>
   <div class="preview">
-    <div class="base-info">
+    <div
+      class="base-info"
+      :style="borderStyle">
       <div class="info-title">
         {{ editData.selectedRiskValue?.risk_title }}
       </div>
@@ -131,7 +133,7 @@
 </template>
 
 <script lang="ts" setup>
-  import { ref } from 'vue';
+  import { computed, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import RiskManageService from '@service/risk-manage';
@@ -154,10 +156,30 @@
   interface Exposes{
     initData(data: Record<string, any>): void,
   }
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const { t } = useI18n();
   const isShowMore = ref(false);
   const eventData = ref<Record<string, any>>({});
+  const riskLevelMap: Record<string, {
+    label: string,
+    color: string,
+  }> =  {
+    HIGH: {
+      label: t('高'),
+      color: '#ea3636',
+    },
+    MIDDLE: {
+      label: t('中'),
+      color: '#ff9c01',
+    },
+    LOW: {
+      label: t('低'),
+      color: '#979ba5',
+    },
+  };
+  const borderStyle = computed(() => ({
+    'border-top': `6px solid ${riskLevelMap[props.editData.selectedRiskValue.risk_level]?.color}`,
+  }));
   const {
     data: strategyList,
   } = useRequest(StrategyManageService.fetchAllStrategyList, {
@@ -170,7 +192,6 @@
   } = useRequest(RiskManageService.fetchRiskStatusCommon, {
     defaultValue: [],
   });
-  console.log('eventData', eventData.value);
 
   // 重点展示字段的 field_name 数组
   const priorityFieldNames = ref([]);
@@ -182,7 +203,6 @@
 
   defineExpose<Exposes>({
     initData(data: Record<string, any>) {
-      console.log('data>>>>>>>>>>>>', data);
       eventData.value = data.selectedRiskValue;
       priorityFieldNames.value = data.selectedRiskValue?.risk_meta_field_config
         .filter((item: Record<string, any>) => item.is_priority);

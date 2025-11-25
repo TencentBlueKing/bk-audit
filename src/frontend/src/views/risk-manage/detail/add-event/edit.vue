@@ -205,7 +205,6 @@
     event_content: '',
   });
   const rules = ref();
-  console.log('formData', formData.value);
 
   const typeList = ref([
     {
@@ -293,7 +292,6 @@
         gen_risk: false,
         risk_id: props.eventData.risk_id.toString(),
       };
-      console.log('params>>>>', params);
       addEvent(params);
     });
   };
