@@ -16,7 +16,7 @@ from rest_framework import serializers
 
 import core.lock as lock_module
 from services.web.risk.constants import RiskStatus
-from services.web.risk.models import ManualRiskEvent, Risk
+from services.web.risk.models import ManualEvent, Risk
 from services.web.risk.tasks import manual_add_event
 from services.web.strategy_v2.models import Strategy
 
@@ -70,7 +70,7 @@ class CreateEventResourceTest(TestCase):
             response = resource.risk.create_event(events=[event_payload], gen_risk=True, _request=request)
         self.assertEqual(len(response["event_ids"]), 1)
         self.assertTrue(
-            ManualRiskEvent.objects.filter(raw_event_id="raw-1", strategy_id=self.strategy.strategy_id).exists()
+            ManualEvent.objects.filter(raw_event_id="raw-1", strategy_id=self.strategy.strategy_id).exists()
         )
         self.assertTrue(Risk.objects.filter(raw_event_id="raw-1", strategy_id=self.strategy.strategy_id).exists())
 
@@ -93,12 +93,12 @@ class CreateEventResourceTest(TestCase):
             )
         self.assertEqual(len(response["event_ids"]), 1)
         self.assertTrue(
-            ManualRiskEvent.objects.filter(
+            ManualEvent.objects.filter(
                 raw_event_id=self.risk.raw_event_id, strategy_id=self.strategy.strategy_id
             ).exists()
         )
         self.assertFalse(
-            ManualRiskEvent.objects.filter(raw_event_id="raw-no-risk", strategy_id=self.strategy.strategy_id).exists()
+            ManualEvent.objects.filter(raw_event_id="raw-no-risk", strategy_id=self.strategy.strategy_id).exists()
         )
         self.assertFalse(Risk.objects.filter(raw_event_id="raw-no-risk").exists())
 
@@ -161,7 +161,7 @@ class CreateEventResourceTest(TestCase):
             response = resource.risk.create_event(events=[event_payload], gen_risk=True, _request=request)
         self.assertEqual(len(response["event_ids"]), 1)
         self.assertTrue(
-            ManualRiskEvent.objects.filter(raw_event_id="raw-owner", strategy_id=self.strategy.strategy_id).exists()
+            ManualEvent.objects.filter(raw_event_id="raw-owner", strategy_id=self.strategy.strategy_id).exists()
         )
         self.assertTrue(Risk.objects.filter(raw_event_id="raw-owner").exists())
 
@@ -186,7 +186,7 @@ class ManualAddEventTaskTest(TestCase):
 
     def test_manual_add_event_persists_rows(self):
         manual_add_event([self._build_event()])
-        manual_event = ManualRiskEvent.objects.get()
+        manual_event = ManualEvent.objects.get()
         self.assertEqual(manual_event.raw_event_id, "raw-manual")
         self.assertEqual(manual_event.strategy_id, self.strategy.strategy_id)
         self.assertEqual(manual_event.event_type, ["manual"])

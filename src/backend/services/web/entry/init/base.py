@@ -54,7 +54,7 @@ from services.web.entry.constants import (
     INIT_SYSTEM_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
     SDK_CONFIG_KEY,
-    get_manual_risk_event_strategy_config,
+    get_manual_event_strategy_config,
 )
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
@@ -260,7 +260,7 @@ class SystemInitHandler:
             ResourceEnum.STRATEGY,
             ResourceEnum.STRATEGY_TAG,
             ResourceEnum.TICKET_PERMISSION,
-            ResourceEnum.MANUAL_RISK_EVENT,
+            ResourceEnum.MANUAL_EVENT,
         ]
         manual_event_custom_conf = {
             "etl.clean_config.json_config.conf": {
@@ -286,7 +286,7 @@ class SystemInitHandler:
                         SnapShotStorageChoices.DORIS.value,
                     ],
                 }
-                if resource_type_id == ResourceEnum.MANUAL_RISK_EVENT.id:
+                if resource_type_id == ResourceEnum.MANUAL_EVENT.id:
                     toggle_params["custom_config"] = manual_event_custom_conf
                 resource.databus.collector.toggle_join_data(toggle_params)
                 status_map[map_key] = True
@@ -301,7 +301,7 @@ class SystemInitHandler:
         使用 quick_run.py 的模板生成系统默认规则审计参数。
         仅保留 create_strategy 接口需要的字段。
         """
-        config = get_manual_risk_event_strategy_config(rt_id)
+        config = get_manual_event_strategy_config(rt_id)
         required_fields = [
             "namespace",
             "strategy_name",
@@ -348,8 +348,8 @@ class SystemInitHandler:
         print("[InitSystemRuleAudit] Start")
         snapshot = (
             Snapshot.objects.filter(
-                system_id=ResourceEnum.MANUAL_RISK_EVENT.system_id,
-                resource_type_id=ResourceEnum.MANUAL_RISK_EVENT.id,
+                system_id=ResourceEnum.MANUAL_EVENT.system_id,
+                resource_type_id=ResourceEnum.MANUAL_EVENT.id,
                 bkbase_table_id__isnull=False,
                 join_data_type=JoinDataType.ASSET.value,
                 status__in=[SnapshotRunningStatus.RUNNING.value, SnapshotRunningStatus.PREPARING.value],

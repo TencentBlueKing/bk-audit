@@ -9,11 +9,8 @@ from iam.collection import FancyDict
 from iam.resource.utils import Page
 
 from apps.permission.handlers.resource_types import ResourceEnum
-from services.web.risk.models import ManualRiskEvent, Risk
-from services.web.risk.provider import (
-    ManualRiskEventResourceProvider,
-    RiskResourceProvider,
-)
+from services.web.risk.models import ManualEvent, Risk
+from services.web.risk.provider import ManualEventResourceProvider, RiskResourceProvider
 from services.web.strategy_v2.models import Strategy
 
 
@@ -158,15 +155,15 @@ class RiskResourceProviderAPITest(TestCase):
         self.assertEqual(payload["last_operate_time_timestamp"], _ms(risk.last_operate_time))
 
 
-class ManualRiskEventProviderAPITest(TestCase):
+class ManualEventProviderAPITest(TestCase):
     def setUp(self):
         self._dummy_request = type("DummyRequest", (), {"headers": {}})()
         self.req_patcher = patch.object(
-            ManualRiskEventResourceProvider, "get_local_request", return_value=self._dummy_request
+            ManualEventResourceProvider, "get_local_request", return_value=self._dummy_request
         )
         self.req_patcher.start()
         self.addCleanup(self.req_patcher.stop)
-        self.provider = ManualRiskEventResourceProvider()
+        self.provider = ManualEventResourceProvider()
 
     def _create_strategy(self, name: str) -> Strategy:
         return Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name=name)
@@ -177,13 +174,11 @@ class ManualRiskEventProviderAPITest(TestCase):
         raw_event_id: str,
         strategy: Strategy,
         event_time: datetime.datetime,
-        event_end_time: datetime.datetime | None,
-    ) -> ManualRiskEvent:
-        return ManualRiskEvent.objects.create(
+    ) -> ManualEvent:
+        return ManualEvent.objects.create(
             raw_event_id=raw_event_id,
             strategy=strategy,
             event_time=event_time,
-            event_end_time=event_end_time,
         )
 
     def test_list_fetch_search(self):
@@ -194,13 +189,11 @@ class ManualRiskEventProviderAPITest(TestCase):
             raw_event_id="manual-raw-A",
             strategy=strategy_a,
             event_time=event_time,
-            event_end_time=event_time + datetime.timedelta(minutes=5),
         )
         event_b = self._create_manual_event(
             raw_event_id="manual-raw-B",
             strategy=strategy_b,
             event_time=event_time,
-            event_end_time=event_time + datetime.timedelta(minutes=10),
         )
         page = Page(50, 0)
         lr = self.provider.list_instance(FancyDict(parent=None, search=None), page)
@@ -234,15 +227,13 @@ class ManualRiskEventProviderAPITest(TestCase):
     def test_fetch_instance_list_returns_ms(self):
         strategy = self._create_strategy("manual-strategy")
         event_time = timezone.now().replace(microsecond=123000)
-        event_end_time = event_time + datetime.timedelta(minutes=5)
         event = self._create_manual_event(
             raw_event_id="manual-raw-1",
             strategy=strategy,
             event_time=event_time,
-            event_end_time=event_end_time,
         )
-        last_operate_time = event_end_time + datetime.timedelta(minutes=5)
-        ManualRiskEvent.objects.filter(pk=event.pk).update(last_operate_time=last_operate_time)
+        last_operate_time = event_time + datetime.timedelta(minutes=5)
+        ManualEvent.objects.filter(pk=event.pk).update(last_operate_time=last_operate_time)
         event.refresh_from_db()
 
         now = timezone.now()
@@ -254,5 +245,4 @@ class ManualRiskEventProviderAPITest(TestCase):
         item = next(data for data in result.results if data["id"] == str(event.manual_event_id))
         payload = item["data"]
         self.assertEqual(payload["event_time_timestamp"], _ms(event.event_time))
-        self.assertEqual(payload["event_end_time_timestamp"], _ms(event.event_end_time))
         self.assertEqual(payload["last_operate_time_timestamp"], _ms(event.last_operate_time))
