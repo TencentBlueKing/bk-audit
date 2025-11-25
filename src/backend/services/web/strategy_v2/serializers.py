@@ -70,6 +70,34 @@ from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTool
 from services.web.tool.constants import DrillConfig
 
 
+def merge_select_field_type(strategy: Strategy, event_data_field_configs: List[dict]) -> List[dict]:
+    """
+    将策略 configs.select 中的 field_type 合并到 event_data_field_configs，按 (field_name, display_name) 唯一键匹配。
+    """
+
+    if not strategy or not event_data_field_configs:
+        return event_data_field_configs
+
+    select_fields = (strategy.configs or {}).get("select", []) if isinstance(strategy.configs, dict) else []
+
+    def build_key(raw_name: str | None, display_name: str | None) -> tuple:
+        return (raw_name or "", display_name or raw_name or "")
+
+    field_type_map = {
+        build_key(select.get("raw_name"), select.get("display_name")): select.get("field_type")
+        for select in select_fields
+        if select.get("field_type")
+    }
+
+    for field in event_data_field_configs:
+        field_name = field.get("field_name", "")
+        display_name = field.get("display_name") or field_name
+        field_type = field_type_map.get(build_key(field_name, display_name))
+        if field_type:
+            field["field_type"] = field_type
+    return event_data_field_configs
+
+
 class MapFieldSerializer(serializers.Serializer):
     source_field = serializers.CharField(
         label=gettext_lazy("Source Field"),
@@ -461,6 +489,11 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Strategy
         exclude = ["backend_data"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["event_data_field_configs"] = merge_select_field_type(instance, data.get("event_data_field_configs", []))
+        return data
 
 
 class StrategyInfoSerializer(serializers.ModelSerializer):
