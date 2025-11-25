@@ -40,7 +40,7 @@ from services.web.risk.constants import (
     RiskViewType,
 )
 from services.web.risk.models import (
-    ManualRiskEvent,
+    ManualEvent,
     ProcessApplication,
     Risk,
     RiskExperience,
@@ -279,18 +279,15 @@ class RiskProviderSerializer(serializers.ModelSerializer):
         exclude = ["strategy"]
 
 
-class ManualRiskEventProviderSerializer(serializers.ModelSerializer):
+class ManualEventProviderSerializer(serializers.ModelSerializer):
     strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
     event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
-    event_end_time_timestamp = TimestampIntegerField(
-        label=gettext_lazy("Event End Time Timestamp(ms)"), source="event_end_time"
-    )
     last_operate_time_timestamp = TimestampIntegerField(
         label=gettext_lazy("Last Operate Time Timestamp(ms)"), source="last_operate_time"
     )
 
     class Meta:
-        model = ManualRiskEvent
+        model = ManualEvent
         exclude = ["strategy"]
 
 

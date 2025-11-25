@@ -80,15 +80,15 @@ class SystemInitAssetTests(TestCase):
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.get")
     @mock.patch("services.web.entry.init.base.GlobalMetaConfig.set")
     @mock.patch("services.web.entry.init.base.resource.databus.collector.toggle_join_data")
-    def test_init_asset_manual_risk_event_with_custom_conf(self, mock_toggle, mock_set, mock_get):
+    def test_init_asset_manual_event_with_custom_conf(self, mock_toggle, mock_set, mock_get):
         mock_get.return_value = {}
 
         self.handler.init_asset()
 
         manual_call = mock.call(
             {
-                "system_id": ResourceEnum.MANUAL_RISK_EVENT.system_id,
-                "resource_type_id": ResourceEnum.MANUAL_RISK_EVENT.id,
+                "system_id": ResourceEnum.MANUAL_EVENT.system_id,
+                "resource_type_id": ResourceEnum.MANUAL_EVENT.id,
                 "is_enabled": True,
                 "join_data_type": JoinDataType.ASSET.value,
                 "storage_type": [
@@ -183,8 +183,8 @@ class SystemInitRuleAuditTests(TestCase):
     def test_init_system_rule_audit_create(self, mock_get, mock_set, mock_create):
         mock_get.return_value = False
         snapshot = Snapshot.objects.create(
-            system_id=ResourceEnum.MANUAL_RISK_EVENT.system_id,
-            resource_type_id=ResourceEnum.MANUAL_RISK_EVENT.id,
+            system_id=ResourceEnum.MANUAL_EVENT.system_id,
+            resource_type_id=ResourceEnum.MANUAL_EVENT.id,
             bkbase_table_id="test_rt_id",
             status=SnapshotRunningStatus.RUNNING.value,
             join_data_type=JoinDataType.ASSET.value,
@@ -203,8 +203,8 @@ class SystemInitRuleAuditTests(TestCase):
     def test_init_system_rule_audit_skip_when_exists(self, mock_get, mock_set, mock_create):
         mock_get.return_value = False
         Snapshot.objects.create(
-            system_id=ResourceEnum.MANUAL_RISK_EVENT.system_id,
-            resource_type_id=ResourceEnum.MANUAL_RISK_EVENT.id,
+            system_id=ResourceEnum.MANUAL_EVENT.system_id,
+            resource_type_id=ResourceEnum.MANUAL_EVENT.id,
             bkbase_table_id="test_rt_id",
             status=SnapshotRunningStatus.RUNNING.value,
             join_data_type=JoinDataType.ASSET.value,

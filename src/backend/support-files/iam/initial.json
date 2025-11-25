@@ -154,7 +154,7 @@
     {
       "operation": "upsert_resource_type",
       "data": {
-        "id": "manual_risk_event",
+        "id": "manual_event",
         "name": "手工风险事件",
         "name_en": "Manual Risk Event",
         "description": "",
