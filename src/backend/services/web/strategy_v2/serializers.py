@@ -156,6 +156,9 @@ class EventFieldSerializer(serializers.Serializer):
     drill_config = DrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), many=True, default=list, allow_null=True)
     is_show = serializers.BooleanField(label=gettext_lazy("是否展示"), default=True)
     duplicate_field = serializers.BooleanField(label=gettext_lazy("是否去重字段"), default=False, required=False)
+    field_type = serializers.CharField(
+        label=gettext_lazy("Field Type"), required=False, default=None, allow_null=True, allow_blank=True
+    )
 
 
 class EventBasicFieldSerializer(EventFieldSerializer):
