@@ -38,18 +38,27 @@ from services.web.databus.constants import (
     SnapShotStorageChoices,
 )
 from services.web.databus.exceptions import SchemaEmptyError
+from services.web.databus.models import Snapshot
 from services.web.databus.storage.handler.redis import RedisHandler
 from services.web.databus.utils import start_bkbase_clean
 
 
 class JoinDataEtlStorageHandler:
-    def __init__(self, data_id: int, system: System, resource_type: ResourceType, storage_type: str):
+    def __init__(
+        self,
+        data_id: int,
+        system: System,
+        resource_type: ResourceType,
+        storage_type: str,
+        snapshot: Snapshot = None,
+    ):
         self.data_id = data_id
         self.system = system
         self.system_id = system.system_id
         self.resource_type = resource_type
         self.resource_type_id = resource_type.resource_type_id
         self.storage_type = storage_type
+        self.snapshot = snapshot
 
     def create_clean(self):
         """创建清洗"""
@@ -745,4 +754,16 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
                 "encoding": "UTF-8",
             },
         }
-        return json.dumps(config)
+        return json.dumps(self.update_json_conf(config))
+
+    def update_json_conf(self, config: dict) -> dict:
+        """
+        使用 Snapshot 自定义配置覆盖清洗 conf
+        """
+        if not self.snapshot or not self.snapshot.custom_config:
+            return config
+        conf_patch = self.snapshot.custom_config.get("etl.clean_config.json_config.conf")
+        if isinstance(conf_patch, dict):
+            config.setdefault("conf", {})
+            config["conf"].update(conf_patch)
+        return config

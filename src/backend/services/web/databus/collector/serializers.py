@@ -38,10 +38,10 @@ from services.web.databus.constants import (
     JoinDataPullType,
     JoinDataType,
     LogReportStatus,
+    RecordLogTypeChoices,
+    SelectSdkTypeChoices,
     SnapShotStorageChoices,
     TargetNodeTypeChoices,
-    RecordLogTypeChoices,
-    SelectSdkTypeChoices
 )
 from services.web.databus.models import (
     CollectorConfig,
@@ -90,8 +90,12 @@ class CollectorCreateRequestSerializer(serializers.Serializer):
     params = PluginParamSerializer()
 
     # 前置：记录日志参数
-    record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK)
-    select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK)
+    record_log_type = serializers.ChoiceField(
+        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
+    )
+    select_sdk_type = serializers.ChoiceField(
+        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
+    )
     is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
 
@@ -179,8 +183,12 @@ class UpdateCollectorRequestSerializer(serializers.Serializer):
     params = PluginParamSerializer()
 
     # 前置：记录日志参数
-    record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK)
-    select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK)
+    record_log_type = serializers.ChoiceField(
+        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
+    )
+    select_sdk_type = serializers.ChoiceField(
+        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
+    )
     is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
 
@@ -260,6 +268,7 @@ class ToggleJoinDataRequestSerializer(serializers.Serializer):
     join_data_type = serializers.ChoiceField(
         label=gettext_lazy("关联数据类型"), choices=JoinDataType.choices, default=JoinDataType.ASSET.value
     )
+    custom_config = serializers.JSONField(label=gettext_lazy("自定义配置"), required=False, allow_null=True)
 
 
 class ToggleJoinDataResponseSerializer(serializers.ModelSerializer):
@@ -267,7 +276,7 @@ class ToggleJoinDataResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Snapshot
-        fields = ["system_id", "resource_type_id", "status", "storage_type", "join_data_type"]
+        fields = ["system_id", "resource_type_id", "status", "storage_type", "join_data_type", "custom_config"]
 
     def get_storage_type(self, obj):
         # 获取与 Snapshot 关联的 storage_type（注意使用反向关系 storages）
@@ -297,10 +306,12 @@ class BcsCollectorBaseSerializer(serializers.Serializer):
     yaml_config = serializers.CharField(label=gettext_lazy("yaml配置内容"), default="", allow_blank=True)
 
     # 前置：记录日志参数
-    record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices,
-                                              default=RecordLogTypeChoices.SDK)
-    select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices,
-                                              default=SelectSdkTypeChoices.PYTHON_SDK)
+    record_log_type = serializers.ChoiceField(
+        label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK
+    )
+    select_sdk_type = serializers.ChoiceField(
+        label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK
+    )
     is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
     def validate_yaml_config(self, value):

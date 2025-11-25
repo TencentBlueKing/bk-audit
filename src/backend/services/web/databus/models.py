@@ -34,9 +34,11 @@ from services.web.databus.constants import (
     JoinDataPullType,
     JoinDataType,
     PluginSceneChoices,
+    RecordLogTypeChoices,
+    SelectSdkTypeChoices,
     SnapshotRunningStatus,
     SnapShotStorageChoices,
-    SourcePlatformChoices, RecordLogTypeChoices, SelectSdkTypeChoices,
+    SourcePlatformChoices,
 )
 
 
@@ -153,8 +155,12 @@ class CollectorConfig(SoftDeleteModel):
     storage_changed = models.BooleanField(gettext_lazy("更新集群"), default=False)
     auth_rt = models.BooleanField(gettext_lazy("已授权RT"), default=False)
 
-    record_log_type = models.CharField(gettext_lazy("记录日志方式"), max_length=64, choices=RecordLogTypeChoices.choices, blank=True)
-    select_sdk_type = models.CharField(gettext_lazy('SDK类型'), max_length=64, choices=SelectSdkTypeChoices.choices, blank=True)
+    record_log_type = models.CharField(
+        gettext_lazy("记录日志方式"), max_length=64, choices=RecordLogTypeChoices.choices, blank=True
+    )
+    select_sdk_type = models.CharField(
+        gettext_lazy('SDK类型'), max_length=64, choices=SelectSdkTypeChoices.choices, blank=True
+    )
     is_configuration = models.BooleanField(gettext_lazy("是否配置完成"), default=False)
 
     class Meta:
@@ -233,6 +239,7 @@ class Snapshot(SoftDeleteModel):
         gettext_lazy("拉取类型"), max_length=16, choices=JoinDataPullType.choices, default=JoinDataPullType.PARTIAL
     )
     pull_config = models.JSONField(gettext_lazy("拉取配置"), default=dict, null=True, blank=True)
+    custom_config = models.JSONField(gettext_lazy("自定义配置"), default=dict, null=True, blank=True)
     status_msg = models.TextField(gettext_lazy("状态信息"), null=True, blank=True)
     auth_rt = models.BooleanField(gettext_lazy("is RT Authorized"), default=False)
 

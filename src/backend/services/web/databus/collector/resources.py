@@ -570,11 +570,14 @@ class ToggleJoinDataResource(CollectorMeta):
         if snapshot.status == SnapshotRunningStatus.PREPARING:
             raise SnapshotPreparingException()
         is_enabled = validated_request_data["is_enabled"]
+        custom_config = validated_request_data.get("custom_config")
+        if custom_config is not None:
+            snapshot.custom_config = custom_config
         if is_enabled:
             snapshot.status = SnapshotRunningStatus.get_status(is_enabled)
             snapshot.pull_type = validated_request_data["pull_type"]
             snapshot.join_data_type = validated_request_data["join_data_type"]
-            snapshot.save(update_fields=["status", "pull_type", "join_data_type"])
+            snapshot.save(update_fields=["status", "pull_type", "join_data_type", "custom_config"])
             for storage in snapshot.storages.all():
                 if storage.storage_type not in validated_request_data["storage_type"]:
                     storage.delete()
@@ -872,8 +875,12 @@ class ApplyDataIdSource(DataIdResource):
             "bk_data_id": bk_data_id,
             "collector_plugin_id": plugin_id,
             "collector_config_id": -bk_data_id,
-            "collector_config_name": raw_data["raw_data_alias"] if not custom_collector_ch_name else custom_collector_ch_name,
-            "collector_config_name_en": raw_data["raw_data_name"] if not custom_collector_en_name else custom_collector_en_name,
+            "collector_config_name": raw_data["raw_data_alias"]
+            if not custom_collector_ch_name
+            else custom_collector_ch_name,
+            "collector_config_name_en": raw_data["raw_data_name"]
+            if not custom_collector_en_name
+            else custom_collector_en_name,
             "source_platform": SourcePlatformChoices.BKBASE.value,
             "custom_type": raw_data["custom_type"],
             "description": raw_data["description"],
