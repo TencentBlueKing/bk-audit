@@ -55,6 +55,8 @@ from services.web.tool.executor.model import (
 from services.web.tool.models import Tool
 from services.web.tool.permissions import check_bkvision_share_permission
 from services.web.vision.handlers.query import VisionHandler
+from services.web.tool.api_execute_mixin import APIConfig, APIExecuteResult, ApiExecutorMixin
+
 
 TConfig = TypeVar('TConfig', bound=BaseModel)
 TParams = TypeVar('TParams', bound=BaseModel)
@@ -346,6 +348,24 @@ class BkVisionExecutor(BaseToolExecutor[BkVisionConfig, None, BkVisionExecuteRes
         return BkVisionExecuteResult(panel_id=panel.id)
 
 
+class APIExecutor(BaseToolExecutor[APIConfig, None, APIExecuteResult]):
+
+    def validate_permission(self, params=None):
+        """
+        校验权限: 校验工具更新人 or 当前请求用户是否有 bkvision 嵌入记录权限。
+        """
+        pass
+        # user_id = self.tool.get_permission_owner() if self.tool else get_request_username()
+        # share_uid = self.config.uid
+        # check_bkvision_share_permission(user_id, share_uid)
+
+    def _execute(self, params=None) -> APIExecuteResult:
+        config = APIConfig()
+        api_execute_mixin = ApiExecutorMixin(config=config)
+        response = api_execute_mixin.get("/")
+        return response
+
+
 class ToolExecutorFactory:
     """工具执行器工厂"""
 
@@ -359,5 +379,7 @@ class ToolExecutorFactory:
                 return SqlDataSearchExecutor(tool, analyzer_cls=self.sql_analyzer_cls)
         elif tool.tool_type == ToolTypeEnum.BK_VISION.value:
             return BkVisionExecutor(tool)
+        elif tool.tool_type == ToolTypeEnum.API.value:
+            return APIExecutor(tool)
         # 其他数据查询类型...
         raise ValueError(f"Unsupported tool type: {tool.tool_type}")
