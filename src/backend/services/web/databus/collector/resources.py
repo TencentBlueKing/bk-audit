@@ -659,6 +659,7 @@ class CreateApiPushResource(GetApiPushBaseResource):
         namespace = validated_request_data["namespace"]
         system_id = validated_request_data["system_id"]
         custom_collector_config_name = validated_request_data.get("custom_collector_config_name")
+        is_configuration = validated_request_data["is_configuration"]
 
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
@@ -698,6 +699,7 @@ class CreateApiPushResource(GetApiPushBaseResource):
             collector_config_name_en=collector_config_name,
             custom_type=CustomTypeEnum.OTLP_LOG.value,
             description=collector_config_name,
+            is_configuration=is_configuration,
         )
 
         # 异步创建ETL避免超时

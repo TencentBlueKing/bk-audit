@@ -328,6 +328,7 @@ class CreateApiPushRequestSerializer(serializers.Serializer):
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
     custom_collector_config_name = serializers.CharField(label=gettext_lazy("用户自定义名称"), required=False)
+    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
 
 class GetApiPushRequestSerializer(serializers.Serializer):
