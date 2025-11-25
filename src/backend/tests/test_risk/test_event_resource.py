@@ -34,6 +34,10 @@ class CreateEventResourceTest(TestCase):
             event_end_time=now + datetime.timedelta(hours=1),
             event_content="risk",
         )
+        self.perm_patcher = mock.patch(
+            "services.web.risk.permissions.GenerateStrategyRiskPermission.ensure_allowed", return_value=None
+        )
+        self.perm_patcher.start()
         self._orig_eager = celery_app.conf.task_always_eager
         self._orig_propagates = celery_app.conf.task_eager_propagates
         celery_app.conf.task_always_eager = True
@@ -45,6 +49,7 @@ class CreateEventResourceTest(TestCase):
         lock_module.cache = self._orig_lock_cache
         celery_app.conf.task_always_eager = self._orig_eager
         celery_app.conf.task_eager_propagates = self._orig_propagates
+        self.perm_patcher.stop()
         super().tearDown()
 
     def _build_request(self, username, is_superuser=False):
