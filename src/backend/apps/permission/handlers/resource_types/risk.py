@@ -70,12 +70,12 @@ class TicketPermission(ResourceTypeMeta):
     related_instance_selections = [{"system_id": system_id, "id": id}]
 
 
-class ManualRiskEvent(ResourceTypeMeta):
+class ManualEvent(ResourceTypeMeta):
     system_id = settings.BK_IAM_SYSTEM_ID
-    id = "manual_risk_event"
-    name = gettext("手工风险事件")
+    id = "manual_event"
+    name = gettext("手工事件")
     selection_mode = "instance"
-    related_instance_selections = [{"system_id": system_id, "id": "manual_risk_event"}]
+    related_instance_selections = [{"system_id": system_id, "id": "manual_event"}]
 
     @classmethod
     def create_instance(cls, instance_id: str, attribute=None) -> Resource:
@@ -83,10 +83,10 @@ class ManualRiskEvent(ResourceTypeMeta):
 
     @classmethod
     def batch_create_instance(cls, instance_ids, attribute=None) -> List[List[Resource]]:
-        from services.web.risk.models import ManualRiskEvent as ManualRiskEventModel
+        from services.web.risk.models import ManualEvent as ManualEventModel
 
         manual_events = (
-            ManualRiskEventModel.objects.filter(manual_event_id__in=instance_ids)
+            ManualEventModel.objects.filter(manual_event_id__in=instance_ids)
             .distinct()
             .order_by()
             .only("manual_event_id", "raw_event_id", "strategy_id")

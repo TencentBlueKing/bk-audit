@@ -53,7 +53,7 @@ from services.web.risk.handlers.ticket import (
     NewRisk,
     TransOperator,
 )
-from services.web.risk.models import ManualRiskEvent, Risk, TicketNode
+from services.web.risk.models import ManualEvent, Risk, TicketNode
 from services.web.risk.serializers import CreateEventSerializer
 
 cache: DefaultClient = _cache
@@ -81,7 +81,7 @@ def add_event(data: list):
 
 @lock(lock_name="celery:manual_add_event")
 def manual_add_event(data: list):
-    """将事件写入 ManualRiskEvent 表"""
+    """将事件写入 ManualEvent 表"""
 
     if not data:
         logger_celery.warning("[ManualAddEvent] Empty payload")
@@ -98,7 +98,7 @@ def manual_add_event(data: list):
         payload["event_data"] = json.loads(payload["event_data"])
         event_time = datetime.datetime.fromtimestamp(payload["event_time"] / 1000, tz=timezone.get_default_timezone())
         manual_events.append(
-            ManualRiskEvent(
+            ManualEvent(
                 event_content=payload.get("event_content"),
                 raw_event_id=payload["raw_event_id"],
                 strategy_id=payload["strategy_id"],
@@ -106,7 +106,6 @@ def manual_add_event(data: list):
                 event_type=handler.parse_event_type(payload.get("event_type")),
                 event_data=payload.get("event_data"),
                 event_time=event_time,
-                event_end_time=event_time,
                 event_source=payload.get("event_source"),
                 operator=handler.parse_operator(payload.get("operator")),
             )
@@ -114,7 +113,7 @@ def manual_add_event(data: list):
     if not manual_events:
         logger_celery.info("[ManualAddEvent] No valid events to persist")
         return
-    ManualRiskEvent.objects.bulk_create(manual_events, batch_size=BULK_ADD_EVENT_SIZE)
+    ManualEvent.objects.bulk_create(manual_events, batch_size=BULK_ADD_EVENT_SIZE)
     logger_celery.info("[ManualAddEvent] Saved %s manual events", len(manual_events))
 
 

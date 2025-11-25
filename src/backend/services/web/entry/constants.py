@@ -81,7 +81,7 @@ PERMISSION_MODEL_IWIKI_URL_KEY = "permission_model_iwiki_url"
 BKVISION_WEB_URL_KEY = "bkvision_web_url"
 
 
-def get_manual_risk_event_strategy_config(rt_id):
+def get_manual_event_strategy_config(rt_id):
     """
     基于最新模板生成风险策略配置字典。
     保留所有字段数据，并将 rt_id 动态填入 SQL、DataSource、Select 配置以及 Where 条件中。

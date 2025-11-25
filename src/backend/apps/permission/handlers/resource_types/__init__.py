@@ -27,7 +27,7 @@ from apps.permission.handlers.resource_types.dept_bk_usermgr import DeptBKUsermg
 from apps.permission.handlers.resource_types.notice_group import NoticeGroup
 from apps.permission.handlers.resource_types.panel import Panel
 from apps.permission.handlers.resource_types.risk import (
-    ManualRiskEvent,
+    ManualEvent,
     Risk,
     TicketPermission,
 )
@@ -60,7 +60,7 @@ class ResourceEnum:
     LINK_TABLE = LinkTable
     NOTICE_GROUP = NoticeGroup
     RISK = Risk
-    MANUAL_RISK_EVENT = ManualRiskEvent
+    MANUAL_EVENT = ManualEvent
     TICKET_PERMISSION = TicketPermission
     PANEL = Panel
     TAG = Tag
