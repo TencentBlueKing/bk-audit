@@ -841,6 +841,7 @@ class ApplyDataIdSource(DataIdResource):
         # 自定义名称
         custom_collector_ch_name = validated_request_data.get("custom_collector_ch_name")
         custom_collector_en_name = validated_request_data.get("custom_collector_en_name")
+        is_configuration = validated_request_data.get("is_configuration")
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
             config_level=ConfigLevelChoices.NAMESPACE.value,
@@ -876,6 +877,7 @@ class ApplyDataIdSource(DataIdResource):
             "description": raw_data["description"],
             "etl_config": EtlConfigEnum.BK_BASE_JSON.value,
             "is_deleted": False,
+            "is_configuration": is_configuration,
         }
         # 存在则更新
         if collector is not None:
