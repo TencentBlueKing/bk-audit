@@ -547,11 +547,14 @@ class ToggleJoinDataResource(CollectorMeta):
         if snapshot.status == SnapshotRunningStatus.PREPARING:
             raise SnapshotPreparingException()
         is_enabled = validated_request_data["is_enabled"]
+        custom_config = validated_request_data.get("custom_config")
+        if custom_config is not None:
+            snapshot.custom_config = custom_config
         if is_enabled:
             snapshot.status = SnapshotRunningStatus.get_status(is_enabled)
             snapshot.pull_type = validated_request_data["pull_type"]
             snapshot.join_data_type = validated_request_data["join_data_type"]
-            snapshot.save(update_fields=["status", "pull_type", "join_data_type"])
+            snapshot.save(update_fields=["status", "pull_type", "join_data_type", "custom_config"])
             for storage in snapshot.storages.all():
                 if storage.storage_type not in validated_request_data["storage_type"]:
                     storage.delete()
