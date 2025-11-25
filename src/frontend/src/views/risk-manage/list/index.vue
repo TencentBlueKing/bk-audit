@@ -24,6 +24,16 @@
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
+      <div class="add-button">
+        <bk-button
+          theme="primary"
+          @click="handleAddRisk">
+          <audit-icon
+            class="add-icon"
+            type="add" />
+          {{ t('新增风险') }}
+        </bk-button>
+      </div>
       <render-list
         ref="listRef"
         class="risk-table"
@@ -35,7 +45,9 @@
         @request-success="handleRequestSuccess" />
     </div>
   </div>
-
+  <add-risk
+    ref="addRiskRef"
+    @add-success="handleAddRiskSuccess" />
   <!-- <handle-risk-label-dialog
     ref="handleRiskLabelDialogRef"
     @close="fetchList" /> -->
@@ -72,6 +84,7 @@
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import addRisk from './add-risk/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
   import RiskLevel from './components/risk-level.vue';
@@ -339,6 +352,7 @@
 
 
   const listRef = ref();
+  const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
 
@@ -380,7 +394,7 @@
 
   // 导出数据
   const handleExport = () => {
-    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id);
+    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id.toString());
     if (!selectedData.length) {
       messageWarn(t('请选择要操作的数据'));
       return;
@@ -600,6 +614,15 @@
     };
     listRef.value.fetchData(dataParams);
   };
+
+  // 新增风险
+  const handleAddRisk = () => {
+    addRiskRef.value.show();
+  };
+  // 新增风险成功
+  const handleAddRiskSuccess = () => {
+    fetchList();
+  };
   onMounted(() => {
     nextTick(() => {
       getEventFields();
@@ -632,6 +655,7 @@
 
 .risk-manage-list-page-wrap {
   .risk-manage-list {
+    padding: 5px 20px;
     margin-top: 16px;
     background-color: white;
 
@@ -640,6 +664,14 @@
     /* .bk-table .bk-table-fixed .column_fixed {
       bottom: 0 !important;
     } */
+    .add-button {
+      padding-bottom: 5px;
+
+      .add-icon {
+        margin-right: 5px;
+        font-size: 12px;
+      }
+    }
   }
 
 }

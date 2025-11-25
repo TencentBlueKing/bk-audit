@@ -31,7 +31,13 @@
     </div>
 
     <div class="title">
-      {{ t('关联事件') }}
+      <span> {{ t('关联事件') }}</span>
+      <span
+        class="add-event"
+        @click="handleAddEvent">
+        <audit-icon
+          class="add-fill-event"
+          type="add-fill" />{{ t('新建关联事件') }}</span>
     </div>
     <div
       :key="detailRenderKey"
@@ -492,6 +498,10 @@
       @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
+  <add-event
+    ref="addEventRef"
+    :event-data="data"
+    @add-success="handleAddSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -519,6 +529,8 @@
   // import Tooltips from '@components/show-tooltips-text/index.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+
+  import addEvent from '../add-event/index.vue';
 
   import RenderInfoItem from './render-info-item.vue';
 
@@ -588,6 +600,7 @@
   const emits = defineEmits<Emits>();
   const isShowSide = ref(false);
 
+  const addEventRef = ref();
   const router = useRouter();
   const { t, locale } = useI18n();
   const linkEventList = ref<Array<EventModel>>([]); // 事件列表
@@ -930,7 +943,23 @@
       handleCloseTool(ToolInfo);
     }
   };
+  const handleAddEvent = () => {
+    addEventRef.value?.show();
+  };
 
+  // 添加事件成功
+  const handleAddSuccess = () => {
+    linkEventList.value = [];
+    nextTick(() => {
+      fetchLinkEvent({
+        start_time: props.data.event_time,
+        end_time: props.data.event_end_time,
+        risk_id: props.data.risk_id,
+        page: currentPage.value,
+        page_size: 50,
+      });
+    });
+  };
   // 防抖处理
   let fetchTimeout: number | undefined;
   watch(() => props.data, (data, oldData) => {
@@ -1017,6 +1046,20 @@
     font-weight: 700;
     line-height: 22px;
     color: #313238;
+
+    .add-event {
+      margin-left: 20px;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 20px;
+      letter-spacing: 0;
+      color: #3a84ff;
+      cursor: pointer;
+
+      .add-fill-event {
+        margin-right: 3px;
+      }
+    }
   }
 
   .body {
