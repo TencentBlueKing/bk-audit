@@ -181,6 +181,7 @@ class UpdateCollectorRequestSerializer(serializers.Serializer):
     # 前置：记录日志参数
     record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK)
     select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK)
+    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
 
 class CollectorEtlFieldsSerializer(serializers.ModelSerializer):
@@ -432,6 +433,7 @@ class ApplyDataIdSourceRequestSerializer(serializers.Serializer):
     system_id = serializers.CharField(label=gettext_lazy("系统ID"))
     custom_collector_en_name = serializers.CharField(label=gettext_lazy("自定义英文名"), required=False)
     custom_collector_ch_name = serializers.CharField(label=gettext_lazy("自定义中文名"), required=False)
+    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
 
 class DataIdEtlStorageRequestSerializer(serializers.Serializer):

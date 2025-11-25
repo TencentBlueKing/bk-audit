@@ -285,6 +285,9 @@ class UpdateCollectorResource(CollectorMeta):
         if validated_request_data.get("select_sdk_type"):
             collector_config.select_sdk_type = validated_request_data["select_sdk_type"]
             update_fields.append("select_sdk_type")
+        if validated_request_data.get("is_configuration") is not None:
+            collector_config.is_configuration = validated_request_data["is_configuration"]
+            update_fields.append("is_configuration")
         collector_config.save(update_fields=update_fields)
         data = self.serializer_class(collector_config).data
         data.update({"task_id_list": resp.get("task_id_list", [])})
@@ -350,7 +353,17 @@ class UpdateBcsCollectorResource(CollectorMeta):
         api.bk_log.update_collector_normal(validated_request_data)
         collector_config.collector_config_name = validated_request_data["collector_config_name"]
         collector_config.description = validated_request_data["collector_config_name"]
-        collector_config.save(update_fields=["collector_config_name", "description"])
+        update_fields = ["collector_config_name", "description"]
+        if validated_request_data.get("record_log_type"):
+            collector_config.record_log_type = validated_request_data["record_log_type"]
+            update_fields.append("record_log_type")
+        if validated_request_data.get("select_sdk_type"):
+            collector_config.select_sdk_type = validated_request_data["select_sdk_type"]
+            update_fields.append("select_sdk_type")
+        if validated_request_data.get("is_configuration") is not None:
+            collector_config.is_configuration = validated_request_data["is_configuration"]
+            update_fields.append("is_configuration")
+        collector_config.save(update_fields=update_fields)
         return self.serializer_class(collector_config).data
 
 
