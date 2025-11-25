@@ -103,7 +103,7 @@ class APIExecuteResult(Generic[T]):
             message=self.message,
             status_code=self.status_code,
             response=self.raw_response
-        ) from self.error
+        )
 
 
 # ==================== 自定义异常 ====================
@@ -256,7 +256,7 @@ class ApiExecutorMixin(BaseApiExecutor):
 
         try:
             # 执行请求（可能触发重试）
-            response = self._execute_with_retry(method, url, **kwargs)
+            response = self._execute_with_retry(method, url, **request_kwargs)
 
             # 解析响应数据
             parsed_data = self._parse_response(response, fmt)
@@ -372,7 +372,7 @@ def demo():
     )
 
     # 2. 创建执行器
-    executor = ApiExecutor(config)
+    executor = ApiExecutorMixin(config)
 
     try:
         # 3. GET请求
