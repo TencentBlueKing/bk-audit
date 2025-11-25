@@ -155,6 +155,7 @@ class CollectorConfig(SoftDeleteModel):
 
     record_log_type = models.CharField(gettext_lazy("记录日志方式"), max_length=64, choices=RecordLogTypeChoices.choices, blank=True)
     select_sdk_type = models.CharField(gettext_lazy('SDK类型'), max_length=64, choices=SelectSdkTypeChoices.choices, blank=True)
+    is_configuration = models.BooleanField(gettext_lazy("是否配置完成"), default=False)
 
     class Meta:
         verbose_name = gettext_lazy("采集项")

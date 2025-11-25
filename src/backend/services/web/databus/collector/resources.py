@@ -246,6 +246,7 @@ class CreateCollectorResource(CollectorMeta):
             description=validated_request_data["collector_config_name"],
             record_log_type=validated_request_data["record_log_type"],
             select_sdk_type=validated_request_data["select_sdk_type"],
+            is_configuration=validated_request_data["is_configuration"],
         )
 
     def perform_request(self, validated_request_data):

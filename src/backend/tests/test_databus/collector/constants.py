@@ -60,7 +60,8 @@ COLLECTOR_DATA = {
     "collector_config_name": COLLECTOR_NAME,
     "collector_config_name_en": COLLECTOR_NAME,
     "record_log_type": "SDK",
-    "select_sdk_type": "PYTHON_SDK"
+    "select_sdk_type": "PYTHON_SDK",
+    "is_configuration": False
 }
 RESULT_TABLE = f"{settings.DEFAULT_BK_BIZ_ID}_bklog_{COLLECTOR_NAME}"
 

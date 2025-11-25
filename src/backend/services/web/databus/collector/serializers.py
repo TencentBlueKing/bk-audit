@@ -92,6 +92,7 @@ class CollectorCreateRequestSerializer(serializers.Serializer):
     # 前置：记录日志参数
     record_log_type = serializers.ChoiceField(label="日志接入方式", choices=RecordLogTypeChoices, default=RecordLogTypeChoices.SDK)
     select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices, default=SelectSdkTypeChoices.PYTHON_SDK)
+    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
 
 class CollectorCreateResponseSerializer(serializers.ModelSerializer):
@@ -299,6 +300,7 @@ class BcsCollectorBaseSerializer(serializers.Serializer):
                                               default=RecordLogTypeChoices.SDK)
     select_sdk_type = serializers.ChoiceField(label="选择SDK", choices=SelectSdkTypeChoices,
                                               default=SelectSdkTypeChoices.PYTHON_SDK)
+    is_configuration = serializers.BooleanField(label="是否完成配置", required=False, default=False)
 
     def validate_yaml_config(self, value):
         try:
