@@ -70,6 +70,30 @@ from services.web.strategy_v2.models import LinkTable, Strategy, StrategyTool
 from services.web.tool.constants import DrillConfig
 
 
+def merge_select_field_type(strategy: Strategy, event_data_field_configs: List[dict]) -> List[dict]:
+    """
+    将策略 configs.select 中的 field_type 合并到 event_data_field_configs，按 (field_name, display_name) 唯一键匹配。
+    """
+
+    if not strategy or not event_data_field_configs:
+        return event_data_field_configs
+
+    select_fields = (strategy.configs or {}).get("select", []) if isinstance(strategy.configs, dict) else []
+
+    field_type_map = {
+        select["display_name"]: select["field_type"] for select in select_fields if select.get("field_type")
+    }
+
+    for field in event_data_field_configs:
+        field_name = field["field_name"]
+        field_type = field_type_map.get(field_name)
+        if field_type:
+            field["field_type"] = field_type
+        else:
+            field["field_type"] = None
+    return event_data_field_configs
+
+
 class MapFieldSerializer(serializers.Serializer):
     source_field = serializers.CharField(
         label=gettext_lazy("Source Field"),
@@ -128,6 +152,9 @@ class EventFieldSerializer(serializers.Serializer):
     drill_config = DrillConfig.drf_serializer(label=gettext_lazy("下钻配置"), many=True, default=list, allow_null=True)
     is_show = serializers.BooleanField(label=gettext_lazy("是否展示"), default=True)
     duplicate_field = serializers.BooleanField(label=gettext_lazy("是否去重字段"), default=False, required=False)
+    field_type = serializers.CharField(
+        label=gettext_lazy("Field Type"), required=False, default=None, allow_null=True, allow_blank=True
+    )
 
 
 class EventBasicFieldSerializer(EventFieldSerializer):
@@ -461,6 +488,11 @@ class ListStrategyResponseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Strategy
         exclude = ["backend_data"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["event_data_field_configs"] = merge_select_field_type(instance, data.get("event_data_field_configs", []))
+        return data
 
 
 class StrategyInfoSerializer(serializers.ModelSerializer):

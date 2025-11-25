@@ -138,9 +138,6 @@ class GenerateStrategyRiskPermission:
         if not user or not getattr(user, "is_authenticated", False):
             self._raise_permission_denied()
 
-        if user.is_superuser:
-            return
-
         strategy_ids = self._collect_strategy_ids(events)
         if not strategy_ids:
             self._raise_permission_denied()

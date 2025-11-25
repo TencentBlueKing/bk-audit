@@ -39,6 +39,8 @@ from services.web.risk.serializers import (
     ListEventResponseSerializer,
 )
 from services.web.risk.tasks import manual_add_event
+from services.web.strategy_v2.constants import StrategyType
+from services.web.strategy_v2.models import Strategy
 
 
 class EventMeta(AuditMixinResource):
@@ -67,6 +69,10 @@ class CreateEvent(EventMeta):
         if not gen_risk:
             bound_risk = self._validate_existing_risk(validated_request_data.get("risk_id"), events)
             self._sync_raw_event_id_with_risk(events, bound_risk)
+            self._ensure_model_strategy(bound_risk.strategy_id)
+        else:
+            for event in events:
+                self._ensure_model_strategy(event["strategy_id"])
         req = validated_request_data.get("_request")
         if req and getattr(req, "user", None) and getattr(req.user, "is_authenticated", False):
             GenerateStrategyRiskPermission(req).ensure_allowed(events)
@@ -114,6 +120,13 @@ class CreateEvent(EventMeta):
     def _sync_raw_event_id_with_risk(self, events: List[dict], risk: Risk):
         for event in events:
             event["raw_event_id"] = risk.raw_event_id
+
+    def _ensure_model_strategy(self, strategy_id: int):
+        strategy = Strategy.objects.filter(strategy_id=strategy_id).only("strategy_type").first()
+        if not strategy:
+            raise serializers.ValidationError(gettext("策略不存在"))
+        if strategy.strategy_type != StrategyType.RULE:
+            raise serializers.ValidationError(gettext("仅支持规则审计策略创建事件"))
 
 
 class ListEvent(EventMeta):
