@@ -29,9 +29,9 @@ from iam.resource.utils import Page
 from apps.permission.handlers.resource_types import ResourceEnum
 from apps.permission.provider.base import IAMResourceProvider
 from services.web.risk.converter.queryset import RiskPathEqDjangoQuerySetConverter
-from services.web.risk.models import ManualRiskEvent, Risk, TicketPermission
+from services.web.risk.models import ManualEvent, Risk, TicketPermission
 from services.web.risk.serializers import (
-    ManualRiskEventProviderSerializer,
+    ManualEventProviderSerializer,
     RiskProviderSerializer,
     TicketPermissionProviderSerializer,
 )
@@ -141,19 +141,17 @@ class RiskResourceProvider(IAMResourceProvider):
         return ListResult(results=results, count=queryset.count())
 
 
-class ManualRiskEventResourceProvider(IAMResourceProvider):
-    resource_provider_serializer = ManualRiskEventProviderSerializer
+class ManualEventResourceProvider(IAMResourceProvider):
+    resource_provider_serializer = ManualEventProviderSerializer
     resource_type_index_fields = [
         "manual_event_id",
         "raw_event_id",
         "strategy_id",
         "event_time",
-        "event_end_time",
         "event_source",
         "last_operate_time",
         "title",
         "event_time_timestamp",
-        "event_end_time_timestamp",
         "last_operate_time_timestamp",
     ]
 
@@ -161,15 +159,15 @@ class ManualRiskEventResourceProvider(IAMResourceProvider):
         return []
 
     @staticmethod
-    def _display_name(instance: ManualRiskEvent) -> str:
+    def _display_name(instance: ManualEvent) -> str:
         return instance.raw_event_id or str(instance.manual_event_id)
 
-    def _filter_queryset(self, parent_id: Optional[str], resource_type: Optional[str]) -> QuerySet[ManualRiskEvent]:
+    def _filter_queryset(self, parent_id: Optional[str], resource_type: Optional[str]) -> QuerySet[ManualEvent]:
         if parent_id and resource_type == ResourceEnum.STRATEGY.id:
-            return ManualRiskEvent.objects.filter(strategy_id=int(parent_id))
+            return ManualEvent.objects.filter(strategy_id=int(parent_id))
         if parent_id:
-            return ManualRiskEvent.objects.none()
-        return ManualRiskEvent.objects.all()
+            return ManualEvent.objects.none()
+        return ManualEvent.objects.all()
 
     def filter_list_instance_results(self, parent_id: Optional[str], resource_type: Optional[str], page: Page) -> Tuple:
         queryset = self._filter_queryset(parent_id, resource_type)
@@ -187,7 +185,7 @@ class ManualRiskEventResourceProvider(IAMResourceProvider):
         return results, queryset.count()
 
     def filter_fetch_instance_results(self, ids: List[str]) -> Tuple:
-        queryset = ManualRiskEvent.objects.filter(manual_event_id__in=ids)
+        queryset = ManualEvent.objects.filter(manual_event_id__in=ids)
         results = [{"id": str(item.manual_event_id), "display_name": self._display_name(item)} for item in queryset]
         return results, queryset.count()
 
@@ -198,7 +196,7 @@ class ManualRiskEventResourceProvider(IAMResourceProvider):
 
         converter = RiskPathEqDjangoQuerySetConverter()
         django_filters = converter.convert(expression)
-        queryset = ManualRiskEvent.objects.filter(django_filters)
+        queryset = ManualEvent.objects.filter(django_filters)
         page_qs = queryset[page.slice_from : page.slice_to]
         results = [{"id": str(item.manual_event_id), "display_name": self._display_name(item)} for item in page_qs]
         return ListResult(results=results, count=queryset.count())
@@ -206,7 +204,7 @@ class ManualRiskEventResourceProvider(IAMResourceProvider):
     def fetch_instance_list(self, filter, page, **options):
         start_time = datetime.datetime.fromtimestamp(float(filter.start_time) / 1000)
         end_time = datetime.datetime.fromtimestamp(float(filter.end_time) / 1000)
-        queryset = ManualRiskEvent.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
+        queryset = ManualEvent.objects.filter(updated_at__gt=start_time, updated_at__lte=end_time)
         page_qs = queryset[page.slice_from : page.slice_to]
         results = [
             {

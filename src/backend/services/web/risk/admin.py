@@ -29,7 +29,7 @@ from django.utils.translation import gettext_lazy as _
 from core.sql.constants import FieldType, Operator
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import (
-    ManualRiskEvent,
+    ManualEvent,
     ProcessApplication,
     Risk,
     RiskEventSubscription,
@@ -111,8 +111,8 @@ class RiskExperienceAdmin(admin.ModelAdmin):
     list_filter = ["is_deleted"]
 
 
-@admin.register(ManualRiskEvent)
-class ManualRiskEventAdmin(admin.ModelAdmin):
+@admin.register(ManualEvent)
+class ManualEventAdmin(admin.ModelAdmin):
     list_display = [
         "manual_event_id",
         "title",

@@ -245,7 +245,7 @@ class Risk(StrategyTagMixin, OperateRecordModel):
         return cls._meta.fields
 
 
-class ManualRiskEvent(OperateRecordModel):
+class ManualEvent(OperateRecordModel):
     """
     手工录入的风险事件，除了主键与风险Model一致
     """
@@ -258,15 +258,12 @@ class ManualRiskEvent(OperateRecordModel):
         db_constraint=True,
         verbose_name=EventMappingFields.STRATEGY_ID.description,
         on_delete=models.DO_NOTHING,
-        related_name='manual_risk_events',
+        related_name='manual_events',
     )
     event_evidence = models.TextField(EventMappingFields.EVENT_EVIDENCE.description, null=True, blank=True)
     event_type = models.JSONField(EventMappingFields.EVENT_TYPE.description, null=True, blank=True, default=list)
     event_data = models.JSONField(EventMappingFields.EVENT_DATA.description, null=True, blank=True)
     event_time = models.DateTimeField(EventMappingFields.EVENT_TIME.description, db_index=True)
-    event_end_time = models.DateTimeField(
-        EventMappingFields.EVENT_TIME.description, db_index=True, null=True, blank=True
-    )
     event_source = models.CharField(
         EventMappingFields.EVENT_SOURCE.description, max_length=255, db_index=True, null=True, blank=True
     )
