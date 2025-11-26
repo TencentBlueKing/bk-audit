@@ -25,7 +25,7 @@ import uuid
 from collections import OrderedDict
 from functools import wraps
 from json import JSONDecodeError
-from typing import Any, Iterator, List, Union
+from typing import Any, Callable, Iterator, List, Union
 
 from bk_resource.base import Empty
 from blueapps.utils.logger import logger
@@ -308,3 +308,24 @@ def preserved_order_sort(
     if extra_order_by:
         orders.extend(extra_order_by)
     return qs.order_by(*orders)
+
+
+def validate_unique_keys(items: List[Any], key_field: str, error_msg: Union[str, Callable[[Any], str]] = ""):
+    """
+    通用列表去重校验器
+    :param items: 字典列表或对象列表
+    :param key_field: 用于判断唯一的字段名
+    :param error_msg: 报错信息模板。
+                      可以是字符串（会自动拼上重复值），
+                      也可以是函数（接收重复值，返回完整的错误字符串）。
+    """
+
+    seen = set()
+    for item in items:
+        # 兼容 item 是字典(TypedDict) 或 对象(Pydantic Model) 的情况
+        val = item.get(key_field) if isinstance(item, dict) else getattr(item, key_field, None)
+        if val in seen:
+            msg = error_msg(val) if callable(error_msg) else error_msg
+            raise ValueError(msg)
+        seen.add(val)
+    return items
