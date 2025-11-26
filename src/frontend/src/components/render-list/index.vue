@@ -140,6 +140,7 @@
     getListData:()=> Array<Record<string, any>>,
     getSelection:()=> void
     initTableHeight: () => void,
+    listDataUnshift: (data: Record<string, any>) => void,
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -375,6 +376,9 @@
     },
     initTableHeight() {
       initTableHeight();
+    },
+    listDataUnshift(data: Record<string, any>) {
+      listData.value.results.unshift(data);
     },
   });
 </script>
