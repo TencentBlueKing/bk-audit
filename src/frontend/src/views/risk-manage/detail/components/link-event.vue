@@ -31,7 +31,13 @@
     </div>
 
     <div class="title">
-      {{ t('关联事件') }}
+      <span> {{ t('关联事件') }}</span>
+      <span
+        class="add-event"
+        @click="handleAddEvent">
+        <audit-icon
+          class="add-fill-event"
+          type="add-fill" />{{ t('新建关联事件') }}</span>
     </div>
     <div
       :key="detailRenderKey"
@@ -60,7 +66,13 @@
         </div>
 
         <!-- detail -->
+        <div v-if="frontendCreateEventTime === eventItem.event_time">
+          <div class="frontend-create">
+            {{ t('事件生成中') }}
+          </div>
+        </div>
         <div
+          v-else
           class="list-item-detail"
           :style="{
             width: isShowSide ? '100%' : 'calc(100% - 164px)',
@@ -492,6 +504,10 @@
       @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
+  <add-event
+    ref="addEventRef"
+    :event-data="data"
+    @add-success="handleAddSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -520,10 +536,13 @@
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
+  import addEvent from '../add-event/index.vue';
+
   import RenderInfoItem from './render-info-item.vue';
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
+  import { convertGMTTimeToStandard } from '@/utils/assist/timestamp-conversion';
 
   interface DrillItem {
     field_name: string;
@@ -587,7 +606,10 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const isShowSide = ref(false);
+  const frontendCreateEvent = ref<Record<string, any> | null>(null);
+  const frontendCreateEventTime = ref('');
 
+  const addEventRef = ref();
   const router = useRouter();
   const { t, locale } = useI18n();
   const linkEventList = ref<Array<EventModel>>([]); // 事件列表
@@ -795,6 +817,22 @@
     },
     onSuccess() {
       if (linkEventData.value.results.length) {
+        if (frontendCreateEvent.value) {
+          const createEvent = {
+            event_id: '',
+            event_content: '',
+            raw_event_id: '',
+            strategy_id: '',
+            event_data: {},
+            event_time: convertGMTTimeToStandard(frontendCreateEvent.value?.event_time),
+            event_source: '',
+            operator: '',
+            event_evidence: '',
+          };
+          linkEventList.value.unshift(createEvent);
+        }
+
+
         // 触底加载，拼接 - 使用动态去重字段
         const allEvents = [...linkEventList.value, ...linkEventData.value.results];
         linkEventList.value = allEvents;
@@ -930,7 +968,27 @@
       handleCloseTool(ToolInfo);
     }
   };
+  const handleAddEvent = () => {
+    addEventRef.value?.show();
+  };
 
+  // 添加事件成功
+  const handleAddSuccess = (data: Record<string, any>) => {
+    frontendCreateEventTime.value = '';
+    frontendCreateEvent.value = null;
+    linkEventList.value = [];
+    nextTick(() => {
+      frontendCreateEvent.value = data;
+      frontendCreateEventTime.value = convertGMTTimeToStandard(data.event_time);
+      fetchLinkEvent({
+        start_time: props.data.event_time,
+        end_time: props.data.event_end_time,
+        risk_id: props.data.risk_id,
+        page: currentPage.value,
+        page_size: 50,
+      });
+    });
+  };
   // 防抖处理
   let fetchTimeout: number | undefined;
   watch(() => props.data, (data, oldData) => {
@@ -1017,6 +1075,20 @@
     font-weight: 700;
     line-height: 22px;
     color: #313238;
+
+    .add-event {
+      margin-left: 20px;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 20px;
+      letter-spacing: 0;
+      color: #3a84ff;
+      cursor: pointer;
+
+      .add-fill-event {
+        margin-right: 3px;
+      }
+    }
   }
 
   .body {
@@ -1191,5 +1263,12 @@
 
 .evidence-info-value-tooltips {
   max-width: 80%
+}
+
+.frontend-create {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%)
 }
 </style>
