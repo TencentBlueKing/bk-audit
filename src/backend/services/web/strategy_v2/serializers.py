@@ -80,21 +80,17 @@ def merge_select_field_type(strategy: Strategy, event_data_field_configs: List[d
 
     select_fields = (strategy.configs or {}).get("select", []) if isinstance(strategy.configs, dict) else []
 
-    def build_key(raw_name: str | None, display_name: str | None) -> tuple:
-        return (raw_name or "", display_name or raw_name or "")
-
     field_type_map = {
-        build_key(select.get("raw_name"), select.get("display_name")): select.get("field_type")
-        for select in select_fields
-        if select.get("field_type")
+        select["display_name"]: select["field_type"] for select in select_fields if select.get("field_type")
     }
 
     for field in event_data_field_configs:
-        field_name = field.get("field_name", "")
-        display_name = field.get("display_name") or field_name
-        field_type = field_type_map.get(build_key(field_name, display_name))
+        field_name = field["field_name"]
+        field_type = field_type_map.get(field_name)
         if field_type:
             field["field_type"] = field_type
+        else:
+            field["field_type"] = None
     return event_data_field_configs
 
 
