@@ -18,9 +18,9 @@ export default class Event {
   event_id: string;
   event_content: string;
   raw_event_id: string;
-  strategy_id: number;
+  strategy_id: number | string;
   event_data: Record<string, any>;
-  event_time: number;
+  event_time: number | string;
   event_source: string;
   operator: string;
   event_evidence: string;

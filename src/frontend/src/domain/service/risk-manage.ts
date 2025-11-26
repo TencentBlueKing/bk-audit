@@ -209,4 +209,11 @@ export default {
     return RiskManageSource.batchExport(params)
       .then(({ data }) => data);
   },
+  /**
+   * @desc 手动增加事件
+   */
+  addEvent(params: Record<string, any>) {
+    return RiskManageSource.addEvent(params)
+      .then(({ data }) => data);
+  },
 };

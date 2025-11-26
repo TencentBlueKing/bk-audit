@@ -24,9 +24,19 @@
       @export="handleExport"
       @model-value-watch="handleModelValueWatch" />
     <div class="risk-manage-list">
+      <div class="add-button">
+        <bk-button
+          theme="primary"
+          @click="handleAddRisk">
+          <audit-icon
+            class="add-icon"
+            type="add" />
+          {{ t('新增风险') }}
+        </bk-button>
+      </div>
       <render-list
         ref="listRef"
-        class="risk-table"
+        class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
         :settings="settings"
@@ -35,7 +45,9 @@
         @request-success="handleRequestSuccess" />
     </div>
   </div>
-
+  <add-risk
+    ref="addRiskRef"
+    @add-success="handleAddRiskSuccess" />
   <!-- <handle-risk-label-dialog
     ref="handleRiskLabelDialogRef"
     @close="fetchList" /> -->
@@ -72,6 +84,7 @@
   import EditTag from '@components/edit-box/tag.vue';
   import Tooltips from '@components/show-tooltips-text/index.vue';
 
+  import addRisk from './add-risk/index.vue';
   import FieldConfig from './components/config';
   import MarkRiskLabel from './components/mark-risk-label.vue';
   import RiskLevel from './components/risk-level.vue';
@@ -134,6 +147,7 @@
   }
 
   const selectedItemList = ref<FieldItem[]>([]);
+  const frontendCreateRisk = ref<Record<string, any> | null>(null); // 前端创建的风险
 
   const initTableColumns = [
     {
@@ -195,7 +209,7 @@
     {
       label: () => t('责任人'),
       field: () => 'operator',
-      width: 160,
+      width: 180,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.operator || []} />,
     },
     {
@@ -203,29 +217,35 @@
       field: () => 'status',
       width: 110,
       render: ({ data }: { data: RiskManageModel }) => (
-        data.status === 'closed' && data.experiences > 0
-          ? (
-          <div style='display: flex;align-items: center;height: 100%;'>
-            <bk-tag
-              theme={statusToMap[data.status].tag}>
-              <p style='display: flex;align-items: center;'>
-                <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}` } />
-                <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
-              </p>
-            </bk-tag>
-              <bk-button text theme='primary' onClick={ () => handleToDetail(data, true)}>
-              <audit-icon v-bk-tooltips={ t('已填写“风险总结”')} type="report" style='font-size: 14px;'/>
-            </bk-button>
-          </div>
-          )
-          : (
-          <bk-tag
-            theme={statusToMap[data.status].tag}>
-            <p style='display: flex;align-items: center;'>
-              <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}` } />
-              <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
-            </p>
-          </bk-tag>)
+        // eslint-disable-next-line no-nested-ternary
+        data.status === 'frontend_create' ? (
+           <bk-tag theme='success'>
+            {t('生成中')}
+          </bk-tag>
+        )
+          : (data.status === 'closed' && data.experiences > 0
+            ? (
+              <div style='display: flex;align-items: center;height: 100%;'>
+                <bk-tag
+                  theme={statusToMap[data.status].tag}>
+                  <p style='display: flex;align-items: center;'>
+                    <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`} />
+                    <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
+                  </p>
+                </bk-tag>
+                <bk-button text theme='primary' onClick={() => handleToDetail(data, true)}>
+                  <audit-icon v-bk-tooltips={t('已填写“风险总结”')} type="report" style='font-size: 14px;' />
+                </bk-button>
+              </div>
+            )
+            : (
+              <bk-tag
+                theme={statusToMap[data.status].tag}>
+                <p style='display: flex;align-items: center;'>
+                  <audit-icon type={statusToMap[data.status].icon} style={`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`} />
+                  <span>{riskStatusCommon.value.find(item => item.id === data.status)?.name || '--'}</span>
+                </p>
+              </bk-tag>))
       ),
     },
     {
@@ -237,7 +257,7 @@
     {
       label: () => t('关注人'),
       field: () => 'notice_users',
-      width: 160,
+      width: 180,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
     },
     {
@@ -339,6 +359,7 @@
 
 
   const listRef = ref();
+  const addRiskRef = ref();
   const searchBoxRef = ref();
   const searchModel = ref<Record<string, any>>({});
 
@@ -380,7 +401,7 @@
 
   // 导出数据
   const handleExport = () => {
-    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id);
+    const selectedData = listRef.value.getSelection().map((i: any) => i.risk_id.toString());
     if (!selectedData.length) {
       messageWarn(t('请选择要操作的数据'));
       return;
@@ -478,7 +499,33 @@
     // 获取对应风险等级
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),
+    }).then(() => {
+
     });
+    if (frontendCreateRisk.value) {
+      // 存在新增风险
+      const unshiftData = {
+        risk_id: frontendCreateRisk.value?.risk_ids[0],
+        event_content: '--',
+        strategy_id: '',
+        event_time: '--',
+        event_end_time: '--',
+        operator: [],
+        status: 'frontend_create',
+        current_operator: [],
+        notice_users: [],
+        event_data: {},
+        tags: [],
+        risk_label: '',
+        experiences: 0,
+        last_operate_time: '--',
+        title: '--',
+        permission: {},
+      };
+      listRef.value.listDataUnshift(unshiftData);
+      // 删除新增风险保证下次数据不在
+      frontendCreateRisk.value = null;
+    }
   };
 
   const  initColumns = () => {
@@ -600,6 +647,16 @@
     };
     listRef.value.fetchData(dataParams);
   };
+
+  // 新增风险
+  const handleAddRisk = () => {
+    addRiskRef.value.show();
+  };
+  // 新增风险成功
+  const handleAddRiskSuccess = (data: Record<string, any>) => {
+    frontendCreateRisk.value = data;
+    fetchList();
+  };
   onMounted(() => {
     nextTick(() => {
       getEventFields();
@@ -632,6 +689,7 @@
 
 .risk-manage-list-page-wrap {
   .risk-manage-list {
+    padding: 5px 20px;
     margin-top: 16px;
     background-color: white;
 
@@ -640,6 +698,14 @@
     /* .bk-table .bk-table-fixed .column_fixed {
       bottom: 0 !important;
     } */
+    .add-button {
+      padding-bottom: 5px;
+
+      .add-icon {
+        margin-right: 5px;
+        font-size: 12px;
+      }
+    }
   }
 
 }
