@@ -125,8 +125,8 @@ class CreateEvent(EventMeta):
         strategy = Strategy.objects.filter(strategy_id=strategy_id).only("strategy_type").first()
         if not strategy:
             raise serializers.ValidationError(gettext("策略不存在"))
-        if strategy.strategy_type != StrategyType.MODEL:
-            raise serializers.ValidationError(gettext("仅支持模型审计策略创建事件"))
+        if strategy.strategy_type != StrategyType.RULE:
+            raise serializers.ValidationError(gettext("仅支持规则审计策略创建事件"))
 
 
 class ListEvent(EventMeta):
