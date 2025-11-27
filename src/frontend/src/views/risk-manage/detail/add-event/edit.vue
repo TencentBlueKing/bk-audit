@@ -266,11 +266,26 @@
     },
     manual: true,
     onSuccess: (data) => {
-      eventList.value = data.event_data_field_configs.map(item => ({
-        ...item,
-        typeValue: 'input',
-        value: '',
-      }));
+      eventList.value = data.event_data_field_configs.map((item:any) => {
+        let typeValueDefault = 'input';
+        if (item.field_type === 'string') {
+          typeValueDefault = 'input';
+        }
+        if (item.field_type === 'timestamp') {
+          typeValueDefault = 'date-picker';
+        }
+        if (item.field_type === 'text') {
+          typeValueDefault = 'textarea';
+        }
+        if (item.field_type === 'double' || item.field_type === 'float' || item.field_type === 'int' || item.field_type === 'long') {
+          typeValueDefault = 'number-input';
+        }
+        return {
+          ...item,
+          typeValue: typeValueDefault,
+          value: '',
+        };
+      });
     },
   });
 

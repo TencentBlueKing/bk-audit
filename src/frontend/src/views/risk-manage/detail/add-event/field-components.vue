@@ -72,7 +72,7 @@
   const emits = defineEmits<Emits>();
   const inputValue = ref('');
   const textareaValue = ref('');
-  const numberValue = ref(0);
+  const numberValue = ref();
   const userValue = ref([]);
   const timeValue = ref('');
 

@@ -21,9 +21,17 @@
     <template v-if="data && data.length">
       <bk-tag
         v-for="(item) in renderData"
-        :key="item"
-        style="width: auto;">
-        <tool-tip-text :data="item " />
+        :key="item">
+        <tool-tip-text
+          :data="item"
+          span-width="10px"
+          style="
+          display: inline-block;width: 100px;
+          overflow: hidden;
+          text-overflow: ellipsis ;
+          white-space: nowrap;
+          vertical-align: middle;
+          -webkit-box-orient: vertical;" />
       </bk-tag>
       <bk-tag
         v-if="moreDataText"
