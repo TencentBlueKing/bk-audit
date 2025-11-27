@@ -18,13 +18,16 @@ import core.lock as lock_module
 from services.web.risk.constants import RiskStatus
 from services.web.risk.models import ManualEvent, Risk
 from services.web.risk.tasks import manual_add_event
+from services.web.strategy_v2.constants import StrategyType
 from services.web.strategy_v2.models import Strategy
 
 
 class CreateEventResourceTest(TestCase):
     def setUp(self):
         super().setUp()
-        self.strategy = Strategy.objects.create(namespace=settings.DEFAULT_NAMESPACE, strategy_name="manual")
+        self.strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE, strategy_name="manual", strategy_type=StrategyType.RULE
+        )
         now = timezone.now()
         self.risk = Risk.objects.create(
             risk_id="risk-manual",
