@@ -642,6 +642,7 @@ class GetApiPushResource(GetApiPushBaseResource):
                 "collector_config_id": collector_config.collector_config_id,
                 "bk_data_id": collector_config.bk_data_id,
                 "collector_config_name": collector_config.collector_config_name,
+                "collector_config_name_en": collector_config.collector_config_name_en,
             }
         # 没有时返回空
         return {"token": ""}

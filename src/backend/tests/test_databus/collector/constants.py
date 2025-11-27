@@ -93,6 +93,25 @@ GET_COLLECTOR_INFO_DATA = {
     "fields": [],
 }
 
+CREATE_API_PUSH_DATA = {
+    "namespace": settings.DEFAULT_NAMESPACE,
+    "system_id": COLLECTOR_DATA.get("system_id"),
+}
+CREATE_API_PUSH_RESP = {
+    "bk_data_id": None,
+    "collector_config_id": COLLECTOR_ID + 1
+}
+GET_API_PUSH_DATA = {
+    "system_id": COLLECTOR_DATA.get("system_id"),
+}
+GET_API_PUSH_RESP = {
+    "bk_data_token": "gjqguan_test_token",
+    "bk_data_id": None,
+    "collector_config_id": None,
+    "collector_config_name": None,
+    "collector_config_name_en": None,
+}
+
 # Create Collector
 CREATE_COLLECTOR_DATA = {
     **COLLECTOR_DATA,

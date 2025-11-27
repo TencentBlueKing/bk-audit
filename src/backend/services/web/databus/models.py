@@ -234,7 +234,6 @@ class Snapshot(SoftDeleteModel):
         gettext_lazy("拉取类型"), max_length=16, choices=JoinDataPullType.choices, default=JoinDataPullType.PARTIAL
     )
     pull_config = models.JSONField(gettext_lazy("拉取配置"), default=dict, null=True, blank=True)
-    custom_config = models.JSONField(gettext_lazy("自定义配置"), default=dict, null=True, blank=True)
     status_msg = models.TextField(gettext_lazy("状态信息"), null=True, blank=True)
     auth_rt = models.BooleanField(gettext_lazy("is RT Authorized"), default=False)
 
