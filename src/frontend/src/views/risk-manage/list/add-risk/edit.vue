@@ -306,6 +306,9 @@
     data: strategyList,
     run: fetchStrategyList,
   } = useRequest(StrategyManageService.fetchStrategyList, {
+    defaultParams: {
+      strategy_type: 'rule',
+    },
     defaultValue: {
       results: [],
       page: 1,
