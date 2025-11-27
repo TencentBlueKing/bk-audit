@@ -283,7 +283,7 @@
     messageError('上传图片失败');
   };
 
-  const extractUrls = (text) => {
+  const extractUrls = (text: string) => {
     const urlRegex = /https?:\/\/[^\s\u4e00-\u9fa5]+/g;
     const links = text.match(urlRegex) || [];
 
@@ -310,7 +310,7 @@
           const quill = editorRef.value?.getQuill();
           if (quill) {
             const text = quill.getText();
-            urls.forEach((url) => {
+            urls.forEach((url: string) => {
               // 查找所有匹配的位置，而不仅仅是第一个
               let startIndex = 0;
               while (startIndex < text.length) {
