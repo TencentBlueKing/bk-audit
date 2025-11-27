@@ -209,7 +209,7 @@
     {
       label: () => t('责任人'),
       field: () => 'operator',
-      width: 180,
+      width: 200,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.operator || []} />,
     },
     {
@@ -251,13 +251,13 @@
     {
       label: () => t('当前处理人'),
       field: () => 'current_operator',
-      width: 160,
+      width: 200,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.current_operator} />,
     },
     {
       label: () => t('关注人'),
       field: () => 'notice_users',
-      width: 180,
+      width: 200,
       render: ({ data }: { data: RiskManageModel }) => <EditTag data={data.notice_users} />,
     },
     {

@@ -1097,6 +1097,7 @@
 
     .list {
       display: inline-block;
+      min-height: 200px;
 
       /* height: 500px; */
       overflow: hidden;
