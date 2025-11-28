@@ -51,6 +51,14 @@ export default {
       },
     },
     {
+      path: 'log-create/:systemId',
+      component: () => import('@/views/system-manage/log-create/index.vue'),
+      name: 'logCreate',
+      meta: {
+        title: '新建日志上报',
+      },
+    },
+    {
       path: 'collector-edit/:systemId/:collectorConfigId',
       component: () => import('@views/system-manage/collector-create/index.vue'),
       name: 'collectorEdit',
@@ -62,6 +70,14 @@ export default {
       path: 'dataid-edit/:systemId/:bkDataId',
       component: () => import('@views/system-manage/collector-create/index.vue'),
       name: 'dataIdEdit',
+      meta: {
+        title: '编辑采集',
+      },
+    },
+    {
+      path: 'log-edit/:systemId/:id',
+      component: () => import('@views/system-manage/log-create/index.vue'),
+      name: 'logDataIdEdit',
       meta: {
         title: '编辑采集',
       },
