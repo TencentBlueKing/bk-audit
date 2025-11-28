@@ -200,3 +200,26 @@ paths:
           userVerifiedRequired: true
         disabledStages: [ ]
         descriptionEn:
+  /backent_api:
+    x-bk-apigateway-method-any:
+      operationId: bk_audit_backent_api
+      description: '审计后端服务'
+      tags: [ ]
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: true
+        enableWebsocket: false
+        backend:
+          name: default
+          method: any
+          path: /
+          matchSubpath: true
+          timeout: 0
+        pluginConfigs: [ ]
+        authConfig:
+          userVerifiedRequired: true
+          appVerifiedRequired: true
+          resourcePermissionRequired: true
+        descriptionEn:
+        noneSchema: true
