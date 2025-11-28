@@ -17,7 +17,7 @@
 <template>
   <div class="collector-operation">
     <template
-      v-if="!loading && (current === data.bk_data_id || checked === data.bk_data_id)">
+      v-if="!loading">
       <auth-component
         action-id="edit_system"
         class="operation-btn"
@@ -90,9 +90,7 @@
 
   import EditInfo from './edit-info/index.vue';
 
-  const props = withDefaults(defineProps<Props>(), {
-    id: '',
-  });
+  const props = defineProps<Props>();
 
 
   const emit = defineEmits<Emits>();
@@ -100,9 +98,6 @@
 
   interface Props {
     data: CollectorModel;
-    current: number;
-    id: string;
-    checked: number
   }
   interface Emits {
     (e: 'getCollectorLists'): void
@@ -151,7 +146,7 @@
     router.push({
       name: 'dataIdEdit',
       params: {
-        systemId: route.params.id || props.id,
+        systemId: route.params.id,
         bkDataId: props.data.bk_data_id,
       },
     });
