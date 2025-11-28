@@ -4,11 +4,11 @@ spec_version: 2  # 如果之前接入过的，建议将 sepc_version改成 2，�
 release:
   # 发布版本号；
   # 资源配置更新，需更新此版本号才会发布资源版本，此版本号和 sdk 版本号一致，错误设置会影响调用方使用
-  version: "0.0.4"
+  version: "0.0.5"
   # 版本标题
-  title: "0.0.4"
+  title: "0.0.5"
   # 版本描述
-  comment: "升级 apigw 描述文件版本，新增风险事件订阅接口"
+  comment: "升级 apigw 描述文件版本，新增风险事件订阅、审计后端服务接口"
 
 # 定义网关基本信息，用于命令 `sync_apigw_config`
 apigateway:
