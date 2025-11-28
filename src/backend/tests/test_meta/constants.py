@@ -726,6 +726,7 @@ GLOBAL_CHOICES = {
         {'id': 'notnull', 'name': 'is not null  不为空'},
         {'id': 'match_all', 'name': '匹配全部'},
         {'id': 'match_any', 'name': '匹配任意'},
+        {'id': 'json_contains', 'name': 'json 包含'},
         {'id': 'between', 'name': '在之间'},
     ],
     'query_field_category': [
