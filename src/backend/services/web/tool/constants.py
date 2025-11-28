@@ -22,7 +22,7 @@ from django.utils.translation import gettext, gettext_lazy
 from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
 from pydantic import field_validator
-from rest_framework.fields import CharField, DictField, JSONField
+from rest_framework.fields import CharField, DictField, JSONField, ListField
 from typing_extensions import TypedDict
 
 from apps.meta.models import EnumMappingRelatedType
@@ -335,28 +335,68 @@ class ApiVariablePosition(TextChoices):
     PATH = "path", gettext_lazy("路径参数")
 
 
-class ApiInputVariable(DataSearchBaseField):
+class ApiInputVariableBase(DataSearchBaseField):
     """
-    API输入变量
+    输入变量
     """
 
     required: bool = PydanticField(title=gettext_lazy("是否必填"))
     field_category: FieldCategory = PydanticField(title=gettext_lazy("前端类型"))
-    choices: List[ChoiceItem] = PydanticField(
-        default_factory=list,
-        title=gettext_lazy("字段选项"),
-        description=gettext_lazy("用于不同字段类别下前端展示配置"),
-    )
     default_value: Annotated[
         Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
     ] = PydanticField(None, title=gettext_lazy("字段默认值"))
     is_show: bool = PydanticField(title=gettext_lazy("用户是否可见"))
     position: ApiVariablePosition = PydanticField(title=gettext_lazy("变量位置"))
 
+
+class ApiStandardInputVariable(ApiInputVariableBase):
+    """
+    标准输入变量
+    """
+
+    field_category: Literal[
+        FieldCategory.INPUT,
+        FieldCategory.NUMBER_INPUT,
+        FieldCategory.TIME_SELECT,
+        FieldCategory.PERSON_SELECT,
+    ] = PydanticField(title=gettext_lazy("前端类型"))
+
+
+class ApiSelectInputVariable(ApiInputVariableBase):
+    """
+    选择输入变量
+    """
+
+    field_category: Literal[FieldCategory.MULTISELECT] = FieldCategory.MULTISELECT
+    choices: List[ChoiceItem] = PydanticField(
+        default_factory=list,
+        title=gettext_lazy("字段选项"),
+        description=gettext_lazy("用于不同字段类别下前端展示配置"),
+    )
+
     @field_validator('choices')
     @classmethod
     def validate_choices(cls, v):
         return validate_unique_keys(v, key_field='key', error_msg=lambda key: gettext("选项值 %s 重复") % key)
+
+
+class TimeRangeSplitConfig(BaseModel):
+    """
+    时间范围分割配置
+    """
+
+    start_field: str = PydanticField(min_length=1, title=gettext_lazy("开始时间参数名"))
+    end_field: str = PydanticField(min_length=1, title=gettext_lazy("结束时间参数名"))
+
+
+class TimeRangeInputVariable(ApiInputVariableBase):
+    """
+    时间范围变量 (特有逻辑)
+    """
+
+    field_category: Literal[FieldCategory.TIME_RANGE_SELECT] = FieldCategory.TIME_RANGE_SELECT
+    # 时间范围分割配置
+    split_config: TimeRangeSplitConfig = PydanticField(title=gettext_lazy("时间范围分割配置"))
 
 
 class ApiOutputFieldType(TextChoices):
@@ -420,11 +460,35 @@ class ApiOutputGroup(BaseModel):
     output_fields: List[ApiOutputField] = PydanticField(default_factory=list, title=gettext_lazy("输出字段"))
 
 
+class ApiOutputConfiguration(BaseModel):
+    """
+    API 输出整体配置
+    """
+
+    # 1. 分组开关
+    enable_grouping: bool = PydanticField(
+        title=gettext_lazy("开启输出分组"), description=gettext_lazy("关闭时前端将忽略分组名，直接展示所有字段")
+    )
+
+    # 2. 统一的数据结构
+    groups: List[ApiOutputGroup] = PydanticField(default_factory=list, title=gettext_lazy("输出分组列表"))
+
+
+# API 输入变量
+ApiInputVariableUnion = Annotated[
+    Union[TimeRangeInputVariable, ApiStandardInputVariable, ApiSelectInputVariable],
+    PydanticField(discriminator="field_category"),
+]
+
+
 class ApiToolConfig(BaseModel):
     """
     API工具配置
     """
 
     api_config: ApiConfig
-    input_variable: List[ApiInputVariable] = PydanticField(default_factory=list, title=gettext_lazy("输入变量"))
-    output_fields: List[ApiOutputGroup] = PydanticField(default_factory=list, title=gettext_lazy("输出字段"))
+    input_variable: Annotated[List[ApiInputVariableUnion], ListField(child=DictField())] = PydanticField(
+        default_factory=list, title=gettext_lazy("输入变量")
+    )
+
+    output_config: ApiOutputConfiguration = PydanticField(title=gettext_lazy("输出配置"))
