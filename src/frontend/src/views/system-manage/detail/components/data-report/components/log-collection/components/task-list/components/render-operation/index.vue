@@ -16,46 +16,43 @@
 -->
 <template>
   <div class="collector-operation">
-    <template
-      v-if="current === data.collector_config_id || checked === data.collector_config_id">
-      <auth-component
-        action-id="view_collection_v2_bk_log"
-        class="operation-btn"
-        :permission="data.permission.view_collection_v2_bk_log"
-        :resource="data.collector_config_id">
+    <auth-component
+      action-id="view_collection_v2_bk_log"
+      class="operation-btn"
+      :permission="data.permission.view_collection_v2_bk_log"
+      :resource="data.collector_config_id">
+      <audit-icon
+        v-bk-tooltips="t('查看')"
+        class="operation-icon"
+        type="audit"
+        @click.stop="handleDetail" />
+    </auth-component>
+    <auth-component
+      action-id="manage_collection_v2_bk_log"
+      class="operation-btn"
+      :permission="data.permission.manage_collection_v2_bk_log"
+      :resource="data.collector_config_id">
+      <audit-icon
+        v-bk-tooltips="t('编辑')"
+        class="operation-icon"
+        type="edit-fill"
+        @click.stop="handleEdit" />
+    </auth-component>
+    <auth-component
+      action-id="manage_collection_v2_bk_log"
+      class="operation-btn"
+      :permission="data.permission.manage_collection_v2_bk_log"
+      :resource="data.collector_config_id">
+      <audit-popconfirm
+        :confirm-handler="handleDelete"
+        :content="t('删除后将不可找回')"
+        :title="t('确认删除采集日志？')">
         <audit-icon
-          v-bk-tooltips="t('查看')"
+          v-bk-tooltips="t('删除')"
           class="operation-icon"
-          type="audit"
-          @click.stop="handleDetail" />
-      </auth-component>
-      <auth-component
-        action-id="manage_collection_v2_bk_log"
-        class="operation-btn"
-        :permission="data.permission.manage_collection_v2_bk_log"
-        :resource="data.collector_config_id">
-        <audit-icon
-          v-bk-tooltips="t('编辑')"
-          class="operation-icon"
-          type="edit-fill"
-          @click.stop="handleEdit" />
-      </auth-component>
-      <auth-component
-        action-id="manage_collection_v2_bk_log"
-        class="operation-btn"
-        :permission="data.permission.manage_collection_v2_bk_log"
-        :resource="data.collector_config_id">
-        <audit-popconfirm
-          :confirm-handler="handleDelete"
-          :content="t('删除后将不可找回')"
-          :title="t('确认删除采集日志？')">
-          <audit-icon
-            v-bk-tooltips="t('删除')"
-            class="operation-icon"
-            type="delete" />
-        </audit-popconfirm>
-      </auth-component>
-    </template>
+          type="delete" />
+      </audit-popconfirm>
+    </auth-component>
   </div>
   <bk-sideslider
     v-model:isShow="isShowDetail"
@@ -100,17 +97,12 @@
 
   interface Props {
     data: CollectorModel;
-    current: number;
-    checked: number;
-    id: string;
   }
   interface Emits {
     (e: 'getCollectorLists'): void
   }
 
-  const props = withDefaults(defineProps<Props>(), {
-    id: '',
-  });
+  const props = defineProps<Props>();
   const emit = defineEmits<Emits>();
   const environment = ref<string|null>(''); // 容器环境
   const { t } = useI18n();
@@ -146,7 +138,7 @@
     router.push({
       name: 'collectorEdit',
       params: {
-        systemId: route.params.id || props.id,
+        systemId: route.params.id,
         collectorConfigId: props.data.collector_config_id,
       },
     });

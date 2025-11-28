@@ -18,7 +18,7 @@
   <div
     v-if="!loading"
     class="collector-config">
-    {{ t('采集已完成') }},
+    <!-- {{ t('采集已完成') }},
     <auth-component
       action-id="edit_system"
       class="operation-btn"
@@ -27,7 +27,7 @@
       <span
         class="route-config"
         @click.stop="handleConfig">{{ t('立即配置') }}</span>
-    </auth-component>
+    </auth-component> -->
     <auth-component
       action-id="edit_system"
       class="operation-btn"
@@ -47,11 +47,11 @@
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
-  import {
-    useRoute,
-    useRouter,
-  } from 'vue-router';
 
+  // import {
+  //   useRoute,
+  //   useRouter,
+  // } from 'vue-router';
   import DataIdManageService from '@service/dataid-manage';
   import IamManageService from '@service/iam-manage';
 
@@ -60,9 +60,7 @@
   import useRequest from '@hooks/use-request';
 
 
-  const props = withDefaults(defineProps<Props>(), {
-    id: '',
-  });
+  const props = defineProps<Props>();
 
   const emit = defineEmits<Emits>();
 
@@ -70,13 +68,12 @@
 
   interface Props {
     data: CollectorModel;
-    id: string;
   }
   interface Emits {
     (e: 'getCollectorLists'): void
   }
-  const router = useRouter();
-  const route = useRoute();
+  // const router = useRouter();
+  // const route = useRoute();
 
   const {
     loading,
@@ -91,23 +88,23 @@
     manual: true,
   });
 
-  const {
-    run: fecthDetail,
-  } = useRequest(DataIdManageService.fecthDetail, {
-    defaultValue: null,
-    onSuccess: () => {
-      router.push({
-        name: 'dataIdEdit',
-        params: {
-          systemId: route.params.id || props.id,
-          bkDataId: props.data.bk_data_id,
-        },
-        query: {
-          step: 3,
-        },
-      });
-    },
-  });
+  // const {
+  //   run: fecthDetail,
+  // } = useRequest(DataIdManageService.fecthDetail, {
+  //   defaultValue: null,
+  //   onSuccess: () => {
+  //     router.push({
+  //       name: 'dataIdEdit',
+  //       params: {
+  //         systemId: route.params.id,
+  //         bkDataId: props.data.bk_data_id,
+  //       },
+  //       query: {
+  //         step: 3,
+  //       },
+  //     });
+  //   },
+  // });
 
   /**
    * 删除采集接口
@@ -129,11 +126,11 @@
     bk_data_id: props.data.bk_data_id,
   });
 
-  const handleConfig = () => {
-    fecthDetail({
-      bk_data_id: props.data.bk_data_id,
-    });
-  };
+  // const handleConfig = () => {
+  //   fecthDetail({
+  //     bk_data_id: props.data.bk_data_id,
+  //   });
+  // };
 </script>
 <!-- .route-config::after {
     position: absolute;
