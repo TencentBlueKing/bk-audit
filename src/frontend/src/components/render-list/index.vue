@@ -150,6 +150,7 @@
     settings: undefined,
   }) ;
   const emits = defineEmits<Emits>();
+  const isUnload = ref(true);
   const { getRecordPageParams, removePageParams } = useRecordPage;
   const { on, off } = useEventBus();
   const slot = useSlots();
@@ -192,6 +193,7 @@
     },
     onSuccess(data) {
       emits('requestSuccess', data);
+      isUnload.value = false;
     },
   });
 
@@ -207,8 +209,8 @@
         if (result) {
           const params = {
             ...paramsMemo,
-            page: pagination.current,
-            page_size: Math.max(pagination.limit, 1),
+            page: isUnload.value ? 1 :  pagination.current,
+            page_size: Math.max(pagination.limit, 1) < 10 ? 10 :  Math.max(pagination.limit, 1),
           };
           isSearching.value = Object.keys(paramsMemo).length > 0;
           cancel();
@@ -225,9 +227,10 @@
       order_field: orderField,
       order_type: orderType,
     } = getSearchParams();
-    if (page && pageSize) {
-      pagination.current = ~~page;
-      pagination.limit = ~~pageSize;
+    const pageValue = isUnload.value ? 1 : page;
+    if (pageValue && pageSize) {
+      pagination.current = ~~pageValue;
+      pagination.limit = (~~pageSize) < 10 ? 10 :  (~~pageSize);
       pagination.limitList = [...new Set([...pagination.limitList, pagination.limit])].sort((a, b) => a - b);
     }
     if (orderField && orderType) {
@@ -268,11 +271,13 @@
   // 切换每页条数
   const handlePageLimitChange = (pageLimit: number) => {
     pagination.limit = pageLimit;
+    isUnload.value = false;
     fetchListData();
   };
   // 切换页码
   const handlePageValueChange = (pageValue:number) => {
     pagination.current = pageValue;
+    isUnload.value = false;
     fetchListData();
   };
   // 情况搜索条件
@@ -330,8 +335,10 @@
         ...pagination.limitList,
         dimensions.rowNum,
       ]);
-      pagination.limit = dimensions.rowNum;
-      pagination.limitList = [...pageLimit].sort((a, b) => a - b);
+      pagination.limit = dimensions.rowNum < 10 ? 10 : dimensions.rowNum;
+      if (pagination.limit > 10) {
+        pagination.limitList = [...pageLimit].sort((a, b) => a - b);
+      }
       // eslint-disable-next-line max-len
       tableMaxHeight.value = dimensions.tableHeaderHeight + dimensions.rowNum * dimensions.tableRowHeight + dimensions.paginationHeight + 8;
     });
@@ -359,7 +366,7 @@
       }
       if (recordParams) {
         pagination.current = Number(recordParams.page);
-        pagination.limit = Number(recordParams.page_size);
+        pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
       }
       fetchListData();
     },
