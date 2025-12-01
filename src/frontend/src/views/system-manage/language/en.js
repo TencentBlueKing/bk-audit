@@ -424,5 +424,6 @@ export default {
     '确认接入该系统?': 'Are you sure to access this system?',
     请先配置权限模型: 'Configure the permission model first',
     新增成功: 'Added success',
+    '数据上报成功，已取 {count} 条数据上报，见下方详细结果': 'Data reporting successful, {count} data reporting obtained, see the detailed results below',
   },
 };
