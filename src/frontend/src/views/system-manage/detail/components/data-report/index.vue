@@ -47,9 +47,10 @@
               v-if="data.enabled"
               class="data-card">
               <div class="card-main">
-                <div class="card-icon">
-                  <div>api</div>
-                </div>
+                <audit-icon
+                  class="card-icon"
+                  svg
+                  type="api-4" />
                 <div class="card-info">
                   <div class="card-title">
                     <span class="name">{{ token.collector_config_name }}</span>
@@ -111,26 +112,19 @@
                   </div>
                 </div>
               </div>
-              <div
-                v-if="apiPushTailLogData && apiPushTailLogData.length"
-                class="card-footer">
+              <div class="card-footer">
                 <!-- 只有成功和失败 -->
                 <div class="card-status">
                   <audit-icon
-                    :style="{
-                      fontSize: '14px',
-                      fill: apiPushStatusMap[token.collector_config_id].icon === 'delete-fill'
-                        ? 'red'
-                        : 'currentcolor',
-                    }"
+                    style="font-size: 14px;"
                     svg
-                    :type="apiPushStatusMap[token.collector_config_id].icon" />
+                    :type="apiPushStatusMap[token.collector_config_id]?.icon" />
                   <span
                     class="status-text"
                     :class="[
-                      apiPushStatusMap[token.collector_config_id].icon === 'delete-fill' ? 'status-danger' : 'completed'
+                      apiPushStatusMap[token.collector_config_id]?.icon === 'cuo' ? 'status-danger' : 'completed'
                     ]">
-                    {{ statusTextMap[apiPushStatusMap[token.collector_config_id].icon] }}
+                    {{ statusTextMap[apiPushStatusMap[token.collector_config_id]?.icon] }}
                   </span>
                 </div>
                 <!-- 最新一条数据 -->
@@ -162,9 +156,10 @@
                 :key="item.collector_config_id"
                 class="data-card">
                 <div class="card-main">
-                  <div class="card-icon">
-                    <div>pull</div>
-                  </div>
+                  <audit-icon
+                    class="card-icon"
+                    svg
+                    type="pull" />
                   <div class="card-info">
                     <div class="card-title">
                       <span class="name">{{ item.custom_type }}</span>
@@ -179,16 +174,13 @@
                       :class="{
                         'rotate-loading': statusMap[item.collector_config_id]?.isRunning,
                       }"
-                      :style="{
-                        fontSize: '14px',
-                        fill: statusMap[item.collector_config_id]?.icon === 'delete-fill' ? 'red' : 'currentcolor',
-                      }"
+                      style="font-size: 14px;"
                       svg
                       :type="statusMap[item.collector_config_id]?.icon" />
                     <span
                       class="status-text"
                       :class="[
-                        statusMap[item.collector_config_id]?.icon === 'delete-fill'
+                        statusMap[item.collector_config_id]?.icon === 'cuo'
                           ? 'status-danger'
                           : statusMap[item.collector_config_id]?.icon === 'completed'
                             ? 'status-success'
@@ -197,7 +189,7 @@
                       {{ statusTextMap[statusMap[item.collector_config_id]?.icon] }}
                     </span>
                     <bk-button
-                      v-if="statusMap[item.collector_config_id]?.icon === 'timestamp'"
+                      v-if="statusMap[item.collector_config_id]?.icon === 'weiwancheng'"
                       text
                       theme="primary">
                       {{ t('继续配置') }}
@@ -239,9 +231,10 @@
                 :key="item.bk_data_id"
                 class="data-card">
                 <div class="card-main">
-                  <div class="card-icon">
-                    <div>bkbase</div>
-                  </div>
+                  <audit-icon
+                    class="card-icon"
+                    svg
+                    type="pull" />
                   <div class="card-info">
                     <div class="card-title">
                       <span class="name">bkbase</span>
@@ -266,7 +259,7 @@
                       {{ statusTextMap[dataIdStatusMap[item.bk_data_id]?.icon] }}
                     </span>
                     <bk-button
-                      v-if="dataIdStatusMap[item.bk_data_id]?.icon === 'timestamp'"
+                      v-if="dataIdStatusMap[item.bk_data_id]?.icon === 'weiwancheng'"
                       text
                       theme="primary"
                       @click="handleDataIdConfig(item.bk_data_id)">
@@ -375,9 +368,9 @@
   const apiPushStatusMap = ref<Record<string, BatchSubscriptionStatusModel>>({});
 
   const statusTextMap = ref<Record<string, string>>({
-    'delete-fill': t('数据上报异常'),
+    cuo: t('数据上报异常'),
     completed: t('数据上报正常'),
-    timestamp: t('未完成配置，请'),
+    weiwancheng: t('未完成配置，请'),
   });
   const statusCom: IStatus = {
     config: RenderConfig,
@@ -495,7 +488,7 @@
   // 用于判断apipush的状态和数据获取
   const {
     run: fetchApiPushTailLog,
-    data: apiPushTailLogData,
+    // data: apiPushTailLogData,
   } = useRequest(CollectorManageService.fetchApiPushTailLog, {
     defaultParams: {
       system_id: route.params.id,
@@ -567,7 +560,7 @@
         if (!item.bkbase_table_id) {
           dataIdStatusMap.value[item.bk_data_id].status = 'WARNING';
         } else {
-          dataIdStatusMap.value[item.bk_data_id].status = 'WARNING';
+          dataIdStatusMap.value[item.bk_data_id].status = 'SUCCESS';
         }
       });
     },
@@ -677,7 +670,6 @@
         display: flex;
         width: 50px;
         height: 50px;
-        background-color: #f9d090;
         justify-content: center;
       }
 
