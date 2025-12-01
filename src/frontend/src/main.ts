@@ -62,7 +62,7 @@ import Exception from './exception.vue';
 
 import('tippy.js/dist/tippy.css');
 import('tippy.js/themes/light.css');
-import('bkui-vue/dist/style.css');
+import('bkui-vue/dist/cli.css');
 import('@lib/bk-icon/style.css');
 import('@lib/bk-icon/iconcool.js');
 import('@/css/reset.css');
