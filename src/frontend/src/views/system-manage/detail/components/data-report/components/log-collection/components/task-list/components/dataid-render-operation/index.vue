@@ -142,12 +142,25 @@
   const handleDetail = () => {
     isShowDetail.value = true;
   };
+  // const handleEdit = () => {
+  //   router.push({
+  //     name: 'logDataIdEdit',
+  //     params: {
+  //       systemId: route.params.id,
+  //       id: props.data.bk_data_id,
+  //     },
+  //   });
+  // };
   const handleEdit = () => {
     router.push({
-      name: 'dataIdEdit',
+      name: 'logDataIdEdit',
       params: {
         systemId: route.params.id,
-        bkDataId: props.data.bk_data_id,
+        id: props.data.bk_data_id,
+      },
+      query: {
+        step: 2,
+        type: 'bkbase',
       },
     });
   };
