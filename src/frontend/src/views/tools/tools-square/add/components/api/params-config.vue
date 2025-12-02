@@ -1,3 +1,4 @@
+<!-- eslint-disable vue/no-template-shadow -->
 <!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
@@ -33,7 +34,7 @@
         <div
           class="field-value"
           style="flex: 0 0 350px;">
-          {{ t('传参说明') }}
+          {{ t('参数说明') }}
         </div>
         <div
           class="field-value"
@@ -101,7 +102,7 @@
         </div>
         <div
           class="field-value"
-          style="flex: 0 0 120px;" />
+          style="flex: 0 0 80px;" />
       </div>
     </div>
     <audit-form
@@ -117,7 +118,148 @@
               error-display-type="tooltips"
               label=""
               label-width="0">
-              {{ item }}+++
+              <bk-input
+                v-if="index !== 2"
+                v-model="val" />
+              <div v-else>
+                <div style="display: flex; border-bottom: 1px solid  #dcdee5;">
+                  <bk-input
+                    v-model="val" /> <span><bk-tag theme="info"> {{ t('开始时间') }} </bk-tag></span>
+                </div>
+                <div style="display: flex;">
+                  <bk-input
+                    v-model="val" /> <span> <bk-tag theme="warning"> {{ t('结束时间') }} </bk-tag></span>
+                </div>
+              </div>
+            </bk-form-item>
+          </div>
+          <!-- 显示名 -->
+          <div class="field-value">
+            <bk-form-item
+              error-display-type="tooltips"
+              label=""
+              label-width="0">
+              显示名
+            </bk-form-item>
+          </div>
+          <!-- 传参方式 -->
+          <div
+            class="field-value"
+            style="flex: 0 0 150px;">
+            <bk-form-item
+              error-display-type="tooltips"
+              label=""
+              label-width="0">
+              <bk-select
+                v-model="selectedValue"
+                class="bk-select"
+                size="small">
+                <bk-option
+                  v-for="(item, index) in paramsTypeList"
+                  :id="item.value"
+                  :key="index"
+                  :name="item.label" />
+              </bk-select>
+            </bk-form-item>
+          </div>
+          <!-- 参数说明 -->
+          <div
+            class="field-value"
+            style="flex: 0 0 350px;">
+            <bk-form-item
+              error-display-type="tooltips"
+              label=""
+              label-width="0">
+              <bk-input
+                v-model="val" />
+            </bk-form-item>
+          </div>
+          <!-- 是否必填 -->
+          <div
+            class="field-value"
+            style="flex: 0 0 200px;">
+            <bk-form-item
+              error-display-type="tooltips"
+              label=""
+              label-width="0">
+              <bk-select
+                v-model="selectedValue"
+                class="bk-select"
+                size="small">
+                <bk-option
+                  v-for="(item, index) in requiredList"
+                  :id="item.value"
+                  :key="index"
+                  :name="item.label" />
+              </bk-select>
+            </bk-form-item>
+          </div>
+          <!-- 前端类型 -->
+          <div
+            class="field-value"
+            style="flex: 0 0 120px;">
+            <bk-form-item
+              error-display-type="tooltips"
+              label=""
+              label-width="0">
+              <bk-select
+                v-model="frontendTypeValue"
+                class="bk-select"
+                :clearable="false"
+                size="small">
+                <bk-option
+                  v-for="(item, index) in frontendTypeList"
+                  :id="item.value"
+                  :key="index"
+                  :name="item.label" />
+              </bk-select>
+            </bk-form-item>
+          </div>
+          <!-- 默认值 -->
+          <div
+            class="field-value">
+            <bk-form-item
+              error-display-type="tooltips"
+              label=""
+              label-width="0">
+              <bk-input
+                v-model="val" />
+            </bk-form-item>
+          </div>
+          <!-- 是否可见 -->
+          <div
+            class="field-value"
+            style="flex: 0 0 120px;">
+            <bk-form-item
+              error-display-type="tooltips"
+              label=""
+              label-width="0">
+              <bk-select
+                v-model="isViews"
+                class="bk-select"
+                size="small">
+                <bk-option
+                  v-for="(item, index) in isViewsList"
+                  :id="item.value"
+                  :key="index"
+                  :name="item.label" />
+              </bk-select>
+            </bk-form-item>
+          </div>
+          <!-- 按钮 -->
+          <div
+            class="field-value"
+            style="flex: 0 0 80px;">
+            <bk-form-item
+              error-display-type="tooltips"
+              label=""
+              label-width="0">
+              <audit-icon
+                class="add-fill field-icon"
+                type="add-fill" />
+              <audit-icon
+                class="reduce-fill field-icon"
+                type="reduce-fill" />
             </bk-form-item>
           </div>
         </div>
@@ -138,7 +280,43 @@
     id: false,
     label: t('否'),
   }]);
+  const val = ref('');
+  const selectedValue = ref('Params');
+  const paramsTypeList = ref([{
+    value: 'Params',
+    label: 'Params',
+  }, {
+    value: 'Body',
+    label: 'Body',
+  }]);
+  const tableInputFormRef = ref();
+  const frontendTypeValue = ref('input');
+  const frontendTypeList = ref([{
+    value: 'input',
+    label: '输入框',
+  }, {
+    value: 'number-input',
+    label: '数字输入框',
+  }, {
+    value: 'select',
+    label: '人员选择器',
+  }, {
+    value: 'date-picker',
+    label: '时间范围选择器',
+  }, {
+    value: 'time-picker',
+    label: '时间选择器',
+  },
+  ]);
 
+  const isViews = ref(true);
+  const isViewsList = ref([{
+    value: true,
+    label: t('可见'),
+  }, {
+    value: false,
+    label: t('不可见'),
+  }]);
 </script>
 
 <style lang="postcss" scoped>
@@ -291,5 +469,10 @@
   color: #63656e;
   border-right: 1px solid #dcdee5;
   border-bottom: 1px solid #dcdee5;
+}
+
+.field-icon {
+  margin-left: 20px;
+  color: #c4c6cc;
 }
 </style>

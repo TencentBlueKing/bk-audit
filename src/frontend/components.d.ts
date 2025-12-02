@@ -20,6 +20,7 @@ declare module 'vue' {
     Button: typeof import('./src/components/auth/button.vue')['default']
     Catch: typeof import('./src/components/apply-permission/catch.vue')['default']
     ChartTableList: typeof import('./src/components/skeleton-loading/components/chart-table-list.vue')['default']
+    CircleGrid: typeof import('./src/components/circle-grid/circle-grid.vue')['default']
     CollapseBox: typeof import('./src/components/ip-selector/selector-box/components/preview-result/collapse-box/index.vue')['default']
     ContentItem: typeof import('./src/components/ip-selector/selector-box/components/preview-result/collapse-box/content-item.vue')['default']
     CreateCollectorStep2: typeof import('./src/components/skeleton-loading/components/create-collector-step2.vue')['default']
