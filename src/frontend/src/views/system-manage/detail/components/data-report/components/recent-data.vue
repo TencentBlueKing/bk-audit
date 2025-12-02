@@ -62,7 +62,8 @@
       <bk-button
         style="font-size: 12px;"
         text
-        theme="primary">
+        theme="primary"
+        @click="handleFold">
         {{ t('收起') }}
       </bk-button>
     </div>
@@ -99,7 +100,12 @@
     };
   }
 
+  interface Emits {
+    (e: 'fold'): void
+  }
+
   const props = defineProps<Props>();
+  const emit = defineEmits<Emits>();
   const route = useRoute();
   const { t } = useI18n();
   const tableColumn = [
@@ -275,6 +281,10 @@
   };
   const handleCopyData = (data:CollectorTailLogModel) => {
     execCopy(data.originData, t('复制成功'));
+  };
+
+  const handleFold = () => {
+    emit('fold');
   };
 
 </script>
