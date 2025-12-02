@@ -19,14 +19,9 @@
     class="collector-field-extraction-page"
     :offset-target="getSmartActionOffsetTarget">
     <div class="step2-content">
-      <div
-        class="content-section"
-        style="width: calc(100% - 450px);">
-        <div class="section-header">
-          <span class="section-title">{{ t('字段映射') }}</span>
-          <span class="section-divider" />
-          <span class="section-desc">{{ t('配置审计中心日志的规范字段与原始日志的映射关系，用以清洗成标准化日志') }}</span>
-        </div>
+      <card
+        style="width: 65%; box-shadow: none;"
+        :title="t('调试字段映射')">
         <audit-form>
           <bk-form-item
             class="field-map-item"
@@ -38,28 +33,10 @@
               :data="previewDataList" />
           </bk-form-item>
         </audit-form>
-      </div>
-
-      <div
-        class="content-section"
-        style="width: 460px; padding-left: 24px; border-left: 1px solid rgb(0 0 0 / 16%);"
+      </card>
+      <card
+        style=" border-left: 1px solid rgb(0 0 0 / 16%); box-shadow: none;flex: 1;"
         :title="t('输入数据')">
-        <div class="section-header">
-          <span class="section-title">{{ t('原始日志') }}</span>
-          <span class="section-divider" />
-          <span class="section-desc">{{ t('获取需标准化的原始日志，可手动编辑') }}</span>
-          <bk-button
-            v-if="formData.data"
-            class="refresh-btn"
-            style="padding-left: 92px;"
-            text
-            @click="handleRefreshTailLog">
-            <audit-icon
-              style="margin-right: 5px;"
-              type="refresh" />
-            <span>{{ t('刷新') }}</span>
-          </bk-button>
-        </div>
         <bk-loading :loading="isTailLogLoading">
           <audit-form
             ref="inputDataFormRef"
@@ -78,6 +55,16 @@
                   <div class="original-data-text">
                     {{ formData.data }}
                   </div>
+                  <bk-button
+                    class="refresh-btn"
+                    style="padding-top: 18px;"
+                    text
+                    @click="handleRefreshTailLog">
+                    <audit-icon
+                      style="margin-right: 5px;"
+                      type="refresh" />
+                    <span>{{ t('刷新') }}</span>
+                  </bk-button>
                 </div>
                 <div
                   v-else
@@ -102,58 +89,49 @@
                 </div>
               </div>
             </bk-form-item>
+            <bk-form-item
+              label=""
+              label-width="0"
+              property="etl_config"
+              required>
+              <bk-radio-group v-model="formData.etl_config">
+                <bk-radio-button
+                  v-for="item in dataIdEtlConfigList"
+                  :key="item.id"
+                  :label="item.id">
+                  {{ item.name }}
+                </bk-radio-button>
+              </bk-radio-group>
+            </bk-form-item>
 
-            <div class="section-content">
-              <div class="section-header">
-                <span class="section-title">{{ t('提起字段') }}</span>
-                <span class="section-divider" />
-                <span class="section-desc">{{ t('根据原始日志，按规则提取字段列表') }}</span>
-              </div>
-
-              <bk-form-item
-                :label="t('字段提取')"
-                label-width="72"
-                property="etl_config"
-                required>
-                <bk-radio-group v-model="formData.etl_config">
-                  <bk-radio-button
-                    v-for="item in dataIdEtlConfigList"
-                    :key="item.id"
-                    :label="item.id">
-                    {{ item.name }}
-                  </bk-radio-button>
-                </bk-radio-group>
-              </bk-form-item>
-
-              <bk-form-item
-                label=""
-                label-width="0">
-                <bk-button
-                  v-if="hasLogData"
-                  v-bk-tooltips="t('请先刷新，以获取原始数据')"
-                  class="is-disabled"
-                  :loading="isPreviewLoading"
-                  style="width: 80px;"
-                  theme="primary">
-                  {{ t('提取字段') }}
-                </bk-button>
-                <bk-button
-                  v-else
-                  :loading="isPreviewLoading"
-                  style="width: 80px;"
-                  theme="primary"
-                  @click="handleDebug">
-                  {{ t('提取字段') }}
-                </bk-button>
-              </bk-form-item>
-            </div>
+            <bk-form-item
+              label=""
+              label-width="0">
+              <bk-button
+                v-if="hasLogData"
+                v-bk-tooltips="t('请先刷新，以获取原始数据')"
+                class="is-disabled"
+                :loading="isPreviewLoading"
+                style="width: 80px;"
+                theme="primary">
+                {{ t('调试') }}
+              </bk-button>
+              <bk-button
+                v-else
+                :loading="isPreviewLoading"
+                style="width: 80px;"
+                theme="primary"
+                @click="handleDebug">
+                {{ t('调试') }}
+              </bk-button>
+            </bk-form-item>
           </audit-form>
         </bk-loading>
         <!-- previewDataList: 调试后解析的字段 -->
         <render-alternative-field
           :data="previewDataList"
           :related-field-map="tFieldMap" />
-      </div>
+      </card>
     </div>
     <template #action>
       <bk-button
@@ -203,9 +181,9 @@
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
 
-  // import Card from '@/views/system-manage/log-create/components/field-cleaning/components/card.vue';
-  import RenderAlternativeField from '@/views/system-manage/log-create/components/field-cleaning/components/field-map/alternative-field.vue';
-  import FieldMap from '@/views/system-manage/log-create/components/field-cleaning/components/field-map/index.vue';
+  import Card from './components/card.vue';
+  import RenderAlternativeField from './components/field-map/alternative-field.vue';
+  import FieldMap from './components/field-map/index.vue';
 
   type TFieldMap = Record<string, string>
 
@@ -239,13 +217,12 @@
   const isPreview = ref(true); // 调试完毕才可提交
   const isError = ref(true); // 调试是否报错
 
-  const isEditMode = route.name === 'logDataIdEdit';
+  const isEditMode = route.name === 'dataIdEdit';
   const {
     searchParams,
     removeSearchParam,
   } = useUrlSearch();
-  const bkDataID = searchParams.get('bk_data_id') || route.params.id;
-  console.log('bkDataID', bkDataID);
+  const bkDataID = searchParams.get('bk_data_id') || route.params.bkDataId;
   const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
 
   // 原始数据
@@ -259,6 +236,7 @@
     defaultValue: [],
     manual: true,
     onSuccess(data) {
+      console.log('data', data);
       if (data.length > 0) {
         hasLogData.value = false;
         formData.data = data[0].value;
@@ -359,33 +337,6 @@
 .collector-field-extraction-page {
   .step2-content {
     display: flex;
-    gap: 24px;
-  }
-
-  .content-section {
-    .section-header {
-      display: flex;
-      align-items: center;
-      margin-bottom: 16px;
-
-      .section-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #313238;
-      }
-
-      .section-divider {
-        width: 1px;
-        height: 12px;
-        margin: 0 10px;
-        background: #979ba5;
-      }
-
-      .section-desc {
-        font-size: 12px;
-        color: #979ba5;
-      }
-    }
   }
 
   .original-data-box {

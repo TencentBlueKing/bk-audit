@@ -37,11 +37,10 @@
         class="log-report-skeleton"
         :loading="isListLoading"
         :style="{ height: `${listHeight}px` }">
-        <scroll-faker>
+        <scroll-faker class="data-list">
           <!-- 如果有采集任务或api推送才显示 -->
-          <div
-            v-if="hasCollectorData || data.enabled"
-            class="data-list">
+          <template
+            v-if="hasCollectorData || data.enabled">
             <!-- 有api推送才显示 -->
             <div
               v-if="data.enabled"
@@ -114,16 +113,17 @@
               </div>
               <div class="card-footer">
                 <!-- 只有成功和失败 -->
-                <div class="card-status">
+                <div
+                  class="card-status"
+                  :class="[
+                    apiPushStatusMap[token.collector_config_id]?.icon === 'cuo' ? 'status-danger' : 'status-success'
+                  ]">
                   <audit-icon
                     style="font-size: 14px;"
                     svg
                     :type="apiPushStatusMap[token.collector_config_id]?.icon" />
                   <span
-                    class="status-text"
-                    :class="[
-                      apiPushStatusMap[token.collector_config_id]?.icon === 'cuo' ? 'status-danger' : 'completed'
-                    ]">
+                    class="status-text">
                     {{ statusTextMap[apiPushStatusMap[token.collector_config_id]?.icon] }}
                   </span>
                 </div>
@@ -146,7 +146,8 @@
               </div>
               <recent-data
                 v-if="showRecentDataMap['api']"
-                :data="collectorDataMap['api']" />
+                :data="collectorDataMap['api']"
+                @fold="showRecentDataMap['api'] = false" />
             </div>
 
             <!-- log 列表 -->
@@ -169,7 +170,15 @@
                 </div>
                 <div class="card-footer">
                   <!-- 失败、成功、未完成 -->
-                  <div class="card-status">
+                  <div
+                    class="card-status"
+                    :class="[
+                      statusMap[item.collector_config_id]?.icon === 'cuo'
+                        ? 'status-danger'
+                        : statusMap[item.collector_config_id]?.icon === 'completed'
+                          ? 'status-success'
+                          : 'status-warning',
+                    ]">
                     <audit-icon
                       :class="{
                         'rotate-loading': statusMap[item.collector_config_id]?.isRunning,
@@ -178,20 +187,14 @@
                       svg
                       :type="statusMap[item.collector_config_id]?.icon" />
                     <span
-                      class="status-text"
-                      :class="[
-                        statusMap[item.collector_config_id]?.icon === 'cuo'
-                          ? 'status-danger'
-                          : statusMap[item.collector_config_id]?.icon === 'completed'
-                            ? 'status-success'
-                            : 'status-warning',
-                      ]">
+                      class="status-text">
                       {{ statusTextMap[statusMap[item.collector_config_id]?.icon] }}
                     </span>
                     <bk-button
                       v-if="statusMap[item.collector_config_id]?.icon === 'weiwancheng'"
                       text
-                      theme="primary">
+                      theme="primary"
+                      @click="handleCollectorConfig(item.collector_config_id)">
                       {{ t('继续配置') }}
                     </bk-button>
                   </div>
@@ -220,7 +223,8 @@
                 </div>
                 <recent-data
                   v-if="showRecentDataMap[`collector_${item.collector_config_id}`]"
-                  :data="collectorDataMap[`collector_${item.collector_config_id}`]" />
+                  :data="collectorDataMap[`collector_${item.collector_config_id}`]"
+                  @fold="showRecentDataMap[`collector_${item.collector_config_id}`] = false" />
               </div>
             </template>
 
@@ -244,18 +248,19 @@
                 </div>
                 <div class="card-footer">
                   <!-- 只有成功和未完成 -->
-                  <div class="card-status">
+                  <div
+                    class="card-status"
+                    :class="[
+                      dataIdStatusMap[item.bk_data_id]?.icon === 'completed'
+                        ? 'status-success'
+                        : 'status-warning',
+                    ]">
                     <audit-icon
                       style="font-size: 14px;"
                       svg
                       :type="dataIdStatusMap[item.bk_data_id]?.icon" />
                     <span
-                      class="status-text"
-                      :class="[
-                        dataIdStatusMap[item.bk_data_id]?.icon === 'completed'
-                          ? 'status-success'
-                          : 'status-warning',
-                      ]">
+                      class="status-text">
                       {{ statusTextMap[dataIdStatusMap[item.bk_data_id]?.icon] }}
                     </span>
                     <bk-button
@@ -292,10 +297,11 @@
                 </div>
                 <recent-data
                   v-if="showRecentDataMap[`dataid_${item.bk_data_id}`]"
-                  :data="collectorDataMap[`dataid_${item.bk_data_id}`]" />
+                  :data="collectorDataMap[`dataid_${item.bk_data_id}`]"
+                  @fold="showRecentDataMap[`dataid_${item.bk_data_id}`] = false" />
               </div>
             </template>
-          </div>
+          </template>
           <!-- 暂无数据 -->
           <div
             v-else
@@ -326,6 +332,7 @@
 
   import BatchSubscriptionStatusModel from '@model/collector/batch-subscription-status';
   import type CollectorModel from '@model/collector/collector';
+  import CollectorDetailModel from '@model/collector/collector-detail';
 
   import {
     execCopy,
@@ -435,11 +442,39 @@
         name: 'logDataIdEdit',
         params: {
           systemId: route.params.id,
-          id: bkDataId,
+          bk_data_id: bkDataId,
         },
         query: {
           step: 2, // 字段清洗
           type: 'bkbase',
+        },
+      });
+    });
+  };
+
+  const {
+    run: fetchCollectorsById,
+  } = useRequest(CollectorManageService.fetchCollectorsById, {
+    defaultValue: new CollectorDetailModel(),
+  });
+
+  // 继续配置log
+  const handleCollectorConfig = (collectorConfigId: number) => {
+    fetchCollectorsById({
+      id: collectorConfigId,
+    }).then((result) => {
+      router.push({
+        name: 'logCollectorEdit',
+        params: {
+          systemId: route.params.id,
+          collector_config_id: collectorConfigId,
+        },
+        query: {
+          collector_config_id: collectorConfigId,
+          task_id_list: result.task_id_list.join(','),
+          step: 4, // 字段清洗
+          environment: result.environment,
+          type: 'newLogCollector',
         },
       });
     });
@@ -644,13 +679,16 @@
   justify-content: center;
 }
 
-.data-list {
-  display: flex;
+:deep(.data-list) {
   height: 100%;
   padding: 20px 16px;
   background: #f5f7fa;
-  flex-direction: column;
-  gap: 12px;
+
+  .scroll-faker-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
   .data-card {
     position: relative;
@@ -658,7 +696,8 @@
     padding: 16px;
     background: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 4px 0 #0d191929;
+
+    /* box-shadow: 0 2px 4px 0 #0d191929; */
     flex-direction: column;
     gap: 16px;
 
@@ -766,7 +805,8 @@
 
       .status-text {
         font-size: 12px;
-        color: #63656e;
+
+        /* color: #63656e; */
       }
 
       .status-success {
