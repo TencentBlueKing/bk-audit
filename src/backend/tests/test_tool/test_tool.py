@@ -421,7 +421,14 @@ class ToolEnumMappingTests(TestCase):
             config={
                 "sql": "SELECT 1",
                 "referenced_tables": [{"table_name": "test"}],
-                "input_variable": [{"raw_name": "param", "display_name": "Parameter", "required": False}],
+                "input_variable": [
+                    {
+                        "raw_name": "param",
+                        "display_name": "Parameter",
+                        "required": False,
+                        "field_category": FieldCategory.INPUT.value,
+                    }
+                ],
                 "output_fields": [
                     {
                         "raw_name": self.field_name,
@@ -473,7 +480,14 @@ class ToolEnumMappingTests(TestCase):
             "config": {
                 "sql": "SELECT * FROM test",
                 "referenced_tables": [{"table_name": "test_table"}],
-                "input_variable": [{"raw_name": "param", "display_name": "Parameter", "required": False}],
+                "input_variable": [
+                    {
+                        "raw_name": "param",
+                        "display_name": "Parameter",
+                        "required": False,
+                        "field_category": FieldCategory.INPUT.value,
+                    }
+                ],
                 "output_fields": [
                     {
                         "raw_name": "status",
