@@ -460,10 +460,8 @@ class UpdateStrategy(StrategyV2Base):
         elif origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
             need_update_remote = True
         logger.info(
-            "[CheckNeedUpdateRemote]StrategyId: {}, Update Key: {}, Update Value: {},"
-            " Origin Value: {}, Need update remote: {}".format(
-                strategy.strategy_id, key, origin_value, new_value, need_update_remote
-            )
+            "[CheckNeedUpdateRemote]StrategyId: {}, Update Key: {}, Update Value: {}, Origin Value: {}, "
+            "Need update remote: {}".format(strategy.strategy_id, key, origin_value, new_value, need_update_remote)
         )
         return need_update_remote
 
@@ -633,7 +631,10 @@ class ListStrategyAll(StrategyV2Base):
     def perform_request(self, validated_request_data):
         if not ActionPermission(
             actions=[ActionEnum.LIST_STRATEGY, ActionEnum.LIST_RISK, ActionEnum.EDIT_RISK]
-        ).has_permission(request=get_local_request(), view=self):
+        ).has_permission(
+            request=get_local_request(),
+            view=self,  # noqa: E501
+        ):
             return []
         strategies: List[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
