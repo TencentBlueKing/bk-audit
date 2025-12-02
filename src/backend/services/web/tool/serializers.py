@@ -25,6 +25,7 @@ from core.sql.model import Table as RawTable
 from core.sql.parser.model import SelectField, SqlVariable
 from services.web.common.caller_permission import CALLER_RESOURCE_TYPE_CHOICES
 from services.web.tool.constants import (
+    ApiToolConfig,
     BkVisionConfig,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
@@ -62,6 +63,7 @@ class ToolCreateRequestSerializer(serializers.Serializer):
     updated_time = serializers.DateTimeField(required=False, label="更新时间", format="%Y-%m-%d %H:%M:%S", allow_null=True)
 
     def validate(self, attrs):
+        attrs = super().validate(attrs)
         tool_type = attrs["tool_type"]
         config = attrs["config"]
         if tool_type == ToolTypeEnum.DATA_SEARCH and "data_search_config_type" not in attrs:
@@ -71,6 +73,8 @@ class ToolCreateRequestSerializer(serializers.Serializer):
             validated_config = BkVisionConfig.model_validate(config).model_dump()
         elif tool_type == ToolTypeEnum.DATA_SEARCH:
             validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
+        elif tool_type == ToolTypeEnum.API:
+            validated_config = ApiToolConfig.model_validate(config).model_dump()
         else:
             raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
         attrs["config"] = validated_config
@@ -89,20 +93,23 @@ class ToolUpdateRequestSerializer(serializers.Serializer):
     updated_time = serializers.DateTimeField(required=False, label="更新时间", format="%Y-%m-%d %H:%M:%S", allow_null=True)
 
     def validate(self, attrs):
+        attrs = super().validate(attrs)
         uid = attrs["uid"]
         config = attrs.get("config")
 
         tool = Tool.last_version_tool(uid)
         tool_type = tool.tool_type
 
-        if tool_type == ToolTypeEnum.BK_VISION:
-            validated_config = BkVisionConfig.model_validate(config).model_dump()
-        elif tool_type == ToolTypeEnum.DATA_SEARCH:
-            validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
-        else:
-            raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
-
-        attrs["config"] = validated_config
+        if config:
+            if tool_type == ToolTypeEnum.BK_VISION:
+                validated_config = BkVisionConfig.model_validate(config).model_dump()
+            elif tool_type == ToolTypeEnum.DATA_SEARCH:
+                validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
+            elif tool_type == ToolTypeEnum.API:
+                validated_config = ApiToolConfig.model_validate(config).model_dump()
+            else:
+                raise serializers.ValidationError({"uid": f"不支持的工具类型: {tool_type}"})
+            attrs["config"] = validated_config
         return attrs
 
 

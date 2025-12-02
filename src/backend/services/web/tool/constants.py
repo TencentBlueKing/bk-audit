@@ -473,6 +473,11 @@ class ApiOutputConfiguration(BaseModel):
     # 2. 统一的数据结构
     groups: List[ApiOutputGroup] = PydanticField(default_factory=list, title=gettext_lazy("输出分组列表"))
 
+    @field_validator('groups')
+    @classmethod
+    def validate_unique_groups(cls, v):
+        return validate_unique_keys(v, key_field='name', error_msg=lambda key: gettext("分组名 %s 重复") % key)
+
 
 # API 输入变量
 ApiInputVariableUnion = Annotated[
@@ -490,5 +495,4 @@ class ApiToolConfig(BaseModel):
     input_variable: Annotated[List[ApiInputVariableUnion], ListField(child=DictField())] = PydanticField(
         default_factory=list, title=gettext_lazy("输入变量")
     )
-
     output_config: ApiOutputConfiguration = PydanticField(title=gettext_lazy("输出配置"))
