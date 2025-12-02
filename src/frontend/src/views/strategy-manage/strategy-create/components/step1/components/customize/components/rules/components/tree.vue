@@ -9,7 +9,7 @@
     filterable
     id-key="id"
     multiple
-    :popover-options="{ 'width': 'auto', 'height': 400, 'extCls': 'node-select' }"
+    :popover-options="{ 'width': 'auto', 'height': 400, 'extCls': 'node-select', placement: 'top-start' }"
     @search-change="handleSearch"
     @toggle="handleToggle">
     <bk-tree
