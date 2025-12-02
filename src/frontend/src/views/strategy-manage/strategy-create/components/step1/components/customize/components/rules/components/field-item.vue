@@ -55,6 +55,7 @@
         v-model="condition.condition.operator"
         filterable
         :placeholder="t('请选择')"
+        :popover-options="{ placement: 'top-start' }"
         @change="(value: string) => handleSelectOperator(value, index)">
         <bk-option
           v-for="item in conditionList"
@@ -96,6 +97,7 @@
         :list="dicts[condition.condition.field.raw_name]"
         :multiple="tagInput.includes(condition.condition.operator)"
         name-key="label"
+        :popover-options="{ placement: 'top-start' }"
         trigger="hover"
         @change="(value: Array<Array<string>>) => handleCascaderFilter(value, index)" />
 
@@ -106,6 +108,7 @@
         allow-create
         class="consition-value"
         :multiple="tagInput.includes(condition.condition.operator)"
+        :popover-options="{ placement: 'top-start' }"
         @change="(value: Array<string>) => handleFilter(Array.isArray(value) ? value : [value], index)" />
 
       <bk-tag-input
