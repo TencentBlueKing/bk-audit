@@ -83,6 +83,14 @@ export default {
       },
     },
     {
+      path: 'log-edit/:systemId/:id',
+      component: () => import('@views/system-manage/log-create/index.vue'),
+      name: 'logCollectorEdit',
+      meta: {
+        title: '编辑采集',
+      },
+    },
+    {
       path: 'collector-complete/:systemId/:collectorConfigId/:taskIdList?',
       component: () => import('@views/system-manage/collector-complete/index.vue'),
       name: 'collectorComplete',

@@ -16,7 +16,7 @@
 -->
 <template>
   <div class="collector-config">
-    {{ t('采集下发已完成') }},
+    <!-- {{ t('采集下发已完成') }},
     <auth-component
       action-id="manage_collection_v2_bk_log"
       class="operation-btn"
@@ -25,7 +25,7 @@
       <span
         class="route-config"
         @click.stop="handleConfig">{{ t('立即配置') }}</span>
-    </auth-component>
+    </auth-component> -->
     <auth-component
       action-id="manage_collection_v2_bk_log"
       class="operation-btn"
@@ -45,13 +45,13 @@
 </template>
 <script setup lang="ts">
   import { useI18n } from 'vue-i18n';
-  import { useRoute, useRouter } from 'vue-router';
 
+  // import { useRoute, useRouter } from 'vue-router';
   import CollectorManageService from '@service/collector-manage';
 
   import type CollectorModel from '@model/collector/collector';
-  import CollectorDetailModel from '@model/collector/collector-detail';
 
+  // import CollectorDetailModel from '@model/collector/collector-detail';
   import useRequest from '@hooks/use-request';
 
 
@@ -67,33 +67,33 @@
   interface Emits {
     (e: 'getCollectorLists'): void
   }
-  const router = useRouter();
-  const route = useRoute();
+  // const router = useRouter();
+  // const route = useRoute();
 
-  const {
-    run: fetchCollectorsById,
-  // eslint-disable-next-line vue/no-setup-props-destructure
-  } = useRequest(CollectorManageService.fetchCollectorsById, {
-    defaultParams: {
-      id: props.data.collector_config_id,
-    },
-    defaultValue: new CollectorDetailModel(),
-    onSuccess: (result) => {
-      router.push({
-        name: 'collectorEdit',
-        params: {
-          systemId: route.params.id,
-          collectorConfigId: props.data.collector_config_id,
-        },
-        query: {
-          collector_config_id: props.data.collector_config_id,
-          task_id_list: result.task_id_list.join(','),
-          step: 3,
-          environment: result.environment,
-        },
-      });
-    },
-  });
+  // const {
+  //   run: fetchCollectorsById,
+  // // eslint-disable-next-line vue/no-setup-props-destructure
+  // } = useRequest(CollectorManageService.fetchCollectorsById, {
+  //   defaultParams: {
+  //     id: props.data.collector_config_id,
+  //   },
+  //   defaultValue: new CollectorDetailModel(),
+  //   onSuccess: (result) => {
+  //     router.push({
+  //       name: 'collectorEdit',
+  //       params: {
+  //         systemId: route.params.id,
+  //         collectorConfigId: props.data.collector_config_id,
+  //       },
+  //       query: {
+  //         collector_config_id: props.data.collector_config_id,
+  //         task_id_list: result.task_id_list.join(','),
+  //         step: 3,
+  //         environment: result.environment,
+  //       },
+  //     });
+  //   },
+  // });
 
   /**
    * 删除采集接口
@@ -115,11 +115,11 @@
     collector_config_id: props.data.collector_config_id,
   });
 
-  const handleConfig = () => {
-    fetchCollectorsById({
-      id: props.data.collector_config_id,
-    });
-  };
+  // const handleConfig = () => {
+  //   fetchCollectorsById({
+  //     id: props.data.collector_config_id,
+  //   });
+  // };
 </script>
 <!-- .route-config::after {
     position: absolute;
