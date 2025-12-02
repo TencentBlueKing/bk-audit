@@ -16,6 +16,7 @@
 -->
 <template>
   <bk-select
+    v-bind="$attrs"
     ref="userSelectorRef"
     :allow-create="allowCreate"
     :auto-focus="autoFocus"
