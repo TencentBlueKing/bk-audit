@@ -34,9 +34,13 @@ from django.utils.translation import gettext
 from django_redis.client import DefaultClient
 
 from apps.itsm.constants import TicketStatus
+from apps.meta.constants import ConfigLevelChoices
+from apps.meta.models import GlobalMetaConfig
 from apps.notice.handlers import ErrorMsgHandler
 from apps.sops.constants import SOPSTaskStatus
 from core.lock import lock
+from core.utils.data import data_chunks
+from services.web.databus.constants import ASSET_RISK_BKBASE_RT_ID_KEY
 from services.web.risk.constants import (
     BULK_ADD_EVENT_SIZE,
     RISK_ESQUERY_DELAY_TIME,
@@ -115,6 +119,47 @@ def manual_add_event(data: list):
         return
     ManualEvent.objects.bulk_create(manual_events, batch_size=BULK_ADD_EVENT_SIZE)
     logger_celery.info("[ManualAddEvent] Saved %s manual events", len(manual_events))
+
+
+def _sync_manual_risk_status(batch_size: int = 500) -> None:
+    try:
+        table_id = GlobalMetaConfig.get(
+            config_key=ASSET_RISK_BKBASE_RT_ID_KEY,
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=settings.DEFAULT_NAMESPACE,
+        )
+    except Exception as err:  # NOCC:broad-except(配置缺失时只记录)
+        logger_celery.warning("[SyncManualRiskStatus] skip because config missing: %s", err)
+        return
+    table_ref = table_id
+    if not table_ref:
+        logger_celery.warning("[SyncManualRiskStatus] skip because table id is empty")
+        return
+
+    unsynced_ids = list(Risk.objects.filter(manual_synced=False).values_list("risk_id", flat=True))
+    if not unsynced_ids:
+        return
+
+    for chunk in data_chunks(unsynced_ids, batch_size):
+        id_clause = repr(tuple(chunk))
+        sql = f"SELECT risk_id FROM {table_ref} WHERE risk_id IN {id_clause}"
+        resp = api.bk_base.query_sync(sql=sql) or {}
+        found_ids = {row.get("risk_id") for row in resp.get("list") or [] if row.get("risk_id")}
+        if found_ids:
+            updated = Risk.objects.filter(risk_id__in=found_ids, manual_synced=False).update(manual_synced=True)
+            logger_celery.info("[SyncManualRiskStatus] Updated %s risks in chunk", updated)
+
+
+@periodic_task(
+    run_every=datetime.timedelta(seconds=30),
+    queue="risk",
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
+@lock(lock_name="celery:sync_manual_risk_status")
+def sync_manual_risk_status():
+    """同步已入 BKBase 的手工风险状态"""
+
+    _sync_manual_risk_status()
 
 
 @periodic_task(

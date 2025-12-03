@@ -86,7 +86,7 @@ class CreateEvent(EventMeta):
         if gen_risk:
             eligible_strategy_ids = RiskHandler.fetch_eligible_strategy_ids()  # 更新 eligible_strategy_ids
             for event in events:
-                risk_id = RiskHandler().generate_risk(event, eligible_strategy_ids)
+                risk_id = RiskHandler().generate_risk(event, eligible_strategy_ids, manual=True)
                 if risk_id:
                     risk_ids.append(risk_id)
         return {"event_ids": event_ids, "risk_ids": risk_ids}
