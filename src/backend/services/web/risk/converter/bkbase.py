@@ -937,6 +937,35 @@ class BkBaseDataQueryBuilder:
         )
 
 
+class ManualUnsyncedRiskPrepender:
+    """管理未同步手工风险的计数与分页填充。"""
+
+    def __init__(self, base_queryset: Optional[QuerySet], order_field: str, order_func):
+        self.queryset = base_queryset.filter(manual_synced=False) if base_queryset is not None else None
+        self.order_field = order_field
+        self.order_func = order_func
+        self._count: Optional[int] = None
+
+    def is_enabled(self) -> bool:
+        return self.queryset is not None
+
+    def count(self) -> int:
+        if not self.is_enabled():
+            return 0
+        if self._count is None:
+            self._count = self.queryset.count()
+        return self._count
+
+    def slice_ids(self, offset: int, limit: int) -> List[str]:
+        if not self.is_enabled() or limit <= 0:
+            return []
+        total = self.count()
+        if offset >= total:
+            return []
+        ordered = self.order_func(self.queryset, self.order_field)
+        return list(ordered.values_list("risk_id", flat=True)[offset : offset + limit])
+
+
 class BkBasePaginationPlanner:
     """处理页码与 limit/offset 计算。"""
 

@@ -65,15 +65,16 @@ class RiskHandler:
             Strategy.objects.exclude(status=StrategyStatusChoices.DISABLED.value).values_list("strategy_id", flat=True)
         )
 
-    def generate_risk(self, event: dict, eligible_strategy_ids: Set[str]):
+    def generate_risk(self, event: dict, eligible_strategy_ids: Set[str], manual: bool = False):
         """
         生成风险
         :param event: 事件
         :param eligible_strategy_ids: 可用策略ID集合
+        :param manual: 是否手动创建
         """
         try:
-            is_create, risk = self.create_risk(event, eligible_strategy_ids)
-            if is_create:
+            is_create, risk = self.create_risk(event, eligible_strategy_ids, manual=manual)
+            if is_create and not manual:
                 self.send_risk_notice(risk)
 
                 from services.web.risk.tasks import process_risk_ticket
@@ -173,7 +174,9 @@ class RiskHandler:
         create_params["title"] = self.render_risk_title(create_params)
         return create_params
 
-    def create_risk(self, event: dict, eligible_strategy_ids: Set[str]) -> Tuple[bool, Optional[Risk]]:
+    def create_risk(
+        self, event: dict, eligible_strategy_ids: Set[str], manual: bool = False
+    ) -> Tuple[bool, Optional[Risk]]:
         """
         创建或更新风险
         """
@@ -229,6 +232,8 @@ class RiskHandler:
 
         # 不存在则创建
         create_params = self.gen_risk_create_params(event)
+        if manual:
+            create_params["manual_synced"] = False
         risk: Risk = Risk.objects.create(**create_params)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
         return True, risk

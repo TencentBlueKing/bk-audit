@@ -164,6 +164,7 @@ class Risk(StrategyTagMixin, OperateRecordModel):
     )
     last_operate_time = models.DateTimeField(gettext_lazy("Last Operate Time"), auto_now=True, db_index=True)
     title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
+    manual_synced = models.BooleanField(gettext_lazy("手动建的单是否已同步"), default=True)
 
     class Meta:
         verbose_name = gettext_lazy("Risk")
@@ -289,6 +290,7 @@ class ManualEvent(OperateRecordModel):
     )
     last_operate_time = models.DateTimeField(gettext_lazy("Last Operate Time"), auto_now=True, db_index=True)
     title = models.TextField(gettext_lazy("Risk Title"), null=True, blank=True, default=None)
+    manual_synced = models.BooleanField(gettext_lazy("手动建的单是否已同步"), default=False)
 
     class Meta:
         verbose_name = gettext_lazy("手动事件存储")

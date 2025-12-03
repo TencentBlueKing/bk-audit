@@ -287,6 +287,9 @@ class RiskStatus(TextChoices):
     ```
     """
 
+    # 录入中, 手工录入风险才存在这个状态，同步到BKBase后自动切换为NEW
+    STAND_BY = "stand_by", gettext_lazy("录入中")
+
     # 新
     NEW = "new", gettext_lazy("新")
 

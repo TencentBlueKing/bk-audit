@@ -37,6 +37,7 @@ from services.web.risk.constants import (
     EventMappingFields,
     RiskLabel,
     RiskRuleOperator,
+    RiskStatus,
     RiskViewType,
 )
 from services.web.risk.models import (
@@ -230,6 +231,12 @@ class RiskInfoSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
 
+    def to_representation(self, instance: Risk):
+        data = super().to_representation(instance)
+        if getattr(instance, "manual_synced", True) is False:
+            data["status"] = RiskStatus.STAND_BY.value
+        return data
+
     def get_event_end_time(self, obj: Risk) -> str | None:
         """
         获取事件结束时间。
@@ -288,6 +295,15 @@ class ManualEventProviderSerializer(serializers.ModelSerializer):
     last_operate_time_timestamp = TimestampIntegerField(
         label=gettext_lazy("Last Operate Time Timestamp(ms)"), source="last_operate_time"
     )
+
+    class Meta:
+        model = ManualEvent
+        exclude = ["strategy"]
+
+
+class ManualEventSerializer(serializers.ModelSerializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
 
     class Meta:
         model = ManualEvent
@@ -569,6 +585,12 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "last_operate_time",
             "title",
         ]
+
+    def to_representation(self, instance: Risk):
+        data = super().to_representation(instance)
+        if getattr(instance, "manual_synced", True) is False:
+            data["status"] = RiskStatus.STAND_BY.value
+        return data
 
 
 class ProcessApplicationsInfoSerializer(serializers.ModelSerializer):
