@@ -30,7 +30,9 @@
           <span class="info-fill-tex">{{ t('开启后，查询结果将按字段分组展示') }}</span>
         </span>
         <span v-else>
-          <span class="group-button">
+          <span
+            class="group-button"
+            @click="handleAddGroup">
             <audit-icon
               class="plus-circle"
               type="plus-circle" />
@@ -38,10 +40,9 @@
           </span>
           <span class="line" />
           <span>
-            <audit-icon
-              class="plus-circle"
-              type="plus-circle" />
-            <span class="plus-circle-tex">{{ t('添加分组') }}</span>
+            <span
+              class="plus-circle-tex"
+              @click="handleOpenGroup">{{ t(openGroup ? '一键展开分组' : '一键收起分组') }}</span>
           </span>
         </span>
       </div>
@@ -50,6 +51,7 @@
         :resultData="resultData" />
       <group-content
         v-else
+        ref="groupContentRef"
         :result-data="resultData" />
     </template>
   </card-part-vue>
@@ -69,8 +71,19 @@
   }
   defineProps<Props>();
   const { t } = useI18n();
-  const isGroup = ref(false);
-
+  const isGroup = ref(!false);
+  const groupContentRef = ref();
+  const openGroup = ref(false);
+  // 添加分组
+  const handleAddGroup = () => {
+    console.log('添加分组');
+    groupContentRef.value?.addGroup();
+  };
+  // 一键展开分组
+  const handleOpenGroup = () => {
+    openGroup.value = !openGroup.value;
+    groupContentRef.value?.openGroup(openGroup.value);
+  };
 </script>
 
 <style lang="postcss" scoped>

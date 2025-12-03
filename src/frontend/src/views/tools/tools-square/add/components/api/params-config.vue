@@ -58,7 +58,8 @@
               <div
                 v-for="(item, index) in requiredList"
                 :key="index"
-                class="field-required-item">
+                class="field-required-item"
+                @click="handleRequiredClick(item)">
                 {{ item.label }}
               </div>
             </div>
@@ -92,9 +93,10 @@
           <div style="display: none">
             <div id="hidden_pop_content2">
               <div
-                v-for="(item, index) in requiredList"
+                v-for="(item, index) in isViewsList"
                 :key="index"
-                class="field-required-item">
+                class="field-required-item"
+                @click="handleViewsClick(item)">
                 {{ item.label }}
               </div>
             </div>
@@ -110,8 +112,8 @@
       form-type="vertical"
       :model="formData">
       <template
-        v-for="(item, index) in 6"
-        :key="index">
+        v-for="(item, index) in paramList"
+        :key="item.id">
         <div class="field-row">
           <div class="field-value">
             <bk-form-item
@@ -119,16 +121,16 @@
               label=""
               label-width="0">
               <bk-input
-                v-if="index !== 2"
-                v-model="val" />
+                v-if="item.frontendType !== 'date-picker'"
+                v-model="item.name" />
               <div v-else>
                 <div style="display: flex; border-bottom: 1px solid  #dcdee5;">
                   <bk-input
-                    v-model="val" /> <span><bk-tag theme="info"> {{ t('开始时间') }} </bk-tag></span>
+                    v-model="item.startTime" /> <span><bk-tag theme="info"> {{ t('开始时间') }} </bk-tag></span>
                 </div>
                 <div style="display: flex;">
                   <bk-input
-                    v-model="val" /> <span> <bk-tag theme="warning"> {{ t('结束时间') }} </bk-tag></span>
+                    v-model="item.endTime" /> <span> <bk-tag theme="warning"> {{ t('结束时间') }} </bk-tag></span>
                 </div>
               </div>
             </bk-form-item>
@@ -139,7 +141,8 @@
               error-display-type="tooltips"
               label=""
               label-width="0">
-              显示名
+              <bk-input
+                v-model="item.dispalyName" />
             </bk-form-item>
           </div>
           <!-- 传参方式 -->
@@ -151,14 +154,14 @@
               label=""
               label-width="0">
               <bk-select
-                v-model="selectedValue"
+                v-model="item.type"
                 class="bk-select"
                 size="small">
                 <bk-option
-                  v-for="(item, index) in paramsTypeList"
-                  :id="item.value"
-                  :key="index"
-                  :name="item.label" />
+                  v-for="(paramsTypeItem, paramsTypeIndex) in paramsTypeList"
+                  :id="paramsTypeItem.value"
+                  :key="paramsTypeIndex"
+                  :name="paramsTypeItem.label" />
               </bk-select>
             </bk-form-item>
           </div>
@@ -171,7 +174,7 @@
               label=""
               label-width="0">
               <bk-input
-                v-model="val" />
+                v-model="item.description" />
             </bk-form-item>
           </div>
           <!-- 是否必填 -->
@@ -183,14 +186,14 @@
               label=""
               label-width="0">
               <bk-select
-                v-model="selectedValue"
+                v-model="item.required"
                 class="bk-select"
                 size="small">
                 <bk-option
-                  v-for="(item, index) in requiredList"
-                  :id="item.value"
-                  :key="index"
-                  :name="item.label" />
+                  v-for="(requiredItem, requiredIndex) in requiredList"
+                  :id="requiredItem.id"
+                  :key="requiredIndex"
+                  :name="requiredItem.label" />
               </bk-select>
             </bk-form-item>
           </div>
@@ -203,15 +206,15 @@
               label=""
               label-width="0">
               <bk-select
-                v-model="frontendTypeValue"
+                v-model="item.frontendType"
                 class="bk-select"
                 :clearable="false"
                 size="small">
                 <bk-option
-                  v-for="(item, index) in frontendTypeList"
-                  :id="item.value"
-                  :key="index"
-                  :name="item.label" />
+                  v-for="(frontendTypeItem, frontendTypeItemIndex) in frontendTypeList"
+                  :id="frontendTypeItem.value"
+                  :key="frontendTypeItemIndex"
+                  :name="frontendTypeItem.label" />
               </bk-select>
             </bk-form-item>
           </div>
@@ -223,7 +226,7 @@
               label=""
               label-width="0">
               <bk-input
-                v-model="val" />
+                v-model="item.defaultValue" />
             </bk-form-item>
           </div>
           <!-- 是否可见 -->
@@ -235,14 +238,14 @@
               label=""
               label-width="0">
               <bk-select
-                v-model="isViews"
+                v-model="item.isViews"
                 class="bk-select"
                 size="small">
                 <bk-option
-                  v-for="(item, index) in isViewsList"
-                  :id="item.value"
-                  :key="index"
-                  :name="item.label" />
+                  v-for="(isViewItem, isViewItemIndex) in isViewsList"
+                  :id="isViewItem.value"
+                  :key="isViewItemIndex"
+                  :name="isViewItem.label" />
               </bk-select>
             </bk-form-item>
           </div>
@@ -256,10 +259,13 @@
               label-width="0">
               <audit-icon
                 class="add-fill field-icon"
-                type="add-fill" />
+                type="add-fill"
+                @click="handelAddItem" />
               <audit-icon
+                v-if="paramList.length > 1"
                 class="reduce-fill field-icon"
-                type="reduce-fill" />
+                type="reduce-fill"
+                @click="handelDelectItem(index)" />
             </bk-form-item>
           </div>
         </div>
@@ -273,15 +279,28 @@
 
   const { t } = useI18n();
   const formData = ref();
+  const paramList = ref([
+    {
+      id: '1',
+      name: 'name',
+      dispalyName: '显示名',
+      type: 'Params',
+      description: '显示名',
+      required: '1',
+      frontendType: 'input',
+      defaultValue: '222',
+      isViews: '1',
+      startTime: '',
+      endTime: '',
+    },
+  ]);
   const requiredList = ref([{
-    id: true,
+    id: '1',
     label: t('是'),
   }, {
-    id: false,
+    id: '0',
     label: t('否'),
   }]);
-  const val = ref('');
-  const selectedValue = ref('Params');
   const paramsTypeList = ref([{
     value: 'Params',
     label: 'Params',
@@ -290,7 +309,6 @@
     label: 'Body',
   }]);
   const tableInputFormRef = ref();
-  const frontendTypeValue = ref('input');
   const frontendTypeList = ref([{
     value: 'input',
     label: '输入框',
@@ -309,14 +327,49 @@
   },
   ]);
 
-  const isViews = ref(true);
   const isViewsList = ref([{
-    value: true,
+    value: '1',
     label: t('可见'),
   }, {
-    value: false,
+    value: '0',
     label: t('不可见'),
   }]);
+  // 添加一项
+  const handelAddItem = () => {
+    paramList.value.push({
+      id: Math.random().toString(36)
+        .substr(2, 9),
+      name: '',
+      dispalyName: '',
+      type: 'Params',
+      description: '',
+      required: '1',
+      frontendType: 'input',
+      defaultValue: '',
+      isViews: '1',
+      startTime: '',
+      endTime: '',
+    });
+  };
+  // 删除一项
+  const handelDelectItem = (index: number) => {
+    paramList.value.splice(index, 1);
+  };
+
+  const handleRequiredClick = (item: Record<string, any>) => {
+    paramList.value = paramList.value.map((listItem: Record<string, any>) => {
+      // eslint-disable-next-line no-param-reassign
+      listItem.required = item.id;
+      return listItem;
+    });
+  };
+  const handleViewsClick = (item: Record<string, any>) => {
+    paramList.value = paramList.value.map((listItem: Record<string, any>) => {
+      // eslint-disable-next-line no-param-reassign
+      listItem.isViews = item.value;
+      return listItem;
+    });
+  };
 </script>
 
 <style lang="postcss" scoped>

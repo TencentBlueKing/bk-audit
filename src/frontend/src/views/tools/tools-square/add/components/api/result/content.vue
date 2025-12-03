@@ -29,11 +29,13 @@
         display-key="name"
         id-key="id"
         multiple
-        multiple-mode="tag">
+        multiple-mode="tag"
+        @tag-remove="handelTagRemove">
         <bk-tree
           ref="treeRef"
           :check-strictly="false"
           children="children"
+          class="api-tree-ref"
           :data="treeData"
           label="name"
           style="color: #63656e">
@@ -48,18 +50,12 @@
         </bk-tree>
       </bk-select>
     </div>
-    <div class="content-item">
+    <div
+      v-if="selectValue.length > 0"
+      class="content-item">
       <div class="content-lable">
         {{ t('设置展示字段') }}
       </div>
-      <!-- <div
-        v-for="item in selectedItems"
-        :key="item.id">
-        <component
-          :is="modelComMap[item.type]"
-          ref="comRef"
-          :data="item" />
-      </div> -->
       <vuedraggable
         :group="{
           name: 'field',
@@ -72,14 +68,15 @@
           <component
             :is="modelComMap[element.type]"
             ref="comRef"
-            :data="element" />
+            :data="element"
+            @close="handleClose" />
         </template>
       </vuedraggable>
     </div>
   </div>
 </template>
 <script setup lang='ts'>
-  import { computed, ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -96,368 +93,11 @@
     object: objectModel,
     list: listModel,
   };
-  const selectValue = ref([
-    'results',
-    'num_pages',
-    'addd',
-    'total',
-  ]);
-  const selectedId = ref([
-    'frontend-data-3-4',
-    'frontend-data-3-2',
-    'frontend-data-3-5',
-    'frontend-data-3-3',
-  ]);
-  const selectedItems = ref([
-    {
-      name: 'results',
-      id: 'frontend-data-3-4',
-      isChecked: true,
-      isChild: true,
-      children: [],
-      list: [
-        {
-          name: 'risk_id',
-          id: 'frontend-data-3-4-1',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'event_content',
-          id: 'frontend-data-3-4-2',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'strategy_id',
-          id: 'frontend-data-3-4-3',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'event_time',
-          id: 'frontend-data-3-4-4',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'event_end_time',
-          id: 'frontend-data-3-4-5',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'operator',
-          id: 'frontend-data-3-4-6',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'status',
-          id: 'frontend-data-3-4-7',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'current_operator',
-          id: 'frontend-data-3-4-8',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'notice_users',
-          id: 'frontend-data-3-4-9',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'event_data',
-          id: 'frontend-data-3-4-10',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'tags',
-          id: 'frontend-data-3-4-11',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'risk_label',
-          id: 'frontend-data-3-4-12',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'experiences',
-          id: 'frontend-data-3-4-13',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'last_operate_time',
-          id: 'frontend-data-3-4-14',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'title',
-          id: 'frontend-data-3-4-15',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'permission',
-          id: 'frontend-data-3-4-16',
-          isChecked: false,
-          isChild: true,
-          children: [
-            {
-              name: 'edit_risk_v2',
-              id: 'frontend-data-3-4-16-1',
-              isChecked: false,
-              isChild: true,
-              children: [],
-              list: [],
-              type: 'object',
-            },
-          ],
-          list: [],
-          type: 'list',
-        },
-      ],
-      type: 'list',
-    },
-    {
-      name: 'num_pages',
-      id: 'frontend-data-3-2',
-      isChecked: true,
-      isChild: true,
-      children: [],
-      list: [],
-      type: 'object',
-    },
-    {
-      name: 'addd',
-      id: 'frontend-data-3-5',
-      isChecked: true,
-      isChild: true,
-      children: [],
-      list: [
-        {
-          name: 'risk_id',
-          id: 'frontend-data-3-5-1',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'event_content',
-          id: 'frontend-data-3-5-2',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'strategy_id',
-          id: 'frontend-data-3-5-3',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'event_time',
-          id: 'frontend-data-3-5-4',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'event_end_time',
-          id: 'frontend-data-3-5-5',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'operator',
-          id: 'frontend-data-3-5-6',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'status',
-          id: 'frontend-data-3-5-7',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'current_operator',
-          id: 'frontend-data-3-5-8',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'notice_users',
-          id: 'frontend-data-3-5-9',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'event_data',
-          id: 'frontend-data-3-5-10',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'tags',
-          id: 'frontend-data-3-5-11',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'risk_label',
-          id: 'frontend-data-3-5-12',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'experiences',
-          id: 'frontend-data-3-5-13',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'last_operate_time',
-          id: 'frontend-data-3-5-14',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'title',
-          id: 'frontend-data-3-5-15',
-          isChecked: false,
-          isChild: true,
-          children: [],
-          list: [],
-          type: 'list',
-        },
-        {
-          name: 'permission',
-          id: 'frontend-data-3-5-16',
-          isChecked: false,
-          isChild: true,
-          children: [
-            {
-              name: 'edit_risk_v2',
-              id: 'frontend-data-3-5-16-1',
-              isChecked: false,
-              isChild: true,
-              children: [],
-              list: [],
-              type: 'object',
-            },
-          ],
-          list: [],
-          type: 'list',
-        },
-      ],
-      type: 'list',
-    },
-    {
-      name: 'total',
-      id: 'frontend-data-3-3',
-      isChecked: true,
-      isChild: true,
-      children: [],
-      list: [],
-      type: 'object',
-    },
-  ]);
+  const selectValue = ref([]);
+  const selectedId = ref([]);
+  const selectedItems = ref([]);
 
-  const treeData = computed(() => buildTree(props.resultData));
+  const treeData = ref([]);
   const buildTree = (obj, parentId = '', path = [], isChild = false, type = 'object')  => {
     const result = [];
 
@@ -495,7 +135,18 @@
     return result;
   };
 
-  console.log('buildTree>>', buildTree(props.resultData));
+  const handelTagRemove = (val) => {
+    console.log('handelTagRemove>>', val);
+    if (val) {
+      // selectedItems中找出name与val相同的节点
+      const node = selectedItems.value.find(item => item.name === val);
+      console.log('node>>', node);
+      const index = selectedId.value.indexOf(node.id);
+      selectedId.value.splice(index, 1);
+      selectedItems.value.splice(index, 1);
+    }
+    console.log('变化之后', selectValue.value, selectedId.value, selectedItems.value);
+  };
 
   const handelCheckoxChange = (val, node) => {
     console.log('val>>', val, node, treeData.value);
@@ -515,11 +166,60 @@
         selectedItems.value.splice(index, 1);
       }
     }
-    console.log('selectValue.value', selectValue.value);
-    console.log('selectedId.value>', selectedId.value);
-
-    console.log('selectedItems', selectedItems.value);
+    console.log('勾选完成》》', treeData.value);
   };
+
+  // 关闭
+  const handleClose = (item: string) => {
+    console.log('父组件handleClose', item);
+    // 删除对应的item treeData中的isChecked 改为false
+    const index = selectedId.value.indexOf(item.id);
+    if (index > -1) {
+      selectedId.value.splice(index, 1);
+      selectValue.value.splice(index, 1);
+      selectedItems.value.splice(index, 1);
+    }
+  };
+
+  watch(
+    () => selectedId.value, (newVal) => {
+      console.log('selectedId变化》》', newVal);
+
+      // 递归更新树中所有节点的isChecked状态
+      const updateTreeCheckedState = (nodes, selectedIds) => nodes.map((node) => {
+        // 更新当前节点的选中状态
+        // eslint-disable-next-line no-param-reassign
+        node.isChecked = selectedIds.includes(node.id);
+
+        // 递归更新子节点
+        if (node.children && node.children.length > 0) {
+          // eslint-disable-next-line no-param-reassign
+          node.children = updateTreeCheckedState(node.children, selectedIds);
+        }
+
+        // 递归更新list中的子节点
+        if (node.list && node.list.length > 0) {
+          // eslint-disable-next-line no-param-reassign
+          node.list = updateTreeCheckedState(node.list, selectedIds);
+        }
+
+        return node;
+      }, {
+        deep: true,
+      });
+
+      treeData.value = updateTreeCheckedState(treeData.value, newVal);
+      console.log('树状态更新完成》》', treeData.value);
+    },
+    {
+      immediate: true,
+      deep: true,
+    },
+  );
+
+  onMounted(() => {
+    treeData.value = buildTree(props.resultData);
+  });
 </script>
 
 <style lang="postcss" scoped>
@@ -528,10 +228,10 @@
 }
 
 .content-item {
-  padding-top: 10px;
+  padding-bottom: 10px;
 
   .content-lable {
-    margin-top: 10px;
+    padding-bottom: 10px;
     font-size: 14px;
     color: #4d4f56;
   }
@@ -542,5 +242,13 @@
   text-decoration-style: dashed;
   text-decoration-color: #c4c6cc;
   text-underline-offset: 2px;
+}
+
+</style>
+<style lang="postcss">
+.api-tree-ref {
+  .bk-node-row.is-selected {
+    background-color: #fff !important;
+  }
 }
 </style>

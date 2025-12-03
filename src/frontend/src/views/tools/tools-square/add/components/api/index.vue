@@ -112,12 +112,13 @@
           <bk-checkbox v-model="formData.params">
             {{ t('参数设置') }}
           </bk-checkbox>
-          <params-config />
+          <params-config v-if="formData.params" />
           <div class="item-params-add">
             <bk-button
               class="ml10"
               outline
-              theme="primary">
+              theme="primary"
+              @click="handlerOpenDeDugRef">
               {{ t('接口调试') }}
             </bk-button>
             <span>
@@ -132,6 +133,7 @@
     </template>
   </card-part-vue>
   <result-config :result-data="resultData" />
+  <de-dug ref="deDugRef" />
 </template>
 <script setup lang='tsx'>
   import { ref } from 'vue';
@@ -139,10 +141,13 @@
 
   import CardPartVue from '../card-part.vue';
 
+  import deDug from './debug-sideslider.vue';
   import paramsConfig from './params-config.vue';
   import resultConfig from './result/index.vue';
 
+
   const { t } = useI18n();
+  const deDugRef = ref();
   const formData = ref({
     url: '',
     type: 'GET',
@@ -168,11 +173,6 @@
       label: '蓝鲸应用认证',
       value: 'basic',
       disabled: false,
-    },
-    {
-      label: 'Bearer',
-      value: 'bearer',
-      disabled: true,
     },
   ]);
   const isSuccess = ref(!false);
@@ -300,6 +300,9 @@
     request_id: '4033e443d3d026af4199706b24881ee8',
     trace_id: null,
   };
+  const handlerOpenDeDugRef = () => {
+    deDugRef.value?.show();
+  };
 </script>
 
 <style lang="postcss" scoped>
@@ -378,6 +381,11 @@
     margin-left: 5px;
     font-size: 12px;
   }
+}
+
+.item-params-add {
+  padding-bottom: 10px;
+  margin-top: 10px;
 }
 
 .corret-fill {

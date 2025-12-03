@@ -28,7 +28,8 @@
       </bk-tag>
       <audit-icon
         class="close"
-        type="close" />
+        type="close"
+        @click="handleClose" />
     </div>
     <div class="list-table-body">
       <div class="list-info">
@@ -82,6 +83,9 @@
                   v-bk-tooltips="{ content: t('在查询结果页，鼠标移入label，即可显示字段说明') }"
                   class="underline-dashed">{{ t('字段说明') }}</span>
               </div>
+              <div
+                class="field-value"
+                style="flex: 0 0 50px;" />
             </div>
           </div>
           <vuedraggable
@@ -95,7 +99,6 @@
             :list="list">
             <template #item="{ element }">
               <div>
-                <!-- 显示名 -->
                 <div class="render-field">
                   <div class="field-row">
                     <div
@@ -113,7 +116,7 @@
                         error-display-type="tooltips"
                         label=""
                         label-width="0">
-                        <bk-input v-model="element.displayName" />
+                        <bk-input v-model="element.display_name" />
                       </bk-form-item>
                     </div>
                     <div
@@ -137,7 +140,82 @@
                         error-display-type="tooltips"
                         label=""
                         label-width="0">
-                        <span class="field-span"> {{ t('请点击配置') }} </span>
+                        <div
+                          class="field-value-div"
+                          @mouseleave="() => handleDrillMouseLeave(0)">
+                          <template v-if="element.drill_config.length > 0">
+                            <bk-popover
+                              placement="top"
+                              theme="black">
+                              <span
+                                @click="() => handleClick(element.id, element.drill_config)">
+                                {{ t('已配置') }}
+                                <span style="color: #3a84ff;">{{ element.drill_config.length }}</span>
+                                {{ t('个工具') }}
+                              </span>
+                              <template #content>
+                                <div>
+                                  <div
+                                    v-for="config in element.drill_config"
+                                    :key="config.tool.uid">
+                                    {{ getToolNameAndType(config.tool.uid).name }}
+                                  </div>
+                                </div>
+                              </template>
+                            </bk-popover>
+                            <!-- 删除 -->
+                            <audit-popconfirm
+                              :ref="(el: any) => drillPopconfirmRefs[0] = el"
+                              class="ml8"
+                              :confirm-handler="() => handleRemove(0)"
+                              :content="t('移除操作无法撤回，请谨慎操作！')"
+                              :title="t('确认移除以下工具？')"
+                              @hide="() => handleDrillPopconfirmHide(0)">
+                              <audit-icon
+                                class="remove-btn"
+                                :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[0] }"
+                                type="delete-fill"
+                                @click="() => handleDrillPopconfirmShow(0)" />
+                              <template #content>
+                                <bk-table
+                                  ref="refTable"
+                                  :columns="columns"
+                                  :data="element.drill_config"
+                                  height="auto"
+                                  max-height="100%"
+                                  show-overflow-tooltip
+                                  stripe />
+                              </template>
+                            </audit-popconfirm>
+                            <bk-popover
+                              v-if="element.drill_config
+                                .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                              placement="top"
+                              theme="black">
+                              <audit-icon
+                                class="renew-tips"
+                                type="info-fill" />
+                              <template #content>
+                                <div>
+                                  <div>{{ t('以下工具已更新，请确认：') }}</div>
+                                  <div
+                                    v-for="drill in element.drill_config
+                                      // eslint-disable-next-line max-len
+                                      .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                                    :key="drill.tool.uid">
+                                    {{ getToolNameAndType(drill.tool.uid).name }}
+                                  </div>
+                                </div>
+                              </template>
+                            </bk-popover>
+                          </template>
+                          <span
+                            v-else
+                            style="color: #c4c6cc;"
+                            @click="() => handleClick(element.id)">
+                            {{ t('请点击配置') }}
+                          </span>
+                        </div>
                       </bk-form-item>
                     </div>
                     <div
@@ -149,11 +227,50 @@
                         <bk-input v-model="element.description" />
                       </bk-form-item>
                     </div>
+                    <div
+                      class="field-value"
+                      style="flex: 0 0 50px;">
+                      <audit-icon
+                        class="reduce-fill field-icon"
+                        type="reduce-fill"
+                        @click="handleDelect(element.id)" />
+                    </div>
                   </div>
                 </div>
               </div>
             </template>
           </vuedraggable>
+          <div
+            v-if="addList.length > 0"
+            class="add-field">
+            <bk-popover
+              ref="requiredListRef"
+              allow-html
+              content="#hidden_pop_content_add"
+              ext-cls="field-required-pop"
+              placement="top"
+              theme="light"
+              trigger="click"
+              width="200">
+              <span>
+                <audit-icon
+                  class="plus-circle"
+                  type="plus-circle" />
+                <span class="plus-circle-text"> 添加字段</span>
+              </span>
+            </bk-popover>
+            <div style="display: none">
+              <div id="hidden_pop_content_add">
+                <div
+                  v-for="(item, index) in addList"
+                  :key="index"
+                  class="field-required-item"
+                  @click="handleAddList(item)">
+                  {{ item.name }}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -163,30 +280,80 @@
       v-model:showFieldDict="showFieldDict"
       :edit-data="enumMappingsData"
       @submit="handleDictSubmit" />
+
+    <!-- 字段下钻 -->
+    <field-reference
+      ref="fieldReferenceRef"
+      v-model:showFieldReference="showFieldReference"
+      :all-tools-data="allToolsData"
+      :new-tool-name="data.name"
+      :output-fields="fieldsData"
+      :tag-data="toolTagData"
+      @open-tool="handleOpenTool"
+      @refresh-tool-list="handleRefreshToolList"
+      @submit="handleFieldSubmit" />
+    <!-- 循环所有工具 -->
+    <div
+      v-for="item in allOpenToolsData"
+      :key="item">
+      <component
+        :is="DialogVue"
+        :ref="(el:any) => dialogRefs[item] = el"
+        :all-tools-data="allToolsData"
+        :tags-enums="toolTagData"
+        @open-field-down="openFieldDown" />
+    </div>
   </div>
 </template>
-<script setup lang='ts'>
-  import { onMounted, ref } from 'vue';
+<script setup lang='tsx'>
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
+  import ToolManageService from '@service/tool-manage';
+
+  import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+
+  import useRequest from '@/hooks/use-request';
+  import { useToolDialog } from '@/hooks/use-tool-dialog';
   import fieldDict from '@/views/strategy-manage/strategy-create/components/step2/components/event-table/field-dict.vue';
+  import FieldReference from '@/views/tools/tools-square/add/components/data-search/components/field-reference/index.vue';
 
   interface Props {
     data: any,
   }
-
+  interface Emits {
+    (e: 'close', id: string): void
+  }
   const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const listInfo = ref({
     name: '',
     desc: '',
   });
   const list = ref([]);
+  const addList = ref([]);
   const showFieldDict = ref(false);
+  const showFieldReference = ref(false);
+
+  const drillPopconfirmRefs = ref<Record<number, any>>({});
+  const drillPopconfirmVisible = ref<Record<number, boolean>>({});
+  const toolMaxVersionMap = ref<Record<string, number>>({});
+
   const enumMappingsData = ref([]);
   // 点击字段映射记录id
   const enumMappingsId = ref('');
+  // 点击字段下钻记录id
+  const fieldDictId = ref('');
+
+  const fieldsData = ref([]);
+  // 关闭
+  const handleClose = () => {
+    console.log('关闭', props.data);
+    emits('close', props.data);
+  };
+
   // 点击字段映射
   const handleAddEnumMapping = (element: any) => {
     console.log('点击字段映射', element);
@@ -206,16 +373,130 @@
       return item;
     });
   };
-  onMounted(() => {
-    console.log('data', props.data?.list);
 
+  const columns = [{
+    label: () => t('工具列表'),
+    render: ({ data }: {data: any}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
+  }] as Column[];
+
+  const getToolNameAndType = (uid: string) => {
+    const tool = allToolsData.value.find(item => item.uid === uid);
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
+    };
+  };
+
+  const handleClick = (id: string) => {
+    console.log('handleClick', id);
+    fieldDictId.value = id;
+    showFieldReference.value = true;
+  };
+  // 删除值
+  const  handleRemove = async (index: number) => {
+    console.log('删除值', index);
+  };
+  // 字段下钻气泡框显示/隐藏处理
+  const handleDrillPopconfirmShow = (index: number) => {
+    drillPopconfirmVisible.value[index] = true;
+  };
+
+  const handleDrillPopconfirmHide = (index: number) => {
+    drillPopconfirmVisible.value[index] = false;
+  };
+
+  const handleDrillMouseLeave = (index: number) => {
+    // 如果气泡框未显示，则关闭气泡框
+    if (drillPopconfirmRefs.value[index] && !drillPopconfirmVisible.value[index]) {
+      drillPopconfirmRefs.value[index].hide();
+    }
+  };
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+  } = useToolDialog();
+  // 获取所有工具
+  const {
+    data: allToolsData,
+    run: fetchAllTools,
+  } = useRequest(ToolManageService.fetchAllTools, {
+    defaultValue: [],
+    onSuccess: (data) => {
+      toolMaxVersionMap.value = data.reduce((res, item) => {
+        res[item.uid] = item.version;
+        return res;
+      }, {} as Record<string, number>);
+    },
+  });
+  // 获取标签列表
+  const {
+    data: toolTagData,
+  } = useRequest(ToolManageService.fetchToolTags, {
+    defaultValue: [],
+    manual: true,
+    onSuccess: () => {
+      fetchAllTools();
+    },
+  });
+
+  const handleRefreshToolList = () => {
+    fetchAllTools();
+  };
+  // 提交字段下钻
+  const handleFieldSubmit = (data: any) => {
+    showFieldReference.value = false;
+    console.log('提交字段下钻', data);
+    list.value = list.value.map((item: any) => {
+      if (item.id === fieldDictId.value) {
+        // eslint-disable-next-line no-param-reassign
+        item.drill_config = data;
+      }
+      return item;
+    });
+
+    console.log('提交字段下钻list>>>', list.value);
+  };
+
+  // 移除
+  const handleDelect = (id: id) => {
+    console.log('移除', id);
+    // addList 添加对应项目
+    addList.value.push(list.value.find((item: any) => item.id === id));
+    // list 移除项目
+    list.value = list.value.filter((item: any) => item.id !== id);
+    console.log('addList>>', addList.value);
+  };
+  // 添加
+  const handleAddList = (item: any) => {
+    console.log('添加', item);
+    list.value.push(item);
+    addList.value = addList.value.filter((addItem: any) => addItem.id !== item.id);
+  };
+  watch(() => list.value, (val) => {
+    console.log('list>>', val, fieldsData);
+    fieldsData.value = val.map((item: any) => ({
+      raw_name: item.name,
+      display_name: item.display_name,
+      description: item.description,
+    }));
+    console.log('fieldsData>>>', fieldsData.value);
+  }, {
+    deep: true,
+  });
+  onMounted(() => {
     list.value = props.data?.list.map((item: any) => ({
       ...item,
-      displayName: '',
+      display_name: '',
       enum_mappings: {
         mappings: [],
       },
-      fieldDrill: '',
+      drill_config: [],
       description: '',
     }));
     // 提取list中每一项的的name
@@ -443,6 +724,23 @@
 .field-icon {
   margin-left: 20px;
   color: #c4c6cc;
+  cursor: pointer;
+}
+
+.add-field {
+  margin-top: 10px;
+}
+
+.plus-circle {
+  font-size: 14px;
+  color: #3a84ff;
+  cursor: pointer;
+}
+
+.plus-circle-text {
+  font-size: 12px;
+  color: #3a84ff;
+  cursor: pointer;
 }
 
 .field-span {

@@ -28,7 +28,8 @@
       </bk-tag>
       <audit-icon
         class="close"
-        type="close" />
+        type="close"
+        @click="handleClose" />
     </div>
     <div class="render-field">
       <div class="field-header-row">
@@ -68,7 +69,7 @@
                 error-display-type="tooltips"
                 label=""
                 label-width="0">
-                <bk-input v-model="formData.name" />
+                <bk-input v-model="formData.display_name" />
               </bk-form-item>
             </div>
             <div
@@ -92,7 +93,7 @@
                 label-width="0">
                 <div
                   class="field-value-div">
-                  <template v-if="0">
+                  <template v-if="formData.drill_config.length > 0">
                     <bk-popover
                       placement="top"
                       theme="black">
@@ -116,15 +117,13 @@
                     <audit-popconfirm
                       :ref="(el: any) => drillPopconfirmRefs[0] = el"
                       class="ml8"
-                      :confirm-handler="() => handleRemove(0)"
+                      :confirm-handler="() => handleRemove()"
                       :content="t('移除操作无法撤回，请谨慎操作！')"
-                      :title="t('确认移除以下工具？')"
-                      @hide="() => handleDrillPopconfirmHide(0)">
+                      :title="t('确认移除以下工具？')">
                       <audit-icon
                         class="remove-btn"
                         :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[0] }"
-                        type="delete-fill"
-                        @click="() => handleDrillPopconfirmShow(0)" />
+                        type="delete-fill" />
                       <template #content>
                         <bk-table
                           ref="refTable"
@@ -191,8 +190,8 @@
       ref="fieldReferenceRef"
       v-model:showFieldReference="showFieldReference"
       :all-tools-data="allToolsData"
-      new-tool-name="111111"
-      :output-fields="[]"
+      :new-tool-name="data.name"
+      :output-fields="fieldsData"
       :tag-data="toolTagData"
       @open-tool="handleOpenTool"
       @refresh-tool-list="handleRefreshToolList"
@@ -211,7 +210,7 @@
   </div>
 </template>
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -226,14 +225,25 @@
   interface Props {
     data: any,
   }
-  defineProps<Props>();
+  interface Emits {
+    (e: 'close', id: string): void
+  }
+  const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
+
+  console.log('props', props.data);
   const formData = ref({
-    name: '',
+    display_name: '',
     description: '',
     mappings: [],
     drill_config: [],
   });
+  const fieldsData = ref([{
+    raw_name: '',
+    display_name: '',
+    description: '',
+  }]);
   const showFieldDict = ref(false);
   const enumMappingsData = ref([]);
   const fieldDictRef = ref();
@@ -305,16 +315,12 @@
     console.log('提交字段下钻', data, formData.value);
   };
   // 删除值
-  const  handleRemove = async (index: number) => {
-    console.log('删除值', index);
+  const  handleRemove = () => {
+    console.log('删除值', formData.value.drill_config);
+    formData.value.drill_config = [];
+    console.log('删除值', formData.value.drill_config);
   };
-  // 字段下钻气泡框显示/隐藏处理
-  const handleDrillPopconfirmShow = (index: number) => {
-    console.log('字段下钻气泡框显示', index);
-  };
-  const handleDrillPopconfirmHide = (index: number) => {
-    console.log('隐藏处理', index);
-  };
+  // 获取工具名称和类型
   const getToolNameAndType = (uid: string) => {
     const tool = allToolsData.value.find(item => item.uid === uid);
     return tool ? {
@@ -325,6 +331,21 @@
       type: '',
     };
   };
+
+  // 关闭
+  const handleClose = () => {
+    console.log('关闭', props.data);
+    emits('close', props.data);
+  };
+  watch(() => formData.value, (val) => {
+    console.log('val>>', val, fieldsData);
+    fieldsData.value[0].raw_name = props.data.name;
+    fieldsData.value[0].display_name = val.display_name;
+    fieldsData.value[0].description = val.description;
+  }, {
+    immediate: true,
+    deep: true,
+  });
 </script>
 <style lang="postcss" scoped>
 .object-table {

@@ -52,6 +52,7 @@
           </span>
           <audit-icon
             class="delete"
+            :style="localValue.length === 1 ? 'color: #979ba5;cursor: not-allowed;' : ''"
             type="delete"
             @click.stop="handleDelete(element.key)" />
         </div>
@@ -72,6 +73,11 @@
   interface Props {
     resultData: any,
   }
+  interface Exposes {
+    addGroup:() => void,
+    openGroup:(val: boolean) => void,
+  }
+
   defineProps<Props>();
   const localValue = ref([
     {
@@ -130,8 +136,28 @@
 
   // 删除
   const handleDelete = (val: string) => {
-    console.log('val', val);
+    if (localValue.value.length > 1) {
+      localValue.value = localValue.value.filter((item: any) => item.key !== val);
+    }
   };
+
+  defineExpose<Exposes>({
+    addGroup() {
+      localValue.value.push({
+        key: `${localValue.value.length + 1}`,
+        val: '分组',
+        isInput: false,
+        isOpen: true,
+      });
+    },
+    openGroup(val: boolean) {
+      localValue.value = localValue.value.map((item: any) => {
+        // eslint-disable-next-line no-param-reassign
+        item.isOpen = !val;
+        return item;
+      });
+    },
+  });
 </script>
 
 <style lang="postcss" scoped>
