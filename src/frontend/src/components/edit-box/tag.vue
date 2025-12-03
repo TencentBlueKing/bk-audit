@@ -26,7 +26,8 @@
           :data="item"
           span-width="10px"
           style="
-          display: inline-block;width: 100px;
+          display: inline-block;
+          max-width: 100px;
           overflow: hidden;
           text-overflow: ellipsis ;
           white-space: nowrap;
