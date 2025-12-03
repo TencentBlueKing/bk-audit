@@ -143,11 +143,12 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
     for chunk in data_chunks(unsynced_ids, batch_size):
         id_clause = repr(tuple(chunk))
         sql = f"SELECT risk_id FROM {table_ref} WHERE risk_id IN {id_clause}"
+        logger_celery.info("[SyncManualRiskStatus] Executing SQL: %s")
         resp = api.bk_base.query_sync(sql=sql) or {}
         found_ids = {row.get("risk_id") for row in resp.get("list") or [] if row.get("risk_id")}
         if found_ids:
-            updated = Risk.objects.filter(risk_id__in=found_ids, manual_synced=False).update(manual_synced=True)
-            logger_celery.info("[SyncManualRiskStatus] Updated %s risks in chunk", updated)
+            _ = Risk.objects.filter(risk_id__in=found_ids, manual_synced=False).update(manual_synced=True)
+            logger_celery.info("[SyncManualRiskStatus] Updated %s risks in chunk", found_ids)
 
 
 @periodic_task(
