@@ -74,11 +74,11 @@ class AuditEventKafkaRecordConsumer(KafkaRecordConsumer):
         )
         if isinstance(value, dict) and 'manual_event_id' in value:
             value = value['manual_event_id']
-            ManualEvent.objects.filter(id=int(value)).update(manual_synced=True)
+            ManualEvent.objects.filter(manual_event_id=int(value)).update(manual_synced=True)
             logger.info("manual_event_id %s synced." % value)
         else:
             logger.info("manual_event_id not found in value.The value is %s." % value)
-            RiskHandler().generate_risk(value, self.eligible_strategy_ids)
+        RiskHandler().generate_risk(value, self.eligible_strategy_ids)
 
 
 class Command(BaseCommand):
