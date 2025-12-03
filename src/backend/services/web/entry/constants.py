@@ -103,7 +103,8 @@ def get_manual_event_strategy_config(rt_id):
         f"`sub_table`.`u_0c5b77a14834daae88b98bacd7ce29db` `operator`,"
         f"`sub_table`.`u_46a4b7f4986ca8845bd00b56233756d7` `event_source`,"
         f"`sub_table`.`u_d76255b2e8d52f3c4af2ad50a692e1e2` `event_content`,"
-        f"`sub_table`.`u_f974c8465fb8f678cf37a1be67f94e6e` `event_type` "
+        f"`sub_table`.`u_f974c8465fb8f678cf37a1be67f94e6e` `event_type`,"
+        f"`sub_table`.`u_manual_event_id` `manual_event_id`"
         f"FROM (SELECT "
         f"`{rt_id}`.`event_content` `u_d76255b2e8d52f3c4af2ad50a692e1e2`,"
         f"`{rt_id}`.`raw_event_id` `u_2f606c22a8b8bec4d47242c235f8d2d9`,"
@@ -113,7 +114,8 @@ def get_manual_event_strategy_config(rt_id):
         f"`{rt_id}`.`event_data` `u_020bf1f3c0b7812374031309d27c1e73`,"
         f"`{rt_id}`.`event_time` `u_95a9c636484ff20d38642e088df195ca`,"
         f"`{rt_id}`.`event_source` `u_46a4b7f4986ca8845bd00b56233756d7`,"
-        f"`{rt_id}`.`operator` `u_0c5b77a14834daae88b98bacd7ce29db` "
+        f"`{rt_id}`.`operator` `u_0c5b77a14834daae88b98bacd7ce29db`,"
+        f"`{rt_id}`.`id` `u_manual_event_id` "
         f"FROM {rt_id} `{rt_id}`) `sub_table`"
     )
 
@@ -213,6 +215,15 @@ def get_manual_event_strategy_config(rt_id):
                     "aggregate": None,
                     "field_type": "text",
                     "display_name": "责任人",
+                },
+                {
+                    "keys": [],
+                    "table": rt_id,  # 变量替换
+                    "remark": "",
+                    "raw_name": "id",
+                    "aggregate": None,
+                    "field_type": "long",
+                    "display_name": "ID",
                 },
             ],
             "config_type": "BuildIn",

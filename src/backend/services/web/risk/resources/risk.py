@@ -79,10 +79,10 @@ from services.web.risk.converter.bkbase import (
     BkBasePaginationPlanner,
     BkBaseQueryComponentsBuilder,
     BkBaseQueryExpressionBuilder,
-    BkBaseQueryPlanner,
     BkBaseResponseAssembler,
     BkBaseSQLRunner,
     FinalSelectAssembler,
+    ManualUnsyncedRiskPrepender,
 )
 from services.web.risk.exceptions import ExportRiskNoPermission
 from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
@@ -97,6 +97,7 @@ from services.web.risk.handlers.ticket import (
     TransOperator,
 )
 from services.web.risk.models import (
+    ManualEvent,
     ProcessApplication,
     Risk,
     RiskAuditInstance,
@@ -120,6 +121,7 @@ from services.web.risk.serializers import (
     ListRiskResponseSerializer,
     ListRiskStrategyRespSerializer,
     ListRiskTagsRespSerializer,
+    ManualEventSerializer,
     ReopenRiskReqSerializer,
     RetrieveRiskStrategyInfoResponseSerializer,
     RetryAutoProcessReqSerializer,
@@ -145,16 +147,32 @@ class RetrieveRisk(RiskMeta):
     audit_action = ActionEnum.LIST_RISK
 
     def perform_request(self, validated_request_data):
-        risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
-        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk))
-        data = RiskInfoSerializer(risk).data
+        risk_obj = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+        self.add_audit_instance_to_context(instance=RiskAuditInstance(risk_obj))
+        data = RiskInfoSerializer(risk_obj).data
         data = wrapper_permission_field(
             data, actions=[ActionEnum.EDIT_RISK], id_field=lambda risk: risk["risk_id"], many=False
         )
         risk = data[0]
         nodes = TicketNode.objects.filter(risk_id=risk["risk_id"]).order_by("timestamp")
         risk["ticket_history"] = TicketNodeSerializer(nodes, many=True).data
+        risk["unsynced_events"] = self._load_unsynced_manual_events(risk_obj=risk_obj)
         return risk
+
+    def _load_unsynced_manual_events(self, risk_obj: Risk) -> List[dict]:
+        start = risk_obj.event_time
+        end = risk_obj.event_end_time
+        queryset = ManualEvent.objects.filter(
+            manual_synced=False,
+            strategy_id=risk_obj.strategy_id,
+            raw_event_id=risk_obj.raw_event_id,
+            event_time__gte=start,
+        )
+        if end is not None:
+            queryset = queryset.filter(event_time__lte=end)
+        if not queryset.exists():
+            return []
+        return ManualEventSerializer(instance=queryset, many=True).data
 
 
 class RetrieveRiskStrategyInfo(RiskMeta):
@@ -331,6 +349,8 @@ class ListRisk(RiskMeta):
         order_field_name = order_field.lstrip("-")
         order_direction = "DESC" if order_field.startswith("-") else "ASC"
 
+        manual_helper = ManualUnsyncedRiskPrepender(base_queryset, order_field, self._apply_ordering)
+        manual_unsynced_count = manual_helper.count()
         resolver = BkBaseFieldResolver(order_field, event_filters, self._duplicate_event_field_map)
         value_fields = resolver.resolve_value_fields(
             ["risk_id", "strategy_id", "raw_event_id", "event_time", "event_end_time"]
@@ -345,8 +365,17 @@ class ListRisk(RiskMeta):
         base_sql = expression_builder.compile_queryset_sql(values_queryset.order_by())
         if base_sql is None:
             page = api_settings.DEFAULT_PAGINATION_CLASS()
-            page.paginate_queryset(range(0), request)
-            return [], page, []
+            page.paginate_queryset(range(manual_unsynced_count), request)
+            manual_ids = []
+            if manual_unsynced_count and getattr(page, "page", None):
+                limit = getattr(page.page.paginator, "per_page", 0)
+                offset = (getattr(page.page, "number", 1) - 1) * limit if limit else 0
+                manual_ids = manual_helper.slice_ids(offset, limit)
+            paged_queryset = Risk.prefetch_strategy_tags(self._build_risk_queryset(manual_ids))
+            paged_risks = list(paged_queryset)
+            if getattr(page, "page", None):
+                page.page.object_list = list(manual_ids)
+            return paged_risks, page, []
 
         base_expression = expression_builder.convert_to_expression(base_sql)
         pagination_class = api_settings.DEFAULT_PAGINATION_CLASS
@@ -371,21 +400,28 @@ class ListRisk(RiskMeta):
             sql_runner=sql_runner,
         )
         pagination_planner = BkBasePaginationPlanner(pagination_class)
-        planner = BkBaseQueryPlanner(
-            queryset_expression=base_expression,
-            count_executor=count_executor,
-            data_executor=data_executor,
-            pagination_planner=pagination_planner,
-            sql_runner=sql_runner,
-        )
 
-        risk_rows, page = planner.plan(
-            request,
-            order_field=order_field_name,
-            order_direction=order_direction,
-        )
+        bkbase_total, components = count_executor.execute(base_expression)
+        total = bkbase_total + manual_unsynced_count
+        page, limit, offset = pagination_planner.paginate(total, request)
 
-        risk_ids = [row["risk_id"] for row in risk_rows]
+        manual_ids = manual_helper.slice_ids(offset, limit)
+        manual_filled = len(manual_ids)
+        bkbase_limit = max(limit - manual_filled, 0)
+        bkbase_offset = max(offset - manual_unsynced_count, 0)
+
+        risk_rows: List[Dict[str, Any]] = []
+        if bkbase_limit and bkbase_total:
+            risk_rows = data_executor.execute(
+                base_expression,
+                order_field=order_field_name,
+                order_direction=order_direction,
+                limit=bkbase_limit,
+                offset=bkbase_offset,
+                components=components,
+            )
+
+        risk_ids = manual_ids + [row["risk_id"] for row in risk_rows]
         paged_queryset = self._build_risk_queryset(risk_ids)
         paged_queryset = Risk.prefetch_strategy_tags(paged_queryset)
         paged_risks = list(paged_queryset)
@@ -395,7 +431,7 @@ class ListRisk(RiskMeta):
         if getattr(page, "page", None):
             page.page.object_list = list(risk_ids)
 
-        return paged_risks, page, planner.sql_statements
+        return paged_risks, page, sql_runner.sql_statements
 
     def _apply_ordering(self, queryset: QuerySet["Risk"], order_field: str) -> QuerySet["Risk"]:
         """Apply ordering, including custom order for strategy risk level.
