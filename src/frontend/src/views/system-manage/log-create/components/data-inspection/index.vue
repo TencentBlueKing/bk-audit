@@ -152,6 +152,19 @@
         </div>
       </template>
     </bk-sideslider>
+
+    <!-- 侧边栏 - API Push 数据源 -->
+    <bk-sideslider
+      v-if="dataSourceType === 'api'"
+      v-model:isShow="isShowDetail"
+      :title="t('日志采集详情')"
+      :width="960">
+      <template #default>
+        <div class="check-detail-content">
+          <api-push-edit-info :data="detailDataForApiPush" />
+        </div>
+      </template>
+    </bk-sideslider>
   </smart-action>
 </template>
 
@@ -181,6 +194,7 @@
   } from '@utils/assist';
 
   import type DataIdTopicLogModel from '@/domain/model/dataid/dataid-tail';
+  import ApiPushEditInfo from '@/views/system-manage/detail/components/data-report/components/api-push-render-operation/edit-info/index.vue';
   import DataIdEditInfo from '@/views/system-manage/detail/components/data-report/components/dataid-render-operation/edit-info/index.vue';
   import DeliveryInfo from '@/views/system-manage/detail/components/data-report/components/render-operation/delivery-info/index.vue';
   import CollectorEditInfo from '@/views/system-manage/detail/components/data-report/components/render-operation/edit-info/index.vue';
@@ -454,6 +468,7 @@
   const isShowDetail = ref(false);
   const detailDataForCollector = ref<any>(new CollectorDetailModel());
   const detailDataForData = ref<any>(new DataIdDetailModel());
+  const detailDataForApiPush = ref<any>({ token: '', hosts: [], collector_config_name: '' });
   const collectorTaskStatus = ref<any>({});
   const environment = ref('');
 
@@ -483,12 +498,34 @@
     },
   });
 
-  const handleViewDetail = () => {
-    // API Push 暂时不支持
-    if (dataSourceType.value === 'api') {
-      return;
-    }
+  // 获取 API Push Token
+  const {
+    run: fetchApiPushToken,
+  } = useRequest(CollectorManageService.fetchApiPush, {
+    defaultValue: {},
+  });
 
+  // 获取 API Push Hosts
+  const {
+    run: fetchApiPushHost,
+  } = useRequest(CollectorManageService.fetchApiPushHost, {
+    defaultValue: { enabled: false, hosts: [] },
+    onSuccess(hostData) {
+      fetchApiPushToken({
+        system_id: dataId.value,
+      }).then((tokenData: any) => {
+        detailDataForApiPush.value = {
+          token: tokenData.token,
+          hosts: hostData.hosts,
+          collector_config_name: tokenData.collector_config_name,
+        };
+        // 接口完成后打开侧边栏
+        isShowDetail.value = true;
+      });
+    },
+  });
+
+  const handleViewDetail = () => {
     // 根据数据源类型获取详情数据，接口完成后会自动打开侧边栏
     if (dataSourceType.value === 'collector') {
       fetchCollectorDetail({
@@ -497,6 +534,10 @@
     } else if (dataSourceType.value === 'bkbase') {
       fetchDataIdDetail({
         bk_data_id: dataId.value,
+      });
+    } else if (dataSourceType.value === 'api') {
+      fetchApiPushHost({
+        system_id: dataId.value,
       });
     }
   };
@@ -571,7 +612,8 @@
 }
 
 .check-detail-content {
-  padding: 20px;
+  height: calc(100vh - 114px);
+  padding: 22px 40px;
 }
 
 .validation-section {

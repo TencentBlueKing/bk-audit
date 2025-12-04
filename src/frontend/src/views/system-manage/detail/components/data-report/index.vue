@@ -144,6 +144,14 @@
                   </template>
                 </div>
               </div>
+              <div class="collector-item-operation">
+                <api-push-render-operation
+                  :data="{
+                    token: token.token,
+                    hosts: data.hosts,
+                    collector_config_name: token.collector_config_name,
+                  }" />
+              </div>
               <recent-data
                 v-if="showRecentDataMap['api']"
                 :data="collectorDataMap['api']"
@@ -339,6 +347,7 @@
     getOffset,
   } from '@utils/assist';
 
+  import ApiPushRenderOperation from './components/api-push-render-operation/index.vue';
   import RenderDataIdConfig from './components/dataid-render-config.vue';
   import RenderDataIdOperation from './components/dataid-render-operation/index.vue';
   import RecentData from './components/recent-data.vue';
@@ -588,7 +597,6 @@
   } = useRequest(DataIdManageService.fetchSystemDataIdList, {
     defaultValue: [],
     onSuccess(result) {
-      console.log('result0000', result);
       result.forEach((item) => {
         dataIdStatusMap.value[item.bk_data_id] = new BatchSubscriptionStatusModel();
         // bkbase 只有成功和未完成
@@ -842,6 +850,13 @@
       position: absolute;
       top: 8px;
       right: 0;
+      display: none;
+    }
+
+    &:hover {
+      .collector-item-operation {
+        display: block;
+      }
     }
   }
 }
