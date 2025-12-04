@@ -20,10 +20,10 @@
       <div class="group-box">
         <span>{{ t('是否分组') }}</span>
         <bk-switcher
-          v-model="isGroup"
+          v-model="outputConfigEnableGrouping.enable_grouping"
           class="group"
           theme="primary" />
-        <span v-if="!isGroup">
+        <span v-if="!outputConfigEnableGrouping.enable_grouping">
           <audit-icon
             class="info-fill"
             type="info-fill" />
@@ -47,17 +47,19 @@
         </span>
       </div>
       <content
-        v-if="!isGroup"
+        v-if="!outputConfigEnableGrouping.enable_grouping"
+        :output-config-groups="outputConfig.groups"
         :resultData="resultData" />
       <group-content
         v-else
         ref="groupContentRef"
+        :output-config-groups="outputConfig.groups"
         :result-data="resultData" />
     </template>
   </card-part-vue>
 </template>
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import CardPartVue from '../../card-part.vue';
@@ -68,12 +70,19 @@
 
   interface Props {
     resultData: any,
+    outputConfig: {
+      enable_grouping: boolean,
+      groups: Array<Record, any>,
+    },
   }
-  defineProps<Props>();
+
+  const props = defineProps<Props>();
   const { t } = useI18n();
-  const isGroup = ref(!false);
   const groupContentRef = ref();
   const openGroup = ref(false);
+  const outputConfigEnableGrouping = ref({
+    enable_grouping: true,
+  });
   // 添加分组
   const handleAddGroup = () => {
     console.log('添加分组');
@@ -84,6 +93,13 @@
     openGroup.value = !openGroup.value;
     groupContentRef.value?.openGroup(openGroup.value);
   };
+
+  watch(props.outputConfig, (val) => {
+    outputConfigEnableGrouping.value.enable_grouping = val.enable_grouping;
+  }, {
+    immediate: true,
+    deep: true,
+  });
 </script>
 
 <style lang="postcss" scoped>

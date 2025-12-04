@@ -66,7 +66,7 @@
         :list="selectedItems">
         <template #item="{ element }">
           <component
-            :is="modelComMap[element.type]"
+            :is="modelComMap[element]"
             ref="comRef"
             :data="element"
             @close="handleClose" />
@@ -85,9 +85,12 @@
 
   interface Props {
     resultData: any,
+    outputConfigGroups: Record<string, any>,
   }
 
   const props = defineProps<Props>();
+  console.log('内容outputConfigGroups', props.outputConfigGroups);
+
   const { t } = useI18n();
   const modelComMap: Record<string, any> = {
     object: objectModel,
@@ -107,8 +110,8 @@
       keys.forEach((key, index) => {
         const currentPath = [...path, key];
         const currentId = parentId
-          ? `${parentId}-${index + 1}`
-          : `frontend-data-${index + 1}`;
+          ? `${parentId}.${key}[${index}]`
+          : `${key}`;
 
         const node = {
           name: key,
@@ -121,10 +124,10 @@
         };
         if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
           // 如果值是对象且不是数组，递归
-          node.children = buildTree(obj[key], currentId, currentPath, true, 'object', '');
+          node.children = buildTree(obj[key], currentId, currentPath, true, 'kv', '');
         } else if (Array.isArray(obj[key]) && obj[key].length > 0) { // 如果值是数组 代表list
           // 递归它的第一个元素
-          node.type = 'list';
+          node.type = 'table';
           const childNodes = buildTree(obj[key][0], currentId, currentPath, true, 'list', key);
           node.list = childNodes;
         }
@@ -183,8 +186,6 @@
 
   watch(
     () => selectedId.value, (newVal) => {
-      console.log('selectedId变化》》', newVal);
-
       // 递归更新树中所有节点的isChecked状态
       const updateTreeCheckedState = (nodes, selectedIds) => nodes.map((node) => {
         // 更新当前节点的选中状态
@@ -209,7 +210,6 @@
       });
 
       treeData.value = updateTreeCheckedState(treeData.value, newVal);
-      console.log('树状态更新完成》》', treeData.value);
     },
     {
       immediate: true,
@@ -219,6 +219,8 @@
 
   onMounted(() => {
     treeData.value = buildTree(props.resultData);
+    console.log('treeData', treeData.value);
+    console.log('outputConfigGroups', props.outputConfigGroups);
   });
 </script>
 

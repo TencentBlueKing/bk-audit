@@ -121,16 +121,26 @@
               label=""
               label-width="0">
               <bk-input
-                v-if="item.frontendType !== 'date-picker'"
-                v-model="item.name" />
+                v-if="item.field_category !== 'time_range_select'"
+                v-model="item.raw_name" />
               <div v-else>
                 <div style="display: flex; border-bottom: 1px solid  #dcdee5;">
                   <bk-input
-                    v-model="item.startTime" /> <span><bk-tag theme="info"> {{ t('开始时间') }} </bk-tag></span>
+                    v-model="item.split_config.start_field" />
+                  <span>
+                    <bk-tag theme="info">
+                      {{ t('开始时间') }}
+                    </bk-tag>
+                  </span>
                 </div>
                 <div style="display: flex;">
                   <bk-input
-                    v-model="item.endTime" /> <span> <bk-tag theme="warning"> {{ t('结束时间') }} </bk-tag></span>
+                    v-model="item.split_config.end_field" />
+                  <span>
+                    <bk-tag theme="warning">
+                      {{ t('结束时间') }}
+                    </bk-tag>
+                  </span>
                 </div>
               </div>
             </bk-form-item>
@@ -142,7 +152,7 @@
               label=""
               label-width="0">
               <bk-input
-                v-model="item.dispalyName" />
+                v-model="item.display_name" />
             </bk-form-item>
           </div>
           <!-- 传参方式 -->
@@ -154,7 +164,7 @@
               label=""
               label-width="0">
               <bk-select
-                v-model="item.type"
+                v-model="item.position"
                 class="bk-select"
                 size="small">
                 <bk-option
@@ -191,8 +201,8 @@
                 size="small">
                 <bk-option
                   v-for="(requiredItem, requiredIndex) in requiredList"
-                  :id="requiredItem.id"
-                  :key="requiredIndex"
+                  :id="requiredItem.value"
+                  :key="requiredIndex.id"
                   :name="requiredItem.label" />
               </bk-select>
             </bk-form-item>
@@ -206,7 +216,7 @@
               label=""
               label-width="0">
               <bk-select
-                v-model="item.frontendType"
+                v-model="item.field_category"
                 class="bk-select"
                 :clearable="false"
                 size="small">
@@ -226,7 +236,7 @@
               label=""
               label-width="0">
               <bk-input
-                v-model="item.defaultValue" />
+                v-model="item.default_value" />
             </bk-form-item>
           </div>
           <!-- 是否可见 -->
@@ -238,7 +248,7 @@
               label=""
               label-width="0">
               <bk-select
-                v-model="item.isViews"
+                v-model="item.is_show"
                 class="bk-select"
                 size="small">
                 <bk-option
@@ -265,7 +275,7 @@
                 v-if="paramList.length > 1"
                 class="reduce-fill field-icon"
                 type="reduce-fill"
-                @click="handelDelectItem(index)" />
+                @click="handelDeleteItem(index)" />
             </bk-form-item>
           </div>
         </div>
@@ -274,85 +284,97 @@
   </bk-form-item>
 </template>
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  interface Props {
+    inputVariable: Array<Record, any>;
+  }
+
+  const props = defineProps<Props>();
+  console.log('props', props.inputVariable);
 
   const { t } = useI18n();
   const formData = ref();
   const paramList = ref([
     {
-      id: '1',
-      name: 'name',
-      dispalyName: '显示名',
-      type: 'Params',
-      description: '显示名',
-      required: '1',
-      frontendType: 'input',
-      defaultValue: '222',
-      isViews: '1',
-      startTime: '',
-      endTime: '',
+      is_show: true,
+      position: '',
+      raw_name: '',
+      required: true,
+      description: '',
+      display_name: '',
+      split_config: {
+        end_field: '',
+        start_field: '',
+      },
+      default_value: '',
+      field_category: '',
     },
   ]);
   const requiredList = ref([{
     id: '1',
+    value: true,
     label: t('是'),
   }, {
     id: '0',
+    value: false,
     label: t('否'),
   }]);
   const paramsTypeList = ref([{
-    value: 'Params',
-    label: 'Params',
+    value: 'query',
+    label: 'query',
   }, {
-    value: 'Body',
-    label: 'Body',
+    value: 'body',
+    label: 'body',
   }]);
   const tableInputFormRef = ref();
   const frontendTypeList = ref([{
     value: 'input',
     label: '输入框',
   }, {
-    value: 'number-input',
+    value: 'number_input',
     label: '数字输入框',
   }, {
-    value: 'select',
+    value: 'person_select',
     label: '人员选择器',
   }, {
-    value: 'date-picker',
+    value: 'time_range_select',
     label: '时间范围选择器',
   }, {
-    value: 'time-picker',
+    value: 'time_select',
     label: '时间选择器',
   },
   ]);
 
   const isViewsList = ref([{
-    value: '1',
+    id: '1',
+    value: true,
     label: t('可见'),
   }, {
-    value: '0',
+    id: '2',
+    value: false,
     label: t('不可见'),
   }]);
   // 添加一项
   const handelAddItem = () => {
     paramList.value.push({
-      id: Math.random().toString(36)
-        .substr(2, 9),
-      name: '',
-      dispalyName: '',
-      type: 'Params',
+      is_show: true,
+      position: '',
+      raw_name: '',
+      required: true,
       description: '',
-      required: '1',
-      frontendType: 'input',
-      defaultValue: '',
-      isViews: '1',
-      startTime: '',
-      endTime: '',
+      display_name: '',
+      split_config: {
+        end_field: '',
+        start_field: '',
+      },
+      default_value: '',
+      field_category: '',
     });
   };
   // 删除一项
-  const handelDelectItem = (index: number) => {
+  const handelDeleteItem = (index: number) => {
     paramList.value.splice(index, 1);
   };
 
@@ -370,6 +392,18 @@
       return listItem;
     });
   };
+
+  watch(
+    () => props.inputVariable,
+    (val) => {
+      paramList.value = val;
+      console.log('paramList', paramList.value);
+    },
+    {
+      deep: true,
+      immediate: true,
+    },
+  );
 </script>
 
 <style lang="postcss" scoped>

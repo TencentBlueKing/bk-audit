@@ -26,27 +26,62 @@
         {{ t('请求信息') }}
       </div>
       <div class="info-concent">
-        <div>URL: xxxxx</div>
-        <div>{{ t('请求方式') }}: GET</div>
-        <div>{{ t('认证方式') }}: 1111111111111111</div>
-        <div>{{ t('Headers') }}: ASDDASDASDAD</div>
+        <div class="left">
+          <div class="info-concent-item">
+            URL:
+          </div>
+          <div class="info-concent-item">
+            {{ t('请求方式') }}:
+          </div>
+          <div class="info-concent-item">
+            {{ t('认证方式') }}:
+          </div>
+          <div class="info-concent-item">
+            {{ t('Headers') }}:
+          </div>
+        </div>
+        <div class="right">
+          <div class="info-concent-item">
+            {{ apiConfig.url }}
+          </div>
+          <div class="info-concent-item">
+            {{ apiConfig.method }}
+          </div>
+          <div class="info-concent-item">
+            {{ apiConfig.auth_config.method }}
+          </div>
+          <div class="info-concent-item item-headers">
+            <div
+              v-for="(item, index) in apiConfig.headers"
+              :key="index">
+              <div class="item-headers-item">
+                {{ item.key || "--" }}: {{ item.value || "--" }}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="params">
-      <div class="title">
+    <div
+
+      class="params">
+      <div
+        v-if="isParams"
+        class="title">
         {{ t('接口参数') }}
       </div>
       <bk-form
+        v-if="isParams"
         class="example"
         form-type="vertical"
         :model="formModel"
         :rules="rules">
         <bk-form-item
-          v-for="item in list"
-          :key="item.display_name"
-          :label="item.lable"
+          v-for="(item, index) in list"
+          :key="index"
+          :label="item.display_name"
           :property="item.display_name"
-          required>
+          :required="item.required">
           <bk-input
             v-model="formModel[item.display_name]"
             clearable
@@ -74,28 +109,24 @@
   </bk-sideslider>
 </template>
 <script setup lang="ts">
-  import { onMounted, ref } from 'vue';
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+
+  interface Props {
+    apiConfig: Record<string, any>,
+    inputVariable: Array<Record<string, any>>
+    isParams: boolean,
+  }
   interface Exposes {
     show: () => void;
   }
+  const props = defineProps<Props>();
   const { t } = useI18n();
   const isShow = ref(false);
   const formModel = ref({});
   const rules = ref({});
-  const list = ref([
-    {
-      lable: '姓名',
-      value: '张三',
-      display_name: 'name',
-    },
-    {
-      lable: '年龄',
-      value: '18',
-      display_name: 'age',
-    },
-  ]);
+  const list = ref([]);
 
   const result = ref(`{
   "status": "success",
@@ -120,17 +151,15 @@
   defineExpose<Exposes>({
     show() {
       isShow.value = true;
+      list.value = props.inputVariable;
+      formModel.value = props.inputVariable.reduce((obj, item) => {
+        // eslint-disable-next-line no-param-reassign
+        obj[item.display_name] = item.default_value;
+        return obj;
+      }, {});
     },
   });
 
-  onMounted(() => {
-    formModel.value = list.value.reduce((obj, item) => {
-      // eslint-disable-next-line no-param-reassign
-      obj[item.display_name] = '';
-      return obj;
-    }, {});
-    console.log('formModel', formModel.value);
-  });
 </script>
 
 <style lang="postcss" scoped>
@@ -146,6 +175,10 @@
     letter-spacing: 0;
     color: #4d4f56;
     background-color: #f5f7fa;
+
+    .info-concent-item {
+      margin-bottom: 10px;
+    }
 
     .left {
       width: 80px;

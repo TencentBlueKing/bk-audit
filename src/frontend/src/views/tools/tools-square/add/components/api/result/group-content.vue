@@ -38,7 +38,7 @@
               :style="element.isOpen ? '' : 'transform: rotate(180deg);' "
               type="angle-fill-down"
               @click.stop="handelOpenUp(element)" />
-            <span class="heard-title"> {{ element.val }}</span>
+            <span class="heard-title"> {{ element.name }}</span>
             <audit-icon
               class="edit-fill"
               type="edit-fill"
@@ -46,7 +46,7 @@
           </span>
           <span v-else>
             <bk-input
-              :model-value="element.val"
+              :model-value="element.name"
               @blur="handleBlur(element.key)"
               @change="(value) => handlechange(value, element.key)" />
           </span>
@@ -58,13 +58,14 @@
         </div>
         <content
           v-if="element.isOpen"
+          :output-config-groups="element"
           :result-data="resultData" />
       </div>
     </template>
   </vuedraggable>
 </template>
 <script setup lang='ts'>
-  import { ref } from 'vue';
+  import { ref, watch } from 'vue';
   import Vuedraggable from 'vuedraggable';
 
   import content from './content.vue';
@@ -72,19 +73,43 @@
 
   interface Props {
     resultData: any,
+    outputConfigGroups: Array<Record, any>,
   }
   interface Exposes {
     addGroup:() => void,
     openGroup:(val: boolean) => void,
   }
 
-  defineProps<Props>();
+  const props = defineProps<Props>();
   const localValue = ref([
     {
-      key: '1',
-      val: '分组1',
+      name: '',
       isInput: false,
       isOpen: true,
+      key: '1',
+      output_fields: [
+        {
+          raw_name: '',
+          json_path: '',
+          description: '',
+          display_name: '',
+          drill_config: null,
+          field_config: {
+            field_type: '',
+            output_fields: [
+              {
+                raw_name: '',
+                json_path: '',
+                description: '',
+                display_name: '',
+                drill_config: null,
+                enum_mappings: null,
+              },
+            ],
+          },
+          enum_mappings: null,
+        },
+      ],
     },
   ]);
   // 拖拽
@@ -92,17 +117,15 @@
     console.log('dragEvent', dragEvent);
   };
   const handlechange = (value: string, key: string) => {
-    console.log('value', value);
     localValue.value = localValue.value.map((item: any) => {
       if (item.key === key) {
         // eslint-disable-next-line no-param-reassign
-        item.val = value;
+        item.name = value;
       }
       return item;
     });
   };
   const handleEdit = (val: string) => {
-    console.log('val', val);
     localValue.value = localValue.value.map((item: any) => {
       if (item.key === val) {
         // eslint-disable-next-line no-param-reassign
@@ -112,7 +135,6 @@
     });
   };
   const handleBlur = (val: string) => {
-    console.log('handleBlur', val);
     localValue.value = localValue.value.map((item: any) => {
       if (item.key === val) {
         // eslint-disable-next-line no-param-reassign
@@ -124,7 +146,6 @@
 
   // 打开收起
   const handelOpenUp = (element: any) => {
-    console.log('element>>', element);
     localValue.value = localValue.value.map((item: any) => {
       if (item.key === element.key) {
         // eslint-disable-next-line no-param-reassign
@@ -141,13 +162,51 @@
     }
   };
 
+  watch(
+    () => props.outputConfigGroups,
+    (val) => {
+      localValue.value = val.map((item: any, index: number) => ({
+        ...item,
+        isInput: false,
+        isOpen: true,
+        key: `${index + 1}`,
+      }));
+    },
+    {
+      deep: true,
+      immediate: true,
+    },
+  );
   defineExpose<Exposes>({
     addGroup() {
       localValue.value.push({
-        key: `${localValue.value.length + 1}`,
-        val: '分组',
+        name: '',
         isInput: false,
         isOpen: true,
+        key: `${localValue.value.length + 1}`,
+        output_fields: [
+          {
+            raw_name: '',
+            json_path: '',
+            description: '',
+            display_name: '',
+            drill_config: null,
+            field_config: {
+              field_type: '',
+              output_fields: [
+                {
+                  raw_name: '',
+                  json_path: '',
+                  description: '',
+                  display_name: '',
+                  drill_config: null,
+                  enum_mappings: null,
+                },
+              ],
+            },
+            enum_mappings: null,
+          },
+        ],
       });
     },
     openGroup(val: boolean) {

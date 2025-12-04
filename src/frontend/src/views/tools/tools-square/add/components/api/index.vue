@@ -26,19 +26,19 @@
           <bk-form-item
             :label="t('URL')"
             label-width="160"
-            property="url"
+            property="api_config.url"
             required
             style="width: 50%;">
-            <bk-input v-model="formData.url" />
+            <bk-input v-model="formData.api_config.url" />
           </bk-form-item>
           <bk-form-item
             :label="t('请求方式')"
             label-width="160"
-            property="type"
+            property="api_config.method"
             required
             style="margin-left: 30px;">
             <bk-radio-group
-              v-model="formData.type"
+              v-model="formData.api_config.method"
               type="card">
               <bk-radio-button label="GET" />
               <bk-radio-button label="POST" />
@@ -48,11 +48,11 @@
         <bk-form-item
           :label="t('认证方式')"
           label-width="160"
-          property="url"
+          property="api_config.auth_config.method"
           required
           style="width: 50%;">
           <bk-select
-            v-model="formData.auth"
+            v-model="formData.api_config.auth_config.method"
             auto-focus
             class="bk-select">
             <bk-option
@@ -67,22 +67,22 @@
           <bk-form-item
             :label="t('应用ID(bk_app_code)')"
             label-width="160"
-            property="bk_app_code"
+            property="api_config.auth_config.config.bk_app_code"
             required>
-            <bk-input v-model="formData.bk_app_code" />
+            <bk-input v-model="formData.api_config.auth_config.config.bk_app_code" />
           </bk-form-item>
           <bk-form-item
             :label="t('安全(bk_app_secret)')"
             label-width="160"
-            property="bk_app_secret"
+            property="api_config.auth_config.config.bk_app_secret"
             required>
-            <bk-input v-model="formData.bk_app_secret" />
+            <bk-input v-model="formData.api_config.auth_config.config.bk_app_secret" />
           </bk-form-item>
         </div>
         <div class="item-headers">
           <span>Headers</span>
           <div
-            v-for="(headersItem, index) in formData.headers"
+            v-for="(headersItem, index) in formData.api_config.headers"
             :key="index"
             class="headers-config">
             <bk-input
@@ -99,9 +99,12 @@
               :placeholder="t('请输入 Headers 说明')" />
             <audit-icon
               class="headers-reduce-fill"
-              type="reduce-fill" />
+              type="reduce-fill"
+              @click="handleDeleteHeaders(index)" />
           </div>
-          <div class="item-headers-add">
+          <div
+            class="item-headers-add"
+            @click="handleAddHeaders">
             <audit-icon
               class="headers-plus-circle"
               type="plus-circle" />
@@ -112,7 +115,9 @@
           <bk-checkbox v-model="formData.params">
             {{ t('参数设置') }}
           </bk-checkbox>
-          <params-config v-if="formData.params" />
+          <params-config
+            v-if="formData.params"
+            :input-variable="formData.input_variable" />
           <div class="item-params-add">
             <bk-button
               class="ml10"
@@ -132,8 +137,14 @@
       </audit-form>
     </template>
   </card-part-vue>
-  <result-config :result-data="resultData" />
-  <de-dug ref="deDugRef" />
+  <result-config
+    :output-config="formData.output_config"
+    :result-data="resultData" />
+  <de-dug
+    ref="deDugRef"
+    :api-config="formData.api_config"
+    :input-variable="formData.input_variable"
+    :is-params="formData.params" />
 </template>
 <script setup lang='tsx'>
   import { ref } from 'vue';
@@ -149,17 +160,109 @@
   const { t } = useI18n();
   const deDugRef = ref();
   const formData = ref({
-    url: '',
-    type: 'GET',
-    auth: 'none',
-    bk_app_code: '',
-    bk_app_secret: '',
-    headers: [{
-      key: '',
-      value: '',
-      description: '',
-    }],
     params: true,
+    api_config: {
+      url: 'www.baidu.com',
+      method: 'GET',
+      headers: [
+        {
+          key: 'xxx',
+          value: 'xxx',
+          description: 'xxx',
+        },
+      ],
+      auth_config: {
+        config: {
+          bk_app_code: 'xxx',
+          bk_app_secret: 'xxx',
+        },
+        method: 'bk_app_auth',
+      },
+    },
+    input_variable: [
+      {
+        is_show: true,
+        position: 'query',
+        raw_name: 'time_range',
+        required: true,
+        description: '',
+        display_name: 'time_range',
+        split_config: {
+          end_field: 'end_f',
+          start_field: 'start_f',
+        },
+        default_value: null,
+        field_category: 'time_range_select',
+      },
+      {
+        is_show: true,
+        position: 'body',
+        raw_name: 'xxx',
+        required: true,
+        description: 'xxx',
+        display_name: 'xxx',
+        default_value: 'asdadasd',
+        field_category: 'input',
+      },
+      {
+        choices: [],
+        is_show: true,
+        position: 'query',
+        raw_name: 'asdasd',
+        required: true,
+        description: 'asda',
+        display_name: 'adssad',
+        default_value: null,
+        field_category: 'multiselect',
+      },
+    ],
+    output_config: {
+      groups: [
+        {
+          name: 'name1',
+          output_fields: [
+            {
+              raw_name: 'key1',
+              json_path: 'key1.key1',
+              description: 'name1',
+              display_name: 'name1',
+              drill_config: null,
+              field_config: {
+                field_type: 'table',
+                output_fields: [
+                  {
+                    raw_name: 'k1',
+                    json_path: 'k1.key1',
+                    description: 'name1',
+                    display_name: 'k1',
+                    drill_config: null,
+                    enum_mappings: null,
+                  },
+                ],
+              },
+              enum_mappings: null,
+            },
+          ],
+        },
+        {
+          name: 'name2',
+          output_fields: [
+            {
+              raw_name: 'k2',
+              json_path: 'kn2',
+              description: '',
+              display_name: 'n2',
+              drill_config: null,
+              field_config: {
+                field_type: 'kv',
+              },
+              enum_mappings: null,
+            },
+          ],
+        },
+      ],
+      enable_grouping: true,
+    },
   });
   const rules = ref({
   });
@@ -171,11 +274,11 @@
     },
     {
       label: '蓝鲸应用认证',
-      value: 'basic',
+      value: 'bk_app_auth',
       disabled: false,
     },
   ]);
-  const isSuccess = ref(!false);
+  const isSuccess = ref(false);
   const  resultData =  {
     result: true,
     code: 0,
@@ -302,6 +405,23 @@
   };
   const handlerOpenDeDugRef = () => {
     deDugRef.value?.show();
+  };
+
+  // 添加 headers
+  const handleAddHeaders = () => {
+    formData.value.api_config.headers.push({
+      key: '',
+      value: '',
+      description: '',
+    });
+  };
+
+  // 删除 headers
+  const handleDeleteHeaders = (index: number) => {
+    if (formData.value.api_config.headers.length === 1) {
+      return;
+    }
+    formData.value.api_config.headers.splice(index, 1);
   };
 </script>
 
