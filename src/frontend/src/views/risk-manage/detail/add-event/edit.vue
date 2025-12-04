@@ -190,7 +190,7 @@
     submit(): void,
   }
   interface Emits{
-    (e: 'addSuccess', data: Record<string, any>): void;
+    (e: 'addSuccess'): void;
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -293,12 +293,9 @@
     run: addEvent,
   } = useRequest(RiskManageService.addEvent, {
     defaultValue: [],
-    onSuccess: (data: Record<string, any>) => {
+    onSuccess: () => {
       messageSuccess(t('添加成功'));
-      emits('addSuccess', {
-        ...data,
-        ...formData.value,
-      });
+      emits('addSuccess');
     },
   });
 

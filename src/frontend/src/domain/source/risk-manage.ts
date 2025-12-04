@@ -41,6 +41,14 @@ class RiskManage extends ModuleBase {
       payload,
     });
   }
+  // 获取正在生成的事件列表
+  getAddEventList(params: {
+    id: string
+  }) {
+    return Request.get(`${this.module}/${params.id}/`, {
+      params,
+    });
+  }
   // 获取待我处理的风险列表
   getTodoRiskList(params: {
       page: number,
