@@ -1,9 +1,11 @@
 {% load i18n %}
 <div class="risk-where-condition-widget"
      data-field-options-target="{{ widget.field_options_id }}"
-     data-operator-options-target="{{ widget.operator_options_id }}">
+     data-operator-options-target="{{ widget.operator_options_id }}"
+     data-field-type-options-target="{{ widget.field_type_options_id }}">
     <script type="application/json" id="{{ widget.field_options_id }}">{{ widget.field_options_json|safe }}</script>
     <script type="application/json" id="{{ widget.operator_options_id }}">{{ widget.operator_options_json|safe }}</script>
+    <script type="application/json" id="{{ widget.field_type_options_id }}">{{ widget.field_type_options_json|safe }}</script>
     <div class="risk-where-condition-toolbar">
         <button type="button" class="button risk-where-mode-btn" data-mode="builder">{% trans "结构化模式" %}</button>
         <button type="button" class="button risk-where-mode-btn" data-mode="json">{% trans "JSON 模式" %}</button>

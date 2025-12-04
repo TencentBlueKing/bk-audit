@@ -77,6 +77,22 @@ class FieldType(TextChoices):
         }
         return type_mapping[self.value]
 
+    @cached_property
+    def query_data_type(self):
+        """
+        返回查询阶段 CAST 可使用的 SQL 类型
+        """
+        type_mapping = {
+            self.STRING: "STRING",
+            self.DOUBLE: "DOUBLE",
+            self.INT: "INT",
+            self.LONG: "BIGINT",
+            self.TEXT: "TEXT",
+            self.TIMESTAMP: "BIGINT",
+            self.FLOAT: "FLOAT",
+        }
+        return type_mapping[self.value]
+
 
 class JoinType(TextChoices):
     """

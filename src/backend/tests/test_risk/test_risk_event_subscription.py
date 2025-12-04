@@ -319,6 +319,58 @@ class TestRiskEventSubscriptionSQLBuilder(RiskEventSubscriptionTestMixin, TestCa
         count_sql = builder.build_count_sql()
         self.assertEqual(count_sql, self._expected_count_sql(where=where))
 
+    def test_event_data_drilldown_generates_json_extract(self):
+        """event_data 下钻应使用 Doris JSON_EXTRACT 函数。"""
+        condition = WhereCondition(
+            condition=Condition(
+                field=Field(
+                    table="t",
+                    raw_name="event_data",
+                    display_name="event_data",
+                    field_type=FieldType.STRING,
+                    keys=["login", "ip"],
+                ),
+                operator=Operator.EQ,
+                filter="127.0.0.1",
+            )
+        )
+        builder = RiskEventSubscriptionSQLBuilder(
+            namespace=settings.DEFAULT_NAMESPACE,
+            time_range=self.TIME_RANGE,
+            subscription_condition=condition,
+        )
+        where = "JSON_EXTRACT_STRING(`t`.`event_data`,'$.login.ip')='127.0.0.1'"
+        sql = builder.build_query_sql(limit=5, offset=0)
+        self.assertEqual(sql, self._expected_query_sql(limit=5, where=where))
+        count_sql = builder.build_count_sql()
+        self.assertEqual(count_sql, self._expected_count_sql(where=where))
+
+    def test_event_data_drilldown_numeric_type(self):
+        """自定义返回类型为 long 时应生成 JSON_EXTRACT_LARGEINT 并进行整型比较。"""
+        condition = WhereCondition(
+            condition=Condition(
+                field=Field(
+                    table="t",
+                    raw_name="event_data",
+                    display_name="event_data",
+                    field_type=FieldType.LONG,
+                    keys=["metric", "value"],
+                ),
+                operator=Operator.GTE,
+                filter=100,
+            )
+        )
+        builder = RiskEventSubscriptionSQLBuilder(
+            namespace=settings.DEFAULT_NAMESPACE,
+            time_range=self.TIME_RANGE,
+            subscription_condition=condition,
+        )
+        where = "CAST(JSON_EXTRACT_STRING(`t`.`event_data`,'$.metric.value') AS BIGINT)>=100"
+        sql = builder.build_query_sql(limit=5, offset=0)
+        self.assertEqual(sql, self._expected_query_sql(limit=5, where=where))
+        count_sql = builder.build_count_sql()
+        self.assertEqual(count_sql, self._expected_count_sql(where=where))
+
 
 class TestRiskEventSubscriptionResource(RiskEventSubscriptionTestMixin, TestCase):
     def setUp(self):
@@ -431,6 +483,41 @@ class TestRiskEventSubscriptionModel(TestCase):
         invalid_condition = {"condition": {"field": "invalid"}}
         with self.assertRaises(ValidationError):
             RiskEventSubscription.validate_condition_dict(invalid_condition)
+
+    def test_validate_condition_dict_invalid_json_path(self):
+        """JSON path 不是合法字符串列表时需报错。"""
+        invalid_condition = {
+            "condition": {
+                "field": {
+                    "table": "t",
+                    "raw_name": "event_data",
+                    "display_name": "event_data",
+                    "keys": ["login", ""],
+                },
+                "operator": Operator.EQ,
+                "filter": "value",
+            }
+        }
+        with self.assertRaises(ValidationError):
+            RiskEventSubscription.validate_condition_dict(invalid_condition)
+
+    def test_validate_condition_dict_preserves_field_type(self):
+        """携带 JSON path 时字段类型应被正确解析。"""
+        condition = {
+            "condition": {
+                "field": {
+                    "table": "t",
+                    "raw_name": "event_data",
+                    "display_name": "event_data",
+                    "keys": ["login", "ip"],
+                    "field_type": FieldType.STRING.value,
+                },
+                "operator": Operator.EQ,
+                "filter": "127.0.0.1",
+            }
+        }
+        parsed = RiskEventSubscription.validate_condition_dict(condition)
+        self.assertEqual(parsed.condition.field.field_type, FieldType.STRING)
 
 
 class TestRiskEventSubscriptionSerializer(TestCase):

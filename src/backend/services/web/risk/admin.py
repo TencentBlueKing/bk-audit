@@ -26,7 +26,7 @@ from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.sql.constants import Operator
+from core.sql.constants import FieldType, Operator
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import (
     ProcessApplication,
@@ -136,6 +136,7 @@ class RiskEventSubscriptionAdminForm(forms.ModelForm):
         self.fields["condition"].widget = WhereConditionWidget(
             field_options=self._build_condition_field_options(),
             operator_options=list(Operator.choices),
+            field_type_options=list(FieldType.choices),
         )
 
     @staticmethod

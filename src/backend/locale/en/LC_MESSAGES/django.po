@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bk-audit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-21 14:32+0800\n"
+"POT-Creation-Date: 2025-12-04 12:16+0800\n"
 "PO-Revision-Date: 2025-11-19 15:00+0800\n"
 "Last-Translator: BK Audit Dev Team <bk-audit@example.com>\n"
 "Language-Team: bk-audit <bk-audit@example.com>\n"
@@ -3833,6 +3833,11 @@ msgstr "TODO"
 
 msgid "我的关注"
 msgstr "Watch"
+
+#, fuzzy
+#| msgid "事件ID"
+msgid "事件"
+msgstr "Event ID"
 
 msgid "策略ID"
 msgstr "Strategy ID"

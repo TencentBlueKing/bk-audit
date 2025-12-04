@@ -5,9 +5,11 @@ Risk event subscription SQL builder.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar, Dict, Optional, Tuple
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 from django.conf import settings
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
 from pypika.enums import Order as PypikaOrder
 from pypika.functions import Cast
 from pypika.terms import ValueWrapper
@@ -18,6 +20,7 @@ from apps.meta.models import GlobalMetaConfig
 from core.sql.builder.builder import BKBaseQueryBuilder, BkBaseTable
 from core.sql.builder.functions import Concat, GroupConcat
 from core.sql.builder.generator import BkBaseComputeSqlGenerator
+from core.sql.builder.terms import DorisJsonTypeExtractFunction
 from core.sql.constants import AggregateType, FieldType, JoinType, Operator
 from core.sql.model import (
     Condition,
@@ -36,6 +39,58 @@ from services.web.databus.constants import (
     ASSET_STRATEGY_TAG_BKBASE_RT_ID_KEY,
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
+from services.web.risk.constants import RiskEventSubscriptionFieldCategory
+
+
+class SubscriptionFieldConfig(BaseModel):
+    """
+    描述订阅 SQL 中的固定字段配置，用于统一生成 select 列及前端配置。
+
+    Attributes:
+        category: 字段所属类别，决定使用哪张底层表/别名。
+        name: Doris 实际字段名。
+        field_type: 字段默认的数据类型，决定 select 输出与条件解析。
+        display_name: 可选的展示名称；为空时默认使用 name。
+        supports_drill: 是否支持 JSON 下钻（例如 event_data）。
+        drill_examples: JSON path 的示例数组，仅用于前端提示。
+        default_return_type: 针对 JSON 字段，选择默认的返回类型；为空则沿用 field_type。
+    """
+
+    category: RiskEventSubscriptionFieldCategory
+    name: str
+    field_type: FieldType
+    display_name: Optional[str] = None
+    supports_drill: bool = False
+    drill_examples: list[str] = PydanticField(default_factory=list)
+    default_return_type: Optional[FieldType] = None
+
+    @property
+    def normalized_display_name(self) -> str:
+        """返回用于 SQL 输出与前端展示的字段名。"""
+        return self.display_name or self.name
+
+    @property
+    def normalized_return_type(self) -> FieldType:
+        """若指定 default_return_type 则使用，否则退回 field_type。"""
+        return self.default_return_type or self.field_type
+
+
+class RiskEventSubscriptionSqlGenerator(BkBaseComputeSqlGenerator):
+    """
+    专用于风险事件订阅的 SQL 生成器，支持 Doris JSON 字段下钻。
+    """
+
+    def _get_pypika_field(self, field: Field):
+        if not field.keys:
+            return super()._get_pypika_field(field)
+
+        table = self._get_table(field.table)
+        base_field = self.field_type_cls.get_field(table, field)
+        json_value = DorisJsonTypeExtractFunction(base_field, field.keys, FieldType.STRING)
+        target_type = field.field_type or FieldType.STRING
+        if target_type in (FieldType.STRING, FieldType.TEXT):
+            return json_value
+        return Cast(json_value, target_type.query_data_type)
 
 
 @dataclass
@@ -76,7 +131,7 @@ class RiskEventSubscriptionSQLBuilder:
     def __post_init__(self):
         self.namespace = self.namespace or settings.DEFAULT_NAMESPACE
         self._start_time, self._end_time = self.time_range
-        self._generator = BkBaseComputeSqlGenerator(BKBaseQueryBuilder())
+        self._generator = RiskEventSubscriptionSqlGenerator(BKBaseQueryBuilder())
         self._table_names = self._load_table_names()
         self._event_table = Table(table_name=self._table_names["event"], alias=self.EVENT_ALIAS)
         self._risk_table = Table(table_name=self._table_names["risk"], alias=self.RISK_ALIAS)
@@ -161,55 +216,157 @@ class RiskEventSubscriptionSQLBuilder:
         )
 
     #: 固定输出字段配置，便于复用元数据
-    INNER_FIELD_CONFIG: ClassVar[list[dict]] = [
-        {"category": "event", "name": "dtEventTime", "field_type": FieldType.STRING},
-        {"category": "event", "name": "dtEventTimeStamp", "field_type": FieldType.LONG},
-        {"category": "event", "name": "event_id", "field_type": FieldType.STRING},
-        {"category": "event", "name": "event_content", "field_type": FieldType.TEXT},
-        {"category": "event", "name": "raw_event_id", "field_type": FieldType.STRING},
-        {"category": "event", "name": "strategy_id", "field_type": FieldType.LONG},
-        {"category": "event", "name": "event_evidence", "field_type": FieldType.TEXT},
-        {"category": "event", "name": "event_type", "field_type": FieldType.STRING},
-        {"category": "event", "name": "event_data", "field_type": FieldType.STRING},
-        {"category": "event", "name": "event_time", "field_type": FieldType.LONG},
-        {"category": "event", "name": "event_source", "field_type": FieldType.STRING},
-        {"category": "event", "name": "operator", "field_type": FieldType.STRING, "display_name": "event_operator"},
-        {"category": "risk", "name": "risk_id", "field_type": FieldType.STRING},
-        {"category": "risk", "name": "event_end_time", "field_type": FieldType.LONG},
-        {"category": "risk", "name": "operator", "field_type": FieldType.STRING, "display_name": "risk_operator"},
-        {"category": "risk", "name": "status", "field_type": FieldType.STRING, "display_name": "risk_status"},
-        {"category": "risk", "name": "rule_id", "field_type": FieldType.LONG},
-        {"category": "risk", "name": "rule_version", "field_type": FieldType.INT},
-        {"category": "risk", "name": "origin_operator", "field_type": FieldType.STRING},
-        {"category": "risk", "name": "current_operator", "field_type": FieldType.STRING},
-        {"category": "risk", "name": "notice_users", "field_type": FieldType.STRING},
-        {"category": "risk", "name": "risk_label", "field_type": FieldType.STRING},
-        {"category": "risk", "name": "title", "field_type": FieldType.STRING, "display_name": "risk_title"},
-        {
-            "category": "strategy_tag",
-            "name": "tag_ids_json",
-            "field_type": FieldType.STRING,
-            "display_name": "strategy_tag_ids",
-        },
-        {"category": "strategy", "name": "risk_level", "field_type": FieldType.STRING},
-        {"category": "strategy", "name": "is_formal", "field_type": FieldType.INT},
-        {"category": "strategy", "name": "status", "field_type": FieldType.STRING, "display_name": "strategy_status"},
+    INNER_FIELD_CONFIG: ClassVar[List[SubscriptionFieldConfig]] = [
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT, name="dtEventTime", field_type=FieldType.STRING
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="dtEventTimeStamp",
+            field_type=FieldType.LONG,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT, name="event_id", field_type=FieldType.STRING
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="event_content",
+            field_type=FieldType.TEXT,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="raw_event_id",
+            field_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="strategy_id",
+            field_type=FieldType.LONG,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="event_evidence",
+            field_type=FieldType.TEXT,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="event_type",
+            field_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="event_data",
+            field_type=FieldType.STRING,
+            supports_drill=True,
+            drill_examples=["login", "ip"],
+            default_return_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="event_time",
+            field_type=FieldType.LONG,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="event_source",
+            field_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.EVENT,
+            name="operator",
+            field_type=FieldType.STRING,
+            display_name="event_operator",
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK, name="risk_id", field_type=FieldType.STRING
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK,
+            name="event_end_time",
+            field_type=FieldType.LONG,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK,
+            name="operator",
+            field_type=FieldType.STRING,
+            display_name="risk_operator",
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK,
+            name="status",
+            field_type=FieldType.STRING,
+            display_name="risk_status",
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK, name="rule_id", field_type=FieldType.LONG
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK, name="rule_version", field_type=FieldType.INT
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK,
+            name="origin_operator",
+            field_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK,
+            name="current_operator",
+            field_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK,
+            name="notice_users",
+            field_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK,
+            name="risk_label",
+            field_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.RISK,
+            name="title",
+            field_type=FieldType.STRING,
+            display_name="risk_title",
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.STRATEGY_TAG,
+            name="tag_ids_json",
+            field_type=FieldType.STRING,
+            display_name="strategy_tag_ids",
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.STRATEGY,
+            name="risk_level",
+            field_type=FieldType.STRING,
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.STRATEGY, name="is_formal", field_type=FieldType.INT
+        ),
+        SubscriptionFieldConfig(
+            category=RiskEventSubscriptionFieldCategory.STRATEGY,
+            name="status",
+            field_type=FieldType.STRING,
+            display_name="strategy_status",
+        ),
     ]
 
     #: 根据字段所属类别，映射到构造实际 Field 的方法，便于统一遍历生成 select 列
     CATEGORY_FIELD_BUILDERS: ClassVar[dict[str, str]] = {
-        "event": "_event_field",
-        "risk": "_risk_field",
-        "strategy": "_strategy_field",
-        "strategy_tag": "_tag_field",
+        RiskEventSubscriptionFieldCategory.EVENT.value: "_event_field",
+        RiskEventSubscriptionFieldCategory.RISK.value: "_risk_field",
+        RiskEventSubscriptionFieldCategory.STRATEGY.value: "_strategy_field",
+        RiskEventSubscriptionFieldCategory.STRATEGY_TAG.value: "_tag_field",
     }
 
     #: 字段类别在文档/前端展示时的中文说明
     CATEGORY_DISPLAY_NAMES: ClassVar[dict[str, str]] = {
-        "event": "事件",
-        "risk": "风险",
-        "strategy": "策略",
-        "strategy_tag": "策略标签",
+        RiskEventSubscriptionFieldCategory.EVENT.value: str(RiskEventSubscriptionFieldCategory.EVENT.label),
+        RiskEventSubscriptionFieldCategory.RISK.value: str(RiskEventSubscriptionFieldCategory.RISK.label),
+        RiskEventSubscriptionFieldCategory.STRATEGY.value: str(RiskEventSubscriptionFieldCategory.STRATEGY.label),
+        RiskEventSubscriptionFieldCategory.STRATEGY_TAG.value: str(
+            RiskEventSubscriptionFieldCategory.STRATEGY_TAG.label
+        ),
     }
 
     def _build_inner_select_fields(self) -> list[Field]:
@@ -218,9 +375,9 @@ class RiskEventSubscriptionSQLBuilder:
         """
         fields: list[Field] = []
         for config in self.INNER_FIELD_CONFIG:
-            builder_name = self.CATEGORY_FIELD_BUILDERS[config["category"]]
+            builder_name = self.CATEGORY_FIELD_BUILDERS[config.category.value]
             builder = getattr(self, builder_name)
-            fields.append(builder(config["name"], config["field_type"], config.get("display_name")))
+            fields.append(builder(config.name, config.field_type, config.normalized_display_name))
         return fields
 
     @classmethod
@@ -230,17 +387,23 @@ class RiskEventSubscriptionSQLBuilder:
         """
         metadata: list[dict] = []
         for config in cls.INNER_FIELD_CONFIG:
-            display = str(config.get("display_name") or config["name"])
-            category_display = str(cls.CATEGORY_DISPLAY_NAMES.get(config["category"], config["category"]))
+            category_value = config.category.value
+            display = str(config.normalized_display_name)
+            category_display = str(cls.CATEGORY_DISPLAY_NAMES.get(category_value, category_value))
+            default_type = config.normalized_return_type
+            default_type_value = default_type.value
             metadata.append(
                 {
                     "name": display,
                     "raw_name": display,
-                    "source_field": config["name"],
-                    "category": config["category"],
+                    "source_field": config.name,
+                    "category": category_value,
                     "category_display": category_display,
-                    "field_type": config["field_type"].value,
+                    "field_type": config.field_type.value,
                     "label": f"{display} ({category_display})",
+                    "supports_drill": config.supports_drill,
+                    "drill_examples": config.drill_examples,
+                    "default_return_type": default_type_value,
                 }
             )
         return metadata

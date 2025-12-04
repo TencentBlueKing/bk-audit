@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bk-audit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-21 14:32+0800\n"
+"POT-Creation-Date: 2025-12-04 12:16+0800\n"
 "PO-Revision-Date: 2025-11-19 15:00+0800\n"
 "Last-Translator: BK审计团队 <bk-audit@example.com>\n"
 "Language-Team: bk-audit <bk-audit@example.com>\n"
@@ -3834,6 +3834,11 @@ msgstr "待我处理"
 msgid "我的关注"
 msgstr "我的关注"
 
+#, fuzzy
+#| msgid "事件ID"
+msgid "事件"
+msgstr "事件ID"
+
 msgid "策略ID"
 msgstr "策略ID"
 
@@ -4773,8 +4778,7 @@ msgstr "字段关联"
 msgid "Storage Type"
 msgstr "存储类型"
 
-msgid ""
-"control_id and control_version are required when strategy_type is model"
+msgid "control_id and control_version are required when strategy_type is model"
 msgstr "当策略类型为模型审计时，必须提供 control_id 和 control_version"
 
 msgid "Control Version not Exists"
@@ -5015,8 +5019,7 @@ msgstr "单个筛选值，可以是字符串、整数或浮点数"
 msgid "Conditions"
 msgstr "条件"
 
-msgid ""
-"Rule Audit Where can not have condition and conditions at the same time"
+msgid "Rule Audit Where can not have condition and conditions at the same time"
 msgstr "规则审计的 Where 不能同时包含 condition 和 conditions"
 
 msgid "Field in having condition must have aggregate set to True"
