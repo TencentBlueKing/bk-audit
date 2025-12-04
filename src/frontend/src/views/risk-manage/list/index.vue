@@ -147,7 +147,6 @@
   }
 
   const selectedItemList = ref<FieldItem[]>([]);
-  const frontendCreateRisk = ref<Record<string, any> | null>(null); // 前端创建的风险
 
   const initTableColumns = [
     {
@@ -218,7 +217,7 @@
       width: 110,
       render: ({ data }: { data: RiskManageModel }) => (
         // eslint-disable-next-line no-nested-ternary
-        data.status === 'frontend_create' ? (
+        data.status === 'stand_by' ? (
            <bk-tag theme='success'>
             {t('生成中')}
           </bk-tag>
@@ -502,30 +501,6 @@
     }).then(() => {
 
     });
-    if (frontendCreateRisk.value) {
-      // 存在新增风险
-      const unshiftData = {
-        risk_id: frontendCreateRisk.value?.risk_ids[0],
-        event_content: '--',
-        strategy_id: '',
-        event_time: '--',
-        event_end_time: '--',
-        operator: [],
-        status: 'frontend_create',
-        current_operator: [],
-        notice_users: [],
-        event_data: {},
-        tags: [],
-        risk_label: '',
-        experiences: 0,
-        last_operate_time: '--',
-        title: '--',
-        permission: {},
-      };
-      listRef.value.listDataUnshift(unshiftData);
-      // 删除新增风险保证下次数据不在
-      frontendCreateRisk.value = null;
-    }
   };
 
   const  initColumns = () => {
@@ -653,9 +628,8 @@
     addRiskRef.value.show();
   };
   // 新增风险成功
-  const handleAddRiskSuccess = (data: Record<string, any>) => {
-    frontendCreateRisk.value = data;
-    fetchList();
+  const handleAddRiskSuccess = () => {
+    searchBoxRef.value.clearValue();
   };
   onMounted(() => {
     nextTick(() => {

@@ -58,7 +58,7 @@
                     { active: active === index },
                   ]"
                   @click="handlerSelect(item, index)">
-                  {{ item.event_time }}
+                  {{ item?.event_time }}
                 </div>
               </div>
             </transition>
@@ -66,7 +66,7 @@
         </div>
 
         <!-- detail -->
-        <div v-if="frontendCreateEventTime === eventItem.event_time">
+        <div v-if="activeStatus === 'new'">
           <div class="frontend-create">
             {{ t('事件生成中') }}
           </div>
@@ -526,6 +526,7 @@
   import { useRouter } from 'vue-router';
 
   import EventManageService from '@service/event-manage';
+  import RiskManageService from '@service/risk-manage';
   import ToolManageService from '@service/tool-manage';
 
   import EventModel from '@model/event/event';
@@ -542,7 +543,6 @@
 
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
-  import { convertGMTTimeToStandard } from '@/utils/assist/timestamp-conversion';
 
   interface DrillItem {
     field_name: string;
@@ -606,9 +606,8 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const isShowSide = ref(false);
-  const frontendCreateEvent = ref<Record<string, any> | null>(null);
-  const frontendCreateEventTime = ref('');
 
+  const activeStatus = ref('');
   const addEventRef = ref();
   const router = useRouter();
   const { t, locale } = useI18n();
@@ -804,6 +803,20 @@
       type: '',
     };
   };
+  const {
+    data: addEventData,
+    run: getAddEventList,
+  } = useRequest(RiskManageService.fetchAddEventList, {
+    defaultValue: {
+      di: '',
+    },
+    onSuccess() {
+      if (addEventData.value.unsynced_events.length > 0) {
+        linkEventList.value = addEventData.value.unsynced_events.concat(linkEventList.value);
+        activeStatus.value = linkEventList.value[0]?.status || '';
+      }
+    },
+  });
 
   const {
     data: linkEventData,
@@ -817,54 +830,42 @@
     },
     onSuccess() {
       if (linkEventData.value.results.length) {
-        if (frontendCreateEvent.value) {
-          const createEvent = {
-            event_id: '',
-            event_content: '',
-            raw_event_id: '',
-            strategy_id: '',
-            event_data: {},
-            event_time: convertGMTTimeToStandard(frontendCreateEvent.value?.event_time),
-            event_source: '',
-            operator: '',
-            event_evidence: '',
-          };
-          linkEventList.value.unshift(createEvent);
-        }
-
-
-        // 触底加载，拼接 - 使用动态去重字段
+        activeStatus.value =  '';
         const allEvents = [...linkEventList.value, ...linkEventData.value.results];
         linkEventList.value = allEvents;
-        if (distinctEventDataKeyArr.value.length) {
-          // 根据指定字段组合进行去重（包含关系）
-          linkEventList.value =  allEvents.filter((event, index, self) => {
-            // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
-            const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
 
-            // 查找第一个具有包含关系的事件索引
-            const firstIndex = self.findIndex((e) => {
-              const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
-              // 检查所有字段值都完全相同（转换为字符串比较）
-              return currentValues.every((currentValue, i) => {
-                // 将值转换为字符串进行比较，处理各种特殊类型
-                const currentStr = convertToString(currentValue);
-                const eValueStr = convertToString(eValues[i]);
-                return currentStr === eValueStr;
+        getAddEventList({
+          id: props.data.risk_id,
+        }).then(() => {
+          // 触底加载，拼接 - 使用动态去重字段
+
+          if (distinctEventDataKeyArr.value.length) {
+            // 根据指定字段组合进行去重（包含关系）
+            linkEventList.value =  allEvents.filter((event, index, self) => {
+              // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
+              const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
+
+              // 查找第一个具有包含关系的事件索引
+              const firstIndex = self.findIndex((e) => {
+                const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
+                // 检查所有字段值都完全相同（转换为字符串比较）
+                return currentValues.every((currentValue, i) => {
+                  // 将值转换为字符串进行比较，处理各种特殊类型
+                  const currentStr = convertToString(currentValue);
+                  const eValueStr = convertToString(eValues[i]);
+                  return currentStr === eValueStr;
+                });
               });
+
+              // 只保留第一次出现的事件（去重）
+              return index === firstIndex;
             });
+          }
 
-            // 只保留第一次出现的事件（去重）
-            return index === firstIndex;
-          });
-        }
-
-        // 默认获取第一个
-        [eventItem.value] = linkEventList.value;
-        isShowSide.value = !(linkEventList.value.length > 1);
-      // 事件event_data数据处理
-      // const eventDataKey = getEventDataKey(eventItem.value.event_data);
-      // eventItemDataKeyArr.value = group(eventDataKey);
+          // 默认获取第一个
+          [eventItem.value] = linkEventList.value;
+          isShowSide.value = !(linkEventList.value.length > 1);
+        });
       }
     },
   });
@@ -898,6 +899,7 @@
   const handlerSelect = (item: EventModel, index: number) => {
     eventItem.value = item;
     active.value = index;
+    activeStatus.value = item?.status || '';
   };
 
   const handlerStrategy = () => {
@@ -973,13 +975,9 @@
   };
 
   // 添加事件成功
-  const handleAddSuccess = (data: Record<string, any>) => {
-    frontendCreateEventTime.value = '';
-    frontendCreateEvent.value = null;
+  const handleAddSuccess = () => {
     linkEventList.value = [];
     nextTick(() => {
-      frontendCreateEvent.value = data;
-      frontendCreateEventTime.value = convertGMTTimeToStandard(data.event_time);
       fetchLinkEvent({
         start_time: props.data.event_time,
         end_time: props.data.event_end_time,
