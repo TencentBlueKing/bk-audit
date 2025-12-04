@@ -108,6 +108,7 @@ from services.web.strategy_v2.constants import (
     StrategyAlgorithmOperator,
     StrategyFieldSourceEnum,
     StrategyOperator,
+    StrategySource,
     StrategyStatusChoices,
     StrategyType,
     TableType,
@@ -586,6 +587,7 @@ class ListStrategy(StrategyV2Base):
             .annotate(risk_count=Subquery(risk_count_subquery, output_field=IntegerField()))
             .prefetch_related("tools")
         )
+        queryset = queryset.exclude(source=StrategySource.SYSTEM)
         # 排序
         queryset = queryset.order_by(order_field)
 
@@ -636,7 +638,7 @@ class ListStrategyAll(StrategyV2Base):
             actions=[ActionEnum.LIST_STRATEGY, ActionEnum.LIST_RISK, ActionEnum.EDIT_RISK]
         ).has_permission(request=get_local_request(), view=self):
             return []
-        strategies: List[Strategy] = Strategy.objects.all()
+        strategies: List[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
         data.sort(key=lambda s: s["label"])
         return data

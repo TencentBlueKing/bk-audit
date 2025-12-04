@@ -201,6 +201,11 @@ class StrategyType(TextChoices):
     MODEL = "model", gettext_lazy("模型策略")
 
 
+class StrategySource(TextChoices):
+    USER = "user", gettext_lazy("用户创建")
+    SYSTEM = "system", gettext_lazy("系统创建")
+
+
 class LinkTableTableType(TextChoices):
     """
     联表表类型

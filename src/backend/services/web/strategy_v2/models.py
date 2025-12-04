@@ -33,6 +33,7 @@ from services.web.analyze.models import Control, ControlVersion
 from services.web.strategy_v2.constants import (
     RiskLevel,
     StrategyFieldSourceEnum,
+    StrategySource,
     StrategyStatusChoices,
     StrategyType,
 )
@@ -85,6 +86,13 @@ class Strategy(SoftDeleteModel):
         gettext_lazy("Risk Meta Field Config"), default=list, null=True, blank=True
     )
     is_formal = models.BooleanField(gettext_lazy("Is Formal"), default=True)
+    source = models.CharField(
+        gettext_lazy("Source"),
+        choices=StrategySource.choices,
+        default=StrategySource.USER,
+        max_length=16,
+        db_index=True,
+    )
 
     class Meta:
         verbose_name = gettext_lazy("Strategy")

@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 import datetime
 import json
 import uuid
-from typing import List, Union
+from typing import List
 
 from django.conf import settings
 from django.utils import timezone
@@ -90,7 +90,7 @@ class CreateEventSerializer(serializers.Serializer):
                 event_data = json.loads(event_data)
             except Exception:
                 raise error
-        if not isinstance(event_data, Union[dict, None]):
+        if not isinstance(event_data, dict):
             raise error
         return json.dumps(event_data, ensure_ascii=False)
 
