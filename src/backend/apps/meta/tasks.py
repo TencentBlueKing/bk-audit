@@ -160,7 +160,7 @@ def sync_iam_systems():
             logger.error(f"[sync_iam_systems] sync {syncer.__name__} error: {e}")
 
 
-@periodic_task(run_every=crontab(minute="*/30"), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
+@periodic_task(run_every=crontab(minute=0, hour=17), time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT)
 @transaction.atomic
 def update_system_diagnosis_push():
     """

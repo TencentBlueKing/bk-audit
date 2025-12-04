@@ -28,7 +28,7 @@ from services.web.tool.constants import ToolTypeEnum
 from services.web.tool.models import Tool
 
 
-@periodic_task(run_every=crontab(minute=settings.BKVISION_UPDATE_HOUR))
+@periodic_task(run_every=crontab(minute=settings.BKVISION_UPDATE_CRON_MINUTE))
 @lock(
     load_lock_name=lambda tool_uid=None, **kwargs: f"celery:update_bkvision_config:{tool_uid}",
     timeout=settings.BKVISION_UPDATE_TASK_TIMEOUT,
