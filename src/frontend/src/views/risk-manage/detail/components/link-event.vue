@@ -811,10 +811,6 @@
       di: '',
     },
     onSuccess() {
-      if (addEventData.value.unsynced_events.length > 0) {
-        linkEventList.value = addEventData.value.unsynced_events.concat(linkEventList.value);
-        activeStatus.value = linkEventList.value[0]?.status || '';
-      }
     },
   });
 
@@ -829,16 +825,14 @@
       total: 1,
     },
     onSuccess() {
-      if (linkEventData.value.results.length) {
-        activeStatus.value =  '';
-        const allEvents = [...linkEventList.value, ...linkEventData.value.results];
-        linkEventList.value = allEvents;
-
-        getAddEventList({
-          id: props.data.risk_id,
-        }).then(() => {
-          // 触底加载，拼接 - 使用动态去重字段
-
+      getAddEventList({
+        id: props.data.risk_id,
+      }).then(() => {
+        // 触底加载，拼接 - 使用动态去重字段
+        if (linkEventData.value.results.length) {
+          activeStatus.value =  '';
+          const allEvents = [...linkEventList.value, ...linkEventData.value.results];
+          linkEventList.value = allEvents;
           if (distinctEventDataKeyArr.value.length) {
             // 根据指定字段组合进行去重（包含关系）
             linkEventList.value =  allEvents.filter((event, index, self) => {
@@ -861,12 +855,15 @@
               return index === firstIndex;
             });
           }
-
-          // 默认获取第一个
-          [eventItem.value] = linkEventList.value;
-          isShowSide.value = !(linkEventList.value.length > 1);
-        });
-      }
+        }
+        if (addEventData.value.unsynced_events.length > 0) {
+          linkEventList.value = addEventData.value.unsynced_events.concat(linkEventList.value);
+          activeStatus.value = linkEventList.value[0]?.status || '';
+        }
+        // 默认获取第一个
+        [eventItem.value] = linkEventList.value;
+        isShowSide.value = !(linkEventList.value.length > 1);
+      });
     },
   });
 
