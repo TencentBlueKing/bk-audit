@@ -82,9 +82,10 @@
               {
                 message: t('请先阅读上报日志须知'),
                 trigger: 'change',
-                validator: (value: {read_requirement: boolean, read_standard: boolean}) => {
+                validator: (value: any) => {
                   return !!value.read_requirement && !!value.read_standard;
-                } },
+                },
+              },
             ]">
             <div class="log-create-notice">
               <bk-radio
@@ -183,6 +184,14 @@
   const getSmartActionOffsetTarget = () => document.querySelector('.step1-action');
 
   const localFormData = ref({ ...props.formData });
+
+  const isEditMode = route.name === 'logCollectorEdit';
+
+  if (isEditMode) {
+    localFormData.value.notice.read_requirement = true;
+    localFormData.value.notice.read_standard = true;
+    localFormData.value.is_reported = true;
+  }
 
   // 根据选中的 SDK 类型获取对应的 URL
   const selectedSdkUrl = computed(() => {

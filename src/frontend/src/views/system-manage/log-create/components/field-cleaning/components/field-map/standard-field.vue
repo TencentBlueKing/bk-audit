@@ -95,7 +95,7 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const route = useRoute();
-  const isEditMode = route.name === 'logDataIdEdit';
+  const isEditMode = route.name === 'logDataIdEdit' || route.name === 'logCollectorEdit';
 
   type TFieldRelatedTargetMap = Record<string, Array<EtlPreviewModel>>
 
@@ -127,7 +127,7 @@
     ? DataIdManageService.fetchFieldHistory
     : CollectorManageService.fetchFieldHistory, {
     defaultParams: {
-      id: route.params.id,
+      id: route.name === 'logDataIdEdit' ? route.params.bkDataId : route.params.collectorConfigId,
     },
     defaultValue: {} as Record<string, string>,
     onSuccess: (data) => {
@@ -164,7 +164,6 @@
       }
       return result;
     }, {} as Props['modelValue']);
-    console.log('result2222', result);
     emits('change', result);
     emits('update:modelValue', result);
   };
@@ -263,9 +262,8 @@
     },
     getFieldHistory() {
       if (isEditMode) {
-        console.log('getFieldHistory', route.params);
         fetchFieldHistory({
-          id: route.params.id,
+          id: route.params.bkDataId || route.params.collectorConfigId,
         });
       }
     },

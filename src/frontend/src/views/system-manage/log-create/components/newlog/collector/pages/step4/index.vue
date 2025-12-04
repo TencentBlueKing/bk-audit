@@ -71,6 +71,7 @@
             :rules="rules">
             <bk-form-item
               :label="t('原始数据')"
+              :label-width="72"
               property="data"
               required>
               <div
@@ -116,6 +117,7 @@
 
               <bk-form-item
                 :label="t('字段提取')"
+                :label-width="72"
                 property="etl_config"
                 required>
                 <bk-radio-group v-model="formData.etl_config">
@@ -165,7 +167,9 @@
                   text />
               </div>
 
-              <bk-form-item>
+              <bk-form-item
+                label=""
+                label-width="0">
                 <bk-button
                   v-if="hasLogData"
                   v-bk-tooltips="t('请先刷新，以获取原始数据')"
@@ -278,12 +282,12 @@
   const isError = ref(true); // 调试是否报错
 
   const isEditMode = route.name === 'logCollectorEdit';
+  console.log('route.name', route.name);
   const {
     searchParams,
     removeSearchParam,
   } = useUrlSearch();
   const collectorConfigId = searchParams.get('collector_config_id');
-  console.log('collectorConfigId', collectorConfigId);
   const environment = searchParams.get('environment');
   const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
   const rules = {
@@ -313,6 +317,8 @@
       formData.etl_config = data.etl_config[0].id;
     },
   });
+
+  console.log('isEditMode', isEditMode);
   // 编辑数据
   if (isEditMode) {
     useRequest(CollectorManageService.fetchCollectorsById, {
