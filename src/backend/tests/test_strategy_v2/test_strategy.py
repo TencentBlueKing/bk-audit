@@ -33,6 +33,7 @@ from services.web.strategy_v2.constants import (
     RuleAuditConfigType,
     RuleAuditFieldType,
     RuleAuditSourceType,
+    StrategySource,
     StrategyStatusChoices,
 )
 from services.web.strategy_v2.models import Strategy, StrategyTool
@@ -257,6 +258,12 @@ class StrategyTest(TestCase):
         data1 = self._create_bkm_strategy(name_suffix="11")
         data2 = self._create_bkm_strategy(name_suffix="22")
         rule_data = self._create_rule_strategy(name_suffix="33")
+        Strategy.objects.create(
+            namespace=self.namespace,
+            strategy_name="hidden_system_strategy",
+            source=StrategySource.SYSTEM,
+            configs={},
+        )
 
         result = resource.strategy_v2.list_strategy(namespace=self.namespace, order_field="-strategy_id")
 
@@ -265,6 +272,7 @@ class StrategyTest(TestCase):
         self.assertIn(data1["strategy_id"], strategy_ids)
         self.assertIn(data2["strategy_id"], strategy_ids)
         self.assertIn(rule_data["strategy_id"], strategy_ids)
+        self.assertNotIn("hidden_system_strategy", [item["strategy_name"] for item in result])
 
         # 校验 tool 字段也在（工具数目等）；规则策略包含 risk_field_config 信息
         for strategy_data in result:

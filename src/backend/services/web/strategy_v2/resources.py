@@ -108,6 +108,7 @@ from services.web.strategy_v2.constants import (
     StrategyAlgorithmOperator,
     StrategyFieldSourceEnum,
     StrategyOperator,
+    StrategySource,
     StrategyStatusChoices,
     StrategyType,
     TableType,
@@ -459,13 +460,10 @@ class UpdateStrategy(StrategyV2Base):
         elif origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
             need_update_remote = True
         logger.info(
-            "[CheckNeedUpdateRemote]StrategyId: %s, Update Key: %s, Update Value: %s, Origin Value: %s, "
-            "Need update remote: %s",
-            strategy.strategy_id,
-            key,
-            origin_value,
-            new_value,
-            need_update_remote,
+            "[CheckNeedUpdateRemote]StrategyId: {}, Update Key: {}, Update Value: {},"
+            " Origin Value: {}, Need update remote: {}".format(
+                strategy.strategy_id, key, origin_value, new_value, need_update_remote
+            )
         )
         return need_update_remote
 
@@ -586,6 +584,7 @@ class ListStrategy(StrategyV2Base):
             .annotate(risk_count=Subquery(risk_count_subquery, output_field=IntegerField()))
             .prefetch_related("tools")
         )
+        queryset = queryset.exclude(source=StrategySource.SYSTEM)
         # 排序
         queryset = queryset.order_by(order_field)
 
@@ -634,12 +633,9 @@ class ListStrategyAll(StrategyV2Base):
     def perform_request(self, validated_request_data):
         if not ActionPermission(
             actions=[ActionEnum.LIST_STRATEGY, ActionEnum.LIST_RISK, ActionEnum.EDIT_RISK]
-        ).has_permission(
-            request=get_local_request(),
-            view=self,  # noqa: E501
-        ):
+        ).has_permission(request=get_local_request(), view=self):
             return []
-        strategies: List[Strategy] = Strategy.objects.all()
+        strategies: List[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
         data.sort(key=lambda s: s["label"])
         return data

@@ -58,6 +58,7 @@ from services.web.strategy_v2.constants import (
     RuleAuditWhereConnector,
     StrategyAlgorithmOperator,
     StrategyOperator,
+    StrategySource,
     StrategyType,
     TableType,
 )
@@ -269,6 +270,9 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
     )
     risk_level = serializers.ChoiceField(label=gettext_lazy("Risk Level"), choices=RiskLevel.choices)
     risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
+    source = serializers.ChoiceField(
+        label=gettext_lazy("Strategy Source"), choices=StrategySource.choices, default=StrategySource.USER
+    )
     processor_groups = serializers.ListField(
         label=gettext_lazy("Processor Groups"),
         child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
@@ -297,6 +301,7 @@ class CreateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "event_data_field_configs",
             "event_evidence_field_configs",
             "risk_meta_field_config",
+            "source",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -354,6 +359,9 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
         label=gettext_lazy("Risk Meta Field Config"), child=EventBasicFieldSerializer(), default=list, allow_empty=True
     )
     risk_title = serializers.CharField(label=gettext_lazy("Risk Title"))
+    source = serializers.ChoiceField(
+        label=gettext_lazy("Strategy Source"), choices=StrategySource.choices, default=StrategySource.USER
+    )
     processor_groups = serializers.ListField(
         label=gettext_lazy("Processor Groups"),
         child=serializers.IntegerField(label=gettext_lazy("Processor Group")),
@@ -385,6 +393,7 @@ class UpdateStrategyRequestSerializer(StrategySerializer, serializers.ModelSeria
             "event_data_field_configs",
             "event_evidence_field_configs",
             "risk_meta_field_config",
+            "source",
         ]
 
     def validate(self, attrs: dict) -> dict:
@@ -509,6 +518,7 @@ class StrategyInfoSerializer(serializers.ModelSerializer):
             "control_id",
             "control_version",
             "is_formal",
+            "source",
             "notice_groups",
             "risk_level",
             "risk_hazard",
