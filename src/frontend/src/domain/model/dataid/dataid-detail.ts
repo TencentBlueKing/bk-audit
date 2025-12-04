@@ -42,8 +42,8 @@ export default class DataIdDetail {
     regexp_keys?: Array<string>;
     delimiter: string;
   };
-  custom_collector_ch_name: string;
-  custom_collector_en_name: string;
+  collector_config_name: string;
+  collector_config_name_en: string;
   constructor(payload = {} as DataIdDetail) {
     this.bk_data_id = payload.bk_data_id;
     this.bk_biz_id = payload.bk_biz_id;
@@ -61,7 +61,7 @@ export default class DataIdDetail {
     this.description = payload.description;
     this.active = payload.active;
     this.bkbase_url = payload.bkbase_url;
-    this.custom_collector_ch_name = payload.custom_collector_ch_name;
-    this.custom_collector_en_name = payload.custom_collector_en_name;
+    this.collector_config_name = payload.collector_config_name;
+    this.collector_config_name_en = payload.collector_config_name_en;
   }
 }
