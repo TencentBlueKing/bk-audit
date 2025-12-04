@@ -32,6 +32,7 @@ export default class Event {
   rule_version: number;
   origin_operator: string[];
   current_operator: string[];
+  unsynced_events?: Array<Record<string, any>>;
   event_end_time: string;
   ticket_history: Array<{
     action: string,
@@ -110,5 +111,6 @@ export default class Event {
     this.permission = payload.permission;
     this.experiences = payload.experiences;
     this.title = payload.title;
+    this.unsynced_events = payload.unsynced_events;
   }
 }

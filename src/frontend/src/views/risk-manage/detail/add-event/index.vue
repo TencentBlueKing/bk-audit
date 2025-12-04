@@ -60,7 +60,7 @@
     eventData: Event & StrategyInfo
   }
   interface Emits{
-    (e: 'addSuccess', data: Record<string, any>): void;
+    (e: 'addSuccess',): void;
   }
   defineProps<Props>();
 
@@ -88,9 +88,9 @@
   const handleSubmit = () => {
     editRef.value?.submit();
   };
-  const handleAddSuccess = (data: Record<string, any>) => {
+  const handleAddSuccess = () => {
     isShow.value = false;
-    emits('addSuccess', data);
+    emits('addSuccess');
   };
 
   defineExpose<Exposes>({

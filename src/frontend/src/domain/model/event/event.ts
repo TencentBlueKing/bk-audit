@@ -24,6 +24,7 @@ export default class Event {
   event_source: string;
   operator: string;
   event_evidence: string;
+  status?: string;
 
   constructor(payload = {} as Event) {
     this.event_content = payload.event_content;
@@ -36,5 +37,6 @@ export default class Event {
 
     this.event_data = payload.event_data;
     this.event_evidence = payload.event_evidence;
+    this.status = payload.status;
   }
 }
