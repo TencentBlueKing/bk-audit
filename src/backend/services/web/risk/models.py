@@ -35,6 +35,7 @@ from apps.meta.models import Tag
 from apps.permission.handlers.actions import ActionEnum, ActionMeta, get_action_by_id
 from apps.permission.handlers.permission import Permission
 from core.models import OperateRecordModel, SoftDeleteModel, UUIDField
+from core.sql.constants import FieldType
 from core.sql.model import WhereCondition
 from services.web.risk.constants import (
     LIST_RISK_FIELD_MAX_LENGTH,
@@ -534,6 +535,7 @@ class RiskEventSubscription(SoftDeleteModel):
         try:
             parsed = WhereCondition.model_validate(condition)
             normalized = RiskEventSubscription._sanitize_condition(parsed)
+            RiskEventSubscription._validate_json_paths(normalized)
             return normalized
         except PydanticValidationError as exc:  # pragma: no cover - 防御性
             error_messages = []
@@ -563,6 +565,43 @@ class RiskEventSubscription(SoftDeleteModel):
         if not condition.condition and not condition.conditions:
             return None
         return condition
+
+    @staticmethod
+    def _validate_json_paths(condition: WhereCondition | None) -> None:
+        """
+        确保携带 keys 的字段为合法 JSON 路径，并补全默认类型。
+        """
+        if not condition:
+            return
+
+        stack = [condition]
+        while stack:
+            current = stack.pop()
+            if current.condition and current.condition.field:
+                field = current.condition.field
+                if field.keys:
+                    RiskEventSubscription._assert_valid_keys(field.keys)
+                    if not field.field_type:
+                        field.field_type = FieldType.STRING
+            stack.extend(current.conditions or [])
+
+    @staticmethod
+    def _assert_valid_keys(keys: list[str]) -> None:
+        """
+        校验 JSON path keys，要求为非空字符串列表。
+        """
+        if not isinstance(keys, list) or not keys:
+            raise DjangoValidationError({"condition": ["JSON path 必须是非空字符串数组"]})
+        cleaned = []
+        for key in keys:
+            if not isinstance(key, str):
+                raise DjangoValidationError({"condition": ["JSON path 仅支持字符串 key"]})
+            stripped = key.strip()
+            if not stripped:
+                raise DjangoValidationError({"condition": ["JSON path 不允许空字符串"]})
+            cleaned.append(stripped)
+        keys.clear()
+        keys.extend(cleaned)
 
     def get_where_condition(self) -> WhereCondition | None:
         """

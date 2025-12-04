@@ -459,8 +459,13 @@ class UpdateStrategy(StrategyV2Base):
         elif origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
             need_update_remote = True
         logger.info(
-            "[CheckNeedUpdateRemote]StrategyId: {}, Update Key: {}, Update Value: {}, Origin Value: {}, "
-            "Need update remote: {}".format(strategy.strategy_id, key, origin_value, new_value, need_update_remote)
+            "[CheckNeedUpdateRemote]StrategyId: %s, Update Key: %s, Update Value: %s, Origin Value: %s, "
+            "Need update remote: %s",
+            strategy.strategy_id,
+            key,
+            origin_value,
+            new_value,
+            need_update_remote,
         )
         return need_update_remote
 

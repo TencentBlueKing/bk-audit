@@ -396,6 +396,17 @@ class RiskViewType(TextChoices):
     WATCH = "watch", gettext_lazy("我的关注")
 
 
+class RiskEventSubscriptionFieldCategory(TextChoices):
+    """
+    风险事件订阅字段所属类别
+    """
+
+    EVENT = "event", gettext_lazy("事件")
+    RISK = "risk", gettext_lazy("风险")
+    STRATEGY = "strategy", gettext_lazy("策略")
+    STRATEGY_TAG = "strategy_tag", gettext_lazy("策略标签")
+
+
 class RiskFields:
     """
     工单字段
