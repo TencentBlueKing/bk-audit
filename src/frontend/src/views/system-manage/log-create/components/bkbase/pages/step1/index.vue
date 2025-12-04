@@ -93,7 +93,7 @@
               </bk-select>
             </bk-loading>
             <!-- 其他数据表详情 -->
-            <other-table-detail-component
+            <table-detail
               v-if="localFormData.bk_data_id"
               :rt-id="localFormData.bk_data_id" />
           </bk-form-item>
@@ -150,7 +150,7 @@
             <div class="log-create-notice">
               <bk-radio
                 v-model="localFormData.notice.read_requirement"
-                label="true">
+                :label="Boolean(true)">
                 {{ t('我已阅读') }}
                 <a
                   href="https://github.com/TencentBlueKing/bk-audit-sdk"
@@ -159,7 +159,7 @@
               <div>
                 <bk-radio
                   v-model="localFormData.notice.read_standard"
-                  label="true">
+                  :label="Boolean(true)">
                   {{ t('我已了解') }}
                   <a
                     href="https://github.com/TencentBlueKing/bk-audit-sdk"
@@ -204,7 +204,7 @@
   import type BizModel from '@model/biz/biz';
   import ConfigModel from '@model/root/config';
 
-  import OtherTableDetailComponent from '@views/strategy-manage/strategy-create/components/step1/components/customize/components/other-table-detail/index.vue';
+  import TableDetail from './components/table-detail.vue';
 
   import DataIdDetailModel from '@/domain/model/dataid/dataid-detail';
   import useRequest from '@/hooks/use-request';
@@ -253,8 +253,10 @@
     onSuccess(data) {
       localFormData.value.bk_biz_id = data.bk_biz_id;
       localFormData.value.bk_data_id = data.bk_data_id;
-      localFormData.value.custom_collector_ch_name = data.custom_collector_ch_name;
-      localFormData.value.custom_collector_en_name = data.custom_collector_en_name;
+      localFormData.value.custom_collector_ch_name = data.collector_config_name;
+      localFormData.value.custom_collector_en_name = data.collector_config_name_en;
+      localFormData.value.notice.read_requirement = true;
+      localFormData.value.notice.read_standard = true;
     },
   });
 
