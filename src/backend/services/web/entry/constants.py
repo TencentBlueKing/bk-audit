@@ -108,7 +108,7 @@ def get_manual_event_strategy_config(rt_id):
         f"`sub_table`.`u_46a4b7f4986ca8845bd00b56233756d7` `event_source`,"
         f"`sub_table`.`u_d76255b2e8d52f3c4af2ad50a692e1e2` `event_content`,"
         f"`sub_table`.`u_f974c8465fb8f678cf37a1be67f94e6e` `event_type`,"
-        f"`sub_table`.`u_manual_event_id` `manual_event_id`"
+        f"`sub_table`.`u_manual_event_id` `manual_event_id` "
         f"FROM (SELECT "
         f"`{rt_id}`.`event_content` `u_d76255b2e8d52f3c4af2ad50a692e1e2`,"
         f"`{rt_id}`.`raw_event_id` `u_2f606c22a8b8bec4d47242c235f8d2d9`,"
