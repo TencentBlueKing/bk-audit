@@ -29,6 +29,7 @@ from django.utils.translation import gettext_lazy as _
 from core.sql.constants import Operator
 from services.web.risk.handlers.subscription_sql import RiskEventSubscriptionSQLBuilder
 from services.web.risk.models import (
+    ManualEvent,
     ProcessApplication,
     Risk,
     RiskEventSubscription,
@@ -72,11 +73,12 @@ class RiskAdmin(admin.ModelAdmin):
         "current_operator",
         "notice_users",
         "risk_label",
+        "manual_synced",
     ]
     # 支持按策略名搜索
     search_fields = ["risk_id", "title", "strategy__strategy_name"]
     # 支持基于命中策略过滤
-    list_filter = ["status", "risk_label", StrategyFilter]
+    list_filter = ["status", "risk_label", "manual_synced", StrategyFilter]
     list_per_page = 100  # 设置每页显示100条记录
 
     def get_queryset(self, request):
@@ -108,6 +110,23 @@ class RiskExperienceAdmin(admin.ModelAdmin):
     list_display = ["risk_id", "content", "created_by", "created_at", "is_deleted"]
     search_fields = ["risk_id", "created_by"]
     list_filter = ["is_deleted"]
+
+
+@admin.register(ManualEvent)
+class ManualEventAdmin(admin.ModelAdmin):
+    list_display = [
+        "manual_event_id",
+        "title",
+        "strategy",
+        "raw_event_id",
+        "event_time",
+        "status",
+        "risk_label",
+        "manual_synced",
+    ]
+    search_fields = ["manual_event_id", "raw_event_id", "title"]
+    list_filter = ["status", "risk_label", "strategy", "manual_synced"]
+    readonly_fields = ["created_by", "created_at", "updated_by", "updated_at"]
 
 
 @admin.register(TicketNode)

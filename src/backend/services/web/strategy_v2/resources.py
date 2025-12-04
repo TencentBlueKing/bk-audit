@@ -108,6 +108,7 @@ from services.web.strategy_v2.constants import (
     StrategyAlgorithmOperator,
     StrategyFieldSourceEnum,
     StrategyOperator,
+    StrategySource,
     StrategyStatusChoices,
     StrategyType,
     TableType,
@@ -232,6 +233,15 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
             StrategyTool.objects.bulk_create(tools_to_create)
 
     @staticmethod
+    def has_sql_override(validated_request_data: dict) -> bool:
+        """
+        判断请求中是否显式携带可用的 SQL
+        """
+
+        sql_value = validated_request_data.get("sql", Empty())
+        return sql_value not in [Empty(), None, ""]
+
+    @staticmethod
     def get_base_control_type(strategy_type: str) -> Optional[str]:
         """
         获取基础控制类型
@@ -352,7 +362,7 @@ class CreateStrategy(StrategyV2Base):
             # save strategy tag
             self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
             self._save_strategy_tools(strategy, validated_request_data)
-            if strategy_type == StrategyType.RULE:
+            if strategy_type == StrategyType.RULE and not self.has_sql_override(validated_request_data):
                 strategy.sql = self.build_rule_audit_sql(strategy)
                 strategy.save(update_fields=["sql"])
             # 更新enum
@@ -449,14 +459,19 @@ class UpdateStrategy(StrategyV2Base):
         # 不同且不在本地更新清单中的字段才触发远程flow更新
         elif origin_value != new_value and key not in LOCAL_UPDATE_FIELDS:
             need_update_remote = True
-        logger.info("[CheckNeedUpdateRemote]StrategyId: %s, Update Key: %s, Update Value: %s, Origin Value: %s, Need update remote: %s" % (
-        strategy.strategy_id, key, origin_value, new_value, need_update_remote))
+        logger.info(
+            "[CheckNeedUpdateRemote]StrategyId: {}, Update Key: {}, Update Value: {},"
+            " Origin Value: {}, Need update remote: {}".format(
+                strategy.strategy_id, key, origin_value, new_value, need_update_remote
+            )
+        )
         return need_update_remote
 
     @transaction.atomic()
     def update_db(self, strategy: Strategy, validated_request_data: dict) -> bool:
         # 用于控制是否更新真实的监控策略或计算平台Flow
         need_update_remote = False
+        has_manual_sql = self.has_sql_override(validated_request_data)
         # pop tag
         tag_names = validated_request_data.pop("tags", [])
         # check control
@@ -477,7 +492,7 @@ class UpdateStrategy(StrategyV2Base):
         self._save_tags(strategy_id=strategy.strategy_id, tag_names=tag_names)
         self._save_strategy_tools(strategy, validated_request_data)
         # update rule audit sql
-        if need_update_remote and strategy.strategy_type == StrategyType.RULE:
+        if need_update_remote and strategy.strategy_type == StrategyType.RULE and not has_manual_sql:
             strategy.sql = self.build_rule_audit_sql(strategy)
             strategy.save(update_fields=["sql"])
         # 更新enum
@@ -569,6 +584,7 @@ class ListStrategy(StrategyV2Base):
             .annotate(risk_count=Subquery(risk_count_subquery, output_field=IntegerField()))
             .prefetch_related("tools")
         )
+        queryset = queryset.exclude(source=StrategySource.SYSTEM)
         # 排序
         queryset = queryset.order_by(order_field)
 
@@ -619,7 +635,7 @@ class ListStrategyAll(StrategyV2Base):
             actions=[ActionEnum.LIST_STRATEGY, ActionEnum.LIST_RISK, ActionEnum.EDIT_RISK]
         ).has_permission(request=get_local_request(), view=self):
             return []
-        strategies: List[Strategy] = Strategy.objects.all()
+        strategies: List[Strategy] = Strategy.objects.exclude(source=StrategySource.SYSTEM)
         data = [{"label": s.strategy_name, "value": s.strategy_id} for s in strategies]
         data.sort(key=lambda s: s["label"])
         return data

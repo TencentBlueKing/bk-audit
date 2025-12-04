@@ -97,3 +97,26 @@ def test_asset_json_config_deduplicates_assignments():
     assert "bk_bak_operator" not in assign_keys
     assert {"bk_bak_operator", "custom"} <= set(non_json_keys)
     assert {"operator"} <= set(json_assign_map.keys())
+
+
+def test_custom_conf_applies_to_json_config():
+    schema = [
+        {
+            "id": "id",
+            "type": JsonSchemaFieldType.STRING.value,
+            "description": "实例ID",
+        },
+    ]
+    handler = AssetEtlStorageHandler(
+        data_id=1,
+        system=SimpleNamespace(system_id="bk_system"),
+        resource_type=SimpleNamespace(resource_type_id="bk_resource_type"),
+        storage_type=SnapShotStorageChoices.REDIS.value,
+        snapshot=SimpleNamespace(custom_config={"etl.clean_config.json_config.conf": {"timestamp_len": 13}}),
+    )
+    handler.__dict__["schema_fields"] = build_schema_fields(schema)
+    config = json.loads(handler.json_config)
+
+    assert config["conf"]["timestamp_len"] == 13
+    # 未覆盖的字段保留默认值
+    assert config["conf"]["time_format"] == "yyyy-MM-dd HH:mm:ss"
