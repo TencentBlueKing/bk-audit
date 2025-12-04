@@ -137,11 +137,13 @@
     yaml_config: '',
   });
 
-  const handleFormDataUpdate = (value: Record<string, any>) => {
+  const handleFormDataUpdate = (...args: any[]) => {
+    const value = args[0] as Record<string, any>;
     formData.value = { ...formData.value, ...value };
   };
 
-  const handlePrevious = (targetStep?: number) => {
+  const handlePrevious = (...args: any[]) => {
+    const targetStep = args[0] as number | undefined;
     if (targetStep) {
       currentStep.value = targetStep;
       appendSearchParams({
@@ -157,9 +159,11 @@
     }
   };
 
-  const handleNext = (targetStep?: number, formData?: Record<string, any>) => {
-    if (formData) {
-      handleFormDataUpdate(formData);
+  const handleNext = (...args: any[]) => {
+    const targetStep = args[0] as number | undefined;
+    const formDataArg = args[1] as Record<string, any> | undefined;
+    if (formDataArg) {
+      handleFormDataUpdate(formDataArg);
     }
     const nextStep = targetStep ?? currentStep.value + 1;
     if (nextStep <= steps.length) {
@@ -252,12 +256,12 @@
 }
 
 .log-create-collector-content {
-  flex: 1;
   display: flex;
-  flex-direction: column;
-  gap: 24px;
+  width: calc(100% - 200px);
   padding: 24px;
   padding-left: 0;
+  flex-direction: column;
+  gap: 24px;
 }
 
 
