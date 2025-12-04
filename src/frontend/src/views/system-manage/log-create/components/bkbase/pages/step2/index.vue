@@ -244,8 +244,7 @@
     searchParams,
     removeSearchParam,
   } = useUrlSearch();
-  const bkDataID = searchParams.get('bk_data_id') || route.params.id;
-  console.log('bkDataID', bkDataID);
+  const bkDataID = searchParams.get('bk_data_id') || route.params.bkDataId;
   const getSmartActionOffsetTarget = () => document.querySelector('.bk-form-content');
 
   // 原始数据

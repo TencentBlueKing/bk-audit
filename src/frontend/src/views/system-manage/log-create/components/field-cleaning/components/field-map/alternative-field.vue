@@ -182,7 +182,7 @@
 
 </script>
 <style lang="postcss" scoped>
-  @media (width <= 1921px) {
+  /* @media (width <= 1921px) {
     .render-alternative-field {
       width: 608px;
 
@@ -190,7 +190,7 @@
         width: 592px;
       }
     }
-  }
+  } */
 
   .render-alternative-field {
     position: relative;

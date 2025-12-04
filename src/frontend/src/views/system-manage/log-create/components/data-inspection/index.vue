@@ -113,6 +113,45 @@
         </template>
       </bk-table>
     </div>
+
+    <!-- 侧边栏 - BKBase 数据源 -->
+    <bk-sideslider
+      v-if="dataSourceType === 'bkbase'"
+      v-model:isShow="isShowDetail"
+      :title="t('查看详情')"
+      :width="960">
+      <template #default>
+        <div class="check-detail-content">
+          <!-- 基本信息 -->
+          <data-id-edit-info
+            :data="detailDataForData"
+            width="50%" />
+        </div>
+      </template>
+    </bk-sideslider>
+
+    <!-- 侧边栏 - Collector 数据源 -->
+    <bk-sideslider
+      v-if="dataSourceType === 'collector'"
+      v-model:isShow="isShowDetail"
+      :title="t('节点管理特殊采集任务')"
+      :width="960">
+      <template #default>
+        <div class="check-detail-content">
+          <!-- 基本信息 -->
+          <collector-edit-info
+            :data="detailDataForCollector"
+            :status="collectorTaskStatus"
+            width="50%"
+            @change="handleType" />
+          <!-- 采集状态 -->
+          <delivery-info
+            :data="detailDataForCollector"
+            :environment="environment"
+            @get-status="handleGetCollectorTaskStatus" />
+        </div>
+      </template>
+    </bk-sideslider>
   </smart-action>
 </template>
 
@@ -130,7 +169,9 @@
   import CollectorManageService from '@service/collector-manage';
   import DataIdManageService from '@service/dataid-manage';
 
+  import CollectorDetailModel from '@model/collector/collector-detail';
   import type CollectorTailLogModel from '@model/collector/collector-tail-log';
+  import DataIdDetailModel from '@model/dataid/dataid-detail';
 
   import useRequest from '@hooks/use-request';
   import useUrlSearch from '@hooks/use-url-search';
@@ -140,6 +181,9 @@
   } from '@utils/assist';
 
   import type DataIdTopicLogModel from '@/domain/model/dataid/dataid-tail';
+  import DataIdEditInfo from '@/views/system-manage/detail/components/data-report/components/dataid-render-operation/edit-info/index.vue';
+  import DeliveryInfo from '@/views/system-manage/detail/components/data-report/components/render-operation/delivery-info/index.vue';
+  import CollectorEditInfo from '@/views/system-manage/detail/components/data-report/components/render-operation/edit-info/index.vue';
 
   const { t } = useI18n();
   const route = useRoute();
@@ -311,15 +355,22 @@
 
   // 统一的成功处理函数
   const handleFetchSuccess = (data: any[]) => {
-    console.log('data1', data);
-    // 重置错误状态
-    step1Error.value = false;
     // 更新表格数据
     tableData.value = Array.isArray(data) ? data : [];
+    const dataLength = Array.isArray(data) ? data.length : 0;
+
+    // 如果数据长度为 0，视为异常
+    if (dataLength === 0) {
+      steps.value[0].icon = 'cuo';
+      steps.value[0].description = t('数据上报失败，暂未获取到最新数据；请重新点击检测或检查数据上报链路');
+      return;
+    }
+
+    // 重置错误状态
+    step1Error.value = false;
     // 成功后更新第一个步骤的图标为 completed
     steps.value[0].icon = 'completed';
     // 更新成功描述，包含数据长度
-    const dataLength = Array.isArray(data) ? data.length : 0;
     steps.value[0].description = t('数据上报成功，已取 {count} 条数据上报，见下方详细结果', { count: dataLength });
     // 计算 popover 宽度
     nextTick(() => {
@@ -400,8 +451,62 @@
     }
   };
 
+  const isShowDetail = ref(false);
+  const detailDataForCollector = ref<any>(new CollectorDetailModel());
+  const detailDataForData = ref<any>(new DataIdDetailModel());
+  const collectorTaskStatus = ref<any>({});
+  const environment = ref('');
+
+  // 获取 Collector 详情
+  const {
+    run: fetchCollectorDetail,
+  } = useRequest(CollectorManageService.fetchCollectorsById, {
+    defaultValue: new CollectorDetailModel(),
+    onSuccess(data) {
+      detailDataForCollector.value = data;
+      environment.value = data.environment || 'linux';
+      // 接口完成后打开侧边栏
+      isShowDetail.value = true;
+    },
+  });
+
+  // 获取 DataId 详情
+  const {
+    run: fetchDataIdDetail,
+  } = useRequest(DataIdManageService.fecthDetail, {
+    defaultValue: new DataIdDetailModel(),
+    onSuccess(data) {
+      console.log('data', data);
+      detailDataForData.value = data;
+      // 接口完成后打开侧边栏
+      isShowDetail.value = true;
+    },
+  });
+
   const handleViewDetail = () => {
-    //
+    // API Push 暂时不支持
+    if (dataSourceType.value === 'api') {
+      return;
+    }
+
+    // 根据数据源类型获取详情数据，接口完成后会自动打开侧边栏
+    if (dataSourceType.value === 'collector') {
+      fetchCollectorDetail({
+        id: dataId.value,
+      });
+    } else if (dataSourceType.value === 'bkbase') {
+      fetchDataIdDetail({
+        bk_data_id: dataId.value,
+      });
+    }
+  };
+
+  const handleType = (value: string) => {
+    environment.value = value;
+  };
+
+  const handleGetCollectorTaskStatus = (value: any) => {
+    collectorTaskStatus.value = value;
   };
 
   const handleCopyData = (data: CollectorTailLogModel | DataIdTopicLogModel) => {
@@ -421,7 +526,6 @@
       || (dataSourceType.value === 'api' && apiErr);
 
     if (isError) {
-      console.log('失败');
       // 失败后更新第一个步骤的图标为 cuo
       steps.value[0].icon = 'cuo';
       // 更新错误描述
@@ -438,6 +542,7 @@
 .bkbase-step-content {
   min-height: 400px;
   padding: 40px 0;
+  padding-right: 20px;
 }
 
 .complete-section {
@@ -463,6 +568,10 @@
     gap: 8px;
     margin-top: 32px;
   }
+}
+
+.check-detail-content {
+  padding: 20px;
 }
 
 .validation-section {

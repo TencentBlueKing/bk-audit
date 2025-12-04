@@ -18,7 +18,9 @@
   <smart-action
     class="step1-action"
     :offset-target="getSmartActionOffsetTarget">
-    <div class="step1-content">
+    <bk-loading
+      class="step1-content"
+      :loading="isEditDataLoading">
       <audit-form
         ref="formRef"
         class="collector-form"
@@ -142,7 +144,7 @@
           </bk-form-item>
         </div>
       </audit-form>
-    </div>
+    </bk-loading>
     <template #action>
       <bk-button @click="handlePrevious">
         {{ t('上一步') }}
@@ -204,16 +206,18 @@
   const { appendSearchParams } = useUrlSearch();
 
   const getSmartActionOffsetTarget = () => document.querySelector('.step1-action');
-  const isEditMode = route.name === 'collectorEdit' || route.name === 'dataIdEdit';
+  const isEditMode = route.name === 'logCollectorEdit';
   const comMap = {
     physics: RenderPhysics,
     container: RenderContainer,
   };
 
   const isSubmiting = ref(false);
+  const isEditDataLoading = ref(false);
   const initBizList = ref<Array<BizModel>>([]);
   const renderCom = ref('physics');
   const localFormData = ref({ ...props.formData });
+  const yaml = ref('');
 
   let editCollectorData: CollectorDetailModel | undefined;
   let editCollectorFormDataClone: typeof localFormData.value | undefined;
@@ -225,6 +229,47 @@
     }
     return '';
   });
+
+  if (isEditMode) {
+    // 编辑状态 collector_config_name_en 不可编辑，不需要验证
+    // delete (rules as { collector_config_name_en?: any }).collector_config_name_en;
+
+    isEditDataLoading.value = true;
+    useRequest(CollectorManageService.fetchCollectorsById, {
+      defaultParams: {
+        id: route.params.collectorConfigId,
+      },
+      defaultValue: new CollectorDetailModel(),
+      manual: true,
+      onSuccess: (data) => {
+        localFormData.value.collector_config_id = data.collector_config_id;
+        localFormData.value.collector_config_name = data.collector_config_name;
+        localFormData.value.collector_config_name_en = data.collector_config_name_en;
+        localFormData.value.bk_biz_id = data.bk_biz_id;
+        localFormData.value.target_node_type = data.target_node_type;
+        localFormData.value.target_nodes = data.target;
+        localFormData.value.data_encoding = data.data_encoding;
+        localFormData.value.params.paths = data.params.paths;
+        // 后端返回conditions只有type字段时，把缺少的字段补上，故是合并，不是直接赋值
+        // eslint-disable-next-line max-len
+        localFormData.value.params.conditions = Object.assign({}, localFormData.value.params.conditions, data.params.conditions);
+        localFormData.value.bcs_cluster_id = data.bcs_cluster_id;
+        localFormData.value.yaml_config = decodeURIComponent(escape(atob(data.yaml_config)));
+        yaml.value = data.yaml_config;
+        localFormData.value.environment = data.environment || 'linux';
+        if (data.environment === 'container') {
+          localFormData.value.environment = data.configs[0].collector_type;
+          renderCom.value = data.environment;
+        }
+        editCollectorData = data;
+        editCollectorFormDataClone = _.cloneDeep(localFormData.value);
+        isEditDataLoading.value = false;
+
+        // 触发更改steps
+        // emits('changeEnvironment', data.environment);
+      },
+    });
+  }
 
   // 业务列表
   const {
@@ -275,7 +320,7 @@
         collector_config_id: data.collector_config_id,
         task_id_list: data.task_id_list.join(','),
       });
-      emit('next', 4);
+      emit('next', 3);
     },
   });
 

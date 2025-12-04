@@ -75,7 +75,7 @@ export default {
       },
     },
     {
-      path: 'log-edit/:systemId/:id',
+      path: 'log-edit/dataid/:systemId/:bkDataId',
       component: () => import('@views/system-manage/log-create/index.vue'),
       name: 'logDataIdEdit',
       meta: {
@@ -83,7 +83,7 @@ export default {
       },
     },
     {
-      path: 'log-edit/:systemId/:id',
+      path: 'log-edit/collector/:systemId/:collectorConfigId',
       component: () => import('@views/system-manage/log-create/index.vue'),
       name: 'logCollectorEdit',
       meta: {

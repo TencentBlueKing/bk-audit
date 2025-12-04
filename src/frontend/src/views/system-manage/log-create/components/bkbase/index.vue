@@ -100,7 +100,8 @@
     },
   });
 
-  const handleFormDataUpdate = (value: Record<string, any>) => {
+  const handleFormDataUpdate = (...args: any[]) => {
+    const value = args[0] as Record<string, any>;
     formData.value = { ...formData.value, ...value };
   };
 

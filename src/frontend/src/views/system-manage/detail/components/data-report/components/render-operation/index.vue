@@ -136,10 +136,14 @@
   };
   const handleEdit = () => {
     router.push({
-      name: 'collectorEdit',
+      name: 'logCollectorEdit',
       params: {
         systemId: route.params.id,
         collectorConfigId: props.data.collector_config_id,
+      },
+      query: {
+        step: 2,
+        type: 'newLogCollector',
       },
     });
   };

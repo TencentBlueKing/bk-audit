@@ -339,12 +339,12 @@
     getOffset,
   } from '@utils/assist';
 
-  import RenderDataIdConfig from './components/log-collection/components/task-list/components/dataid-render-config.vue';
-  import RenderDataIdOperation from './components/log-collection/components/task-list/components/dataid-render-operation/index.vue';
-  import RenderConfig from './components/log-collection/components/task-list/components/render-config.vue';
-  import RenderDetail from './components/log-collection/components/task-list/components/render-detail.vue';
-  import RenderOperation from './components/log-collection/components/task-list/components/render-operation/index.vue';
+  import RenderDataIdConfig from './components/dataid-render-config.vue';
+  import RenderDataIdOperation from './components/dataid-render-operation/index.vue';
   import RecentData from './components/recent-data.vue';
+  import RenderConfig from './components/render-config.vue';
+  import RenderDetail from './components/render-detail.vue';
+  import RenderOperation from './components/render-operation/index.vue';
 
   import useRequest from '@/hooks/use-request';
 

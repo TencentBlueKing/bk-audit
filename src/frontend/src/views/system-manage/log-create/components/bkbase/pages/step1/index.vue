@@ -142,9 +142,10 @@
               {
                 message: t('请先阅读上报日志须知'),
                 trigger: 'change',
-                validator: (value: {read_requirement: string, read_standard: string}) => {
+                validator: (value: any) => {
                   return !!value.read_requirement && !!value.read_standard;
-                } },
+                },
+              },
             ]">
             <div class="log-create-notice">
               <bk-radio
@@ -259,7 +260,7 @@
 
   if (isEditMode) {
     fecthDetail({
-      bk_data_id: route.params.id,
+      bk_data_id: route.params.bkDataId,
     });
   } else if (!isEditMode && searchParams.get('isCreate')) {
     fecthDetail({
@@ -349,7 +350,7 @@
     isSubmiting.value = true;
     formRef.value.validate().then(() => {
       appendSearchParams({
-        id: localFormData.value.bk_data_id,
+        bk_data_id: localFormData.value.bk_data_id,
       });
       return applyDataIdSource({
         bk_data_id: localFormData.value.bk_data_id,

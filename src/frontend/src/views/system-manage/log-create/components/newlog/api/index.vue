@@ -178,9 +178,10 @@
             {
               message: t('请先阅读上报日志须知'),
               trigger: 'change',
-              validator: (value: {read_requirement: string, read_standard: string}) => {
+              validator: (value: any) => {
                 return !!value.read_requirement && !!value.read_standard;
-              } },
+              },
+            },
           ]">
           <div class="log-create-notice">
             <bk-radio

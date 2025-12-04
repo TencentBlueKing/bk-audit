@@ -109,7 +109,6 @@
   const router = useRouter();
   const isShowDetail = ref(false);
 
-
   const {
     loading,
     data: dataCheckMap,
@@ -156,7 +155,7 @@
       name: 'logDataIdEdit',
       params: {
         systemId: route.params.id,
-        id: props.data.bk_data_id,
+        bkDataId: props.data.bk_data_id,
       },
       query: {
         step: 2,
