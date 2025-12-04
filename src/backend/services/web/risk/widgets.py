@@ -7,7 +7,13 @@ from django import forms
 class WhereConditionWidget(forms.Widget):
     template_name = "admin/risk/widgets/where_condition.html"
 
-    def __init__(self, field_options: list[dict[str, Any]], operator_options: list[tuple[str, str]], attrs=None):
+    def __init__(
+        self,
+        field_options: list[dict[str, Any]],
+        operator_options: list[tuple[str, str]],
+        field_type_options: list[tuple[str, str]] | None = None,
+        attrs=None,
+    ):
         self.field_options = [
             {
                 **option,
@@ -17,6 +23,7 @@ class WhereConditionWidget(forms.Widget):
             for option in field_options
         ]
         self.operator_options = [(value, str(label)) for value, label in operator_options]
+        self.field_type_options = [(value, str(label)) for value, label in (field_type_options or [])]
         super().__init__(attrs)
 
     def format_value(self, value):
@@ -44,12 +51,15 @@ class WhereConditionWidget(forms.Widget):
         widget["attrs"] = widget_attrs
         field_options_id = f'{widget_attrs["id"]}-field-options'
         operator_options_id = f'{widget_attrs["id"]}-operator-options'
+        field_type_options_id = f'{widget_attrs["id"]}-field-type-options'
         context["widget"].update(
             {
                 "field_options_json": json.dumps(self.field_options, ensure_ascii=False),
                 "operator_options_json": json.dumps(self.operator_options, ensure_ascii=False),
+                "field_type_options_json": json.dumps(self.field_type_options, ensure_ascii=False),
                 "field_options_id": field_options_id,
                 "operator_options_id": operator_options_id,
+                "field_type_options_id": field_type_options_id,
                 "value": self.format_value(value) or "",
             }
         )
