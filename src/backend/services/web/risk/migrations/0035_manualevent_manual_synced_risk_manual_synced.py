@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('risk', '0037_alter_manualevent_strategy'),
+        ('risk', '0034_manualevent_remove_end_time'),
     ]
 
     operations = [
