@@ -802,6 +802,8 @@ class GetDataIdDetail(DataIdResource):
                         api_settings.DATETIME_FORMAT
                     ),
                     "updated_by": collector.updated_by,
+                    "collector_config_name": collector.collector_config_name,
+                    "collector_config_name_en": collector.collector_config_name_en
                 }
             )
         else:

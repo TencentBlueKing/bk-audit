@@ -392,6 +392,8 @@ class GetDataIdDetailResponseSerializer(DataIdInfoSerializer):
     description = serializers.CharField(label=gettext_lazy("描述"), allow_null=True, allow_blank=True)
     active = serializers.BooleanField(label=gettext_lazy("可用状态"))
     bkbase_url = serializers.CharField(label=gettext_lazy("计算平台访问链接"), allow_null=True, allow_blank=True)
+    collector_config_name = serializers.CharField(label=gettext_lazy("采集项名称"))
+    collector_config_name_en = serializers.CharField(label=gettext_lazy("采集项英文名称"))
 
 
 class GetDataIdTailRequestSerializer(serializers.Serializer):
