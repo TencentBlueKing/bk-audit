@@ -40,7 +40,7 @@ from services.web.entry.constants import (
     SEARCH_RULE_IWIKI_URL_KEY,
     V3_SYSTEM_CREATE_URL_KEY,
     VISION_SHARE_PERMISSION_URL_KEY,
-    SDK_CONFIG_KEY
+    SDK_CONFIG_KEY, AUDIT_DOC_CONFIG_KEY
 )
 
 
@@ -119,6 +119,7 @@ class EntryHandler(object):
             # metric
             "metric": {"metric_report_trace_url": settings.METRIC_REPORT_TRACE_URL},
             "sdk_config": GlobalMetaConfig.get(SDK_CONFIG_KEY, default={}),
+            "audit_doc_config": GlobalMetaConfig.get(AUDIT_DOC_CONFIG_KEY, default={}),
         }
         return data
 

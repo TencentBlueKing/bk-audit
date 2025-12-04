@@ -54,7 +54,7 @@ from services.web.entry.constants import (
     INIT_SYSTEM_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
     SDK_CONFIG_KEY,
-    get_manual_event_strategy_config,
+    get_manual_event_strategy_config, AUDIT_DOC_CONFIG_KEY,
 )
 from services.web.risk.constants import (
     EVENT_DORIS_CLUSTER_ID_KEY,
@@ -119,6 +119,7 @@ class SystemInitHandler:
         self.init_asset()
         self.init_system_rule_audit()
         self.init_sdk_config()
+        self.init_audit_doc_config()
         print("[Main] Init Finished")
 
     def pre_init(self):
@@ -241,6 +242,13 @@ class SystemInitHandler:
             "python_sdk": "https://github.com/TencentBlueKing/bk-audit-python-sdk",
         }
         GlobalMetaConfig.set(SDK_CONFIG_KEY, sdk_config)
+
+    def init_audit_doc_config(self):
+        audit_doc_config = {
+            "audit_access_guide": "https://iwiki.woa.com/p/4016766445 ",
+            "audit_operation_log_recording_standards": "https://iwiki.woa.com/p/4016766445 "
+        }
+        GlobalMetaConfig.set(AUDIT_DOC_CONFIG_KEY, audit_doc_config)
 
     def create_or_update_plugin_etl(self):
         """创建或更新采集入库"""
