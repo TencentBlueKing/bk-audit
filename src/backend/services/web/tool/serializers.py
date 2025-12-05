@@ -14,9 +14,10 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Annotated, Optional, Dict, Any, List, Union
+from typing import Annotated, Optional
 
 from django.utils.translation import gettext_lazy
+from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema_field
 from pydantic import Field as PydanticField
 from rest_framework import serializers
 from rest_framework.fields import DictField
@@ -44,9 +45,29 @@ class ListToolTagsResponseSerializer(serializers.Serializer):
     tool_count = serializers.IntegerField(label=gettext_lazy("Tool Count"), required=False)
 
 
+# 针对 config 字段的多态 Schema 定义
+@extend_schema_field(
+    PolymorphicProxySerializer(
+        component_name='ToolConfigPoly',
+        serializers={
+            'data_search': SQLDataSearchConfig,
+            'api': ApiToolConfig,
+            'bk_vision': BkVisionConfig,
+        },
+        resource_type_field_name='tool_type',
+    )
+)
+class ToolConfigField(serializers.DictField):
+    """
+    自定义字段，用于支持多态文档生成
+    """
+
+    pass
+
+
 class ToolCreateRequestSerializer(serializers.Serializer):
     tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
-    config = serializers.DictField(label=gettext_lazy("工具配置"))
+    config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
     name = serializers.CharField(label=gettext_lazy("工具名称"))
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
     namespace = serializers.CharField(label=gettext_lazy("命名空间"))
@@ -83,7 +104,7 @@ class ToolCreateRequestSerializer(serializers.Serializer):
 
 class ToolUpdateRequestSerializer(serializers.Serializer):
     uid = serializers.CharField(label=gettext_lazy("工具 UID"))
-    config = serializers.DictField(required=False, label=gettext_lazy("工具配置"))
+    config = ToolConfigField(required=False, label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
     name = serializers.CharField(required=False, label=gettext_lazy("工具名称"))
     namespace = serializers.CharField(required=False, label=gettext_lazy("命名空间"))
     description = serializers.CharField(required=False, allow_blank=True, label=gettext_lazy("工具描述"))
@@ -177,6 +198,7 @@ class ToolRetrieveResponseSerializer(serializers.ModelSerializer):
     permission = serializers.DictField(required=False, label=gettext_lazy("权限信息"))
     strategies = serializers.ListField(child=serializers.IntegerField(), label="关联策略")
     tags = serializers.ListField(child=serializers.CharField(), label=gettext_lazy("标签列表"))
+    config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
     data_search_config_type = serializers.SerializerMethodField()
     permission_owner = serializers.SerializerMethodField()
 
