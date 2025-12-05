@@ -403,7 +403,8 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolVariable, ApiToolEx
             }
             return APIToolVariable.model_validate(final_executor_variables)
         else:
-            raise Exception("【ApiToolExecutor】Parse params failed, Hasn't execute params")
+            logger.info("【ApiToolExecutor】Parse params failed, Hasn't execute params")
+            return tool_variables
 
     def parse_request_params(self):
         """
@@ -417,7 +418,7 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolVariable, ApiToolEx
             headers[header_item["key"]] = header_item["value"]
         return url, method, auth_config, headers
 
-    def execute_http_request(self, url, method, headers, request_params, timeout=30):
+    def execute_http_request(self, url, method, request_params):
         """
         根据参数配置执行 HTTP 请求
 
@@ -473,21 +474,20 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolVariable, ApiToolEx
         # 3. 准备 requests 请求参数
         request_kwargs = {}
 
-        http_method = method.lower()
-        if http_method == "get":
+        if method == "get":
             request_kwargs["params"] = query_params
-
-        elif http_method in ["post", "put", "patch"]:
+        elif method == "post":
             request_kwargs["json"] = body_params
+        return formatted_url, request_kwargs
 
-        else:  # delete/head/options 等
-            request_kwargs["params"] = query_params
-
+    def send_request_function(self, method, url, headers, request_kwargs=None, timeout=10):
         # 4. 发送请求并返回Response结果
         try:
+            if not request_kwargs:
+                request_kwargs = {}
             response = requests.request(
-                method=http_method,
-                url=formatted_url,
+                method=method,
+                url=url,
                 headers=headers,
                 timeout=timeout,
                 **request_kwargs
@@ -510,7 +510,14 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolVariable, ApiToolEx
             })
         # 接口调用返回结果
         logger.info("【ApiToolExecutor】url: {}, method: {}, headers: {}".format(url, method, headers))
-        api_executor_result = self.execute_http_request(url, method, headers, params)
+        method = method.lower()
+
+        # 4. 发送请求并返回Response结果
+        if not params:
+            api_executor_result = self.send_request_function(method, url, headers, params)
+        else:
+            formatted_url, request_kwargs = self.execute_http_request(url, method, params)
+            api_executor_result = self.send_request_function(method, formatted_url, headers, request_kwargs)
         logger.info("【ApiToolExecutor】Call apigw result: {}".format(api_executor_result))
         return ApiToolExecuteResult(results=api_executor_result)
 
