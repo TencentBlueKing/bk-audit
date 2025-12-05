@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 import abc
 import json
 import numbers
+import os
 from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar, Union
 
 import requests
@@ -32,15 +33,12 @@ from core.models import get_request_username
 from core.sql.parser.model import RangeVariableData
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.time import parse_datetime
-from meta.utils.fields import FIELD_TYPE_NESTED
 from services.web.tool.constants import (
     BkVisionConfig,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
     SQLDataSearchInputVariable,
     ToolTypeEnum,
-    ApiConfig,
-    ApiOutputConfiguration,
     ApiToolConfig,
     ApiAuthMethod,
     APIToolVariable,
@@ -480,7 +478,7 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolVariable, ApiToolEx
             request_kwargs["json"] = body_params
         return formatted_url, request_kwargs
 
-    def send_request_function(self, method, url, headers, request_kwargs=None, timeout=10):
+    def send_request_function(self, method, url, headers, request_kwargs=None, timeout=0):
         # 4. 发送请求并返回Response结果
         try:
             if not request_kwargs:
@@ -513,11 +511,12 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolVariable, ApiToolEx
         method = method.lower()
 
         # 4. 发送请求并返回Response结果
+        timeout = int(os.getenv("API_EXECUTE_DEFAULT_TIMEOUT", 60))
         if not params:
-            api_executor_result = self.send_request_function(method, url, headers, params)
+            api_executor_result = self.send_request_function(method, url, headers, params, timeout)
         else:
             formatted_url, request_kwargs = self.execute_http_request(url, method, params)
-            api_executor_result = self.send_request_function(method, formatted_url, headers, request_kwargs)
+            api_executor_result = self.send_request_function(method, formatted_url, headers, request_kwargs, timeout)
         logger.info("【ApiToolExecutor】Call apigw result: {}".format(api_executor_result))
         return ApiToolExecuteResult(results=api_executor_result)
 

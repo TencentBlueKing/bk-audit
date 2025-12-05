@@ -519,6 +519,8 @@ CORS_EXPOSE_HEADERS = ['Content-Disposition']
 # Doris 事件表入库配置
 EVENT_DORIS_EXPIRES = os.getenv("BKAPP_EVENT_DORIS_EXPIRES", "1080d")
 
+API_EXECUTE_DEFAULT_TIMEOUT = os.getenv("API_EXECUTE_DEFAULT_TIMEOUT", 60)
+
 """
 以下为框架代码 请勿修改
 """
