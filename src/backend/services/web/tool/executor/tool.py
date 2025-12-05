@@ -483,6 +483,9 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolVariable, ApiToolEx
         try:
             if not request_kwargs:
                 request_kwargs = {}
+            logger.info("【ApiToolExecutor】Send request function, method: {}, url: {}, request_kwargs: {}".format(
+                method, url, request_kwargs
+            ))
             response = requests.request(
                 method=method,
                 url=url,
