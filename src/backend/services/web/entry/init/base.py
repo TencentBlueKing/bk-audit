@@ -236,11 +236,28 @@ class SystemInitHandler:
         self.post_init(INIT_SYSTEM_FINISHED_KEY)
 
     def init_sdk_config(self):
-        sdk_config = {
-            "go_sdk": "https://github.com/TencentBlueKing/bk-audit-go-sdk",
-            "java_sdk": "https://github.com/TencentBlueKing/bk-audit-java-sdk",
-            "python_sdk": "https://github.com/TencentBlueKing/bk-audit-python-sdk",
-        }
+        # sdk_config = {
+        #     "go_sdk": "https://github.com/TencentBlueKing/bk-audit-go-sdk",
+        #     "java_sdk": "https://github.com/TencentBlueKing/bk-audit-java-sdk",
+        #     "python_sdk": "https://github.com/TencentBlueKing/bk-audit-python-sdk",
+        # }
+        sdk_config = [
+            {
+                "label": "PYTHON_SDK",
+                "name": "Python SDK",
+                "url": "https://github.com/TencentBlueKing/bk-audit-python-sdk"
+            },
+            {
+                "label": "JAVA_SDK",
+                "name": "JAVA SDK",
+                "url": "https://github.com/TencentBlueKing/bk-audit-java-sdk"
+            },
+            {
+                "label": "GO_SDK",
+                "name": "GO SDK",
+                "url": "https://github.com/TencentBlueKing/bk-audit-go-sdk"
+            }
+        ]
         GlobalMetaConfig.set(SDK_CONFIG_KEY, sdk_config)
 
     def init_audit_doc_config(self):
