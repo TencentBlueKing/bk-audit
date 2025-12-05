@@ -48,6 +48,8 @@ INSTALLED_APPS += (
     "bk_resource",
     "rest_framework",
     "drf_yasg",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
     "blueapps.opentelemetry.instrument_app",
     "apigw_manager.apigw",
     "bk_notice_sdk",
@@ -164,6 +166,7 @@ REST_FRAMEWORK = {
     "DEFAULT_VERSION": "v1",
     "ALLOWED_VERSIONS": ["v1"],
     "VERSION_PARAM": "api_version",
+    "DEFAULT_SCHEMA_CLASS": "core.utils.spectacular.BKResourceAutoSchema",
 }
 
 # 平台错误代码: 7位整数，前两位表示产品代号，后5为各产品自行分配
@@ -204,6 +207,18 @@ CMSI_ESB_NAME = os.getenv("BKAPP_CMSI_ESB_NAME", "cmsi")
 SWAGGER_SETTINGS = {
     "DEFAULT_INFO": "urls.info",
     "DEFAULT_GENERATOR_CLASS": "bk_resource.utils.generators.BKResourceOpenAPISchemaGenerator",
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Audit',
+    'DESCRIPTION': '审计中心 API',
+    'VERSION': 'v1',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'ENABLE_PYDANTIC_V2': True,
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
 }
 
 DEFAULT_NAMESPACE = os.getenv("BKAPP_DEFAULT_NAMESPACE", "default")

@@ -17,11 +17,15 @@ to the current version of the project delivered to anyone in the future.
 """
 
 from bk_notice_sdk import config as bk_notice_config
-from blueapps.account.decorators import login_exempt
 from django.conf import settings
 from django.conf.urls import include
 from django.contrib import admin
 from django.urls import path
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
+)
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 
@@ -45,8 +49,11 @@ urlpatterns = [
     path("api/v1/", include("apps.feature.urls")),
     path("api/v1/sops/", include("apps.sops.urls")),
     path("api/v1/itsm/", include("apps.itsm.urls")),
-    path("swagger/", schema_view.with_ui(), name="swagger-ui"),
-    path("swagger.json", login_exempt(token_schema_view.without_ui()), name="swagger-json"),
+    # path("swagger/", schema_view.with_ui(), name="swagger-ui"),
+    # path("swagger.json", login_exempt(token_schema_view.without_ui()), name="swagger-json"),
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path("", include(f"services.{settings.DEPLOY_SERVICE}.urls")),
     path(f"api/v1/{bk_notice_config.ENTRANCE_URL}", include(("bk_notice_sdk.urls", "notice"), namespace="notice")),
 ]
