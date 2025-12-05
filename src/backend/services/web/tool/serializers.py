@@ -14,7 +14,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Dict, Any, List, Union
 
 from django.utils.translation import gettext_lazy
 from pydantic import Field as PydanticField
@@ -254,7 +254,7 @@ class SqlAnalyseResponseSerializer(serializers.Serializer):
 
 class ExecuteToolReqSerializer(serializers.Serializer):
     uid = serializers.CharField()
-    params = serializers.JSONField()
+    params = serializers.JSONField(label=gettext_lazy("工具执行参数"))
     caller_resource_type = serializers.ChoiceField(required=False, choices=CALLER_RESOURCE_TYPE_CHOICES)
     caller_resource_id = serializers.CharField(required=False, allow_blank=True)
     drill_field = serializers.CharField(required=False, allow_blank=True)
