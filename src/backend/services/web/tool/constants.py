@@ -496,3 +496,16 @@ class ApiToolConfig(BaseModel):
         default_factory=list, title=gettext_lazy("输入变量")
     )
     output_config: ApiOutputConfiguration = PydanticField(title=gettext_lazy("输出配置"))
+
+
+class APIToolExecuteParams(BaseModel):
+    raw_name: str = PydanticField(title=gettext_lazy("执行入参名"))
+    value: str = PydanticField(title=gettext_lazy("执行入参值"))
+    position: ApiVariablePosition = PydanticField(title=gettext_lazy("参数位置"))
+
+
+class APIToolVariable(BaseModel):
+    uid: str = PydanticField(title=gettext_lazy("工具uid"))
+    execute_variables: Annotated[List[APIToolExecuteParams], ListField(child=DictField())] = PydanticField(
+        default_factory=list, title=gettext_lazy("输入变量")
+    )
