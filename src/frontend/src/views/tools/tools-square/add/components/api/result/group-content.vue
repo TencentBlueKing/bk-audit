@@ -58,14 +58,17 @@
         </div>
         <content
           v-if="element.isOpen"
+          ref="contentRef"
+          :group-key="element.key"
           :output-config-groups="element"
-          :result-data="resultData" />
+          :result-data="resultData"
+          @group-content-change="handleGroupContentChange" />
       </div>
     </template>
   </vuedraggable>
 </template>
 <script setup lang='ts'>
-  import { ref, watch } from 'vue';
+  import { ref } from 'vue';
   import Vuedraggable from 'vuedraggable';
 
   import content from './content.vue';
@@ -78,38 +81,19 @@
   interface Exposes {
     addGroup:() => void,
     openGroup:(val: boolean) => void,
+    handleGetResultConfig: () => Config;
   }
 
   const props = defineProps<Props>();
+  console.log('分组组件', props.outputConfigGroups);
+  const contentRef = ref();
   const localValue = ref([
     {
-      name: '',
+      name: '分组',
       isInput: false,
       isOpen: true,
-      key: '1',
-      output_fields: [
-        {
-          raw_name: '',
-          json_path: '',
-          description: '',
-          display_name: '',
-          drill_config: null,
-          field_config: {
-            field_type: '',
-            output_fields: [
-              {
-                raw_name: '',
-                json_path: '',
-                description: '',
-                display_name: '',
-                drill_config: null,
-                enum_mappings: null,
-              },
-            ],
-          },
-          enum_mappings: null,
-        },
-      ],
+      key: Date.now().toString(),
+      config: null,
     },
   ]);
   // 拖拽
@@ -161,52 +145,43 @@
       localValue.value = localValue.value.filter((item: any) => item.key !== val);
     }
   };
+  // 监听分组内容改变
+  const handleGroupContentChange = (val: any, key: string | number) => {
+    console.log('监听分组内容改变', val, key);
+    // 把val赋值给对应key的 item.config
+    localValue.value = localValue.value.map((item: any) => {
+      if (item.key === key) {
+        // eslint-disable-next-line no-param-reassign
+        item.config = val;
+      }
+      return item;
+    });
+  };
 
-  watch(
-    () => props.outputConfigGroups,
-    (val) => {
-      localValue.value = val.map((item: any, index: number) => ({
-        ...item,
-        isInput: false,
-        isOpen: true,
-        key: `${index + 1}`,
-      }));
-    },
-    {
-      deep: true,
-      immediate: true,
-    },
-  );
+  // watch(
+  //   () => props.outputConfigGroups,
+  //   (val) => {
+  //     localValue.value = val.map((item: any, index: number) => ({
+  //       ...item,
+  //       isInput: false,
+  //       isOpen: true,
+  //       key: `${index + 1}`,
+  //     }));
+  //   },
+  //   {
+  //     deep: true,
+  //     immediate: true,
+  //   },
+  // );
   defineExpose<Exposes>({
+    // 添加组 key 当前时间戳
     addGroup() {
       localValue.value.push({
-        name: '',
+        name: '分组',
         isInput: false,
         isOpen: true,
-        key: `${localValue.value.length + 1}`,
-        output_fields: [
-          {
-            raw_name: '',
-            json_path: '',
-            description: '',
-            display_name: '',
-            drill_config: null,
-            field_config: {
-              field_type: '',
-              output_fields: [
-                {
-                  raw_name: '',
-                  json_path: '',
-                  description: '',
-                  display_name: '',
-                  drill_config: null,
-                  enum_mappings: null,
-                },
-              ],
-            },
-            enum_mappings: null,
-          },
-        ],
+        key: Date.now().toString(),
+        config: null,
       });
     },
     openGroup(val: boolean) {
@@ -215,6 +190,10 @@
         item.isOpen = !val;
         return item;
       });
+    },
+    // 提交获取内容
+    handleGetResultConfig() {
+      return localValue.value;
     },
   });
 </script>

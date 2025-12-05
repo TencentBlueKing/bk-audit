@@ -20,10 +20,14 @@
     label-width="160">
     <div class="render-field ">
       <div class="field-header-row">
-        <div class="field-value is-required">
+        <div
+          class="field-value is-required"
+          style="flex: 0 0 150px;">
           {{ t('参数名') }}
         </div>
-        <div class="field-value">
+        <div
+          class="field-value"
+          style="flex: 0 0 100px;">
           {{ t('显示名') }}
         </div>
         <div
@@ -32,8 +36,7 @@
           {{ t('传参方式') }}
         </div>
         <div
-          class="field-value"
-          style="flex: 0 0 350px;">
+          class="field-value">
           {{ t('参数说明') }}
         </div>
         <div
@@ -70,7 +73,9 @@
           style="flex: 0 0 120px;">
           {{ t('前端类型') }}
         </div>
-        <div class="field-value">
+        <div
+          class="field-value"
+          style="flex: 0 0 250px;">
           {{ t('默认值') }}
         </div>
         <div
@@ -110,12 +115,15 @@
     <audit-form
       ref="tableInputFormRef"
       form-type="vertical"
-      :model="formData">
+      :model="formData"
+      :rules="rules">
       <template
         v-for="(item, index) in paramList"
         :key="item.id">
         <div class="field-row">
-          <div class="field-value">
+          <div
+            class="field-value"
+            style="flex: 0 0 150px;">
             <bk-form-item
               error-display-type="tooltips"
               label=""
@@ -146,7 +154,9 @@
             </bk-form-item>
           </div>
           <!-- 显示名 -->
-          <div class="field-value">
+          <div
+            class="field-value"
+            style="flex: 0 0 100px;">
             <bk-form-item
               error-display-type="tooltips"
               label=""
@@ -177,8 +187,7 @@
           </div>
           <!-- 参数说明 -->
           <div
-            class="field-value"
-            style="flex: 0 0 350px;">
+            class="field-value">
             <bk-form-item
               error-display-type="tooltips"
               label=""
@@ -230,13 +239,36 @@
           </div>
           <!-- 默认值 -->
           <div
-            class="field-value">
+            class="field-value"
+            style="flex: 0 0 250px;">
             <bk-form-item
               error-display-type="tooltips"
               label=""
               label-width="0">
               <bk-input
+                v-if="item.field_category == 'number_input'"
+                v-model="item.default_value"
+                clearable
+                type="number" />
+              <audit-user-selector
+                v-else-if="item.field_category === 'person_select'"
                 v-model="item.default_value" />
+              <date-picker
+                v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
+                v-model="item.time_range"
+                style="width: 100%" />
+
+              <bk-date-picker
+                v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
+                v-model="item.default_value"
+                append-to-body
+                clearable
+                style="width: 100%"
+                type="datetime" />
+              <bk-input
+                v-else
+                v-model="item.default_value"
+                clearable />
             </bk-form-item>
           </div>
           <!-- 是否可见 -->
@@ -291,17 +323,22 @@
     inputVariable: Array<Record, any>;
   }
 
+  interface Exposes {
+    getData: () => void;
+  }
+
   const props = defineProps<Props>();
   console.log('props', props.inputVariable);
 
   const { t } = useI18n();
   const formData = ref();
+  const rules = ref();
   const paramList = ref([
     {
-      is_show: true,
+      is_show: 'true',
       position: '',
       raw_name: '',
-      required: true,
+      required: 'true',
       description: '',
       display_name: '',
       split_config: {
@@ -309,16 +346,17 @@
         start_field: '',
       },
       default_value: '',
-      field_category: '',
+      time_range: [],
+      field_category: 'input',
     },
   ]);
   const requiredList = ref([{
     id: '1',
-    value: true,
+    value: 'true',
     label: t('是'),
   }, {
-    id: '0',
-    value: false,
+    id: '2',
+    value: 'false',
     label: t('否'),
   }]);
   const paramsTypeList = ref([{
@@ -349,27 +387,28 @@
 
   const isViewsList = ref([{
     id: '1',
-    value: true,
+    value: 'true',
     label: t('可见'),
   }, {
     id: '2',
-    value: false,
+    value: 'false',
     label: t('不可见'),
   }]);
   // 添加一项
   const handelAddItem = () => {
     paramList.value.push({
-      is_show: true,
+      is_show: 'true',
       position: '',
       raw_name: '',
-      required: true,
+      required: 'true',
       description: '',
       display_name: '',
       split_config: {
         end_field: '',
         start_field: '',
       },
-      default_value: '',
+      time_range: [],
+      default_value: null,
       field_category: '',
     });
   };
@@ -381,14 +420,15 @@
   const handleRequiredClick = (item: Record<string, any>) => {
     paramList.value = paramList.value.map((listItem: Record<string, any>) => {
       // eslint-disable-next-line no-param-reassign
-      listItem.required = item.id;
+      listItem.required = item.value;
       return listItem;
     });
   };
   const handleViewsClick = (item: Record<string, any>) => {
+    console.log('handleViewsClick', item);
     paramList.value = paramList.value.map((listItem: Record<string, any>) => {
       // eslint-disable-next-line no-param-reassign
-      listItem.isViews = item.value;
+      listItem.is_show = item.value;
       return listItem;
     });
   };
@@ -396,14 +436,29 @@
   watch(
     () => props.inputVariable,
     (val) => {
-      paramList.value = val;
-      console.log('paramList', paramList.value);
+      if (val && val.length > 0) {
+        console.log(val);
+        // paramList.value = val.map((item: Record<string, any>) => {
+        //   console.log('item>>');
+        //   return {
+        //     ...item,
+        //     time_range: [],
+        //   };
+        // });
+      }
     },
     {
       deep: true,
       immediate: true,
     },
   );
+
+  defineExpose<Exposes>({
+    getData() {
+      return paramList.value;
+    },
+  });
+
 </script>
 
 <style lang="postcss" scoped>

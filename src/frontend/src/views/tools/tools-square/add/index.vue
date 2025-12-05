@@ -775,12 +775,12 @@
   // 提交
   const handleSubmit = () => {
     const tastQueue = [formRef.value.validate()];
-    if (comRef.value) {
+    if (comRef.value && formData.value.tool_type !== 'api') {
       tastQueue.push(comRef.value.getValue());
     }
 
     Promise.all(tastQueue).then(() => {
-      isCreating.value = true;
+      // isCreating.value = true;
 
       // 获取组件配置
       if (comRef.value?.getFields) {
@@ -790,28 +790,29 @@
             formData.value.updated_time = bkVisionUpdateTime.value || null;
           }
         } else {
+          console.log('获取组件配置');
           formData.value.config = comRef.value.getFields();
         }
       }
       const data = _.cloneDeep(formData.value);
+      console.log('data', data);
+      // const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
 
-      const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
-
-      if (data.tags) {
-        data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
-      }
-      service(data)
-        .then(() => {
-          isFailed.value = false;
-          isSuccessful.value = true;
-        })
-        .catch(() => {
-          isSuccessful.value = false;
-          isFailed.value = true;
-        })
-        .finally(() => {
-          isCreating.value = false;
-        });
+      // if (data.tags) {
+      //   data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
+      // }
+      // service(data)
+      //   .then(() => {
+      //     isFailed.value = false;
+      //     isSuccessful.value = true;
+      //   })
+      //   .catch(() => {
+      //     isSuccessful.value = false;
+      //     isFailed.value = true;
+      //   })
+      //   .finally(() => {
+      //     isCreating.value = false;
+      //   });
     });
   };
 

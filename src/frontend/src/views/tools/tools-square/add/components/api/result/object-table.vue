@@ -227,6 +227,9 @@
   }
   interface Emits {
     (e: 'close', id: string): void
+    (e: 'configChange', data: any, path: string): void
+  }
+  interface Exposes {
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -271,13 +274,11 @@
   } = useToolDialog();
   // 点击字段映射
   const handleAddDict = () => {
-    console.log('点击字段映射', formData.value);
     enumMappingsData.value = formData.value.mappings;
     showFieldDict.value = true;
   };
 
   const handleDictSubmit = (data: any) => {
-    console.log('提交字段映射', data);
     showFieldDict.value = false;
     formData.value.mappings = data;
   };
@@ -312,13 +313,10 @@
   const handleFieldSubmit = (data: any) => {
     showFieldReference.value = false;
     formData.value.drill_config = data;
-    console.log('提交字段下钻', data, formData.value);
   };
   // 删除值
   const  handleRemove = () => {
-    console.log('删除值', formData.value.drill_config);
     formData.value.drill_config = [];
-    console.log('删除值', formData.value.drill_config);
   };
   // 获取工具名称和类型
   const getToolNameAndType = (uid: string) => {
@@ -334,17 +332,18 @@
 
   // 关闭
   const handleClose = () => {
-    console.log('关闭', props.data);
     emits('close', props.data);
   };
   watch(() => formData.value, (val) => {
-    console.log('val>>', val, fieldsData);
     fieldsData.value[0].raw_name = props.data.name;
     fieldsData.value[0].display_name = val.display_name;
     fieldsData.value[0].description = val.description;
+    emits('configChange', val, props.data.json_path);
   }, {
     immediate: true,
     deep: true,
+  });
+  defineExpose<Exposes>({
   });
 </script>
 <style lang="postcss" scoped>

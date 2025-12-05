@@ -48,6 +48,7 @@
       </div>
       <content
         v-if="!outputConfigEnableGrouping.enable_grouping"
+        ref="contentRef"
         :output-config-groups="outputConfig.groups"
         :resultData="resultData" />
       <group-content
@@ -59,7 +60,7 @@
   </card-part-vue>
 </template>
 <script setup lang='tsx'>
-  import { ref, watch } from 'vue';
+  import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import CardPartVue from '../../card-part.vue';
@@ -75,13 +76,17 @@
       groups: Array<Record, any>,
     },
   }
+  interface Exposes {
+    handleGetResultConfig: () => Config;
+  }
 
   const props = defineProps<Props>();
+  const contentRef = ref();
   const { t } = useI18n();
   const groupContentRef = ref();
   const openGroup = ref(false);
   const outputConfigEnableGrouping = ref({
-    enable_grouping: true,
+    enable_grouping: !false,
   });
   // 添加分组
   const handleAddGroup = () => {
@@ -93,12 +98,82 @@
     openGroup.value = !openGroup.value;
     groupContentRef.value?.openGroup(openGroup.value);
   };
+  console.log('propsresultData>>', props.resultData);
+  // 获取配置信息
+  const getResultConfig = () => {
+    console.log('提交获取配置信息>>index');
+    if (outputConfigEnableGrouping.value.enable_grouping) {
+      const groupContentRefData =  groupContentRef.value?.handleGetResultConfig();
+      console.log('groupContentRefData>>', groupContentRefData);
+      const isGroupOutputConfig = {
+        enable_grouping: true,
+        groups: [],
+      };
 
-  watch(props.outputConfig, (val) => {
-    outputConfigEnableGrouping.value.enable_grouping = val.enable_grouping;
-  }, {
-    immediate: true,
-    deep: true,
+      return isGroupOutputConfig;
+    }
+    const contentRefData  = contentRef.value?.handleGetResultConfig();
+    console.log('contentRefData>>', contentRefData);
+    const noGroupOutputConfig = {
+      enable_grouping: false,
+      groups: [],
+    };
+    noGroupOutputConfig.groups[0] = contentRefData.map((item) => {
+      // 表格
+      if (item.type === 'table') {
+        const tableConfig = {
+          name: '', // 分组名
+          output_fields: [
+            {
+              raw_name: item.name,
+              json_path: item.json_path,
+              description: item.config?.description || '',
+              display_name: item.config?.display_name || '',
+              drill_config: item.config?.drill_config || null,
+              field_config: {
+                field_type: 'table',
+                output_fields: item.list.map((listItem: any) => ({
+                  raw_name: listItem.name,
+                  json_path: listItem.json_path,
+                  description: listItem.config?.description || '',
+                  display_name: listItem.config?.display_name || '',
+                  drill_config: listItem.config?.drill_config || null,
+                  enum_mappings: listItem.config?.mappings || null,
+                })),
+              },
+              enum_mappings: item.config?.mappings || null,
+            },
+          ],
+        };
+
+        return tableConfig;
+      }
+      const objectConfig = {
+        name: '', // 分组名
+        output_fields: [{
+          raw_name: item.name,
+          json_path: item.json_path,
+          description: item.config?.description || '',
+          display_name: item.config?.display_name || '',
+          drill_config: item.config?.drill_config || null,
+          field_config: {
+            field_type: 'kv',
+          },
+          enum_mappings: item.config?.mappings || null,
+        }],
+      };
+      return objectConfig;
+
+      // 对象
+    });
+    return noGroupOutputConfig;
+  };
+  defineExpose<Exposes>({
+    // 提交获取字段
+    handleGetResultConfig() {
+      // getResultConfig();
+      console.log('getResultConfig()', getResultConfig());
+    },
   });
 </script>
 

@@ -82,13 +82,45 @@
           :label="item.display_name"
           :property="item.display_name"
           :required="item.required">
+          <template #label>
+            <bk-popover
+              placement="top"
+              theme="dark">
+              <span class="dashed-underline">{{ t(item.display_name) }}</span>
+              <template #content>
+                <div>{{ t(item.description) }}</div>
+              </template>
+            </bk-popover>
+          </template>
           <bk-input
+            v-if="item.field_category == 'number_input'"
             v-model="formModel[item.display_name]"
             clearable
-            placeholder="请输入" />
+            type="number" />
+          <audit-user-selector
+            v-else-if="item.field_category === 'person_select'"
+            v-model="formModel[item.display_name]" />
+          <date-picker
+            v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
+            v-model="formModel[item.display_name]"
+            style="width: 100%" />
+
+          <bk-date-picker
+            v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
+            v-model="formModel[item.display_name]"
+            append-to-body
+            clearable
+            style="width: 100%"
+            type="datetime" />
+          <bk-input
+            v-else
+            v-model="formModel[item.display_name]"
+            clearable />
         </bk-form-item>
       </bk-form>
-      <bk-button theme="primary">
+      <bk-button
+        theme="primary"
+        @click="handleDebug">
         {{ t('调试') }}
       </bk-button>
     </div>
@@ -112,26 +144,61 @@
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import useMessage from '@/hooks/use-message';
+
 
   interface Props {
     apiConfig: Record<string, any>,
-    inputVariable: Array<Record<string, any>>
+    // inputVariable: Array<Record<string, any>>
     isParams: boolean,
   }
   interface Exposes {
-    show: () => void;
+    init: () => void;
   }
-  const props = defineProps<Props>();
+
+  interface Emits {
+    (e: 'deBugDone', id: string): void
+  }
+
+  defineProps<Props>();
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const { messageSuccess, messageError } = useMessage();
+
   const isShow = ref(false);
   const formModel = ref({});
   const rules = ref({});
   const list = ref([]);
 
-  const result = ref(`{
+  const result = ref('');
+
+  // 调试
+  const handleDebug = () => {
+    console.log('debug');
+    messageSuccess('调试成功');
+    messageError('调试失败');
+    result.value = `{
   "status": "success",
   "message": "操作成功",
   "data": {
+
+    "status": "success",
+    "list": [ {
+            "field_name": "event_tb_key",
+            "display_name": "event_tb_key",
+            "id": "event_tb_key:event_tb_key"
+        },
+        {
+            "field_name": "mrms_openid",
+            "display_name": "mrms_openid",
+            "id": "mrms_openid:mrms_openid"
+        },
+        {
+            "field_name": "风险ID",
+            "display_name": "风险ID",
+            "id": "风险ID:风险ID"
+        }
+      ],
     "person": {
       "name": "张明",
       "age": 28,
@@ -147,14 +214,16 @@
       }
     }
   }
-}`);
+}`;
+    emits('deBugDone', result.value, true);
+  };
   defineExpose<Exposes>({
-    show() {
+    init(data: Array<Record<string, any>>) {
       isShow.value = true;
-      list.value = props.inputVariable;
-      formModel.value = props.inputVariable.reduce((obj, item) => {
+      list.value = data;
+      formModel.value = data.reduce((obj, item) => {
         // eslint-disable-next-line no-param-reassign
-        obj[item.display_name] = item.default_value;
+        obj[item.display_name] = item.field_category === 'time_range_select' ? item.time_range :  item.default_value;
         return obj;
       }, {});
     },

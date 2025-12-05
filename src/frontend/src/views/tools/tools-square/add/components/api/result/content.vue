@@ -27,7 +27,7 @@
         collapse-tags
         custom-content
         display-key="name"
-        id-key="id"
+        id-key="json_path"
         multiple
         multiple-mode="tag"
         @tag-remove="handelTagRemove">
@@ -62,14 +62,16 @@
           pull: false,
           push: true
         }"
-        item-key="id"
+        item-key="json_path"
         :list="selectedItems">
         <template #item="{ element }">
           <component
-            :is="modelComMap[element]"
+            :is="modelComMap(element)"
             ref="comRef"
             :data="element"
-            @close="handleClose" />
+            @close="handleClose"
+            @config-change="handleConfigChange"
+            @list-config-change="handleListConfigChange" />
         </template>
       </vuedraggable>
     </div>
@@ -86,20 +88,25 @@
   interface Props {
     resultData: any,
     outputConfigGroups: Record<string, any>,
+    groupKey?: string,
   }
-
+  interface Exposes {
+    handleGetResultConfig: () => Config;
+    handleGetGroupResultConfig: () => Config;
+  }
+  interface Emits {
+    (e: 'groupContentChange', data: any, id: string | number): void
+  }
   const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
   console.log('内容outputConfigGroups', props.outputConfigGroups);
 
   const { t } = useI18n();
-  const modelComMap: Record<string, any> = {
-    object: objectModel,
-    list: listModel,
-  };
+  const modelComMap = (item: Record<string, any>) => (item.type === 'kv' ? objectModel : listModel);
   const selectValue = ref([]);
   const selectedId = ref([]);
   const selectedItems = ref([]);
-
+  const comRef = ref();
   const treeData = ref([]);
   const buildTree = (obj, parentId = '', path = [], isChild = false, type = 'object')  => {
     const result = [];
@@ -115,12 +122,15 @@
 
         const node = {
           name: key,
-          id: currentId,
+          json_path: currentId,
           isChecked: false,
           isChild,
           children: [],
           list: [],
           type,
+          config: null,
+          listName: '',
+          listDescription: '',
         };
         if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
           // 如果值是对象且不是数组，递归
@@ -139,58 +149,76 @@
   };
 
   const handelTagRemove = (val) => {
-    console.log('handelTagRemove>>', val);
     if (val) {
       // selectedItems中找出name与val相同的节点
       const node = selectedItems.value.find(item => item.name === val);
-      console.log('node>>', node);
-      const index = selectedId.value.indexOf(node.id);
+      const index = selectedId.value.indexOf(node.json_path);
       selectedId.value.splice(index, 1);
       selectedItems.value.splice(index, 1);
     }
-    console.log('变化之后', selectValue.value, selectedId.value, selectedItems.value);
   };
 
   const handelCheckoxChange = (val, node) => {
-    console.log('val>>', val, node, treeData.value);
     if (val) {
       // 选中时添加name到selectValue
-      if (!selectedId.value.includes(node.id)) {
-        selectedId.value.push(node.id);
+      if (!selectedId.value.includes(node.json_path)) {
+        selectedId.value.push(node.json_path);
         selectValue.value.push(node.name);
         selectedItems.value.push(node);
       }
     } else {
       // 取消选中时从selectValue中删除name
-      const index = selectedId.value.indexOf(node.id);
+      const index = selectedId.value.indexOf(node.json_path);
       if (index > -1) {
         selectedId.value.splice(index, 1);
         selectValue.value.splice(index, 1);
         selectedItems.value.splice(index, 1);
       }
     }
-    console.log('勾选完成》》', treeData.value);
   };
 
   // 关闭
   const handleClose = (item: string) => {
-    console.log('父组件handleClose', item);
     // 删除对应的item treeData中的isChecked 改为false
-    const index = selectedId.value.indexOf(item.id);
+    const index = selectedId.value.indexOf(item.json_path);
     if (index > -1) {
       selectedId.value.splice(index, 1);
       selectValue.value.splice(index, 1);
       selectedItems.value.splice(index, 1);
     }
   };
-
+  // kv组件配置更新
+  const handleConfigChange = (data: any, jsonPath: string) => {
+    console.log('组件配置更新', data);
+    if (data) {
+      // 更新对应的item treeData中的isChecked 改为false
+      const node = selectedItems.value.find(item => item.json_path === jsonPath);
+      if (node) {
+        node.config = data;
+      }
+      console.log('selectedItems', selectedItems.value);
+    }
+  };
+  // list组件配置更新
+  const handleListConfigChange = (data: any, jsonPath: string, listInfo: any) => {
+    if (data) {
+      // 更新对应的item treeData中的isChecked 改为false
+      const node = selectedItems.value.find(item => item.json_path === jsonPath);
+      console.log('node', node);
+      if (node) {
+        node.list = data;
+        node.listDescription = listInfo.desc;
+        node.listName = listInfo.name;
+      }
+    }
+  };
   watch(
     () => selectedId.value, (newVal) => {
       // 递归更新树中所有节点的isChecked状态
       const updateTreeCheckedState = (nodes, selectedIds) => nodes.map((node) => {
         // 更新当前节点的选中状态
         // eslint-disable-next-line no-param-reassign
-        node.isChecked = selectedIds.includes(node.id);
+        node.isChecked = selectedIds.includes(node.json_path);
 
         // 递归更新子节点
         if (node.children && node.children.length > 0) {
@@ -216,11 +244,30 @@
       deep: true,
     },
   );
-
+  watch(
+    () => selectedItems.value, (newVal) => {
+      emits('groupContentChange', newVal, props.groupKey);
+    },
+    {
+      immediate: true,
+      deep: true,
+    },
+  );
   onMounted(() => {
-    treeData.value = buildTree(props.resultData);
-    console.log('treeData', treeData.value);
-    console.log('outputConfigGroups', props.outputConfigGroups);
+    treeData.value = buildTree(JSON.parse(props.resultData));
+  });
+
+  defineExpose<Exposes>({
+    // 提交获取内容
+    handleGetResultConfig() {
+      return selectedItems.value;
+    },
+    handleGetGroupResultConfig() {
+      return  {
+        groupKey: props.groupKey,
+        items: selectedItems.value,
+      };
+    },
   });
 </script>
 

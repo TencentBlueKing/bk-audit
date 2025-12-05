@@ -148,7 +148,7 @@
                               placement="top"
                               theme="black">
                               <span
-                                @click="() => handleClick(element.id, element.drill_config)">
+                                @click="() => handleClick(element.json_path, element.drill_config)">
                                 {{ t('已配置') }}
                                 <span style="color: #3a84ff;">{{ element.drill_config.length }}</span>
                                 {{ t('个工具') }}
@@ -212,7 +212,7 @@
                           <span
                             v-else
                             style="color: #c4c6cc;"
-                            @click="() => handleClick(element.id)">
+                            @click="() => handleClick(element.json_path)">
                             {{ t('请点击配置') }}
                           </span>
                         </div>
@@ -233,7 +233,7 @@
                       <audit-icon
                         class="reduce-fill field-icon"
                         type="reduce-fill"
-                        @click="handleDelect(element.id)" />
+                        @click="handleDelect(element.json_path)" />
                     </div>
                   </div>
                 </div>
@@ -324,6 +324,10 @@
   }
   interface Emits {
     (e: 'close', id: string): void
+    (e: 'listConfigChange', data: any, path: string, listInfo: any): void
+  }
+  interface Exposes {
+    getConfig: () => Config;
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -350,23 +354,20 @@
   const fieldsData = ref([]);
   // 关闭
   const handleClose = () => {
-    console.log('关闭', props.data);
     emits('close', props.data);
   };
 
   // 点击字段映射
   const handleAddEnumMapping = (element: any) => {
-    console.log('点击字段映射', element);
-    enumMappingsId.value = element.id;
+    enumMappingsId.value = element.json_path;
     enumMappingsData.value = element.enum_mappings.mappings;
     showFieldDict.value = true;
   };
 
   // 字段映射提交
   const handleDictSubmit = (data: any) => {
-    console.log('字段映射提交', data);
     list.value = list.value.map((item: any) => {
-      if (item.id === enumMappingsId.value) {
+      if (item.json_path === enumMappingsId.value) {
         // eslint-disable-next-line no-param-reassign
         item.enum_mappings.mappings = data;
       }
@@ -391,7 +392,6 @@
   };
 
   const handleClick = (id: string) => {
-    console.log('handleClick', id);
     fieldDictId.value = id;
     showFieldReference.value = true;
   };
@@ -451,41 +451,35 @@
   // 提交字段下钻
   const handleFieldSubmit = (data: any) => {
     showFieldReference.value = false;
-    console.log('提交字段下钻', data);
     list.value = list.value.map((item: any) => {
-      if (item.id === fieldDictId.value) {
+      if (item.json_path === fieldDictId.value) {
         // eslint-disable-next-line no-param-reassign
         item.drill_config = data;
       }
       return item;
     });
-
-    console.log('提交字段下钻list>>>', list.value);
   };
 
   // 移除
-  const handleDelect = (id: id) => {
-    console.log('移除', id);
+  const handleDelect = (path: id) => {
     // addList 添加对应项目
-    addList.value.push(list.value.find((item: any) => item.id === id));
+    addList.value.push(list.value.find((item: any) => item.json_path === path));
     // list 移除项目
-    list.value = list.value.filter((item: any) => item.id !== id);
-    console.log('addList>>', addList.value);
+    list.value = list.value.filter((item: any) => item.json_path !== path);
   };
   // 添加
   const handleAddList = (item: any) => {
-    console.log('添加', item);
     list.value.push(item);
-    addList.value = addList.value.filter((addItem: any) => addItem.id !== item.id);
+    addList.value = addList.value.filter((addItem: any) => addItem.json_path !== item.json_path);
   };
   watch(() => list.value, (val) => {
-    console.log('list>>', val, fieldsData);
     fieldsData.value = val.map((item: any) => ({
       raw_name: item.name,
       display_name: item.display_name,
       description: item.description,
     }));
-    console.log('fieldsData>>>', fieldsData.value);
+    console.log('val, props.data.json_path', val, props.data.json_path);
+    emits('listConfigChange', val, props.data.json_path, listInfo.value);
   }, {
     deep: true,
   });
@@ -500,6 +494,13 @@
       description: '',
     }));
     // 提取list中每一项的的name
+  });
+
+  defineExpose<Exposes>({
+    // 提交获取字段
+    getConfig() {
+      console.log('列表获取值');
+    },
   });
 </script>
 <style lang="postcss" scoped>

@@ -63,7 +63,9 @@
               :name="item.label" />
           </bk-select>
         </bk-form-item>
-        <div class="auth-box">
+        <div
+          v-if="formData.api_config.auth_config.method !== 'none'"
+          class="auth-box">
           <bk-form-item
             :label="t('应用ID(bk_app_code)')"
             label-width="160"
@@ -86,11 +88,11 @@
             :key="index"
             class="headers-config">
             <bk-input
-              v-model="headersItem.value"
+              v-model="headersItem.key"
               class="config-input value"
               :placeholder="t('请输入 Key')" />
             <bk-input
-              v-model="headersItem.key"
+              v-model="headersItem.value"
               class="config-input key"
               :placeholder="t('请输入 Value')" />
             <bk-input
@@ -117,6 +119,7 @@
           </bk-checkbox>
           <params-config
             v-if="formData.params"
+            ref="paramsConfigRef"
             :input-variable="formData.input_variable" />
           <div class="item-params-add">
             <bk-button
@@ -126,11 +129,11 @@
               @click="handlerOpenDeDugRef">
               {{ t('接口调试') }}
             </bk-button>
-            <span>
+            <span v-if="isDoneDeBug">
               <audit-icon
-                :class="isSuccess ? 'delete-fill' : `corret-fill`"
-                :type="isSuccess ? 'delete-fill' : `corret-fill`" />
-              <span class="corret-fill-text">{{ t(isSuccess ? '调试失败' : '调试成功') }}</span>
+                :class="isSuccess ? 'corret-fill' : `delete-fill`"
+                :type="isSuccess ? 'corret-fill' : `delete-fill`" />
+              <span class="corret-fill-text">{{ t(isSuccess ? '调试成功' : '调试失败') }}</span>
             </span>
           </div>
         </div>
@@ -138,13 +141,16 @@
     </template>
   </card-part-vue>
   <result-config
+    v-if="isSuccess && isDoneDeBug"
+    ref="resultConfigRef"
     :output-config="formData.output_config"
     :result-data="resultData" />
   <de-dug
     ref="deDugRef"
     :api-config="formData.api_config"
     :input-variable="formData.input_variable"
-    :is-params="formData.params" />
+    :is-params="formData.params"
+    @de-bug-done="handleDeBugDone" />
 </template>
 <script setup lang='tsx'>
   import { ref } from 'vue';
@@ -156,85 +162,70 @@
   import paramsConfig from './params-config.vue';
   import resultConfig from './result/index.vue';
 
+  interface Exposes {
+    getFields: () => Config;
+  }
 
   const { t } = useI18n();
   const deDugRef = ref();
+  const formRef = ref();
+  const resultConfigRef = ref();
+  const paramsConfigRef = ref();
   const formData = ref({
     params: true,
     api_config: {
-      url: 'www.baidu.com',
+      url: '',
       method: 'GET',
       headers: [
         {
-          key: 'xxx',
-          value: 'xxx',
-          description: 'xxx',
+          key: '',
+          value: '',
+          description: '',
         },
       ],
       auth_config: {
         config: {
-          bk_app_code: 'xxx',
-          bk_app_secret: 'xxx',
+          bk_app_code: '',
+          bk_app_secret: '',
         },
-        method: 'bk_app_auth',
+        method: 'none',
       },
     },
     input_variable: [
       {
-        is_show: true,
-        position: 'query',
-        raw_name: 'time_range',
-        required: true,
+        is_show: 'true',
+        position: '',
+        raw_name: '',
+        required: 'true',
         description: '',
-        display_name: 'time_range',
+        display_name: '',
         split_config: {
-          end_field: 'end_f',
-          start_field: 'start_f',
+          end_field: '',
+          start_field: '',
         },
         default_value: null,
-        field_category: 'time_range_select',
-      },
-      {
-        is_show: true,
-        position: 'body',
-        raw_name: 'xxx',
-        required: true,
-        description: 'xxx',
-        display_name: 'xxx',
-        default_value: 'asdadasd',
         field_category: 'input',
-      },
-      {
-        choices: [],
-        is_show: true,
-        position: 'query',
-        raw_name: 'asdasd',
-        required: true,
-        description: 'asda',
-        display_name: 'adssad',
-        default_value: null,
-        field_category: 'multiselect',
       },
     ],
     output_config: {
       groups: [
         {
-          name: 'name1',
+          name: '',
           output_fields: [
             {
-              raw_name: 'key1',
-              json_path: 'key1.key1',
-              description: 'name1',
-              display_name: 'name1',
+              raw_name: '',
+              json_path: '',
+              description: '',
+              display_name: '',
               drill_config: null,
               field_config: {
-                field_type: 'table',
+                field_type: '',
                 output_fields: [
                   {
-                    raw_name: 'k1',
-                    json_path: 'k1.key1',
-                    description: 'name1',
-                    display_name: 'k1',
+                    raw_name: '',
+                    json_path: '',
+                    description: '',
+                    display_name: '',
                     drill_config: null,
                     enum_mappings: null,
                   },
@@ -244,28 +235,11 @@
             },
           ],
         },
-        {
-          name: 'name2',
-          output_fields: [
-            {
-              raw_name: 'k2',
-              json_path: 'kn2',
-              description: '',
-              display_name: 'n2',
-              drill_config: null,
-              field_config: {
-                field_type: 'kv',
-              },
-              enum_mappings: null,
-            },
-          ],
-        },
       ],
       enable_grouping: true,
     },
   });
-  const rules = ref({
-  });
+  const rules = ref({});
   const authList = ref([
     {
       label: '无',
@@ -279,132 +253,13 @@
     },
   ]);
   const isSuccess = ref(false);
-  const  resultData =  {
-    result: true,
-    code: 0,
-    data: {
-      page: 1,
-      num_pages: 6895,
-      total: 110314,
-      results: [
-        {
-          risk_id: '20251201143641057057',
-          event_content: '',
-          strategy_id: 3,
-          event_time: '2025-12-01 14:36:29',
-          event_end_time: '2025-12-01 14:36:30',
-          operator: [
-            'v_yyhoyang',
-          ],
-          status: 'await_deal',
-          current_operator: [
-            'admin',
-          ],
-          notice_users: [
-            'v_yyhoyang',
-            'v_zzlgzhong',
-          ],
-          event_data: {},
-          tags: [],
-          risk_label: 'normal',
-          experiences: 0,
-          last_operate_time: '2025-12-01 14:36:41',
-          title: 'raja 测试 doris 事件合流-实时策略[风险单标题]',
-          permission: {
-            edit_risk_v2: true,
-          },
-        },
-        {
-          risk_id: '20251201143641141076',
-          event_content: '',
-          strategy_id: 3,
-          event_time: '2025-12-01 14:36:29',
-          event_end_time: '2025-12-01 14:36:30',
-          operator: [
-            'v_yyhoyang',
-          ],
-          status: 'await_deal',
-          current_operator: [
-            'admin',
-          ],
-          notice_users: [
-            'v_yyhoyang',
-            'v_zzlgzhong',
-          ],
-          event_data: {},
-          tags: [],
-          risk_label: 'normal',
-          experiences: 0,
-          last_operate_time: '2025-12-01 14:36:41',
-          title: 'raja 测试 doris 事件合流-实时策略[风险单标题]',
-          permission: {
-            edit_risk_v2: true,
-          },
-        },
-      ],
-      addd: [
-        {
-          risk_id: '20251201143641057057',
-          event_content: '',
-          strategy_id: 3,
-          event_time: '2025-12-01 14:36:29',
-          event_end_time: '2025-12-01 14:36:30',
-          operator: [
-            'v_yyhoyang',
-          ],
-          status: 'await_deal',
-          current_operator: [
-            'admin',
-          ],
-          notice_users: [
-            'v_yyhoyang',
-            'v_zzlgzhong',
-          ],
-          event_data: {},
-          tags: [],
-          risk_label: 'normal',
-          experiences: 0,
-          last_operate_time: '2025-12-01 14:36:41',
-          title: 'raja 测试 doris 事件合流-实时策略[风险单标题]',
-          permission: {
-            edit_risk_v2: true,
-          },
-        },
-        {
-          risk_id: '20251201143641141076',
-          event_content: '',
-          strategy_id: 3,
-          event_time: '2025-12-01 14:36:29',
-          event_end_time: '2025-12-01 14:36:30',
-          operator: [
-            'v_yyhoyang',
-          ],
-          status: 'await_deal',
-          current_operator: [
-            'admin',
-          ],
-          notice_users: [
-            'v_yyhoyang',
-            'v_zzlgzhong',
-          ],
-          event_data: {},
-          tags: [],
-          risk_label: 'normal',
-          experiences: 0,
-          last_operate_time: '2025-12-01 14:36:41',
-          title: 'raja 测试 doris 事件合流-实时策略[风险单标题]',
-          permission: {
-            edit_risk_v2: true,
-          },
-        },
-      ],
-    },
-    message: null,
-    request_id: '4033e443d3d026af4199706b24881ee8',
-    trace_id: null,
-  };
+  const isDoneDeBug = ref(false);
+  const resultData = ref();
   const handlerOpenDeDugRef = () => {
-    deDugRef.value?.show();
+    formRef.value.validate().then(() => {
+      const paramsConfig =  paramsConfigRef.value?.getData() || [];
+      deDugRef.value?.init(paramsConfig);
+    });
   };
 
   // 添加 headers
@@ -423,6 +278,28 @@
     }
     formData.value.api_config.headers.splice(index, 1);
   };
+
+  // 调试
+  const handleDeBugDone = (res: any, isSucc: boolean) => {
+    console.log('handleDeBugDone>', res, isSucc);
+    resultData.value = res;
+    isSuccess.value = isSucc;
+    isDoneDeBug.value = true;
+  };
+  // 获取结果配置
+  const handleGetResultConfig = () => {
+    console.log('handleGetResultConfig>');
+    resultConfigRef.value?.handleGetResultConfig();
+  };
+
+  defineExpose<Exposes>({
+    // 提交获取字段
+    getFields() {
+      handleGetResultConfig();
+      return '111';
+    },
+  });
+
 </script>
 
 <style lang="postcss" scoped>
