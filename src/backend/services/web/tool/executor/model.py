@@ -20,6 +20,8 @@ from typing import Any, List
 from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
+from services.web.tool.constants import BkVisionConfig
+
 DATA_SEARCH_TOOL_DEFAULT_PAGE_SIZE = 100
 
 
@@ -61,3 +63,10 @@ class BkVisionExecuteResult(BaseModel):
     """
 
     panel_id: str
+
+
+class ApiToolExecuteResult(BaseModel):
+    """
+    Api工具执行结果
+    """
+    results: Any = PydanticField(..., title="Api工具执行结果")
