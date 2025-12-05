@@ -702,7 +702,6 @@ class ExecuteTool(ToolBase):
                     "value": ["option1", "option2"]
                 }
             ```
-            ```
         response:
             ```json
             {
@@ -743,7 +742,28 @@ class ExecuteTool(ToolBase):
                 "tool_type": "bk_vision"
             }
             ```
-    3. 权限上下文（可选）
+    3. tool_type 为 api
+        params请求示例（需要传递position参数声明参数位置）:
+            ```json
+            {
+                "uid": "2eb3d241d1a411f09518c2b1e7a5696b",
+                "params": {
+                    "tool_variables": [
+                        {
+                            "raw_name": "pageIndex",
+                            "value": "2",
+                            "position": "query"
+                        },
+                        {
+                            "raw_name": "pageSize",
+                            "value": "30",
+                            "position": "query"
+                        }
+                    ]
+                }
+            }
+            ```
+    4. 权限上下文（可选）
         - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
             - `caller_resource_type`：调用方资源类型（当前支持：`risk`）
             - `caller_resource_id`：调用方资源实例 ID（如风险ID）
