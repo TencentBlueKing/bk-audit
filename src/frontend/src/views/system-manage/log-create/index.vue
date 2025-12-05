@@ -22,9 +22,14 @@
 <script setup lang="ts">
   import {
     computed,
+    provide,
     ref,
   } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
+
+  import RootManageService from '@service/root-manage';
+
+  import ConfigModel from '@model/root/config';
 
   import useUrlSearch from '@hooks/use-url-search';
 
@@ -35,6 +40,7 @@
   import NewLogApi from './components/newlog/api/index.vue';
   import NewLogCollector from './components/newlog/collector/index.vue';
 
+  import useRequest from '@/hooks/use-request';
   import useRouterBack from '@/hooks/use-router-back';
 
   type StepComponentKey = 'logCreate' | 'bkbase' | 'newLogApi' | 'newLogCollector';
@@ -56,6 +62,18 @@
     ? routeQueryType : defaultComponentType);
 
   const renderComponent = computed(() => componentMap[currentComponentType.value]);
+
+  const configData = ref(new ConfigModel());
+
+  provide('configData', configData);
+
+  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+    onSuccess: (data) => {
+      configData.value = data;
+    },
+  });
 
   const handleStepChange = (step: any, formData: Record<string, any>) => {
     const componentType = resolveNextComponent(formData);

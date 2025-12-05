@@ -451,7 +451,7 @@
         name: 'logDataIdEdit',
         params: {
           systemId: route.params.id,
-          bk_data_id: bkDataId,
+          bkDataId,
         },
         query: {
           step: 2, // 字段清洗
@@ -476,7 +476,7 @@
         name: 'logCollectorEdit',
         params: {
           systemId: route.params.id,
-          collector_config_id: collectorConfigId,
+          collectorConfigId,
         },
         query: {
           collector_config_id: collectorConfigId,
