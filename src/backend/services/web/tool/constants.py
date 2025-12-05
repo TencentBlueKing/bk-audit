@@ -305,7 +305,7 @@ class ApiRequestMethod(TextChoices):
 
 class ApiConfig(BaseModel):
     """
-    API配置
+    API配置 -- 当工具为 API 时使用
     """
 
     url: str = PydanticField(title=gettext_lazy("请求地址"))
