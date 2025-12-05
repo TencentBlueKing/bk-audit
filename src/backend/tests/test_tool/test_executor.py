@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 from unittest import mock
 
 from django.test import TestCase
@@ -28,6 +29,7 @@ from services.web.tool.executor.tool import (
     SqlDataSearchExecutor,
     ToolExecutorFactory,
     VariableValueParser,
+    ApiToolExecutor
 )
 from services.web.tool.models import BkVisionToolConfig, DataSearchToolConfig, Tool
 from services.web.vision.models import VisionPanel
@@ -473,6 +475,113 @@ class TestBkVisionExecutor(TestCase):
                 self.assertEqual(result.panel_id, "panel_123")
 
 
+class TestApiToolExecutor(TestCase):
+
+    def setUp(self):
+        """
+            设置ApiTool执行器的测试环境
+        """
+        self.api_config_data = {
+            "api_config": {
+                "url": "https://k.autohome.com.cn/ajax/getfeedIntelligent/",
+                "method": "GET",
+                "auth_config": {
+                    "method": "bk_app_auth",
+                    "config": {
+                        "bk_app_code": os.getenv("BKPAAS_APP_ID"),
+                        "bk_app_secret": os.getenv("BKPAAS_APP_SECRET")
+                    }
+                },
+                "headers": [{"key": "Content-Type", "value": "application/json"}],
+            },
+            "input_variable": [
+                {
+                    "raw_name": "pageIndex",
+                    "display_name": "页码",
+                    "description": "页码",
+                    "field_category": "input",
+                    "required": True,
+                    "default_value": "",
+                    "is_show": True,
+                    "position": "query",
+                },
+                {
+                    "raw_name": "pageSize",
+                    "display_name": "条目数",
+                    "description": "条目数",
+                    "field_category": "input",
+                    "required": False,
+                    "default_value": "",
+                    "is_show": True,
+                    "position": "query",
+                },
+                {
+                    "raw_name": "_appid",
+                    "display_name": "文章类别",
+                    "description": "登录名",
+                    "field_category": "input",
+                    "required": False,
+                    "default_value": "koubei",
+                    "is_show": True,
+                    "position": "query",
+                },
+                {
+                    "raw_name": "date",
+                    "display_name": "文档时间",
+                    "description": "文档时间",
+                    "field_category": "input",
+                    "required": False,
+                    "default_value": "20180129",
+                    "is_show": True,
+                    "position": "query",
+                }
+            ],
+            "output_config": {
+                "enable_grouping": False,
+                "groups": [
+
+                ]
+            },
+        }
+        # 创建API工具
+        self.api_tool = Tool.objects.create(
+            namespace="test",
+            name="api_tool",
+            uid="api_tool_123",
+            version=1,
+            tool_type=ToolTypeEnum.API.value,
+            config=self.api_config_data,
+        )
+
+    def test_api_tool_created(self):
+        """
+            初始化创建API工具是否成功
+        """
+        self.assertEqual(self.api_tool.uid, "api_tool_123")
+
+    def test_execute_with_tool_object(self):
+        """
+            测试通过Tool对象初始化执行ApiTool查询
+        """
+        params = {
+            "tool_variables": [
+                {
+                    "raw_name": "pageIndex",
+                    "value": "2",
+                    "position": "query",
+                },
+                {
+                    "raw_name": "pageSize",
+                    "value": "30",
+                    "position": "query",
+                },
+            ]
+        }
+        executor = ApiToolExecutor(self.api_tool)
+        result = executor.execute(params, skip_permission=True)
+        print(result)
+
+
 class TestToolExecutorFactory(TestCase):
     def setUp(self):
         self.analyzer_cls = SqlQueryAnalysis
@@ -503,6 +612,77 @@ class TestToolExecutorFactory(TestCase):
             config={"uid": "vision_panel_123", "input_variable": []},
         )
 
+        # API工具
+        self.api_tool = Tool.objects.create(
+            namespace="test",
+            name="api_tool",
+            uid="api_tool_123",
+            version=1,
+            tool_type=ToolTypeEnum.API.value,
+            config={
+                "api_config": {
+                    "url": "https://k.autohome.com.cn/ajax/getfeedIntelligent/",
+                    "method": "GET",
+                    "auth_config": {
+                        "method": "bk_app_auth",
+                        "config": {
+                            "bk_app_code": os.getenv("BKPAAS_APP_ID"),
+                            "bk_app_secret": os.getenv("BKPAAS_APP_SECRET")
+                        }
+                    },
+                    "headers": [{"key": "Content-Type", "value": "application/json"}],
+                },
+                "input_variable": [
+                    {
+                        "raw_name": "pageIndex",
+                        "display_name": "页码",
+                        "description": "页码",
+                        "field_category": "input",
+                        "required": True,
+                        "default_value": "",
+                        "is_show": True,
+                        "position": "query",
+                    },
+                    {
+                        "raw_name": "pageSize",
+                        "display_name": "条目数",
+                        "description": "条目数",
+                        "field_category": "input",
+                        "required": False,
+                        "default_value": "",
+                        "is_show": True,
+                        "position": "query",
+                    },
+                    {
+                        "raw_name": "_appid",
+                        "display_name": "文章类别",
+                        "description": "登录名",
+                        "field_category": "input",
+                        "required": False,
+                        "default_value": "koubei",
+                        "is_show": True,
+                        "position": "query",
+                    },
+                    {
+                        "raw_name": "date",
+                        "display_name": "文档时间",
+                        "description": "文档时间",
+                        "field_category": "input",
+                        "required": False,
+                        "default_value": "20180129",
+                        "is_show": True,
+                        "position": "query",
+                    }
+                ],
+                "output_config": {
+                    "enable_grouping": False,
+                    "groups": [
+
+                    ]
+                },
+            }
+        )
+
     def test_create_sql_executor(self):
         """测试工厂创建SQL执行器"""
         factory = ToolExecutorFactory(self.analyzer_cls)
@@ -518,6 +698,14 @@ class TestToolExecutorFactory(TestCase):
 
         self.assertIsInstance(executor, BkVisionExecutor)
         self.assertEqual(executor.config.uid, "vision_panel_123")
+
+    def test_create_api_executor(self):
+        """测试工厂创建Api工具执行器"""
+        factory = ToolExecutorFactory(self.analyzer_cls)
+        executor = factory.create_from_tool(self.api_tool)
+
+        self.assertIsInstance(executor, ApiToolExecutor)
+        self.assertEqual(executor.tool.uid, "api_tool_123")
 
     def test_create_with_unsupported_type(self):
         """测试工厂处理不支持的工具类型"""
