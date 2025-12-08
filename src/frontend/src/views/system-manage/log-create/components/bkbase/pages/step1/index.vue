@@ -19,7 +19,7 @@
     class="step1-action"
     :offset-target="getSmartActionOffsetTarget">
     <div class="step1-content">
-      <bk-form
+      <audit-form
         ref="formRef"
         class="bkbase-form"
         :model="localFormData">
@@ -153,7 +153,7 @@
                 :label="Boolean(true)">
                 {{ t('我已阅读') }}
                 <a
-                  href="https://github.com/TencentBlueKing/bk-audit-sdk"
+                  :href="configData?.audit_doc_config?.audit_access_guide"
                   target="_blank">{{ t('《审计中心接入要求》') }}</a>
               </bk-radio>
               <div>
@@ -162,14 +162,14 @@
                   :label="Boolean(true)">
                   {{ t('我已了解') }}
                   <a
-                    href="https://github.com/TencentBlueKing/bk-audit-sdk"
+                    :href="configData?.audit_doc_config?.audit_operation_log_record_standards"
                     target="_blank">{{ t('《审计中心操作日志记录标准》') }}</a>
                 </bk-radio>
               </div>
             </div>
           </bk-form-item>
         </div>
-      </bk-form>
+      </audit-form>
     </div>
     <template #action>
       <bk-button @click="handlePrevious">
@@ -296,7 +296,9 @@
     defaultValue: [],
   });
 
-  useRequest(RootManageService.config, {
+  const {
+    data: configData,
+  } = useRequest(RootManageService.config, {
     defaultValue: new ConfigModel(),
     manual: true,
     onSuccess(data) {
@@ -427,6 +429,10 @@
 
   .bkbase-form {
     width: 66%;
+
+    :deep(.bk-radio-label) {
+      font-size: 12px;
+    }
   }
 
   .select-tip {
