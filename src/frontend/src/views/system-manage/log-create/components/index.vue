@@ -32,7 +32,8 @@
       <bk-form-item :label="t('是否已有日志数据')">
         <bk-radio-group v-model="formData.reportMethod">
           <bk-radio
-            v-for="item in reportMethodRadioList.filter(item => showBkbase.enabled || item.id !== 'bkbase')"
+            v-for="item in reportMethodRadioList
+              .filter(item => showBkbase.enabled || item.id !== 'bkbase')"
             :key="item.id"
             :label="item.id">
             {{ t(item.name) }}

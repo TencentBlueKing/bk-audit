@@ -20,6 +20,7 @@
     class="log-create-api-push">
     <bk-form
       ref="formRef"
+      class="api-form"
       :model="formData">
       <!-- 新建数据上报 -->
       <div class="content-section">
@@ -189,7 +190,7 @@
               label="true">
               {{ t('我已阅读') }}
               <a
-                href="https://github.com/TencentBlueKing/bk-audit-sdk"
+                :href="configData?.audit_doc_config?.audit_access_guide"
                 target="_blank">{{ t('《审计中心接入要求》') }}</a>
             </bk-radio>
             <div>
@@ -198,7 +199,7 @@
                 label="true">
                 {{ t('我已了解') }}
                 <a
-                  href="https://github.com/TencentBlueKing/bk-audit-sdk"
+                  :href="configData?.audit_doc_config?.audit_operation_log_record_standards"
                   target="_blank">{{ t('《审计中心操作日志记录标准》') }}</a>
               </bk-radio>
             </div>
@@ -226,11 +227,13 @@
   <data-inspection v-else />
 </template>
 <script setup lang="ts">
-  import { computed, onBeforeUnmount, ref } from 'vue';
+  import { computed, inject, onBeforeUnmount, type Ref, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute } from 'vue-router';
 
   import CollectorManageService from '@service/collector-manage';
+
+  import ConfigModel from '@model/root/config';
 
   import {
     execCopy,
@@ -276,6 +279,8 @@
       url: 'https://github.com/TencentBlueKing/bk-audit-go-sdk',
     },
   ]);
+
+  const configData = inject<Ref<ConfigModel>>('configData');
 
   // 根据选中的 SDK 类型获取对应的 URL
   const selectedSdkUrl = computed(() => {
@@ -390,6 +395,14 @@
 .log-create-api-push {
   padding: 16px 24px;
   background: #fff;
+
+  .api-form {
+    width: 66%;
+
+    :deep(.bk-radio-label) {
+      font-size: 12px;
+    }
+  }
 }
 
 .content-section {
