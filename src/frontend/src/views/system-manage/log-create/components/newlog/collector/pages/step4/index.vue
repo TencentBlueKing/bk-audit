@@ -282,7 +282,6 @@
   const isError = ref(true); // 调试是否报错
 
   const isEditMode = route.name === 'logCollectorEdit';
-  console.log('route.name', route.name);
   const {
     searchParams,
     removeSearchParam,
@@ -318,7 +317,6 @@
     },
   });
 
-  console.log('isEditMode', isEditMode);
   // 编辑数据
   if (isEditMode) {
     useRequest(CollectorManageService.fetchCollectorsById, {

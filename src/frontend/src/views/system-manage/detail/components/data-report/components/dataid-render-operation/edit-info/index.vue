@@ -76,6 +76,35 @@
         </render-info-block>
       </div>
     </bk-loading>
+    <p
+      class="title"
+      style="margin-top: 24px;">
+      {{ t('日志记录信息') }}
+    </p>
+    <bk-loading :loading="loading">
+      <div class="base-content">
+        <render-info-block>
+          <render-info-item :label="t('上报日志须知')">
+            <div>
+              <div
+                :label="Boolean(true)">
+                {{ t('我已阅读') }}
+                <a
+                  :href="configData.audit_doc_config.audit_access_guide"
+                  target="_blank">{{ t('《审计中心接入要求》') }}</a>
+              </div>
+              <div
+                :label="Boolean(true)">
+                {{ t('我已了解') }}
+                <a
+                  :href="configData.audit_doc_config.audit_operation_log_record_standards"
+                  target="_blank">{{ t('《审计中心操作日志记录标准》') }}</a>
+              </div>
+            </div>
+          </render-info-item>
+        </render-info-block>
+      </div>
+    </bk-loading>
   </div>
 </template>
 <script setup lang="ts">
@@ -87,8 +116,10 @@
 
   import BizService from '@service/biz-manage';
   import DataIdManageService from '@service/dataid-manage';
+  import RootManageService from '@service/root-manage';
 
   import type CollectorModel from '@model/collector/collector';
+  import ConfigModel from '@model/root/config';
 
   import useRequest from '@hooks/use-request';
 
@@ -105,6 +136,13 @@
   const statusIconType = computed(() => (detailData.value.active ? 'normal' : 'abnormal'));
   const statusTip = computed(() => (detailData.value.active ? t('成功') : t('失败')));
   const bkBizId = computed(() => bizList.value.find(item => item.id === props.data.bk_biz_id)?.name);
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
 
   const {
     loading,
