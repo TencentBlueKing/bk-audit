@@ -173,6 +173,40 @@ class CreateEventResourceTest(TestCase):
         )
         self.assertTrue(Risk.objects.filter(raw_event_id="raw-owner").exists())
 
+    def test_manual_event_maps_basic_config(self):
+        strategy = Strategy.objects.create(
+            namespace=settings.DEFAULT_NAMESPACE,
+            strategy_name="manual-map",
+            strategy_type=StrategyType.RULE,
+            event_basic_field_configs=[
+                {"field_name": "raw_event_id", "display_name": "raw", "map_config": {"source_field": "原始事件ID"}},
+                {"field_name": "event_content", "display_name": "content", "map_config": {"source_field": "事件描述"}},
+                {"field_name": "event_type", "display_name": "type", "map_config": {"source_field": "事件类型"}},
+                {
+                    "field_name": "event_source",
+                    "display_name": "source",
+                    "map_config": {"target_value": "manual-source"},
+                },
+                {"field_name": "operator", "display_name": "operator", "map_config": {"source_field": "责任人"}},
+            ],
+        )
+        event_payload = {
+            "strategy_id": strategy.strategy_id,
+            "event_data": {"原始事件ID": "mapped-raw", "事件描述": "mapped content", "事件类型": "a;b", "责任人": "alice,bob"},
+            "event_time": int(datetime.datetime.now().timestamp() * 1000),
+        }
+        request = self._build_request(username="super", is_superuser=True)
+        with mock.patch("services.web.risk.tasks.process_risk_ticket"):
+            response = resource.risk.create_event(events=[event_payload], gen_risk=True, _request=request)
+
+        self.assertEqual(len(response.get("risk_ids", [])), 1)
+        risk = Risk.objects.get(risk_id=response["risk_ids"][0])
+        self.assertEqual(risk.raw_event_id, "mapped-raw")
+        self.assertEqual(risk.event_content, "mapped content")
+        self.assertEqual(risk.event_source, "manual-source")
+        self.assertEqual(risk.event_type, ["a", "b"])
+        self.assertEqual(risk.operator, ["alice", "bob"])
+
 
 class ManualAddEventTaskTest(TestCase):
     def setUp(self):
