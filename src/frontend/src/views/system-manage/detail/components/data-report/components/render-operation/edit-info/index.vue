@@ -105,21 +105,69 @@
         </render-info-block>
       </div>
     </bk-loading>
+    <p
+      class="title"
+      style="margin-top: 24px;">
+      {{ t('日志记录信息') }}
+    </p>
+    <bk-loading :loading="loading">
+      <div class="log-record-content">
+        <render-info-block>
+          <render-info-item :label="t('日志记录方式')">
+            {{ detailData.record_log_type }}
+          </render-info-item>
+        </render-info-block>
+        <render-info-block>
+          <render-info-item :label="t('SDK类型')">
+            <a
+              v-if="detailData.select_sdk_type"
+              :href="selectedSdkUrl"
+              target="_blank">{{ selectedSdkUrl }}</a>
+            <span v-else>
+              --
+            </span>
+          </render-info-item>
+        </render-info-block>
+        <render-info-block>
+          <render-info-item :label="t('上报日志须知')">
+            <div>
+              <div
+                :label="Boolean(true)">
+                {{ t('我已阅读') }}
+                <a
+                  :href="configData.audit_doc_config.audit_access_guide"
+                  target="_blank">{{ t('《审计中心接入要求》') }}</a>
+              </div>
+              <div
+                :label="Boolean(true)">
+                {{ t('我已了解') }}
+                <a
+                  :href="configData.audit_doc_config.audit_operation_log_record_standards"
+                  target="_blank">{{ t('《审计中心操作日志记录标准》') }}</a>
+              </div>
+            </div>
+          </render-info-item>
+        </render-info-block>
+      </div>
+    </bk-loading>
   </div>
 </template>
 <script setup lang="ts">
 
   import {
+    computed,
     ref,
     watch,
   } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import CollectorManageService from '@service/collector-manage';
+  import RootManageService from '@service/root-manage';
 
   import type CollectorModel from '@model/collector/collector';
   import CollectorDetailModel from '@model/collector/collector-detail';
   import type Content from '@model/collector/task-status';
+  import ConfigModel from '@model/root/config';
 
   import useRequest from '@hooks/use-request';
 
@@ -138,6 +186,36 @@
   const { t } = useI18n();
 
   const type = ref<string>('success');
+  const selectSdkTypeList = ref([
+    {
+      label: 'PYTHON_SDK',
+      name: 'Python SDk',
+      url: 'https://github.com/TencentBlueKing/bk-audit-python-sdk',
+    },
+    {
+      label: 'JAVA_SDK',
+      name: 'Java SDk',
+      url: 'https://github.com/TencentBlueKing/bk-audit-java-sdk',
+    },
+    {
+      label: 'GO_SDK',
+      name: 'Go SDk',
+      url: 'https://github.com/TencentBlueKing/bk-audit-go-sdk',
+    }]);
+
+  // 根据选中的 SDK 类型获取对应的 URL
+  const selectedSdkUrl = computed(() => {
+    const selectedSdk = selectSdkTypeList.value.find(item => item.label === detailData.value.select_sdk_type);
+    return selectedSdk?.url || 'https://github.com/TencentBlueKing/bk-audit-sdk';
+  });
+
+  const {
+    data: configData,
+  } =  useRequest(RootManageService.config, {
+    defaultValue: new ConfigModel(),
+    manual: true,
+  });
+
   const {
     loading,
     data: detailData,
@@ -171,6 +249,12 @@
 <style lang="postcss" scoped>
   .log-collection-detail-box {
     margin-bottom: 24px;
+
+    .log-record-content {
+      :deep(.render-info-item) {
+        flex: 1;
+      }
+    }
 
     .title {
       padding-bottom: 16px;

@@ -140,6 +140,8 @@ export default class CollectorDetail {
   updated_by: string;
   yaml_config: string;
   yaml_config_enabled: boolean;
+  record_log_type: string;
+  select_sdk_type: string;
   constructor(payload = {} as CollectorDetail) {
     this.allocation_min_days = payload.allocation_min_days;
     this.bcs_cluster_id = payload.bcs_cluster_id;
@@ -210,6 +212,8 @@ export default class CollectorDetail {
     this.yaml_config = payload.yaml_config;
     this.yaml_config_enabled = payload.yaml_config_enabled;
     this.environment = payload.environment;
+    this.record_log_type = payload.record_log_type;
+    this.select_sdk_type = payload.select_sdk_type;
 
     this.params = this.initParams(payload.params, payload.configs);
     this.data_encoding = this.initEncoding(payload.configs, payload.data_encoding);
