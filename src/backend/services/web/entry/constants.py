@@ -120,7 +120,7 @@ def get_manual_event_strategy_config(rt_id):
         f"`{rt_id}`.`event_source` `u_46a4b7f4986ca8845bd00b56233756d7`,"
         f"`{rt_id}`.`operator` `u_0c5b77a14834daae88b98bacd7ce29db`,"
         f"`{rt_id}`.`id` `u_manual_event_id` "
-        f"FROM {rt_id} `{rt_id}`) `sub_table`"
+        f"FROM {rt_id} `{rt_id}` WHERE `{rt_id}`.`manual_synced` = FALSE) `sub_table`"
     )
 
     # 2. 构建完整字典

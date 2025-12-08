@@ -41,6 +41,7 @@ from services.web.risk.constants import (
     EVENT_TYPE_SPLIT_REGEX,
     RISK_SYNC_BATCH_SIZE,
     RISK_SYNC_START_TIME_KEY,
+    EventMappingFields,
     RiskStatus,
 )
 from services.web.risk.handlers import EventHandler
@@ -74,7 +75,7 @@ class RiskHandler:
         """
         try:
             is_create, risk = self.create_risk(event, eligible_strategy_ids, manual=manual)
-            if is_create and not manual:
+            if is_create:
                 self.send_risk_notice(risk)
 
                 from services.web.risk.tasks import process_risk_ticket
@@ -158,7 +159,7 @@ class RiskHandler:
             )
             return strategy.risk_title
 
-    def gen_risk_create_params(self, event: dict) -> dict:
+    def gen_risk_create_params(self, event: dict, manual: bool = False) -> dict:
         create_params = {
             "event_content": event.get("event_content"),
             "raw_event_id": event["raw_event_id"],
@@ -171,8 +172,70 @@ class RiskHandler:
             "event_source": event.get("event_source"),
             "operator": self.parse_operator(event.get("operator")),
         }
+        if manual:
+            self._apply_basic_field_mapping(create_params=create_params, event=event)
         create_params["title"] = self.render_risk_title(create_params)
         return create_params
+
+    def _apply_basic_field_mapping(self, create_params: dict, event: dict) -> None:
+        """
+        根据策略基础字段配置，将事件数据中的字段映射到风险创建参数中
+        """
+
+        strategy = (
+            Strategy.objects.filter(strategy_id=create_params["strategy_id"]).only("event_basic_field_configs").first()
+        )
+        if not strategy:
+            return
+
+        basic_configs = strategy.event_basic_field_configs or []
+        if not basic_configs:
+            return
+
+        event_data = event.get("event_data")
+        if not isinstance(event_data, dict):
+            return
+
+        for field in basic_configs:
+            field_name = field.get("field_name")
+            map_config = field.get("map_config") or {}
+            if not field_name or not map_config:
+                continue
+
+            target_value = map_config.get("target_value")
+            source_field = map_config.get("source_field")
+            if target_value:
+                mapped_value = target_value
+            elif source_field:
+                mapped_value = event_data.get(source_field)
+            else:
+                continue
+
+            if mapped_value is None:
+                continue
+
+            if field_name == EventMappingFields.EVENT_TYPE.field_name:
+                create_params[field_name] = self.parse_event_type(
+                    mapped_value
+                    if isinstance(mapped_value, str)
+                    else ",".join(map(str, mapped_value))
+                    if isinstance(mapped_value, (list, tuple, set))
+                    else str(mapped_value)
+                )
+                continue
+
+            if field_name == EventMappingFields.OPERATOR.field_name:
+                operators = (
+                    mapped_value
+                    if isinstance(mapped_value, str)
+                    else ",".join(map(str, mapped_value))
+                    if isinstance(mapped_value, (list, tuple, set))
+                    else str(mapped_value)
+                )
+                create_params[field_name] = self.parse_operator(operators)
+                continue
+
+            create_params[field_name] = mapped_value
 
     def create_risk(
         self, event: dict, eligible_strategy_ids: Set[str], manual: bool = False
@@ -220,7 +283,7 @@ class RiskHandler:
             .first()
         )
 
-        # 存在则更新结束时间
+        # 存在则更新结束时间, 风险事件描述
         if risk:
             last_end_time = event["event_time"] / 1000
             logger.info("[UpdateRisk] Risk exists. risk_id=%s; last_end_time=%s", risk.risk_id, last_end_time)
@@ -228,10 +291,13 @@ class RiskHandler:
             if risk.event_end_time.timestamp() < last_end_time:
                 risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
                 risk.save(update_fields=["event_end_time"])
+            if event.get("event_content") and risk.event_content != event["event_content"]:
+                risk.event_content = event["event_content"]
+                risk.save(update_fields=["event_content"])
             return False, risk
 
         # 不存在则创建
-        create_params = self.gen_risk_create_params(event)
+        create_params = self.gen_risk_create_params(event, manual=manual)
         if manual:
             create_params["manual_synced"] = False
         risk: Risk = Risk.objects.create(**create_params)
