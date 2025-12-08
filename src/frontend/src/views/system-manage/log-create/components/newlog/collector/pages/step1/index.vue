@@ -93,7 +93,7 @@
                 :label="Boolean(true)">
                 {{ t('我已阅读') }}
                 <a
-                  href="https://github.com/TencentBlueKing/bk-audit-sdk"
+                  :href="configData?.audit_doc_config?.audit_access_guide"
                   target="_blank">{{ t('《审计中心接入要求》') }}</a>
               </bk-radio>
               <div>
@@ -102,7 +102,7 @@
                   :label="Boolean(true)">
                   {{ t('我已了解') }}
                   <a
-                    href="https://github.com/TencentBlueKing/bk-audit-sdk"
+                    :href="configData?.audit_doc_config?.audit_operation_log_record_standards"
                     target="_blank">{{ t('《审计中心操作日志记录标准》') }}</a>
                 </bk-radio>
               </div>
@@ -144,11 +144,13 @@
   </smart-action>
 </template>
 <script setup lang="ts">
-  import { computed, ref } from 'vue';
+  import { computed, inject, type Ref, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
   // import MetaManageService from '@service/meta-manage';
   // import useRequest from '@/hooks/use-request';
   import { useRoute, useRouter } from 'vue-router';
+
+  import ConfigModel from '@model/root/config';
 
   interface Props {
     formData: Record<string, any>
@@ -186,6 +188,8 @@
   const localFormData = ref({ ...props.formData });
 
   const isEditMode = route.name === 'logCollectorEdit';
+
+  const configData = inject<Ref<ConfigModel>>('configData');
 
   if (isEditMode) {
     localFormData.value.notice.read_requirement = true;
@@ -286,6 +290,10 @@
 
 .collector-form {
   width: 66%;
+
+  :deep(.bk-radio-label) {
+    font-size: 12px;
+  }
 
   .recommend-text {
     padding: 2px 4px;
