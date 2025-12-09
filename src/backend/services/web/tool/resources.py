@@ -818,15 +818,19 @@ class ApiToolDebug(ToolBase):
 
     def perform_request(self, validated_request_data):
         requests_info = validated_request_data.get("request_info")
-        url, method, auth_type, headers = requests_info["url"], requests_info["method"], requests_info["auth_type"], requests_info["headers"]
+        url, method, auth_type = requests_info["url"], requests_info["method"], requests_info["auth_type"]
+
+        headers = {}
+        for header_item in requests_info["headers"]:
+            headers[header_item["key"]] = header_item["value"]
 
         # 1. 按 position 分类参数
         path_params: Dict[str, str] = {}
         query_params: Dict[str, str] = {}
         body_params: Dict[str, Any] = {}
 
-        for param in validated_request_data.get("requests_params"):
-            position = param["position"].value
+        for param in validated_request_data.get("request_params"):
+            position = param["position"]
             name = param.get("raw_name", "")
             value = param.get("value", "")
 
@@ -863,7 +867,7 @@ class ApiToolDebug(ToolBase):
                 method=http_method,
                 url=formatted_url,
                 headers=headers,
-                timeout=os.getenv(""),
+                timeout=60,
                 **request_kwargs
             )
             return response.json()
