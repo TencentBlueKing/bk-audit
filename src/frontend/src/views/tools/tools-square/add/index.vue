@@ -207,11 +207,13 @@
               </div>
             </template>
           </card-part-vue>
+          {{ formData }}
           <component
             :is="ToolTypeComMap[formData.tool_type]"
             v-if="isShowComponent"
             ref="comRef"
             :data-search-config-type="formData.data_search_config_type"
+            :form-data-config="formData.config"
             :is-edit-mode="isEditMode"
             :is-first-edit="isFirstEdit"
             :is-update="isUpdate"
@@ -780,7 +782,7 @@
     }
 
     Promise.all(tastQueue).then(() => {
-      // isCreating.value = true;
+      isCreating.value = true;
 
       // 获取组件配置
       if (comRef.value?.getFields) {
@@ -796,23 +798,23 @@
       }
       const data = _.cloneDeep(formData.value);
       console.log('data', data);
-      // const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
+      const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
 
-      // if (data.tags) {
-      //   data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
-      // }
-      // service(data)
-      //   .then(() => {
-      //     isFailed.value = false;
-      //     isSuccessful.value = true;
-      //   })
-      //   .catch(() => {
-      //     isSuccessful.value = false;
-      //     isFailed.value = true;
-      //   })
-      //   .finally(() => {
-      //     isCreating.value = false;
-      //   });
+      if (data.tags) {
+        data.tags = data.tags.map(item => (allTagMap.value[item] ? allTagMap.value[item] : item));
+      }
+      service(data)
+        .then(() => {
+          isFailed.value = false;
+          isSuccessful.value = true;
+        })
+        .catch(() => {
+          isSuccessful.value = false;
+          isFailed.value = true;
+        })
+        .finally(() => {
+          isCreating.value = false;
+        });
     });
   };
 
@@ -897,9 +899,8 @@
 
     .permission-link {
       color: #3a84ff;
-      cursor: pointer;
+      cursor: pointe
     }
   }
 }
-
 </style>

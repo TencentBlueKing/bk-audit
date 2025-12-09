@@ -30,6 +30,9 @@
         id-key="json_path"
         multiple
         multiple-mode="tag"
+        :popover-options="{
+          placement: 'top',
+        }"
         @tag-remove="handelTagRemove">
         <bk-tree
           ref="treeRef"

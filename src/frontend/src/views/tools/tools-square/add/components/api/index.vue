@@ -114,11 +114,11 @@
           </div>
         </div>
         <div class="item-params">
-          <bk-checkbox v-model="formData.params">
+          <bk-checkbox v-model="isParams">
             {{ t('参数设置') }}
           </bk-checkbox>
           <params-config
-            v-if="formData.params"
+            v-if="isParams"
             ref="paramsConfigRef"
             :input-variable="formData.input_variable" />
           <div class="item-params-add">
@@ -149,11 +149,11 @@
     ref="deDugRef"
     :api-config="formData.api_config"
     :input-variable="formData.input_variable"
-    :is-params="formData.params"
+    :is-params="isParams"
     @de-bug-done="handleDeBugDone" />
 </template>
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import CardPartVue from '../card-part.vue';
@@ -162,17 +162,23 @@
   import paramsConfig from './params-config.vue';
   import resultConfig from './result/index.vue';
 
+  interface Props {
+    isEditMode: boolean;
+    formDataConfig: any;
+  }
+
   interface Exposes {
     getFields: () => Config;
   }
 
+  const props = defineProps<Props>();
   const { t } = useI18n();
   const deDugRef = ref();
   const formRef = ref();
   const resultConfigRef = ref();
   const paramsConfigRef = ref();
+  const isParams = ref(false);
   const formData = ref({
-    params: true,
     api_config: {
       url: '',
       method: 'GET',
@@ -281,22 +287,38 @@
 
   // 调试
   const handleDeBugDone = (res: any, isSucc: boolean) => {
-    console.log('handleDeBugDone>', res, isSucc);
     resultData.value = res;
     isSuccess.value = isSucc;
     isDoneDeBug.value = true;
   };
-  // 获取结果配置
-  const handleGetResultConfig = () => {
-    console.log('handleGetResultConfig>');
-    resultConfigRef.value?.handleGetResultConfig();
-  };
 
+  watch(
+    () => props.isEditMode,
+    (val) => {
+      console.log('val', val);
+      // if (val) {
+      //   console.log('props.formDataConfig??', props.formDataConfig);
+      //   console.log('p??', props.formDataConfig.api_config);
+      //   isParams.value = props.formDataConfig.input_variable.length !== 0;
+      //   // formData.value.api_config = props.formDataConfig.api_config;
+      //   // formData.value.output_config = props.formDataConfig.output_config;
+      // }
+    },
+    { deep: true, immediate: true },
+  );
+
+  onMounted(() => {
+    console.log('props.isEditMode', props.isEditMode);
+
+    console.log('props.formDataConfig', props.formDataConfig);
+  });
   defineExpose<Exposes>({
     // 提交获取字段
     getFields() {
-      handleGetResultConfig();
-      return '111';
+      formData.value.input_variable = paramsConfigRef.value?.getData();
+      formData.value.output_config = resultConfigRef.value?.handleGetResultConfig();
+      console.log('formData', formData.value);
+      return formData.value;
     },
   });
 
@@ -395,16 +417,6 @@
 .delete-fill {
   margin-left: 17px;
   font-size: 14px;
-  color: #ea3636;
-  cursor: none;
-}
-
-.corret-fill-text {
-  margin-left: 5px;
-  font-size: 12px;
-  line-height: 20px;
-  letter-spacing: 0;
-  color: #4d4f56;
-  cursor: none;
+  cursor: pointer;
 }
 </style>

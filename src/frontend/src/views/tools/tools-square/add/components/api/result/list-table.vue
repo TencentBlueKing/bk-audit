@@ -552,7 +552,7 @@
     line-height: 31px;
     text-align: center;
     background: #fafbfd;
-    border: 1px solid #c4c6cc;
+    border: .5px solid #c4c6cc;
     border-radius: 2px 0 0 2px;
   }
 

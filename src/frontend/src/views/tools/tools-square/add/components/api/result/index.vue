@@ -109,70 +109,115 @@
         enable_grouping: true,
         groups: [],
       };
-
+      isGroupOutputConfig.groups = groupContentRefData.map((item) => {
+        const groupConfig = {
+          name: item.name, // 分组名
+          output_fields: item.config?.map((configItem: any) => {
+            // 表格
+            if (configItem.type === 'table') {
+              return {
+                raw_name: configItem.name,
+                json_path: configItem.json_path,
+                description: configItem.listDescription || '',
+                display_name: configItem.listName || '',
+                drill_config: null,
+                enum_mappings: null,
+                field_config: {
+                  field_type: 'table',
+                  output_fields: configItem.list.map((listItem: any) => ({
+                    raw_name: listItem.name,
+                    json_path: listItem.json_path,
+                    description: listItem?.description || '',
+                    display_name: listItem?.display_name || '',
+                    drill_config: listItem?.drill_config || null,
+                    enum_mappings: {
+                      mappings: listItem?.enum_mappings.mappings || [],
+                    },
+                  })),
+                },
+              };
+            }
+            // 对象
+            return {
+              raw_name: configItem.name,
+              json_path: configItem.json_path,
+              description: configItem.config?.description || '',
+              display_name: configItem.config?.display_name || '',
+              drill_config: configItem.config?.drill_config || null,
+              field_config: {
+                field_type: 'kv',
+              },
+              enum_mappings: {
+                mappings: configItem.config?.mappings || [],
+              },
+            };
+          }),
+        };
+        console.log('groupConfig', groupConfig);
+        return groupConfig;
+      });
+      console.log('isGroupOutputConfig', isGroupOutputConfig);
       return isGroupOutputConfig;
     }
     const contentRefData  = contentRef.value?.handleGetResultConfig();
-    console.log('contentRefData>>', contentRefData);
     const noGroupOutputConfig = {
       enable_grouping: false,
       groups: [],
     };
-    noGroupOutputConfig.groups[0] = contentRefData.map((item) => {
-      // 表格
-      if (item.type === 'table') {
-        const tableConfig = {
-          name: '', // 分组名
-          output_fields: [
-            {
-              raw_name: item.name,
-              json_path: item.json_path,
-              description: item.config?.description || '',
-              display_name: item.config?.display_name || '',
-              drill_config: item.config?.drill_config || null,
-              field_config: {
-                field_type: 'table',
-                output_fields: item.list.map((listItem: any) => ({
-                  raw_name: listItem.name,
-                  json_path: listItem.json_path,
-                  description: listItem.config?.description || '',
-                  display_name: listItem.config?.display_name || '',
-                  drill_config: listItem.config?.drill_config || null,
-                  enum_mappings: listItem.config?.mappings || null,
-                })),
-              },
-              enum_mappings: item.config?.mappings || null,
-            },
-          ],
-        };
+    console.log('contentRefData', contentRefData);
 
-        return tableConfig;
-      }
-      const objectConfig = {
-        name: '', // 分组名
-        output_fields: [{
+    noGroupOutputConfig.groups[0] = {
+      name: '',
+      output_fields: contentRefData.map((item: any) => {
+        if (item.type === 'table') {
+          return {
+            raw_name: item.name,
+            json_path: item.json_path,
+            description: item.listDescription || '',
+            display_name: item.listName || '',
+            drill_config: null,
+            enum_mappings: null,
+            field_config: {
+              field_type: 'table',
+              output_fields: item.list.map((listItem: any) => ({
+                raw_name: listItem.name,
+                json_path: listItem.json_path,
+                description: listItem?.description || '',
+                display_name: listItem?.display_name || '',
+                drill_config: listItem?.drill_config || null,
+                enum_mappings: {
+                  mappings: listItem?.enum_mappings.mappings || [],
+                },
+              })),
+            },
+          };
+        }
+        console.log('对象');
+
+        return {
           raw_name: item.name,
           json_path: item.json_path,
-          description: item.config?.description || '',
-          display_name: item.config?.display_name || '',
-          drill_config: item.config?.drill_config || null,
+          description: item?.config.description || '',
+          display_name: item?.config.display_name || '',
+          drill_config: item?.config.drill_config || null,
+          enum_mappings: {
+            mappings: item?.config.mappings || [],
+          },
           field_config: {
             field_type: 'kv',
           },
-          enum_mappings: item.config?.mappings || null,
-        }],
-      };
-      return objectConfig;
+        };
+      }),
+    };
+    console.log('noGroupOutputConfig>>', noGroupOutputConfig);
 
-      // 对象
-    });
     return noGroupOutputConfig;
   };
   defineExpose<Exposes>({
     // 提交获取字段
     handleGetResultConfig() {
-      // getResultConfig();
       console.log('getResultConfig()', getResultConfig());
+      return getResultConfig();
     },
   });
 </script>
