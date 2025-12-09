@@ -812,6 +812,48 @@ class ExecuteTool(ToolBase):
 class ApiToolDebug(ToolBase):
     """
         API工具调试
+        请求示例：
+        {
+            "request_info": {
+                "url": "https://k.autohome.com.cn/ajax/getfeedIntelligent/",
+                "method": "GET",
+                "auth_type": "none",
+                "headers": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ]
+            },
+            "request_params": [
+                {
+                    "raw_name": "pageIndex",
+                    "value": "2",
+                    "position": "query"
+                },
+                {
+                    "raw_name": "pageSize",
+                    "value": "30",
+                    "position": "query"
+                }
+            ]
+        }
+
+        响应示例：
+        {
+            "result": true,
+            "code": 0,
+            "data": {
+                "message": "成功",
+                "result": [
+
+                ],
+                "returncode": 0
+            },
+            "message": null,
+            "request_id": "27524e36-9b07-41a2-9353-0a9392f47f7d",
+            "trace_id": "3f259f655cec6ee31bb0bf2c18cb806f"
+        }
     """
     name = "API工具执行调试"
     RequestSerializer = ApiToolDebugSerializer
