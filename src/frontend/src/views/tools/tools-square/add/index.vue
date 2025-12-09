@@ -103,7 +103,7 @@
                     v-for="(item, index) in toolTypeList"
                     :key="index">
                     <bk-radio
-                      :disabled="item.id === 'api' || route.name === 'toolsEdit'"
+                      :disabled="route.name === 'toolsEdit'"
                       :label="item.id">
                       <div style="display: flex; align-items: center; line-height: 16px;">
                         <audit-icon
@@ -207,11 +207,13 @@
               </div>
             </template>
           </card-part-vue>
+          {{ formData }}
           <component
             :is="ToolTypeComMap[formData.tool_type]"
             v-if="isShowComponent"
             ref="comRef"
             :data-search-config-type="formData.data_search_config_type"
+            :form-data-config="formData.config"
             :is-edit-mode="isEditMode"
             :is-first-edit="isFirstEdit"
             :is-update="isUpdate"
@@ -273,6 +275,7 @@
 
   import useRouterBack from '@hooks/use-router-back';
 
+  import Api from './components/api/index.vue';
   import BkVision from './components/bkvision/index.vue';
   import CardPartVue from './components/card-part.vue';
   import DataSearch from './components/data-search/index.vue';
@@ -359,6 +362,7 @@
   const ToolTypeComMap: Record<string, any> = {
     data_search: DataSearch,
     bk_vision: BkVision,
+    api: Api,
   };
 
   const route = useRoute();
@@ -400,7 +404,7 @@
     name: '',
     tags: [],
     description: '',
-    tool_type: 'data_search',
+    tool_type: 'api',
     is_bkvision: false,
     data_search_config_type: 'sql',
     updated_at: '',
@@ -449,7 +453,7 @@
   }, {
     id: 'api',
     name: t('API接口'),
-    tips: t('暂未开放，敬请期待'),
+    tips: t('根据输入条件，使用 API 接口调用以获得结果。可定义输入与输出'),
   }, {
     id: 'bk_vision',
     name: t('BKVision图表'),
@@ -773,7 +777,7 @@
   // 提交
   const handleSubmit = () => {
     const tastQueue = [formRef.value.validate()];
-    if (comRef.value) {
+    if (comRef.value && formData.value.tool_type !== 'api') {
       tastQueue.push(comRef.value.getValue());
     }
 
@@ -788,11 +792,12 @@
             formData.value.updated_time = bkVisionUpdateTime.value || null;
           }
         } else {
+          console.log('获取组件配置');
           formData.value.config = comRef.value.getFields();
         }
       }
       const data = _.cloneDeep(formData.value);
-
+      console.log('data', data);
       const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
 
       if (data.tags) {
@@ -817,7 +822,7 @@
     if (val === 'bk_vision') {
       fetchChartLists();
     }
-    if (val === 'data_search') {
+    if (val === 'data_search' || val === 'api') {
       isShowComponent.value = true;
     }
   }, {
