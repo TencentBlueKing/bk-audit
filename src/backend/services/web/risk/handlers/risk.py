@@ -93,6 +93,8 @@ class RiskHandler:
                     event.get("raw_event_id"),
                 ),
             ).send()
+            if manual:
+                raise err
 
     def generate_risk_from_event(self, start_time: datetime.datetime, end_time: datetime.datetime) -> None:
         """
