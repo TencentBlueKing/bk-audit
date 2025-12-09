@@ -31,6 +31,8 @@ from services.web.tool.constants import (
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
     ToolTypeEnum,
+    ApiAuthMethod,
+    ApiRequestMethod,
 )
 from services.web.tool.models import Tool
 
@@ -298,3 +300,26 @@ class UserQueryTableAuthCheckReqSerializer(serializers.Serializer):
 
 class UserQueryTableAuthCheckRespSerializer(serializers.Serializer):
     has_auth = serializers.BooleanField()
+
+
+class ApiToolDebugRequestHeadersSerializer(serializers.Serializer):
+    key = serializers.CharField(label=gettext_lazy("请求头，参数名"))
+    value = serializers.CharField(label=gettext_lazy("请求头，参数值"))
+
+
+class ApiToolDebugRequestInfoSerializer(serializers.Serializer):
+    url = serializers.URLField(label=gettext_lazy("请求url"))
+    method = serializers.ChoiceField(label=gettext_lazy("请求方式"), choices=ApiRequestMethod.choices)
+    auth_type = serializers.ChoiceField(label=gettext_lazy("请求认证方式"), choices=ApiAuthMethod.choices)
+    headers = serializers.ListField(child=ApiToolDebugRequestHeadersSerializer(), label=gettext_lazy("API工具调试请求头"))
+
+
+class ApiToolDebugRequestParamsSerializer(serializers.Serializer):
+    raw_name = serializers.CharField(label=gettext_lazy("查询字段名"))
+    value = serializers.CharField(label=gettext_lazy("查询字段值"))
+    position = serializers.CharField(label=gettext_lazy("查询字段定位"))
+
+
+class ApiToolDebugSerializer(serializers.Serializer):
+    request_info = ApiToolDebugRequestInfoSerializer()
+    request_params = serializers.ListField(child=ApiToolDebugRequestParamsSerializer(), label=gettext_lazy("API工具调试参数"))
