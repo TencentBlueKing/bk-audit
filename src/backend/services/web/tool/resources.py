@@ -18,11 +18,13 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import datetime
+import os
 import traceback
 from collections import defaultdict
 from copy import deepcopy
-from typing import List
+from typing import List, Dict, Any
 
+import requests
 from bk_resource import Resource, api, resource
 from bk_resource.utils.common_utils import get_md5
 from blueapps.utils.logger import logger
@@ -79,6 +81,7 @@ from services.web.tool.serializers import (
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
     UserQueryTableAuthCheckReqSerializer,
+    ApiToolDebugSerializer,
 )
 from services.web.tool.tasks import update_bkvision_config
 from services.web.tool.tool import (
@@ -701,6 +704,7 @@ class ExecuteTool(ToolBase):
                     "value": ["option1", "option2"]
                 }
             ```
+            ```
         response:
             ```json
             {
@@ -741,28 +745,7 @@ class ExecuteTool(ToolBase):
                 "tool_type": "bk_vision"
             }
             ```
-    3. tool_type 为 api
-        params请求示例（需要传递position参数声明参数位置）:
-            ```json
-            {
-                "uid": "2eb3d241d1a411f09518c2b1e7a5696b",
-                "params": {
-                    "tool_variables": [
-                        {
-                            "raw_name": "pageIndex",
-                            "value": "2",
-                            "position": "query"
-                        },
-                        {
-                            "raw_name": "pageSize",
-                            "value": "30",
-                            "position": "query"
-                        }
-                    ]
-                }
-            }
-            ```
-    4. 权限上下文（可选）
+    3. 权限上下文（可选）
         - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
             - `caller_resource_type`：调用方资源类型（当前支持：`risk`）
             - `caller_resource_id`：调用方资源实例 ID（如风险ID）
@@ -824,6 +807,70 @@ class ExecuteTool(ToolBase):
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
         data = executor.execute(params).model_dump()
         return {"data": data, "tool_type": tool.tool_type}
+
+
+class ApiToolDebug(ToolBase):
+    """
+        API工具调试
+    """
+    name = "API工具执行调试"
+    RequestSerializer = ApiToolDebugSerializer
+
+    def perform_request(self, validated_request_data):
+        requests_info = validated_request_data.get("request_info")
+        url, method, auth_type, headers = requests_info["url"], requests_info["method"], requests_info["auth_type"], requests_info["headers"]
+
+        # 1. 按 position 分类参数
+        path_params: Dict[str, str] = {}
+        query_params: Dict[str, str] = {}
+        body_params: Dict[str, Any] = {}
+
+        for param in validated_request_data.get("requests_params"):
+            position = param["position"].value
+            name = param.get("raw_name", "")
+            value = param.get("value", "")
+
+            # 将 None 值转换为空字符串
+            if value is None:
+                value = ""
+
+            if position == "path":
+                path_params[name] = str(value)
+            elif position == "query":
+                query_params[name] = value
+            elif position == "body":
+                body_params[name] = value
+
+        # 2. 替换 URL 中的 path 参数
+        formatted_url = url.format(**path_params)
+
+        # 3. 准备 requests 请求参数
+        request_kwargs = {}
+
+        http_method = method.lower()
+        if http_method == "get":
+            request_kwargs["params"] = query_params
+
+        elif http_method in ["post", "put", "patch"]:
+            request_kwargs["json"] = body_params
+
+        else:  # delete/head/options 等
+            request_kwargs["params"] = query_params
+
+        # 4. 发送请求并返回Response结果
+        try:
+            response = requests.request(
+                method=http_method,
+                url=formatted_url,
+                headers=headers,
+                timeout=os.getenv(""),
+                **request_kwargs
+            )
+            return response.json()
+        except Exception as e:
+            logger.error(e)
+
+        return {}
 
 
 class ListToolAll(ToolBase):
