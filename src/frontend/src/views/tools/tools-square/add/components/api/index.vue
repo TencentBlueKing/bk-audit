@@ -1,0 +1,422 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <card-part-vue :title="t('查询输入设置')">
+    <template #content>
+      <audit-form
+        ref="formRef"
+        form-type="vertical"
+        :model="formData"
+        :rules="rules">
+        <div class="flex-item">
+          <bk-form-item
+            :label="t('URL')"
+            label-width="160"
+            property="api_config.url"
+            required
+            style="width: 50%;">
+            <bk-input v-model="formData.api_config.url" />
+          </bk-form-item>
+          <bk-form-item
+            :label="t('请求方式')"
+            label-width="160"
+            property="api_config.method"
+            required
+            style="margin-left: 30px;">
+            <bk-radio-group
+              v-model="formData.api_config.method"
+              type="card">
+              <bk-radio-button label="GET" />
+              <bk-radio-button label="POST" />
+            </bk-radio-group>
+          </bk-form-item>
+        </div>
+        <bk-form-item
+          :label="t('认证方式')"
+          label-width="160"
+          property="api_config.auth_config.method"
+          required
+          style="width: 50%;">
+          <bk-select
+            v-model="formData.api_config.auth_config.method"
+            auto-focus
+            class="bk-select">
+            <bk-option
+              v-for="(item, index) in authList"
+              :id="item.value"
+              :key="index"
+              :disabled="item.disabled"
+              :name="item.label" />
+          </bk-select>
+        </bk-form-item>
+        <div
+          v-if="formData.api_config.auth_config.method !== 'none'"
+          class="auth-box">
+          <bk-form-item
+            :label="t('应用ID(bk_app_code)')"
+            label-width="160"
+            property="api_config.auth_config.config.bk_app_code"
+            required>
+            <bk-input v-model="formData.api_config.auth_config.config.bk_app_code" />
+          </bk-form-item>
+          <bk-form-item
+            :label="t('安全(bk_app_secret)')"
+            label-width="160"
+            property="api_config.auth_config.config.bk_app_secret"
+            required>
+            <bk-input v-model="formData.api_config.auth_config.config.bk_app_secret" />
+          </bk-form-item>
+        </div>
+        <div class="item-headers">
+          <span>Headers</span>
+          <div
+            v-for="(headersItem, index) in formData.api_config.headers"
+            :key="index"
+            class="headers-config">
+            <bk-input
+              v-model="headersItem.key"
+              class="config-input value"
+              :placeholder="t('请输入 Key')" />
+            <bk-input
+              v-model="headersItem.value"
+              class="config-input key"
+              :placeholder="t('请输入 Value')" />
+            <bk-input
+              v-model="headersItem.description"
+              class="config-input description"
+              :placeholder="t('请输入 Headers 说明')" />
+            <audit-icon
+              class="headers-reduce-fill"
+              type="reduce-fill"
+              @click="handleDeleteHeaders(index)" />
+          </div>
+          <div
+            class="item-headers-add"
+            @click="handleAddHeaders">
+            <audit-icon
+              class="headers-plus-circle"
+              type="plus-circle" />
+            <span class="plus-circle-text">{{ t('添加 Headers') }}</span>
+          </div>
+        </div>
+        <div class="item-params">
+          <bk-checkbox v-model="isParams">
+            {{ t('参数设置') }}
+          </bk-checkbox>
+          <params-config
+            v-if="isParams"
+            ref="paramsConfigRef"
+            :input-variable="formData.input_variable" />
+          <div class="item-params-add">
+            <bk-button
+              class="ml10"
+              outline
+              theme="primary"
+              @click="handlerOpenDeDugRef">
+              {{ t('接口调试') }}
+            </bk-button>
+            <span v-if="isDoneDeBug">
+              <audit-icon
+                :class="isSuccess ? 'corret-fill' : `delete-fill`"
+                :type="isSuccess ? 'corret-fill' : `delete-fill`" />
+              <span class="corret-fill-text">{{ t(isSuccess ? '调试成功' : '调试失败') }}</span>
+            </span>
+          </div>
+        </div>
+      </audit-form>
+    </template>
+  </card-part-vue>
+  <result-config
+    v-if="isSuccess && isDoneDeBug"
+    ref="resultConfigRef"
+    :output-config="formData.output_config"
+    :result-data="resultData" />
+  <de-dug
+    ref="deDugRef"
+    :api-config="formData.api_config"
+    :input-variable="formData.input_variable"
+    :is-params="isParams"
+    @de-bug-done="handleDeBugDone" />
+</template>
+<script setup lang='tsx'>
+  import { onMounted, ref, watch } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  import CardPartVue from '../card-part.vue';
+
+  import deDug from './debug-sideslider.vue';
+  import paramsConfig from './params-config.vue';
+  import resultConfig from './result/index.vue';
+
+  interface Props {
+    isEditMode: boolean;
+    formDataConfig: any;
+  }
+
+  interface Exposes {
+    getFields: () => Config;
+  }
+
+  const props = defineProps<Props>();
+  const { t } = useI18n();
+  const deDugRef = ref();
+  const formRef = ref();
+  const resultConfigRef = ref();
+  const paramsConfigRef = ref();
+  const isParams = ref(false);
+  const formData = ref({
+    api_config: {
+      url: '',
+      method: 'GET',
+      headers: [
+        {
+          key: '',
+          value: '',
+          description: '',
+        },
+      ],
+      auth_config: {
+        config: {
+          bk_app_code: '',
+          bk_app_secret: '',
+        },
+        method: 'none',
+      },
+    },
+    input_variable: [
+      {
+        is_show: 'true',
+        position: '',
+        raw_name: '',
+        required: 'true',
+        description: '',
+        display_name: '',
+        split_config: {
+          end_field: '',
+          start_field: '',
+        },
+        default_value: null,
+        field_category: 'input',
+      },
+    ],
+    output_config: {
+      groups: [
+        {
+          name: '',
+          output_fields: [
+            {
+              raw_name: '',
+              json_path: '',
+              description: '',
+              display_name: '',
+              drill_config: null,
+              field_config: {
+                field_type: '',
+                output_fields: [
+                  {
+                    raw_name: '',
+                    json_path: '',
+                    description: '',
+                    display_name: '',
+                    drill_config: null,
+                    enum_mappings: null,
+                  },
+                ],
+              },
+              enum_mappings: null,
+            },
+          ],
+        },
+      ],
+      enable_grouping: true,
+    },
+  });
+  const rules = ref({});
+  const authList = ref([
+    {
+      label: '无',
+      value: 'none',
+      disabled: false,
+    },
+    {
+      label: '蓝鲸应用认证',
+      value: 'bk_app_auth',
+      disabled: false,
+    },
+  ]);
+  const isSuccess = ref(false);
+  const isDoneDeBug = ref(false);
+  const resultData = ref();
+  const handlerOpenDeDugRef = () => {
+    formRef.value.validate().then(() => {
+      const paramsConfig =  paramsConfigRef.value?.getData() || [];
+      deDugRef.value?.init(paramsConfig);
+    });
+  };
+
+  // 添加 headers
+  const handleAddHeaders = () => {
+    formData.value.api_config.headers.push({
+      key: '',
+      value: '',
+      description: '',
+    });
+  };
+
+  // 删除 headers
+  const handleDeleteHeaders = (index: number) => {
+    if (formData.value.api_config.headers.length === 1) {
+      return;
+    }
+    formData.value.api_config.headers.splice(index, 1);
+  };
+
+  // 调试
+  const handleDeBugDone = (res: any, isSucc: boolean) => {
+    resultData.value = res;
+    isSuccess.value = isSucc;
+    isDoneDeBug.value = true;
+  };
+
+  watch(
+    () => props.isEditMode,
+    (val) => {
+      console.log('val', val);
+      // if (val) {
+      //   console.log('props.formDataConfig??', props.formDataConfig);
+      //   console.log('p??', props.formDataConfig.api_config);
+      //   isParams.value = props.formDataConfig.input_variable.length !== 0;
+      //   // formData.value.api_config = props.formDataConfig.api_config;
+      //   // formData.value.output_config = props.formDataConfig.output_config;
+      // }
+    },
+    { deep: true, immediate: true },
+  );
+
+  onMounted(() => {
+    console.log('props.isEditMode', props.isEditMode);
+
+    console.log('props.formDataConfig', props.formDataConfig);
+  });
+  defineExpose<Exposes>({
+    // 提交获取字段
+    getFields() {
+      formData.value.input_variable = paramsConfigRef.value?.getData();
+      formData.value.output_config = resultConfigRef.value?.handleGetResultConfig();
+      console.log('formData', formData.value);
+      return formData.value;
+    },
+  });
+
+</script>
+
+<style lang="postcss" scoped>
+.flex-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.auth-box {
+  width: 50%;
+  height: 100%;
+  padding: 10px 20px;
+  margin-top: 10px;
+  background: #f5f7fa;
+  border-radius: 2px;
+}
+
+.item-headers {
+  padding-top: 10px;
+}
+
+.headers-config {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-top: 10px;
+
+  .config-input {
+    margin-right: 10px;
+  }
+
+  .value {
+    width: 25%;
+  }
+
+  .key {
+    width: 20%;
+  }
+
+  .description {
+    width: 35%;
+  }
+
+  .headers-reduce-fill {
+    font-size: 16px;
+    color: #c4c6cc;
+    cursor: pointer;
+  }
+}
+
+.item-headers-add {
+  margin-top: 10px;
+  color: #3a84ff;
+  cursor: pointer;
+
+  .headers-plus-circle {
+    font-size: 14px;
+  }
+
+  .plus-circle-text {
+    margin-left: 5px;
+    font-size: 12px;
+  }
+}
+
+.item-params {
+  margin-top: 10px;
+  cursor: pointer;
+
+  .headers-plus-circle {
+    font-size: 14px;
+  }
+
+  .plus-circle-text {
+    margin-left: 5px;
+    font-size: 12px;
+  }
+}
+
+.item-params-add {
+  padding-bottom: 10px;
+  margin-top: 10px;
+}
+
+.corret-fill {
+  margin-left: 17px;
+  font-size: 14px;
+  color: #2caf5e;
+  cursor: none;
+}
+
+.delete-fill {
+  margin-left: 17px;
+  font-size: 14px;
+  cursor: pointer;
+}
+</style>
