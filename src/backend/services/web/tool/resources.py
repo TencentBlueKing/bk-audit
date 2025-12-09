@@ -21,8 +21,9 @@ import datetime
 import traceback
 from collections import defaultdict
 from copy import deepcopy
-from typing import List
+from typing import Any, Dict, List
 
+import requests
 from bk_resource import Resource, api, resource
 from bk_resource.utils.common_utils import get_md5
 from blueapps.utils.logger import logger
@@ -73,6 +74,7 @@ from services.web.tool.serializers import (
     SqlAnalyseResponseSerializer,
     SqlAnalyseWithToolRequestSerializer,
     ToolCreateRequestSerializer,
+    ToolExecuteDebugSerializer,
     ToolListAllResponseSerializer,
     ToolListResponseSerializer,
     ToolResponseSerializer,
@@ -742,28 +744,7 @@ class ExecuteTool(ToolBase):
                 "tool_type": "bk_vision"
             }
             ```
-    3. tool_type 为 api
-        params请求示例（需要传递position参数声明参数位置）:
-            ```json
-            {
-                "uid": "2eb3d241d1a411f09518c2b1e7a5696b",
-                "params": {
-                    "tool_variables": [
-                        {
-                            "raw_name": "pageIndex",
-                            "value": "2",
-                            "position": "query"
-                        },
-                        {
-                            "raw_name": "pageSize",
-                            "value": "30",
-                            "position": "query"
-                        }
-                    ]
-                }
-            }
-            ```
-    4. 权限上下文（可选）
+    3. 权限上下文（可选）
         - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
             - `caller_resource_type`：调用方资源类型（当前支持：`risk`）
             - `caller_resource_id`：调用方资源实例 ID（如风险ID）
@@ -851,6 +832,173 @@ class ExecuteToolAPIGW(ExecuteTool):
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
         data = executor.execute(params).model_dump()
         return {"data": data, "tool_type": tool.tool_type}
+
+
+class ToolExecuteDebug(ToolBase):
+    """
+    工具调试
+
+    说明：
+        蓝鲸认证的信息，放到请求头中
+
+    请求示例：
+    ```json
+        {
+            "tool_type": "api",
+            "config": {
+                "api_config": {
+                    "url": "https://k.autohome.com.cn/ajax/getfeedIntelligent/",
+                    "method": "GET",
+                    "auth_config": {
+                        "method": "none"
+                    },
+                    "headers": [
+                        {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                        }
+                    ]
+                },
+                "input_variable": [
+                    {
+                        "raw_name": "pageIndex",
+                        "display_name": "页码",
+                        "description": "页码",
+                        "field_category": "input",
+                        "required": true,
+                        "default_value": "",
+                        "is_show": true,
+                        "position": "query"
+                    },
+                    {
+                        "raw_name": "pageSize",
+                        "display_name": "条目数",
+                        "description": "条目数",
+                        "field_category": "input",
+                        "required": false,
+                        "default_value": "",
+                        "is_show": true,
+                        "position": "query"
+                    },
+                    {
+                        "raw_name": "_appid",
+                        "display_name": "文章类别",
+                        "description": "登录名",
+                        "field_category": "input",
+                        "required": false,
+                        "default_value": "koubei",
+                        "is_show": true,
+                        "position": "query"
+                    },
+                    {
+                        "raw_name": "date",
+                        "display_name": "文档时间",
+                        "description": "文档时间",
+                        "field_category": "input",
+                        "required": false,
+                        "default_value": "20180129",
+                        "is_show": true,
+                        "position": "query"
+                    }
+                ],
+                "output_config": {
+                    "enable_grouping": false,
+                    "groups": []
+                }
+            }
+        }
+    ```
+
+    响应示例：
+    ```json
+        {
+          "result": true,
+          "code": 0,
+          "data": {
+            "message": "成功",
+            "returncode": 0
+          },
+          "message": null,
+          "request_id": "bd52773d-5a40-4783-8f3f-84c4907e6dc5",
+          "trace_id": "a6c78625c1752ef4e421f2ec2bb650b7"
+        }
+    ```
+    """
+
+    name = "API工具执行调试"
+    RequestSerializer = ToolExecuteDebugSerializer
+
+    def _perform_request_api(self, validated_request_data):
+        """
+        处理API请求
+        """
+        url, method = (
+            validated_request_data["config"]["api_config"]["url"],
+            validated_request_data["config"]["api_config"]["method"],
+        )
+
+        headers = {}
+        for header_item in validated_request_data["config"]["api_config"]["headers"]:
+            headers[header_item["key"]] = header_item["value"]
+
+        # 1. 按 position 分类参数
+        path_params: Dict[str, str] = {}
+        query_params: Dict[str, str] = {}
+        body_params: Dict[str, Any] = {}
+
+        for param in validated_request_data["config"]["input_variable"]:
+            position = param["position"]
+            name = param.get("raw_name", "")
+            value = param.get("value", "")
+
+            # 将 None 值转换为空字符串
+            if value is None:
+                value = ""
+
+            if position == "path":
+                path_params[name] = str(value)
+            elif position == "query":
+                query_params[name] = value
+            elif position == "body":
+                body_params[name] = value
+
+        # 2. 替换 URL 中的 path 参数
+        formatted_url = url.format(**path_params)
+
+        # 3. 准备 requests 请求参数
+        request_kwargs = {}
+
+        http_method = method.lower()
+        if http_method == "get":
+            request_kwargs["params"] = query_params
+
+        elif http_method in ["post", "put", "patch"]:
+            request_kwargs["json"] = body_params
+
+        else:  # delete/head/options 等
+            request_kwargs["params"] = query_params
+
+        # 4. 发送请求并返回Response结果
+        try:
+            response = requests.request(
+                method=http_method, url=formatted_url, headers=headers, timeout=60, **request_kwargs
+            )
+            return response.json()
+        except Exception as e:
+            logger.error(e)
+            return {
+                "result": False,
+                "code": 500,
+                "data": {},
+            }
+
+    def perform_request(self, validated_request_data):
+        if validated_request_data["tool_type"] == ToolTypeEnum.API.value:
+            return self._perform_request_api(validated_request_data)
+        elif validated_request_data["tool_type"] == ToolTypeEnum.DATA_SEARCH.value:
+            pass
+        elif validated_request_data["tool_type"] == ToolTypeEnum.BK_VISION.value:
+            pass
 
 
 class ListToolAll(ToolBase):

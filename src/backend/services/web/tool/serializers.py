@@ -298,3 +298,26 @@ class UserQueryTableAuthCheckReqSerializer(serializers.Serializer):
 
 class UserQueryTableAuthCheckRespSerializer(serializers.Serializer):
     has_auth = serializers.BooleanField()
+
+
+class ToolExecuteDebugSerializer(serializers.Serializer):
+    tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
+    config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        tool_type = attrs["tool_type"]
+        config = attrs["config"]
+        if tool_type == ToolTypeEnum.DATA_SEARCH and "data_search_config_type" not in attrs:
+            raise serializers.ValidationError({"data_search_config_type": gettext_lazy("数据查询配置类型不能为空")})
+
+        if tool_type == ToolTypeEnum.BK_VISION:
+            validated_config = BkVisionConfig.model_validate(config).model_dump()
+        elif tool_type == ToolTypeEnum.DATA_SEARCH:
+            validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
+        elif tool_type == ToolTypeEnum.API:
+            validated_config = ApiToolConfig.model_validate(config).model_dump()
+        else:
+            raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
+        attrs["config"] = validated_config
+        return attrs
