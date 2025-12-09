@@ -18,11 +18,10 @@ to the current version of the project delivered to anyone in the future.
 
 import abc
 import datetime
-import os
 import traceback
 from collections import defaultdict
 from copy import deepcopy
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
 import requests
 from bk_resource import Resource, api, resource
@@ -74,6 +73,7 @@ from services.web.tool.serializers import (
     SqlAnalyseResponseSerializer,
     SqlAnalyseWithToolRequestSerializer,
     ToolCreateRequestSerializer,
+    ToolExecuteDebugSerializer,
     ToolListAllResponseSerializer,
     ToolListResponseSerializer,
     ToolResponseSerializer,
@@ -81,7 +81,6 @@ from services.web.tool.serializers import (
     ToolRetrieveResponseSerializer,
     ToolUpdateRequestSerializer,
     UserQueryTableAuthCheckReqSerializer,
-    ApiToolDebugSerializer,
 )
 from services.web.tool.tasks import update_bkvision_config
 from services.web.tool.tool import (
@@ -704,7 +703,6 @@ class ExecuteTool(ToolBase):
                     "value": ["option1", "option2"]
                 }
             ```
-            ```
         response:
             ```json
             {
@@ -809,10 +807,14 @@ class ExecuteTool(ToolBase):
         return {"data": data, "tool_type": tool.tool_type}
 
 
-class ApiToolDebug(ToolBase):
+class ToolExecuteDebug(ToolBase):
     """
-        API工具调试
-        请求示例：
+    工具调试
+
+    说明：
+        蓝鲸认证的信息，放到请求头中
+
+    请求示例：
         {
             "request_info": {
                 "url": "https://k.autohome.com.cn/ajax/getfeedIntelligent/",
@@ -839,7 +841,7 @@ class ApiToolDebug(ToolBase):
             ]
         }
 
-        响应示例：
+    响应示例：
         {
             "result": true,
             "code": 0,
@@ -855,12 +857,16 @@ class ApiToolDebug(ToolBase):
             "trace_id": "3f259f655cec6ee31bb0bf2c18cb806f"
         }
     """
-    name = "API工具执行调试"
-    RequestSerializer = ApiToolDebugSerializer
 
-    def perform_request(self, validated_request_data):
+    name = "API工具执行调试"
+    RequestSerializer = ToolExecuteDebugSerializer
+
+    def _perform_request_api(self, validated_request_data):
+        """
+        处理API请求
+        """
         requests_info = validated_request_data.get("request_info")
-        url, method, auth_type = requests_info["url"], requests_info["method"], requests_info["auth_type"]
+        url, method = requests_info["url"], requests_info["method"]
 
         headers = {}
         for header_item in requests_info["headers"]:
@@ -906,17 +912,24 @@ class ApiToolDebug(ToolBase):
         # 4. 发送请求并返回Response结果
         try:
             response = requests.request(
-                method=http_method,
-                url=formatted_url,
-                headers=headers,
-                timeout=60,
-                **request_kwargs
+                method=http_method, url=formatted_url, headers=headers, timeout=60, **request_kwargs
             )
             return response.json()
         except Exception as e:
             logger.error(e)
+            return {
+                "result": False,
+                "code": 500,
+                "data": {},
+            }
 
-        return {}
+    def perform_request(self, validated_request_data):
+        if validated_request_data["tool_type"] == ToolTypeEnum.API.value:
+            return self._perform_request_api(validated_request_data)
+        elif validated_request_data["tool_type"] == ToolTypeEnum.DATA_SEARCH.value:
+            pass
+        elif validated_request_data["tool_type"] == ToolTypeEnum.BK_VISION.value:
+            pass
 
 
 class ListToolAll(ToolBase):
