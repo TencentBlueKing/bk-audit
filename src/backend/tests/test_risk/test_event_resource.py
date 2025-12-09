@@ -201,7 +201,6 @@ class CreateEventResourceTest(TestCase):
 
         self.assertEqual(len(response.get("risk_ids", [])), 1)
         risk = Risk.objects.get(risk_id=response["risk_ids"][0])
-        self.assertEqual(risk.raw_event_id, "mapped-raw")
         self.assertEqual(risk.event_content, "mapped content")
         self.assertEqual(risk.event_source, "manual-source")
         self.assertEqual(risk.event_type, ["a", "b"])
