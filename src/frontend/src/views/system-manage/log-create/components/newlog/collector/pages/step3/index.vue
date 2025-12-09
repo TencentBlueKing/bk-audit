@@ -155,7 +155,7 @@
   const route = useRoute();
   const router = useRouter();
 
-  const isEditMode = route.name === 'collectorEdit';
+  const isEditMode = route.name === 'logCollectorEdit';
 
 
   const listType = ref(String(route.query.status || 'all'));
@@ -261,6 +261,7 @@
     .then(() => {
       // 编辑状态——回退到第一步
       if (isEditMode) {
+        console.log('isEditMode', isEditMode);
         emits('previous', 2);
         removeSearchParam([
           'collector_config_id',
