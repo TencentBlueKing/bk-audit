@@ -35,6 +35,7 @@ from apps.meta.utils.format import preprocess_data
 from apps.notice.constants import RelateType
 from apps.notice.handlers import ErrorMsgHandler
 from apps.notice.models import NoticeGroup
+from core.exceptions import ValidationError
 from core.render import Jinja2Renderer, VariableUndefined
 from services.web.risk.constants import (
     EVENT_DATA_SORT_FIELD,
@@ -234,7 +235,10 @@ class RiskHandler:
                 )
                 create_params[field_name] = self.parse_operator(operators)
                 continue
-
+            if field_name == EventMappingFields.RAW_EVENT_ID.field_name and not mapped_value:
+                raise ValidationError(
+                    message=gettext("raw_event_id（映射自{source_field}）不能为空。").format(source_field=source_field)
+                )
             create_params[field_name] = mapped_value
 
     def create_risk(
