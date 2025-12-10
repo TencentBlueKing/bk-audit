@@ -393,7 +393,9 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
                     status_code=response.status_code,
                     result=None,
                     err_type=ApiToolErrorType.NON_JSON_RESPONSE,
-                    message=(response.text[:200] if response.text else ""),
+                    message=(
+                        response.text[: settings.API_TOOL_EXECUTE_DEFAULT_MAX_RETURN_CHAR] if response.text else ""
+                    ),
                 )
 
         except requests.RequestException as e:
