@@ -15,14 +15,17 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from typing import Any, List
+from typing import Annotated, List, Union
 
-from pydantic import BaseModel
+from django.utils.translation import gettext_lazy
+from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
+from rest_framework.fields import JSONField
 
-from services.web.tool.constants import BkVisionConfig
+from services.web.tool.constants import ApiVariablePosition
 
 DATA_SEARCH_TOOL_DEFAULT_PAGE_SIZE = 100
+AnyValue = Annotated[Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)]
 
 
 class ToolVariable(BaseModel):
@@ -31,7 +34,7 @@ class ToolVariable(BaseModel):
     """
 
     raw_name: str = PydanticField(..., title="工具使用的变量名")
-    value: Any = PydanticField(..., title="工具使用的变量值")
+    value: AnyValue = PydanticField(..., title="工具使用的变量值")
 
 
 class DataSearchToolExecuteParams(BaseModel):
@@ -39,7 +42,7 @@ class DataSearchToolExecuteParams(BaseModel):
     数据查询工具执行参数
     """
 
-    tool_variables: List[ToolVariable] = PydanticField(list, title="工具使用的变量列表")
+    tool_variables: List[ToolVariable] = PydanticField(default_factory=list, title="工具使用的变量列表")
     page: int = PydanticField(1, title="页码")
     page_size: int = PydanticField(DATA_SEARCH_TOOL_DEFAULT_PAGE_SIZE, title="每页条数")
 
@@ -69,4 +72,20 @@ class ApiToolExecuteResult(BaseModel):
     """
     Api工具执行结果
     """
-    results: Any = PydanticField(..., title="Api工具执行结果")
+
+    status_code: int = PydanticField(..., title="HTTP 响应状态码")
+    result: AnyValue = PydanticField(..., title="Api工具执行结果")
+
+
+class APIToolExecuteVariable(BaseModel):
+    raw_name: str = PydanticField(title=gettext_lazy("执行入参名"))
+    value: AnyValue = PydanticField(title=gettext_lazy("执行入参值"))
+    position: ApiVariablePosition = PydanticField(title=gettext_lazy("参数位置"))
+
+
+class APIToolExecuteParams(BaseModel):
+    """
+    API工具执行参数
+    """
+
+    tool_variables: List[APIToolExecuteVariable] = PydanticField(default_factory=list, title="工具使用的变量列表")

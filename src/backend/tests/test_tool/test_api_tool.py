@@ -1,16 +1,22 @@
 import hashlib
+import json
+import os
 from copy import deepcopy
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
 from services.web.tool.constants import (
+    ApiAuthMethod,
     ApiOutputFieldType,
     ApiToolConfig,
     ApiVariablePosition,
     FieldCategory,
     ToolTypeEnum,
 )
+from services.web.tool.exceptions import InputVariableMissingError
+from services.web.tool.executor.model import APIToolExecuteParams, ApiToolExecuteResult
+from services.web.tool.executor.tool import ApiToolExecutor
 from services.web.tool.models import Tool
 from services.web.tool.resources import CreateTool, UpdateTool
 
@@ -38,16 +44,47 @@ class ApiToolResourceTestCase(TestCase):
                     "is_show": True,
                     "position": ApiVariablePosition.QUERY.value,
                 },
-                # New Time Range Variable
+                # New Time Range Variable (Required, Query Position)
                 {
-                    "raw_name": "time_range",
-                    "display_name": "Time Range",
-                    "description": "A time range parameter",
-                    "required": False,
+                    "raw_name": "time_range_required",
+                    "display_name": "Time Range Required",
+                    "description": "A required time range parameter",
+                    "required": True,
                     "field_category": FieldCategory.TIME_RANGE_SELECT.value,
                     "is_show": True,
                     "position": ApiVariablePosition.QUERY.value,
                     "split_config": {"start_field": "start_ts", "end_field": "end_ts"},
+                },
+                # New Time Range Variable (Optional, Body Position)
+                {
+                    "raw_name": "time_range_optional",
+                    "display_name": "Time Range Optional",
+                    "description": "An optional time range parameter",
+                    "required": False,
+                    "field_category": FieldCategory.TIME_RANGE_SELECT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.BODY.value,
+                    "split_config": {"start_field": "body_start", "end_field": "body_end"},
+                },
+                # Path Variable
+                {
+                    "raw_name": "path_id",
+                    "display_name": "Path ID",
+                    "description": "An ID in path",
+                    "required": True,
+                    "field_category": FieldCategory.NUMBER_INPUT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.PATH.value,
+                },
+                # Body Variable
+                {
+                    "raw_name": "body_data",
+                    "display_name": "Body Data",
+                    "description": "Data in body",
+                    "required": False,
+                    "field_category": FieldCategory.INPUT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.BODY.value,
                 },
             ],
             "output_config": {
@@ -126,7 +163,7 @@ class ApiToolResourceTestCase(TestCase):
 
         # Verify split_config
         input_vars = tool.config['input_variable']
-        time_range_var = next(v for v in input_vars if v['raw_name'] == 'time_range')
+        time_range_var = next(v for v in input_vars if v['raw_name'] == 'time_range_required')
         self.assertEqual(time_range_var['split_config']['start_field'], 'start_ts')
         self.assertEqual(time_range_var['split_config']['end_field'], 'end_ts')
 
@@ -192,3 +229,275 @@ class ApiToolResourceTestCase(TestCase):
             related_object_id=self.uid,
             related_type="tool",
         )
+
+
+class ApiToolExecutorTestCase(TestCase):
+    def setUp(self):
+        self.tool_uid = "executor_test_uid"
+        self.tool_name = "Executor Test API"
+        self.test_api_url_template = "http://api.example.com/test/{path_id}"  # Unified name
+        self.test_api_method = "POST"
+        self.app_code = "test_app"
+        self.app_secret = "test_secret"
+
+        self.tool_config = {
+            "api_config": {
+                "url": self.test_api_url_template,  # Use unified name
+                "method": self.test_api_method,
+                "auth_config": {
+                    "method": ApiAuthMethod.BK_APP_AUTH.value,
+                    "config": {"bk_app_code": self.app_code, "bk_app_secret": self.app_secret},
+                },
+                "headers": [{"key": "Content-Type", "value": "application/json"}],
+            },
+            "input_variable": [
+                {
+                    "raw_name": "path_id",
+                    "display_name": "Path ID",
+                    "required": True,
+                    "field_category": FieldCategory.INPUT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.PATH.value,
+                },
+                {
+                    "raw_name": "query_param",
+                    "display_name": "Query Param",
+                    "required": False,
+                    "field_category": FieldCategory.INPUT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+                {
+                    "raw_name": "body_param",
+                    "display_name": "Body Param",
+                    "required": True,
+                    "field_category": FieldCategory.INPUT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.BODY.value,
+                },
+                {
+                    "raw_name": "time_range_split",
+                    "display_name": "Time Range Split",
+                    "required": True,
+                    "field_category": FieldCategory.TIME_RANGE_SELECT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.QUERY.value,
+                    "split_config": {"start_field": "start_time", "end_field": "end_time"},
+                },
+                {
+                    "raw_name": "multiselect_param",
+                    "display_name": "Multiselect Param",
+                    "required": False,
+                    "field_category": FieldCategory.MULTISELECT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ],
+            "output_config": {"enable_grouping": False, "groups": []},
+        }
+
+        self.tool = Tool.objects.create(
+            uid=self.tool_uid,
+            version=1,
+            name=self.tool_name,
+            namespace="default",
+            tool_type=ToolTypeEnum.API.value,
+            config=ApiToolConfig.model_validate(self.tool_config).model_dump(),
+            created_by="admin",
+        )
+
+        self.executor = ApiToolExecutor(self.tool)
+
+    @patch('requests.request')
+    def test_execute_success(self, mock_requests_request):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.ok = True
+        mock_response.json.return_value = {"result": True, "data": "mocked_data"}
+        mock_requests_request.return_value = mock_response
+
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "123", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "query_param", "value": "test_query", "position": ApiVariablePosition.QUERY.value},
+                {"raw_name": "body_param", "value": {"key": "value"}, "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+                {
+                    "raw_name": "multiselect_param",
+                    "value": ["opt1", "opt2"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+
+        result = self.executor.execute(params_data)
+
+        self.assertIsInstance(result, ApiToolExecuteResult)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.result, {"result": True, "data": "mocked_data"})
+
+        # Verify requests.request call
+        expected_url = self.test_api_url_template.format(path_id="123")
+        expected_headers = {
+            "Content-Type": "application/json",
+            "X-Bkapi-Authorization": json.dumps(
+                {
+                    "bk_app_code": self.app_code,
+                    "bk_app_secret": self.app_secret,
+                }
+            ),
+        }
+        mock_requests_request.assert_called_once_with(
+            method=self.test_api_method.lower(),
+            url=expected_url,
+            headers=expected_headers,
+            timeout=int(os.getenv("API_EXECUTE_DEFAULT_TIMEOUT", "120")),
+            params={
+                "query_param": "test_query",
+                "start_time": 1672502400000,  # 2023-01-01 00:00:00 in ms
+                "end_time": 1672506000000,  # 2023-01-01 01:00:00 in ms
+                "multiselect_param": ["opt1", "opt2"],
+            },
+            json={"body_param": {"key": "value"}},
+        )
+
+    @patch('requests.request')
+    def test_execute_failed(self, mock_requests_request):
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.ok = False
+        mock_json_content = {"code": 404, "message": "Not Found"}
+        mock_response.json.return_value = mock_json_content
+        mock_response.text = json.dumps(mock_json_content)  # 使用 json.dumps 生成双引号的 JSON 字符串
+        mock_requests_request.return_value = mock_response
+
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "404", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": "some_value", "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+
+        # 应返回结果，而非抛出异常
+        result = self.executor.execute(params_data)
+        self.assertEqual(result.status_code, 404)
+        self.assertEqual(result.result, mock_json_content)
+
+    def test_render_request_params_missing_required(self):
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "query_param", "value": "test_query", "position": ApiVariablePosition.QUERY.value},
+                # path_id is missing
+                {"raw_name": "body_param", "value": "some_value", "position": ApiVariablePosition.BODY.value},
+            ]
+        }
+        params = APIToolExecuteParams.model_validate(params_data)
+
+        with self.assertRaises(InputVariableMissingError):
+            self.executor._render_request_params(params)
+
+    def test_render_request_params_time_range_split(self):
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "1", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": "value", "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+        params = APIToolExecuteParams.model_validate(params_data)
+        rendered_params = self.executor._render_request_params(params)
+
+        expected_params = [
+            {'name': 'path_id', 'value': '1', 'position': ApiVariablePosition.PATH},
+            {'name': 'body_param', 'value': 'value', 'position': ApiVariablePosition.BODY},
+            {'name': 'start_time', 'value': 1672502400000, 'position': ApiVariablePosition.QUERY},
+            {'name': 'end_time', 'value': 1672506000000, 'position': ApiVariablePosition.QUERY},
+        ]
+
+        # Convert to set of frozensets for order-insensitive comparison of dicts
+        self.assertEqual(
+            {frozenset(d.items()) for d in rendered_params},
+            {frozenset(d.items()) for d in expected_params},
+        )
+
+        # 确认可选参数 query_param 和 multiselect_param 不存在
+        self.assertFalse(any(p['name'] == 'query_param' for p in rendered_params))
+        self.assertFalse(any(p['name'] == 'multiselect_param' for p in rendered_params))
+
+    def test_render_request_params_multiselect(self):
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "1", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": "value", "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+                {
+                    "raw_name": "multiselect_param",
+                    "value": ["val1", "val2"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+        params = APIToolExecuteParams.model_validate(params_data)
+        rendered_params = self.executor._render_request_params(params)
+
+        multiselect_param = next(p for p in rendered_params if p['name'] == 'multiselect_param')
+        self.assertEqual(multiselect_param['value'], ['val1', 'val2'])
+
+    def test_render_request_params_optional_missing(self):
+        # query_param and multiselect_param are optional and not provided
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "1", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": "some_value", "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+        params = APIToolExecuteParams.model_validate(params_data)
+        rendered_params = self.executor._render_request_params(params)
+
+        # Optional params should NOT be present
+        self.assertFalse(any(p['name'] == 'query_param' for p in rendered_params))
+        self.assertFalse(any(p['name'] == 'multiselect_param' for p in rendered_params))
+
+    def test_render_request_params_time_range_optional_missing(self):
+        # time_range_optional is optional and not provided
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "1", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "query_param", "value": "test_query", "position": ApiVariablePosition.QUERY.value},
+                {"raw_name": "body_param", "value": "some_value", "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+        params = APIToolExecuteParams.model_validate(params_data)
+        rendered_params = self.executor._render_request_params(params)
+
+        # Check for split_config fields of time_range_optional
+        # These should NOT be present
+        self.assertFalse(any(p['name'] == 'body_start' for p in rendered_params))
+        self.assertFalse(any(p['name'] == 'body_end' for p in rendered_params))
