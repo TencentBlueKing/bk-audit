@@ -22,7 +22,7 @@ from drf_pydantic import BaseModel
 from pydantic import Field as PydanticField
 from rest_framework.fields import JSONField
 
-from services.web.tool.constants import ApiVariablePosition
+from services.web.tool.constants import ApiToolErrorType
 
 DATA_SEARCH_TOOL_DEFAULT_PAGE_SIZE = 100
 AnyValue = Annotated[Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)]
@@ -75,12 +75,10 @@ class ApiToolExecuteResult(BaseModel):
 
     status_code: int = PydanticField(..., title="HTTP 响应状态码")
     result: AnyValue = PydanticField(..., title="Api工具执行结果")
-
-
-class APIToolExecuteVariable(BaseModel):
-    raw_name: str = PydanticField(title=gettext_lazy("执行入参名"))
-    value: AnyValue = PydanticField(title=gettext_lazy("执行入参值"))
-    position: ApiVariablePosition = PydanticField(title=gettext_lazy("参数位置"))
+    err_type: ApiToolErrorType = PydanticField(
+        default=ApiToolErrorType.NONE, title=gettext_lazy("错误类型"), description=gettext_lazy("标识执行异常原因")
+    )
+    message: str = PydanticField(default="", title=gettext_lazy("错误信息"))
 
 
 class APIToolExecuteParams(BaseModel):
@@ -88,4 +86,4 @@ class APIToolExecuteParams(BaseModel):
     API工具执行参数
     """
 
-    tool_variables: List[APIToolExecuteVariable] = PydanticField(default_factory=list, title="工具使用的变量列表")
+    tool_variables: List[ToolVariable] = PydanticField(default_factory=list, title="工具使用的变量列表")

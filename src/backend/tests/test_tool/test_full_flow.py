@@ -149,6 +149,7 @@ class TestToolFullFlow(TestCase):
             "input_variable": [
                 {
                     "raw_name": "pageIndex",
+                    "var_name": "pageIndex",
                     "display_name": "页码",
                     "description": "页码",
                     "field_category": "input",
@@ -159,6 +160,7 @@ class TestToolFullFlow(TestCase):
                 },
                 {
                     "raw_name": "pageSize",
+                    "var_name": "pageSize",
                     "display_name": "条目数",
                     "description": "条目数",
                     "field_category": "input",
@@ -169,6 +171,7 @@ class TestToolFullFlow(TestCase):
                 },
                 {
                     "raw_name": "_appid",
+                    "var_name": "_appid",
                     "display_name": "文章类别",
                     "description": "登录名",
                     "field_category": "input",
@@ -179,6 +182,7 @@ class TestToolFullFlow(TestCase):
                 },
                 {
                     "raw_name": "date",
+                    "var_name": "date",
                     "display_name": "文档时间",
                     "description": "文档时间",
                     "field_category": "input",

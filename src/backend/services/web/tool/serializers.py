@@ -34,7 +34,10 @@ from services.web.tool.constants import (
 )
 from services.web.tool.executor.model import (
     APIToolExecuteParams,
+    ApiToolExecuteResult,
+    BkVisionExecuteResult,
     DataSearchToolExecuteParams,
+    DataSearchToolExecuteResult,
 )
 from services.web.tool.models import Tool
 
@@ -83,6 +86,23 @@ class ToolConfigField(serializers.DictField):
 class ToolParamsField(serializers.DictField):
     """
     自定义字段，用于支持多态文档生成
+    """
+
+
+@extend_schema_field(
+    PolymorphicProxySerializer(
+        component_name='ToolResultPoly',
+        serializers=[
+            DataSearchToolExecuteResult,
+            ApiToolExecuteResult,
+            BkVisionExecuteResult,
+        ],
+        resource_type_field_name=None,
+    )
+)
+class ToolResultField(serializers.DictField):
+    """
+    自定义字段，用于支持多态执行结果文档
     """
 
     pass
@@ -308,7 +328,7 @@ class ExecuteToolReqSerializer(serializers.Serializer):
 
 
 class ExecuteToolRespSerializer(serializers.Serializer):
-    data = serializers.DictField()
+    data = ToolResultField(label=gettext_lazy("执行结果"))
     tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices)
 
 

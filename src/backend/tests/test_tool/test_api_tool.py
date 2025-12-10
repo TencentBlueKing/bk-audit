@@ -4,12 +4,14 @@ import os
 from copy import deepcopy
 from unittest.mock import MagicMock, patch
 
+import requests
 from django.test import TestCase
 
 from services.web.tool.constants import (
     ApiAuthMethod,
     ApiOutputFieldType,
     ApiToolConfig,
+    ApiToolErrorType,
     ApiVariablePosition,
     FieldCategory,
     ToolTypeEnum,
@@ -37,6 +39,7 @@ class ApiToolResourceTestCase(TestCase):
             "input_variable": [
                 {
                     "raw_name": "query_param",
+                    "var_name": "query_param",
                     "display_name": "Query Param",
                     "description": "A query parameter",
                     "required": True,
@@ -47,6 +50,7 @@ class ApiToolResourceTestCase(TestCase):
                 # New Time Range Variable (Required, Query Position)
                 {
                     "raw_name": "time_range_required",
+                    "var_name": "time_range_required",
                     "display_name": "Time Range Required",
                     "description": "A required time range parameter",
                     "required": True,
@@ -58,6 +62,7 @@ class ApiToolResourceTestCase(TestCase):
                 # New Time Range Variable (Optional, Body Position)
                 {
                     "raw_name": "time_range_optional",
+                    "var_name": "time_range_optional",
                     "display_name": "Time Range Optional",
                     "description": "An optional time range parameter",
                     "required": False,
@@ -69,6 +74,7 @@ class ApiToolResourceTestCase(TestCase):
                 # Path Variable
                 {
                     "raw_name": "path_id",
+                    "var_name": "path_id",
                     "display_name": "Path ID",
                     "description": "An ID in path",
                     "required": True,
@@ -79,6 +85,7 @@ class ApiToolResourceTestCase(TestCase):
                 # Body Variable
                 {
                     "raw_name": "body_data",
+                    "var_name": "body_data",
                     "display_name": "Body Data",
                     "description": "Data in body",
                     "required": False,
@@ -253,6 +260,7 @@ class ApiToolExecutorTestCase(TestCase):
             "input_variable": [
                 {
                     "raw_name": "path_id",
+                    "var_name": "path_id",
                     "display_name": "Path ID",
                     "required": True,
                     "field_category": FieldCategory.INPUT.value,
@@ -261,6 +269,7 @@ class ApiToolExecutorTestCase(TestCase):
                 },
                 {
                     "raw_name": "query_param",
+                    "var_name": "query_param",
                     "display_name": "Query Param",
                     "required": False,
                     "field_category": FieldCategory.INPUT.value,
@@ -269,6 +278,7 @@ class ApiToolExecutorTestCase(TestCase):
                 },
                 {
                     "raw_name": "body_param",
+                    "var_name": "body_param",
                     "display_name": "Body Param",
                     "required": True,
                     "field_category": FieldCategory.INPUT.value,
@@ -277,6 +287,7 @@ class ApiToolExecutorTestCase(TestCase):
                 },
                 {
                     "raw_name": "time_range_split",
+                    "var_name": "time_range_split",
                     "display_name": "Time Range Split",
                     "required": True,
                     "field_category": FieldCategory.TIME_RANGE_SELECT.value,
@@ -286,6 +297,7 @@ class ApiToolExecutorTestCase(TestCase):
                 },
                 {
                     "raw_name": "multiselect_param",
+                    "var_name": "multiselect_param",
                     "display_name": "Multiselect Param",
                     "required": False,
                     "field_category": FieldCategory.MULTISELECT.value,
@@ -339,6 +351,8 @@ class ApiToolExecutorTestCase(TestCase):
         self.assertIsInstance(result, ApiToolExecuteResult)
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.result, {"result": True, "data": "mocked_data"})
+        self.assertEqual(result.err_type, ApiToolErrorType.NONE)
+        self.assertEqual(result.message, "")
 
         # Verify requests.request call
         expected_url = self.test_api_url_template.format(path_id="123")
@@ -391,6 +405,56 @@ class ApiToolExecutorTestCase(TestCase):
         result = self.executor.execute(params_data)
         self.assertEqual(result.status_code, 404)
         self.assertEqual(result.result, mock_json_content)
+        self.assertEqual(result.err_type, ApiToolErrorType.NONE)
+        self.assertEqual(result.message, "")
+
+    @patch('requests.request')
+    def test_execute_non_json_response(self, mock_requests_request):
+        mock_response = MagicMock()
+        mock_response.status_code = 502
+        mock_response.json.side_effect = ValueError("not json")
+        mock_response.text = "Bad Gateway"
+        mock_requests_request.return_value = mock_response
+
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "non-json", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": {"k": "v"}, "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+
+        result = self.executor.execute(params_data)
+        self.assertEqual(result.status_code, 502)
+        self.assertIsNone(result.result)
+        self.assertEqual(result.err_type, ApiToolErrorType.NON_JSON_RESPONSE)
+        self.assertEqual(result.message, "Bad Gateway")
+
+    @patch('requests.request')
+    def test_execute_request_exception(self, mock_requests_request):
+        mock_requests_request.side_effect = requests.RequestException("boom")
+
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "error", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": {"key": "value"}, "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+
+        result = self.executor.execute(params_data)
+        self.assertEqual(result.status_code, 500)
+        self.assertIsNone(result.result)
+        self.assertEqual(result.err_type, ApiToolErrorType.REQUEST_ERROR)
+        self.assertEqual(result.message, "boom")
 
     def test_render_request_params_missing_required(self):
         params_data = {

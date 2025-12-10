@@ -30,6 +30,17 @@ from core.choices import TextChoices, register_choices
 from core.utils.data import validate_unique_keys
 
 
+@register_choices("api_tool_error_type")
+class ApiToolErrorType(TextChoices):
+    """
+    API工具执行错误类型
+    """
+
+    NONE = "none", gettext_lazy("无异常")
+    NON_JSON_RESPONSE = "non_json_response", gettext_lazy("响应非 JSON")
+    REQUEST_ERROR = "request_error", gettext_lazy("请求异常")
+
+
 @register_choices("ToolType")
 class ToolTypeEnum(TextChoices):
     """
@@ -341,6 +352,7 @@ class ApiInputVariableBase(DataSearchBaseField):
     """
 
     required: bool = PydanticField(title=gettext_lazy("是否必填"))
+    var_name: str = PydanticField(min_length=1, title=gettext_lazy("请求参数名"))
     field_category: FieldCategory = PydanticField(title=gettext_lazy("前端类型"))
     default_value: Annotated[
         Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
@@ -395,6 +407,7 @@ class TimeRangeInputVariable(ApiInputVariableBase):
     """
 
     field_category: Literal[FieldCategory.TIME_RANGE_SELECT] = FieldCategory.TIME_RANGE_SELECT
+    var_name: Optional[str] = None
     # 时间范围分割配置
     split_config: TimeRangeSplitConfig = PydanticField(title=gettext_lazy("时间范围分割配置"))
 
@@ -496,3 +509,12 @@ class ApiToolConfig(BaseModel):
         default_factory=list, title=gettext_lazy("输入变量")
     )
     output_config: ApiOutputConfiguration = PydanticField(title=gettext_lazy("输出配置"))
+
+    @field_validator("input_variable")
+    @classmethod
+    def validate_unique_raw_names(cls, variables):
+        return validate_unique_keys(
+            variables,
+            key_field="raw_name",
+            error_msg=lambda key: gettext("输入变量 raw_name %s 重复") % key,
+        )
