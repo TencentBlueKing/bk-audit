@@ -44,9 +44,11 @@ from services.web.tool.exceptions import (
     BkbaseApiRequestError,
     DataSearchTablePermission,
     InputVariableMissingError,
+    ToolTypeNotSupport,
 )
 from services.web.tool.executor.auth import AuthHandlerFactory
 from services.web.tool.executor.model import (
+    ApiToolErrorType,
     APIToolExecuteParams,
     ApiToolExecuteResult,
     BkVisionExecuteResult,
@@ -276,13 +278,12 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
         """
         渲染请求参数：校验、格式化、拆分时间范围
         """
-        # 使用 (raw_name, position) 作为 key 来精确匹配
-        tool_vars_map = {(var.raw_name, var.position): var.value for var in params.tool_variables}
+        tool_vars_map = {var.raw_name: var.value for var in params.tool_variables}
         final_params = []
 
         for var_config in self.config.input_variable:
             # 1. 获取值
-            value = tool_vars_map.get((var_config.raw_name, var_config.position))
+            value = tool_vars_map.get(var_config.raw_name)
 
             # 2. 校验
             if var_config.required and value is None:
@@ -313,7 +314,11 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
             else:
                 # 5. 普通参数直接添加
                 final_params.append(
-                    {"name": var_config.raw_name, "value": parsed_value, "position": var_config.position}
+                    {
+                        "name": var_config.var_name,
+                        "value": parsed_value,
+                        "position": var_config.position,
+                    }
                 )
 
         return final_params
@@ -375,21 +380,30 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
                 timeout=settings.API_TOOL_EXECUTE_DEFAULT_TIMEOUT,
                 **request_kwargs,
             )
-            # 尝试解析 JSON，如果非 JSON 则报错
             try:
                 parsed_result = response.json()
-            except ValueError:
-                # 解析失败，视为执行异常
-                raise ApiToolExecuteError(
+                return ApiToolExecuteResult(
                     status_code=response.status_code,
-                    detail=gettext("响应非合法 JSON 格式: %s") % response.text[:200],
+                    result=parsed_result,
+                    err_type=ApiToolErrorType.NONE,
+                    message="",
                 )
-
-            return ApiToolExecuteResult(status_code=response.status_code, result=parsed_result)
+            except ValueError:
+                return ApiToolExecuteResult(
+                    status_code=response.status_code,
+                    result=None,
+                    err_type=ApiToolErrorType.NON_JSON_RESPONSE,
+                    message=(response.text[:200] if response.text else ""),
+                )
 
         except requests.RequestException as e:
             logger.error(f"[{self.__class__.__name__}] Request Failed: {e}", exc_info=True)
-            raise ApiToolExecuteError(status_code=500, detail=str(e))
+            return ApiToolExecuteResult(
+                status_code=500,
+                result=None,
+                err_type=ApiToolErrorType.REQUEST_ERROR,
+                message=str(e),
+            )
 
 
 class ToolExecutorFactory:
@@ -408,7 +422,7 @@ class ToolExecutorFactory:
         elif tool.tool_type == ToolTypeEnum.API.value:
             return ApiToolExecutor(tool)
         # 其他数据查询类型...
-        raise ValueError(f"Unsupported tool type: {tool.tool_type}")
+        raise ToolTypeNotSupport()
 
     def create_from_config(
         self,
@@ -427,4 +441,4 @@ class ToolExecutorFactory:
         elif tool_type == ToolTypeEnum.API.value:
             return ApiToolExecutor(config)
         # BkVision 不支持调试执行
-        raise ValueError(f"Unsupported tool type for debug: {tool_type}")
+        raise ToolTypeNotSupport()

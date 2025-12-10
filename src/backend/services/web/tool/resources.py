@@ -842,11 +842,7 @@ class ToolExecuteDebug(ToolBase):
         params = validated_request_data["params"]
 
         executor_factory = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis)
-        try:
-            executor = executor_factory.create_from_config(tool_type=tool_type, config=config)
-        except ValueError:
-            raise ToolTypeNotSupport()
-
+        executor = executor_factory.create_from_config(tool_type=tool_type, config=config)
         data = executor.execute(params).model_dump()
         return {"data": data, "tool_type": tool_type}
 

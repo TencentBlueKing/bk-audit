@@ -18,6 +18,7 @@ from services.web.tool.exceptions import (
     InvalidVariableFormatError,
     InvalidVariableStructureError,
     ParseVariableError,
+    ToolTypeNotSupport,
 )
 from services.web.tool.executor.model import (
     BkVisionExecuteResult,
@@ -524,5 +525,5 @@ class TestToolExecutorFactory(TestCase):
         invalid_tool = Tool.objects.create(tool_type="invalid_type", name="invalid_tool", version=1, namespace="test")
 
         factory = ToolExecutorFactory(self.analyzer_cls)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ToolTypeNotSupport):
             factory.create_from_tool(invalid_tool)
