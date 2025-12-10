@@ -72,7 +72,8 @@ class CreateEvent(EventMeta):
         else:
             for event in events:
                 self._ensure_model_strategy(event["strategy_id"])
-                self._apply_basic_field_mapping(event)
+        for event in events:
+            self._apply_basic_field_mapping(event)
         req = validated_request_data.get("_request")
         if req and getattr(req, "user", None) and getattr(req.user, "is_authenticated", False):
             GenerateStrategyRiskPermission(req).ensure_allowed(events)
@@ -159,6 +160,13 @@ class CreateEvent(EventMeta):
             if not field_name or not map_config:
                 continue
 
+            if field_name in [
+                EventMappingFields.RAW_EVENT_ID.field_name,
+                EventMappingFields.EVENT_TIME.field_name,
+                EventMappingFields.STRATEGY_ID.field_name,
+            ]:
+                continue
+
             target_value = map_config.get("target_value")
             source_field = map_config.get("source_field")
             if target_value is not None:
@@ -166,9 +174,6 @@ class CreateEvent(EventMeta):
             elif source_field:
                 mapped_value = event_data.get(source_field)
             else:
-                continue
-
-            if mapped_value is None:
                 continue
 
             if field_name == EventMappingFields.EVENT_TYPE.field_name:
