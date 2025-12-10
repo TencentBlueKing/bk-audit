@@ -32,6 +32,13 @@ from services.web.tool.constants import (
     SQLDataSearchConfig,
     ToolTypeEnum,
 )
+from services.web.tool.executor.model import (
+    APIToolExecuteParams,
+    ApiToolExecuteResult,
+    BkVisionExecuteResult,
+    DataSearchToolExecuteParams,
+    DataSearchToolExecuteResult,
+)
 from services.web.tool.models import Tool
 
 
@@ -60,6 +67,42 @@ class ListToolTagsResponseSerializer(serializers.Serializer):
 class ToolConfigField(serializers.DictField):
     """
     自定义字段，用于支持多态文档生成
+    """
+
+    pass
+
+
+# 针对 params 字段的多态 Schema 定义
+@extend_schema_field(
+    PolymorphicProxySerializer(
+        component_name='ToolParamsPoly',
+        serializers=[
+            APIToolExecuteParams,
+            DataSearchToolExecuteParams,
+        ],
+        resource_type_field_name=None,
+    )
+)
+class ToolParamsField(serializers.DictField):
+    """
+    自定义字段，用于支持多态文档生成
+    """
+
+
+@extend_schema_field(
+    PolymorphicProxySerializer(
+        component_name='ToolResultPoly',
+        serializers=[
+            DataSearchToolExecuteResult,
+            ApiToolExecuteResult,
+            BkVisionExecuteResult,
+        ],
+        resource_type_field_name=None,
+    )
+)
+class ToolResultField(serializers.DictField):
+    """
+    自定义字段，用于支持多态执行结果文档
     """
 
     pass
@@ -276,7 +319,7 @@ class SqlAnalyseResponseSerializer(serializers.Serializer):
 
 class ExecuteToolReqSerializer(serializers.Serializer):
     uid = serializers.CharField()
-    params = serializers.JSONField(label=gettext_lazy("工具执行参数"))
+    params = ToolParamsField(label=gettext_lazy("工具执行参数"))
     caller_resource_type = serializers.ChoiceField(required=False, choices=CALLER_RESOURCE_TYPE_CHOICES)
     caller_resource_id = serializers.CharField(required=False, allow_blank=True)
     drill_field = serializers.CharField(required=False, allow_blank=True)
@@ -285,7 +328,7 @@ class ExecuteToolReqSerializer(serializers.Serializer):
 
 
 class ExecuteToolRespSerializer(serializers.Serializer):
-    data = serializers.DictField()
+    data = ToolResultField(label=gettext_lazy("执行结果"))
     tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices)
 
 
@@ -303,21 +346,9 @@ class UserQueryTableAuthCheckRespSerializer(serializers.Serializer):
 class ToolExecuteDebugSerializer(serializers.Serializer):
     tool_type = serializers.ChoiceField(choices=ToolTypeEnum.choices, label=gettext_lazy("工具类型"))
     config = ToolConfigField(label=gettext_lazy("工具配置"), help_text=gettext_lazy("根据工具类型，配置结构不同"))
-
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-        tool_type = attrs["tool_type"]
-        config = attrs["config"]
-        if tool_type == ToolTypeEnum.DATA_SEARCH and "data_search_config_type" not in attrs:
-            raise serializers.ValidationError({"data_search_config_type": gettext_lazy("数据查询配置类型不能为空")})
-
-        if tool_type == ToolTypeEnum.BK_VISION:
-            validated_config = BkVisionConfig.model_validate(config).model_dump()
-        elif tool_type == ToolTypeEnum.DATA_SEARCH:
-            validated_config = SQLDataSearchConfig.model_validate(config).model_dump()
-        elif tool_type == ToolTypeEnum.API:
-            validated_config = ApiToolConfig.model_validate(config).model_dump()
-        else:
-            raise serializers.ValidationError({"tool_type": f"不支持的工具类型: {tool_type}"})
-        attrs["config"] = validated_config
-        return attrs
+    params = ToolParamsField(
+        label=gettext_lazy("调试执行参数"),
+        required=False,
+        default=dict,
+        help_text=gettext_lazy("与正式执行时一致的工具入参"),
+    )
