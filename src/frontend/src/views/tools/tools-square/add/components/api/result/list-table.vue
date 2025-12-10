@@ -148,7 +148,7 @@
                               placement="top"
                               theme="black">
                               <span
-                                @click="() => handleClick(element.json_path, element.drill_config)">
+                                @click="() => handleClick(element.json_path)">
                                 {{ t('已配置') }}
                                 <span style="color: #3a84ff;">{{ element.drill_config.length }}</span>
                                 {{ t('个工具') }}
@@ -189,7 +189,7 @@
                             </audit-popconfirm>
                             <bk-popover
                               v-if="element.drill_config
-                                .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                                .some((drill:any) => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
                               placement="top"
                               theme="black">
                               <audit-icon
@@ -201,7 +201,7 @@
                                   <div
                                     v-for="drill in element.drill_config
                                       // eslint-disable-next-line max-len
-                                      .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                                      .filter((drill: any) => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
                                     :key="drill.tool.uid">
                                     {{ getToolNameAndType(drill.tool.uid).name }}
                                   </div>
@@ -306,6 +306,7 @@
   </div>
 </template>
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
@@ -321,13 +322,13 @@
 
   interface Props {
     data: any,
+    outputFields: any
   }
   interface Emits {
     (e: 'close', id: string): void
     (e: 'listConfigChange', data: any, path: string, listInfo: any): void
   }
   interface Exposes {
-    getConfig: () => Config;
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
@@ -336,8 +337,8 @@
     name: '',
     desc: '',
   });
-  const list = ref([]);
-  const addList = ref([]);
+  const list = ref<any[]>([]);
+  const addList = ref<any[]>([]);
   const showFieldDict = ref(false);
   const showFieldReference = ref(false);
 
@@ -345,13 +346,13 @@
   const drillPopconfirmVisible = ref<Record<number, boolean>>({});
   const toolMaxVersionMap = ref<Record<string, number>>({});
 
-  const enumMappingsData = ref([]);
+  const enumMappingsData = ref<any[]>([]);
   // 点击字段映射记录id
   const enumMappingsId = ref('');
   // 点击字段下钻记录id
   const fieldDictId = ref('');
 
-  const fieldsData = ref([]);
+  const fieldsData = ref<Array<{ raw_name: any; display_name: any; description: any }>>([]);
   // 关闭
   const handleClose = () => {
     emits('close', props.data);
@@ -360,7 +361,7 @@
   // 点击字段映射
   const handleAddEnumMapping = (element: any) => {
     enumMappingsId.value = element.json_path;
-    enumMappingsData.value = element.enum_mappings.mappings;
+    enumMappingsData.value = element.enum_mappings?.mappings || [];
     showFieldDict.value = true;
   };
 
@@ -454,14 +455,14 @@
     list.value = list.value.map((item: any) => {
       if (item.json_path === fieldDictId.value) {
         // eslint-disable-next-line no-param-reassign
-        item.drill_config = data;
+        item.drill_config = data || [];
       }
       return item;
     });
   };
 
   // 移除
-  const handleDelect = (path: id) => {
+  const handleDelect = (path: string) => {
     // addList 添加对应项目
     addList.value.push(list.value.find((item: any) => item.json_path === path));
     // list 移除项目
@@ -478,29 +479,52 @@
       display_name: item.display_name,
       description: item.description,
     }));
-    console.log('val, props.data.json_path', val, props.data.json_path);
     emits('listConfigChange', val, props.data.json_path, listInfo.value);
   }, {
     deep: true,
   });
+
+  watch(() => props.outputFields, (val: any[] | null) => {
+    if (val && val.length > 0) {
+      val.forEach((el: any) => {
+        if (el.raw_name === props.data.name) {
+          listInfo.value.name = el.display_name || '';
+          listInfo.value.desc = el.description || '';
+          list.value = (el.field_config?.output_fields || []).map((outItem: any) => {
+            const findNode =  props.data?.list?.find((e: any) => e.json_path === outItem.json_path) || {};
+            return {
+              ...findNode,
+              display_name: outItem.display_name || '',
+              description: outItem.description || '',
+              drill_config: outItem.drill_config || [],
+              enum_mappings: {
+                mappings: outItem.enum_mappings?.mappings || [],
+              },
+            };
+          });
+        }
+      });
+    } else {
+      list.value = (props.data?.list || []).map((item: any) => ({
+        ...item,
+        display_name: '',
+        enum_mappings: {
+          mappings: [],
+        },
+        drill_config: [],
+        description: '',
+      }));
+    }
+  }, {
+    immediate: true,
+    deep: true,
+  });
+
   onMounted(() => {
-    list.value = props.data?.list.map((item: any) => ({
-      ...item,
-      display_name: '',
-      enum_mappings: {
-        mappings: [],
-      },
-      drill_config: [],
-      description: '',
-    }));
-    // 提取list中每一项的的name
+
   });
 
   defineExpose<Exposes>({
-    // 提交获取字段
-    getConfig() {
-      console.log('列表获取值');
-    },
   });
 </script>
 <style lang="postcss" scoped>

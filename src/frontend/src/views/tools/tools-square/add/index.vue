@@ -207,13 +207,12 @@
               </div>
             </template>
           </card-part-vue>
-          {{ formData }}
           <component
             :is="ToolTypeComMap[formData.tool_type]"
             v-if="isShowComponent"
             ref="comRef"
             :data-search-config-type="formData.data_search_config_type"
-            :form-data-config="formData.config"
+            :form-data-config="formData"
             :is-edit-mode="isEditMode"
             :is-first-edit="isFirstEdit"
             :is-update="isUpdate"
@@ -792,12 +791,10 @@
             formData.value.updated_time = bkVisionUpdateTime.value || null;
           }
         } else {
-          console.log('获取组件配置');
           formData.value.config = comRef.value.getFields();
         }
       }
       const data = _.cloneDeep(formData.value);
-      console.log('data', data);
       const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
 
       if (data.tags) {

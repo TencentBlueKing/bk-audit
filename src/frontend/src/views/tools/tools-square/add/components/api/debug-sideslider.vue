@@ -146,37 +146,45 @@
 
   import useMessage from '@/hooks/use-message';
 
-
+  interface FormItem {
+    display_name: string;
+    description: string;
+    required: boolean;
+    field_category: string;
+    default_value?: any;
+    time_range?: any;
+  }
   interface Props {
     apiConfig: Record<string, any>,
     // inputVariable: Array<Record<string, any>>
     isParams: boolean,
   }
   interface Exposes {
-    init: () => void;
+    init: (data: FormItem[]) => void;
   }
 
   interface Emits {
-    (e: 'deBugDone', id: string): void
+    (e: 'deBugDone', id: string, is: boolean): void
   }
 
   defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
-  const { messageSuccess, messageError } = useMessage();
+  const { messageSuccess } = useMessage(); // messageError
 
   const isShow = ref(false);
-  const formModel = ref({});
+  const formModel = ref<Record<string, any>>({});
   const rules = ref({});
-  const list = ref([]);
+
+
+  const list = ref<FormItem[]>([]);
 
   const result = ref('');
 
   // 调试
   const handleDebug = () => {
-    console.log('debug');
     messageSuccess('调试成功');
-    messageError('调试失败');
+    // messageError('调试失败');
     result.value = `{
   "status": "success",
   "message": "操作成功",
@@ -217,15 +225,19 @@
 }`;
     emits('deBugDone', result.value, true);
   };
+  const initWithData = (data: FormItem[]) => {
+    isShow.value = true;
+    list.value = data;
+    formModel.value = data.reduce((obj: Record<string, any>, item: Record<string, any>) => {
+      // eslint-disable-next-line no-param-reassign
+      obj[item.display_name] = item.field_category === 'time_range_select' ? item.time_range :  item.default_value;
+      return obj;
+    }, {});
+  };
+
   defineExpose<Exposes>({
-    init(data: Array<Record<string, any>>) {
-      isShow.value = true;
-      list.value = data;
-      formModel.value = data.reduce((obj, item) => {
-        // eslint-disable-next-line no-param-reassign
-        obj[item.display_name] = item.field_category === 'time_range_select' ? item.time_range :  item.default_value;
-        return obj;
-      }, {});
+    init(data: FormItem[]) {
+      initWithData(data);
     },
   });
 

@@ -141,9 +141,9 @@
     </template>
   </card-part-vue>
   <result-config
-    v-if="isSuccess && isDoneDeBug"
+    v-if="(isSuccess && isDoneDeBug) || isEditMode"
     ref="resultConfigRef"
-    :output-config="formData.output_config"
+    :is-edit-mode="isEditMode"
     :result-data="resultData" />
   <de-dug
     ref="deDugRef"
@@ -153,7 +153,7 @@
     @de-bug-done="handleDeBugDone" />
 </template>
 <script setup lang='tsx'>
-  import { onMounted, ref, watch } from 'vue';
+  import { nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import CardPartVue from '../card-part.vue';
@@ -164,14 +164,15 @@
 
   interface Props {
     isEditMode: boolean;
-    formDataConfig: any;
+    // formDataConfig: any;
   }
 
   interface Exposes {
-    getFields: () => Config;
+    getFields: () => void;
+    setConfigs: (data: any) => void;
   }
 
-  const props = defineProps<Props>();
+  defineProps<Props>();
   const { t } = useI18n();
   const deDugRef = ref();
   const formRef = ref();
@@ -291,26 +292,7 @@
     isSuccess.value = isSucc;
     isDoneDeBug.value = true;
   };
-
-  watch(
-    () => props.isEditMode,
-    (val) => {
-      console.log('val', val);
-      // if (val) {
-      //   console.log('props.formDataConfig??', props.formDataConfig);
-      //   console.log('p??', props.formDataConfig.api_config);
-      //   isParams.value = props.formDataConfig.input_variable.length !== 0;
-      //   // formData.value.api_config = props.formDataConfig.api_config;
-      //   // formData.value.output_config = props.formDataConfig.output_config;
-      // }
-    },
-    { deep: true, immediate: true },
-  );
-
   onMounted(() => {
-    console.log('props.isEditMode', props.isEditMode);
-
-    console.log('props.formDataConfig', props.formDataConfig);
   });
   defineExpose<Exposes>({
     // 提交获取字段
@@ -319,6 +301,16 @@
       formData.value.output_config = resultConfigRef.value?.handleGetResultConfig();
       console.log('formData', formData.value);
       return formData.value;
+    },
+    setConfigs(data: any) {
+      nextTick(() => {
+        formData.value.api_config = data.api_config;
+        isParams.value = data.input_variable?.length > 0;
+        formData.value.input_variable = data.input_variable;
+        formData.value.output_config = data.output_config;
+        // 查询结果设置值
+        resultConfigRef.value.setConfigs(data.output_config);
+      });
     },
   });
 

@@ -47,7 +47,7 @@
               <bk-checkbox
                 v-model="node.isChecked"
                 style="padding-right: 5px;"
-                @change="(val) => handelCheckoxChange(val, node)" />
+                @change="(val: any) => handleCheckboxChange(val, node)" />
             </span>
           </template>
         </bk-tree>
@@ -72,16 +72,18 @@
             :is="modelComMap(element)"
             ref="comRef"
             :data="element"
+            :output-fields="outputFields"
             @close="handleClose"
-            @config-change="handleConfigChange"
-            @list-config-change="handleListConfigChange" />
+            @config-change="(...args: unknown[]) => handleConfigChange(args[0] as any, args[1] as string)"
+            @list-config-change="(...args: unknown[]) =>
+              handleListConfigChange(args[0] as any, args[1] as string, args[2] as any)" />
         </template>
       </vuedraggable>
     </div>
   </div>
 </template>
 <script setup lang='ts'>
-  import { onMounted, ref, watch } from 'vue';
+  import { nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -90,29 +92,31 @@
 
   interface Props {
     resultData: any,
-    outputConfigGroups: Record<string, any>,
     groupKey?: string,
+    isEditMode: boolean,
+    groupOutputFields?: any,
   }
   interface Exposes {
-    handleGetResultConfig: () => Config;
-    handleGetGroupResultConfig: () => Config;
+    handleGetResultConfig: () => void;
+    handleGetGroupResultConfig: () => void;
+    setConfigs: (data: any) => void;
   }
   interface Emits {
     (e: 'groupContentChange', data: any, id: string | number): void
   }
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
-  console.log('内容outputConfigGroups', props.outputConfigGroups);
 
   const { t } = useI18n();
   const modelComMap = (item: Record<string, any>) => (item.type === 'kv' ? objectModel : listModel);
-  const selectValue = ref([]);
-  const selectedId = ref([]);
-  const selectedItems = ref([]);
+  const selectValue = ref<string[]>([]);
+  const selectedId = ref<string[]>([]);
+  const selectedItems = ref<any[]>([]);
   const comRef = ref();
-  const treeData = ref([]);
-  const buildTree = (obj, parentId = '', path = [], isChild = false, type = 'object')  => {
-    const result = [];
+  const treeData = ref<any[]>([]);
+  const outputFields = ref<any[]>([]);
+  const buildTree = (obj: any, parentId = '', path: string[] = [], isChild = false, type = 'object')  => {
+    const result: any[] = [];
 
     // 如果是对象，我们递归它的每个键值对
     if (typeof obj === 'object' && obj !== null) {
@@ -128,8 +132,8 @@
           json_path: currentId,
           isChecked: false,
           isChild,
-          children: [],
-          list: [],
+          children: [] as any[],
+          list: [] as any[],
           type,
           config: null,
           listName: '',
@@ -137,11 +141,11 @@
         };
         if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
           // 如果值是对象且不是数组，递归
-          node.children = buildTree(obj[key], currentId, currentPath, true, 'kv', '');
+          node.children = buildTree(obj[key], currentId, currentPath, true, 'kv');
         } else if (Array.isArray(obj[key]) && obj[key].length > 0) { // 如果值是数组 代表list
           // 递归它的第一个元素
           node.type = 'table';
-          const childNodes = buildTree(obj[key][0], currentId, currentPath, true, 'list', key);
+          const childNodes = buildTree(obj[key][0], currentId, currentPath, true, 'list');
           node.list = childNodes;
         }
 
@@ -151,17 +155,23 @@
     return result;
   };
 
-  const handelTagRemove = (val) => {
+  const handelTagRemove = (val: any) => {
     if (val) {
       // selectedItems中找出name与val相同的节点
       const node = selectedItems.value.find(item => item.name === val);
-      const index = selectedId.value.indexOf(node.json_path);
-      selectedId.value.splice(index, 1);
-      selectedItems.value.splice(index, 1);
+      if (node) {
+        const index = selectedId.value.indexOf(node.json_path);
+        if (index > -1) {
+          selectedId.value.splice(index, 1);
+          selectedItems.value.splice(index, 1);
+        }
+      }
     }
   };
 
-  const handelCheckoxChange = (val, node) => {
+  const handleCheckboxChange = (val: any, node: any) => {
+    console.log('treeData', treeData.value);
+
     if (val) {
       // 选中时添加name到selectValue
       if (!selectedId.value.includes(node.json_path)) {
@@ -181,7 +191,7 @@
   };
 
   // 关闭
-  const handleClose = (item: string) => {
+  const handleClose = (item: any) => {
     // 删除对应的item treeData中的isChecked 改为false
     const index = selectedId.value.indexOf(item.json_path);
     if (index > -1) {
@@ -192,14 +202,12 @@
   };
   // kv组件配置更新
   const handleConfigChange = (data: any, jsonPath: string) => {
-    console.log('组件配置更新', data);
     if (data) {
       // 更新对应的item treeData中的isChecked 改为false
       const node = selectedItems.value.find(item => item.json_path === jsonPath);
       if (node) {
         node.config = data;
       }
-      console.log('selectedItems', selectedItems.value);
     }
   };
   // list组件配置更新
@@ -207,7 +215,6 @@
     if (data) {
       // 更新对应的item treeData中的isChecked 改为false
       const node = selectedItems.value.find(item => item.json_path === jsonPath);
-      console.log('node', node);
       if (node) {
         node.list = data;
         node.listDescription = listInfo.desc;
@@ -215,13 +222,54 @@
       }
     }
   };
+  const getTreeData = () => {
+    const tr =  `{
+  "status": "success",
+  "message": "操作成功",
+  "data": {
+
+    "status": "success",
+    "list": [ {
+            "field_name": "event_tb_key",
+            "display_name": "event_tb_key",
+            "id": "event_tb_key:event_tb_key"
+        },
+        {
+            "field_name": "mrms_openid",
+            "display_name": "mrms_openid",
+            "id": "mrms_openid:mrms_openid"
+        },
+        {
+            "field_name": "风险ID",
+            "display_name": "风险ID",
+            "id": "风险ID:风险ID"
+        }
+      ],
+    "person": {
+      "name": "张明",
+      "age": 28,
+      "contact": {
+        "email": "zhangming@email.com",
+        "phone": "+86-138-0011-0022",
+        "address": {
+          "street": "人民路123号",
+          "city": "北京市",
+          "district": "朝阳区",
+          "postalCode": "100020"
+        }
+      }
+    }
+  }
+}`;
+    treeData.value = buildTree(JSON.parse(tr));
+  };
   watch(
     () => selectedId.value, (newVal) => {
       // 递归更新树中所有节点的isChecked状态
-      const updateTreeCheckedState = (nodes, selectedIds) => nodes.map((node) => {
+      const updateTreeCheckedState = (nodes: any[], selectedIds: string[]) => nodes.map((node: any) => {
         // 更新当前节点的选中状态
         // eslint-disable-next-line no-param-reassign
-        node.isChecked = selectedIds.includes(node.json_path);
+        node.isChecked = selectedIds?.includes(node.json_path);
 
         // 递归更新子节点
         if (node.children && node.children.length > 0) {
@@ -249,15 +297,50 @@
   );
   watch(
     () => selectedItems.value, (newVal) => {
-      emits('groupContentChange', newVal, props.groupKey);
+      emits('groupContentChange', newVal, props?.groupKey || '');
     },
     {
       immediate: true,
       deep: true,
     },
   );
+
+  // 分组时的复现
+  watch(() => props.groupOutputFields, (newVal) => {
+    if (newVal) {
+      getTreeData();
+      newVal?.forEach((item: any) => {
+        // 递归查找匹配的节点
+        const findAndCheckNode = (nodes: any[]) => {
+          for (const node of nodes) {
+            // 如果当前节点匹配
+            if (node.json_path === item.json_path) {
+              handleCheckboxChange(true, node);
+              return true; // 找到并处理，返回true
+            }
+
+            // 如果节点有子节点，递归查找
+            if (node.children && node.children.length > 0) {
+              const found = findAndCheckNode(node.children);
+              if (found) return true; // 如果在子节点中找到，提前返回
+            }
+          }
+          return false; // 未找到
+        };
+        // 从 treeData.value 开始查找
+        findAndCheckNode(treeData.value);
+      });
+      outputFields.value = newVal;
+    }
+  }, {
+    deep: true,
+    immediate: true,
+  });
+
   onMounted(() => {
-    treeData.value = buildTree(JSON.parse(props.resultData));
+    if (!props.isEditMode && props.resultData) {
+      treeData.value = buildTree(JSON.parse(props.resultData));
+    }
   });
 
   defineExpose<Exposes>({
@@ -270,6 +353,35 @@
         groupKey: props.groupKey,
         items: selectedItems.value,
       };
+    },
+    // 不分组
+    setConfigs(data: any) {
+      getTreeData();
+      nextTick(() => {
+        data[0].output_fields?.forEach((item: any) => {
+          // 当 item.json_path 与节点的json_path相同时 执行  handleCheckboxChange(true, node: any) node为节点
+          // 递归查找匹配的节点
+          const findAndCheckNode = (nodes: any[]) => {
+            for (const node of nodes) {
+              // 如果当前节点匹配
+              if (node.json_path === item.json_path) {
+                handleCheckboxChange(true, node);
+                return true; // 找到并处理，返回true
+              }
+
+              // 如果节点有子节点，递归查找
+              if (node.children && node.children.length > 0) {
+                const found = findAndCheckNode(node.children);
+                if (found) return true; // 如果在子节点中找到，提前返回
+              }
+            }
+            return false; // 未找到
+          };
+          // 从 treeData.value 开始查找
+          findAndCheckNode(treeData.value);
+        });
+        outputFields.value = data[0].output_fields || [];
+      });
     },
   });
 </script>
@@ -284,7 +396,7 @@
 
   .content-lable {
     padding-bottom: 10px;
-    font-size: 14px;
+    font-size: 12px;
     color: #4d4f56;
   }
 }
