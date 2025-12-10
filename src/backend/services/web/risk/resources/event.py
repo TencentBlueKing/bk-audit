@@ -17,6 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 
 import datetime
+import json
 import uuid
 from typing import List
 
@@ -27,7 +28,7 @@ from rest_framework import serializers
 
 from apps.audit.resources import AuditMixinResource
 from core.utils.tools import get_app_info
-from services.web.risk.constants import RiskStatus
+from services.web.risk.constants import EventMappingFields, RiskStatus
 from services.web.risk.handlers import EventHandler
 from services.web.risk.handlers.risk import RiskHandler
 from services.web.risk.models import Risk
@@ -57,7 +58,7 @@ class CreateEvent(EventMeta):
         event_ids = []
         for event in events:
             event["event_id"] = "{}{}".format(event.get("strategy_id"), event["raw_event_id"] or uuid.uuid1().hex)
-            event["event_source"] = source
+            event.setdefault("event_source", source)
             event_ids.append(event["event_id"])
         return event_ids
 
@@ -71,6 +72,7 @@ class CreateEvent(EventMeta):
         else:
             for event in events:
                 self._ensure_model_strategy(event["strategy_id"])
+                self._apply_basic_field_mapping(event)
         req = validated_request_data.get("_request")
         if req and getattr(req, "user", None) and getattr(req.user, "is_authenticated", False):
             GenerateStrategyRiskPermission(req).ensure_allowed(events)
@@ -124,6 +126,72 @@ class CreateEvent(EventMeta):
             raise serializers.ValidationError(gettext("策略不存在"))
         if strategy.strategy_type != StrategyType.RULE:
             raise serializers.ValidationError(gettext("仅支持规则审计策略创建事件"))
+
+    def _apply_basic_field_mapping(self, event: dict) -> None:
+        """
+        手工创建事件时，按策略基础字段映射补充事件字段
+        """
+
+        strategy = (
+            Strategy.objects.filter(strategy_id=event.get("strategy_id")).only("event_basic_field_configs").first()
+        )
+        if not strategy:
+            return
+
+        basic_configs = strategy.event_basic_field_configs or []
+        if not basic_configs:
+            return
+
+        raw_event_data = event.get("event_data") or {}
+        if isinstance(raw_event_data, str):
+            try:
+                event_data = json.loads(raw_event_data)
+            except json.JSONDecodeError:
+                return
+        elif isinstance(raw_event_data, dict):
+            event_data = raw_event_data
+        else:
+            return
+
+        for field in basic_configs:
+            field_name = field.get("field_name")
+            map_config = field.get("map_config") or {}
+            if not field_name or not map_config:
+                continue
+
+            target_value = map_config.get("target_value")
+            source_field = map_config.get("source_field")
+            if target_value is not None:
+                mapped_value = target_value
+            elif source_field:
+                mapped_value = event_data.get(source_field)
+            else:
+                continue
+
+            if mapped_value is None:
+                continue
+
+            if field_name == EventMappingFields.EVENT_TYPE.field_name:
+                event[field_name] = (
+                    mapped_value
+                    if isinstance(mapped_value, str)
+                    else ",".join(map(str, mapped_value))
+                    if isinstance(mapped_value, (list, tuple, set))
+                    else str(mapped_value)
+                )
+                continue
+
+            if field_name == EventMappingFields.OPERATOR.field_name:
+                event[field_name] = (
+                    mapped_value
+                    if isinstance(mapped_value, str)
+                    else ",".join(map(str, mapped_value))
+                    if isinstance(mapped_value, (list, tuple, set))
+                    else str(mapped_value)
+                )
+                continue
+
+            event[field_name] = mapped_value
 
 
 class ListEvent(EventMeta):
