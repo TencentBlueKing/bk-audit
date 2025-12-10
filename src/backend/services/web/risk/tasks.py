@@ -203,7 +203,7 @@ def generate_risk_from_event():
     lock_name="celery:process_risk_ticket",
     load_lock_name=lambda **kwargs: f"celery:process_risk_ticket:{kwargs['risk_id'] if kwargs else None}",
 )
-def process_risk_ticket(*, risk_id: str = None):
+def process_risk_ticket(*, risk_id: str = None, manual: bool = False):
     """自动处理风险单"""
 
     # 检测是否开启自动流转
@@ -222,7 +222,7 @@ def process_risk_ticket(*, risk_id: str = None):
 
     # 逐个处理
     for risk in risks:
-        if settings.ENABLE_MULTI_PROCESS_RISK:
+        if settings.ENABLE_MULTI_PROCESS_RISK and not manual:
             process_one_risk.delay(risk_id=risk.risk_id)
             logger_celery.info("[ProcessRiskTicket] Scheduled %s", risk.risk_id)
         else:
