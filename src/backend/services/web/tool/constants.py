@@ -30,6 +30,17 @@ from core.choices import TextChoices, register_choices
 from core.utils.data import validate_unique_keys
 
 
+@register_choices("api_tool_error_type")
+class ApiToolErrorType(TextChoices):
+    """
+    API工具执行错误类型
+    """
+
+    NONE = "none", gettext_lazy("无异常")
+    NON_JSON_RESPONSE = "non_json_response", gettext_lazy("响应非 JSON")
+    REQUEST_ERROR = "request_error", gettext_lazy("请求异常")
+
+
 @register_choices("ToolType")
 class ToolTypeEnum(TextChoices):
     """
@@ -259,6 +270,7 @@ class ToolTagsEnum(TextChoices):
 # ==========================================
 
 
+@register_choices("api_auth_method")
 class ApiAuthMethod(TextChoices):
     """
     API认证方法
@@ -268,7 +280,7 @@ class ApiAuthMethod(TextChoices):
     NONE = "none", gettext_lazy("无认证")
 
 
-class BkAppAuthConfigSchema(BaseModel):
+class BkAppAuthConfig(BaseModel):
     """蓝鲸认证需要的具体字段"""
 
     bk_app_code: str = PydanticField(..., description="应用ID")
@@ -277,7 +289,7 @@ class BkAppAuthConfigSchema(BaseModel):
 
 class BkAuthItem(BaseModel):
     method: Literal[ApiAuthMethod.BK_APP_AUTH] = ApiAuthMethod.BK_APP_AUTH
-    config: BkAppAuthConfigSchema  # 这里的 config 强类型约束为 BkAppAuthConfigSchema
+    config: BkAppAuthConfig  # 这里的 config 强类型约束为 BkAppAuthConfigSchema
 
 
 class NoAuthItem(BaseModel):
@@ -331,8 +343,8 @@ class ApiVariablePosition(TextChoices):
     """
 
     QUERY = "query", gettext_lazy("查询参数")
-    BODY = "body", gettext_lazy("请求体")
     PATH = "path", gettext_lazy("路径参数")
+    BODY = "body", gettext_lazy("请求体")
 
 
 class ApiInputVariableBase(DataSearchBaseField):
@@ -341,6 +353,7 @@ class ApiInputVariableBase(DataSearchBaseField):
     """
 
     required: bool = PydanticField(title=gettext_lazy("是否必填"))
+    var_name: str = PydanticField(min_length=1, title=gettext_lazy("请求参数名"))
     field_category: FieldCategory = PydanticField(title=gettext_lazy("前端类型"))
     default_value: Annotated[
         Union[str, int, float, bool, dict, list, None], JSONField(allow_null=True)
@@ -395,6 +408,7 @@ class TimeRangeInputVariable(ApiInputVariableBase):
     """
 
     field_category: Literal[FieldCategory.TIME_RANGE_SELECT] = FieldCategory.TIME_RANGE_SELECT
+    var_name: Optional[str] = None
     # 时间范围分割配置
     split_config: TimeRangeSplitConfig = PydanticField(title=gettext_lazy("时间范围分割配置"))
 
@@ -416,7 +430,7 @@ class KvOutputField(BaseModel):
     field_type: Literal[ApiOutputFieldType.KV] = ApiOutputFieldType.KV
 
 
-class ApiJsonField(DataSearchBaseField):
+class ApiJsonField(TableOutputField):
     """
     API JSON 字段
     """
@@ -424,7 +438,7 @@ class ApiJsonField(DataSearchBaseField):
     json_path: str = PydanticField(title=gettext_lazy("字段路径"))
 
 
-class ApiTableOutputField(TableOutputField, ApiJsonField):
+class ApiTableOutputField(ApiJsonField):
     """API 表格内部列定义"""
 
     pass
@@ -472,6 +486,11 @@ class ApiOutputConfiguration(BaseModel):
 
     # 2. 统一的数据结构
     groups: List[ApiOutputGroup] = PydanticField(default_factory=list, title=gettext_lazy("输出分组列表"))
+    result_schema: Annotated[Dict[str, Any], JSONField(allow_null=True),] = PydanticField(
+        default_factory=dict,
+        title=gettext_lazy("调试输出Schema"),
+        description=gettext_lazy("前端调试解析出的响应结构，后端不做处理"),
+    )
 
     @field_validator('groups')
     @classmethod
@@ -497,15 +516,11 @@ class ApiToolConfig(BaseModel):
     )
     output_config: ApiOutputConfiguration = PydanticField(title=gettext_lazy("输出配置"))
 
-
-class APIToolExecuteParams(BaseModel):
-    raw_name: str = PydanticField(title=gettext_lazy("执行入参名"))
-    value: str = PydanticField(title=gettext_lazy("执行入参值"))
-    position: ApiVariablePosition = PydanticField(title=gettext_lazy("参数位置"))
-
-
-class APIToolVariable(BaseModel):
-    uid: str = PydanticField(title=gettext_lazy("工具uid"))
-    execute_variables: Annotated[List[APIToolExecuteParams], ListField(child=DictField())] = PydanticField(
-        default_factory=list, title=gettext_lazy("输入变量")
-    )
+    @field_validator("input_variable")
+    @classmethod
+    def validate_unique_raw_names(cls, variables):
+        return validate_unique_keys(
+            variables,
+            key_field="raw_name",
+            error_msg=lambda key: gettext("输入变量 raw_name %s 重复") % key,
+        )

@@ -21,9 +21,8 @@ import datetime
 import traceback
 from collections import defaultdict
 from copy import deepcopy
-from typing import Any, Dict, List
+from typing import List
 
-import requests
 from bk_resource import Resource, api, resource
 from bk_resource.utils.common_utils import get_md5
 from blueapps.utils.logger import logger
@@ -635,116 +634,154 @@ class UpdateTool(ToolBase):
 class ExecuteTool(ToolBase):
     """
     工具执行
+
+    通用变量输入格式说明：
+    1. input（输入框）
+        ```json
+            {
+                "raw_name": "string",
+                "value": "admin"
+            }
+        ```
+    2. number_input（数字输入框）
+        ```json
+            {
+                "raw_name": "number",
+                "value": 123
+            }
+        ```
+    3. time_select（时间选择器）
+        ```json
+            {
+                "raw_name": "datetime",
+                "value": "2023-01-01 12:00:00" // 默认+8时间，实际 SQL 中会转为毫秒时间戳
+            }
+        ```
+    4. person_select（人员选择器）
+        多值传递采用列表
+        ```json
+            {
+                "raw_name": "usernames",
+                "value": ["user1", "user2"]
+            }
+        ```
+        单值也可以直接传递
+        ```json
+            {
+                "raw_name": "usernames",
+                "value": "user1" // 单个值会自动转为列表 ["user1"]
+            }
+        ```
+        注意：对于 tool_type 为 api 的工具，人员选择器的值会转换为逗号拼接的字符串传递给三方接口
+        （例如：["user1", "user2"] 会转为 "user1,user2"）
+    5. time_range_select（时间范围选择器）
+        ```json
+            {
+                "raw_name": "datetime_range",
+                "value": ["2023-01-01 12:00:00", "2023-01-31 12:00:00"]
+            }
+        ```
+    6. multiselect（下拉列表）
+        ```json
+            {
+                "raw_name": "multiselect",
+                "value": ["option1", "option2"]
+            }
+        ```
+
+    重要提示：
+    - 对于非必填变量，如果用户未输入值，前端应传入 `value: null`（或 JSON 中的 `null`）来表示用户未输入
+    - 后台会忽略 `value` 为 `null` 的非必填变量，不会进行变量替换或校验
+    - 必填变量必须提供有效的值，不能为 `null`
+
     1. tool_type 为 data_search
         params:
-            ```json
-            {
-                "uid": "sql_tool_123",
-                "params": {
-                    "tool_variables": [
-                        {
-                            "raw_name": "username",
-                            "value": "admin"
-                        }
-                    ],
-                    "page": 1,
-                    "page_size": 100
-                },
-                "caller_resource_type": "risk",
-                "caller_resource_id": "R123"
-            }
-            ```
-        不同的变量下的输入格式:
-        1. input（输入框）
-            ```json
-                {
-                    "raw_name": "string",
-                    "value": "admin"
-                }
-            ```
-        2. number_input（数字输入框）
-            ```json
-                {
-                    "raw_name": "number",
-                    "value": 123
-                }
-            ```
-        3. time_select（时间选择器）
-            ```json
-                {
-                    "raw_name": "datetime",
-                    "value": "2023-01-01 12:00:00" // 默认+8时间，实际 SQL 中会转为毫秒时间戳
-                }
-            ```
-        4. person_select（人员选择器）
-            多值传递采用列表
-            ```json
-                {
-                    "raw_name": "usernames",
-                    "value": ["user1", "user2"]
-                }
-            ```
-            单值也可以直接传递
-            ```json
-                {
-                    "raw_name": "usernames",
-                    "value": "user1" // 单个值会自动转为列表 ["user1"]
-                }
-            ```
-        5. time_range_select（时间范围选择器）
-            ```json
-                {
-                    "raw_name": "datetime_range",
-                    "value": ["2023-01-01 12:00:00", "2023-01-31 12:00:00"]
-                }
-        6. multiselect（下拉列表）
-            ```json
-                {
-                    "raw_name": "multiselect",
-                    "value": ["option1", "option2"]
-                }
-            ```
+        ```json
+        {
+            "uid": "sql_tool_123",
+            "params": {
+                "tool_variables": [
+                    {
+                        "raw_name": "username",
+                        "value": "admin"
+                    }
+                ],
+                "page": 1,
+                "page_size": 100
+            },
+            "caller_resource_type": "risk",
+            "caller_resource_id": "R123"
+        }
+        ```
         response:
-            ```json
-            {
-                "data": {
-                    "query_sql": "SELECT * FROM mocked_table",
-                    "count_sql": "SELECT COUNT(*) FROM mocked_table",
-                    "results": [
-                        {
-                            "field1": "value1"
-                        },
-                        {
-                            "field2": "value2"
-                        }
-                    ],
-                    "total": 2,
-                    "num_pages": 100,
-                    "page": 1
-                },
-                "tool_type": "data_search"
-            }
-            ```
-    2. tool_type 为 bk_vision
+        ```json
+        {
+            "data": {
+                "query_sql": "SELECT * FROM mocked_table",
+                "count_sql": "SELECT COUNT(*) FROM mocked_table",
+                "results": [
+                    {
+                        "field1": "value1"
+                    },
+                    {
+                        "field2": "value2"
+                    }
+                ],
+                "total": 2,
+                "num_pages": 100,
+                "page": 1
+            },
+            "tool_type": "data_search"
+        }
+        ```
+
+    2. tool_type 为 api
         params:
-            ```json
-            {
-                "uid": "api_tool_123",
-                "params": {},
-                "caller_resource_type": "risk",
-                "caller_resource_id": "R123"
+        ```json
+        {
+            "uid": "api_tool_123",
+            "params": {
+                "tool_variables": [
+                    {"raw_name": "path_id", "value": 123, "position": "path"},
+                    {"raw_name": "query_param", "value": "test", "position": "query"}
+                ]
             }
-            ```
+        }
+        ```
         response:
-            ```json
-            {
-                "data": {
-                    "panel_id": "panel_123"
-                },
-                "tool_type": "bk_vision"
-            }
-            ```
-    3. 权限上下文（可选）
+        ```json
+        {
+            "data": {
+                "status_code": 200,
+                "result": {
+                    "key": "value"
+                }
+            },
+            "tool_type": "api"
+        }
+        ```
+
+    3. tool_type 为 bk_vision
+        params:
+        ```json
+        {
+            "uid": "vision_tool_123",
+            "params": {},
+            "caller_resource_type": "risk",
+            "caller_resource_id": "R123"
+        }
+        ```
+        response:
+        ```json
+        {
+            "data": {
+                "panel_id": "panel_123"
+            },
+            "tool_type": "bk_vision"
+        }
+        ```
+
+    4. 权限上下文（可选）
         - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
             - `caller_resource_type`：调用方资源类型（当前支持：`risk`）
             - `caller_resource_id`：调用方资源实例 ID（如风险ID）
@@ -753,23 +790,6 @@ class ExecuteTool(ToolBase):
         - 行为说明：
             - 命中且有权限：跳过原有工具权限校验，直接执行
             - 命中但无权限：返回标准权限异常（包含可申请信息）
-
-    示例（携带 drill_field 与时间范围，映射 basic 字段 operator）：
-        ```json
-        {
-          "uid": "vision_tool_123",
-          "caller_resource_type": "risk",
-          "caller_resource_id": "RISK-001",
-          "drill_field": "operator",
-          "event_start_time": "2025-08-06 00:00:00",
-          "event_end_time": "2025-08-07 00:00:00",
-          "params": {
-            "tool_variables": [
-              {"raw_name": "ctx", "value": "admin"}
-            ]
-          }
-        }
-        ```
     """
 
     name = gettext_lazy("工具执行")
@@ -836,169 +856,29 @@ class ExecuteToolAPIGW(ExecuteTool):
 
 class ToolExecuteDebug(ToolBase):
     """
-    工具调试
+    工具执行调试
 
-    说明：
-        蓝鲸认证的信息，放到请求头中
-
-    请求示例：
-    ```json
-        {
-            "tool_type": "api",
-            "config": {
-                "api_config": {
-                    "url": "https://k.autohome.com.cn/ajax/getfeedIntelligent/",
-                    "method": "GET",
-                    "auth_config": {
-                        "method": "none"
-                    },
-                    "headers": [
-                        {
-                            "key": "Content-Type",
-                            "value": "application/json"
-                        }
-                    ]
-                },
-                "input_variable": [
-                    {
-                        "raw_name": "pageIndex",
-                        "display_name": "页码",
-                        "description": "页码",
-                        "field_category": "input",
-                        "required": true,
-                        "default_value": "",
-                        "is_show": true,
-                        "position": "query"
-                    },
-                    {
-                        "raw_name": "pageSize",
-                        "display_name": "条目数",
-                        "description": "条目数",
-                        "field_category": "input",
-                        "required": false,
-                        "default_value": "",
-                        "is_show": true,
-                        "position": "query"
-                    },
-                    {
-                        "raw_name": "_appid",
-                        "display_name": "文章类别",
-                        "description": "登录名",
-                        "field_category": "input",
-                        "required": false,
-                        "default_value": "koubei",
-                        "is_show": true,
-                        "position": "query"
-                    },
-                    {
-                        "raw_name": "date",
-                        "display_name": "文档时间",
-                        "description": "文档时间",
-                        "field_category": "input",
-                        "required": false,
-                        "default_value": "20180129",
-                        "is_show": true,
-                        "position": "query"
-                    }
-                ],
-                "output_config": {
-                    "enable_grouping": false,
-                    "groups": []
-                }
-            }
-        }
-    ```
-
-    响应示例：
-    ```json
-        {
-          "result": true,
-          "code": 0,
-          "data": {
-            "message": "成功",
-            "returncode": 0
-          },
-          "message": null,
-          "request_id": "bd52773d-5a40-4783-8f3f-84c4907e6dc5",
-          "trace_id": "a6c78625c1752ef4e421f2ec2bb650b7"
-        }
-    ```
+    允许用户在不保存工具的情况下基于配置直接调试执行。
+    请求参数：
+    - tool_type：工具类型（目前支持 data_search/sql、api）
+    - config：与工具保存时一致的配置
+    - params：与正式执行时一致的入参
+    响应结构与 ExecuteTool 相同。
     """
 
-    name = "API工具执行调试"
+    name = gettext_lazy("工具执行调试")
     RequestSerializer = ToolExecuteDebugSerializer
-
-    def _perform_request_api(self, validated_request_data):
-        """
-        处理API请求
-        """
-        url, method = (
-            validated_request_data["config"]["api_config"]["url"],
-            validated_request_data["config"]["api_config"]["method"],
-        )
-
-        headers = {}
-        for header_item in validated_request_data["config"]["api_config"]["headers"]:
-            headers[header_item["key"]] = header_item["value"]
-
-        # 1. 按 position 分类参数
-        path_params: Dict[str, str] = {}
-        query_params: Dict[str, str] = {}
-        body_params: Dict[str, Any] = {}
-
-        for param in validated_request_data["config"]["input_variable"]:
-            position = param["position"]
-            name = param.get("raw_name", "")
-            value = param.get("value", "")
-
-            # 将 None 值转换为空字符串
-            if value is None:
-                value = ""
-
-            if position == "path":
-                path_params[name] = str(value)
-            elif position == "query":
-                query_params[name] = value
-            elif position == "body":
-                body_params[name] = value
-
-        # 2. 替换 URL 中的 path 参数
-        formatted_url = url.format(**path_params)
-
-        # 3. 准备 requests 请求参数
-        request_kwargs = {}
-
-        http_method = method.lower()
-        if http_method == "get":
-            request_kwargs["params"] = query_params
-
-        elif http_method in ["post", "put", "patch"]:
-            request_kwargs["json"] = body_params
-
-        else:  # delete/head/options 等
-            request_kwargs["params"] = query_params
-
-        # 4. 发送请求并返回Response结果
-        try:
-            response = requests.request(
-                method=http_method, url=formatted_url, headers=headers, timeout=60, **request_kwargs
-            )
-            return response.json()
-        except Exception as e:
-            logger.error(e)
-            return {
-                "result": False,
-                "code": 500,
-                "data": {},
-            }
+    ResponseSerializer = ExecuteToolRespSerializer
 
     def perform_request(self, validated_request_data):
-        if validated_request_data["tool_type"] == ToolTypeEnum.API.value:
-            return self._perform_request_api(validated_request_data)
-        elif validated_request_data["tool_type"] == ToolTypeEnum.DATA_SEARCH.value:
-            pass
-        elif validated_request_data["tool_type"] == ToolTypeEnum.BK_VISION.value:
-            pass
+        tool_type = validated_request_data["tool_type"]
+        config = validated_request_data["config"]
+        params = validated_request_data["params"]
+
+        executor_factory = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis)
+        executor = executor_factory.create_from_config(tool_type=tool_type, config=config)
+        data = executor.execute(params).model_dump()
+        return {"data": data, "tool_type": tool_type}
 
 
 class ListToolAll(ToolBase):

@@ -654,8 +654,8 @@ GLOBAL_CHOICES = {
     ],
     'api_variable_position': [
         {'id': 'query', 'name': '查询参数'},
-        {'id': 'body', 'name': '请求体'},
         {'id': 'path', 'name': '路径参数'},
+        {'id': 'body', 'name': '请求体'},
     ],
     'core_sql_field_type': [
         {'id': 'string', 'name': '字符串'},

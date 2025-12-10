@@ -170,3 +170,19 @@ class ToolTypeNotSupport(ToolException):
     STATUS_CODE = 400
     ERROR_CODE = "013"
     MESSAGE = gettext_lazy("工具类型不支持")
+
+
+class ApiToolExecuteError(ToolException):
+    """
+    API 工具执行异常
+    """
+
+    STATUS_CODE = 400
+    ERROR_CODE = "014"
+    MESSAGE = gettext_lazy("请求第三方接口失败：[{status_code}] {detail}")
+
+    def __init__(self, status_code: int, detail: str, *args, **kwargs):
+        self.status_code = status_code
+        self.detail = detail
+        self.MESSAGE = self.MESSAGE.format(status_code=status_code, detail=detail)
+        super().__init__(*args, **kwargs)
