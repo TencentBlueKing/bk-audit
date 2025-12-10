@@ -268,7 +268,7 @@ class ApiAuthMethod(TextChoices):
     NONE = "none", gettext_lazy("无认证")
 
 
-class BkAppAuthConfigSchema(BaseModel):
+class BkAppAuthConfig(BaseModel):
     """蓝鲸认证需要的具体字段"""
 
     bk_app_code: str = PydanticField(..., description="应用ID")
@@ -277,7 +277,7 @@ class BkAppAuthConfigSchema(BaseModel):
 
 class BkAuthItem(BaseModel):
     method: Literal[ApiAuthMethod.BK_APP_AUTH] = ApiAuthMethod.BK_APP_AUTH
-    config: BkAppAuthConfigSchema  # 这里的 config 强类型约束为 BkAppAuthConfigSchema
+    config: BkAppAuthConfig  # 这里的 config 强类型约束为 BkAppAuthConfigSchema
 
 
 class NoAuthItem(BaseModel):
@@ -416,7 +416,7 @@ class KvOutputField(BaseModel):
     field_type: Literal[ApiOutputFieldType.KV] = ApiOutputFieldType.KV
 
 
-class ApiJsonField(DataSearchBaseField):
+class ApiJsonField(TableOutputField):
     """
     API JSON 字段
     """
@@ -424,7 +424,7 @@ class ApiJsonField(DataSearchBaseField):
     json_path: str = PydanticField(title=gettext_lazy("字段路径"))
 
 
-class ApiTableOutputField(TableOutputField, ApiJsonField):
+class ApiTableOutputField(ApiJsonField):
     """API 表格内部列定义"""
 
     pass
@@ -496,16 +496,3 @@ class ApiToolConfig(BaseModel):
         default_factory=list, title=gettext_lazy("输入变量")
     )
     output_config: ApiOutputConfiguration = PydanticField(title=gettext_lazy("输出配置"))
-
-
-class APIToolExecuteParams(BaseModel):
-    raw_name: str = PydanticField(title=gettext_lazy("执行入参名"))
-    value: str = PydanticField(title=gettext_lazy("执行入参值"))
-    position: ApiVariablePosition = PydanticField(title=gettext_lazy("参数位置"))
-
-
-class APIToolVariable(BaseModel):
-    uid: str = PydanticField(title=gettext_lazy("工具uid"))
-    execute_variables: Annotated[List[APIToolExecuteParams], ListField(child=DictField())] = PydanticField(
-        default_factory=list, title=gettext_lazy("输入变量")
-    )

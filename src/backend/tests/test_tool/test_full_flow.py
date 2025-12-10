@@ -141,8 +141,8 @@ class TestToolFullFlow(TestCase):
                     "method": "bk_app_auth",
                     "config": {
                         "bk_app_code": os.getenv("BKPAAS_APP_ID"),
-                        "bk_app_secret": os.getenv("BKPAAS_APP_SECRET")
-                    }
+                        "bk_app_secret": os.getenv("BKPAAS_APP_SECRET"),
+                    },
                 },
                 "headers": [{"key": "Content-Type", "value": "application/json"}],
             },
@@ -186,14 +186,9 @@ class TestToolFullFlow(TestCase):
                     "default_value": "20180129",
                     "is_show": True,
                     "position": "query",
-                }
+                },
             ],
-            "output_config": {
-                "enable_grouping": False,
-                "groups": [
-
-                ]
-            },
+            "output_config": {"enable_grouping": False, "groups": []},
         }
         api_tool_uid = "api_tool_full_123"
         resp = self.resource.tool.create_tool(
@@ -225,9 +220,9 @@ class TestToolFullFlow(TestCase):
                             "raw_name": "pageSize",
                             "value": "30",
                             "position": "query",
-                        }
+                        },
                     ]
-                }
+                },
             }
         )
         self.assertEqual(result["tool_type"], ToolTypeEnum.API.value)
