@@ -148,7 +148,6 @@
   <de-dug
     ref="deDugRef"
     :api-config="formData.api_config"
-    :input-variable="formData.input_variable"
     :is-params="isParams"
     @de-bug-done="handleDeBugDone" />
 </template>
@@ -156,11 +155,15 @@
   import { nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import ToolManageService from '@service/tool-manage';
+
   import CardPartVue from '../card-part.vue';
 
   import deDug from './debug-sideslider.vue';
   import paramsConfig from './params-config.vue';
   import resultConfig from './result/index.vue';
+
+  import useRequest from '@/hooks/use-request';
 
   interface Props {
     isEditMode: boolean;
@@ -292,6 +295,30 @@
     isSuccess.value = isSucc;
     isDoneDeBug.value = true;
   };
+
+  const {
+    run: fetchToolsDebug,
+  } = useRequest(ToolManageService.fetchToolsDebug, {
+    defaultValue: {},
+  });
+  const initResultConfig = (data: any) => {
+    const config = {
+      api_config: data.api_config,
+      input_variable: data.input_variable,
+      output_config: data.output_config,
+    };
+
+    fetchToolsDebug({
+      tool_type: 'api',
+      config,
+      params: {},
+    }).then((res) => {
+      if (res) {
+        resultData.value = JSON.stringify(res);
+        resultConfigRef.value.setConfigs(data.output_config);
+      }
+    });
+  };
   onMounted(() => {
   });
   defineExpose<Exposes>({
@@ -308,8 +335,7 @@
         isParams.value = data.input_variable?.length > 0;
         formData.value.input_variable = data.input_variable;
         formData.value.output_config = data.output_config;
-        // 查询结果设置值
-        resultConfigRef.value.setConfigs(data.output_config);
+        initResultConfig(data);
       });
     },
   });

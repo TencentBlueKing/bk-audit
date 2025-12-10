@@ -90,12 +90,14 @@
   import listModel from './list-table.vue';
   import objectModel from './object-table.vue';
 
+
   interface Props {
     resultData: any,
     groupKey?: string,
-    isEditMode: boolean,
+    // isEditMode: boolean,
     groupOutputFields?: any,
   }
+
   interface Exposes {
     handleGetResultConfig: () => void;
     handleGetGroupResultConfig: () => void;
@@ -170,8 +172,6 @@
   };
 
   const handleCheckboxChange = (val: any, node: any) => {
-    console.log('treeData', treeData.value);
-
     if (val) {
       // 选中时添加name到selectValue
       if (!selectedId.value.includes(node.json_path)) {
@@ -222,47 +222,7 @@
       }
     }
   };
-  const getTreeData = () => {
-    const tr =  `{
-  "status": "success",
-  "message": "操作成功",
-  "data": {
 
-    "status": "success",
-    "list": [ {
-            "field_name": "event_tb_key",
-            "display_name": "event_tb_key",
-            "id": "event_tb_key:event_tb_key"
-        },
-        {
-            "field_name": "mrms_openid",
-            "display_name": "mrms_openid",
-            "id": "mrms_openid:mrms_openid"
-        },
-        {
-            "field_name": "风险ID",
-            "display_name": "风险ID",
-            "id": "风险ID:风险ID"
-        }
-      ],
-    "person": {
-      "name": "张明",
-      "age": 28,
-      "contact": {
-        "email": "zhangming@email.com",
-        "phone": "+86-138-0011-0022",
-        "address": {
-          "street": "人民路123号",
-          "city": "北京市",
-          "district": "朝阳区",
-          "postalCode": "100020"
-        }
-      }
-    }
-  }
-}`;
-    treeData.value = buildTree(JSON.parse(tr));
-  };
   watch(
     () => selectedId.value, (newVal) => {
       // 递归更新树中所有节点的isChecked状态
@@ -308,7 +268,6 @@
   // 分组时的复现
   watch(() => props.groupOutputFields, (newVal) => {
     if (newVal) {
-      getTreeData();
       newVal?.forEach((item: any) => {
         // 递归查找匹配的节点
         const findAndCheckNode = (nodes: any[]) => {
@@ -337,10 +296,15 @@
     immediate: true,
   });
 
-  onMounted(() => {
-    if (!props.isEditMode && props.resultData) {
-      treeData.value = buildTree(JSON.parse(props.resultData));
+  watch(() => props.resultData, (newVal) => {
+    if (newVal) {
+      treeData.value = buildTree(JSON.parse(newVal));
     }
+  }, {
+    deep: true,
+    immediate: true,
+  });
+  onMounted(() => {
   });
 
   defineExpose<Exposes>({
@@ -356,7 +320,6 @@
     },
     // 不分组
     setConfigs(data: any) {
-      getTreeData();
       nextTick(() => {
         data[0].output_fields?.forEach((item: any) => {
           // 当 item.json_path 与节点的json_path相同时 执行  handleCheckboxChange(true, node: any) node为节点

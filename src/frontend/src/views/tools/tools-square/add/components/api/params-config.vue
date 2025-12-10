@@ -443,7 +443,7 @@
 
   onMounted(() => {
     // 编辑复现
-    if (props.inputVariable) {
+    if (props.inputVariable && props.inputVariable.length > 0) {
       paramList.value = props.inputVariable.map((item: any) => ({
         ...item,
         time_range: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') ?  item.default_value : [],
@@ -454,7 +454,9 @@
     getData() {
       const data = paramList.value.map((item: any) => ({
         ...item,
-        raw_name: item.var_name + item.position,
+        raw_name: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger')
+          ? (item.split_config.end_field + item.split_config.start_field  + item.position)
+          : (item.var_name + item.position),
         default_value: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') ?  item.time_range : item.default_value,
       }));
       return data;
