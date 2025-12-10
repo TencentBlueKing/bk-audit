@@ -103,6 +103,7 @@ class ToolResourceTestCase(TestCase):
                     "raw_name": "path_id",
                     "display_name": "Path ID",
                     "required": True,
+                    "var_name": "path_id",
                     "field_category": FieldCategory.INPUT.value,
                     "is_show": True,
                     "position": ApiVariablePosition.PATH.value,
@@ -405,7 +406,12 @@ class ToolResourceTestCase(TestCase):
     def test_tool_execute_debug_api(self, mock_factory):
         mock_executor = MagicMock()
         mock_result = MagicMock()
-        mock_result.model_dump.return_value = {"status_code": 200, "result": {"message": "ok"}}
+        mock_result.model_dump.return_value = {
+            "status_code": 200,
+            "result": {"message": "ok"},
+            "err_type": "none",
+            "message": "",
+        }
         mock_executor.execute.return_value = mock_result
         mock_factory.return_value.create_from_config.return_value = mock_executor
 
@@ -421,7 +427,10 @@ class ToolResourceTestCase(TestCase):
         response = resource(request_data)
 
         self.assertEqual(response["tool_type"], ToolTypeEnum.API.value)
-        self.assertEqual(response["data"], {"status_code": 200, "result": {"message": "ok"}})
+        self.assertEqual(
+            response["data"],
+            {"status_code": 200, "result": {"message": "ok"}, "err_type": "none", "message": ""},
+        )
         mock_factory.assert_called_once_with(sql_analyzer_cls=SqlQueryAnalysis)
         mock_factory.return_value.create_from_config.assert_called_once_with(
             tool_type=ToolTypeEnum.API.value,
@@ -431,7 +440,7 @@ class ToolResourceTestCase(TestCase):
 
     @patch("services.web.tool.resources.ToolExecutorFactory")
     def test_tool_execute_debug_not_support(self, mock_factory):
-        mock_factory.return_value.create_from_config.side_effect = ValueError("unsupported")
+        mock_factory.return_value.create_from_config.side_effect = ToolTypeNotSupport()
         request_data = {
             "tool_type": ToolTypeEnum.BK_VISION.value,
             "config": {"uid": "vision_demo"},
