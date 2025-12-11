@@ -147,10 +147,10 @@
                         <div>
                           <div>{{ t('以下工具已更新，请确认：') }}</div>
                           <div
-                            v-for="drill in formData.drill_config
+                            v-for="item in formData.drill_config
                               .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
-                            :key="drill.tool.uid">
-                            {{ getToolNameAndType(drill.tool.uid).name }}
+                            :key="item.tool.uid">
+                            {{ getToolNameAndType(item.tool.uid).name }}
                           </div>
                         </div>
                       </template>
@@ -210,6 +210,7 @@
   </div>
 </template>
 <script setup lang='tsx'>
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -222,8 +223,25 @@
   import fieldDict from '@/views/strategy-manage/strategy-create/components/step2/components/event-table/field-dict.vue';
   import FieldReference from '@/views/tools/tools-square/add/components/data-search/components/field-reference/index.vue';
 
+  interface drill {
+    drill_config: Array<{
+      tool: {
+        uid: string;
+        version: number;
+      };
+      config: Array<{
+        source_field: string;
+        target_value_type: string;
+        target_value: string;
+        target_field_type: string;
+      }>;
+      drill_name?: string;
+    }>;
+  }
+
   interface Props {
     data: any,
+    outputFields: any,
   }
   interface Emits {
     (e: 'close', id: string): void
@@ -235,12 +253,11 @@
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
 
-  console.log('props', props.data);
   const formData = ref({
     display_name: '',
     description: '',
     mappings: [],
-    drill_config: [],
+    drill_config: [] as drill['drill_config'],
   });
   const fieldsData = ref([{
     raw_name: '',
@@ -248,7 +265,7 @@
     description: '',
   }]);
   const showFieldDict = ref(false);
-  const enumMappingsData = ref([]);
+  const enumMappingsData = ref<any[]>([]);
   const fieldDictRef = ref();
   const showFieldReference = ref(false);
   const toolMaxVersionMap = ref<Record<string, number>>({});
@@ -262,7 +279,6 @@
   const drillPopconfirmRefs = ref<Record<number, any>>({});
 
   const handleClick = () => {
-    console.log('点击字段下钻>>>', formData.value);
     showFieldReference.value = true;
   };
   // 使用工具对话框hooks
@@ -315,8 +331,9 @@
     formData.value.drill_config = data;
   };
   // 删除值
-  const  handleRemove = () => {
+  const  handleRemove = async () => {
     formData.value.drill_config = [];
+    return Promise.resolve();
   };
   // 获取工具名称和类型
   const getToolNameAndType = (uid: string) => {
@@ -339,6 +356,22 @@
     fieldsData.value[0].display_name = val.display_name;
     fieldsData.value[0].description = val.description;
     emits('configChange', val, props.data.json_path);
+  }, {
+    immediate: true,
+    deep: true,
+  });
+
+  watch(() => props.outputFields, (val) => {
+    if (val) {
+      val.forEach((el: any) => {
+        if (el.raw_name === props.data.name) {
+          formData.value.display_name = el.display_name;
+          formData.value.description = el.description;
+          formData.value.drill_config = el.drill_config;
+          formData.value.mappings = el.enum_mappings.mappings;
+        }
+      });
+    }
   }, {
     immediate: true,
     deep: true,
