@@ -24,6 +24,7 @@ from copy import deepcopy
 from typing import List
 
 from bk_resource import Resource, api, resource
+from bk_resource.utils.common_utils import get_md5
 from blueapps.utils.logger import logger
 from django.db import transaction
 from django.db.models import Count, Q
@@ -51,8 +52,10 @@ from services.web.strategy_v2.serializers import (
     EnumMappingByCollectionWithCallerSerializer,
 )
 from services.web.tool.constants import (
+    ApiToolConfig,
     DataSearchConfigTypeEnum,
     SQLDataSearchConfig,
+    TableFieldTypeConfig,
     ToolTagsEnum,
     ToolTypeEnum,
 )
@@ -69,6 +72,7 @@ from services.web.tool.serializers import (
     SqlAnalyseResponseSerializer,
     SqlAnalyseWithToolRequestSerializer,
     ToolCreateRequestSerializer,
+    ToolExecuteDebugSerializer,
     ToolListAllResponseSerializer,
     ToolListResponseSerializer,
     ToolResponseSerializer,
@@ -115,6 +119,43 @@ class ToolBase(AuditMixinResource, abc.ABC):
                 related_object_id=tool_uid,
                 mappings=[],
             )
+
+    def _generate_api_field_key(self, group_name, field):
+        """生成 API 字段的唯一标识"""
+        # 组合关键信息
+        raw_str = f"{group_name}-{field.json_path}-{field.raw_name}"
+        # 生成 MD5
+        return get_md5(raw_str)
+
+    def _handle_api_enum_mappings(self, tool_uid: str, config: ApiToolConfig):
+        """
+        处理 API 工具的枚举映射（包含嵌套的表格字段）
+        """
+        # 遍历分组
+        for group in config.output_config.groups:
+            # 遍历分组下的字段
+            for field in group.output_fields:
+                # 1. 处理第一层字段的枚举
+                if field.enum_mappings:
+                    unique_key = self._generate_api_field_key(group.name, field)
+                    self.updatel_enum_mappings(
+                        enum_mapping=field.enum_mappings.model_dump(),
+                        tool_uid=tool_uid,
+                        field_name=unique_key,
+                    )
+
+                # 2. 处理嵌套表格中的字段枚举
+                field_config = field.field_config
+                # 直接通过 isinstance 判断是否为表格类型配置
+                if isinstance(field_config, TableFieldTypeConfig):
+                    for sub_field in field_config.output_fields:
+                        if sub_field.enum_mappings:
+                            unique_key = self._generate_api_field_key(group.name, sub_field)
+                            self.updatel_enum_mappings(
+                                enum_mapping=sub_field.enum_mappings.model_dump(),
+                                tool_uid=tool_uid,
+                                field_name=unique_key,
+                            )
 
 
 class ListToolTags(ToolBase):
@@ -484,16 +525,21 @@ class CreateTool(ToolBase):
     def perform_request(self, validated_request_data):
         validated_request_data["permission_owner"] = get_request_username()
         tool = create_tool_with_config(validated_request_data)
+        config = validated_request_data.get("config", {})
         if tool.tool_type == ToolTypeEnum.DATA_SEARCH.value:
-            config = validated_request_data.get("config", {})
-            for output_field in config.get("output_fields", []):
-                enum_mappings = output_field.get("enum_mappings")
+            # 使用 Pydantic 模型校验
+            config_obj = SQLDataSearchConfig.model_validate(config)
+            for output_field in config_obj.output_fields:
+                enum_mappings = output_field.enum_mappings
                 if enum_mappings:
                     self.updatel_enum_mappings(
-                        enum_mapping=enum_mappings,
+                        enum_mapping=enum_mappings.model_dump(),
                         tool_uid=tool.uid,
-                        field_name=output_field["raw_name"],
+                        field_name=output_field.raw_name,
                     )
+        elif tool.tool_type == ToolTypeEnum.API.value:
+            config_obj = ApiToolConfig.model_validate(config)
+            self._handle_api_enum_mappings(tool.uid, config_obj)
         return tool
 
 
@@ -548,6 +594,10 @@ class UpdateTool(ToolBase):
                         tool_uid=old_tool.uid,
                         field_name=output_field.raw_name,
                     )
+        elif old_tool.tool_type == ToolTypeEnum.API:
+            new_config_obj = ApiToolConfig.model_validate(new_config)
+            self._handle_api_enum_mappings(old_tool.uid, new_config_obj)
+
         return create_tool_with_config(new_tool_data)
 
     @transaction.atomic
@@ -583,6 +633,59 @@ class UpdateTool(ToolBase):
 class ExecuteTool(ToolBase):
     """
     工具执行
+
+    通用变量输入格式说明：
+    1. input（输入框）
+        ```json
+            {
+                "raw_name": "string",
+                "value": "admin"
+            }
+        ```
+    2. number_input（数字输入框）
+        ```json
+            {
+                "raw_name": "number",
+                "value": 123
+            }
+        ```
+    3. time_select（时间选择器）
+        ```json
+            {
+                "raw_name": "datetime",
+                "value": "2023-01-01 12:00:00" // 默认+8时间，实际 SQL 中会转为毫秒时间戳
+            }
+        ```
+    4. person_select（人员选择器）
+        多值传递采用列表
+        ```json
+            {
+                "raw_name": "usernames",
+                "value": ["user1", "user2"]
+            }
+        ```
+        单值也可以直接传递
+        ```json
+            {
+                "raw_name": "usernames",
+                "value": "user1" // 单个值会自动转为列表 ["user1"]
+            }
+        ```
+    5. time_range_select（时间范围选择器）
+        ```json
+            {
+                "raw_name": "datetime_range",
+                "value": ["2023-01-01 12:00:00", "2023-01-31 12:00:00"]
+            }
+        ```
+    6. multiselect（下拉列表）
+        ```json
+            {
+                "raw_name": "multiselect",
+                "value": ["option1", "option2"]
+            }
+        ```
+
     1. tool_type 为 data_search
         params:
             ```json
@@ -601,57 +704,6 @@ class ExecuteTool(ToolBase):
                 "caller_resource_type": "risk",
                 "caller_resource_id": "R123"
             }
-            ```
-        不同的变量下的输入格式:
-        1. input（输入框）
-            ```json
-                {
-                    "raw_name": "string",
-                    "value": "admin"
-                }
-            ```
-        2. number_input（数字输入框）
-            ```json
-                {
-                    "raw_name": "number",
-                    "value": 123
-                }
-            ```
-        3. time_select（时间选择器）
-            ```json
-                {
-                    "raw_name": "datetime",
-                    "value": "2023-01-01 12:00:00" // 默认+8时间，实际 SQL 中会转为毫秒时间戳
-                }
-            ```
-        4. person_select（人员选择器）
-            多值传递采用列表
-            ```json
-                {
-                    "raw_name": "usernames",
-                    "value": ["user1", "user2"]
-                }
-            ```
-            单值也可以直接传递
-            ```json
-                {
-                    "raw_name": "usernames",
-                    "value": "user1" // 单个值会自动转为列表 ["user1"]
-                }
-            ```
-        5. time_range_select（时间范围选择器）
-            ```json
-                {
-                    "raw_name": "datetime_range",
-                    "value": ["2023-01-01 12:00:00", "2023-01-31 12:00:00"]
-                }
-        6. multiselect（下拉列表）
-            ```json
-                {
-                    "raw_name": "multiselect",
-                    "value": ["option1", "option2"]
-                }
-            ```
             ```
         response:
             ```json
@@ -674,11 +726,38 @@ class ExecuteTool(ToolBase):
                 "tool_type": "data_search"
             }
             ```
-    2. tool_type 为 bk_vision
+
+    2. tool_type 为 api
         params:
             ```json
             {
                 "uid": "api_tool_123",
+                "params": {
+                    "tool_variables": [
+                        {"raw_name": "path_id", "value": 123, "position": "path"},
+                        {"raw_name": "query_param", "value": "test", "position": "query"}
+                    ]
+                }
+            }
+            ```
+        response:
+            ```json
+            {
+                "data": {
+                    "status_code": 200,
+                    "result": {
+                        "key": "value"
+                    }
+                },
+                "tool_type": "api"
+            }
+            ```
+
+    3. tool_type 为 bk_vision
+        params:
+            ```json
+            {
+                "uid": "vision_tool_123",
                 "params": {},
                 "caller_resource_type": "risk",
                 "caller_resource_id": "R123"
@@ -693,7 +772,8 @@ class ExecuteTool(ToolBase):
                 "tool_type": "bk_vision"
             }
             ```
-    3. 权限上下文（可选）
+
+    4. 权限上下文（可选）
         - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
             - `caller_resource_type`：调用方资源类型（当前支持：`risk`）
             - `caller_resource_id`：调用方资源实例 ID（如风险ID）
@@ -702,23 +782,6 @@ class ExecuteTool(ToolBase):
         - 行为说明：
             - 命中且有权限：跳过原有工具权限校验，直接执行
             - 命中但无权限：返回标准权限异常（包含可申请信息）
-
-    示例（携带 drill_field 与时间范围，映射 basic 字段 operator）：
-        ```json
-        {
-          "uid": "vision_tool_123",
-          "caller_resource_type": "risk",
-          "caller_resource_id": "RISK-001",
-          "drill_field": "operator",
-          "event_start_time": "2025-08-06 00:00:00",
-          "event_end_time": "2025-08-07 00:00:00",
-          "params": {
-            "tool_variables": [
-              {"raw_name": "ctx", "value": "admin"}
-            ]
-          }
-        }
-        ```
     """
 
     name = gettext_lazy("工具执行")
@@ -755,6 +818,33 @@ class ExecuteTool(ToolBase):
         executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
         data = executor.execute(params).model_dump()
         return {"data": data, "tool_type": tool.tool_type}
+
+
+class ToolExecuteDebug(ToolBase):
+    """
+    工具执行调试
+
+    允许用户在不保存工具的情况下基于配置直接调试执行。
+    请求参数：
+    - tool_type：工具类型（目前支持 data_search/sql、api）
+    - config：与工具保存时一致的配置
+    - params：与正式执行时一致的入参
+    响应结构与 ExecuteTool 相同。
+    """
+
+    name = gettext_lazy("工具执行调试")
+    RequestSerializer = ToolExecuteDebugSerializer
+    ResponseSerializer = ExecuteToolRespSerializer
+
+    def perform_request(self, validated_request_data):
+        tool_type = validated_request_data["tool_type"]
+        config = validated_request_data["config"]
+        params = validated_request_data["params"]
+
+        executor_factory = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis)
+        executor = executor_factory.create_from_config(tool_type=tool_type, config=config)
+        data = executor.execute(params).model_dump()
+        return {"data": data, "tool_type": tool_type}
 
 
 class ListToolAll(ToolBase):
@@ -828,7 +918,16 @@ class GetToolDetail(ToolBase):
             for table in tool.config["referenced_tables"]:
                 table["permission"] = auth_results.get(table["table_name"], {})
         data = self.ResponseSerializer(instance=tool).data
-        data["permission"] = {'use_tool': True, 'manage_tool': False}
+
+        # 权限注入与脱敏
+        current_user = get_request_username()
+        permission = ToolPermission(username=current_user)
+        data = permission.wrapper_tool_permission_field(tool_list=[data], tool_tag_ids=tag_ids)[0]
+
+        if not data.get("permission", {}).get("manage_tool") and tool.tool_type == ToolTypeEnum.API.value:
+            if "config" in data and "api_config" in data["config"]:
+                data["config"]["api_config"] = None
+
         return data
 
 

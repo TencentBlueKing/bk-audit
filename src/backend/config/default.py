@@ -48,6 +48,8 @@ INSTALLED_APPS += (
     "bk_resource",
     "rest_framework",
     "drf_yasg",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
     "blueapps.opentelemetry.instrument_app",
     "apigw_manager.apigw",
     "bk_notice_sdk",
@@ -164,6 +166,7 @@ REST_FRAMEWORK = {
     "DEFAULT_VERSION": "v1",
     "ALLOWED_VERSIONS": ["v1"],
     "VERSION_PARAM": "api_version",
+    "DEFAULT_SCHEMA_CLASS": "core.utils.spectacular.BKResourceAutoSchema",
 }
 
 # 平台错误代码: 7位整数，前两位表示产品代号，后5为各产品自行分配
@@ -204,6 +207,18 @@ CMSI_ESB_NAME = os.getenv("BKAPP_CMSI_ESB_NAME", "cmsi")
 SWAGGER_SETTINGS = {
     "DEFAULT_INFO": "urls.info",
     "DEFAULT_GENERATOR_CLASS": "bk_resource.utils.generators.BKResourceOpenAPISchemaGenerator",
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Audit',
+    'DESCRIPTION': '审计中心 API',
+    'VERSION': 'v1',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'ENABLE_PYDANTIC_V2': True,
+    'SWAGGER_UI_DIST': 'SIDECAR',
+    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
+    'REDOC_DIST': 'SIDECAR',
 }
 
 DEFAULT_NAMESPACE = os.getenv("BKAPP_DEFAULT_NAMESPACE", "default")
@@ -501,7 +516,7 @@ HIGH_RISK_PORTS = {
     int(port)
     for port in os.getenv(
         "BKAPP_HIGH_RISK_PORTS",
-        "21,22,23,25,69,135,137,138,139,161,162,389,465,514,587,636,873,1099,2181,2375,2376,27017,3306,3389,36000,4848,50070,50075,5432,56000,5900,5901,6379,7001,7002,9200,9300,10050,10051,10250,10255,11211",  # noqa
+        "21,22,23,25,69,135,137,138,139,161,162,389,465,514,587,636,873,1099,2181,2375,2376,27017,3306,3389,36000,4848,50070,50075,5432,56000,5900,5901,6379,7001,7002,9200,9300,10050,10051,10250,10255,11211",  # noqa: E501
     ).split(
         ","
     )  # noqa
@@ -518,6 +533,11 @@ CORS_EXPOSE_HEADERS = ['Content-Disposition']
 
 # Doris 事件表入库配置
 EVENT_DORIS_EXPIRES = os.getenv("BKAPP_EVENT_DORIS_EXPIRES", "1080d")
+
+# API 工具执行默认超时时间
+API_TOOL_EXECUTE_DEFAULT_TIMEOUT = int(os.getenv("BKAPP_API_TOOL_EXECUTE_DEFAULT_TIMEOUT", 120))
+# API 工具非 JSON 数据默认最大返回字符数
+API_TOOL_EXECUTE_DEFAULT_MAX_RETURN_CHAR = int(os.getenv("BKAPP_API_TOOL_EXECUTE_DEFAULT_MAX_RETURN_CHAR", 1000))
 
 """
 以下为框架代码 请勿修改

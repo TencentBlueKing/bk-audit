@@ -18,16 +18,17 @@ from services.web.tool.exceptions import (
     InvalidVariableFormatError,
     InvalidVariableStructureError,
     ParseVariableError,
+    ToolTypeNotSupport,
 )
 from services.web.tool.executor.model import (
     BkVisionExecuteResult,
     DataSearchToolExecuteParams,
 )
+from services.web.tool.executor.parser import SqlVariableParser
 from services.web.tool.executor.tool import (
     BkVisionExecutor,
     SqlDataSearchExecutor,
     ToolExecutorFactory,
-    VariableValueParser,
 )
 from services.web.tool.models import BkVisionToolConfig, DataSearchToolConfig, Tool
 from services.web.vision.models import VisionPanel
@@ -218,7 +219,7 @@ class TestSqlDataSearchExecutor(TestCase):
             executor.execute(params)
         self.assertIn("结构无效", str(cm.exception))
 
-    @mock.patch.object(VariableValueParser, "_format_input", side_effect=RuntimeError("mock error"))
+    @mock.patch.object(SqlVariableParser, "_format_input", side_effect=RuntimeError("mock error"))
     def test_variable_parse_fallback_error(self, _):
         """测试变量解析兜底异常 ParseVariableError"""
         config = SQLDataSearchConfig(
@@ -524,5 +525,5 @@ class TestToolExecutorFactory(TestCase):
         invalid_tool = Tool.objects.create(tool_type="invalid_type", name="invalid_tool", version=1, namespace="test")
 
         factory = ToolExecutorFactory(self.analyzer_cls)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ToolTypeNotSupport):
             factory.create_from_tool(invalid_tool)
