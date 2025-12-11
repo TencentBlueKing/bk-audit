@@ -102,6 +102,19 @@ export default  {
     }));
   },
   /**
+     * @desc 工具调试
+     * @param { Object } params
+     */
+  fetchToolsDebug(params: {
+      tool_type: string,
+      config: Record<string, any>,
+      params: Record<string, any>,
+    }) {
+    return ToolManageSources.getToolsDebug(params).then(({ data }) =>  ({
+      ...data,
+    }));
+  },
+  /**
      * @desc 工具删除
      * @param { Object } params
      */

@@ -48,7 +48,7 @@
             <bk-input
               :model-value="element.name"
               @blur="handleBlur(element.key)"
-              @change="(value) => handlechange(value, element.key)" />
+              @change="(value: any) => handlechange(value, element.key)" />
           </span>
           <audit-icon
             class="delete"
@@ -60,7 +60,8 @@
           v-if="element.isOpen"
           ref="contentRef"
           :group-key="element.key"
-          :output-config-groups="element"
+          :group-output-fields="element.output_fields"
+          :is-edit-mode="isEditMode"
           :result-data="resultData"
           @group-content-change="handleGroupContentChange" />
       </div>
@@ -76,16 +77,16 @@
 
   interface Props {
     resultData: any,
-    outputConfigGroups: Array<Record, any>,
+    isEditMode: boolean,
   }
   interface Exposes {
     addGroup:() => void,
     openGroup:(val: boolean) => void,
-    handleGetResultConfig: () => Config;
+    handleGetResultConfig: () => void;
+    setConfigs:(data: any) => void;
   }
 
-  const props = defineProps<Props>();
-  console.log('分组组件', props.outputConfigGroups);
+  defineProps<Props>();
   const contentRef = ref();
   const localValue = ref([
     {
@@ -94,6 +95,7 @@
       isOpen: true,
       key: Date.now().toString(),
       config: null,
+      output_fields: [],
     },
   ]);
   // 拖拽
@@ -147,7 +149,6 @@
   };
   // 监听分组内容改变
   const handleGroupContentChange = (val: any, key: string | number) => {
-    console.log('监听分组内容改变', val, key);
     // 把val赋值给对应key的 item.config
     localValue.value = localValue.value.map((item: any) => {
       if (item.key === key) {
@@ -158,21 +159,6 @@
     });
   };
 
-  // watch(
-  //   () => props.outputConfigGroups,
-  //   (val) => {
-  //     localValue.value = val.map((item: any, index: number) => ({
-  //       ...item,
-  //       isInput: false,
-  //       isOpen: true,
-  //       key: `${index + 1}`,
-  //     }));
-  //   },
-  //   {
-  //     deep: true,
-  //     immediate: true,
-  //   },
-  // );
   defineExpose<Exposes>({
     // 添加组 key 当前时间戳
     addGroup() {
@@ -182,6 +168,7 @@
         isOpen: true,
         key: Date.now().toString(),
         config: null,
+        output_fields: [],
       });
     },
     openGroup(val: boolean) {
@@ -194,6 +181,16 @@
     // 提交获取内容
     handleGetResultConfig() {
       return localValue.value;
+    },
+    setConfigs(data: any) {
+      localValue.value = data.map((item: any, index: number) => ({
+        name: item.name,
+        isInput: false,
+        isOpen: true,
+        key: Date.now().toString() + index,
+        config: null,
+        output_fields: item.output_fields,
+      }));
     },
   });
 </script>
