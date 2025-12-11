@@ -233,6 +233,12 @@ class RiskHandler:
             if event.get("event_content") and risk.event_content != event["event_content"]:
                 risk.event_content = event["event_content"]
                 risk.save(update_fields=["event_content"])
+            if event.get("event_type") and risk.event_type != event["event_type"]:
+                risk.event_type = event["event_type"]
+                risk.save(update_fields=["event_type"])
+            if event.get("operator") and risk.operator != event["operator"]:
+                risk.operator = event["operator"]
+                risk.save(update_fields=["operator"])
             return False, risk
 
         # 不存在则创建
