@@ -49,18 +49,18 @@
       <content
         v-if="!outputConfigEnableGrouping.enable_grouping"
         ref="contentRef"
-        :output-config-groups="outputConfig.groups"
+        :is-edit-mode="isEditMode"
         :resultData="resultData" />
       <group-content
         v-else
         ref="groupContentRef"
-        :output-config-groups="outputConfig.groups"
+        :is-edit-mode="isEditMode"
         :result-data="resultData" />
     </template>
   </card-part-vue>
 </template>
 <script setup lang='tsx'>
-  import { ref } from 'vue';
+  import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import CardPartVue from '../../card-part.vue';
@@ -70,17 +70,15 @@
 
 
   interface Props {
+    isEditMode: boolean,
     resultData: any,
-    outputConfig: {
-      enable_grouping: boolean,
-      groups: Array<Record, any>,
-    },
   }
   interface Exposes {
-    handleGetResultConfig: () => Config;
+    handleGetResultConfig: () => void;
+    setConfigs: (data: any) => void;
   }
 
-  const props = defineProps<Props>();
+  defineProps<Props>();
   const contentRef = ref();
   const { t } = useI18n();
   const groupContentRef = ref();
@@ -90,7 +88,6 @@
   });
   // 添加分组
   const handleAddGroup = () => {
-    console.log('添加分组');
     groupContentRef.value?.addGroup();
   };
   // 一键展开分组
@@ -98,18 +95,15 @@
     openGroup.value = !openGroup.value;
     groupContentRef.value?.openGroup(openGroup.value);
   };
-  console.log('propsresultData>>', props.resultData);
   // 获取配置信息
   const getResultConfig = () => {
-    console.log('提交获取配置信息>>index');
     if (outputConfigEnableGrouping.value.enable_grouping) {
       const groupContentRefData =  groupContentRef.value?.handleGetResultConfig();
-      console.log('groupContentRefData>>', groupContentRefData);
       const isGroupOutputConfig = {
         enable_grouping: true,
-        groups: [],
+        groups: [] as Array<{ name: string; output_fields: any[] }>,
       };
-      isGroupOutputConfig.groups = groupContentRefData.map((item) => {
+      isGroupOutputConfig.groups = groupContentRefData.map((item: any) => {
         const groupConfig = {
           name: item.name, // 分组名
           output_fields: item.config?.map((configItem: any) => {
@@ -153,18 +147,15 @@
             };
           }),
         };
-        console.log('groupConfig', groupConfig);
         return groupConfig;
       });
-      console.log('isGroupOutputConfig', isGroupOutputConfig);
       return isGroupOutputConfig;
     }
     const contentRefData  = contentRef.value?.handleGetResultConfig();
     const noGroupOutputConfig = {
       enable_grouping: false,
-      groups: [],
+      groups: [] as Array<{ name: string; output_fields: any[] }>,
     };
-    console.log('contentRefData', contentRefData);
 
     noGroupOutputConfig.groups[0] = {
       name: '',
@@ -192,8 +183,6 @@
             },
           };
         }
-        console.log('对象');
-
         return {
           raw_name: item.name,
           json_path: item.json_path,
@@ -209,15 +198,19 @@
         };
       }),
     };
-    console.log('noGroupOutputConfig>>', noGroupOutputConfig);
-
     return noGroupOutputConfig;
   };
   defineExpose<Exposes>({
     // 提交获取字段
     handleGetResultConfig() {
-      console.log('getResultConfig()', getResultConfig());
       return getResultConfig();
+    },
+    setConfigs(data: any) {
+      outputConfigEnableGrouping.value.enable_grouping = data.enable_grouping;
+      nextTick(() => {
+        contentRef.value?.setConfigs(data.groups);
+        groupContentRef.value?.setConfigs(data.groups);
+      });
     },
   });
 </script>

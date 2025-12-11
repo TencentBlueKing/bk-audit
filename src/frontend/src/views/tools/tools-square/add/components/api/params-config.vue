@@ -119,7 +119,7 @@
       :rules="rules">
       <template
         v-for="(item, index) in paramList"
-        :key="item.id">
+        :key="index">
         <div class="field-row">
           <div
             class="field-value"
@@ -130,7 +130,7 @@
               label-width="0">
               <bk-input
                 v-if="item.field_category !== 'time_range_select'"
-                v-model="item.raw_name" />
+                v-model="item.var_name" />
               <div v-else>
                 <div style="display: flex; border-bottom: 1px solid  #dcdee5;">
                   <bk-input
@@ -206,12 +206,13 @@
               label-width="0">
               <bk-select
                 v-model="item.required"
+                :allow-empty-values="[false]"
                 class="bk-select"
                 size="small">
                 <bk-option
                   v-for="(requiredItem, requiredIndex) in requiredList"
                   :id="requiredItem.value"
-                  :key="requiredIndex.id"
+                  :key="requiredIndex"
                   :name="requiredItem.label" />
               </bk-select>
             </bk-form-item>
@@ -226,6 +227,7 @@
               label-width="0">
               <bk-select
                 v-model="item.field_category"
+                :allow-empty-values="[false]"
                 class="bk-select"
                 :clearable="false"
                 size="small">
@@ -281,6 +283,7 @@
               label-width="0">
               <bk-select
                 v-model="item.is_show"
+                :allow-empty-values="[false]"
                 class="bk-select"
                 size="small">
                 <bk-option
@@ -316,11 +319,11 @@
   </bk-form-item>
 </template>
 <script setup lang='tsx'>
-  import { ref, watch } from 'vue';
+  import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   interface Props {
-    inputVariable: Array<Record, any>;
+    inputVariable: any;
   }
 
   interface Exposes {
@@ -328,7 +331,6 @@
   }
 
   const props = defineProps<Props>();
-  console.log('props', props.inputVariable);
 
   const { t } = useI18n();
   const formData = ref();
@@ -338,6 +340,7 @@
       is_show: 'true',
       position: '',
       raw_name: '',
+      var_name: '',
       required: 'true',
       description: '',
       display_name: '',
@@ -360,12 +363,16 @@
     label: t('否'),
   }]);
   const paramsTypeList = ref([{
-    value: 'query',
-    label: 'query',
-  }, {
-    value: 'body',
-    label: 'body',
-  }]);
+                                value: 'query',
+                                label: 'query',
+                              }, {
+                                value: 'body',
+                                label: 'body',
+                              },
+                              {
+                                value: 'path',
+                                label: 'path',
+                              }]);
   const tableInputFormRef = ref();
   const frontendTypeList = ref([{
     value: 'input',
@@ -400,6 +407,7 @@
       is_show: 'true',
       position: '',
       raw_name: '',
+      var_name: '',
       required: 'true',
       description: '',
       display_name: '',
@@ -408,7 +416,7 @@
         start_field: '',
       },
       time_range: [],
-      default_value: null,
+      default_value: '',
       field_category: '',
     });
   };
@@ -418,44 +426,40 @@
   };
 
   const handleRequiredClick = (item: Record<string, any>) => {
-    paramList.value = paramList.value.map((listItem: Record<string, any>) => {
+    paramList.value = paramList.value.map((listItem: any) => {
       // eslint-disable-next-line no-param-reassign
       listItem.required = item.value;
       return listItem;
     });
   };
   const handleViewsClick = (item: Record<string, any>) => {
-    console.log('handleViewsClick', item);
-    paramList.value = paramList.value.map((listItem: Record<string, any>) => {
+    paramList.value = paramList.value.map((listItem: any) => {
       // eslint-disable-next-line no-param-reassign
       listItem.is_show = item.value;
       return listItem;
     });
   };
 
-  watch(
-    () => props.inputVariable,
-    (val) => {
-      if (val && val.length > 0) {
-        console.log(val);
-        // paramList.value = val.map((item: Record<string, any>) => {
-        //   console.log('item>>');
-        //   return {
-        //     ...item,
-        //     time_range: [],
-        //   };
-        // });
-      }
-    },
-    {
-      deep: true,
-      immediate: true,
-    },
-  );
 
+  onMounted(() => {
+    // 编辑复现
+    if (props.inputVariable && props.inputVariable.length > 0) {
+      paramList.value = props.inputVariable.map((item: any) => ({
+        ...item,
+        time_range: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') ?  item.default_value : [],
+      }));
+    }
+  });
   defineExpose<Exposes>({
     getData() {
-      return paramList.value;
+      const data = paramList.value.map((item: any) => ({
+        ...item,
+        raw_name: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger')
+          ? (item.split_config.end_field + item.split_config.start_field  + item.position)
+          : (item.var_name + item.position),
+        default_value: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') ?  item.time_range : item.default_value,
+      }));
+      return data;
     },
   });
 

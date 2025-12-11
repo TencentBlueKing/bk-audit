@@ -91,6 +91,14 @@ class ToolManage extends ModuleBase {
   }) {
     return Request.post(`${this.path}/tool/${params.uid}/execute/`, { params });
   }
+  // 工具调试
+  getToolsDebug(params: {
+    tool_type: string,
+    config: Record<string, any>,
+    params: Record<string, any>,
+  }) {
+    return Request.post(`${this.path}/tool/tool_execute_debug/`, { params });
+  }
   // 工具删除
   deleteTool(params: {
     uid: string,
