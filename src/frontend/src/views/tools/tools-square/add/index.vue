@@ -90,6 +90,7 @@
               </bk-form-item>
             </template>
           </card-part-vue>
+
           <!-- 工具类型 -->
           <card-part-vue :title="t('工具类型')">
             <template #content>
@@ -121,6 +122,7 @@
                   </template>
                 </bk-radio-group>
               </bk-form-item>
+
               <!-- 数据查询 -->
               <template v-if="formData.tool_type === 'data_search'">
                 <bk-form-item
@@ -158,6 +160,7 @@
                     :placeholder="t('请输入数据源名称、表名、ID 等，或可直接按分类筛选')" />
                 </bk-form-item>
               </template>
+
               <!-- BKVision 图表 -->
               <div v-else-if="formData.tool_type === 'bk_vision'">
                 <bk-form-item
@@ -749,7 +752,7 @@
   } = useRequest(ToolManageService.fetchToolsDetail, {
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
-      formData.value = data;
+      formData.value = data as any;
       comRef.value.setConfigs(formData.value.config);
     },
   });
