@@ -397,15 +397,16 @@ class ApiToolExecutor(BaseToolExecutor[ApiToolConfig, APIToolExecuteParams, ApiT
                         response.text[: settings.API_TOOL_EXECUTE_DEFAULT_MAX_RETURN_CHAR] if response.text else ""
                     ),
                 )
-
         except requests.RequestException as e:
-            logger.error(f"[{self.__class__.__name__}] Request Failed: {e}", exc_info=True)
             return ApiToolExecuteResult(
                 status_code=500,
                 result=None,
                 err_type=ApiToolErrorType.REQUEST_ERROR,
                 message=str(e),
             )
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            logger.error(f"[{self.__class__.__name__}] Request Failed: {e}", exc_info=True)
+            raise ApiToolExecuteError(status_code=500, detail=gettext("请求异常，请联系系统管理员"))
 
 
 class ToolExecutorFactory:

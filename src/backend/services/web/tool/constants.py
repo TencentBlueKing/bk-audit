@@ -485,6 +485,11 @@ class ApiOutputConfiguration(BaseModel):
 
     # 2. 统一的数据结构
     groups: List[ApiOutputGroup] = PydanticField(default_factory=list, title=gettext_lazy("输出分组列表"))
+    result_schema: Annotated[Dict[str, Any], JSONField(allow_null=True),] = PydanticField(
+        default_factory=dict,
+        title=gettext_lazy("调试输出Schema"),
+        description=gettext_lazy("前端调试解析出的响应结构，后端不做处理"),
+    )
 
     @field_validator('groups')
     @classmethod
