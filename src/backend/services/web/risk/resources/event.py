@@ -68,10 +68,10 @@ class CreateEvent(EventMeta):
         if not gen_risk:
             bound_risk = self._validate_existing_risk(validated_request_data.get("risk_id"), events)
             self._sync_raw_event_id_with_risk(events, bound_risk)
-            self._ensure_model_strategy(bound_risk.strategy_id)
+            self._ensure_rule_strategy(bound_risk.strategy_id)
         else:
             for event in events:
-                self._ensure_model_strategy(event["strategy_id"])
+                self._ensure_rule_strategy(event["strategy_id"])
         for event in events:
             self._apply_basic_field_mapping(event)
         req = validated_request_data.get("_request")
@@ -121,7 +121,7 @@ class CreateEvent(EventMeta):
         for event in events:
             event["raw_event_id"] = risk.raw_event_id
 
-    def _ensure_model_strategy(self, strategy_id: int):
+    def _ensure_rule_strategy(self, strategy_id: int):
         strategy = Strategy.objects.filter(strategy_id=strategy_id).only("strategy_type").first()
         if not strategy:
             raise serializers.ValidationError(gettext("策略不存在"))
