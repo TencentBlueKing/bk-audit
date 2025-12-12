@@ -198,6 +198,7 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
             self.system,
             self.resource_type,
             self.storage_type,
+            snapshot=self.snapshot,
         )
         # 已有清洗链路不做调整
         if self._get_table_id():
@@ -215,6 +216,7 @@ class BaseJoinDataHandler(metaclass=abc.ABCMeta):
             self.system,
             self.resource_type,
             self.storage_type,
+            snapshot=self.snapshot,
         )
         # 已有入库不做调整
         storage = self.snapshot.storages.filter(storage_type=self.storage_type).first()

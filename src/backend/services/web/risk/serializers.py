@@ -17,7 +17,8 @@ to the current version of the project delivered to anyone in the future.
 """
 import datetime
 import json
-from typing import List, Union
+import uuid
+from typing import List
 
 from django.conf import settings
 from django.utils import timezone
@@ -36,9 +37,11 @@ from services.web.risk.constants import (
     EventMappingFields,
     RiskLabel,
     RiskRuleOperator,
+    RiskStatus,
     RiskViewType,
 )
 from services.web.risk.models import (
+    ManualEvent,
     ProcessApplication,
     Risk,
     RiskExperience,
@@ -47,7 +50,10 @@ from services.web.risk.models import (
     TicketPermission,
 )
 from services.web.strategy_v2.models import Strategy
-from services.web.strategy_v2.serializers import EventFieldSerializer
+from services.web.strategy_v2.serializers import (
+    EventFieldSerializer,
+    merge_select_field_type,
+)
 
 
 class CreateEventSerializer(serializers.Serializer):
@@ -59,7 +65,7 @@ class CreateEventSerializer(serializers.Serializer):
         label=EventMappingFields.EVENT_CONTENT.description, default=str, allow_blank=True, allow_null=True
     )
     raw_event_id = serializers.CharField(
-        label=EventMappingFields.RAW_EVENT_ID.description, default=str, allow_blank=True, allow_null=True
+        label=EventMappingFields.RAW_EVENT_ID.description, default=lambda: uuid.uuid1().hex
     )
     strategy_id = serializers.IntegerField(label=EventMappingFields.STRATEGY_ID.description)
     event_data = serializers.JSONField(label=EventMappingFields.EVENT_DATA.description, default=dict, allow_null=True)
@@ -84,7 +90,7 @@ class CreateEventSerializer(serializers.Serializer):
                 event_data = json.loads(event_data)
             except Exception:
                 raise error
-        if not isinstance(event_data, Union[dict, None]):
+        if not isinstance(event_data, dict):
             raise error
         return json.dumps(event_data, ensure_ascii=False)
 
@@ -123,6 +129,12 @@ class CreateEventAPIResponseSerializer(serializers.Serializer):
     event_ids = serializers.ListField(
         label=gettext_lazy("Event IDs"), child=serializers.CharField(label=gettext_lazy("Event ID"))
     )
+    risk_ids = serializers.ListField(
+        label=gettext_lazy("Event IDs"),
+        child=serializers.CharField(label=gettext_lazy("Event ID")),
+        required=False,
+        allow_empty=True,
+    )
 
 
 class CreateEventBKMSerializer(CreateEventSerializer):
@@ -140,6 +152,7 @@ class CreateEventAPISerializer(serializers.Serializer):
 
     events = CreateEventSerializer(many=True)
     gen_risk = serializers.BooleanField(label=gettext_lazy("Generate Risk"), default=False)
+    risk_id = serializers.CharField(label=gettext_lazy("Risk ID"), required=False, allow_blank=True)
 
 
 class ListEventRequestSerializer(serializers.Serializer):
@@ -218,6 +231,12 @@ class RiskInfoSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
     event_end_time = serializers.SerializerMethodField()
 
+    def to_representation(self, instance: Risk):
+        data = super().to_representation(instance)
+        if getattr(instance, "manual_synced", True) is False:
+            data["status"] = RiskStatus.STAND_BY.value
+        return data
+
     def get_event_end_time(self, obj: Risk) -> str | None:
         """
         获取事件结束时间。
@@ -267,6 +286,27 @@ class RiskProviderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Risk
+        exclude = ["strategy"]
+
+
+class ManualEventProviderSerializer(serializers.ModelSerializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
+    last_operate_time_timestamp = TimestampIntegerField(
+        label=gettext_lazy("Last Operate Time Timestamp(ms)"), source="last_operate_time"
+    )
+
+    class Meta:
+        model = ManualEvent
+        exclude = ["strategy"]
+
+
+class ManualEventSerializer(serializers.ModelSerializer):
+    strategy_id = serializers.IntegerField(label=gettext_lazy("Strategy ID"))
+    event_time_timestamp = TimestampIntegerField(label=gettext_lazy("Event Time Timestamp(ms)"), source="event_time")
+
+    class Meta:
+        model = ManualEvent
         exclude = ["strategy"]
 
 
@@ -545,6 +585,12 @@ class ListRiskResponseSerializer(serializers.ModelSerializer):
             "last_operate_time",
             "title",
         ]
+
+    def to_representation(self, instance: Risk):
+        data = super().to_representation(instance)
+        if getattr(instance, "manual_synced", True) is False:
+            data["status"] = RiskStatus.STAND_BY.value
+        return data
 
 
 class ProcessApplicationsInfoSerializer(serializers.ModelSerializer):
@@ -881,6 +927,7 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
+        data["event_data_field_configs"] = merge_select_field_type(instance, data.get("event_data_field_configs", []))
         # 对基础字段描述进行国际化
         event_basic_field_configs = data.get("event_basic_field_configs") or []
         for config in event_basic_field_configs:

@@ -23,8 +23,9 @@ from services.web.databus.constants import (
     DORIS_EVENT_BKBASE_RT_ID_KEY,
 )
 from services.web.risk.constants import EventFilterOperator, RiskStatus
-from services.web.risk.models import Risk, TicketPermission, UserType
-from services.web.risk.resources.risk import ListMineRisk, ListNoticingRisk
+from services.web.risk.models import ManualEvent, Risk, TicketPermission, UserType
+from services.web.risk.resources.risk import ListMineRisk
+from services.web.risk.tasks import _sync_manual_risk_status
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -648,6 +649,106 @@ class TestListRiskResource(TestCase):
         self.assertEqual(data["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
+    def test_list_risk_via_bkbase_prioritizes_manual_unsynced(self):
+        manual_risk = Risk.objects.create(
+            risk_id="risk-manual-unsynced",
+            raw_event_id="raw-manual",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
+            manual_synced=False,
+        )
+        sql_log: List[str] = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        request_first = self._make_request({"page": 1, "page_size": 1})
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self.resource.risk.list_risk({"use_bkbase": True, "title": "bkbase-title"}, _request=request_first)
+
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(data["num_pages"], 2)
+        self.assertEqual([item["risk_id"] for item in data["results"]], [manual_risk.risk_id])
+        self.assertEqual(data["results"][0]["status"], "stand_by")
+        self.assertTrue(any("count" in sql.lower() for sql in data["sql"]))
+
+        sql_log_second: List[str] = []
+
+        def fake_query_sync_second(sql):
+            sql_log_second.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        request_second = self._make_request({"page": 2, "page_size": 1})
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync_second):
+            data_second = self.resource.risk.list_risk(
+                {"use_bkbase": True, "title": "bkbase-title"}, _request=request_second
+            )
+
+        self.assertEqual([item["risk_id"] for item in data_second["results"]], [self.risk.risk_id])
+        self.assertEqual(data_second["total"], 2)
+        self.assertEqual(data_second["num_pages"], 2)
+        self.assertEqual(data_second["results"][0]["status"], RiskStatus.NEW)
+
+    def test_list_risk_via_bkbase_prioritizes_manual_unsynced_with_event_filters(self):
+        manual_risk = Risk.objects.create(
+            risk_id="risk-manual-unsynced-event-filter",
+            raw_event_id="raw-manual",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title=self.bkbase_title,
+            event_time=datetime.datetime(2023, 12, 31, tzinfo=datetime.timezone.utc),
+            manual_synced=False,
+        )
+        sql_log: List[str] = []
+
+        def fake_query_sync(sql):
+            sql_log.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        payload = {
+            "use_bkbase": True,
+            "title": "bkbase-title",
+            "event_filters": [
+                {
+                    "field": "ip",
+                    "display_name": "Source IP",
+                    "operator": EventFilterOperator.CONTAINS.value,
+                    "value": "127.0.0.1",
+                }
+            ],
+        }
+
+        request_first = self._make_request({"page": 1, "page_size": 1})
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            data = self.resource.risk.list_risk(payload, _request=request_first)
+
+        self.assertEqual([item["risk_id"] for item in data["results"]], [manual_risk.risk_id])
+        self.assertEqual(data["results"][0]["status"], "stand_by")
+
+        request_second = self._make_request({"page": 2, "page_size": 1})
+        sql_log_second: List[str] = []
+
+        def fake_query_sync_second(sql):
+            sql_log_second.append(sql)
+            if "COUNT" in sql.upper():
+                return {"list": [{"count": 1}]}
+            return {"list": [{"risk_id": self.risk.risk_id, "strategy_id": self.risk.strategy_id}]}
+
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync_second):
+            data_second = self.resource.risk.list_risk(payload, _request=request_second)
+
+        self.assertEqual([item["risk_id"] for item in data_second["results"]], [self.risk.risk_id])
+        self.assertEqual(data_second["results"][0]["status"], RiskStatus.NEW)
+
 
 class TestListMineAndNoticingRisk(TestCase):
     def setUp(self):
@@ -756,49 +857,142 @@ class TestListMineAndNoticingRisk(TestCase):
         self.assertEqual(response["sql"], sql_log)
         assert_hive_sql(self, sql_log)
 
-    def test_list_noticing_risk(self):
-        request = self._make_request("/notice-risks/")
-        with mock.patch("services.web.risk.models.Risk.load_authed_risks", autospec=True) as mocked:
-            mocked.return_value = Risk.annotated_queryset().filter(
-                risk_id__in=[self.risk_owned.risk_id, self.risk_noticed.risk_id]
-            )
-            response = ListNoticingRisk().request({"page": 1, "page_size": 10}, _request=request)
 
-        results = response["results"]
-        risk_ids = {item["risk_id"] for item in results}
-        self.assertIn(self.risk_noticed.risk_id, risk_ids)
-        self.assertNotIn(self.risk_owned.risk_id, risk_ids)
-        self.assertEqual(response["sql"], [])
+class TestRetrieveRiskDetail(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="detail-strategy",
+            risk_level=RiskLevel.MIDDLE.value,
+        )
+        self.risk = Risk.objects.create(
+            risk_id="risk-detail",
+            raw_event_id="raw-detail",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title="risk-detail-title",
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            event_end_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+        )
 
-    def test_list_noticing_risk_via_bkbase(self):
-        request = self._make_request("/notice-risks/")
-        sql_log: List[str] = []
+    def test_retrieve_risk_returns_unsynced_manual_events(self):
+        in_range = ManualEvent.objects.create(
+            raw_event_id=self.risk.raw_event_id,
+            strategy=self.strategy,
+            event_time=self.risk.event_time + datetime.timedelta(hours=1),
+            manual_synced=False,
+        )
+        ManualEvent.objects.create(
+            raw_event_id=self.risk.raw_event_id,
+            strategy=self.strategy,
+            event_time=self.risk.event_time - datetime.timedelta(days=1),
+            manual_synced=False,
+        )
+        ManualEvent.objects.create(
+            raw_event_id=self.risk.raw_event_id,
+            strategy=self.strategy,
+            event_time=self.risk.event_end_time + datetime.timedelta(minutes=1),
+            manual_synced=False,
+        )
+        ManualEvent.objects.create(
+            raw_event_id=self.risk.raw_event_id,
+            strategy=self.strategy,
+            event_time=self.risk.event_time + datetime.timedelta(minutes=30),
+            manual_synced=True,
+        )
+
+        data = self.resource.risk.retrieve_risk({"risk_id": self.risk.risk_id})
+
+        unsynced_ids = [item["manual_event_id"] for item in data.get("unsynced_events", [])]
+        self.assertEqual(unsynced_ids, [in_range.manual_event_id])
+
+    def test_retrieve_risk_without_end_time_returns_later_manual_events(self):
+        open_risk = Risk.objects.create(
+            risk_id="risk-open",
+            raw_event_id="raw-open",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title="open-risk",
+            event_time=datetime.datetime(2024, 2, 1, tzinfo=datetime.timezone.utc),
+            event_end_time=None,
+        )
+        later_event = ManualEvent.objects.create(
+            raw_event_id=open_risk.raw_event_id,
+            strategy=self.strategy,
+            event_time=open_risk.event_time + datetime.timedelta(hours=2),
+            manual_synced=False,
+        )
+        ManualEvent.objects.create(
+            raw_event_id=open_risk.raw_event_id,
+            strategy=self.strategy,
+            event_time=open_risk.event_time - datetime.timedelta(minutes=10),
+            manual_synced=False,
+        )
+
+        data = self.resource.risk.retrieve_risk({"risk_id": open_risk.risk_id})
+        unsynced_ids = [item["manual_event_id"] for item in data.get("unsynced_events", [])]
+        self.assertEqual(unsynced_ids, [later_event.manual_event_id])
+
+    def test_retrieve_risk_marks_manual_unsynced_as_standby(self):
+        unsynced_risk = Risk.objects.create(
+            risk_id="risk-manual-unsynced-status",
+            raw_event_id="raw-manual-unsynced-status",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title="manual-unsynced-status",
+            event_time=datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc),
+            manual_synced=False,
+        )
+
+        data = self.resource.risk.retrieve_risk({"risk_id": unsynced_risk.risk_id})
+        self.assertEqual(data["status"], "stand_by")
+
+
+class TestSyncManualRiskStatus(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="sync-manual-risk",
+            risk_level=RiskLevel.MIDDLE.value,
+        )
+        GlobalMetaConfig.set(
+            config_key=ASSET_RISK_BKBASE_RT_ID_KEY,
+            config_value="bkdata.risk_rt",
+            config_level=ConfigLevelChoices.NAMESPACE.value,
+            instance_key=settings.DEFAULT_NAMESPACE,
+        )
+        self.addCleanup(lambda: GlobalMetaConfig.objects.filter(config_key=ASSET_RISK_BKBASE_RT_ID_KEY).delete())
+
+    def test_sync_manual_risk_status_updates_flag(self):
+        target = Risk.objects.create(
+            risk_id="risk-unsynced",
+            raw_event_id="raw-unsynced",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title="manual-unsynced",
+            event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
+            manual_synced=False,
+        )
+        untouched = Risk.objects.create(
+            risk_id="risk-still-unsynced",
+            raw_event_id="raw-still-unsynced",
+            strategy=self.strategy,
+            status=RiskStatus.NEW,
+            title="manual-unsynced-2",
+            event_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
+            manual_synced=False,
+        )
+        called_sql = {}
 
         def fake_query_sync(sql):
-            sql_log.append(sql)
-            print(sql)
-            if "COUNT" in sql.upper():
-                return {"list": [{"count": 1}]}
-            return {"list": [{"risk_id": self.risk_noticed.risk_id, "strategy_id": self.strategy.strategy_id}]}
+            called_sql["value"] = sql
+            return {"list": [{"risk_id": target.risk_id}]}
 
-        with mock.patch("services.web.risk.models.Risk.load_authed_risks", autospec=True) as mocked, mock.patch(
-            "bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync
-        ):
-            mocked.return_value = Risk.annotated_queryset().filter(risk_id=self.risk_noticed.risk_id)
-            response = ListNoticingRisk().request(
-                {
-                    "page": 1,
-                    "page_size": 10,
-                    "use_bkbase": True,
-                    "title": "bkbase-title",
-                    "start_time": datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc).isoformat(),
-                    "end_time": datetime.datetime(2024, 1, 3, tzinfo=datetime.timezone.utc).isoformat(),
-                },
-                _request=request,
-            )
+        with mock.patch("bk_resource.api.bk_base.query_sync", side_effect=fake_query_sync):
+            _sync_manual_risk_status(batch_size=10)
 
-        results = response["results"]
-        self.assertEqual([item["risk_id"] for item in results], [self.risk_noticed.risk_id])
-        self.assertEqual(len(sql_log), 2)
-        self.assertEqual(response["sql"], sql_log)
-        assert_hive_sql(self, sql_log)
+        self.assertTrue(Risk.objects.get(pk=target.pk).manual_synced)
+        self.assertFalse(Risk.objects.get(pk=untouched.pk).manual_synced)
+        self.assertIn(target.risk_id, called_sql.get("value", ""))

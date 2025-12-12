@@ -248,6 +248,7 @@ class ToggleJoinDataRequestSerializer(serializers.Serializer):
     join_data_type = serializers.ChoiceField(
         label=gettext_lazy("关联数据类型"), choices=JoinDataType.choices, default=JoinDataType.ASSET.value
     )
+    custom_config = serializers.JSONField(label=gettext_lazy("自定义配置"), required=False, allow_null=True)
 
 
 class ToggleJoinDataResponseSerializer(serializers.ModelSerializer):
@@ -255,7 +256,7 @@ class ToggleJoinDataResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Snapshot
-        fields = ["system_id", "resource_type_id", "status", "storage_type", "join_data_type"]
+        fields = ["system_id", "resource_type_id", "status", "storage_type", "join_data_type", "custom_config"]
 
     def get_storage_type(self, obj):
         # 获取与 Snapshot 关联的 storage_type（注意使用反向关系 storages）

@@ -65,20 +65,22 @@ class RiskHandler:
             Strategy.objects.exclude(status=StrategyStatusChoices.DISABLED.value).values_list("strategy_id", flat=True)
         )
 
-    def generate_risk(self, event: dict, eligible_strategy_ids: Set[str]):
+    def generate_risk(self, event: dict, eligible_strategy_ids: Set[str], manual: bool = False):
         """
         生成风险
         :param event: 事件
         :param eligible_strategy_ids: 可用策略ID集合
+        :param manual: 是否手动创建
         """
         try:
-            is_create, risk = self.create_risk(event, eligible_strategy_ids)
+            is_create, risk = self.create_risk(event, eligible_strategy_ids, manual=manual)
             if is_create:
                 self.send_risk_notice(risk)
 
                 from services.web.risk.tasks import process_risk_ticket
 
-                process_risk_ticket(risk_id=risk.risk_id)
+                process_risk_ticket(risk_id=risk.risk_id, manual=manual)
+            return risk.risk_id
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception("[CreateRiskFailed] Event: %s; Error: %s", json.dumps(event), err)
             ErrorMsgHandler(
@@ -89,6 +91,8 @@ class RiskHandler:
                     event.get("raw_event_id"),
                 ),
             ).send()
+            if manual:
+                raise err
 
     def generate_risk_from_event(self, start_time: datetime.datetime, end_time: datetime.datetime) -> None:
         """
@@ -172,7 +176,9 @@ class RiskHandler:
         create_params["title"] = self.render_risk_title(create_params)
         return create_params
 
-    def create_risk(self, event: dict, eligible_strategy_ids: Set[str]) -> Tuple[bool, Optional[Risk]]:
+    def create_risk(
+        self, event: dict, eligible_strategy_ids: Set[str], manual: bool = False
+    ) -> Tuple[bool, Optional[Risk]]:
         """
         创建或更新风险
         """
@@ -216,18 +222,29 @@ class RiskHandler:
             .first()
         )
 
-        # 存在则更新结束时间
+        # 存在则更新结束时间, 风险事件描述
         if risk:
-            last_end_time = int(event["event_time"] / 1000)
+            last_end_time = event["event_time"] / 1000
             logger.info("[UpdateRisk] Risk exists. risk_id=%s; last_end_time=%s", risk.risk_id, last_end_time)
             # 只在事件的时间更新的时候存储
-            if int(risk.event_end_time.timestamp()) < last_end_time:
+            if risk.event_end_time.timestamp() < last_end_time:
                 risk.event_end_time = datetime.datetime.fromtimestamp(last_end_time)
                 risk.save(update_fields=["event_end_time"])
-            return False, None
+            if event.get("event_content") and risk.event_content != event["event_content"]:
+                risk.event_content = event["event_content"]
+                risk.save(update_fields=["event_content"])
+            if event.get("event_type") and risk.event_type != event["event_type"]:
+                risk.event_type = event["event_type"]
+                risk.save(update_fields=["event_type"])
+            if event.get("operator") and risk.operator != event["operator"]:
+                risk.operator = event["operator"]
+                risk.save(update_fields=["operator"])
+            return False, risk
 
         # 不存在则创建
         create_params = self.gen_risk_create_params(event)
+        if manual:
+            create_params["manual_synced"] = False
         risk: Risk = Risk.objects.create(**create_params)
         logger.info("[CreateRisk] Risk created. risk_id=%s", risk.risk_id)
         return True, risk
