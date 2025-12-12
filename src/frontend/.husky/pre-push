@@ -1,0 +1,2 @@
+#!/bin/bash
+bash "E:/shenji/bk-audit/src/frontend/.husky/pre-push-bkcodeai" $1 $2
