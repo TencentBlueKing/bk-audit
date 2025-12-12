@@ -329,7 +329,6 @@
     dialogRefs,
     openFieldDown,
     handleOpenTool,
-    handleCloseTool,
   } = useToolDialog();
 
   const searchValue = ref<string>('');
@@ -595,9 +594,6 @@
   // 关闭弹窗
   const handleClose = (ToolUid: string | undefined) => {
     if (ToolUid) {
-      // 使用hooks中的handleCloseTool
-      handleCloseTool(ToolUid);
-
       urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolUid);
       appendSearchParams({
         tool_id: urlToolsIds.value.join(','),
