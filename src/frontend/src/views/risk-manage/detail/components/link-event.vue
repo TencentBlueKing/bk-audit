@@ -529,7 +529,6 @@
       :all-tools-data="allToolsData"
       source="risk"
       :tags-enums="tagData"
-      @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
   <add-event
@@ -658,7 +657,6 @@
     allOpenToolsData,
     dialogRefs,
     openFieldDown,
-    handleCloseTool,
   } = useToolDialog();
 
   const labelWidth = computed(() => (locale.value === 'en-US' ? 160 : 120));
@@ -1060,13 +1058,6 @@
     };
   };
 
-  // 关闭弹窗
-  const handleClose = (ToolInfo: string | undefined) => {
-    if (ToolInfo) {
-      // 使用hooks中的handleCloseTool
-      handleCloseTool(ToolInfo);
-    }
-  };
   const handleAddEvent = () => {
     addEventRef.value?.show();
   };
