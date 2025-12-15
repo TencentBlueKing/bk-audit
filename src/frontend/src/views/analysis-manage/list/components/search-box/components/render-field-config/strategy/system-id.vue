@@ -33,7 +33,7 @@
         v-for="item in data"
         :key="item.id"
         action-id="search_regular_event"
-        :label="item.name"
+        :label="`${item.name}(${item.id})`"
         :permission="item.permission.search_regular_event"
         :resource="item.id"
         :value="item.id" />
