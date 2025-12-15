@@ -107,13 +107,13 @@
         v-if="!localEventItem.drill_config.length"
         class="field-cell-div"
         style="color: #c4c6cc;"
-        @click="() => handleClick()">
+        @click="() => handleClick(localEventItem.field_name)">
         {{ t('请点击配置') }}
       </div>
       <div
         v-else
         class="field-cell-div"
-        @click="() => handleClick(localEventItem.drill_config)"
+        @click="() => handleClick(localEventItem.field_name, localEventItem.drill_config)"
         @mouseleave="handleDrillMouseLeave">
         <bk-popover
           placement="top"
@@ -347,8 +347,9 @@
     }
   };
 
-  const handleClick = (drillConfig?: StrategyFieldEvent['event_basic_field_configs'][0]['drill_config']) => {
+  const handleClick = (activeFieldName: string, drillConfig?: StrategyFieldEvent['event_basic_field_configs'][0]['drill_config']) => {
     showFieldReference.value = true;
+    fieldReferenceRef.value.setActiveFieldName(activeFieldName);
     if (drillConfig) {
       fieldReferenceRef.value.setFormData(drillConfig);
     }

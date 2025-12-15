@@ -404,7 +404,7 @@
                       placement="top"
                       theme="black">
                       <span
-                        @click="() => handleClick(index, item.drill_config)">
+                        @click="() => handleClick(index, item.raw_name, item.drill_config)">
                         {{ t('已配置') }}
                         <span style="color: #3a84ff;">{{ item.drill_config.length }}</span>
                         {{ t('个工具') }}
@@ -467,7 +467,7 @@
                   <span
                     v-else
                     style="color: #c4c6cc;"
-                    @click="() => handleClick(index)">
+                    @click="() => handleClick(index, item.raw_name)">
                     {{ t('请点击配置') }}
                   </span>
                 </div>
@@ -843,9 +843,10 @@
     };
   };
 
-  const handleClick = (index: number, drillConfig?: FormData['config']['output_fields'][0]['drill_config']) => {
+  const handleClick = (index: number, activeFieldName: string, drillConfig?: FormData['config']['output_fields'][0]['drill_config']) => {
     showFieldReference.value = true;
     outputIndex.value = index;
+    fieldReferenceRef.value.setActiveFieldName(activeFieldName);
     // 编辑
     if (drillConfig) {
       fieldReferenceRef.value.setFormData(drillConfig);
