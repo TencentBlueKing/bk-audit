@@ -35,7 +35,7 @@ export interface IFieldConfig {
 // const specialReg = /[`~!@#$%^&*()_\+=<>?:"{}|,.\/;'\\[\]·~！@#￥%……&*（）——\+={}|《》？：“”【】、；‘'，。、]/im;
 export default {
   system_id: {
-    label: '系统名称',
+    label: '系统名称(ID)',
     type: 'system-id',
     required: false,
     operator: 'include',
