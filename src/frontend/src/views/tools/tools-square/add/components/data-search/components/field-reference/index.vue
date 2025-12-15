@@ -334,6 +334,11 @@
     }>;
   }
 
+  interface Expose {
+    setFormData: (data: FormData['tools']) => Promise<void>;
+    setActiveFieldName: (fieldName: string) => void;
+  }
+
   interface ToolCascaderItem {
     id: string;
     name: string;
@@ -368,6 +373,8 @@
   const props =  defineProps<Props>();
 
   const emit = defineEmits<Emits>();
+
+  const activeFieldName = ref<string>('');
 
   const toolTypeMap = ref<Record<string, string>>({
     data_search: 'SQL',
@@ -480,6 +487,11 @@
       }
     });
 
+    // 如果activeFieldName不为空，orderedConfig只有一项，target_value为空，则设置为activeFieldName
+    if (activeFieldName.value && orderedConfig.length === 1 && orderedConfig[0].target_value === '') {
+      orderedConfig[0].target_value = activeFieldName.value;
+    }
+
     // 返回更新后的配置，按照 detail 的顺序排列
     return {
       ...toolConfig,
@@ -495,6 +507,7 @@
     formData.value.tools = [];
     formData.value.selectTool = [];
     toolsDetailData.value.clear();
+    activeFieldName.value = '';
   };
 
   const handleSelectTool = async (value: string[]) => {
@@ -541,11 +554,12 @@
 
             // 为每个输入变量创建配置项
             if (toolDetail.config?.input_variable) {
+              // 如果activeFieldName不为空，input_variable只有一项，target_value为activeFieldName
               toolDetail.config.input_variable.forEach((item) => {
                 toolConfig.config.push({
                   source_field: item.raw_name,
                   target_value_type: 'field',
-                  target_value: '',
+                  target_value: toolDetail.config.input_variable.length === 1 ? activeFieldName.value : '',
                   target_field_type: '',
                   description: item.description,
                 });
@@ -646,34 +660,6 @@
     resetFormData();
   };
 
-  const setFormData = async (data: FormData['tools']) => {
-    formData.value.tools = _.cloneDeep(data);
-
-    if (formData.value.tools.length > 0) {
-      formData.value.selectTool = formData.value.tools.map(tool => tool.tool.uid);
-
-      // 使用 Promise.all 并发获取所有工具详情
-      const toolDetailPromises = formData.value.tools
-        .filter(toolConfig => toolConfig.tool.uid)
-        .map(async (toolConfig, index) => {
-          const toolDetail = await fetchToolsDetail(toolConfig.tool.uid);
-          // 对每个工具详情执行对比逻辑，返回更新后的配置
-          const updatedToolConfig = processToolDetailComparison(toolConfig, toolDetail);
-          return { index, updatedToolConfig, toolDetail };
-        });
-
-      try {
-        const results = await Promise.all(toolDetailPromises);
-        // 更新 formData 中的工具配置
-        results.forEach(({ index, updatedToolConfig }) => {
-          formData.value.tools[index] = updatedToolConfig;
-        });
-      } catch (error) {
-        console.error('获取工具详情时发生错误:', error);
-      }
-    }
-  };
-
   // 构建工具级联列表的通用函数
   const buildToolCascaderList = (data: ToolDetailModel[], searchKeyword = '') => {
     // 先过滤出有权限的数据
@@ -729,9 +715,40 @@
     buildToolCascaderList(data);
   });
 
-  defineExpose({
+  const setFormData = async (data: FormData['tools']) => {
+    formData.value.tools = _.cloneDeep(data);
+
+    if (formData.value.tools.length > 0) {
+      formData.value.selectTool = formData.value.tools.map(tool => tool.tool.uid);
+
+      // 使用 Promise.all 并发获取所有工具详情
+      const toolDetailPromises = formData.value.tools
+        .filter(toolConfig => toolConfig.tool.uid)
+        .map(async (toolConfig, index) => {
+          const toolDetail = await fetchToolsDetail(toolConfig.tool.uid);
+          // 对每个工具详情执行对比逻辑，返回更新后的配置
+          const updatedToolConfig = processToolDetailComparison(toolConfig, toolDetail);
+          return { index, updatedToolConfig, toolDetail };
+        });
+
+      try {
+        const results = await Promise.all(toolDetailPromises);
+        // 更新 formData 中的工具配置
+        results.forEach(({ index, updatedToolConfig }) => {
+          formData.value.tools[index] = updatedToolConfig;
+        });
+      } catch (error) {
+        console.error('获取工具详情时发生错误:', error);
+      }
+    }
+  };
+
+  defineExpose<Expose>({
     setFormData: async (data: FormData['tools']) => {
       await setFormData(data);
+    },
+    setActiveFieldName: (fieldName: string) => {
+      activeFieldName.value = fieldName;
     },
   });
 </script>
