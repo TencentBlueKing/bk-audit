@@ -16,7 +16,10 @@
 -->
 <template>
   <div class="config">
-    <card-part-vue :title="t('基础配置')">
+    <card-part-vue
+      :is-open="false"
+      :show-icon="false"
+      :title="t('基础配置')">
       <template #content>
         <div class="flex-center">
           <audit-form
@@ -37,7 +40,6 @@
                 </template>
                 <bk-select
                   v-model="formData.strategy_id"
-                  auto-focus
                   class="bk-select"
                   filterable
                   @select="handleSelect">
@@ -45,22 +47,10 @@
                     v-for="item in strategyList.results"
                     :id="item.strategy_id"
                     :key="item.strategy_id"
-                    :name="item.strategy_name" />
+                    :name="`${item.strategy_name} (${item.strategy_id})`" />
                 </bk-select>
               </bk-form-item>
-              <bk-form-item
-                class="base-item"
-                :label="t('责任人')"
-                property="operator"
-                required>
-                <audit-user-selector
-                  v-model="formData.operator"
-                  allow-create
-                  :auto-focus="false"
-                  class="consition-value" />
-              </bk-form-item>
-            </div>
-            <div class="base-form-item">
+
               <bk-form-item
                 class="base-item"
                 :label="t('事件发生时间')"
@@ -73,46 +63,14 @@
                   type="datetime" />
               </bk-form-item>
             </div>
-            <div class="base-form-item">
-              <bk-form-item
-                class="base-item"
-                :label="t('事件来源')"
-                property="event_source"
-                required>
-                <bk-input
-                  v-model="formData.event_source"
-                  clearable
-                  placeholder="请输入" />
-              </bk-form-item>
-              <bk-form-item
-                class="base-item"
-                :label="t('事件类型')"
-                property="event_type"
-                required>
-                <bk-input
-                  v-model="formData.event_type"
-                  clearable />
-              </bk-form-item>
-            </div>
-
-            <div>
-              <bk-form-item
-                class="base-item"
-                :label="t('事件描述')"
-                property="event_content"
-                required>
-                <bk-input
-                  v-model="formData.event_content"
-                  :maxlength="100"
-                  :rows="4"
-                  type="textarea" />
-              </bk-form-item>
-            </div>
           </audit-form>
         </div>
       </template>
     </card-part-vue>
-    <card-part-vue :title="t('事件数据')">
+    <card-part-vue
+      :is-open="false"
+      :show-icon="false"
+      :title="t('事件数据')">
       <template #content>
         <div v-if="eventList.length === 0">
           {{ t('暂无数据') }}
@@ -125,7 +83,7 @@
               #
             </div>
             <div class="table-label border-right">
-              <span class="table-text">{{ t('字段显示名称') }}</span>
+              <span class="table-text">{{ t('字段名称') }}</span>
             </div>
             <div class="table-type border-right">
               <span class="table-text">
@@ -144,8 +102,11 @@
             <div class="table-index border-right">
               {{ index + 1 }}
             </div>
-            <div class="table-label border-right">
-              <span class="field-type">{{ item?.field_type }}</span>
+            <div
+              class="table-label border-right">
+              <span
+                v-if="item?.field_type"
+                class="field-type">{{ item?.field_type }}</span>
               <span
                 v-bk-tooltips="{
                   content: item?.description,
@@ -154,7 +115,7 @@
                 }"
                 class="table-text"
                 :class="item?.description !== '' ? 'dashed-underline' : '' ">
-                {{ item?.display_name }}({{ item?.field_name }})
+                {{ item?.field_name }}({{ item?.display_name }})
               </span>
             </div>
             <div class="table-type border-right">
@@ -182,7 +143,7 @@
               <field-com
                 ref="fieldComRef"
                 :type="item.typeValue"
-                :value="item.value"
+                :value="item.valueText"
                 @update="(val) => handlerUpdate(val, item)" />
             </div>
           </div>
@@ -196,10 +157,7 @@
   import { nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import AccountManageService from '@service/account-manage';
   import StrategyManageService from '@service/strategy-manage';
-
-  import AccountModel from '@model/account/account';
 
   import useRequest from '@hooks/use-request';
 
@@ -207,7 +165,7 @@
 
   import fieldCom from './field-components.vue';
 
-  import { convertGMTTimeToStandard } from '@/utils/assist/timestamp-conversion';
+  import { convertGMTTimeToStandard, convertToTimestamp } from '@/utils/assist/timestamp-conversion';
 
   interface Exposes{
     getEditData: () => void;
@@ -216,6 +174,7 @@
   }
   interface Emits {
     (e: 'validateSuccess'): void
+    (e: 'getselectedRiskValue', data: any): void
   }
 
   const emits = defineEmits<Emits>();
@@ -223,11 +182,7 @@
   const { t } = useI18n();
   const formData = ref({
     strategy_id: '',
-    operator: [] as string[],
     event_time: new Date(),
-    event_source: '',
-    event_type: '',
-    event_content: '',
   });
   const rules = ref();
   const formRef = ref();
@@ -258,7 +213,7 @@
         typeValue: typeValueDefault,
         value: '',
       };
-    });
+    }).filter((e: Record<string, any>) => e.is_show);
   };
   const typeList = ref([
     {
@@ -318,21 +273,21 @@
     manual: true,
   });
 
-  // 用户信息
-  const {
-    run: fetchUserInfo,
-  } = useRequest(AccountManageService.fetchUserInfo, {
-    defaultValue: new AccountModel(),
-    onSuccess: (data) => {
-      formData.value.operator = [data?.username];
-    },
-  });
-
   const handlerUpdate = (value: any, item: any) => {
+    // 当 long double float int 类型时，需要转换时间格式
+    let valueText: string | number | null = null;
+    if ((item.field_type === 'long' || item.field_type === 'double' || item.field_type === 'float' || item.field_type === 'int')
+      && item.typeValue === 'date-picker') {
+      valueText = convertToTimestamp(value);
+    } else {
+      valueText = value;
+    }
     eventList.value.forEach((eventItem: any) => {
       if (eventItem.field_name === item.field_name  && eventItem.display_name === item.display_name) {
         // eslint-disable-next-line no-param-reassign
-        eventItem.value = value;
+        eventItem.valueText = value;
+        // eslint-disable-next-line no-param-reassign
+        eventItem.value = valueText;
       }
     });
   };
@@ -345,7 +300,6 @@
   };
 
   onMounted(() => {
-    fetchUserInfo();
   });
 
   defineExpose<Exposes>({

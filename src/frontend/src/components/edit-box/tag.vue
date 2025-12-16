@@ -108,7 +108,7 @@
       || props.data.length <= renderTagNum.value) {
       return '';
     }
-    return props.data.slice(renderTagNum.value).join(',');
+    return  (typeof props.data) === 'string' ? [props.data].slice(renderTagNum.value).join(',') : props.data.slice(renderTagNum.value).join(',');
   });
 
   let tippyIns: Instance;

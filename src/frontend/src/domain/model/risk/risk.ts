@@ -84,6 +84,9 @@ export default class Event {
   permission: Record<string, boolean>;
   experiences: number;// 风险总结
   title: string;
+  notice_groups:  number[];
+  processor_groups:  number[];
+  event_basic_field_configs: Array<Record<string, any>>;
 
   constructor(payload = {} as Event) {
     this.risk_id = payload.risk_id;
@@ -112,5 +115,8 @@ export default class Event {
     this.experiences = payload.experiences;
     this.title = payload.title;
     this.unsynced_events = payload.unsynced_events;
+    this.notice_groups = payload.notice_groups;
+    this.processor_groups = payload.processor_groups;
+    this.event_basic_field_configs = payload.event_basic_field_configs;
   }
 }

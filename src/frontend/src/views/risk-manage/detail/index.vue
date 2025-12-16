@@ -33,7 +33,8 @@
           <link-event
             :data="detailData"
             :strategy-list="strategyList"
-            @get-event-data="handleGetEventData" />
+            @get-event-data="handleGetEventData"
+            @updated-data="handleUpdatedData" />
         </div>
       </div>
       <!-- 事件处理 -->
@@ -184,6 +185,10 @@
   // 获取事件信息
   const handleGetEventData = (data: any) => {
     eventDataList.value = data;
+  };
+  // 更新
+  const handleUpdatedData = () => {
+    handleUpdate();
   };
   useRouterBack(() => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

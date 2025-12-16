@@ -39,6 +39,8 @@
         class="audit-highlight-table"
         :columns="tableColumn"
         :data-source="dataSource"
+        :is-row-select-enable="handleSelectEnable"
+        :row-class="handleRowClass"
         :settings="settings"
         @clear-search="handleClearSearch"
         @on-setting-change="handleSettingChange"
@@ -105,7 +107,7 @@
   const { getSearchParamsPost } = useUrlSearch();
   const router = useRouter();
   const route = useRoute();
-  // let timeout: number| undefined = undefined;
+  let timeout: number| undefined = undefined;
   const statusToMap: Record<string, {
     tag: string,
     icon: string,
@@ -168,9 +170,11 @@
             riskId: data.risk_id,
           },
         };
-        return <router-link to={to}>
+        return (data.status === 'stand_by'
+          ? <span>{data.risk_id}</span>
+          : (<router-link to={to}>
           <Tooltips data={data.risk_id} />
-        </router-link>;
+        </router-link>));
       },
     },
     {
@@ -214,13 +218,13 @@
     {
       label: () => t('处理状态'),
       field: () => 'status',
-      width: 110,
+      width: 130,
       render: ({ data }: { data: RiskManageModel }) => (
         // eslint-disable-next-line no-nested-ternary
         data.status === 'stand_by' ? (
-           <bk-tag theme='success'>
-            {t('生成中')}
-          </bk-tag>
+           <span style='font-size: 14px;color: #3a84ff;'>
+           <audit-icon  type="loading" style='font-size: 14px;color: #3a84ff; animation: spin 1s linear infinite' />  {t('风险创建中')}
+          </span>
         )
           : (data.status === 'closed' && data.experiences > 0
             ? (
@@ -309,7 +313,10 @@
       label: () => t('操作'),
       width: 148,
       fixed: 'right',
-      render: ({ data }: { data: RiskManageModel }) => <p>
+      render: ({ data }: { data: RiskManageModel }) => (
+        data.status === 'stand_by' ? <div>
+        <bk-button text  class='mr16'>{t('--')}</bk-button></div>
+        :     (<p>
         {
           ['for_approve', 'auto_process'].includes(data.status)
             ? (
@@ -350,7 +357,8 @@
                 userInfo={userInfo.value}
                 data={data} />
           }
-          </p>,
+          </p>)
+      ),
     },
   ] as Column[];
 
@@ -366,17 +374,20 @@
     risk_id: 'risk_id',
     title: 'title',
     risk_level: 'risk_level',
-    // operator: 'operator',
     status: 'status',
     current_operator: 'current_operator',
-    // last_operate_time: 'last_operate_time',
-    // risk_label: 'risk_label',
+  };
+  const handleSelectEnable = (item: any) => {
+    if (item.row.status === 'stand_by') {
+      return false;
+    }
+    return true;
   };
   const initSettings = () => {
     const fieldNames = selectedItemList.value.map(item => `event_data.${item.field_name}`);
     const list = selectedItemList.value.length > 0 ? tableColumn.value : initTableColumns;
     return  {
-      fields: list.reduce((res, item, index) => {
+      fields: list.reduce((res:any, item: any, index: number) => {
         if (item.field) {
           const fieldValue = typeof item.field === 'function' ? item.field(item, index) : item.field;
           const labelValue = typeof item.label === 'function' ? item.label(item, index) : item.label;
@@ -454,30 +465,13 @@
     },
   });
 
-  // const {
-  //   run: fetchRiskList,
-  // } = useRequest(RiskManageService.fetchRiskList, {
-  //   defaultValue: {
-  //     total: 0,
-  //     results: [],
-  //     page: 1,
-  //     num_pages: 1,
-  //   },
-  //   onSuccess(data) {
-  //     const { results } = data;
-  //     if (results && results.length) {
-  //       results.forEach((item) => {
-  //         const tmpItem = pollingDataMap.value[item.risk_id];
-  //         if (!tmpItem) return;
-  //         tmpItem.status = item.status;
-  //         tmpItem.current_operator = item.current_operator;
-  //         tmpItem.risk_label = item.risk_label;
-  //         tmpItem.last_operate_time = item.last_operate_time;
-  //       });
-  //       // startPolling(results);
-  //     }
-  //   },
-  // });
+  const handleRowClass = (row: Record<string, any>) => {
+    const addEventRiskIds = JSON.parse(sessionStorage.getItem('addEventRiskIds') || '[]');
+    if (row.status === 'stand_by' && addEventRiskIds.includes(row.risk_id)) {
+      return 'new-row';
+    }
+  };
+
 
   const {
     data: levelData,
@@ -486,9 +480,21 @@
     defaultValue: {},
   });
 
+  const {
+    run: fetchRiskList,
+  } = useRequest(RiskManageService.fetchRiskList, {
+    defaultValue: {
+      results: [],
+      page: 0,
+      num_pages: 0,
+      total: 0,
+    },
+  });
+
   // 记录轮训的数据
   // const pollingDataMap = ref<Record<string, RiskManageModel>>({});
   const handleRequestSuccess = ({ results }: {results: Array<RiskManageModel>}) => {
+    window.changeConfirm = false;
     selectedItemList.value =  searchBoxRef.value?.getSelectedItemList();
     if (JSON.stringify(tableColumn.value) !== JSON.stringify(initColumns())) {
       tableColumn.value =  initColumns();
@@ -498,9 +504,30 @@
     // 获取对应风险等级
     fetchRiskLevel({
       strategy_ids: results.map(item => item.strategy_id).join(','),
-    }).then(() => {
-
     });
+    if (results.some(item => item.status === 'stand_by')) {
+      // 执行定时器
+      timeout = setTimeout(() => {
+        const addEventRiskIds = JSON.parse(sessionStorage.getItem('addEventRiskIds') || '[]');
+        if (addEventRiskIds.length === 0) {
+          listRef.value?.initData();
+        }
+        fetchRiskList({
+          risk_id: addEventRiskIds.join(','),
+          page: 1,
+          page_size: 20,
+        }).then((data) => {
+          listRef.value?.initListData(data.results, 'risk_id');
+        });
+      }, 5000);
+    } else {
+      // 消除定时器
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = undefined;
+        listRef.value?.initData();
+      }
+    }
   };
 
   const  initColumns = () => {
@@ -534,25 +561,7 @@
     columns.splice(insertIndex, 0, ...selectedColumns);
     return  columns;
   };
-  //   // 开始轮训
-  // const startPolling = (results: Array<RiskManageModel>) => {
-  //   clearTimeout(timeout);
-  //   pollingDataMap.value = {};
-  //   results.forEach((item) => {
-  //     if (item.status !== 'closed') {
-  //       pollingDataMap.value[item.risk_id] = item;
-  //     }
-  //   });
-  //   if (!Object.keys(pollingDataMap.value).length) return;
-  //   timeout = setTimeout(() => {
-  //     const params = getSearchParamsPost('event_filters');
-  //     fetchRiskList({
-  //       ...params,
-  //       risk_id: Object.values(pollingDataMap.value).map(item => item.risk_id)
-  //         .join(','),
-  //     });
-  //   }, 60 * 1000);
-  // };
+
 
   const handleToDetail = (data: RiskManageModel, needToRiskContent = false) => {
     const params: Record<string, any> = {
@@ -588,7 +597,10 @@
     }
   };
   // 搜索
-  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>) => {
+  const handleSearchChange = (value: Record<string, any>, exValue:  Record<string, any>, isClear?: boolean) => {
+    if (!isClear) {
+      sessionStorage.removeItem('addEventRiskIds');
+    }
     searchModel.value = {
       ...value,
       event_filters: exValue };
@@ -631,13 +643,19 @@
   const handleAddRiskSuccess = () => {
     searchBoxRef.value.clearValue();
   };
+
+
   onMounted(() => {
     nextTick(() => {
       getEventFields();
+      sessionStorage.removeItem('addEventRiskIds');
     });
   });
   onUnmounted(() => {
-    // clearTimeout(timeout);
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
   });
 
   onBeforeRouteLeave((to, from, next) => {
@@ -660,6 +678,15 @@
   });
 </script>
 <style lang='postcss'>
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
 
 .risk-manage-list-page-wrap {
   .risk-manage-list {

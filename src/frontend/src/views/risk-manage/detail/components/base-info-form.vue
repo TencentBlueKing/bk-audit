@@ -29,7 +29,7 @@
           :label-width="labelWidth"
           :style="getFieldStyle(fieldItem.field_name)">
           <template v-if="fieldItem.field_name === 'risk_id'">
-            {{ data.risk_id }}
+            {{ data.risk_id || '--' }}
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_level'">
             <span
@@ -40,12 +40,12 @@
                 'border-radius': '3px',
                 color: 'white'
               }">
-              {{ riskLevelMap[data.risk_level].label }}
+              {{ riskLevelMap[data.risk_level].label || '--' }}
             </span>
             <span v-else>--</span>
           </template>
           <template v-else-if="fieldItem.field_name === 'event_type'">
-            {{ data.event_type?.join('、') || '--' }}
+            {{ handleShowText(data.event_type) || '--' }}
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_tags'">
             <edit-tag :data="data.tags?.map(item=>strategyTagMap[item] || item) || ''" />
@@ -65,7 +65,7 @@
             <span v-else>--</span>
           </template>
           <template v-else-if="fieldItem.field_name === 'event_content'">
-            {{ data.event_content }}
+            {{ data.event_content || '--' }}
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_hazard'">
             {{ data.risk_hazard || '--' }}
@@ -84,21 +84,32 @@
                 </p>
               </bk-tag>
             </template>
+            <span v-else>--</span>
           </template>
           <template v-else-if="fieldItem.field_name === 'operator'">
-            <edit-tag :data="data.operator || ''" />
+            <span v-if="isAddRisk">
+              <edit-tag
+                v-if="operatorsComfig[0]?.typeValue === 'user-selector'"
+                :data="operatorsComfig[0].value || ''"
+                style="display: inline-block;" />
+              <span v-else> {{ operatorsComfig[0]?.value ||'--' }} </span>
+            </span>
+            <edit-tag
+              v-else
+              :data="(typeof data.operator === 'string' ?
+                handleShowText(data.operator).split(',') : data.operator) || ''" />
           </template>
           <template v-else-if="fieldItem.field_name === 'current_operator'">
-            <edit-tag :data="data.current_operator || ''" />
+            <edit-tag :data="(isAddRisk ? processorGroups : data.current_operator) || []" />
           </template>
           <template v-else-if="fieldItem.field_name === 'notice_users'">
-            <edit-tag :data="data.notice_users || ''" />
+            <edit-tag :data="(isAddRisk ? noticeGroups : data.notice_users) || []" />
           </template>
           <template v-else-if="fieldItem.field_name === 'event_time'">
-            {{ data.event_time || '--' }}
+            {{ (isAddRisk ? editData?.formData.event_time : data.event_time) || '--' }}
           </template>
           <template v-else-if="fieldItem.field_name === 'event_end_time'">
-            {{ data.event_end_time || '--' }}
+            {{ (isAddRisk ? editData?.formData.event_time : data.event_end_time) || '--' }}
           </template>
           <template v-else-if="fieldItem.field_name === 'rule_id'">
             <router-link
@@ -120,11 +131,13 @@
               :class="{
                 misreport: data.risk_label === 'misreport',
               }">
-              {{ data.risk_label === 'normal' ? t('正常') : t('误报') }}
+              <span v-if="isAddRisk">{{ t('正常') }}</span>
+              <span v-else>{{ data.risk_label === 'normal' ? t('正常') : t('误报') }}</span>
             </span>
           </template>
           <template v-else>
-            {{ data[fieldItem.field_name as keyof RiskManageModel] || '--' }}
+            {{ (isAddRisk ? editData?.formData.event_time
+              : data[fieldItem.field_name as keyof RiskManageModel]) || '--' }}
           </template>
         </render-info-item>
       </render-info-block>
@@ -160,10 +173,20 @@
       name: string,
     }>,
     showFieldNames: Array<StrategyInfo['risk_meta_field_config'][0]>,
+    isAddRisk?: boolean
+    editData?: Record<string, any>
+    noticeGroups?: string[] // 关注人
+    processorGroups?: string[] // 处理人
+    operatorsComfig?: Array<Record<string, any>> // 责任人
   }
 
-  const props = defineProps<Props>();
-
+  const props = withDefaults(defineProps<Props>(), {
+    isAddRisk: false,
+    editData: () => ({}),
+    noticeGroups: () => [],
+    processorGroups: () => [],
+    operatorsComfig: () => [],
+  });
   const { t, locale } = useI18n();
 
   const labelWidth = computed(() => (locale.value === 'en-US' ? 120 : 100));
@@ -219,7 +242,27 @@
       color: '#0CA668',
     },
   };
+  // 判断值是否为数组（包括字符串形式的数组）
+  const handleShowText = (value: any) => {
+    // 1. 如果是真正的数组，直接连接
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value.join(',') : '--';
+    }
 
+    // 2. 如果是字符串且看起来像数组，尝试解析
+    if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
+      try {
+        const parsedArray = JSON.parse(value);
+        if (Array.isArray(parsedArray)) {
+          return parsedArray.length > 0 ? parsedArray.join(',') : '';
+        }
+      } catch (error) {
+        return value  || '';
+      }
+    }
+    // 3. 其他情况直接返回原值
+    return value || '';
+  };
   const strategyName = computed(() => {
     const { data } = props;
     const item = props.strategyList.find(item => item.value === data.strategy_id);
