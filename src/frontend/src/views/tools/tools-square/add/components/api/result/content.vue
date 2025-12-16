@@ -42,7 +42,7 @@
           label="name"
           style="color: #63656e;">
           <template #nodeType="node">
-            <span v-if="node.isChild && node.children.length === 0">
+            <span v-if="node.isChild || node.children.length === 0">
               <bk-checkbox
                 v-model="node.isChecked"
                 style="padding-right: 5px;"
