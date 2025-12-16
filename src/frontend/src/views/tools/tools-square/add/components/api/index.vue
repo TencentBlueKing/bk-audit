@@ -87,10 +87,21 @@
             v-for="(headersItem, index) in formData.api_config.headers"
             :key="index"
             class="headers-config">
-            <bk-input
-              v-model="headersItem.key"
-              class="config-input value"
-              :placeholder="t('请输入 Key')" />
+            <span class="rules-header-key-span">
+              <bk-input
+                v-model="headersItem.key"
+                class="config-input value"
+                :class="(handleRulesHeadersKey(headersItem.key) &&
+                  !isHeadersPass &&
+                  isHeadersNoPassIndex.includes(index) )? 'rules-header-key' : '' "
+                :placeholder="t('请输入 Key')"
+                @change="handleHeadersKeyChange" />
+              <span
+                v-if="handleRulesHeadersKey(headersItem.key)
+                  && !isHeadersPass &&
+                  isHeadersNoPassIndex.includes(index)"
+                class="rules-header-key-text">{{ t('请输入 Key') }}</span>
+            </span>
             <bk-input
               v-model="headersItem.value"
               class="config-input key"
@@ -184,13 +195,7 @@
     api_config: {
       url: '',
       method: 'GET',
-      headers: [
-        {
-          key: '',
-          value: '',
-          description: '',
-        },
-      ],
+      headers: [] as Array<{ key: string; value: string; description: string }>,
       auth_config: {
         config: {
           bk_app_code: '',
@@ -263,7 +268,24 @@
   const isSuccess = ref(false);
   const isDoneDeBug = ref(false);
   const resultData = ref();
+  const isHeadersPass = ref(true);
+  const isHeadersNoPassIndex = ref<number[]>([]);
   const handlerOpenDeDugRef = () => {
+    isHeadersPass.value = true;
+    isHeadersNoPassIndex.value = [];
+    // 判断 formData.value.api_config.headers中的key是否为空 isHeadersNoPassIndex 存储不为空的数组下标index
+    if (formData.value.api_config.headers.some((item: any) => item.key === '')) {
+      isHeadersPass.value = false;
+      formData.value.api_config.headers.forEach((item: any, index: number) => {
+        if (item.key === '') {
+          isHeadersNoPassIndex.value.push(index);
+        }
+      });
+      return;
+    }
+    if (paramsConfigRef.value?.validatePass()) {
+      return;
+    }
     formRef.value.validate().then(() => {
       const paramsConfig =  paramsConfigRef.value?.getData() || [];
       deDugRef.value?.init(paramsConfig);
@@ -281,9 +303,6 @@
 
   // 删除 headers
   const handleDeleteHeaders = (index: number) => {
-    if (formData.value.api_config.headers.length === 1) {
-      return;
-    }
     formData.value.api_config.headers.splice(index, 1);
   };
 
@@ -297,6 +316,13 @@
   const initResultConfig = (data: any) => {
     resultData.value = data.output_config.result_schema.tree_data;
     resultConfigRef.value.setConfigs(data.output_config);
+  };
+
+  // 检查是否为空
+  const handleRulesHeadersKey = (key: string) => key === '';
+  const handleHeadersKeyChange = () => {
+    isHeadersPass.value = true;
+    isHeadersNoPassIndex.value = [];
   };
   onMounted(() => {
   });
@@ -319,6 +345,13 @@
         isParams.value = data.input_variable?.length > 0;
         formData.value.input_variable = data.input_variable;
         formData.value.output_config = data.output_config;
+        console.log('formData.value', formData.value);
+        if (formData.value.api_config.auth_config.method === 'none') {
+          formData.value.api_config.auth_config.config = {
+            bk_app_code: '',
+            bk_app_secret: '',
+          };
+        }
         initResultConfig(data);
       });
     },
@@ -348,16 +381,17 @@
 
 .headers-config {
   display: flex;
-  align-items: center;
   width: 100%;
+  padding-bottom: 10px;
   margin-top: 10px;
+  align-items: center;
 
   .config-input {
     margin-right: 10px;
   }
 
   .value {
-    width: 25%;
+    width: 98%;
   }
 
   .key {
@@ -421,5 +455,21 @@
   font-size: 14px;
   color: red;
   cursor: none;
+}
+
+.rules-header-key-span {
+  display: inline-block;
+  width: 20%;
+  vertical-align: top;
+}
+
+.rules-header-key {
+  border: 1px solid red;
+}
+
+.rules-header-key-text {
+  /* vertical-align: bottom; */
+  position: absolute;
+  color: red;
 }
 </style>

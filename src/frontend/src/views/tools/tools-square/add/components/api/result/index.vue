@@ -84,7 +84,7 @@
   const groupContentRef = ref();
   const openGroup = ref(false);
   const outputConfigEnableGrouping = ref({
-    enable_grouping: !false,
+    enable_grouping: false,
   });
   // 添加分组
   const handleAddGroup = () => {
