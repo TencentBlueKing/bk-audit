@@ -76,47 +76,54 @@
         form-type="vertical"
         :model="formModel"
         :rules="rules">
-        <bk-form-item
+        <span
           v-for="(item, index) in list"
-          :key="index"
-          :label="item.display_name"
-          :property="item.display_name"
-          :required="item.required">
-          <template #label>
-            <bk-popover
-              placement="top"
-              theme="dark">
-              <span class="dashed-underline">{{ t(item.display_name) }}</span>
-              <template #content>
-                <div>{{ t(item.description) }}</div>
-              </template>
-            </bk-popover>
-          </template>
-          <bk-input
-            v-if="item.field_category == 'number_input'"
-            v-model="formModel[item.display_name]"
-            clearable
-            type="number" />
-          <audit-user-selector
-            v-else-if="item.field_category === 'person_select'"
-            v-model="formModel[item.display_name]" />
-          <date-picker
-            v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
-            v-model="formModel[item.display_name]"
-            style="width: 100%" />
+          :key="index">
+          <bk-form-item
+            v-if="handleIsShow(item.is_show)"
+            :property="item.display_name"
+            :required="item.required">
+            <template
+              #label>
+              <bk-popover
+                v-if="item.description !== ''"
+                placement="top"
+                theme="dark">
+                <span class="dashed-underline">{{ t(item.display_name) || '--' }}</span>
+                <template #content>
+                  <div>{{ t(item.description) }}</div>
+                </template>
+              </bk-popover>
+              <span v-if="item.description ===''">{{ t(item.display_name) || '--' }}</span>
+            </template>
+            <span>
+              <bk-input
+                v-if="item.field_category == 'number_input'"
+                v-model="formModel[item.display_name]"
+                clearable
+                type="number" />
+              <audit-user-selector
+                v-else-if="item.field_category === 'person_select'"
+                v-model="formModel[item.display_name]" />
+              <date-picker
+                v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
+                v-model="formModel[item.display_name]"
+                style="width: 100%" />
 
-          <bk-date-picker
-            v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
-            v-model="formModel[item.display_name]"
-            append-to-body
-            clearable
-            style="width: 100%"
-            type="datetime" />
-          <bk-input
-            v-else
-            v-model="formModel[item.display_name]"
-            clearable />
-        </bk-form-item>
+              <bk-date-picker
+                v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
+                v-model="formModel[item.display_name]"
+                append-to-body
+                clearable
+                style="width: 100%"
+                type="datetime" />
+              <bk-input
+                v-else
+                v-model="formModel[item.display_name]"
+                clearable />
+            </span>
+          </bk-form-item>
+        </span>
       </bk-form>
       <bk-button
         theme="primary"
@@ -166,6 +173,8 @@
     time_range?: any;
     var_name: string;
     raw_name: string;
+    is_show: boolean | string;
+    position: string;
   }
   interface Props {
     apiConfig: Record<string, any>,
@@ -201,6 +210,7 @@
     },
   });
 
+  const handleIsShow = (val: boolean | string) => val === true || val === 'true';
   // 调试
   const handleDebug = () => {
     const config = {
@@ -227,10 +237,9 @@
           value: formatDate(i.default_value),
         };
       }
-
       return {
         raw_name: i.raw_name,
-        value: i.default_value,
+        value: formModel.value[i.display_name],
       };
     });
 
@@ -255,7 +264,7 @@
 
   const initWithData = (data: FormItem[]) => {
     isShow.value = true;
-    list.value = data;
+    list.value = JSON.parse(JSON.stringify(data));
     formModel.value = data.reduce((obj: Record<string, any>, item: Record<string, any>) => {
       // eslint-disable-next-line no-param-reassign
       obj[item.display_name] = item.field_category === 'time_range_select' ? item.time_range :  item.default_value;
