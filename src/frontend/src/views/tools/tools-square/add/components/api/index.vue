@@ -207,7 +207,7 @@
     input_variable: [
       {
         is_show: 'true',
-        position: '',
+        position: 'query',
         raw_name: '',
         required: 'true',
         description: '',
@@ -308,9 +308,12 @@
 
   // 调试
   const handleDeBugDone = (res: any, isSucc: boolean) => {
-    resultData.value = res;
-    isSuccess.value = isSucc;
-    isDoneDeBug.value = true;
+    resultData.value = '';
+    nextTick(() => {
+      resultData.value = res;
+      isSuccess.value = isSucc;
+      isDoneDeBug.value = true;
+    });
   };
 
   const initResultConfig = (data: any) => {
