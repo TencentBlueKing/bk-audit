@@ -262,13 +262,13 @@ class ManualEvent(OperateRecordModel):
         related_name='manual_events',
     )
     event_evidence = models.TextField(EventMappingFields.EVENT_EVIDENCE.description, null=True, blank=True)
-    event_type = models.JSONField(EventMappingFields.EVENT_TYPE.description, null=True, blank=True, default=list)
+    event_type = models.CharField(EventMappingFields.EVENT_TYPE.description, null=True, blank=True, max_length=255)
     event_data = models.JSONField(EventMappingFields.EVENT_DATA.description, null=True, blank=True)
     event_time = models.DateTimeField(EventMappingFields.EVENT_TIME.description, db_index=True)
     event_source = models.CharField(
         EventMappingFields.EVENT_SOURCE.description, max_length=255, db_index=True, null=True, blank=True
     )
-    operator = models.JSONField(EventMappingFields.OPERATOR.description, null=True, blank=True)
+    operator = models.CharField(EventMappingFields.OPERATOR.description, null=True, blank=True, max_length=255)
     status = models.CharField(
         gettext_lazy("Risk Status"), choices=RiskStatus.choices, default=RiskStatus.NEW, max_length=32, db_index=True
     )
