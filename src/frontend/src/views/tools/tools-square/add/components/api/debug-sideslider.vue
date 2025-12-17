@@ -20,7 +20,8 @@
     quick-close
     :title="t('接口调试')"
     transfer
-    :width="600">
+    :width="600"
+    @close="handleClose">
     <div class="info">
       <div class="title">
         {{ t('请求信息') }}
@@ -135,18 +136,24 @@
       <div class="title">
         {{ t('响应结果') }}
       </div>
-      <div class="result">
+      <div
+        v-if="isDebug"
+        class="result">
         <pre
-          v-if="!isErr"
+          v-if="result"
           class="json-result">{{ result }}</pre>
-        <div
-          v-else
-          class="err">
-          <audit-icon
-            class="alert"
-            type="alert" />
-          <span>{{ t('工具目前仅支持解析Json格式的数据') }}</span>
-        </div>
+      </div>
+      <bk-exception
+        v-if="isErr && !isNoJson"
+        :description="t('数据查询失败')"
+        type="500" />
+      <div
+        v-if="!isErr && isNoJson"
+        class="err">
+        <audit-icon
+          class="alert"
+          type="alert" />
+        <span>{{ t('工具目前仅支持解析Json格式的数据') }}</span>
       </div>
     </div>
   </bk-sideslider>
@@ -191,6 +198,8 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const isErr = ref(false);
+  const isNoJson = ref(false);
+  const isDebug = ref(false);
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
 
@@ -213,6 +222,8 @@
   const handleIsShow = (val: boolean | string) => val === true || val === 'true';
   // 调试
   const handleDebug = () => {
+    isDebug.value = true;
+    result.value = null;
     const config = {
       api_config: props.apiConfig,
       input_variable: props.isParams ?  list.value : [],
@@ -250,13 +261,21 @@
         tool_variables: props.isParams ?  params : [],
       } : {},
     }).then((res) => {
-      if (res.data.status_code === 200) {
-        messageSuccess('调试成功');
-        isErr.value = false;
-        result.value = JSON.stringify(res.data.result);
-        emits('deBugDone', JSON.stringify(res.data.result), true);
+      if (res && res.data.status_code === 200) {
+        if (res.data.err_type === 'non_json_response') {
+          isErr.value = false;
+          isNoJson.value = true;
+          emits('deBugDone', '', false);
+        } else {
+          messageSuccess('调试成功');
+          isErr.value = false;
+          isNoJson.value = false;
+          result.value = JSON.stringify(res.data.result);
+          emits('deBugDone', JSON.stringify(res.data.result), true);
+        }
       } else {
         isErr.value = true;
+        isNoJson.value = false;
         emits('deBugDone', '', false);
       }
     });
@@ -271,7 +290,15 @@
       return obj;
     }, {});
   };
-
+  // 关闭初始化数据
+  const handleClose = () => {
+    isShow.value = false;
+    list.value = [];
+    formModel.value = {};
+    isErr.value = false;
+    isNoJson.value = false;
+    result.value = '';
+  };
   defineExpose<Exposes>({
     init(data: FormItem[]) {
       initWithData(data);
