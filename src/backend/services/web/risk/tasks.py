@@ -32,6 +32,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext
 from django_redis.client import DefaultClient
+from rest_framework.settings import api_settings
 
 from apps.itsm.constants import TicketStatus
 from apps.meta.constants import ConfigLevelChoices
@@ -121,6 +122,66 @@ def manual_add_event(data: list):
     logger_celery.info("[ManualAddEvent] Saved %s manual events", len(manual_events))
 
 
+def _build_manual_event_time_range(event_time: datetime.datetime, window: datetime.timedelta) -> tuple[str, str]:
+    aware_time = event_time
+    if timezone.is_naive(aware_time):
+        aware_time = timezone.make_aware(aware_time, timezone.get_default_timezone())
+    local_time = timezone.localtime(aware_time)
+    start_time = (local_time - window).strftime(api_settings.DATETIME_FORMAT)
+    end_time = (local_time + window).strftime(api_settings.DATETIME_FORMAT)
+    return start_time, end_time
+
+
+def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta = datetime.timedelta(hours=1)) -> None:
+    events = list(ManualEvent.objects.filter(manual_synced=False).order_by("manual_event_id")[:batch_size])
+    if not events:
+        return
+
+    synced_ids = []
+    for event in events:
+        start_time, end_time = _build_manual_event_time_range(event.event_time, window)
+        try:
+            resp = (
+                EventHandler.search_event(
+                    namespace=settings.DEFAULT_NAMESPACE,
+                    start_time=start_time,
+                    end_time=end_time,
+                    page=1,
+                    page_size=10,
+                    manual_event_id=str(event.manual_event_id),
+                )
+                or {}
+            )
+        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+            logger_celery.warning(
+                "[SyncManualEventStatus] search failed for manual_event_id=%s: %s",
+                event.manual_event_id,
+                err,
+            )
+            continue
+
+        results = resp.get("results") or []
+        total = resp.get("total", 0) or 0
+        if total or results:
+            synced_ids.append(event.manual_event_id)
+
+    if synced_ids:
+        ManualEvent.objects.filter(manual_event_id__in=synced_ids, manual_synced=False).update(manual_synced=True)
+        logger_celery.info("[SyncManualEventStatus] Updated %s manual events", len(synced_ids))
+
+
+@periodic_task(
+    run_every=datetime.timedelta(seconds=1),
+    queue="risk",
+    time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
+)
+@lock(lock_name="celery:sync_manual_event_status")
+def sync_manual_event_status():
+    """同步已入 ES 的手工事件状态"""
+
+    _sync_manual_event_status()
+
+
 def _sync_manual_risk_status(batch_size: int = 500) -> None:
     try:
         table_id = GlobalMetaConfig.get(
@@ -152,7 +213,7 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
 
 
 @periodic_task(
-    run_every=datetime.timedelta(seconds=30),
+    run_every=datetime.timedelta(seconds=1),
     queue="risk",
     time_limit=settings.DEFAULT_CACHE_LOCK_TIMEOUT,
 )

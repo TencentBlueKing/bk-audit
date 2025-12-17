@@ -9,6 +9,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.request import Request
+from rest_framework.settings import api_settings
 from rest_framework.test import APIRequestFactory
 from sqlglot import errors as sqlglot_errors
 
@@ -25,7 +26,7 @@ from services.web.databus.constants import (
 from services.web.risk.constants import EventFilterOperator, RiskStatus
 from services.web.risk.models import ManualEvent, Risk, TicketPermission, UserType
 from services.web.risk.resources.risk import ListMineRisk
-from services.web.risk.tasks import _sync_manual_risk_status
+from services.web.risk.tasks import _sync_manual_event_status, _sync_manual_risk_status
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -996,3 +997,56 @@ class TestSyncManualRiskStatus(TestCase):
         self.assertTrue(Risk.objects.get(pk=target.pk).manual_synced)
         self.assertFalse(Risk.objects.get(pk=untouched.pk).manual_synced)
         self.assertIn(target.risk_id, called_sql.get("value", ""))
+
+
+class TestSyncManualEventStatus(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="sync-manual-event",
+            risk_level=RiskLevel.MIDDLE.value,
+        )
+
+    def test_sync_manual_event_status_updates_flag(self):
+        event_time = datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc)
+        manual_event = ManualEvent.objects.create(
+            raw_event_id="raw-manual-event",
+            strategy=self.strategy,
+            event_time=event_time,
+            manual_synced=False,
+        )
+        called_kwargs = {}
+
+        def fake_search_event(**kwargs):
+            called_kwargs["value"] = kwargs
+            return {"results": [{"manual_event_id": manual_event.manual_event_id}], "total": 1}
+
+        with mock.patch("services.web.risk.tasks.EventHandler.search_event", side_effect=fake_search_event):
+            _sync_manual_event_status()
+
+        manual_event.refresh_from_db()
+        self.assertTrue(manual_event.manual_synced)
+        window = datetime.timedelta(days=5)
+        expected_start = timezone.localtime(event_time - window).strftime(api_settings.DATETIME_FORMAT)
+        expected_end = timezone.localtime(event_time + window).strftime(api_settings.DATETIME_FORMAT)
+        self.assertEqual(called_kwargs["value"]["start_time"], expected_start)
+        self.assertEqual(called_kwargs["value"]["end_time"], expected_end)
+        self.assertEqual(called_kwargs["value"]["manual_event_id"], str(manual_event.manual_event_id))
+
+    def test_sync_manual_event_status_skips_when_missing(self):
+        manual_event = ManualEvent.objects.create(
+            raw_event_id="raw-missing-event",
+            strategy=self.strategy,
+            event_time=datetime.datetime(2024, 2, 1, tzinfo=datetime.timezone.utc),
+            manual_synced=False,
+        )
+
+        with mock.patch(
+            "services.web.risk.tasks.EventHandler.search_event", return_value={"results": [], "total": 0}
+        ) as search_event:
+            _sync_manual_event_status()
+
+        manual_event.refresh_from_db()
+        self.assertFalse(manual_event.manual_synced)
+        search_event.assert_called_once()
