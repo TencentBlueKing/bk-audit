@@ -137,7 +137,7 @@
                     </audit-popconfirm>
                     <bk-popover
                       v-if="formData.drill_config
-                        .some(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                        .some((drill: any) => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
                       placement="top"
                       theme="black">
                       <audit-icon
@@ -148,7 +148,8 @@
                           <div>{{ t('以下工具已更新，请确认：') }}</div>
                           <div
                             v-for="item in formData.drill_config
-                              .filter(drill => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
+                              // eslint-disable-next-line max-len
+                              .filter((drill: any) => !(drill.tool.version >= (toolMaxVersionMap[drill.tool.uid] || 1)))"
                             :key="item.tool.uid">
                             {{ getToolNameAndType(item.tool.uid).name }}
                           </div>
@@ -242,6 +243,7 @@
   interface Props {
     data: any,
     outputFields: any,
+    treeData: any,
   }
   interface Emits {
     (e: 'close', id: string): void
@@ -351,11 +353,34 @@
   const handleClose = () => {
     emits('close', props.data);
   };
+  // 递归遍历树形数据，收集所有叶子节点
+  const traverseTree = (nodes: any[]): any[] => {
+    const result: any[] = [];
+    nodes.forEach((node: any) => {
+      if (node.children && node.children.length > 0) {
+        // 如果有子节点，递归遍历子节点
+        result.push(...traverseTree(node.children));
+      } else {
+        // 如果没有子节点，添加到结果中
+        result.push({
+          raw_name: node.name,
+          display_name: '',
+          description: '',
+        });
+      }
+    });
+    return result;
+  };
+
   watch(() => formData.value, (val) => {
-    fieldsData.value[0].raw_name = props.data.name;
-    fieldsData.value[0].display_name = val.display_name;
-    fieldsData.value[0].description = val.description;
-    emits('configChange', val, props.data.json_path);
+    if (val) {
+      fieldsData.value = traverseTree(props.treeData);
+      console.log('fieldArr', fieldsData.value); // 调试输出
+    }
+    // fieldsData.value[0].raw_name = props.data.name;
+    // fieldsData.value[0].display_name = val.display_name;
+    // fieldsData.value[0].description = val.description;
+    // emits('configChange', val, props.data.json_path);
   }, {
     immediate: true,
     deep: true,
