@@ -139,7 +139,7 @@
                     <span
                       v-bk-tooltips="{
                         disabled: !isTextOverflow(item.name, 0, '200px', { isSingleLine: true }),
-                        content: t(item.name),
+                        content: item.name,
                         placement: 'top',
                         delay: [300, 0],
                         extCls: 'name-tooltip'
