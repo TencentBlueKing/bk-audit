@@ -15,151 +15,149 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div v-show="apiData.status_code === 200 && groupData.length > 0 && apiData.result">
-    <bk-card
-      v-for="(group, groupIndex) in groupData"
-      :key="groupIndex"
-      is-collapse
-      :title="t(`分组${groupIndex + 1}`)">
-      <div class="card-content">
-        <!-- KV 字段展示 -->
-        <template v-if="group.kv_fields && group.kv_fields.length > 0">
-          <render-info-block
-            v-for="(kvFieldsChunk, chunkIndex) in chunkArray(group.kv_fields, 3)"
-            :key="chunkIndex"
-            style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-            <render-info-item
-              v-for="(kvField, kvIndex) in kvFieldsChunk"
-              :key="kvIndex"
-              class="kv-field-item"
-              :label="kvField.display_name || kvField.raw_name">
-              <template v-if="getMappedValue(kvField) || hasDrillConfig(kvField)">
-                <!-- 有字段映射或者有证据下探 -->
-                <div style="display: flex; align-items: center; gap: 5px;">
-                  <bk-popover
-                    placement="top"
-                    theme="black">
-                    <span
-                      :class="[
-                        getMappedValue(kvField) ? 'tips' : '',
-                      ]"
-                      :style="{
-                        color: hasDrillConfig(kvField) ? '#3a84ff' : '#313238',
-                        cursor: hasDrillConfig(kvField) ? 'pointer' : 'default',
-                      }"
-                      @click.stop="hasDrillConfig(kvField) && handleKVFieldDownClick(kvField)">
-                      {{ getMappedValue(kvField)?.name || kvField.resolvePathValue }}
-                    </span>
-                    <template #content>
-                      <div>
-                        <div v-if="getMappedValue(kvField)">
-                          <span>{{ t('存储值: ') }}</span>
-                          <span>{{ getMappedValue(kvField)?.key }}</span>
-                          <br>
-                          <span>{{ t('展示文本: ') }}</span>
-                          <span>{{ getMappedValue(kvField)?.name }}</span>
+  <template v-if="apiData.status_code">
+    <div v-if="apiData.status_code === 200 && groupData.length > 0 && apiData.result">
+      <bk-card
+        v-for="(group, groupIndex) in groupData"
+        :key="groupIndex"
+        is-collapse
+        :title="t(`分组${groupIndex + 1}`)">
+        <div class="card-content">
+          <!-- KV 字段展示 -->
+          <template v-if="group.kv_fields && group.kv_fields.length > 0">
+            <render-info-block
+              v-for="(kvFieldsChunk, chunkIndex) in chunkArray(group.kv_fields, 3)"
+              :key="chunkIndex"
+              style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+              <render-info-item
+                v-for="(kvField, kvIndex) in kvFieldsChunk"
+                :key="kvIndex"
+                class="kv-field-item"
+                :label="kvField.display_name || kvField.raw_name">
+                <template v-if="getMappedValue(kvField) || hasDrillConfig(kvField)">
+                  <!-- 有字段映射或者有证据下探 -->
+                  <div style="display: flex; align-items: center; gap: 5px;">
+                    <bk-popover
+                      placement="top"
+                      theme="black">
+                      <span
+                        :class="[
+                          getMappedValue(kvField) ? 'tips' : '',
+                        ]"
+                        :style="{
+                          color: hasDrillConfig(kvField) ? '#3a84ff' : '#313238',
+                          cursor: hasDrillConfig(kvField) ? 'pointer' : 'default',
+                        }"
+                        @click.stop="hasDrillConfig(kvField) && handleKVFieldDownClick(kvField)">
+                        {{ getMappedValue(kvField)?.name || kvField.resolvePathValue }}
+                      </span>
+                      <template #content>
+                        <div>
+                          <div v-if="getMappedValue(kvField)">
+                            <span>{{ t('存储值: ') }}</span>
+                            <span>{{ getMappedValue(kvField)?.key }}</span>
+                            <br>
+                            <span>{{ t('展示文本: ') }}</span>
+                            <span>{{ getMappedValue(kvField)?.name }}</span>
+                          </div>
+                          <div
+                            v-if="hasDrillConfig(kvField)"
+                            :style="{
+                              marginTop: getMappedValue(kvField) ? '8px' : '0',
+                            }">
+                            {{ t('点击查看此字段的证据下探') }}
+                          </div>
                         </div>
-                        <div
-                          v-if="hasDrillConfig(kvField)"
-                          :style="{
-                            marginTop: getMappedValue(kvField) ? '8px' : '0',
-                          }">
-                          {{ t('点击查看此字段的证据下探') }}
+                      </template>
+                    </bk-popover>
+                    <!-- 证据下探按钮 -->
+                    <bk-popover
+                      v-if="hasDrillConfig(kvField)"
+                      placement="top"
+                      theme="black">
+                      <template #content>
+                        <div>
+                          <div
+                            v-for="config in kvField.drill_config"
+                            :key="config.tool.uid">
+                            {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
+                            <bk-button
+                              class="ml8"
+                              text
+                              theme="primary"
+                              @click.stop="handleKVFieldDownClick(kvField, config.tool.uid)">
+                              {{ t('去查看') }}
+                              <audit-icon
+                                class="mr-18"
+                                type="jump-link" />
+                            </bk-button>
+                          </div>
                         </div>
-                      </div>
-                    </template>
-                  </bk-popover>
-                  <!-- 证据下探按钮 -->
-                  <bk-popover
-                    v-if="hasDrillConfig(kvField)"
-                    placement="top"
-                    theme="black">
-                    <template #content>
-                      <div>
-                        <div
-                          v-for="config in kvField.drill_config"
-                          :key="config.tool.uid">
-                          {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
-                          <bk-button
-                            class="ml8"
-                            text
-                            theme="primary"
-                            @click.stop="handleKVFieldDownClick(kvField, config.tool.uid)">
-                            {{ t('去查看') }}
-                            <audit-icon
-                              class="mr-18"
-                              type="jump-link" />
-                          </bk-button>
-                        </div>
-                      </div>
-                    </template>
-                    <span
-                      :style="{
-                        padding: '1px 8px',
-                        backgroundColor: '#cddffe',
-                        borderRadius: '8px',
-                        color: '#3a84ff',
-                        cursor: 'pointer',
-                      }"
-                      @click.stop="handleKVFieldDownClick(kvField)">
-                      {{ kvField.drill_config.length }}
-                    </span>
-                  </bk-popover>
-                </div>
-              </template>
-              <!-- 没有字段映射或者没有证据下探 -->
-              <span v-else>
-                {{ kvField.resolvePathValue }}
-              </span>
-            </render-info-item>
-          </render-info-block>
-        </template>
-        <!-- Table 字段展示 -->
-        <template
-          v-for="(tableField, tableIndex) in group.table_fields"
-          :key="tableIndex">
-          <div class="top-search-table-title">
-            {{ tableField.display_name || tableField.raw_name }}
-          </div>
-          <bk-table
-            :border="['row','outer','col']"
-            :columns="tableField.columns"
-            :data="tableField.tableData"
-            header-align="center"
-            :max-height="maxHeight"
-            :pagination="tableField.pagination"
-            show-overflow-tooltip
-            @page-limit-change="(val: number) => {
-              handleGroupTablePageLimitChange(groupIndex, tableIndex, val);
-            }"
-            @page-value-change="(val: number) => {
-              handleGroupTablePageChange(groupIndex, tableIndex, val);
-            }" />
-        </template>
-      </div>
-    </bk-card>
-  </div>
-  <!-- undefined 说明还未开始查询 -->
-  <!-- 查询后， 但 result 为 undefined 说明查询失败 -->
-  <div
-    v-show="(apiData.status_code !== 200 && apiData.status_code !== undefined) ||
-      (!apiData.result && apiData.status_code !== undefined)">
-    <bk-exception
-      :description="t('请联系工具维护人员进行修复')"
-      :title="t('数据查询失败')"
-      type="500">
-      <div>
-        <a
-          href=""
-          target="_blank">
-          <audit-icon
-            style="margin-right: 6px;"
-            type="qw" />
-          <span>{{ toolDetails.created_by }}、{{ toolDetails.updated_by }}</span>
-        </a>
-      </div>
-    </bk-exception>
-  </div>
+                      </template>
+                      <span
+                        :style="{
+                          padding: '1px 8px',
+                          backgroundColor: '#cddffe',
+                          borderRadius: '8px',
+                          color: '#3a84ff',
+                          cursor: 'pointer',
+                        }"
+                        @click.stop="handleKVFieldDownClick(kvField)">
+                        {{ kvField.drill_config.length }}
+                      </span>
+                    </bk-popover>
+                  </div>
+                </template>
+                <!-- 没有字段映射或者没有证据下探 -->
+                <span v-else>
+                  {{ kvField.resolvePathValue }}
+                </span>
+              </render-info-item>
+            </render-info-block>
+          </template>
+          <!-- Table 字段展示 -->
+          <template
+            v-for="(tableField, tableIndex) in group.table_fields"
+            :key="tableIndex">
+            <div class="top-search-table-title">
+              {{ tableField.display_name || tableField.raw_name }}
+            </div>
+            <bk-table
+              :border="['row','outer','col']"
+              :columns="tableField.columns"
+              :data="tableField.tableData"
+              header-align="center"
+              :max-height="maxHeight"
+              :pagination="tableField.pagination"
+              show-overflow-tooltip
+              @page-limit-change="(val: number) => {
+                handleGroupTablePageLimitChange(groupIndex, tableIndex, val);
+              }"
+              @page-value-change="(val: number) => {
+                handleGroupTablePageChange(groupIndex, tableIndex, val);
+              }" />
+          </template>
+        </div>
+      </bk-card>
+    </div>
+    <div v-else>
+      <bk-exception
+        :description="t('请联系工具维护人员进行修复')"
+        :title="t('数据查询失败')"
+        type="500">
+        <div>
+          <a
+            href=""
+            target="_blank">
+            <audit-icon
+              style="margin-right: 6px;"
+              type="qw" />
+            <span>{{ toolDetails.created_by }}、{{ toolDetails.updated_by }}</span>
+          </a>
+        </div>
+      </bk-exception>
+    </div>
+  </template>
 </template>
 
 <script setup lang="tsx">
