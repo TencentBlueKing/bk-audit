@@ -80,7 +80,7 @@ class RiskHandler:
                 from services.web.risk.tasks import process_risk_ticket
 
                 process_risk_ticket(risk_id=risk.risk_id, manual=manual)
-            return risk.risk_id
+            return risk.risk_id if risk else None
         except Exception as err:  # NOCC:broad-except(需要处理所有错误)
             logger.exception("[CreateRiskFailed] Event: %s; Error: %s", json.dumps(event), err)
             ErrorMsgHandler(
@@ -234,10 +234,10 @@ class RiskHandler:
                 risk.event_content = event["event_content"]
                 risk.save(update_fields=["event_content"])
             if event.get("event_type") and risk.event_type != event["event_type"]:
-                risk.event_type = event["event_type"]
+                risk.event_type = self.parse_event_type(event.get("event_type"))
                 risk.save(update_fields=["event_type"])
             if event.get("operator") and risk.operator != event["operator"]:
-                risk.operator = event["operator"]
+                risk.operator = self.parse_operator(event.get("operator"))
                 risk.save(update_fields=["operator"])
             return False, risk
 
