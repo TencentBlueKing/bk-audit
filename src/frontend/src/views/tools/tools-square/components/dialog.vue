@@ -728,8 +728,10 @@
     pagination.value.current = 1;
     pagination.value.count = 0;
     pagination.value.limit = 100;
+
     tableData.value = [];
     apiData.value = {};
+
     isDrillDownOpen.value = false;
     drillDownItemConfig.value = [];
     drillDownItemRowData.value = {};
@@ -958,11 +960,11 @@
 
   // 关闭弹窗
   const handleCloseDialog = () => {
-    emit('close', dialogUid.value);
     handleReset();
-    isShow.value = false;
     dialogWidth.value = '50%';
     isFullScreen.value = false;
+    isShow.value = false;
+    emit('close', dialogUid.value);
   };
 
   watch(() => isFullScreen.value, (val) => {

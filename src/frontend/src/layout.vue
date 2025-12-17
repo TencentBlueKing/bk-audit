@@ -369,7 +369,6 @@
 </template>
 <script setup lang="ts">
   import {
-    defineExpose,
     onBeforeUnmount,
     onMounted,
     type Ref,
