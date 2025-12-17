@@ -200,15 +200,17 @@
   );
 
   const handleInputDataChange = (value: string) => {
-    inputData.value = value;
-    emits('change', value || null);
+    const val =  handleShowText(value);
+    inputData.value = val;
+    emits('change', val || '');
   };
   const handleNumberInputDataChange = (value: number) => {
     numberInputData.value = value;
     emits('change', value || null);
   };
   const handleUserChange = (value: Array<string> | string) => {
-    const formattedValue = Array.isArray(value) ? value : [value];
+    const val =  handleShowText(value);
+    const formattedValue = Array.isArray(val) ? val : [val];
     user.value = formattedValue;
     emits('change', formattedValue || []);
   };
@@ -256,10 +258,29 @@
       handleTimeChange(formatTimestamp(timestamp));
     }
   };
+  // 判断值是否为数组（包括字符串形式的数组）
+  const handleShowText = (value: any) => {
+    // 1. 如果是真正的数组，直接连接
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value.join(',') : '--';
+    }
 
+    // 2. 如果是字符串且看起来像数组，尝试解析
+    if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
+      try {
+        const parsedArray = JSON.parse(value);
+        if (Array.isArray(parsedArray)) {
+          return parsedArray.length > 0 ? parsedArray.join(',') : '';
+        }
+      } catch (error) {
+        return value  || '';
+      }
+    }
+    // 3. 其他情况直接返回原值
+    return value || '';
+  };
   const setData = (val: any) => {
     const type = props.dataConfig.field_category;
-
     // 字段类型处理映射表
     const handlers: Record<string, () => void> = {
       // 文本输入类（统一处理）
