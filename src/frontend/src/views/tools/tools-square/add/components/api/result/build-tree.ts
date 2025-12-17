@@ -16,6 +16,7 @@
 */
 
 export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild = false, type = 'object')  => {
+  console.log('obj>', obj);
   const result: any[] = [];
 
   // 如果是对象，我们递归它的每个键值对
@@ -42,15 +43,26 @@ export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild 
       if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
         // 如果值是对象且不是数组，递归
         node.children = buildTree(obj[key], currentId, currentPath, true, 'kv');
-      } else if (Array.isArray(obj[key]) && obj[key].length > 0) { // 如果值是数组 代表list
-        // 递归它的第一个元素
-        node.type = 'table';
-        const childNodes = buildTree(obj[key][0], currentId, currentPath, true, 'list');
-        node.list = childNodes;
+      } else if (Array.isArray(obj[key])) { // 如果值是数组
+        if (obj[key].length > 0 && typeof obj[key][0] === 'object' && obj[key][0] !== null) {
+          // 如果数组中的每一项都是对象，将其视为表格
+          node.type = 'table';
+          const childNodes = buildTree(obj[key][0], currentId, currentPath, true, 'list');
+          node.list = childNodes;
+        } else {
+          // 如果数组中的项不是对象（比如字符串、数字等），将其视为普通数组字段
+          node.children = [];
+          node.type = 'kv'; // 可以添加一个专门的类型标识
+        }
+      } else {
+        // 其他类型（字符串、数字、布尔值等）不需要子节点
+        node.children = [];
+        node.type = 'kv'; // 可以添加类型标识
       }
 
       result.push(node);
     });
   }
+  console.log('result>>', result);
   return result;
 };
