@@ -138,33 +138,46 @@ def _sync_manual_event_status(batch_size: int = 100, window: datetime.timedelta 
     if not events:
         return
 
-    synced_ids = []
+    start_times: list[str] = []
+    end_times: list[str] = []
+    manual_event_ids: list[str] = []
     for event in events:
         start_time, end_time = _build_manual_event_time_range(event.event_time, window)
-        try:
-            resp = (
-                EventHandler.search_event(
-                    namespace=settings.DEFAULT_NAMESPACE,
-                    start_time=start_time,
-                    end_time=end_time,
-                    page=1,
-                    page_size=10,
-                    manual_event_id=str(event.manual_event_id),
-                )
-                or {}
-            )
-        except Exception as err:  # NOCC:broad-except(需要处理所有错误)
-            logger_celery.warning(
-                "[SyncManualEventStatus] search failed for manual_event_id=%s: %s",
-                event.manual_event_id,
-                err,
-            )
-            continue
+        start_times.append(start_time)
+        end_times.append(end_time)
+        manual_event_ids.append(str(event.manual_event_id))
 
-        results = resp.get("results") or []
-        total = resp.get("total", 0) or 0
-        if total or results:
-            synced_ids.append(event.manual_event_id)
+    search_start = min(start_times)
+    search_end = max(end_times)
+    manual_event_id_param = ",".join(manual_event_ids)
+    page_size = max(len(events), 10)
+
+    try:
+        resp = (
+            EventHandler.search_event(
+                namespace=settings.DEFAULT_NAMESPACE,
+                start_time=search_start,
+                end_time=search_end,
+                page=1,
+                page_size=page_size,
+                manual_event_id=manual_event_id_param,
+            )
+            or {}
+        )
+    except Exception as err:  # NOCC:broad-except(需要处理所有错误)
+        logger_celery.warning(
+            "[SyncManualEventStatus] search failed for manual_event_ids=%s: %s",
+            manual_event_id_param,
+            err,
+        )
+        return
+
+    results = resp.get("results") or []
+    synced_ids = {
+        int(item["manual_event_id"])
+        for item in results
+        if isinstance(item, dict) and item.get("manual_event_id") is not None
+    }
 
     if synced_ids:
         ManualEvent.objects.filter(manual_event_id__in=synced_ids, manual_synced=False).update(manual_synced=True)
