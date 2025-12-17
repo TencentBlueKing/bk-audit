@@ -263,7 +263,7 @@ def validate_tool_variables_with_risk(
                 single_value = (
                     value_to_match[0] if (len(value_to_match) == 1 and isinstance(value_to_match, tuple)) else None
                 )
-                combined_expected = {str(item) for item in expected}
+                combined_expected = {','.join(str(per) for per in item) for item in expected if isinstance(item, tuple)}
                 if not expected or (
                     (value_to_match not in expected)
                     and (value_to_match not in combined_expected)
