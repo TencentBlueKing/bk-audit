@@ -18,10 +18,11 @@
   <div
     ref="rootRef"
     class="audit-edit-tag">
-    <template v-if="data && data.length">
+    <template v-if="initData && initData.length">
       <bk-tag
         v-for="(item) in renderData"
-        :key="item">
+        :key="item"
+        @click="handlerClick">
         <tool-tip-text
           :data="item"
           span-width="10px"
@@ -38,7 +39,7 @@
         v-if="moreDataText"
         key="more"
         ref="moreRef">
-        +{{ data.length - renderData.length }}
+        +{{ initData.length - renderData.length }}
       </bk-tag>
       <div
         v-if="showCopy"
@@ -54,7 +55,7 @@
         v-if="isCalcRenderTagNum"
         style="position: absolute; word-break: keep-all; white-space: nowrap; visibility: hidden;">
         <bk-tag
-          v-for="item in data"
+          v-for="item in initData"
           :key="item"
           ref="tagElsRef">
           {{ item }}
@@ -84,31 +85,48 @@
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
 
   interface Props {
-    data: Array<string>,
+    data: Array<string> | string,
     max?: number,
     showCopy?: boolean
+  }
+  interface Emits {
+    (e: 'click'): void
   }
 
   const props = withDefaults(defineProps<Props>(), {
     max: 0,
     showCopy: true,
   });
-
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const rootRef = ref();
   const moreRef = ref();
   const tagElsRef = ref();
   const renderTagNum = ref(1);
   const isCalcRenderTagNum = ref(false);
+  const initData = computed(() =>  {
+    // 1. 如果是真正的数组，直接连接
+    if (Array.isArray(props.data)) {
+      return props.data;
+    }
 
-  const renderData = computed(() => props.data.slice(0, renderTagNum.value));
+    return  props.data.split(',');
+  });
+  const renderData = computed(() =>  {
+    // 1. 如果是真正的数组，直接连接
+    if (Array.isArray(props.data)) {
+      return props.data.slice(0, renderTagNum.value);
+    }
+
+    return  (props.data.split(',')).slice(0, renderTagNum.value);
+  });
 
   const moreDataText = computed(() => {
-    if (props.data.length < 1
-      || props.data.length <= renderTagNum.value) {
+    if (initData.value.length < 1
+      || initData.value.length <= renderTagNum.value) {
       return '';
     }
-    return props.data.slice(renderTagNum.value).join(',');
+    return  (typeof initData.value) === 'string' ? [initData.value].slice(renderTagNum.value).join(',') : initData.value.slice(renderTagNum.value).join(',');
   });
 
   let tippyIns: Instance;
@@ -118,7 +136,7 @@
       renderTagNum.value = props.max;
       return;
     }
-    if (!rootRef.value || props.data.length < 1) {
+    if (!rootRef.value || initData.value.length < 1) {
       return;
     }
 
@@ -167,8 +185,10 @@
     });
   };
 
-
-  watch(() => props.data, () => {
+  const handlerClick = () => {
+    emits('click');
+  };
+  watch(() => initData.value, () => {
     nextTick(() => {
       calcRenderTagNum();
     });
@@ -205,7 +225,7 @@
   });
 
   const handleCopy = () => {
-    execCopy(props.data.join('\n'), t('复制成功'));
+    execCopy(initData.value.join('\n'), t('复制成功'));
   };
   // 动态设置标签宽度
   const dynamicCalcWidth = () => {

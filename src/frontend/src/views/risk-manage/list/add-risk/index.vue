@@ -116,7 +116,9 @@
       cancelText: t('取消'),
       confirmText: t('确认'),
       onConfirm() {
+        isEdit.value = true;
         isShow.value = false;
+        window.changeConfirm = false;
         resolve(true);
       },
       onCancel() {
@@ -129,7 +131,14 @@
     run: addEvent,
   } = useRequest(RiskManageService.addEvent, {
     defaultValue: [],
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (sessionStorage.getItem('addEventRiskIds')) {
+        const existingRiskIds = sessionStorage.getItem('addEventRiskIds');
+        const riskId = existingRiskIds ? JSON.parse(existingRiskIds).concat(data.risk_ids) : data.risk_ids;
+        sessionStorage.setItem('addEventRiskIds', JSON.stringify(riskId));
+      } else {
+        sessionStorage.setItem('addEventRiskIds', JSON.stringify(data?.risk_ids));
+      }
       messageSuccess(t('添加成功'));
       isShow.value = false;
       isEdit.value = true;
@@ -142,18 +151,14 @@
   const handleSubmit = () => {
     const eventDataParams = editData.value.eventData.reduce((acc: any, item: any) => ({
       ...acc,
-      [item.display_name]: item.value,
+      [item.field_name]: item.value,
     }), {});
     const params = {
       events: [
         {
-          event_content: editData.value.formData.event_content,
           strategy_id: editData.value.formData.strategy_id,
           event_data: eventDataParams,
           event_time: convertToTimestamp(editData.value.formData.event_time),
-          event_type: editData.value.formData.event_type,
-          event_source: editData.value.formData.event_source,
-          operator: editData.value.formData.operator.join(','),
         },
       ],
       gen_risk: true,

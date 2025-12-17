@@ -50,18 +50,22 @@
     showContent?:boolean,
     showIcon?:boolean,
     titleDescription?:string,
+    isOpen?:boolean,
   }
-  withDefaults(defineProps<Props>(), {
+  const props = withDefaults(defineProps<Props>(), {
     showContent: true,
     showIcon: true,
     title: '',
     titleDescription: '',
+    isOpen: true,
   });
 
   const isCollapse = ref(false);
 
   const handleChangeCollapse = () => {
-    isCollapse.value = !isCollapse.value;
+    if (props.isOpen) {
+      isCollapse.value = !isCollapse.value;
+    }
   };
 </script>
 

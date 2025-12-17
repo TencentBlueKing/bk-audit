@@ -78,6 +78,7 @@
       onConfirm() {
         isShow.value = false;
         resolve(true);
+        window.changeConfirm = false;
       },
       onCancel() {
         resolve(false);

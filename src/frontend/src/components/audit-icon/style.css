@@ -4,3 +4,7 @@
   box-sizing: content-box;
   fill: currentcolor;
 }
+
+.audit-icon-loading {
+  display: inline-block;
+}

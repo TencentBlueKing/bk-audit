@@ -28,17 +28,6 @@
             <div class="base-form-item">
               <bk-form-item
                 class="base-item"
-                :label="t('责任人')"
-                property="operator"
-                required>
-                <audit-user-selector
-                  v-model="formData.operator"
-                  allow-create
-                  :auto-focus="false"
-                  class="consition-value" />
-              </bk-form-item>
-              <bk-form-item
-                class="base-item"
                 :label="t('事件发生时间')"
                 property="event_time"
                 required>
@@ -48,41 +37,6 @@
                   clearable
                   style="width: 100%;"
                   type="datetime" />
-              </bk-form-item>
-            </div>
-            <div class="base-form-item">
-              <bk-form-item
-                class="base-item"
-                :label="t('事件来源')"
-                property="event_source"
-                required>
-                <bk-input
-                  v-model="formData.event_source"
-                  clearable
-                  placeholder="请输入" />
-              </bk-form-item>
-              <bk-form-item
-                class="base-item"
-                :label="t('事件类型')"
-                property="event_type"
-                required>
-                <bk-input
-                  v-model="formData.event_type"
-                  clearable />
-              </bk-form-item>
-            </div>
-
-            <div>
-              <bk-form-item
-                class="base-item"
-                :label="t('事件描述')"
-                property="event_content"
-                required>
-                <bk-input
-                  v-model="formData.event_content"
-                  :maxlength="100"
-                  :rows="4"
-                  type="textarea" />
               </bk-form-item>
             </div>
           </audit-form>
@@ -97,7 +51,7 @@
               #
             </div>
             <div class="table-label border-right">
-              <span class="table-text">{{ t('字段显示名称') }}</span>
+              <span class="table-text">{{ t('字段名称') }}</span>
             </div>
             <div class="table-type border-right">
               <span class="table-text">
@@ -126,7 +80,7 @@
                 }"
                 class="table-text"
                 :class="item?.description !== '' ? 'dashed-underline' : '' ">
-                {{ item?.display_name }}({{ item?.field_name }})
+                {{ item?.field_name }}({{ item?.display_name }})
               </span>
             </div>
             <div class="table-type border-right">
@@ -166,10 +120,8 @@
   import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
-  import AccountManageService from '@service/account-manage';
   import RiskManageService from '@service/risk-manage';
 
-  import AccountModel from '@model/account/account';
   import Event from '@model/risk/risk';
   import StrategyInfo from '@model/risk/strategy-info';
 
@@ -199,11 +151,7 @@
   const { t } = useI18n();
   const formRef = ref();
   const formData = ref({
-    operator: [] as string[],
     event_time: new Date(),
-    event_source: '',
-    event_type: '',
-    event_content: '',
   });
   const rules = ref();
 
@@ -249,15 +197,6 @@
   };
   const eventList = ref<Array<Record<string, any>>>([]);
 
-  // 用户信息
-  const {
-    run: fetchUserInfo,
-  } = useRequest(AccountManageService.fetchUserInfo, {
-    defaultValue: new AccountModel(),
-    onSuccess: (data) => {
-      formData.value.operator = [data.username];
-    },
-  });
   // 获取策略事件信息
   useRequest(RiskManageService.fetchRiskInfo, {
     defaultValue: new StrategyInfo(),
@@ -285,7 +224,7 @@
           typeValue: typeValueDefault,
           value: '',
         };
-      });
+      }).filter((e: Record<string, any>) => e.is_show);
     },
   });
 
@@ -302,19 +241,15 @@
   const handleSubmit = () => {
     const eventData = eventList.value.reduce((acc, item) => ({
       ...acc,
-      [item?.display_name]: item.value,
+      [item?.field_name]: item.value,
     }), {});
     formRef.value.validate().then(() => {
       const params = {
         events: [
           {
-            event_content: formData.value.event_content,
             strategy_id: props.eventData.strategy_id,
             event_data: eventData,
             event_time: convertToTimestamp(formData.value.event_time),
-            event_type: formData.value.event_type,
-            event_source: formData.value.event_source,
-            operator: formData.value.operator.join(','),
           },
         ],
         gen_risk: false,
@@ -325,10 +260,18 @@
   };
 
   const handlerUpdate = (value: any, item: any) => {
+    // 当 long double float int 类型时，需要转换时间格式
+    let valueText: string | number | null = null;
+    if ((item.field_type === 'long' || item.field_type === 'double' || item.field_type === 'float' || item.field_type === 'int')
+      && item.typeValue === 'date-picker') {
+      valueText = convertToTimestamp(value);
+    } else {
+      valueText = value;
+    }
     eventList.value.forEach((eventItem: any) => {
       if (eventItem.field_name === item.field_name  && eventItem.display_name === item.display_name) {
         // eslint-disable-next-line no-param-reassign
-        eventItem.value = value;
+        eventItem.value = valueText;
       }
     });
   };
@@ -338,7 +281,6 @@
     },
   });
   onMounted(() => {
-    fetchUserInfo();
   });
   </script>
 
