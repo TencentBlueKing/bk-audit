@@ -30,7 +30,7 @@
     }"
     :width="dialogWidth"
     :z-index="dialogIndex"
-    @click="handleClick"
+    @click="handleClickDialog"
     @closed="handleCloseDialog">
     <template #header>
       <div
@@ -39,7 +39,7 @@
         <dialog-header
           ref="dialogHeaderRef"
           :tabs="tabs"
-          @click-item="handleClickTag" />
+          @click-item="handleChangeTool" />
       </div>
       <div
         class="header"
@@ -49,13 +49,13 @@
             class="full-screen-img"
             svg
             :type="isFullScreen ? 'un-full-screen-2' : 'full-screen'"
-            @click="handleFullscreen()" />
+            @click="() => isFullScreen = !isFullScreen" />
         </div>
         <div class="top-right">
           <audit-icon
             class="top-left-icon"
             svg
-            :type="toolDetails ? itemIcon(toolDetails) : ''" />
+            :type="toolDetails ? toolIconMap[toolDetails.tool_type] || '' : ''" />
           <div class="top-right-box">
             <div class="top-right-title">
               <tool-tips
@@ -65,7 +65,7 @@
                 v-for="(tag, tagIndex) in toolDetails?.tags?.slice(0, 3)"
                 :key="tagIndex"
                 class="desc-tag">
-                {{ returnTagsName(tag) }}
+                {{ tagsEnums.find(item => item.tag_id === tag)?.tag_name || tag }}
               </bk-tag>
               <bk-tag
                 v-if="toolDetails?.tags && toolDetails.tags.length > 3"
@@ -99,6 +99,7 @@
         <scroll-faker>
           <template
             v-if="toolDetails?.tool_type === 'data_search' || toolDetails?.tool_type === 'api'">
+            <!-- 有权限时 -->
             <div v-if="toolDetails?.permission.use_tool">
               <div class="top-search">
                 <div class="top-search-title">
@@ -155,168 +156,30 @@
                 <div class="top-search-result">
                   <bk-loading :loading="isLoading">
                     <!-- sql工具 -->
-                    <template v-if="toolDetails?.tool_type === 'data_search'">
-                      <bk-table
-                        :border="['row','outer','col']"
-                        :columns="columns"
-                        :data="tableData"
-                        header-align="center"
-                        :max-height="dialogTableHeight"
-                        :pagination="pagination"
-                        remote-pagination
-                        show-overflow-tooltip
-                        @page-limit-change="handlePageLimitChange"
-                        @page-value-change="handlePageChange" />
-                    </template>
+                    <data-search-result
+                      v-if="toolDetails?.tool_type === 'data_search'"
+                      v-model:pagination="pagination"
+                      :create-render-cell="createRenderCell"
+                      :max-height="dialogTableHeight"
+                      remote-pagination
+                      :table-data="tableData"
+                      :tool-details="toolDetails"
+                      @update-table="fetchTableData" />
 
                     <!-- api工具 -->
-                    <template v-if="toolDetails?.tool_type === 'api'">
-                      <template v-if="apiDataStatus === 200 && groupData.length > 0">
-                        <bk-card
-                          v-for="(group, groupIndex) in groupData"
-                          :key="groupIndex"
-                          is-collapse
-                          :title="t(`分组${groupIndex + 1}`)">
-                          <div class="card-content">
-                            <!-- KV 字段展示 -->
-                            <template v-if="group.kv_fields && group.kv_fields.length > 0">
-                              <render-info-block
-                                v-for="(kvFieldsChunk, chunkIndex) in chunkArray(group.kv_fields, 3)"
-                                :key="chunkIndex"
-                                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-                                <render-info-item
-                                  v-for="(kvField, kvIndex) in kvFieldsChunk"
-                                  :key="kvIndex"
-                                  class="kv-field-item"
-                                  :label="kvField.display_name || kvField.raw_name">
-                                  <template v-if="getMappedValue(kvField) || hasDrillConfig(kvField)">
-                                    <!-- 有字段映射或者有证据下探 -->
-                                    <div style="display: flex; align-items: center; gap: 5px;">
-                                      <bk-popover
-                                        placement="top"
-                                        theme="black">
-                                        <span
-                                          :class="[
-                                            getMappedValue(kvField) ? 'tips' : '',
-                                          ]"
-                                          :style="{
-                                            color: hasDrillConfig(kvField) ? '#3a84ff' : '#313238',
-                                            cursor: hasDrillConfig(kvField) ? 'pointer' : 'default',
-                                          }"
-                                          @click.stop="hasDrillConfig(kvField) && handleKVFieldDownClick(kvField)">
-                                          {{ getMappedValue(kvField)?.name || kvField.resolvePathValue }}
-                                        </span>
-                                        <template #content>
-                                          <div>
-                                            <div v-if="getMappedValue(kvField)">
-                                              <span>{{ t('存储值: ') }}</span>
-                                              <span>{{ getMappedValue(kvField)?.key }}</span>
-                                              <br>
-                                              <span>{{ t('展示文本: ') }}</span>
-                                              <span>{{ getMappedValue(kvField)?.name }}</span>
-                                            </div>
-                                            <div
-                                              v-if="hasDrillConfig(kvField)"
-                                              :style="{
-                                                marginTop: getMappedValue(kvField) ? '8px' : '0',
-                                              }">
-                                              {{ t('点击查看此字段的证据下探') }}
-                                            </div>
-                                          </div>
-                                        </template>
-                                      </bk-popover>
-                                      <!-- 证据下探按钮 -->
-                                      <bk-popover
-                                        v-if="hasDrillConfig(kvField)"
-                                        placement="top"
-                                        theme="black">
-                                        <template #content>
-                                          <div>
-                                            <div
-                                              v-for="config in kvField.drill_config"
-                                              :key="config.tool.uid">
-                                              {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
-                                              <bk-button
-                                                class="ml8"
-                                                text
-                                                theme="primary"
-                                                @click.stop="handleKVFieldDownClick(kvField, config.tool.uid)">
-                                                {{ t('去查看') }}
-                                                <audit-icon
-                                                  class="mr-18"
-                                                  type="jump-link" />
-                                              </bk-button>
-                                            </div>
-                                          </div>
-                                        </template>
-                                        <span
-                                          :style="{
-                                            padding: '1px 8px',
-                                            backgroundColor: '#cddffe',
-                                            borderRadius: '8px',
-                                            color: '#3a84ff',
-                                            cursor: 'pointer',
-                                          }"
-                                          @click.stop="handleKVFieldDownClick(kvField)">
-                                          {{ kvField.drill_config.length }}
-                                        </span>
-                                      </bk-popover>
-                                    </div>
-                                  </template>
-                                  <!-- 没有字段映射或者没有证据下探 -->
-                                  <span v-else>
-                                    {{ kvField.resolvePathValue }}
-                                  </span>
-                                </render-info-item>
-                              </render-info-block>
-                            </template>
-                            <!-- Table 字段展示 -->
-                            <template
-                              v-for="(tableField, tableIndex) in group.table_fields"
-                              :key="tableIndex">
-                              <div class="top-search-table-title">
-                                {{ tableField.display_name || tableField.raw_name }}
-                              </div>
-                              <bk-table
-                                :border="['row','outer','col']"
-                                :columns="tableField.columns"
-                                :data="tableField.tableData"
-                                header-align="center"
-                                :max-height="dialogTableHeight"
-                                :pagination="tableField.pagination"
-                                show-overflow-tooltip
-                                @page-limit-change="(val: number) => {
-                                  handleGroupTablePageLimitChange(groupIndex, tableIndex, val);
-                                }"
-                                @page-value-change="(val: number) => {
-                                  handleGroupTablePageChange(groupIndex, tableIndex, val);
-                                }" />
-                            </template>
-                          </div>
-                        </bk-card>
-                      </template>
-                      <template v-else>
-                        <bk-exception
-                          :description="t('请联系工具维护人员进行修复')"
-                          :title="t('数据查询失败')"
-                          type="500">
-                          <div>
-                            <a
-                              href=""
-                              target="_blank">
-                              <audit-icon
-                                style="margin-right: 6px;"
-                                type="qw" />
-                              <span>{{ toolDetails.created_by }}、{{ toolDetails.updated_by }}</span>
-                            </a>
-                          </div>
-                        </bk-exception>
-                      </template>
-                    </template>
+                    <api-search-result
+                      v-if="toolDetails?.tool_type === 'api'"
+                      :all-tools-data="allToolsData"
+                      :api-data="apiData"
+                      :create-render-cell="createRenderCell"
+                      :max-height="dialogTableHeight"
+                      :on-kv-field-down-click="handleKVFieldDownClick"
+                      :tool-details="toolDetails" />
                   </bk-loading>
                 </div>
               </div>
             </div>
+            <!-- 无权限时 -->
             <div
               v-else
               class="default-permission">
@@ -342,13 +205,15 @@
           </template>
 
           <!-- bkVision工具 -->
-          <template
-            v-else>
-            <div
-              :id="`panel-${uid}`"
-              ref="panelRef"
-              class="panel" />
-          </template>
+          <bk-vision-result
+            v-if="toolDetails?.tool_type === 'bk_vision'"
+            :drill-down-item-config="drillDownItemConfig"
+            :drill-down-item-row-data="drillDownItemRowData"
+            :is-drill-down-open="isDrillDownOpen"
+            :panel-id="panelId"
+            :risk-tool-params="riskToolParams"
+            :tool-details="toolDetails"
+            :uid="uid" />
         </scroll-faker>
       </div>
 
@@ -370,8 +235,7 @@
   </bk-dialog>
 </template>
 <script setup lang='tsx'>
-  import _ from 'lodash';
-  import { nextTick, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
 
@@ -382,24 +246,16 @@
   import type { OutputFields } from '@model/tool/tool-detail';
   import ToolDetailModel from '@model/tool/tool-detail';
 
-  import useMessage from '@hooks/use-message';
-
   import ToolTips from '@components/show-tooltips-text/index.vue';
 
-  import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
-  import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
-
+  import ApiSearchResult from './api-search-result.vue';
+  import BkVisionResult from './bk-vision-result.vue';
+  import DataSearchResult from './data-search-result.vue';
   import DialogHeader from './dialog-header.vue';
 
-  import useEventBus from '@/hooks/use-event-bus';
   import useRequest from '@/hooks/use-request';
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
-  interface Error {
-    data: Record<string, any>,
-    message: string,
-    status: number
-  }
   interface Column {
     label: string;
     field: string;
@@ -460,12 +316,10 @@
   interface TableDataItem {
     [key: string]: any;
   }
-
   interface tabsItem {
     uid: string;
     name: string;
   }
-
   // API工具分组表格配置
   interface GroupTableConfig {
     kv_fields: Array<{
@@ -515,9 +369,13 @@
     isShowTags: false, // 是否显示标签
   });
   const emit = defineEmits<Emits>();
-  const   emitBus  = useEventBus().emit;
-  const { messageError } = useMessage();
   const { t } = useI18n();
+
+  const toolIconMap: Record<string, string> = {
+    data_search: 'sqlxiao',
+    bk_vision: 'bkvisonxiao',
+    api: 'apixiao',
+  };
 
   const dialogHeaderRef = ref();
   const dialogIndex = ref(3000);
@@ -531,31 +389,27 @@
   const isDrillDownOpen = ref(false);
   const formItemRef = ref();
 
-  const searchList = ref<SearchItem[]>([]);
   const tableData = ref<TableDataItem[]>([]);
-  const columns = ref<Column[]>([]);
   const pagination = ref({
     count: 0,
-    limit: 100,
+    limit: 10,
     current: 1,
-    limitList: [100, 200, 500, 1000],
+    limitList: [10, 50, 100, 200, 500, 1000],
   });
 
-  const groupData = ref<GroupTableConfig[]>([]);
-  const apiDataStatus = ref<number>(200);
+  const apiData = ref<Record<string, any>>({});
 
   const uid = ref('');
   const panelId = ref('');
   const rules = ref({});
   const formRef = ref();
-  const searchFormData = ref();
+
   const router = useRouter();
   const tabs = ref<Array<tabsItem>>([]);
   const drillDownItemConfig = ref<DrillDownItem['drill_config'][0]['config']>([]);
   const drillDownItemRowData = ref<Record<string, any>>({});
   const drillDownItem = ref<DrillDownItem>();
-  // 权限
-  const urlIamApply = ref('');
+
   const riskToolParams = ref<Record<string, any> | undefined>(undefined);
   const dialogUid = ref('');
   const isShowTags = ref(false);
@@ -563,57 +417,95 @@
   // 当前激活的工具
   const activeUid = ref('');
 
+  const searchList = ref<SearchItem[]>([]);
+
+  const searchFormData = computed(() => {
+    const formData: Record<string, any> = {};
+    searchList.value.forEach((item) => {
+      formData[item.raw_name] = item.value;
+    });
+    return formData;
+  });
+
   // 工具执行
   const {
     run: fetchToolsExecute,
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
     onSuccess: (data) => {
-      if (data === undefined) {
-        tableData.value = [];
-      }
+      console.log('execute data:', data);
+
       if (toolDetails.value?.tool_type === 'data_search') {
+        if (data === undefined) {
+          tableData.value = [];
+        }
         tableData.value = data.data.results;
         pagination.value.count = data.data.total;
       }
-      console.log('execute data:', data);
 
-      apiDataStatus.value = data.data.status_code;
-      if (toolDetails.value?.tool_type === 'api' && apiDataStatus.value === 200) {
-        const { result } = data.data;
-        // 更新每个 group 的 table_fields 数据
-        groupData.value = groupData.value.map(group => ({
-          ...group,
-          kv_fields: group.kv_fields.map(kvField => ({
-            ...kvField,
-            resolvePathValue: extractDataByPath(result, kvField.path),
-          })),
-          table_fields: group.table_fields.map((tableField) => {
-            // 根据 path (json_path) 从 data 中提取对应的表格数据
-            const tableData = extractDataByPath(result, tableField.path);
-            let finalTableData: any[] = [];
-            let count = 0;
-            if (Array.isArray(tableData)) {
-              finalTableData = tableData;
-              count = tableData.length;
-            } else if (tableData) {
-              finalTableData = [tableData];
-              count = 1;
-            }
-            return {
-              ...tableField,
-              tableData: Array(100).fill(finalTableData[0]),
-              pagination: {
-                ...tableField.pagination,
-                count,
-              },
-            };
-          }),
-        }));
+      if (toolDetails.value?.tool_type === 'api') {
+        // 将 API 结果传递给子组件，由子组件内部处理
+        apiData.value = data.data;
       }
-      panelId.value = data.data.panel_id;
-      initBK(data.data.panel_id);
+
+      if (toolDetails.value?.tool_type === 'bk_vision') {
+        panelId.value = data.data.panel_id;
+      }
     },
+  });
+
+  // 获取工具详情
+  const {
+    run: fetchToolsDetail,
+    data: toolDetails,
+  } = useRequest(ToolManageService.fetchToolsDetail, {
+    defaultValue: new ToolDetailModel(),
+    onSuccess: (data) => {
+      uid.value = data.uid;
+
+      // 权限
+      if (!data?.permission.use_tool) {
+        getApplyData({
+          action_ids: 'use_tool',
+          resources: data.uid,
+        });
+      }
+
+      if (data.tool_type === 'bk_vision') {
+        // bkVision直接请求
+        fetchTableData();
+      } else {
+        // 创建弹框form
+        createDialogContent(data);
+      }
+
+      setTimeout(() => {
+        const modals = document.querySelectorAll('.tools-use-dialog .bk-modal-wrapper');
+
+        // 遍历所有弹窗，只调整未被拖动过的弹窗位置
+        Array.from(modals).reverse()
+          .forEach((modal, index) => {
+            const htmlModal = modal as HTMLElement;
+            // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
+            if (index > 0 && !htmlModal.style.transform) {
+              htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+            }
+          });
+      }, 0);
+    },
+  });
+
+  const handleIamApply = () => {
+    if (applyData.value?.apply_url) {
+      window.open(applyData.value.apply_url, '_blank');
+    }
+  };
+
+  const {
+    data: applyData,
+    run: getApplyData,
+  } = useRequest(IamManageService.getApplyData, {
+    defaultValue: new IamApplyDataModel(),
   });
 
   // 获取表格数据的方法
@@ -637,56 +529,19 @@
       });
   };
 
-  // 获取工具详情
-  const {
-    run: fetchToolsDetail,
-    data: toolDetails,
-  } = useRequest(ToolManageService.fetchToolsDetail, {
-    defaultValue: new ToolDetailModel(),
-    onSuccess: (data) => {
-      uid.value = data.uid;
+  // 点击头部标签(切换工具)
+  const handleChangeTool = (TagItem: any) => {
+    activeUid.value = TagItem.uid;
 
-      // 权限
-      if (!data?.permission.use_tool) {
-        getApplyData({
-          action_ids: 'use_tool',
-          resources: data.uid,
-        });
-      }
+    drillDownItemConfig.value = drillDownItem.value?.drill_config
+      .find(item => item.tool.uid === activeUid.value)?.config || [];
 
-      // 预览 （暂时用不上）
-      /* if (isPreview.value) {
-        const detail = new ToolDetailModel();
-        createDialogContent({
-          ...detail,
-          ...res,
-        } as ToolDetailModel);
-        return;
-      } */
+    // 清空表格数据
+    tableData.value = [];
+    pagination.value.count = 0;
 
-      if (data.tool_type === 'bk_vision') {
-        // bkVision直接请求
-        fetchTableData();
-      } else {
-        // 创建弹框form、table
-        createDialogContent(data);
-      }
-
-      setTimeout(() => {
-        const modals = document.querySelectorAll('.tools-use-dialog .bk-modal-wrapper');
-
-        // 遍历所有弹窗，只调整未被拖动过的弹窗位置
-        Array.from(modals).reverse()
-          .forEach((modal, index) => {
-            const htmlModal = modal as HTMLElement;
-            // 只调整未被拖动过的弹窗（没有transform样式）且不是第一个弹窗
-            if (index > 0 && !htmlModal.style.transform) {
-              htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-            }
-          });
-      }, 0);
-    },
-  });
+    fetchToolsDetail({ uid: activeUid.value });
+  };
 
   // 策略跳转
   const handlesStrategiesClick = (item: any) => {
@@ -700,92 +555,6 @@
       },
     }).href;
     window.open(url, '_blank');
-  };
-
-  const {
-    run: getApplyData,
-  } = useRequest(IamManageService.getApplyData, {
-    defaultValue: new IamApplyDataModel(),
-    onSuccess(result) {
-      urlIamApply.value = result.apply_url;
-    },
-  });
-
-  // 处理页码变化
-  const handlePageChange = (newPage: number) => {
-    pagination.value.current = newPage;
-    fetchTableData(); // 调用获取表格数据的方法
-  };
-
-  // 处理每页条数变化
-  const handlePageLimitChange = (newLimit: number) => {
-    pagination.value.limit = newLimit;
-    pagination.value.current = 1; // 重置到第一页
-    fetchTableData(); // 调用获取表格数据的方法
-  };
-
-  // 将数组按指定大小分块
-  const chunkArray = (array: any[], chunkSize: number): any[][] => {
-    const chunks: any[][] = [];
-    for (let i = 0; i < array.length; i += chunkSize) {
-      chunks.push(array.slice(i, i + chunkSize));
-    }
-    return chunks;
-  };
-
-  // 根据 json_path 提取数据
-  const extractDataByPath = (data: any, path: string): any => {
-    if (!path || !data) return null;
-
-    // 去掉路径中的下标，如 [1]、[26] 等
-    const cleanPath = path.replace(/\[\d+\]/g, '');
-
-    // 根据 . 分割路径，一层一层获取数据
-    const pathParts = cleanPath.split('.').filter(part => part.length > 0);
-    let result = data;
-
-    for (const part of pathParts) {
-      if (result === null || result === undefined) {
-        return null;
-      }
-      result = result[part];
-    }
-
-    // 如果是字符串，去掉两边的引号（双引号或单引号）
-    if (typeof result === 'string') {
-      result = result.replace(/^["']|["']$/g, '');
-    }
-
-    return result;
-  };
-
-  // 处理分组表格页码变化
-  const handleGroupTablePageChange = (groupIndex: number, tableIndex: number, newPage: number) => {
-    if (groupData.value[groupIndex]?.table_fields[tableIndex]) {
-      groupData.value[groupIndex].table_fields[tableIndex].pagination.current = newPage;
-      fetchTableData();
-    }
-  };
-
-  // 处理分组表格每页条数变化
-  const handleGroupTablePageLimitChange = (groupIndex: number, tableIndex: number, newLimit: number) => {
-    if (groupData.value[groupIndex]?.table_fields[tableIndex]) {
-      groupData.value[groupIndex].table_fields[tableIndex].pagination.limit = newLimit;
-      groupData.value[groupIndex].table_fields[tableIndex].pagination.current = 1; // 重置到第一页
-      fetchTableData();
-    }
-  };
-
-
-  // 标签名称
-  const returnTagsName = (tags: string) => {
-    let tagName = '';
-    props.tagsEnums.forEach((item: TagItem) => {
-      if (item.tag_id === tags) {
-        tagName = item.tag_name;
-      }
-    });
-    return tagName;
   };
 
   const tagContent = (tags: Array<string>) => {
@@ -807,88 +576,6 @@
       name: '',
       type: '',
     };
-  };
-
-  const handleClick = () => {
-    const isNewIndex = sessionStorage.getItem('dialogIndex');
-    if (isNewIndex) {
-      dialogIndex.value = Number(isNewIndex) + 1;
-    } else {
-      dialogIndex.value = dialogIndex.value + 1;
-    }
-    nextTick(() => {
-      sessionStorage.setItem('dialogIndex', String(dialogIndex.value));
-    });
-  };
-
-  const itemIcon = (item: ToolDetailModel) => {
-    switch (item.tool_type) {
-    case 'data_search':
-      return 'sqlxiao';
-    case 'bk_vision':
-      return 'bkvisonxiao';
-    case 'api':
-      return 'apixiao';
-    }
-  };
-
-  const handleIamApply = () => {
-    window.open(urlIamApply.value, '_blank');
-  };
-
-  const submit = () => {
-    searchList.value.forEach((item) => {
-      searchFormData.value[item.raw_name] = item.value;
-    });
-    formRef.value.validate().then(() => {
-      formItemRef.value && formItemRef.value.forEach((item: any) => {
-        item?.getData();
-      });
-      fetchTableData();
-    });
-  };
-
-  // 清空表单验证
-  const handleReset = () => {
-    pagination.value.current = 1;
-    pagination.value.count = 0;
-    pagination.value.limit = 100;
-    tableData.value = [];
-    isDrillDownOpen.value = false;
-    drillDownItemConfig.value = [];
-    drillDownItemRowData.value = {};
-
-    // 检查 searchList.value 中的所有 value 是否为空
-    const allValuesEmpty = searchList.value.every(item => item.value === null
-      || (Array.isArray(item.value) && item.value.length === 0));
-    if (allValuesEmpty) {
-      return;
-    }
-
-    searchList.value = searchList.value.map(item => ({
-      ...item,
-      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
-    }));
-
-    if (formItemRef.value) {
-      formItemRef.value.forEach((item: any) => {
-        item?.resetValue();
-      });
-    }
-
-    formRef.value.clearValidate();
-  };
-
-  const handleFormItemChange = (val: any, item: SearchItem) => {
-    const target = searchList.value.find(i => i.raw_name === item.raw_name);
-    if (target) {
-      if (_.isEqual(target.value, val)) {
-        return;
-      }
-      target.value = val;
-    }
-
-    searchFormData.value[item.raw_name] = val;
   };
 
   // 创建单元格渲染函数（公共函数）
@@ -1016,20 +703,65 @@
     );
   };
 
-  // KV 字段辅助函数
-  const getMappedValue = (kvField: GroupTableConfig['kv_fields'][0]) => {
-    const rawVal = kvField.resolvePathValue;
-    const mappings = kvField.enum_mappings?.mappings;
-    if (Array.isArray(mappings) && mappings.length) {
-      return mappings.find((m: any) => String(m.key) === String(rawVal));
+  const handleClickDialog = () => {
+    const isNewIndex = sessionStorage.getItem('dialogIndex');
+    if (isNewIndex) {
+      dialogIndex.value = Number(isNewIndex) + 1;
+    } else {
+      dialogIndex.value = dialogIndex.value + 1;
     }
-    return undefined;
+    nextTick(() => {
+      sessionStorage.setItem('dialogIndex', String(dialogIndex.value));
+    });
   };
 
-  const hasDrillConfig = (kvField: GroupTableConfig['kv_fields'][0]) => kvField.drill_config
-    && Array.isArray(kvField.drill_config)
-    && kvField.drill_config.length > 0
-    && kvField.drill_config.some((config: any) => config.tool?.uid);
+  const submit = () => {
+    formRef.value.validate().then(() => {
+      formItemRef.value && formItemRef.value.forEach((item: any) => {
+        item?.getData();
+      });
+      fetchTableData();
+    });
+  };
+
+  // 清空表单验证
+  const handleReset = () => {
+    pagination.value.current = 1;
+    pagination.value.count = 0;
+    pagination.value.limit = 100;
+    tableData.value = [];
+    apiData.value = {};
+    isDrillDownOpen.value = false;
+    drillDownItemConfig.value = [];
+    drillDownItemRowData.value = {};
+
+    // 检查 searchList.value 中的所有 value 是否为空
+    const allValuesEmpty = searchList.value.every(item => item.value === null
+      || (Array.isArray(item.value) && item.value.length === 0));
+    if (allValuesEmpty) {
+      return;
+    }
+
+    searchList.value = searchList.value.map(item => ({
+      ...item,
+      value: (item.field_category === 'person_select' || item.field_category === 'time_range_select') ? [] : null,
+    }));
+
+    if (formItemRef.value) {
+      formItemRef.value.forEach((item: any) => {
+        item?.resetValue();
+      });
+    }
+
+    formRef.value.clearValidate();
+  };
+
+  const handleFormItemChange = (val: any, item: SearchItem) => {
+    const target = searchList.value.find(i => i.raw_name === item.raw_name);
+    if (target) {
+      target.value = val;
+    }
+  };
 
   const handleKVFieldDownClick = (kvField: GroupTableConfig['kv_fields'][0], activeUid?: string) => {
     const drillDownItem: DrillDownItem = {
@@ -1042,104 +774,31 @@
     handleFieldDownClick(drillDownItem, { [kvField.raw_name]: kvField.resolvePathValue }, activeUid);
   };
 
+  // 获取表单项的默认值
+  const getSearchItemDefaultValue = (item: any) => {
+    if (item.default_value) {
+      return item.default_value;
+    }
+    if (item.field_category === 'person_select' || item.field_category === 'time_range_select') {
+      return [];
+    }
+    return null;
+  };
+
   // 创建弹窗内容
   const createDialogContent = (data: ToolDetailModel) => {
     console.log('detail data:', data);
-    searchFormData.value = {};
-    groupData.value = []; // 清空分组数据
-
-    // 创建table
-    if (data.tool_type === 'data_search'
-      && Array.isArray(data.config.output_fields)) {
-      columns.value = data.config.output_fields.map((item) => {
-        const renderCell = createRenderCell(item, data);
-        return {
-          label: item.display_name,
-          field: item.raw_name,
-          minWidth: 200,
-          showOverflowTooltip: true,
-          render: renderCell,
-        };
-      });
-    } else if (data.tool_type === 'api'
-      && data.config.output_config
-      && Array.isArray(data.config.output_config.groups)) {
-      const outputConfig = data.config.output_config;
-      // 为每个 group 处理 kv_fields 和 table_fields
-      groupData.value = outputConfig.groups.map((group: any) => {
-        const kvFields: GroupTableConfig['kv_fields'] = [];
-        const tableFields: GroupTableConfig['table_fields'] = [];
-
-        // 遍历每个 output_field，根据 field_config.field_type 分类
-        (group.output_fields || []).forEach((field: any) => {
-          const fieldConfig = field.field_config || {};
-          const fieldType = fieldConfig.field_type;
-
-          if (fieldType === 'kv') {
-            // KV 模式：放入 kv_fields
-            kvFields.push({
-              raw_name: field.raw_name,
-              enum_mappings: field.enum_mappings,
-              drill_config: field.drill_config,
-              display_name: field.display_name || field.raw_name,
-              description: field.description || '',
-              path: field.json_path || '',
-              resolvePathValue: '', // 根据path解析的值
-            });
-          } else if (fieldType === 'table' && Array.isArray(fieldConfig.output_fields)) {
-            // Table 模式：用 field_config.output_fields 生成 columns
-            const tableColumns = fieldConfig.output_fields.map((item: OutputFields) => ({
-              label: item.display_name || item.raw_name,
-              field: item.raw_name,
-              minWidth: 200,
-              showOverflowTooltip: true,
-              render: createRenderCell(item, data),
-            }));
-
-            tableFields.push({
-              raw_name: field.raw_name,
-              display_name: field.display_name || field.raw_name,
-              description: field.description || '',
-              path: field.json_path || '',
-              columns: tableColumns,
-              tableData: [],
-              pagination: {
-                count: 0,
-                limit: 100,
-                current: 1,
-                limitList: [100, 200, 500, 1000],
-              },
-            });
-          }
-        });
-
-        return {
-          kv_fields: kvFields,
-          table_fields: tableFields,
-        };
-      });
-    }
-
-    // 构造formData
-    data.config.input_variable.forEach((item) => {
-      searchFormData.value[item.raw_name] = '';
-    });
-
     // 构造form-item
-    const searchListAr = data.config.input_variable.map(item => ({
+    const createSearchItem = (item: any) => ({
       ...item,
-      // eslint-disable-next-line no-nested-ternary
-      value: item.default_value
-        ? item.default_value
-        : (item.field_category === 'person_select' || item.field_category === 'time_range_select')
-          ? [] :  null,
+      value: getSearchItemDefaultValue(item),
       required: item.required,
       disabled: props.source === 'risk' && toolDetails.value?.tool_type === 'data_search',
-    }));
+    });
 
     // 非下钻
     if (!isDrillDownOpen.value) {
-      searchList.value = searchListAr;
+      searchList.value = data.config.input_variable.map(createSearchItem);
     } else {
       // 下钻填充值
       if (!drillDownItemConfig.value
@@ -1154,7 +813,8 @@
       });
 
       // 一次性完成映射
-      searchList.value = searchListAr.map((searchItem: any) => {
+      searchList.value = data.config.input_variable.map((item: any) => {
+        const searchItem = createSearchItem(item);
         const configItem = configMap.get(searchItem.raw_name);
         if (!configItem) return searchItem;
 
@@ -1219,113 +879,6 @@
     });
   };
 
-  // 图表
-  const loadScript = (src: string) => new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.onload = () => resolve(script);
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-    document.head.appendChild(script);
-  });
-
-  const handleError = (_type: 'dashboard' | 'chart' | 'action' | 'others', err: Error) => {
-    if (err.data.code === '9900403') {
-      const iamResult = new IamApplyDataModel(err.data.data || {});
-      // 页面展示没权限提示
-      emitBus('permission-page', iamResult);
-    } else {
-      messageError(err.message);
-    }
-  };
-
-  const initBK = async  (id: string) => {
-    const filters: Record<string, any> = {};
-    const drillDownFilters: Record<string, any> = {};
-    const constants: Record<string, any> = {};
-    // 初始化将默认值添加到常量中
-    toolDetails.value?.config.input_variable.forEach((item: any) => {
-      if (item.default_value && (Array.isArray(item.default_value) ? item.default_value.length > 0 : true)) {
-        if (item.field_category === 'variable') {
-          constants[item.raw_name] = item.default_value || '';
-        } else {
-          filters[item.raw_name] = item.default_value;
-        }
-      } else {
-        if (item.field_category === 'variable') {
-          constants[item.raw_name] = '';
-        }
-      }
-    });
-    // 将风险工具参数添加到常量中
-    if (riskToolParams.value && Object.keys(riskToolParams.value).length > 0) {
-      Object.keys(riskToolParams.value).forEach((key) => {
-        if (riskToolParams.value && key in riskToolParams.value) {
-          constants[key] = riskToolParams.value[key];
-        } else {
-          constants[key] = '';
-        }
-      });
-    }
-    // 下钻 常量使用下钻的值
-    if (isDrillDownOpen.value) {
-      drillDownItemConfig.value.forEach((item) => {
-        // 根据源字段名称查找对应的字段分类
-        const fieldCategory = toolDetails.value?.config.input_variable
-          .find((i: any) => i.raw_name === item.source_field)?.field_category;
-
-        if (item.target_value_type === 'field') { // 目标值为字段引用类型
-          if (item.target_field_type === 'basic' || !item.target_field_type) {
-            // 从根对象中获取字段值
-            if (fieldCategory === 'variable') {
-              // 变量类型字段：存储到 constants 中，用于工具执行时的参数传递
-              constants[item.source_field] = drillDownItemRowData.value?.[item.target_value] ?? '';
-            } else {
-              // 过滤器类型字段：存储到 drillDownFilters 中，用于数据过滤
-              drillDownFilters[item.source_field] = drillDownItemRowData.value?.[item.target_value] ?? '';
-            }
-          } else {
-            // 从 event_data 嵌套对象中获取字段值
-            if (fieldCategory === 'variable') {
-              // 变量类型字段：存储到 constants 中
-              constants[item.source_field] = drillDownItemRowData.value?.event_data?.[item.target_value] ?? '';
-            } else {
-              // 过滤器类型字段：存储到 drillDownFilters 中
-              drillDownFilters[item.source_field] = drillDownItemRowData.value?.event_data?.[item.target_value] ?? '';
-            }
-          }
-        } else { // 目标值为固定值类型
-          if (fieldCategory === 'variable') {
-            // 变量类型字段：直接使用固定值，存储到 constants 中
-            constants[item.source_field] = item.target_value || '';
-          } else {
-            // 过滤器类型字段：直接使用固定值，存储到 drillDownFilters 中
-            drillDownFilters[item.source_field] = item.target_value;
-          }
-        }
-      });
-    }
-
-    try {
-      await loadScript('https://staticfile.qq.com/bkvision/pbb9b207ba200407982a9bd3d3f2895d4/latest/main.js');
-      window.BkVisionSDK.init(
-        `#panel-${uid.value}`,
-        id,
-        {
-          apiPrefix: `${window.PROJECT_CONFIG.AJAX_URL_PREFIX}/bkvision/`,
-          chartToolMenu: [
-            { type: 'tool', id: 'fullscreen', build_in: true },
-            { type: 'tool', id: 'refresh', build_in: true },
-            { type: 'menu', id: 'excel', build_in: true },
-          ],
-          filters: isDrillDownOpen.value ? drillDownFilters : filters,
-          constants,
-          handleError,
-        },
-      );
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
   // 下钻点击
   const handleFieldDownClick = (
@@ -1413,11 +966,6 @@
     isFullScreen.value = false;
   };
 
-  // 放大
-  const handleFullscreen = () => {
-    isFullScreen.value = !isFullScreen.value;
-  };
-
   watch(() => isFullScreen.value, (val) => {
     nextTick(() => {
       if (tableData.value.length > 0) {
@@ -1500,19 +1048,6 @@
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   }; */
-
-  // 点击头部标签
-  const handleClickTag = (TagItem: any) => {
-    activeUid.value = TagItem.uid;
-    drillDownItemConfig.value = drillDownItem.value?.drill_config
-      .find(item => item.tool.uid === activeUid.value)?.config || [];
-
-    // 清空表格数据
-    tableData.value = [];
-    pagination.value.count = 0;
-
-    fetchToolsDetail({ uid: activeUid.value });
-  };
 
   defineExpose<Exposes>({
     closeDialog() {
