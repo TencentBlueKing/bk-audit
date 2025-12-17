@@ -85,6 +85,7 @@ from services.web.risk.converter.bkbase import (
     ManualUnsyncedRiskPrepender,
 )
 from services.web.risk.exceptions import ExportRiskNoPermission
+from services.web.risk.handlers import EventHandler
 from services.web.risk.handlers.risk_export import MultiSheetRiskExporterXlsx
 from services.web.risk.handlers.ticket import (
     AutoProcess,
@@ -130,7 +131,11 @@ from services.web.risk.serializers import (
     TicketNodeSerializer,
     UpdateRiskLabelReqSerializer,
 )
-from services.web.risk.tasks import process_one_risk, sync_auto_result
+from services.web.risk.tasks import (
+    _build_manual_event_time_range,
+    process_one_risk,
+    sync_auto_result,
+)
 from services.web.strategy_v2.constants import RiskLevel, StrategyFieldSourceEnum
 from services.web.strategy_v2.models import Strategy, StrategyTag
 
@@ -170,9 +175,58 @@ class RetrieveRisk(RiskMeta):
         )
         if end is not None:
             queryset = queryset.filter(event_time__lte=end)
-        if not queryset.exists():
+        manual_events = list(queryset)
+        if not manual_events:
             return []
-        return ManualEventSerializer(instance=queryset, many=True).data
+
+        start_times: List[str] = []
+        end_times: List[str] = []
+        manual_event_ids: List[str] = []
+        for event in manual_events:
+            start_time, end_time = _build_manual_event_time_range(event.event_time, timedelta(hours=1))
+            start_times.append(start_time)
+            end_times.append(end_time)
+            manual_event_ids.append(str(event.manual_event_id))
+
+        search_start = min(start_times)
+        search_end = max(end_times)
+        manual_event_id_param = ",".join(manual_event_ids)
+        page_size = max(len(manual_events), 10)
+
+        try:
+            resp = (
+                EventHandler.search_event(
+                    namespace=settings.DEFAULT_NAMESPACE,
+                    start_time=search_start,
+                    end_time=search_end,
+                    page=1,
+                    page_size=page_size,
+                    manual_event_id=manual_event_id_param,
+                )
+                or {}
+            )
+        except Exception as err:  # NOCC:broad-except(需要兜底，详情接口不应因查询失败报错)
+            logger.warning(
+                "[RetrieveRisk] search manual_event_ids=%s failed when confirming manual_synced: %s",
+                manual_event_id_param,
+                err,
+            )
+            return ManualEventSerializer(instance=manual_events, many=True).data
+
+        results = resp.get("results") or []
+        synced_ids = {
+            int(item["manual_event_id"])
+            for item in results
+            if isinstance(item, dict) and item.get("manual_event_id") is not None
+        }
+
+        if synced_ids:
+            ManualEvent.objects.filter(manual_event_id__in=synced_ids, manual_synced=False).update(manual_synced=True)
+            manual_events = [event for event in manual_events if event.manual_event_id not in synced_ids]
+
+        if not manual_events:
+            return []
+        return ManualEventSerializer(instance=manual_events, many=True).data
 
 
 class RetrieveRiskStrategyInfo(RiskMeta):

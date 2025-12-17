@@ -9,6 +9,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.request import Request
+from rest_framework.settings import api_settings
 from rest_framework.test import APIRequestFactory
 from sqlglot import errors as sqlglot_errors
 
@@ -25,7 +26,7 @@ from services.web.databus.constants import (
 from services.web.risk.constants import EventFilterOperator, RiskStatus
 from services.web.risk.models import ManualEvent, Risk, TicketPermission, UserType
 from services.web.risk.resources.risk import ListMineRisk
-from services.web.risk.tasks import _sync_manual_risk_status
+from services.web.risk.tasks import _sync_manual_event_status, _sync_manual_risk_status
 from services.web.strategy_v2.constants import RiskLevel
 from services.web.strategy_v2.models import Strategy
 from tests.base import TestCase
@@ -875,6 +876,11 @@ class TestRetrieveRiskDetail(TestCase):
             event_time=datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc),
             event_end_time=datetime.datetime(2024, 1, 2, tzinfo=datetime.timezone.utc),
         )
+        self.search_event_patcher = mock.patch(
+            "services.web.risk.resources.risk.EventHandler.search_event", return_value={"results": [], "total": 0}
+        )
+        self.search_event_mock = self.search_event_patcher.start()
+        self.addCleanup(self.search_event_patcher.stop)
 
     def test_retrieve_risk_returns_unsynced_manual_events(self):
         in_range = ManualEvent.objects.create(
@@ -996,3 +1002,100 @@ class TestSyncManualRiskStatus(TestCase):
         self.assertTrue(Risk.objects.get(pk=target.pk).manual_synced)
         self.assertFalse(Risk.objects.get(pk=untouched.pk).manual_synced)
         self.assertIn(target.risk_id, called_sql.get("value", ""))
+
+
+class TestSyncManualEventStatus(TestCase):
+    def setUp(self):
+        super().setUp()
+        self.strategy = Strategy.objects.create(
+            namespace="default",
+            strategy_name="sync-manual-event",
+            risk_level=RiskLevel.MIDDLE.value,
+        )
+
+    def test_sync_manual_event_status_updates_flag(self):
+        event_time = datetime.datetime(2024, 1, 5, tzinfo=datetime.timezone.utc)
+        manual_event = ManualEvent.objects.create(
+            raw_event_id="raw-manual-event",
+            strategy=self.strategy,
+            event_time=event_time,
+            manual_synced=False,
+        )
+        called_kwargs = {}
+
+        def fake_search_event(**kwargs):
+            called_kwargs["value"] = kwargs
+            return {"results": [{"manual_event_id": manual_event.manual_event_id}], "total": 1}
+
+        with mock.patch("services.web.risk.tasks.EventHandler.search_event", side_effect=fake_search_event):
+            _sync_manual_event_status()
+
+        manual_event.refresh_from_db()
+        self.assertTrue(manual_event.manual_synced)
+        window = datetime.timedelta(hours=1)
+        expected_start = timezone.localtime(event_time - window).strftime(api_settings.DATETIME_FORMAT)
+        expected_end = timezone.localtime(event_time + window).strftime(api_settings.DATETIME_FORMAT)
+        self.assertEqual(called_kwargs["value"]["start_time"], expected_start)
+        self.assertEqual(called_kwargs["value"]["end_time"], expected_end)
+        self.assertEqual(called_kwargs["value"]["manual_event_id"], str(manual_event.manual_event_id))
+
+    def test_sync_manual_event_status_skips_when_missing(self):
+        manual_event = ManualEvent.objects.create(
+            raw_event_id="raw-missing-event",
+            strategy=self.strategy,
+            event_time=datetime.datetime(2024, 2, 1, tzinfo=datetime.timezone.utc),
+            manual_synced=False,
+        )
+
+        with mock.patch(
+            "services.web.risk.tasks.EventHandler.search_event", return_value={"results": [], "total": 0}
+        ) as search_event:
+            _sync_manual_event_status()
+
+        manual_event.refresh_from_db()
+        self.assertFalse(manual_event.manual_synced)
+        search_event.assert_called_once()
+
+    def test_sync_manual_event_status_batch_query(self):
+        event_time_a = datetime.datetime(2024, 3, 1, tzinfo=datetime.timezone.utc)
+        event_time_b = datetime.datetime(2024, 3, 2, tzinfo=datetime.timezone.utc)
+        manual_event_a = ManualEvent.objects.create(
+            raw_event_id="raw-batch-event",
+            strategy=self.strategy,
+            event_time=event_time_a,
+            manual_synced=False,
+        )
+        manual_event_b = ManualEvent.objects.create(
+            raw_event_id="raw-batch-event",
+            strategy=self.strategy,
+            event_time=event_time_b,
+            manual_synced=False,
+        )
+        called_kwargs = {}
+
+        def fake_search_event(**kwargs):
+            called_kwargs["value"] = kwargs
+            return {"results": [{"manual_event_id": manual_event_a.manual_event_id}], "total": 1}
+
+        with mock.patch("services.web.risk.tasks.EventHandler.search_event", side_effect=fake_search_event):
+            _sync_manual_event_status()
+
+        manual_event_a.refresh_from_db()
+        manual_event_b.refresh_from_db()
+        self.assertTrue(manual_event_a.manual_synced)
+        self.assertFalse(manual_event_b.manual_synced)
+
+        window = datetime.timedelta(hours=1)
+        expected_start = min(
+            timezone.localtime(event_time_a - window).strftime(api_settings.DATETIME_FORMAT),
+            timezone.localtime(event_time_b - window).strftime(api_settings.DATETIME_FORMAT),
+        )
+        expected_end = max(
+            timezone.localtime(event_time_a + window).strftime(api_settings.DATETIME_FORMAT),
+            timezone.localtime(event_time_b + window).strftime(api_settings.DATETIME_FORMAT),
+        )
+        expected_ids = f"{manual_event_a.manual_event_id},{manual_event_b.manual_event_id}"
+
+        self.assertEqual(called_kwargs["value"]["manual_event_id"], expected_ids)
+        self.assertEqual(called_kwargs["value"]["start_time"], expected_start)
+        self.assertEqual(called_kwargs["value"]["end_time"], expected_end)
