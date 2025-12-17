@@ -27,7 +27,6 @@ from kafka import KafkaConsumer
 from core.kafka import KafkaRecordConsumer
 from services.web.analyze.constants import AUDIT_EVENT_QUEUE_TOPIC_PATTERN
 from services.web.risk.handlers.risk import RiskHandler
-from services.web.risk.models import ManualEvent
 
 
 class AuditEventKafkaRecordConsumer(KafkaRecordConsumer):
@@ -72,12 +71,8 @@ class AuditEventKafkaRecordConsumer(KafkaRecordConsumer):
             value_type,
             value_size,
         )
-        if isinstance(value, dict) and 'manual_event_id' in value:
-            value = value['manual_event_id']
-            ManualEvent.objects.filter(manual_event_id=int(value), manual_synced=False).update(manual_synced=True)
-            logger.info("manual_event_id %s synced." % value)
-        else:
-            logger.info("manual_event_id not found in value.The value is %s." % value)
+        if isinstance(value, dict) and value.get('manual_event_id'):
+            return
         RiskHandler().generate_risk(value, self.eligible_strategy_ids)
 
 
