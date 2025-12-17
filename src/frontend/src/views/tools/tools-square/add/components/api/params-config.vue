@@ -490,10 +490,22 @@
   onMounted(() => {
     // 编辑复现
     if (props.inputVariable && props.inputVariable.length > 0) {
-      paramList.value = props.inputVariable.map((item: any) => ({
-        ...item,
-        time_range: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') ?  item.default_value : [],
-      }));
+      paramList.value = props.inputVariable.map((item: any) => {
+        const defaultValue = item.default_value;
+        const timeRange = item.time_range;
+        if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
+          return {
+            ...item,
+            time_range: defaultValue || [],
+            default_value: [],
+          };
+        }
+        return {
+          ...item,
+          time_range: timeRange,
+          default_value: defaultValue,
+        };
+      });
     }
   });
   defineExpose<Exposes>({
