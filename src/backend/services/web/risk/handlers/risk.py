@@ -57,13 +57,14 @@ class RiskHandler:
     """
 
     @classmethod
-    def fetch_eligible_strategy_ids(cls) -> Set[str]:
+    def fetch_eligible_strategy_ids(cls, extra_filter: Optional[Q] = None) -> Set[str]:
         """
         获取可用策略ID集合
         """
-        return set(
-            Strategy.objects.exclude(status=StrategyStatusChoices.DISABLED.value).values_list("strategy_id", flat=True)
-        )
+        queryset = Strategy.objects.exclude(status=StrategyStatusChoices.DISABLED.value)
+        if extra_filter:
+            queryset = queryset.filter(extra_filter)
+        return set(queryset.values_list("strategy_id", flat=True))
 
     def generate_risk(self, event: dict, eligible_strategy_ids: Set[str], manual: bool = False):
         """
@@ -94,11 +95,13 @@ class RiskHandler:
             if manual:
                 raise err
 
-    def generate_risk_from_event(self, start_time: datetime.datetime, end_time: datetime.datetime) -> None:
+    def generate_risk_from_event(
+        self, start_time: datetime.datetime, end_time: datetime.datetime, extra_filter: Optional[Q] = None
+    ) -> None:
         """
         从事件生成风险
         """
-        eligible_strategy_ids = self.fetch_eligible_strategy_ids()
+        eligible_strategy_ids = self.fetch_eligible_strategy_ids(extra_filter=extra_filter)
         events = self.load_events(start_time, end_time)
         for event in events:
             self.generate_risk(event, eligible_strategy_ids)

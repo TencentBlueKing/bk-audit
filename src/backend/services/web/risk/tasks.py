@@ -29,6 +29,7 @@ from celery.schedules import crontab
 from django.conf import settings
 from django.core.cache import cache as _cache
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.translation import gettext
 from django_redis.client import DefaultClient
@@ -60,6 +61,7 @@ from services.web.risk.handlers.ticket import (
 )
 from services.web.risk.models import ManualEvent, Risk, TicketNode
 from services.web.risk.serializers import CreateEventSerializer
+from services.web.strategy_v2.constants import StrategyType
 
 cache: DefaultClient = _cache
 
@@ -244,7 +246,11 @@ def generate_risk_from_event():
     try:
         while end_time <= task_end_time:
             # 生成风险
-            RiskHandler().generate_risk_from_event(start_time=start_time, end_time=end_time)
+            RiskHandler().generate_risk_from_event(
+                start_time=start_time,
+                end_time=end_time,
+                extra_filter=Q(strategy_type=StrategyType.MODEL.value),
+            )
             logger_celery.info("[GenerateRiskFinished] %s ~ %s", start_time, end_time)
             # 滚动时间
             start_time = end_time
