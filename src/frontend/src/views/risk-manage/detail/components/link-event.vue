@@ -105,11 +105,11 @@
                     <!-- 策略id -->
                     <template v-if="basicItem.field_name === 'strategy_id'">
                       <bk-button
-                        v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
+                        v-if="strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label"
                         text
                         theme="primary"
                         @click="handlerStrategy()">
-                        {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
+                        {{ strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label }}
                       </bk-button>
                       <span v-else> -- </span>
                     </template>
@@ -182,7 +182,14 @@
                       </bk-popover>
                       <!-- 没有字段映射或者没有证据下探 -->
                       <span v-else>
-                        {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value) }}
+                        <edit-tag
+                          v-if="basicItem.field_name === 'operator'"
+                          :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
+                          :max="99"
+                          style="display: inline-block;" />
+                        <span v-else>
+                          {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) }}
+                        </span>
                       </span>
                     </template>
                     <!-- 证据下探按钮 -->
@@ -256,8 +263,8 @@
                   <render-info-item
                     v-for="(key, index) in keyArr"
                     :key="index"
-                    :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
-                    :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
+                    :description="strategyInfo.find((item: any) => item.field_name === key)?.description || ''"
+                    :label="strategyInfo.find((item: any) => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
                     :label-width-percent="25"
                     style="flex-basis: 50%;">
@@ -372,8 +379,8 @@
                   <render-info-item
                     v-for="(key, index) in keyArr"
                     :key="index"
-                    :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
-                    :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
+                    :description="strategyInfo.find((item: any) => item.field_name === key)?.description || ''"
+                    :label="strategyInfo.find((item: any) => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
                     :label-width-percent="25"
                     style="width: 50%;">
@@ -396,7 +403,7 @@
                           drillMap.get(key),
                           key
                         )">
-                        {{ displayValueDict.eventData[key]?.value }}
+                        {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                       </span>
                       <template #content>
                         <div>
@@ -424,7 +431,7 @@
                     <span
                       v-else
                       class="space">
-                      {{ displayValueDict.eventData[key]?.value }}
+                      {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                     </span>
                     <!-- 证据下探按钮 -->
                     <template v-if="drillMap.get(key)">
