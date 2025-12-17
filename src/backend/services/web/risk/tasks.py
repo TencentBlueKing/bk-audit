@@ -94,7 +94,6 @@ def manual_add_event(data: list):
         logger_celery.warning("[ManualAddEvent] Empty payload")
         return
 
-    handler = RiskHandler()
     manual_events = []
     for event in data:
         serializer = CreateEventSerializer(data=event)
@@ -110,11 +109,11 @@ def manual_add_event(data: list):
                 raw_event_id=payload["raw_event_id"],
                 strategy_id=payload["strategy_id"],
                 event_evidence=payload.get("event_evidence"),
-                event_type=handler.parse_event_type(payload.get("event_type")),
+                event_type=payload.get("event_type"),
                 event_data=payload.get("event_data"),
                 event_time=event_time,
                 event_source=payload.get("event_source"),
-                operator=handler.parse_operator(payload.get("operator")),
+                operator=payload.get("operator"),
             )
         )
     if not manual_events:
