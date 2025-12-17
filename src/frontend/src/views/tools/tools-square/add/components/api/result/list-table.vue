@@ -505,7 +505,7 @@
         }
       });
     } else {
-      list.value = (props.data?.list || []).map((item: any) => ({
+      list.value = props.data.list.map((item: any) => ({
         ...item,
         display_name: '',
         enum_mappings: {
