@@ -42,7 +42,7 @@
           label="name"
           style="color: #63656e;">
           <template #nodeType="node">
-            <span v-if="node.isChild || node.children.length === 0">
+            <span v-if="(node.isChild && node.children.length === 0) || !node.isChild ">
               <bk-checkbox
                 v-model="node.isChecked"
                 style="padding-right: 5px;"
@@ -72,6 +72,7 @@
             ref="comRef"
             :data="element"
             :output-fields="outputFields"
+            :tree-data="treeData"
             @close="handleClose"
             @config-change="(...args: unknown[]) => handleConfigChange(args[0] as any, args[1] as string)"
             @list-config-change="(...args: unknown[]) =>
@@ -110,7 +111,7 @@
   const emits = defineEmits<Emits>();
 
   const { t } = useI18n();
-  const modelComMap = (item: Record<string, any>) => (item.type === 'kv' ? objectModel : listModel);
+  const modelComMap = (item: Record<string, any>) => (item.type === 'table' ?  listModel : objectModel);
   const selectValue = ref<string[]>([]);
   const selectedId = ref<string[]>([]);
   const selectedItems = ref<any[]>([]);
@@ -261,6 +262,7 @@
   watch(() => props.resultData, (newVal) => {
     if (newVal) {
       treeData.value = Array.isArray(JSON.parse(newVal)) ? JSON.parse(newVal) : buildTree(JSON.parse(newVal));
+      console.log('treeData.value', treeData.value);
     }
   }, {
     deep: true,
