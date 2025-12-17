@@ -230,6 +230,6 @@ class ManualAddEventTaskTest(TestCase):
         manual_event = ManualEvent.objects.get()
         self.assertEqual(manual_event.raw_event_id, "raw-manual")
         self.assertEqual(manual_event.strategy_id, self.strategy.strategy_id)
-        self.assertEqual(manual_event.event_type, ["manual"])
+        self.assertEqual(manual_event.event_type, "manual")
         self.assertEqual(manual_event.event_data.get("field"), "value")
         self.assertIsNotNone(manual_event.event_time.tzinfo)
