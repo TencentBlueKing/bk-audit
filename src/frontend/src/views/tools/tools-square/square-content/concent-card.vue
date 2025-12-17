@@ -49,7 +49,7 @@
               v-for="(item, index) in dataList.filter(item => item.permission.manage_tool || item.permission.use_tool)"
               :key="index"
               class="card-list-item"
-              @click="handleClick(item)"
+              @click="handleClickTool(item)"
               @mouseenter="handleMouseenter(item)"
               @mouseleave="handleMouseleave()">
               <div
@@ -348,8 +348,10 @@
     'margin-top': '10px',
     height: 'calc(100vh - 200px)',
   };
-  const urlToolsIds = ref<string[]>([]);
+
+  const urlToolsIds = ref<Set<string>>(new Set());
   const {
+    removeSearchParam,
     appendSearchParams,
   } = useUrlSearch();
 
@@ -371,9 +373,10 @@
       total.value = data.total;
       // 自动打开弹窗
       if (route.query.tool_id) {
-        urlToolsIds.value = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
-        allOpenToolsData.value = urlToolsIds.value;
-        if (urlToolsIds.value.length > 0) {
+        const toolIds = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
+        urlToolsIds.value = new Set(toolIds);
+        allOpenToolsData.value = toolIds;
+        if (urlToolsIds.value.size > 0) {
           urlToolsIds.value.forEach((item: string) => {
             // 使用hooks中的handleOpenTool
             handleOpenTool(item);
@@ -578,11 +581,11 @@
    * @param toolInfo: ToolInfo 工具信息
    * @returns void
   */
-  const handleClick = async (toolInfo: ToolInfo) => {
-    urlToolsIds.value.push(toolInfo.uid);
+  const handleClickTool = async (toolInfo: ToolInfo) => {
+    urlToolsIds.value.add(toolInfo.uid);
     // 在游览器地址增加参数单不刷新页面
     appendSearchParams({
-      tool_id: urlToolsIds.value.join(','),
+      tool_id: Array.from(urlToolsIds.value).join(','),
     });
 
     handleCancel(toolInfo.uid);
@@ -594,10 +597,14 @@
   // 关闭弹窗
   const handleClose = (ToolUid: string | undefined) => {
     if (ToolUid) {
-      urlToolsIds.value = urlToolsIds.value.filter(item => item !== ToolUid);
-      appendSearchParams({
-        tool_id: urlToolsIds.value.join(','),
-      });
+      urlToolsIds.value.delete(ToolUid);
+      if (urlToolsIds.value.size <= 0) {
+        removeSearchParam('tool_id');
+      } else {
+        appendSearchParams({
+          tool_id: Array.from(urlToolsIds.value).join(','),
+        });
+      }
     }
   };
 
