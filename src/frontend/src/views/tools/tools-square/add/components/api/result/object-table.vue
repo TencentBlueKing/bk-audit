@@ -375,12 +375,8 @@
   watch(() => formData.value, (val) => {
     if (val) {
       fieldsData.value = traverseTree(props.treeData);
-      console.log('fieldArr', fieldsData.value); // 调试输出
+      emits('configChange', val, props.data.json_path);
     }
-    // fieldsData.value[0].raw_name = props.data.name;
-    // fieldsData.value[0].display_name = val.display_name;
-    // fieldsData.value[0].description = val.description;
-    // emits('configChange', val, props.data.json_path);
   }, {
     immediate: true,
     deep: true,

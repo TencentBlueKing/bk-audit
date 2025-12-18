@@ -62,6 +62,7 @@
           :group-key="element.key"
           :group-output-fields="element.output_fields"
           :is-edit-mode="isEditMode"
+          :is-grouping="isGrouping"
           :result-data="resultData"
           @group-content-change="handleGroupContentChange" />
       </div>
@@ -69,7 +70,7 @@
   </vuedraggable>
 </template>
 <script setup lang='ts'>
-  import { ref } from 'vue';
+  import { nextTick, ref } from 'vue';
   import Vuedraggable from 'vuedraggable';
 
   import content from './content.vue';
@@ -78,6 +79,7 @@
   interface Props {
     resultData: any,
     isEditMode: boolean,
+    isGrouping: boolean,
   }
   interface Exposes {
     addGroup:() => void,
@@ -158,12 +160,31 @@
       return item;
     });
   };
-
   defineExpose<Exposes>({
     // 添加组 key 当前时间戳
     addGroup() {
+      // 生成不重复的分组名称
+      const generateUniqueGroupName = () => {
+        const existingNames = localValue.value.map(item => item.name);
+        let maxNumber = 0;
+        // 查找现有分组名称中的最大数字
+        existingNames.forEach((name: string) => {
+          const match = name.match(/^分组(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        });
+        // 如果没有任何数字分组，从1开始
+        if (maxNumber === 0) {
+          maxNumber = existingNames.filter(name => name === '分组').length;
+        }
+        return `分组${maxNumber + 1}`;
+      };
       localValue.value.push({
-        name: '分组',
+        name: generateUniqueGroupName(),
         isInput: false,
         isOpen: true,
         key: Date.now().toString(),
@@ -191,6 +212,10 @@
         config: null,
         output_fields: item.output_fields,
       }));
+      nextTick(() => {
+        // console.log('!!!', contentRef.value);
+        // contentRef.value?.setGroupConfigs(localValue.value);
+      });
     },
   });
 </script>

@@ -29,6 +29,7 @@
 </template>
 
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { computed } from 'vue';
 
   import type { OutputFields } from '@model/tool/tool-detail';
@@ -81,7 +82,7 @@
       showOverflowTooltip: true,
       render: renderCell,
     };
-  }));
+  })) as unknown as Column[];
 
   const handlePageLimitChange = (val: number) => {
     pagination.value.limit = val;

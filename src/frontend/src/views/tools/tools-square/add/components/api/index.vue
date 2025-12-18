@@ -317,7 +317,7 @@
   };
 
   const initResultConfig = (data: any) => {
-    resultData.value = data.output_config.result_schema.tree_data;
+    resultData.value = data.output_config.result_schema?.tree_data;
     resultConfigRef.value.setConfigs(data.output_config);
   };
 
