@@ -143,14 +143,14 @@
                         <div
                           class="field-value-div"
                           @mouseleave="() => handleDrillMouseLeave(0)">
-                          <template v-if="element.drill_config.length > 0">
+                          <template v-if="element.drill_config && element.drill_config.length > 0">
                             <bk-popover
                               placement="top"
                               theme="black">
                               <span
                                 @click="() => handleClick(element.json_path)">
                                 {{ t('已配置') }}
-                                <span style="color: #3a84ff;">{{ element.drill_config.length }}</span>
+                                <span style="color: #3a84ff;">{{ element.drill_config?.length }}</span>
                                 {{ t('个工具') }}
                               </span>
                               <template #content>
@@ -307,7 +307,7 @@
 </template>
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
-  import { onMounted, ref, watch } from 'vue';
+  import { nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -323,6 +323,8 @@
   interface Props {
     data: any,
     outputFields: any
+    treeData: any
+    // isGrouping: boolean
   }
   interface Emits {
     (e: 'close', id: string): void
@@ -463,46 +465,92 @@
 
   // 移除
   const handleDelect = (path: string) => {
-    // addList 添加对应项目
-    addList.value.push(list.value.find((item: any) => item.json_path === path));
     // list 移除项目
     list.value = list.value.filter((item: any) => item.json_path !== path);
   };
   // 添加
   const handleAddList = (item: any) => {
-    list.value.push(item);
+    // 将项目添加到list.value
+    list.value = [...list.value, item];
+    // 从addList.value中移除项目
     addList.value = addList.value.filter((addItem: any) => addItem.json_path !== item.json_path);
   };
+
+  // 在树形结构中查找节点的函数
+  const findNode = (treeData: any[], targetJsonPath: string): any => {
+    if (!treeData || !Array.isArray(treeData)) return null;
+    for (const node of treeData) {
+      if (node.json_path === targetJsonPath) {
+        return node;
+      }
+
+      if (node.children && node.children.length > 0) {
+        const foundInChildren = findNode(node.children, targetJsonPath);
+        if (foundInChildren) {
+          return foundInChildren;
+        }
+      }
+
+      if (node.list && node.list.length > 0) {
+        const foundInList = findNode(node.list, targetJsonPath);
+        if (foundInList) {
+          return foundInList;
+        }
+      }
+    }
+    return null;
+  };
+
   watch(() => list.value, (val) => {
+    addList.value = [];
     fieldsData.value = val.map((item: any) => ({
       raw_name: item.name,
       display_name: item.display_name,
       description: item.description,
     }));
     emits('listConfigChange', val, props.data.json_path, listInfo.value);
+    const node = findNode(props.treeData, props.data.json_path);
+    // 过滤出node.list中不在当前val中的项目，并保持数据结构一致
+    const valJsonPaths = val.map((item: any) => item.json_path);
+    addList.value = node.list.filter((item: any) => !valJsonPaths.includes(item.json_path))
+      .map((item: any) => {
+        // 查找val中对应的项目，如果有则使用val中的完整结构，否则使用基础结构
+        const existingItem = val.find((valItem: any) => valItem.json_path === item.json_path);
+        return existingItem ? { ...existingItem } : {
+          ...item,
+          display_name: '',
+          description: '',
+          drill_config: [],
+          enum_mappings: {
+            mappings: [],
+          },
+        };
+      });
   }, {
     deep: true,
   });
 
-  watch(() => props.outputFields, (val: any[] | null) => {
+  watch(() => props.outputFields, (val: any) => {
     if (val && val.length > 0) {
-      val.forEach((el: any) => {
-        if (el.raw_name === props.data.name) {
-          listInfo.value.name = el.display_name || '';
-          listInfo.value.desc = el.description || '';
-          list.value = (el.field_config?.output_fields || []).map((outItem: any) => {
-            const findNode =  props.data?.list?.find((e: any) => e.json_path === outItem.json_path) || {};
-            return {
-              ...findNode,
-              display_name: outItem.display_name || '',
-              description: outItem.description || '',
-              drill_config: outItem.drill_config || [],
-              enum_mappings: {
-                mappings: outItem.enum_mappings?.mappings || [],
-              },
-            };
-          });
-        }
+      nextTick(() => {
+        val.forEach((el: any) => {
+          if (el.raw_name === props.data.name) {
+            listInfo.value.name = el.display_name || '';
+            listInfo.value.desc = el.description || '';
+            list.value = (el.field_config?.output_fields || []).map((outItem: any) => {
+              const findNode =  props.data?.list?.find((e: any) => e.json_path === outItem.json_path) || {};
+              return {
+                ...findNode,
+                display_name: outItem.display_name || '',
+                description: outItem.description || '',
+                drill_config: outItem.drill_config || [],
+                enum_mappings: {
+                  mappings: outItem.enum_mappings?.mappings || [],
+                },
+              };
+            });
+          }
+        });
       });
     } else {
       list.value = props.data.list.map((item: any) => ({
