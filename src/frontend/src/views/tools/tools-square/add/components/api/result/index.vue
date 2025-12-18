@@ -50,11 +50,13 @@
         v-if="!outputConfigEnableGrouping.enable_grouping"
         ref="contentRef"
         :is-edit-mode="isEditMode"
-        :resultData="resultData" />
+        :is-grouping="outputConfigEnableGrouping.enable_grouping"
+        :result-data="resultData" />
       <group-content
         v-else
         ref="groupContentRef"
         :is-edit-mode="isEditMode"
+        :is-grouping="outputConfigEnableGrouping.enable_grouping"
         :result-data="resultData" />
     </template>
   </card-part-vue>
@@ -152,6 +154,7 @@
       return isGroupOutputConfig;
     }
     const contentRefData  = contentRef.value?.handleGetResultConfig();
+
     const noGroupOutputConfig = {
       enable_grouping: false,
       groups: [] as Array<{ name: string; output_fields: any[] }>,
