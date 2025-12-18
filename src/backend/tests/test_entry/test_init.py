@@ -24,6 +24,7 @@ from django.test.utils import override_settings
 
 from apps.permission.handlers.resource_types import ResourceEnum
 from services.web.databus.constants import (
+    CLEAN_CONFIG_JSON_CONF_KEY,
     JoinDataType,
     SnapshotRunningStatus,
     SnapShotStorageChoices,
@@ -96,7 +97,7 @@ class SystemInitAssetTests(TestCase):
                     SnapShotStorageChoices.DORIS.value,
                 ],
                 "custom_config": {
-                    "etl.clean_config.json_config.conf": {
+                    CLEAN_CONFIG_JSON_CONF_KEY: {
                         "time_format": "Unix Time Stamp(milliseconds)",
                         "timestamp_len": 13,
                         "timezone": 0,

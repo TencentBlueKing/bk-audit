@@ -18,6 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 from django.utils.translation import gettext_lazy
 
+from apps.notice.constants import ADMIN_NOTICE_GROUP_ID
 from core.choices import TextChoices
 
 HEALTHZ_SPAN_NAME = "Healthz"
@@ -240,7 +241,7 @@ def get_manual_event_strategy_config(rt_id):
         "link_table_version": None,
         "status": "disabled",
         "notice_groups": [],
-        "processor_groups": [1],
+        "processor_groups": [ADMIN_NOTICE_GROUP_ID],
         "description": "自定义",
         "risk_level": "LOW",
         "risk_hazard": "自定义",

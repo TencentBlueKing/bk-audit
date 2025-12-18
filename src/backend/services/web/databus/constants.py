@@ -55,6 +55,8 @@ EMPTY_CLUSTER_ID = -1
 EMPTY_INDEX_SET_ID = 0
 EMPTY_TABLE_ID = 0
 
+CLEAN_CONFIG_JSON_CONF_KEY = "etl.clean_config.json_config.conf"
+
 DEFAULT_ETL_PROCESSOR = "bkbase"
 DEFAULT_COLLECTOR_SCENARIO = "row"
 DEFAULT_CATEGORY_ID = "application_check"

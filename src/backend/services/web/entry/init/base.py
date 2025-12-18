@@ -18,7 +18,7 @@ to the current version of the project delivered to anyone in the future.
 
 import json
 import os
-from typing import List, Type
+from typing import Dict, Type
 
 from bk_resource import resource
 from django.conf import settings
@@ -32,6 +32,7 @@ from apps.permission.handlers.resource_types import ResourceEnum, ResourceTypeMe
 from core.utils.distutils import strtobool
 from services.web.databus.collector.snapshot.system.base import create_iam_data_link
 from services.web.databus.constants import (
+    CLEAN_CONFIG_JSON_CONF_KEY,
     ClusterMode,
     JoinDataType,
     SnapshotRunningStatus,
@@ -245,22 +246,21 @@ class SystemInitHandler:
 
         print("[InitAsset] Start")
         status_map = GlobalMetaConfig.get(INIT_ASSET_FINISHED_KEY, default={})
-        assets: List[Type[ResourceTypeMeta]] = [
-            ResourceEnum.RISK,
-            ResourceEnum.STRATEGY,
-            ResourceEnum.STRATEGY_TAG,
-            ResourceEnum.TICKET_PERMISSION,
-            ResourceEnum.MANUAL_EVENT,
-        ]
-        manual_event_custom_conf = {
-            "etl.clean_config.json_config.conf": {
-                "time_format": "Unix Time Stamp(milliseconds)",
-                "timestamp_len": 13,
-                "timezone": 0,
-                "time_field_name": "event_time_timestamp",
-            }
+        assets: Dict[Type[ResourceTypeMeta], Dict] = {
+            ResourceEnum.RISK: {},
+            ResourceEnum.STRATEGY: {},
+            ResourceEnum.STRATEGY_TAG: {},
+            ResourceEnum.TICKET_PERMISSION: {},
+            ResourceEnum.MANUAL_EVENT: {
+                CLEAN_CONFIG_JSON_CONF_KEY: {
+                    "time_format": "Unix Time Stamp(milliseconds)",
+                    "timestamp_len": 13,
+                    "timezone": 0,
+                    "time_field_name": "event_time_timestamp",
+                }
+            },
         }
-        for asset in assets:
+        for asset, config in assets.items():
             system_id, resource_type_id = asset.system_id, asset.id
             map_key = f"{system_id}-{resource_type_id}"
             if status_map.get(map_key):
@@ -276,8 +276,8 @@ class SystemInitHandler:
                         SnapShotStorageChoices.DORIS.value,
                     ],
                 }
-                if resource_type_id == ResourceEnum.MANUAL_EVENT.id:
-                    toggle_params["custom_config"] = manual_event_custom_conf
+                if config:
+                    toggle_params["custom_config"] = config
                 resource.databus.collector.toggle_join_data(toggle_params)
                 status_map[map_key] = True
             except Exception as err:  # pylint: disable=broad-except
@@ -342,7 +342,7 @@ class SystemInitHandler:
                 resource_type_id=ResourceEnum.MANUAL_EVENT.id,
                 bkbase_table_id__isnull=False,
                 join_data_type=JoinDataType.ASSET.value,
-                status__in=[SnapshotRunningStatus.RUNNING.value, SnapshotRunningStatus.PREPARING.value],
+                status__in=[SnapshotRunningStatus.RUNNING.value],
             )
             .order_by("-updated_at")
             .first()
