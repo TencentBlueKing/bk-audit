@@ -50,7 +50,7 @@ yarn.lock
 *.sw?
 .eslintcache
 .stylelintcache
-.env*
+src/backend/.env
 *.pdm-python
 bkcodeai.json
 *.cursor

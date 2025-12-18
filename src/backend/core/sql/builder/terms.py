@@ -25,6 +25,8 @@ from pypika.utils import builder, format_alias_sql, format_quotes
 from core.sql.constants import DORIS_FIELD_KEY_QUOTE, FieldType
 from core.sql.model import Field, Table
 
+from pymysql.converters import escape_string
+
 
 class PypikaField(_PypikaField):
     @classmethod
@@ -118,13 +120,35 @@ class DorisVariantField(DorisField):
     def get_field(cls, table: Table, field: Field, *args, **kwargs) -> "DorisField":
         return cls(keys=field.keys, *args, **kwargs)
 
+    def _sanitize_variant_key(self, key: str) -> str:
+        """对 Variant Key 做统一校验与转义，避免 SQL 注入"""
+        # 1. 基础校验（非空、类型）
+        if not isinstance(key, str):
+            raise TypeError(f"Variant Key 必须是字符串，当前类型：{type(key)}")
+        if not key:
+            raise ValueError("Variant Key 不能为空字符串")
+            # 2. 使用 PyMySQL 提供的 escape_string 做转义
+        escaped_key = escape_string(key)
+        if isinstance(escaped_key, (bytes, bytearray)):
+            escaped_key = escaped_key.decode()
+
+        return escaped_key
+
     def format_keys_quote(self) -> str:
         """
         格式化keys，例如：["k1", "k2"] => "['k1']['k2']"
         """
         if not self.keys:
             return ""
-        return "".join(["[{quote}{key}{quote}]".format(key=key, quote=self.key_quote or "") for key in self.keys])
+
+        quote = self.key_quote or "'"
+        return "".join(
+            "[{quote}{key}{quote}]".format(
+                key=self._sanitize_variant_key(key),
+                quote=quote,
+            )
+            for key in self.keys
+        )
 
     def get_sql(self, **kwargs: Any) -> str:
         if not self.keys:
