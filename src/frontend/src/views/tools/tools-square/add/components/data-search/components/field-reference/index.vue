@@ -221,24 +221,23 @@
                         v-if="item.target_value_type === 'field'">
                         <bk-select
                           ref="targetValueSelectRef"
-                          v-model="item.target_value"
                           class="bk-select"
                           custom-content
-                          display-key="trigger_display_name"
+                          display-key="label"
                           id-key="raw_name"
                           :placeholder="t('请选择引用的结果字段')"
                           :popover-options="{
                             placement: 'top',
-                          }">
+                          }"
+                          @clear="handleTargetValueClear(toolIndex, index)">
                           <bk-tree
                             :check-strictly="false"
                             children="children"
                             :data="localOutputFields"
-                            style="color: #63656e;"
                             @node-click="(data: LocalOutputFields) => handleTargetValueChange(data, toolIndex, index)">
                             <template #nodeType="node">
                               <span v-if="(node.isChild && node.children.length === 0) || !node.isChild ">
-                                {{ node.trigger_display_name }}
+                                {{ getOutputFieldDisplayName(node) }}
                               </span>
                             </template>
                           </bk-tree>
@@ -294,7 +293,7 @@
 </template>
 <script setup lang="ts">
   import _ from 'lodash';
-  import { computed, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -324,7 +323,6 @@
   interface LocalOutputFields {
     raw_name: string;
     display_name: string;
-    trigger_display_name: string;
     json_path?: string;
     target_field_type?: string;
     children?: LocalOutputFields[];
@@ -628,19 +626,112 @@
     return undefined;
   };
 
+  // 计算全局索引：在所有工具配置中，指定 toolIndex 和 configIndex 之前有多少个 'field' 类型的配置项
+  const getFieldSelectIndex = (toolIndex: number, configIndex: number): number => {
+    let globalFieldCount = 0;
+
+    // 遍历当前工具之前的所有工具
+    for (let t = 0; t < toolIndex; t += 1) {
+      const toolConfig = formData.value.tools[t];
+      if (toolConfig) {
+        for (let c = 0; c < toolConfig.config.length; c += 1) {
+          if (toolConfig.config[c]?.target_value_type === 'field') {
+            globalFieldCount += 1;
+          }
+        }
+      }
+    }
+
+    // 计算当前工具中，在 configIndex 之前的 'field' 类型配置项数量
+    const currentToolConfig = formData.value.tools[toolIndex];
+    if (currentToolConfig) {
+      for (let i = 0; i < configIndex; i += 1) {
+        if (currentToolConfig.config[i]?.target_value_type === 'field') {
+          globalFieldCount += 1;
+        }
+      }
+    }
+
+    return globalFieldCount;
+  };
+
   const handleTargetValueChange = (data: LocalOutputFields, toolIndex: number, configIndex: number) => {
     const localOutputField = findFieldInTree(localOutputFields.value, data.raw_name);
-    const configItem = formData.value.tools[toolIndex].config[configIndex];
 
     // 如果 data.json_path 存在，则使用 data.json_path，否则使用 data.raw_name
-    configItem.target_value = data.json_path || data.raw_name;
+    formData.value.tools[toolIndex].config[configIndex].target_value = data.json_path || data.raw_name;
+
+    // 计算正确的 select ref 索引（只计算 'field' 类型的配置项）
+    const selectIndex = getFieldSelectIndex(toolIndex, configIndex);
+
+    // 设置select显示的值
+    if (targetValueSelectRef.value[selectIndex]) {
+      targetValueSelectRef.value[selectIndex].selected = [{
+        raw_name: data.json_path || data.raw_name,
+        label: getOutputFieldDisplayName(data),
+      }];
+      targetValueSelectRef.value[selectIndex].hidePopover();
+    }
+
     // 结果字段来源（策略配置中添加）
     if (localOutputField?.target_field_type) {
-      configItem.target_field_type = localOutputField.target_field_type;
+      formData.value.tools[toolIndex].config[configIndex].target_field_type = localOutputField.target_field_type;
     }
-    targetValueSelectRef.value[configIndex].hidePopover();
+  };
 
-    console.log('formData.value.tools', formData.value.tools);
+  const handleTargetValueClear = (toolIndex: number, configIndex: number) => {
+    formData.value.tools[toolIndex].config[configIndex].target_value = '';
+    formData.value.tools[toolIndex].config[configIndex].target_field_type = '';
+  };
+
+  // 递归查找字段（支持 json_path 和 raw_name）
+  const findFieldByValue = (fields: LocalOutputFields[], targetValue: string): LocalOutputFields | undefined => {
+    for (const field of fields) {
+      // 匹配 json_path 或 raw_name
+      if (field.json_path === targetValue || field.raw_name === targetValue) {
+        return field;
+      }
+      if (field.children && field.children.length > 0) {
+        const found = findFieldByValue(field.children, targetValue);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  // 设置已存在配置的 select 选中状态
+  const setSelectValues = async () => {
+    await nextTick();
+    if (!targetValueSelectRef.value || !Array.isArray(targetValueSelectRef.value)) {
+      return;
+    }
+
+    let globalIndex = 0;
+    for (let t = 0; t < formData.value.tools.length; t += 1) {
+      const toolConfig = formData.value.tools[t];
+      for (let c = 0; c < toolConfig.config.length; c += 1) {
+        const configItem = toolConfig.config[c];
+        // 只处理类型为 'field' 且有 target_value 的配置项
+        if (configItem.target_value_type === 'field' && configItem.target_value) {
+          // 查找对应的字段（支持 json_path 和 raw_name）
+          const field = findFieldByValue(localOutputFields.value, configItem.target_value);
+
+          if (field && targetValueSelectRef.value[globalIndex]) {
+            // 设置 select 的选中值
+            targetValueSelectRef.value[globalIndex].selected = [{
+              raw_name: field.json_path || field.raw_name,
+              label: getOutputFieldDisplayName(field),
+            }];
+          }
+        }
+        // 只有类型为 'field' 的配置项才有 select，才需要增加索引
+        if (configItem.target_value_type === 'field') {
+          globalIndex += 1;
+        }
+      }
+    }
   };
 
   const handleFormItemChange = (val: any, toolIndex: number, configIndex: number) => {
@@ -680,6 +771,36 @@
   // 快捷关闭
   const handleUpdateIsShow = () => {
     resetFormData();
+  };
+
+  const setFormData = async (data: FormData['tools']) => {
+    formData.value.tools = _.cloneDeep(data);
+
+    if (formData.value.tools.length > 0) {
+      formData.value.selectTool = formData.value.tools.map(tool => tool.tool.uid);
+
+      // 使用 Promise.all 并发获取所有工具详情
+      const toolDetailPromises = formData.value.tools
+        .filter(toolConfig => toolConfig.tool.uid)
+        .map(async (toolConfig, index) => {
+          const toolDetail = await fetchToolsDetail(toolConfig.tool.uid);
+          // 对每个工具详情执行对比逻辑，返回更新后的配置
+          const updatedToolConfig = processToolDetailComparison(toolConfig, toolDetail);
+          return { index, updatedToolConfig, toolDetail };
+        });
+
+      try {
+        const results = await Promise.all(toolDetailPromises);
+        // 更新 formData 中的工具配置
+        results.forEach(({ index, updatedToolConfig }) => {
+          formData.value.tools[index] = updatedToolConfig;
+        });
+        // 设置已存在配置的 select 选中状态
+        await setSelectValues();
+      } catch (error) {
+        console.error('获取工具详情时发生错误:', error);
+      }
+    }
   };
 
   // 构建工具级联列表的通用函数
@@ -729,14 +850,18 @@
       raw_name: item.raw_name,
       display_name: item.display_name,
       description: item.description,
-      trigger_display_name: item.display_name
-        ? `${item.raw_name}(${item.display_name})`
-        : item.raw_name,
       children: item.children && item.children.length > 0
         ? transformOutputFields(item.children)
         : undefined,
     }));
   };
+
+  // 获取输出字段显示名称
+  const getOutputFieldDisplayName = (field: LocalOutputFields): string => (
+    field.display_name
+      ? `${field.raw_name}(${field.display_name})`
+      : field.raw_name
+  );
 
   watch(() => props.outputFields, (val: Array<Record<string, any>>) => {
     localOutputFields.value = transformOutputFields(val || []);
@@ -749,34 +874,6 @@
     isToolLoading.value = false;
     buildToolCascaderList(data);
   });
-
-  const setFormData = async (data: FormData['tools']) => {
-    formData.value.tools = _.cloneDeep(data);
-
-    if (formData.value.tools.length > 0) {
-      formData.value.selectTool = formData.value.tools.map(tool => tool.tool.uid);
-
-      // 使用 Promise.all 并发获取所有工具详情
-      const toolDetailPromises = formData.value.tools
-        .filter(toolConfig => toolConfig.tool.uid)
-        .map(async (toolConfig, index) => {
-          const toolDetail = await fetchToolsDetail(toolConfig.tool.uid);
-          // 对每个工具详情执行对比逻辑，返回更新后的配置
-          const updatedToolConfig = processToolDetailComparison(toolConfig, toolDetail);
-          return { index, updatedToolConfig, toolDetail };
-        });
-
-      try {
-        const results = await Promise.all(toolDetailPromises);
-        // 更新 formData 中的工具配置
-        results.forEach(({ index, updatedToolConfig }) => {
-          formData.value.tools[index] = updatedToolConfig;
-        });
-      } catch (error) {
-        console.error('获取工具详情时发生错误:', error);
-      }
-    }
-  };
 
   defineExpose<Expose>({
     setFormData: async (data: FormData['tools']) => {
