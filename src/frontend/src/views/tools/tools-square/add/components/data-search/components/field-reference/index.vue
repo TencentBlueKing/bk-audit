@@ -220,17 +220,28 @@
                       <div
                         v-if="item.target_value_type === 'field'">
                         <bk-select
+                          ref="targetValueSelectRef"
                           v-model="item.target_value"
                           class="bk-select"
-                          filterable
+                          custom-content
+                          display-key="trigger_display_name"
+                          id-key="raw_name"
                           :placeholder="t('请选择引用的结果字段')"
-                          @change="(value: string) => handleTargetValueChange(value, toolIndex, index)">
-                          <bk-option
-                            v-for="(outputField, OutputFieldIndex) in localOutputFields"
-                            :id="outputField.raw_name"
-                            :key="OutputFieldIndex"
-                            :disabled="getUsedFields(toolIndex, index).has(outputField.raw_name)"
-                            :name="outputField.trigger_display_name" />
+                          :popover-options="{
+                            placement: 'top',
+                          }">
+                          <bk-tree
+                            :check-strictly="false"
+                            children="children"
+                            :data="localOutputFields"
+                            style="color: #63656e;"
+                            @node-click="(data: LocalOutputFields) => handleTargetValueChange(data, toolIndex, index)">
+                            <template #nodeType="node">
+                              <span v-if="(node.isChild && node.children.length === 0) || !node.isChild ">
+                                {{ node.trigger_display_name }}
+                              </span>
+                            </template>
+                          </bk-tree>
                         </bk-select>
                       </div>
                       <div
@@ -314,7 +325,9 @@
     raw_name: string;
     display_name: string;
     trigger_display_name: string;
+    json_path?: string;
     target_field_type?: string;
+    children?: LocalOutputFields[];
   }
 
   interface Emits {
@@ -389,6 +402,7 @@
   });
 
   const formRef = ref();
+  const targetValueSelectRef = ref();
   const localOutputFields = ref<Array<LocalOutputFields>>([]);
 
   const referenceTypeList = ref([{
@@ -425,25 +439,6 @@
     return map;
   });
 
-  // 计算已被其他配置项选中的字段（只在同一个工具配置中互斥）
-  const getUsedFields = (currentToolIndex: number, currentConfigIndex: number) => {
-    const usedFields = new Set<string>();
-    // 只检查当前工具配置中的其他配置项
-    const currentToolConfig = formData.value.tools[currentToolIndex];
-    if (currentToolConfig) {
-      currentToolConfig.config.forEach((configItem, configIdx) => {
-        // 排除当前正在编辑的配置项
-        if (configIdx === currentConfigIndex) {
-          return;
-        }
-        // 如果配置项类型是 field 且有选中的值，则标记为已使用
-        if (configItem.target_value_type === 'field' && configItem.target_value) {
-          usedFields.add(configItem.target_value);
-        }
-      });
-    }
-    return usedFields;
-  };
 
   const fetchToolsDetail = async (uid: string) => {
     try {
@@ -594,7 +589,8 @@
     const fieldMap = toolInputVariableMap.value.get(toolUid);
     if (fieldMap && fieldMap.has(sourceField)) {
       const fieldInfo = fieldMap.get(sourceField);
-      return `${sourceField}(${fieldInfo?.display_name || sourceField})`;
+      const displayName = fieldInfo?.display_name;
+      return displayName ? `${sourceField}(${displayName})` : sourceField;
     }
     return sourceField;
   };
@@ -616,14 +612,35 @@
     }
   };
 
-  const handleTargetValueChange = (value: string, toolIndex: number, configIndex: number) => {
-    const localOutputField = localOutputFields.value.find(item => item.raw_name === value);
+  // 递归查找树形数据中的字段
+  const findFieldInTree = (fields: LocalOutputFields[], rawName: string): LocalOutputFields | undefined => {
+    for (const field of fields) {
+      if (field.raw_name === rawName) {
+        return field;
+      }
+      if (field.children && field.children.length > 0) {
+        const found = findFieldInTree(field.children, rawName);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    return undefined;
+  };
+
+  const handleTargetValueChange = (data: LocalOutputFields, toolIndex: number, configIndex: number) => {
+    const localOutputField = findFieldInTree(localOutputFields.value, data.raw_name);
     const configItem = formData.value.tools[toolIndex].config[configIndex];
 
+    // 如果 data.json_path 存在，则使用 data.json_path，否则使用 data.raw_name
+    configItem.target_value = data.json_path || data.raw_name;
     // 结果字段来源（策略配置中添加）
     if (localOutputField?.target_field_type) {
       configItem.target_field_type = localOutputField.target_field_type;
     }
+    targetValueSelectRef.value[configIndex].hidePopover();
+
+    console.log('formData.value.tools', formData.value.tools);
   };
 
   const handleFormItemChange = (val: any, toolIndex: number, configIndex: number) => {
@@ -702,14 +719,27 @@
     buildToolCascaderList(props.allToolsData, searchValue);
   };
 
-  watch(() => props.outputFields, (val: Array<Record<string, any>>) => {
-    localOutputFields.value = val?.map(item => ({
+  // 递归转换树形数据，保持树状结构
+  const transformOutputFields = (fields: Array<Record<string, any>>): LocalOutputFields[] => {
+    if (!Array.isArray(fields)) {
+      return [];
+    }
+    return fields.map(item => ({
       ...item,
       raw_name: item.raw_name,
       display_name: item.display_name,
       description: item.description,
-      trigger_display_name: `${item.raw_name}(${item.display_name})`,
+      trigger_display_name: item.display_name
+        ? `${item.raw_name}(${item.display_name})`
+        : item.raw_name,
+      children: item.children && item.children.length > 0
+        ? transformOutputFields(item.children)
+        : undefined,
     }));
+  };
+
+  watch(() => props.outputFields, (val: Array<Record<string, any>>) => {
+    localOutputFields.value = transformOutputFields(val || []);
   }, {
     immediate: true,
     deep: true,

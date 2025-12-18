@@ -119,7 +119,6 @@
   const selectValue = ref<string[]>([]);
   const selectedId = ref<string[]>([]);
   const selectedItems = ref<any[]>([]);
-  const comRef = ref();
   const treeData = ref<any[]>([]);
   const outputFields = ref<any[]>([]);
 
