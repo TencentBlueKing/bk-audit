@@ -35,6 +35,17 @@ export default {
       }));
   },
   /**
+   * @desc 获取正在生成的事件列表
+   */
+  fetchAddEventList(params: {
+    id: string
+  }) {
+    return RiskManageSource.getAddEventList(params)
+      .then(({ data }) => ({
+        ...data,
+      }));
+  },
+  /**
    * @desc 获取待我处理风险列表
    */
   fetchTodoRiskList(params: {
@@ -207,6 +218,13 @@ export default {
     risk_view_type: string,
   }) {
     return RiskManageSource.batchExport(params)
+      .then(({ data }) => data);
+  },
+  /**
+   * @desc 手动增加事件
+   */
+  addEvent(params: Record<string, any>) {
+    return RiskManageSource.addEvent(params)
       .then(({ data }) => data);
   },
 };

@@ -25,9 +25,11 @@ import Request, {
 import ModuleBase from './module-base';
 
 class RiskManage extends ModuleBase {
+  api: string;
   constructor() {
     super();
     this.module = '/api/v1/risks';
+    this.api = '/api/v1';
   }
   // 获取风险列表
   getRiskList(params: {
@@ -37,6 +39,14 @@ class RiskManage extends ModuleBase {
     return Request.post<IRequestResponsePaginationData<RiskManageModel>>(`${this.module}/?page=${params.page}&page_size=${params.page_size}`, {
       params,
       payload,
+    });
+  }
+  // 获取正在生成的事件列表
+  getAddEventList(params: {
+    id: string
+  }) {
+    return Request.get(`${this.module}/${params.id}/`, {
+      params,
     });
   }
   // 获取待我处理的风险列表
@@ -198,6 +208,11 @@ class RiskManage extends ModuleBase {
     return Request.post(`${this.module}/export/`, {
       params,
       responseType: 'blob',
+    });
+  }
+  addEvent(params: Record<string, any>) {
+    return Request.post(`${this.api}/events/`, {
+      params,
     });
   }
 }
