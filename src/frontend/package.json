@@ -4,7 +4,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
-    "build": "run-p type-check build-only",
+    "build": "run-s type-check build-only",
     "build-server": "./node_modules/.bin/esbuild ./server/index.js --bundle --minify --outfile=./server/main.js --platform=node",
     "server": "node ./server/main.js",
     "preview": "vite preview --port 4173",
