@@ -800,7 +800,9 @@
 
     // 非下钻
     if (!isDrillDownOpen.value) {
-      searchList.value = data.config.input_variable.map(createSearchItem);
+      searchList.value = data.config.input_variable
+        .filter((item: any) => item.is_show === undefined || item.is_show === true)
+        .map(createSearchItem);
     } else {
       // 下钻填充值
       if (!drillDownItemConfig.value
@@ -815,30 +817,32 @@
       });
 
       // 一次性完成映射
-      searchList.value = data.config.input_variable.map((item: any) => {
-        const searchItem = createSearchItem(item);
-        const configItem = configMap.get(searchItem.raw_name);
-        if (!configItem) return searchItem;
+      searchList.value = data.config.input_variable
+        .filter((item: any) => item.is_show === undefined || item.is_show === true)
+        .map((item: any) => {
+          const searchItem = createSearchItem(item);
+          const configItem = configMap.get(searchItem.raw_name);
+          if (!configItem) return searchItem;
 
-        // 动态值处理逻辑
-        let dynamicValue = '';
-        if (configItem.target_value_type !== 'fixed_value') {
-          if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
-            // 从根对象取值
-            dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? searchItem.value;
-          } else {
-            // 从event_data对象取值
-            dynamicValue = drillDownItemRowData.value?.event_data?.[configItem.target_value] ?? searchItem.value;
+          // 动态值处理逻辑
+          let dynamicValue = '';
+          if (configItem.target_value_type !== 'fixed_value') {
+            if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
+              // 从根对象取值
+              dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? searchItem.value;
+            } else {
+              // 从event_data对象取值
+              dynamicValue = drillDownItemRowData.value?.event_data?.[configItem.target_value] ?? searchItem.value;
+            }
           }
-        }
 
-        return {
-          ...searchItem,
-          value: configItem.target_value_type === 'fixed_value'
-            ? configItem.target_value
-            : dynamicValue,
-        };
-      });
+          return {
+            ...searchItem,
+            value: configItem.target_value_type === 'fixed_value'
+              ? configItem.target_value
+              : dynamicValue,
+          };
+        });
     }
 
     nextTick(() => {
