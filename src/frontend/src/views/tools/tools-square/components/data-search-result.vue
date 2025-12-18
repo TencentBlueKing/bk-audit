@@ -73,14 +73,20 @@
   });
 
   // 创建 columns
-  const columns = computed(() => outputFields.value.map((item) => {
+  const columns = computed<Column[]>(() => outputFields.value.map((item): Column => {
     const renderCell = props.createRenderCell(item, props.toolDetails);
     return {
       label: item.display_name,
       field: item.raw_name,
       minWidth: 200,
       showOverflowTooltip: true,
-      render: renderCell,
+      render: (args: any) => {
+        // 包装 renderCell 以兼容 bk-table 的参数类型（data 是可选的）
+        if (!args?.data) {
+          return null;
+        }
+        return renderCell({ data: args.data });
+      },
     };
   })) as unknown as Column[];
 
