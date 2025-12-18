@@ -1,3 +1,4 @@
+<!-- eslint-disable max-len -->
 <!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
@@ -31,7 +32,14 @@
     </div>
 
     <div class="title">
-      {{ t('关联事件') }}
+      <span> {{ t('关联事件') }}</span>
+      <span
+        v-if="data.status !== 'closed'"
+        class="add-event"
+        @click="handleAddEvent">
+        <audit-icon
+          class="add-fill-event"
+          type="add-fill" />{{ t('新建关联事件') }}</span>
     </div>
     <div
       :key="detailRenderKey"
@@ -52,7 +60,7 @@
                     { active: active === index },
                   ]"
                   @click="handlerSelect(item, index)">
-                  {{ item.event_time }}
+                  {{ item?.event_time }}
                 </div>
               </div>
             </transition>
@@ -60,7 +68,16 @@
         </div>
 
         <!-- detail -->
+        <div v-if="activeStatus === 'new' && newIndex.includes(active)">
+          <div class="frontend-create">
+            <audit-icon
+              class="create-icon"
+              type="loading" />
+            {{ t('事件创建中') }}
+          </div>
+        </div>
         <div
+          v-else
           class="list-item-detail"
           :style="{
             width: isShowSide ? '100%' : 'calc(100% - 164px)',
@@ -88,11 +105,11 @@
                     <!-- 策略id -->
                     <template v-if="basicItem.field_name === 'strategy_id'">
                       <bk-button
-                        v-if="strategyList.find(item => item.value === eventItem.strategy_id)?.label"
+                        v-if="strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label"
                         text
                         theme="primary"
                         @click="handlerStrategy()">
-                        {{ strategyList.find(item => item.value === eventItem.strategy_id)?.label }}
+                        {{ strategyList.find((item: any) => item.value === eventItem.strategy_id)?.label }}
                       </bk-button>
                       <span v-else> -- </span>
                     </template>
@@ -117,7 +134,19 @@
                             drillMap.get(basicItem.field_name),
                             basicItem.field_name
                           )">
-                          {{ displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value }}
+                          <edit-tag
+                            v-if="basicItem.field_name === 'operator'"
+                            :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
+                            :max="99"
+                            :show-copy="false"
+                            style="display: inline-block;"
+                            @click="handleUseTool(
+                              drillMap.get(basicItem.field_name),
+                              basicItem.field_name
+                            )" />
+                          <span v-else>
+                            {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) }}
+                          </span>
                         </span>
                         <template #content>
                           <div>
@@ -153,7 +182,14 @@
                       </bk-popover>
                       <!-- 没有字段映射或者没有证据下探 -->
                       <span v-else>
-                        {{ displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value }}
+                        <edit-tag
+                          v-if="basicItem.field_name === 'operator'"
+                          :data="handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value)"
+                          :max="99"
+                          style="display: inline-block;" />
+                        <span v-else>
+                          {{ handleShowText(displayValueDict[basicItem.field_name as DisplayValueKeysWithoutEventData]?.value ) }}
+                        </span>
                       </span>
                     </template>
                     <!-- 证据下探按钮 -->
@@ -227,8 +263,8 @@
                   <render-info-item
                     v-for="(key, index) in keyArr"
                     :key="index"
-                    :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
-                    :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
+                    :description="strategyInfo.find((item: any) => item.field_name === key)?.description || ''"
+                    :label="strategyInfo.find((item: any) => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
                     :label-width-percent="25"
                     style="flex-basis: 50%;">
@@ -241,7 +277,7 @@
                       <span
                         :class="[
                           displayValueDict.eventData[key]?.isMappings
-                            ? 'tips' : ''
+                            ? 'tips space' : 'space'
                         ]"
                         :style="{
                           color: drillMap.get(key) ? '#3a84ff' : '#313238',
@@ -251,7 +287,7 @@
                           drillMap.get(key),
                           key
                         )">
-                        {{ displayValueDict.eventData[key]?.value }}
+                        {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                       </span>
                       <template #content>
                         <div>
@@ -263,8 +299,8 @@
                             </span>
                             <br>
                             <span>{{ t('展示文本: ') }}</span>
-                            <span>
-                              {{ displayValueDict.eventData[key]?.dict?.name }}
+                            <span class="space">
+                              {{ handleShowText(displayValueDict.eventData[key]?.dict?.name) }}
                             </span>
                           </div>
                           <div
@@ -276,8 +312,10 @@
                       </template>
                     </bk-popover>
                     <!-- 没有字段映射或者没有证据下探 -->
-                    <span v-else>
-                      {{ displayValueDict.eventData[key]?.value }}
+                    <span
+                      v-else
+                      class="space">
+                      {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                     </span>
                     <!-- 证据下探按钮 -->
                     <template v-if="drillMap.get(key)">
@@ -341,8 +379,8 @@
                   <render-info-item
                     v-for="(key, index) in keyArr"
                     :key="index"
-                    :description="strategyInfo.find(item => item.field_name === key)?.description || ''"
-                    :label="strategyInfo.find(item => item.field_name === key)?.display_name || key"
+                    :description="strategyInfo.find((item: any) => item.field_name === key)?.description || ''"
+                    :label="strategyInfo.find((item: any) => item.field_name === key)?.display_name || key"
                     :label-width="labelWidth"
                     :label-width-percent="25"
                     style="width: 50%;">
@@ -355,7 +393,7 @@
                       <span
                         :class="[
                           displayValueDict.eventData[key]?.isMappings
-                            ? 'tips' : ''
+                            ? 'tips space' : 'space'
                         ]"
                         :style="{
                           color: drillMap.get(key) ? '#3a84ff' : '#313238',
@@ -365,7 +403,7 @@
                           drillMap.get(key),
                           key
                         )">
-                        {{ displayValueDict.eventData[key]?.value }}
+                        {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                       </span>
                       <template #content>
                         <div>
@@ -377,7 +415,7 @@
                             </span>
                             <br>
                             <span>{{ t('展示文本: ') }}</span>
-                            <span>
+                            <span class="space">
                               {{ displayValueDict.eventData[key]?.dict?.name }}
                             </span>
                           </div>
@@ -390,8 +428,10 @@
                       </template>
                     </bk-popover>
                     <!-- 没有字段映射或者没有证据下探 -->
-                    <span v-else>
-                      {{ displayValueDict.eventData[key]?.value }}
+                    <span
+                      v-else
+                      class="space">
+                      {{ handleShowText(displayValueDict.eventData[key]?.value) }}
                     </span>
                     <!-- 证据下探按钮 -->
                     <template v-if="drillMap.get(key)">
@@ -492,6 +532,10 @@
       @close="handleClose"
       @open-field-down="openFieldDown" />
   </div>
+  <add-event
+    ref="addEventRef"
+    :event-data="data"
+    @add-success="handleAddSuccess" />
 </template>
 
 <script setup lang='tsx'>
@@ -510,15 +554,20 @@
   import { useRouter } from 'vue-router';
 
   import EventManageService from '@service/event-manage';
+  import RiskManageService from '@service/risk-manage';
   import ToolManageService from '@service/tool-manage';
 
   import EventModel from '@model/event/event';
   import type RiskManageModel from '@model/risk/risk';
   import type StrategyInfo from '@model/risk/strategy-info';
 
+  import EditTag from '@components/edit-box/tag.vue';
+
   // import Tooltips from '@components/show-tooltips-text/index.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
+
+  import addEvent from '../add-event/index.vue';
 
   import RenderInfoItem from './render-info-item.vue';
 
@@ -573,6 +622,7 @@
 
   interface Emits {
     (e: 'getEventData', value: any): void
+    (e: 'updatedData'): void
   }
 
   type DisplayValueDict = {
@@ -587,7 +637,11 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const isShowSide = ref(false);
+  let timeout: number| undefined = undefined;
 
+  const activeStatus = ref('');
+  const newIndex = ref<number[]>([]);
+  const addEventRef = ref();
   const router = useRouter();
   const { t, locale } = useI18n();
   const linkEventList = ref<Array<EventModel>>([]); // 事件列表
@@ -715,6 +769,28 @@
     return eventInfo.filter(item => item.duplicate_field).map(item => item.field_name);
   });
 
+  // 判断值是否为数组（包括字符串形式的数组）
+  const handleShowText = (value: any) => {
+    // 1. 如果是真正的数组，直接连接
+    if (Array.isArray(value)) {
+      return value.length > 0 ? value.join(',') : '--';
+    }
+
+    // 2. 如果是字符串且看起来像数组，尝试解析
+    if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
+      try {
+        const parsedArray = JSON.parse(value);
+        if (Array.isArray(parsedArray)) {
+          return parsedArray.length > 0 ? parsedArray.join(',') : '--';
+        }
+      } catch (error) {
+        return value  || '--';
+      }
+    }
+    // 3. 其他情况直接返回原值
+    return value || '--';
+  };
+
   // 将各种类型转换为字符串，模拟 Vue 模板的显示效果
   const convertToString = (value: any): string => {
     // Vue 模板显示逻辑：
@@ -782,6 +858,16 @@
       type: '',
     };
   };
+  const {
+    data: addEventData,
+    run: getAddEventList,
+  } = useRequest(RiskManageService.fetchAddEventList, {
+    defaultValue: {
+      di: '',
+    },
+    onSuccess() {
+    },
+  });
 
   const {
     data: linkEventData,
@@ -794,43 +880,90 @@
       total: 1,
     },
     onSuccess() {
-      if (linkEventData.value.results.length) {
+      getAddEventList({
+        id: props.data.risk_id,
+      }).then(() => {
         // 触底加载，拼接 - 使用动态去重字段
-        const allEvents = [...linkEventList.value, ...linkEventData.value.results];
-        linkEventList.value = allEvents;
-        if (distinctEventDataKeyArr.value.length) {
-          // 根据指定字段组合进行去重（包含关系）
-          linkEventList.value =  allEvents.filter((event, index, self) => {
-            // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
-            const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
+        linkEventList.value = [];
+        newIndex.value = [];
+        if (linkEventData.value.results.length) {
+          activeStatus.value =  '';
+          const allEvents = [...linkEventList.value, ...linkEventData.value.results];
+          linkEventList.value = allEvents;
+          if (distinctEventDataKeyArr.value.length) {
+            // 根据指定字段组合进行去重（包含关系）
+            linkEventList.value =  allEvents.filter((event, index, self) => {
+              // 根据 distinctEventDataKeyArr 中的字段生成当前事件的字段值数组
+              const currentValues = distinctEventDataKeyArr.value.map(key => event[key as keyof EventModel] || event.event_data?.[key] || '');
 
-            // 查找第一个具有包含关系的事件索引
-            const firstIndex = self.findIndex((e) => {
-              const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
-              // 检查所有字段值都完全相同（转换为字符串比较）
-              return currentValues.every((currentValue, i) => {
-                // 将值转换为字符串进行比较，处理各种特殊类型
-                const currentStr = convertToString(currentValue);
-                const eValueStr = convertToString(eValues[i]);
-                return currentStr === eValueStr;
+              // 查找第一个具有包含关系的事件索引
+              const firstIndex = self.findIndex((e) => {
+                const eValues = distinctEventDataKeyArr.value.map(key => e[key as keyof EventModel] || e.event_data?.[key] || '');
+                // 检查所有字段值都完全相同（转换为字符串比较）
+                return currentValues.every((currentValue, i) => {
+                  // 将值转换为字符串进行比较，处理各种特殊类型
+                  const currentStr = convertToString(currentValue);
+                  const eValueStr = convertToString(eValues[i]);
+                  return currentStr === eValueStr;
+                });
               });
-            });
 
-            // 只保留第一次出现的事件（去重）
-            return index === firstIndex;
-          });
+              // 只保留第一次出现的事件（去重）
+              return index === firstIndex;
+            });
+          }
+        }
+        if (addEventData.value.unsynced_events.length > 0) {
+          linkEventList.value = addEventData.value.unsynced_events.concat(linkEventList.value);
+          activeStatus.value = linkEventList.value[0]?.status || '';
         }
 
+        newIndex.value = linkEventList.value.map((item, index) => {
+          if (item.status === 'new') {
+            return index;
+          }
+          return -1;
+        }).filter(item => item !== -1);
+
+        if (linkEventList.value.some(item => item.status === 'new')) {
+          // 执行定时器刷新列表
+          activeStatus.value = 'new';
+          timeout = setTimeout(() => {
+            timeoutRefresh();
+          }, 5000);
+        } else {
+          // 消除定时器 慢5秒确保最新数据
+          if (timeout) {
+            activeStatus.value = 'new';
+            setTimeout(() => {
+              activeStatus.value = '';
+              emits('updatedData');
+              timeoutRefresh();
+              clearTimeout(timeout);
+              timeout = undefined;
+            }, 5000);
+          }
+        }
         // 默认获取第一个
         [eventItem.value] = linkEventList.value;
         isShowSide.value = !(linkEventList.value.length > 1);
-      // 事件event_data数据处理
-      // const eventDataKey = getEventDataKey(eventItem.value.event_data);
-      // eventItemDataKeyArr.value = group(eventDataKey);
-      }
+      });
     },
   });
-
+  // 执行定时器刷新列表
+  const timeoutRefresh = () => {
+    getAddEventList({
+      id: props.data.risk_id,
+    }).then((data) => {
+      fetchLinkEvent({
+        start_time: data.event_time,
+        end_time: data.event_end_time,
+        risk_id: data.risk_id,
+        page: currentPage.value,
+        page_size: 50,
+      });
+    });
+  };
   const handleScroll = (event: Event) => {
     const target = event.target as HTMLDivElement;
     // 下拉触底没有加载完时，继续获取列表
@@ -860,6 +993,7 @@
   const handlerSelect = (item: EventModel, index: number) => {
     eventItem.value = item;
     active.value = index;
+    activeStatus.value = item?.status || '';
   };
 
   const handlerStrategy = () => {
@@ -930,7 +1064,24 @@
       handleCloseTool(ToolInfo);
     }
   };
+  const handleAddEvent = () => {
+    addEventRef.value?.show();
+  };
 
+  // 添加事件成功
+  const handleAddSuccess = () => {
+    active.value = 0;
+    linkEventList.value = [];
+    nextTick(() => {
+      fetchLinkEvent({
+        start_time: props.data.event_time,
+        end_time: props.data.event_end_time,
+        risk_id: props.data.risk_id,
+        page: currentPage.value,
+        page_size: 50,
+      });
+    });
+  };
   // 防抖处理
   let fetchTimeout: number | undefined;
   watch(() => props.data, (data, oldData) => {
@@ -1017,6 +1168,20 @@
     font-weight: 700;
     line-height: 22px;
     color: #313238;
+
+    .add-event {
+      margin-left: 20px;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 20px;
+      letter-spacing: 0;
+      color: #3a84ff;
+      cursor: pointer;
+
+      .add-fill-event {
+        margin-right: 3px;
+      }
+    }
   }
 
   .body {
@@ -1025,6 +1190,7 @@
 
     .list {
       display: inline-block;
+      min-height: 200px;
 
       /* height: 500px; */
       overflow: hidden;
@@ -1191,5 +1357,31 @@
 
 .evidence-info-value-tooltips {
   max-width: 80%
+}
+
+.frontend-create {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  color: #3a84ff;
+  transform: translateX(-50%);
+
+  .create-icon {
+    animation: spin 1s linear infinite
+  }
+}
+
+.space {
+  white-space: pre-line;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

@@ -18,18 +18,28 @@
   <div
     ref="rootRef"
     class="audit-edit-tag">
-    <template v-if="data && data.length">
+    <template v-if="initData && initData.length">
       <bk-tag
         v-for="(item) in renderData"
         :key="item"
-        style="width: auto;">
-        <tool-tip-text :data="item " />
+        @click="handlerClick">
+        <tool-tip-text
+          :data="item"
+          span-width="10px"
+          style="
+          display: inline-block;
+          max-width: 100px;
+          overflow: hidden;
+          text-overflow: ellipsis ;
+          white-space: nowrap;
+          vertical-align: middle;
+          -webkit-box-orient: vertical;" />
       </bk-tag>
       <bk-tag
         v-if="moreDataText"
         key="more"
         ref="moreRef">
-        +{{ data.length - renderData.length }}
+        +{{ initData.length - renderData.length }}
       </bk-tag>
       <div
         v-if="showCopy"
@@ -45,7 +55,7 @@
         v-if="isCalcRenderTagNum"
         style="position: absolute; word-break: keep-all; white-space: nowrap; visibility: hidden;">
         <bk-tag
-          v-for="item in data"
+          v-for="item in initData"
           :key="item"
           ref="tagElsRef">
           {{ item }}
@@ -75,41 +85,58 @@
   import ToolTipText from '@/components/show-tooltips-text/index.vue';
 
   interface Props {
-    data: Array<string>,
+    data: Array<string> | string,
     max?: number,
     showCopy?: boolean
+  }
+  interface Emits {
+    (e: 'click'): void
   }
 
   const props = withDefaults(defineProps<Props>(), {
     max: 0,
     showCopy: true,
   });
-
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const rootRef = ref();
   const moreRef = ref();
   const tagElsRef = ref();
   const renderTagNum = ref(1);
   const isCalcRenderTagNum = ref(false);
-
-  const renderData = computed(() => props.data.slice(0, renderTagNum.value));
-
-  const moreDataText = computed(() => {
-    if (props.data.length < 1
-      || props.data.length <= renderTagNum.value) {
-      return '';
+  const initData = computed(() =>  {
+    // 1. 如果是真正的数组，直接连接
+    if (Array.isArray(props.data)) {
+      return props.data;
     }
-    return props.data.slice(renderTagNum.value).join(',');
+
+    return  props.data.split(',');
+  });
+  const renderData = computed(() =>  {
+    // 1. 如果是真正的数组，直接连接
+    if (Array.isArray(props.data)) {
+      return props.data.slice(0, renderTagNum.value);
+    }
+
+    return  (props.data.split(',')).slice(0, renderTagNum.value);
   });
 
-  let tippyIns: Instance;
+  const moreDataText = computed(() => {
+    if (initData.value.length < 1
+      || initData.value.length <= renderTagNum.value) {
+      return '';
+    }
+    return  (typeof initData.value) === 'string' ? [initData.value].slice(renderTagNum.value).join(',') : initData.value.slice(renderTagNum.value).join(',');
+  });
+
+  let tippyIns: Instance | null = null;
 
   const calcRenderTagNum = () => {
     if (props.max && props.max > 0) {
       renderTagNum.value = props.max;
       return;
     }
-    if (!rootRef.value || props.data.length < 1) {
+    if (!rootRef.value || initData.value.length < 1) {
       return;
     }
 
@@ -158,8 +185,10 @@
     });
   };
 
-
-  watch(() => props.data, () => {
+  const handlerClick = () => {
+    emits('click');
+  };
+  watch(() => initData.value, () => {
     nextTick(() => {
       calcRenderTagNum();
     });
@@ -171,9 +200,9 @@
       return;
     }
     if (tippyIns) {
-      tippyIns.hide();
-      tippyIns.unmount();
-      tippyIns.destroy();
+      tippyIns?.hide();
+      tippyIns?.unmount();
+      tippyIns?.destroy();
     }
     nextTick(() => {
       tippyIns = tippy(moreRef.value.$el as SingleTarget, {
@@ -196,7 +225,7 @@
   });
 
   const handleCopy = () => {
-    execCopy(props.data.join('\n'), t('复制成功'));
+    execCopy(initData.value.join('\n'), t('复制成功'));
   };
   // 动态设置标签宽度
   const dynamicCalcWidth = () => {
@@ -243,9 +272,9 @@
 
   onBeforeUnmount(() => {
     if (tippyIns) {
-      tippyIns.hide();
-      tippyIns.unmount();
-      tippyIns.destroy();
+      tippyIns?.hide();
+      tippyIns?.unmount();
+      tippyIns?.destroy();
     }
     resizeObserver?.disconnect();
   });
