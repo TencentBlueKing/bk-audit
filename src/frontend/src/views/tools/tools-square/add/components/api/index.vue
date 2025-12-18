@@ -348,7 +348,6 @@
         isParams.value = data.input_variable?.length > 0;
         formData.value.input_variable = data.input_variable;
         formData.value.output_config = data.output_config;
-        console.log('formData.value', formData.value);
         if (formData.value.api_config.auth_config.method === 'none') {
           formData.value.api_config.auth_config.config = {
             bk_app_code: '',
