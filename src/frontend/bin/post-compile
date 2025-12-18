@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-
-echo "Post Hook: this runs after build"
-npm run build-server
