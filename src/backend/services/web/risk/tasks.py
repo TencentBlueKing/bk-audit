@@ -35,6 +35,7 @@ from django.utils.translation import gettext
 from django_redis.client import DefaultClient
 from rest_framework.settings import api_settings
 
+from apps.exceptions import MetaConfigNotExistException
 from apps.itsm.constants import TicketStatus
 from apps.meta.constants import ConfigLevelChoices
 from apps.meta.models import GlobalMetaConfig
@@ -203,7 +204,7 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=settings.DEFAULT_NAMESPACE,
         )
-    except Exception as err:  # NOCC:broad-except(配置缺失时只记录)
+    except MetaConfigNotExistException as err:  # NOCC:broad-except(配置缺失时只记录)
         logger_celery.warning("[SyncManualRiskStatus] skip because config missing: %s", err)
         return
     table_ref = table_id

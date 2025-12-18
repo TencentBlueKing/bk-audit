@@ -5,7 +5,11 @@ from typing import List
 from services.web.databus.collector.snapshot.join.etl_storage import (
     AssetEtlStorageHandler,
 )
-from services.web.databus.constants import JsonSchemaFieldType, SnapShotStorageChoices
+from services.web.databus.constants import (
+    CLEAN_CONFIG_JSON_CONF_KEY,
+    JsonSchemaFieldType,
+    SnapShotStorageChoices,
+)
 
 
 def build_schema_fields(entries: List[dict]) -> List[dict]:
@@ -112,7 +116,7 @@ def test_custom_conf_applies_to_json_config():
         system=SimpleNamespace(system_id="bk_system"),
         resource_type=SimpleNamespace(resource_type_id="bk_resource_type"),
         storage_type=SnapShotStorageChoices.REDIS.value,
-        snapshot=SimpleNamespace(custom_config={"etl.clean_config.json_config.conf": {"timestamp_len": 13}}),
+        snapshot=SimpleNamespace(custom_config={CLEAN_CONFIG_JSON_CONF_KEY: {"timestamp_len": 13}}),
     )
     handler.__dict__["schema_fields"] = build_schema_fields(schema)
     config = json.loads(handler.json_config)

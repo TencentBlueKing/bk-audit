@@ -31,6 +31,7 @@ from apps.meta.models import GlobalMetaConfig, ResourceType, System
 from core.models import get_request_username
 from services.web.databus.constants import (
     ASSET_RT_FORMAT,
+    CLEAN_CONFIG_JSON_CONF_KEY,
     DEFAULT_REPLICA_WRITE_STORAGE_CONFIG_KEY,
     JOIN_DATA_PHYSICAL_RT_FORMAT,
     JOIN_DATA_RT_FORMAT,
@@ -762,7 +763,7 @@ class AssetEtlStorageHandler(JoinDataEtlStorageHandler):
         """
         if not self.snapshot or not self.snapshot.custom_config:
             return config
-        conf_patch = self.snapshot.custom_config.get("etl.clean_config.json_config.conf")
+        conf_patch = self.snapshot.custom_config.get(CLEAN_CONFIG_JSON_CONF_KEY)
         if isinstance(conf_patch, dict):
             config.setdefault("conf", {})
             config["conf"].update(conf_patch)
