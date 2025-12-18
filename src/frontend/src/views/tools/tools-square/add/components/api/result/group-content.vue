@@ -75,7 +75,6 @@
 
   import content from './content.vue';
 
-
   interface Props {
     resultData: any,
     isEditMode: boolean,

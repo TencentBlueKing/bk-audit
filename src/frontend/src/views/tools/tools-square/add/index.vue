@@ -406,7 +406,7 @@
     name: '',
     tags: [],
     description: '',
-    tool_type: 'api',
+    tool_type: '',
     is_bkvision: false,
     data_search_config_type: 'sql',
     updated_at: '',
@@ -753,7 +753,9 @@
     defaultValue: new ToolDetailModel(),
     onSuccess: (data) => {
       formData.value = data as any;
-      comRef.value.setConfigs(formData.value.config);
+      nextTick(() => {
+        comRef.value.setConfigs(formData.value.config);
+      });
     },
   });
 
