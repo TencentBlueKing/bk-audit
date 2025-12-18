@@ -150,5 +150,9 @@ export default {
     不能为空: ' can not be empty',
     展开工单处理: '',
     收起工单处理: '',
+    新增风险: 'Add risk',
+    基础配置: 'Basic configuration',
+    审计策略: 'Audit strategy',
+    责任人: 'Responsible person',
   },
 };

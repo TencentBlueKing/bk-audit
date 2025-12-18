@@ -283,6 +283,12 @@
     messageError('上传图片失败');
   };
 
+  const extractUrls = (text: string) => {
+    const urlRegex = /https?:\/\/[^\s\u4e00-\u9fa5]+/g;
+    const links = text.match(urlRegex) || [];
+
+    return links;
+  };
   watch(
     () => props.disabled,
     () => {
@@ -296,6 +302,27 @@
       content.value = val;
       // 当默认内容变化时，也要提取图片
       extractImagesFromContent(val);
+
+      if (val) {
+        const urls = extractUrls(val);
+        // 把配的url变成超链接
+        nextTick(() => {
+          const quill = editorRef.value?.getQuill();
+          if (quill) {
+            const text = quill.getText();
+            urls.forEach((url: string) => {
+              // 查找所有匹配的位置，而不仅仅是第一个
+              let startIndex = 0;
+              while (startIndex < text.length) {
+                const index = text.indexOf(url, startIndex);
+                if (index === -1) break;
+                quill.formatText(index, url.length, 'link', url);
+                startIndex = index + url.length;
+              }
+            });
+          }
+        });
+      }
     },
   );
   const dataURLtoBlob = (dataURL: any) => {

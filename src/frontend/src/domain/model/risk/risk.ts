@@ -32,6 +32,7 @@ export default class Event {
   rule_version: number;
   origin_operator: string[];
   current_operator: string[];
+  unsynced_events?: Array<Record<string, any>>;
   event_end_time: string;
   ticket_history: Array<{
     action: string,
@@ -83,6 +84,9 @@ export default class Event {
   permission: Record<string, boolean>;
   experiences: number;// 风险总结
   title: string;
+  notice_groups:  number[];
+  processor_groups:  number[];
+  event_basic_field_configs: Array<Record<string, any>>;
 
   constructor(payload = {} as Event) {
     this.risk_id = payload.risk_id;
@@ -110,5 +114,9 @@ export default class Event {
     this.permission = payload.permission;
     this.experiences = payload.experiences;
     this.title = payload.title;
+    this.unsynced_events = payload.unsynced_events;
+    this.notice_groups = payload.notice_groups;
+    this.processor_groups = payload.processor_groups;
+    this.event_basic_field_configs = payload.event_basic_field_configs;
   }
 }

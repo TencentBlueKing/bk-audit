@@ -22,6 +22,7 @@
       <bk-table
         ref="tableRef"
         :border="border"
+        class="render-list"
         v-bind="$attrs"
         :columns="columns"
         :data="listData.results"
@@ -140,6 +141,9 @@
     getListData:()=> Array<Record<string, any>>,
     getSelection:()=> void
     initTableHeight: () => void,
+    listDataUnshift: (data: Record<string, any>) => void,
+    initListData:(data: any, key: string) => void
+    initData: () => void
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -171,7 +175,7 @@
   const isSearching = ref(false);
 
   let isReady = false;
-
+  const isLoading = ref(false);
   const {
     getSearchParams,
     replaceSearchParams,
@@ -180,7 +184,6 @@
   const {
     run,
     data: listData,
-    loading: isLoading,
     refresh: refreshList,
     cancel,
   // eslint-disable-next-line vue/no-setup-props-destructure
@@ -194,6 +197,7 @@
     onSuccess(data) {
       emits('requestSuccess', data);
       isUnload.value = false;
+      isLoading.value = false;
     },
   });
 
@@ -266,18 +270,21 @@
       order_field: type === 'null' ? undefined : (_.isString(sortPayload.column.field) ? sortPayload.column.field : sortPayload.column.field()),
       order_type: type === 'null' ? undefined : type,
     };
+    isLoading.value = true;
     fetchListData();
   };
   // 切换每页条数
   const handlePageLimitChange = (pageLimit: number) => {
     pagination.limit = pageLimit;
     isUnload.value = false;
+    isLoading.value = true;
     fetchListData();
   };
   // 切换页码
   const handlePageValueChange = (pageValue:number) => {
     pagination.current = pageValue;
     isUnload.value = false;
+    isLoading.value = true;
     fetchListData();
   };
   // 情况搜索条件
@@ -368,10 +375,12 @@
         pagination.current = Number(recordParams.page);
         pagination.limit = Number(recordParams.page_size) < 10 ? 10 : Number(recordParams.page_size);
       }
+      isLoading.value = true;
       fetchListData();
     },
     loading: isLoading,
     refreshList() {
+      isLoading.value = true;
       refreshList();
     },
     getListData() {
@@ -383,5 +392,34 @@
     initTableHeight() {
       initTableHeight();
     },
+    listDataUnshift(data: Record<string, any>) {
+      listData.value.results.unshift(data);
+    },
+    initListData(data: any, key: string) {
+      isLoading.value = false;
+      const initData = JSON.parse(JSON.stringify(listData.value));
+      listData.value.results = initData.results.map((item: Record<string, any>) => {
+        const newItem = data.find((findItem: Record<string, any>) => item[key] === findItem[key]);
+        if (newItem) {
+          return newItem;
+        }
+        return item;
+      });
+      emits('requestSuccess',  listData.value);
+    },
+    initData() {
+      isLoading.value = false;
+      fetchListData();
+    },
   });
 </script>
+
+<style lang="postcss" scoped>
+  .render-list {
+    :deep(.new-row) {
+      td {
+        background-color: #e4faf0 !important;
+      }
+    }
+  }
+</style>
