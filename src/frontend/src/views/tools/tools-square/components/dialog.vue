@@ -794,7 +794,7 @@
       ...item,
       value: getSearchItemDefaultValue(item),
       required: item.required,
-      disabled: props.source === 'risk' && toolDetails.value?.tool_type === 'data_search',
+      disabled: props.source === 'risk' && (toolDetails.value?.tool_type === 'data_search' || toolDetails.value?.tool_type === 'api'),
     });
 
     // 非下钻
