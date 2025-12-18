@@ -42,7 +42,7 @@
           label="name"
           style="color: #63656e;">
           <template #nodeType="node">
-            <span v-if="(node.isChild && node.children.length === 0) || !node.isChild ">
+            <span v-if="node.children.length === 0 ">
               <bk-checkbox
                 v-model="node.isChecked"
                 style="padding-right: 5px;"
@@ -71,6 +71,8 @@
             :is="modelComMap(element)"
             ref="comRef"
             :data="element"
+            :is-edit-mode="isEditMode"
+            :is-grouping="isGrouping"
             :output-fields="outputFields"
             :tree-data="treeData"
             @close="handleClose"
@@ -95,14 +97,16 @@
   interface Props {
     resultData: any,
     groupKey?: string,
-    // isEditMode: boolean,
+    isEditMode: boolean,
     groupOutputFields?: any,
+    isGrouping: boolean
   }
 
   interface Exposes {
     handleGetResultConfig: () => void;
     handleGetGroupResultConfig: () => void;
     setConfigs: (data: any) => void;
+    setGroupConfigs: (data: any) => void;
   }
   interface Emits {
     (e: 'groupContentChange', data: any, id: string | number): void
@@ -179,7 +183,7 @@
       // 更新对应的item treeData中的isChecked 改为false
       const node = selectedItems.value.find(item => item.json_path === jsonPath);
       if (node) {
-        node.list = data;
+        node.list = JSON.parse(JSON.stringify(data));
         node.listDescription = listInfo.desc;
         node.listName = listInfo.name;
       }
@@ -211,7 +215,7 @@
         deep: true,
       });
 
-      treeData.value = updateTreeCheckedState(treeData.value, newVal);
+      treeData.value = updateTreeCheckedState(JSON.parse(JSON.stringify(treeData.value)), newVal);
     },
     {
       immediate: true,
@@ -228,41 +232,33 @@
     },
   );
 
-  // 分组时的复现
-  watch(() => props.groupOutputFields, (newVal) => {
-    if (newVal) {
-      newVal?.forEach((item: any) => {
-        // 递归查找匹配的节点
-        const findAndCheckNode = (nodes: any[]) => {
-          for (const node of nodes) {
-            // 如果当前节点匹配
-            if (node.json_path === item.json_path) {
-              handleCheckboxChange(true, node);
-              return true; // 找到并处理，返回true
-            }
-
-            // 如果节点有子节点，递归查找
-            if (node.children && node.children.length > 0) {
-              const found = findAndCheckNode(node.children);
-              if (found) return true; // 如果在子节点中找到，提前返回
-            }
-          }
-          return false; // 未找到
-        };
-        // 从 treeData.value 开始查找
-        findAndCheckNode(treeData.value);
-      });
-      outputFields.value = newVal;
-    }
-  }, {
-    deep: true,
-    immediate: true,
-  });
-
   watch(() => props.resultData, (newVal) => {
     if (newVal) {
       treeData.value = Array.isArray(JSON.parse(newVal)) ? JSON.parse(newVal) : buildTree(JSON.parse(newVal));
-      console.log('treeData.value', treeData.value);
+      // 分组时的复现
+      if (props.groupOutputFields && props.groupOutputFields.length > 0) {
+        props.groupOutputFields.forEach((item: any) => {
+          // 递归查找匹配的节点
+          const findAndCheckNode = (nodes: any[]) => {
+            for (const node of nodes) {
+              // 如果当前节点匹配
+              if (node.json_path === item.json_path) {
+                handleCheckboxChange(true, node);
+                return true; // 找到并处理，返回true
+              }
+              // 如果节点有子节点，递归查找
+              if (node.children && node.children.length > 0) {
+                const found = findAndCheckNode(node.children);
+                if (found) return true; // 如果在子节点中找到，提前返回
+              }
+            }
+            return false; // 未找到
+          };
+          // 从 treeData.value 开始查找
+          findAndCheckNode(treeData.value);
+        });
+        outputFields.value = props.groupOutputFields;
+      }
     }
   }, {
     deep: true,
@@ -308,6 +304,13 @@
           findAndCheckNode(treeData.value);
         });
         outputFields.value = data[0].output_fields || [];
+      });
+    },
+    // 分组
+    setGroupConfigs(data: any) {
+      nextTick(() => {
+        console.log('groupOutputFields', props.groupOutputFields);
+        console.log('分组setGroupConfigs', data);
       });
     },
   });

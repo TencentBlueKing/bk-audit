@@ -798,6 +798,7 @@
         }
       }
       const data = _.cloneDeep(formData.value);
+
       const service = isEditMode ? ToolManageService.updateTool : ToolManageService.createTool;
 
       if (data.tags) {
