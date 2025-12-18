@@ -161,6 +161,7 @@
 </template>
 
 <script setup lang="tsx">
+  import type { Column } from 'bkui-vue/lib/table/props';
   import { ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -211,7 +212,7 @@
       display_name: string;
       description: string;
       path: string;
-      columns: any[];
+      columns: Column[];
       tableData: any[];
       pagination: {
         count: number;
