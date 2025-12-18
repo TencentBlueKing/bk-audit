@@ -212,7 +212,7 @@
 </template>
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -240,6 +240,14 @@
     }>;
   }
 
+  interface FieldItem {
+    raw_name: string;
+    display_name: string;
+    description: string;
+    json_path: string;
+    children: FieldItem[];
+  }
+
   interface Props {
     data: any,
     outputFields: any,
@@ -249,11 +257,17 @@
     (e: 'close', id: string): void
     (e: 'configChange', data: any, path: string): void
   }
-  interface Exposes {
-  }
+
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  // 使用工具对话框hooks
+  const {
+    allOpenToolsData,
+    dialogRefs,
+    openFieldDown,
+    handleOpenTool,
+  } = useToolDialog();
 
   const formData = ref({
     display_name: '',
@@ -261,14 +275,8 @@
     mappings: [],
     drill_config: [] as drill['drill_config'],
   });
-  const fieldsData = ref([{
-    raw_name: '',
-    display_name: '',
-    description: '',
-  }]);
   const showFieldDict = ref(false);
   const enumMappingsData = ref<any[]>([]);
-  const fieldDictRef = ref();
   const showFieldReference = ref(false);
   const toolMaxVersionMap = ref<Record<string, number>>({});
   const drillPopconfirmVisible = ref<Record<number, boolean>>({});
@@ -280,16 +288,41 @@
 
   const drillPopconfirmRefs = ref<Record<number, any>>({});
 
+  // 转换树形数据，保持树状结构
+  const transformTreeData = (nodes: any[], parentPath?: string): FieldItem[] => {
+    if (!Array.isArray(nodes)) {
+      return [];
+    }
+    return nodes.map((node: any) => {
+      // 如果有父路径，则拼接父路径和当前节点名称；否则使用 node.json_path 或 node.name
+      const currentPath = parentPath
+        ? `${parentPath}.${node.name || ''}`
+        : (node.json_path || node.name || '');
+
+      return {
+        raw_name: node.name || '',
+        display_name: '',
+        description: '',
+        json_path: currentPath,
+        children: node.children && node.children.length > 0
+          ? transformTreeData(node.children, currentPath)
+          : [],
+      };
+    });
+  };
+
+  // 使用 computed 创建 fieldsData，保持树状结构
+  const fieldsData = computed<FieldItem[]>(() => {
+    if (!props.treeData) {
+      return [];
+    }
+    return transformTreeData(props.treeData);
+  });
+
   const handleClick = () => {
     showFieldReference.value = true;
   };
-  // 使用工具对话框hooks
-  const {
-    allOpenToolsData,
-    dialogRefs,
-    openFieldDown,
-    handleOpenTool,
-  } = useToolDialog();
+
   // 点击字段映射
   const handleAddDict = () => {
     enumMappingsData.value = formData.value.mappings;
@@ -300,6 +333,7 @@
     showFieldDict.value = false;
     formData.value.mappings = data;
   };
+
   // 获取所有工具
   const {
     data: allToolsData,
@@ -313,6 +347,7 @@
       }, {} as Record<string, number>);
     },
   });
+
   // 获取标签列表
   const {
     data: toolTagData,
@@ -353,34 +388,6 @@
   const handleClose = () => {
     emits('close', props.data);
   };
-  // 递归遍历树形数据，收集所有叶子节点
-  const traverseTree = (nodes: any[]): any[] => {
-    const result: any[] = [];
-    nodes.forEach((node: any) => {
-      if (node.children && node.children.length > 0) {
-        // 如果有子节点，递归遍历子节点
-        result.push(...traverseTree(node.children));
-      } else {
-        // 如果没有子节点，添加到结果中
-        result.push({
-          raw_name: node.name,
-          display_name: '',
-          description: '',
-        });
-      }
-    });
-    return result;
-  };
-
-  watch(() => formData.value, (val) => {
-    if (val) {
-      fieldsData.value = traverseTree(props.treeData);
-      emits('configChange', val, props.data.json_path);
-    }
-  }, {
-    immediate: true,
-    deep: true,
-  });
 
   watch(() => props.outputFields, (val) => {
     if (val) {
@@ -396,8 +403,6 @@
   }, {
     immediate: true,
     deep: true,
-  });
-  defineExpose<Exposes>({
   });
 </script>
 <style lang="postcss" scoped>
