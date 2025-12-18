@@ -98,7 +98,7 @@
                       placement="top"
                       theme="black">
                       <span
-                        @click="() => handleClick">
+                        @click="handleClick(formData.drill_config)">
                         {{ t('已配置') }}
                         <span style="color: #3a84ff;">{{ formData.drill_config.length }}</span>
                         {{ t('个工具') }}
@@ -160,7 +160,7 @@
                   <span
                     v-else
                     style="color: #c4c6cc;"
-                    @click="handleClick">
+                    @click="handleClick()">
                     {{ t('请点击配置') }}
                   </span>
                 </div>
@@ -261,6 +261,8 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const fieldReferenceRef = ref();
+
   // 使用工具对话框hooks
   const {
     allOpenToolsData,
@@ -319,8 +321,12 @@
     return transformTreeData(props.treeData);
   });
 
-  const handleClick = () => {
+  const handleClick = (drillConfig?: drill['drill_config']) => {
     showFieldReference.value = true;
+    // 编辑
+    if (drillConfig) {
+      fieldReferenceRef.value.setFormData(drillConfig);
+    }
   };
 
   // 点击字段映射

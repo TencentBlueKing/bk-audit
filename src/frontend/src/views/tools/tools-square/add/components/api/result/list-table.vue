@@ -148,7 +148,7 @@
                               placement="top"
                               theme="black">
                               <span
-                                @click="() => handleClick(element.json_path)">
+                                @click="() => handleClick(element.json_path, element.drill_config)">
                                 {{ t('已配置') }}
                                 <span style="color: #3a84ff;">{{ element.drill_config?.length }}</span>
                                 {{ t('个工具') }}
@@ -307,7 +307,7 @@
 </template>
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -332,9 +332,17 @@
   }
   interface Exposes {
   }
+  interface FieldItem {
+    raw_name: string;
+    display_name: string;
+    description: string;
+    json_path: string;
+  }
+
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const { t } = useI18n();
+  const fieldReferenceRef = ref();
   const listInfo = ref({
     name: '',
     desc: '',
@@ -354,7 +362,15 @@
   // 点击字段下钻记录id
   const fieldDictId = ref('');
 
-  const fieldsData = ref<Array<{ raw_name: any; display_name: any; description: any }>>([]);
+  const fieldsData = computed<Array<FieldItem>>(() => (
+    list.value.map((item: any) => ({
+      raw_name: item.name,
+      json_path: item.json_path,
+      display_name: item.display_name,
+      description: item.description,
+    }))
+  ));
+
   // 关闭
   const handleClose = () => {
     emits('close', props.data);
@@ -394,9 +410,13 @@
     };
   };
 
-  const handleClick = (id: string) => {
+  const handleClick = (id: string, drillConfig?: any) => {
     fieldDictId.value = id;
     showFieldReference.value = true;
+    // 编辑
+    if (drillConfig) {
+      fieldReferenceRef.value.setFormData(drillConfig);
+    }
   };
   // 删除值
   const  handleRemove = async (index: number) => {
@@ -503,11 +523,6 @@
 
   watch(() => list.value, (val) => {
     addList.value = [];
-    fieldsData.value = val.map((item: any) => ({
-      raw_name: item.name,
-      display_name: item.display_name,
-      description: item.description,
-    }));
     emits('listConfigChange', val, props.data.json_path, listInfo.value);
     const node = findNode(props.treeData, props.data.json_path);
     // 过滤出node.list中不在当前val中的项目，并保持数据结构一致
