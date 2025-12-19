@@ -237,7 +237,9 @@ REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 
-DEFAULT_REDIS_TAGS = os.getenv("BKAPP_DEFAULT_REDIS_TAGS", "Bk-Audit,inland,enable,usr").split(",")
+DEFAULT_REDIS_TAGS = [
+    tag for tag in os.getenv("BKAPP_DEFAULT_REDIS_TAGS", "Bk-Audit,inland,enable,usr").split(",") if tag
+]
 
 CACHES["db"] = {
     "BACKEND": "django.core.cache.backends.db.DatabaseCache",
