@@ -313,6 +313,8 @@
 
   import ToolManageService from '@service/tool-manage';
 
+  import resultDataModel from '@model/tool/api';
+
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -322,8 +324,8 @@
 
   interface Props {
     data: any,
-    outputFields: any
-    treeData: any
+    outputFields: any,
+    treeData: Array<resultDataModel>,
     // isGrouping: boolean
   }
   interface Emits {

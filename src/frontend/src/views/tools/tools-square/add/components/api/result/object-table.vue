@@ -217,6 +217,8 @@
 
   import ToolManageService from '@service/tool-manage';
 
+  import resultDataModel from '@model/tool/api';
+
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
   import useRequest from '@/hooks/use-request';
@@ -251,7 +253,7 @@
   interface Props {
     data: any,
     outputFields: any,
-    treeData: any,
+    treeData: Array<resultDataModel>,
   }
   interface Emits {
     (e: 'close', id: string): void
@@ -394,6 +396,33 @@
   const handleClose = () => {
     emits('close', props.data);
   };
+  // // 递归遍历树形数据，收集所有叶子节点
+  // const traverseTree = (nodes: Array<resultDataModel>) => {
+  //   const result: any[] = [];
+  //   nodes.forEach((node: any) => {
+  //     if (node.children && node.children.length > 0) {
+  //       // 如果有子节点，递归遍历子节点
+  //       result.push(...traverseTree(node.children));
+  //     } else {
+  //       // 如果没有子节点，添加到结果中
+  //       result.push({
+  //         raw_name: node.name,
+  //         display_name: '',
+  //         description: '',
+  //       });
+  //     }
+  //   });
+  //   return result;
+  // };
+
+  watch(() => formData.value, (val) => {
+    if (val) {
+      emits('configChange', val, props.data.json_path);
+    }
+  }, {
+    immediate: true,
+    deep: true,
+  });
 
   watch(() => props.outputFields, (val) => {
     if (val) {
