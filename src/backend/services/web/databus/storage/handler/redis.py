@@ -39,7 +39,7 @@ class RedisHandler:
             "bk_biz_id": settings.DEFAULT_BK_BIZ_ID,
             "resource_set_id": data["redis_name_en"],
             "resource_set_name": data["redis_name"],
-            "geog_area_code": "inland",
+            "geog_area_code": settings.BKBASE_GEOG_AREA_CODE,
             "category": "redis",
             "provider": "user",
             "purpose": "Redis",

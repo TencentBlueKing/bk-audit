@@ -50,7 +50,7 @@ class DataflowBatchStatusListReqSerializer(serializers.Serializer):
     processing_id = serializers.CharField(label=gettext_lazy("RT ID"))
     data_start = serializers.IntegerField(label=gettext_lazy("查询开始时间"))
     data_end = serializers.IntegerField(label=gettext_lazy("查询结束时间"))
-    geog_area_code = serializers.CharField(label=gettext_lazy("地域"), default="inland")
+    geog_area_code = serializers.CharField(label=gettext_lazy("地域"), default=settings.BKBASE_GEOG_AREA_CODE)
     limit = serializers.IntegerField(label=gettext_lazy("限制条数"), default=100)
     offset = serializers.IntegerField(label=gettext_lazy("偏移量"), default=0)
 
