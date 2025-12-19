@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+from MySQLdb._mysql import escape_string
 from pydantic import ValidationError
 from pypika import Order as pypikaOrder
 from pypika.queries import QueryBuilder
@@ -44,6 +44,11 @@ from core.sql.model import (
     WhereCondition,
 )
 from tests.base import TestCase
+
+from src.backend.core.sql.builder.terms import DorisVariantField
+from src.backend.core.sql.constants import DORIS_FIELD_KEY_QUOTE
+from src.backend.services.web.query.utils.doris import DorisQuerySQLBuilder
+from src.backend.services.web.query.utils.search_config import QueryConditionOperator
 
 
 class TestSQLGenerator(TestCase):
@@ -1069,3 +1074,69 @@ class TestSQLFunctions(TestCase):
     def test_concat_function(self):
         expr = Concat(ValueWrapper("a"), ValueWrapper("b"))
         self.assertEqual(str(expr), "CONCAT('a','b')")
+
+class TestDorisVariantFieldSanitize(TestCase):
+    def test_sanitize_variant_key_type_and_empty(self):
+        """ _sanitize_variant_key 对类型和空字符串做校验 """
+        field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
+
+        # 非字符串 -> TypeError
+        with self.assertRaises(TypeError):
+            field._sanitize_variant_key(123)  # type: ignore[arg-type]
+
+        # 空字符串 -> ValueError
+        with self.assertRaises(ValueError):
+            field._sanitize_variant_key("")
+
+    def test_sanitize_variant_key_escape_injection_payload(self):
+        """ 恶意 payload 作为 Variant keys 参与 Doris 查询条件时，会被 escape_string 转义，避免拼出可执行 SQL 片段"""
+        payload = "foo'\''] !=0 or 1=1; --"
+
+        builder = DorisQuerySQLBuilder(
+            table="test_table",
+            conditions=[
+                {
+                    "field": {
+                        "raw_name": "snapshot_resource_type_info",
+                        "keys": [payload],
+                    },
+                    "operator": QueryConditionOperator.EQ.value,
+                    "filters": ["bk-audit"],
+                }
+            ],
+            sort_list=[],
+            page=1,
+            page_size=10,
+        )
+
+        sql = builder.build_data_sql()
+        print(sql)
+        # 与 pymysql.converters.escape_string 一致
+        expected = escape_string(payload)
+        if isinstance(expected, (bytes, bytearray)):
+            expected = expected.decode()
+
+        expected_fragment = f"[{DORIS_FIELD_KEY_QUOTE}{expected}{DORIS_FIELD_KEY_QUOTE}]"
+
+        self.assertIn(
+            expected_fragment,
+            sql,
+            msg=f"\nExpected fragment:\n{expected_fragment}\nGot SQL:\n{sql}",
+        )
+
+    def test_format_keys_quote_normal_keys(self):
+        """ 正常 keys: ["k1", "k2"] => "['k1']['k2']"（或使用 DORIS_FIELD_KEY_QUOTE） """
+        field = DorisVariantField(
+            keys=["k1", "k2"],
+            name="snapshot_resource_type_info",
+        )
+
+        sql_fragment = field.format_keys_quote()
+
+        self.assertEqual(
+            sql_fragment,
+            (
+                f"[{DORIS_FIELD_KEY_QUOTE}k1{DORIS_FIELD_KEY_QUOTE}]"
+                f"[{DORIS_FIELD_KEY_QUOTE}k2{DORIS_FIELD_KEY_QUOTE}]"
+            ),
+        )
