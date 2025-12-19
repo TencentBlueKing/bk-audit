@@ -73,10 +73,12 @@
   import { nextTick, ref } from 'vue';
   import Vuedraggable from 'vuedraggable';
 
+  import resultDataModel from '@model/tool/api';
+
   import content from './content.vue';
 
   interface Props {
-    resultData: any,
+    resultData: Array<resultDataModel> | string,
     isEditMode: boolean,
     isGrouping: boolean,
   }

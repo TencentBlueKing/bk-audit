@@ -166,6 +166,8 @@
   import { nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import resultDataModel from '@model/tool/api';
+
   import CardPartVue from '../card-part.vue';
 
   import deDug from './debug-sideslider.vue';
@@ -176,7 +178,6 @@
 
   interface Props {
     isEditMode: boolean;
-    // formDataConfig: any;
   }
 
   interface Exposes {
@@ -267,7 +268,7 @@
   ]);
   const isSuccess = ref(false);
   const isDoneDeBug = ref(false);
-  const resultData = ref();
+  const resultData = ref<Array<resultDataModel> | string>('');
   const isHeadersPass = ref(true);
   const isHeadersNoPassIndex = ref<number[]>([]);
   const handlerOpenDeDugRef = () => {
@@ -333,11 +334,16 @@
     // 提交获取字段
     getFields() {
       formData.value.input_variable = paramsConfigRef.value?.getData();
+      // 处理resultData.value的类型转换
+      const resultDataString = typeof resultData.value === 'string'
+        ? resultData.value
+        : JSON.stringify(resultData.value);
+
       formData.value.output_config = {
         ...resultConfigRef.value?.handleGetResultConfig(),
         result_schema: {
-          tree_data: Array.isArray(JSON.parse(resultData.value))
-            ? resultData.value :  JSON.stringify(buildTree(JSON.parse(resultData.value))),
+          tree_data: Array.isArray(JSON.parse(resultDataString))
+            ? resultDataString :  JSON.stringify(buildTree(JSON.parse(resultDataString))),
         },
       };
       return formData.value;
