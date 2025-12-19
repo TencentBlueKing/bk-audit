@@ -234,6 +234,7 @@
                             :check-strictly="false"
                             children="children"
                             :data="localOutputFields"
+                            :selected="getTreeSelectedValue(toolIndex, index)"
                             @node-click="(data: LocalOutputFields) => handleTargetValueChange(data, toolIndex, index)">
                             <template #nodeType="node">
                               <span v-if="(node.isChild && node.children.length === 0) || !node.isChild ">
@@ -653,6 +654,20 @@
     }
 
     return globalFieldCount;
+  };
+
+  // 获取 tree 的选中值（返回节点对象）
+  const getTreeSelectedValue = (toolIndex: number, configIndex: number): LocalOutputFields | undefined => {
+    const configItem = formData.value.tools[toolIndex]?.config[configIndex];
+    if (configItem?.target_value_type === 'field' && configItem.target_value) {
+      // 根据 target_value 查找对应的节点对象
+      const field = findFieldByValue(localOutputFields.value, configItem.target_value);
+      if (field) {
+        // 返回节点对象，用于 tree 的 selected 属性
+        return field;
+      }
+    }
+    return undefined;
   };
 
   const handleTargetValueChange = (data: LocalOutputFields, toolIndex: number, configIndex: number) => {
