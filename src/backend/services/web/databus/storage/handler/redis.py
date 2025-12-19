@@ -20,7 +20,6 @@ from bk_resource import api
 from django.conf import settings
 
 from core.models import get_request_username
-from services.web.databus.constants import DEFAULT_REDIS_TAGS
 from services.web.databus.models import RedisConfig
 
 
@@ -45,7 +44,7 @@ class RedisHandler:
             "purpose": "Redis",
             "share": False,
             "admin": [username],
-            "tag": DEFAULT_REDIS_TAGS,
+            "tag": settings.DEFAULT_REDIS_TAGS,
             "connection_info": data["connection_info"],
             "version": data["version"],
         }
