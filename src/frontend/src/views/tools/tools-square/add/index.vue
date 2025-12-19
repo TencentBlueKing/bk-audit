@@ -406,7 +406,7 @@
     name: '',
     tags: [],
     description: '',
-    tool_type: '',
+    tool_type: 'data_search',
     is_bkvision: false,
     data_search_config_type: 'sql',
     updated_at: '',
