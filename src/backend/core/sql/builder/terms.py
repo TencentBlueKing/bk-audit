@@ -17,7 +17,7 @@ to the current version of the project delivered to anyone in the future.
 """
 from typing import Any, Iterator, List, Optional, Union
 
-from MySQLdb._mysql import escape_string
+from pymysql.converters import escape_string
 from pypika.terms import Criterion
 from pypika.terms import Field as _PypikaField
 from pypika.terms import Function, NodeT
