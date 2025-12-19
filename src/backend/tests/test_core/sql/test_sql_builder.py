@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-from MySQLdb._mysql import escape_string
+from pymysql.converters import escape_string
 from pydantic import ValidationError
 from pypika import Order as pypikaOrder
 from pypika.queries import QueryBuilder
@@ -45,10 +45,10 @@ from core.sql.model import (
 )
 from tests.base import TestCase
 
-from src.backend.core.sql.builder.terms import DorisVariantField
-from src.backend.core.sql.constants import DORIS_FIELD_KEY_QUOTE
-from src.backend.services.web.query.utils.doris import DorisQuerySQLBuilder
-from src.backend.services.web.query.utils.search_config import QueryConditionOperator
+from core.sql.builder.terms import DorisVariantField
+from core.sql.constants import DORIS_FIELD_KEY_QUOTE
+from services.web.query.utils.doris import DorisQuerySQLBuilder
+from services.web.query.utils.search_config import QueryConditionOperator
 
 
 class TestSQLGenerator(TestCase):
