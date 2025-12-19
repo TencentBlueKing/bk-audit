@@ -65,6 +65,8 @@
   import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import resultDataModel from '@model/tool/api';
+
   import CardPartVue from '../../card-part.vue';
 
   import content from './content.vue';
@@ -73,7 +75,7 @@
 
   interface Props {
     isEditMode: boolean,
-    resultData: any,
+    resultData: Array<resultDataModel> | string,
   }
   interface Exposes {
     handleGetResultConfig: () => void;
