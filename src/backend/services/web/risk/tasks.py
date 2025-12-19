@@ -218,7 +218,7 @@ def _sync_manual_risk_status(batch_size: int = 500) -> None:
 
     for chunk in data_chunks(unsynced_ids, batch_size):
         id_clause = f"""({','.join(f"'{item}'" for item in chunk)})"""
-        sql = f"SELECT risk_id FROM {table_ref} WHERE risk_id IN {id_clause}"
+        sql = f"SELECT risk_id FROM {table_ref}.doris WHERE risk_id IN {id_clause}"
         logger_celery.info("[SyncManualRiskStatus] Executing SQL: %s", sql)
         resp = api.bk_base.query_sync(sql=sql) or {}
         found_ids = {row.get("risk_id") for row in resp.get("list") or [] if row.get("risk_id")}
