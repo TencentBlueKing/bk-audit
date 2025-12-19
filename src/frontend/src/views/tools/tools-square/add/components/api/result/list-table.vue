@@ -307,7 +307,7 @@
 </template>
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
-  import { computed, nextTick, onMounted, ref, watch } from 'vue';
+  import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -332,13 +332,12 @@
     (e: 'close', id: string): void
     (e: 'listConfigChange', data: any, path: string, listInfo: any): void
   }
-  interface Exposes {
-  }
   interface FieldItem {
     raw_name: string;
     display_name: string;
     description: string;
     json_path: string;
+    children: FieldItem[];
   }
 
   const props = defineProps<Props>();
@@ -364,14 +363,29 @@
   // 点击字段下钻记录id
   const fieldDictId = ref('');
 
-  const fieldsData = computed<Array<FieldItem>>(() => (
-    list.value.map((item: any) => ({
-      raw_name: item.name,
-      json_path: item.json_path,
-      display_name: item.display_name,
-      description: item.description,
-    }))
-  ));
+  // 转换树形数据，保持树状结构
+  const transformTreeData = (nodes: any[]): FieldItem[] => {
+    if (!Array.isArray(nodes)) {
+      return [];
+    }
+    return nodes.map((node: any) => ({
+      raw_name: node.name || '',
+      display_name: '',
+      description: '',
+      json_path: node.json_path || '',
+      children: (node.children && node.children.length > 0) || (node.list && node.list.length > 0)
+        ? transformTreeData(node.children && node.children.length > 0 ? node.children : node.list)
+        : [],
+    }));
+  };
+
+  // 使用 computed 创建 fieldsData，保持树状结构
+  const fieldsData = computed<FieldItem[]>(() => {
+    if (!props.treeData) {
+      return [];
+    }
+    return transformTreeData(props.treeData);
+  });
 
   // 关闭
   const handleClose = () => {
@@ -422,7 +436,7 @@
   };
   // 删除值
   const  handleRemove = async (index: number) => {
-    console.log('删除值', index);
+    list.value[index].drill_config = [];
   };
   // 字段下钻气泡框显示/隐藏处理
   const handleDrillPopconfirmShow = (index: number) => {
@@ -583,13 +597,6 @@
   }, {
     immediate: true,
     deep: true,
-  });
-
-  onMounted(() => {
-
-  });
-
-  defineExpose<Exposes>({
   });
 </script>
 <style lang="postcss" scoped>
