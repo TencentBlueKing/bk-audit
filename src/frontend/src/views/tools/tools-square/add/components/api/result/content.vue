@@ -89,13 +89,14 @@
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
+  import resultDataModel from '@model/tool/api';
+
   import { buildTree } from './build-tree';
   import listModel from './list-table.vue';
   import objectModel from './object-table.vue';
 
-
   interface Props {
-    resultData: any,
+    resultData: Array<resultDataModel> | string,
     groupKey?: string,
     isEditMode: boolean,
     groupOutputFields?: any,
@@ -231,7 +232,7 @@
     },
   );
 
-  watch(() => props.resultData, (newVal) => {
+  watch(() => props.resultData, (newVal: any) => {
     if (newVal) {
       treeData.value = Array.isArray(JSON.parse(newVal)) ? JSON.parse(newVal) : buildTree(JSON.parse(newVal));
       // 分组时的复现

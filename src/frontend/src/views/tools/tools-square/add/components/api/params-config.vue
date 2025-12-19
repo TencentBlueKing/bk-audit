@@ -16,7 +16,7 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div :class="haveSameName ? `have-same-name params-box`: 'params-box'">
+  <div class="params-box">
     <bk-form-item
       label-width="160">
       <div class="render-field">
@@ -132,18 +132,17 @@
                 <bk-input
                   v-if="item.field_category !== 'time_range_select'"
                   v-model="item.var_name"
-                  :class="(handelVarNameRules(item, index)
-                    && isVarNameNOPass
-                    && isVarNameNoPassIndex.includes(index)) ? `var-name-rules` : ''" />
+                  :class="!item.isPass
+                    ? `var-name-rules` : ''"
+                  @change="() => handelVarItem(item)" />
                 <div
                   v-else
-                  :class="(handelVarNameRules(item, index)
-                    && isVarNameNOPass &&
-                    isVarNameNoPassIndex.includes(index))? `var-split-rules` : ''">
+                  :class="!item.isPass ? `var-split-rules` : ''">
                   <div
                     class="var-split">
                     <bk-input
-                      v-model="item.split_config.start_field" />
+                      v-model="item.split_config.start_field"
+                      @change="() => handelVarItem(item)" />
                     <span>
                       <bk-tag theme="info">
                         {{ t('开始时间') }}
@@ -152,7 +151,8 @@
                   </div>
                   <div style="display: flex;">
                     <bk-input
-                      v-model="item.split_config.end_field" />
+                      v-model="item.split_config.end_field"
+                      @change="() => handelVarItem(item)" />
                     <span>
                       <bk-tag theme="warning">
                         {{ t('结束时间') }}
@@ -339,7 +339,7 @@
   </div>
 </template>
 <script setup lang='tsx'>
-  import { onMounted, ref, watch } from 'vue';
+  import { onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   interface Props {
@@ -348,7 +348,7 @@
 
   interface Exposes {
     getData: () => void;
-    validatePass: () => boolean;
+    validatePass: () => void;
   }
 
   const props = defineProps<Props>();
@@ -372,6 +372,7 @@
       default_value: '',
       time_range: [],
       field_category: 'input',
+      isPass: true,
     },
   ]);
   const requiredList = ref([{
@@ -412,7 +413,6 @@
   },
   ]);
   const isVarNameNOPass = ref(false);
-  const isVarNameNoPassIndex = ref<number[]>([]);
   const haveSameName = ref(false);
   const isViewsList = ref([{
     id: '1',
@@ -425,8 +425,6 @@
   }]);
   // 添加一项
   const handelAddItem = () => {
-    isVarNameNoPassIndex.value = [];
-    isVarNameNOPass.value = false;
     paramList.value.push({
       is_show: 'true',
       position: 'query',
@@ -442,50 +440,93 @@
       time_range: [],
       default_value: '',
       field_category: 'input',
+      isPass: true,
     });
   };
   // 删除一项
   const handelDeleteItem = (index: number) => {
-    isVarNameNoPassIndex.value = [];
-    isVarNameNOPass.value = false;
     paramList.value.splice(index, 1);
   };
 
   const handleRequiredClick = (item: Record<string, any>) => {
-    paramList.value = paramList.value.map((listItem: any) => {
-      // eslint-disable-next-line no-param-reassign
-      listItem.required = item.value;
-      return listItem;
-    });
+    paramList.value = paramList.value.map((listItem: any) => ({
+      ...listItem,
+      required: item.value,
+    }));
   };
   const handleViewsClick = (item: Record<string, any>) => {
-    paramList.value = paramList.value.map((listItem: any) => {
-      // eslint-disable-next-line no-param-reassign
-      listItem.is_show = item.value;
-      return listItem;
-    });
+    paramList.value = paramList.value.map((listItem: any) => ({
+      ...listItem,
+      is_show: item.value,
+    }));
   };
+  const handelVarItem = (item: Record<string, any>) => {
+    const updatedItem = { ...item, isPass: true };
+    haveSameName.value = false;
+    isVarNameNOPass.value = false;
+    return updatedItem;
+  };
+  const validatePass = () => {
+    // 收集所有字段名用于重复性检查
+    const allFieldNames: string[] = [];
+    const tempParamList = JSON.parse(JSON.stringify(paramList.value));
 
-  // 规则样式
-  const handelVarNameRules = (item: Record<string, any>, index: number) => {
-    isVarNameNoPassIndex.value = [];
-    if (item.field_category !== 'time_range_select') {
-      if (item.var_name === '') {
-        isVarNameNoPassIndex.value.push(index);
+    tempParamList.forEach((item: any) => {
+      if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
+        if (item.split_config.start_field) allFieldNames.push(item.split_config.start_field);
+        if (item.split_config.end_field) allFieldNames.push(item.split_config.end_field);
+      } else if (item.var_name) {
+        allFieldNames.push(item.var_name);
+      }
+    });
+
+    // 检查是否存在重复的字段名
+    const haveSameVarName = allFieldNames.some((name: string, index: number) => allFieldNames.indexOf(name) !== index);
+    haveSameName.value = haveSameVarName;
+
+    // 检查是否有空值
+    const haveEmptyVarName = tempParamList.some((item: any) => {
+      if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
+        return item.split_config.end_field === '' || item.split_config.start_field === '';
       }
       return item.var_name === '';
-    }
-    if (item.split_config.end_field === '' || item.split_config.start_field === '') {
-      isVarNameNoPassIndex.value.push(index);
-    }
-    return item.split_config.end_field === '' || item.split_config.start_field === '';
-  };
+    });
 
-  watch(() => paramList.value, () => {
-    isVarNameNOPass.value = false;
-    isVarNameNoPassIndex.value = [];
-    haveSameName.value = false;
-  }, { deep: true, immediate: true });
+    isVarNameNOPass.value = haveEmptyVarName;
+
+    // 修改list中的数据以改变isPass的值显示样式
+    paramList.value = paramList.value.map((item: any) => {
+      let isPass = true;
+
+      if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
+        // 检查空值
+        if (item.split_config.end_field === '' || item.split_config.start_field === '') {
+          isPass = false;
+        } else if (haveSameVarName) {
+          // 检查重复名
+          const fieldNames = [item.split_config.start_field, item.split_config.end_field].filter(Boolean);
+          if (fieldNames.some(name => allFieldNames.indexOf(name) !== allFieldNames.lastIndexOf(name))) {
+            isPass = false;
+          }
+        }
+      } else {
+        // 检查空值
+        if (item.var_name === '') {
+          isPass = false;
+        // eslint-disable-next-line max-len
+        } else if (haveSameVarName && allFieldNames.indexOf(item.var_name) !== allFieldNames.lastIndexOf(item.var_name)) {
+          // 检查重复名
+          isPass = false;
+        }
+      }
+
+      // eslint-disable-next-line no-param-reassign
+      item.isPass = isPass;
+      return item;
+    });
+    // true 不通过 false 通过
+    return haveEmptyVarName || haveSameVarName;
+  };
 
   onMounted(() => {
     // 编辑复现
@@ -498,12 +539,14 @@
             ...item,
             time_range: defaultValue || [],
             default_value: [],
+            isPass: true,
           };
         }
         return {
           ...item,
           time_range: timeRange,
           default_value: defaultValue,
+          isPass: true,
         };
       });
     }
@@ -517,38 +560,18 @@
           : (item.var_name + item.position),
         default_value: (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') ?  item.time_range : item.default_value,
       }));
-      return data;
+      // 删除isPass
+      const cleanedData = data.map((item: any) => {
+        const itemCopy = { ...item };
+        delete itemCopy.isPass;
+        return itemCopy;
+      });
+      return cleanedData;
     },
     validatePass() {
-      // 判断参数名是否有空值
-      const isEmptyArr = paramList.value.map((item: any) => {
-        if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
-          return item.split_config.end_field === '' || item.split_config.start_field === '';
-        }
-        return item.var_name === '';
-      });
-      const haveEmptyVarName = isEmptyArr.some((isEmpty: boolean) => isEmpty);
-      // 收集所有字段名用于重复性检查
-      const allFieldNames: string[] = [];
-      if (!haveEmptyVarName) {
-        paramList.value.forEach((item: any) => {
-          if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
-            if (item.split_config.start_field) allFieldNames.push(item.split_config.start_field);
-            if (item.split_config.end_field) allFieldNames.push(item.split_config.end_field);
-          } else if (item.var_name) {
-            allFieldNames.push(item.var_name);
-          }
-        });
-      }
-
-      // 检查是否存在重复的字段名
-      // eslint-disable-next-line max-len
-      const haveSameVarName = allFieldNames.some((name: string, index: number) => allFieldNames.indexOf(name) !== index);
-
-      haveSameName.value = haveSameVarName;
-      isVarNameNOPass.value = haveEmptyVarName || haveSameVarName;
-      return isVarNameNOPass.value;
+      return validatePass();
     },
+
   });
 
 </script>
