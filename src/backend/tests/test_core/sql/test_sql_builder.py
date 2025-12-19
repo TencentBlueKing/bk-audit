@@ -49,7 +49,7 @@ from core.sql.builder.terms import DorisVariantField
 from core.sql.constants import DORIS_FIELD_KEY_QUOTE
 from services.web.query.utils.doris import DorisQuerySQLBuilder
 from services.web.query.utils.search_config import QueryConditionOperator
-
+from unittest.mock import patch
 
 class TestSQLGenerator(TestCase):
     def setUp(self):
@@ -1075,6 +1075,7 @@ class TestSQLFunctions(TestCase):
         expr = Concat(ValueWrapper("a"), ValueWrapper("b"))
         self.assertEqual(str(expr), "CONCAT('a','b')")
 
+
 class TestDorisVariantFieldSanitize(TestCase):
     def test_sanitize_variant_key_type_and_empty(self):
         """ _sanitize_variant_key 对类型和空字符串做校验 """
@@ -1110,7 +1111,7 @@ class TestDorisVariantFieldSanitize(TestCase):
         )
 
         sql = builder.build_data_sql()
-        print(sql)
+        # print(sql)
         # 与 pymysql.converters.escape_string 一致
         expected = escape_string(payload)
         if isinstance(expected, (bytes, bytearray)):
@@ -1140,3 +1141,18 @@ class TestDorisVariantFieldSanitize(TestCase):
                 f"[{DORIS_FIELD_KEY_QUOTE}k2{DORIS_FIELD_KEY_QUOTE}]"
             ),
         )
+
+    @patch("core.sql.builder.terms.escape_string")
+    def test_sanitize_variant_key_escape_return_bytes(self, mock_escape_string):
+        """ 当 escape_string 返回 bytes 时，_sanitize_variant_key 能正确 decode 成 str """
+        mock_escape_string.return_value = b"escaped_payload"
+
+        field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
+
+        result = field._sanitize_variant_key("foo")
+
+        # 确认调用了 escape_string
+        mock_escape_string.assert_called_once_with("foo")
+        # 确认最终返回的是 str，而不是 bytes
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "escaped_payload")
