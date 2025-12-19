@@ -293,26 +293,19 @@
   const drillPopconfirmRefs = ref<Record<number, any>>({});
 
   // 转换树形数据，保持树状结构
-  const transformTreeData = (nodes: any[], parentPath?: string): FieldItem[] => {
+  const transformTreeData = (nodes: any[]): FieldItem[] => {
     if (!Array.isArray(nodes)) {
       return [];
     }
-    return nodes.map((node: any) => {
-      // 如果有父路径，则拼接父路径和当前节点名称；否则使用 node.json_path 或 node.name
-      const currentPath = parentPath
-        ? `${parentPath}.${node.name || ''}`
-        : (node.json_path || node.name || '');
-
-      return {
-        raw_name: node.name || '',
-        display_name: '',
-        description: '',
-        json_path: currentPath,
-        children: node.children && node.children.length > 0
-          ? transformTreeData(node.children, currentPath)
-          : [],
-      };
-    });
+    return nodes.map((node: any) => ({
+      raw_name: node.name || '',
+      display_name: '',
+      description: '',
+      json_path: node.json_path || '',
+      children: (node.children && node.children.length > 0) || (node.list && node.list.length > 0)
+        ? transformTreeData(node.children && node.children.length > 0 ? node.children : node.list)
+        : [],
+    }));
   };
 
   // 使用 computed 创建 fieldsData，保持树状结构
@@ -396,24 +389,6 @@
   const handleClose = () => {
     emits('close', props.data);
   };
-  // // 递归遍历树形数据，收集所有叶子节点
-  // const traverseTree = (nodes: Array<resultDataModel>) => {
-  //   const result: any[] = [];
-  //   nodes.forEach((node: any) => {
-  //     if (node.children && node.children.length > 0) {
-  //       // 如果有子节点，递归遍历子节点
-  //       result.push(...traverseTree(node.children));
-  //     } else {
-  //       // 如果没有子节点，添加到结果中
-  //       result.push({
-  //         raw_name: node.name,
-  //         display_name: '',
-  //         description: '',
-  //       });
-  //     }
-  //   });
-  //   return result;
-  // };
 
   watch(() => formData.value, (val) => {
     if (val) {
