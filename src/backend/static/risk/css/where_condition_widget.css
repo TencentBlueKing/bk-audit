@@ -81,6 +81,16 @@
   flex: 1;
 }
 
+.risk-where-group .condition-row .condition-field-type {
+  flex: 0 0 120px;
+  background-color: #f9f9f9;
+  font-size: 12px;
+}
+
+.risk-where-group .condition-row .condition-field {
+  flex: 2;
+}
+
 .risk-where-group .group-actions {
   margin-top: 10px;
   display: flex;

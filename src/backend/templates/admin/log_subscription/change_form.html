@@ -1,0 +1,13 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    {% if original %}
+        <li>
+            <a href="{% url 'admin:log_subscription_logsubscription_preview_sql' original.pk %}?next={{ request.path|urlencode }}" class="historylink">
+                {% trans "验证 SQL" %}
+            </a>
+        </li>
+    {% endif %}
+{% endblock %}
