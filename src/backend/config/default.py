@@ -519,6 +519,9 @@ CORS_EXPOSE_HEADERS = ['Content-Disposition']
 # Doris 事件表入库配置
 EVENT_DORIS_EXPIRES = os.getenv("BKAPP_EVENT_DORIS_EXPIRES", "1080d")
 
+# 日志订阅查询最大时间范围（毫秒），默认 30 天
+LOG_SUBSCRIPTION_MAX_TIME_RANGE = int(os.getenv("BKAPP_LOG_SUBSCRIPTION_MAX_TIME_RANGE", 30 * 24 * 60 * 60 * 1000))
+
 """
 以下为框架代码 请勿修改
 """
