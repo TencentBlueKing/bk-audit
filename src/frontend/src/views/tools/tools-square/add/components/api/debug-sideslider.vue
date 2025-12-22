@@ -175,7 +175,7 @@
   interface FormItem {
     display_name: string;
     description: string;
-    required: boolean;
+    required: boolean | string;
     field_category: string;
     default_value?: any;
     time_range?: any;
