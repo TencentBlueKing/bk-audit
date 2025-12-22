@@ -100,27 +100,27 @@
             <span>
               <bk-input
                 v-if="item.field_category == 'number_input'"
-                v-model="formModel[item.display_name]"
+                v-model="formModel[item.raw_name]"
                 clearable
                 type="number" />
               <audit-user-selector
                 v-else-if="item.field_category === 'person_select'"
-                v-model="formModel[item.display_name]" />
+                v-model="formModel[item.raw_name]" />
               <date-picker
                 v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
-                v-model="formModel[item.display_name]"
+                v-model="formModel[item.raw_name]"
                 style="width: 100%" />
 
               <bk-date-picker
                 v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
-                v-model="formModel[item.display_name]"
+                v-model="formModel[item.raw_name]"
                 append-to-body
                 clearable
                 style="width: 100%"
                 type="datetime" />
               <bk-input
                 v-else
-                v-model="formModel[item.display_name]"
+                v-model="formModel[item.raw_name]"
                 clearable />
             </span>
           </bk-form-item>
@@ -235,7 +235,7 @@
     const params = list.value.map((i) => {
       if (i.field_category === 'time_range_select' || i.field_category === 'time-ranger') {
         let val = [];
-        const date = new DateRange(i.default_value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
+        const date = new DateRange(formModel.value[i.raw_name], 'YYYY-MM-DD HH:mm:ss', window.timezone);
         val = [date.startDisplayText, date.endDisplayText];
         return {
           raw_name: i.raw_name,
@@ -245,12 +245,12 @@
       if (i.field_category === 'time_select' || i.field_category === 'time-picker') {
         return {
           raw_name: i.raw_name,
-          value: formatDate(i.default_value),
+          value: formatDate(formModel.value[i.raw_name]),
         };
       }
       return {
         raw_name: i.raw_name,
-        value: formModel.value[i.display_name],
+        value: formModel.value[i.raw_name],
       };
     });
 
@@ -286,7 +286,7 @@
     list.value = JSON.parse(JSON.stringify(data));
     formModel.value = data.reduce((obj: Record<string, any>, item: Record<string, any>) => {
       // eslint-disable-next-line no-param-reassign
-      obj[item.display_name] = item.field_category === 'time_range_select' ? item.time_range :  item.default_value;
+      obj[item.raw_name] = item.field_category === 'time_range_select' ? item.time_range :  item.default_value;
       return obj;
     }, {});
   };

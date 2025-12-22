@@ -228,8 +228,7 @@
     maxHeight?: string | number;
     allToolsData: ToolDetailModel[];
     onKvFieldDownClick: (kvField: GroupTableConfig['kv_fields'][0], activeUid?: string) => void;
-    // eslint-disable-next-line max-len
-    createRenderCell: (fieldItem: OutputFields, toolData: ToolDetailModel) => ({ data }: { data: Record<any, any> }) => any;
+    createRenderCell: (fieldItem: OutputFields) => ({ data }: { data: Record<any, any> }) => any;
     apiData: Record<string, any>; // API 返回的结果数据
   }
 
@@ -301,7 +300,7 @@
             field: item.raw_name,
             minWidth: 200,
             showOverflowTooltip: true,
-            render: props.createRenderCell(item, data),
+            render: props.createRenderCell(item),
           }));
 
           tableFields.push({

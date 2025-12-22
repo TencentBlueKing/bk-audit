@@ -48,7 +48,7 @@
     maxHeight?: string | number;
     remotePagination?: boolean;
     // eslint-disable-next-line max-len
-    createRenderCell: (fieldItem: OutputFields, toolData: ToolDetailModel) => ({ data }: { data: Record<any, any> }) => any;
+    createRenderCell: (fieldItem: OutputFields) => ({ data }: { data: Record<any, any> }) => any;
   }
 
   interface Emits {
@@ -74,7 +74,7 @@
 
   // 创建 columns
   const columns = computed<Column[]>(() => outputFields.value.map((item): Column => {
-    const renderCell = props.createRenderCell(item, props.toolDetails);
+    const renderCell = props.createRenderCell(item);
     return {
       label: item.display_name,
       field: item.raw_name,
