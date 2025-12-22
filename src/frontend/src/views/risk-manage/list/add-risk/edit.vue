@@ -125,9 +125,9 @@
             </div>
             <div
               class="table-label border-right field-type-box">
-              <span
+              <!-- <span
                 v-if="item?.field_type"
-                class="field-type">{{ item?.field_type }}</span>
+                class="field-type">{{ item?.field_type }}</span> -->
               <span
                 v-bk-tooltips="{
                   content: item?.description,
@@ -175,7 +175,7 @@
                 ref="fieldComRef"
                 :type="item.typeValue"
                 :value="item.valueText"
-                @update="(val) => handlerUpdate(val, item)" />
+                @update="(val: any) => handlerUpdate(val, item)" />
             </div>
           </div>
         </div>
@@ -418,7 +418,7 @@
 
       .table-list {
         display: flex;
-        min-height: 42px;
+        height: 42px;
         line-height: 42px;
         border-bottom: 1px solid #dcdee5;
       }
@@ -438,7 +438,7 @@
 
       .table-value {
         display: flex;
-        width: 100%;
+        width: 250px;
         height: auto;
         line-height: normal;
         flex: 1;

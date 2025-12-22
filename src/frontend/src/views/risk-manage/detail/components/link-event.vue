@@ -787,8 +787,11 @@
         return value  || '--';
       }
     }
+    if (value === '') {
+      return '--';
+    }
     // 3. 其他情况直接返回原值
-    return value || '--';
+    return value;
   };
 
   // 将各种类型转换为字符串，模拟 Vue 模板的显示效果

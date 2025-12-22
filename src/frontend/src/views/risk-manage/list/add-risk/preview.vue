@@ -94,7 +94,7 @@
                     v-if="eventSourceComfig[0]?.typeValue === 'user-selector'"
                     :data="eventSourceComfig[0].value || ''"
                     style="display: inline-block;" />
-                  <span v-else> {{ eventSourceComfig[0]?.value ||'--' }} </span>
+                  <span v-else> {{ eventSourceComfig[0]?.value === '' ? '--' : eventSourceComfig[0]?.value }} </span>
                 </span>
               </span>
               <span
@@ -154,7 +154,7 @@
                 </span>
                 <span
                   v-else
-                  class="info-item-value">{{ eventItem.value || '--' }}</span>
+                  class="info-item-value">{{ eventItem.value === '' ? '--' : eventItem.value }}</span>
               </div>
             </div>
           </div>

@@ -16,25 +16,25 @@
   to the current version of the project delivered to anyone in the future.
 -->
 <template>
-  <div>
+  <div class="add-risk-com">
     <bk-input
       v-if="type === 'textarea'"
       v-model="textareaValue"
       :resize="false"
-      style="width: 232px;height: 100%"
+      style="width: 248px;height: 40px;border: none"
       type="textarea"
       @update:modelValue="handleChange('textarea')" />
     <bk-input
       v-if="type === 'number-input'"
       v-model="numberValue"
       :precision="9"
-      style="width: 232px;height: 100%"
+      style="width: 248px;height: 40px"
       type="number"
       @update:modelValue="handleChange('number-input')" />
     <bk-input
       v-if="type === 'input'"
       v-model="inputValue"
-      style="width: 232px;height: 42px"
+      style="width: 248px;height: 40px"
       type="input"
       @update:modelValue="handleChange('input')" />
     <audit-user-selector
@@ -42,14 +42,16 @@
       v-model="userValue"
       allow-create
       :auto-focus="false"
-      class="user-selector"
+      class="add-risk-com-user-selector"
+      style="width: 248px;"
       @update:modelValue="handleChange('user-selector')" />
     <bk-date-picker
       v-if="type === 'date-picker'"
       v-model="timeValue"
       append-to-body
+      class="add-risk-com-date-picker"
       clearable
-      style="width: 232px;height: 100%"
+      style="width: 248px;height: 40px"
       type="datetime"
       @update:modelValue="handleChange('date-picker')" />
   </div>
@@ -66,7 +68,7 @@
     value: string | number | string[];
   }
 
-  interface Emits{
+  interface Emits {
     (e: 'update', value: string | number | string[]): void;
   }
 
@@ -120,8 +122,41 @@
 
 </script>
 
-<style>
+<style lang="postcss" scoped>
 .user-selector {
-  width: 232px;
+  width: 250px;
+  height: 40px;
+
+  :deep(.bk-input) {
+    border: none !important;
+  }
+
+}
+
+.add-risk-com {
+  :deep(.bk-input) {
+    border: none !important;
+  }
+}
+
+.add-risk-com-date-picker {
+  :deep(.bk-date-picker-rel .bk-date-picker-editor) {
+    height: 40px;
+    border: none !important;
+  }
+}
+</style>
+<style lang="postcss">
+.add-risk-com-user-selector {
+  height: 42px;
+
+  .bk-select-trigger {
+    height: 40px !important;
+
+    .bk-select-tag {
+      height: 40px !important;
+      border: none !important;
+    }
+  }
 }
 </style>
