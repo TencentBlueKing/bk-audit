@@ -187,10 +187,10 @@
                   class="bk-select"
                   size="small">
                   <bk-option
-                    v-for="(paramsTypeItem, paramsTypeIndex) in paramsTypeList"
-                    :id="paramsTypeItem.value"
-                    :key="paramsTypeIndex"
-                    :name="paramsTypeItem.label" />
+                    v-for="paramsTypeItem in apiVariablePosition"
+                    :id="paramsTypeItem.id"
+                    :key="paramsTypeItem.id"
+                    :name="paramsTypeItem.id" />
                 </bk-select>
               </bk-form-item>
             </div>
@@ -344,6 +344,10 @@
 
   interface Props {
     inputVariable: any;
+    apiVariablePosition: Array<{
+      id: string,
+      name: string
+    }>;
   }
 
   interface Exposes {
@@ -384,17 +388,6 @@
     value: 'false',
     label: t('否'),
   }]);
-  const paramsTypeList = ref([{
-                                value: 'query',
-                                label: 'query',
-                              }, {
-                                value: 'body',
-                                label: 'body',
-                              },
-                              {
-                                value: 'path',
-                                label: 'path',
-                              }]);
   const frontendTypeList = ref([{
     value: 'input',
     label: '输入框',
@@ -537,6 +530,8 @@
         if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
           return {
             ...item,
+            is_show: String(item.is_show),
+            required: String(item.required),
             time_range: defaultValue || [],
             default_value: [],
             isPass: true,
@@ -544,6 +539,8 @@
         }
         return {
           ...item,
+          is_show: String(item.is_show),
+          required: String(item.required),
           time_range: timeRange,
           default_value: defaultValue,
           isPass: true,

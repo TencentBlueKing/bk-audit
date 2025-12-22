@@ -388,7 +388,7 @@
   const formRef = ref();
   const comRef = ref();
 
-  const { messageSuccess } = useMessage();
+  const { messageSuccess, messageWarn } = useMessage();
   const loading = ref(false);
   const isCreating = ref(false);
   const isFailed = ref(false);
@@ -783,6 +783,17 @@
     const tastQueue = [formRef.value.validate()];
     if (comRef.value && formData.value.tool_type !== 'api') {
       tastQueue.push(comRef.value.getValue());
+    }
+    // 创建时 api 判断是否调试成功
+    if (comRef.value && formData.value.tool_type === 'api' && !isEditMode) {
+      const debugResult = comRef.value.getDebugResult();
+      if (!debugResult.isDoneDeBug) {
+        messageWarn(t('请先进行接口调试'));
+        return;
+      } if (debugResult.isDoneDeBug && !debugResult.isSuccess) {
+        messageWarn(t('接口调试失败'));
+        return;
+      }
     }
 
     Promise.all(tastQueue).then(() => {

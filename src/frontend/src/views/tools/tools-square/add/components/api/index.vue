@@ -57,14 +57,13 @@
             class="bk-select">
             <bk-option
               v-for="(item, index) in authList"
-              :id="item.value"
+              :id="item.id"
               :key="index"
-              :disabled="item.disabled"
-              :name="item.label" />
+              :name="item.name" />
           </bk-select>
         </bk-form-item>
         <div
-          v-if="formData.api_config.auth_config.method !== 'none'"
+          v-if="formData.api_config.auth_config.method === 'bk_app_auth'"
           class="auth-box">
           <bk-form-item
             :label="t('应用ID(bk_app_code)')"
@@ -131,6 +130,7 @@
           <params-config
             v-if="isParams"
             ref="paramsConfigRef"
+            :api-variable-position="apiVariablePosition"
             :input-variable="formData.input_variable" />
           <div class="item-params-add">
             <bk-button
@@ -166,7 +166,11 @@
   import { nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
+  import MetaManageService from '@service/meta-manage';
+
   import resultDataModel from '@model/tool/api';
+
+  import useRequest from '@hooks/use-request';
 
   import CardPartVue from '../card-part.vue';
 
@@ -183,6 +187,7 @@
   interface Exposes {
     getFields: () => void;
     setConfigs: (data: any) => void;
+    getDebugResult: () => void;
   }
 
   defineProps<Props>();
@@ -254,18 +259,27 @@
     },
   });
   const rules = ref({});
-  const authList = ref([
-    {
-      label: '无',
-      value: 'none',
-      disabled: false,
+  const authList = ref<Array<{
+    id: string,
+    name: string
+  }>>();
+  const apiVariablePosition = ref<Array<{
+    id: string,
+    name: string
+  }>>([]);
+  // 获取字段类型
+  const {
+    run: fetchGlobalChoices,
+  } = useRequest(MetaManageService.fetchGlobalChoices, {
+    defaultValue: {},
+    onSuccess(result) {
+      if (result) {
+        authList.value = result.api_auth_method;
+        apiVariablePosition.value = result.api_variable_position;
+      }
     },
-    {
-      label: '蓝鲸应用认证',
-      value: 'bk_app_auth',
-      disabled: false,
-    },
-  ]);
+  });
+
   const isSuccess = ref(false);
   const isDoneDeBug = ref(false);
   const resultData = ref<Array<resultDataModel> | string>('');
@@ -329,6 +343,7 @@
     isHeadersNoPassIndex.value = [];
   };
   onMounted(() => {
+    fetchGlobalChoices();
   });
   defineExpose<Exposes>({
     // 提交获取字段
@@ -362,6 +377,12 @@
         }
         initResultConfig(data);
       });
+    },
+    getDebugResult() {
+      return {
+        isDoneDeBug: isDoneDeBug.value,
+        isSuccess: isSuccess.value,
+      };
     },
   });
 
