@@ -276,8 +276,11 @@
         return value  || '';
       }
     }
+    if (value === '') {
+      return '--';
+    }
     // 3. 其他情况直接返回原值
-    return value || '';
+    return value;
   };
   const setData = (val: any) => {
     const type = props.dataConfig.field_category;

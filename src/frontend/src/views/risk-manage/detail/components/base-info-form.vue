@@ -65,13 +65,13 @@
             <span v-else>--</span>
           </template>
           <template v-else-if="fieldItem.field_name === 'event_content'">
-            {{ data.event_content || '--' }}
+            {{ data.event_content === '' ? '--' : data.event_content }}
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_hazard'">
-            {{ data.risk_hazard || '--' }}
+            {{ data.risk_hazard === '' ? '--' : data.risk_hazard }}
           </template>
           <template v-else-if="fieldItem.field_name === 'risk_guidance'">
-            {{ data.risk_guidance || '--' }}
+            {{ data.risk_guidance=== '' ? '--' : data.risk_guidance }}
           </template>
           <template v-else-if="fieldItem.field_name === 'status'">
             <template v-if="statusToMap[data.status]">
@@ -80,7 +80,8 @@
                   <audit-icon
                     :style="`margin-right: 6px;color: ${statusToMap[data.status].color || ''}`"
                     :type="statusToMap[data.status].icon" />
-                  {{ riskStatusCommon.find(item=>item.id===data.status)?.name || '--' }}
+                  {{ riskStatusCommon.find(item=>item.id===data.status)?.name === '' ? '--' :
+                    riskStatusCommon.find(item=>item.id===data.status)?.name }}
                 </p>
               </bk-tag>
             </template>
@@ -92,7 +93,7 @@
                 v-if="operatorsComfig[0]?.typeValue === 'user-selector'"
                 :data="operatorsComfig[0].value || ''"
                 style="display: inline-block;" />
-              <span v-else> {{ operatorsComfig[0]?.value ||'--' }} </span>
+              <span v-else> {{ operatorsComfig[0]?.value === '' ? '--' : operatorsComfig[0]?.value }} </span>
             </span>
             <edit-tag
               v-else
@@ -106,10 +107,12 @@
             <edit-tag :data="(isAddRisk ? noticeGroups : data.notice_users) || []" />
           </template>
           <template v-else-if="fieldItem.field_name === 'event_time'">
-            {{ (isAddRisk ? editData?.formData.event_time : data.event_time) || '--' }}
+            {{ (isAddRisk ? editData?.formData.event_time : data.event_time) === '' ? '--' :
+              (isAddRisk ? editData?.formData.event_time : data.event_time) }}
           </template>
           <template v-else-if="fieldItem.field_name === 'event_end_time'">
-            {{ (isAddRisk ? editData?.formData.event_time : data.event_end_time) || '--' }}
+            {{ (isAddRisk ? editData?.formData.event_time : data.event_end_time) === '' ? '--' :
+              (isAddRisk ? editData?.formData.event_time : data.event_end_time) }}
           </template>
           <template v-else-if="fieldItem.field_name === 'rule_id'">
             <router-link
@@ -137,7 +140,8 @@
           </template>
           <template v-else>
             {{ (isAddRisk ? '--'
-              : data[fieldItem.field_name as keyof RiskManageModel]) || '--' }}
+              : (data[fieldItem.field_name as keyof RiskManageModel]) === '' ? '--'
+                : data[fieldItem.field_name as keyof RiskManageModel]) }}
           </template>
         </render-info-item>
       </render-info-block>
@@ -260,8 +264,11 @@
         return value  || '';
       }
     }
+    if (value === '') {
+      return '--';
+    }
     // 3. 其他情况直接返回原值
-    return value || '';
+    return value ;
   };
   const strategyName = computed(() => {
     const { data } = props;

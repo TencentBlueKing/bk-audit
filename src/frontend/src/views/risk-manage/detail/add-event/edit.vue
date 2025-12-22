@@ -71,7 +71,6 @@
               {{ index + 1 }}
             </div>
             <div class="table-label border-right field-type-box">
-              <span class="field-type">{{ item?.field_type }}</span>
               <span
                 v-bk-tooltips="{
                   content: item?.description,
@@ -115,7 +114,7 @@
             <div class="table-value">
               <field-com
                 :type="item.typeValue"
-                @update="(val) => handlerUpdate(val, item)" />
+                @update="(val:any) => handlerUpdate(val, item)" />
             </div>
           </div>
         </div>
@@ -352,7 +351,7 @@
       }
 
       .table-label {
-        width: 286px;
+        width: 270px;
       }
 
       .table-type {
@@ -361,7 +360,7 @@
 
       .table-value {
         display: flex;
-        width: 100%;
+        width: 300px;
         height: auto;
         line-height: normal;
         flex: 1;
