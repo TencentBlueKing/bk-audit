@@ -390,10 +390,10 @@
     run: fetchToolsList,
   } = useRequest(ToolManageService.fetchToolsList, {
     defaultValue: {} as IRequestResponsePaginationData<ToolInfo>,
-    onSuccess: (data) => {
+    onSuccess: () => {
       // 触底拼接数据
-      dataList.value = [...dataList.value, ...data.results];
-      total.value = data.total;
+      // dataList.value = [...dataList.value, ...data.results];
+      // total.value = data.total;
 
       // 自动打开弹窗
       if (route.query.tool_id) {
@@ -442,6 +442,7 @@
     }).then(() => {
       handleCancel(item.uid);
       loading.value = true;
+      currentPage.value = 1;
       fetchToolsList({
         page: currentPage.value,
         page_size: currentPagSize.value,
@@ -449,9 +450,14 @@
         recent_used: props.recentUsed,
         keyword: searchValue.value,
         tags: [props.tagId],
-      }).finally(() => {
-        loading.value = false;
-      });
+      }).then((data) => {
+        // 非拼接模式，重新赋值
+        dataList.value = data.results;
+        total.value = data.total;
+      })
+        .finally(() => {
+          loading.value = false;
+        });
     });
   };
 
@@ -616,6 +622,7 @@
 
   const handleSearch = () => {
     loading.value = true;
+    currentPage.value = 1;
     fetchToolsList({
       page: currentPage.value,
       page_size: currentPagSize.value,
@@ -623,9 +630,14 @@
       my_created: props.myCreated,
       recent_used: props.recentUsed,
       tags: [props.tagId],
-    }).finally(() => {
-      loading.value = false;
-    });
+    }).then((data) => {
+      // 非拼接模式，重新赋值
+      dataList.value = data.results;
+      total.value = data.total;
+    })
+      .finally(() => {
+        loading.value = false;
+      });
     emits('change');
   };
 
@@ -652,6 +664,11 @@
         recent_used: props.recentUsed,
         tags: [props.tagId],
       })
+        .then((data) => {
+          // 拼接模式，追加数据
+          dataList.value = [...dataList.value, ...data.results];
+          total.value = data.total;
+        })
         .finally(() => {
           hasMore.value = false;
           isMoreLoading.value = false;
@@ -662,6 +679,7 @@
   defineExpose<Exposes>({
     getToolsList(id: string) {
       nextTick(() => {
+        currentPage.value = 1;
         fetchToolsList({
           page: currentPage.value,
           page_size: 50,
@@ -669,9 +687,14 @@
           my_created: props.myCreated,
           recent_used: props.recentUsed,
           tags: [id],
-        }).finally(() => {
-          loading.value = false;
-        });
+        }).then((data) => {
+          // 非拼接模式，重新赋值
+          dataList.value = data.results;
+          total.value = data.total;
+        })
+          .finally(() => {
+            loading.value = false;
+          });
       });
     },
   });

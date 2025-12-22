@@ -149,14 +149,13 @@
       :title="t('数据查询失败')"
       type="500">
       <div>
-        <a
-          href=""
-          target="_blank">
+        <div style="color: #3a84ff; cursor: pointer;">
           <audit-icon
             style="margin-right: 6px;"
             type="qw" />
-          <span>{{ toolDetails.created_by }}、{{ toolDetails.updated_by }}</span>
-        </a>
+          <span @click="handleOpenUserWx(toolDetails.created_by)">{{ toolDetails.created_by }}</span> 、
+          <span @click="handleOpenUserWx(toolDetails.updated_by)">{{ toolDetails.updated_by }}</span>
+        </div>
       </div>
     </bk-exception>
   </div>
@@ -333,6 +332,10 @@
     };
   };
 
+  const handleOpenUserWx = (username: string) => {
+    window.open(`wxwork://message/?username=${username}`, '_blank');
+  };
+
   // 处理分组表格页码变化(本地分页)
   const handleGroupTablePageChange = (groupIndex: number, tableIndex: number, newPage: number) => {
     if (groupData.value[groupIndex]?.table_fields[tableIndex]) {
@@ -419,24 +422,41 @@
               if (!data) {
                 return '--';
               }
+              // 将值转换为可渲染的字符串
+              const toDisplayString = (val: any): string => {
+                if (val === null || val === undefined) return '--';
+                if (typeof val === 'object') return JSON.stringify(val);
+                return String(val);
+              };
+
               const rawVal = data[item.raw_name];
+              const rawValStr = toDisplayString(rawVal);
               // 如果有enum映射，优先用映射的name
               const mappings = item.enum_mappings?.mappings;
               const mapped = Array.isArray(mappings) && mappings.length
                 ? mappings.find((m: any) => String(m.key) === String(rawVal))
                 : undefined;
-              console.log('mapped', mapped);
-              const display = mapped ? mapped.name : rawVal;
-              console.log('display', display);
+              // display 始终是字符串，可以安全渲染
+              const display = mapped ? toDisplayString(mapped.name) : rawValStr;
               if (item.drill_config === null
                 || item.drill_config.length === 0
                 || (item.drill_config.length === 1 && !item.drill_config[0].tool.uid)) {
                 // 普通单元格
-                return <span>
-                  { rawVal }
+                return <span
+                  v-bk-tooltips={{
+                    content: t('映射对象', {
+                      key: mapped?.key,
+                      name: mapped?.name,
+                    }),
+                    disabled: !mapped,
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                  }}
+                  class={{ tips: mapped }}
+                >
+                  {display}
                 </span>;
-              // 没有映射时，直接显示
-              // return <span>111</span>;
               }
               // 可下钻的列，显示按钮
               return (
@@ -532,12 +552,6 @@
                 </div>
               );
             },
-            // render: ({ data }: { data?: Record<any, any> }) => {
-            //   if (!data) {
-            //     return '--';
-            //   }
-            //   return '111';
-            // },
           }));
 
           tableFields.push({

@@ -157,9 +157,7 @@
       const mapped = Array.isArray(mappings) && mappings.length
         ? mappings.find((m: any) => String(m.key) === String(rawVal))
         : undefined;
-      console.log('mapped', mapped);
       const display = mapped ? mapped.name : rawVal;
-      console.log('display', display);
       if (item.drill_config === null
         || item.drill_config.length === 0
         || (item.drill_config.length === 1 && !item.drill_config[0].tool.uid)) {
