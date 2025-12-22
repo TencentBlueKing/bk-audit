@@ -158,23 +158,28 @@
                     <!-- sql工具 -->
                     <data-search-result
                       v-if="toolDetails?.tool_type === 'data_search'"
-                      v-model:pagination="pagination"
-                      :create-render-cell="createRenderCell"
+                      ref="dataSearchResultRef"
+                      :all-tools-data="allToolsData"
                       :max-height="dialogTableHeight"
                       remote-pagination
-                      :table-data="tableData"
+                      :risk-tool-params="riskToolParams"
+                      :search-list="searchList"
                       :tool-details="toolDetails"
-                      @update-table="fetchTableData" />
+                      :uid="uid"
+                      @handle-field-down-click="handleFieldDownClick" />
 
                     <!-- api工具 -->
                     <api-search-result
-                      v-if="toolDetails?.tool_type === 'api'"
+                      v-show="toolDetails?.tool_type === 'api'"
+                      ref="apiSearchResultRef"
                       :all-tools-data="allToolsData"
-                      :api-data="apiData"
-                      :create-render-cell="createRenderCell"
                       :max-height="dialogTableHeight"
                       :on-kv-field-down-click="handleKVFieldDownClick"
-                      :tool-details="toolDetails" />
+                      :risk-tool-params="riskToolParams"
+                      :search-list="searchList"
+                      :tool-details="toolDetails"
+                      :uid="uid"
+                      @handle-field-down-click="handleFieldDownClick" />
                   </bk-loading>
                 </div>
               </div>
@@ -207,11 +212,12 @@
           <!-- bkVision工具 -->
           <bk-vision-result
             v-if="toolDetails?.tool_type === 'bk_vision'"
+            ref="bkVisionResultRef"
             :drill-down-item-config="drillDownItemConfig"
             :drill-down-item-row-data="drillDownItemRowData"
             :is-drill-down-open="isDrillDownOpen"
-            :panel-id="panelId"
             :risk-tool-params="riskToolParams"
+            :search-list="searchList"
             :tool-details="toolDetails"
             :uid="uid" />
         </scroll-faker>
@@ -243,7 +249,7 @@
   import ToolManageService from '@service/tool-manage';
 
   import IamApplyDataModel from '@model/iam/apply-data';
-  import type { OutputFields } from '@model/tool/tool-detail';
+  // import type { OutputFields } from '@model/tool/tool-detail';
   import ToolDetailModel from '@model/tool/tool-detail';
 
   import ToolTips from '@components/show-tooltips-text/index.vue';
@@ -383,26 +389,17 @@
   const dialogHeight = ref('50vh');
   const dialogTableHeight = ref('300px');
   const isFullScreen = ref(false);
-  const isLoading = ref(false);
   const isShow = ref(false);
   const isPreview = ref<boolean | undefined>(false);
   const isDrillDownOpen = ref(false);
   const formItemRef = ref();
 
-  const tableData = ref<TableDataItem[]>([]);
-  const pagination = ref({
-    count: 0,
-    limit: 10,
-    current: 1,
-    limitList: [10, 50, 100, 200, 500, 1000],
-  });
-
-  const apiData = ref<Record<string, any>>({});
-
   const uid = ref('');
-  const panelId = ref('');
   const rules = ref({});
   const formRef = ref();
+  const dataSearchResultRef = ref();
+  const apiSearchResultRef = ref();
+  const bkVisionResultRef = ref();
 
   const router = useRouter();
   const tabs = ref<Array<tabsItem>>([]);
@@ -427,33 +424,23 @@
     return formData;
   });
 
-  // 工具执行
-  const {
-    data: executeData,
-    run: fetchToolsExecute,
-  } = useRequest(ToolManageService.fetchToolsExecute, {
-    defaultValue: {},
-    onSuccess: (data) => {
-      console.log('execute data:', data);
+  // const toolExecuteData = computed(() => {
+  //   if (apiSearchResultRef.value) {
+  //     return apiSearchResultRef.value.toolExecuteData;
+  //   }
+  //   return null;
+  // });
 
-      if (toolDetails.value?.tool_type === 'data_search') {
-        if (data === undefined) {
-          tableData.value = [];
-        }
-        tableData.value = data.data.results;
-        pagination.value.count = data.data.total;
-      }
-
-      if (toolDetails.value?.tool_type === 'api') {
-        // 将 API 结果传递给子组件，由子组件内部处理
-        apiData.value = data.data;
-      }
-
-      if (toolDetails.value?.tool_type === 'bk_vision') {
-        panelId.value = data.data.panel_id;
-      }
-    },
+  const isLoading = computed(() => {
+    if (dataSearchResultRef.value) {
+      return dataSearchResultRef.value.isLoading;
+    }
+    if (apiSearchResultRef.value) {
+      return apiSearchResultRef.value.isLoading;
+    }
+    return false;
   });
+
 
   // 获取工具详情
   const {
@@ -472,12 +459,17 @@
         });
       }
 
-      if (data.tool_type === 'bk_vision') {
-        // bkVision直接请求
-        fetchTableData();
-      } else {
+      if (data.tool_type !== 'bk_vision') {
         // 创建弹框form
         createDialogContent(data);
+      } else {
+        // bkVision工具直接执行
+        nextTick(() => {
+          if (bkVisionResultRef.value) {
+            console.log('bkVisionResultRef.value', bkVisionResultRef.value);
+            bkVisionResultRef.value.executeTool();
+          }
+        });
       }
 
       setTimeout(() => {
@@ -509,37 +501,12 @@
     defaultValue: new IamApplyDataModel(),
   });
 
-  // 获取表格数据的方法
-  const fetchTableData = () => {
-    isLoading.value = true;
-    fetchToolsExecute({
-      uid: uid.value,
-      params: {
-        tool_variables: searchList.value.map(item => ({
-          raw_name: item.raw_name,
-          // eslint-disable-next-line no-nested-ternary
-          value: (item.field_category === 'person_select') ? (item.value.length === 0 ?  '' :  item.value.join(','))  :  item.value,
-        })),
-        page: pagination.value.current,
-        page_size: pagination.value.limit,
-      },
-      ...(riskToolParams.value && Object.keys(riskToolParams.value).length > 0 ? riskToolParams.value : {}),
-    })
-      .finally(() => {
-        isLoading.value = false;
-      });
-  };
-
   // 点击头部标签(切换工具)
   const handleChangeTool = (TagItem: any) => {
     activeUid.value = TagItem.uid;
 
     drillDownItemConfig.value = drillDownItem.value?.drill_config
       .find(item => item.tool.uid === activeUid.value)?.config || [];
-
-    // 清空表格数据
-    tableData.value = [];
-    pagination.value.count = 0;
 
     fetchToolsDetail({ uid: activeUid.value });
   };
@@ -581,128 +548,7 @@
 
   // 创建单元格渲染函数（公共函数）
   // eslint-disable-next-line max-len
-  const createRenderCell = (fieldItem: OutputFields) => ({ data }: { data: Record<any, any> }) => {
-    const rawVal = data[fieldItem.raw_name];
-    // 如果有enum映射，优先用映射的name
-    const mappings = fieldItem.enum_mappings?.mappings;
-    const mapped = Array.isArray(mappings) && mappings.length
-      ? mappings.find((m: any) => String(m.key) === String(rawVal))
-      : undefined;
-    const display = mapped ? mapped.name : rawVal;
-    if (fieldItem.drill_config === null
-      || fieldItem.drill_config.length === 0
-      || (fieldItem.drill_config.length === 1 && !fieldItem.drill_config[0].tool.uid)) {
-      // 普通单元格
-      return <span
-          v-bk-tooltips={{
-            content: t('映射对象', {
-              key: mapped?.key,
-              name: mapped?.name,
-            }),
-            disabled: !mapped,
-          }}
-          style={{
-            cursor: 'pointer',
-          }}
-          class={{ tips: mapped }}
-        >
-          {display}
-        </span>;
-    }
-    // 可下钻的列，显示按钮
-    return (
-        <div>
-          <bk-popover
-            placement="top"
-            theme="black"
-            v-slots={{
-              content: () => (
-                <>
-                  {
-                    mapped && (
-                      <>
-                        <span>
-                          { t('存储值: ') }
-                        </span>
-                        <span>
-                          { mapped?.key }
-                        </span>
-                        <br />
-                        <span>
-                          { t('展示文本: ') }
-                        </span>
-                        <span>
-                          { mapped?.name }
-                        </span>
-                      </>
-                    )
-                  }
-                  <div style={{
-                    marginTop: '8px',
-                  }}>
-                    { t('点击查看此字段的证据下探') }
-                  </div>
-                </>
-              ),
-            }}>
-            <span
-              style={{
-                cursor: 'pointer',
-                color: '#3a84ff',
-              }}
-              class={{ tips: mapped }}
-              onClick={(e: any) => {
-                e.stopPropagation(); // 阻止事件冒泡
-                handleFieldDownClick(fieldItem, toolDetails.value.tool_type === 'api' ? executeData.value.data.result : data);
-              }}>
-              {display}
-            </span>
-          </bk-popover>
-          <bk-popover
-            placement="top"
-            theme="black"
-            v-slots={{
-              content: () => (
-                <div>
-                  {fieldItem.drill_config.map(config => (
-                    <div key={config.tool.uid}>
-                      {config.drill_name || getToolNameAndType(config.tool.uid).name}
-                      <bk-button
-                        class="ml8"
-                        theme="primary"
-                        text
-                        onClick={(e: any) => {
-                          e.stopPropagation(); // 阻止事件冒泡
-                          handleFieldDownClick(fieldItem, toolDetails.value.tool_type === 'api' ? executeData.value.data.result : data, config.tool.uid);
-                        }}>
-                        {t('去查看')}
-                        <audit-icon
-                          class="mr-18"
-                          type="jump-link" />
-                      </bk-button>
-                    </div>
-                  ))}
-                </div>
-              ),
-            }}>
-            <span style={{
-              padding: '1px 8px',
-              backgroundColor: '#cddffe',
-              borderRadius: '8px',
-              marginLeft: '5px',
-              color: '#3a84ff',
-              cursor: 'pointer',
-            }}
-            onClick={(e: any) => {
-              e.stopPropagation(); // 阻止事件冒泡
-              handleFieldDownClick(fieldItem, toolDetails.value.tool_type === 'api' ? executeData.value.data.result : data);
-            }}>
-              {fieldItem.drill_config.length}
-            </span>
-          </bk-popover>
-        </div>
-    );
-  };
+  // const createRenderCell = (fieldItem: OutputFields) =>
 
   const handleClickDialog = () => {
     const isNewIndex = sessionStorage.getItem('dialogIndex');
@@ -721,19 +567,17 @@
       formItemRef.value && formItemRef.value.forEach((item: any) => {
         item?.getData();
       });
-      fetchTableData();
+      // 调用子组件的执行方法
+      if (toolDetails.value?.tool_type === 'data_search' && dataSearchResultRef.value) {
+        dataSearchResultRef.value.executeTool();
+      } else if (toolDetails.value?.tool_type === 'api' && apiSearchResultRef.value) {
+        apiSearchResultRef.value.executeTool();
+      }
     });
   };
 
   // 清空表单验证
   const handleReset = () => {
-    pagination.value.current = 1;
-    pagination.value.count = 0;
-    pagination.value.limit = 100;
-
-    tableData.value = [];
-    apiData.value = {};
-
     isDrillDownOpen.value = false;
     drillDownItemConfig.value = [];
     drillDownItemRowData.value = {};
@@ -774,7 +618,9 @@
       drill_config: kvField.drill_config as DrillDownItem['drill_config'],
       enum_mappings: kvField.enum_mappings,
     };
-    handleFieldDownClick(drillDownItem, executeData.value.data.result, activeUid);
+    // 注意：这里需要从子组件获取结果数据，暂时传递空对象
+    // 如果需要，可以通过事件或 ref 从子组件获取
+    handleFieldDownClick(drillDownItem, {}, activeUid);
   };
 
   // 获取表单项的默认值
@@ -913,9 +759,6 @@
         if (isValid) {
           submit();
         }
-      } else if (toolDetails.value?.tool_type === 'api') {
-        // api 可以没有input_variable，直接提交
-        submit();
       }
     });
   };
@@ -1009,11 +852,8 @@
 
   watch(() => isFullScreen.value, (val) => {
     nextTick(() => {
-      if (tableData.value.length > 0) {
-        // 判断可视高度大于900px
-        // eslint-disable-next-line no-nested-ternary
-        dialogTableHeight.value = val ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.57}px` : '40%') : '300px';
-      }
+      // eslint-disable-next-line no-nested-ternary
+      dialogTableHeight.value = val ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.57}px` : '40%') : '300px';
       // eslint-disable-next-line no-nested-ternary
       dialogHeight.value = isFullScreen.value ? (window.innerHeight >= 900 ? `${window.innerHeight * 0.65}px` : `${window.innerHeight * 0.60}px`) : `${window.innerHeight * 0.50}px`;
     });

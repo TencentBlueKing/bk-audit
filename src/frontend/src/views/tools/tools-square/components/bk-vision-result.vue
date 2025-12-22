@@ -16,13 +16,15 @@
 -->
 <template>
   <div
-    :id="`panel-${uid}`"
+    :id="`panel-${props.uid}`"
     ref="panelRef"
     class="panel" />
 </template>
 
 <script setup lang="ts">
-  import { ref, watch } from 'vue';
+  import { ref } from 'vue';
+
+  import ToolManageService from '@service/tool-manage';
 
   import IamApplyDataModel from '@model/iam/apply-data';
   import ToolDetailModel from '@model/tool/tool-detail';
@@ -30,6 +32,7 @@
   import useMessage from '@hooks/use-message';
 
   import useEventBus from '@/hooks/use-event-bus';
+  import useRequest from '@/hooks/use-request';
 
   interface DrillDownItem {
     raw_name: string;
@@ -50,14 +53,23 @@
     }>;
   }
 
+  interface SearchItem {
+    value: any;
+    raw_name: string;
+    required: boolean;
+    description: string;
+    display_name: string;
+    field_category: string;
+  }
+
   interface Props {
     uid: string;
-    panelId: string;
     toolDetails: ToolDetailModel;
-    riskToolParams?: Record<string, any>;
     isDrillDownOpen: boolean;
     drillDownItemConfig: DrillDownItem['drill_config'][0]['config'];
     drillDownItemRowData: Record<string, any>;
+    searchList: SearchItem[];
+    riskToolParams?: Record<string, any>;
   }
 
   interface Error {
@@ -66,11 +78,46 @@
     status: number
   }
 
-  const props = defineProps<Props>();
+  const props = withDefaults(defineProps<Props>(), {
+    riskToolParams: () => ({}),
+  });
 
   const panelRef = ref<HTMLElement | null>(null);
+  const panelId = ref('');
   const { messageError } = useMessage();
   const emitBus = useEventBus().emit;
+
+  // 获取工具执行结果
+  const {
+    run: fetchToolsExecute,
+  } = useRequest(ToolManageService.fetchToolsExecute, {
+    defaultValue: {},
+    onSuccess: (data) => {
+      if (data?.data?.panel_id) {
+        panelId.value = data.data.panel_id;
+        initBK(panelId.value);
+      }
+    },
+  });
+
+  // 执行工具
+  const executeTool = () => {
+    fetchToolsExecute({
+      uid: props.uid,
+      params: {
+        tool_variables: props.searchList.map(item => ({
+          raw_name: item.raw_name,
+          value: item.value,
+        })),
+      },
+      ...(props.riskToolParams && Object.keys(props.riskToolParams).length > 0 ? props.riskToolParams : {}),
+    });
+  };
+
+  defineExpose({
+    executeTool,
+    panelRef,
+  });
 
   // 加载脚本
   const loadScript = (src: string) => new Promise((resolve, reject) => {
@@ -184,17 +231,6 @@
       console.error(error);
     }
   };
-
-  // 监听 panelId 变化，触发初始化
-  watch(() => props.panelId, (newPanelId) => {
-    if (newPanelId) {
-      initBK(newPanelId);
-    }
-  }, { immediate: true });
-
-  defineExpose({
-    panelRef,
-  });
 </script>
 
 <style scoped lang="postcss">
