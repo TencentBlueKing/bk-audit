@@ -30,10 +30,15 @@
 
 <script setup lang="tsx">
   import type { Column } from 'bkui-vue/lib/table/props';
-  import { computed } from 'vue';
+  import { computed, ref } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  import ToolManageService from '@service/tool-manage';
 
   import type { OutputFields } from '@model/tool/tool-detail';
   import ToolDetailModel from '@model/tool/tool-detail';
+
+  import useRequest from '@hooks/use-request';
 
   interface Pagination {
     current: number;
@@ -42,27 +47,80 @@
     limitList?: number[];
   }
 
+  interface SearchItem {
+    value: any;
+    raw_name: string;
+    required: boolean;
+    description: string;
+    display_name: string;
+    field_category: string;
+  }
+
   interface Props {
-    tableData: Record<string, any>[];
+    uid: string;
     toolDetails: ToolDetailModel;
     maxHeight?: string | number;
     remotePagination?: boolean;
-    // eslint-disable-next-line max-len
-    createRenderCell: (fieldItem: OutputFields) => ({ data }: { data: Record<any, any> }) => any;
+    searchList: SearchItem[];
+    allToolsData: ToolDetailModel[];
+    riskToolParams?: Record<string, any>;
   }
 
   interface Emits {
-    (e: 'updateTable'): void;
+    (e: 'handleFieldDownClick', item: OutputFields, data: Record<any, any>, uid?: string): void;
   }
 
   const props = withDefaults(defineProps<Props>(), {
     maxHeight: '300px',
     remotePagination: false,
+    riskToolParams: () => ({}),
+  });
+  const emit = defineEmits<Emits>();
+  const { t } = useI18n();
+  const pagination = ref<Pagination>({
+    count: 0,
+    limit: 10,
+    current: 1,
+    limitList: [10, 50, 100, 200, 500, 1000],
+  });
+  const tableData = ref<Record<string, any>[]>([]);
+
+  // 获取工具执行结果
+  const {
+    loading: isLoading,
+    run: fetchToolsExecute,
+  } = useRequest(ToolManageService.fetchToolsExecute, {
+    defaultValue: {},
+    onSuccess: (data) => {
+      if (data === undefined) {
+        tableData.value = [];
+      } else if (data?.data) {
+        tableData.value = data.data.results || [];
+        pagination.value.count = data.data.total || 0;
+      }
+    },
   });
 
-  const emit = defineEmits<Emits>();
+  // 执行工具
+  const executeTool = () => {
+    fetchToolsExecute({
+      uid: props.uid,
+      params: {
+        tool_variables: props.searchList.map(item => ({
+          raw_name: item.raw_name,
+          value: item.value,
+        })),
+        page: pagination.value.current,
+        page_size: pagination.value.limit,
+      },
+      ...(props.riskToolParams && Object.keys(props.riskToolParams).length > 0 ? props.riskToolParams : {}),
+    });
+  };
 
-  const pagination = defineModel<Pagination>('pagination', { required: true });
+  defineExpose({
+    executeTool,
+    isLoading,
+  });
 
   // 从 toolDetails 获取 outputFields
   const outputFields = computed(() => {
@@ -72,32 +130,164 @@
     return [];
   });
 
-  // 创建 columns
-  const columns = computed<Column[]>(() => outputFields.value.map((item): Column => {
-    const renderCell = props.createRenderCell(item);
-    return {
-      label: item.display_name,
-      field: item.raw_name,
-      minWidth: 200,
-      showOverflowTooltip: true,
-      render: (args: any) => {
-        // 包装 renderCell 以兼容 bk-table 的参数类型（data 是可选的）
-        if (!args?.data) {
-          return null;
-        }
-        return renderCell({ data: args.data });
-      },
+  const getToolNameAndType = (uid: string) => {
+    const tool = props.allToolsData?.find(item => item.uid === uid);
+    return tool ? {
+      name: tool.name,
+      type: tool.tool_type,
+    } : {
+      name: '',
+      type: '',
     };
-  })) as unknown as Column[];
+  };
+
+  // 创建 columns
+  const columns = computed<Column[]>(() => outputFields.value.map((item): Column => ({
+    label: item.display_name,
+    field: item.raw_name,
+    minWidth: 200,
+    showOverflowTooltip: true,
+    render: ({ data }: { data?: Record<any, any> }) => {
+      if (!data) {
+        return '--';
+      }
+      const rawVal = data[item.raw_name];
+      // 如果有enum映射，优先用映射的name
+      const mappings = item.enum_mappings?.mappings;
+      const mapped = Array.isArray(mappings) && mappings.length
+        ? mappings.find((m: any) => String(m.key) === String(rawVal))
+        : undefined;
+      console.log('mapped', mapped);
+      const display = mapped ? mapped.name : rawVal;
+      console.log('display', display);
+      if (item.drill_config === null
+        || item.drill_config.length === 0
+        || (item.drill_config.length === 1 && !item.drill_config[0].tool.uid)) {
+        // 普通单元格
+        return <span
+          v-bk-tooltips={{
+            content: t('映射对象', {
+              key: mapped?.key,
+              name: mapped?.name,
+            }),
+            disabled: !mapped,
+          }}
+          style={{
+            cursor: 'pointer',
+          }}
+          class={{ tips: mapped }}
+        >
+          {display}
+        </span>;
+      }
+      // 可下钻的列，显示按钮
+      return (
+          <div>
+            <bk-popover
+              placement="top"
+              theme="black"
+              v-slots={{
+                content: () => (
+                  <>
+                    {
+                      mapped && (
+                        <>
+                          <span>
+                            { t('存储值: ') }
+                          </span>
+                          <span>
+                            { mapped?.key }
+                          </span>
+                          <br />
+                          <span>
+                            { t('展示文本: ') }
+                          </span>
+                          <span>
+                            { mapped?.name }
+                          </span>
+                        </>
+                      )
+                    }
+                    <div style={{
+                      marginTop: '8px',
+                    }}>
+                      { t('点击查看此字段的证据下探') }
+                    </div>
+                  </>
+                ),
+              }}>
+              <span
+                style={{
+                  cursor: 'pointer',
+                  color: '#3a84ff',
+                }}
+                class={{ tips: mapped }}
+                onClick={(e: any) => {
+                  e.stopPropagation(); // 阻止事件冒泡
+                  handleFieldDownClick(item, data);
+                }}>
+                {display}
+              </span>
+            </bk-popover>
+            <bk-popover
+              placement="top"
+              theme="black"
+              v-slots={{
+                content: () => (
+                  <div>
+                    {item.drill_config.map(config => (
+                      <div key={config.tool.uid}>
+                        {config.drill_name || getToolNameAndType(config.tool.uid).name}
+                        <bk-button
+                          class="ml8"
+                          theme="primary"
+                          text
+                          onClick={(e: any) => {
+                            e.stopPropagation(); // 阻止事件冒泡
+                            handleFieldDownClick(item, data, config.tool.uid);
+                          }}>
+                          {t('去查看')}
+                          <audit-icon
+                            class="mr-18"
+                            type="jump-link" />
+                        </bk-button>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              }}>
+              <span style={{
+                padding: '1px 8px',
+                backgroundColor: '#cddffe',
+                borderRadius: '8px',
+                marginLeft: '5px',
+                color: '#3a84ff',
+                cursor: 'pointer',
+              }}
+              onClick={(e: any) => {
+                e.stopPropagation(); // 阻止事件冒泡
+                handleFieldDownClick(item, data);
+              }}>
+                {item.drill_config.length}
+              </span>
+            </bk-popover>
+          </div>
+      );
+    },
+  }))) as unknown as Column[];
+
+  const handleFieldDownClick = (item: OutputFields, data: Record<any, any>, uid?: string) => {
+    emit('handleFieldDownClick', item, data, uid);
+  };
 
   const handlePageLimitChange = (val: number) => {
     pagination.value.limit = val;
     pagination.value.current = 1;
-    emit('updateTable');
+    executeTool();
   };
 
   const handlePageValueChange = (val: number) => {
     pagination.value.current = val;
-    emit('updateTable');
+    executeTool();
   };
 </script>
