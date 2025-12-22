@@ -51,6 +51,7 @@ from services.web.query.utils.doris import DorisQuerySQLBuilder
 from services.web.query.utils.search_config import QueryConditionOperator
 from unittest.mock import patch
 
+
 class TestSQLGenerator(TestCase):
     def setUp(self):
         self.query_builder = QueryBuilder()
@@ -1080,11 +1081,9 @@ class TestDorisVariantFieldSanitize(TestCase):
     def test_sanitize_variant_key_type_and_empty(self):
         """ _sanitize_variant_key 对类型和空字符串做校验 """
         field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
-
         # 非字符串 -> TypeError
         with self.assertRaises(TypeError):
             field._sanitize_variant_key(123)  # type: ignore[arg-type]
-
         # 空字符串 -> ValueError
         with self.assertRaises(ValueError):
             field._sanitize_variant_key("")
@@ -1092,7 +1091,6 @@ class TestDorisVariantFieldSanitize(TestCase):
     def test_sanitize_variant_key_escape_injection_payload(self):
         """ 恶意 payload 作为 Variant keys 参与 Doris 查询条件时，会被 escape_string 转义，避免拼出可执行 SQL 片段"""
         payload = "foo'\''] !=0 or 1=1; --"
-
         builder = DorisQuerySQLBuilder(
             table="test_table",
             conditions=[
@@ -1109,21 +1107,46 @@ class TestDorisVariantFieldSanitize(TestCase):
             page=1,
             page_size=10,
         )
-
         sql = builder.build_data_sql()
-        # print(sql)
-        # 与 pymysql.converters.escape_string 一致
+
         expected = escape_string(payload)
         if isinstance(expected, (bytes, bytearray)):
             expected = expected.decode()
-
         expected_fragment = f"[{DORIS_FIELD_KEY_QUOTE}{expected}{DORIS_FIELD_KEY_QUOTE}]"
-
         self.assertIn(
             expected_fragment,
             sql,
             msg=f"\nExpected fragment:\n{expected_fragment}\nGot SQL:\n{sql}",
         )
+        # 模拟 escape_string 返回 bytes 类型，让 isinstance 分支执行
+        with patch("pymysql.converters.escape_string", return_value=b"foo\\'\\'\\''] !=0 or 1=1; --"):
+            expected_bytes = escape_string(payload)  # 此时返回 bytes
+            if isinstance(expected_bytes, (bytes, bytearray)):
+                expected_bytes = expected_bytes.decode()
+            expected_fragment_bytes = f"[{DORIS_FIELD_KEY_QUOTE}{expected_bytes}{DORIS_FIELD_KEY_QUOTE}]"
+            # 重新构建 SQL 并校验（确保 bytes 转义后符合预期）
+            builder_bytes = DorisQuerySQLBuilder(
+                table="test_table",
+                conditions=[
+                    {
+                        "field": {
+                            "raw_name": "snapshot_resource_type_info",
+                            "keys": [payload],
+                        },
+                        "operator": QueryConditionOperator.EQ.value,
+                        "filters": ["bk-audit"],
+                    }
+                ],
+                sort_list=[],
+                page=1,
+                page_size=10,
+            )
+            sql_bytes = builder_bytes.build_data_sql()
+            self.assertIn(
+                expected_fragment_bytes,
+                sql_bytes,
+                msg=f"\nExpected fragment (bytes):\n{expected_fragment_bytes}\nGot SQL:\n{sql_bytes}",
+            )
 
     def test_format_keys_quote_normal_keys(self):
         """ 正常 keys: ["k1", "k2"] => "['k1']['k2']"（或使用 DORIS_FIELD_KEY_QUOTE） """
@@ -1131,9 +1154,7 @@ class TestDorisVariantFieldSanitize(TestCase):
             keys=["k1", "k2"],
             name="snapshot_resource_type_info",
         )
-
         sql_fragment = field.format_keys_quote()
-
         self.assertEqual(
             sql_fragment,
             (
@@ -1146,11 +1167,8 @@ class TestDorisVariantFieldSanitize(TestCase):
     def test_sanitize_variant_key_escape_return_bytes(self, mock_escape_string):
         """ 当 escape_string 返回 bytes 时，_sanitize_variant_key 能正确 decode 成 str """
         mock_escape_string.return_value = b"escaped_payload"
-
         field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
-
         result = field._sanitize_variant_key("foo")
-
         # 确认调用了 escape_string
         mock_escape_string.assert_called_once_with("foo")
         # 确认最终返回的是 str，而不是 bytes
