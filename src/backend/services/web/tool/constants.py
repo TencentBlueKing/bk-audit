@@ -270,6 +270,7 @@ class ToolTagsEnum(TextChoices):
 # ==========================================
 
 
+@register_choices("api_auth_method")
 class ApiAuthMethod(TextChoices):
     """
     API认证方法
