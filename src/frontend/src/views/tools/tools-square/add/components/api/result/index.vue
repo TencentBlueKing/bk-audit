@@ -129,7 +129,7 @@
                     display_name: listItem?.display_name || '',
                     drill_config: listItem?.drill_config || null,
                     enum_mappings: {
-                      mappings: listItem?.enum_mappings.mappings || [],
+                      mappings: listItem?.enum_mappings?.mappings || [],
                     },
                   })),
                 },
@@ -182,7 +182,7 @@
                 display_name: listItem?.display_name || '',
                 drill_config: listItem?.drill_config || null,
                 enum_mappings: {
-                  mappings: listItem?.enum_mappings.mappings || [],
+                  mappings: listItem?.enum_mappings?.mappings || [],
                 },
               })),
             },
