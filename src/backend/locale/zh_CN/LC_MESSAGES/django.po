@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: bk-audit\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-04 12:16+0800\n"
+"POT-Creation-Date: 2025-12-22 20:53+0800\n"
 "PO-Revision-Date: 2025-11-19 15:00+0800\n"
 "Last-Translator: BK审计团队 <bk-audit@example.com>\n"
 "Language-Team: bk-audit <bk-audit@example.com>\n"
@@ -2232,6 +2232,9 @@ msgstr "策略列表访问"
 msgid "创建策略"
 msgstr "创建策略"
 
+msgid "手工生成策略风险"
+msgstr ""
+
 msgid "编辑策略"
 msgstr "编辑策略"
 
@@ -2359,6 +2362,9 @@ msgstr "审计报表"
 
 msgid "风险工单权限"
 msgstr "风险工单权限"
+
+msgid "手工事件"
+msgstr ""
 
 msgid "敏感操作"
 msgstr "敏感操作"
@@ -3042,6 +3048,9 @@ msgstr "存储类型"
 msgid "关联数据类型"
 msgstr "关联数据类型"
 
+msgid "自定义配置"
+msgstr ""
+
 msgid "日志类型"
 msgstr "日志类型"
 
@@ -3533,6 +3542,190 @@ msgstr "蓝鲸桌面"
 msgid "Doris必须是预定义的"
 msgstr "Doris必须是预定义的"
 
+msgid "表配置"
+msgstr "表配置"
+
+msgid "bkbase_table_id: BKBase 结果表 ID，如 591_bkaudit_event<br>storage_type: 存储类型，默认 doris<br>time_field: 用于时间范围筛选的字段名"
+msgstr "bkbase_table_id: BKBase 结果表 ID，如 591_bkaudit_event<br>storage_type: 存储类型，默认 doris<br>time_field: 用于时间范围筛选的字段名"
+
+msgid "必须筛选字段"
+msgstr "必须筛选字段"
+
+msgid "订阅配置项选择此数据源时，筛选条件中必须包含的字段列表<br>格式: [\"field1\", \"field2\"]<br>注意: 这里只校验字段名是否在筛选条件中，字段是否真实存在交由 SQL 查询时数据库校验"
+msgstr "订阅配置项选择此数据源时，筛选条件中必须包含的字段列表<br>格式: [\"field1\", \"field2\"]<br>注意: 这里只校验字段名是否在筛选条件中，字段是否真实存在交由 SQL 查询时数据库校验"
+
+msgid "审计信息"
+msgstr "审计信息"
+
+msgid "可使用结构化模式或 JSON 模式编辑筛选条件。"
+msgstr "可使用结构化模式或 JSON 模式编辑筛选条件。"
+
+#, python-brace-format
+msgid "以下数据源要求配置筛选条件：{sources}"
+msgstr "以下数据源要求配置筛选条件：{sources}"
+
+msgid "筛选条件"
+msgstr "筛选条件"
+
+msgid "订阅不存在"
+msgstr "订阅不存在"
+
+#, python-brace-format
+msgid "调试订阅 - {name}"
+msgstr "调试订阅 - {name}"
+
+msgid "配置项数量"
+msgstr "配置项数量"
+
+msgid "选择一个或多个数据源"
+msgstr "选择一个或多个数据源"
+
+msgid "配置筛选条件，必须包含所有数据源的必须筛选字段。<br>注意: field.table 在配置时给默认值即可（如 't'），查询时会被自动替换为实际表别名。"
+msgstr "配置筛选条件，必须包含所有数据源的必须筛选字段。<br>注意: field.table 在配置时给默认值即可（如 't'），查询时会被自动替换为实际表别名。"
+
+msgid "日志订阅"
+msgstr "日志订阅"
+
+msgid "订阅配置不存在或未启用"
+msgstr "订阅配置不存在或未启用"
+
+#, python-brace-format
+msgid "数据源 {source_id} 不存在或未启用"
+msgstr "数据源 {source_id} 不存在或未启用"
+
+#, python-brace-format
+msgid "数据源 {source_id} 不在当前订阅配置中"
+msgstr "数据源 {source_id} 不在当前订阅配置中"
+
+msgid "数据源标识"
+msgstr "数据源标识"
+
+msgid "英文标识，如 audit_log, operation_log"
+msgstr "英文标识，如 audit_log, operation_log"
+
+msgid "BKBase 表 ID"
+msgstr "BKBase 表 ID"
+
+msgid "BKBase 结果表 ID，如 591_bkaudit_event"
+msgstr "BKBase 结果表 ID，如 591_bkaudit_event"
+
+msgid "BKBase 存储类型"
+msgstr "BKBase 存储类型"
+
+msgid "订阅配置项选择此数据源时，筛选条件中必须包含的字段列表，如 ['system_id', 'namespace']"
+msgstr "订阅配置项选择此数据源时，筛选条件中必须包含的字段列表，如 ['system_id', 'namespace']"
+
+msgid "时间字段"
+msgstr "时间字段"
+
+msgid "用于时间范围筛选的字段名"
+msgstr "用于时间范围筛选的字段名"
+
+msgid "日志数据源"
+msgstr "日志数据源"
+
+#, python-brace-format
+msgid "数据源 {source} 要求配置筛选条件，必须筛选字段: {fields}"
+msgstr "数据源 {source} 要求配置筛选条件，必须筛选字段: {fields}"
+
+#, python-brace-format
+msgid "数据源 {source} 缺少必须筛选字段: {fields}"
+msgstr "数据源 {source} 缺少必须筛选字段: {fields}"
+
+msgid "配置名称"
+msgstr "配置名称"
+
+msgid "配置描述"
+msgstr "配置描述"
+
+msgid "订阅 Token"
+msgstr "订阅 Token"
+
+msgid "日志订阅配置"
+msgstr "日志订阅配置"
+
+msgid "订阅配置"
+msgstr "订阅配置"
+
+msgid "配置项名称"
+msgstr "配置项名称"
+
+msgid "配置项的描述性名称"
+msgstr "配置项的描述性名称"
+
+msgid "WhereCondition 格式的筛选条件，必须包含所有关联数据源的必须筛选字段"
+msgstr "WhereCondition 格式的筛选条件，必须包含所有关联数据源的必须筛选字段"
+
+msgid "排序"
+msgstr "排序"
+
+msgid "日志订阅配置项"
+msgstr "日志订阅配置项"
+
+msgid "日志订阅查询"
+msgstr "日志订阅查询"
+
+msgid "订阅配置的唯一标识"
+msgstr "订阅配置的唯一标识"
+
+msgid "指定查询的数据源，如 audit_log"
+msgstr "指定查询的数据源，如 audit_log"
+
+msgid "开始时间(ms)"
+msgstr "开始时间(ms)"
+
+msgid "Unix 毫秒时间戳"
+msgstr "Unix 毫秒时间戳"
+
+msgid "结束时间(ms)"
+msgstr "结束时间(ms)"
+
+msgid "指定返回哪些字段，不传则返回全部字段（SELECT *）。字段是否存在由 SQL 查询时数据库校验"
+msgstr "指定返回哪些字段，不传则返回全部字段（SELECT *）。字段是否存在由 SQL 查询时数据库校验"
+
+msgid "自定义筛选条件"
+msgstr "自定义筛选条件"
+
+msgid "WhereCondition JSON 格式的额外筛选条件，会与订阅配置的条件 AND 合并"
+msgstr "WhereCondition JSON 格式的额外筛选条件，会与订阅配置的条件 AND 合并"
+
+msgid "仅返回 SQL"
+msgstr "仅返回 SQL"
+
+msgid "设置为 true 时仅返回 SQL 不执行查询"
+msgstr "设置为 true 时仅返回 SQL 不执行查询"
+
+msgid "自定义筛选条件不支持 keys 字段"
+msgstr "自定义筛选条件不支持 keys 字段"
+
+msgid "开始时间需小于等于结束时间"
+msgstr "开始时间需小于等于结束时间"
+
+#, python-brace-format
+msgid "时间范围不能超过 {days} 天"
+msgstr "时间范围不能超过 {days} 天"
+
+msgid "总数"
+msgstr "总数"
+
+msgid "数据"
+msgstr "数据"
+
+msgid "透传 BKBase 查询结果，字段结构由数据源配置和请求参数决定"
+msgstr "透传 BKBase 查询结果，字段结构由数据源配置和请求参数决定"
+
+msgid "查询 SQL"
+msgstr "查询 SQL"
+
+msgid "实际执行的查询 SQL"
+msgstr "实际执行的查询 SQL"
+
+msgid "统计 SQL"
+msgstr "统计 SQL"
+
+msgid "实际执行的统计 SQL"
+msgstr "实际执行的统计 SQL"
+
 msgid "任务状态"
 msgstr "任务状态"
 
@@ -3749,17 +3942,11 @@ msgstr "指定字段范围时，字段列表不能为空"
 msgid "导出参数"
 msgstr "导出参数"
 
-msgid "可使用结构化模式或 JSON 模式编辑筛选条件。"
-msgstr "可使用结构化模式或 JSON 模式编辑筛选条件。"
-
 msgid "Metadata"
 msgstr "Metadata"
 
 msgid "Audit"
 msgstr "蓝鲸审计中心"
-
-msgid "订阅不存在"
-msgstr "订阅不存在"
 
 #, python-brace-format
 msgid "验证 SQL - {name}"
@@ -3809,6 +3996,9 @@ msgstr "事件发生时间"
 
 msgid "事件来源"
 msgstr "事件来源"
+
+msgid "录入中"
+msgstr ""
 
 msgid "新"
 msgstr "新"
@@ -4002,6 +4192,15 @@ msgstr "最后处理时间"
 msgid "Risk Title"
 msgstr "风险标题"
 
+msgid "手动建的单是否已同步"
+msgstr ""
+
+msgid "Manual Risk Event ID"
+msgstr ""
+
+msgid "手动事件存储"
+msgstr ""
+
 msgid "UUID"
 msgstr "UUID"
 
@@ -4080,20 +4279,36 @@ msgstr "用户类型"
 msgid "Ticket Permission"
 msgstr "单据权限"
 
-msgid "订阅 Token"
-msgstr "订阅 Token"
-
-msgid "配置名称"
-msgstr "配置名称"
-
-msgid "筛选条件"
-msgstr "筛选条件"
-
 msgid "风险事件订阅"
 msgstr "风险事件订阅"
 
 msgid "创建事件"
 msgstr "创建事件"
+
+#, fuzzy
+#| msgid "URL不能为空"
+msgid "风险ID不能为空"
+msgstr "URL不能为空"
+
+#, fuzzy
+#| msgid "订阅 Token 不存在或未启用"
+msgid "风险不存在或不可用"
+msgstr "订阅 Token 不存在或未启用"
+
+msgid "事件所属策略与风险不一致"
+msgstr ""
+
+msgid "风险单已关闭，无法添加事件"
+msgstr ""
+
+msgid "事件时间不在风险有效区间内"
+msgstr ""
+
+msgid "策略不存在"
+msgstr ""
+
+msgid "仅支持规则审计策略创建事件"
+msgstr ""
 
 msgid "获取事件列表"
 msgstr "获取事件列表"
@@ -4278,27 +4493,6 @@ msgstr "字段显示名"
 
 msgid "字段ID"
 msgstr "字段ID"
-
-msgid "开始时间(ms)"
-msgstr "开始时间(ms)"
-
-msgid "Unix 毫秒时间戳"
-msgstr "Unix 毫秒时间戳"
-
-msgid "结束时间(ms)"
-msgstr "结束时间(ms)"
-
-msgid "仅返回 SQL"
-msgstr "仅返回 SQL"
-
-msgid "开始时间需小于等于结束时间"
-msgstr "开始时间需小于等于结束时间"
-
-msgid "总数"
-msgstr "总数"
-
-msgid "数据"
-msgstr "数据"
 
 msgid "订阅结果行"
 msgstr "订阅结果行"
@@ -4485,6 +4679,9 @@ msgstr "规则策略"
 msgid "模型策略"
 msgstr "模型策略"
 
+msgid "用户创建"
+msgstr ""
+
 msgid "Link Table Name"
 msgstr "联表名称"
 
@@ -4614,6 +4811,11 @@ msgstr "事件证据字段配置"
 
 msgid "Is Formal"
 msgstr "Is Formal"
+
+#, fuzzy
+#| msgid "Source Type"
+msgid "Source"
+msgstr "数据源类型"
 
 msgid "Strategy"
 msgstr "策略"
@@ -4778,6 +4980,9 @@ msgstr "字段关联"
 msgid "Storage Type"
 msgstr "存储类型"
 
+msgid "SQL is only allowed for rule strategy"
+msgstr ""
+
 msgid "control_id and control_version are required when strategy_type is model"
 msgstr "当策略类型为模型审计时，必须提供 control_id 和 control_version"
 
@@ -4787,6 +4992,11 @@ msgstr "控件版本不存在"
 #, python-format
 msgid "%s Need to configure mapping"
 msgstr "%s 必须配置映射"
+
+#, fuzzy
+#| msgid "Strategy Count"
+msgid "Strategy Source"
+msgstr "策略数量"
 
 msgid "Processor Groups"
 msgstr "处理组"
@@ -5346,6 +5556,118 @@ msgstr "请记录下错误场景并及时与开发人员联系"
 msgid "管理"
 msgstr "管理"
 
+msgid "验证 SQL"
+msgstr "验证 SQL"
+
+msgid "Home"
+msgstr "Home"
+
+msgid "调试订阅"
+msgstr ""
+
+#, fuzzy
+#| msgid "查询参数URL"
+msgid "查询参数"
+msgstr "查询参数URL"
+
+msgid "请选择数据源"
+msgstr ""
+
+msgid "开始时间"
+msgstr "开始时间"
+
+msgid "结束时间"
+msgstr "结束时间"
+
+msgid "每页数量"
+msgstr "每页数量"
+
+#, fuzzy
+#| msgid "多个字段使用逗号分隔"
+msgid "留空返回全部字段，多个字段用逗号分隔"
+msgstr "多个字段使用逗号分隔"
+
+msgid "示例: field1,field2,field3"
+msgstr ""
+
+msgid "结构化模式"
+msgstr "结构化模式"
+
+msgid "JSON 模式"
+msgstr "JSON 模式"
+
+msgid "复杂嵌套条件可切换到 JSON 编辑"
+msgstr "复杂嵌套条件可切换到 JSON 编辑"
+
+msgid "留空则不添加额外筛选条件"
+msgstr ""
+
+msgid "仅生成 SQL"
+msgstr "仅生成 SQL"
+
+msgid "生成并执行查询"
+msgstr "生成并执行查询"
+
+msgid "返回订阅详情"
+msgstr "返回订阅详情"
+
+msgid "查询结果"
+msgstr "查询结果"
+
+#, fuzzy
+#| msgid "筛选条件"
+msgid "自定义筛选条件格式错误"
+msgstr "筛选条件"
+
+#, fuzzy
+#| msgid "验证 SQL"
+msgid "无查询 SQL"
+msgstr "验证 SQL"
+
+#, fuzzy
+#| msgid "验证 SQL"
+msgid "无统计 SQL"
+msgstr "验证 SQL"
+
+msgid "共"
+msgstr ""
+
+msgid "条记录，当前第"
+msgstr ""
+
+msgid "页，每页"
+msgstr ""
+
+#, fuzzy
+#| msgid "条件"
+msgid "条"
+msgstr "条件"
+
+#, fuzzy
+#| msgid "错误信息"
+msgid "错误"
+msgstr "错误信息"
+
+msgid "获取表单数据失败"
+msgstr ""
+
+#, fuzzy
+#| msgid "时间范围"
+msgid "请选择时间范围"
+msgstr "时间范围"
+
+msgid "正在查询..."
+msgstr ""
+
+msgid "请求失败"
+msgstr ""
+
+msgid "SQL 生成成功"
+msgstr ""
+
+msgid "查询成功"
+msgstr ""
+
 msgid "您暂时不能访问该站点的后台管理，这是以下原因造成的："
 msgstr "您暂时不能访问该站点的后台管理，这是以下原因造成的："
 
@@ -5361,44 +5683,8 @@ msgstr "没有管理员权限，请联系管理员！"
 msgid "如有需要，请联系管理员或开发者为您解决上述问题。"
 msgstr "如有需要，请联系管理员或开发者为您解决上述问题。"
 
-msgid "验证 SQL"
-msgstr "验证 SQL"
-
-msgid "Home"
-msgstr "Home"
-
 msgid "时间范围与分页"
 msgstr "时间范围与分页"
-
-msgid "开始时间"
-msgstr "开始时间"
-
-msgid "结束时间"
-msgstr "结束时间"
-
-msgid "每页数量"
-msgstr "每页数量"
-
-msgid "仅生成 SQL"
-msgstr "仅生成 SQL"
-
-msgid "生成并执行查询"
-msgstr "生成并执行查询"
-
-msgid "返回订阅详情"
-msgstr "返回订阅详情"
-
-msgid "查询结果"
-msgstr "查询结果"
-
-msgid "结构化模式"
-msgstr "结构化模式"
-
-msgid "JSON 模式"
-msgstr "JSON 模式"
-
-msgid "复杂嵌套条件可切换到 JSON 编辑"
-msgstr "复杂嵌套条件可切换到 JSON 编辑"
 
 msgid "蓝鲸开发框架(Django模板)"
 msgstr "蓝鲸开发框架(Django模板)"
