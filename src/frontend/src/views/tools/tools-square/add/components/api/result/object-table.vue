@@ -93,7 +93,7 @@
                 label-width="0">
                 <div
                   class="field-value-div">
-                  <template v-if="formData.drill_config.length > 0">
+                  <template v-if="formData.drill_config && formData.drill_config.length > 0">
                     <bk-popover
                       placement="top"
                       theme="black">
