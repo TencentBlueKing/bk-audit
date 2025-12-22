@@ -429,6 +429,7 @@
 
   // 工具执行
   const {
+    data: executeData,
     run: fetchToolsExecute,
   } = useRequest(ToolManageService.fetchToolsExecute, {
     defaultValue: {},
@@ -580,7 +581,7 @@
 
   // 创建单元格渲染函数（公共函数）
   // eslint-disable-next-line max-len
-  const createRenderCell = (fieldItem: OutputFields, toolData: ToolDetailModel) => ({ data }: { data: Record<any, any> }) => {
+  const createRenderCell = (fieldItem: OutputFields) => ({ data }: { data: Record<any, any> }) => {
     const rawVal = data[fieldItem.raw_name];
     // 如果有enum映射，优先用映射的name
     const mappings = fieldItem.enum_mappings?.mappings;
@@ -652,7 +653,7 @@
               class={{ tips: mapped }}
               onClick={(e: any) => {
                 e.stopPropagation(); // 阻止事件冒泡
-                handleFieldDownClick(fieldItem, toolData);
+                handleFieldDownClick(fieldItem, toolDetails.value.tool_type === 'api' ? executeData.value.data.result : data);
               }}>
               {display}
             </span>
@@ -672,7 +673,7 @@
                         text
                         onClick={(e: any) => {
                           e.stopPropagation(); // 阻止事件冒泡
-                          handleFieldDownClick(fieldItem, toolData, config.tool.uid);
+                          handleFieldDownClick(fieldItem, toolDetails.value.tool_type === 'api' ? executeData.value.data.result : data, config.tool.uid);
                         }}>
                         {t('去查看')}
                         <audit-icon
@@ -694,7 +695,7 @@
             }}
             onClick={(e: any) => {
               e.stopPropagation(); // 阻止事件冒泡
-              handleFieldDownClick(fieldItem, toolData);
+              handleFieldDownClick(fieldItem, toolDetails.value.tool_type === 'api' ? executeData.value.data.result : data);
             }}>
               {fieldItem.drill_config.length}
             </span>
@@ -773,7 +774,7 @@
       drill_config: kvField.drill_config as DrillDownItem['drill_config'],
       enum_mappings: kvField.enum_mappings,
     };
-    handleFieldDownClick(drillDownItem, { [kvField.raw_name]: kvField.resolvePathValue }, activeUid);
+    handleFieldDownClick(drillDownItem, executeData.value.data.result, activeUid);
   };
 
   // 获取表单项的默认值
@@ -787,9 +788,40 @@
     return null;
   };
 
+  // 根据 json_path 提取数据
+  const extractDataByPath = (data: any, path: string): any => {
+    if (!path || !data) return null;
+
+    // 去掉路径中的下标，如 [1]、[26] 等
+    const cleanPath = path.replace(/\[\d+\]/g, '');
+
+    // 根据 . 分割路径，一层一层获取数据
+    const pathParts = cleanPath.split('.').filter(part => part.length > 0);
+    let result = data;
+
+    for (const part of pathParts) {
+      if (result === null || result === undefined) {
+        return null;
+      }
+      // 如果 result 是数组，默认从第一个元素获取
+      if (Array.isArray(result)) {
+        result = result[0]?.[part];
+      } else {
+        result = result[part];
+      }
+    }
+
+    // 如果是字符串，去掉两边的引号（双引号或单引号）
+    if (typeof result === 'string') {
+      result = result.replace(/^["']|["']$/g, '');
+    }
+
+    return result;
+  };
+
   // 创建弹窗内容
-  const createDialogContent = (data: ToolDetailModel) => {
-    console.log('detail data:', data);
+  const createDialogContent = (currentToolDetail: ToolDetailModel) => {
+    console.log('currentToolDetail:', currentToolDetail);
     // 构造form-item
     const createSearchItem = (item: any) => ({
       ...item,
@@ -800,7 +832,7 @@
 
     // 非下钻
     if (!isDrillDownOpen.value) {
-      searchList.value = data.config.input_variable
+      searchList.value = currentToolDetail.config.input_variable
         .filter((item: any) => item.is_show === undefined || item.is_show === true)
         .map(createSearchItem);
     } else {
@@ -817,7 +849,7 @@
       });
 
       // 一次性完成映射
-      searchList.value = data.config.input_variable
+      searchList.value = currentToolDetail.config.input_variable
         .filter((item: any) => item.is_show === undefined || item.is_show === true)
         .map((item: any) => {
           const searchItem = createSearchItem(item);
@@ -827,7 +859,10 @@
           // 动态值处理逻辑
           let dynamicValue = '';
           if (configItem.target_value_type !== 'fixed_value') {
-            if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
+            // 如果target_value是类似'data.risk_id'，则需要把target_value作为json_path从currentToolDetail.data.result中取值
+            if (configItem.target_value.includes('.')) {
+              dynamicValue = extractDataByPath(drillDownItemRowData.value, configItem.target_value);
+            } else if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
               // 从根对象取值
               dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? searchItem.value;
             } else {
@@ -878,7 +913,7 @@
         if (isValid) {
           submit();
         }
-      } else if (data.tool_type === 'api') {
+      } else if (toolDetails.value?.tool_type === 'api') {
         // api 可以没有input_variable，直接提交
         submit();
       }
