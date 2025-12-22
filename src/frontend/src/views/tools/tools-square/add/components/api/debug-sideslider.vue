@@ -84,7 +84,7 @@
           <bk-form-item
             v-if="handleIsShow(item.is_show)"
             :property="item.raw_name"
-            :required="item.required">
+            :required="item.required === 'true'">
             <template
               #label>
               <bk-popover
@@ -175,7 +175,7 @@
   interface FormItem {
     display_name: string;
     description: string;
-    required: boolean | string;
+    required:string;
     field_category: string;
     default_value?: any;
     time_range?: any;
