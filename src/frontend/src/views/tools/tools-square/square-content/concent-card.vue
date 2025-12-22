@@ -363,35 +363,41 @@
     manual: true,
   });
 
+  const openUrlTools = () => {
+    const toolIds = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
+    urlToolsIds.value = new Set(toolIds);
+    allOpenToolsData.value = toolIds;
+    if (urlToolsIds.value.size > 0) {
+      urlToolsIds.value.forEach((item: string) => {
+        // 使用hooks中的handleOpenTool
+        handleOpenTool(item);
+        setTimeout(() => {
+          const modals = document.querySelectorAll('.tools-use-dialog.bk-modal-wrapper');
+          Array.from(modals).reverse()
+            .forEach((modal, index) => {
+              const htmlModal = modal as HTMLElement;
+              if (index > 0 && !htmlModal.style.transform) {
+                htmlModal.style.left = `${50 - (index + 1) * 2}%`;
+              }
+            });
+        }, 0);
+      });
+    }
+  };
+
   // 工具列表
   const {
     run: fetchToolsList,
   } = useRequest(ToolManageService.fetchToolsList, {
     defaultValue: {} as IRequestResponsePaginationData<ToolInfo>,
     onSuccess: (data) => {
-      dataList.value = data.results;
+      // 触底拼接数据
+      dataList.value = [...dataList.value, ...data.results];
       total.value = data.total;
+
       // 自动打开弹窗
       if (route.query.tool_id) {
-        const toolIds = typeof route.query.tool_id === 'string' ? route.query.tool_id.split(',') : [];
-        urlToolsIds.value = new Set(toolIds);
-        allOpenToolsData.value = toolIds;
-        if (urlToolsIds.value.size > 0) {
-          urlToolsIds.value.forEach((item: string) => {
-            // 使用hooks中的handleOpenTool
-            handleOpenTool(item);
-            setTimeout(() => {
-              const modals = document.querySelectorAll('.tools-use-dialog.bk-modal-wrapper');
-              Array.from(modals).reverse()
-                .forEach((modal, index) => {
-                  const htmlModal = modal as HTMLElement;
-                  if (index > 0 && !htmlModal.style.transform) {
-                    htmlModal.style.left = `${50 - (index + 1) * 2}%`;
-                  }
-                });
-            }, 0);
-          });
-        }
+        openUrlTools();
       }
     },
   });
@@ -636,19 +642,15 @@
       loading.value = false;
       isMoreLoading.value = true;
       hasMore.value = true;
+      currentPage.value += 1;
 
       fetchToolsList({
-        page: currentPage.value === 1 ? 2 : currentPage.value,
-        page_size: currentPagSize.value === 50 ? 100 : currentPagSize.value,
+        page: currentPage.value,
+        page_size: 50,
         keyword: searchValue.value,
         my_created: props.myCreated,
         recent_used: props.recentUsed,
         tags: [props.tagId],
-      }).then((res) => {
-        if (res) {
-          currentPage.value += 1;
-          currentPagSize.value += 50;
-        }
       })
         .finally(() => {
           hasMore.value = false;
@@ -662,7 +664,7 @@
       nextTick(() => {
         fetchToolsList({
           page: currentPage.value,
-          page_size: currentPagSize.value,
+          page_size: 50,
           keyword: searchValue.value,
           my_created: props.myCreated,
           recent_used: props.recentUsed,
