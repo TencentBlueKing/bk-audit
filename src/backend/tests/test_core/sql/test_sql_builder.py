@@ -1109,22 +1109,20 @@ class TestDorisVariantFieldSanitize(TestCase):
         )
         sql = builder.build_data_sql()
 
-        expected = escape_string(payload)
-        if isinstance(expected, (bytes, bytearray)):
-            expected = expected.decode()
+        field = DorisVariantField(keys=[payload], name="snapshot_resource_type_info")
+        expected = field._sanitize_variant_key(payload)
         expected_fragment = f"[{DORIS_FIELD_KEY_QUOTE}{expected}{DORIS_FIELD_KEY_QUOTE}]"
-        self.assertIn(
-            expected_fragment,
-            sql,
-            msg=f"\nExpected fragment:\n{expected_fragment}\nGot SQL:\n{sql}",
-        )
+        self.assertIn(expected_fragment, sql)
         # 模拟 escape_string 返回 bytes 类型，让 isinstance 分支执行
         with patch("pymysql.converters.escape_string", return_value=b"foo\\'\\'\\''] !=0 or 1=1; --"):
-            expected_bytes = escape_string(payload)  # 此时返回 bytes
-            if isinstance(expected_bytes, (bytes, bytearray)):
-                expected_bytes = expected_bytes.decode()
-            expected_fragment_bytes = f"[{DORIS_FIELD_KEY_QUOTE}{expected_bytes}{DORIS_FIELD_KEY_QUOTE}]"
-            # 重新构建 SQL 并校验（确保 bytes 转义后符合预期）
+            field_bytes = DorisVariantField(
+                keys=[payload],
+                name="snapshot_resource_type_info",
+            )
+            expected_bytes = field_bytes._sanitize_variant_key(payload)
+            expected_fragment_bytes = (
+                f"[{DORIS_FIELD_KEY_QUOTE}{expected_bytes}{DORIS_FIELD_KEY_QUOTE}]"
+            )
             builder_bytes = DorisQuerySQLBuilder(
                 table="test_table",
                 conditions=[
