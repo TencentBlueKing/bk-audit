@@ -50,11 +50,38 @@
               @blur="handleBlur(element.key)"
               @change="(value: any) => handlechange(value, element.key)" />
           </span>
-          <audit-icon
-            class="delete"
-            :style="localValue.length === 1 ? 'color: #979ba5;cursor: not-allowed;' : ''"
-            type="delete"
-            @click.stop="handleDelete(element.key)" />
+          <bk-popover
+            ref="popoverDeleteRef"
+            :disabled="localValue.length === 1"
+            placement="bottom"
+            theme="light"
+            trigger="click"
+            width="300">
+            <audit-icon
+              class="delete"
+              :style="localValue.length === 1 ? 'color: #979ba5;cursor: not-allowed;' : ''"
+              type="delete" />
+            <template #content>
+              <div class="popover-delete-title">
+                {{ t('确认删除该分组？') }}
+              </div>
+              <div class="popover-delete-text">
+                {{ t('删除分组后，分组内的字段与相关设置也会同步删除，请谨慎操作！') }}
+              </div>
+              <div class="popover-delete-button-group">
+                <bk-button
+                  class="mr8"
+                  theme="danger"
+                  @click.stop="handleDelete(element.key)">
+                  {{ t('删除') }}
+                </bk-button>
+                <bk-button
+                  @click.stop="handleDeleteCancel">
+                  {{ t('取消') }}
+                </bk-button>
+              </div>
+            </template>
+          </bk-popover>
         </div>
         <content
           v-if="element.isOpen"
@@ -70,7 +97,8 @@
   </vuedraggable>
 </template>
 <script setup lang='ts'>
-  import { nextTick, ref } from 'vue';
+  import { ref } from 'vue';
+  import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
   import resultDataModel from '@model/tool/api';
@@ -91,6 +119,8 @@
 
   defineProps<Props>();
   const contentRef = ref();
+  const { t } = useI18n();
+  const popoverDeleteRef = ref();
   const localValue = ref([
     {
       name: '分组',
@@ -149,6 +179,9 @@
     if (localValue.value.length > 1) {
       localValue.value = localValue.value.filter((item: any) => item.key !== val);
     }
+  };
+  const handleDeleteCancel = () => {
+    popoverDeleteRef.value?.hide();
   };
   // 监听分组内容改变
   const handleGroupContentChange = (val: any, key: string | number) => {
@@ -213,10 +246,6 @@
         config: null,
         output_fields: item.output_fields,
       }));
-      nextTick(() => {
-        // console.log('!!!', contentRef.value);
-        // contentRef.value?.setGroupConfigs(localValue.value);
-      });
     },
   });
 </script>
@@ -276,5 +305,27 @@
       }
     }
   }
+}
+
+.popover-delete-title {
+  font-size: 16px;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: #4d4f56;
+}
+
+.popover-delete-text {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 20px;
+  letter-spacing: 0;
+  color: #4d4f56;
+}
+
+.popover-delete-button-group {
+  display: flex;
+  margin-top: 5px;
+  justify-content: flex-end;
+  align-items: center;
 }
 </style>
