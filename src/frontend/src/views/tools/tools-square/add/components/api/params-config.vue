@@ -76,7 +76,7 @@
           </div>
           <div
             class="field-value"
-            style="flex: 0 0 250px;">
+            style="flex: 0 0 350px;">
             {{ t('默认值') }}
           </div>
           <div
@@ -251,7 +251,7 @@
             <!-- 默认值 -->
             <div
               class="field-value"
-              style="flex: 0 0 250px;">
+              style="flex: 0 0 350px;">
               <bk-form-item
                 error-display-type="tooltips"
                 label=""
