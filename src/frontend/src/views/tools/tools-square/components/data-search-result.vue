@@ -62,7 +62,7 @@
     maxHeight?: string | number;
     remotePagination?: boolean;
     searchList: SearchItem[];
-    allToolsData: ToolDetailModel[];
+    getToolNameAndType: (uid: string) => { name: string, type: string };
     riskToolParams?: Record<string, any>;
   }
 
@@ -129,17 +129,6 @@
     }
     return [];
   });
-
-  const getToolNameAndType = (uid: string) => {
-    const tool = props.allToolsData?.find(item => item.uid === uid);
-    return tool ? {
-      name: tool.name,
-      type: tool.tool_type,
-    } : {
-      name: '',
-      type: '',
-    };
-  };
 
   // 创建 columns
   const columns = computed<Column[]>(() => outputFields.value.map((item): Column => ({
@@ -235,7 +224,7 @@
                   <div>
                     {item.drill_config.map(config => (
                       <div key={config.tool.uid}>
-                        {config.drill_name || getToolNameAndType(config.tool.uid).name}
+                        {config.drill_name || props.getToolNameAndType(config.tool.uid).name}
                         <bk-button
                           class="ml8"
                           theme="primary"

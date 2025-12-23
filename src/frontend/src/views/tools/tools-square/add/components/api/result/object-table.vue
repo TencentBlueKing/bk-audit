@@ -292,7 +292,7 @@
 
   const drillPopconfirmRefs = ref<Record<number, any>>({});
 
-  // 转换树形数据，保持树状结构
+  // 转换树形数据，保持树状结构（kv模式不能引用表格中的字段, 即node.list中的不添加）
   const transformTreeData = (nodes: any[]): FieldItem[] => {
     if (!Array.isArray(nodes)) {
       return [];
@@ -302,8 +302,8 @@
       display_name: '',
       description: '',
       json_path: node.json_path || '',
-      children: (node.children && node.children.length > 0) || (node.list && node.list.length > 0)
-        ? transformTreeData(node.children && node.children.length > 0 ? node.children : node.list)
+      children: node.children && node.children.length > 0
+        ? transformTreeData(node.children)
         : [],
     }));
   };
