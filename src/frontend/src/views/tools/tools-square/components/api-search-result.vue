@@ -20,7 +20,7 @@
       v-for="(group, groupIndex) in groupData"
       :key="groupIndex"
       is-collapse
-      :title="t(`分组${groupIndex + 1}`)">
+      :title="group.name">
       <div class="card-content">
         <!-- KV 字段展示 -->
         <template v-if="group.kv_fields && group.kv_fields.length > 0">
@@ -207,6 +207,7 @@
   }
 
   interface GroupTableConfig {
+    name: string;
     kv_fields: Array<{
       drill_config: DrillDownItem['drill_config'];
       enum_mappings: DrillDownItem['enum_mappings'];
@@ -384,6 +385,7 @@
   const createGroupData = (data: ToolDetailModel): GroupTableConfig[] => {
     if (!data.config.output_config || !Array.isArray(data.config.output_config.groups)) {
       return [{
+        name: '',
         kv_fields: [],
         table_fields: [],
       }];
@@ -571,6 +573,7 @@
       });
 
       return {
+        name: group.name,
         kv_fields: kvFields,
         table_fields: tableFields,
       };
