@@ -210,7 +210,7 @@
   };
   const handleUserChange = (value: Array<string> | string) => {
     const val =  handleShowText(value);
-    const formattedValue = Array.isArray(val) ? val : [val];
+    const formattedValue = Array.isArray(val) ? val : [];
     user.value = formattedValue;
     emits('change', formattedValue || []);
   };
@@ -275,7 +275,7 @@
   const handleShowText = (value: any) => {
     // 1. 如果是真正的数组，直接连接
     if (Array.isArray(value)) {
-      return value.length > 0 ? value.join(',') : '--';
+      return value.length > 0 ? value.join(',') : '';
     }
 
     // 2. 如果是字符串且看起来像数组，尝试解析

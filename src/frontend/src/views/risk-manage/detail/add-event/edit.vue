@@ -67,11 +67,10 @@
             v-for="(item, index) in eventList"
             :key="index"
             class="table-list">
-            <div class="table-index border-right">
+            <div class="table-index border-right ">
               {{ index + 1 }}
             </div>
-            <div class="table-label border-right">
-              <span class="field-type">{{ item?.field_type }}</span>
+            <div class="table-label border-right field-type-box">
               <span
                 v-bk-tooltips="{
                   content: item?.description,
@@ -80,7 +79,15 @@
                 }"
                 class="table-text"
                 :class="item?.description !== '' ? 'dashed-underline' : '' ">
-                {{ item?.field_name }}({{ item?.display_name }})
+                <tool-tip-text
+                  :data="`${item?.field_name}(${item?.display_name})`"
+                  :line="1"
+                  placement="top"
+                  style="
+                  padding: 0;
+                  vertical-align: middle;
+                  "
+                  theme="light" />
               </span>
             </div>
             <div class="table-type border-right">
@@ -107,7 +114,7 @@
             <div class="table-value">
               <field-com
                 :type="item.typeValue"
-                @update="(val) => handlerUpdate(val, item)" />
+                @update="(val:any) => handlerUpdate(val, item)" />
             </div>
           </div>
         </div>
@@ -132,6 +139,7 @@
 
   import fieldCom from './field-components.vue';
 
+  import ToolTipText from '@/components/show-tooltips-text/index.vue';
   import { convertToTimestamp } from '@/utils/assist/timestamp-conversion';
 
   interface Props {
@@ -313,6 +321,10 @@
         border-right: 1px solid #dcdee5;
       }
 
+      .field-type-box {
+        display: flex;
+      }
+
       .table-text {
         padding: 0 10px;
         line-height: 42px;
@@ -339,7 +351,7 @@
       }
 
       .table-label {
-        width: 286px;
+        width: 270px;
       }
 
       .table-type {
@@ -348,7 +360,7 @@
 
       .table-value {
         display: flex;
-        width: 100%;
+        width: 300px;
         height: auto;
         line-height: normal;
         flex: 1;
@@ -382,9 +394,12 @@
     }
 
     .field-type {
+      height: 20px;
       padding: 1px 5px;
+      margin-top: 12px;
       margin-left: 5px;
       font-size: 12px;
+      line-height: normal;
       color: #1768ef;
       background: #e1ecff;
       border-radius: 10px;

@@ -67,11 +67,15 @@
               {{ t('基本信息') }}
             </div>
             <div class="right-info-item">
-              <span class="info-item">
+              <span
+                v-if="eventTimeIshow"
+                class="info-item">
                 <span class="info-item-left">{{ t('事件发生时间 ') }}</span>:
                 <span class="info-item-value">{{ editData.formData.event_time }}</span>
               </span>
-              <span class="info-item">
+              <span
+                v-if="operatorIshow"
+                class="info-item">
                 <span class="info-item-left">{{ t('责任人') }}</span>:
                 <span class="info-item-value">
                   <edit-tag
@@ -81,17 +85,21 @@
                   <span v-else> {{ operatorsComfig[0]?.valueText ||'--' }} </span>
                 </span>
               </span>
-              <span class="info-item">
-                <span class="info-item-left">{{ t('事件来源') }}</span>:
+              <span
+                v-if="eventSourceIshow"
+                class="info-item">
+                <span class="info-item-left">{{ t('事件来源') }} {{ eventSourceComfig[0]?.is_show }}</span>:
                 <span class="info-item-value">
                   <edit-tag
                     v-if="eventSourceComfig[0]?.typeValue === 'user-selector'"
                     :data="eventSourceComfig[0].value || ''"
                     style="display: inline-block;" />
-                  <span v-else> {{ eventSourceComfig[0]?.value ||'--' }} </span>
+                  <span v-else> {{ eventSourceComfig[0]?.value === '' ? '--' : eventSourceComfig[0]?.value }} </span>
                 </span>
               </span>
-              <span class="info-item">
+              <span
+                v-if="eventTypeIshow"
+                class="info-item">
                 <span class="info-item-left">{{ t('事件类型') }}</span>:
                 <span class="info-item-value">
                   <edit-tag
@@ -102,7 +110,9 @@
 
                 </span>
               </span>
-              <div class="info-item-line">
+              <div
+                v-if="eventContentIshow"
+                class="info-item-line">
                 <span class="line-item">
                   <span class="info-item-left">{{ t('事件描述') }}</span>:
                   <span class="line-value">
@@ -120,19 +130,21 @@
             <div class="right-info-title">
               {{ t('事件数据') }}
             </div>
-            <div class="right-info-item">
-              <span
+            <div class="edit-data">
+              <div
                 v-for="eventItem in editData.eventData"
                 :key="eventItem.field_name"
-                class="info-item">
+                class="edit-data-item">
                 <span
                   v-bk-tooltips="{
                     content: eventItem.description,
                     disabled: eventItem.description === '',
                     placement: 'top'
                   }"
-                  :class="eventItem.description !== '' ? 'dashed-underline info-item-left' : 'info-item-left' ">
-                  {{ eventItem.display_name }}</span>:
+                  :class="eventItem.description !== '' ?
+                    'dashed-underline edit-data-ite-lable' : 'edit-data-ite-lable' ">
+                  {{ eventItem.display_name }}</span>
+                <span class="lable-icon">：</span>
                 <span
                   v-if="eventItem.typeValue === 'user-selector'"
                   class="info-item-value">
@@ -142,8 +154,8 @@
                 </span>
                 <span
                   v-else
-                  class="info-item-value">{{ eventItem.value || '--' }}</span>
-              </span>
+                  class="info-item-value">{{ eventItem.value === '' ? '--' : eventItem.value }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -174,6 +186,7 @@
       formData: Record<string, any>,
       eventData: Array<Record<string, any>>,
       selectedRiskValue: RiskManageModel & StrategyInfo,
+      is_show: boolean,
     }
   }
   interface Exposes{
@@ -195,6 +208,15 @@
   const strategyIdComfig = ref<Array<Record<string, any>>>([]); // 策略id
   const eventEndTimeComfig = ref<Array<Record<string, any>>>([]); // 事件结束时间
   const eventDataComfig = ref<Array<Record<string, any>>>([]); // 事件结束时间
+
+  const operatorIshow  = computed(() => props.editData.selectedRiskValue.event_basic_field_configs.filter(item => item.field_name === 'operator')[0]?.is_show);
+
+  const eventTimeIshow  = computed(() => props.editData.selectedRiskValue.event_basic_field_configs.filter(item => item.field_name === 'event_time')[0]?.is_show);
+
+  const eventSourceIshow  =  computed(() => props.editData.selectedRiskValue.event_basic_field_configs.filter(item => item.field_name === 'event_source')[0]?.is_show);
+
+  const eventContentIshow = computed(() => props.editData.selectedRiskValue.event_basic_field_configs.filter(item => item.field_name === 'event_content')[0]?.is_show);
+  const eventTypeIshow  = computed(() => props.editData.selectedRiskValue.event_basic_field_configs.filter(item => item.field_name === 'event_type')[0]?.is_show);
 
   const riskLevelMap: Record<string, {
     label: string,
@@ -431,6 +453,7 @@
           }
 
           .right-info-item {
+            width: 700px;
             margin-top: 10px;
             margin-bottom: 10px;
 
@@ -481,6 +504,33 @@
     padding-bottom: 2px;
     cursor: pointer;
     border-bottom: 1px dashed #c4c6cc;
+  }
+
+  .edit-data {
+    display: flex;
+
+    /* background-color: #4d4f56; */
+    width: 720px;
+    flex-wrap: wrap;
+
+    .edit-data-item {
+      width: 50%;
+      padding-bottom: 20px;
+
+      .edit-data-ite-lable {
+        display: inline-block;
+        width: 130px;
+        text-align: right;
+        word-break: break-all;
+        word-wrap: break-word;
+        vertical-align: middle;
+      }
+
+      .lable-icon {
+        margin-left: 3px;
+        vertical-align: middle;
+      }
+    }
   }
 }
 </style>
