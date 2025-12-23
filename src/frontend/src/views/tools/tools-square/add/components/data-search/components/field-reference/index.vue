@@ -193,7 +193,7 @@
                         class="bk-select"
                         :filterable="false"
                         :input-search="false"
-                        @change="() => handleTypeChange(toolIndex, index)">
+                        @change="() => handleTypeChange(Number(toolIndex), Number(index))">
                         <template #trigger>
                           <bk-button style="width: 100px;">
                             {{ getDictName(item.target_value_type) }}
@@ -220,7 +220,7 @@
                       <div
                         v-if="item.target_value_type === 'field'">
                         <bk-select
-                          ref="targetValueSelectRef"
+                          :ref="(el: any) => setTargetValueSelectRef(el, Number(toolIndex), Number(index))"
                           class="bk-select"
                           custom-content
                           display-key="label"
@@ -229,13 +229,14 @@
                           :popover-options="{
                             placement: 'top',
                           }"
-                          @clear="handleTargetValueClear(toolIndex, index)">
+                          @clear="handleTargetValueClear(Number(toolIndex), Number(index))">
                           <bk-tree
                             :check-strictly="false"
                             children="children"
                             :data="localOutputFields"
-                            :selected="getTreeSelectedValue(toolIndex, index)"
-                            @node-click="(data: LocalOutputFields) => handleTargetValueChange(data, toolIndex, index)">
+                            :selected="getTreeSelectedValue(Number(toolIndex), Number(index))"
+                            @node-click="(data: LocalOutputFields) =>
+                              handleTargetValueChange(data, Number(toolIndex), Number(index))">
                             <template #nodeType="node">
                               <span v-if="(node.isChild && node.children.length === 0) || !node.isChild ">
                                 {{ getOutputFieldDisplayName(node) }}
@@ -254,7 +255,7 @@
                             .get(toolConfig.tool.uid)?.get(item.source_field) as SearchItem"
                           origin-model
                           :target-value="item.target_value"
-                          @change="(val:any) => handleFormItemChange(val, toolIndex, index)" />
+                          @change="(val:any) => handleFormItemChange(val, Number(toolIndex), Number(index))" />
                       </div>
                     </bk-form-item>
                     <div style=" width: 75px;margin-left: 10px; color: #979ba5;">
@@ -401,7 +402,16 @@
   });
 
   const formRef = ref();
-  const targetValueSelectRef = ref();
+  // 使用 Map 存储 select ref，key 为 `${toolIndex}_${configIndex}`
+  const targetValueSelectMap = new Map<string, any>();
+  const setTargetValueSelectRef = (el: any, toolIndex: number, configIndex: number) => {
+    const key = `${toolIndex}_${configIndex}`;
+    if (el) {
+      targetValueSelectMap.set(key, el);
+    } else {
+      targetValueSelectMap.delete(key);
+    }
+  };
   const localOutputFields = ref<Array<LocalOutputFields>>([]);
 
   const referenceTypeList = ref([{
@@ -627,35 +637,6 @@
     return undefined;
   };
 
-  // 计算全局索引：在所有工具配置中，指定 toolIndex 和 configIndex 之前有多少个 'field' 类型的配置项
-  const getFieldSelectIndex = (toolIndex: number, configIndex: number): number => {
-    let globalFieldCount = 0;
-
-    // 遍历当前工具之前的所有工具
-    for (let t = 0; t < toolIndex; t += 1) {
-      const toolConfig = formData.value.tools[t];
-      if (toolConfig) {
-        for (let c = 0; c < toolConfig.config.length; c += 1) {
-          if (toolConfig.config[c]?.target_value_type === 'field') {
-            globalFieldCount += 1;
-          }
-        }
-      }
-    }
-
-    // 计算当前工具中，在 configIndex 之前的 'field' 类型配置项数量
-    const currentToolConfig = formData.value.tools[toolIndex];
-    if (currentToolConfig) {
-      for (let i = 0; i < configIndex; i += 1) {
-        if (currentToolConfig.config[i]?.target_value_type === 'field') {
-          globalFieldCount += 1;
-        }
-      }
-    }
-
-    return globalFieldCount;
-  };
-
   // 获取 tree 的选中值（返回节点对象）
   const getTreeSelectedValue = (toolIndex: number, configIndex: number): LocalOutputFields | undefined => {
     const configItem = formData.value.tools[toolIndex]?.config[configIndex];
@@ -676,16 +657,17 @@
     // 如果 data.json_path 存在，则使用 data.json_path，否则使用 data.raw_name
     formData.value.tools[toolIndex].config[configIndex].target_value = data.json_path || data.raw_name;
 
-    // 计算正确的 select ref 索引（只计算 'field' 类型的配置项）
-    const selectIndex = getFieldSelectIndex(toolIndex, configIndex);
+    // 使用 Map 直接获取对应的 select ref
+    const key = `${toolIndex}_${configIndex}`;
+    const selectRef = targetValueSelectMap.get(key);
 
     // 设置select显示的值
-    if (targetValueSelectRef.value[selectIndex]) {
-      targetValueSelectRef.value[selectIndex].selected = [{
+    if (selectRef) {
+      selectRef.selected = [{
         raw_name: data.json_path || data.raw_name,
         label: getOutputFieldDisplayName(data),
       }];
-      targetValueSelectRef.value[selectIndex].hidePopover();
+      selectRef.hidePopover();
     }
 
     // 结果字段来源（策略配置中添加）
@@ -717,13 +699,7 @@
   };
 
   // 设置已存在配置的 select 选中状态
-  const setSelectValues = async () => {
-    await nextTick();
-    if (!targetValueSelectRef.value || !Array.isArray(targetValueSelectRef.value)) {
-      return;
-    }
-
-    let globalIndex = 0;
+  const setSelectValues = () => {
     for (let t = 0; t < formData.value.tools.length; t += 1) {
       const toolConfig = formData.value.tools[t];
       for (let c = 0; c < toolConfig.config.length; c += 1) {
@@ -732,18 +708,17 @@
         if (configItem.target_value_type === 'field' && configItem.target_value) {
           // 查找对应的字段（支持 json_path 和 raw_name）
           const field = findFieldByValue(localOutputFields.value, configItem.target_value);
+          // 使用 Map 直接获取对应的 select ref
+          const key = `${t}_${c}`;
+          const selectRef = targetValueSelectMap.get(key);
 
-          if (field && targetValueSelectRef.value[globalIndex]) {
+          if (field && selectRef) {
             // 设置 select 的选中值
-            targetValueSelectRef.value[globalIndex].selected = [{
+            selectRef.selected = [{
               raw_name: field.json_path || field.raw_name,
               label: getOutputFieldDisplayName(field),
             }];
           }
-        }
-        // 只有类型为 'field' 的配置项才有 select，才需要增加索引
-        if (configItem.target_value_type === 'field') {
-          globalIndex += 1;
         }
       }
     }
@@ -806,7 +781,9 @@
           formData.value.tools[index] = updatedToolConfig;
         });
         // 设置已存在配置的 select 选中状态
-        await setSelectValues();
+        nextTick(() => {
+          setSelectValues();
+        });
       } catch (error) {
         console.error('获取工具详情时发生错误:', error);
       }
