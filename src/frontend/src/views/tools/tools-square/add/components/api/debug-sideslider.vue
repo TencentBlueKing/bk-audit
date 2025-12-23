@@ -107,10 +107,20 @@
               <audit-user-selector
                 v-else-if="item.field_category === 'person_select'"
                 v-model="formModel[item.raw_name]" />
-              <date-picker
+              <div
                 v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
-                v-model="formModel[item.raw_name]"
-                style="width: 100%" />
+                @mouseenter.stop="handleMouseEnterTimeRange(item.raw_name)"
+                @mouseleave.stop="handleMouseLeaveTimeRange">
+
+                <date-picker
+                  v-model="formModel[item.raw_name]"
+                  style="width: 100%" />
+                <audit-icon
+                  v-show="MouseEnterTimeRange === item.raw_name && formModel[item.raw_name].length > 0"
+                  class="delete-fill-btn"
+                  type="delete-fill"
+                  @click.stop="handleDeleteTimeRange(item.raw_name)" />
+              </div>
 
               <bk-date-picker
                 v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
@@ -138,6 +148,14 @@
         {{ t('响应结果') }}
       </div>
       <div
+        v-if="!isErr && (isNoSuccess || isNOJson)"
+        class="err">
+        <audit-icon
+          class="alert"
+          type="alert" />
+        <span>{{ t( isNOJson ? '工具目前仅支持解析Json格式的数据' : '工具调试接口失败') }}</span>
+      </div>
+      <div
         v-if="isDebug"
         class="result">
         <pre
@@ -145,17 +163,9 @@
           class="json-result">{{ result }}</pre>
       </div>
       <bk-exception
-        v-if="isErr && !isNoSuccess"
+        v-if="isErr && (!isNoSuccess && !isNOJson)"
         :description="t('数据查询失败')"
         type="500" />
-      <div
-        v-if="!isErr && isNoSuccess"
-        class="err">
-        <audit-icon
-          class="alert"
-          type="alert" />
-        <span>{{ t('工具调试接口失败') }}</span>
-      </div>
     </div>
   </bk-sideslider>
 </template>
@@ -201,6 +211,7 @@
   const isErr = ref(false);
   const isNoSuccess = ref(false);
   const isDebug = ref(false);
+  const isNOJson = ref(false);
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
   const formRef = ref();
@@ -211,7 +222,19 @@
   const list = ref<FormItem[]>([]);
 
   const result = ref();
+  const MouseEnterTimeRange = ref<string| null>(null);
 
+  const handleMouseEnterTimeRange = (e: string) => {
+    MouseEnterTimeRange.value = e;
+  };
+  const handleMouseLeaveTimeRange = () => {
+    MouseEnterTimeRange.value = null;
+  };
+
+  // 时间组件删除
+  const handleDeleteTimeRange = (rawName: string) => {
+    formModel.value[rawName] = [];
+  };
   const {
     run: fetchToolsDebug,
   } = useRequest(ToolManageService.fetchToolsDebug, {
@@ -245,30 +268,32 @@
 
   // 处理调试响应结果
   const handleDebugResponse = (res: any) => {
-    console.log('handleDebugResponse', res);
     if (res && res.data) {
-      console.log('res.data.err_type', res.data.err_type);
       switch (res.data.err_type) {
       case 'non_json_response':
-        isErr.value = true;
-        isNoSuccess.value = true;
+        isErr.value = false;
+        isNoSuccess.value = false;
+        isNOJson.value = true;
         emits('deBugDone', '', false);
         break;
       case 'request_error':
         isErr.value = true;
         isNoSuccess.value = false;
+        isNOJson.value = false;
         emits('deBugDone', '', false);
         break;
       case 'none':
         if (res.data.status_code !== 200) {
           isErr.value = false;
           isNoSuccess.value = true;
+          isNOJson.value = false;
           result.value = JSON.stringify(res.data.result);
           emits('deBugDone', '', false);
         } else {
           messageSuccess('调试成功');
           isErr.value = false;
           isNoSuccess.value = false;
+          isNOJson.value = false;
           result.value = JSON.stringify(res.data.result);
           emits('deBugDone', JSON.stringify(res.data.result), true);
         }
@@ -552,5 +577,18 @@
   background: #f8f9fa;
   border: 1px dashed #dcdee5;
   border-radius: 4px;
+}
+
+.delete-fill-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  color: #c4c6cc;
+
+  &:hover {
+    color: #979ba5;
+    cursor: pointer;
+  }
 }
 </style>
