@@ -73,11 +73,13 @@
             <bk-input v-model="formData.api_config.auth_config.config.bk_app_code" />
           </bk-form-item>
           <bk-form-item
-            :label="t('安全(bk_app_secret)')"
+            :label="t('密钥(bk_app_secret)')"
             label-width="160"
             property="api_config.auth_config.config.bk_app_secret"
             required>
-            <bk-input v-model="formData.api_config.auth_config.config.bk_app_secret" />
+            <bk-input
+              v-model="formData.api_config.auth_config.config.bk_app_secret"
+              type="password" />
           </bk-form-item>
         </div>
         <div class="item-headers">
