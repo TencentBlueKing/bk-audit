@@ -166,16 +166,10 @@ class LogSubscriptionItemAdminForm(forms.ModelForm):
     def clean(self):
         """
         表单整体验证
-
-        这里只能做基本验证，因为 ManyToMany 关系在表单验证阶段可能还未保存。
-        完整的必须筛选字段验证在 save_model 中的 save_m2m() 之后进行。
         """
         cleaned_data = super().clean()
 
         # 基本验证：如果选择了数据源，检查是否需要配置筛选条件
-        # 注意：
-        # 1. 在编辑现有配置项时，data_sources 已经存在于 self.instance
-        # 2. 在内联添加新配置项时，data_sources 在 cleaned_data 中
         data_sources = None
 
         if self.instance and self.instance.pk:
@@ -185,15 +179,52 @@ class LogSubscriptionItemAdminForm(forms.ModelForm):
             # 内联添加新配置项
             data_sources = cleaned_data.get("data_sources")
 
+        condition_data = cleaned_data.get("condition")
+
         if data_sources:
-            condition = cleaned_data.get("condition")
-
-            # 检查是否有数据源要求必须筛选字段
+            # 1. 检查是否有数据源要求必须筛选字段，但条件为空
             sources_with_required = [source for source in data_sources if source.required_filter_fields]
-
-            if sources_with_required and not condition:
+            if sources_with_required and not condition_data:
                 source_names = ", ".join([s.name for s in sources_with_required])
                 raise forms.ValidationError({"condition": _("以下数据源要求配置筛选条件：{sources}").format(sources=source_names)})
+
+            # 2. 深度校验：检查条件中是否包含了必须的字段
+            # 将字典转换为 WhereCondition 对象以便调用模型的校验逻辑
+            if condition_data:
+                try:
+                    where_condition = WhereCondition.model_validate(condition_data)
+                    # 收集所有数据源的错误，而不是遇到第一个错误就抛出
+                    validation_errors = []
+                    for source in data_sources:
+                        try:
+                            source.validate_required_fields(where_condition)
+                        except DjangoValidationError as e:
+                            # 收集每个数据源的错误信息
+                            if hasattr(e, "message_dict") and "condition" in e.message_dict:
+                                validation_errors.extend(e.message_dict["condition"])
+                            elif hasattr(e, "messages"):
+                                validation_errors.extend(e.messages if isinstance(e.messages, list) else [e.messages])
+                            else:
+                                validation_errors.append(str(e))
+
+                    # 如果有任何验证错误，统一抛出
+                    if validation_errors:
+                        raise forms.ValidationError({"condition": validation_errors})
+                except forms.ValidationError:
+                    # 重新抛出表单验证错误
+                    raise
+                except DjangoValidationError as e:
+                    # 将模型层的错误转化为表单错误，这样页面上能红字显示
+                    if hasattr(e, "message_dict"):
+                        raise forms.ValidationError(e.message_dict)
+                    elif hasattr(e, "messages"):
+                        error_list = e.messages if isinstance(e.messages, list) else [e.messages]
+                        raise forms.ValidationError({"condition": error_list})
+                    else:
+                        raise forms.ValidationError({"condition": [str(e)]})
+                except Exception as e:
+                    # 兜底捕获其他可能的解析错误
+                    raise forms.ValidationError({"condition": [str(e)]})
 
         return cleaned_data
 
@@ -280,10 +311,12 @@ class LogSubscriptionAdmin(admin.ModelAdmin):
 
         # 获取订阅关联的所有数据源
         data_sources = []
+        seen_source_ids = set()
         for item in subscription.items.all():
             for source in item.data_sources.all():
-                if source not in data_sources:
+                if source.source_id not in seen_source_ids:
                     data_sources.append({"id": source.source_id, "name": source.name})
+                    seen_source_ids.add(source.source_id)
 
         change_url = reverse(
             f"admin:{self.model._meta.app_label}_{self.model._meta.model_name}_change",
@@ -325,23 +358,6 @@ class LogSubscriptionAdmin(admin.ModelAdmin):
             obj.pk = None
 
         super().save_model(request, obj, form, change)
-
-    def save_related(self, request, form, formsets, change):
-        """保存关联对象后验证必须筛选字段"""
-        super().save_related(request, form, formsets, change)
-
-        # 验证所有配置项的必须筛选字段
-        for formset in formsets:
-            for inline_form in formset.forms:
-                if inline_form.instance.pk:  # 只验证已保存的配置项
-                    try:
-                        inline_form.instance.validate_condition_with_sources()
-                    except DjangoValidationError as exc:
-                        # 将错误添加到表单，让用户看到
-                        from django.contrib import messages
-
-                        messages.error(request, f"配置项 '{inline_form.instance.name}': {exc}")
-                        raise
 
 
 @admin.register(LogSubscriptionItem)
@@ -386,11 +402,3 @@ class LogSubscriptionItemAdmin(admin.ModelAdmin):
 
         # 保存 ManyToMany 关系
         form.save_m2m()
-
-        # 验证必须筛选字段
-        try:
-            obj.validate_condition_with_sources()
-        except DjangoValidationError as exc:
-            # 删除刚才保存的对象
-            obj.delete()
-            raise exc
