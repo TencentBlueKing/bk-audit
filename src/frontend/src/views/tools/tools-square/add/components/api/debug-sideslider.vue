@@ -145,16 +145,16 @@
           class="json-result">{{ result }}</pre>
       </div>
       <bk-exception
-        v-if="isErr && !isNoJson"
+        v-if="isErr && !isNoSuccess"
         :description="t('数据查询失败')"
         type="500" />
       <div
-        v-if="!isErr && isNoJson"
+        v-if="!isErr && isNoSuccess"
         class="err">
         <audit-icon
           class="alert"
           type="alert" />
-        <span>{{ t('工具目前仅支持解析Json格式的数据') }}</span>
+        <span>{{ t('工具调试接口失败') }}</span>
       </div>
     </div>
   </bk-sideslider>
@@ -199,7 +199,7 @@
   const props = defineProps<Props>();
   const emits = defineEmits<Emits>();
   const isErr = ref(false);
-  const isNoJson = ref(false);
+  const isNoSuccess = ref(false);
   const isDebug = ref(false);
   const { t } = useI18n();
   const { messageSuccess } = useMessage();
@@ -221,71 +221,99 @@
   });
 
   const handleIsShow = (val: boolean | string) => val === true || val === 'true';
+  // 处理表单字段值转换
+  const processFieldValue = (field: FormItem) => {
+    const value = formModel.value[field.raw_name];
+
+    if (field.field_category === 'time_range_select' || field.field_category === 'time-ranger') {
+      const date = new DateRange(value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
+      return [date.startDisplayText, date.endDisplayText];
+    }
+
+    if (field.field_category === 'time_select' || field.field_category === 'time-picker') {
+      return formatDate(value);
+    }
+
+    return value;
+  };
+
+  // 构建调试请求参数
+  const buildDebugParams = () => list.value.map(field => ({
+    raw_name: field.raw_name,
+    value: processFieldValue(field),
+  }));
+
+  // 处理调试响应结果
+  const handleDebugResponse = (res: any) => {
+    console.log('handleDebugResponse', res);
+    if (res && res.data) {
+      console.log('res.data.err_type', res.data.err_type);
+      switch (res.data.err_type) {
+      case 'non_json_response':
+        isErr.value = true;
+        isNoSuccess.value = true;
+        emits('deBugDone', '', false);
+        break;
+      case 'request_error':
+        isErr.value = true;
+        isNoSuccess.value = false;
+        emits('deBugDone', '', false);
+        break;
+      case 'none':
+        if (res.data.status_code !== 200) {
+          isErr.value = false;
+          isNoSuccess.value = true;
+          result.value = JSON.stringify(res.data.result);
+          emits('deBugDone', '', false);
+        } else {
+          messageSuccess('调试成功');
+          isErr.value = false;
+          isNoSuccess.value = false;
+          result.value = JSON.stringify(res.data.result);
+          emits('deBugDone', JSON.stringify(res.data.result), true);
+        }
+        break;
+      }
+    } else {
+      isErr.value = true;
+      isNoSuccess.value = false;
+      emits('deBugDone', '', false);
+    }
+  };
+
+  // 执行调试请求
+  const executeDebugRequest = () => {
+    isDebug.value = true;
+    result.value = null;
+
+    const config = {
+      api_config: props.apiConfig,
+      input_variable: props.isParams ? list.value : [],
+      output_config: {
+        enable_grouping: true,
+        groups: [],
+      },
+    };
+
+    const params = buildDebugParams();
+
+    fetchToolsDebug({
+      tool_type: 'api',
+      config,
+      params: props.isParams ? {
+        tool_variables: params,
+      } : {},
+    }).then(handleDebugResponse);
+  };
+
   // 调试
   const handleDebug = () => {
-    formRef.value.validate().then(() => {
-      isDebug.value = true;
-      result.value = null;
-      const config = {
-        api_config: props.apiConfig,
-        input_variable: props.isParams ?  list.value : [],
-        output_config: {
-          enable_grouping: true,
-          groups: [],
-        },
-      };
-      const params = list.value.map((i) => {
-        if (i.field_category === 'time_range_select' || i.field_category === 'time-ranger') {
-          let val = [];
-          const date = new DateRange(formModel.value[i.raw_name], 'YYYY-MM-DD HH:mm:ss', window.timezone);
-          val = [date.startDisplayText, date.endDisplayText];
-          return {
-            raw_name: i.raw_name,
-            value: val,
-          };
-        }
-        if (i.field_category === 'time_select' || i.field_category === 'time-picker') {
-          return {
-            raw_name: i.raw_name,
-            value: formatDate(formModel.value[i.raw_name]),
-          };
-        }
-        return {
-          raw_name: i.raw_name,
-          value: formModel.value[i.raw_name],
-        };
-      });
+    if (list.value.length === 0) {
+      executeDebugRequest();
+      return;
+    }
 
-      fetchToolsDebug({
-        tool_type: 'api',
-        config,
-        params: props.isParams ?  {
-          tool_variables: props.isParams ?  params : [],
-        } : {},
-      }).then((res) => {
-        if (res && res.data.status_code === 200) {
-          if (res.data.err_type === 'non_json_response') {
-            isErr.value = false;
-            isNoJson.value = true;
-            emits('deBugDone', '', false);
-          } else if (res.data.err_type === 'request_error') {
-            isErr.value = true;
-            isNoJson.value = false;
-            emits('deBugDone', '', false);
-          } else {
-            messageSuccess('调试成功');
-            isErr.value = false;
-            isNoJson.value = false;
-            result.value = JSON.stringify(res.data.result);
-            emits('deBugDone', JSON.stringify(res.data.result), true);
-          }
-        } else {
-          isErr.value = true;
-          isNoJson.value = false;
-          emits('deBugDone', '', false);
-        }
-      });
-    });
+    formRef.value.validate().then(executeDebugRequest);
   };
 
   const initWithData = (data: FormItem[]) => {
@@ -303,7 +331,7 @@
     list.value = [];
     formModel.value = {};
     isErr.value = false;
-    isNoJson.value = false;
+    isNoSuccess.value = false;
     result.value = '';
   };
   defineExpose<Exposes>({
