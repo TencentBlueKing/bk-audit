@@ -114,6 +114,7 @@
                   <div class="formref-item">
                     <bk-form-item
                       v-for="(item, index) in searchList"
+                      v-show="item?.is_show !== false"
                       :key="index"
                       class="formref-item-item"
                       :label="item?.display_name"
@@ -159,7 +160,7 @@
                     <data-search-result
                       v-if="toolDetails?.tool_type === 'data_search'"
                       ref="dataSearchResultRef"
-                      :all-tools-data="allToolsData"
+                      :get-tool-name-and-type="getToolNameAndType"
                       :max-height="dialogTableHeight"
                       remote-pagination
                       :risk-tool-params="riskToolParams"
@@ -172,9 +173,8 @@
                     <api-search-result
                       v-show="toolDetails?.tool_type === 'api'"
                       ref="apiSearchResultRef"
-                      :all-tools-data="allToolsData"
+                      :get-tool-name-and-type="getToolNameAndType"
                       :max-height="dialogTableHeight"
-                      :on-kv-field-down-click="handleKVFieldDownClick"
                       :risk-tool-params="riskToolParams"
                       :search-list="searchList"
                       :tool-details="toolDetails"
@@ -262,14 +262,6 @@
   import useRequest from '@/hooks/use-request';
   import FormItem from '@/views/tools/tools-square/components/form-item.vue';
 
-  interface Column {
-    label: string;
-    field: string;
-    width?: number;
-    minWidth?: number;
-    sortable?: boolean;
-    showOverflowTooltip?: boolean;
-  }
   interface TagItem {
     tag_id: string
     tag_name: string
@@ -288,6 +280,7 @@
       name: string
     }>;
     disabled: boolean;
+    is_show?: boolean;
   }
   interface Props {
     tagsEnums: Array<TagItem>,
@@ -319,38 +312,9 @@
       }>;
     };
   }
-  interface TableDataItem {
-    [key: string]: any;
-  }
   interface tabsItem {
     uid: string;
     name: string;
-  }
-  // API工具分组表格配置
-  interface GroupTableConfig {
-    kv_fields: Array<{
-      drill_config: DrillDownItem['drill_config'];
-      enum_mappings: DrillDownItem['enum_mappings'];
-      raw_name: string;
-      display_name: string;
-      description: string;
-      path: string;
-      resolvePathValue: unknown;
-    }>;
-    table_fields: Array<{
-      raw_name: string;
-      display_name: string;
-      description: string;
-      path: string;
-      columns: Column[];
-      tableData: TableDataItem[];
-      pagination: {
-        count: number;
-        limit: number;
-        current: number;
-        limitList: number[];
-      };
-    }>;
   }
 
   interface Exposes {
@@ -466,7 +430,6 @@
         // bkVision工具直接执行
         nextTick(() => {
           if (bkVisionResultRef.value) {
-            console.log('bkVisionResultRef.value', bkVisionResultRef.value);
             bkVisionResultRef.value.executeTool();
           }
         });
@@ -535,7 +498,7 @@
     return tagNameList.join(',');
   };
 
-  const getToolNameAndType = (uid: string) => {
+  const getToolNameAndType = (uid: string): { name: string, type: string } => {
     const tool = props.allToolsData?.find(item => item.uid === uid);
     return tool ? {
       name: tool.name,
@@ -610,19 +573,6 @@
     }
   };
 
-  const handleKVFieldDownClick = (kvField: GroupTableConfig['kv_fields'][0], activeUid?: string) => {
-    const drillDownItem: DrillDownItem = {
-      raw_name: kvField.raw_name,
-      display_name: kvField.display_name,
-      description: kvField.description,
-      drill_config: kvField.drill_config as DrillDownItem['drill_config'],
-      enum_mappings: kvField.enum_mappings,
-    };
-    // 注意：这里需要从子组件获取结果数据，暂时传递空对象
-    // 如果需要，可以通过事件或 ref 从子组件获取
-    handleFieldDownClick(drillDownItem, {}, activeUid);
-  };
-
   // 获取表单项的默认值
   const getSearchItemDefaultValue = (item: any) => {
     if (item.default_value) {
@@ -649,12 +599,7 @@
       if (result === null || result === undefined) {
         return null;
       }
-      // 如果 result 是数组，默认从第一个元素获取
-      if (Array.isArray(result)) {
-        result = result[0]?.[part];
-      } else {
-        result = result[part];
-      }
+      result = result[part];
     }
 
     // 如果是字符串，去掉两边的引号（双引号或单引号）
@@ -667,7 +612,6 @@
 
   // 创建弹窗内容
   const createDialogContent = (currentToolDetail: ToolDetailModel) => {
-    console.log('currentToolDetail:', currentToolDetail);
     // 构造form-item
     const createSearchItem = (item: any) => ({
       ...item,
@@ -678,9 +622,7 @@
 
     // 非下钻
     if (!isDrillDownOpen.value) {
-      searchList.value = currentToolDetail.config.input_variable
-        .filter((item: any) => item.is_show === undefined || item.is_show === true)
-        .map(createSearchItem);
+      searchList.value = currentToolDetail.config.input_variable.map(createSearchItem);
     } else {
       // 下钻填充值
       if (!drillDownItemConfig.value
@@ -695,35 +637,33 @@
       });
 
       // 一次性完成映射
-      searchList.value = currentToolDetail.config.input_variable
-        .filter((item: any) => item.is_show === undefined || item.is_show === true)
-        .map((item: any) => {
-          const searchItem = createSearchItem(item);
-          const configItem = configMap.get(searchItem.raw_name);
-          if (!configItem) return searchItem;
+      searchList.value = currentToolDetail.config.input_variable.map((item: any) => {
+        const searchItem = createSearchItem(item);
+        const configItem = configMap.get(searchItem.raw_name);
+        if (!configItem) return searchItem;
 
-          // 动态值处理逻辑
-          let dynamicValue = '';
-          if (configItem.target_value_type !== 'fixed_value') {
-            // 如果target_value是类似'data.risk_id'，则需要把target_value作为json_path从currentToolDetail.data.result中取值
-            if (configItem.target_value.includes('.')) {
-              dynamicValue = extractDataByPath(drillDownItemRowData.value, configItem.target_value);
-            } else if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
-              // 从根对象取值
-              dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? searchItem.value;
-            } else {
-              // 从event_data对象取值
-              dynamicValue = drillDownItemRowData.value?.event_data?.[configItem.target_value] ?? searchItem.value;
-            }
+        // 动态值处理逻辑
+        let dynamicValue = '';
+        if (configItem.target_value_type !== 'fixed_value') {
+          // 如果target_value是类似'data.risk_id'，则需要把target_value作为json_path
+          if (configItem.target_value.includes('.')) {
+            dynamicValue = extractDataByPath(drillDownItemRowData.value, configItem.target_value);
+          } else if (configItem.target_field_type === 'basic' || !configItem.target_field_type) {
+            // 从根对象取值
+            dynamicValue = drillDownItemRowData.value?.[configItem.target_value] ?? searchItem.value;
+          } else {
+            // 从event_data对象取值
+            dynamicValue = drillDownItemRowData.value?.event_data?.[configItem.target_value] ?? searchItem.value;
           }
+        }
 
-          return {
-            ...searchItem,
-            value: configItem.target_value_type === 'fixed_value'
-              ? configItem.target_value
-              : dynamicValue,
-          };
-        });
+        return {
+          ...searchItem,
+          value: configItem.target_value_type === 'fixed_value'
+            ? configItem.target_value
+            : dynamicValue,
+        };
+      });
     }
 
     nextTick(() => {
