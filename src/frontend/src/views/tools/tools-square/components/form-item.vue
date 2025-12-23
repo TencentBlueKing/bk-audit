@@ -210,7 +210,7 @@
   };
   const handleUserChange = (value: Array<string> | string) => {
     const val =  handleShowText(value);
-    const formattedValue = Array.isArray(val) ? val : [];
+    const formattedValue = Array.isArray(val) ? val : val.split(',');
     user.value = formattedValue;
     emits('change', formattedValue || []);
   };
