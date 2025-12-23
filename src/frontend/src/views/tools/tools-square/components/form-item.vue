@@ -210,7 +210,8 @@
   };
   const handleUserChange = (value: Array<string> | string) => {
     const val =  handleShowText(value);
-    const formattedValue = Array.isArray(val) ? val : val.split(',');
+    // eslint-disable-next-line no-nested-ternary
+    const formattedValue = Array.isArray(val) ? val : (val === '' ? [] :  val.split(','));
     user.value = formattedValue;
     emits('change', formattedValue || []);
   };
