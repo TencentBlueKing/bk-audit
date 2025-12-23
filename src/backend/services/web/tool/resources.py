@@ -686,92 +686,97 @@ class ExecuteTool(ToolBase):
             }
         ```
 
+    重要提示：
+    - 对于非必填变量，如果用户未输入值，前端应传入 `value: null`（或 JSON 中的 `null`）来表示用户未输入
+    - 后台会忽略 `value` 为 `null` 的非必填变量，不会进行变量替换或校验
+    - 必填变量必须提供有效的值，不能为 `null`
+
     1. tool_type 为 data_search
         params:
-            ```json
-            {
-                "uid": "sql_tool_123",
-                "params": {
-                    "tool_variables": [
-                        {
-                            "raw_name": "username",
-                            "value": "admin"
-                        }
-                    ],
-                    "page": 1,
-                    "page_size": 100
-                },
-                "caller_resource_type": "risk",
-                "caller_resource_id": "R123"
-            }
-            ```
+        ```json
+        {
+            "uid": "sql_tool_123",
+            "params": {
+                "tool_variables": [
+                    {
+                        "raw_name": "username",
+                        "value": "admin"
+                    }
+                ],
+                "page": 1,
+                "page_size": 100
+            },
+            "caller_resource_type": "risk",
+            "caller_resource_id": "R123"
+        }
+        ```
         response:
-            ```json
-            {
-                "data": {
-                    "query_sql": "SELECT * FROM mocked_table",
-                    "count_sql": "SELECT COUNT(*) FROM mocked_table",
-                    "results": [
-                        {
-                            "field1": "value1"
-                        },
-                        {
-                            "field2": "value2"
-                        }
-                    ],
-                    "total": 2,
-                    "num_pages": 100,
-                    "page": 1
-                },
-                "tool_type": "data_search"
-            }
-            ```
+        ```json
+        {
+            "data": {
+                "query_sql": "SELECT * FROM mocked_table",
+                "count_sql": "SELECT COUNT(*) FROM mocked_table",
+                "results": [
+                    {
+                        "field1": "value1"
+                    },
+                    {
+                        "field2": "value2"
+                    }
+                ],
+                "total": 2,
+                "num_pages": 100,
+                "page": 1
+            },
+            "tool_type": "data_search"
+        }
+        ```
 
     2. tool_type 为 api
         params:
-            ```json
-            {
-                "uid": "api_tool_123",
-                "params": {
-                    "tool_variables": [
-                        {"raw_name": "path_id", "value": 123, "position": "path"},
-                        {"raw_name": "query_param", "value": "test", "position": "query"}
-                    ]
-                }
+        ```json
+        {
+            "uid": "api_tool_123",
+            "params": {
+                "tool_variables": [
+                    {"raw_name": "path_id", "value": 123, "position": "path"},
+                    {"raw_name": "query_param", "value": "test", "position": "query"}
+                ]
             }
-            ```
+        }
+        ```
         response:
-            ```json
-            {
-                "data": {
-                    "status_code": 200,
-                    "result": {
-                        "key": "value"
-                    }
-                },
-                "tool_type": "api"
-            }
-            ```
+        ```json
+        {
+            "data": {
+                "status_code": 200,
+                "result": {
+                    "key": "value"
+                }
+            },
+            "tool_type": "api"
+        }
+        ```
 
     3. tool_type 为 bk_vision
         params:
-            ```json
-            {
-                "uid": "vision_tool_123",
-                "params": {},
-                "caller_resource_type": "risk",
-                "caller_resource_id": "R123"
-            }
-            ```
+        ```json
+        {
+            "uid": "vision_tool_123",
+            "params": {},
+            "caller_resource_type": "risk",
+            "caller_resource_id": "R123"
+        }
+        ```
         response:
-            ```json
-            {
-                "data": {
-                    "panel_id": "panel_123"
-                },
-                "tool_type": "bk_vision"
-            }
-            ```
+        ```json
+        {
+            "data": {
+                "panel_id": "panel_123"
+            },
+            "tool_type": "bk_vision"
+        }
+        ```
 
     4. 权限上下文（可选）
         - 携带调用方上下文时，系统将基于调用方资源做统一鉴权：
