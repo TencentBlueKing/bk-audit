@@ -36,7 +36,8 @@
         <bk-input
           v-model="listInfo.name"
           class="mb8"
-          style="width: 400px;">
+          style="width: 400px;"
+          @change="handleListInfoChange">
           <template #prefix>
             <span class="info-prefix">{{ t('表格显示名') }} </span>
           </template>
@@ -44,7 +45,8 @@
         <bk-input
           v-model="listInfo.desc"
           class="mb8"
-          style="width: 100%;margin-left: 20px;">
+          style="width: 100%;margin-left: 20px;"
+          @change="handleListInfoChange">
           <template #prefix>
             <span class="info-prefix">{{ t('表格说明') }} </span>
           </template>
@@ -537,6 +539,9 @@
     return null;
   };
 
+  const handleListInfoChange = () => {
+    emits('listConfigChange', list.value, props.data.json_path, listInfo.value);
+  };
   watch(() => list.value, (val) => {
     addList.value = [];
     emits('listConfigChange', val, props.data.json_path, listInfo.value);
