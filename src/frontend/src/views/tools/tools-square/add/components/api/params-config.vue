@@ -264,11 +264,21 @@
                 <audit-user-selector
                   v-else-if="item.field_category === 'person_select'"
                   v-model="item.default_value" />
-                <date-picker
+                <div
                   v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
-                  v-model="item.time_range"
-                  style="width: 100%" />
-
+                  @mouseenter.stop="handleMouseEnterTimeRange(index)"
+                  @mouseleave.stop="handleMouseLeaveTimeRange">
+                  <div style="position: relative;">
+                    <date-picker
+                      v-model="item.time_range"
+                      style="width: 100%" />
+                    <audit-icon
+                      v-show="MouseEnterTimeRange === index && item.time_range.length > 0"
+                      class="delete-fill-btn"
+                      type="delete-fill"
+                      @click.stop="handleDeleteTimeRange(index)" />
+                  </div>
+                </div>
                 <bk-date-picker
                   v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
                   v-model="item.default_value"
@@ -416,6 +426,25 @@
     value: 'false',
     label: t('不可见'),
   }]);
+  const MouseEnterTimeRange = ref<number | null>(null);
+  const handleMouseEnterTimeRange = (e: number) => {
+    MouseEnterTimeRange.value = e;
+  };
+  const handleMouseLeaveTimeRange = () => {
+    MouseEnterTimeRange.value = null;
+  };
+  // 时间组件删除
+  const handleDeleteTimeRange = (index: number) => {
+    paramList.value = paramList.value.map((listItem: any, listIndex: number) => {
+      if (listIndex === index) {
+        return {
+          ...listItem,
+          time_range: [],
+        };
+      }
+      return listItem;
+    });
+  };
   // 添加一项
   const handelAddItem = () => {
     paramList.value.push({
@@ -756,5 +785,17 @@
 .have-same-name-text {
   font-size: 12px;
   color: red;
+}
+
+.delete-fill-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  color: #c4c6cc;
+
+  &:hover {
+    color: #979ba5;
+  }
 }
 </style>
