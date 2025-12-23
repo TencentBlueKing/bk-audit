@@ -27,6 +27,7 @@
     <bk-input
       v-if="type === 'number-input'"
       v-model="numberValue"
+      :precision="999"
       style="width: 248px;height: 40px"
       type="number"
       @update:modelValue="handleChange('number-input')" />
