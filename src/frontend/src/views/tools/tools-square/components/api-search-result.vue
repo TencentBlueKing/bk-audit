@@ -79,7 +79,7 @@
                         <div
                           v-for="config in kvField.drill_config"
                           :key="config.tool.uid">
-                          {{ config.drill_name || getToolNameAndType(config.tool.uid).name }}
+                          {{ config.drill_name || props.getToolNameAndType(config.tool.uid).name }}
                           <bk-button
                             class="ml8"
                             text
@@ -143,6 +143,9 @@
       </div>
     </bk-card>
   </div>
+  <!-- 未查询时显示空占位 -->
+  <div v-else-if="!toolExecuteData || Object.keys(toolExecuteData).length === 0" />
+  <!-- 查询失败时显示异常 -->
   <div v-else>
     <bk-exception
       :description="t('请联系工具维护人员进行修复')"
@@ -163,7 +166,8 @@
 
 <script setup lang="tsx">
   import type { Column } from 'bkui-vue/lib/table/props';
-  import { ref, watch } from 'vue';
+  import _ from 'lodash';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -241,9 +245,8 @@
     uid: string;
     toolDetails: ToolDetailModel;
     maxHeight?: string | number;
-    allToolsData: ToolDetailModel[];
-    onKvFieldDownClick: (kvField: GroupTableConfig['kv_fields'][0], activeUid?: string) => void;
     searchList: SearchItem[];
+    getToolNameAndType: (uid: string) => { name: string, type: string };
     riskToolParams?: Record<string, any>;
   }
 
@@ -316,22 +319,6 @@
     && kvField.drill_config.length > 0
     && kvField.drill_config.some((config: any) => config.tool?.uid);
 
-
-  const handleKVFieldDownClick = (kvField: GroupTableConfig['kv_fields'][0], activeUid?: string) => {
-    props.onKvFieldDownClick(kvField, activeUid);
-  };
-
-  const getToolNameAndType = (uid: string) => {
-    const tool = props.allToolsData?.find(item => item.uid === uid);
-    return tool ? {
-      name: tool.name,
-      type: tool.tool_type,
-    } : {
-      name: '',
-      type: '',
-    };
-  };
-
   const handleOpenUserWx = (username: string) => {
     window.open(`wxwork://message/?username=${username}`, '_blank');
   };
@@ -377,8 +364,20 @@
     return result;
   };
 
+  const handleKVFieldDownClick = (kvField: GroupTableConfig['kv_fields'][0], uid?: string) => {
+    emit('handleFieldDownClick', kvField as OutputFields, toolExecuteData.value?.data.result, uid);
+  };
+
   const handleFieldDownClick = (item: OutputFields, data: Record<any, any>, uid?: string) => {
-    emit('handleFieldDownClick', item, data, uid);
+    const newItem = _.cloneDeep(item);
+    // 把item中的drill_config.config.target_value作为json_path只保留最后一级，因为已经是对应表格数据
+    newItem.drill_config.forEach((config: any) => {
+      config.config.forEach((configItem: any) => {
+        // eslint-disable-next-line no-param-reassign
+        configItem.target_value = configItem.target_value.split('.').pop() || '';
+      });
+    });
+    emit('handleFieldDownClick', newItem, data, uid);
   };
 
   // 创建 groupData
@@ -502,7 +501,7 @@
                       class={{ tips: mapped }}
                       onClick={(e: any) => {
                         e.stopPropagation(); // 阻止事件冒泡
-                        handleFieldDownClick(item, toolExecuteData.value?.data.result);
+                        handleFieldDownClick(item, data);
                       }}>
                       {display}
                     </span>
@@ -515,14 +514,14 @@
                         <div>
                           {item.drill_config.map(config => (
                             <div key={config.tool.uid}>
-                              {config.drill_name || getToolNameAndType(config.tool.uid).name}
+                              {config.drill_name || props.getToolNameAndType(config.tool.uid).name}
                               <bk-button
                                 class="ml8"
                                 theme="primary"
                                 text
                                 onClick={(e: any) => {
                                   e.stopPropagation(); // 阻止事件冒泡
-                                  handleFieldDownClick(item, toolExecuteData.value?.data.result, config.tool.uid);
+                                  handleFieldDownClick(item, data, config.tool.uid);
                                 }}>
                                 {t('去查看')}
                                 <audit-icon
@@ -544,7 +543,7 @@
                     }}
                     onClick={(e: any) => {
                       e.stopPropagation(); // 阻止事件冒泡
-                      handleFieldDownClick(item, toolExecuteData.value?.data.result);
+                      handleFieldDownClick(item, data);
                     }}>
                       {item.drill_config.length}
                     </span>
@@ -589,10 +588,8 @@
     key.value += 1;
     groupData.value = createGroupData(props.toolDetails);
 
-    console.log('executeData324234234324', data);
-    console.log('key', key.value);
     // 异步更新 groupData，填充数据
-    setTimeout(() => {
+    nextTick(() => {
       if (data.data.status_code === 200 && data.data.result) {
         const { result } = data.data;
         // 更新每个 group 的 table_fields 数据
@@ -606,10 +603,17 @@
             let finalTableData: any[] = [];
             let count = 0;
             if (Array.isArray(tableData)) {
-              finalTableData = tableData;
+              // 为每条数据添加自增 id
+              finalTableData = tableData.map((item, index) => ({
+                ...item,
+                __uniqueId: index + 1,
+              }));
               count = tableData.length;
             } else if (tableData) {
-              finalTableData = [tableData];
+              finalTableData = [{
+                ...tableData,
+                __uniqueId: 1,
+              }];
               count = 1;
             }
             // eslint-disable-next-line no-param-reassign
@@ -619,7 +623,7 @@
           });
         });
       }
-    }, 1000);
+    });
   });
 </script>
 
@@ -627,7 +631,6 @@
 .card-content {
   .top-search-table-title {
     margin: 10px 0;
-    font-weight: 700;
   }
 }
 </style>
