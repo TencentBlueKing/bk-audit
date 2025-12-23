@@ -108,7 +108,8 @@
       params: {
         tool_variables: props.searchList.map(item => ({
           raw_name: item.raw_name,
-          value: item.value,
+          // eslint-disable-next-line no-nested-ternary
+          value: (item.field_category === 'person_select') ? (item.value.length === 0 ?  '' :  item.value.join(','))  :  item.value,
         })),
         page: pagination.value.current,
         page_size: pagination.value.limit,
