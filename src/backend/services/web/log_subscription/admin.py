@@ -235,7 +235,7 @@ class LogSubscriptionAdmin(admin.ModelAdmin):
     search_fields = ["name", "token", "description"]
     readonly_fields = ["token", "created_by", "created_at", "updated_by", "updated_at"]
     inlines = [LogSubscriptionItemInline]
-    save_as = True  # 启用"另存为"功能
+    save_as = False  # 暂时禁用"另存为"功能，避免复杂的校验逻辑问题
 
     fieldsets = (
         (None, {"fields": ("name", "token", "is_enabled")}),
@@ -321,7 +321,7 @@ class LogSubscriptionAdmin(admin.ModelAdmin):
         """保存模型"""
         # 如果是"另存为"操作，生成新的 token
         if "_saveasnew" in request.POST:
-            obj.token = uuid.uuid4()
+            obj.token = uuid.uuid4().hex
             obj.pk = None
 
         super().save_model(request, obj, form, change)
