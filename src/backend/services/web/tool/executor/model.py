@@ -31,6 +31,11 @@ AnyValue = Annotated[Union[str, int, float, bool, dict, list, None], JSONField(a
 class ToolVariable(BaseModel):
     """
     工具变量
+
+    注意：
+    - 对于非必填变量，如果用户未输入值，前端应传入 `value: null` 来表示用户未输入
+    - 后台会忽略 `value` 为 `null` 的非必填变量，不会进行变量替换或校验
+    - 必填变量必须提供有效的值，不能为 `null`
     """
 
     raw_name: str = PydanticField(..., title="工具使用的变量名")
