@@ -47,7 +47,28 @@
                     v-for="item in strategyList.results"
                     :id="item.strategy_id"
                     :key="item.strategy_id"
-                    :name="`${item.strategy_name} (${item.strategy_id})`" />
+                    :disabled="item.status !== 'running'"
+                    :name="`${item.strategy_name} (${item.strategy_id})`"
+                    :popover-options="{ boundary: 'parent'}">
+                    <bk-popover
+                      v-if="item.status !== 'running'"
+                      max-width="800px"
+                      placement="top"
+                      theme="light">
+                      <div style="width: 100%;height: 100%; color: #c4c6cc;">
+                        {{ `${item.strategy_name} (${item.strategy_id})` }}
+                      </div>
+                      <template #content>
+                        <div>
+                          {{ t('该策略已停用，暂不支持创建风险单') }}
+                        </div>
+                      </template>
+                    </bk-popover>
+                    <span v-else>
+
+                      {{ `${item.strategy_name} (${item.strategy_id})` }}
+                    </span>
+                  </bk-option>
                 </bk-select>
               </bk-form-item>
 
@@ -103,10 +124,10 @@
               {{ index + 1 }}
             </div>
             <div
-              class="table-label border-right">
-              <span
+              class="table-label border-right field-type-box">
+              <!-- <span
                 v-if="item?.field_type"
-                class="field-type">{{ item?.field_type }}</span>
+                class="field-type">{{ item?.field_type }}</span> -->
               <span
                 v-bk-tooltips="{
                   content: item?.description,
@@ -115,25 +136,35 @@
                 }"
                 class="table-text"
                 :class="item?.description !== '' ? 'dashed-underline' : '' ">
-                {{ item?.field_name }}({{ item?.display_name }})
+                <tool-tip-text
+                  :data="`${item?.field_name}(${item?.display_name})`"
+                  :line="1"
+                  placement="top"
+                  style="
+                  padding: 0;
+                  vertical-align: middle;
+                  "
+                  theme="light" />
               </span>
             </div>
             <div class="table-type border-right">
+              <!-- {{ item.typeValue }} {{ item.field_type }} -->
               <bk-select
                 v-model="item.typeValue"
                 behavior="simplicity"
-                class="bk-select"
-                :filterable="false">
-                <template #trigger="{ selected }">
+                class="field-type-list"
+                :filterable="false"
+                style=" height: 100%;background-color: #fff;">
+                <!-- <template #trigger="{ selected }">
                   <div class="trigger">
                     {{ selected[0]?.label }}
                     <audit-icon
                       class="table-info-fill"
                       type="angle-line-down" />
                   </div>
-                </template>
+                </template> -->
                 <bk-option
-                  v-for="type in comTypeList(item.field_type)"
+                  v-for="type in item.fieldTypeList"
                   :id="type.typeValue"
                   :key="type.typeValue"
                   :name="type.label" />
@@ -144,7 +175,7 @@
                 ref="fieldComRef"
                 :type="item.typeValue"
                 :value="item.valueText"
-                @update="(val) => handlerUpdate(val, item)" />
+                @update="(val: any) => handlerUpdate(val, item)" />
             </div>
           </div>
         </div>
@@ -165,6 +196,7 @@
 
   import fieldCom from './field-components.vue';
 
+  import ToolTipText from '@/components/show-tooltips-text/index.vue';
   import { convertGMTTimeToStandard, convertToTimestamp } from '@/utils/assist/timestamp-conversion';
 
   interface Exposes{
@@ -212,6 +244,7 @@
         ...item,
         typeValue: typeValueDefault,
         value: '',
+        fieldTypeList: comTypeList(item.field_type),
       };
     }).filter((e: Record<string, any>) => e.is_show);
   };
@@ -366,6 +399,10 @@
         border-right: 1px solid #dcdee5;
       }
 
+      .field-type-box {
+        display: flex;
+      }
+
       .table-text {
         padding: 0 10px;
         line-height: 42px;
@@ -381,7 +418,7 @@
 
       .table-list {
         display: flex;
-        min-height: 42px;
+        height: 42px;
         line-height: 42px;
         border-bottom: 1px solid #dcdee5;
       }
@@ -401,7 +438,7 @@
 
       .table-value {
         display: flex;
-        width: 100%;
+        width: 250px;
         height: auto;
         line-height: normal;
         flex: 1;
@@ -429,6 +466,7 @@
         margin-right: 10px;
         margin-left: 10px;
         font-size: 12px;
+        line-height: 0px;
         letter-spacing: 0;
         color: #63656e;
         cursor: pointer;
@@ -438,13 +476,22 @@
     }
 
     .field-type {
+      height: 20px;
       padding: 1px 5px;
+      margin-top: 12px;
       margin-left: 5px;
       font-size: 12px;
+      line-height: normal;
       color: #1768ef;
       background: #e1ecff;
       border-radius: 10px;
       align-items: center;
       justify-content: center;
+    }
+
+    .field-type-list {
+      :deep(.bk-input) {
+        border: none !important;
+      }
     }
   </style>
