@@ -166,7 +166,7 @@ paths:
         backend:
           type: HTTP
           method: post
-          path: /api/v1/log_subscription/apigw/query/
+          path: /api/v1/log_subscription/log_subscription_apigw/query/
           matchSubpath: false
           timeout: 0
           upstreams: { }
