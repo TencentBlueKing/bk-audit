@@ -274,6 +274,7 @@
         isErr.value = false;
         isNoSuccess.value = false;
         isNOJson.value = true;
+        result.value = JSON.stringify(res.data.result);
         emits('deBugDone', '', false);
         break;
       case 'request_error':
