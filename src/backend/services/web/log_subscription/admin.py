@@ -169,15 +169,15 @@ class LogSubscriptionItemAdminForm(forms.ModelForm):
         """
         cleaned_data = super().clean()
 
-        # 基本验证：如果选择了数据源，检查是否需要配置筛选条件
-        data_sources = None
+        # 获取选中的数据源
+        # 优先使用 cleaned_data（用户提交的新数据），如果未提交且是绑定过程（极其罕见）才回退到实例
+        data_sources = cleaned_data.get("data_sources")
 
-        if self.instance and self.instance.pk:
-            # 编辑现有配置项
+        # 只有在 cleaned_data 中没有 data_sources 且不是用户主动清空（即表单未包含该字段）的情况下，才使用实例数据
+        # 但在这个 AdminForm 中，data_sources 字段始终存在，所以通常 cleaned_data.get("data_sources") 就是准的
+        # 如果用户清空了选择，data_sources 会是空 QuerySet，此时也不应该回退到 instance
+        if data_sources is None and self.instance and self.instance.pk:
             data_sources = self.instance.data_sources.all()
-        elif "data_sources" in cleaned_data:
-            # 内联添加新配置项
-            data_sources = cleaned_data.get("data_sources")
 
         condition_data = cleaned_data.get("condition")
 
