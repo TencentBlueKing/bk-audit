@@ -725,6 +725,11 @@
   };
 
   const handleFormItemChange = (val: any, toolIndex: number, configIndex: number) => {
+    // 检查值是否真的变化了，避免循环触发
+    const currentValue = formData.value.tools[toolIndex]?.config[configIndex]?.target_value;
+    if (_.isEqual(currentValue, val)) {
+      return;
+    }
     if (val) {
       formRef.value.clearValidate(`tools.${toolIndex}.config.${configIndex}.target_value`);
     }
