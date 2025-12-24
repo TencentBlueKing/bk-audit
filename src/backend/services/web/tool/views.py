@@ -48,3 +48,19 @@ class ToolViewSet(ResourceViewSet):
         ResourceRoute("POST", resource.tool.sql_analyse_with_tool, endpoint="sql_analyse_with_tool", pk_field="uid"),
         ResourceRoute("POST", resource.tool.user_query_table_auth_check, endpoint="user_query_table_auth_check"),
     ]
+
+
+class ToolAPIGWViewSet(ResourceViewSet):
+    """
+    Execute Tool APIGW
+    """
+
+    def get_authenticators(self):
+        return []
+
+    def get_permissions(self):
+        return []
+
+    resource_routes = [
+        ResourceRoute("POST", resource.tool.execute_tool_apigw, endpoint="execute", pk_field="uid"),
+    ]

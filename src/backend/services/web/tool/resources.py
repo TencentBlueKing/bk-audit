@@ -37,6 +37,7 @@ from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import EnumMappingRelatedType, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from core.models import get_request_username
+from core.utils.tools import get_app_info
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.data import preserved_order_sort
@@ -745,6 +746,32 @@ class ExecuteTool(ToolBase):
         check_request_data["tool_variables"] = params.get("tool_variables", [])
         should_skip_permission_from(check_request_data, get_request_username())
         current_user = get_request_username()
+        try:
+            recent_tool_usage_manager.record_usage(current_user, uid)
+        except Exception as e:  # NOCC:broad-except(需要处理所有错误)
+            logger.error(
+                f"[record_tool_usage] Uid:{uid}; Current User:{current_user}; "
+                f"Err: {e}; Detail: {traceback.format_exc()}"
+            )
+        executor = ToolExecutorFactory(sql_analyzer_cls=SqlQueryAnalysis).create_from_tool(tool)
+        data = executor.execute(params).model_dump()
+        return {"data": data, "tool_type": tool.tool_type}
+
+
+class ExecuteToolAPIGW(ExecuteTool):
+    """
+    工具执行(APIGW)，仅校验 app_code
+    """
+
+    def perform_request(self, validated_request_data):
+        get_app_info()
+        uid = validated_request_data["uid"]
+        params = validated_request_data["params"]
+        tool: Tool = Tool.last_version_tool(uid=uid)
+        if not tool:
+            raise ToolDoesNotExist()
+
+        current_user = "admin"
         try:
             recent_tool_usage_manager.record_usage(current_user, uid)
         except Exception as e:  # NOCC:broad-except(需要处理所有错误)
