@@ -343,8 +343,8 @@ class ApiVariablePosition(TextChoices):
     """
 
     QUERY = "query", gettext_lazy("查询参数")
-    BODY = "body", gettext_lazy("请求体")
     PATH = "path", gettext_lazy("路径参数")
+    BODY = "body", gettext_lazy("请求体")
 
 
 class ApiInputVariableBase(DataSearchBaseField):
