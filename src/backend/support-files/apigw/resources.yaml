@@ -152,6 +152,31 @@ paths:
         disabledStages: [ ]
         descriptionEn:
 
+  /{namespace}/tools/{uid}/execute/:
+    post:
+      operationId: execute_tool
+      description: 执行工具
+      tags: [ ]
+      responses:
+        default:
+          description: ''
+      x-bk-apigateway-resource:
+        isPublic: true
+        allowApplyPermission: false
+        matchSubpath: false
+        backend:
+          type: HTTP
+          method: post
+          path: /api/v1/namespaces/{namespace}/tool_apigw/{uid}/execute/
+          matchSubpath: false
+          timeout: 0
+          upstreams: { }
+          transformHeaders: { }
+        authConfig:
+          userVerifiedRequired: false
+        disabledStages: [ ]
+        descriptionEn:
+
   /{namespace}/strategies/all/:
     get:
       operationId: get_all_strategy
