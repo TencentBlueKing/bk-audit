@@ -34,7 +34,11 @@
           <div
             class="field-value"
             style="flex: 0 0 150px;">
-            {{ t('传参方式') }}
+            <span
+              v-bk-tooltips="{ content: positionContentText}"
+              class="underline-dashed">
+              {{ t('传参方式') }}
+            </span>
           </div>
           <div
             class="field-value">
@@ -82,7 +86,10 @@
           <div
             class="field-value"
             style="flex: 0 0 120px;">
-            {{ t('是否可见') }}
+            <span
+              v-bk-tooltips="{ content: t(`可见：用户打开工具后，可以查看和输入该参数值
+              不可见：参数将作为后台参数传递给接口，建议设置默认值`) }"
+              class="underline-dashed">{{ t('是否可见') }}</span>
             <bk-popover
               ref="requiredListRef"
               allow-html
@@ -190,7 +197,7 @@
                     v-for="paramsTypeItem in apiVariablePosition"
                     :id="paramsTypeItem.id"
                     :key="paramsTypeItem.id"
-                    :name="paramsTypeItem.id" />
+                    :name="paramsTypeItem.lable" />
                 </bk-select>
               </bk-form-item>
             </div>
@@ -239,7 +246,8 @@
                   :allow-empty-values="[false]"
                   class="bk-select"
                   :clearable="false"
-                  size="small">
+                  size="small"
+                  @change="handleFrontendTypeChange(item)">
                   <bk-option
                     v-for="(frontendTypeItem, frontendTypeItemIndex) in frontendTypeList"
                     :id="frontendTypeItem.value"
@@ -324,7 +332,7 @@
                 <audit-icon
                   class="add-fill field-icon"
                   type="add-fill"
-                  @click="handelAddItem" />
+                  @click="handelAddItem(item.position)" />
                 <audit-icon
                   v-if="paramList.length > 1"
                   class="reduce-fill field-icon"
@@ -356,13 +364,15 @@
     inputVariable: any;
     apiVariablePosition: Array<{
       id: string,
-      name: string
+      name: string,
+      lable: string,
     }>;
   }
 
   interface Exposes {
     getData: () => void;
     validatePass: () => void;
+    changeMethod: (method: string) => void;
   }
 
   const props = defineProps<Props>();
@@ -433,6 +443,9 @@
   const handleMouseLeaveTimeRange = () => {
     MouseEnterTimeRange.value = null;
   };
+  const positionContentText = ref(`Query: 参数位于URL的?后，例如：?page=1&status=active
+Path: 参数位于URL路径中,例如：/users/123
+Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age": "19" }`);
   // 时间组件删除
   const handleDeleteTimeRange = (index: number) => {
     paramList.value = paramList.value.map((listItem: any, listIndex: number) => {
@@ -446,10 +459,10 @@
     });
   };
   // 添加一项
-  const handelAddItem = () => {
+  const handelAddItem = (positionType: string) => {
     paramList.value.push({
       is_show: 'true',
-      position: 'query',
+      position: positionType,
       raw_name: '',
       var_name: '',
       required: 'true',
@@ -487,6 +500,33 @@
     haveSameName.value = false;
     isVarNameNOPass.value = false;
     return updatedItem;
+  };
+  // 前端类型改变
+  const handleFrontendTypeChange = (item: Record<string, any>) => {
+    // 如果为人员选择,则默认值为数组
+    if (item.field_category === 'person_select') {
+      paramList.value = paramList.value.map((listItem: any) => {
+        if (listItem.raw_name === item.raw_name) {
+          return {
+            ...listItem,
+            default_value: item.default_value.split(','),
+          };
+        }
+        return listItem;
+      });
+    }
+    // 如果为输入框,则默认值为字符串
+    if (item.field_category === 'input') {
+      paramList.value = paramList.value.map((listItem: any) => {
+        if (listItem.raw_name === item.raw_name) {
+          return {
+            ...listItem,
+            default_value: Array.isArray(item.default_value) ? item.default_value.join(',') : item.default_value,
+          };
+        }
+        return listItem;
+      });
+    }
   };
   const validatePass = () => {
     // 收集所有字段名用于重复性检查
@@ -597,7 +637,13 @@
     validatePass() {
       return validatePass();
     },
-
+    changeMethod(method: string) {
+      console.log('method', method);
+      // paramList.value = paramList.value.map((item: any) => ({
+      //   ...item,
+      //   position: method === 'POST' ? 'body' : 'query',
+      // }));
+    },
   });
 
 </script>
@@ -797,5 +843,13 @@
   &:hover {
     color: #979ba5;
   }
+}
+
+.underline-dashed {
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: #c4c6cc;
+  text-underline-offset: 5px;
+  cursor: pointer;
 }
 </style>

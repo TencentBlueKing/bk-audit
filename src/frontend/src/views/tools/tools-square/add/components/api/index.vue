@@ -39,7 +39,8 @@
             style="margin-left: 30px;">
             <bk-radio-group
               v-model="formData.api_config.method"
-              type="card">
+              type="card"
+              @change="handleMethodChange">
               <bk-radio-button label="GET" />
               <bk-radio-button label="POST" />
             </bk-radio-group>
@@ -126,7 +127,9 @@
           </div>
         </div>
         <div class="item-params">
-          <bk-checkbox v-model="isParams">
+          <bk-checkbox
+            v-model="isParams"
+            class="item-params-checkbox">
             {{ t('参数设置') }}
           </bk-checkbox>
           <params-config
@@ -161,11 +164,12 @@
   <de-dug
     ref="deDugRef"
     :api-config="formData.api_config"
+    :auth-list="authList"
     :is-params="isParams"
     @de-bug-done="handleDeBugDone" />
 </template>
 <script setup lang='tsx'>
-  import { nextTick, onMounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -198,7 +202,7 @@
   const formRef = ref();
   const resultConfigRef = ref();
   const paramsConfigRef = ref();
-  const isParams = ref(false);
+  const isParams = ref(true);
   const formData = ref({
     api_config: {
       url: '',
@@ -209,7 +213,7 @@
           bk_app_code: '',
           bk_app_secret: '',
         },
-        method: 'none',
+        method: 'bk_app_auth',
       },
     },
     input_variable: [
@@ -264,11 +268,18 @@
   const authList = ref<Array<{
     id: string,
     name: string
-  }>>();
-  const apiVariablePosition = ref<Array<{
-    id: string,
-    name: string
   }>>([]);
+  const apiVariablePositionList = ref<Array<{
+    id: string,
+    name: string,
+    lable: string
+  }>>([]);
+  const apiVariablePosition =  computed(() => {
+    if (formData.value.api_config.method === 'GET') {
+      return apiVariablePositionList.value.filter((item: any) => item.id !== 'body');
+    }
+    return apiVariablePositionList.value;
+  });
   // 获取字段类型
   const {
     run: fetchGlobalChoices,
@@ -277,7 +288,11 @@
     onSuccess(result) {
       if (result) {
         authList.value = result.api_auth_method;
-        apiVariablePosition.value = result.api_variable_position;
+        apiVariablePositionList.value = result.api_variable_position.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          lable: item.id[0].toUpperCase() + item.id.slice(1),
+        }));
       }
     },
   });
@@ -309,6 +324,10 @@
     });
   };
 
+  // 方法改变默认值
+  const handleMethodChange = (value: string) => {
+    paramsConfigRef.value?.changeMethod(value);
+  };
   // 添加 headers
   const handleAddHeaders = () => {
     formData.value.api_config.headers.push({
@@ -366,6 +385,7 @@
       return formData.value;
     },
     setConfigs(data: any) {
+      isParams.value = false;
       nextTick(() => {
         formData.value.api_config = data.api_config;
         isParams.value = data.input_variable?.length > 0;
@@ -407,7 +427,7 @@
 }
 
 .item-headers {
-  padding-top: 10px;
+  padding-top: 24px;
 }
 
 .headers-config {
@@ -456,8 +476,12 @@
 }
 
 .item-params {
-  margin-top: 10px;
+  margin-top: 24px;
   cursor: pointer;
+
+  .item-params-checkbox {
+    padding-bottom: 10px;
+  }
 
   .headers-plus-circle {
     font-size: 14px;
@@ -471,7 +495,7 @@
 
 .item-params-add {
   padding-bottom: 10px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .corret-fill {

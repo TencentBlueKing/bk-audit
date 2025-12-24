@@ -27,36 +27,41 @@
         {{ t('请求信息') }}
       </div>
       <div class="info-concent">
-        <div class="left">
-          <div class="info-concent-item">
+        <!-- <div class="left"> -->
+        <div class="info-concent-item">
+          <div class="info-concent-item-left">
             URL:
           </div>
-          <div class="info-concent-item">
-            {{ t('请求方式') }}:
-          </div>
-          <div class="info-concent-item">
-            {{ t('认证方式') }}:
-          </div>
-          <div class="info-concent-item">
-            {{ t('Headers') }}:
-          </div>
-        </div>
-        <div class="right">
-          <div class="info-concent-item">
+          <div class="info-concent-item-value">
             {{ apiConfig.url }}
           </div>
-          <div class="info-concent-item">
+        </div>
+        <div class="info-concent-item">
+          <div class="info-concent-item-left">
+            {{ t('请求方法') }}:
+          </div>
+          <div class="info-concent-item-value">
             {{ apiConfig.method }}
           </div>
-          <div class="info-concent-item">
-            {{ apiConfig.auth_config.method }}
+        </div>
+        <div class="info-concent-item">
+          <div class="info-concent-item-left">
+            {{ t('认证方式') }}:
           </div>
-          <div class="info-concent-item item-headers">
+          <div class="info-concent-item-value">
+            {{ getMethodText(apiConfig.auth_config.method) }}
+          </div>
+        </div>
+        <div class="info-concent-item">
+          <div class="info-concent-item-left">
+            {{ t('请求头') }}:
+          </div>
+          <div class="info-concent-item-value">
             <div
               v-for="(item, index) in apiConfig.headers"
               :key="index">
               <div class="item-headers-item">
-                {{ item.key || "--" }}: {{ item.value || "--" }}
+                {{ item.key || "--" }} = {{ item.value || "--" }}
               </div>
             </div>
           </div>
@@ -160,7 +165,12 @@
         class="result">
         <pre
           v-if="result"
-          class="json-result">{{ result }}</pre>
+          class="json-result">
+          <json-viewer
+          copyable
+          expand-depth="3"
+          theme="jv-light"
+        :value="JSON.parse(result)" /></pre>
       </div>
       <bk-exception
         v-if="isErr && (!isNoSuccess && !isNOJson)"
@@ -197,6 +207,10 @@
   interface Props {
     apiConfig: Record<string, any>,
     isParams: boolean,
+    authList:Array<{
+      id: string,
+      name: string
+    }>,
   }
   interface Exposes {
     init: (data: FormItem[]) => void;
@@ -224,6 +238,7 @@
   const result = ref();
   const MouseEnterTimeRange = ref<string| null>(null);
 
+  const getMethodText = (method: string) => props.authList.find(item => item.id === method)?.name;
   const handleMouseEnterTimeRange = (e: string) => {
     MouseEnterTimeRange.value = e;
   };
@@ -256,7 +271,9 @@
     if (field.field_category === 'time_select' || field.field_category === 'time-picker') {
       return formatDate(value);
     }
-
+    if (field.field_category === 'person_select') {
+      return value.join(',');
+    }
     return value;
   };
 
@@ -374,6 +391,7 @@
 
   .info-concent {
     display: flex;
+    flex-direction: column;
     padding: 10px;
     margin-top: 10px;
     font-size: 12px;
@@ -383,33 +401,23 @@
     background-color: #f5f7fa;
 
     .info-concent-item {
+      display: flex;
       margin-bottom: 10px;
+
+      .info-concent-item-left {
+        width: 60px;
+        margin-right: 8px;
+        text-align: right;
+      }
+
+      .info-concent-item-value {
+        word-break: break-all;
+        white-space: normal;
+        flex: 1;
+        overflow-wrap: break-word;
+      }
     }
 
-    .left {
-      width: 80px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #4d4f56;
-      text-align: right;
-    }
-
-    .right {
-      margin-left: 10px;
-      font-size: 12px;
-      line-height: 20px;
-      color: #4d4f56;
-      text-align: left;
-      flex: 1;
-    }
-
-    .lable {
-      margin-bottom: 10px;
-    }
-
-    .value {
-      margin-bottom: 10px;
-    }
   }
 }
 
@@ -439,7 +447,9 @@
     font-size: 12px;
     line-height: 1.5;
     color: #4d4f56;
-    word-break: break-all;
+    word-break: break-word;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
     white-space: pre-wrap;
     background-color: #f5f7fa;
     border-radius: 4px;
@@ -520,7 +530,9 @@
           font-family: Monaco, Menlo, 'Ubuntu Mono', monospace;
           font-size: 11px;
           color: #313238;
-          word-break: break-all;
+          word-break: break-word;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
           white-space: pre-wrap;
           background: #f0f1f5;
           border-radius: 2px;
@@ -552,7 +564,9 @@
           font-family: Monaco, Menlo, 'Ubuntu Mono', monospace;
           font-size: 11px;
           color: #313238;
-          word-break: break-all;
+          word-break: break-word;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
           white-space: pre-wrap;
           flex: 1;
         }
@@ -592,4 +606,10 @@
     cursor: pointer;
   }
 }
+</style>
+<style  lang="postcss">
+.jv-push {
+  .open {
+    background-color: transparent;  /* 透明背景 */
+  }}
 </style>
