@@ -1172,3 +1172,42 @@ class TestDorisVariantFieldSanitize(TestCase):
         # 确认最终返回的是 str，而不是 bytes
         self.assertIsInstance(result, str)
         self.assertEqual(result, "escaped_payload")
+    def test_variant_like_with_injection_payload(self):
+        """
+        恶意 payload 作为 LIKE 条件参与 Variant 查询时：
+        - 字段访问仍然是 snapshot_resource_type_info['id'] 这种受控形式
+        """
+        payload =r"foo'\''] !=0 or 1=1; --"
+
+        builder = DorisQuerySQLBuilder(
+            table="test_table",
+            conditions=[
+                {
+                    "field": {
+                        "raw_name": "snapshot_resource_type_info",
+                        "keys": ["id"],
+                    },
+                    "operator": QueryConditionOperator.LIKE.value,
+                    "filters": [payload],
+                }
+            ],
+            sort_list=[],
+            page=1,
+            page_size=10,
+        )
+
+        sql = builder.build_data_sql()
+        print(sql)
+        self.assertIn("`snapshot_resource_type_info`['id']", sql)
+
+        # 2）确认是 LIKE 查询，并且前缀形如 LIKE '%foo...'
+        self.assertIn("LIKE '%foo", sql)
+
+        expected_sub = "foo''\\''''] !=0 or 1=1; --"
+        self.assertIn(
+            expected_sub,
+            sql,
+            msg=f"\n原始 payload:\n{payload}\n"
+                f"期望转义后片段:\n{expected_sub}\n"
+                f"实际 SQL:\n{sql}",
+        )
