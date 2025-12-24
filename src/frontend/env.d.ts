@@ -74,7 +74,29 @@ declare module '@blueking/bk-trace-core' {
 
   const BkTrace: {
     install: (app: any, options: BkTraceOptions) => void
+  };
+
+  export default BkTrace;
+}
+declare module 'vue-json-viewer' {
+  import { Plugin } from 'vue';
+
+  interface JsonViewerOptions {
+    // 可以根据实际使用情况添加更多选项
+    value?: any;
+    expanded?: boolean;
+    expandDepth?: number;
+    copyable?: boolean;
+    sort?: boolean;
+    boxed?: boolean;
+    theme?: string;
+    previewMode?: boolean;
+    timeformat?: string;
   }
-  
-  export default BkTrace
+
+  const JsonViewer: Plugin & {
+    install: (app: any, options?: JsonViewerOptions) => void;
+  };
+
+  export default JsonViewer;
 }
