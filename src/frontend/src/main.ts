@@ -20,7 +20,7 @@ import { createApp } from 'vue';
 import Aegis from 'aegis-web-sdk';
 import BkuiVue from 'bkui-vue';
 import { bkTooltips } from 'bkui-vue/lib/directives';
-
+import JsonViewer from 'vue-json-viewer';
 import RootManageService from '@service/root-manage';
 import EntryManageService from '@service/entry-manage';
 
@@ -78,6 +78,7 @@ Promise.all([RootManageService.config(), EntryManageService.watermark()])
     sessionStorage.setItem('BK_AUDIT_CONFIG', JSON.stringify(config));
     BKApp.use(BkuiVue);
     BKApp.use(i18n);
+    BKApp.use(JsonViewer);
     BKApp.use(createRouter(config));
 
     BKApp.component('ApplyPermissionCatch', ApplyPermissionCatch);
