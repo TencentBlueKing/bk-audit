@@ -671,6 +671,8 @@ class ExecuteTool(ToolBase):
                 "value": "user1" // 单个值会自动转为列表 ["user1"]
             }
         ```
+        注意：对于 tool_type 为 api 的工具，人员选择器的值会转换为逗号拼接的字符串传递给三方接口
+        （例如：["user1", "user2"] 会转为 "user1,user2"）
     5. time_range_select（时间范围选择器）
         ```json
             {
