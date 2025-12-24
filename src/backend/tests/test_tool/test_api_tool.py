@@ -304,6 +304,15 @@ class ApiToolExecutorTestCase(TestCase):
                     "is_show": True,
                     "position": ApiVariablePosition.QUERY.value,
                 },
+                {
+                    "raw_name": "person_select_param",
+                    "var_name": "person_select_param",
+                    "display_name": "Person Select Param",
+                    "required": False,
+                    "field_category": FieldCategory.PERSON_SELECT.value,
+                    "is_show": True,
+                    "position": ApiVariablePosition.QUERY.value,
+                },
             ],
             "output_config": {"enable_grouping": False, "groups": []},
         }
@@ -565,3 +574,90 @@ class ApiToolExecutorTestCase(TestCase):
         # These should NOT be present
         self.assertFalse(any(p['name'] == 'body_start' for p in rendered_params))
         self.assertFalse(any(p['name'] == 'body_end' for p in rendered_params))
+
+    def test_render_request_params_person_select(self):
+        """测试 API 工具中人员选择器转换为逗号拼接的字符串"""
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "1", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": "value", "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+                {
+                    "raw_name": "person_select_param",
+                    "value": ["user1", "user2", "user3"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+        params = APIToolExecuteParams.model_validate(params_data)
+        rendered_params = self.executor._render_request_params(params)
+
+        person_select_param = next(p for p in rendered_params if p['name'] == 'person_select_param')
+        # 验证人员选择器被转换为逗号拼接的字符串
+        self.assertEqual(person_select_param['value'], "user1,user2,user3")
+
+    def test_render_request_params_person_select_single_value(self):
+        """测试 API 工具中人员选择器单值情况"""
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "1", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": "value", "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+                {
+                    "raw_name": "person_select_param",
+                    "value": "user1",  # 单个值
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+        params = APIToolExecuteParams.model_validate(params_data)
+        rendered_params = self.executor._render_request_params(params)
+
+        person_select_param = next(p for p in rendered_params if p['name'] == 'person_select_param')
+        # 验证单个值被转换为字符串
+        self.assertEqual(person_select_param['value'], "user1")
+
+    @patch('requests.request')
+    def test_execute_with_person_select(self, mock_requests_request):
+        """测试 API 工具执行时人员选择器参数传递"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.ok = True
+        mock_response.json.return_value = {"result": True, "data": "mocked_data"}
+        mock_requests_request.return_value = mock_response
+
+        params_data = {
+            "tool_variables": [
+                {"raw_name": "path_id", "value": "123", "position": ApiVariablePosition.PATH.value},
+                {"raw_name": "body_param", "value": {"key": "value"}, "position": ApiVariablePosition.BODY.value},
+                {
+                    "raw_name": "time_range_split",
+                    "value": ["2023-01-01 00:00:00", "2023-01-01 01:00:00"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+                {
+                    "raw_name": "person_select_param",
+                    "value": ["user1", "user2"],
+                    "position": ApiVariablePosition.QUERY.value,
+                },
+            ]
+        }
+
+        result = self.executor.execute(params_data)
+
+        self.assertIsInstance(result, ApiToolExecuteResult)
+        self.assertEqual(result.status_code, 200)
+
+        # 验证请求参数中人员选择器被转换为逗号拼接的字符串
+        self.test_api_url_template.format(path_id="123")
+        mock_requests_request.assert_called_once()
+        call_kwargs = mock_requests_request.call_args[1]
+        self.assertEqual(call_kwargs['params']['person_select_param'], "user1,user2")

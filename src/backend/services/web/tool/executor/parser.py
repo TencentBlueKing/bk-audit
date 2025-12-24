@@ -136,3 +136,11 @@ class ApiVariableParser(BaseVariableParser):
 
     def __init__(self, variable: ApiInputVariableUnion):
         super().__init__(variable.field_category)
+
+    def _format_person_select(self, value: Any) -> str:
+        """
+        格式化人员选择器 (API 工具中转为逗号拼接的字符串)
+        """
+        if not isinstance(value, list):
+            return str(value)
+        return ",".join(str(v) for v in value)
