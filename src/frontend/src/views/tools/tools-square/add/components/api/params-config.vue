@@ -264,40 +264,42 @@
                 error-display-type="tooltips"
                 label=""
                 label-width="0">
-                <bk-input
-                  v-if="item.field_category == 'number_input'"
-                  v-model="item.default_value"
-                  clearable
-                  type="number" />
-                <audit-user-selector
-                  v-else-if="item.field_category === 'person_select'"
-                  v-model="item.default_value" />
-                <div
-                  v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
-                  @mouseenter.stop="handleMouseEnterTimeRange(index)"
-                  @mouseleave.stop="handleMouseLeaveTimeRange">
-                  <div style="position: relative;">
-                    <date-picker
-                      v-model="item.time_range"
-                      style="width: 100%" />
-                    <audit-icon
-                      v-show="MouseEnterTimeRange === index && item.time_range.length > 0"
-                      class="delete-fill-btn"
-                      type="delete-fill"
-                      @click.stop="handleDeleteTimeRange(index)" />
+                <div :class="defaultValuevalidate(item) ? 'default-value-box' : ''">
+                  <bk-input
+                    v-if="item.field_category == 'number_input'"
+                    v-model="item.default_value"
+                    clearable
+                    type="number" />
+                  <audit-user-selector
+                    v-else-if="item.field_category === 'person_select'"
+                    v-model="item.default_value" />
+                  <div
+                    v-else-if="item.field_category === 'time_range_select' || item.field_category === 'time-ranger'"
+                    @mouseenter.stop="handleMouseEnterTimeRange(index)"
+                    @mouseleave.stop="handleMouseLeaveTimeRange">
+                    <div style="position: relative;">
+                      <date-picker
+                        v-model="item.time_range"
+                        style="width: 100%" />
+                      <audit-icon
+                        v-show="MouseEnterTimeRange === index && item.time_range.length > 0"
+                        class="delete-fill-btn"
+                        type="delete-fill"
+                        @click.stop="handleDeleteTimeRange(index)" />
+                    </div>
                   </div>
+                  <bk-date-picker
+                    v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
+                    v-model="item.default_value"
+                    append-to-body
+                    clearable
+                    style="width: 100%"
+                    type="datetime" />
+                  <bk-input
+                    v-else
+                    v-model="item.default_value"
+                    clearable />
                 </div>
-                <bk-date-picker
-                  v-else-if="item.field_category === 'time_select' || item.field_category === 'time-picker'"
-                  v-model="item.default_value"
-                  append-to-body
-                  clearable
-                  style="width: 100%"
-                  type="datetime" />
-                <bk-input
-                  v-else
-                  v-model="item.default_value"
-                  clearable />
               </bk-form-item>
             </div>
             <!-- 是否可见 -->
@@ -532,6 +534,17 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       });
     }
   };
+  const defaultValuevalidateList = ref<string[]>([]);
+  // 校验
+  const defaultValuevalidate = (item: Record<string, any>) => {
+    defaultValuevalidateList.value = [];
+    if (item.required === 'true' && item.is_show === 'false'  && item.default_value === '') {
+      defaultValuevalidateList.value.push('true');
+      return true;
+    }
+    defaultValuevalidateList.value.push('false');
+    return false;
+  };
   const validatePass = () => {
     // 收集所有字段名用于重复性检查
     const allFieldNames: string[] = [];
@@ -590,8 +603,11 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       item.isPass = isPass;
       return item;
     });
+    // 判断 defaultValuevalidateList 是否有 'true'
+    const haveDefaultValuevalidateList = defaultValuevalidateList.value.some((item: string) => item === 'true');
+
     // true 不通过 false 通过
-    return haveEmptyVarName || haveSameVarName;
+    return haveEmptyVarName || haveSameVarName || haveDefaultValuevalidateList;
   };
   const isSetConfigsSuccess = ref(false);
   watch(() => paramList.value, () => {
@@ -825,6 +841,10 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 }
 
 .var-split-rules {
+  border: 1px solid red !important;
+}
+
+.default-value-box {
   border: 1px solid red !important;
 }
 

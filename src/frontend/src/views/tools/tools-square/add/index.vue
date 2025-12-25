@@ -269,6 +269,7 @@
 </template>
 
 <script setup lang='tsx'>
+  import _ from 'lodash';
   import { nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';

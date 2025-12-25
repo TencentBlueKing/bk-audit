@@ -15,7 +15,7 @@
   to the current version of the project delivered to anyone in the future.
 */
 
-export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild = false, type = 'object')  => {
+export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild = false, type = 'object', nameCountMap = new Map<string, number>())  => {
   const result: any[] = [];
 
   // 如果是对象，我们递归它的每个键值对
@@ -27,8 +27,15 @@ export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild 
         ? `${parentId}.${key}`
         : `${key}`;
 
+      // 检测节点名称是否重复
+      const currentCount = nameCountMap.get(key) || 0;
+      nameCountMap.set(key, currentCount + 1);
+
+      // 根据重复情况设置显示名称
+      const displayName = currentCount > 0 ? `${key} (${currentId})` : key;
+
       const node = {
-        name: key,
+        name: displayName,
         json_path: currentId,
         isChecked: false,
         isChild,
@@ -40,13 +47,13 @@ export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild 
         listDescription: '',
       };
       if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
-        // 如果值是对象且不是数组，递归
-        node.children = buildTree(obj[key], currentId, currentPath, true, 'kv');
+        // 如果值是对象且不是数组，递归（传递相同的名称计数映射）
+        node.children = buildTree(obj[key], currentId, currentPath, true, 'kv', nameCountMap);
       } else if (Array.isArray(obj[key])) { // 如果值是数组
         if (obj[key].length > 0 && typeof obj[key][0] === 'object' && obj[key][0] !== null) {
           // 如果数组中的每一项都是对象，将其视为表格
           node.type = 'table';
-          const childNodes = buildTree(obj[key][0], currentId, currentPath, true, 'list');
+          const childNodes = buildTree(obj[key][0], currentId, currentPath, true, 'list', nameCountMap);
           node.list = childNodes;
         } else {
           // 如果数组中的项不是对象（比如字符串、数字等），将其视为普通数组字段
