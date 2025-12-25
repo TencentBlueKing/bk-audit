@@ -418,7 +418,7 @@
 <style lang="postcss" scoped>
 .object-table {
   position: relative;
-  margin-top: 20px;
+  margin-top: 6px;
   border: 1px solid #dcdee5;
   border-radius: 2px;
 
