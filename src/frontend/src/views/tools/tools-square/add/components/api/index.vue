@@ -168,6 +168,7 @@
     :api-config="formData.api_config"
     :auth-list="authList"
     :is-params="isParams"
+    :is-success="isSuccess"
     @de-bug-done="handleDeBugDone" />
 </template>
 <script setup lang='tsx'>
