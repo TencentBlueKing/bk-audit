@@ -590,5 +590,5 @@ def get_manual_event_strategy_config(rt_id):
             },
         ],
         "is_formal": True,
-        "source": "system"
+        "source": "system",
     }

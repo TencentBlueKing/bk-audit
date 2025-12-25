@@ -37,11 +37,11 @@ from apps.meta.constants import NO_TAG_ID, NO_TAG_NAME
 from apps.meta.models import EnumMappingRelatedType, Tag
 from apps.meta.serializers import EnumMappingSerializer
 from core.models import get_request_username
-from core.utils.tools import get_app_info
 from core.sql.parser.model import ParsedSQLInfo
 from core.sql.parser.praser import SqlQueryAnalysis
 from core.utils.data import preserved_order_sort
 from core.utils.page import paginate_data
+from core.utils.tools import get_app_info
 from services.web.common.caller_permission import (
     CurrentType,
     should_skip_permission_from,

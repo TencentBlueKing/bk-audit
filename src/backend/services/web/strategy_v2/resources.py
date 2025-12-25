@@ -238,8 +238,8 @@ class StrategyV2Base(AuditMixinResource, abc.ABC):
         判断请求中是否显式携带可用的 SQL
         """
 
-        sql_value = validated_request_data.get("sql", Empty())
-        return sql_value not in [Empty(), None, ""]
+        sql_value = validated_request_data.get("sql", Empty)
+        return sql_value not in [Empty, None, ""]
 
     @staticmethod
     def get_base_control_type(strategy_type: str) -> Optional[str]:
