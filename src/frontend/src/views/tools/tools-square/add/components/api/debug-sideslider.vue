@@ -160,18 +160,20 @@
           type="alert" />
         <span>{{ t( isNOJson ? '工具目前仅支持解析Json格式的数据' : '工具调试接口失败') }}</span>
       </div>
-      <div
+      <scroll-faker
         v-if="isDebug"
-        class="result">
-        <pre
-          v-if="result"
-          class="json-result">
+        style="height: 53vh">
+        <div
+          class="result">
+          <pre
+            v-if="result"
+            class="json-result">
           <json-viewer
-          copyable
-          expand-depth="3"
+          expand-depth="99"
           theme="jv-light"
-        :value="JSON.parse(result)" /></pre>
-      </div>
+          :value="JSON.parse(result)" /></pre>
+        </div>
+      </scroll-faker>
       <bk-exception
         v-if="isErr && (!isNoSuccess && !isNOJson)"
         :description="t('数据查询失败')"
@@ -376,6 +378,7 @@
     isErr.value = false;
     isNoSuccess.value = false;
     result.value = '';
+    isDebug.value = false;
   };
   defineExpose<Exposes>({
     init(data: FormItem[]) {
@@ -422,6 +425,7 @@
 }
 
 .title {
+  padding-bottom: 10px;
   font-size: 14px;
   font-weight: 700;
   line-height: 22px;

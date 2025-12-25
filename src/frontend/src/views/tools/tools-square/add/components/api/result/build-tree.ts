@@ -16,7 +16,6 @@
 */
 
 export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild = false, type = 'object')  => {
-  console.log('obj>', obj);
   const result: any[] = [];
 
   // 如果是对象，我们递归它的每个键值对
@@ -63,6 +62,5 @@ export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild 
       result.push(node);
     });
   }
-  console.log('result>>', result);
   return result;
 };
