@@ -515,6 +515,7 @@
 </template>
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
+  import _ from 'lodash';
   import * as monaco from 'monaco-editor';
   import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
@@ -808,6 +809,11 @@
   const handleFormItemChange = (val: any, item: FormData['config']['input_variable'][0]) => {
     const index = formData.value.config.input_variable.findIndex(i => i.raw_name === item.raw_name);
     if (index !== -1) {
+      // 检查值是否真的变化了，避免循环触发
+      const currentValue = formData.value.config.input_variable[index].default_value;
+      if (_.isEqual(currentValue, val)) {
+        return;
+      }
       formData.value.config.input_variable[index].default_value = val;
     }
   };

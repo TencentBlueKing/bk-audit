@@ -54,16 +54,6 @@
       :disabled="dataConfig.disabled"
       @change="handleUserChange" />
 
-    <!-- <bk-date-picker
-      v-if="dataConfig.field_category === 'time_range_select'"
-      append-to-body
-      clearable
-      :model-value="pickerRangeValue"
-      style="width: 100%"
-      :time-picker-options="{ allowCrossDay: true }"
-      type="datetimerange"
-      @change="handleRangeChange" /> -->
-
     <date-picker
       v-else-if="dataConfig.field_category === 'time_range_select' || dataConfig.field_category === 'time-ranger'"
       v-model="pickerRangeValue"

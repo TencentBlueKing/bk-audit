@@ -241,6 +241,7 @@
   </bk-dialog>
 </template>
 <script setup lang='tsx'>
+  import _ from 'lodash';
   import { computed, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRouter } from 'vue-router';
@@ -570,6 +571,9 @@
   const handleFormItemChange = (val: any, item: SearchItem) => {
     const target = searchList.value.find(i => i.raw_name === item.raw_name);
     if (target) {
+      if (_.isEqual(target.value, val)) {
+        return;
+      }
       target.value = val;
     }
   };
