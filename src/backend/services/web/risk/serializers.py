@@ -893,6 +893,11 @@ class GetRiskFieldsByStrategyResponseSerializer(serializers.Serializer):
     unique = serializers.BooleanField(default=False)
 
 
+class RetrieveRiskStrategyInfoAPIGWRequestSerializer(serializers.Serializer):
+    risk_id = serializers.CharField()
+    prohibit_enum_mappings = serializers.BooleanField(required=False, default=True)
+
+
 class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
     event_basic_field_configs = serializers.ListField(
         label=gettext_lazy("Event Basic Field Configs"), child=EventFieldSerializer(), required=False, allow_empty=True
@@ -935,6 +940,56 @@ class RetrieveRiskStrategyInfoResponseSerializer(serializers.ModelSerializer):
             # 兼容历史数据
             if config["field_name"] == EventMappingFields.RAW_EVENT_ID.field_name:
                 config["description"] = str(RAW_EVENT_ID_REMARK)
+        return data
+
+
+class EventFieldAPIGWSerializer(EventFieldSerializer):
+    enum_mappings = serializers.JSONField(required=False, allow_null=True)
+
+
+class RetrieveRiskStrategyInfoAPIGWResponseSerializer(RetrieveRiskStrategyInfoResponseSerializer):
+    event_basic_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Basic Field Configs"),
+        child=EventFieldAPIGWSerializer(),
+        required=False,
+        allow_empty=True,
+    )
+    event_data_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Data Field Configs"),
+        child=EventFieldAPIGWSerializer(),
+        required=False,
+        allow_empty=True,
+    )
+    event_evidence_field_configs = serializers.ListField(
+        label=gettext_lazy("Event Evidence Field Configs"),
+        child=EventFieldAPIGWSerializer(),
+        required=False,
+        allow_empty=True,
+    )
+    risk_meta_field_config = serializers.ListField(
+        label=gettext_lazy("Risk Meta Field Config"),
+        child=EventFieldAPIGWSerializer(),
+        required=False,
+        allow_empty=True,
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.prohibit_enum_mappings = kwargs.pop("prohibit_enum_mappings", False)
+        super().__init__(*args, **kwargs)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not self.prohibit_enum_mappings:
+            return data
+        for field_key in (
+            "event_basic_field_configs",
+            "event_data_field_configs",
+            "event_evidence_field_configs",
+            "risk_meta_field_config",
+        ):
+            for field_config in data.get(field_key, []):
+                if isinstance(field_config, dict):
+                    field_config.pop("enum_mappings", None)
         return data
 
 
