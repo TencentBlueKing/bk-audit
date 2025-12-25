@@ -357,11 +357,12 @@
   </div>
 </template>
 <script setup lang='tsx'>
-  import { onMounted, ref } from 'vue';
+  import { onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   interface Props {
     inputVariable: any;
+    isEditMode: boolean;
     apiVariablePosition: Array<{
       id: string,
       name: string,
@@ -374,9 +375,12 @@
     validatePass: () => void;
     changeMethod: (method: string) => void;
   }
+  interface Emits {
+    (e: 'configChange',): void;
+  }
 
   const props = defineProps<Props>();
-
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const formData = ref();
   const rules = ref();
@@ -589,6 +593,15 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     // true 不通过 false 通过
     return haveEmptyVarName || haveSameVarName;
   };
+  const isSetConfigsSuccess = ref(false);
+  watch(() => paramList.value, () => {
+    if (isSetConfigsSuccess.value && props.isEditMode) {
+      emits('configChange');
+    }
+  }, {
+    deep: true,
+  });
+
 
   onMounted(() => {
     // 编辑复现
@@ -615,6 +628,9 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
           isPass: true,
         };
       });
+      setTimeout(() => {
+        isSetConfigsSuccess.value = true;
+      }, 0);
     }
   });
   defineExpose<Exposes>({
@@ -638,11 +654,10 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       return validatePass();
     },
     changeMethod(method: string) {
-      console.log('method', method);
-      // paramList.value = paramList.value.map((item: any) => ({
-      //   ...item,
-      //   position: method === 'POST' ? 'body' : 'query',
-      // }));
+      paramList.value = paramList.value.map((item: any) => ({
+        ...item,
+        position: method === 'POST' ? 'body' : 'query',
+      }));
     },
   });
 

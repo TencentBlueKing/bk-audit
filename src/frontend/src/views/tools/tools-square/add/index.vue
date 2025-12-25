@@ -223,12 +223,18 @@
             :report-lists-panels="reportListsPanels"
             :uid="formData.uid"
             @change-is-update-submit="changeIsUpdateSubmit"
-            @change-submit="changeSubmit" />
+            @change-submit="changeSubmit"
+            @get-is-done-de-bug="getIsDoneDeBug" />
         </audit-form>
       </div>
       <template #action>
         <bk-button
+          v-bk-tooltips="{
+            disabled: !isApiDoneDeBug,
+            content: t('请完成接口成功调试后再试')
+          }"
           class="w88"
+          :disabled="isApiDoneDeBug"
           theme="primary"
           @click="handleSubmit">
           {{ isEditMode ? t('提交') : t('创建') }}
@@ -263,7 +269,6 @@
 </template>
 
 <script setup lang='tsx'>
-  import _ from 'lodash';
   import { nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
@@ -831,12 +836,39 @@
         });
     });
   };
-
+  const isApiDoneDeBug = ref(false);
+  // api工具获取是否调试成功
+  const getIsDoneDeBug = (val: boolean, isEditInfo: boolean, isSuccess: boolean) => {
+    // 创建时 api 判断是否调试成功
+    if (!isEditMode) {
+      if (!val) {
+        isApiDoneDeBug.value = true;
+      } else {
+        isApiDoneDeBug.value = !isSuccess;
+      }
+    } else {
+      // 编辑时 api 判断是否调试成功
+      if (!isEditInfo) { // 没有修改参数
+        isApiDoneDeBug.value = false;
+      } else { // 修改了参数
+        if (!val) {
+          isApiDoneDeBug.value = true;
+        } else {
+          isApiDoneDeBug.value = !isSuccess;
+        }
+      }
+    }
+  };
   watch(() => formData.value.tool_type, (val) => {
     if (val === 'bk_vision') {
       fetchChartLists();
+      isApiDoneDeBug.value = false;
     }
-    if (val === 'data_search' || val === 'api') {
+    if (val === 'data_search') {
+      isShowComponent.value = true;
+      isApiDoneDeBug.value = false;
+    }
+    if (val === 'api') {
       isShowComponent.value = true;
     }
   }, {

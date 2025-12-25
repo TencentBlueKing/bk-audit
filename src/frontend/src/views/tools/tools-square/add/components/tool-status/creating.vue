@@ -18,6 +18,7 @@
   <div class="tool-status-creating">
     <div class="tool-status-creating-icon">
       <audit-icon
+        class="loading-icon"
         svg
         type="loading" />
     </div>
@@ -49,6 +50,21 @@
     margin-bottom: 10px;
     font-size: 64px;
     color: blue;
+
+    .loading-icon {
+      animation: loading 1s linear infinite;
+    }
   }
 }
+
+@keyframes loading {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 </style>
