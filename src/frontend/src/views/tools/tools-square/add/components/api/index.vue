@@ -136,7 +136,9 @@
             v-if="isParams"
             ref="paramsConfigRef"
             :api-variable-position="apiVariablePosition"
-            :input-variable="formData.input_variable" />
+            :input-variable="formData.input_variable"
+            :is-edit-mode="isEditMode"
+            @config-change="handleParamsConfigChange" />
           <div class="item-params-add">
             <bk-button
               class="ml10"
@@ -169,7 +171,7 @@
     @de-bug-done="handleDeBugDone" />
 </template>
 <script setup lang='tsx'>
-  import { computed, nextTick, onMounted, ref } from 'vue';
+  import { computed, nextTick, onMounted, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import MetaManageService from '@service/meta-manage';
@@ -196,10 +198,17 @@
     getDebugResult: () => void;
   }
 
-  defineProps<Props>();
+  interface Emits {
+    (e: 'getIsDoneDeBug', val: boolean, isEditInfo: boolean, isSuccess: boolean): void;
+  }
+
+  const props = defineProps<Props>();
+  const emits = defineEmits<Emits>();
   const { t } = useI18n();
   const deDugRef = ref();
   const formRef = ref();
+  const isSetConfigsSuccess = ref(false);
+  const editModeIseditInfo = ref(false); // 编辑模式是否编辑信息
   const resultConfigRef = ref();
   const paramsConfigRef = ref();
   const isParams = ref(true);
@@ -330,6 +339,8 @@
   };
   // 添加 headers
   const handleAddHeaders = () => {
+    isSuccess.value = false;
+    isDoneDeBug.value = false;
     formData.value.api_config.headers.push({
       key: '',
       value: '',
@@ -349,6 +360,7 @@
       resultData.value = res;
       isSuccess.value = isSucc;
       isDoneDeBug.value = true;
+      emits('getIsDoneDeBug', isDoneDeBug.value, editModeIseditInfo.value, isSuccess.value);
     });
   };
 
@@ -363,8 +375,32 @@
     isHeadersPass.value = true;
     isHeadersNoPassIndex.value = [];
   };
+
+  // 参数配置改变
+  const handleParamsConfigChange = () => {
+    isSuccess.value = false;
+    isDoneDeBug.value = false;
+    editModeIseditInfo.value = true;
+    emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value);
+  };
+
+  watch(() => formData.value.api_config, () => {
+    isSuccess.value = false;
+    isDoneDeBug.value = false;
+    if (isSetConfigsSuccess.value) {
+      editModeIseditInfo.value = true;
+      emits('getIsDoneDeBug', false, editModeIseditInfo.value, isSuccess.value);
+    }
+  }, {
+    deep: true,
+  });
+
   onMounted(() => {
     fetchGlobalChoices();
+    // 初始化调试结果
+    if (!props.isEditMode) {
+      emits('getIsDoneDeBug', false, false, false);
+    }
   });
   defineExpose<Exposes>({
     // 提交获取字段
@@ -397,6 +433,10 @@
             bk_app_secret: '',
           };
         }
+        setTimeout(() => {
+          emits('getIsDoneDeBug', false, false, true);
+          isSetConfigsSuccess.value = true;
+        }, 0);
         initResultConfig(data);
       });
     },
