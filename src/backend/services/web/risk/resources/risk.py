@@ -124,6 +124,8 @@ from services.web.risk.serializers import (
     ListRiskTagsRespSerializer,
     ManualEventSerializer,
     ReopenRiskReqSerializer,
+    RetrieveRiskStrategyInfoAPIGWRequestSerializer,
+    RetrieveRiskStrategyInfoAPIGWResponseSerializer,
     RetrieveRiskStrategyInfoResponseSerializer,
     RetryAutoProcessReqSerializer,
     RiskExportReqSerializer,
@@ -237,6 +239,28 @@ class RetrieveRiskStrategyInfo(RiskMeta):
         risk: Risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
         strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
         return strategy or {}
+
+
+class RetrieveRiskStrategyInfoAPIGW(RiskMeta):
+    name = gettext_lazy("获取风险策略信息(APIGW)")
+    RequestSerializer = RetrieveRiskStrategyInfoAPIGWRequestSerializer
+    ResponseSerializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer
+    audit_action = None
+
+    def perform_request(self, validated_request_data):
+        from core.utils import tools as core_tools
+
+        core_tools.get_app_info()
+        risk: Risk = get_object_or_404(Risk, risk_id=validated_request_data["risk_id"])
+        strategy = Strategy.objects.filter(strategy_id=risk.strategy_id).first()
+        if not strategy:
+            return {}
+
+        prohibit_enum_mappings = validated_request_data.get("prohibit_enum_mappings", True)
+        serializer = RetrieveRiskStrategyInfoAPIGWResponseSerializer(
+            strategy, prohibit_enum_mappings=prohibit_enum_mappings
+        )
+        return serializer.data
 
 
 class RetrieveRiskAPIGW(RetrieveRisk):
