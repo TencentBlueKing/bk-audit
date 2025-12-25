@@ -213,6 +213,7 @@
       id: string,
       name: string
     }>,
+    isSuccess: boolean
   }
   interface Exposes {
     init: (data: FormItem[]) => void;
@@ -372,6 +373,9 @@
   };
   // 关闭初始化数据
   const handleClose = () => {
+    if (props.isSuccess) {
+      return;
+    }
     isShow.value = false;
     list.value = [];
     formModel.value = {};

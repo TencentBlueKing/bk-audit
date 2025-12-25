@@ -109,7 +109,9 @@
                       <audit-icon
                         class="field-value-move"
                         type="move" />
-                      <span class="field-value-text">{{ element.name }}</span>
+                      <span class="field-value-text">
+                        <tooltips :data="element.name" />
+                      </span>
                     </div>
                     <div
                       class="field-value"
@@ -316,6 +318,8 @@
   import ToolManageService from '@service/tool-manage';
 
   import resultDataModel from '@model/tool/api';
+
+  import Tooltips from '@components/show-tooltips-text/index.vue';
 
   import DialogVue from '@views/tools/tools-square/components/dialog.vue';
 
@@ -617,7 +621,6 @@
 <style lang="postcss" scoped>
 .list-table {
   position: relative;
-  margin-top: 20px;
   border: 1px solid #dcdee5;
   border-radius: 2px;
 

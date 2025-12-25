@@ -41,6 +41,14 @@
           :data="treeData"
           label="name"
           style="color: #63656e;">
+          <template #operations="node">
+            <span v-if="node.children.length === 0 ">
+              <bk-checkbox
+                v-model="node.isChecked"
+                style="padding-right: 5px;"
+                @change="(val: any) => handleCheckboxChange(val, node)" />
+            </span>
+          </template>
           <template #nodeType="node">
             <span v-if="node.children.length === 0 ">
               <bk-checkbox
@@ -317,15 +325,11 @@
 </script>
 
 <style lang="postcss" scoped>
-.result-content {
-  padding-top: 10px;
-}
 
 .content-item {
-  padding-bottom: 10px;
+  margin-top: 24px;
 
   .content-lable {
-    padding-bottom: 10px;
     font-size: 12px;
     color: #4d4f56;
   }
