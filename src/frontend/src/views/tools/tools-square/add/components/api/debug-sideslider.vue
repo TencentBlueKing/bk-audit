@@ -241,7 +241,7 @@
   const result = ref();
   const MouseEnterTimeRange = ref<string| null>(null);
 
-  const getMethodText = (method: string) => props.authList.find(item => item.id === method)?.name;
+  const getMethodText = (method: string) => props.authList?.find(item => item.id === method)?.name;
   const handleMouseEnterTimeRange = (e: string) => {
     MouseEnterTimeRange.value = e;
   };
