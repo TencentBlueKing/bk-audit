@@ -534,17 +534,16 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       });
     }
   };
-  const defaultValuevalidateList = ref<string[]>([]);
-  // 校验
-  const defaultValuevalidate = (item: Record<string, any>) => {
-    defaultValuevalidateList.value = [];
-    if (item.required === 'true' && item.is_show === 'false'  && item.default_value === '') {
-      defaultValuevalidateList.value.push('true');
-      return true;
-    }
-    defaultValuevalidateList.value.push('false');
-    return false;
-  };
+  // 校验 - 纯函数，不修改响应式状态，避免在模板渲染时触发递归更新
+  // 必填 + 不可见 + 无默认值 = 需要提示
+  const defaultValuevalidate = (item: Record<string, any>) => (
+    item.required === 'true' && item.is_show === 'false' && item.default_value === ''
+  );
+
+  // 收集验证结果，仅在 validatePass 中使用
+  const collectDefaultValueValidateResults = () => (
+    paramList.value.map(item => (defaultValuevalidate(item) ? 'true' : 'false'))
+  );
   const validatePass = () => {
     // 收集所有字段名用于重复性检查
     const allFieldNames: string[] = [];
@@ -603,11 +602,12 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       item.isPass = isPass;
       return item;
     });
-    // 判断 defaultValuevalidateList 是否有 'true'
-    const haveDefaultValuevalidateList = defaultValuevalidateList.value.some((item: string) => item === 'true');
+    // 判断是否存在默认值校验不通过的项
+    const defaultValueResults = collectDefaultValueValidateResults();
+    const haveDefaultValueError = defaultValueResults.some((item: string) => item === 'true');
 
     // true 不通过 false 通过
-    return haveEmptyVarName || haveSameVarName || haveDefaultValuevalidateList;
+    return haveEmptyVarName || haveSameVarName || haveDefaultValueError;
   };
   const isSetConfigsSuccess = ref(false);
   watch(() => paramList.value, () => {

@@ -129,7 +129,7 @@
                           {{ item?.display_name }}
                         </span>
                       </template>
-                      <form-item
+                      <tool-form-item
                         ref="formItemRef"
                         :data-config="item"
                         @change="(val:any) => handleFormItemChange(val, item)" />
@@ -261,7 +261,7 @@
   import DialogHeader from './dialog-header.vue';
 
   import useRequest from '@/hooks/use-request';
-  import FormItem from '@/views/tools/tools-square/components/form-item.vue';
+  import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
   interface TagItem {
     tag_id: string

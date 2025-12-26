@@ -249,7 +249,7 @@
                         v-else
                         style="border: none;">
                         <!-- 不同前端类型 -->
-                        <form-item
+                        <tool-form-item
                           v-if="toolInputVariableMap.get(toolConfig.tool.uid)?.has(item.source_field)"
                           :data-config="toolInputVariableMap
                             .get(toolConfig.tool.uid)?.get(item.source_field) as SearchItem"
@@ -306,7 +306,7 @@
   // import AlternativeField from './alternative-field.vue';
   // import SelectMapValue from './select-map-value.vue';
   import AuditCollapsePanel from '@/components/audit-collapse-panel/index.vue';
-  import FormItem from '@/views/tools/tools-square/components/form-item.vue';
+  import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
   interface SearchItem {
     // value: string;
