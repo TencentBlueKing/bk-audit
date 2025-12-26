@@ -127,7 +127,6 @@
 | page_size | integer | 是 | 每页数量（最大 1000） |
 | fields | array[string] | 否 | 指定返回字段列表，为空则返回所有字段 |
 | filters | object | 否 | 自定义筛选条件（WhereCondition 格式） |
-| raw | boolean | 否 | 是否只返回 SQL 而不执行查询（默认 false） |
 
 ### filters 字段说明
 
@@ -287,21 +286,5 @@ curl -X POST "https://your-domain/api/v1/log_subscription/apigw/query/" \
         "filters": ["%admin%"]
       }
     }
-  }'
-```
-
-### 4. 只获取 SQL（不执行查询）
-
-```bash
-curl -X POST "https://your-domain/api/v1/log_subscription/apigw/query/" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "token": "550e8400-e29b-41d4-a716-446655440000",
-    "source_id": "audit_log",
-    "start_time": 1700000000000,
-    "end_time": 1700600000000,
-    "page": 1,
-    "page_size": 10,
-    "raw": true
   }'
 ```
