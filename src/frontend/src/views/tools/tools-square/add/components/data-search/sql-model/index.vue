@@ -262,7 +262,7 @@
                 </template>
                 <template v-else>
                   <!-- 不同前端类型 -->
-                  <form-item
+                  <tool-form-item
                     :data-config="item"
                     origin-model
                     :target-value="item.default_value"
@@ -540,7 +540,7 @@
   import useRequest from '@/hooks/use-request';
   import { useToolDialog } from '@/hooks/use-tool-dialog';
   import fieldDict from '@/views/strategy-manage/strategy-create/components/step2/components/event-table/field-dict.vue';
-  import formItem from '@/views/tools/tools-square/components/form-item.vue';
+  import ToolFormItem from '@/views/tools/tools-square/components/tool-form-item.vue';
 
   interface Props {
     name: string

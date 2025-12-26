@@ -245,13 +245,11 @@
       const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
 
       if (fullDateTimePattern.test(val)) {
-        console.log('handleTimeChange', val);
         handleTimeChange(val);
         return;
       }
       // 如果只有日期，补充时间部分（默认 00:00:00）
       if (dateOnlyPattern.test(val)) {
-        console.log('handleTimeChange with date only', `${val} 00:00:00`);
         handleTimeChange(`${val} 00:00:00`);
         return;
       }
