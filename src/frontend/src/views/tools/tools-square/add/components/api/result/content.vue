@@ -27,18 +27,21 @@
         collapse-tags
         custom-content
         display-key="name"
+        filterable
         id-key="json_path"
         multiple
         multiple-mode="tag"
         :popover-options="{
           placement: 'top',
         }"
+        @search-change="handleTreeSearchChange"
         @tag-remove="handelTagRemove">
         <bk-tree
           ref="treeRef"
           :check-strictly="false"
           children="children"
           :data="treeData"
+          expand-all
           label="name"
           style="color: #63656e;">
           <template #operations="node">
@@ -115,7 +118,6 @@
     handleGetResultConfig: () => void;
     handleGetGroupResultConfig: () => void;
     setConfigs: (data: any) => void;
-    setGroupConfigs: (data: any) => void;
   }
   interface Emits {
     (e: 'groupContentChange', data: any, id: string | number): void
@@ -130,8 +132,39 @@
   const selectedItems = ref<any[]>([]);
   const treeData = ref<any[]>([]);
   const outputFields = ref<any[]>([]);
+  const initTreeDatas = ref<any[]>([]);
 
 
+  // 搜索
+  const handleTreeSearchChange = (val: any) => {
+    if (!val) {
+      treeData.value = initTreeDatas.value;
+      return;
+    }
+
+    // 递归搜索树形结构
+    const searchTree = (nodes: any[]) => nodes.filter((node: any) => {
+      // 检查当前节点是否匹配
+      const currentMatch = node.name.includes(val);
+
+      // 递归搜索子节点
+      let childrenMatch = false;
+      if (node.children && node.children.length > 0) {
+        const filteredChildren = searchTree(node.children);
+        if (filteredChildren.length > 0) {
+          childrenMatch = true;
+          // 保留匹配的子节点
+          // eslint-disable-next-line no-param-reassign
+          node.children = filteredChildren;
+        }
+      }
+
+      // 如果当前节点匹配或有匹配的子节点，则保留该节点
+      return currentMatch || childrenMatch;
+    });
+
+    treeData.value = searchTree(JSON.parse(JSON.stringify(initTreeDatas.value)));
+  };
   const handelTagRemove = (val: any) => {
     if (val) {
       // selectedItems中找出name与val相同的节点
@@ -242,7 +275,8 @@
 
   watch(() => props.resultData, (newVal: any) => {
     if (newVal) {
-      treeData.value = Array.isArray(JSON.parse(newVal)) ? JSON.parse(newVal) : buildTree(JSON.parse(newVal));
+      initTreeDatas.value = Array.isArray(JSON.parse(newVal)) ? JSON.parse(newVal) : buildTree(JSON.parse(newVal));
+      treeData.value = initTreeDatas.value;
       // 分组时的复现
       if (props.groupOutputFields && props.groupOutputFields.length > 0) {
         props.groupOutputFields.forEach((item: any) => {
@@ -312,13 +346,6 @@
           findAndCheckNode(treeData.value);
         });
         outputFields.value = data[0].output_fields || [];
-      });
-    },
-    // 分组
-    setGroupConfigs(data: any) {
-      nextTick(() => {
-        console.log('groupOutputFields', props.groupOutputFields);
-        console.log('分组setGroupConfigs', data);
       });
     },
   });
