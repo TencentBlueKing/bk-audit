@@ -213,7 +213,7 @@ http://your-domain/admin/log_subscription/logsubscription/<订阅ID>/preview-sql
 3. **调试筛选条件**: 确认筛选条件是否符合预期
 4. **测试自定义字段**: 验证指定字段是否正确返回
 
-详细使用指南请参考: [ADMIN_DEBUG_GUIDE.md](./ADMIN_DEBUG_GUIDE.md)
+详细使用指南请参考: [ADMIN_DEBUG_GUIDE.md](./ADMIN_OPERATION_GUIDE.md)
 
 ## 开发状态
 

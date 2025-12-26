@@ -13,6 +13,7 @@ from pydantic import ValidationError as PydanticValidationError
 from pypika.enums import Order as PypikaOrder
 
 from apps.audit.resources import AuditMixinResource
+from apps.meta.models import GlobalMetaConfig
 from core.sql.builder.builder import BKBaseQueryBuilder
 from core.sql.builder.generator import BkBaseComputeSqlGenerator
 from core.sql.constants import FieldType, FilterConnector, Operator
@@ -25,9 +26,14 @@ from core.sql.model import (
     Table,
     WhereCondition,
 )
+from services.web.log_subscription.constants import (
+    GLOBAL_FIELD_BLACKLIST_SOURCE_ID,
+    LOG_SUBSCRIPTION_FIELD_BLACKLIST_KEY,
+)
 from services.web.log_subscription.exceptions import (
     DataSourceNotFound,
     DataSourceNotInSubscription,
+    FieldNotAllowed,
     LogSubscriptionNotFound,
 )
 from services.web.log_subscription.models import LogDataSource, LogSubscription
@@ -134,6 +140,9 @@ class QueryLogSubscription(LogSubscriptionMeta):
 
         results = data_resp.get("list", [])
         count_list = count_resp.get("list", [])
+
+        # 过滤黑名单字段
+        results = self._filter_blacklist_fields(results, source_id)
 
         response["results"] = results
         response["total"] = count_list[0].get("count", 0) if count_list else 0
@@ -348,9 +357,33 @@ class QueryLogSubscription(LogSubscriptionMeta):
 
         Returns:
             Field 对象列表，为空时表示 SELECT *
+
+        Raises:
+            FieldNotAllowed: 请求字段不在数据源允许的字段范围内
         """
-        if not custom_fields:
-            return []  # 空列表表示 SELECT *
+        # 数据源配置的允许字段列表
+        allowed_fields = data_source.fields or []
+
+        # 如果用户指定了自定义字段
+        if custom_fields:
+            # 如果数据源配置了字段限制，校验用户字段是否在允许范围内
+            if allowed_fields:
+                invalid_fields = set(custom_fields) - set(allowed_fields)
+                if invalid_fields:
+                    raise FieldNotAllowed(
+                        fields=list(invalid_fields),
+                        source_id=data_source.source_id,
+                        allowed_fields=allowed_fields,
+                    )
+            # 用户字段校验通过，使用用户指定的字段
+            fields_to_select = custom_fields
+        else:
+            # 用户未指定字段，使用数据源配置的字段（如果配置了）
+            fields_to_select = allowed_fields if allowed_fields else []
+
+        # 如果没有字段列表，返回空（表示 SELECT *）
+        if not fields_to_select:
+            return []
 
         # 构建 Field 对象列表
         return [
@@ -360,5 +393,44 @@ class QueryLogSubscription(LogSubscriptionMeta):
                 display_name=field_name,
                 field_type=FieldType.STRING,  # 默认字符串类型，实际类型由 Doris 决定
             )
-            for field_name in custom_fields
+            for field_name in fields_to_select
         ]
+
+    def _filter_blacklist_fields(self, results: List[dict], source_id: str) -> List[dict]:
+        """
+        过滤返回结果中的黑名单字段
+
+        Args:
+            results: 查询结果列表
+            source_id: 数据源标识
+
+        Returns:
+            过滤后的结果列表
+        """
+        # 获取黑名单配置
+        blacklist_config = GlobalMetaConfig.get(config_key=LOG_SUBSCRIPTION_FIELD_BLACKLIST_KEY, default={})
+
+        if not blacklist_config:
+            return results
+
+        # 收集需要过滤的字段
+        fields_to_remove = set()
+
+        # 添加全局黑名单字段
+        global_blacklist = blacklist_config.get(GLOBAL_FIELD_BLACKLIST_SOURCE_ID, [])
+        fields_to_remove.update(global_blacklist)
+
+        # 添加该数据源特定的黑名单字段
+        source_blacklist = blacklist_config.get(source_id, [])
+        fields_to_remove.update(source_blacklist)
+
+        if not fields_to_remove:
+            return results
+
+        # 过滤结果中的黑名单字段（兼容字段不存在的情况）
+        filtered_results = []
+        for item in results:
+            filtered_item = {k: v for k, v in item.items() if k not in fields_to_remove}
+            filtered_results.append(filtered_item)
+
+        return filtered_results

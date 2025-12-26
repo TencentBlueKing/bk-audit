@@ -92,6 +92,14 @@ class LogDataSource(OperateRecordModel):
         help_text=gettext_lazy("用于时间范围筛选的字段名"),
     )
 
+    # 允许返回的字段列表（可选，为空则返回所有字段）
+    fields = models.JSONField(
+        gettext_lazy("允许返回的字段"),
+        default=list,
+        blank=True,
+        help_text=gettext_lazy("限制数据源允许返回的字段列表，为空则返回所有字段(*)"),
+    )
+
     # 是否启用
     is_enabled = models.BooleanField(gettext_lazy("是否启用"), default=True)
 
