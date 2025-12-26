@@ -519,7 +519,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
         if (listItem.raw_name === item.raw_name) {
           return {
             ...listItem,
-            default_value: item.default_value.split(','),
+            default_value: item.default_value === '' ? [] : item.default_value.split(','),
           };
         }
         return listItem;

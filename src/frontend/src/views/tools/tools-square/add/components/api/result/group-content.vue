@@ -27,7 +27,8 @@
     @change="handelValueDragChange">
     <template #item="{ element }">
       <div
-        class="draggable-element">
+        class="draggable-element"
+        :data-group-key="element.key">
         <div class="draggable-heard">
           <audit-icon
             class="move"
@@ -217,14 +218,16 @@
         }
         return `分组${maxNumber + 1}`;
       };
+      const newGroupKey = Date.now().toString();
       localValue.value.push({
         name: generateUniqueGroupName(),
         isInput: false,
         isOpen: true,
-        key: Date.now().toString(),
+        key: newGroupKey,
         config: null,
         output_fields: [],
       });
+      return newGroupKey;
     },
     openGroup(val: boolean) {
       localValue.value = localValue.value.map((item: any) => {
