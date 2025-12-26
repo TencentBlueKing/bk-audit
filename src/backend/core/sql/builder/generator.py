@@ -19,6 +19,7 @@ import json
 from typing import Dict, Optional, Type, Union
 
 from pypika import Table
+from pypika.functions import Count
 from pypika.queries import QueryBuilder
 from pypika.terms import BasicCriterion, EmptyCriterion, Function
 
@@ -156,6 +157,10 @@ class SQLGenerator:
 
     def _build_select(self, query: QueryBuilder) -> QueryBuilder:
         """添加 SELECT 子句"""
+        # 如果 select_fields 为空，使用 SELECT *
+        if not self.config.select_fields:
+            return query.select("*")
+
         for field in self.config.select_fields:
             if field.aggregate:
                 # 如果存在聚合函数，使用 fn 调用
@@ -263,6 +268,22 @@ class SQLGenerator:
                 query = query.limit(self.config.pagination.limit)
             if self.config.pagination.offset:
                 query = query.offset(self.config.pagination.offset)
+        return query
+
+    def generate_count(self, config: SqlConfig) -> QueryBuilder:
+        """
+        生成 COUNT 查询
+
+        与 generate() 类似，但只返回 COUNT(*) 而不是实际数据。
+        不包含 SELECT、GROUP BY、HAVING、ORDER BY、PAGINATION。
+        """
+        self.config = config
+        self.table_map = {}
+        self._register_tables()
+        query = self.query_builder
+        query = self._build_from(query)
+        query = self._build_where(query)
+        query = query.select(Count("*").as_("count")).limit(1)
         return query
 
 
