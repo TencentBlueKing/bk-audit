@@ -251,9 +251,9 @@
   }
 
   interface Props {
-    data: any,
-    outputFields: any,
-    treeData: Array<resultDataModel>,
+    data: any, // 当前节点的数据
+    outputFields: any, // 输出字段
+    treeData: Array<resultDataModel>, // 树形数据
   }
   interface Emits {
     (e: 'close', id: string): void

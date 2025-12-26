@@ -21,6 +21,7 @@
         <span>{{ t('是否分组') }}</span>
         <bk-switcher
           v-model="outputConfigEnableGrouping.enable_grouping"
+          :before-change="handleEnableGrouping"
           class="group"
           theme="primary" />
         <span v-if="!outputConfigEnableGrouping.enable_grouping">
@@ -47,7 +48,7 @@
         </span>
       </div>
       <content
-        v-if="!outputConfigEnableGrouping.enable_grouping"
+        v-if="!isGrouping"
         ref="contentRef"
         :is-edit-mode="isEditMode"
         :is-grouping="outputConfigEnableGrouping.enable_grouping"
@@ -62,6 +63,7 @@
   </card-part-vue>
 </template>
 <script setup lang='tsx'>
+  import { InfoBox } from 'bkui-vue';
   import { nextTick, ref } from 'vue';
   import { useI18n } from 'vue-i18n';
 
@@ -90,9 +92,71 @@
   const outputConfigEnableGrouping = ref({
     enable_grouping: false,
   });
+  const isGrouping  = ref(false);
+  const handleEnableGrouping = (lastValue: boolean) => new Promise<boolean>((resolve, reject) => {
+    if (lastValue) {
+      isGrouping.value = true;
+      // 开启分组
+      const contentRefData  = contentRef.value?.handleGetResultConfig(); // 分组前的配置信息
+      resolve(true);
+      nextTick(() => {
+        const setConfigsData = [
+          {
+            name: '分组1',
+            output_fields: contentRefData,
+          },
+        ];
+        groupContentRef.value?.setConfigs(setConfigsData);
+      });
+    } else {
+      const groupContentRefData =  groupContentRef.value?.handleGetResultConfig(); // 分组后的配置信息
+
+      if (groupContentRefData.length > 1) {
+        InfoBox({
+          title: t('当前存在多个分组，请先合并至一个分组后再关闭'),
+          contentAlign: 'left',
+          content: '',
+          cancelText: t('取消'),
+          confirmText: t('确定'),
+          onConfirm() {
+            outputConfigEnableGrouping.value.enable_grouping = true;
+            isGrouping.value = true;
+            reject(true);
+          },
+          onCancel() {
+            outputConfigEnableGrouping.value.enable_grouping = true;
+            isGrouping.value = true;
+            reject(true);
+          },
+        });
+        return;
+      }
+      resolve(false);
+      isGrouping.value = false;
+      outputConfigEnableGrouping.value.enable_grouping = false;
+      nextTick(() => {
+        contentRef.value?.setConfigs(groupContentRefData);
+      });
+    }
+  });
   // 添加分组
-  const handleAddGroup = () => {
-    groupContentRef.value?.addGroup();
+  const handleAddGroup = async () => {
+    const newGroupKey = groupContentRef.value?.addGroup();
+    // 等待DOM更新后滚动到新分组位置
+    nextTick(() => {
+      // 增加延迟确保DOM完全渲染
+      setTimeout(() => {
+        if (newGroupKey) {
+          const newGroupElement = document.querySelector(`[data-group-key="${newGroupKey}"]`);
+          if (newGroupElement) {
+            newGroupElement.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start',
+            });
+          }
+        }
+      }, 100);
+    });
   };
   // 一键展开分组
   const handleOpenGroup = () => {
@@ -122,7 +186,7 @@
                 enum_mappings: null,
                 field_config: {
                   field_type: 'table',
-                  output_fields: configItem.list.map((listItem: any) => ({
+                  output_fields: configItem?.list.map((listItem: any) => ({
                     raw_name: listItem.name,
                     json_path: listItem.json_path,
                     description: listItem?.description || '',
@@ -212,6 +276,7 @@
     },
     setConfigs(data: any) {
       outputConfigEnableGrouping.value.enable_grouping = data.enable_grouping;
+      isGrouping.value = data.enable_grouping;
       nextTick(() => {
         contentRef.value?.setConfigs(data.groups);
         groupContentRef.value?.setConfigs(data.groups);
@@ -247,6 +312,7 @@
   margin-left: 10px;
   font-size: 12px;
   color: #3a84ff;
+  cursor: pointer;
 }
 
 .plus-circle {
