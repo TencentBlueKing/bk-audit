@@ -107,6 +107,18 @@ class LogDataSourceAdmin(admin.ModelAdmin):
                 ),
             },
         ),
+        (
+            _("允许返回的字段"),
+            {
+                "fields": ("fields",),
+                "description": _(
+                    "限制数据源允许返回的字段列表，用于数据脱敏或字段过滤<br>"
+                    '格式: ["field1", "field2", "field3"]<br>'
+                    "为空列表时返回所有字段 (SELECT *)<br>"
+                    "用户查询时指定的 fields 参数必须是此列表的子集，否则会返回 400 错误"
+                ),
+            },
+        ),
         (_("其他"), {"fields": ("description",)}),
         (
             _("审计信息"),

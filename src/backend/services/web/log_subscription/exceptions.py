@@ -43,6 +43,7 @@ class DataSourceNotFound(LogSubscriptionException):
     ERROR_CODE = "002"
 
     def __init__(self, source_id: str, *args, **kwargs):
+        self.source_id = source_id
         message = self.MESSAGE.format(source_id=source_id)
         super().__init__(message=message, *args, **kwargs)
 
@@ -55,5 +56,25 @@ class DataSourceNotInSubscription(LogSubscriptionException):
     ERROR_CODE = "003"
 
     def __init__(self, source_id: str, *args, **kwargs):
+        self.source_id = source_id
         message = self.MESSAGE.format(source_id=source_id)
+        super().__init__(message=message, *args, **kwargs)
+
+
+class FieldNotAllowed(LogSubscriptionException):
+    """请求字段不在数据源允许的字段范围内"""
+
+    MESSAGE = gettext_lazy("请求字段 {fields} 不在数据源 {source_id} 允许的字段范围内，允许的字段: {allowed_fields}")
+    STATUS_CODE = 400
+    ERROR_CODE = "004"
+
+    def __init__(self, fields: list, source_id: str, allowed_fields: list, *args, **kwargs):
+        self.fields = fields
+        self.source_id = source_id
+        self.allowed_fields = allowed_fields
+        message = self.MESSAGE.format(
+            fields=", ".join(fields),
+            source_id=source_id,
+            allowed_fields=", ".join(allowed_fields),
+        )
         super().__init__(message=message, *args, **kwargs)
