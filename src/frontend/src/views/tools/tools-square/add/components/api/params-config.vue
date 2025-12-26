@@ -192,6 +192,7 @@
                 <bk-select
                   v-model="item.position"
                   class="bk-select"
+                  :clearable="false"
                   size="small">
                   <bk-option
                     v-for="paramsTypeItem in apiVariablePosition"
@@ -217,6 +218,7 @@
               class="field-value"
               style="flex: 0 0 200px;">
               <bk-form-item
+                :clearable="false"
                 error-display-type="tooltips"
                 label=""
                 label-width="0">
@@ -224,6 +226,7 @@
                   v-model="item.required"
                   :allow-empty-values="[false]"
                   class="bk-select"
+                  :clearable="false"
                   size="small">
                   <bk-option
                     v-for="(requiredItem, requiredIndex) in requiredList"
@@ -314,6 +317,7 @@
                   v-model="item.is_show"
                   :allow-empty-values="[false]"
                   class="bk-select"
+                  :clearable="false"
                   size="small">
                   <bk-option
                     v-for="(isViewItem, isViewItemIndex) in isViewsList"
@@ -637,6 +641,10 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
         }
         return {
           ...item,
+          split_config: {
+            start_field: '',
+            end_field: '',
+          },
           is_show: String(item.is_show),
           required: String(item.required),
           time_range: timeRange,
