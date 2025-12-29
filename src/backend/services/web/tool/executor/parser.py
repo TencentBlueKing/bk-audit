@@ -91,7 +91,10 @@ class BaseVariableParser(abc.ABC):
     def _format_person_select(self, value: Any) -> list:
         """
         格式化人员选择器 (默认保持列表)
+        如果输入是字符串，则用逗号拆分为列表
         """
+        if isinstance(value, str):
+            return [v.strip() for v in value.split(",") if v.strip()]
         if not isinstance(value, list):
             return [str(value)]
         return [str(v) for v in value]
@@ -140,7 +143,11 @@ class ApiVariableParser(BaseVariableParser):
     def _format_person_select(self, value: Any) -> str:
         """
         格式化人员选择器 (API 工具中转为逗号拼接的字符串)
+        如果输入是字符串，则用逗号拆分后再重新拼接（去除空白）
         """
+        if isinstance(value, str):
+            # 用逗号拆分，去除空白后重新拼接
+            return ",".join(v.strip() for v in value.split(",") if v.strip())
         if not isinstance(value, list):
             return str(value)
         return ",".join(str(v) for v in value)
