@@ -389,13 +389,6 @@
     return formData;
   });
 
-  // const toolExecuteData = computed(() => {
-  //   if (apiSearchResultRef.value) {
-  //     return apiSearchResultRef.value.toolExecuteData;
-  //   }
-  //   return null;
-  // });
-
   const isLoading = computed(() => {
     if (dataSearchResultRef.value) {
       return dataSearchResultRef.value.isLoading;
@@ -405,7 +398,6 @@
     }
     return false;
   });
-
 
   // 获取工具详情
   const {
@@ -788,6 +780,9 @@
   // 关闭弹窗
   const handleCloseDialog = () => {
     handleReset();
+    if (apiSearchResultRef.value) {
+      apiSearchResultRef.value.resetGroupData();
+    }
     dialogWidth.value = '50%';
     isFullScreen.value = false;
     isShow.value = false;
@@ -1032,8 +1027,8 @@
   .top-search-result {
     position: relative;
     height: auto;
-    padding: 10px;
-    margin-top: 10px;
+    padding-right: 16px;
+    margin-top: 12px;
 
     .top-search-table-title {
       margin-bottom: 8px;
@@ -1139,12 +1134,6 @@
 
     .card-content {
       padding: 16px 0;
-
-      .kv-field-item {
-        .info-label {
-          flex: 1;
-        }
-      }
     }
   }
 

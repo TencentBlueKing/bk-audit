@@ -130,11 +130,26 @@
                         error-display-type="tooltips"
                         label=""
                         label-width="0">
-                        <span
-                          :class="element?.enum_mappings?.mappings.length === 0 ? `field-span` : `field-span-black`"
-                          @click="handleAddEnumMapping(element)">
-                          {{ t(element?.enum_mappings?.mappings.length === 0 ? '请点击配置' : '已配置') }}
-                        </span>
+                        <div class="field-value-div">
+                          <span
+                            :class="element?.enum_mappings?.mappings.length === 0 ? `field-span` : `field-span-black`"
+                            @click="handleAddEnumMapping(element)">
+                            {{ t(element?.enum_mappings?.mappings.length === 0 ? '请点击配置' : '已配置') }}
+                          </span>
+                          <audit-popconfirm
+                            v-if="element?.enum_mappings?.mappings.length"
+                            :ref="(el: any) => mappingsPopconfirmRefs[0] = el"
+                            :confirm-handler="() => handleRemoveMappings(0)"
+                            :content="t('删除操作无法撤回，请谨慎操作！')"
+                            :title="t('确认删除该配置？')"
+                            @hide="() => handleMappingsPopconfirmHide(0)">
+                            <audit-icon
+                              class="remove-mappings-btn remove-btn"
+                              :class="{ 'is-popconfirm-visible': mappingsPopconfirmVisible[0] }"
+                              type="delete-fill"
+                              @click="() => handleMappingsPopconfirmShow(0)" />
+                          </audit-popconfirm>
+                        </div>
                       </bk-form-item>
                     </div>
                     <div
@@ -290,7 +305,7 @@
       ref="fieldReferenceRef"
       v-model:showFieldReference="showFieldReference"
       :all-tools-data="allToolsData"
-      :new-tool-name="data.name"
+      :new-tool-name="newToolDataName"
       :output-fields="fieldsData"
       :tag-data="toolTagData"
       @open-tool="handleOpenTool"
@@ -311,7 +326,7 @@
 </template>
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
-  import { computed, nextTick, ref, watch } from 'vue';
+  import { computed, type ComputedRef, inject, nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -359,6 +374,8 @@
   const showFieldDict = ref(false);
   const showFieldReference = ref(false);
 
+  const mappingsPopconfirmRefs = ref<Record<number, any>>({});
+  const mappingsPopconfirmVisible = ref<Record<number, boolean>>({});
   const drillPopconfirmRefs = ref<Record<number, any>>({});
   const drillPopconfirmVisible = ref<Record<number, boolean>>({});
   const toolMaxVersionMap = ref<Record<string, number>>({});
@@ -369,28 +386,29 @@
   // 点击字段下钻记录id
   const fieldDictId = ref('');
 
-  // 转换树形数据，保持树状结构
+  const newToolDataName = inject<ComputedRef<string>>('newToolDataName', computed(() => ''));
+
+  // 转换树形数据
   const transformTreeData = (nodes: any[]): FieldItem[] => {
     if (!Array.isArray(nodes)) {
       return [];
     }
     return nodes.map((node: any) => ({
       raw_name: node.name || '',
-      display_name: '',
-      description: '',
+      display_name: node.display_name || '',
+      description: node.description || '',
       json_path: node.json_path || '',
-      children: (node.children && node.children.length > 0) || (node.list && node.list.length > 0)
-        ? transformTreeData(node.children && node.children.length > 0 ? node.children : node.list)
-        : [],
+      children: [],
     }));
   };
 
-  // 使用 computed 创建 fieldsData，保持树状结构
+  // 使用 computed 创建 fieldsData
   const fieldsData = computed<FieldItem[]>(() => {
-    if (!props.treeData) {
+    // 只使用当前table字段
+    if (!props.data || !props.data.list) {
       return [];
     }
-    return transformTreeData(props.treeData);
+    return transformTreeData(props.data.list);
   });
 
   // 关闭
@@ -459,6 +477,23 @@
       drillPopconfirmRefs.value[index].hide();
     }
   };
+
+  const handleRemoveMappings = async (index: number) => {
+    list.value[index].enum_mappings = {
+      collection_id: '',
+      mappings: [],
+    };
+  };
+
+  const handleMappingsPopconfirmHide = (index: number) => {
+    mappingsPopconfirmVisible.value[index] = false;
+  };
+
+  // 字段值映射气泡框显示/隐藏处理
+  const handleMappingsPopconfirmShow = (index: number) => {
+    mappingsPopconfirmVisible.value[index] = true;
+  };
+
   // 使用工具对话框hooks
   const {
     allOpenToolsData,
@@ -886,7 +921,7 @@
 
 .field-span-black {
   margin-left: 5px;
-  color: black;
+  color: #63656e;
   cursor: pointer;
 }
 </style>

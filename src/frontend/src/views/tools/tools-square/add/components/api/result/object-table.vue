@@ -79,9 +79,26 @@
                 error-display-type="tooltips"
                 label=""
                 label-width="0">
-                <span
-                  :class="formData.mappings.length === 0 ? `field-span` : `field-span-black`"
-                  @click="handleAddDict"> {{ t(formData.mappings.length === 0 ? '请点击配置' : '已配置') }} </span>
+                <div class="field-value-div">
+                  <span
+                    :class="formData.mappings.length === 0 ? `field-span` : `field-span-black`"
+                    @click="handleAddDict">
+                    {{ t(formData.mappings.length === 0 ? '请点击配置' : '已配置') }}
+                  </span>
+                  <audit-popconfirm
+                    v-if="formData.mappings.length"
+                    :ref="(el: any) => mappingsPopconfirmRefs[0] = el"
+                    :confirm-handler="() => handleRemoveMappings(0)"
+                    :content="t('删除操作无法撤回，请谨慎操作！')"
+                    :title="t('确认删除该配置？')"
+                    @hide="() => handleMappingsPopconfirmHide(0)">
+                    <audit-icon
+                      class="remove-mappings-btn remove-btn"
+                      :class="{ 'is-popconfirm-visible': mappingsPopconfirmVisible[0] }"
+                      type="delete-fill"
+                      @click="() => handleMappingsPopconfirmShow(0)" />
+                  </audit-popconfirm>
+                </div>
               </bk-form-item>
             </div>
             <div
@@ -191,7 +208,7 @@
       ref="fieldReferenceRef"
       v-model:showFieldReference="showFieldReference"
       :all-tools-data="allToolsData"
-      :new-tool-name="data.name"
+      :new-tool-name="newToolDataName"
       :output-fields="fieldsData"
       :tag-data="toolTagData"
       @open-tool="handleOpenTool"
@@ -212,7 +229,7 @@
 </template>
 <script setup lang='tsx'>
   import type { Column } from 'bkui-vue/lib/table/props';
-  import { computed, ref, watch } from 'vue';
+  import { computed, type ComputedRef, inject, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -254,6 +271,7 @@
     data: any, // 当前节点的数据
     outputFields: any, // 输出字段
     treeData: Array<resultDataModel>, // 树形数据
+    listData: Array<any>, // 列表数据
   }
   interface Emits {
     (e: 'close', id: string): void
@@ -284,6 +302,8 @@
   const showFieldReference = ref(false);
   const toolMaxVersionMap = ref<Record<string, number>>({});
   const drillPopconfirmVisible = ref<Record<number, boolean>>({});
+  const mappingsPopconfirmRefs = ref<Record<number, any>>({});
+  const mappingsPopconfirmVisible = ref<Record<number, boolean>>({});
 
   const columns = [{
     label: () => t('工具列表'),
@@ -292,20 +312,25 @@
 
   const drillPopconfirmRefs = ref<Record<number, any>>({});
 
-  // 转换树形数据，保持树状结构（kv模式不能引用表格中的字段, 即node.list中的不添加）
+  const newToolDataName = inject<ComputedRef<string>>('newToolDataName', computed(() => ''));
+
   const transformTreeData = (nodes: any[]): FieldItem[] => {
     if (!Array.isArray(nodes)) {
       return [];
     }
-    return nodes.map((node: any) => ({
-      raw_name: node.name || '',
-      display_name: '',
-      description: '',
-      json_path: node.json_path || '',
-      children: node.children && node.children.length > 0
-        ? transformTreeData(node.children)
-        : [],
-    }));
+    const result = nodes.map((node: any) => {
+      const listItem = props.listData.find((item: any) => item.json_path === node.json_path);
+      return {
+        raw_name: node.name || '',
+        display_name: listItem?.config?.display_name || '',
+        description: listItem?.config?.description || '',
+        json_path: node.json_path || '',
+        children: node.children && node.children.length > 0
+          ? transformTreeData(node.children)
+          : [],
+      };
+    });
+    return result;
   };
 
   // 使用 computed 创建 fieldsData，保持树状结构
@@ -313,6 +338,7 @@
     if (!props.treeData) {
       return [];
     }
+    // console.log('props.outputFields', props.outputFields);
     return transformTreeData(props.treeData);
   });
 
@@ -333,6 +359,20 @@
   const handleDictSubmit = (data: any) => {
     showFieldDict.value = false;
     formData.value.mappings = data;
+  };
+
+  // 删除字段值映射
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const handleRemoveMappings = async (index: number) => {
+    formData.value.mappings = [];
+  };
+
+  const handleMappingsPopconfirmHide = (index: number) => {
+    mappingsPopconfirmVisible.value[index] = false;
+  };
+
+  const handleMappingsPopconfirmShow = (index: number) => {
+    mappingsPopconfirmVisible.value[index] = true;
   };
 
   // 获取所有工具
@@ -615,7 +655,7 @@
 
 .field-span-black {
   margin-left: 5px;
-  color: black;
+  color: #63656e;
   cursor: pointer;
 }
 </style>

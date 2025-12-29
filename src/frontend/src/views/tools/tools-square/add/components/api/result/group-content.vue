@@ -36,7 +36,7 @@
           <span v-if="!element.isInput">
             <audit-icon
               class="angle-fill-down"
-              :style="element.isOpen ? '' : 'transform: rotate(180deg);' "
+              :style="element.isOpen ? '' : 'transform: rotate(270deg);' "
               type="angle-fill-down"
               @click.stop="handelOpenUp(element)" />
             <span class="heard-title"> {{ element.name }}</span>
@@ -186,7 +186,6 @@
   };
   // 监听分组内容改变
   const handleGroupContentChange = (val: any, key: string | number) => {
-    // 把val赋值给对应key的 item.config
     localValue.value = localValue.value.map((item: any) => {
       if (item.key === key) {
         // eslint-disable-next-line no-param-reassign
