@@ -16,11 +16,13 @@
 -->
 <template>
   <div v-if="toolExecuteData?.data?.status_code === 200 && groupData.length > 0">
-    <bk-card
+    <!-- 使用动态组件，单分组用 div，多分组用 bk-card -->
+    <component
+      :is="groupData.length === 1 ? 'div' : AuditCollapsePanel"
       v-for="(group, groupIndex) in groupData"
       :key="groupIndex"
-      is-collapse
-      :title="group.name">
+      style="margin-bottom: 16px;"
+      v-bind="{ label: group.name, isActive: true }">
       <div class="card-content">
         <!-- KV 字段展示 -->
         <template v-if="group.kv_fields && group.kv_fields.length > 0">
@@ -32,6 +34,7 @@
               v-for="(kvField, kvIndex) in kvFieldsChunk"
               :key="kvIndex"
               class="kv-field-item"
+              :description="kvField.description"
               :label="kvField.display_name || kvField.raw_name">
               <template v-if="getMappedValue(kvField) || hasDrillConfig(kvField)">
                 <!-- 有字段映射或者有证据下探 -->
@@ -141,10 +144,17 @@
           </div>
         </template>
       </div>
-    </bk-card>
+    </component>
   </div>
   <!-- 未查询时显示空占位 -->
-  <div v-else-if="!toolExecuteData || Object.keys(toolExecuteData).length === 0" />
+  <div v-else-if="!toolExecuteData || Object.keys(toolExecuteData).length === 0">
+    <bk-exception
+      class="exception-part"
+      scene="part"
+      type="search-empty">
+      {{ t('暂无数据') }}
+    </bk-exception>
+  </div>
   <!-- 查询失败时显示异常 -->
   <div v-else>
     <bk-exception
@@ -156,8 +166,13 @@
           <audit-icon
             style="margin-right: 6px;"
             type="qw" />
-          <span @click="handleOpenUserWx(toolDetails.created_by)">{{ toolDetails.created_by }}</span> 、
-          <span @click="handleOpenUserWx(toolDetails.updated_by)">{{ toolDetails.updated_by }}</span>
+          <span
+            v-for="(user, userIndex) in linkUsers"
+            :key="user"
+            @click="handleOpenUserWx(user)">
+            {{ user }}
+            <span v-if="linkUsers.length > 1 && userIndex !== linkUsers.length - 1">、</span>
+          </span>
         </div>
       </div>
     </bk-exception>
@@ -167,7 +182,7 @@
 <script setup lang="tsx">
   import type { Column } from 'bkui-vue/lib/table/props';
   import _ from 'lodash';
-  import { nextTick, ref, watch } from 'vue';
+  import { computed, nextTick, type Ref, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
 
   import ToolManageService from '@service/tool-manage';
@@ -177,8 +192,17 @@
 
   import useRequest from '@hooks/use-request';
 
+  import AuditCollapsePanel from '@components/audit-collapse-panel/index.vue';
+
+  import RenderInfoItem from '@views/risk-manage/detail/components/render-info-item.vue';
   import RenderInfoBlock from '@views/strategy-manage/list/components/render-info-block.vue';
-  import RenderInfoItem from '@views/strategy-manage/list/components/render-info-item.vue';
+
+  interface Exposes {
+    executeTool: () => void;
+    toolExecuteData: any;
+    isLoading: Ref<boolean>;
+    resetGroupData: () => void;
+  }
 
   interface DrillDownItem {
     raw_name: string;
@@ -267,6 +291,9 @@
   const groupData = ref<GroupTableConfig[]>([]);
   const key = ref(0);
 
+  const linkUsers = computed(() => [...new Set([props.toolDetails.created_by, props.toolDetails.updated_by]
+    .filter(Boolean))]);
+
   // 获取工具执行结果
   const {
     loading: isLoading,
@@ -290,10 +317,13 @@
     });
   };
 
-  defineExpose({
+  defineExpose<Exposes>({
     executeTool,
     toolExecuteData,
     isLoading,
+    resetGroupData: () => {
+      groupData.value = [];
+    },
   });
 
   // 将数组按指定大小分块
@@ -321,7 +351,9 @@
     && kvField.drill_config.some((config: any) => config.tool?.uid);
 
   const handleOpenUserWx = (username: string) => {
-    window.open(`wxwork://message/?username=${username}`, '_blank');
+    const link = document.createElement('a');
+    link.href = `wxwork://message/?username=${username}`;
+    link.click();
   };
 
   // 处理分组表格页码变化(本地分页)
@@ -375,7 +407,7 @@
     newItem.drill_config.forEach((config: any) => {
       config.config.forEach((configItem: any) => {
         // eslint-disable-next-line no-param-reassign
-        configItem.target_value = configItem.target_value.split('.').pop() || '';
+        configItem.target_value = typeof configItem.target_value === 'string' ? configItem.target_value.split('.').pop() || '' : configItem.target_value;
       });
     });
     emit('handleFieldDownClick', newItem, data, uid);
@@ -566,7 +598,7 @@
               count: 0,
               limit: 100,
               current: 1,
-              limitList: [100, 200, 500, 1000],
+              limitList: [10, 20, 50, 100, 200, 500, 1000],
             },
           });
         }
@@ -631,9 +663,20 @@
 </script>
 
 <style scoped lang="postcss">
-.card-content {
+:deep(.card-content) {
+  padding: 16px;
+  background-color: #fafbfd;
+
   .top-search-table-title {
     margin: 10px 0;
+    font-size: 12px;
+  }
+
+  .kv-field-item {
+    .info-label {
+      width: fit-content !important;
+      min-width: revert !important;
+    }
   }
 }
 </style>
