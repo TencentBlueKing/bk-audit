@@ -84,6 +84,7 @@
             :data="element"
             :is-edit-mode="isEditMode"
             :is-grouping="isGrouping"
+            :list-data="selectedItems"
             :output-fields="outputFields"
             :tree-data="treeData"
             @close="handleClose"
@@ -96,7 +97,7 @@
   </div>
 </template>
 <script setup lang='ts'>
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { nextTick, ref, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import Vuedraggable from 'vuedraggable';
 
@@ -134,6 +135,26 @@
   const outputFields = ref<any[]>([]);
   const initTreeDatas = ref<any[]>([]);
 
+  // 递归查找节点并勾选（公共函数）
+  const findAndCheckNode = (nodes: any[], targetJsonPath: string): boolean => {
+    for (const node of nodes) {
+      if (node.json_path === targetJsonPath) {
+        handleCheckboxChange(true, node);
+        return true;
+      }
+      if (node.children?.length > 0 && findAndCheckNode(node.children, targetJsonPath)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  // 批量恢复选中状态
+  const restoreCheckedNodes = (outputFieldsData: any[]) => {
+    outputFieldsData?.forEach((item: any) => {
+      findAndCheckNode(treeData.value, item.json_path);
+    });
+  };
 
   // 搜索
   const handleTreeSearchChange = (val: any) => {
@@ -277,36 +298,16 @@
     if (newVal) {
       initTreeDatas.value = Array.isArray(JSON.parse(newVal)) ? JSON.parse(newVal) : buildTree(JSON.parse(newVal));
       treeData.value = initTreeDatas.value;
-      // 分组时的复现
-      if (props.groupOutputFields && props.groupOutputFields.length > 0) {
-        props.groupOutputFields.forEach((item: any) => {
-          // 递归查找匹配的节点
-          const findAndCheckNode = (nodes: any[]) => {
-            for (const node of nodes) {
-              // 如果当前节点匹配
-              if (node.json_path === item.json_path) {
-                handleCheckboxChange(true, node);
-                return true; // 找到并处理，返回true
-              }
-              // 如果节点有子节点，递归查找
-              if (node.children && node.children.length > 0) {
-                const found = findAndCheckNode(node.children);
-                if (found) return true; // 如果在子节点中找到，提前返回
-              }
-            }
-            return false; // 未找到
-          };
-          // 从 treeData.value 开始查找
-          findAndCheckNode(treeData.value);
-        });
+
+      // 分组模式：恢复选中状态
+      if (props.groupOutputFields?.length > 0) {
+        restoreCheckedNodes(props.groupOutputFields);
         outputFields.value = props.groupOutputFields;
       }
     }
   }, {
     deep: true,
     immediate: true,
-  });
-  onMounted(() => {
   });
 
   defineExpose<Exposes>({
@@ -320,32 +321,12 @@
         items: selectedItems.value,
       };
     },
-    // 不分组
+    // 非分组模式：恢复配置
     setConfigs(data: any) {
       nextTick(() => {
-        data[0].output_fields?.forEach((item: any) => {
-          // 当 item.json_path 与节点的json_path相同时 执行  handleCheckboxChange(true, node: any) node为节点
-          // 递归查找匹配的节点
-          const findAndCheckNode = (nodes: any[]) => {
-            for (const node of nodes) {
-              // 如果当前节点匹配
-              if (node.json_path === item.json_path) {
-                handleCheckboxChange(true, node);
-                return true; // 找到并处理，返回true
-              }
-
-              // 如果节点有子节点，递归查找
-              if (node.children && node.children.length > 0) {
-                const found = findAndCheckNode(node.children);
-                if (found) return true; // 如果在子节点中找到，提前返回
-              }
-            }
-            return false; // 未找到
-          };
-          // 从 treeData.value 开始查找
-          findAndCheckNode(treeData.value);
-        });
-        outputFields.value = data[0].output_fields || [];
+        const fields = data[0].output_fields || [];
+        restoreCheckedNodes(fields);
+        outputFields.value = fields;
       });
     },
   });

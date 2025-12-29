@@ -50,6 +50,7 @@
             :loading="isToolLoading"
             style="width: 100%;">
             <bk-select
+              ref="selectToolRef"
               v-model="formData.selectTool"
               class="bk-select"
               display-key="name"
@@ -191,16 +192,21 @@
                       <bk-select
                         v-model="item.target_value_type"
                         class="bk-select"
+                        :disabled="isOnlyFixedValue(toolConfig.tool.uid, item.source_field)"
                         :filterable="false"
                         :input-search="false"
                         @change="() => handleTypeChange(Number(toolIndex), Number(index))">
                         <template #trigger>
-                          <bk-button style="width: 100px;">
+                          <bk-button
+                            :disabled="isOnlyFixedValue(toolConfig.tool.uid, item.source_field)"
+                            style="width: 100px;">
                             {{ getDictName(item.target_value_type) }}
                           </bk-button>
                         </template>
                         <bk-option
-                          v-for="(typeItem, typeIndex) in referenceTypeList"
+                          v-for="(typeItem, typeIndex) in getAvailableReferenceTypeList(
+                            toolConfig.tool.uid, item.source_field
+                          )"
                           :id="typeItem.id"
                           :key="typeIndex"
                           :name="typeItem.name" />
@@ -402,6 +408,7 @@
   });
 
   const formRef = ref();
+  const selectToolRef = ref();
   // 使用 Map 存储 select ref，key 为 `${toolIndex}_${configIndex}`
   const targetValueSelectMap = new Map<string, any>();
   const setTargetValueSelectRef = (el: any, toolIndex: number, configIndex: number) => {
@@ -421,6 +428,22 @@
     id: 'fixed_value',
     name: t('固定值填充'),
   }]);
+
+  // 根据字段的 field_category 获取可用的类型列表
+  const getAvailableReferenceTypeList = (toolUid: string, sourceField: string) => {
+    const fieldInfo = toolInputVariableMap.value.get(toolUid)?.get(sourceField);
+    // 如果是 time_range_select，只能选择固定值填充
+    if (fieldInfo?.field_category === 'time_range_select') {
+      return referenceTypeList.value.filter(item => item.id === 'fixed_value');
+    }
+    return referenceTypeList.value;
+  };
+
+  // 检查字段是否只能使用固定值填充
+  const isOnlyFixedValue = (toolUid: string, sourceField: string) => {
+    const fieldInfo = toolInputVariableMap.value.get(toolUid)?.get(sourceField);
+    return fieldInfo?.field_category === 'time_range_select';
+  };
 
   const toolCascaderList = ref<Array<ToolCascaderItem>>([]);
 
@@ -481,9 +504,11 @@
         orderedConfig.push(existingConfigMap.get(item.raw_name)!);
       } else {
         // 如果当前字段尚未存在于配置中，则添加新配置项
+        // time_range_select 类型只能使用固定值填充
+        const defaultType = item.field_category === 'time_range_select' ? 'fixed_value' : 'field';
         orderedConfig.push({
           source_field: item.raw_name,
-          target_value_type: 'field',
+          target_value_type: defaultType,
           target_value: '',  // 初始化为空值
           target_field_type: '', // 初始化为空值
           description: item.description,
@@ -560,9 +585,11 @@
             if (toolDetail.config?.input_variable) {
               // 如果activeFieldName不为空，input_variable只有一项，target_value为activeFieldName
               toolDetail.config.input_variable.forEach((item) => {
+                // time_range_select 类型只能使用固定值填充
+                const defaultType = item.field_category === 'time_range_select' ? 'fixed_value' : 'field';
                 toolConfig.config.push({
                   source_field: item.raw_name,
-                  target_value_type: 'field',
+                  target_value_type: defaultType,
                   target_value: toolDetail.config.input_variable.length === 1 ? activeFieldName.value : '',
                   target_field_type: '',
                   description: item.description,
@@ -579,6 +606,20 @@
     } else {
       resetFormData();
     }
+    nextTick(() => {
+      // 设置selectTool的选中值：根据 value 数组，在 toolCascaderList 中查找对应工具
+      const selectedTools: Array<{ value: string; label: string }> = [];
+      value.forEach((uid) => {
+        for (const group of toolCascaderList.value) {
+          const tool = group.children?.find((child: any) => child.id === uid);
+          if (tool) {
+            selectedTools.push({ value: tool.id, label: tool.name });
+            break;
+          }
+        }
+      });
+      selectToolRef.value.selected = selectedTools;
+    });
   };
 
   const refreshToolList = () => {
@@ -599,9 +640,12 @@
     if (fieldMap && fieldMap.has(sourceField)) {
       const fieldInfo = fieldMap.get(sourceField);
       const displayName = fieldInfo?.display_name;
-      return displayName ? `${sourceField}(${displayName})` : sourceField;
+      // 如果sourceField 结尾是 body、path、query，显示时去掉结尾
+      const cleanedField = sourceField.replace(/(body|path|query)$/, '');
+      return displayName ? `${cleanedField}(${displayName})` : cleanedField;
     }
-    return sourceField;
+    // 找不到时也清理后返回
+    return sourceField.replace(/(body|path|query)$/, '');
   };
 
   const handleOpenTool = () => {
@@ -652,6 +696,10 @@
   };
 
   const handleTargetValueChange = (data: LocalOutputFields, toolIndex: number, configIndex: number) => {
+    // 父级节点不可选
+    if (data.children && data.children.length > 0) {
+      return;
+    }
     const localOutputField = findFieldInTree(localOutputFields.value, data.raw_name);
 
     // 如果 data.json_path 存在，则使用 data.json_path，否则使用 data.raw_name
