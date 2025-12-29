@@ -101,6 +101,28 @@
     },
   });
 
+  // 判断值是否为空
+  const isEmptyValue = (value: any) => {
+    if (value === undefined || value === null || value === '') return true;
+    if (Array.isArray(value) && value.length === 0) return true;
+    return false;
+  };
+
+  // 格式化工具变量值
+  const formatToolVariableValue = (item: SearchItem) => {
+    // 人员选择器转字符串
+    if (item.field_category === 'person_select') {
+      const strValue = Array.isArray(item.value) && item.value.length > 0 ? item.value.join(',') : '';
+      // 非必填且为空，返回 null
+      return !item.required && strValue === '' ? null : strValue;
+    }
+    // 非必填且值为空，返回 null
+    if (!item.required && isEmptyValue(item.value)) {
+      return null;
+    }
+    return item.value;
+  };
+
   // 执行工具
   const executeTool = () => {
     fetchToolsExecute({
@@ -108,8 +130,7 @@
       params: {
         tool_variables: props.searchList.map(item => ({
           raw_name: item.raw_name,
-          // eslint-disable-next-line no-nested-ternary
-          value: (item.field_category === 'person_select') ? (item.value.length === 0 ?  '' :  item.value.join(','))  :  item.value,
+          value: formatToolVariableValue(item),
         })),
         page: pagination.value.current,
         page_size: pagination.value.limit,

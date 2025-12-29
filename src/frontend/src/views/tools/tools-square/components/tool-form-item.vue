@@ -200,8 +200,7 @@
   };
   const handleUserChange = (value: Array<string> | string) => {
     const val =  handleShowText(value);
-    // eslint-disable-next-line no-nested-ternary
-    const formattedValue = Array.isArray(val) ? val : (val === '' ? [] :  val.split(','));
+    const formattedValue = val === '' ? [] :  val.split(',');
     user.value = formattedValue;
     emits('change', formattedValue || []);
   };
@@ -215,7 +214,8 @@
     // 工具使用查询，使用format值
     const date = new DateRange(value, 'YYYY-MM-DD HH:mm:ss', window.timezone);
     pickerRangeValue.value = value;
-    emits('change', [date.startDisplayText, date.endDisplayText]);
+    // 如果值为空，则返回空数组
+    value.length > 0 ? emits('change', [date.startDisplayText, date.endDisplayText]) : emits('change', []);
   };
   const handleTimeChange = (value: string) => {
     pickerValue.value = value;
