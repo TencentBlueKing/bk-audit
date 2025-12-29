@@ -81,7 +81,7 @@
                 }"
                 clearable
                 :disabled="isDisabled || step1Disabled"
-                :placeholder="t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成')" />
+                :placeholder="t('请输入20字符内，可由汉字/小写英文字母/数字/“-”组成')" />
             </bk-form-item>
 
             <bk-form-item
@@ -452,14 +452,14 @@
         message: t('系统ID不能为空'),
       },
       {
-        validator: (value: string) => isDisabled.value || /^[\u4e00-\u9fa5a-z0-9_]+$/.test(value) || step1Disabled.value,
+        validator: (value: string) => isDisabled.value || /^[\u4e00-\u9fa5a-z0-9-]+$/.test(value) || step1Disabled.value,
         trigger: 'blur',
-        message: t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成'),
+        message: t('请输入20字符内，可由汉字/小写英文字母/数字/“-”组成'),
       },
       {
         validator: (value: string) => isDisabled.value || value.length <= 20 || step1Disabled.value,
         trigger: 'blur',
-        message: t('请输入20字符内，可由汉字/小写英文字母/数字/“_”组成'),
+        message: t('请输入20字符内，可由汉字/小写英文字母/数字/“-”组成'),
       },
       {
         validator: (value: string) => isDisabled.value
