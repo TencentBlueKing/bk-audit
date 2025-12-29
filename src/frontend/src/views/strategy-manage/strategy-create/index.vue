@@ -68,6 +68,7 @@
   import StrategyModel from '@model/strategy/strategy';
   import StrategyFieldEvent from '@model/strategy/strategy-field-event';
 
+  import eventReport from './components/event-report/index.vue';
   import Preview from './components/preview/index.vue';
   import Step1 from './components/step1/index.vue';
   import Step2 from './components/step2/index.vue';
@@ -106,11 +107,13 @@
   const comMap = {
     1: Step1,
     2: Step2,
-    3: Step3,
+    3: eventReport,
+    4: Step3,
   };
   const steps = [
     { title: t('风险发现') },
     { title: t('单据展示') },
+    { title: t('事件调查报告') },
     { title: t('其他配置') },
   ];
   const currentStep = ref(1);
@@ -333,7 +336,7 @@
 </script>
 <style scoped>
 .strategy-upgrade-step {
-  width: 450px;
+  width: 650px;
   margin: 0 auto;
   transform: translateX(-86px);
 

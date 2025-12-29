@@ -263,7 +263,7 @@
   });
 
   const handlePrevious = () => {
-    emits('previousStep', 2);
+    emits('previousStep', 3);
   };
 
   const handleCancel = () => {
