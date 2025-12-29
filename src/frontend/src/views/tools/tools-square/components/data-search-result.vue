@@ -81,7 +81,7 @@
     count: 0,
     limit: 10,
     current: 1,
-    limitList: [10, 50, 100, 200, 500, 1000],
+    limitList: [10, 20, 50, 100, 200, 500, 1000],
   });
   const tableData = ref<Record<string, any>[]>([]);
 

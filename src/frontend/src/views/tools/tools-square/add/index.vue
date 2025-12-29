@@ -270,7 +270,7 @@
 
 <script setup lang='tsx'>
   import _ from 'lodash';
-  import { nextTick, onMounted, ref, watch } from 'vue';
+  import { nextTick, onMounted, provide, ref, toRef, watch } from 'vue';
   import { useI18n } from 'vue-i18n';
   import { useRoute, useRouter } from 'vue-router';
 
@@ -473,6 +473,8 @@
     bk_vision: 'bkvisonxiao',
   };
 
+  // 提供响应式的工具名称给子组件
+  provide('newToolDataName', toRef(() => formData.value.name));
 
   const getSmartActionOffsetTarget = () => document.querySelector('.create-tools-page');
 
