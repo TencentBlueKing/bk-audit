@@ -181,7 +181,7 @@
                       placement: 'left-start'
                     }"
                     :disabled="item.is_applied"
-                    :label="item.raw_data_alias"
+                    :label="`${item.raw_data_alias}(${item.raw_data_name})`"
                     :value="item.bk_data_id"
                     @wheel="onWheelMove" />
                 </bk-select>
