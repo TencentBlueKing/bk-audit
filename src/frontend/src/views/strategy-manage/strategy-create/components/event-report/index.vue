@@ -1,0 +1,187 @@
+<!--
+  TencentBlueKing is pleased to support the open source community by making
+  蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
+  Copyright (C) 2023 THL A29 Limited,
+  a Tencent company. All rights reserved.
+  Licensed under the MIT License (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at http://opensource.org/licenses/MIT
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on
+  an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+  either express or implied. See the License for the
+  specific language governing permissions and limitations under the License.
+  We undertake not to change the open source license (MIT license) applicable
+  to the current version of the project delivered to anyone in the future.
+-->
+<template>
+  <smart-action
+    class="create-strategy-page"
+    :offset-target="getSmartActionOffsetTarget">
+    <div class="event-tips">
+      <audit-icon
+        class="info-fill-icon"
+        type="info-fill" />
+      <span class="info-fill-text">{{ t('当前策略尚未产生风险单，暂时无法预览报告的实际内容，您可以选择等待策略产生风险单后再启用该功能，或立即启用无需使用预览功能') }}</span>
+    </div>
+    <div class="event-box">
+      <div class="event-title">
+        <span class="event-title-text">{{ t('事件调查报告') }}</span>
+        <bk-switcher
+          v-model="isEnvent"
+          class="event-switcher"
+          theme="primary" />
+        <span>
+          <audit-icon
+            class="title-fill-icon"
+            type="info-fill" />
+          <span class="info-fill-dec">{{ t('启用后，审计策略产生的风险工单将新增事件调查报告内容，便于非技术人员理解风险详情') }}</span>
+        </span>
+      </div>
+      <div class="event-editor">
+        <div class="event-editor-title">
+          {{ t('事件调查报告模版') }}
+        </div>
+        <div class="editor-box">
+          111
+        </div>
+      </div>
+    </div>
+    <template #action>
+      <bk-button @click="handlePrevious">
+        {{ t('上一步') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
+        theme="primary"
+        @click="handleNext">
+        {{ t('下一步') }}
+      </bk-button>
+      <bk-button
+        class="ml8"
+        @click="handleCancel">
+        {{ t('取消') }}
+      </bk-button>
+    </template>
+  </smart-action>
+</template>
+<script setup lang="ts">
+  import { ref } from 'vue';
+  import { useI18n } from 'vue-i18n';
+
+  interface IFormData {
+    processor_groups: Array<number>,
+    notice_groups: Array<number>,
+  }
+  interface Emits {
+    (e: 'previousStep', step: number): void;
+    (e: 'nextStep', step: number, params: IFormData): void;
+    (e: 'submitData'): void;
+  }
+
+  const emits = defineEmits<Emits>();
+  const { t } = useI18n();
+  const isEnvent = ref(false);
+  const getSmartActionOffsetTarget = () => document.querySelector('.create-strategy-page');
+
+
+  const handlePrevious = () => {
+    console.log('handlePrevious');
+    emits('previousStep', 2);
+  };
+  const handleNext = () => {
+    console.log('handleNext');
+    emits('nextStep', 4, {
+      processor_groups: [],
+      notice_groups: [],
+    });
+  };
+  const handleCancel = () => {
+    console.log('handleCancel');
+  };
+</script>
+
+<style lang="postcss" scoped>
+.create-strategy-page {
+  .event-tips {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    background: #f0f5ff;
+    border: 1px solid #a3c5fd;
+    border-radius: 2px;
+
+    .info-fill-icon {
+      margin-left: 9px;
+      font-size: 14px;
+      color: #3a84ff;
+    }
+
+    .info-fill-text {
+      margin-left: 9px;
+      font-size: 12px;
+      line-height: 20px;
+      letter-spacing: 0;
+      color: #4d4f56;
+    }
+  }
+
+  .event-box {
+    margin-top: 16px;
+    background: #fff;
+    border-radius: 2px;
+    box-shadow: 0 2px 4px 0 #1919290d;
+
+    .event-title {
+      display: flex;
+      height: 50px;
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 22px;
+      letter-spacing: 0;
+      color: #4d4f56;
+      border-bottom: 1px solid #e8e8e8;
+      align-items: center;
+
+      .event-title-text {
+        margin-left: 16px;
+      }
+
+      .event-switcher {
+        margin-left: 13px;
+      }
+
+      .info-fill-dec {
+        margin-left: 5px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 20px;
+        letter-spacing: 0;
+        color: #4d4f56;
+      }
+
+      .title-fill-icon {
+        margin-left: 9px;
+        font-size: 14px;
+        color: #979ba5;
+      }
+    }
+
+    .event-editor {
+      padding: 16px;
+
+      .event-editor-title {
+        font-size: 12px;
+        line-height: 20px;
+        letter-spacing: 0;
+        color: #4d4f56;
+      }
+    }
+
+    .editor-box {
+      margin-top: 5px;
+      background-color: #3a84ff;
+    }
+  }
+}
+</style>
