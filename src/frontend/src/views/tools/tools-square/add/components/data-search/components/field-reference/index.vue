@@ -60,6 +60,9 @@
               multiple-mode="tag"
               :remote-method="handleRemoteMethod"
               @change="handleSelectTool">
+              <template #tagRender="{ label }">
+                {{ label }}
+              </template>
               <template
                 v-for="(item, index) in toolCascaderList"
                 :key="index">
@@ -607,17 +610,16 @@
       resetFormData();
     }
     nextTick(() => {
-      // 设置selectTool的选中值：根据 value 数组，在 toolCascaderList 中查找对应工具
-      const selectedTools: Array<{ value: string; label: string }> = [];
-      value.forEach((uid) => {
-        for (const group of toolCascaderList.value) {
-          const tool = group.children?.find((child: any) => child.id === uid);
-          if (tool) {
-            selectedTools.push({ value: tool.id, label: tool.name });
-            break;
-          }
-        }
+      selectToolRef.value.selected = [];
+      // 设置selectTool的选中值：以 formData.tools 为准，优先从 toolCascaderList 获取名称
+      const allChildren = toolCascaderList.value.flatMap(group => group.children || []);
+      const selectedTools = formData.value.tools.map((toolConfig) => {
+        const tool = allChildren.find((child: any) => child.id === toolConfig.tool.uid);
+        // 如果在列表中找到，使用列表中的名称；否则使用 getToolName 获取名称
+        const label = tool?.name || getToolName(toolConfig.tool.uid);
+        return { value: toolConfig.tool.uid, label };
       });
+
       selectToolRef.value.selected = selectedTools;
     });
   };
