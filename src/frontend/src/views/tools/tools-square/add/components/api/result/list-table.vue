@@ -99,7 +99,7 @@
             }"
             item-key="key"
             :list="list">
-            <template #item="{ element }">
+            <template #item="{ element, index }">
               <div>
                 <div class="render-field">
                   <div class="field-row">
@@ -138,16 +138,16 @@
                           </span>
                           <audit-popconfirm
                             v-if="element?.enum_mappings?.mappings.length"
-                            :ref="(el: any) => mappingsPopconfirmRefs[0] = el"
-                            :confirm-handler="() => handleRemoveMappings(0)"
+                            :ref="(el: any) => mappingsPopconfirmRefs[index] = el"
+                            :confirm-handler="() => handleRemoveMappings(index)"
                             :content="t('删除操作无法撤回，请谨慎操作！')"
                             :title="t('确认删除该配置？')"
-                            @hide="() => handleMappingsPopconfirmHide(0)">
+                            @hide="() => handleMappingsPopconfirmHide(index)">
                             <audit-icon
                               class="remove-mappings-btn remove-btn"
-                              :class="{ 'is-popconfirm-visible': mappingsPopconfirmVisible[0] }"
+                              :class="{ 'is-popconfirm-visible': mappingsPopconfirmVisible[index] }"
                               type="delete-fill"
-                              @click="() => handleMappingsPopconfirmShow(0)" />
+                              @click="() => handleMappingsPopconfirmShow(index)" />
                           </audit-popconfirm>
                         </div>
                       </bk-form-item>
@@ -161,7 +161,7 @@
                         label-width="0">
                         <div
                           class="field-value-div"
-                          @mouseleave="() => handleDrillMouseLeave(0)">
+                          @mouseleave="() => handleDrillMouseLeave(index)">
                           <template v-if="element.drill_config && element.drill_config.length > 0">
                             <bk-popover
                               placement="top"
@@ -184,17 +184,17 @@
                             </bk-popover>
                             <!-- 删除 -->
                             <audit-popconfirm
-                              :ref="(el: any) => drillPopconfirmRefs[0] = el"
+                              :ref="(el: any) => drillPopconfirmRefs[index] = el"
                               class="ml8"
-                              :confirm-handler="() => handleRemove(0)"
+                              :confirm-handler="() => handleRemove(index)"
                               :content="t('移除操作无法撤回，请谨慎操作！')"
                               :title="t('确认移除以下工具？')"
-                              @hide="() => handleDrillPopconfirmHide(0)">
+                              @hide="() => handleDrillPopconfirmHide(index)">
                               <audit-icon
                                 class="remove-btn"
-                                :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[0] }"
+                                :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[index] }"
                                 type="delete-fill"
-                                @click="() => handleDrillPopconfirmShow(0)" />
+                                @click="() => handleDrillPopconfirmShow(index)" />
                               <template #content>
                                 <bk-table
                                   ref="refTable"
@@ -608,34 +608,35 @@
   watch(() => props.outputFields, (val: any) => {
     if (val && val.length > 0) {
       nextTick(() => {
-        val.forEach((el: any) => {
-          if (el.raw_name === props.data.name) {
-            listInfo.value.name = el.display_name || '';
-            listInfo.value.desc = el.description || '';
-            list.value = (el.field_config?.output_fields || []).map((outItem: any) => {
-              const findNode =  props.data?.list?.find((e: any) => e.json_path === outItem.json_path) || {};
-              return {
-                ...findNode,
-                display_name: outItem.display_name || '',
-                description: outItem.description || '',
-                drill_config: outItem.drill_config || [],
-                enum_mappings: {
-                  mappings: outItem.enum_mappings?.mappings || [],
-                },
-              };
-            });
-          } else {
-            list.value = props.data.list.map((item: any) => ({
-              ...item,
-              display_name: '',
+        // 查找匹配的元素
+        const matchedEl = val.find((el: any) => el.raw_name === props.data.name);
+        if (matchedEl) {
+          listInfo.value.name = matchedEl.display_name || '';
+          listInfo.value.desc = matchedEl.description || '';
+          list.value = (matchedEl.field_config?.output_fields || []).map((outItem: any) => {
+            const foundNode = props.data?.list?.find((e: any) => e.json_path === outItem.json_path) || {};
+            return {
+              ...foundNode,
+              display_name: outItem.display_name || '',
+              description: outItem.description || '',
+              drill_config: outItem.drill_config || [],
               enum_mappings: {
-                mappings: [],
+                mappings: outItem.enum_mappings?.mappings || [],
               },
-              drill_config: [],
-              description: '',
-            }));
-          }
-        });
+            };
+          });
+        } else {
+          // 没有找到匹配项时，使用默认值
+          list.value = props.data.list.map((item: any) => ({
+            ...item,
+            display_name: '',
+            enum_mappings: {
+              mappings: [],
+            },
+            drill_config: [],
+            description: '',
+          }));
+        }
       });
     } else {
       list.value = props.data.list.map((item: any) => ({
@@ -695,13 +696,13 @@
 
   .info-prefix {
     display: inline-block;
-    height: 32px;
+    height: 31px;
     padding-right: 5px;
     padding-left: 5px;
     line-height: 31px;
     text-align: center;
     background: #fafbfd;
-    border: .5px solid #c4c6cc;
+    border-right: .5px solid #c4c6cc;
     border-radius: 2px 0 0 2px;
   }
 

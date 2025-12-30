@@ -87,16 +87,16 @@
                   </span>
                   <audit-popconfirm
                     v-if="formData.mappings.length"
-                    :ref="(el: any) => mappingsPopconfirmRefs[0] = el"
-                    :confirm-handler="() => handleRemoveMappings(0)"
+                    ref="mappingsPopconfirmRefs"
+                    :confirm-handler="() => handleRemoveMappings()"
                     :content="t('删除操作无法撤回，请谨慎操作！')"
                     :title="t('确认删除该配置？')"
-                    @hide="() => handleMappingsPopconfirmHide(0)">
+                    @hide="handleMappingsPopconfirmHide">
                     <audit-icon
                       class="remove-mappings-btn remove-btn"
-                      :class="{ 'is-popconfirm-visible': mappingsPopconfirmVisible[0] }"
+                      :class="{ 'is-popconfirm-visible': mappingsPopconfirmVisible }"
                       type="delete-fill"
-                      @click="() => handleMappingsPopconfirmShow(0)" />
+                      @click="handleMappingsPopconfirmShow" />
                   </audit-popconfirm>
                 </div>
               </bk-form-item>
@@ -132,14 +132,14 @@
                     </bk-popover>
                     <!-- 删除 -->
                     <audit-popconfirm
-                      :ref="(el: any) => drillPopconfirmRefs[0] = el"
+                      ref="drillPopconfirmRefs"
                       class="ml8"
                       :confirm-handler="() => handleRemove()"
                       :content="t('移除操作无法撤回，请谨慎操作！')"
                       :title="t('确认移除以下工具？')">
                       <audit-icon
                         class="remove-btn"
-                        :class="{ 'is-popconfirm-visible': drillPopconfirmVisible[0] }"
+                        :class="{ 'is-popconfirm-visible': drillPopconfirmVisible }"
                         type="delete-fill" />
                       <template #content>
                         <bk-table
@@ -301,36 +301,36 @@
   const enumMappingsData = ref<any[]>([]);
   const showFieldReference = ref(false);
   const toolMaxVersionMap = ref<Record<string, number>>({});
-  const drillPopconfirmVisible = ref<Record<number, boolean>>({});
-  const mappingsPopconfirmRefs = ref<Record<number, any>>({});
-  const mappingsPopconfirmVisible = ref<Record<number, boolean>>({});
+  const drillPopconfirmVisible = ref();
+  const mappingsPopconfirmVisible = ref();
 
   const columns = [{
     label: () => t('工具列表'),
     render: ({ data }: {data: any}) => <div>{getToolNameAndType(data.tool.uid).name}</div>,
   }] as Column[];
 
-  const drillPopconfirmRefs = ref<Record<number, any>>({});
 
   const newToolDataName = inject<ComputedRef<string>>('newToolDataName', computed(() => ''));
 
+  // 转换树形数据，保持树状结构（kv模式不能引用表格中的字段, 即node.list中的不添加）
   const transformTreeData = (nodes: any[]): FieldItem[] => {
     if (!Array.isArray(nodes)) {
       return [];
     }
-    const result = nodes.map((node: any) => {
-      const listItem = props.listData.find((item: any) => item.json_path === node.json_path);
-      return {
-        raw_name: node.name || '',
-        display_name: listItem?.config?.display_name || '',
-        description: listItem?.config?.description || '',
-        json_path: node.json_path || '',
-        children: node.children && node.children.length > 0
-          ? transformTreeData(node.children)
-          : [],
-      };
-    });
-    return result;
+    return nodes
+      .filter((node: any) => !node.list || node.list.length === 0)
+      .map((node: any) => {
+        const listItem = props.listData.find((item: any) => item.json_path === node.json_path);
+        return {
+          raw_name: node.name || '',
+          display_name: listItem?.config?.display_name || '',
+          description: listItem?.config?.description || '',
+          json_path: node.json_path || '',
+          children: node.children && node.children.length > 0
+            ? transformTreeData(node.children)
+            : [],
+        };
+      });
   };
 
   // 使用 computed 创建 fieldsData，保持树状结构
@@ -362,17 +362,16 @@
   };
 
   // 删除字段值映射
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleRemoveMappings = async (index: number) => {
+  const handleRemoveMappings = async () => {
     formData.value.mappings = [];
   };
 
-  const handleMappingsPopconfirmHide = (index: number) => {
-    mappingsPopconfirmVisible.value[index] = false;
+  const handleMappingsPopconfirmHide = () => {
+    mappingsPopconfirmVisible.value = false;
   };
 
-  const handleMappingsPopconfirmShow = (index: number) => {
-    mappingsPopconfirmVisible.value[index] = true;
+  const handleMappingsPopconfirmShow = () => {
+    mappingsPopconfirmVisible.value = true;
   };
 
   // 获取所有工具

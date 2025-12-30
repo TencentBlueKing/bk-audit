@@ -23,7 +23,9 @@
       :key="groupIndex"
       style="margin-bottom: 16px;"
       v-bind="{ label: group.name, isActive: true }">
-      <div class="card-content">
+      <div
+        class="card-content"
+        :class="[groupData.length === 1 ? 'single-group' : '']">
         <!-- KV 字段展示 -->
         <template v-if="group.kv_fields && group.kv_fields.length > 0">
           <render-info-block
@@ -124,7 +126,14 @@
             v-for="(tableField, tableIndex) in group.table_fields"
             :key="tableIndex">
             <div class="top-search-table-title">
-              {{ tableField.display_name || tableField.raw_name }}
+              <span
+                v-bk-tooltips="{
+                  disabled: !tableField.description,
+                  content: tableField.description
+                }"
+                :class="[tableField.description ? 'tips' : '']">
+                {{ tableField.display_name || tableField.raw_name }}
+              </span>
             </div>
             <bk-table
               :key="key"
@@ -345,6 +354,7 @@
     isLoading,
     resetGroupData: () => {
       groupData.value = [];
+      toolExecuteData.value = {};
     },
   });
 
@@ -469,7 +479,16 @@
         } else if (fieldType === 'table' && Array.isArray(fieldConfig.output_fields)) {
           // Table 模式：用 field_config.output_fields 生成 columns
           const tableColumns = fieldConfig.output_fields.map((item: OutputFields) => ({
-            label: item.display_name || item.raw_name,
+            label: () => (
+              <span
+                class={item.description ? 'tips' : ''}
+                v-bk-tooltips={{
+                  disabled: !item.description,
+                  content: item.description,
+                }}>
+                {item.display_name || item.raw_name}
+              </span>
+            ),
             field: item.raw_name,
             minWidth: 200,
             showOverflowTooltip: true,
@@ -618,7 +637,7 @@
             tableData: [],
             pagination: {
               count: 0,
-              limit: 100,
+              limit: 10,
               current: 1,
               limitList: [10, 20, 50, 100, 200, 500, 1000],
             },
@@ -700,5 +719,10 @@
       min-width: revert !important;
     }
   }
+}
+
+.single-group {
+  padding: 0;
+  background-color: #fff;
 }
 </style>

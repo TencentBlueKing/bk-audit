@@ -154,7 +154,16 @@
 
   // 创建 columns
   const columns = computed<Column[]>(() => outputFields.value.map((item): Column => ({
-    label: item.display_name,
+    label: () => (
+      <span
+        class={item.description ? 'tips' : ''}
+        v-bk-tooltips={{
+          disabled: !item.description,
+          content: item.description,
+        }}>
+        {item.display_name || item.raw_name}
+      </span>
+    ),
     field: item.raw_name,
     minWidth: 200,
     showOverflowTooltip: true,
@@ -300,3 +309,12 @@
     executeTool();
   };
 </script>
+<style lang="postcss" scoped>
+.tips {
+  text-decoration: underline;
+  text-decoration-style: dashed;
+  text-decoration-color: #c4c6cc;
+  text-underline-offset: 5px;
+  cursor: pointer;
+}
+</style>
