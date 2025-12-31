@@ -267,7 +267,7 @@
                 error-display-type="tooltips"
                 label=""
                 label-width="0">
-                <div :class="defaultValuevalidate(item) ? 'default-value-box' : ''">
+                <div :class="!item.isDefaultValuePass ? 'default-value-box' : ''">
                   <bk-input
                     v-if="item.field_category == 'number_input'"
                     v-model="item.default_value"
@@ -283,7 +283,8 @@
                     <div style="position: relative;">
                       <date-picker
                         v-model="item.time_range"
-                        style="width: 100%" />
+                        style="width: 100%;height: 87px;border: none;"
+                        @update:model-value="() => handelTimeVarItem(item)" />
                       <audit-icon
                         v-show="MouseEnterTimeRange === index && item.time_range.length > 0"
                         class="delete-fill-btn"
@@ -407,6 +408,7 @@
       time_range: [],
       field_category: 'input',
       isPass: true,
+      isDefaultValuePass: true,
     },
   ]);
   const requiredList = ref([{
@@ -486,6 +488,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
       default_value: '',
       field_category: 'input',
       isPass: true,
+      isDefaultValuePass: true,
     });
   };
   // 删除一项
@@ -506,10 +509,18 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     }));
   };
   const handelVarItem = (item: Record<string, any>) => {
-    const updatedItem = { ...item, isPass: true };
+    const updatedItem = { ...item, isPass: true, isDefaultValuePass: true };
     haveSameName.value = false;
     isVarNameNOPass.value = false;
     return updatedItem;
+  };
+
+  // 处理时间范围选择器的更新事件
+  const handelTimeVarItem = (item: Record<string, any>) => {
+    // eslint-disable-next-line no-param-reassign
+    item.isDefaultValuePass = true;
+    haveSameName.value = false;
+    isVarNameNOPass.value = false;
   };
   // 前端类型改变
   const handleFrontendTypeChange = (item: Record<string, any>) => {
@@ -539,15 +550,6 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     }
   };
   // 校验 - 纯函数，不修改响应式状态，避免在模板渲染时触发递归更新
-  // 必填 + 不可见 + 无默认值 = 需要提示
-  const defaultValuevalidate = (item: Record<string, any>) => (
-    item.required === 'true' && item.is_show === 'false' && item.default_value === ''
-  );
-
-  // 收集验证结果，仅在 validatePass 中使用
-  const collectDefaultValueValidateResults = () => (
-    paramList.value.map(item => (defaultValuevalidate(item) ? 'true' : 'false'))
-  );
   const validatePass = () => {
     // 收集所有字段名用于重复性检查
     const allFieldNames: string[] = [];
@@ -579,7 +581,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
     // 修改list中的数据以改变isPass的值显示样式
     paramList.value = paramList.value.map((item: any) => {
       let isPass = true;
-
+      let isDefaultValuePass = true;
       if (item.field_category === 'time_range_select' || item.field_category === 'time-ranger') {
         // 检查空值
         if (item.split_config.end_field === '' || item.split_config.start_field === '') {
@@ -591,6 +593,12 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
             isPass = false;
           }
         }
+        // 检查默认值
+        if (item.required === 'true' && item.is_show !== 'true'  && item.time_range.length === 0) {
+          isDefaultValuePass = false;
+        } else {
+          isDefaultValuePass = true;
+        }
       } else {
         // 检查空值
         if (item.var_name === '') {
@@ -600,16 +608,22 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
           // 检查重复名
           isPass = false;
         }
+        // 检查默认值
+        if (item.required === 'true' && item.is_show !== 'true'  && (item.default_value === '' || item.default_value === undefined || item.default_value === null)) {
+          isDefaultValuePass = false;
+        } else {
+          isDefaultValuePass = true;
+        }
       }
-
       // eslint-disable-next-line no-param-reassign
       item.isPass = isPass;
+      // eslint-disable-next-line no-param-reassign
+      item.isDefaultValuePass = isDefaultValuePass;
       return item;
     });
     // 判断是否存在默认值校验不通过的项
-    const defaultValueResults = collectDefaultValueValidateResults();
-    const haveDefaultValueError = defaultValueResults.some((item: string) => item === 'true');
-
+    const defaultValueResults = paramList.value.map((item: any) => item.isDefaultValuePass);
+    const haveDefaultValueError = defaultValueResults.some((item: boolean) => item === false);
     // true 不通过 false 通过
     return haveEmptyVarName || haveSameVarName || haveDefaultValueError;
   };
@@ -637,6 +651,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
             time_range: defaultValue || [],
             default_value: [],
             isPass: true,
+            isDefaultValuePass: true,
           };
         }
         return {
@@ -650,6 +665,7 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
           time_range: timeRange,
           default_value: defaultValue,
           isPass: true,
+          isDefaultValuePass: true,
         };
       });
       setTimeout(() => {
@@ -878,10 +894,11 @@ Body: 请求体中,一般用于Post请求参数,例如：{ "name": "Tom", "age":
 
 .delete-fill-btn {
   position: absolute;
-  top: 10px;
+  top: 50%;
   right: 10px;
   z-index: 1000;
   color: #c4c6cc;
+  transform: translateY(-50%);
 
   &:hover {
     color: #979ba5;
