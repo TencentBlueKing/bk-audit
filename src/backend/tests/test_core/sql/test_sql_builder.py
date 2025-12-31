@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 We undertake not to change the open source license (MIT license) applicable
 to the current version of the project delivered to anyone in the future.
 """
-
+from pymysql.converters import escape_string
 from pydantic import ValidationError
 from pypika import Order as pypikaOrder
 from pypika.queries import QueryBuilder
@@ -44,6 +44,12 @@ from core.sql.model import (
     WhereCondition,
 )
 from tests.base import TestCase
+
+from core.sql.builder.terms import DorisVariantField
+from core.sql.constants import DORIS_FIELD_KEY_QUOTE
+from services.web.query.utils.doris import DorisQuerySQLBuilder
+from services.web.query.utils.search_config import QueryConditionOperator
+from unittest.mock import patch
 
 
 class TestSQLGenerator(TestCase):
@@ -1069,3 +1075,139 @@ class TestSQLFunctions(TestCase):
     def test_concat_function(self):
         expr = Concat(ValueWrapper("a"), ValueWrapper("b"))
         self.assertEqual(str(expr), "CONCAT('a','b')")
+
+
+class TestDorisVariantFieldSanitize(TestCase):
+    def test_sanitize_variant_key_type_and_empty(self):
+        """ _sanitize_variant_key 对类型和空字符串做校验 """
+        field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
+        # 非字符串 -> TypeError
+        with self.assertRaises(TypeError):
+            field._sanitize_variant_key(123)  # type: ignore[arg-type]
+        # 空字符串 -> ValueError
+        with self.assertRaises(ValueError):
+            field._sanitize_variant_key("")
+
+    def test_sanitize_variant_key_escape_injection_payload(self):
+        """ 恶意 payload 作为 Variant keys 参与 Doris 查询条件时，会被 escape_string 转义，避免拼出可执行 SQL 片段"""
+        payload = "foo'\''] !=0 or 1=1; --"
+        builder = DorisQuerySQLBuilder(
+            table="test_table",
+            conditions=[
+                {
+                    "field": {
+                        "raw_name": "snapshot_resource_type_info",
+                        "keys": [payload],
+                    },
+                    "operator": QueryConditionOperator.EQ.value,
+                    "filters": ["bk-audit"],
+                }
+            ],
+            sort_list=[],
+            page=1,
+            page_size=10,
+        )
+        sql = builder.build_data_sql()
+
+        field = DorisVariantField(keys=[payload], name="snapshot_resource_type_info")
+        expected = field._sanitize_variant_key(payload)
+        expected_fragment = f"[{DORIS_FIELD_KEY_QUOTE}{expected}{DORIS_FIELD_KEY_QUOTE}]"
+        self.assertIn(expected_fragment, sql)
+        # 模拟 escape_string 返回 bytes 类型，让 isinstance 分支执行
+        with patch("pymysql.converters.escape_string", return_value=b"foo\\'\\'\\''] !=0 or 1=1; --"):
+            field_bytes = DorisVariantField(
+                keys=[payload],
+                name="snapshot_resource_type_info",
+            )
+            expected_bytes = field_bytes._sanitize_variant_key(payload)
+            expected_fragment_bytes = (
+                f"[{DORIS_FIELD_KEY_QUOTE}{expected_bytes}{DORIS_FIELD_KEY_QUOTE}]"
+            )
+            builder_bytes = DorisQuerySQLBuilder(
+                table="test_table",
+                conditions=[
+                    {
+                        "field": {
+                            "raw_name": "snapshot_resource_type_info",
+                            "keys": [payload],
+                        },
+                        "operator": QueryConditionOperator.EQ.value,
+                        "filters": ["bk-audit"],
+                    }
+                ],
+                sort_list=[],
+                page=1,
+                page_size=10,
+            )
+            sql_bytes = builder_bytes.build_data_sql()
+            self.assertIn(
+                expected_fragment_bytes,
+                sql_bytes,
+                msg=f"\nExpected fragment (bytes):\n{expected_fragment_bytes}\nGot SQL:\n{sql_bytes}",
+            )
+
+    def test_format_keys_quote_normal_keys(self):
+        """ 正常 keys: ["k1", "k2"] => "['k1']['k2']"（或使用 DORIS_FIELD_KEY_QUOTE） """
+        field = DorisVariantField(
+            keys=["k1", "k2"],
+            name="snapshot_resource_type_info",
+        )
+        sql_fragment = field.format_keys_quote()
+        self.assertEqual(
+            sql_fragment,
+            (
+                f"[{DORIS_FIELD_KEY_QUOTE}k1{DORIS_FIELD_KEY_QUOTE}]"
+                f"[{DORIS_FIELD_KEY_QUOTE}k2{DORIS_FIELD_KEY_QUOTE}]"
+            ),
+        )
+
+    @patch("core.sql.builder.terms.escape_string")
+    def test_sanitize_variant_key_escape_return_bytes(self, mock_escape_string):
+        """ 当 escape_string 返回 bytes 时，_sanitize_variant_key 能正确 decode 成 str """
+        mock_escape_string.return_value = b"escaped_payload"
+        field = DorisVariantField(keys=["k1"], name="snapshot_resource_type_info")
+        result = field._sanitize_variant_key("foo")
+        # 确认调用了 escape_string
+        mock_escape_string.assert_called_once_with("foo")
+        # 确认最终返回的是 str，而不是 bytes
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "escaped_payload")
+    def test_variant_like_with_injection_payload(self):
+        """
+        恶意 payload 作为 LIKE 条件参与 Variant 查询时：
+        - 字段访问仍然是 snapshot_resource_type_info['id'] 这种受控形式
+        """
+        payload =r"foo'\''] !=0 or 1=1; --"
+
+        builder = DorisQuerySQLBuilder(
+            table="test_table",
+            conditions=[
+                {
+                    "field": {
+                        "raw_name": "snapshot_resource_type_info",
+                        "keys": ["id"],
+                    },
+                    "operator": QueryConditionOperator.LIKE.value,
+                    "filters": [payload],
+                }
+            ],
+            sort_list=[],
+            page=1,
+            page_size=10,
+        )
+
+        sql = builder.build_data_sql()
+        print(sql)
+        self.assertIn("`snapshot_resource_type_info`['id']", sql)
+
+        # 2）确认是 LIKE 查询，并且前缀形如 LIKE '%foo...'
+        self.assertIn("LIKE '%foo", sql)
+
+        expected_sub = "foo''\\''''] !=0 or 1=1; --"
+        self.assertIn(
+            expected_sub,
+            sql,
+            msg=f"\n原始 payload:\n{payload}\n"
+                f"期望转义后片段:\n{expected_sub}\n"
+                f"实际 SQL:\n{sql}",
+        )
