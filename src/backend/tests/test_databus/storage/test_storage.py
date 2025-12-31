@@ -20,6 +20,7 @@ from unittest import mock
 
 from core.utils.data import ordered_dict_to_json
 from services.web.databus.models import StorageOperateLog
+from services.web.databus.storage.serializers import StorageCustomOptionSerializer
 from tests.base import TestCase
 from tests.test_databus.collector_plugin.constants import (
     CREATE_PLUGIN_DATA as CREATE_PLUGIN_API_RESP,
@@ -94,3 +95,48 @@ class StorageTest(TestCase):
         result.pop("redis_id", None)
         result.pop("is_deleted", None)
         self.assertEqual(result, CREATE_OR_UPDATE_REDIS_DATA)
+
+    def test_admin_with_empty_string(self):
+        """
+        测试 admin 字段包含空字符串的情况
+        根据日志: "admin": ["admin", ""] - 包含一个空字符串
+        """
+        # 模拟日志中返回的数据格式
+        test_data = {
+            "bk_biz_id": 19069,
+            "hot_warm_config": {
+                "is_enabled": False,
+                "hot_attr_name": "",
+                "hot_attr_value": "",
+                "warm_attr_name": "",
+                "warm_attr_value": ""
+            },
+            "source_type": "other",
+            "visible_config": {
+                "visible_type": "current_biz",
+                "visible_bk_biz": [],
+                "bk_biz_labels": {}
+            },
+            "setup_config": {
+                "retention_days_default": 30,
+                "number_of_replicas_default": 1,
+                "retention_days_max": 30,
+                "number_of_replicas_max": 1,
+                "es_shards_default": 3,
+                "es_shards_max": 512
+            },
+            "admin": ["admin", ""],
+            "description": "审计中心存储集群"
+        }
+
+        serializer = StorageCustomOptionSerializer(data=test_data)
+        if serializer.is_valid():
+            print(f"admin 字段值: {serializer.validated_data.get('admin')}")
+        else:
+            print("验证失败!")
+            print(f"错误信息: {serializer.errors}")
+
+        self.assertTrue(serializer.is_valid(), f"序列化验证失败: {serializer.errors}")
+        self.assertEqual(serializer.validated_data.get('admin'), ["admin", ""])
+
+        return serializer.is_valid()
