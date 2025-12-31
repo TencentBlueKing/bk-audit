@@ -80,7 +80,7 @@ class StorageCustomOptionSerializer(serializers.Serializer):
     hot_warm_config = StorageHotWarmSerializer()
     source_type = serializers.CharField()
     setup_config = SetupSerializer()
-    admin = serializers.ListField(child=serializers.CharField())
+    admin = serializers.ListField(child=serializers.CharField(allow_blank=True))
     description = serializers.CharField()
     option = serializers.JSONField(required=False)
     cluster_namespace = serializers.CharField(required=False)
