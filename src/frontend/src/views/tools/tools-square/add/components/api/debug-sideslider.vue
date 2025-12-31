@@ -383,6 +383,7 @@
     isNoSuccess.value = false;
     result.value = '';
     isDebug.value = false;
+    isNOJson.value = false;
   };
   defineExpose<Exposes>({
     init(data: FormItem[]) {
