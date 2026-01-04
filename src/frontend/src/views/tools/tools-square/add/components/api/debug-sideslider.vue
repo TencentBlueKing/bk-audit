@@ -57,11 +57,16 @@
             {{ t('请求头') }}:
           </div>
           <div class="info-concent-item-value">
-            <div
-              v-for="(item, index) in apiConfig.headers"
-              :key="index">
-              <div class="item-headers-item">
-                {{ item.key || "--" }} = {{ item.value || "--" }}
+            <div v-if="apiConfig.headers.length === 0">
+              --
+            </div>
+            <div v-else>
+              <div
+                v-for="(item, index) in apiConfig.headers"
+                :key="index">
+                <div class="item-headers-item">
+                  {{ item.key || "--" }} = {{ item.value || "--" }}
+                </div>
               </div>
             </div>
           </div>
@@ -96,12 +101,14 @@
                 v-if="item.description !== ''"
                 placement="top"
                 theme="dark">
-                <span class="dashed-underline">{{ t(item.display_name) || '--' }}</span>
+                <span class="dashed-underline">{{ item.display_name === '' ? item.var_name
+                  : `${item.display_name}(${item.var_name})` }}</span>
                 <template #content>
                   <div>{{ t(item.description) }}</div>
                 </template>
               </bk-popover>
-              <span v-if="item.description ===''">{{ t(item.display_name) || '--' }}</span>
+              <span v-if="item.description ===''">{{ item.display_name === '' ? item.var_name
+                : `${item.display_name}(${item.var_name})` }}</span>
             </template>
             <span>
               <bk-input
@@ -169,6 +176,7 @@
             v-if="result"
             class="json-result">
           <json-viewer
+          copyable
           expand-depth="99"
           theme="jv-light"
           :value="JSON.parse(result)" /></pre>
