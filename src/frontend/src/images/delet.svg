@@ -1,0 +1,10 @@
+
+
+<svg class="bk-icon" style="width: 1em; height: 1em;vertical-align: middle;fill: currentColor;overflow: hidden;" viewBox="0 0 64 64" version="1.1" xmlns="http://www.w3.org/2000/svg">
+
+<path  fill="#737987" d="M58,14H42v-4c0-2.2-1.8-4-4-4H26c-2.2,0-4,1.8-4,4v4H6v4h7v36c0,2.2,1.8,4,4,4h30c2.2,0,4-1.8,4-4
+	V18h7V14z M27,10h10c0.6,0,1,0.4,1,1v3H26v-3C26,10.4,26.4,10,27,10z M46,54H18c-0.6,0-1-0.4-1-1V18h30v35C47,53.6,46.6,54,46,54z"
+	/>
+<rect  x="36" y="25" fill="#737987" width="4" height="22"/>
+<rect  x="24" y="25" fill="#737987" width="4" height="22"/>
+</svg>
