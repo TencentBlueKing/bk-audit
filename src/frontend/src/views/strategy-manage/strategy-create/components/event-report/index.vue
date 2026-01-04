@@ -1,4 +1,4 @@
-<!--
+  <!--
   TencentBlueKing is pleased to support the open source community by making
   蓝鲸智云 - 审计中心 (BlueKing - Audit Center) available.
   Copyright (C) 2023 THL A29 Limited,
@@ -43,7 +43,7 @@
           {{ t('事件调查报告模版') }}
         </div>
         <div class="editor-box">
-          111
+          <ai-editor />
         </div>
       </div>
     </div>
@@ -68,6 +68,8 @@
 <script setup lang="ts">
   import { ref } from 'vue';
   import { useI18n } from 'vue-i18n';
+
+  import AiEditor from '@components/ai-editor/index.vue';
 
   interface IFormData {
     processor_groups: Array<number>,
@@ -180,7 +182,6 @@
 
     .editor-box {
       margin-top: 5px;
-      background-color: #3a84ff;
     }
   }
 }
