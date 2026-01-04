@@ -244,6 +244,8 @@ class CreateCollectorResource(CollectorMeta):
             collector_config_name_en=validated_request_data["collector_config_name_en"],
             bk_data_id=resp["bk_data_id"],
             description=validated_request_data["collector_config_name"],
+            record_log_type=validated_request_data["record_log_type"],
+            select_sdk_type=validated_request_data["select_sdk_type"],
         )
 
     def perform_request(self, validated_request_data):
@@ -275,7 +277,14 @@ class UpdateCollectorResource(CollectorMeta):
         )
         collector_config.collector_config_name = resp["collector_config_name"]
         collector_config.description = validated_request_data["collector_config_name"]
-        collector_config.save(update_fields=["collector_config_name", "description"])
+        update_fields = ["collector_config_name", "description"]
+        if validated_request_data.get("record_log_type"):
+            collector_config.record_log_type = validated_request_data["record_log_type"]
+            update_fields.append("record_log_type")
+        if validated_request_data.get("select_sdk_type"):
+            collector_config.select_sdk_type = validated_request_data["select_sdk_type"]
+            update_fields.append("select_sdk_type")
+        collector_config.save(update_fields=update_fields)
         data = self.serializer_class(collector_config).data
         data.update({"task_id_list": resp.get("task_id_list", [])})
         return data
@@ -340,7 +349,15 @@ class UpdateBcsCollectorResource(CollectorMeta):
         api.bk_log.update_collector_normal(validated_request_data)
         collector_config.collector_config_name = validated_request_data["collector_config_name"]
         collector_config.description = validated_request_data["collector_config_name"]
-        collector_config.save(update_fields=["collector_config_name", "description"])
+        update_fields = ["collector_config_name", "description"]
+        if validated_request_data.get("record_log_type"):
+            collector_config.record_log_type = validated_request_data["record_log_type"]
+            update_fields.append("record_log_type")
+        if validated_request_data.get("select_sdk_type"):
+            collector_config.select_sdk_type = validated_request_data["select_sdk_type"]
+            update_fields.append("select_sdk_type")
+        collector_config.save(update_fields=update_fields)
+        collector_config.save(update_fields=update_fields)
         return self.serializer_class(collector_config).data
 
 
@@ -624,6 +641,8 @@ class GetApiPushResource(GetApiPushBaseResource):
                 "token": asymmetric_cipher.encrypt(report_info["bk_data_token"]),
                 "collector_config_id": collector_config.collector_config_id,
                 "bk_data_id": collector_config.bk_data_id,
+                "collector_config_name": collector_config.collector_config_name,
+                "collector_config_name_en": collector_config.collector_config_name_en,
             }
         # 没有时返回空
         return {"token": ""}
@@ -637,15 +656,19 @@ class CreateApiPushResource(GetApiPushBaseResource):
         # 初始化请求参数
         namespace = validated_request_data["namespace"]
         system_id = validated_request_data["system_id"]
+        custom_collector_config_name = validated_request_data.get("custom_collector_config_name")
+
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
             config_level=ConfigLevelChoices.NAMESPACE.value,
             instance_key=namespace,
         )
-        collector_config_name = API_PUSH_COLLECTOR_NAME_FORMAT.format(
-            system_id=system_id, date=datetime.datetime.now().strftime("%Y%m%d"), id=str(uniqid())[:10].lower()
-        ).replace("-", "_")[:COLLECTOR_NAME_MAX_LENGTH]
-
+        if not custom_collector_config_name:
+            collector_config_name = API_PUSH_COLLECTOR_NAME_FORMAT.format(
+                system_id=system_id, date=datetime.datetime.now().strftime("%Y%m%d"), id=str(uniqid())[:10].lower()
+            ).replace("-", "_")[:COLLECTOR_NAME_MAX_LENGTH]
+        else:
+            collector_config_name = custom_collector_config_name
         # 校验，重复则终止创建流程
         collector = self.get_collector(system_id)
         if collector:
@@ -813,6 +836,9 @@ class ApplyDataIdSource(DataIdResource):
     def perform_request(self, validated_request_data):
         namespace = validated_request_data["namespace"]
         bk_data_id = validated_request_data["bk_data_id"]
+        # 自定义名称
+        custom_collector_ch_name = validated_request_data.get("custom_collector_ch_name")
+        custom_collector_en_name = validated_request_data.get("custom_collector_en_name")
         plugin_id = GlobalMetaConfig.get(
             COLLECTOR_PLUGIN_ID,
             config_level=ConfigLevelChoices.NAMESPACE.value,
@@ -841,8 +867,12 @@ class ApplyDataIdSource(DataIdResource):
             "bk_data_id": bk_data_id,
             "collector_plugin_id": plugin_id,
             "collector_config_id": -bk_data_id,
-            "collector_config_name": raw_data["raw_data_alias"],
-            "collector_config_name_en": raw_data["raw_data_name"],
+            "collector_config_name": raw_data["raw_data_alias"]
+            if not custom_collector_ch_name
+            else custom_collector_ch_name,
+            "collector_config_name_en": raw_data["raw_data_name"]
+            if not custom_collector_en_name
+            else custom_collector_en_name,
             "source_platform": SourcePlatformChoices.BKBASE.value,
             "custom_type": raw_data["custom_type"],
             "description": raw_data["description"],

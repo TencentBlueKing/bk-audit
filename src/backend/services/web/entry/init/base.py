@@ -54,6 +54,7 @@ from services.web.entry.constants import (
     INIT_SNAPSHOT_FINISHED_KEY,
     INIT_SYSTEM_FINISHED_KEY,
     INIT_SYSTEM_RULE_AUDIT_FINISHED_KEY,
+    SDK_CONFIG_KEY,
     get_manual_event_strategy_config,
 )
 from services.web.risk.constants import (
@@ -117,6 +118,7 @@ class SystemInitHandler:
         self.create_or_update_plugin_etl()
         self.init_system()
         self.init_asset()
+        self.init_sdk_config()
         self.init_system_rule_audit()
         print("[Main] Init Finished")
 
@@ -232,6 +234,14 @@ class SystemInitHandler:
         sync_iam_systems()
         print("[InitSystem] Finished")
         self.post_init(INIT_SYSTEM_FINISHED_KEY)
+
+    def init_sdk_config(self):
+        sdk_config = {
+            "go_sdk": "https://github.com/TencentBlueKing/bk-audit-go-sdk",
+            "java_sdk": "https://github.com/TencentBlueKing/bk-audit-java-sdk",
+            "python_sdk": "https://github.com/TencentBlueKing/bk-audit-python-sdk",
+        }
+        GlobalMetaConfig.set(SDK_CONFIG_KEY, sdk_config)
 
     def create_or_update_plugin_etl(self):
         """创建或更新采集入库"""
