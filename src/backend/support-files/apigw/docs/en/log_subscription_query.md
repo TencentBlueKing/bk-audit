@@ -18,9 +18,7 @@
   "filters": {
     "condition": {
       "field": {
-        "table": "table_name",
         "raw_name": "user_name",
-        "display_name": "user_name",
         "field_type": "string"
       },
       "operator": "eq",
@@ -116,7 +114,44 @@ Common field examples:
 | page | integer | Yes | Page number (starts from 1) |
 | page_size | integer | Yes | Page size (max 1000) |
 | fields | array[string] | No | Specify return field list, empty returns all fields |
-| filters | object | No | Custom filter conditions (WhereCondition format) |
+| filters | object | No | Custom filter conditions (WhereCondition format, see below) |
+
+### filters Field Description
+
+The `filters` parameter uses `WhereCondition` format to define filter conditions. In the `field` object:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| raw_name | string | Yes | Field name (must match actual field name in data source) |
+| field_type | string | Yes | Field type: `string`, `int`, `float`, `timestamp` |
+
+**Simplified Example** (recommended):
+```json
+{
+  "condition": {
+    "field": {
+      "raw_name": "user_name",
+      "field_type": "string"
+    },
+    "operator": "eq",
+    "filters": ["admin"]
+  }
+}
+```
+
+**Full Format Example** (for backward compatibility):
+```json
+{
+  "condition": {
+    "field": {
+      "raw_name": "user_name",
+      "field_type": "string"
+    },
+    "operator": "eq",
+    "filters": ["admin"]
+  }
+}
+```
 | raw | boolean | No | Return SQL only without executing query (default false) |
 
 <h2 id="tocS_LogSubscriptionQueryResponse">LogSubscriptionQueryResponse</h2>

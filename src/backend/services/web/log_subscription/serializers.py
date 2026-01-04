@@ -60,7 +60,7 @@ class LogSubscriptionQuerySerializer(serializers.Serializer):
 
     def validate_filters(self, value):
         """
-        验证自定义筛选条件，检查是否包含 keys 字段（暂不支持）
+        验证自定义筛选条件，检查是否包含 keys 字段（暂不支持），并为 field 对象补充默认值
 
         参考 _replace_table_name 的实现方式，递归检查 field.keys
 
@@ -68,7 +68,7 @@ class LogSubscriptionQuerySerializer(serializers.Serializer):
             value: WhereCondition 格式的字典
 
         Returns:
-            验证后的值
+            验证后的值（已补充默认值）
 
         Raises:
             ValidationError: 如果包含 keys 字段
@@ -76,9 +76,9 @@ class LogSubscriptionQuerySerializer(serializers.Serializer):
         if not value:
             return value
 
-        def has_field_keys(condition_dict):
+        def process_condition(condition_dict):
             """
-            递归检查 field 对象是否包含 keys 字段
+            递归处理条件：检查 keys 字段并为 field 补充默认值
 
             Args:
                 condition_dict: WhereCondition 格式的字典
@@ -93,18 +93,25 @@ class LogSubscriptionQuerySerializer(serializers.Serializer):
             if "condition" in condition_dict and isinstance(condition_dict["condition"], dict):
                 condition = condition_dict["condition"]
                 if "field" in condition and isinstance(condition["field"], dict):
-                    if "keys" in condition["field"]:
+                    field = condition["field"]
+                    # 检查是否包含 keys 字段
+                    if "keys" in field:
                         return True
+                    # 为 field 补充默认值：table 默认为 "t"，display_name 默认为 raw_name
+                    if "table" not in field:
+                        field["table"] = "t"
+                    if "display_name" not in field and "raw_name" in field:
+                        field["display_name"] = field["raw_name"]
 
             # 如果是组合节点（包含 conditions 列表），递归处理每个子条件
             if "conditions" in condition_dict and isinstance(condition_dict["conditions"], list):
                 for sub_condition in condition_dict["conditions"]:
-                    if has_field_keys(sub_condition):
+                    if process_condition(sub_condition):
                         return True
 
             return False
 
-        if has_field_keys(value):
+        if process_condition(value):
             raise serializers.ValidationError(gettext_lazy("自定义筛选条件不支持 keys 字段"))
 
         return value
