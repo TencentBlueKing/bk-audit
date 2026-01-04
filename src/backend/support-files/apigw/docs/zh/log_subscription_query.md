@@ -18,9 +18,7 @@
   "filters": {
     "condition": {
       "field": {
-        "table": "table_name",
         "raw_name": "user_name",
-        "display_name": "user_name",
         "field_type": "string"
       },
       "operator": "eq",
@@ -105,9 +103,7 @@
   "filters": {
     "condition": {
       "field": {
-        "table": "string",
         "raw_name": "string",
-        "display_name": "string",
         "field_type": "string"
       },
       "operator": "string",
@@ -132,13 +128,28 @@
 
 `filters` 参数用于在订阅配置的基础上添加额外的筛选条件，格式为 `WhereCondition` 对象：
 
+**简化示例**（推荐）：
+
 ```json
 {
   "condition": {
     "field": {
-      "table": "table_name",
+      "raw_name": "user_name",
+      "field_type": "string"
+    },
+    "operator": "eq",
+    "filters": ["admin"]
+  }
+}
+```
+
+**完整格式**：
+
+```json
+{
+  "condition": {
+    "field": {
       "raw_name": "field_name",
-      "display_name": "field_name",
       "field_type": "string"
     },
     "operator": "eq",
@@ -146,6 +157,13 @@
   }
 }
 ```
+
+**field 对象字段说明**：
+
+| 字段 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| raw_name | 是 | - | 字段名称，必须与数据源表中的字段名一致 |
+| field_type | 是 | - | 字段类型：`string`、`int`、`long`、`float`、`double` 等 |
 
 或使用 `conditions` 数组支持多条件组合：
 
@@ -277,9 +295,7 @@ curl -X POST "https://your-domain/api/v1/log_subscription/apigw/query/" \
     "filters": {
       "condition": {
         "field": {
-          "table": "591_audit_log.doris",
           "raw_name": "user_name",
-          "display_name": "user_name",
           "field_type": "string"
         },
         "operator": "like",

@@ -622,3 +622,127 @@ class TestQueryLogSubscription(TestCase):
         validated_data = self.resource.validate_request_data(request_data)
         self.assertIn("filters", validated_data)
         self.assertEqual(validated_data["filters"]["connector"], "and")
+
+    def test_filters_simplified_format(self):
+        """测试简化格式的筛选条件（只提供 raw_name 和 field_type）"""
+        # 使用简化格式：不提供 table 和 display_name
+        request_data = {
+            "token": self.token,
+            "source_id": "audit_log",
+            "start_time": 1734589800000,
+            "end_time": 1734593400000,
+            "page": 1,
+            "page_size": 10,
+            "filters": {
+                "connector": "and",
+                "conditions": [
+                    {
+                        "condition": {
+                            "field": {
+                                "raw_name": "username",
+                                "field_type": "string",
+                            },
+                            "operator": "eq",
+                            "filter": "admin",
+                        }
+                    }
+                ],
+            },
+            "raw": True,
+        }
+
+        # 验证通过后，检查默认值是否被正确补充
+        validated_data = self.resource.validate_request_data(request_data)
+        self.assertIn("filters", validated_data)
+
+        # 验证 field 对象已被补充默认值
+        field = validated_data["filters"]["conditions"][0]["condition"]["field"]
+        self.assertEqual(field["table"], "t")  # 默认值
+        self.assertEqual(field["display_name"], "username")  # 默认为 raw_name
+        self.assertEqual(field["raw_name"], "username")
+        self.assertEqual(field["field_type"], "string")
+
+        # 验证能正常生成 SQL
+        result = self.resource.perform_request(validated_data)
+        query_sql = result["query_sql"]
+        expected_table = self.data_source_audit_log.get_table_name()
+
+        # 验证筛选条件已正确应用（表名已替换）
+        self.assertIn(f"`{expected_table}`.`username`='admin'", query_sql)
+
+    def test_filters_simplified_format_nested(self):
+        """测试嵌套条件中的简化格式"""
+        # 测试嵌套的 conditions 中也能正确处理简化格式
+        request_data = {
+            "token": self.token,
+            "source_id": "audit_log",
+            "start_time": 1734589800000,
+            "end_time": 1734593400000,
+            "page": 1,
+            "page_size": 10,
+            "filters": {
+                "connector": "or",
+                "conditions": [
+                    {
+                        "connector": "and",
+                        "conditions": [
+                            {
+                                "condition": {
+                                    "field": {
+                                        "raw_name": "username",
+                                        "field_type": "string",
+                                    },
+                                    "operator": "eq",
+                                    "filter": "admin",
+                                }
+                            },
+                            {
+                                "condition": {
+                                    "field": {
+                                        "raw_name": "result_code",
+                                        "field_type": "int",
+                                    },
+                                    "operator": "eq",
+                                    "filter": 200,
+                                }
+                            },
+                        ],
+                    },
+                    {
+                        "condition": {
+                            "field": {
+                                "raw_name": "action_id",
+                                "field_type": "string",
+                            },
+                            "operator": "eq",
+                            "filter": "create",
+                        }
+                    },
+                ],
+            },
+            "raw": True,
+        }
+
+        validated_data = self.resource.validate_request_data(request_data)
+
+        # 验证嵌套条件中的 field 都已补充默认值
+        nested_conditions = validated_data["filters"]["conditions"][0]["conditions"]
+        for cond in nested_conditions:
+            field = cond["condition"]["field"]
+            self.assertEqual(field["table"], "t")
+            self.assertEqual(field["display_name"], field["raw_name"])
+
+        # 验证外层条件也已补充默认值
+        outer_field = validated_data["filters"]["conditions"][1]["condition"]["field"]
+        self.assertEqual(outer_field["table"], "t")
+        self.assertEqual(outer_field["display_name"], "action_id")
+
+        # 验证能正常生成 SQL
+        result = self.resource.perform_request(validated_data)
+        query_sql = result["query_sql"]
+        expected_table = self.data_source_audit_log.get_table_name()
+
+        # 验证所有筛选条件都已正确应用
+        self.assertIn(f"`{expected_table}`.`username`='admin'", query_sql)
+        self.assertIn(f"`{expected_table}`.`result_code`=200", query_sql)
+        self.assertIn(f"`{expected_table}`.`action_id`='create'", query_sql)
