@@ -32,7 +32,7 @@ export const buildTree = (obj: any, parentId = '', path: string[] = [], isChild 
       nameCountMap.set(key, currentCount + 1);
 
       // 根据重复情况设置显示名称
-      const displayName = currentCount > 0 ? `${key} (${currentId})` : key;
+      const displayName = `${key} (${currentId})`;
 
       const node = {
         name: displayName,

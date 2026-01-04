@@ -429,7 +429,7 @@
       }
 
       .table-label {
-        width: 286px;
+        width: 270px;
       }
 
       .table-type {

@@ -35,6 +35,8 @@
           v-if="isShowMore"
           :data="editData.selectedRiskValue"
           :edit-data="editData"
+          :event-content-comfig="eventContentComfig"
+          :event-type-comfig="eventTypeComfig"
           is-add-risk
           :notice-groups="noticeGroups"
           :operators-comfig="operatorsComfig"
@@ -117,10 +119,10 @@
                   <span class="info-item-left">{{ t('事件描述') }}</span>:
                   <span class="line-value">
                     <edit-tag
-                      v-if="eventTypeComfig[0]?.typeValue === 'user-selector'"
-                      :data="eventTypeComfig[0].value || []"
+                      v-if="eventContentComfig[0]?.typeValue === 'user-selector'"
+                      :data="eventContentComfig[0].value || []"
                       style="display: inline-block;" />
-                    <span v-else> {{ eventTypeComfig[0]?.value ||'--' }} </span>
+                    <span v-else> {{ eventContentComfig[0]?.value ||'--' }} </span>
                   </span>
                 </span>
               </div>
